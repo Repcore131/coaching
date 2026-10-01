@@ -762,7 +762,7 @@ function _htmlChoixDiete(user){
     return '<button type="button" class="dch-opt'+(ici?' actif':'')+'" data-diete="'+o.type+'"'
       +(ici?' aria-current="true"':'')
       +(verrou?' disabled':' onclick="choisirDiete(\''+o.type+'\')"')+'>'
-      +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' 🔒':'')+'</span>'
+      +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' '+icon('lock',12):'')+'</span>'
       +(ici?'<span class="dch-etat">Actuelle</span>':'')+'</span>'
       +'<span class="dch-desc">'+escapeHtml(o.desc)+'</span>'
       +(v?'<span class="dch-verrou"><strong>'+escapeHtml(v.titre)+'</strong>'+escapeHtml(v.texte)+'</span>':'')

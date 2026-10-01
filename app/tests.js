@@ -8753,7 +8753,7 @@ async function testExercices(){
             const ids=(corps.sessions||[]).map(x=>x&&x.id);
             if(ids.indexOf('s_nouvelle')<0) return _echec('le PUT ne porte pas la séance : '+JSON.stringify(ids));
             if(ids.indexOf('s_ancienne')<0) return _echec('le PUT perd l’ancienne séance');
-            if(!vus.some(m=>/✓ Envoyé au cloud/.test(m))) return _echec('pas de ✓ après le PUT réussi : '+vus.join(' | '));
+            if(!vus.some(m=>/^\uE000coche\uE001 Envoyé au cloud/.test(m))) return _echec('pas de ✓ après le PUT réussi : '+vus.join(' | '));
             // Et la séance est toujours en mémoire.
             return currentUser.sessions.some(x=>x.id==='s_nouvelle')?true:_echec('la séance a quitté currentUser');
           } finally { _qRanger(sv); }
@@ -10360,7 +10360,7 @@ async function testExercices(){
             if(!/Ouvre Safari/.test(src)) return _echec('le repli générique a disparu');
             // ON NE DIT « COPIÉ » QUE SI ÇA L'EST : un accusé faux fait coller
             // dans le vide, ce qui est pire que pas d'accusé.
-            if(!/ok\?'✓ Lien copié'/.test(src)) return _echec('le « copié » n’est plus conditionnel');
+            if(!/ok\?ICO\.coche\+' Lien copié'/.test(src)) return _echec('le « copié » n’est plus conditionnel');
             const z=document.getElementById('rc-inst-lien');
             if(!z) return _echec('l’adresse en clair a disparu de l’écran');
             // Sélectionnable d'un appui long : c'est le repli ultime.
@@ -12002,7 +12002,7 @@ async function testExercices(){
           if(!/pauseWorkout/.test(woBack.getAttribute('onclick')||''))
             return _echec('la flèche de séance n\'ouvre plus la modale Pause');
           const croix=document.querySelector('#session-picker button');
-          return (croix&&/[✕×]/.test(croix.textContent||''))
+          return (croix&&(/[✕×]/.test(croix.textContent||'')||!!croix.querySelector('[data-ico="croix"] svg')))
             ?true:_echec('le sélecteur de séance n\'a plus de croix');})());
         ok('Un emplacement vide ne réserve aucun espace vertical',(()=>{
           // Ces conteneurs sont remplis à l'exécution. Vides, ils gardaient leur
@@ -39743,7 +39743,7 @@ async function testExercices(){
           return _echec('la publication renvoie encore de force sur la fiche');
         // LE RETOUR VISUEL RESTE ENTIER, et le verrou contre le double appui
         // avec lui : c'est ce qui empêche de publier deux fois.
-        if(s.indexOf("'PUBLIÉ ✓'")<0) return _echec('le bouton ne dit plus que c’est parti');
+        if(s.indexOf("'PUBLIÉ '+ICO.coche")<0) return _echec('le bouton ne dit plus que c’est parti');
         if(s.indexOf('_b.disabled=true')<0) return _echec('le verrou anti-double-appui a sauté');
         // ET IL REPREND LA MAIN une fois la célébration finie : sur un écran où
         // le coach continue de travailler, un bouton mort n'a pas de sens.
@@ -55635,7 +55635,7 @@ async function testExercices(){
       if(/partagerCarteSaison/.test(d.innerHTML)) return _echec('partage avant d’avoir bouclé');
       for(let k=4;k<12;k++) u.sessions.push(S(k));
       const b=htmlBanniereSaison(s,u,null,_SAT);
-      if(!/Bouclé ⚡/.test(b)||!/partagerCarteSaison\('hiver-2026'/.test(b)) return _echec('bouclé');
+      if(!/Bouclé (⚡|<svg)/.test(b)||!/partagerCarteSaison\('hiver-2026'/.test(b)) return _echec('bouclé');
       return htmlBanniereSaison(s,{role:'coach'},null,_SAT)===''?true:_echec('coach');})());
     okA('Saisons : l’athlète écrit SA valeur (une fois par valeur), pour le compteur collectif',async()=>{
       const sv={u:currentUser,ok:CLOUD.ok,tk:CLOUD._getToken,f:window.fetch,su:window.saveUser,sa:_saisons};
@@ -55837,7 +55837,7 @@ async function testExercices(){
       try{ window.amiSuivre=async(p,n)=>{ appel=[p,n]; return true; }; }catch(e){}
       let ok=false; try{ ok=await amiBasculerSuivi(b); } finally { try{ window.amiSuivre=sv.s; }catch(e){} }
       if(!ok||!appel||appel[0]!=='marc.fit') return _echec('suivre non appelé');
-      return b.textContent==='Suivi ✓'?true:_echec('libellé : '+b.textContent);
+      return (b.textContent==='Suivi '&&b.querySelector('svg'))?true:_echec('libellé : '+b.textContent);
     });
     ok('Amis : un pseudo introuvable propose le lien, sans « n’existe pas »',(()=>{
       const h=htmlFicheAmi({trouve:false,pseudo:'fantome'},false);
@@ -56243,7 +56243,7 @@ async function testExercices(){
       if(!d.querySelector('.pr-carte-inv .vfmt')||!d.querySelector('.pr-carte-inv #pr-fonds')) return _echec('formats et fonds absents');
       const sec=[...d.querySelectorAll('.pr-secondaire button')].map(b=>b.textContent);
       // « Défie un pote » (les duels) vit avec eux, en second.
-      return (sec.join('|')==='Envoyer le texte|Copier le lien'+(SERVEUR_LEGER?'|⚔ Défie un pote':''))?true:_echec(sec.join('|'));})());
+      return (sec.join('|')==='Envoyer le texte|Copier le lien'+(SERVEUR_LEGER?'| Défie un pote':''))?true:_echec(sec.join('|'));})());
     ok('Invitation : « Inviter un pote » sur le rang, le palier de série et la dernière slide du Wrapped',(()=>{
       const sv=currentUser;
       try{
@@ -56274,7 +56274,7 @@ async function testExercices(){
       const d=document.createElement('div');
       d.innerHTML=htmlParrainage(u);
       const l=[...d.querySelectorAll('.pr-f')].map(x=>x.querySelector('.pr-f-nom').textContent+'='+x.querySelector('b').textContent+'/'+x.querySelectorAll('.pr-f-etapes i.on').length);
-      if(l.join()!=='Tom=Abonné ✓/4,Max=Qualifié ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
+      if(l.join().replace(/\uE000coche\uE001/g,'✓')!=='Tom=Abonné ✓/4,Max=Qualifié/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
       // Un miroir déjà écrit avec « seance » se relit tel quel.
       return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
     // ══ 28/09/2026 — LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ══
@@ -56864,6 +56864,37 @@ async function testExercices(){
       const root=(sansComm.match(/(^|\n):root\{([\s\S]*?)\n\}/)||[])[2]||'';
       const rayons=(root.match(/--r-[\w-]+(?=\s*:)/g)||[]).sort().join();
       return rayons==='--r-1,--r-2,--r-3,--r-4,--r-full'?true:_echec('rayons de :root : '+rayons);})());
+    // ══ LES EMOJIS DE L'INTERFACE SONT DES ICONES (01/10/2026) ══════════════
+    // scripts/emojis.py a remplacé ✓ ✕ ⚡ 💪 📏 🔥 ☕ 🍵 💊 🛡 🎯… par icon('coche')
+    // et consorts (ou ICO.coche dans un texte brut : toast, textContent). Il ne
+    // reste d'emojis que là où l'app ne dessine pas : partages, visuels,
+    // réactions envoyées. MÊME LISTE que LISTE_BLANCHE de scripts/emojis.py.
+    ok('Les emojis des chaînes de rc-core (hors commentaires) sont tous dans la liste blanche',(()=>{
+      const BLANCHE='⚡💪🔥🛡👇🐈🧍🎹🚗🦏🐘🦖🚌🐋🗽🗼👍❤👏😮☺♫✦♀♂';
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const scr=document.querySelector('script[src*="rc-core."]');
+      const js=scr?lire(scr.getAttribute('src')):'';
+      if(!js) return _echec('rc-core illisible');
+      // Commentaires retirés : /* … */ (pas « image/* »), lignes //, <!-- … -->.
+      const nu=js.replace(/(^|[^\w"'])\/\*[\s\S]*?\*\//g,'$1').replace(/^[ \t]*\/\/.*$/gm,'').replace(/<!--[\s\S]*?-->/g,'');
+      const vus=new Set((nu.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{21C4}]/gu)||[]));
+      const hors=[...vus].filter(e=>BLANCHE.indexOf(e)<0);
+      return hors.length?_echec(hors.length+' emoji(s) hors liste : '+hors.join(' ')):true;})());
+    ok('Le jeu d’icônes porte les quatorze noms qui remplacent les emojis, et toast() dessine ICO',(()=>{
+      const noms=['eclair','muscle','regle','flamme','cafe','the','gelule','bouclier','cible','coeur','cadeau','etoile','coche','croix'];
+      const manque=noms.filter(n=>!ICONS[n]||icon(n,14).indexOf('<svg')!==0);
+      if(manque.length) return _echec('icône(s) absente(s) : '+manque.join(', '));
+      if(icon('coche',14).indexOf('stroke-linecap="square"')<0) return _echec('le trait n’est pas celui du jeu');
+      const d=document.createElement('div');
+      _texteIco(d,'Copié '+ICO.coche+' <b>x</b>');
+      if(!d.querySelector('svg')) return _echec('ICO.coche ne devient pas une icône');
+      if(d.querySelector('b')) return _echec('le texte n’est plus du texte brut');
+      if(_sansIco('Copié '+ICO.coche)!=='Copié') return _echec('_sansIco');
+      const h=String(window._RC_PAGE_PROD||'');
+      if(!h) return true;
+      const nu=h.replace(/<!--[\s\S]*?-->/g,'').replace(/^[ \t]*\/\/.*$/gm,'');
+      const e=nu.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{21C4}]/gu);
+      return e?_echec('index.html garde '+e.length+' emoji(s) : '+[...new Set(e)].join(' ')):true;})());
     ok('.btn et .btn-sm ont le même rayon (--r-3) ; .btn-red est un rouge plat',(()=>{
       const d=document.createElement('div'); d.style.cssText='position:absolute;left:-9999px';
       d.innerHTML='<button class="btn">a</button><button class="btn btn-sm">b</button><button class="btn btn-red">c</button>';
@@ -61285,7 +61316,7 @@ async function testExercices(){
         if(currentUser.sonRepos!==true) return _echec('le son ne s’allume pas');
         if((document.querySelector('.screen.active')||{}).id!=='s-workout') return _echec('« Activer » fait quitter la séance');
         if(woState.reposFin!==echeance) return _echec('« Activer » touche au repos');
-        if(z.textContent!=='Son activé ✓') return _echec('confirmation : « '+z.textContent+' »');
+        if(z.textContent!=='Son activé '||!z.querySelector('svg')) return _echec('confirmation : « '+z.textContent+' »');
         if(toasts.length) return _echec('un toast en plus de la ligne : '+toasts.join(' | '));
         if(currentUser.vus.reposSonVus!==0) return _echec('allumer ne remet pas le compteur à zéro');
         await pause(2150);
@@ -61316,7 +61347,7 @@ async function testExercices(){
         if(currentUser.vus.reposSonVus!==1) return _echec('rechargement : compté '+currentUser.vus.reposSonVus+' fois');
         // L'ICÔNE DU BANDEAU ALLUME PENDANT LA PROPOSITION : la ligne suit.
         document.getElementById('rep-son').click();
-        if(inv().textContent!=='Son activé ✓') return _echec('l’icône allume, la ligne dit encore « '+inv().textContent+' »');
+        if(inv().textContent!=='Son activé '||!inv().querySelector('svg')) return _echec('l’icône allume, la ligne dit encore « '+inv().textContent+' »');
         annulerRepos();
         // La bascule des réglages reste une bascule, avec son toast.
         toasts.length=0; basculerSonRepos();
@@ -61741,9 +61772,9 @@ async function testExercices(){
         if(actif()!=='s-food-search') return _echec('après l’ajout : '+actif());
         if(inp.value!==''||document.activeElement!==inp) return _echec('le champ n’est ni vidé ni focalisé');
         if(g('fj-results-list').innerHTML!=='') return _echec('les résultats précédents restent');
-        if(bandeau()!=='Poulet rôti 150 g ajouté au déjeuner ✓AnnulerTerminer') return _echec('bandeau : « '+bandeau()+' »');
-        // Espaces insécables : « 150 g » et « ✓ » ne se séparent pas en fin de ligne.
-        if(!/150 g .* ✓$/.test(z.querySelector('.fj-bandeau-t').textContent)) return _echec('espaces insécables absents');
+        if(bandeau()!=='Poulet rôti 150 g ajouté au déjeuner AnnulerTerminer') return _echec('bandeau : « '+bandeau()+' »');
+        // Espaces insécables : « 150 g » et la coche ne se séparent pas en fin de ligne.
+        if(!/150 g .* $/.test(z.querySelector('.fj-bandeau-t').textContent)||!z.querySelector('.fj-bandeau-t svg')) return _echec('espaces insécables absents');
         if(!/Récents/.test(g('fj-recent-section').textContent)||currentUser.nutrition.recentFoods[0]!==901) return _echec('les récents ne sont pas à jour');
         if(toasts.some(t=>/Ajouté/.test(t))) return _echec('le toast répète le bandeau');
         const f1=z.querySelector('.fj-bandeau');
@@ -61760,7 +61791,7 @@ async function testExercices(){
         if(actif()!=='s-food-search') return _echec('la flèche mène à '+actif());
         const avantRiz={rec:JSON.stringify(currentUser.nutrition.recentFoods),uf:JSON.stringify(currentUser.nutrition.usageFoods)};
         await ajouter(902,200);
-        if(!/^Riz blanc cuit 200 g ajouté au dîner ✓Annuler/.test(bandeau())) return _echec('second bandeau : « '+bandeau()+' »');
+        if(!/^Riz blanc cuit 200 g ajouté au dîner Annuler/.test(bandeau())) return _echec('second bandeau : « '+bandeau()+' »');
         const idRiz=_fjSaisieAjout.id;
         // 3) ANNULER : l'entrée, et elle seule ; les récents et l'usage d'avant.
         if(annulerAjoutAliment()!==true) return _echec('Annuler échoue');
@@ -65749,7 +65780,7 @@ async function testExercices(){
       const _pa=o=>Object.assign({id:'r26',role:'athlete',nutrition:{}},o);
       const lire=u=>{ const d=document.createElement('div'); d.innerHTML=_htmlChoixDiete(u);
         return [...d.querySelectorAll('.dch-opt')].map(x=>({type:x.dataset.diete,off:x.disabled,actif:x.classList.contains('actif'),
-          nom:x.querySelector('.dch-nom').textContent,desc:x.querySelector('.dch-desc').textContent,
+          nom:x.querySelector('.dch-nom').textContent+(x.querySelector('.dch-nom svg')?'🔒':''),desc:x.querySelector('.dch-desc').textContent,
           verrou:x.querySelector('.dch-verrou'),clic:x.getAttribute('onclick')})); };
       // OUVERTE : deux options, flexible d'abord, les phrases demandées.
       const o=lire(_pa({coachId:'c',nutrition:{dietType:'flexible',strictAcces:true}}));
@@ -66085,7 +66116,7 @@ async function testExercices(){
         if(envois) return _echec('l’envoi est parti pendant la séance');
         if(toasts.indexOf('Vidéo gardée, envoi à la fin de la séance')<0) return _echec('toast : '+toasts.join(' | '));
         if(d.sets[0].video!==true) return _echec('s.video n’est pas posé');
-        if(!/🎥 1/.test(document.getElementById('sets-body-0').textContent)) return _echec('pas de badge 🎥 1 sur la série');
+        if(!/<svg[^]*?<\/svg> 1</.test(document.getElementById('sets-body-0').innerHTML)) return _echec('pas de badge 🎥 1 sur la série');
         if((document.querySelector('.screen.active')||{}).id!==ecran) return _echec('l’écran a changé');
         return true;
       } finally {

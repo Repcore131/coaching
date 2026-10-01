@@ -847,7 +847,8 @@ function toast(msg,c='var(--green)',duree){
   const erreur=/--red\b|--danger|--arc-danger/i.test(String(c));
   if(_toastMinuteur){ clearTimeout(_toastMinuteur); _toastMinuteur=null; }
   const poser=()=>{
-    t.textContent=msg;
+    // Les marqueurs ICO.coche… deviennent des icones (01/10/2026).
+    _texteIco(t,msg);
     // PAS DE FILET DE COULEUR SUR LE COTE (charte du 26/09/2026) : l'erreur se
     // lit a son fond et a son cadre, le reste du temps le message est neutre.
     t.style.borderLeft='';
@@ -1869,7 +1870,7 @@ function rescueLogin(em,pw){
   panel.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px';
   panel.innerHTML=`
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:28px 24px;max-width:340px;width:100%;text-align:center">
-      <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
+      <div style="font-size:var(--fs-2xl);margin-bottom:12px">${icon('check-circle',32)}</div>
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
       <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">

@@ -98,7 +98,7 @@ function _htmlTableauxTableur(c){
     +li('Niveau d’activité hors sport',
         sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
           t.naf.cle),
-        t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' ⚠ '+NAF_ALERTE_METIER:''))
+        t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' · '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
@@ -1115,7 +1115,7 @@ function ccdJournalEnregistrer(){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _ccdCalForm=null; _ccdCalJour=iso; _ccdCalMois=_calMois(iso);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Repas ajouté au journal ✓','le repas est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Repas ajouté au journal '+ICO.coche,'le repas est');
   try{ renderJournalNutriCoach(c); }catch(e){}
   return true;
 }
@@ -1916,7 +1916,7 @@ function saveClientNutriDiet(type){
   c.nutrition.dietType=type;
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré ✓','la diète est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré '+ICO.coche,'la diète est');
   renderCoachNutriSection(c);
   // LES TROIS BLOCS QUI DEPENDENT DU TYPE DE DIETE. Le taux de respect ne se
   // calcule pas de la meme facon dans les deux modes — jours declares en
@@ -1941,7 +1941,7 @@ function saveClientStrictAcces(ouvert){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    ouvert?'Diète stricte ouverte à l\'athlète ✓':'Diète stricte refermée','l\'accès est');
+    ouvert?'Diète stricte ouverte à l\'athlète '+ICO.coche:'Diète stricte refermée','l\'accès est');
   renderCoachNutriSection(c);
 }
 
@@ -2038,7 +2038,7 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
   const envoi=CLOUD.pushOne(c.email,c);
   window._tbDernierEnvoi=envoi;
   if(!transmettre) toastSync(ok,envoi,
-    viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
+    viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   renderCoachNutriSection(c);
   return true;
 }

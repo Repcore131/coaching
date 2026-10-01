@@ -344,7 +344,7 @@ function sanObjectifEnregistrer(quoi){
     if(on==null||on<500||on>60000){ toast('Un objectif entre 500 et 60 000 pas'); return; }
     u.stepsGoals=Object.assign({},u.stepsGoals||{},{on:on},(off!=null&&off>=500&&off<=60000)?{off:off}:{});
   }
-  toastEcriture(saveUser(),'Objectif enregistré ✓','l’objectif est');
+  toastEcriture(saveUser(),'Objectif enregistré '+ICO.coche,'l’objectif est');
   sanFermer();
   sanRendre();
 }
@@ -1087,7 +1087,7 @@ function _htmlSanSyncFeuille(){
       +corps;
   }
   return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
-      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
+      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">'+icon('croix',14)+'</button></div>'
     +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
       +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
     // LOT G1 : Garmin, qui envoie sans le téléphone. Relié, il passe devant les étapes du téléphone.
@@ -2341,8 +2341,8 @@ function savePastedLinks(){
   document.getElementById('prog-paste-zone').style.display='none';
   document.getElementById('prog-photo2-ready').style.display='block';
   const lbl=document.getElementById('prog-photo2-label');
-  if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube prêts';
-  toast(links.length+' lien(s) enregistrés ✓');
+  if(lbl) _texteIco(lbl,ICO.coche+' '+links.length+' lien(s) YouTube prêts');
+  toast(links.length+' lien(s) enregistrés '+ICO.coche);
 }
 
 async function importVideoLinksFromPdf(input){
@@ -2388,8 +2388,8 @@ async function importVideoLinksFromPdf(input){
       document.getElementById('prog-photo2-ph').style.display='none';
       document.getElementById('prog-photo2-ready').style.display='block';
       const lbl=document.getElementById('prog-photo2-label');
-      if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube trouvé(s)';
-      toast(links.length+' lien(s) YouTube importé(s) ✓');
+      if(lbl) _texteIco(lbl,ICO.coche+' '+links.length+' lien(s) YouTube trouvé(s)');
+      toast(links.length+' lien(s) YouTube importé(s) '+ICO.coche);
     } else {
       // Modale diagnostic — montre le texte brut extrait
       const preview=t=>t.replace(/</g,'&lt;').slice(0,400);
@@ -2397,7 +2397,7 @@ async function importVideoLinksFromPdf(input){
       <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <b style="color:var(--red-light)">Aucun lien trouvé : Diagnostic</b>
-          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
         </div>
         <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Copie ce texte et envoie-le pour qu'on diagnostique :</p>
         <div style="font-size:var(--fs-xs);margin-bottom:6px;color:var(--green)">Annotations trouvées (${annotUrls.length}) :</div>
@@ -2453,7 +2453,7 @@ async function analyzeProgPhotos(){
           <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
               <b style="color:var(--red-light)">Lecture automatique : texte brut</b>
-              <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+              <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
             </div>
             <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
             <div style="font-size:var(--fs-xs);color:var(--green);margin-bottom:4px">M1 original :</div>

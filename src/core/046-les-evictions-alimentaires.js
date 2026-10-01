@@ -1647,7 +1647,7 @@ function _suppMajCoches(){
     const l=Array.from(sec.querySelectorAll('[data-supp-coche]'));
     const tout=l.length>0&&l.every(b=>b.getAttribute('aria-pressed')==='true');
     bt.disabled=tout;
-    bt.textContent=tout?'✓ Tout pris':'Tout prendre ('+l.length+')';
+    _texteIco(bt,tout?ICO.coche+' Tout pris':'Tout prendre ('+l.length+')');
   });
 }
 function _renderSuppTable(list, isCoach, editFn){
@@ -1793,7 +1793,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const actifs=sec.items.filter(e=>e.s.active!==false);
     const tous=actifs.length>0&&actifs.every(e=>pris.has(_suppCle(e.s.id,sec.id)));
     const tout=(!isCoach&&actifs.length)
-      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?'✓ Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
+      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?icon('coche',14)+' Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
     return `<section class="supp-moment" style="--mc:${mc}" data-moment="${sec.id}">
       <div class="supp-mh">
         <span class="supp-mi" aria-hidden="true">${_suppTimingIcon(sec.id,26,mc)}</span>
@@ -2059,7 +2059,7 @@ function saveSuppEntry(){
   else{list.push(entry);}
   const ok=saveUser();
   if(currentUser._notifEnabled) scheduleSuppNotif();
-  toastEcriture(ok,idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
+  toastEcriture(ok,idx>=0?'Complément mis à jour '+ICO.coche:'Complément ajouté '+ICO.coche,'le complément est');
   _suppReturnToNutrition?loadNutrition():loadSupplements();
 }
 

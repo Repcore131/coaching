@@ -467,11 +467,11 @@ function finishWorkout(incomplete=false){
     try{ go('s-workout-done'); }catch(_e){}
     try{
       const m=document.getElementById('wd-msg');
-      if(m) m.textContent='Séance enregistrée ✓ Le détail de fin de séance n\'a pas pu s\'afficher, mais rien n\'est perdu.';
+      if(m) _texteIco(m,'Séance enregistrée '+ICO.coche+' Le détail de fin de séance n\'a pas pu s\'afficher, mais rien n\'est perdu.');
     }catch(_e){}
     // ET UN TOAST, parce que l'ecran de fin peut lui-meme etre reste vide : le
     // message ci-dessus vit dans un noeud qui n'existe peut-etre plus.
-    try{ toast('Séance enregistrée ✓ (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
+    try{ toast('Séance enregistrée '+ICO.coche+' (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
   }
   // ── LA RELANCE D'INSTALLATION, ICI ET NULLE PART AILLEURS ───────────
   //

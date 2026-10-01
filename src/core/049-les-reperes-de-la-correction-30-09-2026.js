@@ -174,8 +174,8 @@ function _vcCorpsHtml(email,videoId){
         <div id="vc-audio-preview" style="display:none">
           <audio id="vc-audio-player" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">✓ Ajouter ce message</button>
-            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">✗ Recommencer</button>
+            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">${icon('coche',14)} Ajouter ce message</button>
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">${icon('croix',14)} Recommencer</button>
           </div>
         </div>
         <div id="vc-audio-status" class="vcx-audio-s"></div>
@@ -1321,7 +1321,7 @@ async function confirmAudioAnnotation(){
     _renderTsAnnotations();
     cancelAudioAnnotation();
     document.getElementById('vc-audio-ts').value='';
-    if(status)status.textContent='✓ Message audio ajouté';
+    if(status) _texteIco(status,ICO.coche+' Message audio ajouté');
   }catch(e){
     console.error('[confirmAudioAnnotation]',e);
     if(status)status.textContent='';
@@ -1355,7 +1355,7 @@ async function uploadAudioFile(input){
     _renderTsAnnotations();
     document.getElementById('vc-audio-ts').value='';
     input.value='';
-    if(status)status.textContent='✓ Message audio ajouté';
+    if(status) _texteIco(status,ICO.coche+' Message audio ajouté');
   }catch(e){
     console.error('[uploadAudioFile]',e);
     if(status)status.textContent='';
@@ -1614,7 +1614,7 @@ function loadSteps(containerId='steps-content',opts){
       const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
       const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:var(--r-1);background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type==='on'?'Entraînement':'Repos'}</span>`:'';
-      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
+      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">'+icon('coche',14)+'</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
       return `<div style="padding:10px 0;border-bottom:1px solid #111">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div></div>

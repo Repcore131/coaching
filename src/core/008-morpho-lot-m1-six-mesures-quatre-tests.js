@@ -1723,7 +1723,7 @@ async function lireMorphoPhoto(email){
   users[email]=c;
   const ok=DB.set('users',users);
   _ampRendre();
-  toastSync(ok,CLOUD.pushOne(email,c),'Photo lue ✓','la lecture de photo est');
+  toastSync(ok,CLOUD.pushOne(email,c),'Photo lue '+ICO.coche,'la lecture de photo est');
   return true;
 }
 /** La dernière lecture, pour l'afficher sans la relire. @type {any} */
@@ -2107,7 +2107,7 @@ async function refaireMorphoInitiale(email){
   users[email]=c;
   const ok=DB.set('users',users);
   try{ _ampRendre(); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(email,c),'Analyse refaite ✓','l’analyse est');
+  toastSync(ok,CLOUD.pushOne(email,c),'Analyse refaite '+ICO.coche,'l’analyse est');
   return true;
 }
 // ── CE QUE L'ECRAN EN DIT ──────────────────────────────────────────────────

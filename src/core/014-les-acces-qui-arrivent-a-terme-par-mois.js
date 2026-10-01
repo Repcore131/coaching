@@ -413,7 +413,7 @@ function loadCoachHome(){
   // les memes fonctions, et rendus par renderPortefeuille depuis
   // renderClientList. Un seul comptage, un seul rendu.
   try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
-    if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' ✓'); }catch(e){}
+    if(_e) _texteIco(_e,_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' '+ICO.coche)); }catch(e){}
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
@@ -703,7 +703,7 @@ function ccdCadenceEnregistrer(){
   _cadenceAppliquer(c,f===''?null:f,v('bcad-jour'),[1,2,3].map(i=>v('bcad-q'+i)||''));
   users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Cadence enregistrée ✓','la cadence est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Cadence enregistrée '+ICO.coche,'la cadence est');
   try{ renderCalendrierBilansCoach(c); }catch(e){}
   return true;
 }
@@ -734,7 +734,7 @@ function selCadenceAppliquer(){
   }
   const ok=DB.set('users',users);
   closeModal();
-  toastSync(ok,Promise.all(faits.map(c=>CLOUD.pushOne(c.email,c))),'Cadence appliquée à '+faits.length+' athlète'+(faits.length>1?'s':'')+' ✓','la cadence est');
+  toastSync(ok,Promise.all(faits.map(c=>CLOUD.pushOne(c.email,c))),'Cadence appliquée à '+faits.length+' athlète'+(faits.length>1?'s':'')+' '+ICO.coche,'la cadence est');
   try{ renderTodoBlock(getClients()); }catch(e){}
   return faits.length;
 }
@@ -2196,7 +2196,7 @@ function _buildSessionCard(s,client){
         <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
       </div>
-      <span style="font-size:var(--fs-xs);font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
+      <span style="font-size:var(--fs-xs);font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?icon('coche',14):icon('croix',14)}</span>
       <span class="sc-arr" style="color:var(--text-dim);font-size:var(--fs-xs);flex-shrink:0">▶</span>
     </div>
     <div class="sc-body" style="display:none;padding:0 14px 14px">

@@ -708,7 +708,7 @@ function renderCartePesee(){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
-      ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
+      ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">${icon('coche',14)} ${dujour.kg} kg</span>`:''}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <!-- La boîte, et non le champ, porte la bordure : c'est elle qui doit
@@ -753,7 +753,7 @@ async function _enregistrerPesee(v,jour){
   if(ant&&Math.abs(v-ant.kg)>PESEE_ECART_CONFIRM
      &&!await rcConfirm('Écart de '+Math.abs(v-ant.kg).toFixed(1)+' kg avec ta dernière pesée ('+ant.kg+' kg).\n\nC\'est bien '+v+' kg ?',null,'Confirmer')) return false;
   if(!_recordWeight(auj,v)){ toast('Pesée refusée','var(--red)'); return false; }
-  toastEcriture(saveUser(),'Pesée enregistrée 👍','ta pesée est');
+  toastEcriture(saveUser(),'Pesée enregistrée '+ICO.coche,'ta pesée est');
   return true;
 }
 async function savePesee(){
@@ -1263,7 +1263,7 @@ function confirmerPhase(){
   _phChoix=null;
   const ok=saveUser();
   closeModal();
-  toastEcriture(ok,PHASES[t].lib+' enregistrée 👍','ta phase est');
+  toastEcriture(ok,PHASES[t].lib+' enregistrée '+ICO.coche,'ta phase est');
   if(document.getElementById('clh-phase')) loadClientHome();
   const bp=document.getElementById('prog-bandeau-phase');
   if(bp) renderBandeauPhase();
@@ -1883,7 +1883,7 @@ function saveStepsGoals(){
   const offVal=parseInt(document.getElementById('steps-goal-off').value,10);
   if(isNaN(onVal)||onVal<500||isNaN(offVal)||offVal<500){toast('Objectifs invalides');return;}
   currentUser.stepsGoals={on:onVal,off:offVal};
-  toastEcriture(saveUser(),'Objectifs enregistrés ✓','les objectifs sont');
+  toastEcriture(saveUser(),'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   // Et NON loadLifestyle() : ce panneau est aussi rendu dans l'écran « Mes
   // pas » autonome, d'où un go('s-lifestyle') éjectait l'athlète au moment
   // même où son enregistrement réussissait.

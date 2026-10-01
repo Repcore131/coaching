@@ -1588,7 +1588,7 @@ async function _canalCharger(){
   try{ msgs=await CLOUD.pullCanalMessages(cle); }
   catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
@@ -1628,7 +1628,7 @@ async function _canalCharger(){
 }
 function _canalVide(titre,sous){
   return `<div style="text-align:center;padding:48px 20px">
-    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📭</div>
+    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('mail',32)}</div>
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">${escapeHtml(titre)}</div>
     <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">${escapeHtml(sous)}</div></div>`;
 }
@@ -2218,7 +2218,7 @@ function htmlKit(k){
   const lundi=kitLundi(Date.parse(k.semaine+'T12:00:00')).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
   const prets=k.contenus.filter(c=>c.d).length;
   let h='<div class="aa-haut"><span>Mon kit · semaine du '+escapeHtml(lundi)+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">'+icon('croix',14)+'</button></div>'
     +'<div class="kit-corps">'
     +'<p class="kit-intro">Trois contenus prêts à poster (1080×1350), tirés des chiffres de ta team. Modifie la légende si tu veux, puis publie.</p>'
     +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" onclick="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
@@ -2247,7 +2247,7 @@ async function kitCopierLegende(i,btn){
   const c=_kit&&_kit.contenus[i]; if(!c) return false;
   let ok=false;
   try{ await navigator.clipboard.writeText(c.legende); ok=true; }catch(e){ ok=false; }
-  if(btn){ const t=btn.textContent; btn.textContent=ok?'Copiée ✓':'Copie impossible'; setTimeout(()=>{ btn.textContent=t; },1800); }
+  if(btn){ const t=btn.textContent; _texteIco(btn,ok?'Copiée '+ICO.coche:'Copie impossible'); setTimeout(()=>{ btn.textContent=t; },1800); }
   return ok;
 }
 function _kitBlob(c){
@@ -2398,7 +2398,7 @@ function _vcRendre(){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="btn btn-outline btn-casse vc-part" onclick="vcSortir(\'partager\',this)">'+icon('share',16)+' <span>Partager</span></button>':'';
   z.innerHTML='<div class="aa-haut"><span>'+(_vc.type==='victoire'?'Victoire de '+escapeHtml(_vc.u.fname||'l’athlète'):'Récap de l’équipe')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">'+icon('croix',14)+'</button></div>'
     +'<div class="aa-apercu"><canvas id="vc-canvas" aria-label="Aperçu de l’image"></canvas></div>'
     +'<div class="aa-bas">'
     +'<button type="button" class="btn btn-red vc-dl" onclick="vcSortir(\'telecharger\',this)">'+icon('download',18)+' <span>Télécharger</span></button>'+part
@@ -2444,7 +2444,7 @@ function vcSortir(quoi,btn){
   }catch(e){ toast('Export impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   try{ if(ok) rcm(_vc&&_vc.type==='recap'?'coach_recap_partage':'coach_victoire_partage'); }catch(e){}
   return ok;
 }

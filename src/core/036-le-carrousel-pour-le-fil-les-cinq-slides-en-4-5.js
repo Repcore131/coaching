@@ -35,7 +35,7 @@ function partagerCarrouselWrapped(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carrousel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carrousel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // Le repli : les cinq images, chacune avec son lien « Enregistrer ». Chaque
@@ -529,7 +529,7 @@ function _muscSortir(id,btn,partager){
   }catch(e){ toast('Visuel impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 function partagerCarteMuscles(id,btn){ return _muscSortir(id,btn,true); }
@@ -990,7 +990,7 @@ function _aaRendreEcran(){
   const vues=aaVuesDisponibles(u);
   const cons=u&&u.consentementPartageCoach&&Number(u.consentementPartageCoach.date)>0;
   z.innerHTML='<div class="aa-haut"><span>'+(role==='coach'?'Avant / après de '+escapeHtml(u.fname||'l’athlète'):'Mon avant/après')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">'+icon('croix',14)+'</button></div>'
     +'<div class="aa-apercu"><canvas id="aa-canvas" aria-label="Aperçu de l’image"></canvas><div class="aa-charge" id="aa-charge">Composition…</div></div>'
     +'<div class="aa-bas">'
     +(autorise
@@ -1126,7 +1126,7 @@ function _aaSortir(partager,btn,confirme){
   }catch(e){ toast('Image impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const t=sp.textContent; sp.textContent='Image prête ✓'; setTimeout(()=>{ sp.textContent=t; },2000); }
+  if(sp&&ok){ const t=sp.textContent; _texteIco(sp,'Image prête '+ICO.coche); setTimeout(()=>{ sp.textContent=t; },2000); }
   return ok;
 }
 function aaPartager(btn){ return _aaSortir(true,btn,false); }
@@ -1294,7 +1294,7 @@ function partagerCycle(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
   return ok;
 }
 // ══ LES PALIERS DE SÉRIE : 4, 8, 12, 26, 52 SEMAINES ══════════════════════
@@ -1434,7 +1434,7 @@ function partagerSerie(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ LES VOLTS (XP) ET LES DIX RANGS ═══════════════════════════════════════
@@ -2141,7 +2141,7 @@ function htmlChevrons(n,classe){
 function _celebrerSousNiveau(xp){
   const nom=nomRangComplet(xp), s=sousNiveauDe(xp);
   if(!s) return false;
-  try{ toast('⚡ '+nom+' · nouveau sous-niveau'); }catch(e){}
+  try{ toast(ICO.eclair+' '+nom+' · nouveau sous-niveau'); }catch(e){}
   try{ const el=document.getElementById('clh-rang'); rcFoudre(el&&el.offsetParent?el:null,{eclairs:1,son:false}); }catch(e){}
   try{
     const ancre=document.getElementById('wd-volts');

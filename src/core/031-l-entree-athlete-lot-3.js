@@ -1069,7 +1069,7 @@ async function _echOuvrirDialogue(){
   try{ if(currentClientId) openClientDetail(currentClientId,true); }catch(e){}
   try{
     const _envoi=CLOUD.pushOne(c.email,c);
-    toastSync(true,_envoi,r.remplacee?'Échéance remplacée ✓':'Échéance ouverte ✓','l’échéance');
+    toastSync(true,_envoi,r.remplacee?'Échéance remplacée '+ICO.coche:'Échéance ouverte '+ICO.coche,'l’échéance');
   }catch(e){}
   return true;
 }
@@ -1121,7 +1121,7 @@ function _echEnregistrer(n){
   try{ _renderEcheance(); }catch(e){}
   try{
     const _envoi=CLOUD.pushOne(u.email,u);
-    toastSync(true,_envoi,'J-'+n+' enregistré ✓','cette journée');
+    toastSync(true,_envoi,'J-'+n+' enregistré '+ICO.coche,'cette journée');
   }catch(e){}
   return true;
 }
@@ -1672,7 +1672,7 @@ function rcRendreSrpe(){
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
     +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
     +'style="background:none;border:none;color:rgba(255,255,255,.45);font-size:var(--fs-lg);line-height:1;'
-    +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">✕</button></div>'
+    +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">'+icon('croix',14)+'</button></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +SRPE_ECHELLE.map(e=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="flex:1 1 auto;min-width:0;padding:10px 6px;font-size:var(--fs-xs)" '
@@ -1698,7 +1698,7 @@ function rcNoterSeance(cle){
   if(!r||!r.ok) return false;
   try{ direSiEnvoiEchoue(CLOUD.pushOne(u.email,u),
     'Ta note de séance','ton coach ne la verra pas encore'); }catch(e){}
-  try{ toast('Noté ✓'); }catch(e){}
+  try{ toast('Noté '+ICO.coche); }catch(e){}
   return true;
 }
 // L'ECRITURE DE LA NOTE. Elle porte sur la DERNIERE seance enregistree.

@@ -916,7 +916,7 @@ function loadSubscribePage(mode,payload){
     if(codeOpt) codeOpt.style.display='none';
     if(pendingInfo){
       pendingInfo.style.display='';
-      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-sm);line-height:1.7">Code de <strong>'+escapeHtml(payload.coachName||'ton coach')+'</strong> reconnu ✓<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement ci-dessous.</div>';
+      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-sm);line-height:1.7">Code de <strong>'+escapeHtml(payload.coachName||'ton coach')+'</strong> reconnu '+icon('coche',14)+'<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement ci-dessous.</div>';
     }
   } else {
     if(codeOpt) codeOpt.style.display='';
@@ -1082,7 +1082,7 @@ function renderPaypalButton(planId,coachId){
         saveUser();
         toast('Paiement reçu, activation…','var(--info)');
         const _actif=await _attendreActivation(_estCoach?{coach:_subPalier}:{});
-        toast(_actif?'Abonnement activé ! Bienvenue sur RepCore ✓'
+        toast(_actif?'Abonnement activé ! Bienvenue sur RepCore '+ICO.coche
           :'Paiement reçu. L’activation prend plus de temps que prévu : elle apparaîtra d’elle-même, sans rien refaire.',
           _actif?'var(--green)':'var(--orange)');
         // UN COACH NE RENTRE PAS SUR L ACCUEIL ATHLÈTE. loadClientHome y lit
@@ -1866,7 +1866,7 @@ function _peLigneEtape(e,i,total){
       <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i-1})" ${i===0?'disabled':''} aria-label="Monter">▲</button>
       <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i+1})" ${i===total-1?'disabled':''} aria-label="Descendre">▼</button>
     </div>
-    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">✕</button>
+    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">${icon('croix',14)}</button>
   </div>`;
 }
 function _peRendreEtapes(){
@@ -2116,7 +2116,7 @@ function _pfRendre(){
 
   const barre=`<button onclick="_pfOuvert=!_pfOuvert;_pfRendre()"
       style="display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:2px 0;cursor:pointer;font-family:Montserrat,sans-serif;text-align:left">
-      <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">☰ Filtres${actifs?' ('+actifs+')':''}</span>
+      <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">${icon('sliders',12)} Filtres${actifs?' ('+actifs+')':''}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-2xs);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(resume)}</span>
       <span style="color:var(--sub);font-size:var(--fs-sm)">${_pfOuvert?'▾':'▸'}</span>
     </button>`;

@@ -175,7 +175,7 @@ function appliquerAjustement(retour){
   n.macros.origineDate=Date.now();
   _ajustJournaliser(a,'applique');
   const ok=saveUser();
-  toastEcriture(ok,'Objectifs ajustés ✓','l\'ajustement est');
+  toastEcriture(ok,'Objectifs ajustés '+ICO.coche,'l\'ajustement est');
   _ajustRetour(retour);
 }
 function refuserAjustement(retour){

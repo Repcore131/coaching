@@ -140,7 +140,7 @@ function uploadCoachPhoto(input){
     if(el) el.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     // L'aperçu vient d'être posé dans le DOM : sans ce garde-fou, l'image
     // affichée renforcerait la fausse certitude d'un enregistrement réussi.
-    toastSync(ok,_envoi,'Photo enregistrée ✓','le profil public est');
+    toastSync(ok,_envoi,'Photo enregistrée '+ICO.coche,'le profil public est');
   });
 }
 // Une ligne de diplome : un intitule, une image facultative. Le DOM est la
@@ -353,17 +353,17 @@ function ajouterDiplomeRow(titre,image){
   // sur la ligne : le champ file ne peut pas porter une valeur existante.
   i.type='button'; i.className='dip-image';
   i.dataset.img=image||'';
-  i.textContent=image?'Image ✓':'Ajouter une image';
+  _texteIco(i,image?'Image '+ICO.coche:'Ajouter une image');
   i.style.cssText=st+';cursor:pointer;text-align:left';
   i.onclick=()=>{
     const f=document.createElement('input');
     f.type='file'; f.accept='image/*';
     f.onchange=()=>{ _lireImage(f,900,1200,(b64)=>{
-      i.dataset.img=b64; i.textContent='Image ✓'; }); };
+      i.dataset.img=b64; _texteIco(i,'Image '+ICO.coche); }); };
     f.click();
   };
   const x=document.createElement('button');
-  x.type='button'; x.textContent='✕';
+  x.type='button'; _texteIco(x,ICO.croix);
   x.setAttribute('aria-label','Retirer ce diplôme');
   x.style.cssText='flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer';
   x.onclick=()=>row.remove();
@@ -515,7 +515,7 @@ function _htmlDiplomesCoach(p){
   // c est lui qui fait lire la ligne comme une validation.
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
-    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">✓</span>'
+    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">'+icon('coche',14)+'</span>'
     +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
@@ -687,7 +687,7 @@ function saveCoachIdentity(){
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastSync(ok,_envoi,'Identité de la team enregistrée ✓','le profil public est');
+  toastSync(ok,_envoi,'Identité de la team enregistrée '+ICO.coche,'le profil public est');
 }
 
 // ── Le cadre de disponibilité, côté écran ─────────────────────────────────
@@ -729,7 +729,7 @@ function saveCoachDispo(){
   const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch(e){}},300);
-  toastSync(ok,_envoi,'Disponibilité enregistrée ✓','le profil public est');
+  toastSync(ok,_envoi,'Disponibilité enregistrée '+ICO.coche,'le profil public est');
   _chargerDispoCoach(currentUser);
 }
 function _dispoAAAAMMJJ(ts){
@@ -826,7 +826,7 @@ function addCoachBannerRow(imageUrl, linkUrl){
     :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:var(--r-1);font-size:var(--fs-xs);color:var(--text-dim)">Ajouter une photo</div>`;
   row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:1px">BANNIÈRE ${n}</span>
-    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">✕</button>
+    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">${icon('croix',14)}</button>
   </div>
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>
@@ -860,7 +860,7 @@ function saveCoachBanners(){
   const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastSync(ok,_envoi,'Bannières enregistrées ✓','le profil public est');
+  toastSync(ok,_envoi,'Bannières enregistrées '+ICO.coche,'le profil public est');
 }
 // R34 — LE CONTENEUR EST REVENU AU BAS DE L'ACCUEIL ATHLETE (#clh-promo-banners).
 // Un seul identifiant dans toute l'application — un second, reste dans la
@@ -927,7 +927,7 @@ function uploadAthletePhoto(input){
     if(circle) circle.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     const avatar=document.getElementById('clh-athlete-avatar');
     if(avatar) avatar.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
-    toastEcriture(ok,'Photo enregistrée ✓','la photo est');
+    toastEcriture(ok,'Photo enregistrée '+ICO.coche,'la photo est');
   });
 }
 // Suivi du cycle, modifiable à tout moment. La carte suit la convention de
@@ -1298,7 +1298,7 @@ function saveAthleteProfile(){
     // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
     if(_atpCycleSuivi!=='actif') currentUser.currentCycle='ignore';
   }
-  toastEcriture(saveUser(),'Profil enregistré ✓','ton profil est');
+  toastEcriture(saveUser(),'Profil enregistré '+ICO.coche,'ton profil est');
   go('s-client-home');
   loadClientHome();
 }
@@ -1338,7 +1338,7 @@ function saveCloudinaryConfig(){
   if(!name||!preset){toast('Renseigne les deux champs','var(--orange)');return;}
   currentUser.cloudinaryName=name;
   currentUser.cloudinaryPreset=preset;
-  toastEcriture(saveUser(),'Configuration vidéo enregistrée ✓','la configuration est');
+  toastEcriture(saveUser(),'Configuration vidéo enregistrée '+ICO.coche,'la configuration est');
 }
 // ══ L'ACCES DES ATHLETES, ET LA RELANCE ══════════════════════════════════
 //
@@ -1704,7 +1704,7 @@ function executeOffboard(coachId){
   // Un transfert non synchronisé laisse l'ancien coach avec ses droits d'accès
   // côté serveur : l'annoncer fait n'est pas anodin.
   toastSync(ok,Promise.all(envois),
-    athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' ✓','le transfert est');
+    athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' '+ICO.coche,'le transfert est');
 }
 
 // ── Portabilité RGPD (art. 20) : un bouton, un fichier ─────────────────────
@@ -2230,7 +2230,7 @@ async function _envoyerInvitation(){
       partage=true;
     }
   }catch(e){}   // annule par l utilisateur : ce n est pas une erreur
-  toast(partage?'Invitation envoyée ✓':'✓ Lien copié : envoie-le à '
+  toast(partage?'Invitation envoyée '+ICO.coche:ICO.coche+' Lien copié : envoie-le à '
     +(r.invitation.prenom||'ton athlète'),'var(--green)');
   _rendreInvitations();
   return true;

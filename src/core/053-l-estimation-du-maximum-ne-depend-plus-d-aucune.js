@@ -508,7 +508,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px;margin-bottom:10px;border:1px solid ${ex.ss?'var(--orange)':'var(--border)'}" id="ocr-ex-${i}">
       ${i===0?'':`<label style="display:flex;align-items:center;gap:8px;margin:-4px 0 10px;cursor:pointer">
         <input type="checkbox" id="ocr-ss-${i}" ${ex.ss?'checked':''} style="width:15px;height:15px;margin:0;accent-color:var(--orange);flex-shrink:0;cursor:pointer">
-        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">⇄ EN SUPERSET AVEC LE PRÉCÉDENT</span>
+        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">${icon('echange',12)} EN SUPERSET AVEC LE PRÉCÉDENT</span>
       </label>`}
       <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px">
         <span style="background:var(--red);color:var(--text);border-radius:var(--r-2);padding:2px 8px;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${i+1}</span>
@@ -547,7 +547,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2> ${exercises.length} exercices lus</h2>
-      <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
+      <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Vérifie et corrige si besoin, puis importe. <span style="color:var(--green);font-size:var(--fs-xs)">v233</span></p>
     <div id="ocr-rows">${rows}</div>
@@ -769,7 +769,7 @@ function showPdfSeancesModal(seances,targetEmail){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2>${seances.length} séance${seances.length>1?'s':''} détectée${seances.length>1?'s':''}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Clique sur une séance pour voir les exercices. Les jours de pratique seront à définir ensuite dans le programme.</p>
     ${rows}
@@ -787,7 +787,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="font-size:var(--fs-lg)"> PDF Google Drive</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:20px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
     <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
@@ -1190,8 +1190,8 @@ async function createAthlete(){
   // suite lit ce ternaire d'un bloc pour verifier que les deux cas restent
   // distingues, et un commentaire pose au milieu suffit a la rendre aveugle.
   const messageFinal=(motDePasseActif
-    ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe.'
-    : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
+    ? ICO.coche+' '+fn+' créé : il peut se connecter avec cet email et ce mot de passe.'
+    : ICO.coche+' '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
     +_aFaire+' Accès jusqu\'au '+exp;
   toastEcriture(okU&&okS,messageFinal,'le compte est');
   loadCoachHome();
@@ -1460,7 +1460,7 @@ function _rcSortieManuelle(nom,u){
     if(c){
       // ON NE DIT « COPIÉ » QUE SI ÇA L'EST. Un accusé de réception faux fait
       // coller dans le vide, et c'est pire que pas d'accusé du tout.
-      c.textContent=ok?'✓ Lien copié':'Sélectionne l’adresse ci-dessous et copie-la.';
+      _texteIco(c,ok?ICO.coche+' Lien copié':'Sélectionne l’adresse ci-dessous et copie-la.');
       c.style.color=ok?'var(--green)':'var(--orange)';
       c.style.display='block';
     }
@@ -1995,7 +1995,7 @@ function _rcInviteArrivee(){
   // d'un cran plus loin : la personne toucherait en croyant installer.
   try{
     if(b&&rcInstallBloquePar()==='samsung')
-      b.textContent='⬇ Ajouter RepCore à l\'écran d\'accueil';
+      _texteIco(b,ICO.download+' Ajouter RepCore à l\'écran d\'accueil');
   }catch(e){}
   // Sans ce second passage, un Android eligible restait sur la branche F de
   // l'ecran d'installation et se voyait expliquer un menu alors qu'un bouton
@@ -2592,7 +2592,7 @@ function saveCoachPhone(){
   // Même règle que pour les athlètes : wa.me refuse un numéro national.
   if(_numWa(raw).length<8){toast('Numéro inutilisable : mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');return;}
   currentUser.phone=raw;
-  toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
+  toastEcriture(saveUser(),'Numéro WhatsApp enregistré '+ICO.coche,'le numéro est');
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
 }

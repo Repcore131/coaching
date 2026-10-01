@@ -1450,7 +1450,7 @@ function openClientDetail(cid,_refresh,_force){
         .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
         .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
@@ -2277,8 +2277,8 @@ function renderBilanEvolution(c){
       return null;
     };
     const VIEWS=[
-      {k:'face',label:'De Face',icon:'🧍'},
-      {k:'back',label:'De Dos',icon:'🔙'},
+      {k:'face',label:'De Face',icon:'user'},
+      {k:'back',label:'De Dos',icon:'refresh-cw'},
       {k:'side',label:'De Profil',icon:'↔️'}
     ];
     if(!bilans.length)return'';
@@ -2303,7 +2303,7 @@ function renderBilanEvolution(c){
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
-              <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
+              <div style="font-size:var(--fs-2xl);opacity:.5">${icon('camera',28)}</div>
               <div style="font-size:var(--fs-xs);color:var(--text-mid);font-weight:700">B${i+1}</div>
               <div style="font-size:var(--fs-xs);color:var(--sub)">${date}</div>
               <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
@@ -2311,7 +2311,7 @@ function renderBilanEvolution(c){
       }).join('');
       return `<div style="margin-bottom:20px">
         <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <span>${v.icon}</span><span>${v.label}</span>
+          <span>${icon(v.icon,14)}</span><span>${v.label}</span>
         </div>
         <div style="position:relative"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px" data-scroll-fade>${cards}</div></div>
       </div>`;

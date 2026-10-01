@@ -126,7 +126,7 @@ async function enregistrerVenteProgramme(){
   // ici, et aucun chemin ne peut publier une liste perimee.
   const envoi=CLOUD.pushProfilCoach(currentUser);
   toastSync(local,envoi,
-    progEnVente(p)?'Programme publié sur ta vitrine ✓':'Programme retiré de ta vitrine ✓',
+    progEnVente(p)?'Programme publié sur ta vitrine '+ICO.coche:'Programme retiré de ta vitrine '+ICO.coche,
     'ta vitrine est');
   fermerVenteProgramme();
   loadCoachProgramsList();
@@ -1061,7 +1061,7 @@ async function cptCopyDay(i,j){
   loadProgTemplateSlots(_editProgTemplateGender);
   // Pas de saveUser ici : comme cptToggleDay et cptRenameSession, l'écriture
   // appartient au bouton SAUVEGARDER de l'écran.
-  toast(src.day+' → '+dst.day+' ✓');
+  toast(src.day+' → '+dst.day+' '+ICO.coche);
 }
 // Le programme d'un ATHLÈTE passe par dupliquerSeance : copie profonde, nom
 // unique, photo non reprise. cptCopyDay garde _copierSeance — un modèle n'a ni
@@ -1081,7 +1081,7 @@ async function coachCopyDay(i,j){
   const r=dupliquerSeance(sc,i,j);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return; }
   loadCoachSessionSlots();
-  toast(src.day+' → '+dst.day+' : '+r.nom+' ✓');
+  toast(src.day+' → '+dst.day+' : '+r.nom+' '+ICO.coche);
 }
 
 function cptToggleDay(i){
@@ -1271,7 +1271,7 @@ async function setClientPhone(){
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(emailKey,a);
   openClientDetail(currentClientId,true);
-  toastSync(ok,envoi,brut?'Numéro enregistré ✓':'Numéro retiré','le numéro est');
+  toastSync(ok,envoi,brut?'Numéro enregistré '+ICO.coche:'Numéro retiré','le numéro est');
 }
 
 // Cœur d'assignation, partagé par l'écran d'assignation en masse et par
@@ -2429,7 +2429,7 @@ function saveCoachSessions(){
   const _b=document.getElementById('csm-publier');
   if(_b){
     _b.classList.remove('btn-attente');
-    _b.textContent='PUBLIÉ ✓';
+    _texteIco(_b,'PUBLIÉ '+ICO.coche);
     _b.disabled=true;
     if(!arcReduit()) _b.classList.add('celebrate');
   }

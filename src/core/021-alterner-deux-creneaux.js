@@ -244,7 +244,7 @@ function _htmlSeanceDepart(s){
   return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
     +'border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +'<span style="font-size:var(--fs-lg)">⏳</span>'
+    +'<span style="font-size:var(--fs-lg)">'+icon('clock',16)+'</span>'
     +'<div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;'
     +'letter-spacing:1px">Séance provisoire</div></div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">'
@@ -524,7 +524,7 @@ function _htmlDemarrage(u){
     +'<div class="pd-tete"><span class="eyebrow eyebrow-act">Pour démarrer</span>'
     +'<span class="pd-compte">'+faites+' sur 3</span></div>'
     +lignes.map((l,i)=>{
-      const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?'✓':'')+'</span>'
+      const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?icon('coche',14):'')+'</span>'
         +'<span class="pd-txt"><span class="pd-titre">'+(i+1)+' · '+escapeHtml(l.titre)+'</span>'
         +'<span class="pd-sous">'+escapeHtml(l.sous)+'</span></span>';
       return l.fait
@@ -799,7 +799,7 @@ function _bandeauEssai(u){
     :'Tu peux le modifier librement.';
   return `<div class="bandeau-essai" style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-lg)" aria-hidden="true">⏳</span>
+        <span style="font-size:var(--fs-lg)" aria-hidden="true">'+icon('clock',16)+'</span>
         <div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;letter-spacing:1px">Séances d'essai</div>
       </div>
       <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">Ce programme d'essai te permet de commencer tout de suite. ${suite}</div>

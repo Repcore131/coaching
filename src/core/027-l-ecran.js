@@ -635,7 +635,7 @@ function anatAjouterExo(val){
   sc.exercises=(Array.isArray(sc.exercises)?sc.exercises:[]).concat([ex]);
   d.updatedAt=Date.now(); users[c.email]=d;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,d),ex.name+' ajouté à « '+(sc.name||('Séance '+(i+1)))+' » ✓','le programme est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),ex.name+' ajouté à « '+(sc.name||('Séance '+(i+1)))+' » '+ICO.coche,'le programme est');
   return true;
 }
 /**
@@ -670,7 +670,7 @@ function anatEnvoyerConsigne(cle,i){
   if(!n){ toast('Aucun exercice de son programme ne correspond à « '+am.quoi+' ».','var(--orange)'); return false; }
   d.updatedAt=Date.now(); users[c.email]=d;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' ✓','la consigne est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' '+ICO.coche,'la consigne est');
   return true;
 }
 /** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
@@ -805,7 +805,7 @@ function anatSauvegarder(){
   users[c.email]=d;
   const ok=DB.set('users',users);
   renderAnatCoach(getOwnedClient(currentClientId)||c);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée ✓','la sauvegarde est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée '+ICO.coche,'la sauvegarde est');
 }
 /**
  * Changer le bilan analysé. « auto » (ou le bilan par défaut) revient au
@@ -844,7 +844,7 @@ function anatChoisirBilan(val){
   const ok=DB.set('users',users);
   _anatLevIdx=0;
   renderAnatCoach(getOwnedClient(currentClientId)||d);
-  const txt=choix?'Bilan du '+_anatDateFr(choix)+' ✓':'Bilan de départ ✓';
+  const txt=choix?'Bilan du '+_anatDateFr(choix)+' '+ICO.coche:'Bilan de départ '+ICO.coche;
   toastSync(ok,CLOUD.pushOne(c.email,d),txt,'le changement de bilan est');
 }
 function anatRestaurer(id){
@@ -866,7 +866,7 @@ function anatRestaurer(id){
   users[c.email]=d;
   const ok=DB.set('users',users);
   renderAnatCoach(getOwnedClient(currentClientId)||c);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Version du '+_anatDateHeure(v.date)+' restaurée ✓','la restauration est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Version du '+_anatDateHeure(v.date)+' restaurée '+ICO.coche,'la restauration est');
 }
 function anatSupprimerSauvegarde(id){
   const c=getOwnedClient(currentClientId);
@@ -1242,7 +1242,7 @@ function anatRelancer(){
   if(!c) return;
   toast('Détection des repères…');
   anatAnalyser(c.email,true).then(ok=>{
-    if(ok) toast('Détection refaite ✓');
+    if(ok) toast('Détection refaite '+ICO.coche);
     else toast('Rien de lu : '+(_anatEchecs.get(c.email)||'la photo n’a pas pu être lue'),'var(--orange)');
   });
 }
@@ -1258,7 +1258,7 @@ function anatReglerOption(nom,val){
   users[c.email]=d;
   const ok=DB.set('users',users);
   try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Lecture mise à jour ✓','le réglage est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Lecture mise à jour '+ICO.coche,'le réglage est');
 }
 /** La demande « paumes vers l'avant » pour les prochaines photos de bilan (A10). */
 function anatDemanderPaumes(on){
@@ -1272,7 +1272,7 @@ function anatDemanderPaumes(on){
   users[c.email]=d;
   const ok=DB.set('users',users);
   try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(c.email,d),on?'Prochaines photos : paumes vers l’avant ✓':'Demande retirée ✓','la demande est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),on?'Prochaines photos : paumes vers l’avant '+ICO.coche:'Demande retirée '+ICO.coche,'la demande est');
 }
 function anatVue(v){
   if(_anatEdit) return;
@@ -1425,7 +1425,7 @@ function anatEnregistrerPoints(silencieux){
   _anatEdit=null;
   try{ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }catch(x){}
   if(silencieux){ CLOUD.pushOne(e.email,c); return; }
-  toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points ✓','l’analyse est');
+  toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points '+ICO.coche,'l’analyse est');
 }
 function _anatBouge(a,b){
   if(!a||!b) return true;

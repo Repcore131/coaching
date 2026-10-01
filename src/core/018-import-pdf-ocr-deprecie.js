@@ -591,7 +591,7 @@ function _bqLigne(f){
     <button onclick="bqFavori('${escapeHtml(f.slug)}',event)" aria-label="Favori"
       style="background:none;border:none;font-size:var(--fs-xl);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
-      color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'★':'☆'}</button>
+      color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'<span class="ico-plein">'+icon('etoile',16)+'</span>':icon('etoile',16)}</button>
     <button onclick="ouvrirFicheBanque('${escapeHtml(f.slug)}',event)" aria-label="Détail"
       style="background:none;border:none;font-size:var(--fs-lg);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
@@ -894,11 +894,11 @@ function _validerCreationExo(){
   // de demander un clic de plus.
   const _slug=(r.fiche&&r.fiche.slug)||null;
   if(ok&&_bqCb&&_slug&&bqChoisir(_slug)){
-    toast('Exercice créé et ajouté ✓');
+    toast('Exercice créé et ajouté '+ICO.coche);
     return true;
   }
   bqOnglet('perso');
-  toastEcriture(ok,'Exercice créé ✓','l\'exercice est');
+  toastEcriture(ok,'Exercice créé '+ICO.coche,'l\'exercice est');
   return true;
 }
 

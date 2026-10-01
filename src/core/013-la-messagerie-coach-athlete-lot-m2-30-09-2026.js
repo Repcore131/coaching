@@ -1129,7 +1129,7 @@ function _rendreEtiquettesFiche(c){
   if(!z) return;
   if(!c||c._fromCode||!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return; }
   const t=etiquettesDe(currentUser), l=etiquettesAthlete(currentUser,c.id);
-  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">✕</button>')).join('')
+  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">'+icon('croix',14)+'</button>')).join('')
     +'<button type="button" class="etq-plus" onclick="ouvrirEtiquettes(['+_attrArg(c.id)+'])">+ Étiquette</button>';
 }
 // « Cocher l'étiquette… » : dans les trois écrans qui cochent des athlètes.
@@ -1355,7 +1355,7 @@ function renderTodoBlock(clients){
       // colorée de plus ferait trois rouges côte à côte et plus rien ne
       // ressortirait. Deux halos, un serré et un large : c'est ce qui fait le
       // néon plutôt qu'un simple trait clair.
-      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">${icon('croix',14)}</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
@@ -1609,7 +1609,7 @@ function _selMaj(){
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selCadence()">Cadence</button>'
-    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
+    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">'+icon('croix',14)+'</button>'
     +'</div>';
 }
 // Les cases de l'ecran de destination sont cochees APRES son rendu : c'est lui

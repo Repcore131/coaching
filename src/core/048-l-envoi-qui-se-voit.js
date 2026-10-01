@@ -908,7 +908,7 @@ async function uploadVideoFile(input,options){
       pan.fini('Vidéo envoyée au coach');
       if(progEl){
         progEl.style.display='block';
-        progEl.textContent='✓ Vidéo envoyée au coach · '+name;
+        _texteIco(progEl,ICO.coche+' Vidéo envoyée au coach · '+name);
       }
       toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
     }else{
@@ -1872,7 +1872,7 @@ function ouvrirGestionModeles(){
         <div style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
         <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
         <button onclick="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
-          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">✕</button>
+          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">${icon('croix',14)}</button>
       </div>
       <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
         style="width:100%;margin-top:8px;font-size:var(--fs-sm);box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
@@ -1895,7 +1895,7 @@ function tplCreer(){
   const l=_tplListe();
   currentUser.msgTemplates=l.concat([{id:'tpl'+Date.now(),cat:cat,
     titre:titre.slice(0,40),corps:corps,createdAt:Date.now()}]);
-  toastEcriture(saveUser(),'Modèle ajouté ✓','le modèle est');
+  toastEcriture(saveUser(),'Modèle ajouté '+ICO.coche,'le modèle est');
   ouvrirGestionModeles();
 }
 function tplMajCorps(id,v){
@@ -2003,7 +2003,7 @@ function qcAdd(){
   if(!currentUser.quickComments)currentUser.quickComments=[];
   const maxPos=currentUser.quickComments.reduce((m,c)=>Math.max(m,c.pos??0),0);
   currentUser.quickComments.push({id:'qc'+Date.now(),label:label.slice(0,40),text:text.slice(0,120),pos:maxPos+1});
-  toastEcriture(saveUser(),'Commentaire ajouté ✓','le commentaire est');
+  toastEcriture(saveUser(),'Commentaire ajouté '+ICO.coche,'le commentaire est');
   openQCManager();_renderQuickCommentChips();
 }
 function qcEditRow(id){
@@ -2014,7 +2014,7 @@ function qcEditRow(id){
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:var(--fs-xs)">
   </div>
   <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:8px 12px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
-  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
+  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">${icon('croix',14)}</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
 function qcSaveEdit(id){
@@ -2043,7 +2043,7 @@ function qcDown(idx){
 async function qcReset(){
   if(!await rcConfirm('Réinitialiser aux 6 commentaires par défaut ?',null,'Confirmer'))return;
   currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+Date.now()+i,label:c.label,text:c.text,pos:i}));
-  toastEcriture(saveUser(),'Liste réinitialisée ✓','la liste est');openQCManager();_renderQuickCommentChips();
+  toastEcriture(saveUser(),'Liste réinitialisée '+ICO.coche,'la liste est');openQCManager();_renderQuickCommentChips();
 }
 // ======= VIDEO CORRECTION =======
 

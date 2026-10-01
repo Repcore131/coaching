@@ -245,7 +245,7 @@ async function pushActiverDepuisReglages(){
   const ok=await pushAbonner({geste:true});
   if(ok){
     try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
-    toast('Notifications activées ✓');
+    toast('Notifications activées '+ICO.coche);
   } else if(_notifSupported()&&Notification.permission==='denied'){
     toast('Notifications bloquées par le navigateur.','var(--orange)');
   } else toast('Impossible d’activer les notifications ici.','var(--orange)');
@@ -862,7 +862,7 @@ function _pdjAccuser(question){
   const c=document.getElementById('pdj-carte');
   if(!c){ try{ _rendrePointDuJour(); }catch(e){} return; }
   const def=PDJ_QUESTIONS[question]||{accuse:'Noté'};
-  c.innerHTML='<div class="pdj-ok-msg"><span class="pdj-coche">✓</span>'
+  c.innerHTML='<div class="pdj-ok-msg"><span class="pdj-coche">'+icon('coche',14)+'</span>'
     +escapeHtml(def.accuse)+'</div>';
   c.setAttribute('data-fait','');
   setTimeout(()=>{
@@ -890,7 +890,7 @@ function pdjValiderPas(){
   const n=parseInt(String(inp.value).replace(/\s/g,''),10);
   if(!_recordSteps(pdjDateCible('pas',Date.now()),n)){
     toast('Saisis un nombre de pas valide','var(--red)'); return; }
-  toastEcriture(saveUser(),n.toLocaleString('fr-FR')+' pas enregistrés 👍','tes pas sont');
+  toastEcriture(saveUser(),n.toLocaleString('fr-FR')+' pas enregistrés '+ICO.coche,'tes pas sont');
   _pdjAccuser('pas');
 }
 function pdjValiderSommeil(h){
@@ -898,14 +898,14 @@ function pdjValiderSommeil(h){
   const d=Number(h);
   if(!_recordSleep(pdjDateCible('sommeil',Date.now()),{duration:d})){
     toast('Durée refusée','var(--red)'); return; }
-  toastEcriture(saveUser(),d+'h enregistrées 👍','ta nuit est');
+  toastEcriture(saveUser(),d+'h enregistrées '+ICO.coche,'ta nuit est');
   _pdjAccuser('sommeil');
 }
 function pdjValiderEnergie(n){
   if(!demanderConsentementSante('energie',()=>pdjValiderEnergie(n))) return;
   if(!_recordEnergie(pdjDateCible('energie',Date.now()),n)){
     toast('Niveau refusé','var(--red)'); return; }
-  toastEcriture(saveUser(),'Énergie enregistrée 👍','ton énergie est');
+  toastEcriture(saveUser(),'Énergie enregistrée '+ICO.coche,'ton énergie est');
   _pdjAccuser('energie');
 }
 // ══════════════════ LA COLLECTION DE BADGES ══════════════════════════════
@@ -1523,7 +1523,7 @@ function tropheeVignette(x,u){
     if(x.rang){ const r=RANGS[Math.max(0,Math.min(RANGS.length-1,Number(x.rang)-1))];
       return {img:'<img src="'+rangEmbleme(r.n)+'" alt="" data-rang="'+r.n+'" decoding="async">',nom:r.nom,sur:'Nouveau rang'}; }
     if(x.defi){ const res=((u&&u.defisReleves)||{})[x.defi]||{};
-      return {img:'<span class="tr-chiffre">⚡</span>',nom:String(res.titre||'Défi'),sur:res.champion?'Champion':'Défi relevé'}; }
+      return {img:'<span class="tr-chiffre">'+icon('eclair',14)+'</span>',nom:String(res.titre||'Défi'),sur:res.champion?'Champion':'Défi relevé'}; }
     return {img:'',nom:'',sur:''};
   }
   const b=badgeAcquisDef(x);
@@ -1579,7 +1579,7 @@ function partagerTrophee(i,btn){
   catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ── Le réglage « Célébrations » (profil) ──────────────────────────────────
@@ -1845,7 +1845,7 @@ function htmlDefisReleves(u){
   if(!l.length) return '';
   return '<div class="bdg-sous">Défis relevés <span class="bdg-compte">'+l.length+'</span></div><div class="dfr-liste">'
     +l.map(x=>'<button type="button" class="dfr-badge" onclick="partagerDefi(\''+escapeHtml(x.id)+'\',null)">'
-      +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?'🏆':'⚡')+'</span>'
+      +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?icon('trophy',14):icon('eclair',14))+'</span>'
       +'<span class="dfr-c"><b>'+escapeHtml(x.champion?'CHAMPION · ':'DÉFI RELEVÉ · ')+escapeHtml(defiMoisTexte(x.fin).replace(/^D’|^DE /,''))+'</b>'
       +'<span>'+escapeHtml(x.titre)+' · '+escapeHtml(_bdgDate(Number(x.termineLe)||Number(x.fin)))+'</span></span></button>').join('')+'</div>';
 }
@@ -1992,7 +1992,7 @@ function partagerBadge(id,btn){
     toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false;
   }finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ L'ÉQUIVALENT FUN D'UN TONNAGE ═════════════════════════════════════════
@@ -2334,7 +2334,7 @@ function ouvrirWrapped(cle){
   const sl=wrappedSlides(w,per);
   z.innerHTML='<div class="wr-barres">'+sl.map(()=>'<span><i></i></span>').join('')+'</div>'
     +'<div class="wr-haut"><button type="button" class="wr-btn" aria-label="Partager cette slide" onclick="event.stopPropagation();partagerWrapped(_wr?_wr.i:0)">'+icon('share',18)+'</button>'
-    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">✕</button></div>'
+    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">'+icon('croix',14)+'</button></div>'
     +'<div class="wr-slides" onclick="_wrTap(event)">'+sl.map((s,k)=>_wrHtmlSlide(s,k)).join('')+'</div>';
   try{ localStorage.setItem('rc_wrapped_vu_'+per.cle,'1'); }catch(e){}
   go('s-wrapped');
@@ -2444,7 +2444,7 @@ function partagerWrapped(i,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 

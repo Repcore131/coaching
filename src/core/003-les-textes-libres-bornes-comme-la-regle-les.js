@@ -1271,7 +1271,7 @@ const CLOUD={
       // reussi du dossier courant.
       if(DB._quotaAnnonce&&typeof currentUser==='object'&&currentUser&&currentUser.email===email){
         DB._quotaAnnonce=false;
-        try{ toast('✓ Envoyé au cloud. Le téléphone est plein : ces données ne seront pas disponibles hors ligne.','var(--green)'); }catch(e){}
+        try{ toast(ICO.coche+' Envoyé au cloud. Le téléphone est plein : ces données ne seront pas disponibles hors ligne.','var(--green)'); }catch(e){}
       }
     }catch(e){
       console.error('[RepCore] sync push error:',e);

@@ -858,6 +858,9 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    casse phrase il espacerait les mots comme un titre. */
 .btn{width:100%;padding:16px;border:none;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);letter-spacing:.3px;-webkit-tap-highlight-color:transparent}
 .btn.btn-red:not(.btn-sm):not(.btn-casse){text-transform:uppercase;letter-spacing:2.5px}
+/* L'ETOILE PLEINE (favori, note) : icon('etoile') est au trait ; dans
+   .ico-plein, elle se remplit de sa couleur (01/10/2026). */
+.ico-plein svg{fill:currentColor}
 /* LE BOUTON PRINCIPAL, UNE SEULE RECETTE (01/10/2026) : celle du CTA de la
    landing (« Essayer gratuitement », .cta de charte.css). Rouge PLAT de la
    marque, texte blanc (4,8:1 sur --red ; le #efefef de --text n'y faisait que

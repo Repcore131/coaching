@@ -348,7 +348,7 @@ function partagerCarteAthlete(btn,format){
   finally{ _storyEnCours=false; }
   if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // ── L'accueil : la carte, quand la note monte ───────────────────────────
@@ -359,7 +359,7 @@ function htmlCarteAccueil(u){
   const av=Number(c.avant)||0;
   return '<div class="ca-accueil" role="region" aria-label="Ta carte d’athlète">'
     +'<div class="ca-tete"><b>Ta note monte'+(av?' : '+av+' → '+c.globale:' : '+c.globale)+'</b>'
-    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">✕</button></div>'
+    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">'+icon('croix',14)+'</button></div>'
     +'<canvas class="ca-vignette" id="ca-vignette" width="360" height="504" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
     +'<div class="ca-btns">'
     +'<button type="button" class="btn btn-red btn-sm" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
@@ -426,7 +426,7 @@ function htmlVoltsFin(g,xpTotal){
   const lignes=g.lignes.map(l=>'<div class="vt-l"><span>'+escapeHtml(l.lib)+'</span><b>+'+xpFormat(l.v)+'</b></div>').join('');
   return '<div class="vt-carte">'
     +'<div class="vt-tete"><img class="vt-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="44" height="44" decoding="async">'
-    +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">⚡</span></div>'
+    +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">'+icon('eclair',14)+'</span></div>'
     +'<div class="vt-rang">'+escapeHtml(r.rang.nom)+'</div></div>'
     +'<div class="vt-lignes">'+lignes+'</div>'
     +'<div class="rg-jauge vt-jauge"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
@@ -441,7 +441,7 @@ function htmlVoltsCible(u,j){
   let c=null; try{ c=cibleTenueJour(u,j); }catch(e){ c=null; }
   if(!c||!c.tenue) return '';
   return '<div class="vt-cible" role="status"><span class="vt-gain">+'+xpFormat(XP_ACTIONS.cible)
-    +' <span class="vt-eclair" aria-hidden="true">⚡</span></span><span class="vt-cible-t">Journée dans ta cible</span></div>';
+    +' <span class="vt-eclair" aria-hidden="true">'+icon('eclair',14)+'</span></span><span class="vt-cible-t">Journée dans ta cible</span></div>';
 }
 function rendreVoltsFin(u,sess){
   const z=document.getElementById('wd-volts');
@@ -486,7 +486,7 @@ function _rangEcran(n,reste){
     +'<div class="bdg-ecran-txt">'
     +'<div class="bdg-ecran-sur">NOUVEAU RANG</div>'
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(d.nom)+'</h2>'
-    +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
+    +'<div class="bdg-ecran-meta">'+icon('eclair',14)+' '+escapeHtml(xpFormat(d.xp))+' V</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
     +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
@@ -599,7 +599,7 @@ function partagerRang(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ── LE CANAL ET LES DÉFIS : l'emblème miniature devant chaque prénom ──────
@@ -805,7 +805,7 @@ async function jenValider(){
   _jenMarquer(currentUser);
   try{ await _appliquerRappelSeance(_jenJours,h,_jenMin); }catch(e){}
   toast('C’est note : rappel a '+String(h).padStart(2,'0')+':'
-    +String(_jenMin).padStart(2,'0')+' ✓');
+    +String(_jenMin).padStart(2,'0')+' '+ICO.coche);
   go('s-client-home');
   loadClientHome();
 }
@@ -835,7 +835,7 @@ async function saveWoReminderConfig(){
   if(!days.length){toast("Sélectionne au moins un jour d'entraînement",'var(--orange)');return;}
   const doSave=async()=>{
     await _appliquerRappelSeance(days,h,m);
-    toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' ✓');
+    toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' '+ICO.coche);
     document.getElementById('wo-reminder-config')?.remove();
     renderWoReminderCard();
   };
@@ -2268,7 +2268,7 @@ function ccdComptageEnregistrer(v){
   users[c.email]=c;
   try{ _viderCacheVolume(); }catch(e){}
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Comptage enregistré ✓','le réglage est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Comptage enregistré '+ICO.coche,'le réglage est');
   try{ renderVolumeCoach(c); }catch(e){}
   return true;
 }

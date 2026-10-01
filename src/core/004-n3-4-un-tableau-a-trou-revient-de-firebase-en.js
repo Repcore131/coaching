@@ -264,7 +264,7 @@ const DB={
       if(e.name==='QuotaExceededError'||e.code===22){
         localOk=false;
         if(k==='users'||k==='session') this._quotaAnnonce=true;
-        if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le ✓','var(--orange)');
+        if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le '+ICO.coche,'var(--orange)');
       } else throw e;
     }
     // Le cache : oublie apres une ecriture reussie (le prochain get relit et
@@ -1240,7 +1240,7 @@ function _validerReconsentement(){
   const ok=DB.set('users',users)&&DB.set('session',currentUser);
   const envoi=CLOUD.pushOne(currentUser.email,currentUser);
   closeModal();
-  toastSync(ok,envoi,'Accord enregistré ✓','ton accord est');
+  toastSync(ok,envoi,'Accord enregistré '+ICO.coche,'ton accord est');
 }
 function _peutImporterPkg(a){
   return !!(a&&currentUser&&(currentUser.role==='coach'||currentUser.email===a.email));
@@ -1269,7 +1269,7 @@ function _proposerImportAthlete(){
   <div id="rc-pkg-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2 style="font-size:var(--fs-lg)">Importer un profil ?</h2>
-      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:14px;line-height:1.6">Ce lien contient un profil d'athlète. Il n'a rien enregistré pour l'instant.</p>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">
@@ -1326,7 +1326,7 @@ function _confirmerImportAthlete(){
   const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
   closeModal();
   toastSync(okMaj,envoiMaj,
-    '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' : '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
+    ICO.coche+' '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' : '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
     'la mise à jour est');
   // Sans ça, l'athlète importé n'apparaît sur le tableau de bord qu'à la sync
   // suivante, jusqu'à 30 secondes plus tard.
@@ -1408,7 +1408,7 @@ function _majRappelVerification(){
   if(!z){
     z=document.createElement('div');
     z.id='rc-verif'; z.className='rc-verif'; z.setAttribute('role','status');
-    z.innerHTML='<span>✉ Vérifie ton adresse e-mail</span>'
+    z.innerHTML='<span>'+icon('mail',14)+' Vérifie ton adresse e-mail</span>'
       +'<button type="button" data-v="fait">C’est fait</button><button type="button" data-v="renvoyer">Renvoyer</button>';
     z.addEventListener('click',async e=>{
       const b=e.target&&e.target.closest?e.target.closest('button[data-v]'):null;
@@ -1499,6 +1499,10 @@ window.onload=()=>{
   // 40px de vide au-dessus de « COACH » et « ATHLÈTE ». Passer par ICONS plutôt
   // que réinliner un SVG garde une seule définition par pictogramme.
   document.querySelectorAll('.role-icon[data-icon]').forEach(e=>{e.innerHTML=icon(e.dataset.icon,36);});
+  // LES ICONES D'INDEX.HTML (01/10/2026) : la page statique ne peut pas appeler
+  // icon(). Ses anciens emojis sont devenus <span data-ico="croix"
+  // data-taille="14">, remplis ici d'apres le meme jeu ICONS.
+  document.querySelectorAll('[data-ico]').forEach(e=>{e.innerHTML=icon(e.dataset.ico,Number(e.dataset.taille)||14);});
   // Onglets de catégorie caféine : même principe, une seule définition
   // d'icône (CAFF_ICONES) partagée entre les onglets, les tuiles produit et
   // la liste des prises.
@@ -2080,9 +2084,9 @@ function htmlSelecteurComptes(opts){
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
-      ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">✓</span>'
+      ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">'+icon('coche',14)+'</span>'
            :`<button onclick="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
-              style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
+              style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">${icon('croix',14)}</button>`}
     </div>`;
   };
   // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le

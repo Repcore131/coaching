@@ -1107,7 +1107,7 @@ function _htmlPersoResult(a){
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
-    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
+    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">'+icon('pencil',14)+'</button>'
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){

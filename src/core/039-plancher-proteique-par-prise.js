@@ -337,7 +337,7 @@ function verifierRappelAvantSeance(){
     document.getElementById('rappel-gluc-banniere')?.remove();
     const b=document.createElement('div');
     b.id='rappel-gluc-banniere'; b.className='rg-banniere'; b.setAttribute('role','status');
-    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">✕</button>';
+    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">'+icon('croix',14)+'</button>';
     document.body.appendChild(b);
     setTimeout(()=>{ try{ b.remove(); }catch(err){} },30000);
   }catch(err){}
@@ -1902,7 +1902,7 @@ function accepterSuggestionCycle(){
     notes:'Phase lutéale tardive : soutien anti-inflammatoire',
     active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
   const ok=saveUser();
-  toastEcriture(ok,'Ajouté à ta liste ✓','le complément est');
+  toastEcriture(ok,'Ajouté à ta liste '+ICO.coche,'le complément est');
   try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
   return true;
 }
@@ -2162,7 +2162,7 @@ function _renderCycleNutSettings(nut){
 function declarerReglesAujourdhui(){
   _cycleAjouterRegles(currentUser,localISODate(new Date()));
   const ok=saveUser();
-  toastEcriture(ok,'Date enregistrée ✓','la date est');
+  toastEcriture(ok,'Date enregistrée '+ICO.coche,'la date est');
   _renderNutriContent(typeDiete(currentUser.nutrition));
 }
 // Consigné, jamais commenté. Aucune alarme sur une occurrence, aucune
@@ -2298,7 +2298,7 @@ async function utiliserBesoinsProposes(){
   currentUser.nutrition.macros={on:j(b.on),off:j(b.off),origine:'auto',
     origineDate:Date.now(),origineSource:b.source};
   const ok=saveUser();
-  toastEcriture(ok,'Objectifs enregistrés ✓','les objectifs sont');
+  toastEcriture(ok,'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   loadNutrition();
 }
 

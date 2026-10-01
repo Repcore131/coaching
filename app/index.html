@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1774';
+window.RC_BUILD='1775';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1774.css">
+<link rel="stylesheet" href="./rc-style.1775.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1774.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1775.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -779,7 +779,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="rc-inst-sam-guide" style="display:none;margin-top:12px;text-align:left;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text);text-transform:uppercase;margin-bottom:8px">Trois gestes</div>
         <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.8">
-          <b style="color:var(--text)">1.</b> Touche les <b style="color:var(--text)">trois traits ☰</b> en bas à droite.<br>
+          <b style="color:var(--text)">1.</b> Touche les <b style="color:var(--text)">trois traits <span data-ico="menu" data-taille="14" aria-hidden="true"></span></b> en bas à droite.<br>
           <b style="color:var(--text)">2.</b> Choisis <b style="color:var(--text)">« Ajouter la page à »</b>.<br>
           <b style="color:var(--text)">3.</b> Choisis <b style="color:var(--text)">« Écran d'accueil »</b>.
         </div>
@@ -1503,7 +1503,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH CODE DISPLAY -->
 <div id="s-coach-code" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in" style="text-align:center;max-width:380px;width:100%">
-    <div style="font-size:var(--fs-3xl);margin-bottom:12px">🏋️</div>
+    <div style="font-size:var(--fs-3xl);margin-bottom:12px"><span data-ico="dumbbell" data-taille="40" aria-hidden="true"></span></div>
     <h1 style="margin-bottom:6px">Ton code coach</h1>
     <div class="code-display" id="coach-code-val" style="margin:16px 0">-</div>
 
@@ -1546,7 +1546,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Bouton retour accueil visible -->
     <button onclick="go('s-welcome')" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);font-size:var(--fs-md);cursor:pointer;font-family:Montserrat,sans-serif;margin-bottom:24px;padding:0">← Retour à l'accueil</button>
     <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:52px;margin-bottom:16px">🔑</div>
+      <div style="font-size:52px;margin-bottom:16px"><span data-ico="key" data-taille="52" aria-hidden="true"></span></div>
       <h1 style="margin-bottom:8px">Code d'accès</h1>
       <p class="sub" style="line-height:1.6">Entre le code fourni par ton coach pour activer ton accès personnalisé.</p>
     </div>
@@ -1721,7 +1721,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="ouvrirComptes()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte">⇄</button>
+        <button onclick="ouvrirComptes()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte"><span data-ico="echange" data-taille="14" aria-hidden="true"></span></button>
         <button class="hv-code" onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:background var(--t-1)">CODE</button>
         <button class="hv-texte" onclick="logout()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:color var(--t-1)">&#8592;</button>
       </div>
@@ -2082,7 +2082,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Une autre que celle du profil. Elle ouvre ta vitrine.</div>
   </div>
-  <button type="button" onclick="_viderImageVitrine('coach-photo-vitrine')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer">✕</button>
+  <button type="button" onclick="_viderImageVitrine('coach-photo-vitrine')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 </div>
 <div style="margin-bottom:16px">
@@ -2095,7 +2095,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Un PNG à fond transparent rend mieux sur le fond sombre.</div>
   </div>
-  <button type="button" onclick="_viderImageVitrine('coach-signature')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer">✕</button>
+  <button type="button" onclick="_viderImageVitrine('coach-signature')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 </div>
 <!-- LE LOGO. Il ne remplace pas la signature : il a un autre emploi, et c'est
@@ -2113,7 +2113,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Il signe l’image que tes athlètes téléchargent après leur séance. Sans logo, c’est ta signature qui est utilisée.</div>
   </div>
-  <button type="button" onclick="_viderImageVitrine('coach-logo')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer">✕</button>
+  <button type="button" onclick="_viderImageVitrine('coach-logo')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 </div>
 <!-- LOT M1 : la marque dans l’app des athlètes (palier Pro), rendue par renderMarqueCoach. -->
@@ -2132,7 +2132,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </label>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Facultative. Visible de tes athlètes rattachés.</div>
   </div>
-  <button type="button" onclick="_viderImageVitrine('coach-cartepro')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer">✕</button>
+  <button type="button" onclick="_viderImageVitrine('coach-cartepro')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 </div>
 <div style="margin-bottom:14px">
@@ -2304,7 +2304,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div id="pp-subs-list">
             <div style="text-align:center;padding:40px 20px;color:var(--text-dim)">
-              <div style="font-size:var(--fs-3xl);margin-bottom:12px;opacity:0.4">💳</div>
+              <div style="font-size:var(--fs-3xl);margin-bottom:12px;opacity:0.4"><span data-ico="carte-bancaire" data-taille="40" aria-hidden="true"></span></div>
               <div style="font-size:var(--fs-md)">Aucun abonné pour l'instant.</div>
             </div>
           </div>
@@ -3031,7 +3031,7 @@ const COACH_PHOTO='icons/coach.jpg';
            fabrique un modele, est juste a cote. -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
         <button class="btn btn-red btn-sm" style="width:100%;margin:0" onclick="openApplyTemplate()">Partir d'un modèle</button>
-        <button class="btn btn-blanc btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer dans mes programmes</button>
+        <button class="btn btn-blanc btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()"><span data-ico="etoile" data-taille="14" aria-hidden="true"></span> Enregistrer dans mes programmes</button>
       </div>
       <div id="csm-volume"></div>
       <div id="coach-session-slots"></div>
@@ -3725,7 +3725,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
-        <div class="eyebrow" style="color:#7fb3e8;margin-bottom:6px">✎ Bilan commencé</div>
+        <div class="eyebrow" style="color:#7fb3e8;margin-bottom:6px"><span data-ico="pencil" data-taille="12" aria-hidden="true"></span> Bilan commencé</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px" id="clh-resume-bilan-name">Reprendre mon bilan</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)" id="clh-resume-bilan-sub">Reprendre là où tu t'es arrêté →</div>
       </div>
@@ -4122,7 +4122,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <i class="sp-poignee" aria-hidden="true"></i>
     <div class="sp-tete">
       <h2 id="vn-titre">Mettre en vente</h2>
-      <button class="sp-fermer" onclick="fermerFicheVente()" aria-label="Fermer">✕</button>
+      <button class="sp-fermer" onclick="fermerFicheVente()" aria-label="Fermer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
     </div>
     <div id="vn-corps"></div>
     <div id="vn-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:12px;display:none"></div>
@@ -4149,7 +4149,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <i class="sp-poignee" aria-hidden="true"></i>
     <div class="sp-tete">
       <h2 id="cpv-titre">Vendre ce programme</h2>
-      <button class="sp-fermer" onclick="fermerVenteProgramme()" aria-label="Fermer">✕</button>
+      <button class="sp-fermer" onclick="fermerVenteProgramme()" aria-label="Fermer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
     </div>
     <label class="vn-cb" style="margin-top:0" for="cpv-envente">
       <input type="checkbox" id="cpv-envente" onchange="_cpvApercu()">
@@ -4281,7 +4281,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <i class="sp-poignee" aria-hidden="true"></i>
     <div class="sp-tete">
       <h2>Quelle séance aujourd'hui ?</h2>
-      <button class="sp-fermer" onclick="document.getElementById('session-picker').style.display='none'" aria-label="Fermer">✕</button>
+      <button class="sp-fermer" onclick="document.getElementById('session-picker').style.display='none'" aria-label="Fermer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
     </div>
     <div id="session-picker-list"></div>
     <div style="height:20px"></div>
@@ -4357,7 +4357,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px">Installer l'app</div>
-      <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
+      <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;line-height:1"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:28px">
       <div id="ios-step-safari" style="display:flex;align-items:flex-start;gap:12px">
@@ -4370,7 +4370,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:var(--r-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);flex-shrink:0">2</div>
         <div>
-          <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red-text)">Partager</span> <span style="font-size:var(--fs-lg)">⎙</span></div>
+          <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red-text)">Partager</span> <span style="font-size:var(--fs-lg)"><span data-ico="share" data-taille="16" aria-hidden="true"></span></span></div>
           <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5">L'icône carré avec une flèche vers le haut : en bas de l'écran Safari.</div>
         </div>
       </div>
@@ -4449,7 +4449,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="display:flex;flex-direction:column;gap:10px">
       <button onclick="_feuilleFermer('wo-pause-modal')" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Continuer la séance</button>
       <button onclick="confirmPauseWorkout()" style="padding:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text-mid);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Mettre en pause</button>
-      <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
+      <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px"><span data-ico="croix" data-taille="14" aria-hidden="true"></span> Annuler la séance</button>
     </div>
   </div>
 </div>
@@ -5776,7 +5776,7 @@ const COACH_PHOTO='icons/coach.jpg';
        non l'attribut disabled — ce dernier le sortirait du parcours clavier et
        n'annoncerait aucune raison, alors qu'il mène justement à la saisie du
        code coach. -->
-  <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true">🔒</span>Canal</button>
+  <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true" data-ico="lock" data-taille="10"></span>Canal</button>
 </div>
 <!-- ══════ LA RELANCE D'INSTALLATION ══════════════════════════════════
      SŒUR DES ECRANS, comme la barre d'onglets, et pour la meme raison :
@@ -5788,7 +5788,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <span id="rc-ban-txt">Installe RepCore sur ton téléphone</span>
   <button type="button" id="rc-ban-oui" onclick="rcBanniereInstallAgir()">Installer</button>
   <button type="button" id="rc-ban-non" aria-label="Fermer et ne plus proposer"
-    onclick="rcBanniereInstallFermer()">✕</button>
+    onclick="rcBanniereInstallFermer()"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 <!-- ══════ ACCESS GATE ══════ -->
 <!-- PAS de prefixe s-coach- : go() refuse a tout athlete un ecran ainsi
@@ -6092,5 +6092,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1774.js"></script>
+<script src="./rc-core.1775.js"></script>
 </body></html>

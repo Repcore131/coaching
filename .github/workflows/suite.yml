@@ -79,6 +79,11 @@ jobs:
       - name: Verifier les rayons et les ombres
         run: python3 scripts/rayons.py --verifier
 
+      # LES EMOJIS DE L'INTERFACE SONT DES ICONES (01/10/2026) : il n'en reste
+      # que dans la liste blanche de scripts/emojis.py (partages, reactions).
+      - name: Verifier les emojis
+        run: python3 scripts/emojis.py --verifier
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &

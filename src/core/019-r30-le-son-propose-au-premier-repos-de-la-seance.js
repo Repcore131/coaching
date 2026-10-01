@@ -66,7 +66,7 @@ function _majInviteSon(sonOn){
   if(!z||z.hidden) return;
   if(sonOn&&z.dataset.type==='propose'){
     z.dataset.type='ok';
-    z.innerHTML='<span class="rep-invite-t">Son activé ✓</span>';
+    z.innerHTML='<span class="rep-invite-t">Son activé '+icon('coche',14)+'</span>';
     if(_reposInviteMinuteur) clearTimeout(_reposInviteMinuteur);
     _reposInviteMinuteur=setTimeout(()=>{ _reposInviteMinuteur=null;
       if(z.isConnected&&z.dataset.type==='ok'){ z.hidden=true; z.innerHTML=''; } },2000);
@@ -1049,8 +1049,8 @@ async function remplacerDepuisBanque(i,mode){
     const _dit=[_photo?'photo':'', _nv?(_nv+' vidéo'+(_nv>1?'s':'')):''].filter(Boolean).join(' · ')
       ||'aucun média sur cette fiche';
     toast(maj
-      ?('« '+_ap.name+' » mis à jour ✓ : historique conservé · '+_dit)
-      :('Remplacé par « '+f.nom+' » ✓ · '+_dit),
+      ?('« '+_ap.name+' » mis à jour '+ICO.coche+' : historique conservé · '+_dit)
+      :('Remplacé par « '+f.nom+' » '+ICO.coche+' · '+_dit),
       (_photo||_nv)?'var(--green)':'var(--orange)');
   },'s-coach-program');
 }
@@ -1078,7 +1078,7 @@ function ajouterDepuisBanque(){
     });
     _progExDirty=true;
     renderProgEx();
-    toast('« '+f.nom+' » ajouté ✓','var(--green)');
+    toast('« '+f.nom+' » ajouté '+ICO.coche,'var(--green)');
   },'s-coach-program');
 }
 // ══ LA SILHOUETTE DANS L'ÉDITEUR DU COACH (01/10/2026) ═══════════════════
@@ -1168,7 +1168,7 @@ function renderProgEx(){
     // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
     const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
-      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
+      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?icon('echange',14)+' SUPERSET · DÉLIER':'+ SUPERSET'}</button>
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
     </div>`;
     // Le badge de METHODE prime : il porte le nom exact du guide. Les badges
@@ -1702,7 +1702,7 @@ function validerProgEx(){
   toast(trous.length
     ?('Programmation enregistrée · '+n+' semaine'+(n>1?'s':'')+' sur '+b.semaines.length
       +' : semaine'+(trous.length>1?'s':'')+' '+trous.join(', ')+' incomplète'+(trous.length>1?'s':''))
-    :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' ✓'),
+    :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' '+ICO.coche),
     trous.length?'var(--orange)':'var(--green)');
   _progExFermer();
   renderProgEx();

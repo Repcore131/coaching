@@ -524,7 +524,7 @@ function _htmlConsigneExo(ex){
 // elle attend dans la file du telephone et part a la fin. Le badge dit
 // qu'elle existe ; il ne dit pas qu'elle est partie.
 function _badgeVideoSerie(s){
-  return (s&&s.video)?'<span class="wo-vid-badge" role="img" aria-label="Une vidéo gardée pour cette série, envoi à la fin de la séance">🎥 1</span>':'';
+  return (s&&s.video)?'<span class="wo-vid-badge" role="img" aria-label="Une vidéo gardée pour cette série, envoi à la fin de la séance">'+icon('video',12)+' 1</span>':'';
 }
 function _htmlVideoTechniqueExo(ex){
   let u='';
@@ -576,7 +576,7 @@ function htmlFeuilleDemo(url,ex,enLigne){
   }
   return '<div class="demo-poignee" aria-hidden="true"></div>'
     +'<div class="demo-tete"><div class="demo-titre">'+titre+'</div>'
-    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">✕</button></div>'
+    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">'+icon('croix',14)+'</button></div>'
     +corps;
 }
 function _videoDemoOuvrir(a,e){
@@ -793,7 +793,7 @@ function _blocExo(idx,estSS){
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center">
-          <div style="font-size:var(--fs-2xl);margin-bottom:6px">🏃</div>
+          <div style="font-size:var(--fs-2xl);margin-bottom:6px">${icon('activity',28)}</div>
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
@@ -844,7 +844,7 @@ function _blocExo(idx,estSS){
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
 
-      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
+      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">${icon('video',14)}</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
       <!-- LA BANDE DE TEMPO. Peinte par renderSets, comme les actions de
            series : son libelle depend de la serie en cours et du chronometre,
            qui changent tous les deux sans repasser par _blocExo. Elle vit HORS

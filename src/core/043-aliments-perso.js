@@ -147,7 +147,7 @@ function enregistrerAlimentPerso(){
   currentUser.nutrition.alimentsPerso=liste;
   const cree=!_persoEdit;
   const dernier=liste[_persoEdit?liste.findIndex(a=>a&&a.id===_persoEdit.id):liste.length-1];
-  toastEcriture(saveUser(),cree?'Aliment créé ✓':'Aliment modifié ✓','cet aliment est');
+  toastEcriture(saveUser(),cree?'Aliment créé '+ICO.coche:'Aliment modifié '+ICO.coche,'cet aliment est');
   // Un COACH publie sa liste pour ses athletes. En arriere-plan et sans
   // toast : c est un effet de bord de son enregistrement, pas une action
   // qu il a demandee, et l echouer ne doit pas lui faire croire que sa
@@ -868,7 +868,7 @@ function _htmlFjBandeau(s){
   // lisible d'un coup. Espace insecable devant ✓ : il ne part pas seul a la ligne.
   const phrase=s.annule
     ?'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' retiré du journal'
-    :'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' ajouté '+escapeHtml(ou)+' ✓';
+    :'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' ajouté '+escapeHtml(ou)+' '+icon('coche',14);
   return '<div class="fj-bandeau'+(s.annule?' annule':'')+'">'
     +'<div class="fj-bandeau-t">'+phrase+'</div>'
     +'<div class="fj-bandeau-a">'
@@ -1050,8 +1050,8 @@ function _renderFjDaySummary(date){
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal${e.kcalEstimee?' estimées':''}</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
-              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
-            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
+              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('echange',14)}</button>
+            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('croix',14)}</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;

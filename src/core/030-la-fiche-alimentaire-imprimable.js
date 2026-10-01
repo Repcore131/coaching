@@ -1571,7 +1571,7 @@ function _streakRattrapage(){
   let b=null; try{ b=_streakAppliquerJokers(u,Date.now()); }catch(e){ b=null; }
   if(b&&b.sauve){
     try{ saveUser(); }catch(e){}
-    try{ toast('🛡 '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
+    try{ toast(ICO.bouclier+' '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
   }
   return b;
 }
@@ -1610,7 +1610,7 @@ function updateStreak(){
     if(SERIE_PALIERS.indexOf(n)>=0){ try{ _celebrerSerie(n); }catch(e){} }
   }
   currentUser.lastSession=now;
-  if(_jk&&_jk.sauve){ try{ toast('🛡 '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
+  if(_jk&&_jk.sauve){ try{ toast(ICO.bouclier+' '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
 }
 // ══ L'ARRONDI D'UNE CHARGE, ET L'UNITÉ (30/09/2026) ═══════════════════════
 //
@@ -1748,7 +1748,7 @@ function choisirUnite(v){
   if(v==='lb') currentUser.unite='lb'; else delete currentUser.unite;
   try{ saveUser(); }catch(e){}
   _rendreUniteReglages();
-  toast(v==='lb'?'Charges en livres ✓':'Charges en kilos ✓','var(--green)');
+  toast(v==='lb'?'Charges en livres '+ICO.coche:'Charges en kilos '+ICO.coche,'var(--green)');
   return true;
 }
 // Enveloppe : au-dessus sous 20 kg, au plus proche au-delà (comme avant).

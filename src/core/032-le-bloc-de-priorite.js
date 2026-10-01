@@ -928,7 +928,7 @@ function dispoAllegerSeance(idx,d){
     cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   try{ saveUser(); }catch(e){}
   const _envoi=CLOUD.pushOne(u.email,u);
-  toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' ✓','l’allègement est');
+  toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
   return true;
 }
@@ -962,7 +962,7 @@ async function dispoReporterSeance(d){
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   try{ saveUser(); }catch(e){}
   const _envoi=CLOUD.pushOne(u.email,u);
-  toastSync(true,_envoi,'Semaine allégée ✓','l’allègement est');
+  toastSync(true,_envoi,'Semaine allégée '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
   return true;
 }
@@ -985,7 +985,7 @@ function _htmlDispo(idx){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(d.motif)+'</div>'
     +(dejaAllege
-      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">✓ Dernière série retirée pour aujourd’hui.</div>'
+      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">'+icon('coche',14)+' Dernière série retirée pour aujourd’hui.</div>'
       : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
         +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
         +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
@@ -1396,7 +1396,7 @@ function rcRepondreRetour(btn,muscle,champ,valeur){
     if(carte) carte.remove();
   }catch(e){}
   try{
-    if(res&&res.ok) toast('Noté ✓');
+    if(res&&res.ok) toast('Noté '+ICO.coche);
     else if(res&&res.raison) toast(res.raison,'var(--orange)');
   }catch(e){}
   // PLUS RIEN A REMPLIR : la zone entiere s'efface plutot que de laisser un
@@ -1531,7 +1531,7 @@ async function rcReinitReperes(muscle){
   // coach lirait « ramené ✓ » et l'athlete garderait ses seuils deplaces.
   // toastSync est le chemin deja emprunte par toutes les ecritures coach.
   const _envoi=CLOUD.pushOne(c.email,c);
-  toastSync(true,_envoi,r.n+' repère'+(r.n>1?'s ramenés':' ramené')+' à la référence ✓',
+  toastSync(true,_envoi,r.n+' repère'+(r.n>1?'s ramenés':' ramené')+' à la référence '+ICO.coche,
     'le retour aux repères de référence est');
   return true;
 }

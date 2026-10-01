@@ -41,7 +41,7 @@ function copyCoachInviteLink(){
   // sans rien dire — aucun toast, et le coach croyait le lien copie. _rcCopier
   // essaie le presse-papiers puis l'ancienne copie ; en dernier recours, le
   // lien s'affiche pour etre copie a la main.
-  _rcCopierOuMontrer(url,'✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
+  _rcCopierOuMontrer(url,ICO.coche+' Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
 }
 /**
  * Copier, et DIRE ce qui s'est passe : le toast de reussite seulement si la
@@ -199,7 +199,7 @@ function linkToCoach(coach){
   DB.set('users',users);DB.set('session',currentUser);
   // La liaison a abouti : le code a joue son role et peut partir.
   try{localStorage.removeItem('pendingCode');}catch(e){}
-  toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' ✓');
+  toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' '+ICO.coche);
   _apresRattachement();
 }
 
@@ -272,7 +272,7 @@ function _appliquerPayloadCode(payload){
     try{ rafraichirDroits(currentUser,true).then(()=>{ try{ _planifierRepeint(currentUser.email); }catch(e){} }).catch(()=>{}); }catch(e){}
     // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
     _oublierCodeVerifie();
-    toastSync(_u1&&_s1,_envoi,'Accès activé ✓','ton accès est');
+    toastSync(_u1&&_s1,_envoi,'Accès activé '+ICO.coche,'ton accès est');
     _apresRattachement();
   } else {
     // Code NON athlète (invitation coach) : le paiement reste le chemin
@@ -526,7 +526,7 @@ async function doLinkCoach(){
         const users=DB.get('users')||{};
         users[currentUser.email]=currentUser;
         const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
-        toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
+        toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' '+ICO.coche,'le rattachement est');
         _apresRattachement();return;
       }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
     }
@@ -1088,7 +1088,7 @@ async function exporterMesDonnees(){
     u.rgpd.dernierExport=Date.now();
     saveUser();
   }catch(e){}
-  toast('Export téléchargé ✓','var(--green)');
+  toast('Export téléchargé '+ICO.coche,'var(--green)');
   return true;
 }
 // Voir AVANT de télécharger : ce qui sort, et surtout ce qui ne sort pas.

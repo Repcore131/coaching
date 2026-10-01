@@ -91,7 +91,7 @@ function openWaGroupe(rowIdx){
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(nom)}</div>
-        <div class="sub" style="font-size:var(--fs-xs)">${tel?'📱 '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro : le contact sera à choisir dans WhatsApp</span>'}</div>
+        <div class="sub" style="font-size:var(--fs-xs)">${tel?icon('smartphone',12)+' '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro : le contact sera à choisir dans WhatsApp</span>'}</div>
       </div>
     </label>`;
   }).join('');
@@ -1564,7 +1564,7 @@ function _ajBouton(r,idx){
   return '<button class="hit44" onclick="event.stopPropagation();ouvrirAjustement('+idx+')"'
     +' title="Ajuster le programme" aria-label="Ajuster le programme"'
     +' style="background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;'
-    +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:var(--r-1)">⚙</button>';
+    +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:var(--r-1)">'+icon('sliders',16)+'</button>';
 }
 function ouvrirAjustement(idx){
   const r=window._todoRows&&window._todoRows[idx];
@@ -1928,13 +1928,13 @@ function renderDouleurAthlete(){
 // atteignable. Plutôt que d'inventer une quatrième porte, la carte annonce
 // l'ordre réel des opérations.
 const PREMIERS_PAS=Object.freeze([
-  Object.freeze({icone:'👤', titre:'Inviter mon premier athlète',
+  Object.freeze({icone:'user', titre:'Inviter mon premier athlète',
     detail:'Un code à lui transmettre, et il te rejoint.',
     action:'openAddAthlete()'}),
-  Object.freeze({icone:'🗂️', titre:'Créer un programme',
+  Object.freeze({icone:'folder', titre:'Créer un programme',
     detail:'Un modèle Homme/Femme, réutilisable pour tous.',
     action:'openCoachPrograms()'}),
-  Object.freeze({icone:'📄', titre:'Importer une fiche existante',
+  Object.freeze({icone:'clipboard', titre:'Importer une fiche existante',
     detail:'PDF ou photo. L\'import se fait dans le programme d\'un athlète : commence par en ajouter un.',
     action:'openAddAthlete()'}),
 ]);
@@ -2311,7 +2311,7 @@ function relApercu(signal){
 function relancesReprendreLaMain(on){
   if(!currentUser) return false;
   _relEcrire(currentUser,n=>{ n.pause=on===true; });
-  toast(on?'Relances automatiques coupées ✓':'Relances automatiques reprises ✓',on?'var(--orange)':'var(--green)');
+  toast(on?'Relances automatiques coupées '+ICO.coche:'Relances automatiques reprises '+ICO.coche,on?'var(--orange)':'var(--green)');
   try{ renderRelancesCoach(); }catch(e){}
   try{ renderEntreeRelances(); }catch(e){}
   return true;

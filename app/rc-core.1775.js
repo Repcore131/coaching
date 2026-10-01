@@ -2940,7 +2940,7 @@ function _confirmerResiliation(){
   const motif=[m,l].filter(Boolean).join(' : ');
   if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
-  toast('Résiliation enregistrée ✓','var(--green)');
+  toast('Résiliation enregistrée '+ICO.coche,'var(--green)');
   return true;
 }
 // ⚠ CE TEXTE PROMETTAIT LE REMBOURSEMENT DE TOUT PRELEVEMENT POSTERIEUR A LA
@@ -3264,6 +3264,48 @@ const ICONS={
   moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
 };
+// ── LES ICONES QUI REMPLACENT LES EMOJIS DE L'INTERFACE (01/10/2026) ─────────
+// Un emoji est dessine par la police du systeme : il change d'un telephone a
+// l'autre et ignore la palette. Ces noms francais sont ceux que
+// scripts/emojis.py pose a sa place (✓ coche, ✕ croix, ⚡ eclair…). Meme
+// trait que le reste du jeu : viewBox 24, trace au trait, rendu par icon().
+// Celles qui existaient sous un nom anglais reprennent le meme dessin.
+Object.assign(ICONS,{
+  eclair:ICONS.zap, muscle:ICONS.biceps, flamme:ICONS.flame, cafe:ICONS.coffee,
+  gelule:ICONS.pill, cible:ICONS.target, coche:ICONS.check, croix:ICONS.x,
+  // La regle graduee (mesures en cm du bilan de depart), dessin Lucide « ruler » (ISC).
+  regle:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
+  // La tasse sans fumee, son fil et son etiquette : le the, distinct du cafe.
+  the:'<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 9V5h3"/><rect x="11" y="3.5" width="3" height="3.5"/><line x1="3" y1="22" x2="19" y2="22"/>',
+  bouclier:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  coeur:'<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  cadeau:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+  // L'etoile : au trait ; pleine, elle porte la classe .ico-plein (favori).
+  etoile:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  // Trois de plus, pour index.html : le menu du navigateur (☰), l'echange de
+  // compte ou de superset (⇄), la carte bancaire (💳) ; et l'enveloppe (✉ 📭).
+  menu:'<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  echange:'<polyline points="17 3 21 7 17 11"/><line x1="21" y1="7" x2="7" y2="7"/><polyline points="7 13 3 17 7 21"/><line x1="3" y1="17" x2="17" y2="17"/>',
+  'carte-bancaire':'<rect x="1.5" y="4.5" width="21" height="15" rx="2"/><line x1="1.5" y1="10" x2="22.5" y2="10"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
+});
+// UNE ICONE DANS UN TEXTE BRUT. toast() et les libelles poses par textContent
+// n'acceptent pas de balisage (et ne doivent pas : ils portent des noms
+// d'athletes). ICO.coche est un MARQUEUR (deux caracteres d'usage prive autour
+// du nom) ; _texteIco(el,texte) ecrit le texte en noeuds texte et chaque
+// marqueur en icone. Un marqueur qui atteint un autre puits (journal, presse-
+// papiers) s'y lit comme rien : _sansIco(texte) le retire.
+/** @type {Record<string,string>} */
+const ICO=Object.freeze(Object.fromEntries(Object.keys(ICONS).map(n=>[n,'\uE000'+n+'\uE001'])));
+function _texteIco(el,texte,taille){
+  if(!el) return;
+  el.textContent='';
+  String(texte==null?'':texte).split(/\uE000([\w-]+)\uE001/).forEach((p,i)=>{
+    if(i%2){ if(ICONS[p]) el.insertAdjacentHTML('beforeend',icon(p,taille||14)); }
+    else if(p) el.appendChild(document.createTextNode(p));
+  });
+}
+function _sansIco(texte){ return String(texte==null?'':texte).replace(/\s?\uE000[\w-]+\uE001/g,''); }
 function _icoG(nom,cx,cy,taille,couleur,epaisseur){
   const p=ICONS[nom]; if(!p) return '';
   const k=taille/24;
@@ -5147,7 +5189,7 @@ const CLOUD={
       // reussi du dossier courant.
       if(DB._quotaAnnonce&&typeof currentUser==='object'&&currentUser&&currentUser.email===email){
         DB._quotaAnnonce=false;
-        try{ toast('✓ Envoyé au cloud. Le téléphone est plein : ces données ne seront pas disponibles hors ligne.','var(--green)'); }catch(e){}
+        try{ toast(ICO.coche+' Envoyé au cloud. Le téléphone est plein : ces données ne seront pas disponibles hors ligne.','var(--green)'); }catch(e){}
       }
     }catch(e){
       console.error('[RepCore] sync push error:',e);
@@ -6788,7 +6830,7 @@ const DB={
       if(e.name==='QuotaExceededError'||e.code===22){
         localOk=false;
         if(k==='users'||k==='session') this._quotaAnnonce=true;
-        if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le ✓','var(--orange)');
+        if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le '+ICO.coche,'var(--orange)');
       } else throw e;
     }
     // Le cache : oublie apres une ecriture reussie (le prochain get relit et
@@ -7764,7 +7806,7 @@ function _validerReconsentement(){
   const ok=DB.set('users',users)&&DB.set('session',currentUser);
   const envoi=CLOUD.pushOne(currentUser.email,currentUser);
   closeModal();
-  toastSync(ok,envoi,'Accord enregistré ✓','ton accord est');
+  toastSync(ok,envoi,'Accord enregistré '+ICO.coche,'ton accord est');
 }
 function _peutImporterPkg(a){
   return !!(a&&currentUser&&(currentUser.role==='coach'||currentUser.email===a.email));
@@ -7793,7 +7835,7 @@ function _proposerImportAthlete(){
   <div id="rc-pkg-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2 style="font-size:var(--fs-lg)">Importer un profil ?</h2>
-      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:14px;line-height:1.6">Ce lien contient un profil d'athlète. Il n'a rien enregistré pour l'instant.</p>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">
@@ -7850,7 +7892,7 @@ function _confirmerImportAthlete(){
   const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
   closeModal();
   toastSync(okMaj,envoiMaj,
-    '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' : '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
+    ICO.coche+' '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' : '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
     'la mise à jour est');
   // Sans ça, l'athlète importé n'apparaît sur le tableau de bord qu'à la sync
   // suivante, jusqu'à 30 secondes plus tard.
@@ -7932,7 +7974,7 @@ function _majRappelVerification(){
   if(!z){
     z=document.createElement('div');
     z.id='rc-verif'; z.className='rc-verif'; z.setAttribute('role','status');
-    z.innerHTML='<span>✉ Vérifie ton adresse e-mail</span>'
+    z.innerHTML='<span>'+icon('mail',14)+' Vérifie ton adresse e-mail</span>'
       +'<button type="button" data-v="fait">C’est fait</button><button type="button" data-v="renvoyer">Renvoyer</button>';
     z.addEventListener('click',async e=>{
       const b=e.target&&e.target.closest?e.target.closest('button[data-v]'):null;
@@ -8023,6 +8065,10 @@ window.onload=()=>{
   // 40px de vide au-dessus de « COACH » et « ATHLÈTE ». Passer par ICONS plutôt
   // que réinliner un SVG garde une seule définition par pictogramme.
   document.querySelectorAll('.role-icon[data-icon]').forEach(e=>{e.innerHTML=icon(e.dataset.icon,36);});
+  // LES ICONES D'INDEX.HTML (01/10/2026) : la page statique ne peut pas appeler
+  // icon(). Ses anciens emojis sont devenus <span data-ico="croix"
+  // data-taille="14">, remplis ici d'apres le meme jeu ICONS.
+  document.querySelectorAll('[data-ico]').forEach(e=>{e.innerHTML=icon(e.dataset.ico,Number(e.dataset.taille)||14);});
   // Onglets de catégorie caféine : même principe, une seule définition
   // d'icône (CAFF_ICONES) partagée entre les onglets, les tuiles produit et
   // la liste des prises.
@@ -8604,9 +8650,9 @@ function htmlSelecteurComptes(opts){
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
-      ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">✓</span>'
+      ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">'+icon('coche',14)+'</span>'
            :`<button onclick="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
-              style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
+              style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">${icon('croix',14)}</button>`}
     </div>`;
   };
   // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le
@@ -11779,7 +11825,8 @@ function toast(msg,c='var(--green)',duree){
   const erreur=/--red\b|--danger|--arc-danger/i.test(String(c));
   if(_toastMinuteur){ clearTimeout(_toastMinuteur); _toastMinuteur=null; }
   const poser=()=>{
-    t.textContent=msg;
+    // Les marqueurs ICO.coche… deviennent des icones (01/10/2026).
+    _texteIco(t,msg);
     // PAS DE FILET DE COULEUR SUR LE COTE (charte du 26/09/2026) : l'erreur se
     // lit a son fond et a son cadre, le reste du temps le message est neutre.
     t.style.borderLeft='';
@@ -12801,7 +12848,7 @@ function rescueLogin(em,pw){
   panel.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px';
   panel.innerHTML=`
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:28px 24px;max-width:340px;width:100%;text-align:center">
-      <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
+      <div style="font-size:var(--fs-2xl);margin-bottom:12px">${icon('check-circle',32)}</div>
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
       <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
@@ -13123,7 +13170,7 @@ function copyCoachInviteLink(){
   // sans rien dire — aucun toast, et le coach croyait le lien copie. _rcCopier
   // essaie le presse-papiers puis l'ancienne copie ; en dernier recours, le
   // lien s'affiche pour etre copie a la main.
-  _rcCopierOuMontrer(url,'✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
+  _rcCopierOuMontrer(url,ICO.coche+' Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
 }
 /**
  * Copier, et DIRE ce qui s'est passe : le toast de reussite seulement si la
@@ -13281,7 +13328,7 @@ function linkToCoach(coach){
   DB.set('users',users);DB.set('session',currentUser);
   // La liaison a abouti : le code a joue son role et peut partir.
   try{localStorage.removeItem('pendingCode');}catch(e){}
-  toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' ✓');
+  toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' '+ICO.coche);
   _apresRattachement();
 }
 
@@ -13354,7 +13401,7 @@ function _appliquerPayloadCode(payload){
     try{ rafraichirDroits(currentUser,true).then(()=>{ try{ _planifierRepeint(currentUser.email); }catch(e){} }).catch(()=>{}); }catch(e){}
     // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
     _oublierCodeVerifie();
-    toastSync(_u1&&_s1,_envoi,'Accès activé ✓','ton accès est');
+    toastSync(_u1&&_s1,_envoi,'Accès activé '+ICO.coche,'ton accès est');
     _apresRattachement();
   } else {
     // Code NON athlète (invitation coach) : le paiement reste le chemin
@@ -13608,7 +13655,7 @@ async function doLinkCoach(){
         const users=DB.get('users')||{};
         users[currentUser.email]=currentUser;
         const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
-        toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
+        toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' '+ICO.coche,'le rattachement est');
         _apresRattachement();return;
       }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
     }
@@ -14170,7 +14217,7 @@ async function exporterMesDonnees(){
     u.rgpd.dernierExport=Date.now();
     saveUser();
   }catch(e){}
-  toast('Export téléchargé ✓','var(--green)');
+  toast('Export téléchargé '+ICO.coche,'var(--green)');
   return true;
 }
 // Voir AVANT de télécharger : ce qui sort, et surtout ce qui ne sort pas.
@@ -17234,7 +17281,7 @@ async function lireMorphoPhoto(email){
   users[email]=c;
   const ok=DB.set('users',users);
   _ampRendre();
-  toastSync(ok,CLOUD.pushOne(email,c),'Photo lue ✓','la lecture de photo est');
+  toastSync(ok,CLOUD.pushOne(email,c),'Photo lue '+ICO.coche,'la lecture de photo est');
   return true;
 }
 /** La dernière lecture, pour l'afficher sans la relire. @type {any} */
@@ -17618,7 +17665,7 @@ async function refaireMorphoInitiale(email){
   users[email]=c;
   const ok=DB.set('users',users);
   try{ _ampRendre(); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(email,c),'Analyse refaite ✓','l’analyse est');
+  toastSync(ok,CLOUD.pushOne(email,c),'Analyse refaite '+ICO.coche,'l’analyse est');
   return true;
 }
 // ── CE QUE L'ECRAN EN DIT ──────────────────────────────────────────────────
@@ -19664,7 +19711,7 @@ async function _canalCharger(){
   try{ msgs=await CLOUD.pullCanalMessages(cle); }
   catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
@@ -19704,7 +19751,7 @@ async function _canalCharger(){
 }
 function _canalVide(titre,sous){
   return `<div style="text-align:center;padding:48px 20px">
-    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📭</div>
+    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('mail',32)}</div>
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">${escapeHtml(titre)}</div>
     <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">${escapeHtml(sous)}</div></div>`;
 }
@@ -20294,7 +20341,7 @@ function htmlKit(k){
   const lundi=kitLundi(Date.parse(k.semaine+'T12:00:00')).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
   const prets=k.contenus.filter(c=>c.d).length;
   let h='<div class="aa-haut"><span>Mon kit · semaine du '+escapeHtml(lundi)+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">'+icon('croix',14)+'</button></div>'
     +'<div class="kit-corps">'
     +'<p class="kit-intro">Trois contenus prêts à poster (1080×1350), tirés des chiffres de ta team. Modifie la légende si tu veux, puis publie.</p>'
     +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" onclick="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
@@ -20323,7 +20370,7 @@ async function kitCopierLegende(i,btn){
   const c=_kit&&_kit.contenus[i]; if(!c) return false;
   let ok=false;
   try{ await navigator.clipboard.writeText(c.legende); ok=true; }catch(e){ ok=false; }
-  if(btn){ const t=btn.textContent; btn.textContent=ok?'Copiée ✓':'Copie impossible'; setTimeout(()=>{ btn.textContent=t; },1800); }
+  if(btn){ const t=btn.textContent; _texteIco(btn,ok?'Copiée '+ICO.coche:'Copie impossible'); setTimeout(()=>{ btn.textContent=t; },1800); }
   return ok;
 }
 function _kitBlob(c){
@@ -20474,7 +20521,7 @@ function _vcRendre(){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="btn btn-outline btn-casse vc-part" onclick="vcSortir(\'partager\',this)">'+icon('share',16)+' <span>Partager</span></button>':'';
   z.innerHTML='<div class="aa-haut"><span>'+(_vc.type==='victoire'?'Victoire de '+escapeHtml(_vc.u.fname||'l’athlète'):'Récap de l’équipe')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">'+icon('croix',14)+'</button></div>'
     +'<div class="aa-apercu"><canvas id="vc-canvas" aria-label="Aperçu de l’image"></canvas></div>'
     +'<div class="aa-bas">'
     +'<button type="button" class="btn btn-red vc-dl" onclick="vcSortir(\'telecharger\',this)">'+icon('download',18)+' <span>Télécharger</span></button>'+part
@@ -20520,7 +20567,7 @@ function vcSortir(quoi,btn){
   }catch(e){ toast('Export impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   try{ if(ok) rcm(_vc&&_vc.type==='recap'?'coach_recap_partage':'coach_victoire_partage'); }catch(e){}
   return ok;
 }
@@ -20936,7 +20983,7 @@ async function activerPageDepuisRang(btn){
     toast((r&&r.erreur)||'Mise en ligne impossible','var(--orange)');
     return false;
   }
-  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne ⚡</div>'
+  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne '+icon('eclair',14)+'</div>'
     +'<p class="pp-prop-s">'+escapeHtml(urlPagePerso(u).replace(/^https?:\/\//,''))+'</p>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
   return true;
@@ -20958,7 +21005,7 @@ async function enregistrerPagePublique(btn){
   const r=await publierPagePublique(currentUser,reg);
   if(btn){ btn.disabled=false; btn.textContent='Enregistrer ma page'; }
   if(!r.ok){ toast(r.erreur,'var(--orange)'); const e=document.getElementById('pp-etat'); if(e) e.textContent=r.erreur; return false; }
-  toast(reg.active?'Ta page est en ligne ⚡':'Ta page est désactivée.');
+  toast(reg.active?'Ta page est en ligne '+ICO.eclair:'Ta page est désactivée.');
   _rendrePagePublique();
   return true;
 }
@@ -20969,7 +21016,7 @@ function copierLienBio(btn){
   const lib=btn?btn.textContent:'';
   const fait=()=>{ try{ attribCompter('copie','bio'); }catch(e){}
     toast('Lien copié · colle-le dans ta bio : Modifier le profil > Liens','var(--green)',4000);
-    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent=lib; },2000); } };
+    if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); setTimeout(()=>{ btn.textContent=lib; },2000); } };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
   toast(l);
   return false;
@@ -21313,7 +21360,7 @@ async function relierPaiementCoach(btn){
   try{ r=await CLOUD._callFn('paiementCoach',{action:'relier',marchand:v}); }
   catch(e){ toast(e.message||'Vérification impossible.','var(--orange)'); }
   if(btn){ btn.disabled=false; btn.textContent='Relier'; }
-  if(r) toast(r.relie?'Compte PayPal relié ✓':'PayPal ne reconnaît pas ce compte : vérifie l’identifiant.',r.relie?'var(--green)':'var(--orange)');
+  if(r) toast(r.relie?'Compte PayPal relié '+ICO.coche:'PayPal ne reconnaît pas ce compte : vérifie l’identifiant.',r.relie?'var(--green)':'var(--orange)');
   await _pcChargerEtat();
   return !!(r&&r.relie);
 }
@@ -21346,7 +21393,7 @@ async function pcRetourPaypal(etat,commande){
   try{ r=await CLOUD._callFn('paiementCoach',{action:'capturer',commande}); }
   catch(e){ toast(e.message||'Le paiement n’a pas pu être confirmé.','var(--orange)'); return false; }
   if(r&&(r.statut==='recu'||r.statut==='deja')){
-    toast('Paiement reçu ✓ Ton suivi est ouvert.','var(--green)',5000);
+    toast('Paiement reçu '+ICO.coche+' Ton suivi est ouvert.','var(--green)',5000);
     try{ rafraichirDroits(currentUser,true); }catch(e){}
     return true;
   }
@@ -21390,7 +21437,7 @@ function renderPaiementsFiche(c){
 function pcCopierLienPayer(formule,btn){
   const l=pcLienPayer(currentUser&&currentUser.vitrineSlug,formule);
   if(!l) return false;
-  const fait=()=>{ toast('Lien de paiement copié : envoie-le à ton contact.','var(--green)'); if(btn){ btn.textContent='Lien copié ✓'; } };
+  const fait=()=>{ toast('Lien de paiement copié : envoie-le à ton contact.','var(--green)'); if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); } };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
   toast(l); return true;
 }
@@ -21721,7 +21768,7 @@ function htmlRetention(s){
     +'<div class="vir-tab"><table><tr><th>Levier</th><th>Avec</th><th>Sans</th><th>Écart</th></tr>'
     +(s.leviers||[]).map(l=>{
       const ec=(l.avec.j30!=null&&l.sans.j30!=null)?Math.round((l.avec.j30-l.sans.j30)*10)/10:null;
-      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>⚠ groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
+      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>'+icon('alert-triangle',12)+' groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
         +'<td>'+_vfPct(l.avec.j30)+'<small>n = '+l.avec.n+'</small></td><td>'+_vfPct(l.sans.j30)+'<small>n = '+l.sans.n+'</small></td>'
         +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
     +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
@@ -21851,8 +21898,8 @@ async function ambassadeurApresInscription(u,saisi){
     try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
     // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
-    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
-      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
+    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix '+ICO.eclair)
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert '+ICO.eclair):('Code '+c.code+' appliqué : ton premier mois est offert '+ICO.eclair)),'var(--green)');
     return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
@@ -22087,7 +22134,7 @@ async function creerAmbassadeur(btn){
       palierSeuil:f.palierSeuil,dureeMois:f.dureeMois,actif:true,maj:Date.now()})}).catch(()=>false);
   if(btn) btn.disabled=false;
   if(!ok){ toast('Création refusée (droits, ou code déjà pris).','var(--orange)'); return false; }
-  toast('Ambassadeur '+r.code+' créé ⚡');
+  toast('Ambassadeur '+r.code+' créé '+ICO.eclair);
   return ouvrirAmbassadeurs();
 }
 async function basculerAmbassadeur(code,on){
@@ -22132,7 +22179,7 @@ function exporterCommissionsDues(){
   return true;
 }
 function ambCopier(l,btn){
-  try{ navigator.clipboard.writeText(l).then(()=>{ if(btn){ const x=btn.textContent; btn.textContent='Copié ✓'; setTimeout(()=>{ btn.textContent=x; },1800); } },()=>toast(l)); }
+  try{ navigator.clipboard.writeText(l).then(()=>{ if(btn){ const x=btn.textContent; _texteIco(btn,'Copié '+ICO.coche); setTimeout(()=>{ btn.textContent=x; },1800); } },()=>toast(l)); }
   catch(e){ toast(l); }
   return true;
 }
@@ -22376,7 +22423,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
+  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois '+ICO.eclair):'Code appliqué : ton premier mois est offert '+ICO.eclair,'var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -22440,12 +22487,12 @@ function filleulStatut(x){
   if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
   return 'inscrit';
 }
-const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','Qualifié ✓'],['payant','Abonné']]);
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','Qualifié'],['payant','Abonné']]);
 // PURE. La ligne d'un filleul : son prénom, et ses trois marches.
 function htmlFilleul(x){
   const st=filleulStatut(x);
   const k=FILLEUL_ETAPES.findIndex(e=>e[0]===st);
-  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' ✓':'');
+  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' '+ICO.coche:'');
   return '<div class="pr-f" data-statut="'+st+'"><span class="pr-f-nom">'+escapeHtml(x&&x.prenom||'Un ami')+'</span>'
     +'<span class="pr-f-etapes" aria-hidden="true">'+FILLEUL_ETAPES.map((e,i)=>'<i class="'+(i<=k?'on':'')+'" title="'+e[1]+'"></i>').join('')+'</span>'
     +'<b>'+escapeHtml(lib)+'</b></div>';
@@ -22463,7 +22510,7 @@ function htmlLigneFilleuls(u){
   if(actifs) bouts.push(actifs+' au travail');
   if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
   if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
-  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
+  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">'+icon('eclair',14)+'</span> '
     +escapeHtml(bouts.join(' · '))+'<span class="clh-filleuls-f" aria-hidden="true">›</span></button>';
 }
 // PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
@@ -22503,7 +22550,7 @@ function htmlParrainage(u){
     const part=Math.min(1,actifs/x.n);
     const reste=x.n-actifs;
     return '<div class="pr-palier'+(actifs>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
-      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
+      +escapeHtml(actifs>=x.n?'Atteint '+icon('coche',14):actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
@@ -22528,7 +22575,7 @@ function htmlParrainage(u){
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
-    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
+    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">'+icon('haches',14)+' Défie un pote</button>':'')+'</div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,actifs>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -22552,7 +22599,7 @@ function parrainageCopier(btn){
   const l=lienPerso('parrainage');
   if(!l) return false;
   const fait=()=>{ try{ attribCompter('copie','parrainage'); }catch(e){}
-    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
+    if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; }
   }catch(e){}
@@ -22689,7 +22736,7 @@ function partagerCarteInvitation(btn,format){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // « INVITER UN POTE », le bouton secondaire des grands moments (rang,
@@ -23072,7 +23119,7 @@ async function enregistrerDefiCanal(){
   // UN NOUVEAU DÉFI prévient les athlètes (une modification, non).
   if(nouveau) deposerEvenement({type:'defi_publie',msg:id}).catch(()=>{});
   if(nouveau) rcmCoach('coach_canal_publie');
-  toast(window._defiEdite?'Défi modifié':'Défi lancé ⚡');
+  toast(window._defiEdite?'Défi modifié':'Défi lancé '+ICO.eclair);
   window._defiEdite='';
   _canalChargerCoach(id);
   return true;
@@ -23091,7 +23138,7 @@ function _dfEnTete(m,t){
   return '<div class="dfi-tete"><span class="cnl-defi">Défi</span><span class="dfi-quand">'+escapeHtml(quand)+'</span></div>'
     +'<div class="cnl-titre">'+escapeHtml(m.titre||'Défi')+'</div>'
     +'<div class="dfi-obj">'+escapeHtml((m.collectif?'En équipe · ':'Chacun le sien · ')+defiTexteObjectif(m))+'</div>'
-    +(m.recompense?'<div class="dfi-rec">🎁 '+escapeHtml(m.recompense)+'</div>':'');
+    +(m.recompense?'<div class="dfi-rec">'+icon('cadeau',14)+' '+escapeHtml(m.recompense)+'</div>':'');
 }
 // PURE. La carte athlète : jauges, avatars, classement, et l'action.
 // etat : {pub, moi, resultat} ; u : l'athlète (jauge perso calculée ici).
@@ -23124,18 +23171,18 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
   if(cl.length){
     const unite=m.mesure==='progressionPct'?' %':(m.mesure==='serie'?' sem.':' séances');
     h+='<div class="dfi-classement"><div class="dfi-cl-t">Classement · '+escapeHtml(m.mesure==='progressionPct'?'progression':'régularité')+'</div>'
-      +cl.slice(0,5).map((x,i)=>'<div class="dfi-cl-l"><span>'+(i+1)+'. '+escapeHtml(x.nom)+(x.termine?' ✓':'')+'</span><b>'
+      +cl.slice(0,5).map((x,i)=>'<div class="dfi-cl-l"><span>'+(i+1)+'. '+escapeHtml(x.nom)+(x.termine?' '+icon('coche',14):'')+'</span><b>'
         +escapeHtml(String(x.valeur).replace('.',','))+unite+'</b></div>').join('')
       +(moi&&moi.place?'<div class="dfi-cl-moi">Ta place : '+moi.place+(moi.place===1?'er':'e')
         +(moi.inscription&&moi.inscription.classement?'':' (hors classement public)')+'</div>':'')+'</div>';
   }
   if(fini){
-    h+='<div class="dfi-fait">'+(res&&res.champion?'Champion du défi':'✓ Défi relevé')+'</div>'
+    h+='<div class="dfi-fait">'+(res&&res.champion?'Champion du défi':icon('coche',14)+' Défi relevé')+'</div>'
       +'<button type="button" class="btn btn-outline btn-sm dfi-part" onclick="partagerDefi(\''+escapeHtml(m.id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>';
   }else if(actif&&!inscrit){
     h+='<button type="button" class="btn btn-red dfi-go" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Je relève le défi</button>';
   }else if(actif&&inscrit){
-    h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
+    h+='<div class="dfi-inscrit">Tu relèves ce défi '+icon('coche',14)+' <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
   }
   h+='<div style="display:flex;gap:6px;margin-top:12px">'+_canalBoutonsReactions(m,compteurs||{},mienne||'')+'</div>';
   return h+'</div>';
@@ -23155,7 +23202,7 @@ function htmlCarteDefiCoach(m,d,neuve){
   }).sort((a,b)=>b.v-a.v);
   let h='<div class="cnl-carte dfi-carte'+(neuve?' cnl-neuve':'')+'">'+_dfEnTete(m,t);
   h+=_dfJauge('Équipe',Number((pub.equipe||{}).part)||0,Math.round((Number((pub.equipe||{}).part)||0)*100)+' %');
-  h+=l.length?'<div class="dfi-classement">'+l.map(x=>'<div class="dfi-cl-l"><span>'+htmlNomRang(x.nom,x.xp)+(x.f?' ✓':'')+'</span><b>'
+  h+=l.length?'<div class="dfi-classement">'+l.map(x=>'<div class="dfi-cl-l"><span>'+htmlNomRang(x.nom,x.xp)+(x.f?' '+icon('coche',14):'')+'</span><b>'
       +escapeHtml(_dfValeurTexte(m,x.v))+'</b></div>').join('')+'</div>'
     :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Personne n’a encore relevé le défi.</div>';
   h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
@@ -23424,7 +23471,7 @@ async function rejoindreDuel(id,btn){
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
   try{ saveUser(); }catch(e){}
   deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
-  toast('Défi relevé ⚡ Il commence à ta prochaine séance.','var(--green)',4000);
+  toast('Défi relevé '+ICO.eclair+' Il commence à ta prochaine séance.','var(--green)',4000);
   delete _duelsCache[id];
   _rendreDuelsAccueil();
   return true;
@@ -23514,7 +23561,7 @@ function htmlDuelsHub(u,duels,invite,maintenant){
   }
   const l=_duelsListe(duels,maintenant);
   if(l.length) h+='<div class="du-lab">Défis en cours</div><div class="du-liste">'+l.map(d=>
-    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">'+icon('haches',14)+'</span> '
       +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>').join('')+'</div>';
   return h;
 }
@@ -23902,7 +23949,7 @@ function htmlFicheAmi(r,suivi){
     +'<div class="am-fiche-t"><b>'+escapeHtml(r.prenom)+'</b><small>@'+escapeHtml(r.pseudo)+'</small>'
       +'<span class="am-fiche-r">'+(r.rang?escapeHtml(r.rang.nom):'Rang non affiché')+(r.volts!=null?' · '+Number(r.volts).toLocaleString('fr-FR')+' V':'')+'</span>'
       +(r.badges&&r.badges.length?'<span class="am-fiche-b">'+r.badges.map(escapeHtml).join(' · ')+'</span>':'')+'</div>'
-    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi ✓':'Suivre')+'</button>'
+    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi '+icon('coche',14):'Suivre')+'</button>'
     +'</div>';
 }
 // PURE. Personne à ce nom : on ne dit pas « n'existe pas » sèchement, on
@@ -24008,7 +24055,7 @@ async function amiBasculerSuivi(b){
   const p=b.dataset.p, n=b.dataset.n;
   const suivi=!!amisLocal().amis[pseudoPublicCle(p)];
   const ok=suivi?await amiRetirer(p):await amiSuivre(p,n);
-  if(ok){ const s=!suivi; b.textContent=s?'Suivi ✓':'Suivre'; b.classList.toggle('btn-red',!s); b.classList.toggle('btn-outline',s); }
+  if(ok){ const s=!suivi; _texteIco(b,s?'Suivi '+ICO.coche:'Suivre'); b.classList.toggle('btn-red',!s); b.classList.toggle('btn-outline',s); }
   return ok;
 }
 function _rendreAmisPartout(){
@@ -24027,7 +24074,7 @@ function amiEnvoyerLien(btn){
   const pr=String((currentUser&&currentUser.fname)||'').trim();
   const txt=(pr?pr+' t’invite':'Je t’invite')+' sur RepCore : on se suit et on se défie ⚡';
   if(navigator.share){ navigator.share({title:'RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','amis'); }catch(e){} }).catch(()=>{}); return true; }
-  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>{ toast('Lien copié','var(--green)'); if(btn) btn.textContent='Lien copié ✓'; },()=>toast(l)); }catch(e){ toast(l); }
+  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>{ toast('Lien copié','var(--green)'); if(btn) _texteIco(btn,'Lien copié '+ICO.coche); },()=>toast(l)); }catch(e){ toast(l); }
   return true;
 }
 // « Défier » : la feuille de duel existante, préparée pour cet ami.
@@ -24106,7 +24153,7 @@ async function amiRevanche(pseudo,mesure,duree,btn){
     return false;
   }
   fermerDuelFeuille();
-  toast('Revanche lancée contre '+r.prenom+' ⚡ Sa prochaine séance lance le compte.','var(--green)',4500);
+  toast('Revanche lancée contre '+r.prenom+' '+ICO.eclair+' Sa prochaine séance lance le compte.','var(--green)',4500);
   _rendreDuelsAccueil(); _rendreAmisPartout();
   return true;
 }
@@ -24196,7 +24243,7 @@ async function lancerDuel(btn){
   if(_duelCible){
     const ra=await creerDuelAvecAmi(_duelCible.p,m,j);
     if(ra.ok){
-      if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' ⚡</div>'
+      if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' '+icon('eclair',14)+'</div>'
         +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Il n’a rien à accepter : sa prochaine séance lance le compte.</p>'
         +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
       _rendreDuelsAccueil();
@@ -24209,7 +24256,7 @@ async function lancerDuel(btn){
   if(!r.ok){ if(btn){ btn.disabled=false; lib.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
   // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
   // iOS refuserait la feuille de partage ouverte hors du geste.
-  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
+  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt '+icon('eclair',14)+'</div>'
     +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Envoie-le à ton pote : il commence à sa première séance.</p>'
     +'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
@@ -24351,7 +24398,7 @@ function partagerCarteDuel(id,type,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 
@@ -24392,7 +24439,7 @@ function htmlDefiMois(d,u,maintenant){
     +'<div class="dm-titre">'+escapeHtml(d.titre)+'</div>'
     +(d.texte?'<p class="dm-texte">'+escapeHtml(d.texte)+'</p>':'')
     +'<div class="rg-jauge dm-jauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
-    +'<div class="dm-etat">'+(fait?'Relevé ⚡ ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
+    +'<div class="dm-etat">'+(fait?'Relevé '+icon('eclair',14)+' ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
       +(fait?'':' · '+(j?j+' jour'+(j>1?'s':'')+' restant'+(j>1?'s':''):'dernier jour'))+'</div></div>';
 }
 async function renderDefiMoisAccueil(){
@@ -24443,7 +24490,7 @@ async function enregistrerDefiMois(btn){
   const ok=await CLOUD.racinePatch({['defi_mois/'+r.mois]:r.fiche}).catch(()=>false);
   if(btn) btn.disabled=false;
   try{ localStorage.removeItem(DEFI_MOIS_CACHE); }catch(e){}
-  toast(ok?'Défi de '+r.mois+' publié ⚡':'Publication refusée','var('+(ok?'--green':'--orange')+')');
+  toast(ok?'Défi de '+r.mois+' publié '+ICO.eclair:'Publication refusée','var('+(ok?'--green':'--orange')+')');
   return ok;
 }
 // ══ LES ÉVÉNEMENTS SAISONNIERS (28/09/2026) ══════════════════════════════
@@ -24559,7 +24606,7 @@ function htmlBanniereSaison(s,u,stats,maintenant){
     +(s.texteAccueil?'<p class="sa-texte">'+escapeHtml(s.texteAccueil)+'</p>':'')
     +'<div class="sa-lab">Toi</div>'
     +'<div class="rg-jauge sa-jauge" role="progressbar" aria-label="Ta progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
-    +'<div class="sa-val">'+(fait?'Bouclé ⚡ ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
+    +'<div class="sa-val">'+(fait?'Bouclé '+icon('eclair',14)+' ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
     +(col>0?'<div class="sa-lab">Tous ensemble</div>'
       +'<div class="rg-jauge sa-jauge sa-collectif" role="progressbar" aria-label="Le compteur collectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pc*100)+'"><span style="width:'+Math.round(pc*100)+'%"></span></div>'
       +'<div class="sa-val">'+escapeHtml(txt(tot))+' sur '+escapeHtml(txt(col))
@@ -24699,7 +24746,7 @@ function partagerCarteSaison(id,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // ── L'écran admin : créer une édition ─────────────────────────────────────
@@ -24752,7 +24799,7 @@ async function enregistrerSaison(btn){
   if(btn) btn.disabled=false;
   try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
   _saisons=null;
-  toast(ok?'Édition « '+r.fiche.nom+' » créée ⚡':'Création refusée','var('+(ok?'--green':'--orange')+')');
+  toast(ok?'Édition « '+r.fiche.nom+' » créée '+ICO.eclair:'Création refusée','var('+(ok?'--green':'--orange')+')');
   return ok;
 }
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
@@ -24784,7 +24831,7 @@ async function majRecompensesServeur(o){
     const tok=await CLOUD._getToken();
     const rs=tok?await fetch(CLOUD._fbUrl.replace('users.json','saisons_resultats/'+String(u.email||'').replace(/\./g,',')+'.json')+'?auth='+tok):null;
     ns=saisonsFusionnerResultats(u,(rs&&rs.ok)?await rs.json():null);
-    if(ns) toast('Édition bouclée ⚡ Ton badge t’attend dans ta collection.','var(--green)',4000);
+    if(ns) toast('Édition bouclée '+ICO.eclair+' Ton badge t’attend dans ta collection.','var(--green)',4000);
   }catch(e){ ns=0; }
   const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns;
   if(n){
@@ -24887,7 +24934,7 @@ function _defiEcran(id,reste){
   const z=_bdgCouche('<div class="bdg-ecran-txt">'
     +'<div class="bdg-ecran-sur">'+(d.champion?'CHAMPION DU DÉFI':'DÉFI RELEVÉ')+'</div>'
     +'<h2 class="bdg-ecran-nom" id="dfe-titre">'+escapeHtml(d.titre)+'</h2>'
-    +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · ⚡ '+escapeHtml(d.valeur):'')+'</div>'
+    +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · '+icon('eclair',14)+' '+escapeHtml(d.valeur):'')+'</div>'
     +_htmlVisuelFonds('dfe-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerDefi(\''+escapeHtml(id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
@@ -24912,7 +24959,7 @@ function partagerDefi(id,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
@@ -25180,7 +25227,7 @@ async function _canalChargerCoach(idNeuf){
     ]);
   }catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
@@ -25528,7 +25575,7 @@ function openWaGroupe(rowIdx){
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(nom)}</div>
-        <div class="sub" style="font-size:var(--fs-xs)">${tel?'📱 '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro : le contact sera à choisir dans WhatsApp</span>'}</div>
+        <div class="sub" style="font-size:var(--fs-xs)">${tel?icon('smartphone',12)+' '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro : le contact sera à choisir dans WhatsApp</span>'}</div>
       </div>
     </label>`;
   }).join('');
@@ -27001,7 +27048,7 @@ function _ajBouton(r,idx){
   return '<button class="hit44" onclick="event.stopPropagation();ouvrirAjustement('+idx+')"'
     +' title="Ajuster le programme" aria-label="Ajuster le programme"'
     +' style="background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;'
-    +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:var(--r-1)">⚙</button>';
+    +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:var(--r-1)">'+icon('sliders',16)+'</button>';
 }
 function ouvrirAjustement(idx){
   const r=window._todoRows&&window._todoRows[idx];
@@ -27365,13 +27412,13 @@ function renderDouleurAthlete(){
 // atteignable. Plutôt que d'inventer une quatrième porte, la carte annonce
 // l'ordre réel des opérations.
 const PREMIERS_PAS=Object.freeze([
-  Object.freeze({icone:'👤', titre:'Inviter mon premier athlète',
+  Object.freeze({icone:'user', titre:'Inviter mon premier athlète',
     detail:'Un code à lui transmettre, et il te rejoint.',
     action:'openAddAthlete()'}),
-  Object.freeze({icone:'🗂️', titre:'Créer un programme',
+  Object.freeze({icone:'folder', titre:'Créer un programme',
     detail:'Un modèle Homme/Femme, réutilisable pour tous.',
     action:'openCoachPrograms()'}),
-  Object.freeze({icone:'📄', titre:'Importer une fiche existante',
+  Object.freeze({icone:'clipboard', titre:'Importer une fiche existante',
     detail:'PDF ou photo. L\'import se fait dans le programme d\'un athlète : commence par en ajouter un.',
     action:'openAddAthlete()'}),
 ]);
@@ -27748,7 +27795,7 @@ function relApercu(signal){
 function relancesReprendreLaMain(on){
   if(!currentUser) return false;
   _relEcrire(currentUser,n=>{ n.pause=on===true; });
-  toast(on?'Relances automatiques coupées ✓':'Relances automatiques reprises ✓',on?'var(--orange)':'var(--green)');
+  toast(on?'Relances automatiques coupées '+ICO.coche:'Relances automatiques reprises '+ICO.coche,on?'var(--orange)':'var(--green)');
   try{ renderRelancesCoach(); }catch(e){}
   try{ renderEntreeRelances(); }catch(e){}
   return true;
@@ -28937,7 +28984,7 @@ function _rendreEtiquettesFiche(c){
   if(!z) return;
   if(!c||c._fromCode||!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return; }
   const t=etiquettesDe(currentUser), l=etiquettesAthlete(currentUser,c.id);
-  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">✕</button>')).join('')
+  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">'+icon('croix',14)+'</button>')).join('')
     +'<button type="button" class="etq-plus" onclick="ouvrirEtiquettes(['+_attrArg(c.id)+'])">+ Étiquette</button>';
 }
 // « Cocher l'étiquette… » : dans les trois écrans qui cochent des athlètes.
@@ -29163,7 +29210,7 @@ function renderTodoBlock(clients){
       // colorée de plus ferait trois rouges côte à côte et plus rien ne
       // ressortirait. Deux halos, un serré et un large : c'est ce qui fait le
       // néon plutôt qu'un simple trait clair.
-      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">${icon('croix',14)}</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
@@ -29417,7 +29464,7 @@ function _selMaj(){
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selCadence()">Cadence</button>'
-    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
+    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">'+icon('croix',14)+'</button>'
     +'</div>';
 }
 // Les cases de l'ecran de destination sont cochees APRES son rendu : c'est lui
@@ -30453,7 +30500,7 @@ function loadCoachHome(){
   // les memes fonctions, et rendus par renderPortefeuille depuis
   // renderClientList. Un seul comptage, un seul rendu.
   try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
-    if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' ✓'); }catch(e){}
+    if(_e) _texteIco(_e,_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' '+ICO.coche)); }catch(e){}
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
@@ -30743,7 +30790,7 @@ function ccdCadenceEnregistrer(){
   _cadenceAppliquer(c,f===''?null:f,v('bcad-jour'),[1,2,3].map(i=>v('bcad-q'+i)||''));
   users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Cadence enregistrée ✓','la cadence est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Cadence enregistrée '+ICO.coche,'la cadence est');
   try{ renderCalendrierBilansCoach(c); }catch(e){}
   return true;
 }
@@ -30774,7 +30821,7 @@ function selCadenceAppliquer(){
   }
   const ok=DB.set('users',users);
   closeModal();
-  toastSync(ok,Promise.all(faits.map(c=>CLOUD.pushOne(c.email,c))),'Cadence appliquée à '+faits.length+' athlète'+(faits.length>1?'s':'')+' ✓','la cadence est');
+  toastSync(ok,Promise.all(faits.map(c=>CLOUD.pushOne(c.email,c))),'Cadence appliquée à '+faits.length+' athlète'+(faits.length>1?'s':'')+' '+ICO.coche,'la cadence est');
   try{ renderTodoBlock(getClients()); }catch(e){}
   return faits.length;
 }
@@ -32236,7 +32283,7 @@ function _buildSessionCard(s,client){
         <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
       </div>
-      <span style="font-size:var(--fs-xs);font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
+      <span style="font-size:var(--fs-xs);font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?icon('coche',14):icon('croix',14)}</span>
       <span class="sc-arr" style="color:var(--text-dim);font-size:var(--fs-xs);flex-shrink:0">▶</span>
     </div>
     <div class="sc-body" style="display:none;padding:0 14px 14px">
@@ -33795,7 +33842,7 @@ function openClientDetail(cid,_refresh,_force){
         .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
         .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
@@ -34622,8 +34669,8 @@ function renderBilanEvolution(c){
       return null;
     };
     const VIEWS=[
-      {k:'face',label:'De Face',icon:'🧍'},
-      {k:'back',label:'De Dos',icon:'🔙'},
+      {k:'face',label:'De Face',icon:'user'},
+      {k:'back',label:'De Dos',icon:'refresh-cw'},
       {k:'side',label:'De Profil',icon:'↔️'}
     ];
     if(!bilans.length)return'';
@@ -34648,7 +34695,7 @@ function renderBilanEvolution(c){
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
-              <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
+              <div style="font-size:var(--fs-2xl);opacity:.5">${icon('camera',28)}</div>
               <div style="font-size:var(--fs-xs);color:var(--text-mid);font-weight:700">B${i+1}</div>
               <div style="font-size:var(--fs-xs);color:var(--sub)">${date}</div>
               <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
@@ -34656,7 +34703,7 @@ function renderBilanEvolution(c){
       }).join('');
       return `<div style="margin-bottom:20px">
         <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <span>${v.icon}</span><span>${v.label}</span>
+          <span>${icon(v.icon,14)}</span><span>${v.label}</span>
         </div>
         <div style="position:relative"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px" data-scroll-fade>${cards}</div></div>
       </div>`;
@@ -37350,7 +37397,7 @@ async function enregistrerVenteProgramme(){
   // ici, et aucun chemin ne peut publier une liste perimee.
   const envoi=CLOUD.pushProfilCoach(currentUser);
   toastSync(local,envoi,
-    progEnVente(p)?'Programme publié sur ta vitrine ✓':'Programme retiré de ta vitrine ✓',
+    progEnVente(p)?'Programme publié sur ta vitrine '+ICO.coche:'Programme retiré de ta vitrine '+ICO.coche,
     'ta vitrine est');
   fermerVenteProgramme();
   loadCoachProgramsList();
@@ -38285,7 +38332,7 @@ async function cptCopyDay(i,j){
   loadProgTemplateSlots(_editProgTemplateGender);
   // Pas de saveUser ici : comme cptToggleDay et cptRenameSession, l'écriture
   // appartient au bouton SAUVEGARDER de l'écran.
-  toast(src.day+' → '+dst.day+' ✓');
+  toast(src.day+' → '+dst.day+' '+ICO.coche);
 }
 // Le programme d'un ATHLÈTE passe par dupliquerSeance : copie profonde, nom
 // unique, photo non reprise. cptCopyDay garde _copierSeance — un modèle n'a ni
@@ -38305,7 +38352,7 @@ async function coachCopyDay(i,j){
   const r=dupliquerSeance(sc,i,j);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return; }
   loadCoachSessionSlots();
-  toast(src.day+' → '+dst.day+' : '+r.nom+' ✓');
+  toast(src.day+' → '+dst.day+' : '+r.nom+' '+ICO.coche);
 }
 
 function cptToggleDay(i){
@@ -38495,7 +38542,7 @@ async function setClientPhone(){
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(emailKey,a);
   openClientDetail(currentClientId,true);
-  toastSync(ok,envoi,brut?'Numéro enregistré ✓':'Numéro retiré','le numéro est');
+  toastSync(ok,envoi,brut?'Numéro enregistré '+ICO.coche:'Numéro retiré','le numéro est');
 }
 
 // Cœur d'assignation, partagé par l'écran d'assignation en masse et par
@@ -39653,7 +39700,7 @@ function saveCoachSessions(){
   const _b=document.getElementById('csm-publier');
   if(_b){
     _b.classList.remove('btn-attente');
-    _b.textContent='PUBLIÉ ✓';
+    _texteIco(_b,'PUBLIÉ '+ICO.coche);
     _b.disabled=true;
     if(!arcReduit()) _b.classList.add('celebrate');
   }
@@ -40301,7 +40348,7 @@ function _bqLigne(f){
     <button onclick="bqFavori('${escapeHtml(f.slug)}',event)" aria-label="Favori"
       style="background:none;border:none;font-size:var(--fs-xl);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
-      color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'★':'☆'}</button>
+      color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'<span class="ico-plein">'+icon('etoile',16)+'</span>':icon('etoile',16)}</button>
     <button onclick="ouvrirFicheBanque('${escapeHtml(f.slug)}',event)" aria-label="Détail"
       style="background:none;border:none;font-size:var(--fs-lg);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
@@ -40604,11 +40651,11 @@ function _validerCreationExo(){
   // de demander un clic de plus.
   const _slug=(r.fiche&&r.fiche.slug)||null;
   if(ok&&_bqCb&&_slug&&bqChoisir(_slug)){
-    toast('Exercice créé et ajouté ✓');
+    toast('Exercice créé et ajouté '+ICO.coche);
     return true;
   }
   bqOnglet('perso');
-  toastEcriture(ok,'Exercice créé ✓','l\'exercice est');
+  toastEcriture(ok,'Exercice créé '+ICO.coche,'l\'exercice est');
   return true;
 }
 
@@ -42195,7 +42242,7 @@ function _majInviteSon(sonOn){
   if(!z||z.hidden) return;
   if(sonOn&&z.dataset.type==='propose'){
     z.dataset.type='ok';
-    z.innerHTML='<span class="rep-invite-t">Son activé ✓</span>';
+    z.innerHTML='<span class="rep-invite-t">Son activé '+icon('coche',14)+'</span>';
     if(_reposInviteMinuteur) clearTimeout(_reposInviteMinuteur);
     _reposInviteMinuteur=setTimeout(()=>{ _reposInviteMinuteur=null;
       if(z.isConnected&&z.dataset.type==='ok'){ z.hidden=true; z.innerHTML=''; } },2000);
@@ -43178,8 +43225,8 @@ async function remplacerDepuisBanque(i,mode){
     const _dit=[_photo?'photo':'', _nv?(_nv+' vidéo'+(_nv>1?'s':'')):''].filter(Boolean).join(' · ')
       ||'aucun média sur cette fiche';
     toast(maj
-      ?('« '+_ap.name+' » mis à jour ✓ : historique conservé · '+_dit)
-      :('Remplacé par « '+f.nom+' » ✓ · '+_dit),
+      ?('« '+_ap.name+' » mis à jour '+ICO.coche+' : historique conservé · '+_dit)
+      :('Remplacé par « '+f.nom+' » '+ICO.coche+' · '+_dit),
       (_photo||_nv)?'var(--green)':'var(--orange)');
   },'s-coach-program');
 }
@@ -43207,7 +43254,7 @@ function ajouterDepuisBanque(){
     });
     _progExDirty=true;
     renderProgEx();
-    toast('« '+f.nom+' » ajouté ✓','var(--green)');
+    toast('« '+f.nom+' » ajouté '+ICO.coche,'var(--green)');
   },'s-coach-program');
 }
 // ══ LA SILHOUETTE DANS L'ÉDITEUR DU COACH (01/10/2026) ═══════════════════
@@ -43297,7 +43344,7 @@ function renderProgEx(){
     // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
     const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
-      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
+      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?icon('echange',14)+' SUPERSET · DÉLIER':'+ SUPERSET'}</button>
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
     </div>`;
     // Le badge de METHODE prime : il porte le nom exact du guide. Les badges
@@ -43831,7 +43878,7 @@ function validerProgEx(){
   toast(trous.length
     ?('Programmation enregistrée · '+n+' semaine'+(n>1?'s':'')+' sur '+b.semaines.length
       +' : semaine'+(trous.length>1?'s':'')+' '+trous.join(', ')+' incomplète'+(trous.length>1?'s':''))
-    :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' ✓'),
+    :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' '+ICO.coche),
     trous.length?'var(--orange)':'var(--green)');
   _progExFermer();
   renderProgEx();
@@ -46592,7 +46639,7 @@ function _renderSessionManager(){
              boutons sur une rangee font 33 % de largeur chacun, et
              « Modifier ma séance » ne tient plus. -->
         <button class="btn btn-blanc btn-sm" style="width:100%;margin-top:8px"
-          onclick="alternerSeance(${i})">⇄ Alterner ma séance</button>
+          onclick="alternerSeance(${i})">${icon('echange',14)} Alterner ma séance</button>
         <div id="alt-${i}"></div>
       </div>`:
       `<div style="padding:10px 16px;text-align:center"><span class="sub" style="font-size:var(--fs-sm)">Active ce jour pour y mettre une séance</span></div>`}
@@ -46857,7 +46904,7 @@ function _htmlSeanceDepart(s){
   return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
     +'border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +'<span style="font-size:var(--fs-lg)">⏳</span>'
+    +'<span style="font-size:var(--fs-lg)">'+icon('clock',16)+'</span>'
     +'<div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;'
     +'letter-spacing:1px">Séance provisoire</div></div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">'
@@ -47137,7 +47184,7 @@ function _htmlDemarrage(u){
     +'<div class="pd-tete"><span class="eyebrow eyebrow-act">Pour démarrer</span>'
     +'<span class="pd-compte">'+faites+' sur 3</span></div>'
     +lignes.map((l,i)=>{
-      const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?'✓':'')+'</span>'
+      const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?icon('coche',14):'')+'</span>'
         +'<span class="pd-txt"><span class="pd-titre">'+(i+1)+' · '+escapeHtml(l.titre)+'</span>'
         +'<span class="pd-sous">'+escapeHtml(l.sous)+'</span></span>';
       return l.fait
@@ -47412,7 +47459,7 @@ function _bandeauEssai(u){
     :'Tu peux le modifier librement.';
   return `<div class="bandeau-essai" style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-lg)" aria-hidden="true">⏳</span>
+        <span style="font-size:var(--fs-lg)" aria-hidden="true">'+icon('clock',16)+'</span>
         <div style="font-weight:900;font-size:var(--fs-sm);color:var(--orange);text-transform:uppercase;letter-spacing:1px">Séances d'essai</div>
       </div>
       <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">Ce programme d'essai te permet de commencer tout de suite. ${suite}</div>
@@ -51993,7 +52040,7 @@ function _htmlConsigneExo(ex){
 // elle attend dans la file du telephone et part a la fin. Le badge dit
 // qu'elle existe ; il ne dit pas qu'elle est partie.
 function _badgeVideoSerie(s){
-  return (s&&s.video)?'<span class="wo-vid-badge" role="img" aria-label="Une vidéo gardée pour cette série, envoi à la fin de la séance">🎥 1</span>':'';
+  return (s&&s.video)?'<span class="wo-vid-badge" role="img" aria-label="Une vidéo gardée pour cette série, envoi à la fin de la séance">'+icon('video',12)+' 1</span>':'';
 }
 function _htmlVideoTechniqueExo(ex){
   let u='';
@@ -52045,7 +52092,7 @@ function htmlFeuilleDemo(url,ex,enLigne){
   }
   return '<div class="demo-poignee" aria-hidden="true"></div>'
     +'<div class="demo-tete"><div class="demo-titre">'+titre+'</div>'
-    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">✕</button></div>'
+    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">'+icon('croix',14)+'</button></div>'
     +corps;
 }
 function _videoDemoOuvrir(a,e){
@@ -52262,7 +52309,7 @@ function _blocExo(idx,estSS){
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center">
-          <div style="font-size:var(--fs-2xl);margin-bottom:6px">🏃</div>
+          <div style="font-size:var(--fs-2xl);margin-bottom:6px">${icon('activity',28)}</div>
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
@@ -52313,7 +52360,7 @@ function _blocExo(idx,estSS){
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
 
-      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
+      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">${icon('video',14)}</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
       <!-- LA BANDE DE TEMPO. Peinte par renderSets, comme les actions de
            series : son libelle depend de la serie en cours et du chronometre,
            qui changent tous les deux sans repasser par _blocExo. Elle vit HORS
@@ -54344,11 +54391,11 @@ function finishWorkout(incomplete=false){
     try{ go('s-workout-done'); }catch(_e){}
     try{
       const m=document.getElementById('wd-msg');
-      if(m) m.textContent='Séance enregistrée ✓ Le détail de fin de séance n\'a pas pu s\'afficher, mais rien n\'est perdu.';
+      if(m) _texteIco(m,'Séance enregistrée '+ICO.coche+' Le détail de fin de séance n\'a pas pu s\'afficher, mais rien n\'est perdu.');
     }catch(_e){}
     // ET UN TOAST, parce que l'ecran de fin peut lui-meme etre reste vide : le
     // message ci-dessus vit dans un noeud qui n'existe peut-etre plus.
-    try{ toast('Séance enregistrée ✓ (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
+    try{ toast('Séance enregistrée '+ICO.coche+' (affichage de fin incomplet)','var(--orange)'); }catch(_e){}
   }
   // ── LA RELANCE D'INSTALLATION, ICI ET NULLE PART AILLEURS ───────────
   //
@@ -61886,7 +61933,7 @@ function anatAjouterExo(val){
   sc.exercises=(Array.isArray(sc.exercises)?sc.exercises:[]).concat([ex]);
   d.updatedAt=Date.now(); users[c.email]=d;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,d),ex.name+' ajouté à « '+(sc.name||('Séance '+(i+1)))+' » ✓','le programme est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),ex.name+' ajouté à « '+(sc.name||('Séance '+(i+1)))+' » '+ICO.coche,'le programme est');
   return true;
 }
 /**
@@ -61921,7 +61968,7 @@ function anatEnvoyerConsigne(cle,i){
   if(!n){ toast('Aucun exercice de son programme ne correspond à « '+am.quoi+' ».','var(--orange)'); return false; }
   d.updatedAt=Date.now(); users[c.email]=d;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' ✓','la consigne est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' '+ICO.coche,'la consigne est');
   return true;
 }
 /** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
@@ -62056,7 +62103,7 @@ function anatSauvegarder(){
   users[c.email]=d;
   const ok=DB.set('users',users);
   renderAnatCoach(getOwnedClient(currentClientId)||c);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée ✓','la sauvegarde est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée '+ICO.coche,'la sauvegarde est');
 }
 /**
  * Changer le bilan analysé. « auto » (ou le bilan par défaut) revient au
@@ -62095,7 +62142,7 @@ function anatChoisirBilan(val){
   const ok=DB.set('users',users);
   _anatLevIdx=0;
   renderAnatCoach(getOwnedClient(currentClientId)||d);
-  const txt=choix?'Bilan du '+_anatDateFr(choix)+' ✓':'Bilan de départ ✓';
+  const txt=choix?'Bilan du '+_anatDateFr(choix)+' '+ICO.coche:'Bilan de départ '+ICO.coche;
   toastSync(ok,CLOUD.pushOne(c.email,d),txt,'le changement de bilan est');
 }
 function anatRestaurer(id){
@@ -62117,7 +62164,7 @@ function anatRestaurer(id){
   users[c.email]=d;
   const ok=DB.set('users',users);
   renderAnatCoach(getOwnedClient(currentClientId)||c);
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Version du '+_anatDateHeure(v.date)+' restaurée ✓','la restauration est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Version du '+_anatDateHeure(v.date)+' restaurée '+ICO.coche,'la restauration est');
 }
 function anatSupprimerSauvegarde(id){
   const c=getOwnedClient(currentClientId);
@@ -62493,7 +62540,7 @@ function anatRelancer(){
   if(!c) return;
   toast('Détection des repères…');
   anatAnalyser(c.email,true).then(ok=>{
-    if(ok) toast('Détection refaite ✓');
+    if(ok) toast('Détection refaite '+ICO.coche);
     else toast('Rien de lu : '+(_anatEchecs.get(c.email)||'la photo n’a pas pu être lue'),'var(--orange)');
   });
 }
@@ -62509,7 +62556,7 @@ function anatReglerOption(nom,val){
   users[c.email]=d;
   const ok=DB.set('users',users);
   try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(c.email,d),'Lecture mise à jour ✓','le réglage est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Lecture mise à jour '+ICO.coche,'le réglage est');
 }
 /** La demande « paumes vers l'avant » pour les prochaines photos de bilan (A10). */
 function anatDemanderPaumes(on){
@@ -62523,7 +62570,7 @@ function anatDemanderPaumes(on){
   users[c.email]=d;
   const ok=DB.set('users',users);
   try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
-  toastSync(ok,CLOUD.pushOne(c.email,d),on?'Prochaines photos : paumes vers l’avant ✓':'Demande retirée ✓','la demande est');
+  toastSync(ok,CLOUD.pushOne(c.email,d),on?'Prochaines photos : paumes vers l’avant '+ICO.coche:'Demande retirée '+ICO.coche,'la demande est');
 }
 function anatVue(v){
   if(_anatEdit) return;
@@ -62676,7 +62723,7 @@ function anatEnregistrerPoints(silencieux){
   _anatEdit=null;
   try{ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }catch(x){}
   if(silencieux){ CLOUD.pushOne(e.email,c); return; }
-  toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points ✓','l’analyse est');
+  toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points '+ICO.coche,'l’analyse est');
 }
 function _anatBouge(a,b){
   if(!a||!b) return true;
@@ -63828,7 +63875,7 @@ function _coachClasserMuscles(i){
     cc.exMuscles[_aliasPour(exKey(a.nom),cc)]=r;
     cc.updatedAt=Date.now(); users[cc.email]=cc;
     const ok=DB.set('users',users);
-    toastSync(ok,CLOUD.pushOne(cc.email,cc),'Muscles attribués ✓','l’attribution est');
+    toastSync(ok,CLOUD.pushOne(cc.email,cc),'Muscles attribués '+ICO.coche,'l’attribution est');
     try{ _viderCacheVolume(); }catch(e){}
     closeModal();
     try{ renderPlateauxCoach(cc); }catch(e){}
@@ -65244,7 +65291,7 @@ function telechargerSeanceRelue(btn){
   if(sp) sp.textContent='Génération…';
   let ok=false;
   try{ ok=telechargerBilanSeance(_seanceRelue); }catch(e){ ok=false; }
-  if(sp) setTimeout(()=>{ sp.textContent=ok?'Téléchargé ✓':lib;
+  if(sp) setTimeout(()=>{ _texteIco(sp,ok?'Téléchargé '+ICO.coche:lib);
     if(ok) setTimeout(()=>{ sp.textContent=lib; },2000); },260);
   return ok;
 }
@@ -65465,7 +65512,7 @@ function partagerRecord(cle,i,btn){
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){
     const lib=sp.textContent;
-    sp.textContent='Visuel prêt ✓';
+    _texteIco(sp,'Visuel prêt '+ICO.coche);
     setTimeout(()=>{ sp.textContent=lib; },2000);
   }
   return ok;
@@ -69907,7 +69954,7 @@ function _streakRattrapage(){
   let b=null; try{ b=_streakAppliquerJokers(u,Date.now()); }catch(e){ b=null; }
   if(b&&b.sauve){
     try{ saveUser(); }catch(e){}
-    try{ toast('🛡 '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
+    try{ toast(ICO.bouclier+' '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
   }
   return b;
 }
@@ -69946,7 +69993,7 @@ function updateStreak(){
     if(SERIE_PALIERS.indexOf(n)>=0){ try{ _celebrerSerie(n); }catch(e){} }
   }
   currentUser.lastSession=now;
-  if(_jk&&_jk.sauve){ try{ toast('🛡 '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
+  if(_jk&&_jk.sauve){ try{ toast(ICO.bouclier+' '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
 }
 // ══ L'ARRONDI D'UNE CHARGE, ET L'UNITÉ (30/09/2026) ═══════════════════════
 //
@@ -70084,7 +70131,7 @@ function choisirUnite(v){
   if(v==='lb') currentUser.unite='lb'; else delete currentUser.unite;
   try{ saveUser(); }catch(e){}
   _rendreUniteReglages();
-  toast(v==='lb'?'Charges en livres ✓':'Charges en kilos ✓','var(--green)');
+  toast(v==='lb'?'Charges en livres '+ICO.coche:'Charges en kilos '+ICO.coche,'var(--green)');
   return true;
 }
 // Enveloppe : au-dessus sous 20 kg, au plus proche au-delà (comme avant).
@@ -71818,7 +71865,7 @@ async function _echOuvrirDialogue(){
   try{ if(currentClientId) openClientDetail(currentClientId,true); }catch(e){}
   try{
     const _envoi=CLOUD.pushOne(c.email,c);
-    toastSync(true,_envoi,r.remplacee?'Échéance remplacée ✓':'Échéance ouverte ✓','l’échéance');
+    toastSync(true,_envoi,r.remplacee?'Échéance remplacée '+ICO.coche:'Échéance ouverte '+ICO.coche,'l’échéance');
   }catch(e){}
   return true;
 }
@@ -71870,7 +71917,7 @@ function _echEnregistrer(n){
   try{ _renderEcheance(); }catch(e){}
   try{
     const _envoi=CLOUD.pushOne(u.email,u);
-    toastSync(true,_envoi,'J-'+n+' enregistré ✓','cette journée');
+    toastSync(true,_envoi,'J-'+n+' enregistré '+ICO.coche,'cette journée');
   }catch(e){}
   return true;
 }
@@ -72421,7 +72468,7 @@ function rcRendreSrpe(){
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
     +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
     +'style="background:none;border:none;color:rgba(255,255,255,.45);font-size:var(--fs-lg);line-height:1;'
-    +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">✕</button></div>'
+    +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">'+icon('croix',14)+'</button></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +SRPE_ECHELLE.map(e=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="flex:1 1 auto;min-width:0;padding:10px 6px;font-size:var(--fs-xs)" '
@@ -72447,7 +72494,7 @@ function rcNoterSeance(cle){
   if(!r||!r.ok) return false;
   try{ direSiEnvoiEchoue(CLOUD.pushOne(u.email,u),
     'Ta note de séance','ton coach ne la verra pas encore'); }catch(e){}
-  try{ toast('Noté ✓'); }catch(e){}
+  try{ toast('Noté '+ICO.coche); }catch(e){}
   return true;
 }
 // L'ECRITURE DE LA NOTE. Elle porte sur la DERNIERE seance enregistree.
@@ -74018,7 +74065,7 @@ function dispoAllegerSeance(idx,d){
     cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   try{ saveUser(); }catch(e){}
   const _envoi=CLOUD.pushOne(u.email,u);
-  toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' ✓','l’allègement est');
+  toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
   return true;
 }
@@ -74052,7 +74099,7 @@ async function dispoReporterSeance(d){
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   try{ saveUser(); }catch(e){}
   const _envoi=CLOUD.pushOne(u.email,u);
-  toastSync(true,_envoi,'Semaine allégée ✓','l’allègement est');
+  toastSync(true,_envoi,'Semaine allégée '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
   return true;
 }
@@ -74075,7 +74122,7 @@ function _htmlDispo(idx){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(d.motif)+'</div>'
     +(dejaAllege
-      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">✓ Dernière série retirée pour aujourd’hui.</div>'
+      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">'+icon('coche',14)+' Dernière série retirée pour aujourd’hui.</div>'
       : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
         +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
         +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
@@ -74486,7 +74533,7 @@ function rcRepondreRetour(btn,muscle,champ,valeur){
     if(carte) carte.remove();
   }catch(e){}
   try{
-    if(res&&res.ok) toast('Noté ✓');
+    if(res&&res.ok) toast('Noté '+ICO.coche);
     else if(res&&res.raison) toast(res.raison,'var(--orange)');
   }catch(e){}
   // PLUS RIEN A REMPLIR : la zone entiere s'efface plutot que de laisser un
@@ -74621,7 +74668,7 @@ async function rcReinitReperes(muscle){
   // coach lirait « ramené ✓ » et l'athlete garderait ses seuils deplaces.
   // toastSync est le chemin deja emprunte par toutes les ecritures coach.
   const _envoi=CLOUD.pushOne(c.email,c);
-  toastSync(true,_envoi,r.n+' repère'+(r.n>1?'s ramenés':' ramené')+' à la référence ✓',
+  toastSync(true,_envoi,r.n+' repère'+(r.n>1?'s ramenés':' ramené')+' à la référence '+ICO.coche,
     'le retour aux repères de référence est');
   return true;
 }
@@ -75770,7 +75817,7 @@ function bSports(id){
         oninput="_bSportSet('${id}',${i},'heures',this.value)"
         style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-weight:700;margin:0">
       <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
-        style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px;min-width:30px">✕</button>
+        style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px;min-width:30px">${icon('croix',14)}</button>
     </div>
     ${kh!=null&&Number(e.heures)>0?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin:-4px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
   };
@@ -76137,74 +76184,74 @@ function loadBilPhoto(input,key){
 // athlète — une seule déclaration, deux usages.
 const BILAN_QUESTIONS={
   suivi:[
-    {k:'bil-motivation',lbl:'Motivation',emoji:'🔥'},
-    {k:'bil-diff-type',lbl:'Difficultés rencontrées',emoji:'⚠️'},
-    {k:'bil-diff-detail',lbl:'Détail des difficultés',emoji:'📝'},
-    {k:'bil-cheat-meals',lbl:'Repas hors programme',emoji:'🍕'},
-    {k:'bil-cheat-reasons',lbl:'Raisons des écarts',emoji:'💬'},
-    {k:'bil-prog-modifs',lbl:'Modifications demandées',emoji:'🏋️'},
-    {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
-    {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
-    {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
+    {k:'bil-motivation',lbl:'Motivation',ico:'flamme'},
+    {k:'bil-diff-type',lbl:'Difficultés rencontrées',ico:'alert-triangle'},
+    {k:'bil-diff-detail',lbl:'Détail des difficultés',ico:'pencil'},
+    {k:'bil-cheat-meals',lbl:'Repas hors programme',ico:'utensils'},
+    {k:'bil-cheat-reasons',lbl:'Raisons des écarts',ico:'message-circle'},
+    {k:'bil-prog-modifs',lbl:'Modifications demandées',ico:'dumbbell'},
+    {k:'bil-sleep-quality',lbl:'Qualité du sommeil',ico:'moon'},
+    {k:'bil-stress',lbl:'Niveau de stress',ico:'activity'},
+    {k:'bil-stress-detail',lbl:'Source du stress',ico:'flag'},
     // `bil-new-goals` n'est PLUS POSÉE : le questionnaire ne demande que
     // « Où en es-tu de tes objectifs ? ». On la garde pour les bilans qui
     // la portent encore, et le libellé de la sous-question est autonome —
     // « Lesquels » s'affichait seul, sans la question à laquelle il répond.
-    {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
-    {k:'bil-new-goals-detail',lbl:'Où en es-tu de tes objectifs',emoji:'🚀'},
+    {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',ico:'cible'},
+    {k:'bil-new-goals-detail',lbl:'Où en es-tu de tes objectifs',ico:'trending-up'},
     // Les questions libres du coach (questionsCoach) : le texte de chacune est
     // gardé dans le bilan sous <clé>-q, et c'est lui qui s'affiche (libelleQuestionBilan).
-    {k:'coach-q1',lbl:'Question de ton coach',emoji:'❓'},
-    {k:'coach-q2',lbl:'Question de ton coach',emoji:'❓'},
-    {k:'coach-q3',lbl:'Question de ton coach',emoji:'❓'},
+    {k:'coach-q1',lbl:'Question de ton coach',ico:'info'},
+    {k:'coach-q2',lbl:'Question de ton coach',ico:'info'},
+    {k:'coach-q3',lbl:'Question de ton coach',ico:'info'},
   ],
   depart:[
     // Les trois contre-indications d'abord : c'est ce qui conditionne tout le
     // reste de la programmation.
-    {k:'deb-health',lbl:'Problèmes de santé / blessures',emoji:'🩺',alerte:true},
-    {k:'deb-entrejambe',lbl:'Entrejambe (cm)',emoji:'📏'},
-    {k:'deb-bras',lbl:'Longueur de bras (cm)',emoji:'📏'},
-    {k:'deb-genou',lbl:'Hauteur de genou (cm)',emoji:'📏'},
-    {k:'deb-avantbras',lbl:'Avant-bras (cm)',emoji:'📏'},
-    {k:'deb-epaules',lbl:'Largeur d’épaules (cm)',emoji:'📏'},
-    {k:'deb-bassin',lbl:'Largeur de bassin (cm)',emoji:'📏'},
-    {k:'deb-poignet',lbl:'Tour de poignet (cm)',emoji:'📏'},
-    {k:'deb-cheville',lbl:'Tour de cheville (cm)',emoji:'📏'},
-    {k:'deb-envergure',lbl:'Envergure (cm)',emoji:'📏'},
-    {k:'deb-pied',lbl:'Longueur de pied (cm)',emoji:'📏'},
-    {k:'deb-thorax',lbl:'Profondeur du thorax (cm)',emoji:'📏'},
-    {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',emoji:'💊',alerte:true},
-    {k:'deb-traitement-detail',lbl:'Traitement : précisions',emoji:'💊'},
-    {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
-    {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
-    {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
-    {k:'deb-job',lbl:'Profession',emoji:'💼'},
-    {k:'deb-naf',lbl:"Niveau d'activité hors sport",emoji:'🚶'},
-    {k:'deb-work-rhythm',lbl:'Rythme de travail',emoji:'🕒'},
-    {k:'deb-location',lbl:"Lieu d'entraînement",emoji:'📍'},
-    {k:'deb-gym',lbl:'Salle fréquentée',emoji:'🏢'},
-    {k:'deb-training-days',lbl:"Jours d'entraînement souhaités",emoji:'📅'},
-    {k:'deb-training-time',lbl:'Moment de la journée',emoji:'⏰'},
-    {k:'deb-session-duration',lbl:'Durée de séance préférée',emoji:'⏱️'},
+    {k:'deb-health',lbl:'Problèmes de santé / blessures',ico:'coeur',alerte:true},
+    {k:'deb-entrejambe',lbl:'Entrejambe (cm)',ico:'regle'},
+    {k:'deb-bras',lbl:'Longueur de bras (cm)',ico:'regle'},
+    {k:'deb-genou',lbl:'Hauteur de genou (cm)',ico:'regle'},
+    {k:'deb-avantbras',lbl:'Avant-bras (cm)',ico:'regle'},
+    {k:'deb-epaules',lbl:'Largeur d’épaules (cm)',ico:'regle'},
+    {k:'deb-bassin',lbl:'Largeur de bassin (cm)',ico:'regle'},
+    {k:'deb-poignet',lbl:'Tour de poignet (cm)',ico:'regle'},
+    {k:'deb-cheville',lbl:'Tour de cheville (cm)',ico:'regle'},
+    {k:'deb-envergure',lbl:'Envergure (cm)',ico:'regle'},
+    {k:'deb-pied',lbl:'Longueur de pied (cm)',ico:'regle'},
+    {k:'deb-thorax',lbl:'Profondeur du thorax (cm)',ico:'regle'},
+    {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',ico:'gelule',alerte:true},
+    {k:'deb-traitement-detail',lbl:'Traitement : précisions',ico:'gelule'},
+    {k:'deb-allergies',lbl:'Allergies / régime particulier',ico:'leaf',alerte:true},
+    {k:'deb-tca',lbl:'Troubles du comportement alimentaire',ico:'alert-triangle',alerte:true},
+    {k:'deb-goals',lbl:'Objectifs principaux',ico:'cible'},
+    {k:'deb-job',lbl:'Profession',ico:'user'},
+    {k:'deb-naf',lbl:"Niveau d'activité hors sport",ico:'shoe'},
+    {k:'deb-work-rhythm',lbl:'Rythme de travail',ico:'clock'},
+    {k:'deb-location',lbl:"Lieu d'entraînement",ico:'crosshair'},
+    {k:'deb-gym',lbl:'Salle fréquentée',ico:'home'},
+    {k:'deb-training-days',lbl:"Jours d'entraînement souhaités",ico:'calendar'},
+    {k:'deb-training-time',lbl:'Moment de la journée',ico:'clock'},
+    {k:'deb-session-duration',lbl:'Durée de séance préférée',ico:'clock'},
     // Les deux, et dans cet ordre. `deb-sports` est le champ collecté
     // aujourd'hui ; `deb-other-sports` est la question en texte libre qu'il
     // a remplacée — retirée du formulaire, mais toujours présente dans les
     // bilans d'avant la migration, où elle est la seule trace du sujet.
-    {k:'deb-sports',lbl:'Sports pratiqués',emoji:'⚽'},
-    {k:'deb-other-sports',lbl:'Autres sports pratiqués',emoji:'⚽'},
+    {k:'deb-sports',lbl:'Sports pratiqués',ico:'target'},
+    {k:'deb-other-sports',lbl:'Autres sports pratiqués',ico:'target'},
     // R35 — memes cles, libelles alignes sur les questions reformulees.
-    {k:'deb-intensity-1',lbl:'Intensité du sport principal',emoji:'🔥'},
-    {k:'deb-intensity-2',lbl:'Intensité du second sport',emoji:'🔥'},
-    {k:'deb-history',lbl:'Antécédents sportifs',emoji:'📜'},
-    {k:'deb-nutrition-type',lbl:'Type de suivi nutritionnel',emoji:'🥗'},
-    {k:'deb-meals-day',lbl:'Repas par jour',emoji:'🍽️'},
-    {k:'deb-food-love',lbl:'Aliments appréciés',emoji:'😋'},
-    {k:'deb-food-hate',lbl:'Aliments détestés',emoji:'🤢'},
-    {k:'deb-water',lbl:"Eau bue par jour",emoji:'💧'},
-    {k:'deb-track-macros',lbl:'Suit ses calories / macros',emoji:'📊'},
-    {k:'deb-calories',lbl:'Calories et objectif',emoji:'🔢'},
-    {k:'deb-supplements',lbl:'Souhaite des compléments',emoji:'💊'},
-    {k:'deb-supps-detail',lbl:'Compléments déjà pris',emoji:'🧪'},
+    {k:'deb-intensity-1',lbl:'Intensité du sport principal',ico:'flamme'},
+    {k:'deb-intensity-2',lbl:'Intensité du second sport',ico:'flamme'},
+    {k:'deb-history',lbl:'Antécédents sportifs',ico:'clipboard'},
+    {k:'deb-nutrition-type',lbl:'Type de suivi nutritionnel',ico:'leaf'},
+    {k:'deb-meals-day',lbl:'Repas par jour',ico:'utensils'},
+    {k:'deb-food-love',lbl:'Aliments appréciés',ico:'coeur'},
+    {k:'deb-food-hate',lbl:'Aliments détestés',ico:'x-circle'},
+    {k:'deb-water',lbl:"Eau bue par jour",ico:'droplet'},
+    {k:'deb-track-macros',lbl:'Suit ses calories / macros',ico:'chart-bar'},
+    {k:'deb-calories',lbl:'Calories et objectif',ico:'sliders'},
+    {k:'deb-supplements',lbl:'Souhaite des compléments',ico:'gelule'},
+    {k:'deb-supps-detail',lbl:'Compléments déjà pris',ico:'pill'},
   ]
 };
 // Texte affichable d'une réponse. Un tableau vide est truthy et produisait une
@@ -76262,7 +76309,7 @@ function _ccdBilParJour(c){
 function _ccdBilReponses(b){
   if(!b) return [];
   const qs=(b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)||[];
-  return qs.map(q=>({lbl:libelleQuestionBilan(q,b),emoji:q.emoji||'',txt:_texteReponseLue(q.k,b[q.k])}))
+  return qs.map(q=>({lbl:libelleQuestionBilan(q,b),ico:q.ico||'',txt:_texteReponseLue(q.k,b[q.k])}))
            .filter(x=>x.txt);
 }
 function _ccdBilMoisLib(cle){
@@ -76981,7 +77028,7 @@ function _ctValider(){
   const ok2=_ctEcrire(u=>ajouterContrainte(u,c));
   closeModal();
   if(!ok2){ toast('Enregistrement impossible','var(--red)'); return; }
-  toast('C\'est noté 👍');
+  toast('C\'est noté '+ICO.coche);
   try{ _ctRafraichirFiche(); }catch(e){}
   try{ if(document.getElementById('clh-contraintes')) renderContraintesAthlete(); }catch(e){}
 }
@@ -77006,7 +77053,7 @@ function _ligneContrainte(c,pourCoach,cible){
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}</div>
     </div>
-    <button onclick="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer" aria-label="Retirer">✕</button>
+    <button onclick="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer" aria-label="Retirer">${icon('croix',14)}</button>
   </div>`;
 }
 function _ctRetirer(id,cible){
@@ -77911,7 +77958,7 @@ function contreIndications(bilans){
   const dep=(bilans||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
   if(!dep) return [];
   return BILAN_QUESTIONS.depart.filter(q=>q.alerte)
-    .map(q=>({lbl:q.lbl,emoji:q.emoji,txt:_texteReponse(dep[q.k])}))
+    .map(q=>({lbl:q.lbl,ico:q.ico,txt:_texteReponse(dep[q.k])}))
     .filter(x=>x.txt&&!/^(non|aucun|aucune|rien|ras|n\/a)\.?$/i.test(x.txt));
 }
 // Rendu partagé par l'écran athlète (showProgressTab) et l'écran coach
@@ -78441,7 +78488,7 @@ function enregistrerFormulesReponse(){
   currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
   try{ saveUser(); }catch(e){}
   closeModal();
-  toast('Formule enregistrée ✓','var(--green)');
+  toast('Formule enregistrée '+ICO.coche,'var(--green)');
   return true;
 }
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
@@ -78602,8 +78649,8 @@ function renderReponsesBilans(bilans,client){
     // qui ne s'y range pas — rien d'écrit ne disparaît.
     const rubs=(depart?BILAN_RUBRIQUES.depart:BILAN_RUBRIQUES.suivi).map(r=>({titre:r.titre,ico:r.ico,cles:r.cles.slice()}));
     const ranges=new Set([].concat(...rubs.map(r=>r.cles)));
-    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.emoji==='📏').map(q=>q.k);
-    const autres=Q.filter(q=>!ranges.has(q.k)&&q.emoji!=='📏').map(q=>q.k);
+    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.ico==='regle').map(q=>q.k);
+    const autres=Q.filter(q=>!ranges.has(q.k)&&q.ico!=='regle').map(q=>q.k);
     if(mesures.length) rubs.push({titre:'Mesures du corps',ico:'crosshair',cles:mesures});
     if(autres.length) rubs.push({titre:'Autres réponses',ico:'clipboard',cles:autres});
     const sections=rubs.map(r=>{
@@ -78800,7 +78847,7 @@ const DEB_STEPS=[
     bLbl("Si tu t'entraînes en salle, laquelle ?")+bT('deb-gym','Nom de la salle...')+
     bLbl('Quels jours souhaites-tu t\'entraîner ?')+
     `<div>${bC('deb-training-days',['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'],true)}</div>`+
-    bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex : 45 min, 1 h 30...')+
+    bLbl('Quelle est la durée de séance que tu préfères ? '+icon('clock',14))+bT('deb-session-duration','Ex : 45 min, 1 h 30...')+
     // R12 — c'est exact : besoinsProposes compte les creneaux RepCore une fois,
     // et ne les additionne jamais a une musculation declaree ici.
     bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
@@ -78827,7 +78874,7 @@ const DEB_STEPS=[
       {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div></div>`+
     bLbl('As-tu des antécédents sportifs ?')+bT('deb-history','Ex : football 5 ans, boxe 2 ans...')+
-    bLbl('Quand préfères-tu t\'entraîner ? ⏰')+
+    bLbl('Quand préfères-tu t\'entraîner ? '+icon('clock',14))+
     `<div>${bC('deb-training-time',['Matin','Après-midi','Soir'],true)}</div>`
   ),
   // Step 4 : Nutrition
@@ -79201,7 +79248,7 @@ function _htmlBilanRetard(d){
     +'<div class="bal2-sous">'+sous+'</div></div>'
     +'<div class="bal2-j"><b>J'+(n?' + <span>'+n+'</span>':' <span>0</span>')+'</b><small>'+(n?'de retard':'c’est le jour')+'</small></div>'
     +'<span class="bal2-ch">'+chev+'</span></div>'
-    +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">✓</i>':'')+'</b></div>'
+    +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">'+icon('coche',14)+'</i>':'')+'</b></div>'
     +'<div class="bal2-ligne" aria-hidden="true"><i class="p0"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i></div>'
     +'<div class="bal2-bout bal2-fin"><small>Prochain bilan</small><b>'+date(d&&d.echeance)+'</b><small>À compléter</small></div></div>'
     +'<span class="bal2-go"><span class="bal2-go-ico">'+doc+'</span><span class="bal2-go-t">Compléter mon bilan</span><span class="bal2-go-ch">'+chev+'</span></span>'+'</div>';
@@ -79337,7 +79384,7 @@ function showBilanNotifBanner(){
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">${icon('croix',14)}</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000); // auto-dismiss après 60s
@@ -79874,7 +79921,7 @@ function renderWoReminderCard(){
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
-    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
+    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">${icon('sliders',14)}</button>
   </div>`;
 }
 function checkWoReminderToday(){
@@ -79917,12 +79964,12 @@ function showWoReminderBanner(){
   b.id='wo-reminder-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-    <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
+    <div style="font-size:var(--fs-2xl);flex-shrink:0">${icon('muscle',14)}</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(texteRappelRecord(currentUser)||'C\'est l\'heure de t\'entraîner ! Clique pour démarrer.')}</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">${icon('croix',14)}</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000);
@@ -79942,7 +79989,7 @@ function openWoReminderConfig(){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
-      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
+      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">${icon('croix',14)}</button>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Heure du rappel</label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
@@ -80207,7 +80254,7 @@ async function invNotifOui(){
       // l'accepte sans redemander. Sans attente : l'enregistrement part en
       // arrière-plan, le toast ne dépend pas du réseau.
       try{ pushAbonner({geste:true}); }catch(e){}
-      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance ✓':'C’est noté ✓');
+      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance '+ICO.coche:'C’est noté '+ICO.coche);
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
       // reprocher, c'est se faire desinstaller.
@@ -80463,7 +80510,7 @@ async function pushActiverDepuisReglages(){
   const ok=await pushAbonner({geste:true});
   if(ok){
     try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
-    toast('Notifications activées ✓');
+    toast('Notifications activées '+ICO.coche);
   } else if(_notifSupported()&&Notification.permission==='denied'){
     toast('Notifications bloquées par le navigateur.','var(--orange)');
   } else toast('Impossible d’activer les notifications ici.','var(--orange)');
@@ -81080,7 +81127,7 @@ function _pdjAccuser(question){
   const c=document.getElementById('pdj-carte');
   if(!c){ try{ _rendrePointDuJour(); }catch(e){} return; }
   const def=PDJ_QUESTIONS[question]||{accuse:'Noté'};
-  c.innerHTML='<div class="pdj-ok-msg"><span class="pdj-coche">✓</span>'
+  c.innerHTML='<div class="pdj-ok-msg"><span class="pdj-coche">'+icon('coche',14)+'</span>'
     +escapeHtml(def.accuse)+'</div>';
   c.setAttribute('data-fait','');
   setTimeout(()=>{
@@ -81108,7 +81155,7 @@ function pdjValiderPas(){
   const n=parseInt(String(inp.value).replace(/\s/g,''),10);
   if(!_recordSteps(pdjDateCible('pas',Date.now()),n)){
     toast('Saisis un nombre de pas valide','var(--red)'); return; }
-  toastEcriture(saveUser(),n.toLocaleString('fr-FR')+' pas enregistrés 👍','tes pas sont');
+  toastEcriture(saveUser(),n.toLocaleString('fr-FR')+' pas enregistrés '+ICO.coche,'tes pas sont');
   _pdjAccuser('pas');
 }
 function pdjValiderSommeil(h){
@@ -81116,14 +81163,14 @@ function pdjValiderSommeil(h){
   const d=Number(h);
   if(!_recordSleep(pdjDateCible('sommeil',Date.now()),{duration:d})){
     toast('Durée refusée','var(--red)'); return; }
-  toastEcriture(saveUser(),d+'h enregistrées 👍','ta nuit est');
+  toastEcriture(saveUser(),d+'h enregistrées '+ICO.coche,'ta nuit est');
   _pdjAccuser('sommeil');
 }
 function pdjValiderEnergie(n){
   if(!demanderConsentementSante('energie',()=>pdjValiderEnergie(n))) return;
   if(!_recordEnergie(pdjDateCible('energie',Date.now()),n)){
     toast('Niveau refusé','var(--red)'); return; }
-  toastEcriture(saveUser(),'Énergie enregistrée 👍','ton énergie est');
+  toastEcriture(saveUser(),'Énergie enregistrée '+ICO.coche,'ton énergie est');
   _pdjAccuser('energie');
 }
 // ══════════════════ LA COLLECTION DE BADGES ══════════════════════════════
@@ -81741,7 +81788,7 @@ function tropheeVignette(x,u){
     if(x.rang){ const r=RANGS[Math.max(0,Math.min(RANGS.length-1,Number(x.rang)-1))];
       return {img:'<img src="'+rangEmbleme(r.n)+'" alt="" data-rang="'+r.n+'" decoding="async">',nom:r.nom,sur:'Nouveau rang'}; }
     if(x.defi){ const res=((u&&u.defisReleves)||{})[x.defi]||{};
-      return {img:'<span class="tr-chiffre">⚡</span>',nom:String(res.titre||'Défi'),sur:res.champion?'Champion':'Défi relevé'}; }
+      return {img:'<span class="tr-chiffre">'+icon('eclair',14)+'</span>',nom:String(res.titre||'Défi'),sur:res.champion?'Champion':'Défi relevé'}; }
     return {img:'',nom:'',sur:''};
   }
   const b=badgeAcquisDef(x);
@@ -81797,7 +81844,7 @@ function partagerTrophee(i,btn){
   catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ── Le réglage « Célébrations » (profil) ──────────────────────────────────
@@ -82063,7 +82110,7 @@ function htmlDefisReleves(u){
   if(!l.length) return '';
   return '<div class="bdg-sous">Défis relevés <span class="bdg-compte">'+l.length+'</span></div><div class="dfr-liste">'
     +l.map(x=>'<button type="button" class="dfr-badge" onclick="partagerDefi(\''+escapeHtml(x.id)+'\',null)">'
-      +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?'🏆':'⚡')+'</span>'
+      +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?icon('trophy',14):icon('eclair',14))+'</span>'
       +'<span class="dfr-c"><b>'+escapeHtml(x.champion?'CHAMPION · ':'DÉFI RELEVÉ · ')+escapeHtml(defiMoisTexte(x.fin).replace(/^D’|^DE /,''))+'</b>'
       +'<span>'+escapeHtml(x.titre)+' · '+escapeHtml(_bdgDate(Number(x.termineLe)||Number(x.fin)))+'</span></span></button>').join('')+'</div>';
 }
@@ -82210,7 +82257,7 @@ function partagerBadge(id,btn){
     toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false;
   }finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ L'ÉQUIVALENT FUN D'UN TONNAGE ═════════════════════════════════════════
@@ -82552,7 +82599,7 @@ function ouvrirWrapped(cle){
   const sl=wrappedSlides(w,per);
   z.innerHTML='<div class="wr-barres">'+sl.map(()=>'<span><i></i></span>').join('')+'</div>'
     +'<div class="wr-haut"><button type="button" class="wr-btn" aria-label="Partager cette slide" onclick="event.stopPropagation();partagerWrapped(_wr?_wr.i:0)">'+icon('share',18)+'</button>'
-    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">✕</button></div>'
+    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">'+icon('croix',14)+'</button></div>'
     +'<div class="wr-slides" onclick="_wrTap(event)">'+sl.map((s,k)=>_wrHtmlSlide(s,k)).join('')+'</div>';
   try{ localStorage.setItem('rc_wrapped_vu_'+per.cle,'1'); }catch(e){}
   go('s-wrapped');
@@ -82662,7 +82709,7 @@ function partagerWrapped(i,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 
@@ -82703,7 +82750,7 @@ function partagerCarrouselWrapped(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carrousel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carrousel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // Le repli : les cinq images, chacune avec son lien « Enregistrer ». Chaque
@@ -83197,7 +83244,7 @@ function _muscSortir(id,btn,partager){
   }catch(e){ toast('Visuel impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 function partagerCarteMuscles(id,btn){ return _muscSortir(id,btn,true); }
@@ -83658,7 +83705,7 @@ function _aaRendreEcran(){
   const vues=aaVuesDisponibles(u);
   const cons=u&&u.consentementPartageCoach&&Number(u.consentementPartageCoach.date)>0;
   z.innerHTML='<div class="aa-haut"><span>'+(role==='coach'?'Avant / après de '+escapeHtml(u.fname||'l’athlète'):'Mon avant/après')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">'+icon('croix',14)+'</button></div>'
     +'<div class="aa-apercu"><canvas id="aa-canvas" aria-label="Aperçu de l’image"></canvas><div class="aa-charge" id="aa-charge">Composition…</div></div>'
     +'<div class="aa-bas">'
     +(autorise
@@ -83794,7 +83841,7 @@ function _aaSortir(partager,btn,confirme){
   }catch(e){ toast('Image impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const t=sp.textContent; sp.textContent='Image prête ✓'; setTimeout(()=>{ sp.textContent=t; },2000); }
+  if(sp&&ok){ const t=sp.textContent; _texteIco(sp,'Image prête '+ICO.coche); setTimeout(()=>{ sp.textContent=t; },2000); }
   return ok;
 }
 function aaPartager(btn){ return _aaSortir(true,btn,false); }
@@ -83962,7 +84009,7 @@ function partagerCycle(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
   return ok;
 }
 // ══ LES PALIERS DE SÉRIE : 4, 8, 12, 26, 52 SEMAINES ══════════════════════
@@ -84102,7 +84149,7 @@ function partagerSerie(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ LES VOLTS (XP) ET LES DIX RANGS ═══════════════════════════════════════
@@ -84809,7 +84856,7 @@ function htmlChevrons(n,classe){
 function _celebrerSousNiveau(xp){
   const nom=nomRangComplet(xp), s=sousNiveauDe(xp);
   if(!s) return false;
-  try{ toast('⚡ '+nom+' · nouveau sous-niveau'); }catch(e){}
+  try{ toast(ICO.eclair+' '+nom+' · nouveau sous-niveau'); }catch(e){}
   try{ const el=document.getElementById('clh-rang'); rcFoudre(el&&el.offsetParent?el:null,{eclairs:1,son:false}); }catch(e){}
   try{
     const ancre=document.getElementById('wd-volts');
@@ -85438,7 +85485,7 @@ function partagerCarteAthlete(btn,format){
   finally{ _storyEnCours=false; }
   if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // ── L'accueil : la carte, quand la note monte ───────────────────────────
@@ -85449,7 +85496,7 @@ function htmlCarteAccueil(u){
   const av=Number(c.avant)||0;
   return '<div class="ca-accueil" role="region" aria-label="Ta carte d’athlète">'
     +'<div class="ca-tete"><b>Ta note monte'+(av?' : '+av+' → '+c.globale:' : '+c.globale)+'</b>'
-    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">✕</button></div>'
+    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">'+icon('croix',14)+'</button></div>'
     +'<canvas class="ca-vignette" id="ca-vignette" width="360" height="504" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
     +'<div class="ca-btns">'
     +'<button type="button" class="btn btn-red btn-sm" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
@@ -85516,7 +85563,7 @@ function htmlVoltsFin(g,xpTotal){
   const lignes=g.lignes.map(l=>'<div class="vt-l"><span>'+escapeHtml(l.lib)+'</span><b>+'+xpFormat(l.v)+'</b></div>').join('');
   return '<div class="vt-carte">'
     +'<div class="vt-tete"><img class="vt-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="44" height="44" decoding="async">'
-    +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">⚡</span></div>'
+    +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">'+icon('eclair',14)+'</span></div>'
     +'<div class="vt-rang">'+escapeHtml(r.rang.nom)+'</div></div>'
     +'<div class="vt-lignes">'+lignes+'</div>'
     +'<div class="rg-jauge vt-jauge"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
@@ -85531,7 +85578,7 @@ function htmlVoltsCible(u,j){
   let c=null; try{ c=cibleTenueJour(u,j); }catch(e){ c=null; }
   if(!c||!c.tenue) return '';
   return '<div class="vt-cible" role="status"><span class="vt-gain">+'+xpFormat(XP_ACTIONS.cible)
-    +' <span class="vt-eclair" aria-hidden="true">⚡</span></span><span class="vt-cible-t">Journée dans ta cible</span></div>';
+    +' <span class="vt-eclair" aria-hidden="true">'+icon('eclair',14)+'</span></span><span class="vt-cible-t">Journée dans ta cible</span></div>';
 }
 function rendreVoltsFin(u,sess){
   const z=document.getElementById('wd-volts');
@@ -85576,7 +85623,7 @@ function _rangEcran(n,reste){
     +'<div class="bdg-ecran-txt">'
     +'<div class="bdg-ecran-sur">NOUVEAU RANG</div>'
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(d.nom)+'</h2>'
-    +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
+    +'<div class="bdg-ecran-meta">'+icon('eclair',14)+' '+escapeHtml(xpFormat(d.xp))+' V</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
     +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
@@ -85689,7 +85736,7 @@ function partagerRang(btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ── LE CANAL ET LES DÉFIS : l'emblème miniature devant chaque prénom ──────
@@ -85895,7 +85942,7 @@ async function jenValider(){
   _jenMarquer(currentUser);
   try{ await _appliquerRappelSeance(_jenJours,h,_jenMin); }catch(e){}
   toast('C’est note : rappel a '+String(h).padStart(2,'0')+':'
-    +String(_jenMin).padStart(2,'0')+' ✓');
+    +String(_jenMin).padStart(2,'0')+' '+ICO.coche);
   go('s-client-home');
   loadClientHome();
 }
@@ -85925,7 +85972,7 @@ async function saveWoReminderConfig(){
   if(!days.length){toast("Sélectionne au moins un jour d'entraînement",'var(--orange)');return;}
   const doSave=async()=>{
     await _appliquerRappelSeance(days,h,m);
-    toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' ✓');
+    toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' '+ICO.coche);
     document.getElementById('wo-reminder-config')?.remove();
     renderWoReminderCard();
   };
@@ -87358,7 +87405,7 @@ function ccdComptageEnregistrer(v){
   users[c.email]=c;
   try{ _viderCacheVolume(); }catch(e){}
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Comptage enregistré ✓','le réglage est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Comptage enregistré '+ICO.coche,'le réglage est');
   try{ renderVolumeCoach(c); }catch(e){}
   return true;
 }
@@ -88722,7 +88769,7 @@ function repriseDouceChoisir(oui){
   try{ saveUser(); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
   try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
-  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère ✓':'C’est noté : tes charges restent les mêmes ✓'); }catch(e){}
+  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère '+ICO.coche:'C’est noté : tes charges restent les mêmes '+ICO.coche); }catch(e){}
   return true;
 }
 // L'écran ouvert par la notification du 30e jour (./?reprise=1).
@@ -90091,7 +90138,7 @@ function exportDossierSanteTexte(user){
 function telechargerDossierSante(){
   try{
     _telecharger('repcore-dossier-sante.txt',exportDossierSanteTexte(currentUser),'text/plain;charset=utf-8');
-    toast('Dossier téléchargé ✓','var(--green)');
+    toast('Dossier téléchargé '+ICO.coche,'var(--green)');
     return true;
   }catch(e){ toast('Export impossible.','var(--red)'); return false; }
 }
@@ -90441,7 +90488,7 @@ function verifierRappelAvantSeance(){
     document.getElementById('rappel-gluc-banniere')?.remove();
     const b=document.createElement('div');
     b.id='rappel-gluc-banniere'; b.className='rg-banniere'; b.setAttribute('role','status');
-    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">✕</button>';
+    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">'+icon('croix',14)+'</button>';
     document.body.appendChild(b);
     setTimeout(()=>{ try{ b.remove(); }catch(err){} },30000);
   }catch(err){}
@@ -92006,7 +92053,7 @@ function accepterSuggestionCycle(){
     notes:'Phase lutéale tardive : soutien anti-inflammatoire',
     active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
   const ok=saveUser();
-  toastEcriture(ok,'Ajouté à ta liste ✓','le complément est');
+  toastEcriture(ok,'Ajouté à ta liste '+ICO.coche,'le complément est');
   try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
   return true;
 }
@@ -92266,7 +92313,7 @@ function _renderCycleNutSettings(nut){
 function declarerReglesAujourdhui(){
   _cycleAjouterRegles(currentUser,localISODate(new Date()));
   const ok=saveUser();
-  toastEcriture(ok,'Date enregistrée ✓','la date est');
+  toastEcriture(ok,'Date enregistrée '+ICO.coche,'la date est');
   _renderNutriContent(typeDiete(currentUser.nutrition));
 }
 // Consigné, jamais commenté. Aucune alarme sur une occurrence, aucune
@@ -92402,7 +92449,7 @@ async function utiliserBesoinsProposes(){
   currentUser.nutrition.macros={on:j(b.on),off:j(b.off),origine:'auto',
     origineDate:Date.now(),origineSource:b.source};
   const ok=saveUser();
-  toastEcriture(ok,'Objectifs enregistrés ✓','les objectifs sont');
+  toastEcriture(ok,'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   loadNutrition();
 }
 
@@ -93249,7 +93296,7 @@ function _htmlChoixDiete(user){
     return '<button type="button" class="dch-opt'+(ici?' actif':'')+'" data-diete="'+o.type+'"'
       +(ici?' aria-current="true"':'')
       +(verrou?' disabled':' onclick="choisirDiete(\''+o.type+'\')"')+'>'
-      +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' 🔒':'')+'</span>'
+      +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' '+icon('lock',12):'')+'</span>'
       +(ici?'<span class="dch-etat">Actuelle</span>':'')+'</span>'
       +'<span class="dch-desc">'+escapeHtml(o.desc)+'</span>'
       +(v?'<span class="dch-verrou"><strong>'+escapeHtml(v.titre)+'</strong>'+escapeHtml(v.texte)+'</span>':'')
@@ -95572,7 +95619,7 @@ function _cplHtmlSources(){
             <div style="font-size:var(--fs-2xs);color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
           </div>
           <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
-            style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
+            style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">${icon('croix',14)}</button>
         </div>`;
       }).join('')}
       <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:.5px"
@@ -95587,7 +95634,7 @@ function _cplHtmlSources(){
 function _cplHtmlLigne(item){
   const nom=planNomItem(item);
   const sup=`<button onclick="cplSupprimerLigne('${item.id}')" aria-label="Retirer cette ligne"
-    style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>`;
+    style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">${icon('croix',14)}</button>`;
   // Couleurs PLAN_COULEURS : le coach voit ici exactement ce que son athlète
   // verra sur sa fiche. Les protéines étaient en bleu de ce côté-ci et en rouge
   // de l'autre — la même ligne changeait de sens selon l'écran.
@@ -95875,7 +95922,7 @@ function savePlanCoach(){
   c.nutrition.plan=p;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré ✓','le plan est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré '+ICO.coche,'le plan est');
 }
 async function supprimerPlanCoach(){
   if(!await rcConfirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
@@ -96199,7 +96246,7 @@ function _htmlPlanAthlete(user,intercale){
     <div style="position:relative;display:flex;align-items:center;gap:8px;padding:10px 14px;
       background:linear-gradient(90deg,color-mix(in srgb,var(--red) 55%,transparent),color-mix(in srgb,var(--red-deep) 22%,transparent) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
-      <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
+      <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">${icon('alert-triangle',16)}</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
@@ -96594,7 +96641,7 @@ function _htmlEpingle(id,grand){
   return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${id},event)"
     title="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     aria-label="${on?'Retirer des favoris':'Ajouter aux favoris'}"
-    style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'★':'☆'}</button>`;
+    style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'<span class="ico-plein">'+icon('etoile',t)+'</span>':icon('etoile',t)}</button>`;
 }
 
 // ── Portions visuelles ────────────────────────────────────────────────────
@@ -98557,7 +98604,7 @@ function _htmlPersoResult(a){
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
-    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
+    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">'+icon('pencil',14)+'</button>'
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){
@@ -99841,7 +99888,7 @@ function enregistrerAlimentPerso(){
   currentUser.nutrition.alimentsPerso=liste;
   const cree=!_persoEdit;
   const dernier=liste[_persoEdit?liste.findIndex(a=>a&&a.id===_persoEdit.id):liste.length-1];
-  toastEcriture(saveUser(),cree?'Aliment créé ✓':'Aliment modifié ✓','cet aliment est');
+  toastEcriture(saveUser(),cree?'Aliment créé '+ICO.coche:'Aliment modifié '+ICO.coche,'cet aliment est');
   // Un COACH publie sa liste pour ses athletes. En arriere-plan et sans
   // toast : c est un effet de bord de son enregistrement, pas une action
   // qu il a demandee, et l echouer ne doit pas lui faire croire que sa
@@ -100562,7 +100609,7 @@ function _htmlFjBandeau(s){
   // lisible d'un coup. Espace insecable devant ✓ : il ne part pas seul a la ligne.
   const phrase=s.annule
     ?'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' retiré du journal'
-    :'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' ajouté '+escapeHtml(ou)+' ✓';
+    :'<strong>'+escapeHtml(s.nom)+'</strong> '+qte+' ajouté '+escapeHtml(ou)+' '+icon('coche',14);
   return '<div class="fj-bandeau'+(s.annule?' annule':'')+'">'
     +'<div class="fj-bandeau-t">'+phrase+'</div>'
     +'<div class="fj-bandeau-a">'
@@ -100744,8 +100791,8 @@ function _renderFjDaySummary(date){
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal${e.kcalEstimee?' estimées':''}</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
-              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
-            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
+              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('echange',14)}</button>
+            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('croix',14)}</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
@@ -103036,7 +103083,7 @@ function saveClientNutriManuel(v){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    manuel?'Saisie manuelle activée ✓':'Calcul automatique rétabli ✓','le réglage est');
+    manuel?'Saisie manuelle activée '+ICO.coche:'Calcul automatique rétabli '+ICO.coche,'le réglage est');
   renderCoachNutriSection(c);
   return true;
 }
@@ -103134,7 +103181,7 @@ function saveClientNutriCycle(v){
   // la même question finiraient par se contredire à l'écran.
   try{ _propCycle=cycle; }catch(e){}
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    cycle?'Diète cyclée ✓':'Diète non cyclée : mêmes valeurs tous les jours ✓',
+    cycle?'Diète cyclée '+ICO.coche:'Diète non cyclée : mêmes valeurs tous les jours '+ICO.coche,
     'le réglage est');
   renderCoachNutriSection(c);
   return true;
@@ -103197,7 +103244,7 @@ async function reinitialiserCalculs(){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ecrit=DB.set('users',users);
   try{ _viderCachePlateau(); _viderCacheSignaux(); }catch(e){}
-  toastSync(ecrit,CLOUD.pushOne(c.email,c),'Calculs remis au point de départ ✓','la remise à zéro est');
+  toastSync(ecrit,CLOUD.pushOne(c.email,c),'Calculs remis au point de départ '+ICO.coche,'la remise à zéro est');
   try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
   return true;
 }
@@ -103423,7 +103470,7 @@ async function actualiserClient(){
       _majFraicheur();
       return true;
     }
-    toast('Dossier mis à jour ✓','var(--success)');
+    toast('Dossier mis à jour '+ICO.coche,'var(--success)');
     // ⚠ `true` — C'EST UN RAFRAICHISSEMENT, PAS UNE OUVERTURE. Ce drapeau
     //   manquait ici, et c'etait le SEUL des quinze appels en place a
     //   l'oublier. Deux effets, tous deux mesures au banc le 21/09/2026 :
@@ -103818,7 +103865,7 @@ function _confirmerTransmission(c,localOk,envoi){
     if(r===false) throw new Error('envoi refusé');
     const _on=((c.nutrition||{}).macros||{}).on||{};
     _transmisPoser(c.email,{d:Date.now(),kcal:Math.round(Number(_on.kcal)||0)});
-    toast('Transmis à ton athlète ✓ : reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
+    toast('Transmis à ton athlète '+ICO.coche+' : reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
     try{ renderCoachNutriSection(getOwnedClient(currentClientId)||c); }catch(e){}
     return true;
   }).catch(()=>{
@@ -104098,7 +104145,7 @@ function _htmlTableauxTableur(c){
     +li('Niveau d’activité hors sport',
         sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
           t.naf.cle),
-        t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' ⚠ '+NAF_ALERTE_METIER:''))
+        t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' · '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
@@ -105115,7 +105162,7 @@ function ccdJournalEnregistrer(){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _ccdCalForm=null; _ccdCalJour=iso; _ccdCalMois=_calMois(iso);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Repas ajouté au journal ✓','le repas est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Repas ajouté au journal '+ICO.coche,'le repas est');
   try{ renderJournalNutriCoach(c); }catch(e){}
   return true;
 }
@@ -105916,7 +105963,7 @@ function saveClientNutriDiet(type){
   c.nutrition.dietType=type;
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré ✓','la diète est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré '+ICO.coche,'la diète est');
   renderCoachNutriSection(c);
   // LES TROIS BLOCS QUI DEPENDENT DU TYPE DE DIETE. Le taux de respect ne se
   // calcule pas de la meme facon dans les deux modes — jours declares en
@@ -105941,7 +105988,7 @@ function saveClientStrictAcces(ouvert){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    ouvert?'Diète stricte ouverte à l\'athlète ✓':'Diète stricte refermée','l\'accès est');
+    ouvert?'Diète stricte ouverte à l\'athlète '+ICO.coche:'Diète stricte refermée','l\'accès est');
   renderCoachNutriSection(c);
 }
 
@@ -106038,7 +106085,7 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
   const envoi=CLOUD.pushOne(c.email,c);
   window._tbDernierEnvoi=envoi;
   if(!transmettre) toastSync(ok,envoi,
-    viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
+    viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   renderCoachNutriSection(c);
   return true;
 }
@@ -107947,7 +107994,7 @@ function _suppMajCoches(){
     const l=Array.from(sec.querySelectorAll('[data-supp-coche]'));
     const tout=l.length>0&&l.every(b=>b.getAttribute('aria-pressed')==='true');
     bt.disabled=tout;
-    bt.textContent=tout?'✓ Tout pris':'Tout prendre ('+l.length+')';
+    _texteIco(bt,tout?ICO.coche+' Tout pris':'Tout prendre ('+l.length+')');
   });
 }
 function _renderSuppTable(list, isCoach, editFn){
@@ -108093,7 +108140,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const actifs=sec.items.filter(e=>e.s.active!==false);
     const tous=actifs.length>0&&actifs.every(e=>pris.has(_suppCle(e.s.id,sec.id)));
     const tout=(!isCoach&&actifs.length)
-      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?'✓ Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
+      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?icon('coche',14)+' Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
     return `<section class="supp-moment" style="--mc:${mc}" data-moment="${sec.id}">
       <div class="supp-mh">
         <span class="supp-mi" aria-hidden="true">${_suppTimingIcon(sec.id,26,mc)}</span>
@@ -108359,7 +108406,7 @@ function saveSuppEntry(){
   else{list.push(entry);}
   const ok=saveUser();
   if(currentUser._notifEnabled) scheduleSuppNotif();
-  toastEcriture(ok,idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
+  toastEcriture(ok,idx>=0?'Complément mis à jour '+ICO.coche:'Complément ajouté '+ICO.coche,'le complément est');
   _suppReturnToNutrition?loadNutrition():loadSupplements();
 }
 
@@ -108764,7 +108811,7 @@ function saveClientSuppEntry(){
   c.nutrition.supplements.push({id:Date.now(),name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active:true});
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément ajouté ✓','le complément est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément ajouté '+ICO.coche,'le complément est');
   renderCoachSuppSection(c);
 }
 
@@ -108804,7 +108851,7 @@ function openCoachSuppEdit(id){
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2>${s?'Modifier le complément':'Nouveau complément'}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <div style="margin-bottom:14px">
       <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">NOM</div>
@@ -108876,7 +108923,7 @@ function saveCoachSuppEdit(){
   }
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),idx>=0?'Complément mis à jour '+ICO.coche:'Complément ajouté '+ICO.coche,'le complément est');
   closeModal();
   renderCoachSuppSection(c);
 }
@@ -108968,44 +109015,44 @@ function renderCoachCaffeineSection(c){
 
 // ======= CAFFEINE =======
 const CAFFEINE_DB=[
-  {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'☕',mg:63,  volume:'30ml'},
-  {id:'cafe_filtre', type:'coffee',       name:'Café filtre',           icon:'☕',mg:95,  volume:'240ml'},
-  {id:'americano',   type:'coffee',       name:'Americano',             icon:'☕',mg:120, volume:'240ml'},
-  {id:'latte',       type:'coffee',       name:'Latte',                 icon:'☕',mg:63,  volume:'240ml'},
-  {id:'cappuccino',  type:'coffee',       name:'Cappuccino',            icon:'☕',mg:63,  volume:'180ml'},
-  {id:'double_esp',  type:'coffee',       name:'Double espresso',       icon:'☕',mg:126, volume:'60ml'},
-  {id:'the_noir',    type:'tea',          name:'Thé noir',              icon:'🍵',mg:47,  volume:'240ml'},
-  {id:'the_vert',    type:'tea',          name:'Thé vert',              icon:'🍵',mg:28,  volume:'240ml'},
-  {id:'matcha',      type:'tea',          name:'Matcha',                icon:'🍵',mg:70,  volume:'240ml'},
-  {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'🍵',mg:15,  volume:'240ml'},
-  {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'🍵',mg:37,  volume:'240ml'},
-  {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'🍵',mg:80,  volume:'240ml'},
+  {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'cafe',mg:63,  volume:'30ml'},
+  {id:'cafe_filtre', type:'coffee',       name:'Café filtre',           icon:'cafe',mg:95,  volume:'240ml'},
+  {id:'americano',   type:'coffee',       name:'Americano',             icon:'cafe',mg:120, volume:'240ml'},
+  {id:'latte',       type:'coffee',       name:'Latte',                 icon:'cafe',mg:63,  volume:'240ml'},
+  {id:'cappuccino',  type:'coffee',       name:'Cappuccino',            icon:'cafe',mg:63,  volume:'180ml'},
+  {id:'double_esp',  type:'coffee',       name:'Double espresso',       icon:'cafe',mg:126, volume:'60ml'},
+  {id:'the_noir',    type:'tea',          name:'Thé noir',              icon:'the',mg:47,  volume:'240ml'},
+  {id:'the_vert',    type:'tea',          name:'Thé vert',              icon:'the',mg:28,  volume:'240ml'},
+  {id:'matcha',      type:'tea',          name:'Matcha',                icon:'the',mg:70,  volume:'240ml'},
+  {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'the',mg:15,  volume:'240ml'},
+  {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'the',mg:37,  volume:'240ml'},
+  {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'the',mg:80,  volume:'240ml'},
   // Canettes : valeurs EUROPÉENNES. La réglementation impose l'étiquetage de la
   // teneur, et les formules européennes tournent à 30-32 mg/100 ml — nettement
   // sous les versions américaines souvent citées en ligne. Une canette annoncée
   // trop forte fait croire à un dépassement qui n'a pas eu lieu, une annoncée
   // trop faible masque un vrai dépassement : les deux trompent l'athlète.
-  {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'⚡',mg:80,  volume:'250ml'},
-  {id:'monster',     type:'energy_drink', name:'Monster',               icon:'⚡',mg:150, volume:'500ml'},
-  {id:'monster_355', type:'energy_drink', name:'Monster',               icon:'⚡',mg:107, volume:'355ml'},
-  {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'⚡',mg:160, volume:'500ml'},
-  {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'⚡',mg:80,  volume:'250ml'},
-  {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'⚡',mg:80,  volume:'250ml'},
+  {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'eclair',mg:80,  volume:'250ml'},
+  {id:'monster',     type:'energy_drink', name:'Monster',               icon:'eclair',mg:150, volume:'500ml'},
+  {id:'monster_355', type:'energy_drink', name:'Monster',               icon:'eclair',mg:107, volume:'355ml'},
+  {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'eclair',mg:160, volume:'500ml'},
+  {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'eclair',mg:80,  volume:'250ml'},
+  {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'eclair',mg:80,  volume:'250ml'},
   // Canettes prêtes à boire, à ne pas confondre avec les poudres du même nom
   // rangées en pré-workout : le dosage n'est pas le même.
-  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'⚡',mg:160, volume:'500ml'},
-  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'⚡',mg:200, volume:'330ml'},
+  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'eclair',mg:160, volume:'500ml'},
+  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'eclair',mg:200, volume:'330ml'},
   // Poudres : le nom porte la VERSION quand la gamme en compte plusieurs à des
   // dosages très différents. « Mr Hyde » seul allait de 196 à 380 mg selon
   // qu'on prenait Signature, Xtreme ou Infinite.
-  {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'💪',mg:150, volume:'1 dose'},
-  {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'💪',mg:200, volume:'1 dose'},
-  {id:'ghost',       type:'preworkout',   name:'Ghost Legend V4',       icon:'💪',mg:300, volume:'1 dose'},
-  {id:'hyde',        type:'preworkout',   name:'Mr Hyde Signature',     icon:'💪',mg:200, volume:'1 dose'},
-  {id:'hyde_xtreme', type:'preworkout',   name:'Mr Hyde Xtreme',        icon:'💪',mg:375, volume:'1 dose'},
-  {id:'myp_origin',  type:'preworkout',   name:'Origin (MyProtein)',    icon:'💪',mg:150, volume:'1 dose'},
-  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'💪',mg:200,volume:'1 dose'},
-  {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'💪',mg:150, volume:'1 dose'},
+  {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'muscle',mg:150, volume:'1 dose'},
+  {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'muscle',mg:200, volume:'1 dose'},
+  {id:'ghost',       type:'preworkout',   name:'Ghost Legend V4',       icon:'muscle',mg:300, volume:'1 dose'},
+  {id:'hyde',        type:'preworkout',   name:'Mr Hyde Signature',     icon:'muscle',mg:200, volume:'1 dose'},
+  {id:'hyde_xtreme', type:'preworkout',   name:'Mr Hyde Xtreme',        icon:'muscle',mg:375, volume:'1 dose'},
+  {id:'myp_origin',  type:'preworkout',   name:'Origin (MyProtein)',    icon:'muscle',mg:150, volume:'1 dose'},
+  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'muscle',mg:200,volume:'1 dose'},
+  {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'muscle',mg:150, volume:'1 dose'},
 ];
 
 // Icônes de catégorie, tracées en blanc avec un halo : les emoji rendaient
@@ -110077,7 +110124,7 @@ function _commitCaffeineAdd(qty){
   _pendingCaffProduct=null;
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   _caffTsNeuf=_ts;
-  toast(name+' ajouté ✓');
+  toast(name+' ajouté '+ICO.coche);
   // ON RESTE SUR LE JOUR OU LA PRISE A ETE ECRITE. loadCaffeine remettait
   // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
   // _caffeineEmbedDate : la prise partait au bon jour, mais l’écran revenait
@@ -110114,10 +110161,10 @@ function saveCaffeineCustom(){
   // Meme marqueur que _commitCaffeineAdd : ajouter une boisson personnalisee
   // est le meme geste, la ligne doit se signaler pareil.
   const _ts=Date.now();
-  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:_ts},_d);
+  const _ok=addCaffeineEntry({id:'custom',name,icon:'cafe',mg,volume,type:'custom',time:hhmm,ts:_ts},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   _caffTsNeuf=_ts;
-  toast(name+' ajouté ✓');
+  toast(name+' ajouté '+ICO.coche);
   // `_fjDate` EN PREMIER ARGUMENT. Laissé à undefined, _renderNutriContent
   // retombait sur _renderFjDaySummary(aujourd’hui) — qui ÉCRIT `_fjDate` au
   // passage. Ajouter un café sur hier ramenait donc le journal alimentaire à
@@ -110368,7 +110415,7 @@ function _buildVideoCard(v){
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
@@ -111784,7 +111831,7 @@ async function uploadVideoFile(input,options){
       pan.fini('Vidéo envoyée au coach');
       if(progEl){
         progEl.style.display='block';
-        progEl.textContent='✓ Vidéo envoyée au coach · '+name;
+        _texteIco(progEl,ICO.coche+' Vidéo envoyée au coach · '+name);
       }
       toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
     }else{
@@ -112748,7 +112795,7 @@ function ouvrirGestionModeles(){
         <div style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
         <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
         <button onclick="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
-          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">✕</button>
+          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">${icon('croix',14)}</button>
       </div>
       <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
         style="width:100%;margin-top:8px;font-size:var(--fs-sm);box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
@@ -112771,7 +112818,7 @@ function tplCreer(){
   const l=_tplListe();
   currentUser.msgTemplates=l.concat([{id:'tpl'+Date.now(),cat:cat,
     titre:titre.slice(0,40),corps:corps,createdAt:Date.now()}]);
-  toastEcriture(saveUser(),'Modèle ajouté ✓','le modèle est');
+  toastEcriture(saveUser(),'Modèle ajouté '+ICO.coche,'le modèle est');
   ouvrirGestionModeles();
 }
 function tplMajCorps(id,v){
@@ -112879,7 +112926,7 @@ function qcAdd(){
   if(!currentUser.quickComments)currentUser.quickComments=[];
   const maxPos=currentUser.quickComments.reduce((m,c)=>Math.max(m,c.pos??0),0);
   currentUser.quickComments.push({id:'qc'+Date.now(),label:label.slice(0,40),text:text.slice(0,120),pos:maxPos+1});
-  toastEcriture(saveUser(),'Commentaire ajouté ✓','le commentaire est');
+  toastEcriture(saveUser(),'Commentaire ajouté '+ICO.coche,'le commentaire est');
   openQCManager();_renderQuickCommentChips();
 }
 function qcEditRow(id){
@@ -112890,7 +112937,7 @@ function qcEditRow(id){
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:var(--fs-xs)">
   </div>
   <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:8px 12px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
-  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
+  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">${icon('croix',14)}</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
 function qcSaveEdit(id){
@@ -112919,7 +112966,7 @@ function qcDown(idx){
 async function qcReset(){
   if(!await rcConfirm('Réinitialiser aux 6 commentaires par défaut ?',null,'Confirmer'))return;
   currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+Date.now()+i,label:c.label,text:c.text,pos:i}));
-  toastEcriture(saveUser(),'Liste réinitialisée ✓','la liste est');openQCManager();_renderQuickCommentChips();
+  toastEcriture(saveUser(),'Liste réinitialisée '+ICO.coche,'la liste est');openQCManager();_renderQuickCommentChips();
 }
 // ======= VIDEO CORRECTION =======
 
@@ -113553,8 +113600,8 @@ function _vcCorpsHtml(email,videoId){
         <div id="vc-audio-preview" style="display:none">
           <audio id="vc-audio-player" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">✓ Ajouter ce message</button>
-            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">✗ Recommencer</button>
+            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">${icon('coche',14)} Ajouter ce message</button>
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">${icon('croix',14)} Recommencer</button>
           </div>
         </div>
         <div id="vc-audio-status" class="vcx-audio-s"></div>
@@ -114700,7 +114747,7 @@ async function confirmAudioAnnotation(){
     _renderTsAnnotations();
     cancelAudioAnnotation();
     document.getElementById('vc-audio-ts').value='';
-    if(status)status.textContent='✓ Message audio ajouté';
+    if(status) _texteIco(status,ICO.coche+' Message audio ajouté');
   }catch(e){
     console.error('[confirmAudioAnnotation]',e);
     if(status)status.textContent='';
@@ -114734,7 +114781,7 @@ async function uploadAudioFile(input){
     _renderTsAnnotations();
     document.getElementById('vc-audio-ts').value='';
     input.value='';
-    if(status)status.textContent='✓ Message audio ajouté';
+    if(status) _texteIco(status,ICO.coche+' Message audio ajouté');
   }catch(e){
     console.error('[uploadAudioFile]',e);
     if(status)status.textContent='';
@@ -114993,7 +115040,7 @@ function loadSteps(containerId='steps-content',opts){
       const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
       const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:var(--r-1);background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type==='on'?'Entraînement':'Repos'}</span>`:'';
-      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
+      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">'+icon('coche',14)+'</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
       return `<div style="padding:10px 0;border-bottom:1px solid #111">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div></div>
@@ -115918,7 +115965,7 @@ function appliquerAjustement(retour){
   n.macros.origineDate=Date.now();
   _ajustJournaliser(a,'applique');
   const ok=saveUser();
-  toastEcriture(ok,'Objectifs ajustés ✓','l\'ajustement est');
+  toastEcriture(ok,'Objectifs ajustés '+ICO.coche,'l\'ajustement est');
   _ajustRetour(retour);
 }
 function refuserAjustement(retour){
@@ -118769,7 +118816,7 @@ function renderCartePesee(){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
-      ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
+      ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">${icon('coche',14)} ${dujour.kg} kg</span>`:''}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <!-- La boîte, et non le champ, porte la bordure : c'est elle qui doit
@@ -118814,7 +118861,7 @@ async function _enregistrerPesee(v,jour){
   if(ant&&Math.abs(v-ant.kg)>PESEE_ECART_CONFIRM
      &&!await rcConfirm('Écart de '+Math.abs(v-ant.kg).toFixed(1)+' kg avec ta dernière pesée ('+ant.kg+' kg).\n\nC\'est bien '+v+' kg ?',null,'Confirmer')) return false;
   if(!_recordWeight(auj,v)){ toast('Pesée refusée','var(--red)'); return false; }
-  toastEcriture(saveUser(),'Pesée enregistrée 👍','ta pesée est');
+  toastEcriture(saveUser(),'Pesée enregistrée '+ICO.coche,'ta pesée est');
   return true;
 }
 async function savePesee(){
@@ -119324,7 +119371,7 @@ function confirmerPhase(){
   _phChoix=null;
   const ok=saveUser();
   closeModal();
-  toastEcriture(ok,PHASES[t].lib+' enregistrée 👍','ta phase est');
+  toastEcriture(ok,PHASES[t].lib+' enregistrée '+ICO.coche,'ta phase est');
   if(document.getElementById('clh-phase')) loadClientHome();
   const bp=document.getElementById('prog-bandeau-phase');
   if(bp) renderBandeauPhase();
@@ -119944,7 +119991,7 @@ function saveStepsGoals(){
   const offVal=parseInt(document.getElementById('steps-goal-off').value,10);
   if(isNaN(onVal)||onVal<500||isNaN(offVal)||offVal<500){toast('Objectifs invalides');return;}
   currentUser.stepsGoals={on:onVal,off:offVal};
-  toastEcriture(saveUser(),'Objectifs enregistrés ✓','les objectifs sont');
+  toastEcriture(saveUser(),'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   // Et NON loadLifestyle() : ce panneau est aussi rendu dans l'écran « Mes
   // pas » autonome, d'où un go('s-lifestyle') éjectait l'athlète au moment
   // même où son enregistrement réussissait.
@@ -120901,7 +120948,7 @@ function sanObjectifEnregistrer(quoi){
     if(on==null||on<500||on>60000){ toast('Un objectif entre 500 et 60 000 pas'); return; }
     u.stepsGoals=Object.assign({},u.stepsGoals||{},{on:on},(off!=null&&off>=500&&off<=60000)?{off:off}:{});
   }
-  toastEcriture(saveUser(),'Objectif enregistré ✓','l’objectif est');
+  toastEcriture(saveUser(),'Objectif enregistré '+ICO.coche,'l’objectif est');
   sanFermer();
   sanRendre();
 }
@@ -121644,7 +121691,7 @@ function _htmlSanSyncFeuille(){
       +corps;
   }
   return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
-      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
+      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">'+icon('croix',14)+'</button></div>'
     +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
       +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
     // LOT G1 : Garmin, qui envoie sans le téléphone. Relié, il passe devant les étapes du téléphone.
@@ -122898,8 +122945,8 @@ function savePastedLinks(){
   document.getElementById('prog-paste-zone').style.display='none';
   document.getElementById('prog-photo2-ready').style.display='block';
   const lbl=document.getElementById('prog-photo2-label');
-  if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube prêts';
-  toast(links.length+' lien(s) enregistrés ✓');
+  if(lbl) _texteIco(lbl,ICO.coche+' '+links.length+' lien(s) YouTube prêts');
+  toast(links.length+' lien(s) enregistrés '+ICO.coche);
 }
 
 async function importVideoLinksFromPdf(input){
@@ -122945,8 +122992,8 @@ async function importVideoLinksFromPdf(input){
       document.getElementById('prog-photo2-ph').style.display='none';
       document.getElementById('prog-photo2-ready').style.display='block';
       const lbl=document.getElementById('prog-photo2-label');
-      if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube trouvé(s)';
-      toast(links.length+' lien(s) YouTube importé(s) ✓');
+      if(lbl) _texteIco(lbl,ICO.coche+' '+links.length+' lien(s) YouTube trouvé(s)');
+      toast(links.length+' lien(s) YouTube importé(s) '+ICO.coche);
     } else {
       // Modale diagnostic — montre le texte brut extrait
       const preview=t=>t.replace(/</g,'&lt;').slice(0,400);
@@ -122954,7 +123001,7 @@ async function importVideoLinksFromPdf(input){
       <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <b style="color:var(--red-light)">Aucun lien trouvé : Diagnostic</b>
-          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
         </div>
         <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Copie ce texte et envoie-le pour qu'on diagnostique :</p>
         <div style="font-size:var(--fs-xs);margin-bottom:6px;color:var(--green)">Annotations trouvées (${annotUrls.length}) :</div>
@@ -123010,7 +123057,7 @@ async function analyzeProgPhotos(){
           <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
               <b style="color:var(--red-light)">Lecture automatique : texte brut</b>
-              <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+              <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
             </div>
             <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
             <div style="font-size:var(--fs-xs);color:var(--green);margin-bottom:4px">M1 original :</div>
@@ -123555,7 +123602,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px;margin-bottom:10px;border:1px solid ${ex.ss?'var(--orange)':'var(--border)'}" id="ocr-ex-${i}">
       ${i===0?'':`<label style="display:flex;align-items:center;gap:8px;margin:-4px 0 10px;cursor:pointer">
         <input type="checkbox" id="ocr-ss-${i}" ${ex.ss?'checked':''} style="width:15px;height:15px;margin:0;accent-color:var(--orange);flex-shrink:0;cursor:pointer">
-        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">⇄ EN SUPERSET AVEC LE PRÉCÉDENT</span>
+        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">${icon('echange',12)} EN SUPERSET AVEC LE PRÉCÉDENT</span>
       </label>`}
       <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px">
         <span style="background:var(--red);color:var(--text);border-radius:var(--r-2);padding:2px 8px;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${i+1}</span>
@@ -123594,7 +123641,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2> ${exercises.length} exercices lus</h2>
-      <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
+      <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Vérifie et corrige si besoin, puis importe. <span style="color:var(--green);font-size:var(--fs-xs)">v233</span></p>
     <div id="ocr-rows">${rows}</div>
@@ -123816,7 +123863,7 @@ function showPdfSeancesModal(seances,targetEmail){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2>${seances.length} séance${seances.length>1?'s':''} détectée${seances.length>1?'s':''}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Clique sur une séance pour voir les exercices. Les jours de pratique seront à définir ensuite dans le programme.</p>
     ${rows}
@@ -123834,7 +123881,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="font-size:var(--fs-lg)"> PDF Google Drive</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:20px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
     <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
@@ -124237,8 +124284,8 @@ async function createAthlete(){
   // suite lit ce ternaire d'un bloc pour verifier que les deux cas restent
   // distingues, et un commentaire pose au milieu suffit a la rendre aveugle.
   const messageFinal=(motDePasseActif
-    ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe.'
-    : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
+    ? ICO.coche+' '+fn+' créé : il peut se connecter avec cet email et ce mot de passe.'
+    : ICO.coche+' '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
     +_aFaire+' Accès jusqu\'au '+exp;
   toastEcriture(okU&&okS,messageFinal,'le compte est');
   loadCoachHome();
@@ -124507,7 +124554,7 @@ function _rcSortieManuelle(nom,u){
     if(c){
       // ON NE DIT « COPIÉ » QUE SI ÇA L'EST. Un accusé de réception faux fait
       // coller dans le vide, et c'est pire que pas d'accusé du tout.
-      c.textContent=ok?'✓ Lien copié':'Sélectionne l’adresse ci-dessous et copie-la.';
+      _texteIco(c,ok?ICO.coche+' Lien copié':'Sélectionne l’adresse ci-dessous et copie-la.');
       c.style.color=ok?'var(--green)':'var(--orange)';
       c.style.display='block';
     }
@@ -125042,7 +125089,7 @@ function _rcInviteArrivee(){
   // d'un cran plus loin : la personne toucherait en croyant installer.
   try{
     if(b&&rcInstallBloquePar()==='samsung')
-      b.textContent='⬇ Ajouter RepCore à l\'écran d\'accueil';
+      _texteIco(b,ICO.download+' Ajouter RepCore à l\'écran d\'accueil');
   }catch(e){}
   // Sans ce second passage, un Android eligible restait sur la branche F de
   // l'ecran d'installation et se voyait expliquer un menu alors qu'un bouton
@@ -125639,7 +125686,7 @@ function saveCoachPhone(){
   // Même règle que pour les athlètes : wa.me refuse un numéro national.
   if(_numWa(raw).length<8){toast('Numéro inutilisable : mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');return;}
   currentUser.phone=raw;
-  toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
+  toastEcriture(saveUser(),'Numéro WhatsApp enregistré '+ICO.coche,'le numéro est');
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
 }
@@ -125785,7 +125832,7 @@ function uploadCoachPhoto(input){
     if(el) el.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     // L'aperçu vient d'être posé dans le DOM : sans ce garde-fou, l'image
     // affichée renforcerait la fausse certitude d'un enregistrement réussi.
-    toastSync(ok,_envoi,'Photo enregistrée ✓','le profil public est');
+    toastSync(ok,_envoi,'Photo enregistrée '+ICO.coche,'le profil public est');
   });
 }
 // Une ligne de diplome : un intitule, une image facultative. Le DOM est la
@@ -125998,17 +126045,17 @@ function ajouterDiplomeRow(titre,image){
   // sur la ligne : le champ file ne peut pas porter une valeur existante.
   i.type='button'; i.className='dip-image';
   i.dataset.img=image||'';
-  i.textContent=image?'Image ✓':'Ajouter une image';
+  _texteIco(i,image?'Image '+ICO.coche:'Ajouter une image');
   i.style.cssText=st+';cursor:pointer;text-align:left';
   i.onclick=()=>{
     const f=document.createElement('input');
     f.type='file'; f.accept='image/*';
     f.onchange=()=>{ _lireImage(f,900,1200,(b64)=>{
-      i.dataset.img=b64; i.textContent='Image ✓'; }); };
+      i.dataset.img=b64; _texteIco(i,'Image '+ICO.coche); }); };
     f.click();
   };
   const x=document.createElement('button');
-  x.type='button'; x.textContent='✕';
+  x.type='button'; _texteIco(x,ICO.croix);
   x.setAttribute('aria-label','Retirer ce diplôme');
   x.style.cssText='flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer';
   x.onclick=()=>row.remove();
@@ -126160,7 +126207,7 @@ function _htmlDiplomesCoach(p){
   // c est lui qui fait lire la ligne comme une validation.
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
-    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">✓</span>'
+    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">'+icon('coche',14)+'</span>'
     +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
@@ -126332,7 +126379,7 @@ function saveCoachIdentity(){
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastSync(ok,_envoi,'Identité de la team enregistrée ✓','le profil public est');
+  toastSync(ok,_envoi,'Identité de la team enregistrée '+ICO.coche,'le profil public est');
 }
 
 // ── Le cadre de disponibilité, côté écran ─────────────────────────────────
@@ -126374,7 +126421,7 @@ function saveCoachDispo(){
   const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch(e){}},300);
-  toastSync(ok,_envoi,'Disponibilité enregistrée ✓','le profil public est');
+  toastSync(ok,_envoi,'Disponibilité enregistrée '+ICO.coche,'le profil public est');
   _chargerDispoCoach(currentUser);
 }
 function _dispoAAAAMMJJ(ts){
@@ -126471,7 +126518,7 @@ function addCoachBannerRow(imageUrl, linkUrl){
     :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:var(--r-1);font-size:var(--fs-xs);color:var(--text-dim)">Ajouter une photo</div>`;
   row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:1px">BANNIÈRE ${n}</span>
-    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">✕</button>
+    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">${icon('croix',14)}</button>
   </div>
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>
@@ -126505,7 +126552,7 @@ function saveCoachBanners(){
   const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastSync(ok,_envoi,'Bannières enregistrées ✓','le profil public est');
+  toastSync(ok,_envoi,'Bannières enregistrées '+ICO.coche,'le profil public est');
 }
 // R34 — LE CONTENEUR EST REVENU AU BAS DE L'ACCUEIL ATHLETE (#clh-promo-banners).
 // Un seul identifiant dans toute l'application — un second, reste dans la
@@ -126572,7 +126619,7 @@ function uploadAthletePhoto(input){
     if(circle) circle.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     const avatar=document.getElementById('clh-athlete-avatar');
     if(avatar) avatar.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
-    toastEcriture(ok,'Photo enregistrée ✓','la photo est');
+    toastEcriture(ok,'Photo enregistrée '+ICO.coche,'la photo est');
   });
 }
 // Suivi du cycle, modifiable à tout moment. La carte suit la convention de
@@ -126943,7 +126990,7 @@ function saveAthleteProfile(){
     // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
     if(_atpCycleSuivi!=='actif') currentUser.currentCycle='ignore';
   }
-  toastEcriture(saveUser(),'Profil enregistré ✓','ton profil est');
+  toastEcriture(saveUser(),'Profil enregistré '+ICO.coche,'ton profil est');
   go('s-client-home');
   loadClientHome();
 }
@@ -126983,7 +127030,7 @@ function saveCloudinaryConfig(){
   if(!name||!preset){toast('Renseigne les deux champs','var(--orange)');return;}
   currentUser.cloudinaryName=name;
   currentUser.cloudinaryPreset=preset;
-  toastEcriture(saveUser(),'Configuration vidéo enregistrée ✓','la configuration est');
+  toastEcriture(saveUser(),'Configuration vidéo enregistrée '+ICO.coche,'la configuration est');
 }
 // ══ L'ACCES DES ATHLETES, ET LA RELANCE ══════════════════════════════════
 //
@@ -127349,7 +127396,7 @@ function executeOffboard(coachId){
   // Un transfert non synchronisé laisse l'ancien coach avec ses droits d'accès
   // côté serveur : l'annoncer fait n'est pas anodin.
   toastSync(ok,Promise.all(envois),
-    athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' ✓','le transfert est');
+    athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' '+ICO.coche,'le transfert est');
 }
 
 // ── Portabilité RGPD (art. 20) : un bouton, un fichier ─────────────────────
@@ -127875,7 +127922,7 @@ async function _envoyerInvitation(){
       partage=true;
     }
   }catch(e){}   // annule par l utilisateur : ce n est pas une erreur
-  toast(partage?'Invitation envoyée ✓':'✓ Lien copié : envoie-le à '
+  toast(partage?'Invitation envoyée '+ICO.coche:ICO.coche+' Lien copié : envoie-le à '
     +(r.invitation.prenom||'ton athlète'),'var(--green)');
   _rendreInvitations();
   return true;
@@ -128878,7 +128925,7 @@ function loadSubscribePage(mode,payload){
     if(codeOpt) codeOpt.style.display='none';
     if(pendingInfo){
       pendingInfo.style.display='';
-      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-sm);line-height:1.7">Code de <strong>'+escapeHtml(payload.coachName||'ton coach')+'</strong> reconnu ✓<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement ci-dessous.</div>';
+      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-sm);line-height:1.7">Code de <strong>'+escapeHtml(payload.coachName||'ton coach')+'</strong> reconnu '+icon('coche',14)+'<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement ci-dessous.</div>';
     }
   } else {
     if(codeOpt) codeOpt.style.display='';
@@ -129044,7 +129091,7 @@ function renderPaypalButton(planId,coachId){
         saveUser();
         toast('Paiement reçu, activation…','var(--info)');
         const _actif=await _attendreActivation(_estCoach?{coach:_subPalier}:{});
-        toast(_actif?'Abonnement activé ! Bienvenue sur RepCore ✓'
+        toast(_actif?'Abonnement activé ! Bienvenue sur RepCore '+ICO.coche
           :'Paiement reçu. L’activation prend plus de temps que prévu : elle apparaîtra d’elle-même, sans rien refaire.',
           _actif?'var(--green)':'var(--orange)');
         // UN COACH NE RENTRE PAS SUR L ACCUEIL ATHLÈTE. loadClientHome y lit
@@ -129828,7 +129875,7 @@ function _peLigneEtape(e,i,total){
       <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i-1})" ${i===0?'disabled':''} aria-label="Monter">▲</button>
       <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i+1})" ${i===total-1?'disabled':''} aria-label="Descendre">▼</button>
     </div>
-    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">✕</button>
+    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">${icon('croix',14)}</button>
   </div>`;
 }
 function _peRendreEtapes(){
@@ -130078,7 +130125,7 @@ function _pfRendre(){
 
   const barre=`<button onclick="_pfOuvert=!_pfOuvert;_pfRendre()"
       style="display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:2px 0;cursor:pointer;font-family:Montserrat,sans-serif;text-align:left">
-      <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">☰ Filtres${actifs?' ('+actifs+')':''}</span>
+      <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">${icon('sliders',12)} Filtres${actifs?' ('+actifs+')':''}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-2xs);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(resume)}</span>
       <span style="color:var(--sub);font-size:var(--fs-sm)">${_pfOuvert?'▾':'▸'}</span>
     </button>`;

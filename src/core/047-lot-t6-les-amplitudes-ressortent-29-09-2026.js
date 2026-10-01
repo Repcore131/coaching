@@ -292,7 +292,7 @@ function saveClientSuppEntry(){
   c.nutrition.supplements.push({id:Date.now(),name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active:true});
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément ajouté ✓','le complément est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément ajouté '+ICO.coche,'le complément est');
   renderCoachSuppSection(c);
 }
 
@@ -332,7 +332,7 @@ function openCoachSuppEdit(id){
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2>${s?'Modifier le complément':'Nouveau complément'}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">${icon('croix',14)}</button>
     </div>
     <div style="margin-bottom:14px">
       <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">NOM</div>
@@ -404,7 +404,7 @@ function saveCoachSuppEdit(){
   }
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),idx>=0?'Complément mis à jour '+ICO.coche:'Complément ajouté '+ICO.coche,'le complément est');
   closeModal();
   renderCoachSuppSection(c);
 }
@@ -496,44 +496,44 @@ function renderCoachCaffeineSection(c){
 
 // ======= CAFFEINE =======
 const CAFFEINE_DB=[
-  {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'☕',mg:63,  volume:'30ml'},
-  {id:'cafe_filtre', type:'coffee',       name:'Café filtre',           icon:'☕',mg:95,  volume:'240ml'},
-  {id:'americano',   type:'coffee',       name:'Americano',             icon:'☕',mg:120, volume:'240ml'},
-  {id:'latte',       type:'coffee',       name:'Latte',                 icon:'☕',mg:63,  volume:'240ml'},
-  {id:'cappuccino',  type:'coffee',       name:'Cappuccino',            icon:'☕',mg:63,  volume:'180ml'},
-  {id:'double_esp',  type:'coffee',       name:'Double espresso',       icon:'☕',mg:126, volume:'60ml'},
-  {id:'the_noir',    type:'tea',          name:'Thé noir',              icon:'🍵',mg:47,  volume:'240ml'},
-  {id:'the_vert',    type:'tea',          name:'Thé vert',              icon:'🍵',mg:28,  volume:'240ml'},
-  {id:'matcha',      type:'tea',          name:'Matcha',                icon:'🍵',mg:70,  volume:'240ml'},
-  {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'🍵',mg:15,  volume:'240ml'},
-  {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'🍵',mg:37,  volume:'240ml'},
-  {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'🍵',mg:80,  volume:'240ml'},
+  {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'cafe',mg:63,  volume:'30ml'},
+  {id:'cafe_filtre', type:'coffee',       name:'Café filtre',           icon:'cafe',mg:95,  volume:'240ml'},
+  {id:'americano',   type:'coffee',       name:'Americano',             icon:'cafe',mg:120, volume:'240ml'},
+  {id:'latte',       type:'coffee',       name:'Latte',                 icon:'cafe',mg:63,  volume:'240ml'},
+  {id:'cappuccino',  type:'coffee',       name:'Cappuccino',            icon:'cafe',mg:63,  volume:'180ml'},
+  {id:'double_esp',  type:'coffee',       name:'Double espresso',       icon:'cafe',mg:126, volume:'60ml'},
+  {id:'the_noir',    type:'tea',          name:'Thé noir',              icon:'the',mg:47,  volume:'240ml'},
+  {id:'the_vert',    type:'tea',          name:'Thé vert',              icon:'the',mg:28,  volume:'240ml'},
+  {id:'matcha',      type:'tea',          name:'Matcha',                icon:'the',mg:70,  volume:'240ml'},
+  {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'the',mg:15,  volume:'240ml'},
+  {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'the',mg:37,  volume:'240ml'},
+  {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'the',mg:80,  volume:'240ml'},
   // Canettes : valeurs EUROPÉENNES. La réglementation impose l'étiquetage de la
   // teneur, et les formules européennes tournent à 30-32 mg/100 ml — nettement
   // sous les versions américaines souvent citées en ligne. Une canette annoncée
   // trop forte fait croire à un dépassement qui n'a pas eu lieu, une annoncée
   // trop faible masque un vrai dépassement : les deux trompent l'athlète.
-  {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'⚡',mg:80,  volume:'250ml'},
-  {id:'monster',     type:'energy_drink', name:'Monster',               icon:'⚡',mg:150, volume:'500ml'},
-  {id:'monster_355', type:'energy_drink', name:'Monster',               icon:'⚡',mg:107, volume:'355ml'},
-  {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'⚡',mg:160, volume:'500ml'},
-  {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'⚡',mg:80,  volume:'250ml'},
-  {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'⚡',mg:80,  volume:'250ml'},
+  {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'eclair',mg:80,  volume:'250ml'},
+  {id:'monster',     type:'energy_drink', name:'Monster',               icon:'eclair',mg:150, volume:'500ml'},
+  {id:'monster_355', type:'energy_drink', name:'Monster',               icon:'eclair',mg:107, volume:'355ml'},
+  {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'eclair',mg:160, volume:'500ml'},
+  {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'eclair',mg:80,  volume:'250ml'},
+  {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'eclair',mg:80,  volume:'250ml'},
   // Canettes prêtes à boire, à ne pas confondre avec les poudres du même nom
   // rangées en pré-workout : le dosage n'est pas le même.
-  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'⚡',mg:160, volume:'500ml'},
-  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'⚡',mg:200, volume:'330ml'},
+  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'eclair',mg:160, volume:'500ml'},
+  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'eclair',mg:200, volume:'330ml'},
   // Poudres : le nom porte la VERSION quand la gamme en compte plusieurs à des
   // dosages très différents. « Mr Hyde » seul allait de 196 à 380 mg selon
   // qu'on prenait Signature, Xtreme ou Infinite.
-  {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'💪',mg:150, volume:'1 dose'},
-  {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'💪',mg:200, volume:'1 dose'},
-  {id:'ghost',       type:'preworkout',   name:'Ghost Legend V4',       icon:'💪',mg:300, volume:'1 dose'},
-  {id:'hyde',        type:'preworkout',   name:'Mr Hyde Signature',     icon:'💪',mg:200, volume:'1 dose'},
-  {id:'hyde_xtreme', type:'preworkout',   name:'Mr Hyde Xtreme',        icon:'💪',mg:375, volume:'1 dose'},
-  {id:'myp_origin',  type:'preworkout',   name:'Origin (MyProtein)',    icon:'💪',mg:150, volume:'1 dose'},
-  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'💪',mg:200,volume:'1 dose'},
-  {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'💪',mg:150, volume:'1 dose'},
+  {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'muscle',mg:150, volume:'1 dose'},
+  {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'muscle',mg:200, volume:'1 dose'},
+  {id:'ghost',       type:'preworkout',   name:'Ghost Legend V4',       icon:'muscle',mg:300, volume:'1 dose'},
+  {id:'hyde',        type:'preworkout',   name:'Mr Hyde Signature',     icon:'muscle',mg:200, volume:'1 dose'},
+  {id:'hyde_xtreme', type:'preworkout',   name:'Mr Hyde Xtreme',        icon:'muscle',mg:375, volume:'1 dose'},
+  {id:'myp_origin',  type:'preworkout',   name:'Origin (MyProtein)',    icon:'muscle',mg:150, volume:'1 dose'},
+  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'muscle',mg:200,volume:'1 dose'},
+  {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'muscle',mg:150, volume:'1 dose'},
 ];
 
 // Icônes de catégorie, tracées en blanc avec un halo : les emoji rendaient
@@ -1605,7 +1605,7 @@ function _commitCaffeineAdd(qty){
   _pendingCaffProduct=null;
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   _caffTsNeuf=_ts;
-  toast(name+' ajouté ✓');
+  toast(name+' ajouté '+ICO.coche);
   // ON RESTE SUR LE JOUR OU LA PRISE A ETE ECRITE. loadCaffeine remettait
   // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
   // _caffeineEmbedDate : la prise partait au bon jour, mais l’écran revenait
@@ -1642,10 +1642,10 @@ function saveCaffeineCustom(){
   // Meme marqueur que _commitCaffeineAdd : ajouter une boisson personnalisee
   // est le meme geste, la ligne doit se signaler pareil.
   const _ts=Date.now();
-  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:_ts},_d);
+  const _ok=addCaffeineEntry({id:'custom',name,icon:'cafe',mg,volume,type:'custom',time:hhmm,ts:_ts},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   _caffTsNeuf=_ts;
-  toast(name+' ajouté ✓');
+  toast(name+' ajouté '+ICO.coche);
   // `_fjDate` EN PREMIER ARGUMENT. Laissé à undefined, _renderNutriContent
   // retombait sur _renderFjDaySummary(aujourd’hui) — qui ÉCRIT `_fjDate` au
   // passage. Ajouter un café sur hier ramenait donc le journal alimentaire à
@@ -1896,7 +1896,7 @@ function _buildVideoCard(v){
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien

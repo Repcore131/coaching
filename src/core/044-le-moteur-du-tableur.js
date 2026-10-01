@@ -1182,7 +1182,7 @@ function saveClientNutriManuel(v){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    manuel?'Saisie manuelle activée ✓':'Calcul automatique rétabli ✓','le réglage est');
+    manuel?'Saisie manuelle activée '+ICO.coche:'Calcul automatique rétabli '+ICO.coche,'le réglage est');
   renderCoachNutriSection(c);
   return true;
 }
@@ -1280,7 +1280,7 @@ function saveClientNutriCycle(v){
   // la même question finiraient par se contredire à l'écran.
   try{ _propCycle=cycle; }catch(e){}
   toastSync(ok,CLOUD.pushOne(c.email,c),
-    cycle?'Diète cyclée ✓':'Diète non cyclée : mêmes valeurs tous les jours ✓',
+    cycle?'Diète cyclée '+ICO.coche:'Diète non cyclée : mêmes valeurs tous les jours '+ICO.coche,
     'le réglage est');
   renderCoachNutriSection(c);
   return true;
@@ -1343,7 +1343,7 @@ async function reinitialiserCalculs(){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ecrit=DB.set('users',users);
   try{ _viderCachePlateau(); _viderCacheSignaux(); }catch(e){}
-  toastSync(ecrit,CLOUD.pushOne(c.email,c),'Calculs remis au point de départ ✓','la remise à zéro est');
+  toastSync(ecrit,CLOUD.pushOne(c.email,c),'Calculs remis au point de départ '+ICO.coche,'la remise à zéro est');
   try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
   return true;
 }
@@ -1569,7 +1569,7 @@ async function actualiserClient(){
       _majFraicheur();
       return true;
     }
-    toast('Dossier mis à jour ✓','var(--success)');
+    toast('Dossier mis à jour '+ICO.coche,'var(--success)');
     // ⚠ `true` — C'EST UN RAFRAICHISSEMENT, PAS UNE OUVERTURE. Ce drapeau
     //   manquait ici, et c'etait le SEUL des quinze appels en place a
     //   l'oublier. Deux effets, tous deux mesures au banc le 21/09/2026 :
@@ -1964,7 +1964,7 @@ function _confirmerTransmission(c,localOk,envoi){
     if(r===false) throw new Error('envoi refusé');
     const _on=((c.nutrition||{}).macros||{}).on||{};
     _transmisPoser(c.email,{d:Date.now(),kcal:Math.round(Number(_on.kcal)||0)});
-    toast('Transmis à ton athlète ✓ : reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
+    toast('Transmis à ton athlète '+ICO.coche+' : reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
     try{ renderCoachNutriSection(getOwnedClient(currentClientId)||c); }catch(e){}
     return true;
   }).catch(()=>{

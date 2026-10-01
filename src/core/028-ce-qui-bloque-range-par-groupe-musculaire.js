@@ -187,7 +187,7 @@ function _coachClasserMuscles(i){
     cc.exMuscles[_aliasPour(exKey(a.nom),cc)]=r;
     cc.updatedAt=Date.now(); users[cc.email]=cc;
     const ok=DB.set('users',users);
-    toastSync(ok,CLOUD.pushOne(cc.email,cc),'Muscles attribués ✓','l’attribution est');
+    toastSync(ok,CLOUD.pushOne(cc.email,cc),'Muscles attribués '+ICO.coche,'l’attribution est');
     try{ _viderCacheVolume(); }catch(e){}
     closeModal();
     try{ renderPlateauxCoach(cc); }catch(e){}
@@ -1603,7 +1603,7 @@ function telechargerSeanceRelue(btn){
   if(sp) sp.textContent='Génération…';
   let ok=false;
   try{ ok=telechargerBilanSeance(_seanceRelue); }catch(e){ ok=false; }
-  if(sp) setTimeout(()=>{ sp.textContent=ok?'Téléchargé ✓':lib;
+  if(sp) setTimeout(()=>{ _texteIco(sp,ok?'Téléchargé '+ICO.coche:lib);
     if(ok) setTimeout(()=>{ sp.textContent=lib; },2000); },260);
   return ok;
 }
@@ -1824,7 +1824,7 @@ function partagerRecord(cle,i,btn){
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){
     const lib=sp.textContent;
-    sp.textContent='Visuel prêt ✓';
+    _texteIco(sp,'Visuel prêt '+ICO.coche);
     setTimeout(()=>{ sp.textContent=lib; },2000);
   }
   return ok;

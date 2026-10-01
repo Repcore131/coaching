@@ -521,7 +521,7 @@ function enregistrerFormulesReponse(){
   currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
   try{ saveUser(); }catch(e){}
   closeModal();
-  toast('Formule enregistrée ✓','var(--green)');
+  toast('Formule enregistrée '+ICO.coche,'var(--green)');
   return true;
 }
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
@@ -682,8 +682,8 @@ function renderReponsesBilans(bilans,client){
     // qui ne s'y range pas — rien d'écrit ne disparaît.
     const rubs=(depart?BILAN_RUBRIQUES.depart:BILAN_RUBRIQUES.suivi).map(r=>({titre:r.titre,ico:r.ico,cles:r.cles.slice()}));
     const ranges=new Set([].concat(...rubs.map(r=>r.cles)));
-    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.emoji==='📏').map(q=>q.k);
-    const autres=Q.filter(q=>!ranges.has(q.k)&&q.emoji!=='📏').map(q=>q.k);
+    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.ico==='regle').map(q=>q.k);
+    const autres=Q.filter(q=>!ranges.has(q.k)&&q.ico!=='regle').map(q=>q.k);
     if(mesures.length) rubs.push({titre:'Mesures du corps',ico:'crosshair',cles:mesures});
     if(autres.length) rubs.push({titre:'Autres réponses',ico:'clipboard',cles:autres});
     const sections=rubs.map(r=>{
@@ -880,7 +880,7 @@ const DEB_STEPS=[
     bLbl("Si tu t'entraînes en salle, laquelle ?")+bT('deb-gym','Nom de la salle...')+
     bLbl('Quels jours souhaites-tu t\'entraîner ?')+
     `<div>${bC('deb-training-days',['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'],true)}</div>`+
-    bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex : 45 min, 1 h 30...')+
+    bLbl('Quelle est la durée de séance que tu préfères ? '+icon('clock',14))+bT('deb-session-duration','Ex : 45 min, 1 h 30...')+
     // R12 — c'est exact : besoinsProposes compte les creneaux RepCore une fois,
     // et ne les additionne jamais a une musculation declaree ici.
     bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
@@ -907,7 +907,7 @@ const DEB_STEPS=[
       {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div></div>`+
     bLbl('As-tu des antécédents sportifs ?')+bT('deb-history','Ex : football 5 ans, boxe 2 ans...')+
-    bLbl('Quand préfères-tu t\'entraîner ? ⏰')+
+    bLbl('Quand préfères-tu t\'entraîner ? '+icon('clock',14))+
     `<div>${bC('deb-training-time',['Matin','Après-midi','Soir'],true)}</div>`
   ),
   // Step 4 : Nutrition
@@ -1281,7 +1281,7 @@ function _htmlBilanRetard(d){
     +'<div class="bal2-sous">'+sous+'</div></div>'
     +'<div class="bal2-j"><b>J'+(n?' + <span>'+n+'</span>':' <span>0</span>')+'</b><small>'+(n?'de retard':'c’est le jour')+'</small></div>'
     +'<span class="bal2-ch">'+chev+'</span></div>'
-    +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">✓</i>':'')+'</b></div>'
+    +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">'+icon('coche',14)+'</i>':'')+'</b></div>'
     +'<div class="bal2-ligne" aria-hidden="true"><i class="p0"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i></div>'
     +'<div class="bal2-bout bal2-fin"><small>Prochain bilan</small><b>'+date(d&&d.echeance)+'</b><small>À compléter</small></div></div>'
     +'<span class="bal2-go"><span class="bal2-go-ico">'+doc+'</span><span class="bal2-go-t">Compléter mon bilan</span><span class="bal2-go-ch">'+chev+'</span></span>'+'</div>';
@@ -1417,7 +1417,7 @@ function showBilanNotifBanner(){
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">${icon('croix',14)}</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000); // auto-dismiss après 60s
@@ -1954,7 +1954,7 @@ function renderWoReminderCard(){
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
-    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
+    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">${icon('sliders',14)}</button>
   </div>`;
 }
 function checkWoReminderToday(){
@@ -1997,12 +1997,12 @@ function showWoReminderBanner(){
   b.id='wo-reminder-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-    <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
+    <div style="font-size:var(--fs-2xl);flex-shrink:0">${icon('muscle',14)}</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(texteRappelRecord(currentUser)||'C\'est l\'heure de t\'entraîner ! Clique pour démarrer.')}</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">${icon('croix',14)}</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000);
@@ -2022,7 +2022,7 @@ function openWoReminderConfig(){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
-      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
+      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">${icon('croix',14)}</button>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Heure du rappel</label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
@@ -2287,7 +2287,7 @@ async function invNotifOui(){
       // l'accepte sans redemander. Sans attente : l'enregistrement part en
       // arrière-plan, le toast ne dépend pas du réseau.
       try{ pushAbonner({geste:true}); }catch(e){}
-      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance ✓':'C’est noté ✓');
+      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance '+ICO.coche:'C’est noté '+ICO.coche);
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
       // reprocher, c'est se faire desinstaller.

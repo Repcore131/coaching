@@ -187,7 +187,7 @@ async function enregistrerDefiCanal(){
   // UN NOUVEAU DÉFI prévient les athlètes (une modification, non).
   if(nouveau) deposerEvenement({type:'defi_publie',msg:id}).catch(()=>{});
   if(nouveau) rcmCoach('coach_canal_publie');
-  toast(window._defiEdite?'Défi modifié':'Défi lancé ⚡');
+  toast(window._defiEdite?'Défi modifié':'Défi lancé '+ICO.eclair);
   window._defiEdite='';
   _canalChargerCoach(id);
   return true;
@@ -206,7 +206,7 @@ function _dfEnTete(m,t){
   return '<div class="dfi-tete"><span class="cnl-defi">Défi</span><span class="dfi-quand">'+escapeHtml(quand)+'</span></div>'
     +'<div class="cnl-titre">'+escapeHtml(m.titre||'Défi')+'</div>'
     +'<div class="dfi-obj">'+escapeHtml((m.collectif?'En équipe · ':'Chacun le sien · ')+defiTexteObjectif(m))+'</div>'
-    +(m.recompense?'<div class="dfi-rec">🎁 '+escapeHtml(m.recompense)+'</div>':'');
+    +(m.recompense?'<div class="dfi-rec">'+icon('cadeau',14)+' '+escapeHtml(m.recompense)+'</div>':'');
 }
 // PURE. La carte athlète : jauges, avatars, classement, et l'action.
 // etat : {pub, moi, resultat} ; u : l'athlète (jauge perso calculée ici).
@@ -239,18 +239,18 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
   if(cl.length){
     const unite=m.mesure==='progressionPct'?' %':(m.mesure==='serie'?' sem.':' séances');
     h+='<div class="dfi-classement"><div class="dfi-cl-t">Classement · '+escapeHtml(m.mesure==='progressionPct'?'progression':'régularité')+'</div>'
-      +cl.slice(0,5).map((x,i)=>'<div class="dfi-cl-l"><span>'+(i+1)+'. '+escapeHtml(x.nom)+(x.termine?' ✓':'')+'</span><b>'
+      +cl.slice(0,5).map((x,i)=>'<div class="dfi-cl-l"><span>'+(i+1)+'. '+escapeHtml(x.nom)+(x.termine?' '+icon('coche',14):'')+'</span><b>'
         +escapeHtml(String(x.valeur).replace('.',','))+unite+'</b></div>').join('')
       +(moi&&moi.place?'<div class="dfi-cl-moi">Ta place : '+moi.place+(moi.place===1?'er':'e')
         +(moi.inscription&&moi.inscription.classement?'':' (hors classement public)')+'</div>':'')+'</div>';
   }
   if(fini){
-    h+='<div class="dfi-fait">'+(res&&res.champion?'Champion du défi':'✓ Défi relevé')+'</div>'
+    h+='<div class="dfi-fait">'+(res&&res.champion?'Champion du défi':icon('coche',14)+' Défi relevé')+'</div>'
       +'<button type="button" class="btn btn-outline btn-sm dfi-part" onclick="partagerDefi(\''+escapeHtml(m.id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>';
   }else if(actif&&!inscrit){
     h+='<button type="button" class="btn btn-red dfi-go" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Je relève le défi</button>';
   }else if(actif&&inscrit){
-    h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
+    h+='<div class="dfi-inscrit">Tu relèves ce défi '+icon('coche',14)+' <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
   }
   h+='<div style="display:flex;gap:6px;margin-top:12px">'+_canalBoutonsReactions(m,compteurs||{},mienne||'')+'</div>';
   return h+'</div>';
@@ -270,7 +270,7 @@ function htmlCarteDefiCoach(m,d,neuve){
   }).sort((a,b)=>b.v-a.v);
   let h='<div class="cnl-carte dfi-carte'+(neuve?' cnl-neuve':'')+'">'+_dfEnTete(m,t);
   h+=_dfJauge('Équipe',Number((pub.equipe||{}).part)||0,Math.round((Number((pub.equipe||{}).part)||0)*100)+' %');
-  h+=l.length?'<div class="dfi-classement">'+l.map(x=>'<div class="dfi-cl-l"><span>'+htmlNomRang(x.nom,x.xp)+(x.f?' ✓':'')+'</span><b>'
+  h+=l.length?'<div class="dfi-classement">'+l.map(x=>'<div class="dfi-cl-l"><span>'+htmlNomRang(x.nom,x.xp)+(x.f?' '+icon('coche',14):'')+'</span><b>'
       +escapeHtml(_dfValeurTexte(m,x.v))+'</b></div>').join('')+'</div>'
     :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Personne n’a encore relevé le défi.</div>';
   h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
@@ -539,7 +539,7 @@ async function rejoindreDuel(id,btn){
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
   try{ saveUser(); }catch(e){}
   deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
-  toast('Défi relevé ⚡ Il commence à ta prochaine séance.','var(--green)',4000);
+  toast('Défi relevé '+ICO.eclair+' Il commence à ta prochaine séance.','var(--green)',4000);
   delete _duelsCache[id];
   _rendreDuelsAccueil();
   return true;
@@ -629,7 +629,7 @@ function htmlDuelsHub(u,duels,invite,maintenant){
   }
   const l=_duelsListe(duels,maintenant);
   if(l.length) h+='<div class="du-lab">Défis en cours</div><div class="du-liste">'+l.map(d=>
-    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">'+icon('haches',14)+'</span> '
       +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>').join('')+'</div>';
   return h;
 }
@@ -1017,7 +1017,7 @@ function htmlFicheAmi(r,suivi){
     +'<div class="am-fiche-t"><b>'+escapeHtml(r.prenom)+'</b><small>@'+escapeHtml(r.pseudo)+'</small>'
       +'<span class="am-fiche-r">'+(r.rang?escapeHtml(r.rang.nom):'Rang non affiché')+(r.volts!=null?' · '+Number(r.volts).toLocaleString('fr-FR')+' V':'')+'</span>'
       +(r.badges&&r.badges.length?'<span class="am-fiche-b">'+r.badges.map(escapeHtml).join(' · ')+'</span>':'')+'</div>'
-    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi ✓':'Suivre')+'</button>'
+    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi '+icon('coche',14):'Suivre')+'</button>'
     +'</div>';
 }
 // PURE. Personne à ce nom : on ne dit pas « n'existe pas » sèchement, on
@@ -1123,7 +1123,7 @@ async function amiBasculerSuivi(b){
   const p=b.dataset.p, n=b.dataset.n;
   const suivi=!!amisLocal().amis[pseudoPublicCle(p)];
   const ok=suivi?await amiRetirer(p):await amiSuivre(p,n);
-  if(ok){ const s=!suivi; b.textContent=s?'Suivi ✓':'Suivre'; b.classList.toggle('btn-red',!s); b.classList.toggle('btn-outline',s); }
+  if(ok){ const s=!suivi; _texteIco(b,s?'Suivi '+ICO.coche:'Suivre'); b.classList.toggle('btn-red',!s); b.classList.toggle('btn-outline',s); }
   return ok;
 }
 function _rendreAmisPartout(){
@@ -1142,7 +1142,7 @@ function amiEnvoyerLien(btn){
   const pr=String((currentUser&&currentUser.fname)||'').trim();
   const txt=(pr?pr+' t’invite':'Je t’invite')+' sur RepCore : on se suit et on se défie ⚡';
   if(navigator.share){ navigator.share({title:'RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','amis'); }catch(e){} }).catch(()=>{}); return true; }
-  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>{ toast('Lien copié','var(--green)'); if(btn) btn.textContent='Lien copié ✓'; },()=>toast(l)); }catch(e){ toast(l); }
+  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>{ toast('Lien copié','var(--green)'); if(btn) _texteIco(btn,'Lien copié '+ICO.coche); },()=>toast(l)); }catch(e){ toast(l); }
   return true;
 }
 // « Défier » : la feuille de duel existante, préparée pour cet ami.
@@ -1221,7 +1221,7 @@ async function amiRevanche(pseudo,mesure,duree,btn){
     return false;
   }
   fermerDuelFeuille();
-  toast('Revanche lancée contre '+r.prenom+' ⚡ Sa prochaine séance lance le compte.','var(--green)',4500);
+  toast('Revanche lancée contre '+r.prenom+' '+ICO.eclair+' Sa prochaine séance lance le compte.','var(--green)',4500);
   _rendreDuelsAccueil(); _rendreAmisPartout();
   return true;
 }
@@ -1311,7 +1311,7 @@ async function lancerDuel(btn){
   if(_duelCible){
     const ra=await creerDuelAvecAmi(_duelCible.p,m,j);
     if(ra.ok){
-      if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' ⚡</div>'
+      if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' '+icon('eclair',14)+'</div>'
         +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Il n’a rien à accepter : sa prochaine séance lance le compte.</p>'
         +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
       _rendreDuelsAccueil();
@@ -1324,7 +1324,7 @@ async function lancerDuel(btn){
   if(!r.ok){ if(btn){ btn.disabled=false; lib.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
   // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
   // iOS refuserait la feuille de partage ouverte hors du geste.
-  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
+  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt '+icon('eclair',14)+'</div>'
     +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Envoie-le à ton pote : il commence à sa première séance.</p>'
     +'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
@@ -1466,7 +1466,7 @@ function partagerCarteDuel(id,type,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 
@@ -1507,7 +1507,7 @@ function htmlDefiMois(d,u,maintenant){
     +'<div class="dm-titre">'+escapeHtml(d.titre)+'</div>'
     +(d.texte?'<p class="dm-texte">'+escapeHtml(d.texte)+'</p>':'')
     +'<div class="rg-jauge dm-jauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
-    +'<div class="dm-etat">'+(fait?'Relevé ⚡ ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
+    +'<div class="dm-etat">'+(fait?'Relevé '+icon('eclair',14)+' ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
       +(fait?'':' · '+(j?j+' jour'+(j>1?'s':'')+' restant'+(j>1?'s':''):'dernier jour'))+'</div></div>';
 }
 async function renderDefiMoisAccueil(){
@@ -1558,7 +1558,7 @@ async function enregistrerDefiMois(btn){
   const ok=await CLOUD.racinePatch({['defi_mois/'+r.mois]:r.fiche}).catch(()=>false);
   if(btn) btn.disabled=false;
   try{ localStorage.removeItem(DEFI_MOIS_CACHE); }catch(e){}
-  toast(ok?'Défi de '+r.mois+' publié ⚡':'Publication refusée','var('+(ok?'--green':'--orange')+')');
+  toast(ok?'Défi de '+r.mois+' publié '+ICO.eclair:'Publication refusée','var('+(ok?'--green':'--orange')+')');
   return ok;
 }
 // ══ LES ÉVÉNEMENTS SAISONNIERS (28/09/2026) ══════════════════════════════
@@ -1674,7 +1674,7 @@ function htmlBanniereSaison(s,u,stats,maintenant){
     +(s.texteAccueil?'<p class="sa-texte">'+escapeHtml(s.texteAccueil)+'</p>':'')
     +'<div class="sa-lab">Toi</div>'
     +'<div class="rg-jauge sa-jauge" role="progressbar" aria-label="Ta progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
-    +'<div class="sa-val">'+(fait?'Bouclé ⚡ ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
+    +'<div class="sa-val">'+(fait?'Bouclé '+icon('eclair',14)+' ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
     +(col>0?'<div class="sa-lab">Tous ensemble</div>'
       +'<div class="rg-jauge sa-jauge sa-collectif" role="progressbar" aria-label="Le compteur collectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pc*100)+'"><span style="width:'+Math.round(pc*100)+'%"></span></div>'
       +'<div class="sa-val">'+escapeHtml(txt(tot))+' sur '+escapeHtml(txt(col))
@@ -1814,7 +1814,7 @@ function partagerCarteSaison(id,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // ── L'écran admin : créer une édition ─────────────────────────────────────
@@ -1867,7 +1867,7 @@ async function enregistrerSaison(btn){
   if(btn) btn.disabled=false;
   try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
   _saisons=null;
-  toast(ok?'Édition « '+r.fiche.nom+' » créée ⚡':'Création refusée','var('+(ok?'--green':'--orange')+')');
+  toast(ok?'Édition « '+r.fiche.nom+' » créée '+ICO.eclair:'Création refusée','var('+(ok?'--green':'--orange')+')');
   return ok;
 }
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
@@ -1899,7 +1899,7 @@ async function majRecompensesServeur(o){
     const tok=await CLOUD._getToken();
     const rs=tok?await fetch(CLOUD._fbUrl.replace('users.json','saisons_resultats/'+String(u.email||'').replace(/\./g,',')+'.json')+'?auth='+tok):null;
     ns=saisonsFusionnerResultats(u,(rs&&rs.ok)?await rs.json():null);
-    if(ns) toast('Édition bouclée ⚡ Ton badge t’attend dans ta collection.','var(--green)',4000);
+    if(ns) toast('Édition bouclée '+ICO.eclair+' Ton badge t’attend dans ta collection.','var(--green)',4000);
   }catch(e){ ns=0; }
   const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns;
   if(n){
@@ -2002,7 +2002,7 @@ function _defiEcran(id,reste){
   const z=_bdgCouche('<div class="bdg-ecran-txt">'
     +'<div class="bdg-ecran-sur">'+(d.champion?'CHAMPION DU DÉFI':'DÉFI RELEVÉ')+'</div>'
     +'<h2 class="bdg-ecran-nom" id="dfe-titre">'+escapeHtml(d.titre)+'</h2>'
-    +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · ⚡ '+escapeHtml(d.valeur):'')+'</div>'
+    +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · '+icon('eclair',14)+' '+escapeHtml(d.valeur):'')+'</div>'
     +_htmlVisuelFonds('dfe-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerDefi(\''+escapeHtml(id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
@@ -2027,7 +2027,7 @@ function partagerDefi(id,btn){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  if(sp&&ok){ _texteIco(sp,'Visuel prêt '+ICO.coche); setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
 // ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
@@ -2295,7 +2295,7 @@ async function _canalChargerCoach(idNeuf){
     ]);
   }catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;

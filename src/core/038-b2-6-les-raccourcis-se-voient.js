@@ -1135,7 +1135,7 @@ function repriseDouceChoisir(oui){
   try{ saveUser(); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
   try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
-  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère ✓':'C’est noté : tes charges restent les mêmes ✓'); }catch(e){}
+  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère '+ICO.coche:'C’est noté : tes charges restent les mêmes '+ICO.coche); }catch(e){}
   return true;
 }
 // L'écran ouvert par la notification du 30e jour (./?reprise=1).
@@ -2504,7 +2504,7 @@ function exportDossierSanteTexte(user){
 function telechargerDossierSante(){
   try{
     _telecharger('repcore-dossier-sante.txt',exportDossierSanteTexte(currentUser),'text/plain;charset=utf-8');
-    toast('Dossier téléchargé ✓','var(--green)');
+    toast('Dossier téléchargé '+ICO.coche,'var(--green)');
     return true;
   }catch(e){ toast('Export impossible.','var(--red)'); return false; }
 }

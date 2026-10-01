@@ -729,7 +729,7 @@ function _cplHtmlSources(){
             <div style="font-size:var(--fs-2xs);color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
           </div>
           <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
-            style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
+            style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">${icon('croix',14)}</button>
         </div>`;
       }).join('')}
       <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:.5px"
@@ -744,7 +744,7 @@ function _cplHtmlSources(){
 function _cplHtmlLigne(item){
   const nom=planNomItem(item);
   const sup=`<button onclick="cplSupprimerLigne('${item.id}')" aria-label="Retirer cette ligne"
-    style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>`;
+    style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">${icon('croix',14)}</button>`;
   // Couleurs PLAN_COULEURS : le coach voit ici exactement ce que son athlète
   // verra sur sa fiche. Les protéines étaient en bleu de ce côté-ci et en rouge
   // de l'autre — la même ligne changeait de sens selon l'écran.
@@ -1032,7 +1032,7 @@ function savePlanCoach(){
   c.nutrition.plan=p;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré ✓','le plan est');
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré '+ICO.coche,'le plan est');
 }
 async function supprimerPlanCoach(){
   if(!await rcConfirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
@@ -1356,7 +1356,7 @@ function _htmlPlanAthlete(user,intercale){
     <div style="position:relative;display:flex;align-items:center;gap:8px;padding:10px 14px;
       background:linear-gradient(90deg,color-mix(in srgb,var(--red) 55%,transparent),color-mix(in srgb,var(--red-deep) 22%,transparent) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
-      <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
+      <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">${icon('alert-triangle',16)}</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
@@ -1751,7 +1751,7 @@ function _htmlEpingle(id,grand){
   return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${id},event)"
     title="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     aria-label="${on?'Retirer des favoris':'Ajouter aux favoris'}"
-    style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'★':'☆'}</button>`;
+    style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'<span class="ico-plein">'+icon('etoile',t)+'</span>':icon('etoile',t)}</button>`;
 }
 
 // ── Portions visuelles ────────────────────────────────────────────────────

@@ -382,7 +382,7 @@ async function activerPageDepuisRang(btn){
     toast((r&&r.erreur)||'Mise en ligne impossible','var(--orange)');
     return false;
   }
-  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne ⚡</div>'
+  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne '+icon('eclair',14)+'</div>'
     +'<p class="pp-prop-s">'+escapeHtml(urlPagePerso(u).replace(/^https?:\/\//,''))+'</p>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
   return true;
@@ -404,7 +404,7 @@ async function enregistrerPagePublique(btn){
   const r=await publierPagePublique(currentUser,reg);
   if(btn){ btn.disabled=false; btn.textContent='Enregistrer ma page'; }
   if(!r.ok){ toast(r.erreur,'var(--orange)'); const e=document.getElementById('pp-etat'); if(e) e.textContent=r.erreur; return false; }
-  toast(reg.active?'Ta page est en ligne ⚡':'Ta page est désactivée.');
+  toast(reg.active?'Ta page est en ligne '+ICO.eclair:'Ta page est désactivée.');
   _rendrePagePublique();
   return true;
 }
@@ -415,7 +415,7 @@ function copierLienBio(btn){
   const lib=btn?btn.textContent:'';
   const fait=()=>{ try{ attribCompter('copie','bio'); }catch(e){}
     toast('Lien copié · colle-le dans ta bio : Modifier le profil > Liens','var(--green)',4000);
-    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent=lib; },2000); } };
+    if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); setTimeout(()=>{ btn.textContent=lib; },2000); } };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
   toast(l);
   return false;
@@ -759,7 +759,7 @@ async function relierPaiementCoach(btn){
   try{ r=await CLOUD._callFn('paiementCoach',{action:'relier',marchand:v}); }
   catch(e){ toast(e.message||'Vérification impossible.','var(--orange)'); }
   if(btn){ btn.disabled=false; btn.textContent='Relier'; }
-  if(r) toast(r.relie?'Compte PayPal relié ✓':'PayPal ne reconnaît pas ce compte : vérifie l’identifiant.',r.relie?'var(--green)':'var(--orange)');
+  if(r) toast(r.relie?'Compte PayPal relié '+ICO.coche:'PayPal ne reconnaît pas ce compte : vérifie l’identifiant.',r.relie?'var(--green)':'var(--orange)');
   await _pcChargerEtat();
   return !!(r&&r.relie);
 }
@@ -792,7 +792,7 @@ async function pcRetourPaypal(etat,commande){
   try{ r=await CLOUD._callFn('paiementCoach',{action:'capturer',commande}); }
   catch(e){ toast(e.message||'Le paiement n’a pas pu être confirmé.','var(--orange)'); return false; }
   if(r&&(r.statut==='recu'||r.statut==='deja')){
-    toast('Paiement reçu ✓ Ton suivi est ouvert.','var(--green)',5000);
+    toast('Paiement reçu '+ICO.coche+' Ton suivi est ouvert.','var(--green)',5000);
     try{ rafraichirDroits(currentUser,true); }catch(e){}
     return true;
   }
@@ -836,7 +836,7 @@ function renderPaiementsFiche(c){
 function pcCopierLienPayer(formule,btn){
   const l=pcLienPayer(currentUser&&currentUser.vitrineSlug,formule);
   if(!l) return false;
-  const fait=()=>{ toast('Lien de paiement copié : envoie-le à ton contact.','var(--green)'); if(btn){ btn.textContent='Lien copié ✓'; } };
+  const fait=()=>{ toast('Lien de paiement copié : envoie-le à ton contact.','var(--green)'); if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); } };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
   toast(l); return true;
 }
@@ -1167,7 +1167,7 @@ function htmlRetention(s){
     +'<div class="vir-tab"><table><tr><th>Levier</th><th>Avec</th><th>Sans</th><th>Écart</th></tr>'
     +(s.leviers||[]).map(l=>{
       const ec=(l.avec.j30!=null&&l.sans.j30!=null)?Math.round((l.avec.j30-l.sans.j30)*10)/10:null;
-      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>⚠ groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
+      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>'+icon('alert-triangle',12)+' groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
         +'<td>'+_vfPct(l.avec.j30)+'<small>n = '+l.avec.n+'</small></td><td>'+_vfPct(l.sans.j30)+'<small>n = '+l.sans.n+'</small></td>'
         +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
     +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
@@ -1297,8 +1297,8 @@ async function ambassadeurApresInscription(u,saisi){
     try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
     // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
-    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
-      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
+    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix '+ICO.eclair)
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert '+ICO.eclair):('Code '+c.code+' appliqué : ton premier mois est offert '+ICO.eclair)),'var(--green)');
     return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
@@ -1533,7 +1533,7 @@ async function creerAmbassadeur(btn){
       palierSeuil:f.palierSeuil,dureeMois:f.dureeMois,actif:true,maj:Date.now()})}).catch(()=>false);
   if(btn) btn.disabled=false;
   if(!ok){ toast('Création refusée (droits, ou code déjà pris).','var(--orange)'); return false; }
-  toast('Ambassadeur '+r.code+' créé ⚡');
+  toast('Ambassadeur '+r.code+' créé '+ICO.eclair);
   return ouvrirAmbassadeurs();
 }
 async function basculerAmbassadeur(code,on){
@@ -1578,7 +1578,7 @@ function exporterCommissionsDues(){
   return true;
 }
 function ambCopier(l,btn){
-  try{ navigator.clipboard.writeText(l).then(()=>{ if(btn){ const x=btn.textContent; btn.textContent='Copié ✓'; setTimeout(()=>{ btn.textContent=x; },1800); } },()=>toast(l)); }
+  try{ navigator.clipboard.writeText(l).then(()=>{ if(btn){ const x=btn.textContent; _texteIco(btn,'Copié '+ICO.coche); setTimeout(()=>{ btn.textContent=x; },1800); } },()=>toast(l)); }
   catch(e){ toast(l); }
   return true;
 }
@@ -1822,7 +1822,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
+  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois '+ICO.eclair):'Code appliqué : ton premier mois est offert '+ICO.eclair,'var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -1886,12 +1886,12 @@ function filleulStatut(x){
   if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
   return 'inscrit';
 }
-const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','Qualifié ✓'],['payant','Abonné']]);
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','Qualifié'],['payant','Abonné']]);
 // PURE. La ligne d'un filleul : son prénom, et ses trois marches.
 function htmlFilleul(x){
   const st=filleulStatut(x);
   const k=FILLEUL_ETAPES.findIndex(e=>e[0]===st);
-  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' ✓':'');
+  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' '+ICO.coche:'');
   return '<div class="pr-f" data-statut="'+st+'"><span class="pr-f-nom">'+escapeHtml(x&&x.prenom||'Un ami')+'</span>'
     +'<span class="pr-f-etapes" aria-hidden="true">'+FILLEUL_ETAPES.map((e,i)=>'<i class="'+(i<=k?'on':'')+'" title="'+e[1]+'"></i>').join('')+'</span>'
     +'<b>'+escapeHtml(lib)+'</b></div>';
@@ -1909,7 +1909,7 @@ function htmlLigneFilleuls(u){
   if(actifs) bouts.push(actifs+' au travail');
   if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
   if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
-  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
+  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">'+icon('eclair',14)+'</span> '
     +escapeHtml(bouts.join(' · '))+'<span class="clh-filleuls-f" aria-hidden="true">›</span></button>';
 }
 // PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
@@ -1949,7 +1949,7 @@ function htmlParrainage(u){
     const part=Math.min(1,actifs/x.n);
     const reste=x.n-actifs;
     return '<div class="pr-palier'+(actifs>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
-      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
+      +escapeHtml(actifs>=x.n?'Atteint '+icon('coche',14):actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
@@ -1974,7 +1974,7 @@ function htmlParrainage(u){
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
-    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
+    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">'+icon('haches',14)+' Défie un pote</button>':'')+'</div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,actifs>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -1998,7 +1998,7 @@ function parrainageCopier(btn){
   const l=lienPerso('parrainage');
   if(!l) return false;
   const fait=()=>{ try{ attribCompter('copie','parrainage'); }catch(e){}
-    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
+    if(btn){ _texteIco(btn,'Lien copié '+ICO.coche); setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; }
   }catch(e){}
@@ -2135,7 +2135,7 @@ function partagerCarteInvitation(btn,format){
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
-  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
 }
 // « INVITER UN POTE », le bouton secondaire des grands moments (rang,

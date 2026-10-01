@@ -2418,7 +2418,7 @@ function _renderSessionManager(){
              boutons sur une rangee font 33 % de largeur chacun, et
              « Modifier ma séance » ne tient plus. -->
         <button class="btn btn-blanc btn-sm" style="width:100%;margin-top:8px"
-          onclick="alternerSeance(${i})">⇄ Alterner ma séance</button>
+          onclick="alternerSeance(${i})">${icon('echange',14)} Alterner ma séance</button>
         <div id="alt-${i}"></div>
       </div>`:
       `<div style="padding:10px 16px;text-align:center"><span class="sub" style="font-size:var(--fs-sm)">Active ce jour pour y mettre une séance</span></div>`}

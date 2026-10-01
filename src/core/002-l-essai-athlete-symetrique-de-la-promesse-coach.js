@@ -1271,7 +1271,7 @@ function _confirmerResiliation(){
   const motif=[m,l].filter(Boolean).join(' : ');
   if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
-  toast('Résiliation enregistrée ✓','var(--green)');
+  toast('Résiliation enregistrée '+ICO.coche,'var(--green)');
   return true;
 }
 // ⚠ CE TEXTE PROMETTAIT LE REMBOURSEMENT DE TOUT PRELEVEMENT POSTERIEUR A LA
@@ -1595,6 +1595,48 @@ const ICONS={
   moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
 };
+// ── LES ICONES QUI REMPLACENT LES EMOJIS DE L'INTERFACE (01/10/2026) ─────────
+// Un emoji est dessine par la police du systeme : il change d'un telephone a
+// l'autre et ignore la palette. Ces noms francais sont ceux que
+// scripts/emojis.py pose a sa place (✓ coche, ✕ croix, ⚡ eclair…). Meme
+// trait que le reste du jeu : viewBox 24, trace au trait, rendu par icon().
+// Celles qui existaient sous un nom anglais reprennent le meme dessin.
+Object.assign(ICONS,{
+  eclair:ICONS.zap, muscle:ICONS.biceps, flamme:ICONS.flame, cafe:ICONS.coffee,
+  gelule:ICONS.pill, cible:ICONS.target, coche:ICONS.check, croix:ICONS.x,
+  // La regle graduee (mesures en cm du bilan de depart), dessin Lucide « ruler » (ISC).
+  regle:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
+  // La tasse sans fumee, son fil et son etiquette : le the, distinct du cafe.
+  the:'<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 9V5h3"/><rect x="11" y="3.5" width="3" height="3.5"/><line x1="3" y1="22" x2="19" y2="22"/>',
+  bouclier:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  coeur:'<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  cadeau:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+  // L'etoile : au trait ; pleine, elle porte la classe .ico-plein (favori).
+  etoile:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  // Trois de plus, pour index.html : le menu du navigateur (☰), l'echange de
+  // compte ou de superset (⇄), la carte bancaire (💳) ; et l'enveloppe (✉ 📭).
+  menu:'<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  echange:'<polyline points="17 3 21 7 17 11"/><line x1="21" y1="7" x2="7" y2="7"/><polyline points="7 13 3 17 7 21"/><line x1="3" y1="17" x2="17" y2="17"/>',
+  'carte-bancaire':'<rect x="1.5" y="4.5" width="21" height="15" rx="2"/><line x1="1.5" y1="10" x2="22.5" y2="10"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
+});
+// UNE ICONE DANS UN TEXTE BRUT. toast() et les libelles poses par textContent
+// n'acceptent pas de balisage (et ne doivent pas : ils portent des noms
+// d'athletes). ICO.coche est un MARQUEUR (deux caracteres d'usage prive autour
+// du nom) ; _texteIco(el,texte) ecrit le texte en noeuds texte et chaque
+// marqueur en icone. Un marqueur qui atteint un autre puits (journal, presse-
+// papiers) s'y lit comme rien : _sansIco(texte) le retire.
+/** @type {Record<string,string>} */
+const ICO=Object.freeze(Object.fromEntries(Object.keys(ICONS).map(n=>[n,'\uE000'+n+'\uE001'])));
+function _texteIco(el,texte,taille){
+  if(!el) return;
+  el.textContent='';
+  String(texte==null?'':texte).split(/\uE000([\w-]+)\uE001/).forEach((p,i)=>{
+    if(i%2){ if(ICONS[p]) el.insertAdjacentHTML('beforeend',icon(p,taille||14)); }
+    else if(p) el.appendChild(document.createTextNode(p));
+  });
+}
+function _sansIco(texte){ return String(texte==null?'':texte).replace(/\s?\uE000[\w-]+\uE001/g,''); }
 function _icoG(nom,cx,cy,taille,couleur,epaisseur){
   const p=ICONS[nom]; if(!p) return '';
   const k=taille/24;
