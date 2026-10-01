@@ -50241,10 +50241,11 @@ async function testExercices(){
     // listes. Un badge de plus doit donc passer par ici, a la main.
     ok('Cinquante et un badges, la collection est fermée',(()=>{
       if(!Array.isArray(BADGES_ACQUIS)) return _echec('BADGES_ACQUIS n’est pas une liste');
-      // Huit familles de quatre paliers, neuf uniques (SOUS TENSION, le
-      // parcours de démarrage, depuis le 28/09/2026), dix secrets.
+      // Huit familles de quatre paliers, dix uniques (SOUS TENSION, le
+      // parcours de démarrage, depuis le 28/09/2026 ; SEPT SUR SEPT, la
+      // mission du jour, depuis le 01/10/2026), dix secrets.
       const par=f=>BADGES_ACQUIS.filter(b=>b.famille===f).length;
-      if(par('unique')!==9||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
+      if(par('unique')!==10||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
       for(const fam of BADGE_FAMILLES)
         if(par(fam.cle)!==4) return _echec(fam.cle+' : '+par(fam.cle)+' paliers');
       // Les cinq anciennes clés, telles quelles : elles vivent dans u.badges.
@@ -50261,7 +50262,7 @@ async function testExercices(){
       const ids=BADGES_ACQUIS.map(b=>b.id);
       if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
       if(par('assiette')!==5) return _echec(par('assiette')+' badges de l’assiette');
-      if(ids.length!==56) return _echec(ids.length+' badges au lieu de cinquante-six');
+      if(ids.length!==57) return _echec(ids.length+' badges au lieu de cinquante-sept');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -50548,15 +50549,16 @@ async function testExercices(){
       const h=htmlMesBadges({badges:{'premiere-seance':{at:new Date(2026,8,1,10).getTime()}},
         sessions:[],bilans:[],sessions_config:[{active:true}]},new Date(2026,8,2).getTime());
       const d=document.createElement('div'); d.innerHTML=h;
-      // 56 depuis le lot N4 (29/09/2026) : les cinq badges de l'assiette.
-      if(h.indexOf('1/56')<0) return _echec('le compteur global ne dit pas 1/56');
+      // 56 depuis le lot N4 (29/09/2026) : les cinq badges de l'assiette ;
+      // 57 avec SEPT SUR SEPT (mission du jour, 01/10/2026).
+      if(h.indexOf('1/57')<0) return _echec('le compteur global ne dit pas 1/57');
       const fams=d.querySelectorAll('.bdg-fam');
       if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
       if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
       if(d.querySelectorAll('.bdg-barre').length!==8) return _echec('une famille sans barre');
       const cases=d.querySelectorAll('.bdg-case');
       // + 5 depuis le lot N4 (29/09/2026) : la ligne de l'assiette, entre les uniques et les secrets.
-      if(cases.length!==24) return _echec(cases.length+' cases au lieu de 9 uniques + 5 de l’assiette + 10 secrets');
+      if(cases.length!==25) return _echec(cases.length+' cases au lieu de 10 uniques + 5 de l’assiette + 10 secrets');
       if(d.querySelectorAll('.bdg-grille-assiette .bdg-case').length!==5) return _echec('la ligne de l’assiette');
       if(h.indexOf('01/09/2026')<0) return _echec('la date d’obtention n’est pas montrée');
       // LES SECRETS NE SE DÉVOILENT PAS : ??? et l'indice, jamais la condition.
@@ -50569,11 +50571,11 @@ async function testExercices(){
       if((h.match(/>\?\?\?</g)||[]).length!==10) return _echec('les secrets ne s’affichent pas en ???');
       if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
       // TOUCHER UN BADGE OUVRE SA FICHE.
-      // 8 familles + 24 cases (les 5 de l'assiette depuis le lot N4).
-      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==32) return _echec('un badge ne s’ouvre pas');
+      // 8 familles + 25 cases (les 5 de l'assiette depuis le lot N4, SEPT SUR SEPT depuis le 01/10/2026).
+      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==33) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      return v.indexOf('0/56')>=0?true:_echec('le dossier vierge ne dit pas 0/56');})());
+      return v.indexOf('0/57')>=0?true:_echec('le dossier vierge ne dit pas 0/57');})());
     ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',(()=>{
       const sv=currentUser;
       try{
@@ -51354,6 +51356,186 @@ async function testExercices(){
         currentUser=u3; updateStreak();
         return (vus.join()==='4,8'&&SERIE_PALIERS.join()==='4,8,12,26,52')?true:_echec('palier fêté à 5 : '+vus.join());
       } finally { currentUser=sv; _celebrerSerie=svC; }})());
+    // ══ LA MISSION DU JOUR (01/10/2026) ══════════════════════════════════
+    // Lundi 5 octobre 2026 : jour de séance (lundi, mercredi, vendredi actifs) ;
+    // mardi 6 : repos. Un compte ancien (parcours terminé d'office).
+    const _MJ=(()=>{
+      const cfg=[0,1,2,3,4,5,6].map(i=>(i===0||i===2||i===4)?{active:true,name:'S'+i,exercises:[{name:'SQUAT'}]}:{active:false});
+      const u=o=>Object.assign({role:'athlete',email:'mj@t.fr',createdAt:new Date(2026,8,1).getTime(),parcours:{existant:true,fini:1,debut:1},
+        sessions_config:cfg,sessions:[]},o||{});
+      const at=(j,h)=>{ const [a,m,d]=j.split('-').map(Number); return new Date(a,m-1,d,h||12).getTime(); };
+      const ses=(j,h,sets,o)=>Object.assign({date:at(j,h),duration:60,data:{SQUAT:{sets:sets.map(([w,r,rir])=>({weight:String(w),reps:String(r),rir:rir==null?'':String(rir),done:true}))}}},o||{});
+      const jours=n=>Array.from({length:n},(_,k)=>localISODate(new Date(2026,0,1+k)));
+      return {u,at,ses,jours,ctx:{amis:0}};
+    })();
+    ok('Mission du jour : déterministe (même jour, mêmes missions, même coffre), séance ou repos selon le calendrier',(()=>{
+      const {u,ctx}=_MJ, a=u(), b=u();
+      const rep=missionsDuJour(a,'2026-10-06',ctx), rep2=missionsDuJour(b,'2026-10-06',ctx);
+      if(rep.length!==3||JSON.stringify(rep)!==JSON.stringify(rep2)) return _echec('repos : '+JSON.stringify(rep.map(m=>m.cle)));
+      if(rep.some(m=>m.type!=='repos')) return _echec('type repos');
+      if(coffreTirage(a,'2026-10-06')!==coffreTirage(b,'2026-10-06')) return _echec('coffre');
+      if(missionGraine(a,'2026-10-06')===missionGraine(a,'2026-10-07')) return _echec('graine identique deux jours');
+      const se=missionsDuJour(a,'2026-10-05',ctx).map(m=>m.cle).join();
+      if(se!=='seance_finie,record_rep,rir') return _echec('séance : '+se);
+      // La graine est la clé du compte et le jour : un autre compte, un autre tirage (sur l'année).
+      const c=u({email:'autre@t.fr'});
+      if(_MJ.jours(60).every(j=>JSON.stringify(missionsDuJour(a,j,ctx))===JSON.stringify(missionsDuJour(c,j,ctx)))) return _echec('graine sans le compte');
+      // Le coffre suit les proportions annoncées (60 / 25 / 10 / 5 %) sur trois ans.
+      const n={20:0,50:0,joker:0,double:0};
+      for(const j of Array.from({length:1095},(_,k)=>localISODate(new Date(2026,0,1+k)))) n[coffreTirage(a,j)]++;
+      if(Math.abs(n[20]/1095-.6)>.06||Math.abs(n[50]/1095-.25)>.05||Math.abs(n.joker/1095-.1)>.04||Math.abs(n.double/1095-.05)>.03) return _echec('proportions '+JSON.stringify(n));
+      return true;})());
+    ok('Mission du jour : jamais de mission impossible (aTCA, sans cible, sans ami, sans créneau)',(()=>{
+      const {u,jours}=_MJ;
+      const macros={on:{kcal:2400,p:160},off:{kcal:2200,p:160}};
+      const vues=(x,ctx)=>new Set(jours(120).flatMap(j=>missionsDuJour(x,j,ctx).map(m=>m.cle)));
+      const avec=vues(u({nutrition:{macros}}),{amis:3});
+      if(!avec.has('proteines')||!avec.has('reaction_ami')||!avec.has('prochaine')) return _echec('jamais proposées : '+[...avec].join());
+      if(vues(u({nutrition:{macros},tcaRisque:true}),{amis:3}).has('proteines')) return _echec('protéines sous aTCA');
+      if(vues(u(),{amis:3}).has('proteines')) return _echec('protéines sans cible');
+      if(vues(u({nutrition:{macros:{on:{kcal:2400},off:{kcal:2200}}}}),{amis:3}).has('proteines')) return _echec('protéines sans cible protéique');
+      if(vues(u({nutrition:{macros}}),{amis:0}).has('reaction_ami')) return _echec('réaction sans carnet');
+      // Sans créneau actif : chaque jour est un jour de repos, sans « prochaine séance ».
+      const sans=vues(u({sessions_config:[]}),{amis:0});
+      if(sans.has('prochaine')||sans.has('seance_finie')) return _echec('sans créneau : '+[...sans].join());
+      if(MISSIONS.filter(m=>m.nutrition).map(m=>m.cle).join()!=='proteines') return _echec('table : missions nutritionnelles');
+      return jours(120).every(j=>missionsDuJour(u({nutrition:{macros}}),j,{amis:3}).length===3)?true:_echec('moins de 3 missions');})());
+    ok('Mission du jour : les cases se cochent depuis les faits, jamais à la main',(()=>{
+      const {u,ses,at,ctx}=_MJ;
+      // Jour de SÉANCE : la séance, +1 rép sur le 1er exercice, le RIR partout.
+      const x=u({sessions:[ses('2026-10-02',18,[[100,5,2],[100,5,1]]),ses('2026-10-05',18,[[100,6,2],[100,5,1]])]});
+      const e=missionsEtat(x,'2026-10-05',Object.assign({maintenant:at('2026-10-05',20)},ctx));
+      if(!e.toutes||!e.ouvrable) return _echec('séance : '+JSON.stringify(e.missions.map(m=>m.cle+':'+m.faite)));
+      // Un RIR manquant décoche la case ; la même rép qu'avant ne vaut pas +1.
+      const y=u({sessions:[ses('2026-10-02',18,[[100,5,2]]),ses('2026-10-05',18,[[100,5,2],[100,5,null]])]});
+      const f=missionsEtat(y,'2026-10-05',Object.assign({maintenant:at('2026-10-05',20)},ctx)).missions.map(m=>m.faite).join();
+      if(f!=='true,false,false') return _echec('séance partielle : '+f);
+      // Une séance abandonnée à 0 série ne coche rien.
+      const z=u({sessions:[{date:at('2026-10-05',18),duration:5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:false}]}}}]});
+      if(missionsEtat(z,'2026-10-05',ctx).missions.some(m=>m.faite)) return _echec('séance vide cochée');
+      // Jour de REPOS : chaque mission a son fait.
+      const r=u({nutrition:{macros:{on:{kcal:2400,p:160},off:{kcal:2200,p:160}}}});
+      const j='2026-10-06', l=missionsDuJour(r,j,{amis:3});
+      r.checkin={[j]:{sommeil:4,energie:3,courbatures:2,at:at(j,8)}};
+      r.sleepLog=[{date:j,duration:450}];
+      r.nutrition.log={[j]:{entries:[{kcal:2200,p:165}]}};
+      const t0=at(j,10);
+      for(const k of ['mobilite','prochaine','reaction_ami']) missionActe(r,k,t0);
+      const avant=missionsEtat(Object.assign({},r,{checkin:{},sleepLog:[],missions:{},nutrition:{macros:r.nutrition.macros}}),j,{amis:3});
+      if(avant.missions.some(m=>m.faite)) return _echec('cochée sans fait : '+avant.missions.filter(m=>m.faite).map(m=>m.cle));
+      const apres=missionsEtat(r,j,{amis:3,maintenant:at(j,21)});
+      if(!apres.toutes) return _echec('repos ['+l.map(m=>m.cle)+'] : '+JSON.stringify(apres.missions.map(m=>m.cle+':'+m.faite)));
+      // Un acte ne se date qu'une fois.
+      if(missionActe(r,'mobilite',t0+60e3)||r.missions[j].actes.mobilite!==t0) return _echec('acte redaté');
+      // Aucune case n'a de bouton « fait » : seuls les actes réels (minuteur, ouverture, réaction).
+      if(/missionCocher|data-cocher/.test(htmlMissionDuJour(apres)+String(missionsEtat))) return _echec('case déclarative');
+      return true;})());
+    ok('Mission du jour : le coffre (déterministe, joker ou +50 V), ses volts sous le plafond',(()=>{
+      const {u,ses,at,ctx,jours}=_MJ;
+      const seanceDuJour=j=>ses(j,18,[[100,6,2],[100,6,2],[100,6,2],[100,6,2],[100,6,2],[100,6,2]]);
+      // Un jour de séance où les trois cases sont faites, pour chaque tirage.
+      const lundis=jours(400).filter(j=>new Date(j+'T12:00').getDay()===1);
+      const cherche=g=>lundis.find(j=>coffreTirage(u(),j)===g);
+      const jv=cherche(20), jj=cherche('joker'), jd=cherche('double');
+      if(!jv||!jj||!jd) return _echec('tirages introuvables');
+      const avecSeance=(j,o)=>u(Object.assign({sessions:[ses(localISODate(new Date(new Date(j+'T12:00').getTime()-3*864e5)),18,[[100,5,2]]),seanceDuJour(j)]},o||{}));
+      // +20 V : le même coffre à chaque ouverture (deux dossiers, même jour).
+      const a=avecSeance(jv), b=avecSeance(jv);
+      const ka=ouvrirCoffre(a,jv,Object.assign({maintenant:at(jv,20)},ctx)), kb=ouvrirCoffre(b,jv,Object.assign({maintenant:at(jv,21)},ctx));
+      if(!ka||ka.gain!==20||kb.gain!==20) return _echec('coffre '+JSON.stringify([ka,kb]));
+      if(ouvrirCoffre(a,jv,Object.assign({maintenant:at(jv,22)},ctx))!==null) return _echec('rouvert');
+      if(a.missions[jv].faites.join()!=='seance_finie,record_rep,rir') return _echec('faites');
+      // Ses volts : cat.mission, le jour de l'ouverture.
+      if(xpCalcul(a,at(jv,23)).cat.mission!==20) return _echec('cat.mission '+xpCalcul(a,at(jv,23)).cat.mission);
+      // LE JOKER : posé si la réserve a de la place, sinon +50 V.
+      const c=avecSeance(jj,{streakJokers:0}), d=avecSeance(jj,{streakJokers:STREAK_JOKERS_MAX});
+      const kc=ouvrirCoffre(c,jj,Object.assign({maintenant:at(jj,20)},ctx)), kd=ouvrirCoffre(d,jj,Object.assign({maintenant:at(jj,20)},ctx));
+      if(kc.gain!=='joker'||c.streakJokers!==1) return _echec('joker '+JSON.stringify(kc)+' '+c.streakJokers);
+      if(kd.gain!==50||d.streakJokers!==STREAK_JOKERS_MAX) return _echec('réserve pleine '+JSON.stringify(kd));
+      if(xpCalcul(c,at(jj,23)).cat.mission!==0) return _echec('le joker rapporte des volts');
+      // VOLTS DOUBLÉS : la séance SUIVANTE rapporte deux fois ses volts de séance.
+      const e=avecSeance(jd);
+      ouvrirCoffre(e,jd,Object.assign({maintenant:at(jd,20)},ctx));
+      const j2=localISODate(new Date(at(jd,12)+2*864e5));
+      if(xpCalcul(e,at(j2,23)).cat.mission!==0) return _echec('doublé sans séance');
+      e.sessions.push(seanceDuJour(j2));
+      if(xpCalcul(e,at(j2,23)).cat.mission!==voltsSeance(e.sessions[2])) return _echec('doublé '+xpCalcul(e,at(j2,23)).cat.mission);
+      // LE PLAFOND : une journée déjà à 400 V ne prend rien du coffre.
+      const p=u({sessions:[1,2,3,4].map(h=>seanceDuJour('2026-10-07')).map((s,k)=>Object.assign(s,{date:s.date+k*36e5})),
+        missions:{'2026-10-07':{coffre:{gain:50,at:at('2026-10-07',23)}},'2026-10-08':{coffre:{gain:50,at:at('2026-10-08',9)}}}});
+      const x=xpCalcul(p,at('2026-10-09',12));
+      if(x.cat.seance+x.cat.complete+x.cat.record>XP_PLAFOND_JOUR-0||x.cat.mission!==50||x.ecrete<50) return _echec('plafond '+JSON.stringify(x.cat)+' écrêté '+x.ecrete);
+      // Un gain hors table (100 V écrits à la main) est ramené à 50.
+      if(xpCalcul(u({missions:{'2026-10-08':{coffre:{gain:100,at:at('2026-10-08',9)}}}}),at('2026-10-09',12)).cat.mission!==MISSION_VOLTS_MAX) return _echec('borne');
+      return true;})());
+    ok('Mission du jour : coach (rien), suspension (en pause, sans coffre), compte de moins de 2 jours (le parcours)',(()=>{
+      const {u,ses,at,ctx}=_MJ;
+      if(missionsDuJour({role:'coach',email:'c@t.fr'},'2026-10-06',ctx).length) return _echec('coach');
+      // Suspension : les cases se lisent, le coffre ne s'ouvre pas.
+      const s=u({sessions:[ses('2026-10-02',18,[[100,5,2]]),ses('2026-10-05',18,[[100,6,2]])],
+        drapeauRouge:{zone:'epaule',cases:['nuit'],date:at('2026-10-04')},
+        suspension:{actif:true,cause:'drapeau',debut:at('2026-10-04'),fin:0}});
+      const e=missionsEtat(s,'2026-10-05',Object.assign({maintenant:at('2026-10-05',20)},ctx));
+      if(!e.pause||e.ouvrable||!e.toutes) return _echec('suspension '+JSON.stringify({p:e.pause,o:e.ouvrable,t:e.toutes}));
+      if(ouvrirCoffre(s,'2026-10-05',Object.assign({maintenant:at('2026-10-05',20)},ctx))!==null) return _echec('coffre sous suspension');
+      if(!/en pause/.test(htmlMissionDuJour(e))||/mj-ouvrir/.test(htmlMissionDuJour(e))) return _echec('carte suspension');
+      // Compte né le 5 octobre : les 5 et 6, les étapes du parcours ; le 7, les missions.
+      const n=u({createdAt:at('2026-10-05',18),parcours:{debut:at('2026-10-05',18),etapes:{}}});
+      const p5=missionsDuJour(n,'2026-10-05',ctx), p6=missionsDuJour(n,'2026-10-06',ctx), p7=missionsDuJour(n,'2026-10-07',ctx);
+      if(p5.length!==3||!p5.every(m=>m.parcours)||p5[0].cle!=='parcours:'+parcoursEtapes()[0].cle) return _echec('jour 1 '+JSON.stringify(p5.map(m=>m.cle)));
+      if(!p6.every(m=>m.parcours)) return _echec('jour 2');
+      if(p7.some(m=>m.parcours)) return _echec('jour 3 : '+p7.map(m=>m.cle));
+      const en=missionsEtat(n,'2026-10-05',ctx);
+      if(en.ouvrable||!/3e jour/.test(htmlMissionDuJour(en))) return _echec('coffre du parcours');
+      // LE FUSEAU : la clé est le jour LOCAL (missionActe, ouvrirCoffre) ; le
+      // tirage ne dépend que de la chaîne du jour, pas de l'heure.
+      const v=u(); missionActe(v,'mobilite',at('2026-10-06',23));
+      if(!v.missions['2026-10-06']) return _echec('jour local');
+      return JSON.stringify(missionsDuJour(u(),'2026-10-06',ctx))===JSON.stringify(missionsDuJour(u(),'2026-10-06',Object.assign({maintenant:at('2026-10-07',3)},ctx)))?true:_echec('tirage lié à l’heure');})());
+    ok('Mission du jour : SEPT SUR SEPT au 7e coffre d’affilée (badge, règles, détail purgé)',(()=>{
+      const {u,at}=_MJ;
+      const k=n=>{ const o={}; for(let i=0;i<n;i++){ const j=localISODate(new Date(2026,9,1+i)); o[j]={coffre:{gain:20,at:at(j,20)}}; } return o; };
+      const b=badgeAcquisDef('sept_sur_sept');
+      if(!b||b.nom!=='SEPT SUR SEPT'||b.famille!=='unique') return _echec('badge absent');
+      const f6=_badgesFaits(u({missions:k(6)}),at('2026-10-20'));
+      if(b.test(f6)) return _echec('6 jours');
+      const f7=_badgesFaits(u({missions:k(7)}),at('2026-10-20'));
+      if(b.test(f7)!==at('2026-10-07',20)) return _echec('7e jour : '+b.test(f7));
+      // Un trou casse la suite.
+      const trou=k(8); delete trou['2026-10-04'];
+      if(b.test(_badgesFaits(u({missions:trou}),at('2026-10-20')))) return _echec('trou');
+      // Un jour sans coffre (cases seules) ne compte pas.
+      const sans=k(7); sans['2026-10-03']={faites:['checkin']};
+      if(b.test(_badgesFaits(u({missions:sans}),at('2026-10-20')))) return _echec('jour sans coffre');
+      // La purge garde le coffre (le badge et les volts en dépendent) et jette le détail.
+      const v=u({missions:Object.assign(k(7),{'2026-09-01':{faites:['a'],actes:{x:1}}})});
+      v.missions['2026-10-01'].actes={mobilite:1};
+      _mjPurger(v,at('2026-10-20'));
+      if(v.missions['2026-09-01']||v.missions['2026-10-01'].actes||!v.missions['2026-10-01'].coffre) return _echec('purge '+JSON.stringify(v.missions['2026-10-01']));
+      // Le champ est classé, et le Worker n'admet le joker du coffre que daté.
+      if(CHAMPS_SANTE.indexOf('missions')<0&&CHAMPS_NON_SANTE.indexOf('missions')<0) return _echec('missions non classé');
+      return true;})());
+    ok('Mission du jour : la carte sous l’en-tête de l’accueil, un jour de repos',(()=>{
+      const z=document.getElementById('clh-mission');
+      if(!z) return _echec('#clh-mission absent');
+      const pad=z.closest('.pad'), d=document.getElementById('clh-douleur');
+      if(!pad||!(d.compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('place');
+      const sv=currentUser, svD=Date;
+      try{
+        const {u}=_MJ;
+        // Mardi 6 octobre 2026, 10 h : un jour de repos.
+        const T=new Date(2026,9,6,10).getTime();
+        window.Date=class extends svD{ constructor(...a){ if(a.length) super(...a); else super(T); } static now(){ return T; } };
+        currentUser=u({checkin:{'2026-10-06':{sommeil:4,energie:4,courbatures:2,at:T}}});
+        const e=_rendreMission(currentUser);
+        if(!e||e.missions.length!==3||e.missions.some(m=>m.type!=='repos')) return _echec('état '+JSON.stringify(e&&e.missions));
+        const h=z.innerHTML;
+        if(z.querySelectorAll('.mj-case').length!==3||!/Mission du jour/.test(h)||!/[0-3]\/3/.test(h)) return _echec('carte : '+h.slice(0,200));
+        if(e.missions.some(m=>m.cle==='checkin')&&!z.querySelector('.mj-case.on')) return _echec('check-in non coché');
+        if(/mj-ouvrir/.test(h)) return _echec('coffre ouvrable sans les trois');
+        currentUser=Object.assign({},currentUser,{role:'coach'}); _rendreMission(currentUser);
+        return z.innerHTML===''?true:_echec('carte chez un coach');
+      } finally { window.Date=svD; currentUser=sv; try{ _rendreMission(currentUser); }catch(e){} }})());
     ok('Série : les jokers s’affichent en boucliers à côté du compteur',(()=>{
       if(!document.getElementById('clh-streak')) return true;
       _rendreStreak({streakJokers:2,sessions_config:[]},5);
@@ -54002,7 +54184,7 @@ async function testExercices(){
       if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
       const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
       if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
-      if(BADGES_ACQUIS.length!==56) return _echec('la collection n’est plus de cinquante-six');
+      if(BADGES_ACQUIS.length!==57) return _echec('la collection n’est plus de cinquante-sept');
       const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
       return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);})());
     ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',(()=>{
@@ -57252,7 +57434,11 @@ async function testExercices(){
       // HUITIEME (lot N4, 29/09/2026) : APRES UN AJOUT AU JOURNAL (_nutGeste),
       // jamais a un rendu : c'est l'ajout qui fait tenir la journee et gagner un
       // badge de l'assiette.
-      if(n!==8) return _echec(n+' occurrences de majBadges( au lieu de huit');
+      // NEUVIEME (01/10/2026) : l'OUVERTURE DU COFFRE de la mission du jour
+      // (missionOuvrirCoffre), jamais un rendu : c'est le coffre qui fait
+      // gagner SEPT SUR SEPT.
+      if(n!==9) return _echec(n+' occurrences de majBadges( au lieu de neuf');
+      if(!/function missionOuvrirCoffre\(btn\)\{[\s\S]{0,200}?if\(!k\) return null;[\s\S]{0,600}?majBadges\(\)/.test(s)) return _echec('l’appel du coffre n’est plus gardé par son ouverture');
       if(!/function _nutGeste\(date\)\{[\s\S]{0,300}?setTimeout\(\(\)=>\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du journal n’est plus garde par l’ajout');
       if(!/if\(r\.fini\)\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du parcours n’est plus garde par sa fin');
       if(!/defisFusionnerResultats\(u,r\)[^;]*;\s*if\(n\)\{[\s\S]{0,500}?majBadges\(\)/.test(s))

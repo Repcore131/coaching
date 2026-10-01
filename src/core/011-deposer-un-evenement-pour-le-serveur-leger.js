@@ -926,6 +926,8 @@ async function amiReagir(pseudo,emoji,btn){
   if(!r.ok){ toast(r.st===401||r.st===403?'Suis '+(prof.prenom||p)+' pour réagir à ses séances.':'Réaction non envoyée : réessaie une fois connecté.','var(--orange)'); return false; }
   try{ localStorage.setItem(_reacCle(),JSON.stringify(reactionPoserLocal(reactionsLocales(),cle,prof.der,emoji,Date.now()))); }catch(e){}
   deposerEvenement({type:'reaction',cible:cle,jour:prof.der}).catch(()=>{});
+  // La mission du jour « Réagis à la séance d'un ami » : l'acte, daté.
+  try{ if(missionActe(u,'reaction_ami')){ saveUser(); _rendreMission(u); } }catch(e){}
   const z=btn&&btn.closest('.am-reac');
   if(z) z.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.textContent===emoji));
   return true;

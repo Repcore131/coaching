@@ -865,6 +865,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
   // Les jokers de série (26/09/2026) : des compteurs et une date, comme streak.
   'streakJokers','streakJokersUtilises','streakJokerLe',
+  // La mission du jour (01/10/2026) : les cases faites (des clés : séance,
+  // nuit, protéines…), les actes vus par l'app et le coffre. Elles disent ce
+  // qui a été FAIT ce jour-là, comme sessions et sleepLog : classées avec eux.
+  'missions',
   // correctionsOrphelines porte EXACTEMENT ce que porte videos[].feedback :
   // le retour d'un coach sur un mouvement, quand la video qui l'a motive
   // n'existe plus (lot 7). Il est classe avec elle, et pour la meme raison.

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1780';
+window.RC_BUILD='1781';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1780.css">
+<link rel="stylesheet" href="./rc-style.1781.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1780.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1781.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3546,6 +3546,12 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- DOULEUR SIGNALÉE -->
       <div id="clh-douleur"></div>
 
+      <!-- LA MISSION DU JOUR (01/10/2026) : trois cases qui se cochent seules
+           et un coffre (_rendreMission). Sous l'en-tete et la carte du coach,
+           mais APRES les signes a faire examiner et la douleur : une mission
+           ne passe jamais devant un signal de sante. -->
+      <div id="clh-mission"></div>
+
       <!-- ══ R36 — POUR DÉMARRER ══════════════════════════════════════════
            Trois lignes qui se cochent d'elles-mêmes : questionnaire de départ,
            première séance, premier repas noté. Rempli par _rendreDemarrage,
@@ -6092,5 +6098,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1780.js"></script>
+<script src="./rc-core.1781.js"></script>
 </body></html>

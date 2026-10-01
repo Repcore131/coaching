@@ -392,3 +392,29 @@ test('valeurServeur : une séance à 0 série ne compte jamais ; le journal ne g
   assert.deepEqual(Object.keys(loin.jr), ['2026-12-20'], 'plus de 40 jours : purgé');
   assert.equal(X.tonnageSeance({ data: { A: { sets: [{ weight: '50', reps: '10', done: true }, { weight: '50', reps: '10', done: false }] } } }), 500);
 });
+
+// ══ LA MISSION DU JOUR : LE COFFRE BORNÉ, LE JOKER DATÉ (01/10/2026) ═══════
+test('mission du jour : cat.mission bornée à jours × 50, le joker accepté seulement s’il est daté', async () => {
+  const t0 = PARIS('2026-10-10T12:00:00');
+  assert.equal(X.XP.mission, 50);
+  // Trois jours de compte : 150 V au plus, quoi que dise l'app.
+  assert.equal(X.totalServeur(X.etatVide(), { mission: 5000 }, { debut: t0 - 2 * J }, t0).cat.mission, 150);
+  assert.equal(X.totalServeur(X.etatVide(), { mission: 70 }, { debut: t0 - 2 * J }, t0).cat.mission, 70);
+  assert.equal(X.totalServeur(X.etatVide(), { mission: -9 }, { debut: t0 - 2 * J }, t0).cat.mission, 0);
+  // La constante de l'app (MISSION_VOLTS_MAX) est celle du serveur.
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, new RegExp('const MISSION_VOLTS_MAX=' + X.XP.mission + ';'));
+  assert.match(src, new RegExp('const STREAK_JOKERS_MAX=' + X.JOKERS_MAX + ', STREAK_JOKER_TOUS=' + X.JOKER_TOUS + ';'));
+  // LE JOKER : une série de 2 semaines n'en explique aucun.
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1 }), 0, 'joker sans coffre daté : refusé');
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1, missions: { '2026-10-08': { coffre: { gain: 'joker', at: t0 - 2 * J } } } }), 1);
+  // Un coffre de volts, ou un joker sans date, n'explique rien.
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1, missions: { '2026-10-08': { coffre: { gain: 50, at: t0 } }, '2026-10-09': { coffre: { gain: 'joker' } } } }), 0);
+  // Quatre semaines validées en expliquent un ; le coffre le second ; jamais plus de 2.
+  assert.equal(X.jokersAdmis({ streak: 4, streakJokers: 2 }), 1);
+  assert.equal(X.jokersAdmis({ streak: 4, streakJokers: 2, missions: { '2026-10-08': { coffre: { gain: 'joker', at: t0 } } } }), 2);
+  assert.equal(X.jokersAdmis({ streak: 40, streakJokers: 9 }), 2);
+  assert.equal(X.jokersAdmis({ streak: 0, streakJokers: 0 }), 0);
+});

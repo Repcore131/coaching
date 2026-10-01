@@ -26,7 +26,9 @@
 // Le Worker ne relit pas le journal : il BORNE la valeur de l'app, comme pour
 // le journal lui-même (jours × barème).
 export const XP = { seance: 100, complete: 30, record: 50, bilan: 80, badge: 40, badgePalier4: 200,
-  nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, semaineAssiette: 75, parcours: 300 };
+  nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, semaineAssiette: 75, parcours: 300,
+  // La mission du jour (01/10/2026) : le coffre vaut 50 V au plus, une fois par jour.
+  mission: 50 };
 export const XP_PLAFOND_JOUR = 400;
 export const SEANCE_MIN_MIN = 15, SEANCE_MIN_SERIES = 6, VOLTS_PAR_SERIE = 10;
 export const RANGS = [
@@ -339,6 +341,8 @@ export function totalServeur(etat, client, dossier, t) {
     // Lot N4 : la semaine d'assiette (5 jours tenus sur 7), une par semaine au plus.
     semaineAssiette: borne('semaineAssiette', (Math.floor(jours / 7) + 1) * XP.semaineAssiette),
     parcours: borne('parcours', XP.parcours),
+    // La mission du jour : un coffre par jour au plus, à 50 V.
+    mission: borne('mission', jours * XP.mission),
     archive: borne('archive', jours * XP.sommeil),
   });
   const total = Object.keys(cat).reduce((a, k) => a + (Number(cat[k]) || 0), 0);
@@ -353,4 +357,29 @@ export function rangDe(xp) {
 export function voltsPublics(total) {
   const r = rangDe(total);
   return { xp: Math.round(r.xp), de: r.rang.seuil, a: r.suivant ? r.suivant.seuil : 0 };
+}
+
+// ══ LE JOKER DU COFFRE (mission du jour, 01/10/2026) ══════════════════════
+// Un joker de série se gagne toutes les 4 semaines validées (STREAK_JOKER_TOUS
+// de l'app), ou dans le coffre de la mission du jour. Le serveur lit
+// u.streakJokers pour dire si une série est « sauvée » (serieDuJour) : il ne
+// prend pas un joker que rien n'explique. Ceux du coffre doivent être DATÉS
+// dans u.missions (coffre {gain: 'joker', at}) ; les autres, couverts par la
+// série en cours (streak + jokers déjà consommés dans cette série) / 4.
+// ⚠ Un joker gagné dans une série d'avant, cassée depuis, n'est plus expliqué :
+//   le serveur le refuse, et se tait sur la série plutôt que de mentir.
+export const JOKERS_MAX = 2, JOKER_TOUS = 4;
+export function jokersMission(missions) {
+  let n = 0;
+  for (const j of Object.keys(missions && typeof missions === 'object' ? missions : {})) {
+    const c = missions[j] && missions[j].coffre;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(j) && c && c.gain === 'joker' && Number(c.at) > 0) n++;
+  }
+  return n;
+}
+export function jokersAdmis(u) {
+  const declares = Math.max(0, Math.min(JOKERS_MAX, Math.floor(Number(u && u.streakJokers) || 0)));
+  if (!declares) return 0;
+  const serie = Math.floor(((Number(u && u.streak) || 0) + (Number(u && u.streakJokersUtilises) || 0)) / JOKER_TOUS);
+  return Math.min(declares, serie + jokersMission(u && u.missions));
 }

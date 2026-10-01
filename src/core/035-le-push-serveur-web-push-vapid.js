@@ -1008,6 +1008,9 @@ const BADGES_ACQUIS=Object.freeze([
   // NOM de l'app à dire « SOUS TENSION » sans « temps » devant — la clé,
   // elle, dit parcours_ (voir PARCOURS_DEMARRAGE). Le visuel : badges-bruts/
   // sous_tension.png, converti par scripts/badges.py (repli : FULL_SESSION).
+  // LA MISSION DU JOUR : le coffre ouvert sept jours d'affilée.
+  {id:'sept_sur_sept',nom:'SEPT SUR SEPT',famille:'unique',palier:null,icone:'sept_sur_sept',condition:'Ouvre le coffre de la mission du jour 7 jours d’affilée.',test:f=>f.septSurSept,
+   phrase:'Sept coffres, sept jours. La régularité, c’est ça.'},
   {id:'parcours_sous_tension',nom:'SOUS TENSION',famille:'unique',palier:null,icone:'sous_tension',condition:'Termine le parcours Mise sous tension.',test:f=>f.parcoursFini,
    lib:'Mise sous tension',phrase:'Toutes les étapes sont faites. Le courant passe.'},
   // ── L'ASSIETTE (lot N4) : des journées TENUES, jamais un résultat ────
@@ -1066,7 +1069,7 @@ const BADGE_REPLI=Object.freeze({
   sans_faute:'PERFECT',miroir:'PROGRESSION',cycles:'FULL_SESSION',carburant:'MONSTER',
   'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
   'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
-  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',aube:'NEW_PERF',nuit:'NEW_PERF',
+  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',sept_sur_sept:'STREAK',aube:'NEW_PERF',nuit:'NEW_PERF',
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
   phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME',
   assiette:'FULL_SESSION',assiette_premier_jour:'FULL_SESSION',assiette_7:'STREAK',assiette_21:'DISCIPLINE',
@@ -1118,7 +1121,8 @@ function _badgesFaits(u,maintenant){
   const f={seances:ses.filter(seanceComptee).map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
-    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0,septSurSept:0};
+  try{ f.septSurSept=missionSeptSurSept(u); }catch(e){ f.septSurSept=0; }
   const premier=(k,v)=>{ if(!f[k]) f[k]=v; };
   // Les séances passent dans l'ordre ; on retient au passage tout ce qui se
   // lit séance par séance.

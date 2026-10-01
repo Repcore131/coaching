@@ -7452,6 +7452,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
   // Les jokers de série (26/09/2026) : des compteurs et une date, comme streak.
   'streakJokers','streakJokersUtilises','streakJokerLe',
+  // La mission du jour (01/10/2026) : les cases faites (des clés : séance,
+  // nuit, protéines…), les actes vus par l'app et le coffre. Elles disent ce
+  // qui a été FAIT ce jour-là, comme sessions et sleepLog : classées avec eux.
+  'missions',
   // correctionsOrphelines porte EXACTEMENT ce que porte videos[].feedback :
   // le retour d'un coach sur un mouvement, quand la video qui l'a motive
   // n'existe plus (lot 7). Il est classe avec elle, et pour la meme raison.
@@ -23882,6 +23886,8 @@ async function amiReagir(pseudo,emoji,btn){
   if(!r.ok){ toast(r.st===401||r.st===403?'Suis '+(prof.prenom||p)+' pour réagir à ses séances.':'Réaction non envoyée : réessaie une fois connecté.','var(--orange)'); return false; }
   try{ localStorage.setItem(_reacCle(),JSON.stringify(reactionPoserLocal(reactionsLocales(),cle,prof.der,emoji,Date.now()))); }catch(e){}
   deposerEvenement({type:'reaction',cible:cle,jour:prof.der}).catch(()=>{});
+  // La mission du jour « Réagis à la séance d'un ami » : l'acte, daté.
+  try{ if(missionActe(u,'reaction_ami')){ saveUser(); _rendreMission(u); } }catch(e){}
   const z=btn&&btn.closest('.am-reac');
   if(z) z.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.textContent===emoji));
   return true;
@@ -44867,6 +44873,8 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
+  // LA MISSION DU JOUR, sous l'en-tête : trois cases relues dans les faits.
+  try{ _rendreMission(u); }catch(e){}
   // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
   try{ _rendreCarteAccueil(u); }catch(e){}
   // Le record à portée de la séance du jour, dans la carte Entraînement.
@@ -81450,6 +81458,9 @@ const BADGES_ACQUIS=Object.freeze([
   // NOM de l'app à dire « SOUS TENSION » sans « temps » devant — la clé,
   // elle, dit parcours_ (voir PARCOURS_DEMARRAGE). Le visuel : badges-bruts/
   // sous_tension.png, converti par scripts/badges.py (repli : FULL_SESSION).
+  // LA MISSION DU JOUR : le coffre ouvert sept jours d'affilée.
+  {id:'sept_sur_sept',nom:'SEPT SUR SEPT',famille:'unique',palier:null,icone:'sept_sur_sept',condition:'Ouvre le coffre de la mission du jour 7 jours d’affilée.',test:f=>f.septSurSept,
+   phrase:'Sept coffres, sept jours. La régularité, c’est ça.'},
   {id:'parcours_sous_tension',nom:'SOUS TENSION',famille:'unique',palier:null,icone:'sous_tension',condition:'Termine le parcours Mise sous tension.',test:f=>f.parcoursFini,
    lib:'Mise sous tension',phrase:'Toutes les étapes sont faites. Le courant passe.'},
   // ── L'ASSIETTE (lot N4) : des journées TENUES, jamais un résultat ────
@@ -81508,7 +81519,7 @@ const BADGE_REPLI=Object.freeze({
   sans_faute:'PERFECT',miroir:'PROGRESSION',cycles:'FULL_SESSION',carburant:'MONSTER',
   'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
   'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
-  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',aube:'NEW_PERF',nuit:'NEW_PERF',
+  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',sept_sur_sept:'STREAK',aube:'NEW_PERF',nuit:'NEW_PERF',
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
   phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME',
   assiette:'FULL_SESSION',assiette_premier_jour:'FULL_SESSION',assiette_7:'STREAK',assiette_21:'DISCIPLINE',
@@ -81560,7 +81571,8 @@ function _badgesFaits(u,maintenant){
   const f={seances:ses.filter(seanceComptee).map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
-    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0,septSurSept:0};
+  try{ f.septSurSept=missionSeptSurSept(u); }catch(e){ f.septSurSept=0; }
   const premier=(k,v)=>{ if(!f[k]) f[k]=v; };
   // Les séances passent dans l'ordre ; on retient au passage tout ce qui se
   // lit séance par séance.
@@ -85124,7 +85136,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,semaine:0,semaineAssiette:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,mission:0,semaine:0,semaineAssiette:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -85161,11 +85173,14 @@ function xpCalcul(u,maintenant){
   for(const j of Object.keys((u.checkin&&typeof u.checkin==='object')?u.checkin:{})){
     if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=t) pose(j,'checkin',XP_ACTIONS.checkin);
   }
+  // LA MISSION DU JOUR : le coffre (20 ou 50 V) le jour de son ouverture, ou
+  // les volts doublés de la séance qui suit, SOUS le plafond et en dernier.
+  try{ for(const [j,v] of missionVoltsParJour(u,t)) pose(j,'mission',v); }catch(e){}
   // LA CIBLE PASSE EN DERNIER sous le plafond : sur la journée de référence
   // (séance complète à trois records + bilan + journal + nuit = 380), elle ne
   // prend que les 20 V qui restent, et la nuit comme le check-in gardent leur
   // place.
-  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin','cible'];
+  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin','cible','mission'];
   let ecrete=0;
   for(const j of Object.keys(jours)){
     let reste=XP_PLAFOND_JOUR;
@@ -85214,6 +85229,7 @@ function xpGainsSeance(u,sess,maintenant){
   if(d('semaine')>0) lignes.push({lib:'Semaine validée',v:d('semaine')});
   if(d('badge')>0) lignes.push({lib:'Badge débloqué',v:d('badge')});
   if(d('parcours')>0) lignes.push({lib:'Mise sous tension',v:d('parcours')});
+  if(d('mission')>0) lignes.push({lib:'Volts doublés (coffre)',v:d('mission')});
   const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
   if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
   return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,
@@ -85313,6 +85329,348 @@ function _rendreRang(u){
     if(!l&&h&&t){ l=document.createElement('div'); l.id='clh-filleuls'; t.insertAdjacentElement('afterend',l); }
     if(l){ l.innerHTML=h; l.hidden=!h; }
   }catch(e){}
+  return true;
+}
+// ══ LA MISSION DU JOUR (01/10/2026) ═══════════════════════════════════════
+//
+// Trois missions par jour, sous l'en-tête de l'accueil. Elles se cochent
+// SEULES : chaque case est relue, à chaque rendu, dans ce que le dossier
+// contient déjà (séance, check-in, journal, nuit) ou dans un acte que l'app a
+// vu se faire (le minuteur de mobilité arrivé au bout, la prochaine séance
+// ouverte, une réaction envoyée — u.missions[jour].actes). Aucune case ne se
+// coche à la main : rien de déclaratif.
+//
+// LE TIRAGE EST DÉTERMINISTE : graine = hash(clé du compte + jour local).
+// Le même jour rend les mêmes missions et le même coffre, sur tous les
+// appareils, et le serveur n'a aucun aléa à tenir.
+//
+// LE TYPE DE JOUR est celui du CALENDRIER (nutIsOnDayCalendrier) et non la
+// réalité du jour (jourOnReel) : une séance faite un jour de repos ne doit
+// pas remplacer les missions au milieu de la journée.
+//
+// ⚠ JAMAIS UNE MISSION IMPOSSIBLE : pas de protéines sans cible, rien de
+//   nutritionnel sous aTCA, pas de réaction sans carnet d'amis, pas de
+//   prochaine séance sans créneau actif.
+// ⚠ LE COFFRE (les trois cases faites) : 60 % +20 V, 25 % +50 V, 10 % un
+//   joker de série (+50 V si la réserve est pleine), 5 % les volts doublés
+//   sur la prochaine séance. Ses volts (xpCalcul, cat.mission) passent SOUS
+//   le plafond du jour, en dernier ; le serveur les borne à jours × 50.
+// ⚠ COACH : rien. SUSPENSION : missions en pause, pas de coffre. COMPTE DE
+//   MOINS DE 2 JOURS : les étapes du parcours à la place, sans coffre.
+const MISSION_JEUNE_JOURS=2;
+const MISSION_COFFRE=Object.freeze([
+  Object.freeze({gain:20,p:0.60}),Object.freeze({gain:50,p:0.25}),
+  Object.freeze({gain:'joker',p:0.10}),Object.freeze({gain:'double',p:0.05})
+]);
+const MISSION_VOLTS_MAX=50;
+const MISSION_MOBILITE_S=600;
+const MISSION_GARDE_DETAIL_J=14;
+// Les séances du jour qui comptent (seanceComptee), jour local de leur fin.
+function _mjSeances(u,j){ return ((u&&u.sessions)||[]).filter(s=>s&&Number(s.date)>0&&seanceComptee(s)&&_xpJour(Number(s.date))===j); }
+function _mjActe(u,j,k){ const m=u&&u.missions&&u.missions[j]; return !!(m&&m.actes&&Number(m.actes[k])>0); }
+// Les séries validées d'un exercice d'une séance (forme data).
+function _mjSeries(s,nom){ const d=s&&s.data&&s.data[nom]; const l=d&&d.sets; return (Array.isArray(l)?l:(l&&typeof l==='object'?Object.values(l):[])).filter(st=>st&&st.done===true); }
+// PURE. +1 rép sur le 1er exercice : à la charge de tête de la fois d'avant,
+// une rép de plus qu'elle (ou une charge au-dessus).
+function _mjRepPlus(u,j){
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&Number(s.date)>0).slice().sort((a,b)=>a.date-b.date);
+  for(const s of _mjSeances(u,j)){
+    const nom=Object.keys((s.data&&typeof s.data==='object')?s.data:{})[0];
+    if(!nom) continue;
+    const avant=ses.filter(x=>x.date<s.date&&_mjSeries(x,nom).length).pop();
+    if(!avant) continue;
+    const w=x=>parseFloat(x.weight)||0, r=x=>parseFloat(x.repsDone!=null?x.repsDone:x.reps)||0;
+    const pa=_mjSeries(avant,nom), wTete=Math.max(...pa.map(w));
+    const rTete=Math.max(...pa.filter(x=>w(x)===wTete).map(r));
+    if(_mjSeries(s,nom).some(x=>w(x)>wTete||(w(x)===wTete&&r(x)>=rTete+1))) return true;
+  }
+  return false;
+}
+function _mjCible(u,j){
+  try{ const n=u&&u.nutrition; if(!n||!n.macros) return 0; const c=_getEffectiveMacros(n,nutIsOnDay(j,u),j,u); return Number(c&&c.p)||0; }catch(e){ return 0; }
+}
+function _mjCreneauActif(u){ return ((u&&u.sessions_config)||[]).some(s=>s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length); }
+// LA TABLE. type : jour de séance ou de repos. `faite(u, jour, ctx)` lit les
+// faits ; `possible(u, jour, ctx)` écarte ce qui ne peut pas se faire.
+const MISSIONS=Object.freeze([
+  Object.freeze({cle:'seance_finie',type:'seance',lib:'Termine ta séance',
+    faite:(u,j)=>_mjSeances(u,j).length>0,action:'openSessionPicker()',bouton:'Y aller'}),
+  Object.freeze({cle:'record_rep',type:'seance',lib:'Bats 1 record ou fais +1 rép sur ton 1er exercice',
+    faite:(u,j,c)=>(c.f.records||[]).some(d=>_xpJour(d)===j)||_mjRepPlus(u,j)}),
+  Object.freeze({cle:'rir',type:'seance',lib:'Note ton RIR sur toutes les séries',
+    faite:(u,j)=>{ const l=[]; for(const s of _mjSeances(u,j)) for(const k of Object.keys(s.data||{})) l.push(..._mjSeries(s,k));
+      return l.length>0&&l.every(st=>st.rir!=null&&String(st.rir).trim()!==''&&isFinite(Number(st.rir))); }}),
+  Object.freeze({cle:'checkin',type:'repos',lib:'Check-in du matin',
+    faite:(u,j)=>{ try{ return checkinComplet(u.checkin&&u.checkin[j]); }catch(e){ return false; } }}),
+  Object.freeze({cle:'mobilite',type:'repos',lib:'10 min de mobilité',
+    faite:(u,j)=>_mjActe(u,j,'mobilite'),action:'missionMobiliteLancer()',bouton:'Lancer'}),
+  Object.freeze({cle:'proteines',type:'repos',lib:'Atteins tes protéines',nutrition:true,
+    possible:(u,j)=>_mjCible(u,j)>0,
+    faite:(u,j)=>{ try{ return !!cibleTenueJour(u,j).prot; }catch(e){ return false; } }}),
+  Object.freeze({cle:'nuit',type:'repos',lib:'Saisis ta nuit',
+    faite:(u,j)=>(Array.isArray(u.sleepLog)?u.sleepLog:[]).some(e=>e&&e.date===j&&Number(e.duration)>0),
+    action:'loadSleep()',bouton:'Saisir'}),
+  Object.freeze({cle:'prochaine',type:'repos',lib:'Regarde ta prochaine séance et ses records à portée',
+    possible:u=>_mjCreneauActif(u),
+    faite:(u,j)=>_mjActe(u,j,'prochaine'),action:'missionProchaineVoir()',bouton:'Voir'}),
+  Object.freeze({cle:'reaction_ami',type:'repos',lib:'Réagis à la séance d’un ami',
+    possible:(u,j,c)=>Number(c.amis)>0,
+    faite:(u,j)=>_mjActe(u,j,'reaction_ami'),action:'ouvrirAmis()',bouton:'Mes potes'})
+]);
+// PURE. FNV-1a 32 bits, puis mulberry32 : un aléa rejouable.
+function _mjHash(s){ let h=0x811c9dc5; for(const ch of String(s)){ h^=ch.codePointAt(0); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
+function _mjAlea(graine){
+  let a=graine>>>0;
+  return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+}
+function missionGraine(u,jour){ return _mjHash(_cleCompte(u)+'|'+jour); }
+// PURE. Le coffre du jour : le PREMIER tirage de la graine.
+function coffreTirage(u,jour){
+  const r=_mjAlea(missionGraine(u,jour))();
+  let cumul=0;
+  for(const x of MISSION_COFFRE){ cumul+=x.p; if(r<cumul) return x.gain; }
+  return MISSION_COFFRE[MISSION_COFFRE.length-1].gain;
+}
+// PURE. Le compte a-t-il moins de deux jours, ce jour-là ? Le jour entier
+// compte (sa fin) : le tirage ne change pas en cours de journée.
+function _mjDebutCompte(u){
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).map(s=>Number(s.date));
+  const d=Math.min(Number(u&&u.createdAt)||Infinity,Number(u&&u.parcours&&u.parcours.debut)||Infinity,ses.length?Math.min(...ses):Infinity);
+  return isFinite(d)?d:0;
+}
+function _mjFinJour(jour){ const [a,m,d]=String(jour).split('-').map(Number); return new Date(a,m-1,d+1).getTime(); }
+function missionCompteJeune(u,jour){ const d=_mjDebutCompte(u); return d>0&&_mjFinJour(jour)-d<MISSION_JEUNE_JOURS*864e5; }
+// Le contexte lu sur l'appareil (carnet d'amis) ; un test le donne lui-même.
+function _mjContexte(u,ctx){
+  const c=Object.assign({},ctx||{});
+  if(!c.f){ try{ c.f=_badgesFaits(u,typeof c.maintenant==='number'?c.maintenant:Date.now()); }catch(e){ c.f={records:[]}; } }
+  if(c.amis==null){ try{ c.amis=amisListe().length; }catch(e){ c.amis=0; } }
+  return c;
+}
+/**
+ * PURE. Les 3 missions du jour `jour` (AAAA-MM-JJ local) : [{cle, lib, type,
+ * action?, bouton?, parcours?}]. [] pour un coach.
+ */
+function missionsDuJour(u,jour,ctx){
+  if(!u||u.role==='coach'||!/^\d{4}-\d{2}-\d{2}$/.test(String(jour||''))) return [];
+  const c=_mjContexte(u,ctx);
+  // Les deux premiers jours : les étapes du parcours, pas encore le coffre.
+  const p=u.parcours;
+  if(missionCompteJeune(u,jour)&&p&&!p.existant&&!p.fini){
+    const et=p.etapes||{};
+    return parcoursEtapes(undefined,p.jeu).filter(x=>!et[x.cle]).slice(0,3)
+      .map(x=>({cle:'parcours:'+x.cle,lib:x.lib,type:'parcours',parcours:true,action:x.action||null,bouton:x.bouton||null}));
+  }
+  const type=nutIsOnDayCalendrier(jour,u)?'seance':'repos';
+  const tca=aTCA(u);
+  const l=MISSIONS.filter(m=>m.type===type&&!(m.nutrition&&tca)&&(!m.possible||(()=>{ try{ return !!m.possible(u,jour,c); }catch(e){ return false; } })()));
+  // Le mélange : Fisher-Yates sur la même graine, APRÈS le tirage du coffre.
+  const r=_mjAlea(missionGraine(u,jour)); r();
+  const t=l.slice();
+  for(let i=t.length-1;i>0;i--){ const k=Math.floor(r()*(i+1)); [t[i],t[k]]=[t[k],t[i]]; }
+  // Un jour de séance garde l'ordre de la table (séance, record, RIR).
+  return (type==='seance'?l:t).slice(0,3).map(m=>({cle:m.cle,lib:m.lib,type,action:m.action||null,bouton:m.bouton||null}));
+}
+/** PURE. L'état du jour : les cases relues dans les faits, la pause, le coffre. */
+function missionsEtat(u,jour,ctx){
+  const c=_mjContexte(u,ctx);
+  const t=typeof c.maintenant==='number'?c.maintenant:Date.now();
+  const liste=missionsDuJour(u,jour,c);
+  const p=u&&u.parcours, et=(p&&p.etapes)||{};
+  const missions=liste.map(m=>{
+    let faite=false;
+    if(m.parcours) faite=!!et[m.cle.slice(9)];
+    else { const d=MISSIONS.find(x=>x.cle===m.cle); try{ faite=!!(d&&d.faite(u,jour,c)); }catch(e){ faite=false; } }
+    return Object.assign({},m,{faite});
+  });
+  let pause=false; try{ pause=!!suspensionEtat(u,t).actif; }catch(e){ pause=false; }
+  const parcours=missions.some(m=>m.parcours);
+  const toutes=missions.length===3&&missions.every(m=>m.faite);
+  const coffre=(u&&u.missions&&u.missions[jour]&&u.missions[jour].coffre)||null;
+  return {jour,missions,toutes,pause,parcours,coffre,ouvrable:toutes&&!pause&&!parcours&&!coffre};
+}
+// ÉCRIT. Un acte vu par l'app (minuteur fini, prochaine séance ouverte,
+// réaction envoyée), daté dans u.missions[jour].actes.
+function missionActe(u,k,t){
+  if(!u||u.role==='coach') return false;
+  const at=typeof t==='number'?t:Date.now(), j=_xpJour(at);
+  u.missions=(u.missions&&typeof u.missions==='object')?u.missions:{};
+  const m=u.missions[j]=(u.missions[j]&&typeof u.missions[j]==='object')?u.missions[j]:{};
+  m.actes=(m.actes&&typeof m.actes==='object')?m.actes:{};
+  if(Number(m.actes[k])>0) return false;
+  m.actes[k]=at;
+  return true;
+}
+// ÉCRIT. Le détail (faites, actes) d'un jour ancien part ; le coffre reste,
+// c'est lui qui porte les volts et le badge.
+function _mjPurger(u,t){
+  const lim=localISODate(_datePlusJours(t,-MISSION_GARDE_DETAIL_J));
+  for(const j of Object.keys(u.missions||{})){
+    const m=u.missions[j];
+    if(j>=lim||!m||typeof m!=='object') continue;
+    if(m.coffre) u.missions[j]={coffre:m.coffre}; else delete u.missions[j];
+  }
+}
+/**
+ * ÉCRIT. Ouvre le coffre du jour : rend {gain, at} (gain : 20, 50, 'joker',
+ * 'double'), ou null. Le joker se pose ici, dans u.streakJokers ; la réserve
+ * pleine, il vaut +50 V.
+ */
+function ouvrirCoffre(u,jour,ctx){
+  const c=_mjContexte(u,ctx);
+  const t=typeof c.maintenant==='number'?c.maintenant:Date.now();
+  const e=missionsEtat(u,jour,c);
+  if(!e.ouvrable) return null;
+  let gain=coffreTirage(u,jour);
+  if(gain==='joker'){
+    const n=Math.max(0,Number(u.streakJokers)||0);
+    if(n>=STREAK_JOKERS_MAX) gain=MISSION_VOLTS_MAX; else u.streakJokers=n+1;
+  }
+  u.missions=(u.missions&&typeof u.missions==='object')?u.missions:{};
+  const m=Object.assign({},u.missions[jour]||{});
+  m.faites=e.missions.map(x=>x.cle);
+  m.coffre={gain,at:t};
+  u.missions[jour]=m;
+  _mjPurger(u,t);
+  return m.coffre;
+}
+/** PURE. Les volts des coffres, par jour : [[jour, volts]] (xpCalcul). */
+function missionVoltsParJour(u,t){
+  const out=[];
+  const ms=(u&&u.missions&&typeof u.missions==='object')?u.missions:{};
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&Number(s.date)>0&&s.date<=t&&seanceComptee(s)).sort((a,b)=>a.date-b.date);
+  for(const j of Object.keys(ms)){
+    const k=ms[j]&&ms[j].coffre, at=Number(k&&k.at)||0;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(j)||!(at>0)||at>t) continue;
+    if(typeof k.gain==='number') out.push([j,Math.max(0,Math.min(MISSION_VOLTS_MAX,k.gain))]);
+    else if(k.gain==='double'){
+      // La PROCHAINE séance après l'ouverture : ses volts une deuxième fois.
+      const s=ses.find(x=>x.date>at);
+      if(s) out.push([_xpJour(s.date),voltsSeance(s)]);
+    }
+  }
+  return out;
+}
+/** PURE. SEPT SUR SEPT : la date du 7e coffre de 7 jours d'affilée, ou 0. */
+function missionSeptSurSept(u){
+  const ms=(u&&u.missions&&typeof u.missions==='object')?u.missions:{};
+  const j=Object.keys(ms).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&Number(ms[k]&&ms[k].coffre&&ms[k].coffre.at)>0).sort();
+  let suite=0, prec=null;
+  for(const k of j){
+    const d=new Date(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8,10)).getTime();
+    suite=(prec!==null&&Math.round((d-prec)/864e5)===1)?suite+1:1;
+    prec=d;
+    if(suite>=7) return Number(ms[k].coffre.at);
+  }
+  return 0;
+}
+// ── LA CARTE, sous l'en-tête de l'accueil ────────────────────────────────
+function _mjLibGain(g){
+  return g==='joker'?'Un joker de série':g==='double'?'Volts doublés sur ta prochaine séance':'+'+g+' V';
+}
+/** PURE. La carte « Mission du jour ». */
+function htmlMissionDuJour(e){
+  if(!e||!e.missions.length) return '';
+  const E=escapeHtml, n=e.missions.filter(m=>m.faite).length;
+  const cases=e.missions.map(m=>'<li class="mj-case'+(m.faite?' on':'')+'">'
+    +'<span class="mj-coche" aria-hidden="true">'+(m.faite?icon('coche',14):'')+'</span>'
+    +'<span class="mj-lib">'+E(m.lib)+'<span class="mj-lu">'+(m.faite?' : faite':' : à faire')+'</span></span>'
+    +(!m.faite&&!e.pause&&m.action&&m.bouton?'<button type="button" class="btn btn-outline btn-sm mj-b" onclick="'+m.action+'">'+E(m.bouton)+'</button>':'')
+    +'</li>').join('');
+  let pied='';
+  if(e.pause) pied='<div class="mj-note">Missions en pause pendant ta suspension.</div>';
+  else if(e.parcours) pied='<div class="mj-note">Le coffre s’ouvre à partir de ton 3e jour.</div>';
+  else if(e.coffre) pied='<div class="mj-coffre mj-ouvert" role="status">'+icon('cadeau',16)
+    +' <b class="mj-gain"'+(typeof e.coffre.gain==='number'?' data-gain="'+e.coffre.gain+'"':'')+'>'+E(_mjLibGain(e.coffre.gain))+'</b></div>';
+  else if(e.ouvrable) pied='<button type="button" class="btn btn-red mj-ouvrir" onclick="missionOuvrirCoffre(this)">'+icon('cadeau',16)+' Ouvrir</button>';
+  else pied='<div class="mj-note">Les trois faites : un coffre s’ouvre.</div>';
+  return '<section class="mj-carte" role="region" aria-label="Mission du jour">'
+    +'<div class="mj-tete"><b>'+(e.parcours?'Tes premières missions':'Mission du jour')+'</b><span>'+n+'/3</span></div>'
+    +'<ul class="mj-liste">'+cases+'</ul>'+pied+'</section>';
+}
+function _rendreMission(u){
+  const z=document.getElementById('clh-mission');
+  if(!z) return null;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return null; }
+  let e=null; try{ e=missionsEtat(u,localISODate(new Date())); }catch(er){ e=null; }
+  z.innerHTML=htmlMissionDuJour(e);
+  return e;
+}
+// Le bouton « Ouvrir » : le tirage, l'animation courte (arcCompteur), les
+// volts et le badge.
+function missionOuvrirCoffre(btn){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return null;
+  const k=ouvrirCoffre(u,localISODate(new Date()));
+  if(!k) return null;
+  try{ saveUser(); }catch(e){}
+  const e=_rendreMission(u);
+  try{
+    const g=document.querySelector('#clh-mission .mj-gain');
+    if(g&&typeof k.gain==='number'){ g.dataset.valeur='0'; arcCompteur(g,k.gain,{duree:ARC.release,format:x=>'+'+Math.round(x)+' V'}); }
+  }catch(er){}
+  try{ majBadges(); }catch(er){}
+  try{ majXp(); _rendreRang(u); }catch(er){}
+  return e&&e.coffre;
+}
+// ── Les actes vus par l'app ───────────────────────────────────────────────
+let _mjMinuteur=null;
+function missionMobiliteLancer(){
+  if(_mjMinuteur) return false;
+  const d=document.createElement('div');
+  d.className='mj-minuteur'; d.setAttribute('role','dialog'); d.setAttribute('aria-label','Mobilité, 10 minutes');
+  d.innerHTML='<div class="mj-min-c"><div class="mj-min-t">Mobilité</div><div class="mj-min-v" aria-live="polite">10:00</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="missionMobiliteArreter()">Arrêter</button></div>';
+  document.body.appendChild(d);
+  const debut=Date.now();
+  const tic=()=>{
+    const reste=Math.max(0,MISSION_MOBILITE_S-Math.floor((Date.now()-debut)/1000));
+    const v=d.querySelector('.mj-min-v'); if(v) v.textContent=Math.floor(reste/60)+':'+String(reste%60).padStart(2,'0');
+    if(reste>0) return;
+    missionMobiliteArreter();
+    const u=currentUser;
+    if(missionActe(u,'mobilite')){ try{ saveUser(); }catch(e){} }
+    try{ toast(ICO.coche+' 10 min de mobilité','var(--green)'); }catch(e){}
+    try{ _rendreMission(u); }catch(e){}
+  };
+  _mjMinuteur={d,id:setInterval(tic,1000)};
+  return true;
+}
+function missionMobiliteArreter(){
+  if(!_mjMinuteur) return false;
+  clearInterval(_mjMinuteur.id);
+  try{ _mjMinuteur.d.remove(); }catch(e){}
+  _mjMinuteur=null;
+  return true;
+}
+// La prochaine séance et ses records à portée (_recordsAPorteeParJour).
+function htmlProchaineSeance(u,maintenant){
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  const cfg=(u&&u.sessions_config)||[];
+  const auj=(new Date(t).getDay()+6)%7;
+  let c=null, dj=0;
+  for(let k=1;k<=7&&!c;k++){ const s=cfg[(auj+k)%7]; if(s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length){ c=s; dj=k; } }
+  if(!c) return '<p class="mj-note">Aucune séance prévue cette semaine.</p>';
+  let o=null; try{ o=recordAPortee(u,c,t); }catch(e){ o=null; }
+  let rap={}; try{ rap=_recordsAPorteeParJour(u,t)||{}; }catch(e){ rap={}; }
+  const autres=Object.keys(rap).map(k=>rap[k]).filter(Boolean);
+  const quand=dj===1?'Demain':new Date(t+dj*864e5).toLocaleDateString('fr-FR',{weekday:'long'}).replace(/^./,x=>x.toUpperCase());
+  return '<div class="mj-pro-t">'+escapeHtml(quand+' · '+(c.name||c.nom||'Ta séance'))+'</div>'
+    +'<ul class="mj-pro-l">'+c.exercises.slice(0,8).map(x=>'<li>'+escapeHtml(String((x&&(x.name||x.nom))||''))+'</li>').join('')+'</ul>'
+    +(o?htmlRecordAPortee(o,'accueil'):'')
+    +(autres.length?'<div class="mj-note">'+autres.map(escapeHtml).join('<br>')+'</div>':'');
+}
+function missionProchaineVoir(){
+  const u=currentUser;
+  if(!u) return false;
+  const d=document.createElement('div');
+  d.className='mj-feuille'; d.setAttribute('role','dialog'); d.setAttribute('aria-label','Ta prochaine séance');
+  d.innerHTML='<div class="mj-feuille-c">'+htmlProchaineSeance(u)
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="this.closest(\'.mj-feuille\').remove()">Fermer</button></div>';
+  d.addEventListener('click',e=>{ if(e.target===d) d.remove(); });
+  document.body.appendChild(d);
+  if(missionActe(u,'prochaine')){ try{ saveUser(); }catch(e){} }
+  try{ _rendreMission(u); }catch(e){}
   return true;
 }
 // ══ LA CARTE D'ATHLÈTE (28/09/2026) ═════════════════════════════════════

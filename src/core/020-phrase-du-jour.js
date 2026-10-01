@@ -540,6 +540,8 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
+  // LA MISSION DU JOUR, sous l'en-tête : trois cases relues dans les faits.
+  try{ _rendreMission(u); }catch(e){}
   // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
   try{ _rendreCarteAccueil(u); }catch(e){}
   // Le record à portée de la séance du jour, dans la carte Entraînement.

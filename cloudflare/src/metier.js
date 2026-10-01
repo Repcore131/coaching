@@ -612,7 +612,18 @@ export function creerMetier(deps) {
     // TOUJOURS RELUE ICI, jamais prise au profil : elle change sans séance.
     const s = await _surface(uid);
     const [susp, config] = await Promise.all([_objet(uid, s, 'suspension'), _objet(uid, s, 'sessions_config')]);
-    const fname = s.fname, jokers = s.streakJokers, jokerLe = s.streakJokerLe;
+    const fname = s.fname, jokerLe = s.streakJokerLe;
+    // LES JOKERS QUE LE DOSSIER EXPLIQUE (xp.js, jokersAdmis) : ceux de la
+    // série en cours, et ceux du coffre de la mission du jour, DATÉS dans
+    // u.missions — relu seulement s'il en faut pour expliquer la réserve.
+    let jokers = 0;
+    if (Number(s.streakJokers) > 0) {
+      const base = { streakJokers: s.streakJokers, streak, streakJokersUtilises: s.streakJokersUtilises };
+      jokers = XPS.jokersAdmis(base);
+      if (jokers < Math.min(XPS.JOKERS_MAX, Number(s.streakJokers) || 0) && s.missions !== undefined) {
+        jokers = XPS.jokersAdmis(Object.assign(base, { missions: await _objet(uid, s, 'missions') }));
+      }
+    }
     const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
       streakJokerLe: jokerLe, sessions_config: config }, t);
     if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;

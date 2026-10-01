@@ -181,7 +181,7 @@
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
