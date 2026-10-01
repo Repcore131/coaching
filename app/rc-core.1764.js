@@ -67695,6 +67695,13 @@ function faNomPlanche(n){
  * Rend TOUJOURS un objet : `ok:false` porte la raison, et la fiche l'affiche
  * au lieu d'une page blanche.
  */
+// LA DERNIERE COLONNE DES TABLEAUX : LA QUANTITE POUR SIX REPAS (Kevin,
+// 01/10/2026). Elle multipliait le grammage du repas par le nombre de repas
+// qui appellent une source (« 2 repas » sur sa fiche) : ce n'est pas ce qu'il
+// en attend. C'est une aide pour preparer : la portion d'un repas, six fois.
+// ⚠ Le grammage du repas (colonne « Quantite ») ne change pas : lui reste
+//   restant / nombre de sources, c'est la dose de l'athlete.
+const FA_REPAS_COLONNE=6;
 function ficheAlimDonnees(user,chercher){
   const u=_dossier(user);
   if(!u) return {ok:false,raison:'Aucun dossier.'};
@@ -67732,11 +67739,12 @@ function ficheAlimDonnees(user,chercher){
   // grammage du repas multiplié par le nombre de repas qui appellent une
   // source : c'est ce que la liste de courses fait déjà, et c'est ce que la
   // planche de Kevin appelle « quantité (portion) ».
-  const table=(bloc,n)=>(bloc&&bloc.liste?bloc.liste:[]).map(s=>({
+  const table=(bloc)=>(bloc&&bloc.liste?bloc.liste:[]).map(s=>({
     nom:faNomPlanche(s.nom),
     q:(s.q==null?null:Math.round(s.q)),
     per100:(s.per100==null?null:Math.round(s.per100*100)/100),
-    jour:(s.q==null||!(n>0))?null:Math.round(s.q*n),
+    // La quantite AFFICHEE, six fois : le lecteur retrouve le compte.
+    jour:(s.q==null)?null:Math.round(s.q)*FA_REPAS_COLONNE,
     alerte:!!s.excessif}));
   const coach=(function(){ try{ return coachAffichable(u)||null; }catch(e){ return null; } })();
   const nomCoach=(function(){
@@ -67750,11 +67758,11 @@ function ficheAlimDonnees(user,chercher){
     jourOn:isOn,
     marque:(function(){ try{ return marqueCoachDe(u)||''; }catch(e){ return ''; } })(),
     coachNom:nomCoach,
-    nSources:nSrc, moment,
+    nSources:nSrc, nRepasColonne:FA_REPAS_COLONNE, moment,
     avecComplements:!!(plan&&plan.avecComplements),
     repas,
-    proteines:table(src.proteines,nSrc.p),
-    glucides:table(src.glucides,nSrc.c),
+    proteines:table(src.proteines),
+    glucides:table(src.glucides),
     fruits:PLAN_FRUITS.map(f=>({n:f.n,q:f.q}))};
 }
 
@@ -67818,9 +67826,9 @@ function htmlFicheAlim(user,chercher){
   }).join('');
 
   // ── PLANCHE 2 : LES TABLEAUX ────────────────────────────────────────────
-  const tbl4=(lignes,n)=>lignes.length
+  const tbl4=(lignes)=>lignes.length
     ? `<table class="fa-t4"><thead><tr><th>Aliment</th><th>Quantité</th>
-        <th>Pour 100 g</th><th>Pour la journée${n>0?' ('+n+' repas)':''}</th></tr></thead><tbody>`
+        <th>Pour 100 g</th><th>Pour ${d.nRepasColonne} repas</th></tr></thead><tbody>`
       +lignes.map(l=>`<tr><td class="fa-t4-n">${E(l.nom)}</td>
         <td${l.alerte?' class="fa-alerte"':''}>${l.q==null?'-':E(l.q+' g')}</td>
         <td>${l.per100==null?'-':E(String(l.per100).replace('.',',')+' g')}</td>
@@ -67845,7 +67853,7 @@ function htmlFicheAlim(user,chercher){
     <div class="fa-cols">
       <section class="fa-carte fa-c-prot">
         <div class="fa-carte-t">SOURCES DE PROTÉINES</div>
-        ${tbl4(d.proteines,d.nSources.p)}
+        ${tbl4(d.proteines)}
       </section>
       <section class="fa-carte fa-c-fruit">
         <div class="fa-carte-t">1 PORTION DE FRUITS</div>
@@ -67854,7 +67862,7 @@ function htmlFicheAlim(user,chercher){
     </div>
     <section class="fa-carte fa-c-gluc">
       <div class="fa-carte-t">SOURCES DE GLUCIDES</div>
-      ${tbl4(d.glucides,d.nSources.c)}
+      ${tbl4(d.glucides)}
     </section>
     <div class="fa-motto">${E(FA_MOTTO)}</div>
     ${pied}

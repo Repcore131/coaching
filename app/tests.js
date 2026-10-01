@@ -38287,8 +38287,8 @@ async function testExercices(){
           // « Pour la journée » = le grammage du repas × le nombre de repas qui
           // appellent une source. C'est ce que fait la liste de courses, et
           // c'est ce que la planche du coach appelle « quantité (portion) ».
-          if(p.jour!==Math.round(p.q*d.nSources.p))
-            return _echec('la colonne journée : '+p.jour+' pour '+p.q+'×'+d.nSources.p);
+          if(d.nRepasColonne!==6||p.jour!==Math.round(p.q*6))
+            return _echec('la colonne des six repas : '+p.jour+' pour '+p.q+'×6');
           // LE NOM TIENT SUR UNE LIGNE : deux segments Ciqual, pas six.
           if(faNomPlanche('Sardine, à l’huile, appertisée, égouttée')!=='Sardine, à l’huile')
             return _echec('le nom de planche : '+faNomPlanche('Sardine, à l’huile, appertisée, égouttée'));
