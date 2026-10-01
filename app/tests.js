@@ -38163,7 +38163,9 @@ async function testExercices(){
               const bloc=r.slice(i,i+3000);
               if(bloc.indexOf('!newData.exists()')<0)
                 return _echec('aucune règle ne permet de supprimer un jour de métriques');
-              if(bloc.indexOf(CREATOR_EMAIL)<0)
+              // Depuis le 01/10/2026 : le créateur par son UID et une adresse vérifiée,
+              // jamais par son adresse seule (cloudflare/src/createur.js).
+              if(!/auth\.uid === '[^']+' && auth\.token\.email_verified === true\) && !newData\.exists\(\)/.test(bloc))
                 return _echec('la suppression des métriques n’est pas réservée au créateur');
             }
             return true;})());
@@ -49887,7 +49889,8 @@ async function testExercices(){
       const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+900):'';
       if(!m) return _echec('le nœud stats manque aux règles');
       if(!/"\$autre"\s*:\s*\{\s*"\.read"\s*:\s*true\s*\}/.test(m)) return _echec('stats n’est pas en lecture publique');
-      if(!/"retention"\s*:\s*\{\s*"\.read"\s*:\s*"auth != null && auth\.token\.email === 'guellec\.coachingpro@gmail\.com'"/.test(m)) return _echec('la rétention n’est pas réservée au créateur');
+      // Le créateur : son UID et une adresse vérifiée (01/10/2026).
+      if(!/"retention"\s*:\s*\{\s*"\.read"\s*:\s*"auth != null && \(auth\.uid === '[^']+' && auth\.token\.email_verified === true\)"/.test(m)) return _echec('la rétention n’est pas réservée au créateur');
       return /"\.write"\s*:\s*false/.test(m)?true:_echec('stats est inscriptible');})());
 
 

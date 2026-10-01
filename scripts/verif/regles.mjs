@@ -28,6 +28,15 @@ import {sourceProd} from './source-prod.mjs';
 const regles=readFileSync('database.rules.json','utf8');
 const source=sourceProd();
 
+// LE CREATEUR EST RECONNU PAR SON UID ET UNE ADRESSE VERIFIEE (01/10/2026),
+// jamais par son adresse seule. La condition exacte, telle que les regles
+// doivent l'ecrire, se deduit de l'unique constante CREATEUR_UID.
+const srcCreateur=readFileSync('cloudflare/src/createur.js','utf8');
+const CREATEUR_UID=(srcCreateur.match(/export const CREATEUR_UID = '([^']*)';/)||[])[1];
+const UID_A_POSER=(srcCreateur.match(/export const UID_A_POSER = '([^']*)';/)||[])[1];
+if(!CREATEUR_UID){ console.error('CREATEUR_UID introuvable dans cloudflare/src/createur.js'); process.exit(1); }
+const CONDITION_CREATEUR="(auth.uid === '"+CREATEUR_UID+"' && auth.token.email_verified === true)";
+
 // ── La liste blanche du code ──────────────────────────────────────────────
 // Lue dans la source plutot que recopiee : une copie ici divergerait, et
 // divergerait en silence — le defaut meme qu'on cherche a fermer.
@@ -298,9 +307,9 @@ const mEcrit=mBoutique[1].match(/"\.write"\s*:\s*"([^"]+)"/);
 const mLit=mBoutique[1].match(/"\.read"\s*:\s*"([^"]+)"/);
 if(!mEcrit||!mLit){ console.error('le noeud boutique n\'a pas ses deux regles'); process.exit(1); }
 console.log('\nvendeur declare par le code : '+mCreateur[1]);
-if(mEcrit[1].indexOf(mCreateur[1])<0){
+if(mEcrit[1].indexOf(CONDITION_CREATEUR)<0){
   console.error('\nLA REGLE NOMME UN AUTRE VENDEUR QUE LE CODE.');
-  console.error('  code   : '+mCreateur[1]);
+  console.error('  code   : '+CONDITION_CREATEUR);
   console.error('  regles : '+mEcrit[1]);
   console.error('Soit le createur ne peut plus publier, soit n\'importe qui le peut.');
   process.exit(1);
@@ -325,7 +334,7 @@ if(!mContenu){ console.error('\nle noeud boutique_contenu est absent : les seanc
 if(/"seances"\s*:/.test(mBoutique[1])){ console.error('\nLA FICHE PUBLIQUE (boutique) ACCEPTE ENCORE DES SEANCES : tout compte connecte les lirait.'); process.exit(1); }
 const mLitC=mContenu[1].match(/"\.read"\s*:\s*"([^"]+)"/), mEcC=mContenu[1].match(/"\.write"\s*:\s*"([^"]+)"/);
 if(!mLitC||mLitC[1].indexOf("child('programmes').child($progId).exists()")<0){ console.error('\nboutique_contenu ne se lit plus sur la preuve d\'achat (droits/<cle>/programmes/<id>)'); process.exit(1); }
-if(!mEcC||mEcC[1].indexOf(mCreateur[1])<0){ console.error('\nboutique_contenu s\'ecrit par un autre que le createur'); process.exit(1); }
+if(!mEcC||mEcC[1].indexOf(CONDITION_CREATEUR)<0){ console.error('\nboutique_contenu s\'ecrit par un autre que le createur'); process.exit(1); }
 for(const [champ,att,bloc] of [['image',420000,mBoutique[1]],['seances',240000,mContenu[1]]]){
   const m=bloc.match(new RegExp('"'+champ+'"\\s*:\\s*\\{[^}]*length\\s*<\\s*(\\d+)'));
   if(!m){ console.error('\nle champ '+champ+' n\'est pas borne dans les regles'); process.exit(1); }
@@ -411,11 +420,12 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     console.error('\ndroits/ est ouvert a tout compte connecte : n\'importe qui pourrait se poser un palier.');
     process.exit(1);
   }
-  // L'ADRESSE DOIT Y ETRE ECRITE EN CLAIR. Une condition qui passerait par le
-  // dossier (« role === coach », par exemple) rendrait la serrure aussi
-  // trafiquable que le dossier lui-meme.
-  if(w[1]!=='false'&&w[1].indexOf(mCreateur[1])<0){
-    console.error('\ndroits/ s\'ecrit sans nommer d\'adresse : '+w[1].slice(0,90));
+  // LE CREATEUR DOIT Y ETRE NOMME EN CLAIR (UID + adresse verifiee depuis le
+  // 01/10/2026). Une condition qui passerait par le dossier (« role ===
+  // coach », par exemple) rendrait la serrure aussi trafiquable que le
+  // dossier lui-meme.
+  if(w[1]!=='false'&&w[1].indexOf(CONDITION_CREATEUR)<0){
+    console.error('\ndroits/ s\'ecrit sans nommer le createur (UID + adresse verifiee) : '+w[1].slice(0,90));
     process.exit(1);
   }
   if(!/"\.read"\s*:/.test(bloc)){
@@ -508,7 +518,7 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     return o; }).join('\n');
   const R=JSON.parse(sansCom).rules;
   const U=((R.users||{})['$emailKey'])||{};
-  const CREA="auth.token.email === 'guellec.coachingpro@gmail.com'";
+  const CREA=CONDITION_CREATEUR;
   const gele=(v)=>typeof v==='string'&&v.indexOf('newData.val() === data.val()')>=0&&v.indexOf(CREA)>=0;
   const fautes=[];
   for(const k of ['status','paymentStatus','accessExpiry','coachPlan','coachSubActive','role'])
@@ -533,6 +543,55 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     process.exit(1);
   }
   console.log('droits geles : 11 champs de users/ figes, coachs_registre ferme, rc_codes reserve aux coachs enregistres');
+}
+
+// ══ AUCUNE REGLE D'ADMINISTRATION FONDEE SUR L'ADRESSE SEULE (01/10/2026) ══
+//
+// Une adresse e-mail n'est pas une identite : un compte Google, Apple ou lie
+// peut porter l'adresse du createur sous un autre UID. Toute condition
+// d'acces qui compare le jeton a l'adresse (ou a sa cle) du createur est donc
+// refusee ici ; la seule forme admise est CONDITION_CREATEUR, UID + adresse
+// verifiee. Les commentaires ne comptent pas ; une comparaison de CHEMIN
+// ($coachKey === 'guellec,…' : la marque du createur) non plus, elle ne dit
+// rien de qui appelle.
+{
+  const sansCom=regles.split('\n').map((l)=>{ let q=false,o='';
+    for(let i=0;i<l.length;i++){ const c=l[i]; if(c==='"'&&l[i-1]!=='\\') q=!q; if(!q&&c==='/'&&l[i+1]==='/') break; o+=c; }
+    return o; }).join('\n');
+  const adresse=mCreateur[1], cle=adresse.replace(/\./g,',');
+  const esc=(x)=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const fautes=[];
+  // auth.token.email === '<adresse>' (ou ==, ou dans l'autre sens) ;
+  // auth.token.email.replace('.', ',') === '<cle>'.
+  const motifs=[
+    new RegExp("auth\\.token\\.email\\s*===?\\s*'"+esc(adresse)+"'",'g'),
+    new RegExp("'"+esc(adresse)+"'\\s*===?\\s*auth\\.token\\.email",'g'),
+    new RegExp("auth\\.token\\.email\\.replace\\([^)]*\\)\\s*===?\\s*'"+esc(cle)+"'",'g'),
+    new RegExp("'"+esc(cle)+"'\\s*===?\\s*auth\\.token\\.email",'g'),
+  ];
+  for(const m of motifs) for(const x of sansCom.matchAll(m)) fautes.push(x[0]);
+  if(fautes.length){
+    console.error('\nL\'ADRESSE DU CREATEUR SERT ENCORE DE CONDITION D\'ACCES ('+fautes.length+') :\n  '+fautes.slice(0,5).join('\n  '));
+    console.error('Remplacer par '+CONDITION_CREATEUR);
+    process.exit(1);
+  }
+  // Chaque auth.uid compare doit etre CELUI de la constante, et toujours
+  // accompagne de l'adresse verifiee.
+  const uids=[...sansCom.matchAll(/auth\.uid === '([^']*)'/g)].map((m)=>m[1]);
+  const autres=uids.filter((u)=>u!==CREATEUR_UID);
+  if(autres.length){ console.error('\nUID DIVERGENT dans les regles : '+[...new Set(autres)].join(', ')+' (createur.js : '+CREATEUR_UID+')'); console.error('node scripts/poser_uid_createur.mjs les realigne.'); process.exit(1); }
+  const nus=uids.length-sansCom.split(CONDITION_CREATEUR).length+1;
+  if(nus>0){ console.error('\n'+nus+' condition(s) auth.uid sans auth.token.email_verified === true'); process.exit(1); }
+  if(uids.length<20){ console.error('\nseulement '+uids.length+' condition(s) createur dans les regles : lecture cassee ?'); process.exit(1); }
+  console.log('createur : '+uids.length+' condition(s), toutes sur l\'UID et une adresse verifiee ; aucune sur l\'adresse seule');
+  // ⚠ EN DERNIER, ET BLOQUANT : des regles deployees avec le texte de
+  //   remplacement ne reconnaitraient PLUS PERSONNE comme createur.
+  if(CREATEUR_UID===UID_A_POSER){
+    console.error('\nCREATEUR_UID N\'EST PAS POSE (cloudflare/src/createur.js vaut encore '+UID_A_POSER+').');
+    console.error('Console Firebase > Authentication > colonne « UID utilisateur » du compte createur,');
+    console.error('puis : node scripts/poser_uid_createur.mjs. Ne PAS deployer ces regles avant.');
+    process.exit(1);
+  }
 }
 
 console.log('\nRien de bloquant.');

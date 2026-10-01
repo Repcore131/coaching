@@ -18,6 +18,7 @@
 import T from '../../tarifs.json' with { type: 'json' };
 import { ErreurAppel } from './appels.js';
 import { CREATOR_EMAIL, MONTH_MS } from './metier.js';
+import { estCreateur } from './createur.js';
 
 const JOUR_MS = 86400000;
 export const CODE_MOIS_MAX_AFFILIE = 12;      // = CODE_MOIS_MAX_AFFILIE de l'app
@@ -192,7 +193,13 @@ export function creerAppelsDroits(ctx) {
     const cle = cleDe(auth.email), t = now();
     const { d } = await lireCode(data && data.code);
     const coach = coachDuCode(d);
-    if (coach !== cle && cle !== CLE_CREATEUR) throw new ErreurAppel(403, "Ce code n'est pas le tien.");
+    // Le créateur prolonge tout code — reconnu par son UID et une adresse
+    // vérifiée (createur.js), jamais par son adresse seule.
+    // Un code ÉMIS PAR LE CRÉATEUR ne se prolonge que par lui, reconnu de même :
+    // sinon un compte qui porte son adresse sous un autre UID passerait par
+    // « coach === cle ».
+    const sien = coach === cle && (coach !== CLE_CREATEUR || estCreateur(auth));
+    if (!sien && !estCreateur(auth)) throw new ErreurAppel(403, "Ce code n'est pas le tien.");
     if (coach !== CLE_CREATEUR && !(await lire('coachs_registre/' + coach))) throw new ErreurAppel(403, "Tu n'es pas enregistré comme coach.");
     if (d.redeemed !== true || !d.athleteEmail) return { ok: true, applique: false };
     const fin = finDuCode({ expiry: d.expiry }, coach, t);

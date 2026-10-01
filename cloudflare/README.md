@@ -52,7 +52,8 @@ refusés jusqu'à minuit (UTC).
    npx wrangler@4 deploy
    ```
 6. Vérifier : `https://repcore-serveur.<sous-domaine>.workers.dev/sante` doit répondre
-   `{"ok":true,"base":true,"secret":true,"acces":"compte_service","vapid":true}`.
+   `{"ok":true,"base":true,"vapid":true}`. Le détail (mode d'accès à la base, secrets posés) est
+   réservé à l'administrateur : `/sante?cles=1` (voir « Limites »).
 
 L'adresse du serveur est ensuite posée dans l'app (`SERVEUR_LEGER_URL`, `app/rc-core.*.js`) et dans
 les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qui allume le tout.
@@ -125,6 +126,26 @@ vérification à la main : `docs/apercu-liens.md`.
 - **Purge** : le 1er du mois, 4 h 10, `paypal_evenements` de plus de 90 jours (PayPal ne renvoie
   plus rien après trois jours), par lots de 200, les plus anciens d'abord (`.indexOn: ["at"]`).
 
+## Le créateur, reconnu par son UID
+
+Depuis le 01/10/2026, les règles de la base et le Worker ne reconnaissent plus le créateur à son
+adresse e-mail (un compte Google, Apple ou lié peut porter la même adresse sous un autre UID), mais
+à **son UID Firebase et une adresse vérifiée** : `auth.uid === '<UID>' && auth.token.email_verified === true`.
+
+L'UID vit dans **une seule constante**, `CREATEUR_UID` de `src/createur.js`. Pour la poser :
+
+1. Console Firebase → *Authentication* → *Utilisateurs* → la ligne `guellec.coachingpro@gmail.com`
+   → colonne **UID utilisateur** (28 caractères ; ce n'est pas un secret).
+2. Remplacer `'UID_CREATEUR_A_POSER'` par cet UID dans `CREATEUR_UID` (pas dans `UID_A_POSER`).
+3. `node scripts/poser_uid_createur.mjs` (depuis la racine) : le recopie dans `database.rules.json`.
+4. `node scripts/verif/regles.mjs` doit finir par « Rien de bloquant. »
+
+Tant que l'UID n'est pas posé, `regles.mjs` échoue — et avec lui le déploiement (`firebase.yml`) :
+des règles déployées avec le texte de remplacement ne reconnaîtraient plus personne comme créateur.
+L'adresse du créateur doit aussi être **vérifiée** : le jeton porte `email_verified`. Si elle ne
+l'est pas, cliquer le lien de vérification reçu par e-mail, puis se déconnecter et se reconnecter
+(le jeton n'est relu qu'à la connexion ou au renouvellement, au plus une heure).
+
 ## Limites
 
 - **`/sante?cles=1`** interroge PayPal et Cloudinary : il est réservé à l'administrateur. Poser le
@@ -137,7 +158,9 @@ vérification à la main : `docs/apercu-liens.md`.
   $s = Get-Content C:\Users\kevin\RepCore-secrets\admin-secret.txt
   Invoke-RestMethod https://repcore-serveur.repcore.workers.dev/sante?cles=1 -Headers @{Authorization="Bearer $s"}
   ```
-  Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public.
+  Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public, et ne dit
+  plus que `ok`, `base` et `vapid` : le mode d'accès à la base (`acces`) et les secrets posés
+  (`paypalPose`, `cloudinaryPose`, `garmin`) ne sortent que par `/sante?cles=1`.
 - **Aucune route publique sans limite** (01/10/2026). Trois limiteurs par adresse IP, déclarés dans
   `wrangler.toml` et posés par `npx wrangler deploy` (rien à régler à la main) :
   `LIMITE_ROUTES` (toute requête sauf `OPTIONS`, 120 par minute), `LIMITE_ARRIVEES` (ci-dessous) et
@@ -235,7 +258,7 @@ Ce qu'il faut en retenir :
    - Noter le **Webhook ID** affiché, et le **Secret** de l'application (même page).
 2. Cloudinary (https://console.cloudinary.com/settings/api-keys) : **API Key** et **API Secret**.
 3. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\secrets-paiements.ps1`
-   pose les quatre secrets. `/sante` doit alors dire `"paypal":true,"cloudinary":true`.
+   pose les quatre secrets. `/sante?cles=1` doit alors dire `"paypal":"ok","cloudinary":"ok"`.
 
 Sans ces secrets, rien ne casse : `/paypal` refuse (signature invérifiable), et les suppressions
 de vidéos attendent dans la file de l'app jusqu'à ce que le serveur sache les faire.
@@ -332,7 +355,7 @@ instructions du guide Garmin.
 5. Dans l'outil « Endpoint Configuration » du portail Garmin, déclarer en **push**
    (pas en ping) pour Dailies, Sleeps, HRV, Deregistrations et User Permissions :
    `https://repcore-serveur.repcore.workers.dev/garmin/push/<GARMIN_PUSH_SECRET>`.
-6. Vérifier : `/sante` dit `"garmin": true`, puis relier un compte de test depuis
+6. Vérifier : `/sante?cles=1` dit `"garmin": true`, puis relier un compte de test depuis
    l'app (Lifestyle › Connecter mes données santé › Connecter Garmin) et
    synchroniser la montre : la journée arrive dans `sante_sync/<clé>/jours`.
 
@@ -355,7 +378,7 @@ une heure, se renouvelle seul, et la clé qui le signe ne quitte jamais le worke
 Il remplace l'ancien **code secret de la base de données** (`FIREBASE_DB_SECRET`) : un accès total,
 sans expiration, envoyé dans l'URL de chaque requête (`?auth=…`), donc dans les journaux de ce
 qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en sert encore, et
-`/sante` le dit : `"acces":"secret_historique"`. L'état voulu est `"acces":"compte_service"`.
+`/sante?cles=1` le dit : `"acces":"secret_historique"`. L'état voulu est `"acces":"compte_service"`.
 
 ### Mise en place (une fois)
 
@@ -367,7 +390,7 @@ qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en 
 3. Le compte → **Clés** → **Ajouter une clé** → **JSON**. Enregistrer le fichier sous
    `C:\Users\kevin\RepCore-secrets\compte-service.json`, **hors du dépôt**.
 4. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\compte-service.ps1` : pose
-   le secret `FIREBASE_SERVICE_ACCOUNT`, vérifie `/sante`, puis retire `FIREBASE_DB_SECRET` du worker.
+   le secret `FIREBASE_SERVICE_ACCOUNT`, vérifie `/sante?cles=1`, puis retire `FIREBASE_DB_SECRET` du worker.
 5. **Révoquer l'ancien code secret** : console Firebase → ⚙ Paramètres du projet → Comptes de
    service → Codes secrets de la base de données → supprimer. Tant qu'il existe, il ouvre toute la
    base, à qui l'a.
@@ -378,7 +401,7 @@ qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en 
    `compte-service.json` par le nouveau fichier.
 2. Relancer `compte-service.ps1` : le worker prend la nouvelle clé au déploiement du secret (les
    jetons déjà émis avec l'ancienne restent valables au plus une heure).
-3. `/sante` doit dire `"acces":"compte_service"`.
+3. `/sante?cles=1` doit dire `"acces":"compte_service"`.
 4. Supprimer l'**ancienne** clé dans **Clés** (son identifiant est `private_key_id` dans l'ancien
    fichier), puis effacer l'ancien fichier.
 

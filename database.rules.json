@@ -96,7 +96,7 @@
           //   un champ non declare fait rejeter le PUT ENTIER du dossier, en
            //   silence. Sans cette ligne, le premier abonne a Ultime aurait
           //   cesse de se synchroniser sans que rien ne le dise.
-          "formule": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
+          "formule": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "prochaineEcheance": { ".validate": "newData.isNumber()" },
           // ⚠ LE TERME DE L'ENGAGEMENT (24/09/2026), ET IL DOIT ETRE DECLARE ICI.
           //   `abonnement` est une liste blanche fermee par "$autre": false : un
@@ -108,10 +108,10 @@
           //   offert du parrainage), et DECLARES ICI pour la meme raison que
           //   `formule` : l app renvoie le dossier entier, et un champ inconnu
           //   ferait rejeter tout le PUT, en silence.
-          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
-          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
+          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
+          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "resilieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
-          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
+          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))" },
           "source": { ".validate": "newData.isString() && newData.val().length < 40" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
@@ -323,16 +323,16 @@
         // (_alignerChampsGeles) pour ne jamais faire rejeter un envoi.
         // La SUPPRESSION d un champ n est pas validee par Firebase : elle
         // passe, et n ouvre rien — la verite est dans droits/ et coachs_registre/.
-        "status": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
-        "paymentStatus": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
-        "accessExpiry": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
-        "coachPlan": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
-        "coachSubActive": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "status": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "paymentStatus": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "accessExpiry": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "coachPlan": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
+        "coachSubActive": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
         // Un objet ne se compare pas d un bloc : on gele chaque feuille.
-        "programmesAchetes": { "$prog": { "$champ": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" } } },
+        "programmesAchetes": { "$prog": { "$champ": { ".validate": "newData.val() === data.val() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" } } },
         // Le role : la premiere pose, a 'athlete' seulement. 'coach' est pose
         // par le Worker (devenirCoach), sur invitation ou place Libre.
-        "role": { ".validate": "newData.val() === data.val() || (!data.exists() && newData.val() === 'athlete') || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "role": { ".validate": "newData.val() === data.val() || (!data.exists() && newData.val() === 'athlete') || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
 
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
@@ -473,8 +473,8 @@
   //   croyant l ouvrir, et c est la faute la plus chere possible ici.
   "droits": {
     "$emailKey": {
-      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  auth.token.email === 'guellec.coachingpro@gmail.com'\n)",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)\n)",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "palier": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "avant": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
       "echeance": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4102444800000" },
@@ -519,7 +519,7 @@
 
   "boutique": {
     ".read": "auth != null",
-    ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+    ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
     "$progId": {
       ".validate": "$progId.length < 60",
       "nom": { ".validate": "newData.isString() && newData.val().length < 80" },
@@ -561,8 +561,8 @@
   // createur, adresse VERIFIEE. Ecrit par le createur seul.
   "boutique_contenu": {
     "$progId": {
-      ".read": "auth != null && (root.child('droits').child(auth.token.email.replace('.', ',')).child('programmes').child($progId).exists() || (auth.token.email === 'guellec.coachingpro@gmail.com' && auth.token.email_verified === true))",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (root.child('droits').child(auth.token.email.replace('.', ',')).child('programmes').child($progId).exists() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true))",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".validate": "$progId.length < 60",
       "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
       "maj": { ".validate": "newData.isNumber()" },
@@ -1134,7 +1134,7 @@
         // serveur, une telemetrie d ouverture est necessairement falsifiable ;
         // la difference avec /metrics, qui accepte l ecriture sans rien
         // connaitre, est qu il faut ici detenir le code.
-        ".write": "(auth != null && ((!data.exists() && (root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() || auth.token.email === 'guellec.coachingpro@gmail.com') && newData.child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || data.child('coachEmailKey').val() === auth.token.email.replace('.', ','))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
+        ".write": "(auth != null && ((!data.exists() && (root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() || (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)) && newData.child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || data.child('coachEmailKey').val() === auth.token.email.replace('.', ','))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
 
         // Trois etats, dans cet ordre, et rien d autre.
         "etat":     { ".validate": "newData.isString() && newData.val().matches(/^(envoye|ouvert|cree)$/)" },
@@ -1202,7 +1202,7 @@
       // additionne les jours du mois en UNE requete bornee par orderBy="$key".
       // Sans ce droit, il faudrait trente-et-une requetes pour un ecran que
       // seule une personne ouvre. Les autres gardent la lecture par jour.
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "$jour": {
         ".read": "auth != null",
         // UNE DATE PLAUSIBLE, et pas seulement un motif a chiffres : annee 2020
@@ -1236,7 +1236,7 @@
         //   sur ce point couterait TOUTES les mesures du tunnel, en silence.
         //   Le noeud ne porte aucune donnee personnelle : le risque est un
         //   chiffre faux, pas une fuite.
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true) && !newData.exists()",
         "$evenement": {
           // ⚠ LES QUATRE DERNIERS NOMS NE SONT PAS DES ETAPES DE TUNNEL, ce sont
           //   des COMPTEURS DE CAPACITE : oct_in_ko et oct_out_ko comptent les
@@ -1726,7 +1726,7 @@
     "saisons": {
       ".read": "auth != null",
       "$id": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$id.matches(/^[a-z0-9][a-z0-9-]{2,40}$/) && newData.hasChildren(['nom', 'debut', 'fin', 'mesure', 'objectifPerso', 'objectifCollectif', 'badgeCle', 'couleurAccent', 'texteAccueil'])",
         "nom":               { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 60" },
         "debut":             { ".validate": "newData.isNumber()" },
@@ -2028,7 +2028,7 @@
     "defi_mois": {
       ".read": "auth != null",
       "$mois": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && newData.hasChildren(['titre', 'mesure', 'objectif', 'debut', 'fin'])",
         "titre":    { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 80" },
         "texte":    { ".validate": "newData.isString() && newData.val().length <= 300" },
@@ -2101,8 +2101,8 @@
     // range par le Worker, lu par l administrateur (ecran Ambassadeurs), qui
     // peut effacer une ligne une fois vue.
     "evenements_ko": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
-      "$id": { ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()" }
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      "$id": { ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true) && !newData.exists()" }
     },
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
@@ -2128,7 +2128,7 @@
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).
     "paypal_journal": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false
     },
 
@@ -2143,7 +2143,7 @@
       // LA RETENTION (/stats/retention, serveur leger) : des agregats, mais des
       // chiffres d affaires en creux — le createur seul. Le reste (badges,
       // saisons) reste public, comme avant.
-      "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      "retention": { ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)" },
       "$autre": { ".read": true }
     },
     // LE RESUME D ACTIVITE d un compte, pour la retention agregee : des jours
@@ -2177,7 +2177,7 @@
     // noms fermes, aucune cle ne designe une personne (le code d un parrain,
     // lui, n est jamais enregistre). Lecture : le createur (ecran Viralite).
     "attribution": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "jours": {
         "$jour": {
           // Une date plausible (comme /metrics). « Aujourd hui a un jour pres »
@@ -2225,9 +2225,9 @@
     // comptent clics, inscriptions, paiements et commissions. L admin n y
     // touche, en pratique, que pour creer une fiche et marquer « payee ».
     "ambassadeurs": {
-      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "$code": {
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         ".validate": "$code.matches(/^[A-Z0-9]{3,16}$/)",
         "nom":           { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
         "instagram":     { ".validate": "newData.isString() && newData.val().length <= 60" },
@@ -2250,7 +2250,7 @@
     "ambassadeurs_publics": {
       "$code": {
         ".read": true,
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
         "nom":      { ".validate": "newData.isString() && newData.val().length <= 80" },
         "avantage": { ".validate": "newData.isString() && (newData.val() === 'essai+1mois' || newData.val() === 'ultime_demi')" },
         "actif":    { ".validate": "newData.isBoolean()" },
@@ -2262,7 +2262,7 @@
     "ambassadeurs_vue": {
       "$secret": {
         ".read": true,
-        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+        ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)"
       }
     },
     // UNE demande par compte, a vie, vers un code actif ; jugee par
@@ -2285,7 +2285,7 @@
     // partir de la l abonnement que seul le dossier affirme.
     "reglages_publics": {
       ".read": "auth != null",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       "droitsServeur": {
         "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
         // v = 2 : droits/ et coachs_registre/ remplis par remplir-droits.mjs.
@@ -2303,7 +2303,7 @@
     // plus rien.
     "exercices": {
       ".read": "auth != null && (\n  root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
-      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+      ".write": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)"
     }
   }
 }

@@ -5,13 +5,18 @@
 //   node cloudflare/test/regles-droits.emu.mjs
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { CREATEUR_UID } from '../src/createur.js';
 
 const BASE = process.env.EMU || 'http://127.0.0.1:9000';
 const NS = 'droits' + Date.now().toString(36);
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-const jeton = (email) => b64({ alg: 'none', typ: 'JWT' }) + '.' + b64({ sub: email, user_id: email, email, email_verified: true,
+// Le créateur se présente sous SON UID (createur.js) : les règles ne le
+// reconnaissent plus à son adresse. Un autre UID se force par UID_FORCE.
+const UID_FORCE = new Map();
+const uidDe = (email) => UID_FORCE.get(email) || (email === 'guellec.coachingpro@gmail.com' ? CREATEUR_UID : email);
+const jeton = (email) => b64({ alg: 'none', typ: 'JWT' }) + '.' + b64({ sub: uidDe(email), user_id: uidDe(email), email, email_verified: true,
   iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600, aud: NS, iss: 'https://securetoken.google.com/' + NS,
   firebase: { sign_in_provider: 'password' } }) + '.';
 async function appel(qui, methode, chemin, corps) {

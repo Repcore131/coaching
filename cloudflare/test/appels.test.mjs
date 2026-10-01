@@ -10,6 +10,8 @@ import { creerMetier } from '../src/metier.js';
 import { creerAppelsDroits } from '../src/droits-appels.js';
 import { ErreurAppel } from '../src/appels.js';
 import { planifierDroitsCoachs } from '../src/migration.js';
+import { CREATOR_EMAIL } from '../src/metier.js';
+import { estCreateur, reconnaitCreateur, CREATEUR_UID, UID_A_POSER } from '../src/createur.js';
 
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
@@ -315,6 +317,25 @@ await test('prolongerCode : le coach du code repousse l’accès de l’athlète
   const r = await w.appel('prolongerCode', 'kev@t.fr', { code: 'RC-AAAA-BBBB' });
   assert.equal(r.applique, true);
   assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 12 * MMS);
+});
+await test('le créateur se reconnaît à son UID et à une adresse vérifiée, jamais à son adresse seule', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } }, rc_codes: { 'RC-AAAA-BBBB': CODE() } });
+  await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
+  // L'adresse du créateur, sous un autre UID (compte Google ou lié) : refusé,
+  // sur le code d'un coach comme sur un code émis par le créateur lui-même.
+  await assert.rejects(() => w.A.prolongerCode({ auth: { email: CREATOR_EMAIL, uid: 'un-autre-uid', emailVerifie: true },
+    data: { code: 'RC-AAAA-BBBB' } }), refusA(403));
+  w.F.ecrire('rc_codes/RC-CREA-TEUR', Object.assign(CODE(), { coachEmail: CREATOR_EMAIL, coachEmailKey: 'guellec,coachingpro@gmail,com' }));
+  await assert.rejects(() => w.A.prolongerCode({ auth: { email: CREATOR_EMAIL, uid: 'un-autre-uid', emailVerifie: true },
+    data: { code: 'RC-CREA-TEUR' } }), refusA(403));
+  const est = reconnaitCreateur('uidDuCreateur0000000000000ab');
+  assert.equal(est({ email: CREATOR_EMAIL, uid: 'uidDuCreateur0000000000000ab', emailVerifie: true }), true);
+  assert.equal(est({ email: CREATOR_EMAIL, uid: 'uidDuCreateur0000000000000ab', emailVerifie: false }), false, 'adresse non vérifiée');
+  assert.equal(est({ email: CREATOR_EMAIL, uid: 'un-autre-uid', emailVerifie: true }), false, 'autre UID');
+  assert.equal(est({ email: 'x@t.fr', uid: 'uidDuCreateur0000000000000ab', emailVerifie: true }), true, 'l’UID fait foi, pas l’adresse');
+  // Tant que la constante n'est pas posée, PERSONNE n'est créateur.
+  assert.equal(reconnaitCreateur(UID_A_POSER)({ uid: UID_A_POSER, emailVerifie: true }), false);
+  if (CREATEUR_UID === UID_A_POSER) assert.equal(estCreateur({ email: CREATOR_EMAIL, uid: UID_A_POSER, emailVerifie: true }), false);
 });
 
 await test('emailVerifie : le serveur ne croit que le jeton ; il note la date une fois', async () => {

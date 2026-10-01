@@ -92,6 +92,17 @@ function egalSecret(a, b) {
   for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x.charCodeAt(i % x.length) || 0) ^ (y.charCodeAt(i % y.length) || 0);
   return d === 0;
 }
+// CE QUI EST POSÉ, pour l'administrateur seul (/sante?cles=1).
+// `acces` : « compte_service » est l'état voulu ; « secret_historique » dit
+// que l'ancien code secret sert encore et qu'il reste à le retirer.
+function configDe(env) {
+  const cs = !!lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
+  return { base: !!env.FIREBASE_DB_URL, secret: cs || !!env.FIREBASE_DB_SECRET,
+    acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
+    vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+    paypalPose: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
+    cloudinaryPose: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET), garmin: garminOuvert(env) };
+}
 // L'adresse IP de l'appelant, telle que Cloudflare la donne.
 const ipDe = (req) => (req.headers && req.headers.get('CF-Connecting-IP')) || 'inconnue';
 const reponse = (corps, statut, type) => {
@@ -231,7 +242,7 @@ async function servir(req, env, ctx) {
     if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
       const donne = String(req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
       if (!egalSecret(donne, String(env.ADMIN_SECRET || '').trim())) return reponse(JSON.stringify({ erreur: 'réservé' }), 401);
-      const r = {};
+      const r = configDe(env);
       try {
         const jeton = await jetonPaypal(env); r.paypal = 'ok';
         // Le Webhook ID posé est-il celui qui pointe ici ?
@@ -257,14 +268,12 @@ async function servir(req, env, ctx) {
       if (r) return r;
     }
     if (url.pathname === '/sante') {
-      // `acces` : « compte_service » est l'état voulu ; « secret_historique »
-      // dit que l'ancien code secret sert encore et qu'il reste à le retirer.
-      const cs = !!lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
-      return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: cs || !!env.FIREBASE_DB_SECRET,
-        acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
-        vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
-        paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
-        cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET), garmin: garminOuvert(env) }));
+      // PUBLIC : vivant, base configurée, notifications possibles — rien de
+      // plus (01/10/2026). Le MODE D'ACCÈS à la base et la liste des secrets
+      // posés disaient à un attaquant quelle porte essayer : ils sont passés
+      // derrière ADMIN_SECRET, dans /sante?cles=1 (configDe).
+      return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL,
+        vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) }));
     }
     return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
   } catch (e) {

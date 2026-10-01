@@ -54,12 +54,28 @@ await test('une URL illisible ne sort jamais sans CORS', async () => {
   corsPresent(r);
 });
 
-await test('/sante dit quel accès à la base sert : compte de service, ou l’ancien secret à retirer', async () => {
-  const lire = async (env) => (await (await worker.fetch(new Request('https://s.t/sante'), env, CTX)).json()).acces;
-  assert.equal(await lire(ENV), 'secret_historique');
+await test('/sante public : ok, base, vapid — et plus rien sur le mode d’accès à la base (« acces ») ni sur les secrets', async () => {
   const compte = JSON.stringify({ client_email: 'w@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' });
-  assert.equal(await lire(Object.assign({}, ENV, { FIREBASE_SERVICE_ACCOUNT: compte })), 'compte_service');
-  assert.equal(await lire({ FIREBASE_DB_URL: 'https://b' }), 'aucun');
+  for (const env of [ENV, Object.assign({}, ENV, { FIREBASE_SERVICE_ACCOUNT: compte }), { FIREBASE_DB_URL: 'https://b' }]) {
+    const r = await worker.fetch(new Request('https://s.t/sante'), env, CTX);
+    const texte = await r.text();
+    assert.equal(r.status, 200);
+    assert.ok(!/acces/.test(texte), texte);
+    assert.deepEqual(Object.keys(JSON.parse(texte)).sort(), ['base', 'ok', 'vapid']);
+  }
+});
+
+await test('/sante?cles=1 (administrateur) dit toujours le mode d’accès : compte de service, ou l’ancien secret à retirer', async () => {
+  const vrai = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('hors ligne'); };
+  try {
+    const lire = async (env) => (await (await worker.fetch(new Request('https://s.t/sante?cles=1', { headers: { Authorization: 'Bearer secret-admin-assez-long' } }),
+      Object.assign({ ADMIN_SECRET: 'secret-admin-assez-long' }, env), CTX)).json()).acces;
+    assert.equal(await lire(ENV), 'secret_historique');
+    const compte = JSON.stringify({ client_email: 'w@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' });
+    assert.equal(await lire(Object.assign({}, ENV, { FIREBASE_SERVICE_ACCOUNT: compte })), 'compte_service');
+    assert.equal(await lire({ FIREBASE_DB_URL: 'https://b' }), 'aucun');
+  } finally { globalThis.fetch = vrai; }
 });
 
 // ══ LES LIMITES (01/10/2026) : aucune route publique sans limite ═══════════
