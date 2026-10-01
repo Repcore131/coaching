@@ -1052,6 +1052,9 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .tq-o[aria-selected="true"] b{color:var(--red-text)}
 :root[data-theme="clair"] .tq-s span,:root[data-theme="clair"] .tq-o span{color:var(--sub)}
 :root[data-theme="clair"] .px-tq .tq-l{background:var(--surface-2);border:1px solid color-mix(in srgb,var(--red) 50%,transparent);box-shadow:var(--e3)}
+:root[data-theme="clair"] .px-sous{color:var(--text-faint)}
+:root[data-theme="clair"] .px-musc-c{background:var(--surface-0);border:1px solid var(--border)}
+:root[data-theme="clair"] .px-musc:focus-visible .px-musc-c{border-color:var(--red-text)}
 :root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:var(--surface-0)}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}

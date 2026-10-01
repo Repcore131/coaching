@@ -891,6 +891,12 @@ const SERIES_MAX=20;
 // correction, pas de champ vide : un coach qui ecrit « 2 s en bas, explosif »
 // a ecrit une consigne, et elle vaut. Elle n'aura simplement pas de guide —
 // il n'y a rien a battre dans une phrase.
+// LE MATÉRIEL COMMENCE PAR UNE MAJUSCULE (Kevin, 01/10/2026) : la banque écrit
+// « barre », la carte affiche « Barre ». Seule la première lettre change.
+function _materielMajuscule(v){
+  const t=String(v==null?'':v).trim();
+  return t?t.charAt(0).toLocaleUpperCase('fr')+t.slice(1):'';
+}
 function _progTempoSaisie(i,el){
   _progExDirty=true;
   const brut=String(el&&el.value!=null?el.value:'');

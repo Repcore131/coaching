@@ -43442,22 +43442,29 @@ function renderProgEx(){
              1025 px : deux div empiles, chacun avec sa marge, exactement comme
              avant. C'est la seule regle CSS qui le met en deux colonnes, et
              elle est bornee au coach. -->
+        <!-- 01/10/2026 (Kevin) : TEMPO, MATÉRIEL, MUSCLES SUR UNE MÊME LIGNE (.px-l3).
+             Tempo court, Matériel à côté, Muscles prend tout le reste. L'exemple
+             « 3-1-1-0 » ne vit plus que dans la case ; dessous, en plus petit, ce
+             que valent les quatre chiffres. .px-duo reste dans le rendu, sans
+             boîte (display:contents) : ses deux enfants sont des cases de la ligne. -->
+        <div class="px-l3">
         <div class="px-duo">
-        <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
-        <div style="margin-bottom:8px">
-          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 : descente, bas, montée, haut)</span></label>
-          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
+        <div class="px-tempo" style="margin-bottom:8px">
+          <label style="margin-top:0">Tempo</label>
+          <input class="px-court f-c" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
+          <div class="px-sous">(descente, bas, montée, haut)</div>
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
              illisible partout où le nom sert de clef. -->
         <div style="margin-bottom:8px">
-          <label>Matériel</label>
-          <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
+          <label style="margin-top:0">Matériel</label>
+          <input value="${escapeHtml(_materielMajuscule(ex.materiel))}" onchange="_progExDirty=true;this.value=_materielMajuscule(this.value);progEx[${i}].materiel=this.value" placeholder="Ex : Haltères, banc incliné">
         </div>
+        </div>
+        ${_ligneMuscles(ex,i)}
         </div>
         ${_blocAvertissementContrainte(ex,i)}
-        ${_ligneMuscles(ex,i)}
         <!-- Description technique -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Description / Technique</label>
@@ -52353,6 +52360,12 @@ const SERIES_MAX=20;
 // correction, pas de champ vide : un coach qui ecrit « 2 s en bas, explosif »
 // a ecrit une consigne, et elle vaut. Elle n'aura simplement pas de guide —
 // il n'y a rien a battre dans une phrase.
+// LE MATÉRIEL COMMENCE PAR UNE MAJUSCULE (Kevin, 01/10/2026) : la banque écrit
+// « barre », la carte affiche « Barre ». Seule la première lettre change.
+function _materielMajuscule(v){
+  const t=String(v==null?'':v).trim();
+  return t?t.charAt(0).toLocaleUpperCase('fr')+t.slice(1):'';
+}
 function _progTempoSaisie(i,el){
   _progExDirty=true;
   const brut=String(el&&el.value!=null?el.value:'');
@@ -129083,10 +129096,11 @@ function _ligneMuscles(ex,i){
     ? [...r.p.map(g=>past(g,true)),...r.s.map(g=>past(g,false))].join(' ')
       +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
-  return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-    style="margin-bottom:10px;padding:8px 10px;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
+  // 01/10/2026 : le titre est un libellé de champ, AU-DESSUS de la case, comme
+  // Tempo et Matériel à sa gauche : les trois cases de la ligne s'alignent.
+  return `<div class="px-musc" onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <label style="margin-top:0;cursor:pointer">Muscles</label>
+    <div class="px-musc-c">${corps}</div>
   </div>`;
 }
 
@@ -129344,7 +129358,10 @@ function _rendreSuggestionsProto(){
                                    ['cooldown','proto-sug-cooldown','prog-cooldown']]){
     const el=document.getElementById(zone); if(!el) continue;
     const actuel=(document.getElementById(champ)?.value||'').trim();
-    el.innerHTML=sug[phase].map(p=>{
+    // 01/10/2026 (Kevin) : SUR ORDINATEUR, LES TROIS SUGGESTIONS CÔTE À CÔTE,
+    // en trois colonnes de même taille (.pr-grille), au lieu d'être empilées.
+    // Sur téléphone et tablette, la grille ne fait rien : une carte par rang.
+    el.innerHTML='<div class="pr-grille">'+sug[phase].map(p=>{
       const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
       // Comparaison sur la ligne d'en-tête entière, pas sur un préfixe : deux
       // protocoles peuvent partager un début de nom.
@@ -129369,7 +129386,7 @@ function _rendreSuggestionsProto(){
         <div class="pr-desc">${escapeHtml(p.desc)}</div>
         ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}
       </button>`;
-    }).join('')
+    }).join('')+'</div>'
     +`<button type="button" class="pr-tous" onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');

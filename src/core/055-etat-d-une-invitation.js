@@ -1134,10 +1134,11 @@ function _ligneMuscles(ex,i){
     ? [...r.p.map(g=>past(g,true)),...r.s.map(g=>past(g,false))].join(' ')
       +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
-  return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-    style="margin-bottom:10px;padding:8px 10px;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
+  // 01/10/2026 : le titre est un libellé de champ, AU-DESSUS de la case, comme
+  // Tempo et Matériel à sa gauche : les trois cases de la ligne s'alignent.
+  return `<div class="px-musc" onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <label style="margin-top:0;cursor:pointer">Muscles</label>
+    <div class="px-musc-c">${corps}</div>
   </div>`;
 }
 
@@ -1395,7 +1396,10 @@ function _rendreSuggestionsProto(){
                                    ['cooldown','proto-sug-cooldown','prog-cooldown']]){
     const el=document.getElementById(zone); if(!el) continue;
     const actuel=(document.getElementById(champ)?.value||'').trim();
-    el.innerHTML=sug[phase].map(p=>{
+    // 01/10/2026 (Kevin) : SUR ORDINATEUR, LES TROIS SUGGESTIONS CÔTE À CÔTE,
+    // en trois colonnes de même taille (.pr-grille), au lieu d'être empilées.
+    // Sur téléphone et tablette, la grille ne fait rien : une carte par rang.
+    el.innerHTML='<div class="pr-grille">'+sug[phase].map(p=>{
       const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
       // Comparaison sur la ligne d'en-tête entière, pas sur un préfixe : deux
       // protocoles peuvent partager un début de nom.
@@ -1420,7 +1424,7 @@ function _rendreSuggestionsProto(){
         <div class="pr-desc">${escapeHtml(p.desc)}</div>
         ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}
       </button>`;
-    }).join('')
+    }).join('')+'</div>'
     +`<button type="button" class="pr-tous" onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');

@@ -1313,22 +1313,29 @@ function renderProgEx(){
              1025 px : deux div empiles, chacun avec sa marge, exactement comme
              avant. C'est la seule regle CSS qui le met en deux colonnes, et
              elle est bornee au coach. -->
+        <!-- 01/10/2026 (Kevin) : TEMPO, MATÉRIEL, MUSCLES SUR UNE MÊME LIGNE (.px-l3).
+             Tempo court, Matériel à côté, Muscles prend tout le reste. L'exemple
+             « 3-1-1-0 » ne vit plus que dans la case ; dessous, en plus petit, ce
+             que valent les quatre chiffres. .px-duo reste dans le rendu, sans
+             boîte (display:contents) : ses deux enfants sont des cases de la ligne. -->
+        <div class="px-l3">
         <div class="px-duo">
-        <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
-        <div style="margin-bottom:8px">
-          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 : descente, bas, montée, haut)</span></label>
-          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
+        <div class="px-tempo" style="margin-bottom:8px">
+          <label style="margin-top:0">Tempo</label>
+          <input class="px-court f-c" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
+          <div class="px-sous">(descente, bas, montée, haut)</div>
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
              illisible partout où le nom sert de clef. -->
         <div style="margin-bottom:8px">
-          <label>Matériel</label>
-          <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
+          <label style="margin-top:0">Matériel</label>
+          <input value="${escapeHtml(_materielMajuscule(ex.materiel))}" onchange="_progExDirty=true;this.value=_materielMajuscule(this.value);progEx[${i}].materiel=this.value" placeholder="Ex : Haltères, banc incliné">
         </div>
+        </div>
+        ${_ligneMuscles(ex,i)}
         </div>
         ${_blocAvertissementContrainte(ex,i)}
-        ${_ligneMuscles(ex,i)}
         <!-- Description technique -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Description / Technique</label>
