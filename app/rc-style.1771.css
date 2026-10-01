@@ -85,6 +85,9 @@ html{background:var(--bg)}
   --e3:0 4px 8px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);
   --e4:0 8px 16px rgba(0,0,0,.55);
   --e-inset:inset 0 2px 6px rgba(0,0,0,.6);
+  /* LE PANNEAU QUI FLOTTE (menu, liste deroulante) : plus haut que --e4. Ajoute
+     le 01/10/2026 pour un composant de main, au lieu d'une ombre ecrite en dur. */
+  --e-flottant:0 14px 34px rgba(0,0,0,.6);
   --glow-red:0 0 18px rgba(224,32,32,.35);
   /* Durées et courbes. Dix-huit durées distinctes pour quatre intentions.
      --c-out sort vite puis freine, --c-in fait l'inverse, --c-snap dépasse
@@ -5540,6 +5543,54 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .csm-hist-sel{font-size:var(--fs-xs);color:var(--sub);line-height:1.4;min-width:0}
 .csm-hist-btns{display:flex;gap:8px;flex-wrap:wrap}
 .csm-hist-btns .btn[disabled]{opacity:.4;cursor:not-allowed;box-shadow:none}
+/* ══ LA LISTE DES TECHNIQUES D'INTENSIFICATION (01/10/2026) ═══════════════
+   « Nom : ce qu'elle fait », sur une ligne. Le nom est petit, l'explication
+   plus petite encore et plus fine : c'est le nom qu'on cherche, l'explication
+   qu'on lit pour être sûr. */
+.tq{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);overflow:hidden}
+.tq[open]{border-color:color-mix(in srgb,var(--red) 50%,transparent)}
+.tq[data-inactif]{opacity:.45;pointer-events:none}
+.tq-s{display:flex;align-items:baseline;gap:0;min-height:44px;box-sizing:border-box;padding:14px 12px 12px;cursor:pointer;list-style:none;
+  white-space:nowrap;overflow:hidden;font-family:Montserrat,sans-serif}
+.tq-s::-webkit-details-marker{display:none}
+.tq-s i{margin-left:auto;padding-left:10px;font-style:normal;color:var(--sub);flex:0 0 auto;transition:transform var(--t-2)}
+.tq[open] .tq-s i{transform:rotate(180deg)}
+.tq-s:focus-visible{outline:2px solid var(--red-text);outline-offset:-2px}
+.tq-l{max-height:min(46vh,340px);overflow-y:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--border)}
+.tq-o{display:flex;align-items:baseline;width:100%;min-height:34px;box-sizing:border-box;padding:8px 12px;margin:0;
+  background:none;border:none;border-top:1px solid color-mix(in srgb,var(--text) 4.5%,transparent);border-radius:0;cursor:pointer;text-align:left;
+  white-space:nowrap;overflow:hidden;font-family:Montserrat,sans-serif;letter-spacing:0;text-transform:none}
+.tq-o:first-child{border-top:none}
+.tq-o:hover,.tq-o:focus-visible{background:color-mix(in srgb,var(--text) 5%,transparent);outline:none}
+.tq-o[aria-selected="true"]{background:color-mix(in srgb,var(--red) 12%,transparent)}
+.tq-s b,.tq-o b{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--text-strong);letter-spacing:.1px}
+.tq-o[aria-selected="true"] b{color:var(--red-text)}
+.tq-s span,.tq-o span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:pre;
+  font-size:10px;font-weight:300;color:var(--sub);letter-spacing:.1px}
+/* ══ LES DEUX LIGNES DE PRESCRIPTION DE LA CARTE DU COACH (01/10/2026) ═════
+   Ligne 1 : Séries, Répétition, Repos, trois cases égales jusqu'au bord.
+   Ligne 2 : Technique (la plus longue), Charge cible, RIR cible (réduit).
+   La borne .px-court (220 px) est levée DANS ces deux lignes : une case de
+   grille a déjà sa largeur, la borner y laissait un vide à droite. */
+.px-l1 .px-court,.px-l2 .px-court{max-width:none!important;width:100%}
+.px-l2{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr) minmax(0,.8fr);gap:8px;margin-bottom:8px;align-items:start;container-type:inline-size}
+.px-l2>div{min-width:0}
+.px-tq{position:relative}
+/* La liste s'ouvre PAR-DESSUS la carte : dans une case de grille, la pousser
+   ferait descendre la charge et le RIR d'un écran. Elle déborde sa case pour
+   que « Nom : ce qu'elle fait » garde sa ligne. */
+.px-tq .tq{overflow:visible}
+/* Les trois cases à la même hauteur : 48 px, bordure comprise. */
+.px-tq .tq-s{border-radius:var(--r-2);min-height:46px;align-items:center}
+.px-l2 input,.px-l2 select{height:48px;box-sizing:border-box}
+.px-tq .tq-l{position:absolute;left:0;top:calc(100% + 4px);z-index:40;width:max(100%,min(620px,100cqw));
+  background:var(--surface-2);border:1px solid color-mix(in srgb,var(--red) 50%,transparent);border-radius:var(--r-2);box-shadow:var(--e-flottant)}
+/* Téléphone : trois cases ne tiennent pas, la technique prend sa ligne. */
+@media (max-width:640px){
+  .px-l2{grid-template-columns:1fr 1fr}
+  .px-l2>.px-tq{grid-column:1/-1}
+  .px-tq .tq-l{width:100%}
+}
 /* ══ LA GRILLE DES MUSCLES DE LA BANQUE D'EXERCICES (01/10/2026) ═══════════
    Un carré par muscle : l'illustration du volume, le nom dessous. Cinq par
    ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,

@@ -41210,6 +41210,61 @@ const TECHNIQUES=Object.freeze({
   "constant_tension":{nom:"Constant tension",sous:"",famille:"normale",desc:"Ne jamais tendre complètement l'articulation en haut du mouvement pour garder le muscle constamment sous tension.",videos:[]},
   "dc_training":{nom:"DC Training",sous:"",famille:"rest_pause",desc:"3 mini-séries : jusqu'à l'échec, 10-15s de repos, refaire jusqu'à l'échec, 10-15s, refaire une dernière fois. Suivi d'un « extreme stretch » : maintenir une position d'étirement maximal du muscle pendant 30-60s en fin de série pour stimuler l'hyperplasie via la tension mécanique en position allongée.",videos:[]}
 });
+// ══ CE QUE FAIT CHAQUE MÉTHODE, EN UNE LIGNE (01/10/2026) ═══════════════
+// Kevin : « le nom de la technique, deux points, et en police beaucoup plus
+// petite et plus fine l'explication ; il faut que ça tienne sur une ligne, que
+// la personne sache sur quoi elle clique ». Le `desc` du catalogue est le
+// texte du guide, long de deux ou trois phrases : il reste affiché, entier,
+// une fois la méthode choisie. Ces résumés ne servent qu'à la LISTE : cinquante
+// caractères au plus, sans rien inventer que le `desc` ne dise.
+const TECHNIQUES_COURT=Object.freeze({
+  "dropset_type_1":"3 × 12 reps en baissant la charge, sans repos",
+  "dropset_type_2":"3 × 8 reps en baissant la charge, sans repos",
+  "dropset_type_3":"max de reps, on baisse, jusqu’à 100 reps au total",
+  "methode_5_repetitions_10_sec":"5 reps, 10 s de repos, trois fois",
+  "methode_10_repetitions_10_se":"10 reps, 10 s de repos, trois fois",
+  "methode_lourd_leger":"8 reps lourdes puis 15 reps légères",
+  "rest_in_pause":"à l’échec, 15 s de repos, puis on finit la série",
+  "stop_and_go":"2 s d’arrêt en haut ou en bas du mouvement",
+  "maximum":"le maximum de reps, au-delà de la brûlure",
+  "unilaterale":"un côté, puis l’autre",
+  "superset":"2 exercices enchaînés sans repos",
+  "methode_curl_barre":"10 serrée, 10 large, 10 moyenne, sans repos",
+  "methode_1_des_demis_repetiti":"10 bas-milieu, 10 milieu-haut, 10 complètes",
+  "methode_isometrie_type_1":"20 s contracté, puis 8 reps",
+  "methode_isometrie_type_2":"20 s contracté sur la dernière rep",
+  "triset":"3 exercices enchaînés sans repos",
+  "fst_7":"8 à 12 reps, contraction 20 à 30 s pendant le repos",
+  "repetition_partielle":"mouvement incomplet, sans tendre bras ou jambes",
+  "20_10_10_20":"20 reps, 10, 10, puis 20",
+  "bulgare":"3 reps à 85 %, puis 6 reps à 50 %",
+  "isotention":"3 s de contraction en bas du mouvement",
+  "isometrie_max":"pousser une charge immobile 4 s, trois fois",
+  "methode_2_des_demis_repetiti":"une demi-rep puis une complète comptent pour 1",
+  "methode_isometrie_type_3":"10 reps d’un bras, l’autre bloqué, puis les deux",
+  "methode_7_7_7":"7 reps puis 7 s de maintien, trois fois",
+  "excentrique_ralentit":"descente freinée sur 5 s",
+  "methode_trinite":"complètes, puis partielles, puis maintien en haut",
+  "methode_infinite":"12, 24, 36 puis 50 reps, repos égal en secondes",
+  "methode_sst":"lourd, puis deux baisses de charge en tempo lent",
+  "8_reps_puis_5_5s":"8 reps, puis 5 reps avec descente de 5 s",
+  "prefatigue":"isolation juste avant le mouvement de base",
+  "repetitions_forcees":"2 ou 3 reps de plus avec l’aide d’un partenaire",
+  "cluster_sets":"2 à 3 reps lourdes, 10 à 15 s de repos, en boucle",
+  "myo_reps":"série d’activation, puis mini-séries de 3 à 5 reps",
+  "repetitions_allongees":"seulement la partie basse, étirée, du mouvement",
+  "serie_geante":"4 exercices ou plus enchaînés sans repos",
+  "running_the_rack":"haltères de plus en plus légers, sans les reposer",
+  "negatives_pures":"seulement la descente, 5 à 8 s, charge très lourde",
+  "contrast_training":"une série lourde, puis une série légère explosive",
+  "reps_tricheur":"léger élan sur les dernières reps, descente tenue",
+  "occlusion_bfr":"bandes de compression, charge légère à 20-30 %",
+  "constant_tension":"sans jamais tendre l’articulation en haut",
+  "dc_training":"3 fois à l’échec, 10-15 s entre, puis étirement"
+});
+// PURE. Le résumé d'une méthode, ou '' si elle n'en a pas (méthode ajoutée
+// au catalogue sans son résumé : la ligne garde son nom seul).
+function techniqueCourt(cle){ return TECHNIQUES_COURT[cle]||''; }
 // PURE. La video a montrer pour une methode : la PREMIERE du guide, ou ''.
 // Elle existe pour que le passage de `video` a `videos` ne demande rien aux
 // trois endroits qui l'affichent — et pour qu'une methode sans video rende une
@@ -42869,18 +42924,34 @@ function _techniqueLecture(ex,i,m,cardio){
 }
 // Le sélecteur est désactivé sur un exercice cardio : aucune de ces méthodes
 // n'a de sens sur du vélo, et proposer un choix inopérant est pire que rien.
-function _selecteurTechnique(ex,i){
+// `partie` (01/10/2026) : la carte du coach pose le CHOIX sur la ligne de la
+// charge et du RIR cibles, et la SUITE (description, séries visées, règle,
+// avertissement) dessous, sur toute la largeur. Sans `partie`, tout d'un bloc.
+function _selecteurTechnique(ex,i,partie){
   const cardio=(()=>{ try{ return isCardio(ex); }catch(e){ return false; } })();
   const m=methodeDe(ex);
   if(!peutChoisirTechnique()) return _techniqueLecture(ex,i,m,cardio);
   const cles=Object.keys(TECHNIQUES);
   const sel=ex&&ex.methode&&TECHNIQUES[ex.methode]?ex.methode:'';
-  const opts='<option value="">Aucune (série normale)</option>'
-    +cles.map(k=>`<option value="${k}"${sel===k?' selected':''}>${escapeHtml(TECHNIQUES[k].nom+(TECHNIQUES[k].sous?' ('+TECHNIQUES[k].sous+')':''))}</option>`).join('');
-  return `<div style="margin-bottom:10px">
+  // ⚠ UNE LISTE DESSINÉE, PLUS UN <select> (01/10/2026). Une option native ne
+  //   porte qu'un texte, d'une seule graisse : « Dropset type 1 (3 x 12
+  //   répétitions) » ne disait pas ce que la méthode fait. Chaque ligne est
+  //   « Nom : ce qu'elle fait », le nom en petit, l'explication plus petite et
+  //   plus fine, sur UNE ligne (nowrap, l'ellipse en dernier recours).
+  //   <details> : natif, refermable, atteignable au clavier, sans une ligne de
+  //   JS pour l'ouvrir ; le choix passe par _progExTechnique, comme avant.
+  const ligne=(k,nom,court)=>`<button type="button" role="option" class="tq-o" data-v="${k}" aria-selected="${sel===k?'true':'false'}"`
+    +` onclick="_progExTechnique(${i},'${k}')"><b>${escapeHtml(nom)}</b>${court?`<span> : ${escapeHtml(court)}</span>`:''}</button>`;
+  const opts=ligne('','Aucune','série normale')
+    +cles.map(k=>ligne(k,TECHNIQUES[k].nom,techniqueCourt(k))).join('');
+  const courant=sel?[TECHNIQUES[sel].nom,techniqueCourt(sel)]:['Aucune','série normale'];
+  const choix=`
     <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
-    <select ${cardio?'disabled':''} onchange="_progExTechnique(${i},this.value)"
-      style="width:100%;box-sizing:border-box${cardio?';opacity:.45':''}">${opts}</select>
+    <details class="tq"${cardio?' data-inactif="1"':''}>
+      <summary class="tq-s"${cardio?' tabindex="-1" aria-disabled="true"':''}><b>${escapeHtml(courant[0])}</b>${courant[1]?`<span> : ${escapeHtml(courant[1])}</span>`:''}<i aria-hidden="true">▾</i></summary>
+      ${cardio?'':`<div class="tq-l" role="listbox" aria-label="Technique d’intensification">${opts}</div>`}
+    </details>`;
+  const suite=`
     ${m?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(m.desc)}
       ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
     <!-- SUR QUELLE(S) SÉRIE(S). Une méthode se pose rarement sur les quatre :
@@ -42894,8 +42965,10 @@ function _selecteurTechnique(ex,i){
         placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
     ${_blocRegleMethode(ex,i)}
-    ${_avertissementTechnique(ex,i)}
-  </div>`;
+    ${_avertissementTechnique(ex,i)}`;
+  if(partie==='choix') return `<div class="px-tq">${choix}</div>`;
+  if(partie==='suite') return `<div style="margin-bottom:10px">${suite}</div>`;
+  return `<div style="margin-bottom:10px">${choix}${suite}</div>`;
 }
 // L'EVALUATION TELLE QUE L'EDITEUR LA POSE. Elle porte le contexte que les
 // fonctions pures ne peuvent pas deviner : sur QUEL athlete on prescrit, et
@@ -43193,6 +43266,8 @@ function renderProgEx(){
   // Lu UNE FOIS pour tout le rendu : peutConsulterBanque relit currentUser a
   // chaque appel, et une carte de dix exercices l'appellerait dix fois.
   const _bqDispo=(()=>{ try{ return !!peutConsulterBanque(); }catch(e){ return false; } })();
+  // Le menu de technique (coach) partage la ligne de la charge et du RIR cibles.
+  const _tqMenu=(()=>{ try{ return !!peutChoisirTechnique(); }catch(e){ return false; } })();
   // Le bouton n'apparait qu'a qui a le catalogue (un coach, ou Ultime).
   const _bq=document.getElementById('prog-banque');
   if(_bq) _bq.style.display=_bqDispo?'block':'none';
@@ -43299,14 +43374,17 @@ function renderProgEx(){
              les trois formes reconnues passent en infobulle. Les écrire toutes
              dans le placeholder les aurait fait tronquer : trente et un
              caractères dans un champ de 106 px. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <!-- 01/10/2026 (Kevin) : LES TROIS CASES VONT JUSQU'AU BORD. « Repos » était
+             borné à 220 px (.px-court) et laissait un vide à droite ; .px-l1 lève
+             la borne, et le champ est centré comme ses deux voisins. -->
+        <div class="px-l1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
           <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
             <label style="margin-top:0">Répétition</label>
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label style="margin-top:0">Repos</label><input class="px-court" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}" class="f-c f-sm"></div>
+          <div><label style="margin-top:0">Repos</label><input class="px-court f-c" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}"></div>
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours,              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
              deux colonnes de la fiche imprimable, et ÉCRITS nulle part.
@@ -43320,7 +43398,12 @@ function renderProgEx(){
 
              Placés avec les séries, les reps et le tempo plutôt qu’avec le
              matériel : c’est la prescription du travail, pas de l’engin. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <!-- 01/10/2026 (Kevin) : TECHNIQUE, CHARGE CIBLE, RIR CIBLE SUR UNE LIGNE,
+             la technique en premier et plus longue que les deux autres, le RIR
+             réduit. Pour le coach seulement : l'athlète n'a pas de menu de
+             technique, sa ligne reste Charge + RIR. -->
+        <div ${_tqMenu?'class="px-l2"':'style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"'}>
+          ${_tqMenu?_selecteurTechnique(ex,i,'choix'):''}
           <div>
             <label>Charge cible</label>
             <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg ou 75 %">
@@ -43350,7 +43433,7 @@ function renderProgEx(){
              _selecteurTechnique s'en charge, et c'est la regle posee par Kevin
              le 25/08/2026, l'athlete qui veut une technique la tape dans la
              description. -->
-        ${_selecteurTechnique(ex,i)}
+        ${_tqMenu?_selecteurTechnique(ex,i,'suite'):_selecteurTechnique(ex,i)}
         ${_bqDispo?_htmlBoutonProgEx(ex,i):''}
         ${_bqDispo?_htmlAlternativesEx(ex,i):''}
         <div class="px-grp">EXÉCUTION</div>
