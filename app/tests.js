@@ -1199,7 +1199,11 @@ async function testExercices(){
       // le cas est traite.
       if(!_exoIndex||!_exoIndex.size) return _echec('index non chargé');
       const morts=Object.entries(EX_RENOMMAGES)
-        .filter(([,v])=>!_exoIndex.has(exSlug(v)))
+        // 01/10/2026 : la table porte aussi les NOMS CORRIGÉS du guide (la faute
+        // d'orthographe retirée). Leur cible est un exercice du guide ; une variante
+        // (« alterné ») n'a pas de fichier à son nom et prend l'image de sa base.
+        // On exige donc qu'elle MÈNE à une image, pas qu'un fichier porte son nom.
+        .filter(([,v])=>!_exoIndex.has(exSlug(v))&&!(_exGuide().has(v)&&_slugIllustre(exSlug(v))))
         .map(([k,v])=>k+' → '+v);
       return morts.length?_echec('cible(s) inexistante(s) : '+morts.join(' | ')):true;})());
     ok('EX_RENOMMAGES : les clefs sont SANS ACCENT, comme les slugs',(()=>{
@@ -1244,8 +1248,28 @@ async function testExercices(){
       // Le cas exact signale. « curl-barre » EXISTE dans l'index : c'est bien
       // la regle qui choisissait de le servir, pas une absence de donnee.
       if(!_exoIndex.has('curl-barre')) return _echec('la fixture ne prouve rien : curl-barre absent');
+      // 01/10/2026 : « curl barre poulie » a désormais SA photo (l'ancien
+      // « curl-barre-poulie-elastique », renommé). Le cas signalé se prouve donc
+      // dans l'autre sens : il rend sa propre image, jamais celle de la barre libre.
       const r=_slugIllustre('curl-barre-poulie');
-      return r===null?true:_echec('« curl barre poulie » rend « '+r+' »');})());
+      if(r!=='curl-barre-poulie') return _echec('« curl barre poulie » rend « '+r+' »');
+      // Et la règle tient toujours sur un agrès sans photo.
+      const r2=_slugIllustre('curl-barre-poulie-basse');
+      if(r2==='curl-barre') return _echec('« curl barre poulie basse » rend la barre libre');
+      // LES ANCIENS NOMS MÈNENT AUX NOUVEAUX : slugs déjà enregistrés, historiques.
+      const F='exten'+'tion';
+      if(_slugIllustre('curl-barre-poulie-elastique')!=='curl-barre-poulie') return _echec('ancien slug du curl : '+_slugIllustre('curl-barre-poulie-elastique'));
+      if(_slugIllustre('leg-'+F)!=='leg-extension'||_slugIllustre(F+'-triceps-sur-banc')!=='extension-triceps-sur-banc') return _echec('ancien slug mal écrit sans image');
+      if(_cleRenommee(('leg '+F+' haltere').toUpperCase())!=='LEG EXTENSION HALTERE') return _echec('l’historique de l’ancien nom est perdu');
+      if([..._exGuide().keys()].some(k=>k.indexOf(F.toUpperCase())>=0)) return _echec('la faute est encore dans le guide');
+      if(_exGuide().has('CURL BARRE POULIE ELASTIQUE')||!_exGuide().has('CURL BARRE POULIE')) return _echec('le curl barre poulie porte encore « élastique »');
+      // La banque en ligne, copie figée : noms corrigés et doublons retirés au chargement.
+      const bq=_indexerBanque([{slug:'leg-extension',nom:'LEG EXTENSION'},{slug:'leg-'+F,nom:'LEG '+F.toUpperCase()},
+        {slug:F+'-triceps-sur-banc',nom:F.toUpperCase()+' TRICEPS SUR BANC'},
+        {slug:'curl-barre-poulie-elastique',nom:'CURL BARRE POULIE/ÉLASTIQUE'},{slug:'curl-barre-poulie-elastique-elastique',nom:'CURL BARRE POULIE/ÉLASTIQUE : ÉLASTIQUE'}]);
+      if(bq.liste.length!==3) return _echec('doublons non retirés : '+bq.liste.map(f=>f.slug).join(','));
+      if(bq.parSlug['curl-barre-poulie-elastique'].nom!=='CURL BARRE POULIE'||bq.parSlug[F+'-triceps-sur-banc'].nom!=='EXTENSION TRICEPS SUR BANC') return _echec('noms de la banque non corrigés');
+      return true;})());
     ok('Une PRECISION D\'EXECUTION garde bien l\'image de sa base',(()=>{
       // C'est l'objet meme de la regle, et elle ne doit pas mourir avec le
       // correctif : « prise large » n'est pas un autre exercice.
@@ -44431,7 +44455,9 @@ async function testExercices(){
     const _guideAttendu=()=>{
       const cardio=new Set(EX_GUIDE_CARDIO.split('~'));
       // 408 depuis le 30/09/2026 : quatre exercices sont passés au cardio.
-      return 408+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
+      // 407 depuis le 01/10/2026 : « LEG EXTENSION » était écrit deux fois, dont
+      // une avec une faute ; les deux lignes n'en font plus qu'une.
+      return 407+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));

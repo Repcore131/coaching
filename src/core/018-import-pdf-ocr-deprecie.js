@@ -340,8 +340,20 @@ function ficheBanque(ref,user){
 // écartés gardaient le triceps. La recherche classait donc sur des muscles
 // périmés. Quand le guide connaît le nom, c'est lui qui fait foi : principal
 // en premier, secondaires ensuite. Une fiche inconnue du guide garde les siens.
+// LES DEUX NOMS CORRIGÉS LE 01/10/2026, sur une fiche de la banque en ligne,
+// qui reste une copie figée au jour de son remplissage.
+function _nomBanqueCorrige(t){
+  if(typeof t!=='string') return t;
+  return t.replace(new RegExp('EXTEN'+'TION','g'),'EXTENSION')
+    .replace(/^CURL BARRE POULIE[/][ÉE]LASTIQUE$/,'CURL BARRE POULIE');
+}
+// Les fiches que la correction rend inutiles : la variante à l'élastique du
+// curl barre poulie, et le doublon mal écrit de LEG EXTENSION.
+const BQ_SLUGS_RETIRES=Object.freeze(['curl-barre-poulie-elastique-elastique','leg-exten'+'tion']);
 function _musclesAJour(f){
   if(!f||!f.nom||f.perso) return f;
+  f.nom=_nomBanqueCorrige(f.nom);
+  if(f.libelle) f.libelle=_nomBanqueCorrige(f.libelle);
   let k=''; try{ k=exKey(f.nom); }catch(e){ return f; }
   if(!k) return f;
   try{
@@ -357,8 +369,11 @@ function _musclesAJour(f){
 }
 function _indexerBanque(liste){
   const parSlug={};
-  for(const f of (liste||[])) if(f&&f.slug) parSlug[f.slug]=_musclesAJour(f);
-  return {liste:(liste||[]),parSlug,at:Date.now()};
+  // Le doublon de LEG EXTENSION ne part que si la bonne fiche est là.
+  const aBonne=(liste||[]).some(f=>f&&f.slug==='leg-extension');
+  liste=(liste||[]).filter(f=>!f||!f.slug||BQ_SLUGS_RETIRES.indexOf(f.slug)<0||(f.slug!==BQ_SLUGS_RETIRES[0]&&!aBonne));
+  for(const f of liste) if(f&&f.slug) parSlug[f.slug]=_musclesAJour(f);
+  return {liste,parSlug,at:Date.now()};
 }
 // Réseau d'abord, cache ensuite. Un coach hors ligne garde la banque qu'il
 // avait ; un coach qui n'y a jamais accédé n'a rien, et l'écran le dira
