@@ -3763,8 +3763,12 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
   background:none}
 .pr-bloc>*{position:relative}
 /* ── L en-tete ───────────────────────────────────────────────────────── */
+/* UNE BANNIÈRE ROUGE (Kevin, 01/10/2026), comme l'en-tête des cartes
+   d'exercice juste au-dessus : le titre en blanc, SANS néon, et les deux
+   commandes en blanc. */
 .pr-tete{display:flex;flex-direction:column;align-items:flex-start;gap:12px;
-  margin-bottom:16px}
+  margin-bottom:16px;padding:14px 14px 12px;border-radius:var(--r-3);
+  background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4)}
 /* Le skew, jamais font-style:italic : Bebas n est chargee qu en romain. */
 /* EN ROUGE, demande de Kevin. Meme convention que les autres titres rouges de
    l app — « MES PAS », « REPCORE » : var(--red-text) et un halo de la meme
@@ -3777,19 +3781,24 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
    :root, et leur var(--halo-c) s y resout aussi — avec le blanc par defaut.
    Poser --halo-c ici ne les atteint donc pas : l app contourne ca par une
    regle [style*=--halo-c] qui ne vise que les styles en ligne. */
+/* 01/10/2026 : BLANC ET SANS HALO, sur la bannière rouge. Le rouge à halo de
+   la consigne ci-dessus (25/08) ne se lirait pas sur du rouge, et Kevin ne veut
+   plus de néon ici. */
 .pr-titre{font-family:var(--pile-titre);font-size:17px;line-height:1;
-  letter-spacing:2.2px;text-transform:uppercase;color:var(--red-text);
-  text-shadow:0 0 8px rgba(224,32,32,.55);
+  letter-spacing:2.2px;text-transform:uppercase;color:#fff;
+  text-shadow:none;
   transform:skewX(-9deg);transform-origin:left center}
 .pr-cmds{display:flex;width:100%;gap:8px;align-items:center;flex-wrap:wrap}
 .pr-cmd{display:inline-flex;align-items:center;justify-content:center;gap:8px;
   flex:1 1 auto;min-height:34px;padding:8px 10px;border-radius:var(--r-2);
   cursor:pointer;
   font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
-  letter-spacing:.8px;text-transform:uppercase;color:var(--sub);
-  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
-  border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-.pr-cmd svg{color:var(--text-dim)}
+  letter-spacing:.8px;text-transform:uppercase;color:#141414;
+  background:#fff;
+  border:1px solid #fff;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.pr-cmd:hover{background:#f1f1f1}
+.pr-cmd:focus-visible{outline:2px solid #141414;outline-offset:2px}
+.pr-cmd svg{color:#141414}
 /* ── Une phase : echauffement, retour au calme ───────────────────────── */
 .pr-phase{--c:#8a8a8a}
 .pr-phase+.pr-phase{margin-top:16px;padding-top:16px;
@@ -5602,6 +5611,9 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
    détache la silhouette de la bannière. */
 .px-ava{margin:0 6px 0 2px}
 .px-ava .wo-ava-img{filter:drop-shadow(0 2px 3px rgba(0,0,0,.55)) drop-shadow(0 0 10px rgba(0,0,0,.35))}
+/* Sur le rouge, tout ce qui s'écrit est blanc, dans les deux thèmes : ces éléments portent
+   une couleur en ligne ou héritée d'une règle de champ, qui passe au noir en thème clair. */
+.px-tete .px-poignee,.px-tete .px-mini,.px-tete .px-cmd-ed button,.px-tete .px-nom{color:#fff!important}
 /* L'explication, sous les deux boutons de la banque. */
 .px-cmd-bq{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;max-width:100%}
 .px-diff{max-width:290px;font-size:var(--fs-2xs);line-height:1.45;color:rgba(255,255,255,.88)}
@@ -13064,9 +13076,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .cs-btn-plein{background:rgba(9,9,9,0.16);border-color:rgba(9,9,9,0.34)}
 :root[data-theme="clair"] .cs-mention{color:rgba(9,9,9,0.52)}
 :root[data-theme="clair"] .pr-bloc{background:linear-gradient(168deg,#e8e8e8,#eeeeee 55%,#f3f3f3);border:1px solid var(--border);box-shadow:0 4px 8px rgba(0,0,0,0.158),inset 0 1px 0 rgba(255,255,255,.04)}
-:root[data-theme="clair"] .pr-titre{color:var(--red-text);text-shadow:0 0 8px rgba(224,32,32,.55)}
-:root[data-theme="clair"] .pr-cmd{color:var(--sub);background:linear-gradient(180deg,rgba(9,9,9,0.035),rgba(9,9,9,0.012));border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-:root[data-theme="clair"] .pr-cmd svg{color:var(--text-dim)}
 :root[data-theme="clair"] .pr-phase{--c:#787878}
 :root[data-theme="clair"] .pr-phase+.pr-phase{border-top:1px solid rgba(9,9,9,0.06)}
 :root[data-theme="clair"] .pr-ico{color:var(--c);border:1px solid color-mix(in srgb,var(--c) 42%,transparent);background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:0 0 11px color-mix(in srgb,var(--c) 20%,transparent)}
@@ -13376,22 +13385,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}
 :root[data-theme="clair"] .bq-mus.on{border-color:var(--bq-c,var(--red));background:rgba(9,9,9,0.05);box-shadow:0 0 0 1px var(--bq-c,var(--red)) inset}
 :root[data-theme="clair"] .bq-mus.on span{color:var(--bq-c,var(--red-text))}
-:root[data-theme="clair"] .px-tete{color:#fff;background:linear-gradient(160deg,#e21414,#8d0000);border-bottom:1px solid rgba(255,90,90,.4)}
-:root[data-theme="clair"] .px-num{background:#090909;color:#b00000}
-:root[data-theme="clair"] .px-nom{color:#090909;text-shadow:0 1px 2px rgba(0,0,0,0.122)}
-:root[data-theme="clair"] .px-nom::placeholder{color:rgba(9,9,9,0.6)}
-:root[data-theme="clair"] .px-b-blanc{background:#090909;color:#e8e8e8;box-shadow:0 1px 0 rgba(0,0,0,0.087)}
-:root[data-theme="clair"] .px-b-blanc:hover{background:#161616}
-:root[data-theme="clair"] .px-b-blanc:focus-visible{outline:2px solid #e8e8e8}
-:root[data-theme="clair"] .px-mus{color:rgba(9,9,9,0.85)}
-:root[data-theme="clair"] .px-mus b{color:#090909}
-:root[data-theme="clair"] .px-mus-s{color:rgba(9,9,9,0.78)}
-:root[data-theme="clair"] .px-mus-v{color:rgba(9,9,9,0.8)}
-:root[data-theme="clair"] .px-ava .wo-ava-img{filter:drop-shadow(0 2px 3px rgba(0,0,0,0.193)) drop-shadow(0 0 10px rgba(0,0,0,0.122))}
-:root[data-theme="clair"] .px-diff{color:rgba(9,9,9,0.88)}
-:root[data-theme="clair"] .px-diff summary{text-decoration-color:rgba(9,9,9,0.45)}
-:root[data-theme="clair"] .px-diff summary:focus-visible{outline:2px solid #090909}
-:root[data-theme="clair"] .px-diff b{color:#090909}
 :root[data-theme="clair"] .px-poignee{background:rgba(9,9,9,0.133);color:var(--text)}
 :root[data-theme="clair"] .px-poignee:active{background:rgba(9,9,9,0.267)}
 :root[data-theme="clair"] .px-mini{background:rgba(9,9,9,0.133);color:var(--text)}

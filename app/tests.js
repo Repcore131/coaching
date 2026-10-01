@@ -14979,33 +14979,24 @@ async function testExercices(){
           const trouve=[...t].filter(c=>{const n=c.codePointAt(0);
             return (n>=0x1F300&&n<=0x1FAFF)||(n>=0x2600&&n<=0x27BF);});
           return trouve.length?_echec('emoji present : '+trouve.join(' ')):true;})());
-        ok('LE TITRE EST ROUGE, halo compris',(()=>{
-          // Demande de Kevin, 25/08/2026. Le halo est le piege : les crans
-          // --halo-1/2/3 sont definis sur :root, ou leur var(--halo-c) s est
-          // deja resolu — au BLANC par defaut. Poser --halo-c dans une regle
-          // laisse donc un titre rouge cercle de blanc : ca ne se voit qu a
-          // l oeil, et pas du tout dans le code. On lit les deux.
-          const t=document.querySelector('.pr-titre');
+        ok('LA BANNIÈRE EST ROUGE, le titre blanc et sans néon, les deux commandes blanches',(()=>{
+          // 25/08/2026 : Kevin voulait le titre en ROUGE, avec son halo, et ce test
+          // le figeait. 01/10/2026 : il demande une bannière rouge, le titre en blanc
+          // « sans néon », et les deux boutons en blanc. C'est la consigne la plus
+          // récente qui est vérifiée ici.
+          const t=document.querySelector('.pr-tete .pr-titre');
           if(!t) return _echec('le titre a disparu');
           const s=getComputedStyle(t);
-          // N5.13 — LE JETON A CHANGE DE VALEUR, PAS DE ROLE. --red-text est
-          // passe de #E02020 a #FF5A4A pour atteindre AA sur du petit texte :
-          // ce titre reste rouge, et c'est le JETON qu'on verifie, pas un
-          // nombre en dur. Un nombre en dur aurait fait tomber cette sonde a
-          // chaque reglage de lisibilite, sans que rien ne soit casse.
-          const _jeton=getComputedStyle(document.documentElement)
-            .getPropertyValue('--red-text').trim();
-          const _norm=v=>{ const d=document.createElement('div');
-            d.style.color=v; document.body.appendChild(d);
-            const c=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return c; };
-          if(s.color.replace(/\s/g,'')!==_norm(_jeton))
-            return _echec('le titre n est pas rouge : '+s.color);
-          if(!/224,\s*32,\s*32/.test(s.textShadow))
-            return _echec('le halo n est pas rouge : '+s.textShadow);
-          // Et pas un flou de 30 px : sur un mot de 17 px, le cran 2 se lit
-          // comme un rectangle de surlignage, pas comme une lueur.
-          const flou=parseFloat((s.textShadow.match(/(\d+(?:\.\d+)?)px\s*$/)||[0,99])[1]);
-          return flou<=12?true:_echec('halo trop large : '+flou+' px');})());
+          if(s.color.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('le titre n est pas blanc : '+s.color);
+          if(s.textShadow&&s.textShadow!=='none') return _echec('le titre porte encore un halo : '+s.textShadow);
+          const b=getComputedStyle(document.querySelector('.pr-tete'));
+          if(!/226,\s*20,\s*20|141,\s*0,\s*0/.test(b.backgroundImage+b.backgroundColor)) return _echec('la bannière n est pas rouge');
+          for(const x of document.querySelectorAll('.pr-tete .pr-cmd')){
+            const cs=getComputedStyle(x);
+            if(cs.backgroundColor.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('une commande n est pas blanche : '+cs.backgroundColor);
+            if(cs.color.replace(/\s/g,'')!=='rgb(20,20,20)') return _echec('son texte ne se lit pas sur le blanc : '+cs.color);
+          }
+          return document.querySelectorAll('.pr-tete .pr-cmd').length===2?true:_echec('deux commandes attendues dans la bannière');})());
         ok('Les quatre pictogrammes sont des SVG du jeu d\'icones',(()=>{
           const b=document.querySelector('.pr-bloc');
           if(!b) return _echec('le bloc a disparu');
