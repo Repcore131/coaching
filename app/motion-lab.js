@@ -6775,7 +6775,7 @@ function mlOuvrirExport(o){
   d.innerHTML='<div class="mle">'
     +'<div class="mle-tete"><span class="mle-ico">'+S('export',22)+'</span><div><b>Exporter la vidéo</b>'
       +'<span>Les tracés et la légende gravés dans l’image, sans toucher à l’original.</span></div>'
-      +'<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlFermerExport()" aria-label="Fermer">×</button></div>'
+      +'<button type="button" class="mlx-ico-b mlx-ico-p" data-on-click="mlFermerExport()" aria-label="Fermer">×</button></div>'
     +(fmt?'':'<p class="mle-alerte">'+ML_EXPORT_MSG.format+'</p>')
     +'<div class="mle-choix"><span class="mlx-lab-s">Passage</span><div class="mlx-chips mlx-chips-l" data-choix="portion">'
       +'<button type="button" class="mlx-chip" aria-pressed="true" data-v="tout">Toute la vidéo · '+_mlDureeCourte(o.dureeMs)+'</button>'
@@ -6789,7 +6789,7 @@ function mlOuvrirExport(o){
     +'<p class="mlx-note" id="mle-note"></p>'
     +'<div class="mle-prog" hidden><div class="mle-barre"><i id="mle-barre"></i></div><span id="mle-txt">Préparation…</span></div>'
     +'<div class="mle-fin" id="mle-fin" hidden></div>'
-    +'<div class="mle-pied"><button type="button" class="mlx-b" onclick="mlFermerExport()">Fermer</button>'
+    +'<div class="mle-pied"><button type="button" class="mlx-b" data-on-click="mlFermerExport()">Fermer</button>'
       +'<button type="button" class="mlx-enreg mle-go" id="mle-go"'+(fmt?'':' disabled')+'>'+S('export',18)+'<span>Créer la vidéo</span></button></div>'
   +'</div>';
   document.body.appendChild(d);
@@ -6841,7 +6841,7 @@ async function mlLancerExport(){
   if(fin){ fin.hidden=true; fin.innerHTML=''; }
   d.querySelectorAll('.mle-choix button, .mlx-coche input').forEach(x=>{ /** @type {HTMLButtonElement} */(x).disabled=true; });
   const pied=d.querySelector('.mle-pied .mlx-b');
-  if(pied){ pied.textContent='Arrêter'; pied.setAttribute('onclick','mlArreterExport()'); }
+  if(pied){ pied.textContent='Arrêter'; pied.setAttribute('data-on-click','mlArreterExport()'); }
   E.arret=false;
   const res=await mlExporterVideo({url:o.url,annot:o.annot,debutMs:seq?seq.debutMs:0,finMs:seq?seq.finMs:o.dureeMs||86400000,
     vitesse:ch.vitesse,son:avecSon,logo:lg&&lg.checked?o.logo:'',ac:E.ac,
@@ -6851,7 +6851,7 @@ async function mlLancerExport(){
   E.ac=null;
   if(!_mle||_mle!==E||!_mlEl('mle')) return false;
   if(prog) prog.hidden=true;
-  if(pied){ pied.textContent='Fermer'; pied.setAttribute('onclick','mlFermerExport()'); }
+  if(pied){ pied.textContent='Fermer'; pied.setAttribute('data-on-click','mlFermerExport()'); }
   d.querySelectorAll('.mle-choix button, .mlx-coche input').forEach(x=>{ /** @type {HTMLButtonElement} */(x).disabled=false; });
   if(go){ go.disabled=false; go.innerHTML=_mlxIco('export',18)+'<span>'+(res.ok?'Recréer':'Réessayer')+'</span>'; }
   if(!res.ok){
@@ -6875,7 +6875,7 @@ async function mlLancerExport(){
     fin.innerHTML='<video class="mle-apercu" src="'+E.url+'" controls playsinline></video>'
       +'<p class="mlx-note">'+escapeHtml(nom)+' · '+res.r.largeur+' × '+res.r.hauteur+' · '+mo+' Mo</p>'
       +'<div class="mle-pied"><a class="mlx-enreg mle-dl" href="'+E.url+'" download="'+escapeHtml(nom)+'">'+_mlxIco('export',18)+'<span>Télécharger</span></a>'
-      +(partage?'<button type="button" class="mlx-b" onclick="mlPartagerExport()">Partager…</button>':'')+'</div>';
+      +(partage?'<button type="button" class="mlx-b" data-on-click="mlPartagerExport()">Partager…</button>':'')+'</div>';
   }
   toast('Vidéo prête ✓');
   return true;
@@ -7105,30 +7105,30 @@ function _mlRendre(){
   if(!z||!_ml) return false;
   const S=_mlxIco;
   /** @param {string} lib @param {string} act @param {string} titre @param {string} [extra] */
-  const b=(lib,act,titre,extra)=>'<button type="button" class="ml-b" onclick="'+act+'" '
+  const b=(lib,act,titre,extra)=>'<button type="button" class="ml-b" data-on-click="'+act+'" '
     +'title="'+escapeHtml(titre)+'" aria-label="'+escapeHtml(titre)+'" disabled '+(extra||'')+'>'+lib+'</button>';
   const logo=String((currentUser||{}).logo||'').trim();
   z.innerHTML='<div class="mlx">'
     // ── L'EN-TÊTE ─────────────────────────────────────────────────────────
     +'<header class="mlx-tete">'
-      +'<button type="button" class="mlx-retour" onclick="fermerMotionLab()" aria-label="Retour à la correction">'
+      +'<button type="button" class="mlx-retour" data-on-click="fermerMotionLab()" aria-label="Retour à la correction">'
         +S('retour',20)+'<span>Retour</span></button>'
       +'<div class="mlx-marque"><h1 class="mlx-titre">Motion <em>Lab</em></h1>'
         +'<p class="mlx-sous-t">Analyse et correction technique</p></div>'
       +'<div class="mlx-pilule">'+S('haltere',24)+'<div><b id="ml-titre"></b><span class="ml-sous"></span></div></div>'
-      +'<div class="mlx-menu-z"><button type="button" id="mlx-menu-b" class="mlx-ico-b" onclick="mlMenu()" '
+      +'<div class="mlx-menu-z"><button type="button" id="mlx-menu-b" class="mlx-ico-b" data-on-click="mlMenu()" '
         +'aria-haspopup="true" aria-expanded="false" aria-label="Plus d’actions">'+S('menu',20)+'</button>'
         +'<div id="mlx-menu" class="mlx-menu" role="menu" hidden>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlExporterLab()">Exporter la vidéo annotée</button>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'reglages\')">Paramètres avancés</button>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'analyse\')">Analyse automatique</button>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlOnglet(\'voix\')">Correction vocale</button>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlRaccourcis()">Raccourcis clavier</button>'
-          +'<button type="button" role="menuitem" onclick="mlMenu();mlAnnotToutEffacer()">Effacer tous les tracés</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlExporterLab()">Exporter la vidéo annotée</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlOnglet(\'reglages\')">Paramètres avancés</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlOnglet(\'analyse\')">Analyse automatique</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlOnglet(\'voix\')">Correction vocale</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlRaccourcis()">Raccourcis clavier</button>'
+          +'<button type="button" role="menuitem" data-on-click="mlMenu();mlAnnotToutEffacer()">Effacer tous les tracés</button>'
         +'</div></div>'
       +'<div class="mlx-esp"></div>'
       +'<div class="mlx-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>'
-      +(logo?'<img class="mlx-logo" src="'+escapeHtml(logo)+'" alt="" onerror="this.remove()">':'')
+      +(logo?'<img class="mlx-logo" src="'+escapeHtml(logo)+'" alt="" data-on-error="this.remove()">':'')
     +'</header>'
     // LA BARRE D'ENREGISTREMENT de la correction vocale reste en haut.
     +'<div id="ml-rec" class="ml-rec" hidden></div>'
@@ -7136,7 +7136,7 @@ function _mlRendre(){
       // ── GAUCHE : SÉQUENCES ET MODÈLES ─────────────────────────────────────
       +'<aside class="mlx-g">'
         +'<section class="mlx-carte"><div class="mlx-ct"><span>Séquences</span>'
-          +'<button type="button" class="mlx-ico-b mlx-ico-p" id="ml-ajouter" onclick="mlAjouter()" disabled '
+          +'<button type="button" class="mlx-ico-b mlx-ico-p" id="ml-ajouter" data-on-click="mlAjouter()" disabled '
             +'title="Ajouter une séquence à la tête de lecture" aria-label="Ajouter une séquence à la tête de lecture">'+S('plus',18)+'</button></div>'
           +'<div id="ml-liste"></div><div id="ml-bornes"></div>'
           +'<p class="ml-aide">Place la tête de lecture au début du mouvement, ajoute une séquence, puis ajuste son '
@@ -7147,7 +7147,7 @@ function _mlRendre(){
       +'<main class="mlx-c">'
         +'<div class="ml-scene">'
           +'<video id="ml-video" src="'+safeUrl(_ml.url)+'" preload="metadata" playsinline webkit-playsinline '
-            +'onerror="_videoIndisponible(this)"></video>'
+            +'data-on-error="_videoIndisponible(this)"></video>'
           +'<canvas id="ml-calque" class="ml-calque" aria-hidden="true"></canvas>'
           +'<canvas id="ml-loupe" class="ml-loupe" width="220" height="220" aria-hidden="true" hidden></canvas>'
           +'<span class="mlx-badge-orig" aria-hidden="true">Version originale</span>'
@@ -7155,7 +7155,7 @@ function _mlRendre(){
         +'<div class="mlx-transport">'
           +'<div class="mlx-tr-l1">'
             +b(S('prec',18),'mlImage(-1)','Image précédente (flèche gauche)')
-            +'<button type="button" id="ml-play" class="ml-b mlx-play" onclick="mlLecture()" disabled aria-label="Lecture (espace)">'+S('lire',20)+'</button>'
+            +'<button type="button" id="ml-play" class="ml-b mlx-play" data-on-click="mlLecture()" disabled aria-label="Lecture (espace)">'+S('lire',20)+'</button>'
             +b(S('suiv',18),'mlImage(1)','Image suivante (flèche droite)')
             +'<span class="mlx-temps"><span id="ml-t" aria-live="off">0:00.00</span><span id="mlx-duree"></span></span>'
             +'<span class="mlx-esp"></span>'
@@ -7166,7 +7166,7 @@ function _mlRendre(){
             +b(S('plein',20),'mlPleinEcran()','Plein écran')
           +'</div>'
           +'<div class="mlx-tr-l2"><input type="range" id="mlx-pos" min="0" max="1000" step="1" value="0" disabled '
-            +'aria-label="Position dans la vidéo" oninput="mlPosition(this.value)">'
+            +'aria-label="Position dans la vidéo" data-on-input="mlPosition(this.value)">'
             +'<span id="ml-fps" class="ml-fps">Chargement…</span></div>'
         +'</div>'
       +'</main>'
@@ -7174,17 +7174,17 @@ function _mlRendre(){
       +'<aside class="mlx-d">'
         +'<div class="mlx-onglets" role="tablist" aria-label="Panneaux du laboratoire">'
           +[['trace','Tracé'],['analyse','Analyse'],['voix','Voix'],['reglages','Réglages']].map(([k,l])=>
-            '<button type="button" role="tab" data-onglet="'+k+'" aria-selected="'+(k===_ml?.onglet)+'" onclick="mlOnglet(\''+k+'\')">'+l+'</button>').join('')
+            '<button type="button" role="tab" data-onglet="'+k+'" aria-selected="'+(k===_ml?.onglet)+'" data-on-click="mlOnglet(\''+k+'\')">'+l+'</button>').join('')
         +'</div>'
         +'<div role="tabpanel" data-onglet="trace"'+(_ml.onglet==='trace'?'':' hidden')+'>'
           +'<section class="mlx-carte"><div class="mlx-ct"><span>Outils de tracé</span><span id="mlx-histo" class="mlx-histo"></span></div>'
             +'<div id="mlx-outils"></div></section>'
           +'<section class="mlx-carte"><div class="mlx-ct"><span id="mlx-n-annot">Annotations</span>'
-            +'<button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotAjouter()">'+S('plus',14)+' Ajouter</button></div>'
+            +'<button type="button" class="mlx-b mlx-b-r" data-on-click="mlAnnotAjouter()">'+S('plus',14)+' Ajouter</button></div>'
             +'<div id="mlx-liste"></div><div id="mlx-editeur"></div></section>'
           +'<section class="mlx-carte"><div class="mlx-ct"><span>Légende sur la vidéo</span>'
             +'<label class="mlx-bascule" title="Afficher la légende sur la vidéo"><input type="checkbox" id="mlx-leg-on" '
-              +'aria-label="Afficher la légende sur la vidéo" onchange="mlLegende(\'on\',this.checked)"><i></i></label></div>'
+              +'aria-label="Afficher la légende sur la vidéo" data-on-change="mlLegende(\'on\',this.checked)"><i></i></label></div>'
             +'<div id="mlx-legende"></div></section>'
         +'</div>'
         +'<div role="tabpanel" data-onglet="analyse"'+(_ml.onglet==='analyse'?'':' hidden')+'>'
@@ -7209,7 +7209,7 @@ function _mlRendre(){
         +b(S('ajuster',16)+'<span>Ajuster</span>','mlZoomAjuster()','Toute la vidéo dans la timeline','class="ml-b mlx-ajuster"')
         +'<span id="mlx-tl-t" class="mlx-tl-t">0:00 / 0:00</span></div>'
       +'<div class="mlx-tl-corps">'
-        +'<div class="mlx-tl-g"><button type="button" class="mlx-tl-lire" onclick="mlLecture()" aria-label="Lecture">'+S('lire',18)+'</button>'
+        +'<div class="mlx-tl-g"><button type="button" class="mlx-tl-lire" data-on-click="mlLecture()" aria-label="Lecture">'+S('lire',18)+'</button>'
           +'<div id="mlx-tl-noms" class="mlx-tl-noms"></div></div>'
         +'<div class="ml-frise" id="ml-frise"><div class="ml-frise-in" id="ml-frise-in">'
           +'<canvas id="ml-regle" class="ml-regle" aria-hidden="true"></canvas>'
@@ -7227,12 +7227,12 @@ function _mlRendre(){
     +'</section>'
     // ── LE PIED ─────────────────────────────────────────────────────────────
     +'<footer class="mlx-pied">'
-      +'<button type="button" id="mlx-orig" class="mlx-pied-b" aria-pressed="false" onclick="mlVersionOriginale()" '
+      +'<button type="button" id="mlx-orig" class="mlx-pied-b" aria-pressed="false" data-on-click="mlVersionOriginale()" '
         +'title="Revoir la vidéo sans aucune annotation (O)">'+S('orig',18)+'<span>Version originale</span></button>'
       +'<span class="mlx-esp"></span>'
-      +'<button type="button" id="mlx-export" class="mlx-pied-b" onclick="mlExporterLab()" title="Une vidéo où les tracés et la légende sont gravés">'+S('export',18)+'<span>Exporter la vidéo</span></button>'
-      +'<button type="button" class="mlx-pied-b" onclick="mlOnglet(\'reglages\')">'+S('reglages',18)+'<span>Paramètres avancés</span></button>'
-      +'<button type="button" id="ml-enreg" class="mlx-enreg" onclick="enregistrerMotionLab()" disabled>'
+      +'<button type="button" id="mlx-export" class="mlx-pied-b" data-on-click="mlExporterLab()" title="Une vidéo où les tracés et la légende sont gravés">'+S('export',18)+'<span>Exporter la vidéo</span></button>'
+      +'<button type="button" class="mlx-pied-b" data-on-click="mlOnglet(\'reglages\')">'+S('reglages',18)+'<span>Paramètres avancés</span></button>'
+      +'<button type="button" id="ml-enreg" class="mlx-enreg" data-on-click="enregistrerMotionLab()" disabled>'
         +'<span>Enregistrer la correction</span><i class="mlx-enreg-pt" aria-hidden="true"></i>'+S('fleched',20)+'</button>'
     +'</footer>'
   +'</div>';
@@ -7297,73 +7297,73 @@ function _mlxMajOutils(){
     texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone, ou touche un coin, puis l’autre.',
     gomme:'Touche un tracé pour l’effacer.'};
   let h='<div class="mlx-outils">'+ML_OUTILS.map(x=>'<button type="button" class="mlx-outil" data-outil="'+x.o+'" '
-    +'aria-pressed="'+(x.o===o)+'" onclick="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
+    +'aria-pressed="'+(x.o===o)+'" data-on-click="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
     +S(x.o,22)+'<span>'+x.lib+'</span></button>').join('')+'</div>';
   // L'ÉCHELLE N'A NI COULEUR, NI ÉPAISSEUR, NI STYLE : c'est une donnée de
   // calcul. Son panneau prend leur place.
   if(o==='echelle') h+=_mlxHtmlEchelle();
   else h+='<div class="mlx-ligne"><span class="mlx-lab-s">Couleur</span><div class="mlx-couleurs">'
     +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===_ml?.couleur)+'" '
-      +'title="'+escapeHtml(p.nom+(sens[p.c]?' : '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlCouleur(\''+p.c+'\')"></button>').join('')
+      +'title="'+escapeHtml(p.nom+(sens[p.c]?' : '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" data-on-click="mlCouleur(\''+p.c+'\')"></button>').join('')
     +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(_ml.couleur)+'" '
-      +'aria-label="Couleur personnalisée" onchange="mlCouleur(this.value)"></label></div></div>'
+      +'aria-label="Couleur personnalisée" data-on-change="mlCouleur(this.value)"></label></div></div>'
     +'<div class="mlx-ligne"><span class="mlx-lab-s">Épaisseur</span><input type="range" min="1" max="12" step="1" value="'+_ml.epaisseur+'" '
-      +'aria-label="Épaisseur du trait" oninput="mlEpaisseur(this.value)"><span id="mlx-ep-val">'+_ml.epaisseur+' px</span></div>'
+      +'aria-label="Épaisseur du trait" data-on-input="mlEpaisseur(this.value)"><span id="mlx-ep-val">'+_ml.epaisseur+' px</span></div>'
     +'<div class="mlx-ligne"><span class="mlx-lab-s">Trait</span><div class="mlx-chips mlx-chips-l" role="group" aria-label="Style du trait">'
-      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+(k===(_ml?.style||''))+'" onclick="mlStyleTrait(\''+k+'\')">'
+      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+(k===(_ml?.style||''))+'" data-on-click="mlStyleTrait(\''+k+'\')">'
         +_mlxTraitIco(k)+l+'</button>').join('')+'</div></div>';
   // LA LECTURE CONTINUE PENDANT LE GESTE, si le coach le veut. Proposé pour
   // les outils qui dessinent ; le texte ouvre une saisie, il fige toujours.
   // LA TRAJECTOIRE : suivie automatiquement, ou tracée à la main.
   if(o==='libre') h+='<div class="mlx-chips" role="group" aria-label="Façon de tracer la trajectoire">'
-    +'<button type="button" class="mlx-chip" aria-pressed="'+(!!_ml.trajAuto)+'" onclick="mlTrajMode(true)">Suivi automatique</button>'
-    +'<button type="button" class="mlx-chip" aria-pressed="'+(!_ml.trajAuto)+'" onclick="mlTrajMode(false)">À la main</button></div>';
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!!_ml.trajAuto)+'" data-on-click="mlTrajMode(true)">Suivi automatique</button>'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!_ml.trajAuto)+'" data-on-click="mlTrajMode(false)">À la main</button></div>';
   if(o!=='selection'&&o!=='gomme'&&o!=='texte'&&o!=='echelle'&&!(o==='libre'&&_ml.trajAuto)) h+='<label class="mlx-coche"><input type="checkbox" id="mlx-en-lecture"'
-    +(_ml.enLecture?' checked':'')+' onchange="mlTracerEnLecture(this.checked)"> Tracer pendant la lecture</label>';
+    +(_ml.enLecture?' checked':'')+' data-on-change="mlTracerEnLecture(this.checked)"> Tracer pendant la lecture</label>';
   // LE MODÈLE EN COURS : l'étape, et de quoi la passer ou s'arrêter.
   const G=_ml.guide;
   if(G){
     const e=G.m.etapes[G.i];
     if(e) h+='<div class="mlx-guide"><i class="mlx-an-pt" style="--c:'+e.c+'"></i><span>Modèle <b>'+escapeHtml(G.m.nom)+'</b> · étape '
       +(G.i+1)+'/'+G.m.etapes.length+' : <b>'+escapeHtml(e.n)+'</b> ('+escapeHtml((ML_OUTILS.find(x=>x.o===e.t)||{lib:''}).lib.toLowerCase())+')</span>'
-      +'<span class="mlx-esp"></span><button type="button" class="mlx-b" onclick="mlGuidePasser()">Passer</button>'
-      +'<button type="button" class="mlx-b" onclick="mlGuideArreter()">Arrêter</button></div>';
+      +'<span class="mlx-esp"></span><button type="button" class="mlx-b" data-on-click="mlGuidePasser()">Passer</button>'
+      +'<button type="button" class="mlx-b" data-on-click="mlGuideArreter()">Arrêter</button></div>';
   }
   if(o==='point') h+='<div class="mlx-chips" role="group" aria-label="Repère anatomique posé au prochain toucher">'
-    +ML_REPERES_ANAT.map((r,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(i===_ml?.repereAnat)+'" onclick="mlRepereAnat('+i+')">'+r+'</button>').join('')
-    +'<button type="button" class="mlx-chip" aria-pressed="'+(_ml.repereAnat<0)+'" onclick="mlRepereAnat(-1)">Sans nom</button></div>'
-    +'<label class="mlx-coche"><input type="checkbox"'+(_ml.relier?' checked':'')+' onchange="mlRelier(this.checked)"> Relier les points</label>';
+    +ML_REPERES_ANAT.map((r,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(i===_ml?.repereAnat)+'" data-on-click="mlRepereAnat('+i+')">'+r+'</button>').join('')
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(_ml.repereAnat<0)+'" data-on-click="mlRepereAnat(-1)">Sans nom</button></div>'
+    +'<label class="mlx-coche"><input type="checkbox"'+(_ml.relier?' checked':'')+' data-on-change="mlRelier(this.checked)"> Relier les points</label>';
   if(o==='texte') h+='<div class="mlx-chips" role="group" aria-label="Phrase proposée">'
-    +ML_PHRASES.map((p,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(p===_ml?.phrase)+'" onclick="mlPhrase('+i+')">'+escapeHtml(p)+'</button>').join('')
+    +ML_PHRASES.map((p,i)=>'<button type="button" class="mlx-chip" aria-pressed="'+(p===_ml?.phrase)+'" data-on-click="mlPhrase('+i+')">'+escapeHtml(p)+'</button>').join('')
     +'</div><div class="mlx-ligne"><span class="mlx-lab-s">Taille</span><div class="mlx-chips mlx-chips-l">'
-    +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" onclick="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
+    +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+(k===_ml?.tailleTexte)+'" data-on-click="mlTailleTexte(\''+k+'\')">'+l+'</button>').join('')
     +'</div></div>';
   // LE SUIVI D'UNE TRAJECTOIRE EN COURS : où il en est, et de quoi l'arrêter
   // en gardant ce qui est déjà tracé.
   if(_ml.mode==='trajsuivi') h+='<div class="mlx-cours"><span id="mlx-traj-txt">'+escapeHtml(_ml.progres||'Suivi en cours…')+'</span>'
-    +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" onclick="mlTrajArreter()">Arrêter</button></div>';
+    +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" data-on-click="mlTrajArreter()">Arrêter</button></div>';
   // UNE ÉTIQUETTE EN MAIN : où la poser, et de quoi renoncer.
   if(_ml.deplEtiq) h+='<div class="mlx-cours"><span>'+(_ml.deplEtiq.kind==='leg'?'Déplace la légende'
       :_ml.deplEtiq.kind==='mes'?'Déplace la mesure':'Déplace l’étiquette')
       +', puis touche pour la poser</span><span class="mlx-esp"></span>'
-    +'<button type="button" class="mlx-b" onclick="mlEtiqAnnuler()">Annuler</button></div>';
+    +'<button type="button" class="mlx-b" data-on-click="mlEtiqAnnuler()">Annuler</button></div>';
   // L'ÉCHELLE COMMENCÉE D'UN CLIC : le haut est posé, le bas est attendu.
   if(_ml.echPose) h+='<div class="mlx-cours"><span>Haut posé : touche maintenant le BAS du disque</span><span class="mlx-esp"></span>'
-    +'<button type="button" class="mlx-b" onclick="_mlxEchAnnulerPose()">Annuler</button></div>';
+    +'<button type="button" class="mlx-b" data-on-click="_mlxEchAnnulerPose()">Annuler</button></div>';
   // COMMENCÉ D'UN CLIC : ce qu'attend le clic suivant, et de quoi renoncer.
   if(_ml.trace&&_ml.trace.clic) h+='<div class="mlx-cours"><span>'+(_ml.trace.t==='libre'
       ?'Suis le mouvement à la souris, puis touche pour finir (ou Entrée)':'Touche le point d’arrivée')+'</span><span class="mlx-esp"></span>'
-    +'<button type="button" class="mlx-b" onclick="mlAnnulerTrace()">Annuler</button></div>';
+    +'<button type="button" class="mlx-b" data-on-click="mlAnnulerTrace()">Annuler</button></div>';
   if(cours) h+='<div class="mlx-cours"><span>'+(cours.t==='angle'?'Angle : point '+(cours.pts.length+1)+' sur 3'
       :cours.pts.length+' point'+(cours.pts.length>1?'s':'')+' posé'+(cours.pts.length>1?'s':''))+'</span><span class="mlx-esp"></span>'
-    +(cours.t!=='angle'?'<button type="button" class="mlx-b mlx-b-r" onclick="mlTerminerTrace()">Terminer ↵</button>':'')
-    +'<button type="button" class="mlx-b" onclick="mlAnnulerTrace()">Annuler</button></div>';
+    +(cours.t!=='angle'?'<button type="button" class="mlx-b mlx-b-r" data-on-click="mlTerminerTrace()">Terminer ↵</button>':'')
+    +'<button type="button" class="mlx-b" data-on-click="mlAnnulerTrace()">Annuler</button></div>';
   h+='<p class="mlx-aide-o">'+escapeHtml(aides[o]||'')+'</p>';
   z.innerHTML=h;
   const hi=_mlEl('mlx-histo');
-  if(hi) hi.innerHTML='<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlAnnuler()" title="Annuler (Ctrl+Z)" aria-label="Annuler"'
+  if(hi) hi.innerHTML='<button type="button" class="mlx-ico-b mlx-ico-p" data-on-click="mlAnnuler()" title="Annuler (Ctrl+Z)" aria-label="Annuler"'
     +(_ml.annule.length?'':' disabled')+'>'+S('annuler',16)+'</button>'
-    +'<button type="button" class="mlx-ico-b mlx-ico-p" onclick="mlRetablir()" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir"'
+    +'<button type="button" class="mlx-ico-b mlx-ico-p" data-on-click="mlRetablir()" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir"'
     +(_ml.refait.length?'':' disabled')+'>'+S('retablir',16)+'</button>';
   const c=_mlEl('ml-calque');
   if(c){ c.dataset.outil=o; c.dataset.depl=_ml.deplEtiq?'1':''; }
@@ -7381,7 +7381,8 @@ function _mlxHtmlEchelle(){
   const ch=mlEchChoix(ui);
   const d=ch?mlDisqueDe(ch.src,ch.mm):null;
   /** @param {string} fn @param {string} lib @param {[string,string][]} opts @param {string} val */
-  const sel=(fn,lib,opts,val)=>'<label class="mlx-champ"><span>'+lib+'</span><select class="mlx-in" onchange="'+fn+'(this.value)">'
+  // actions-en-plus: mlEchMarque mlEchGamme mlEchCharge
+  const sel=(fn,lib,opts,val)=>'<label class="mlx-champ"><span>'+lib+'</span><select class="mlx-in" data-on-change="'+fn+'(this.value)">'
     +'<option value=""'+(val?'':' selected')+'>Choisir…</option>'
     +opts.map(([k,l])=>'<option value="'+escapeHtml(k)+'"'+(k===val?' selected':'')+'>'+escapeHtml(l)+'</option>').join('')+'</select></label>';
   // OÙ ON EN EST : une seule phrase, la prochaine chose à faire.
@@ -7398,8 +7399,8 @@ function _mlxHtmlEchelle(){
   // AUTOMATIQUE OU À LA MAIN. En automatique, glisser du haut au bas pose
   // quand même l'échelle à la main : le premier geste le dit.
   let h='<div class="mlx-ech"><div class="mlx-chips" role="group" aria-label="Façon de poser l’échelle">'
-    +'<button type="button" class="mlx-chip" aria-pressed="'+auto+'" onclick="mlEchMode(true)">Automatique</button>'
-    +'<button type="button" class="mlx-chip" aria-pressed="'+(!auto)+'" onclick="mlEchMode(false)">À la main</button></div>'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+auto+'" data-on-click="mlEchMode(true)">Automatique</button>'
+    +'<button type="button" class="mlx-chip" aria-pressed="'+(!auto)+'" data-on-click="mlEchMode(false)">À la main</button></div>'
     +'<p class="mlx-note mlx-ech-etat">'+etat+'</p>';
   // CE QUI A ÉTÉ TROUVÉ, pour que le coach le vérifie d'un coup d'œil : le
   // liseré bleu sur la vidéo, et la part du tour où le bord a été vu.
@@ -7417,7 +7418,7 @@ function _mlxHtmlEchelle(){
       +'du haut au bas du disque. RepCore s’en souviendra pour tes prochaines vidéos.</p>';
     if(ui.c) h+='<label class="mlx-champ"><span>Diamètre mesuré</span><span class="mlx-ech-mm">'
       +'<input class="mlx-in" type="number" inputmode="numeric" min="100" max="600" step="1" value="'+escapeHtml(ui.mm)+'" '
-      +'aria-label="Diamètre mesuré, en millimètres" onchange="mlEchMm(this.value)"><i>mm</i></span></label>';
+      +'aria-label="Diamètre mesuré, en millimètres" data-on-change="mlEchMm(this.value)"><i>mm</i></span></label>';
   }
   // LE DISQUE, SA COTE, SA SOURCE — et la précision qu'en tire l'image.
   if(d){
@@ -7429,9 +7430,9 @@ function _mlxHtmlEchelle(){
         +mlNombre(pr*100,1)+' % environ, si les tracés sont dans le même plan que le disque.</p>';
     }
   }
-  h+='<div class="mlx-ech-b"><button type="button" class="btn btn-red btn-sm" onclick="mlEchEnregistrer()"'
+  h+='<div class="mlx-ech-b"><button type="button" class="btn btn-red btn-sm" data-on-click="mlEchEnregistrer()"'
     +(e&&Number(e.mm)>0&&px>=ML_ECHELLE_MIN_PX&&!e.ok?'':' disabled')+'>Enregistrer la mesure</button>'
-    +(e?'<button type="button" class="mlx-b" onclick="mlEchEffacer()">Effacer l’échelle</button>':'')+'</div></div>';
+    +(e?'<button type="button" class="mlx-b" data-on-click="mlEchEffacer()">Effacer l’échelle</button>':'')+'</div></div>';
   return h;
 }
 /**
@@ -7459,15 +7460,15 @@ function _mlxMajListe(){
   const n=_mlEl('mlx-n-annot'); if(n) n.textContent='Annotations ('+l.length+')';
   z.innerHTML=l.length?l.map(a=>'<div class="mlx-an'+(a.id===_ml?.sel?' on':'')+(a.h?' masque':'')+'" draggable="true" data-id="'+escapeHtml(a.id)+'">'
       +'<span class="mlx-an-poignee" title="Glisse pour changer l’ordre : le dernier se dessine au-dessus">'+S('poignee',16)+'</span>'
-      +'<button type="button" class="mlx-an-oeil" aria-pressed="'+(!a.h)+'" onclick="mlAnnotVisibilite(\''+escapeHtml(a.id)+'\')" '
+      +'<button type="button" class="mlx-an-oeil" aria-pressed="'+(!a.h)+'" data-on-click="mlAnnotVisibilite(\''+escapeHtml(a.id)+'\')" '
         +'aria-label="'+(a.h?'Afficher ':'Masquer ')+escapeHtml(a.n)+'">'+S(a.h?'oeilnon':'oeil',17)+'</button>'
       +'<i class="mlx-an-pt" style="--c:'+a.c+'"></i>'
-      +'<button type="button" class="mlx-an-nom" onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\')" title="'+escapeHtml(ML_TYPE_LIB[a.t]||'')+'">'
+      +'<button type="button" class="mlx-an-nom" data-on-click="mlAnnotChoisir(\''+escapeHtml(a.id)+'\')" title="'+escapeHtml(ML_TYPE_LIB[a.t]||'')+'">'
         +escapeHtml(mlAnnotLibelle(a,Math.max(a.d,Math.min(a.f-1,sMs)),vw,vh))
         +(Array.isArray(a.k)&&a.k.length?' <span class="mlx-an-suivi" title="Suit le mouvement">'+S('cle',11)+a.k.length+'</span>':'')+'</button>'
       +'<span class="mlx-an-t">'+_mlxT(a.d).slice(0,-3)+' – '+_mlxT(a.f).slice(0,-3)+'</span>'
-      +'<button type="button" class="mlx-an-act" onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)" aria-label="Modifier '+escapeHtml(a.n)+'">'+S('crayon',16)+'</button>'
-      +'<button type="button" class="mlx-an-act" onclick="mlAnnotSupprimer(\''+escapeHtml(a.id)+'\')" aria-label="Supprimer '+escapeHtml(a.n)+'">'+S('corbeille',16)+'</button>'
+      +'<button type="button" class="mlx-an-act" data-on-click="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)" aria-label="Modifier '+escapeHtml(a.n)+'">'+S('crayon',16)+'</button>'
+      +'<button type="button" class="mlx-an-act" data-on-click="mlAnnotSupprimer(\''+escapeHtml(a.id)+'\')" aria-label="Supprimer '+escapeHtml(a.n)+'">'+S('corbeille',16)+'</button>'
     +'</div>').join('')
     :'<p class="mlx-vide">Aucun tracé. Choisis un outil et dessine sur la vidéo, ou arme un modèle à gauche.</p>';
   // L'ORDRE AU GLISSER : le tracé lâché prend la place de celui qu'il survole.
@@ -7497,60 +7498,60 @@ function _mlxMajEditeur(){
   const an=mlAngleAnnot(a,Math.max(a.d,Math.min(a.f-1,sMs)),vw,vh);
   let h='<div class="mlx-ed" role="group" aria-label="Annotation choisie">'
     +'<div class="mlx-ed-tete"><i class="mlx-an-pt" style="--c:'+a.c+'"></i><b>'+escapeHtml(ML_TYPE_LIB[a.t]||'Annotation')+'</b>'
-      +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotChoisir(\''+id+'\')">Valider</button></div>'
+      +'<span class="mlx-esp"></span><button type="button" class="mlx-b mlx-b-r" data-on-click="mlAnnotChoisir(\''+id+'\')">Valider</button></div>'
     +'<label class="mlx-champ"><span>Nom de l’annotation</span><input id="mlx-nom" class="mlx-in" type="text" maxlength="'+ANNOT_NOM_MAX+'" '
-      +'value="'+escapeHtml(a.n)+'" onfocus="mlAnnotFocus()" oninput="mlAnnotNom(this.value)" '
-      +'onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>';
+      +'value="'+escapeHtml(a.n)+'" data-on-focus="mlAnnotFocus()" data-on-input="mlAnnotNom(this.value)" '
+      +'data-on-keydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>';
   if(a.t==='texte') h+='<label class="mlx-champ"><span>Texte sur la vidéo</span><input class="mlx-in" type="text" maxlength="'+ANNOT_TEXTE_MAX+'" '
-      +'value="'+escapeHtml(a.x||a.n)+'" onfocus="mlAnnotFocus()" oninput="mlAnnotTexte(this.value)" '
-      +'onkeydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>'
+      +'value="'+escapeHtml(a.x||a.n)+'" data-on-focus="mlAnnotFocus()" data-on-input="mlAnnotTexte(this.value)" '
+      +'data-on-keydown="if(event.key===\'Enter\'||event.key===\'Escape\'){event.preventDefault();this.blur()}"></label>'
     +'<div class="mlx-champ"><span>Taille · fond</span><div class="mlx-chips mlx-chips-l">'
-      +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((a.ts||'m')===k)+'" onclick="mlAnnotOption(\'ts\',\''+k+'\')">'+l+'</button>').join('')
-      +[[0,'Sans fond'],[1,'Fond sombre'],[2,'Fond couleur']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((typeof a.tf==='number'?a.tf:1)===k)+'" onclick="mlAnnotOption(\'tf\','+k+')">'+l+'</button>').join('')
+      +[['s','Petite'],['m','Moyenne'],['l','Grande']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((a.ts||'m')===k)+'" data-on-click="mlAnnotOption(\'ts\',\''+k+'\')">'+l+'</button>').join('')
+      +[[0,'Sans fond'],[1,'Fond sombre'],[2,'Fond couleur']].map(([k,l])=>'<button type="button" class="mlx-chip" aria-pressed="'+((typeof a.tf==='number'?a.tf:1)===k)+'" data-on-click="mlAnnotOption(\'tf\','+k+')">'+l+'</button>').join('')
     +'</div></div>'
-    +'<label class="mlx-coche"><input type="checkbox"'+(a.tc?' checked':'')+' onchange="mlAnnotOption(\'tc\',this.checked)"> Contour</label>';
+    +'<label class="mlx-coche"><input type="checkbox"'+(a.tc?' checked':'')+' data-on-change="mlAnnotOption(\'tc\',this.checked)"> Contour</label>';
   h+='<div class="mlx-champ"><span>Couleur</span><div class="mlx-couleurs">'
-      +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===a.c)+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlAnnotCouleur(\''+p.c+'\')"></button>').join('')
-      +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(a.c)+'" aria-label="Couleur personnalisée" onchange="mlAnnotCouleur(this.value)"></label></div></div>'
+      +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===a.c)+'" aria-label="'+escapeHtml(p.nom)+'" data-on-click="mlAnnotCouleur(\''+p.c+'\')"></button>').join('')
+      +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(a.c)+'" aria-label="Couleur personnalisée" data-on-change="mlAnnotCouleur(this.value)"></label></div></div>'
     +(a.t==='texte'?'':'<div class="mlx-champ"><span>Épaisseur</span><div class="mlx-ligne mlx-ligne-0"><input type="range" min="1" max="12" step="1" value="'+a.e+'" '
-      +'aria-label="Épaisseur" onfocus="mlAnnotFocus()" oninput="mlAnnotEpaisseur(this.value)"><span id="mlx-aep-val">'+a.e+' px</span></div></div>'
+      +'aria-label="Épaisseur" data-on-focus="mlAnnotFocus()" data-on-input="mlAnnotEpaisseur(this.value)"><span id="mlx-aep-val">'+a.e+' px</span></div></div>'
       +'<div class="mlx-champ"><span>Trait</span><div class="mlx-chips mlx-chips-l" role="group" aria-label="Style du trait">'
-      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+((a.st||'')===k)+'" onclick="mlAnnotOption(\'st\',\''+k+'\')">'
+      +ML_TRAITS.map(([k,l])=>'<button type="button" class="mlx-chip mlx-trait" aria-pressed="'+((a.st||'')===k)+'" data-on-click="mlAnnotOption(\'st\',\''+k+'\')">'
         +_mlxTraitIco(k)+l+'</button>').join('')+'</div></div>')
     +'<div class="mlx-champ"><span>Durée d’apparition</span><div class="mlx-duree">'
-      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.d)+'" aria-label="Début" onchange="mlAnnotBorne(\'d\',this.value)">'
-      +'<button type="button" class="mlx-b" onclick="mlAnnotBorne(\'d\')" title="Début à la tête de lecture">Ici</button>'
+      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.d)+'" aria-label="Début" data-on-change="mlAnnotBorne(\'d\',this.value)">'
+      +'<button type="button" class="mlx-b" data-on-click="mlAnnotBorne(\'d\')" title="Début à la tête de lecture">Ici</button>'
       +'<span class="mlx-fl">→</span>'
-      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.f)+'" aria-label="Fin" onchange="mlAnnotBorne(\'f\',this.value)">'
-      +'<button type="button" class="mlx-b" onclick="mlAnnotBorne(\'f\')" title="Fin à la tête de lecture">Ici</button></div>'
-      +'<div class="mlx-chips"><button type="button" class="mlx-chip" onclick="mlAnnotDuree(\'video\')">Toute la vidéo</button>'
-      +'<button type="button" class="mlx-chip" onclick="mlAnnotDuree(\'sequence\')"'+(_mlActif()?'':' disabled')+'>Séquence choisie</button></div></div>';
+      +'<input class="mlx-in mlx-tps" type="text" inputmode="decimal" value="'+_mlxT(a.f)+'" aria-label="Fin" data-on-change="mlAnnotBorne(\'f\',this.value)">'
+      +'<button type="button" class="mlx-b" data-on-click="mlAnnotBorne(\'f\')" title="Fin à la tête de lecture">Ici</button></div>'
+      +'<div class="mlx-chips"><button type="button" class="mlx-chip" data-on-click="mlAnnotDuree(\'video\')">Toute la vidéo</button>'
+      +'<button type="button" class="mlx-chip" data-on-click="mlAnnotDuree(\'sequence\')"'+(_mlActif()?'':' disabled')+'>Séquence choisie</button></div></div>';
   if(a.t==='angle') h+='<div class="mlx-champ"><span>Angle cible</span><div class="mlx-ligne mlx-ligne-0">'
       +'<input class="mlx-in mlx-tps" type="number" min="0" max="180" step="1" value="'+(typeof a.cb==='number'?a.cb:'')+'" placeholder="—" '
-      +'aria-label="Angle cible en degrés" onchange="mlAnnotOption(\'cb\',this.value)"><span class="mlx-deg">°</span>'
+      +'aria-label="Angle cible en degrés" data-on-change="mlAnnotOption(\'cb\',this.value)"><span class="mlx-deg">°</span>'
       +'<span class="mlx-angle-l">'+(an?'Actuel <b>'+an.val+'°</b>'+(an.ecart!==null?' · écart <b>'+(an.ecart>0?'+':'')+an.ecart+'°</b>':''):'')+'</span></div>'
       +'<span class="mlx-note">En comparaison, la branche cible se dessine en tirets verts.</span></div>';
-  if(a.t==='point'&&mlDecoderTrait(a.p).length>1) h+='<label class="mlx-coche"><input type="checkbox"'+(a.rel?' checked':'')+' onchange="mlAnnotOption(\'rel\',this.checked)"> Relier les points</label>';
-  if(a.t!=='texte') h+='<label class="mlx-coche"><input type="checkbox"'+(a.et!==0?' checked':'')+' onchange="mlAnnotOption(\'et\',this.checked)"> Afficher le nom sur la vidéo</label>'
+  if(a.t==='point'&&mlDecoderTrait(a.p).length>1) h+='<label class="mlx-coche"><input type="checkbox"'+(a.rel?' checked':'')+' data-on-change="mlAnnotOption(\'rel\',this.checked)"> Relier les points</label>';
+  if(a.t!=='texte') h+='<label class="mlx-coche"><input type="checkbox"'+(a.et!==0?' checked':'')+' data-on-change="mlAnnotOption(\'et\',this.checked)"> Afficher le nom sur la vidéo</label>'
     +(a.et!==0?'<p class="mlx-note">Double-clique le nom sur la vidéo pour le déplacer.'
-      +(Array.isArray(a.eo)?' <button type="button" class="mlx-b" onclick="mlEtiqReplacer()">Le remettre près du tracé</button>':'')+'</p>':'')
-    +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' onchange="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
+      +(Array.isArray(a.eo)?' <button type="button" class="mlx-b" data-on-click="mlEtiqReplacer()">Le remettre près du tracé</button>':'')+'</p>':'')
+    +'<label class="mlx-coche"><input type="checkbox"'+(a.lg!==0?' checked':'')+' data-on-change="mlAnnotOption(\'lg\',this.checked)"> Dans la légende</label>';
   // SA MESURE, quand l'échelle est posée : elle se déplace elle aussi.
   {
     const G=_mlxCalqueGeo();
     const mmpx=G?mlEchelleMmPx(_ml.annot.ech,G.R.vw,G.R.vh):null;
     if(mmpx&&['ligne','fleche','libre','courbe','cercle','rect','zone'].includes(a.t))
       h+='<p class="mlx-note">Double-clique sa mesure sur la vidéo pour la déplacer.'
-        +(Array.isArray(a.mo)?' <button type="button" class="mlx-b" onclick="mlMesReplacer()">Remettre la mesure</button>':'')+'</p>';
+        +(Array.isArray(a.mo)?' <button type="button" class="mlx-b" data-on-click="mlMesReplacer()">Remettre la mesure</button>':'')+'</p>';
   }
   // LE SUIVI DU MOUVEMENT : images clés, et l'interpolation entre elles.
-  h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' onchange="mlAnnotSuivre()"> Suivre le mouvement</label>'
+  h+='<div class="mlx-suivi"><label class="mlx-coche"><input type="checkbox"'+(suit?' checked':'')+' data-on-change="mlAnnotSuivre()"> Suivre le mouvement</label>'
     // LE SUIVI AUTOMATIQUE : depuis l'image affichée jusqu'à la fin du tracé.
     +(_ml.mode==='annotsuivi'
       ?'<div class="mle-prog mlx-suivi-prog"><div class="mle-barre"><i id="mlx-suivi-barre"></i></div>'
         +'<span id="mlx-suivi-txt">'+escapeHtml(_ml.progres||'Suivi en cours…')+'</span>'
-        +'<button type="button" class="mlx-b" onclick="mlAnnotSuiviArreter()">Arrêter</button></div>'
-      :'<div class="mlx-auto-l"><button type="button" class="mlx-b mlx-b-r" onclick="mlAnnotSuiviAuto()"'+(_mlOccupe()?' disabled':'')+'>'
+        +'<button type="button" class="mlx-b" data-on-click="mlAnnotSuiviArreter()">Arrêter</button></div>'
+      :'<div class="mlx-auto-l"><button type="button" class="mlx-b mlx-b-r" data-on-click="mlAnnotSuiviAuto()"'+(_mlOccupe()?' disabled':'')+'>'
         +S('cible',14)+' Suivi automatique</button><span class="mlx-note">Pose '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les points':'le tracé')
         +' sur l’image de départ : le suivi '+(ML_SUIVI_TYPES_POINTS.includes(a.t)?'les ':'l’')+'accompagne jusqu’à '+_mlxT(Math.min(a.f,sMs+ML_SUIVI_ANNOT_MAX_MS))
         +'.'+(mlSegmentsRigides(a,mlDecoderTrait(a.p).length).length
@@ -7558,13 +7559,13 @@ function _mlxMajEditeur(){
         +'</span></div>')
     +(suit?'<div class="mlx-cles"><span>'+S('cle',12)+' '+(a.k||[]).length+' image'+((a.k||[]).length>1?'s':'')+' clé'+((a.k||[]).length>1?'s':'')
         +'<b id="mlx-cle-etat">'+(cle>=0?' · clé à cet instant':'')+'</b></span><span class="mlx-esp"></span>'
-      +'<button type="button" class="mlx-b" onclick="mlCleAller(-1)" aria-label="Image clé précédente">◀</button>'
-      +'<button type="button" class="mlx-b" onclick="mlCleAller(1)" aria-label="Image clé suivante">▶</button>'
-      +'<button type="button" id="mlx-cle-suppr" class="mlx-b" onclick="mlCleSupprimer()"'+(cle>=0?'':' disabled')+'>Retirer la clé</button></div>'
+      +'<button type="button" class="mlx-b" data-on-click="mlCleAller(-1)" aria-label="Image clé précédente">◀</button>'
+      +'<button type="button" class="mlx-b" data-on-click="mlCleAller(1)" aria-label="Image clé suivante">▶</button>'
+      +'<button type="button" id="mlx-cle-suppr" class="mlx-b" data-on-click="mlCleSupprimer()"'+(cle>=0?'':' disabled')+'>Retirer la clé</button></div>'
       +'<p class="mlx-note">Avance image par image (→) et replace les points : chaque déplacement pose une image clé, et le mouvement '
         +'se remplit entre elles.</p>'
       :'<p class="mlx-note">Allume-le pour que le tracé suive un repère (genou, barre, coude) image par image.</p>')+'</div>'
-    +'<div class="mlx-ed-pied"><button type="button" class="mlx-b mlx-suppr" onclick="mlAnnotSupprimer(\''+id+'\')">'+S('corbeille',14)+' Supprimer</button></div>'
+    +'<div class="mlx-ed-pied"><button type="button" class="mlx-b mlx-suppr" data-on-click="mlAnnotSupprimer(\''+id+'\')">'+S('corbeille',14)+' Supprimer</button></div>'
   +'</div>';
   z.innerHTML=h;
   // L'ÉDITEUR VIENT EN VUE quand on choisit un autre tracé — et seulement
@@ -7578,19 +7579,19 @@ function _mlxMajLegende(){
   const L=_ml.annot.leg;
   if(on instanceof HTMLInputElement) on.checked=!!L.on;
   /** @param {string} cle @param {[string,string][]} opts @param {string} val */
-  const sel=(cle,opts,val)=>'<select class="mlx-in" onchange="mlLegende(\''+cle+'\',this.value)">'
+  const sel=(cle,opts,val)=>'<select class="mlx-in" data-on-change="mlLegende(\''+cle+'\',this.value)">'
     +opts.map(([k,l])=>'<option value="'+k+'"'+(k===val?' selected':'')+'>'+l+'</option>').join('')+'</select>';
   z.innerHTML='<div class="mlx-leg'+(L.on?'':' mlx-leg-off')+'">'
     +'<label class="mlx-champ"><span>Titre</span><input class="mlx-in" type="text" maxlength="40" value="'+escapeHtml(L.titre)+'" '
-      +'onfocus="mlAnnotFocus()" oninput="mlLegende(\'titre\',this.value)"></label>'
+      +'data-on-focus="mlAnnotFocus()" data-on-input="mlLegende(\'titre\',this.value)"></label>'
     +'<div class="mlx-champs2"><label class="mlx-champ"><span>Position</span>'+sel('pos',[['hg','Haut gauche'],['hd','Haut droite'],['bg','Bas gauche'],['bd','Bas droite']],L.pos)+'</label>'
     +'<label class="mlx-champ"><span>Style</span>'+sel('fond',[['sombre','Fond sombre'],['clair','Fond clair'],['aucun','Sans fond']],L.fond)+'</label></div>'
     +'<div class="mlx-champs2"><label class="mlx-champ"><span>Taille</span>'+sel('taille',[['s','Petite'],['m','Moyenne'],['l','Grande']],L.taille)+'</label>'
     +'<label class="mlx-champ"><span>Opacité du fond</span><input type="range" min="30" max="100" step="5" value="'+Math.round(L.op*100)+'" '
-      +'aria-label="Opacité du fond de la légende" onfocus="mlAnnotFocus()" oninput="mlLegende(\'op\',Number(this.value)/100)"></label></div>'
+      +'aria-label="Opacité du fond de la légende" data-on-focus="mlAnnotFocus()" data-on-input="mlLegende(\'op\',Number(this.value)/100)"></label></div>'
     +'<p class="mlx-note">Elle liste les tracés gardés « dans la légende », avec la valeur de leurs angles, et part avec la correction. '
       +'Double-clique-la sur la vidéo pour la déplacer.'
-      +(typeof L.x==='number'?' <button type="button" class="mlx-b" onclick="mlLegendeReplacer()">La remettre dans son coin</button>':'')+'</p>'
+      +(typeof L.x==='number'?' <button type="button" class="mlx-b" data-on-click="mlLegendeReplacer()">La remettre dans son coin</button>':'')+'</p>'
   +'</div>';
 }
 // ── LES MODÈLES ────────────────────────────────────────────────────────────
@@ -7598,12 +7599,12 @@ function _mlxMajModeles(){
   const z=_mlEl('mlx-modeles');
   if(!z||!_ml) return;
   const S=_mlxIco, l=_mlxModeles(), G=_ml.guide;
-  z.innerHTML=l.map((m,i)=>'<div class="mlx-mod-l"><button type="button" class="mlx-mod'+(G&&G.m.nom===m.nom?' on':'')+'" onclick="mlModeleAnnot('+i+')" '
+  z.innerHTML=l.map((m,i)=>'<div class="mlx-mod-l"><button type="button" class="mlx-mod'+(G&&G.m.nom===m.nom?' on':'')+'" data-on-click="mlModeleAnnot('+i+')" '
       +'title="'+escapeHtml(m.etapes.map(e=>e.n).join(' · '))+'">'+S(m.ico,18)+'<span>'+escapeHtml(m.nom)+'</span>'
       +(G&&G.m.nom===m.nom?'<small>'+(G.i+1)+'/'+m.etapes.length+'</small>':'')+'</button>'
-      +(i>=ML_MODELES_ANNOT.length?'<button type="button" class="mlx-an-act" onclick="mlModeleAnnotRetirer('+i+')" aria-label="Retirer le modèle '+escapeHtml(m.nom)+'">×</button>':'')
+      +(i>=ML_MODELES_ANNOT.length?'<button type="button" class="mlx-an-act" data-on-click="mlModeleAnnotRetirer('+i+')" aria-label="Retirer le modèle '+escapeHtml(m.nom)+'">×</button>':'')
     +'</div>').join('')
-    +'<button type="button" class="mlx-mod mlx-mod-creer" onclick="mlModeleCreer()">'+S('plus',16)+'<span>Créer un modèle</span></button>';
+    +'<button type="button" class="mlx-mod mlx-mod-creer" data-on-click="mlModeleCreer()">'+S('plus',16)+'<span>Créer un modèle</span></button>';
 }
 // ── LE SENS DES COULEURS (Réglages) ────────────────────────────────────────
 function _mlxMajSens(){
@@ -7614,7 +7615,7 @@ function _mlxMajSens(){
       +'rouge s’appelle « Trajectoire actuelle », une verte « Trajectoire idéale », sauf si tu réécris leur sens. Ce réglage suit ton compte.</p>'
     +ML_PALETTE.map(p=>'<label class="mlx-sens-l"><i class="mlx-an-pt" style="--c:'+p.c+'"></i><span>'+p.nom+'</span>'
       +'<input class="mlx-in" type="text" maxlength="'+ANNOT_NOM_MAX+'" value="'+escapeHtml(sens[p.c]||'')+'" placeholder="Sans nom par défaut" '
-      +'onchange="mlCouleurSens(\''+p.c+'\',this.value)"></label>').join('');
+      +'data-on-change="mlCouleurSens(\''+p.c+'\',this.value)"></label>').join('');
 }
 
 // ── LA TIMELINE : LES PISTES ───────────────────────────────────────────────
@@ -7630,7 +7631,7 @@ function _mlxMajPistes(){
   zn.style.height=haut+'px';
   zn.innerHTML='<div class="mlx-tl-nom mlx-tl-nom-seq" style="top:'+MLX_TL_REGLE+'px;height:'+MLX_TL_SEQ+'px">Séquences</div>'
     +l.map((a,i)=>'<button type="button" class="mlx-tl-nom'+(a.id===_ml?.sel?' on':'')+(a.h?' masque':'')+'" style="top:'+(MLX_TL_REGLE+MLX_TL_SEQ+i*MLX_TL_PISTE)+'px" '
-      +'onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)"><i class="mlx-an-pt" style="--c:'+a.c+'"></i><span>'+escapeHtml(a.n)+'</span></button>').join('')
+      +'data-on-click="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)"><i class="mlx-an-pt" style="--c:'+a.c+'"></i><span>'+escapeHtml(a.n)+'</span></button>').join('')
     +(l.length?'':'<div class="mlx-tl-nom mlx-tl-vide" style="top:'+(MLX_TL_REGLE+MLX_TL_SEQ)+'px">Aucun tracé</div>');
   zp.style.top=(MLX_TL_REGLE+MLX_TL_SEQ)+'px';
   zp.innerHTML=D?l.map((a,i)=>{
@@ -7699,27 +7700,27 @@ function _mlMajListe(){
   const a=_mlActif(), S=_mlxIco;
   z.innerHTML=_ml.segments.length
     ?_ml.segments.map((s,i)=>'<div class="ml-rep mlx-seq'+(a&&s.id===a.id?' ml-rep-on':'')+'" role="button" tabindex="0" '
-        +'aria-pressed="'+(!!a&&s.id===a.id)+'" onclick="mlChoisir(\''+escapeHtml(s.id)+'\')" '
-        +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'
+        +'aria-pressed="'+(!!a&&s.id===a.id)+'" data-on-click="mlChoisir(\''+escapeHtml(s.id)+'\')" '
+        +'data-on-keydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}">'
         +'<span class="mlx-seq-n">'+(i+1)+'</span>'
         +'<canvas class="mlx-sv" data-seg="'+escapeHtml(s.id)+'" width="112" height="72" aria-hidden="true"></canvas>'
         +'<span class="mlx-seq-t"><b class="ml-rep-n">'+escapeHtml(s.label)+'</b>'
           +'<span class="ml-rep-t">'+_mlxT(s.debutMs).slice(0,-3)+' – '+_mlxT(s.finMs).slice(0,-3)
           +(s.barre?' · <b class="ml-rep-traj">trajectoire</b>':'')+'</span></span>'
-        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlRenommer('+i+')" '
+        +'<button type="button" class="ml-mini" data-on-click="event.stopPropagation();mlRenommer('+i+')" '
           +'aria-label="Renommer '+escapeHtml(s.label)+'">'+S('crayon',15)+'</button>'
-        +'<button type="button" class="ml-mini" onclick="event.stopPropagation();mlSupprimer('+i+')" '
+        +'<button type="button" class="ml-mini" data-on-click="event.stopPropagation();mlSupprimer('+i+')" '
           +'aria-label="Supprimer '+escapeHtml(s.label)+'">×</button></div>').join('')
     :'<div class="ml-vide">Aucune séquence pour l’instant.</div>';
   zb.innerHTML=a?'<div class="ml-bornes">'
       +['debut','fin'].map(q=>'<div class="ml-borne"><span class="ml-lab">'+(q==='debut'?'Début':'Fin')+'</span>'
         +'<span class="ml-val" id="ml-v-'+q+'">'+mlTempsTexte(q==='debut'?a.debutMs:a.finMs)+'</span>'
-        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',-1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tôt">◀ 1</button>'
-        +'<button type="button" class="ml-b" onclick="mlIci(\''+q+'\')" aria-label="'+(q==='debut'?'Début':'Fin')+' à la tête de lecture">Ici</button>'
-        +'<button type="button" class="ml-b" onclick="mlPas(\''+q+'\',1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tard">1 ▶</button>'
+        +'<button type="button" class="ml-b" data-on-click="mlPas(\''+q+'\',-1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tôt">◀ 1</button>'
+        +'<button type="button" class="ml-b" data-on-click="mlIci(\''+q+'\')" aria-label="'+(q==='debut'?'Début':'Fin')+' à la tête de lecture">Ici</button>'
+        +'<button type="button" class="ml-b" data-on-click="mlPas(\''+q+'\',1)" aria-label="'+(q==='debut'?'Début':'Fin')+' : une image plus tard">1 ▶</button>'
         +'</div>').join('')
       +'<div class="ml-borne-pied">'
-        +'<button type="button" class="ml-b" id="ml-boucle" aria-pressed="'+_ml.boucle+'" onclick="mlBoucle()">⟲ Lire en boucle</button>'
+        +'<button type="button" class="ml-b" id="ml-boucle" aria-pressed="'+_ml.boucle+'" data-on-click="mlBoucle()">⟲ Lire en boucle</button>'
         +'<span id="ml-duree">'+escapeHtml(a.label)+' · '+mlDureeTexte(a.finMs-a.debutMs)+'</span>'
       +'</div></div>':'';
   if(!_ml.dureeMs) zb.querySelectorAll('button').forEach(x=>{ x.setAttribute('disabled',''); });
@@ -9001,25 +9002,25 @@ function _mlMajReperes(){
         +'Ajuste la taille du cercle pour qu’il cerne ce que tu suis, sans plus.</p>'
       +'<label class="ml-champ"><span>Taille du repère</span><input type="range" id="ml-suiv-rayon" min="5" max="'
         +Math.round((_mlVideo()?.videoHeight||720)/6)+'" step="0.5" value="'+(_ml.graine?_ml.graine.r:16)
-        +'" oninput="mlRepTaille(this.value)"></label>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="mlRepSuivre()"'
+        +'" data-on-input="mlRepTaille(this.value)"></label>'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" data-on-click="mlRepSuivre()"'
         +(pose?'':' disabled')+'>Suivre</button>'
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlRepAnnuler()">Annuler</button></div>';
+      +'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlRepAnnuler()">Annuler</button></div>';
   } else if(_ml.mode==='repsuivi'){
     h+='<div class="ml-progres" role="progressbar" aria-label="Suivi en cours"><i id="ml-suiv-barre"></i></div>'
       +'<p class="ml-traj-aide" id="ml-suiv-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement de la vidéo…')+'</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterAnalyse()">Arrêter</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlArreterAnalyse()">Arrêter</button></div>';
   } else {
     const bloque=(_ml.dureeMs&&!_ml.rec)?'':' disabled';
     h+=(n
       ?'<ul class="ml-suiv">'+r.pts.map((/** @type {any} */ p,/** @type {number} */ i)=>
           '<li><i class="ml-suiv-pastille" style="--c:'+_mlCouleurTrait(p.c)+'"></i>'
           +'<b>'+escapeHtml(p.nom)+'</b>'+_mlRepEtat(a,i)
-          +'<button type="button" class="ml-mini" onclick="mlRepSupprimer('+i+')" aria-label="Retirer '
+          +'<button type="button" class="ml-mini" data-on-click="mlRepSupprimer('+i+')" aria-label="Retirer '
           +escapeHtml(p.nom)+'">✕</button></li>').join('')+'</ul>'
       :'<p class="ml-traj-aide">Aucun point suivi. Donne un nom à un endroit de l’image (« trajectoire », '
         +'« genou », « coude ») et son déplacement se dessinera sous ce nom.</p>')
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlRepAjouter()"'
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlRepAjouter()"'
         +(n>=SEG_REP_MAX?' disabled':bloque)+'>Ajouter un point</button></div>'
       // ON DIT CE QUI TIENT ET CE QUI NE TIENT PAS. Le suivi reconnaît un motif
       // d'image : il tient sur ce qui contraste, il décroche sur un aplat. Le
@@ -9236,23 +9237,23 @@ function _mlMajTrajectoire(){
         :'Touche le centre du disque'+(g&&Math.abs(g.tMs-a.debutMs)>20?' : l’analyse part de cette image':'')
           +'. Ajuste sa taille pour que le cercle suive son bord.')+'</p>'
       +(replacer?'':'<label class="ml-champ"><span>Taille du disque</span><input type="range" id="ml-rayon" min="4" max="'
-          +Math.round((_mlVideo()?.videoHeight||720)/4)+'" step="0.5" value="'+(g?g.r:20)+'" oninput="mlGraineTaille(this.value)"></label>'
+          +Math.round((_mlVideo()?.videoHeight||720)/4)+'" step="0.5" value="'+(g?g.r:20)+'" data-on-input="mlGraineTaille(this.value)"></label>'
         +'<label class="ml-champ"><span>Diamètre réel</span><span class="ml-cm"><input type="number" id="ml-diam" inputmode="decimal" min="10" max="100" step="0.5" value="'
-          +Math.round(_ml.disqueM*1000)/10+'" onchange="mlDisque(this.value)"><i>cm</i></span></label>'
+          +Math.round(_ml.disqueM*1000)/10+'" data-on-change="mlDisque(this.value)"><i>cm</i></span></label>'
         +'<div class="ml-champ"><span>L’athlète regarde vers</span><span class="ml-choix">'
           +[['gauche','← Gauche'],['droite','Droite →'],['','Je ne sais pas']].map(o=>'<button type="button" class="ml-b" aria-pressed="'
-            +(_ml&&_ml.sens===o[0])+'" onclick="mlSens(\''+o[0]+'\')">'+o[1]+'</button>').join('')+'</span></div>')
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="'+(replacer?'mlRelancer()':'mlAnalyser()')+'"'
+            +(_ml&&_ml.sens===o[0])+'" data-on-click="mlSens(\''+o[0]+'\')">'+o[1]+'</button>').join('')+'</span></div>')
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" data-on-click="'+(replacer?'mlRelancer()':'mlAnalyser()')+'"'
         +(pose?'':' disabled')+'>'+(replacer?'Relancer depuis ici':'Analyser')+'</button>'
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlAnnulerTrace()">Annuler</button></div>';
+      +'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlAnnulerTrace()">Annuler</button></div>';
   } else if(_ml.mode==='analyse'){
     h+='</div><div class="ml-progres" role="progressbar" aria-label="Analyse en cours"><i id="ml-progres-barre"></i></div>'
       +'<p class="ml-traj-aide" id="ml-progres-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement de la vidéo…')+'</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterAnalyse()">Arrêter</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlArreterAnalyse()">Arrêter</button></div>';
   } else if(!b){
     h+='</div><p class="ml-traj-aide">Pose le disque sur la première image de la répétition : l’analyse le suit '
         +'image par image, sur ce téléphone. Filme de profil, à 60 images par seconde de préférence.</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlTracer()"'+off+'>Tracer la trajectoire</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlTracer()"'+off+'>Tracer la trajectoire</button></div>';
   } else {
     const m=b.m||{}, cm=(/** @type {number} */ x)=>Math.round((x||0)*100)+'\u00a0cm';
     const avant=b.sens==='droite'?m.devPlus:b.sens==='gauche'?m.devMoins:null;
@@ -9261,7 +9262,7 @@ function _mlMajTrajectoire(){
     const doutes=mlPassagesDouteux(suivi
       ?suivi.points.map(p=>({t:p.tMs,conf:p.conf,etat:p.etat}))
       :(()=>{ const d=_mlBarreLue(a); return d?d.t.map((t,i)=>({t,conf:d.conf[i]})):[]; })());
-    h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaire()" aria-label="Refaire la trajectoire">↺</button></div>'
+    h+='<button type="button" class="ml-mini ml-refaire" data-on-click="mlRefaire()" aria-label="Refaire la trajectoire">↺</button></div>'
       // DEUX DÉCIMALES, PAS TROIS : le millième est sous le bruit de l'analyse
       // (quelques pour cent sur la vitesse maximale, mesurés sur des
       // trajectoires de synthèse), et l'afficher promettrait une précision
@@ -9280,18 +9281,18 @@ function _mlMajTrajectoire(){
       +'</div></details>'
       +'<canvas id="ml-courbe" class="ml-courbe" aria-label="Vitesse verticale dans le temps"></canvas>'
       +(b.ph&&b.ph.length?(function(){ const LIB=mlPhasesLib(b.ph); return '<div class="ml-phases">'+b.ph.map((/** @type {[string,number,number]} */ p)=>
-          '<button type="button" class="ml-phase" onclick="mlAllerA('+p[1]+')">'
+          '<button type="button" class="ml-phase" data-on-click="mlAllerA('+p[1]+')">'
           +escapeHtml(LIB[p[0]]||p[0])+' <i>'+mlTempsTexte(p[1])
           +(p[2]<ML_CONF_DOUTE*100?' · incertain':'')+'</i></button>').join('')+'</div>'; })()
         :'<p class="ml-traj-aide">Aucune phase n’a pu être reconnue sur cette répétition.</p>')
-      +'<label class="ml-coche"><input type="checkbox" '+(_ml.fantome?'checked ':'')+'onchange="mlFantome(this.checked)"> Trajectoire complète</label>'
+      +'<label class="ml-coche"><input type="checkbox" '+(_ml.fantome?'checked ':'')+'data-on-change="mlFantome(this.checked)"> Trajectoire complète</label>'
       // LES AVERTISSEMENTS NE BLOQUENT RIEN : ils disent ce qui rend le
       // résultat moins sûr. Le dernier vaut pour toute analyse en deux dimensions.
       +'<ul class="ml-alertes">'
         +(b.av||[]).map((/** @type {string} */ k)=>'<li>'+escapeHtml(ML_ALERTES_LIB[/** @type {keyof typeof ML_ALERTES_LIB} */(k)]||k)+'</li>').join('')
         +'<li>Analyse en 2D : fiable de profil, moins de face ou de trois-quarts.</li></ul>'
       +(doutes.length?'<div class="ml-lab" style="margin-top:12px">Images douteuses</div><div class="ml-phases">'
-          +doutes.slice(0,ML_DOUTES_MONTRES).map(p=>'<button type="button" class="ml-phase ml-doute" onclick="mlDouteuse('+p.tMs+')">'
+          +doutes.slice(0,ML_DOUTES_MONTRES).map(p=>'<button type="button" class="ml-phase ml-doute" data-on-click="mlDouteuse('+p.tMs+')">'
             +mlTempsTexte(p.tMs)+' <i>'+(p.perdu?'perdu':p.conf+'\u00a0%')+'</i></button>').join('')+'</div>':'')
       +(suivi?'<p class="ml-perf">Analysé sur ce téléphone : '+suivi.perf.images+' images en '
           +(Math.round(suivi.perf.ms/100)/10).toString().replace('.',',')+'\u00a0s ('
@@ -9368,12 +9369,12 @@ function _mlMajLecture(){
   h+='<div class="ml-phrases">'+phrases.map((/** @type {any} */ p,/** @type {number} */ i)=>
     '<div class="ml-phrase'+(p.mesurable?'':' ml-phrase-vide')+'">'
     +(p.tMs!=null
-      ?'<button type="button" class="ml-phrase-t" onclick="mlAllerA('+p.tMs+')" aria-label="Aller à cet instant">'
+      ?'<button type="button" class="ml-phrase-t" data-on-click="mlAllerA('+p.tMs+')" aria-label="Aller à cet instant">'
         +mlTempsTexte(p.tMs)+'</button>'
       :'')
     +'<span>'+escapeHtml(p.texte)+'</span>'
     +(p.mesurable&&enCorrection
-      ?'<button type="button" class="ml-mini" onclick="mlPhraseCarte('+i+')" aria-label="Ajouter cette phrase à la correction">+</button>'
+      ?'<button type="button" class="ml-mini" data-on-click="mlPhraseCarte('+i+')" aria-label="Ajouter cette phrase à la correction">+</button>'
       :'')
     +'</div>').join('')+'</div>';
   // LA CONVENTION, ÉCRITE DANS L'ÉCRAN. Un coach qui lit « hanche 78° » sans
@@ -9382,19 +9383,19 @@ function _mlMajLecture(){
   // L'ARTICULATION LUE, ET LA CHARGE. Deux réglages de lecture, pas deux mesures.
   h+='<div class="ml-champ"><span>Articulation lue</span><span class="ml-choix">'
     +ML_ANGLES.filter(q=>q.c).map(q=>'<button type="button" class="ml-b" aria-pressed="'
-      +(_mlArtLue===q.cle)+'" onclick="mlArticulationLue(\''+q.cle+'\')">'+escapeHtml(q.nom)+'</button>').join('')
+      +(_mlArtLue===q.cle)+'" data-on-click="mlArticulationLue(\''+q.cle+'\')">'+escapeHtml(q.nom)+'</button>').join('')
     +'</span></div>'
     +'<label class="ml-champ"><span>Charge externe</span><span class="ml-cm">'
     +'<input type="number" inputmode="decimal" min="1" max="999" step="0.5" value="'
-    +(_mlChargeKg==null?'':_mlChargeKg)+'" onchange="mlChargeKg(this.value)"><i>kg</i></span></label>';
+    +(_mlChargeKg==null?'':_mlChargeKg)+'" data-on-change="mlChargeKg(this.value)"><i>kg</i></span></label>';
   // LA LIGNE D'ACTION. Par défaut la gravité ; le passage en câble est un
   // geste explicite, parce que le deviner fausserait tous les bras de levier
   // d'un coup et dans le même sens.
   const act=/** @type {any} */(a).barre.act;
   const cable=!!(act&&act.mode==='cable');
   h+='<div class="ml-champ"><span>Ligne d’action</span><span class="ml-choix">'
-    +'<button type="button" class="ml-b" aria-pressed="'+(!cable)+'" onclick="mlActionLibre()">Charge libre</button>'
-    +'<button type="button" class="ml-b" aria-pressed="'+cable+'" onclick="mlActionCable()">Câble ou machine</button>'
+    +'<button type="button" class="ml-b" aria-pressed="'+(!cable)+'" data-on-click="mlActionLibre()">Charge libre</button>'
+    +'<button type="button" class="ml-b" aria-pressed="'+cable+'" data-on-click="mlActionCable()">Câble ou machine</button>'
     +'</span></div>'
     +(_ml.mode==='action'
       ?'<p class="ml-traj-aide">Touche DEUX points sur le câble, du côté de la charge vers la poulie. '
@@ -9440,7 +9441,7 @@ function _mlMajLecture(){
           +'</div>';
       }).join('')+'</div>'
       +(pertes?'<label class="ml-coche"><input type="checkbox" '+(/** @type {any} */(_ml).compare?'checked ':'')
-        +'onchange="mlComparerSerie(this.checked)"> Superposer la meilleure et la dernière</label>':'');
+        +'data-on-change="mlComparerSerie(this.checked)"> Superposer la meilleure et la dernière</label>':'');
   }
   z.innerHTML=h+'</div>';
   _mlDessinerProfil(L);
@@ -10317,19 +10318,19 @@ function _mlMajArticulations(){
   if(_ml.mode==='pose'){
     h+='</div><div class="ml-progres" role="progressbar" aria-label="Lecture des articulations"><i id="ml-progres-barre"></i></div>'
       +'<p class="ml-traj-aide" id="ml-progres-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement du moteur…')+'</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlArreterPose()">Arrêter</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlArreterPose()">Arrêter</button></div>';
   } else if(!p){
     h+='</div><p class="ml-traj-aide">Le corps est reconnu sur douze images par seconde, sur ce téléphone. '
       +'Filme l’athlète en entier, de profil : un genou qu’on ne voit pas ne donne pas d’angle.</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlAnalyserArticulations()"'+off+'>Lire les articulations</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlAnalyserArticulations()"'+off+'>Lire les articulations</button></div>';
   } else {
     const S=_mlPoseLue(a);
     /** @type {ReturnType<typeof mlMetriquesAngles>} */
     const met=S?mlMetriquesAngles(S):{};
-    h+='<button type="button" class="ml-mini ml-refaire" onclick="mlRefaireArticulations()" aria-label="Refaire les articulations"'+off+'>↺</button></div>'
+    h+='<button type="button" class="ml-mini ml-refaire" data-on-click="mlRefaireArticulations()" aria-label="Refaire les articulations"'+off+'>↺</button></div>'
       +'<div class="ml-champ"><span>Côté mesuré</span><span class="ml-choix">'
       +[['G','Gauche'],['D','Droite']].map(o=>'<button type="button" class="ml-b" aria-pressed="'
-        +((S?S.cote:p.cote)===o[0])+'" onclick="mlCoteAngles(\''+o[0]+'\')">'+o[1]+'</button>').join('')
+        +((S?S.cote:p.cote)===o[0])+'" data-on-click="mlCoteAngles(\''+o[0]+'\')">'+o[1]+'</button>').join('')
       +'</span></div>'
       +'<p class="ml-traj-aide">Touche un angle pour le poser sur la vidéo. '+ML_ANG_MAX+' à la fois.</p>'
       +'<div class="ml-choix ml-ang">'
@@ -10338,7 +10339,7 @@ function _mlMajArticulations(){
         const i=E.angCalques.indexOf(q.cle);
         return '<button type="button" class="ml-b ml-ang-b" aria-pressed="'+on+'"'+(m?'':' disabled')
           +(on?' style="--c:'+_mlCouleurTrait(i%3)+'"':'')
-          +' onclick="mlCalqueAngle(\''+q.cle+'\')">'+q.nom+(m?'':' —')+'</button>';
+          +' data-on-click="mlCalqueAngle(\''+q.cle+'\')">'+q.nom+(m?'':' —')+'</button>';
       }).join('')
       +'</div>';
     const actifs=_ml.angCalques.filter(c=>met[c]);
@@ -10346,7 +10347,7 @@ function _mlMajArticulations(){
     if(actifs.length&&enCorrection){
       h+='<div class="ml-choix ml-ang">'+actifs.map(c=>{
         const q=ML_ANGLES.find(x=>x.cle===c);
-        return '<button type="button" class="ml-b" onclick="mlEpingler(\''+c+'\')">📌 '+escapeHtml(q?q.nom:c)+'</button>';
+        return '<button type="button" class="ml-b" data-on-click="mlEpingler(\''+c+'\')">📌 '+escapeHtml(q?q.nom:c)+'</button>';
       }).join('')+'</div>';
     }
     if(actifs.length){
@@ -10696,7 +10697,7 @@ function _mlMajPrise(){
   } else {
     h+='<p class="ml-traj-aide">Dix images suffisent à dire si la vidéo se laisse mesurer : profil, cadrage, '
       +'aplomb, cadence. Une seconde, contre une minute pour l’analyse complète.</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlVerifierPriseDeVue()"'+off+'>Vérifier la prise de vue</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlVerifierPriseDeVue()"'+off+'>Vérifier la prise de vue</button></div>';
   }
   // ── L'APLOMB ──
   const auto=E.thetaAuto;
@@ -10709,11 +10710,11 @@ function _mlMajPrise(){
           +'corrige au doigt si le téléphone était penché.')+'</p>'
     +'<label class="ml-champ"><span>Redressement</span>'
       +'<input type="range" id="ml-aplomb" min="'+(-ML_APLOMB_MAX)+'" max="'+ML_APLOMB_MAX+'" step="1" '
-      +'value="'+E.theta+'" aria-label="Aplomb, en degrés" oninput="mlAplomb(this.value)"></label>'
+      +'value="'+E.theta+'" aria-label="Aplomb, en degrés" data-on-input="mlAplomb(this.value)"></label>'
     +'<div class="ml-champ"><span>'+Math.round(E.theta)+'°</span>'
       +'<span class="ml-choix">'
-      +(auto?'<button type="button" class="ml-b" onclick="mlAplombAuto()">Reprendre l’estimation</button>':'')
-      +'<button type="button" class="ml-b" onclick="mlAplomb(0)">Remettre à zéro</button></span></div>';
+      +(auto?'<button type="button" class="ml-b" data-on-click="mlAplombAuto()">Reprendre l’estimation</button>':'')
+      +'<button type="button" class="ml-b" data-on-click="mlAplomb(0)">Remettre à zéro</button></span></div>';
   // ── L'ÉTALON ──
   const e=E.etalon, px=_mlEtalonPx();
   const pose=E.mode==='etalon';
@@ -10728,16 +10729,16 @@ function _mlMajPrise(){
         +'sur une longueur que tu connais, ou l’outil Échelle, dans l’onglet Tracé.')+'</p>'
     +'<div class="ml-champ"><span>Étalon</span><span class="ml-choix">'
       +ML_ETALONS.map(x=>'<button type="button" class="ml-b" aria-pressed="'+(e.type===x.cle)+'" '
-        +'onclick="mlEtalonType(\''+x.cle+'\')">'+escapeHtml(x.nom)+'</button>').join('')+'</span></div>'
+        +'data-on-click="mlEtalonType(\''+x.cle+'\')">'+escapeHtml(x.nom)+'</button>').join('')+'</span></div>'
     +'<label class="ml-champ"><span>Longueur réelle</span><span class="ml-cm">'
       +'<input type="number" id="ml-etalon-cm" inputmode="decimal" min="1" max="1000" step="0.5" value="'
-      +(e.cm||'')+'" onchange="mlEtalonCm(this.value)"><i>cm</i></span></label>'
+      +(e.cm||'')+'" data-on-change="mlEtalonCm(this.value)"><i>cm</i></span></label>'
     +(e.type==='taille'?'<p class="ml-traj-aide">⚠ Une taille déclarée est une ESTIMATION, pas une mesure : '
       +'l’échelle qui en découle l’est aussi.</p>':'')
     +'<div class="ml-traj-cmd">'
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlEtalonPoser()"'+off+'>'
+      +'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlEtalonPoser()"'+off+'>'
       +(px?'Reposer les deux points':'Poser deux points')+'</button>'
-      +(px?'<button type="button" class="btn btn-outline btn-sm" onclick="mlEtalonEffacer()">Revenir au disque</button>':'')
+      +(px?'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlEtalonEffacer()">Revenir au disque</button>':'')
     +'</div>';
   z.innerHTML=h+'</div>';
 }
@@ -11198,19 +11199,19 @@ function _mlMajBarreRec(){
   z.innerHTML='<div class="ml-rec-l1"><span class="ml-rec-point fx-loop'+(r.pause?' ml-rec-pause':'')+'" aria-hidden="true"></span>'
     +'<b class="ml-rec-t">'+mlTempsTexte(t).slice(0,-3)+'</b>'
     +'<span class="ml-rec-etat">'+(r.pause?'En pause':r.media?'Enregistrement':'Enregistrement sans voix')+'</span>'
-    +'<button type="button" class="ml-b" onclick="mlRecPause()">'+(r.pause?'Reprendre':'❚❚ Pause')+'</button>'
-    +'<button type="button" class="ml-b ml-b-plein" onclick="mlRecTerminer()">■ Terminer</button></div>'
+    +'<button type="button" class="ml-b" data-on-click="mlRecPause()">'+(r.pause?'Reprendre':'❚❚ Pause')+'</button>'
+    +'<button type="button" class="ml-b ml-b-plein" data-on-click="mlRecTerminer()">■ Terminer</button></div>'
     +'<div class="ml-rec-l2">'
-      +'<button type="button" class="ml-b" aria-pressed="'+(r.outil==='dessin')+'" onclick="mlRecDessin()"'+(r.pause?' disabled':'')+'>✎ Dessiner</button>'
+      +'<button type="button" class="ml-b" aria-pressed="'+(r.outil==='dessin')+'" data-on-click="mlRecDessin()"'+(r.pause?' disabled':'')+'>✎ Dessiner</button>'
       +[0,1,2].map(i=>'<button type="button" class="ml-pastille" style="--c:'+_mlCouleurTrait(i)+'" aria-pressed="'+(r.couleur===i)
-        +'" aria-label="Couleur '+['blanche','cyan','rouge'][i]+'" onclick="mlRecCouleur('+i+')"'+(r.pause?' disabled':'')+'></button>').join('')
-      +'<button type="button" class="ml-b" onclick="mlRecEffacer()"'+(r.pause||!r.traits.length?' disabled':'')+'>Effacer</button>'
+        +'" aria-label="Couleur '+['blanche','cyan','rouge'][i]+'" data-on-click="mlRecCouleur('+i+')"'+(r.pause?' disabled':'')+'></button>').join('')
+      +'<button type="button" class="ml-b" data-on-click="mlRecEffacer()"'+(r.pause||!r.traits.length?' disabled':'')+'>Effacer</button>'
       // ⚠ LA VOIX PART CHEZ UN TIERS quand c'est allumé : le navigateur
       // fait la reconnaissance, pas nous. Éteint par défaut, et le
       // panneau en dessous le dit en toutes lettres.
-      +'<button type="button" class="ml-b" aria-pressed="'+(!!r.reco)+'" onclick="mlRecSousTitres()"'
+      +'<button type="button" class="ml-b" aria-pressed="'+(!!r.reco)+'" data-on-click="mlRecSousTitres()"'
         +(mlReconnaissanceDispo()?'':' disabled')+'>CC'+(r.st.length?' '+r.st.length:'')+'</button>'
-      +(a&&a.barre?'<button type="button" class="ml-b" aria-pressed="'+r.trace+'" onclick="mlRecTrace()"'+(r.pause?' disabled':'')+'>Trajectoire</button>':'')
+      +(a&&a.barre?'<button type="button" class="ml-b" aria-pressed="'+r.trace+'" data-on-click="mlRecTrace()"'+(r.pause?' disabled':'')+'>Trajectoire</button>':'')
     +'</div>';
 }
 function _mlMajCorrection(){
@@ -11232,7 +11233,7 @@ function _mlMajCorrection(){
       +(mlReconnaissanceDispo()?' Le bouton CC ajoute des sous-titres : la reconnaissance est celle du navigateur, et ta voix part alors chez son éditeur.':'')
       +(v&&motionCorrectionValide(v.motion)?' Une correction a déjà été envoyée'+(v.motion.envoyeLe?' le '+new Date(v.motion.envoyeLe).toLocaleDateString('fr-FR'):'')
         +' : la nouvelle la remplacera.':'')+'</p>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="mlCorrDemarrer()"'+off+'>🎙 Enregistrer une correction</button></div>';
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" data-on-click="mlCorrDemarrer()"'+off+'>🎙 Enregistrer une correction</button></div>';
   } else {
     const st={brouillon:'Prête à envoyer',envoi:'Envoi en cours…',envoye:'Envoyée ✓',erreur:'Échec de l’envoi'}[c.statut];
     h+='<p class="ml-traj-aide"><b class="ml-statut ml-statut-'+c.statut+'">'+st+'</b> · '+_mlDureeCourte(c.motion.dureeMs)
@@ -11240,10 +11241,10 @@ function _mlMajCorrection(){
       +'<div id="ml-corr-lecteur" class="ml-corr-lecteur"></div>'
       +'<div class="ml-traj-cmd">'
       +(c.statut==='envoye'
-        ?'<button type="button" class="btn btn-outline btn-sm" onclick="mlCorrAbandonner()">Nouvelle correction</button>'
-        :'<button type="button" class="btn btn-red btn-sm" onclick="mlCorrEnvoyer()"'+(c.statut==='envoi'?' disabled':'')+'>'
+        ?'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlCorrAbandonner()">Nouvelle correction</button>'
+        :'<button type="button" class="btn btn-red btn-sm" data-on-click="mlCorrEnvoyer()"'+(c.statut==='envoi'?' disabled':'')+'>'
           +(c.statut==='erreur'?'Réessayer l’envoi':'Envoyer à l’athlète')+'</button>'
-          +'<button type="button" class="btn btn-outline btn-sm" onclick="mlCorrAbandonner()"'+(c.statut==='envoi'?' disabled':'')+'>Abandonner</button>')
+          +'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlCorrAbandonner()"'+(c.statut==='envoi'?' disabled':'')+'>Abandonner</button>')
       +'</div>';
   }
   // LES CARTES : elles se préparent avant, pendant ou après l'enregistrement,
@@ -11253,16 +11254,16 @@ function _mlMajCorrection(){
   h+='<div class="ml-lab" style="margin-top:14px">Corrections écrites</div>'
     +(_ml.cartes.length?'<div class="ml-cartes">'+_ml.cartes.map(k=>'<div class="ml-carte-l"><span class="ml-carte-t">'
         +mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span>'
-        +(verrou?'':'<button type="button" class="ml-mini" onclick="mlCarteSupprimer(\''+escapeHtml(k.id)+'\')" aria-label="Retirer cette carte">×</button>')
+        +(verrou?'':'<button type="button" class="ml-mini" data-on-click="mlCarteSupprimer(\''+escapeHtml(k.id)+'\')" aria-label="Retirer cette carte">×</button>')
         +'</div>').join('')+'</div>':'<p class="ml-traj-aide">Aucune pour l’instant.</p>')
     +(verrou?'':'<div class="ml-carte-saisie"><input id="ml-carte-txt" class="vn-in" maxlength="'+CORR_CARTE_MAX+'" placeholder="Ex. : garde les coudes hauts" '
-        +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();mlCarteAjouter()}">'
+        +'data-on-keydown="if(event.key===\'Enter\'){event.preventDefault();mlCarteAjouter()}">'
       +'<select id="ml-carte-duree" class="vn-in" aria-label="Durée d’affichage">'
         +ML_DUREES_CARTE.map(d=>'<option value="'+d+'"'+(d===3000?' selected':'')+'>'+(d/1000)+' s</option>').join('')+'</select></div>'
-      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlCarteAjouter()"'+off+'>+ À l’image affichée</button>'
-        +'<button type="button" class="btn btn-outline btn-sm" onclick="mlModeleGarder()">★ Garder comme modèle</button></div>'
-      +'<div class="ml-phases">'+_mlModeles().map((m,i)=>'<span class="ml-modele"><button type="button" class="ml-phase" onclick="mlModeleUtiliser('+i+')">'
-        +escapeHtml(m)+'</button><button type="button" class="ml-modele-x" onclick="mlModeleRetirer('+i+')" aria-label="Retirer ce modèle">×</button></span>').join('')+'</div>');
+      +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlCarteAjouter()"'+off+'>+ À l’image affichée</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" data-on-click="mlModeleGarder()">★ Garder comme modèle</button></div>'
+      +'<div class="ml-phases">'+_mlModeles().map((m,i)=>'<span class="ml-modele"><button type="button" class="ml-phase" data-on-click="mlModeleUtiliser('+i+')">'
+        +escapeHtml(m)+'</button><button type="button" class="ml-modele-x" data-on-click="mlModeleRetirer('+i+')" aria-label="Retirer ce modèle">×</button></span>').join('')+'</div>');
   // LES ÉPINGLES : la valeur d'un angle, attachée à une image. Elle est
   // gardée telle qu'elle a été vue, et non recalculée à la lecture : si les
   // articulations sont refaites, ce que le coach a montré ne bouge pas.
@@ -11272,7 +11273,7 @@ function _mlMajCorrection(){
         const q=ML_ANGLES.find(x=>x.cle===p.art);
         return '<div class="ml-carte-l"><span class="ml-carte-t">'+mlTempsTexte(p.aMs)+'</span>'
           +'<span class="ml-carte-x">'+escapeHtml(q?q.nom:String(p.art))+' · '+p.val+'°\u00a0±'+(p.tol||ML_TOL_BRUT)+'</span>'
-          +(verrou?'':'<button type="button" class="ml-mini" onclick="mlEpingleSupprimer(\''+escapeHtml(p.id)+'\')" aria-label="Retirer cette épingle">×</button>')
+          +(verrou?'':'<button type="button" class="ml-mini" data-on-click="mlEpingleSupprimer(\''+escapeHtml(p.id)+'\')" aria-label="Retirer cette épingle">×</button>')
           +'</div>';
       }).join('')+'</div>'
       :'<p class="ml-traj-aide">Aucun. Affiche un angle, place-toi sur l’image, et épingle-le depuis le panneau des articulations.</p>');
@@ -11280,7 +11281,7 @@ function _mlMajCorrection(){
   // jettent. Une reconnaissance qui a compris de travers vaut mieux jetée.
   const st=(c&&c.motion.st)||[];
   if(st.length) h+='<p class="ml-traj-aide">'+st.length+' ligne'+(st.length>1?'s':'')+' de sous-titres, reconnues pendant l’enregistrement.'
-    +(verrou?'':' <button type="button" class="ml-modele-x" onclick="mlSousTitresRetirer()">Les retirer</button>')+'</p>';
+    +(verrou?'':' <button type="button" class="ml-modele-x" data-on-click="mlSousTitresRetirer()">Les retirer</button>')+'</p>';
   z.innerHTML=h+'</div>';
   // L'APERÇU : le lecteur de l'athlète, sur la voix gardée en mémoire.
   const hote=_mlEl('ml-corr-lecteur');
@@ -11879,14 +11880,14 @@ function mlAfficherCorrection(u,v){
     +(m?(aAnnot?'<div class="ml-lab" style="margin-top:18px">La correction commentée · '+_mlDureeCourte(m.dureeMs)+'</div>':'')
       +'<div id="mlc-lecteur"></div>'
       +(m.cartes.length?'<div class="ml-lab" style="margin-top:16px">Corrections écrites</div><div class="ml-cartes">'
-        +m.cartes.map((k,i)=>'<button type="button" class="ml-carte-l ml-carte-b" onclick="mlCorrectionCarte('+i+')">'
+        +m.cartes.map((k,i)=>'<button type="button" class="ml-carte-l ml-carte-b" data-on-click="mlCorrectionCarte('+i+')">'
           +'<span class="ml-carte-t">'+mlTempsTexte(k.aMs)+'</span><span class="ml-carte-x">'+escapeHtml(k.texte)+'</span></button>').join('')+'</div>':''):'')
     +(mesures.length?'<div class="ml-lab" style="margin-top:16px">Tes mesures</div>'
       +mesures.map(s=>{ const b=/** @type {any} */(s).barre, mm=b.m||{};
         return '<div class="ml-metr ml-metr-l"><div><b>'+mlNombre(mm.vMax,2)+' m/s</b><span>'+escapeHtml(s.label)+' · vitesse max</span></div>'
           +'<div><b>'+mlNombre(mm.hMax,2)+' m</b><span>'+escapeHtml(s.label)+' · hauteur max</span></div></div>'; }).join(''):'')
-    +'<div class="ml-traj-cmd" style="margin-top:16px"><button type="button" class="btn btn-outline btn-sm" onclick="mlVoirOrigine()">Voir ma vidéo d’origine</button>'
-      +(coach?'':'<button type="button" class="btn btn-outline btn-sm" onclick="repondreCorrectionMotion()">Répondre à mon coach</button>')+'</div>'
+    +'<div class="ml-traj-cmd" style="margin-top:16px"><button type="button" class="btn btn-outline btn-sm" data-on-click="mlVoirOrigine()">Voir ma vidéo d’origine</button>'
+      +(coach?'':'<button type="button" class="btn btn-outline btn-sm" data-on-click="repondreCorrectionMotion()">Répondre à mon coach</button>')+'</div>'
     +'<div id="mlc-origine"></div>';
   _mlc.m=m; _mlc.url=String(v.url||'');
   const ha=_mlEl('mlc-annot');
@@ -12993,15 +12994,15 @@ function mlOuvrirComparaison(email,videoId){
   _mlcEtat={email,id:videoId,autre:autres[0].id,liste};
   const E=escapeHtml;
   document.getElementById('modal-overlay')?.remove();
-  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="mlFermerComparaison()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">'
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" data-on-click="mlFermerComparaison()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:4px">Comparer deux analyses</h2>'
     +'<p class="mlc-p">'+E(v.lien.exerciceNom||'')+' · la plus ancienne est proposée d’abord.</p>'
-    +'<label class="mlc-l" for="mlc-choix">Comparer avec</label><select id="mlc-choix" onchange="mlChoisirComparaison(this.value)">'
+    +'<label class="mlc-l" for="mlc-choix">Comparer avec</label><select id="mlc-choix" data-on-change="mlChoisirComparaison(this.value)">'
     +autres.map((x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
     +'<div id="mlc-corps"></div>'
-    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlFermerComparaison()">Fermer</button>'
-    +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlExporterComparaison()">Exporter l’image</button></div></div></div>');
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="mlFermerComparaison()">Fermer</button>'
+    +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="mlExporterComparaison()">Exporter l’image</button></div></div></div>');
   _mlcRendre();
   return true;
 }
@@ -13030,3 +13031,27 @@ function mlExporterComparaison(){
   toast('Image de la comparaison téléchargée : joins-la à ta correction.','var(--green)');
   return true;
 }
+// actions:debut
+// TABLE BLANCHE DES GESTES. Ecrite par `node scripts/verif/gestes.mjs --ecrire` : ne pas
+// la retoucher a la main, la CI la compare a ce que le code demande.
+rcActions({
+  _mlxEchAnnulerPose,mlActionCable,mlActionLibre,mlAjouter,mlAllerA,mlAnalyser,mlAnalyserArticulations,
+  mlAnnotAjouter,mlAnnotBorne,mlAnnotChoisir,mlAnnotCouleur,mlAnnotDuree,mlAnnotEpaisseur,mlAnnotFocus,mlAnnotNom,
+  mlAnnotOption,mlAnnotSuiviArreter,mlAnnotSuiviAuto,mlAnnotSuivre,mlAnnotSupprimer,mlAnnotTexte,
+  mlAnnotToutEffacer,mlAnnotVisibilite,mlAnnuler,mlAnnulerTrace,mlAplomb,mlAplombAuto,mlArreterAnalyse,
+  mlArreterExport,mlArreterPose,mlArticulationLue,mlBoucle,mlCalqueAngle,mlCarteAjouter,mlCarteSupprimer,
+  mlChargeKg,mlChoisir,mlChoisirComparaison,mlCleAller,mlCleSupprimer,mlComparaison,mlComparerSerie,
+  mlCorrAbandonner,mlCorrDemarrer,mlCorrEnvoyer,mlCorrectionCarte,mlCoteAngles,mlCouleur,mlCouleurSens,mlDisque,
+  mlDouteuse,mlEchCharge,mlEchEffacer,mlEchEnregistrer,mlEchGamme,mlEchMarque,mlEchMm,mlEchMode,mlEpaisseur,
+  mlEpingleSupprimer,mlEpingler,mlEtalonCm,mlEtalonEffacer,mlEtalonPoser,mlEtalonType,mlEtiqAnnuler,
+  mlEtiqReplacer,mlExporterComparaison,mlExporterLab,mlFantome,mlFermerComparaison,mlFermerExport,mlGraineTaille,
+  mlGuideArreter,mlGuidePasser,mlIci,mlImage,mlLecture,mlLegende,mlLegendeReplacer,mlMenu,mlMesReplacer,
+  mlModeleAnnot,mlModeleAnnotRetirer,mlModeleCreer,mlModeleGarder,mlModeleRetirer,mlModeleUtiliser,mlOnglet,
+  mlOutil,mlPartagerExport,mlPas,mlPhrase,mlPhraseCarte,mlPleinEcran,mlPosition,mlRaccourcis,mlRecCouleur,
+  mlRecDessin,mlRecEffacer,mlRecPause,mlRecSousTitres,mlRecTerminer,mlRecTrace,mlRefaire,mlRefaireArticulations,
+  mlRelancer,mlRelier,mlRenommer,mlRepAjouter,mlRepAnnuler,mlRepSuivre,mlRepSupprimer,mlRepTaille,mlRepereAnat,
+  mlRetablir,mlSens,mlSon,mlSousTitresRetirer,mlStyleTrait,mlSupprimer,mlTailleTexte,mlTerminerTrace,mlTracer,
+  mlTracerEnLecture,mlTrajArreter,mlTrajMode,mlVerifierPriseDeVue,mlVersionOriginale,mlVitesse,mlVoirOrigine,
+  mlZoom,mlZoomAjuster
+});
+// actions:fin

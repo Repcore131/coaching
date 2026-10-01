@@ -47,6 +47,7 @@ import gzip
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(RACINE, 'app', 'index.html')
 SW = os.path.join(RACINE, 'app', 'sw.js')
+FIREBASE = os.path.join(RACINE, 'firebase.json')
 SEUIL = 50 * 1024          # au-dela, un bloc en ligne merite de sortir
 
 
@@ -88,6 +89,29 @@ def bloc(html, ouvrant, fermant, mini):
         if fin - deb >= mini:
             return (d, deb, fin, fin + len(fermant))
         i = fin + len(fermant)
+
+
+def empreintes_scripts(html):
+    """Les empreintes CSP ('sha256-…') des <script> en ligne, dans l'ordre.
+
+    Sur le texte EN LF : c'est ce que l'analyseur HTML rend au moteur, et c'est
+    donc ce que le navigateur hache — pas les CRLF du disque."""
+    import base64
+    import hashlib
+    out = []
+    for m in re.finditer(r'<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)</script>', html):
+        t = m.group(1).replace('\r\n', '\n').replace('\r', '\n')
+        out.append("'sha256-%s'" % base64.b64encode(hashlib.sha256(t.encode('utf-8')).digest()).decode('ascii'))
+    return out
+
+
+def poser_empreintes(fb, empreintes):
+    """Remplace, dans chaque script-src de firebase.json, les empreintes portees."""
+    def une(m):
+        valeurs = [v for v in m.group(1).split() if not v.startswith("'sha256-")]
+        i = valeurs.index("'self'") + 1 if "'self'" in valeurs else 0
+        return 'script-src ' + ' '.join(valeurs[:i] + empreintes + valeurs[i:])
+    return re.sub(r"script-src ('self'[^;\"]*)", une, fb)
 
 
 def main():
@@ -171,6 +195,18 @@ def main():
         if html.count('\n') - html.count('\r\n') != 0:
             raise SystemExit('REFUS : des fins de ligne LF seules sont apparues')
         ecrire(INDEX, html)
+
+    # ── LA CSP : les empreintes des scripts en ligne ─────────────────────
+    # script-src ne porte plus 'unsafe-inline' (build 1760) : chaque <script>
+    # en ligne d'index.html est admis par son empreinte, et le premier porte
+    # RC_BUILD — elle change donc a chaque build. Verifie par
+    # scripts/verif/csp.mjs avant tout deploiement.
+    fb = lire(FIREBASE)
+    fb2 = poser_empreintes(fb, empreintes_scripts(html))
+    if fb2 != fb:
+        if not verifier:
+            ecrire(FIREBASE, fb2)
+        faits.append('firebase.json : empreintes des scripts en ligne mises a jour')
 
     apresb = html.encode('utf-8')
     print('build %s' % build)

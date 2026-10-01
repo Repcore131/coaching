@@ -56,8 +56,36 @@ console.log('nettoyage :', await ev(`(async()=>{ try{
   if(indexedDB.databases) for(const d of await indexedDB.databases())
     if(d&&d.name) indexedDB.deleteDatabase(d.name);
   return 'sw, caches et stockage vides'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+// Les refus de la CSP sont notes des le chargement : un <script> en ligne
+// dont l'empreinte est perimee est refuse AVANT que la suite ne commence.
+const CSP = process.env.CSP === '1';
+await cmd('Page.addScriptToEvaluateOnNewDocument', { source: `window.__csp=[];
+  document.addEventListener('securitypolicyviolation',e=>{ window.__csp.push({d:e.violatedDirective,
+    b:String(e.blockedURI||'').slice(0,80),ou:String(e.sourceFile||'').split('/').pop()+':'+e.lineNumber,
+    x:String(e.sample||'').slice(0,60)}); });` });
 await cmd('Page.reload', { ignoreCache: true });
 await new Promise(r => setTimeout(r, 6000));
+if (CSP) {
+  const servie = await ev(`fetch(location.href,{cache:'no-store'}).then(r=>r.headers.get('content-security-policy')||'')`);
+  if (!servie || typeof servie !== 'string') { console.log('CSP=1, mais la page n est pas servie avec une Content-Security-Policy : '
+    + 'lancer node scripts/verif/serveur-csp.mjs'); process.exit(1); }
+  console.log('csp : servie' + (/'unsafe-inline'/.test((servie.match(/script-src[^;]*/) || [''])[0]) ? " — ATTENTION, script-src porte 'unsafe-inline'" : ", script-src sans 'unsafe-inline'"));
+  // LES SCRIPTS EN LIGNE ONT-ILS TOURNE ? Le premier pose RC_BUILD, le dernier
+  // _tok : absents, c'est qu'une empreinte de firebase.json est perimee et que
+  // le navigateur a refuse le bloc — ce que la production ferait aussi.
+  const blocs = await ev(`[typeof window.RC_BUILD, typeof _tok].join(',')`);
+  if (blocs !== 'string,function') { console.log('CSP : un <script> en ligne de index.html a ete REFUSE (' + blocs
+    + ') : empreinte perimee, lancer python scripts/versionner_actifs.py'); process.exit(1); }
+}
+// L'ECOUTE DES REFUS, posee une seconde fois ici : selon le mode sans tete,
+// addScriptToEvaluateOnNewDocument ne s'applique pas toujours, et une ecoute
+// absente rendrait « 0 refus » sans avoir rien ecoute.
+console.log('ecoute csp :', await ev(`(()=>{ if(Array.isArray(window.__csp)) return 'posee au chargement ('+window.__csp.length+' refus deja notes)';
+  window.__csp=[];
+  document.addEventListener('securitypolicyviolation',e=>{ window.__csp.push({d:e.violatedDirective,
+    b:String(e.blockedURI||'').slice(0,80),ou:String(e.sourceFile||'').split('/').pop()+':'+e.lineNumber,
+    x:String(e.sample||'').slice(0,60)}); });
+  return 'posee apres le chargement'; })()`));
 // LA TABLE CIQUAL EST CHARGEE AVANT, ET CELA CHANGE LA TAILLE DE LA SUITE.
 // Sans elle, un test de substitution levait a mi-parcours ; la suite est un
 // seul try, si bien que TOUT ce qui suivait ne s'executait plus. Mesure :
@@ -82,13 +110,51 @@ console.log('regles :', await ev(`(async()=>{ try{
   window._RC_RULES=await r.text();
   return 'chargees ('+window._RC_RULES.length+' o)';
 }catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
-const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
-  return {total:r.total,echecs:r.echecs,
-    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; }
-  catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
+// LA SUITE EST LANCEE, PUIS SURVEILLEE (01/10/2026). Un seul Runtime.evaluate
+// qui attend chargerTests() tombait sur « timeout Runtime.evaluate » des que
+// la suite passait trois minutes — une machine chargee suffit. On pose le
+// rapport dans window.__rap et on le relit toutes les deux secondes.
+await ev(`(()=>{ window.__rap=null;
+  chargerTests().then(r=>{ window.__rap={total:r.total,echecs:r.echecs,
+    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; })
+  .catch(e=>{ window.__rap={erreur:String(e&&e.message||e)}; }); return 1; })()`);
+const MAXI = +(process.env.SUITE_MAX_S || 1500) * 1000;
+let rap = null;
+for (const t0 = Date.now(); Date.now() - t0 < MAXI;) {
+  await new Promise(r => setTimeout(r, 2000));
+  rap = await ev('window.__rap').catch(() => null);
+  if (rap) break;
+}
+if (!rap) rap = { erreur: 'la suite n a pas rendu son rapport en ' + MAXI / 1000 + ' s' };
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
+// LA CSP (CSP=1, avec scripts/verif/serveur-csp.mjs). Le navigateur consigne
+// chaque refus ; un refus de script-src est un gestionnaire en ligne ou un
+// <script> que la production refuserait aussi — donc un bouton mort. Les
+// gestes refuses par le moteur (fonction hors de RC_ACTIONS) sont lus de meme.
+// Les refus d'autres directives (img-src, connect-src…) viennent des jeux
+// d'essai, qui pointent vers des domaines factices : ils sont listes, sans
+// faire tomber la suite.
+let cspKo = false;
+if (CSP) {
+  const v = (await ev('window.__csp||[]')) || [];
+  const refus = (await ev(`(typeof _rcGestesRefus!=='undefined'?_rcGestesRefus:[]).slice(0,40)`)) || [];
+  const uniq = l => [...new Map(l.map(x => [JSON.stringify(x), x])).values()];
+  const scripts = uniq(v.filter(x => /^script-src/.test(x.d)));
+  const autres = uniq(v.filter(x => !/^script-src/.test(x.d)));
+  console.log('CSP : ' + scripts.length + ' refus de script, ' + autres.length + ' refus d autres directives, '
+    + refus.length + ' geste(s) refuse(s) par le moteur');
+  for (const x of scripts.slice(0, 40)) console.log('  SCRIPT ' + JSON.stringify(x));
+  for (const x of autres.slice(0, 15)) console.log('  autre  ' + JSON.stringify(x));
+  for (const x of refus) console.log('  GESTE  ' + JSON.stringify(x));
+  cspKo = scripts.length > 0 || refus.length > 0;
+}
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
 // LE CODE DE SORTIE DIT LE RESULTAT (30/09/2026) : la CI le lit. Une suite
 // interrompue (erreur, ou moins de 1000 tests joues) est un echec aussi.
 const MIN = +(process.env.SUITE_MIN || 1000);
-process.exit(rap && !rap.erreur && rap.echecs === 0 && rap.total >= MIN ? 0 : 1);
+// On ferme la connexion avant de sortir : sous Windows, process.exit sur un
+// WebSocket ouvert fait tomber libuv (« UV_HANDLE_CLOSING ») et le code de
+// sortie ne dit plus le resultat.
+try { ws.close(); } catch (e) {}
+await new Promise(r => setTimeout(r, 300));
+process.exit(rap && !rap.erreur && rap.echecs === 0 && rap.total >= MIN && !cspKo ? 0 : 1);

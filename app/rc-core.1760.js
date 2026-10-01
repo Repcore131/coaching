@@ -1,3 +1,377 @@
+// gestes:debut
+// ══════ GESTES DELEGUES (build 1760) ═════════════════════════════════════════
+// PLUS AUCUN GESTIONNAIRE EN LIGNE. La Content-Security-Policy de l'app
+// (firebase.json) ne porte plus 'unsafe-inline' dans script-src : un
+// onclick="…" ecrit dans une chaine HTML n'est plus execute par le navigateur,
+// et c'est le but. Une donnee de dossier qui echapperait a escapeHtml ne peut
+// donc plus faire tourner de code.
+//
+// CE QUI REMPLACE onclick="f(x)" : data-on-click="f(x)". Le texte est le meme,
+// mais ce n'est plus du JavaScript : c'est lu par le petit interprete
+// ci-dessous, qui ne sait faire que trois choses :
+//   · appeler une fonction INSCRITE dans RC_ACTIONS (la table blanche, en fin
+//     de fichier, tenue par `node scripts/verif/gestes.mjs --ecrire`) ;
+//   · lire ou poser une propriete dont le NOM est dans RC_GESTE_PROPS
+//     (this.value, event.key, this.style.display…) ;
+//   · lire ou poser une variable d'etat inscrite dans RC_GESTE_VARS.
+// Tout le reste est REFUSE et consigne (console + _rcGestesRefus) : pas de
+// innerHTML, pas de location, pas de constructor, pas de fonction globale non
+// inscrite. Un attribut injecte ne peut donc declencher, au toucher, qu'une
+// action que l'app propose deja.
+//
+// Evenements pris en charge : RC_GESTE_BULLE (delegues sur document, remontee
+// rejouee de la cible vers la racine, event.stopPropagation() respecte) et
+// RC_GESTE_CIBLE (ceux qui ne remontent pas : captures sur document, joues sur
+// la cible seule).
+//
+// ⚠ UN ELEMENT HORS DU DOCUMENT NE REMONTE PAS JUSQU'ICI : el.click() sur un
+// noeud detache ne joue plus son geste. rcGesteDeclencher(el,'click') le joue.
+//
+// ⚠ el.onclick=fn L'EMPORTE TOUJOURS SUR data-on-click, comme il remplacait
+// l'attribut onclick : trois editeurs recablent ainsi leur fleche de retour
+// avec un garde de modifications non enregistrees. Tant que la propriete est
+// une fonction, le geste ecrit dans le balisage ne joue pas. Et el.onclick()
+// n'appelle plus un geste du balisage : passer par rcGesteClic(el).
+const RC_GESTE_BULLE=['click','change','input','keydown','submit','mouseover','mouseout','pointerdown','pointermove'];
+const RC_GESTE_CIBLE=['error','focus','blur','toggle','pointerleave'];
+// Les noms de propriete qu'un geste peut lire, poser ou appeler. Liste fermee :
+// y ajouter un nom, c'est l'ouvrir a tout attribut data-on-* — jamais
+// innerHTML, outerHTML, location, href, cookie, constructor, ni rien qui
+// ecrive du HTML ou navigue.
+const RC_GESTE_PROPS=new Set([
+  // l'evenement
+  'key','target','stopPropagation','preventDefault','shiftKey',
+  // l'element et ses voisins
+  'value','checked','open','hidden','files','dataset','selectedIndex','src','scrollHeight','textContent',
+  'click','focus','blur','select','remove','closest','querySelector','getElementById',
+  'previousElementSibling','nextElementSibling','parentElement','parentNode',
+  'classList','toggle','add','style','display','opacity','borderColor','background','color','height','maxHeight',
+  // les valeurs
+  'trim','length','toUpperCase','startsWith','includes','max','min','email','id','getAttribute'
+]);
+// Les variables d'etat qu'un geste peut lire (et poser quand un second
+// accesseur est fourni). Remplie en fin de fichier : les `let` du script ne
+// sont pas des proprietes de window, il faut les nommer.
+const RC_GESTE_VARS=Object.create(null);
+// La table blanche des fonctions. Remplie en fin de fichier (rcActions), et
+// par motion-lab.js quand il se charge.
+const RC_ACTIONS=Object.create(null);
+function rcActions(t){ for(const k in t) if(typeof t[k]==='function') RC_ACTIONS[k]=t[k]; }
+const _rcGestesRefus=[];
+const _rcGesteCache=new Map();
+
+// ── L'analyse : un sous-ensemble d'expressions, rien d'autre ─────────────────
+function _rcGesteJetons(src){
+  const re=/\s*(?:(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+)|("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')|([A-Za-z_$][\w$]*)|(===|!==|==|!=|<=|>=|&&|\|\||\?\?|\?\.(?!\d)|\+=|-=|[-+*\/%<>!=?:.,;(){}\[\]]))/y;
+  const out=[]; let i=0;
+  const fin=/\s*$/y;
+  while(true){
+    fin.lastIndex=i; if(fin.test(src)) break;
+    re.lastIndex=i; const m=re.exec(src);
+    if(!m) throw new Error('caractere inattendu en '+i+' : '+src.slice(i,i+12));
+    i=re.lastIndex;
+    if(m[1]!==undefined) out.push({t:'n',v:+m[1]});
+    else if(m[2]!==undefined) out.push({t:'s',v:_rcGesteChaine(m[2])});
+    else if(m[3]!==undefined) out.push({t:'i',v:m[3]});
+    else out.push({t:'p',v:m[4]});
+  }
+  return out;
+}
+function _rcGesteChaine(lit){
+  const ech={n:'\n',t:'\t',r:'\r',b:'\b',f:'\f',v:'\v','0':'\0'};
+  return lit.slice(1,-1).replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g,(_,c)=>{
+    if(c[0]==='u'&&c.length>1) return String.fromCodePoint(parseInt(c.replace(/[u{}]/g,''),16));
+    if(c[0]==='x'&&c.length===3) return String.fromCharCode(parseInt(c.slice(1),16));
+    if(c==='\n'||c==='\r\n') return '';
+    return c in ech?ech[c]:c;
+  });
+}
+function rcGesteAnalyser(src){
+  const J=_rcGesteJetons(src); let p=0;
+  const vu=(v)=>p<J.length&&J[p].t==='p'&&J[p].v===v;
+  const mot=(v)=>p<J.length&&J[p].t==='i'&&J[p].v===v;
+  const exige=(v)=>{ if(!vu(v)) throw new Error('« '+v+' » attendu'+(p<J.length?' avant « '+J[p].v+' »':' en fin')); p++; };
+  const prend=(v)=>{ if(vu(v)){ p++; return true; } return false; };
+  const nom=()=>{ if(p>=J.length||J[p].t!=='i') throw new Error('nom attendu'); return J[p++].v; };
+  function suite(fermant){
+    const l=[];
+    while(p<J.length&&!(fermant&&vu(fermant))){ if(prend(';')) continue; l.push(instr()); }
+    return l;
+  }
+  function instr(){
+    if(vu('{')){ p++; const l=suite('}'); exige('}'); return {k:'bloc',l}; }
+    if(mot('if')){ p++; exige('('); const c=expr(); exige(')'); const a=instr(); prend(';');
+      let b=null; if(mot('else')){ p++; b=instr(); } return {k:'si',c,a,b}; }
+    if(mot('return')){ p++; const v=(p>=J.length||vu(';')||vu('}'))?null:expr(); return {k:'rend',v}; }
+    if(mot('var')||mot('let')||mot('const')){ p++; const n=nom(); exige('='); return {k:'local',n,v:expr()}; }
+    return {k:'expr',v:expr()};
+  }
+  function expr(){
+    const g=cond();
+    if(vu('=')||vu('+=')||vu('-=')){
+      const op=J[p++].v;
+      if(g.k!=='membre'&&g.k!=='nom') throw new Error('affectation a autre chose qu une propriete ou une variable');
+      return {k:'pose',op,g,d:expr()};
+    }
+    return g;
+  }
+  function cond(){
+    const c=bin(0);
+    if(prend('?')){ const a=expr(); exige(':'); const b=expr(); return {k:'tern',c,a,b}; }
+    return c;
+  }
+  const NIV=[['??','||'],['&&'],['===','!==','==','!='],['<','>','<=','>='],['+','-'],['*','/','%']];
+  function bin(n){
+    if(n>=NIV.length) return unaire();
+    let g=bin(n+1);
+    while(p<J.length&&J[p].t==='p'&&NIV[n].includes(J[p].v)){ const op=J[p++].v; g={k:'bin',op,g,d:bin(n+1)}; }
+    return g;
+  }
+  function unaire(){
+    if(vu('!')||vu('-')||vu('+')){ const op=J[p++].v; return {k:'un',op,v:unaire()}; }
+    return postfixe();
+  }
+  function args(){ const a=[]; while(!vu(')')){ a.push(expr()); if(!prend(',')) break; } exige(')'); return a; }
+  function postfixe(){
+    let e=primaire();
+    while(p<J.length){
+      if(prend('.')) e={k:'membre',o:e,n:nom()};
+      else if(vu('?.')){ p++;
+        if(prend('(')) e={k:'appel',f:e,a:args(),opt:true};
+        else if(prend('[')){ const c=expr(); exige(']'); e={k:'membre',o:e,c,opt:true}; }
+        else e={k:'membre',o:e,n:nom(),opt:true}; }
+      else if(prend('[')){ const c=expr(); exige(']'); e={k:'membre',o:e,c}; }
+      else if(prend('(')) e={k:'appel',f:e,a:args()};
+      else break;
+    }
+    return e;
+  }
+  function primaire(){
+    if(p>=J.length) throw new Error('expression attendue en fin');
+    const j=J[p++];
+    if(j.t==='n'||j.t==='s') return {k:'val',v:j.v};
+    if(j.t==='i'){
+      if(j.v==='true') return {k:'val',v:true};
+      if(j.v==='false') return {k:'val',v:false};
+      if(j.v==='null') return {k:'val',v:null};
+      if(j.v==='undefined') return {k:'val',v:undefined};
+      if(j.v==='this') return {k:'ceci'};
+      if(j.v==='event') return {k:'evt'};
+      if(j.v==='new'||j.v==='function'||j.v==='typeof'||j.v==='delete'||j.v==='void'||j.v==='await'||j.v==='for'||j.v==='while')
+        throw new Error('« '+j.v+' » n est pas admis dans un geste');
+      return {k:'nom',n:j.v};
+    }
+    if(j.v==='('){ const e=expr(); exige(')'); return e; }
+    if(j.v==='['){ const l=[]; while(!vu(']')){ l.push(expr()); if(!prend(',')) break; } exige(']'); return {k:'liste',l}; }
+    if(j.v==='{'){ const c=[];
+      while(!vu('}')){ const t=J[p++]; if(!t||(t.t!=='i'&&t.t!=='s'&&t.t!=='n')) throw new Error('cle d objet attendue');
+        exige(':'); c.push([String(t.v),expr()]); if(!prend(',')) break; }
+      exige('}'); return {k:'objet',c}; }
+    throw new Error('« '+j.v+' » inattendu');
+  }
+  const l=suite(null);
+  if(p<J.length) throw new Error('« '+J[p].v+' » inattendu');
+  return l;
+}
+// Les noms qu'un geste appelle ou lit au niveau global, et ses proprietes :
+// c'est ce que scripts/verif/gestes.mjs et la suite comparent aux tables.
+function rcGesteNoms(src){
+  const r={fonctions:new Set(),variables:new Set(),props:new Set()};
+  const locaux=new Set();
+  const va=(n,appele)=>{
+    if(!n||typeof n!=='object') return;
+    if(Array.isArray(n)){ n.forEach((x)=>va(x)); return; }
+    if(n.k==='local') locaux.add(n.n);
+    if(n.k==='nom'&&!locaux.has(n.n)&&!(n.n in _RC_GESTE_SOCLE)) (appele?r.fonctions:r.variables).add(n.n);
+    // this.dataset.x : les cles d'un dataset sont libres (voir _rcGesteCle).
+    if(n.k==='membre'&&n.n&&!(n.o.k==='membre'&&n.o.n==='dataset')) r.props.add(n.n);
+    if(n.k==='appel'){ va(n.f,n.f.k==='nom'); va(n.a); return; }
+    if(n.k==='objet'){ n.c.forEach((c)=>va(c[1])); return; }
+    for(const c in n) if(c!=='k') va(n[c]);
+  };
+  va(rcGesteAnalyser(src));
+  return r;
+}
+
+// ── L'execution ──────────────────────────────────────────────────────────────
+const _RC_GESTE_SOCLE={document:1,Math:1,parseInt:1,parseFloat:1,Number:1,String:1,decodeURIComponent:1};
+const _RC_GESTE_RETOUR={};
+function _rcGesteRefus(quoi){ const e=new Error('geste refuse : '+quoi); e.rcRefus=true; return e; }
+function _rcGesteDonnee(o){
+  if(o===null||typeof o!=='object') return false;
+  if(Array.isArray(o)) return true;
+  const pr=Object.getPrototypeOf(o);
+  return pr===Object.prototype||pr===null;
+}
+function _rcGesteCle(o,cle){
+  // Un indice de tableau, une cle d'un objet de donnees : libres. Tout autre
+  // nom passe par la liste fermee.
+  if(typeof cle==='number') return cle;
+  cle=String(cle);
+  if(cle==='constructor'||cle==='__proto__'||cle==='prototype') throw _rcGesteRefus('propriete '+cle);
+  if(RC_GESTE_PROPS.has(cle)) return cle;
+  if(_rcGesteDonnee(o)||(typeof DOMStringMap!=='undefined'&&o instanceof DOMStringMap)) return cle;
+  throw _rcGesteRefus('propriete « '+cle+' » hors de RC_GESTE_PROPS');
+}
+function _rcGesteEval(n,env){
+  switch(n.k){
+    case 'val': return n.v;
+    case 'ceci': return env.ceci;
+    case 'evt': return env.evt;
+    case 'nom': {
+      if(n.n in env.locaux) return env.locaux[n.n];
+      if(n.n in RC_GESTE_VARS) return RC_GESTE_VARS[n.n][0]();
+      if(n.n in RC_ACTIONS) return RC_ACTIONS[n.n];
+      if(n.n==='document') return document;
+      if(n.n==='Math') return Math;
+      if(n.n==='parseInt') return parseInt;
+      if(n.n==='parseFloat') return parseFloat;
+      if(n.n==='Number') return Number;
+      if(n.n==='String') return String;
+      if(n.n==='decodeURIComponent') return decodeURIComponent;
+      throw _rcGesteRefus('« '+n.n+' » n est inscrit ni dans RC_ACTIONS ni dans RC_GESTE_VARS');
+    }
+    case 'membre': {
+      const o=_rcGesteEval(n.o,env);
+      if(o==null){ if(n.opt||env.court) { env.court=true; return undefined; } }
+      const cle=_rcGesteCle(o,n.c?_rcGesteEval(n.c,env):n.n);
+      return o[cle];
+    }
+    case 'appel': {
+      let ceci, f;
+      if(n.f.k==='membre'){
+        ceci=_rcGesteEval(n.f.o,env);
+        if(ceci==null&&(n.f.opt||env.court)){ env.court=true; return undefined; }
+        f=ceci[_rcGesteCle(ceci,n.f.c?_rcGesteEval(n.f.c,env):n.f.n)];
+      } else f=_rcGesteEval(n.f,env);
+      if(f==null&&n.opt) return undefined;
+      if(typeof f!=='function') throw new TypeError('geste : ce qui est appele n est pas une fonction');
+      return f.apply(ceci,n.a.map((a)=>_rcGesteEval(a,env)));
+    }
+    case 'pose': {
+      const d=()=>_rcGesteEval(n.d,env);
+      const calc=(avant,v)=>n.op==='='?v:n.op==='+='?avant+v:avant-v;
+      if(n.g.k==='nom'){
+        const nm=n.g.n;
+        if(nm in env.locaux) return env.locaux[nm]=calc(env.locaux[nm],d());
+        const acc=RC_GESTE_VARS[nm];
+        if(!acc||!acc[1]) throw _rcGesteRefus('« '+nm+' » ne se pose pas depuis un geste');
+        const v=calc(n.op==='='?undefined:acc[0](),d()); acc[1](v); return v;
+      }
+      const o=_rcGesteEval(n.g.o,env);
+      const cle=_rcGesteCle(o,n.g.c?_rcGesteEval(n.g.c,env):n.g.n);
+      return o[cle]=calc(n.op==='='?undefined:o[cle],d());
+    }
+    case 'tern': return _rcGesteEval(n.c,env)?_rcGesteEval(n.a,env):_rcGesteEval(n.b,env);
+    case 'un': { const v=_rcGesteEval(n.v,env); return n.op==='!'?!v:n.op==='-'?-v:+v; }
+    case 'bin': {
+      if(n.op==='&&'){ const g=_rcGesteEval(n.g,env); return g?_rcGesteEval(n.d,env):g; }
+      if(n.op==='||'){ const g=_rcGesteEval(n.g,env); return g?g:_rcGesteEval(n.d,env); }
+      if(n.op==='??'){ const g=_rcGesteEval(n.g,env); return g!=null?g:_rcGesteEval(n.d,env); }
+      const g=_rcGesteEval(n.g,env), d=_rcGesteEval(n.d,env);
+      switch(n.op){
+        case '===': return g===d; case '!==': return g!==d;
+        case '==': return g==d; case '!=': return g!=d;
+        case '<': return g<d; case '>': return g>d; case '<=': return g<=d; case '>=': return g>=d;
+        case '+': return g+d; case '-': return g-d; case '*': return g*d; case '/': return g/d; case '%': return g%d;
+      }
+      return undefined;
+    }
+    case 'liste': return n.l.map((x)=>_rcGesteEval(x,env));
+    case 'objet': { const o={}; for(const c of n.c) o[c[0]]=_rcGesteEval(c[1],env); return o; }
+  }
+  throw new Error('geste : noeud inconnu');
+}
+function _rcGesteInstr(n,env){
+  switch(n.k){
+    case 'bloc': for(const x of n.l) _rcGesteInstr(x,env); return;
+    case 'si': if(_rcGesteEval(n.c,env)) _rcGesteInstr(n.a,env); else if(n.b) _rcGesteInstr(n.b,env); return;
+    case 'rend': env.rendu=n.v?_rcGesteEval(n.v,env):undefined; throw _RC_GESTE_RETOUR;
+    case 'local': env.locaux[n.n]=_rcGesteEval(n.v,env); return;
+    case 'expr': env.court=false; env.dernier=_rcGesteEval(n.v,env); return;
+  }
+}
+// Joue le texte d'un geste sur un element, et rend la valeur de sa derniere
+// instruction (la promesse d'une action async, par exemple). Une erreur levee par l'action part
+// la ou partait celle d'un gestionnaire en ligne (window.onerror) ; un refus
+// est consigne et ne casse rien d'autre.
+function rcGesteJouer(src,el,evt){
+  let arbre=_rcGesteCache.get(src);
+  const env={ceci:el,evt:evt,locaux:Object.create(null),rendu:undefined,court:false,dernier:undefined};
+  try{
+    if(!arbre){
+      arbre=rcGesteAnalyser(src);
+      if(_rcGesteCache.size>4000) _rcGesteCache.clear();
+      _rcGesteCache.set(src,arbre);
+    }
+    for(const i of arbre) _rcGesteInstr(i,env);
+    return env.dernier;
+  }catch(e){
+    if(e===_RC_GESTE_RETOUR){ if(env.rendu===false&&evt&&evt.preventDefault) evt.preventDefault(); return env.rendu; }
+    if((e&&e.rcRefus)||!arbre){
+      _rcGestesRefus.push({geste:String(src).slice(0,200),pourquoi:String(e&&e.message||e)});
+      if(_rcGestesRefus.length>200) _rcGestesRefus.shift();
+      console.error('[geste] '+String(e&&e.message||e)+' — '+String(src).slice(0,200));
+      return;
+    }
+    if(typeof reportError==='function') reportError(e); else setTimeout(()=>{ throw e; },0);
+  }
+}
+function _rcGesteRemontee(evt){
+  const attr='data-on-'+evt.type;
+  let chemin=evt.composedPath?evt.composedPath():[];
+  if(!chemin.length) for(let n=evt.target;n;n=n.parentNode) chemin.push(n);
+  const prop='on'+evt.type;
+  for(const el of chemin){
+    if(!el||el.nodeType!==1||!el.hasAttribute(attr)) continue;
+    if(typeof el[prop]==='function') continue;   // la propriete posee l'emporte, et elle a deja joue
+    rcGesteJouer(el.getAttribute(attr),el,evt);
+    // event.stopPropagation() dans un geste : les ancetres ne le voient pas,
+    // ni les ecouteurs poses apres celui-ci sur document ou window.
+    if(evt.cancelBubble){ evt.stopImmediatePropagation(); break; }
+  }
+}
+function _rcGesteCible(evt){
+  const el=evt.target, attr='data-on-'+evt.type;
+  if(el&&el.nodeType===1&&el.hasAttribute(attr)&&typeof el['on'+evt.type]!=='function') rcGesteJouer(el.getAttribute(attr),el,evt);
+}
+// Un evenement de RC_GESTE_BULLE emis SANS remontee — el.dispatchEvent(new
+// Event('input')) — n'atteint jamais l'ecouteur de remontee. Le gestionnaire
+// en ligne, lui, le recevait : on le joue donc sur la cible, a la capture.
+function _rcGesteSansRemontee(evt){ if(!evt.bubbles) _rcGesteCible(evt); }
+// Pour un element HORS du document (un fragment qu'on vient de construire) :
+// joue le geste de l'element et de ses ancetres, comme le ferait la remontee.
+function rcGesteDeclencher(el,type,evt){
+  evt=evt||new Event(type,{bubbles:true,cancelable:true});
+  const attr='data-on-'+type;
+  for(let n=el;n&&n.nodeType===1;n=n.parentNode){
+    if(typeof n['on'+type]==='function') n['on'+type](evt);
+    else if(n.hasAttribute(attr)) rcGesteJouer(n.getAttribute(attr),n,evt);
+    if(evt.cancelBubble) break;
+  }
+  return evt;
+}
+// Le clic d'UN element, joue directement et sans remontee : la propriete
+// el.onclick si elle est posee, sinon son geste data-on-click. Rend ce que le
+// gestionnaire rend (une promesse, pour un garde async). C'est ce qui remplace
+// el.onclick() la ou le code appelait le gestionnaire d'un bouton du balisage.
+function rcGesteAClic(el){
+  return !!el&&(typeof el.onclick==='function'||(!!el.hasAttribute&&el.hasAttribute('data-on-click')));
+}
+function rcGesteClic(el){
+  if(typeof el.onclick==='function') return el.onclick();
+  const g=el.getAttribute('data-on-click');
+  return g?rcGesteJouer(g,el,new Event('click',{bubbles:true,cancelable:true})):undefined;
+}
+if(typeof document!=='undefined'&&document.addEventListener){
+  for(const t of RC_GESTE_BULLE){
+    document.addEventListener(t,_rcGesteRemontee);
+    document.addEventListener(t,_rcGesteSansRemontee,true);
+  }
+  for(const t of RC_GESTE_CIBLE) document.addEventListener(t,_rcGesteCible,true);
+}
+// gestes:fin
+
 
 
 // ── Version de la politique de confidentialite ────────────────────────
@@ -1329,7 +1703,7 @@ function rcVerrouBloc(capacite){
   const action=(v.vers==='coaching')
     ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +escapeHtml(voie.bouton)+'</a>'
-    :'<button type="button" class="vrr-b" onclick="rcVerrouUltime()">'+escapeHtml(voie.bouton)+'</button>';
+    :'<button type="button" class="vrr-b" data-on-click="rcVerrouUltime()">'+escapeHtml(voie.bouton)+'</button>';
   return '<div class="vrr" data-verrou="'+escapeHtml(capacite)+'">'
     +'<div class="vrr-t">'+escapeHtml(voie.phrase(v.ferme,v.ouvert))+'</div>'
     +prix+action+'</div>';
@@ -2063,7 +2437,7 @@ function _htmlAlertePalier(coach,users){
     +'<div class="sub" style="font-size:var(--fs-xs);margin-top:6px;line-height:1.6">'
     +escapeHtml(a.texte)+'</div>'
     +'<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;min-height:44px" '
-    +'onclick="ouvrirMonAbonnement()">Changer de formule</button>'
+    +'data-on-click="ouvrirMonAbonnement()">Changer de formule</button>'
     +'</div>';
 }
 
@@ -2095,7 +2469,7 @@ function _htmlBandeauPaliers(coach,users){
     +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">Formule '+escapeHtml(pal.titre)
     +(pal.prix?(' : '+pal.prix+' € par mois'):' : gratuit')+'</div></div>'
     +'<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:38px" '
-    +'onclick="ouvrirMonAbonnement()">Changer</button>'
+    +'data-on-click="ouvrirMonAbonnement()">Changer</button>'
     +'</div>';
 }
 // Un seul chemin vers l'écran d'abonnement : l'onglet qui le porte. Le
@@ -2185,7 +2559,7 @@ function _renderAbonnementCoach(users){
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${escapeHtml(x.periode||'')}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.5">${escapeHtml(x.detail)}</div>
       ${(id&&!ici)?`<button class="btn btn-red btn-sm" style="margin-top:10px;width:100%"
-        onclick="souscrireCoach('${x.cle}')">Choisir ${escapeHtml(x.titre)}</button>`:''}
+        data-on-click="souscrireCoach('${x.cle}')">Choisir ${escapeHtml(x.titre)}</button>`:''}
     </div>`;
   }).join('');
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
@@ -2199,7 +2573,7 @@ function _renderAbonnementCoach(users){
       Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
-      onclick="exporterMesDonnees()">Exporter toutes mes données</button>
+      data-on-click="exporterMesDonnees()">Exporter toutes mes données</button>
     ${_htmlRappelPurge(users)}
   </div>`;
   return true;
@@ -2463,7 +2837,7 @@ function texteMiseAJour(maj,build){
 // PURE.
 function htmlPrefsAide(role,choix,maj,build,appareil){
   const r=role==='coach'?'coach':'client';
-  const seg=THEMES.map(t=>'<button type="button" data-theme="'+t.cle+'" aria-pressed="'+(t.cle===choix)+'" onclick="themeChoisir(\''+t.cle+'\')">'+t.nom+'</button>').join('');
+  const seg=THEMES.map(t=>'<button type="button" data-theme="'+t.cle+'" aria-pressed="'+(t.cle===choix)+'" data-on-click="themeChoisir(\''+t.cle+'\')">'+t.nom+'</button>').join('');
   const faq=FAQ_APP.filter(x=>x.pour.indexOf(r)>=0).map(x=>'<details class="prf-q"><summary>'+escapeHtml(x.q)+'</summary><p>'+escapeHtml(x.r)+'</p></details>').join('');
   return '<section class="prf card" aria-labelledby="prf-t-app">'
     +'<h3 class="prf-t" id="prf-t-app">Apparence</h3>'
@@ -2630,7 +3004,7 @@ function marqueCss(couleur){
 function htmlMarqueLogo(m,classe){
   if(!m) return '';
   return '<span class="mq-logo'+(classe?' '+classe:'')+'" aria-hidden="true"><span class="mq-init">'+escapeHtml(initialesMarque(m.nom))+'</span>'
-    +(m.logoUrl?'<img src="'+escapeHtml(m.logoUrl)+'" alt="" onerror="this.remove()">':'')+'</span>';
+    +(m.logoUrl?'<img src="'+escapeHtml(m.logoUrl)+'" alt="" data-on-error="this.remove()">':'')+'</span>';
 }
 // PURE. La bande de l'accueil et du canal.
 function htmlMarqueBande(m){
@@ -2722,21 +3096,21 @@ async function renderMarqueCoach(){
   z.innerHTML='<div class="mq-carte">'+tete
     +'<div class="mq-carte-d">Ta couleur remplace le rouge, ton logo et ton nom coiffent leur accueil et le canal. Ils la voient au prochain lancement.</div>'
     +'<label class="mq-lab" for="mq-nom">Nom affiché</label>'
-    +'<input id="mq-nom" class="mq-champ" maxlength="40" value="'+E(e.nom)+'" oninput="mqChamp(\'nom\',this.value)">'
+    +'<input id="mq-nom" class="mq-champ" maxlength="40" value="'+E(e.nom)+'" data-on-input="mqChamp(\'nom\',this.value)">'
     +'<label class="mq-lab" for="mq-hex">Couleur</label>'
-    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||'#E02020').toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
-    +'<input id="mq-hex" class="mq-champ" maxlength="7" value="'+E(e.couleur)+'" oninput="mqChamp(\'couleur\',this.value)"></div>'
+    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||'#E02020').toLowerCase())+'" data-on-input="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
+    +'<input id="mq-hex" class="mq-champ" maxlength="7" value="'+E(e.couleur)+'" data-on-input="mqChamp(\'couleur\',this.value)"></div>'
     +'<div id="mq-verdict" class="mq-verdict"></div>'
     +'<label class="mq-lab">Logo (carré, 200 Ko au plus)</label>'
     +'<div class="mq-logo-l"><div id="mq-logo-apercu"></div><div style="flex:1;min-width:0">'
-      +'<label class="btn btn-outline btn-sm mq-b">'+(e.envoi?'Envoi…':'Choisir une image')+'<input type="file" accept="image/*" style="display:none" onchange="mqLogoFichier(this)"></label>'
-      +(aLogoProfil?'<button type="button" class="mq-lien" onclick="mqLogoProfil()">Reprendre le logo de mon profil</button>':'')
-      +(e.logoUrl?'<button type="button" class="mq-lien" onclick="mqChamp(\'logoUrl\',\'\');renderMarqueCoach()">Sans logo (initiales)</button>':'')
+      +'<label class="btn btn-outline btn-sm mq-b">'+(e.envoi?'Envoi…':'Choisir une image')+'<input type="file" accept="image/*" style="display:none" data-on-change="mqLogoFichier(this)"></label>'
+      +(aLogoProfil?'<button type="button" class="mq-lien" data-on-click="mqLogoProfil()">Reprendre le logo de mon profil</button>':'')
+      +(e.logoUrl?'<button type="button" class="mq-lien" data-on-click="mqChamp(\'logoUrl\',\'\');renderMarqueCoach()">Sans logo (initiales)</button>':'')
     +'</div></div>'
     +'<div class="mq-lab">Aperçu</div><div id="mq-apercu" class="mq-apercu"></div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
-      +(e.existe?'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="mqRetirer()">Retirer ma marque</button>':'')
-      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="mqEnregistrer()">Enregistrer ma marque</button></div>'
+      +(e.existe?'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="mqRetirer()">Retirer ma marque</button>':'')
+      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="mqEnregistrer()">Enregistrer ma marque</button></div>'
     +'</div>';
   _mqApercu();
   return true;
@@ -2761,7 +3135,7 @@ function _mqApercu(){
   if(v) v.innerHTML=!c.couleur?'<span class="mq-ko">Écris une couleur au format #RRGGBB.</span>'
     :c.ok?'<span class="mq-ok">Lisible sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1).</span>'
     :'<span class="mq-ko">Trop sombre sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1, il en faut 3).</span> '
-      +'<button type="button" class="mq-lien" onclick="mqUtiliser('+_attrArg(c.proposee)+')">Utiliser '+escapeHtml(c.proposee)+', la plus proche lisible</button>';
+      +'<button type="button" class="mq-lien" data-on-click="mqUtiliser('+_attrArg(c.proposee)+')">Utiliser '+escapeHtml(c.proposee)+', la plus proche lisible</button>';
   const l=document.getElementById('mq-logo-apercu');
   const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||'#E02020'),logoUrl:e.logoUrl||null};
   if(l){ l.innerHTML=htmlMarqueLogo(m,'mq-logo-grand'); l.style.setProperty('--mq-c',m.couleur); }
@@ -2896,7 +3270,7 @@ function _renderAbonnement(){
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
         <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 20px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
-      :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
+      :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" data-on-click="_ouvrirResiliation()">Résilier mon abonnement</button>
         <div id="cr-resil" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px"></div>`}
   </div>`;
   return true;
@@ -2914,7 +3288,7 @@ function _ouvrirResiliation(){
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
     </select>
     <input id="resil-libre" type="text" maxlength="300" placeholder="Préciser (facultatif)" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:10px">
-    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>`;
+    <button class="btn btn-red" style="width:100%;margin:0" data-on-click="_confirmerResiliation()">Confirmer la résiliation</button>`;
   return true;
 }
 function _confirmerResiliation(){
@@ -3101,7 +3475,7 @@ function rcInfo(cle){
   const e=_lexEntree(cle);
   if(!e) return '';
   return '<button type="button" class="rc-i hit44" '
-    +'onclick="rcInfoOuvrir(\''+cle+'\')" '
+    +'data-on-click="rcInfoOuvrir(\''+cle+'\')" '
     +'aria-label="Qu\'est-ce que '+escapeHtml(e.t)+' ?">ⓘ</button>';
 }
 // L'OUVERTURE. Une cle inconnue n'ouvre RIEN : une feuille vide serait pire
@@ -3266,7 +3640,7 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" data-on-click="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
 // pas concurrencer l'action principale de l'ecran. ctaFn est une CHAINE posee
@@ -3335,13 +3709,13 @@ function renderDataList(items,rowRenderer,opts={}){
     const last=i===items.length-1;
     const r=rowRenderer(item,i);
     const html=typeof r==='string'?r:r.html;
-    const onC=typeof r==='object'&&r.onClick?` onclick="${r.onClick}"`:'';
+    const onC=typeof r==='object'&&r.onClick?` data-on-click="${r.onClick}"`:'';
     const xSt=typeof r==='object'&&r.style?r.style:'';
     // rc-ligne : le point d'ancrage du retrait anime. Aucune mise en forme n'y
     // est attachee — c'est une prise, pas un style.
     const xCls=` class="rc-ligne${typeof r==='object'&&r.cls?' '+r.cls:''}"`;
     const sep=last?'':`border-bottom:1px solid ${border};`;
-    const hov=hover?` onmouseover="this.style.background='${hover}'" onmouseout="this.style.background=''"` :'';
+    const hov=hover?` data-on-mouseover="this.style.background='${hover}'" data-on-mouseout="this.style.background=''"` :'';
     return `<div${xCls} style="display:flex;align-items:${align};gap:${gap}px;padding:${pad};${sep}${jStr}${xSt}"${onC}${hov}>${html}</div>`;
   }).join('');
 }
@@ -3894,6 +4268,7 @@ function _textesBornes(doc){
   for(const c of liste(doc.quickComments)) fermer(c,SCHEMA_COMMENTAIRE);
   return doc;
 }
+function cloudAfficherQR(){ CLOUD.showQR(); }
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -6490,7 +6865,7 @@ const CLOUD={
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
       <div id="qr-zone" style="width:220px;height:220px;border-radius:var(--r-3);background:#fff;padding:8px;margin:0 auto;display:flex;align-items:center;justify-content:center"></div>
       <p style="font-size:var(--fs-xs);color:#888;margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
-      <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:var(--text);padding:10px 24px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Fermer</button>
+      <button data-on-click="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:var(--text);padding:10px 24px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Fermer</button>
     </div>`;
     document.body.appendChild(modal);
     // APRES insertion dans le DOM : un canvas a besoin d'un parent rendu.
@@ -7597,8 +7972,8 @@ function _proposerReconsentement(){
   if(!currentUser||_consentementAJour(currentUser)) return;
   if(document.getElementById('rc-consent-modal')) return;   // idempotent
   const dejaVu=!!(currentUser.consent&&currentUser.consent.policyVersion);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div id="rc-consent-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div id="rc-consent-modal" data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="font-size:var(--fs-lg);margin-bottom:8px">${dejaVu?'La politique de confidentialité a changé':'Ton accord est nécessaire'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">${dejaVu
       ?'Le texte que tu avais accepté a été modifié. Relis-le et confirme ton accord pour continuer.'
@@ -7613,11 +7988,11 @@ function _proposerReconsentement(){
          Il est redemande par s-consent-sante, au premier geste qui le
          concerne, version du texte comprise. -->
     <div id="rc-consent-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:10px;display:none"></div>
-    <button class="btn btn-red" style="margin-top:14px" onclick="_validerReconsentement()">Confirmer mon accord</button>
+    <button class="btn btn-red" style="margin-top:14px" data-on-click="_validerReconsentement()">Confirmer mon accord</button>
     <!-- Pas de « plus tard » : un traitement de donnees de sante sans accord en
          cours de validite ne doit pas continuer. La seule autre issue est de se
          deconnecter, ce qui laisse le compte intact. -->
-    <button class="btn btn-outline" style="margin-top:10px" onclick="logout()">Se déconnecter</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="logout()">Se déconnecter</button>
   </div></div>`;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -7669,11 +8044,11 @@ function _proposerImportAthlete(){
   if(d.connu&&d.seances<d.seancesExistantes)
     degats.push((d.seancesExistantes-d.seances)+' séance'+((d.seancesExistantes-d.seances)>1?'s':''));
   degats.push(...d.ecrase);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div id="rc-pkg-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div id="rc-pkg-modal" data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2 style="font-size:var(--fs-lg)">Importer un profil ?</h2>
-      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button data-on-click="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:14px;line-height:1.6">Ce lien contient un profil d'athlète. Il n'a rien enregistré pour l'instant.</p>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">
@@ -7687,8 +8062,8 @@ function _proposerImportAthlete(){
     ${degats.length?`<p style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6;margin-bottom:14px">L'import supprimerait ${degats.join(', ')}. C'est irréversible.</p>`:''}
     ${d.connu?'':'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Aucun dossier ne porte encore cet email : l\'import créerait une nouvelle fiche.</p>'}
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:16px;line-height:1.6">N'importe qui peut fabriquer un lien de ce type. N'accepte que s'il vient de ton élève.</p>
-    <button class="btn btn-red" onclick="_confirmerImportAthlete()">Importer ce profil</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="_refuserImportAthlete()">Refuser</button>
+    <button class="btn btn-red" data-on-click="_confirmerImportAthlete()">Importer ce profil</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="_refuserImportAthlete()">Refuser</button>
   </div></div>`;
   // closeModal() et non un remove() direct : lui seul annule un enregistrement
   // audio en cours, que le remove laisserait tourner micro ouvert.
@@ -8475,12 +8850,12 @@ function htmlSelecteurComptes(opts){
       <div style="width:34px;height:34px;border-radius:var(--r-full);flex-shrink:0;overflow:hidden;background:var(--surface-2);
         display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:800;color:#bbb">
         ${c.avatar?`<img src="${escapeHtml(c.avatar)}" style="width:100%;height:100%;object-fit:cover">`:escapeHtml(ini(c))}</div>
-      <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` onclick="basculerCompte('${escapeHtml(c.email)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`}>
+      <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` data-on-click="basculerCompte('${escapeHtml(c.email)}')" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`}>
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
       ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">✓</span>'
-           :`<button onclick="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
+           :`<button data-on-click="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
               style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
     </div>`;
   };
@@ -8491,7 +8866,7 @@ function htmlSelecteurComptes(opts){
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>
     ${groupe('Compte athlète',l.filter(c=>c.role!=='coach'))}
     ${groupe('Compte coach',l.filter(c=>c.role==='coach'))}
-    <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="ajouterCompte()">+ Ajouter un compte</button>
     ${l.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Les rappels de notification suivent le compte actif : le compte en veille n'en reçoit pas.</div>`:''}
   </div>`;
 }
@@ -8500,8 +8875,8 @@ function htmlSelecteurComptes(opts){
 function ouvrirComptes(){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Changer de compte</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">Tes comptes restent connectés sur cet appareil. Tu passes de l'un à l'autre sans ressaisir ton mot de passe.</div>
         ${htmlSelecteurComptes()}
@@ -9228,12 +9603,12 @@ function _rendreConsoleAcces(){
     +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
   const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
     +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:10px 10px;min-height:38px" '
-    +'onclick="'+act+'">'+lib+'</button>';
+    +'data-on-click="'+act+'">'+lib+'</button>';
   let h=carte(titre('Une adresse')
     +'<input id="acces-mail" type="email" inputmode="email" autocapitalize="off" autocomplete="off" '
     +'spellcheck="false" placeholder="adresse@exemple.fr" value="'+escapeHtml(mail)+'" '
-    +'style="width:100%;margin-bottom:10px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();accesVoir()}">'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="accesVoir()">Voir son accès</button>'
+    +'style="width:100%;margin-bottom:10px" data-on-keydown="if(event.key===\'Enter\'){event.preventDefault();accesVoir()}">'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:0" data-on-click="accesVoir()">Voir son accès</button>'
     +'<div '+S+' style="margin-top:10px">Le rapport du 1er du mois donne l’adresse de chaque '
     +'personne qui paie. Colle-la ici : tu n’as pas besoin d’ouvrir son dossier pour '
     +'ouvrir ou fermer son accès.</div>');
@@ -9338,8 +9713,8 @@ function _accueilCarte(cle,pref,lignes){
   // ⚠ UN BOUTON QUI NE PEUT PAS ABOUTIR NE S'AFFICHE PAS EN ROUGE. Tant que le
   //   plan n'existe pas chez PayPal, on le dit au lieu de faire semblant.
   const bouton=plan
-    ? '<button type="button" class="wel-c-b" onclick="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
-    : '<button type="button" class="wel-c-b creux" onclick="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
+    ? '<button type="button" class="wel-c-b" data-on-click="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
+    : '<button type="button" class="wel-c-b creux" data-on-click="accueilChoisir(\''+cle+'\','+(annuel?'true':'false')+')">Commencer le mois offert</button>'
       +'<div class="wel-c-att">Le paiement de cette formule ouvre bientôt. Ton mois offert, lui, commence tout de suite.</div>';
   return '<div class="wel-c'+(pref?' pref':'')+'">'
     +'<div class="wel-c-top"><span class="wel-c-nom">'+escapeHtml(o.lib)+'</span>'
@@ -10283,7 +10658,7 @@ function _histPopstate(){
     try{ if(typeof _b.getClientRects==='function') _vu=_b.getClientRects().length>0; }catch(e){}
     if(_vu) _bk=_b;
   }
-  if(_bk&&typeof _bk.onclick==='function'){
+  if(rcGesteAClic(_bk)){
     _histPousser(actuel);
     // LE DRAPEAU EST LEVE ICI AUSSI, comme dans _histRetour : sans lui, le
     // go() declenche par la flèche écrivait l’origine À L’ENVERS.
@@ -10294,7 +10669,7 @@ function _histPopstate(){
     // go() qui suit la confirmation s’exécuter drapeau baissé.
     _navParHistorique=true;
     let _p=null;
-    try{ _p=_bk.onclick(); }catch(e){}
+    try{ _p=rcGesteClic(_bk); }catch(e){}
     if(_p&&typeof _p.then==='function') Promise.resolve(_p)
       .then(()=>{_navParHistorique=false;},()=>{_navParHistorique=false;});
     else _navParHistorique=false;
@@ -12081,7 +12456,7 @@ function _inscriptionPhotoRepli(montrer){
   if(!z) return;
   z.innerHTML=montrer
     ? '<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" '
-      +'onclick="_inscriptionPhotoAbandonner()">Continuer sans photo pour l\'instant</button>'
+      +'data-on-click="_inscriptionPhotoAbandonner()">Continuer sans photo pour l\'instant</button>'
     : '';
 }
 function _inscriptionPhotoAbandonner(){
@@ -12680,16 +13055,16 @@ function rescueLogin(em,pw){
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
       <p style="font-size:var(--fs-sm);color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
-        <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
+        <button data-on-click="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Coach
         </button>
-        <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
+        <button data-on-click="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
           style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Athlète
         </button>
       </div>
-      <button onclick="document.getElementById('rescue-panel').remove()"
+      <button data-on-click="document.getElementById('rescue-panel').remove()"
         style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
     </div>`;
   document.body.appendChild(panel);
@@ -12715,7 +13090,7 @@ function doRescue(em,pwEnc,role){
 async function forgotPassword(){
   const em=(document.getElementById('l-email')?.value||'').trim().toLowerCase();
   if(!em) return toast('Saisis ton email ci-dessus d\'abord','var(--orange)');
-  const btn=document.querySelector('#s-login [onclick="forgotPassword()"]');
+  const btn=document.querySelector('#s-login [data-on-click="forgotPassword()"]');
   if(btn){btn.textContent='Envoi…';btn.style.pointerEvents='none';}
   const ok=await CLOUD.resetPassword(em);
   if(btn){btn.textContent='Mot de passe oublié ?';btn.style.pointerEvents='';}
@@ -12847,15 +13222,15 @@ function goRegisterCoach(){
   setTimeout(()=>selectRole('coach',true),50);
 }
 function ouvrirInviteCoach(){
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out)">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out)">
     <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.6">Tu n'en as pas besoin pour créer ton compte. Si le créateur de RepCore t'a remis un code, saisis-le ici : il est à usage unique.</p>
     <label for="ci-code" style="margin-top:0">Ton code</label>
-    <input id="ci-code" placeholder="RC-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-family:monospace;letter-spacing:1px" onkeydown="if(event.key==='Enter'){event.preventDefault();_validerInviteCoach()}">
+    <input id="ci-code" placeholder="RC-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-family:monospace;letter-spacing:1px" data-on-keydown="if(event.key==='Enter'){event.preventDefault();_validerInviteCoach()}">
     <div id="ci-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:8px;display:none"></div>
-    <button class="btn btn-red" style="margin-top:14px" onclick="_validerInviteCoach()">Continuer</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:14px" data-on-click="_validerInviteCoach()">Continuer</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   setTimeout(()=>document.getElementById('ci-code')?.focus(),80);
@@ -13340,9 +13715,9 @@ function _annoncerDejaRattache(coachDuLien){
   const actuel=coachActuelDe();
   if(!actuel) return false;
   const nomLien=coachDuLien?(((coachDuLien.fname||'')+' '+(coachDuLien.lname||'')).trim()||'ce coach'):'ce coach';
-  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+  const html='<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'animation:fadeIn var(--t-3) var(--c-out)">'
     +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Tu es déjà suivi</h2>'
@@ -13353,9 +13728,9 @@ function _annoncerDejaRattache(coachDuLien){
     +escapeHtml(actuel)+' de te libérer, puis rouvre celui-ci. '
     +'<strong style="color:var(--text-strong)">Rien n\'a été modifié.</strong>'
     +'</p>'
-    +'<button class="btn btn-red" style="min-height:46px" onclick="closeModal();go(\'s-client-home\')">'
+    +'<button class="btn btn-red" style="min-height:46px" data-on-click="closeModal();go(\'s-client-home\')">'
     +'Revenir à mon accueil</button>'
-    +'<button class="btn btn-outline" style="margin-top:10px;min-height:44px" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-outline" style="margin-top:10px;min-height:44px" data-on-click="closeModal()">Fermer</button>'
     +'</div></div>';
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -17517,7 +17892,7 @@ function _htmlMorphoInitiale(u,athletes){
   const etat=morphoInitialeEtat(u);
   const m=u&&u.morphoInitiale;
   const bouton='<button type="button" class="btn btn-outline" style="width:100%;margin:8px 0 0" '
-    +'onclick="refaireMorphoInitiale(\''+escapeHtml((u&&u.email)||'')+'\')">Refaire l’analyse</button>';
+    +'data-on-click="refaireMorphoInitiale(\''+escapeHtml((u&&u.email)||'')+'\')">Refaire l’analyse</button>';
   if(etat==='absente')
     return '<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin:0">'
       +'Analyse pas encore faite : elle part toute seule au premier bilan qui porte '
@@ -17592,7 +17967,7 @@ function _htmlMorphoPhoto(){
       :'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
       +'Rien de lu pour l’instant.</p>')
     +'<button type="button" class="btn btn-outline" style="width:100%;margin:0" '
-    +'onclick="lireMorphoPhoto(\''+escapeHtml(_amp.email)+'\')">Lire la photo de face du dernier bilan</button>'
+    +'data-on-click="lireMorphoPhoto(\''+escapeHtml(_amp.email)+'\')">Lire la photo de face du dernier bilan</button>'
     +'</div>'
     // L'ANALYSE INITIALE, FIGEE (lot 8) : ce que la photo a donne une fois, et
     // qu'on ne recalcule plus. Le bouton « Refaire l'analyse » est cote coach,
@@ -17677,11 +18052,11 @@ function _ampRendre(){
   const E=_amp;
   const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
     +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'-')+'" '
-    +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
+    +'data-on-input="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
     +'style="width:88px;min-height:44px;background:#0c0c0c;border:1px solid var(--border);'
     +'border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;'
     +'font-size:var(--fs-md);text-align:center;padding:6px">';
-  const bouton=(cle,champ,val,cour,lib)=>'<button type="button" onclick="ampSaisie(\''+cle+'\',\''+champ
+  const bouton=(cle,champ,val,cour,lib)=>'<button type="button" data-on-click="ampSaisie(\''+cle+'\',\''+champ
     +'\',\''+cour+'\')" aria-pressed="'+(val===cour)+'" style="min-height:44px;padding:0 12px;'
     +'border-radius:var(--r-2);border:1px solid '+(val===cour?'var(--red)':'var(--border)')+';'
     +'background:'+(val===cour?'rgba(224,32,32,.12)':'none')+';color:var(--text);'
@@ -17918,8 +18293,8 @@ function _htmlDeficitCoach(c){
   // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
   const boutons=bloc
     ?`<div style="display:flex;gap:8px;margin-top:12px">
-        <button onclick="leverDeficit('consulte')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Elle a consulté</button>
-        <button onclick="leverDeficit('regles_revenues')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Les règles sont revenues</button>
+        <button data-on-click="leverDeficit('consulte')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Elle a consulté</button>
+        <button data-on-click="leverDeficit('regles_revenues')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Les règles sont revenues</button>
       </div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Après une levée, propose une pause diététique plutôt qu'un retour direct en déficit.</div>`
     :'';
@@ -17988,7 +18363,7 @@ function _htmlTraitementsCoach(c){
       // la version masquee — et l'enregistrer ecraserait le vrai.
       +(t.saisiPar==='coach'
         ? '<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
-          +'font-size:var(--fs-2xs);padding:4px 8px" onclick="ouvrirEditeurTraitement(\''
+          +'font-size:var(--fs-2xs);padding:4px 8px" data-on-click="ouvrirEditeurTraitement(\''
           +escapeHtml(c.email)+'\',\''+escapeHtml(t.id)+'\',\'s-coach-client\')">Modifier</button>'
         : '')
       +'</div>';
@@ -18007,7 +18382,7 @@ function _htmlTraitementsCoach(c){
       :'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
        +'padding:4px 0 10px">Aucun traitement en cours dans son dossier.</div>')
     +'<button type="button" class="btn btn-outline" style="width:100%;margin:12px 0 0" '
-    +'onclick="ouvrirEditeurTraitement(\''+escapeHtml(c.email)
+    +'data-on-click="ouvrirEditeurTraitement(\''+escapeHtml(c.email)
     +'\',null,\'s-coach-client\')">+ Saisir un traitement</button>'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
     +'margin-top:8px">'+escapeHtml(MICRO_DISCLAIMER)+'</div>'
@@ -18379,7 +18754,7 @@ function _pilCompteur(cle,lib,n,couleur){
   // 'travail', « Tous » est une puce comme les autres : elle s'allume, et se
   // re-toucher la rend.
   const cible=actif?'travail':cle;
-  return `<button onclick="setFiltreClients('${cible}')"
+  return `<button data-on-click="setFiltreClients('${cible}')"
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
     style="color:${couleur};border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
@@ -18619,7 +18994,7 @@ function renderChronoCoach(clients){
     +'<details class="chr-d"'+(ouvert?' open':'')+'><summary>Les 10 dossiers qui te prennent le plus de temps</summary>'
     +'<div class="chr-t"><div class="chr-e"><span>Athlète</span><span>Cette semaine</span><span>4 semaines</span></div>'
     +r.top.map(x=>{ const c=par.get(x.id)||{};
-      return '<button type="button" class="chr-r" onclick="openClientDetail('+_attrArg(x.id)+')"><span><b>'+escapeHtml(_nomAthlete(c)||'Athlète')+'</b><small>'+escapeHtml(_chronoFormule(c))+'</small></span>'
+      return '<button type="button" class="chr-r" data-on-click="openClientDetail('+_attrArg(x.id)+')"><span><b>'+escapeHtml(_nomAthlete(c)||'Athlète')+'</b><small>'+escapeHtml(_chronoFormule(c))+'</small></span>'
         +'<span>'+escapeHtml(x.semaine?chronoMinutes(x.semaine):'-')+'</span><span>'+escapeHtml(chronoMinutes(x.quatre))+'</span></button>'; }).join('')
     +'</div><div class="sub chr-n">Le temps passé sur sa fiche, son évolution et ses vidéos. Trois minutes sans geste arrêtent le compte.</div></details>';
   return true;
@@ -18659,7 +19034,7 @@ function renderPortefeuille(clients){
   try{ renderChronoCoach(l); }catch(e){}
 }
 function _pilBande(cle,titre,corps,resume){
-  return `<details class="plan-src pil-bande" style="margin:0 0 8px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
+  return `<details class="plan-src pil-bande" style="margin:0 0 8px"${_pilOuvert[cle]?' open':''} data-on-toggle="pilNoterBande('${cle}',this.open)">
     <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
     <div class="plan-src-liste" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7"><div>${corps}</div></div>
   </details>`;
@@ -18677,7 +19052,7 @@ function renderPilotage(clients){
   const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   const corpsA=ch.length
     ? montres.map(x=>`<div style="padding:2px 0"><span style="color:var(--text-faint)">${dateCourte(x.date)}</span> · <b>${escapeHtml(x.qui)}</b> ${escapeHtml(x.quoi)}</div>`).join('')
-      +(ch.length>montres.length?`<button onclick="pilVoirTout()" style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
+      +(ch.length>montres.length?`<button data-on-click="pilVoirTout()" style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
     : 'Rien de neuf depuis ta dernière visite.';
   // N1.11 — LA BANDE « PORTEFEUILLE » A DISPARU D ICI. Ses quatre nombres
   // sont ceux de la barre d etat, qui les affiche en permanence et ouvre la
@@ -18697,7 +19072,7 @@ function renderPilotage(clients){
   const corpsC=(g.bilansSansReponse||g.videosEnAttente)
     ? `${g.bilansSansReponse} bilan${g.bilansSansReponse>1?'s':''} sans réponse · `
       +(g.videosEnAttente
-        ?`<button type="button" onclick="_entrerFileVideos()" style="background:none;border:none;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;color:var(--red-light);font-weight:800;text-decoration:underline;cursor:pointer">${_libVid}</button>`
+        ?`<button type="button" data-on-click="_entrerFileVideos()" style="background:none;border:none;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;color:var(--red-light);font-weight:800;text-decoration:underline;cursor:pointer">${_libVid}</button>`
         :_libVid)
     : 'Rien en attente de ta part.';
   // TROIS VOLETS POUR UN SEUL GESTE. Le coach les ouvrait l'un apres l'autre
@@ -19235,10 +19610,10 @@ function _waBoutonTodo(r,idx){
     const titre=tel?'Écrire à '+(c.fname||'')+' sur WhatsApp'
       :'Ouvrir WhatsApp avec le message pré-rempli ('+(c.fname||'cet athlète')+' n\'a pas de numéro enregistré)';
     return `<a href="${safeUrl(waLink(tel,_waTexteTodo(r.type,c)))}" target="_blank" rel="noopener"
-      onclick="event.stopPropagation();rcmCoach('coach_message_envoye');noterContact(${_attrArg(c.id)})" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
+      data-on-click="event.stopPropagation();rcmCoach('coach_message_envoye');noterContact(${_attrArg(c.id)})" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
       style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
-  return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
+  return `<button data-on-click="event.stopPropagation();openWaGroupe(${idx})"
     title="Écrire aux ${r.list.length} athlètes de cette ligne" aria-label="Écrire aux ${r.list.length} athlètes de cette ligne"
     style="${style}">${icon('message-circle',16)}</button>`;
 }
@@ -19542,7 +19917,7 @@ async function _canalCharger(){
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
+      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" data-on-click="_canalCharger()">Réessayer</button></div>`;
     return;
   }
   const [compteurs,miennes]=await Promise.all([
@@ -19589,7 +19964,7 @@ function _canalBoutonsReactions(m,compteurs,mienne){
   return CANAL_EMOJIS.map(e=>{
     const n=Number(compteurs[e])||0;
     const actif=mienne===e;
-    return `<button onclick="basculerReaction('${escapeHtml(m.id)}','${escapeHtml(e)}')"
+    return `<button data-on-click="basculerReaction('${escapeHtml(m.id)}','${escapeHtml(e)}')"
       aria-pressed="${actif?'true':'false'}"
       style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 4px;
         background:${actif?'var(--red-bg)':'transparent'};border:1px solid ${actif?'var(--red)':'var(--border)'};
@@ -19742,7 +20117,7 @@ function renderEpingleAccueil(){
     +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
     +'d\'un coup d\'œil sur son tableau de bord.</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%" '
-    +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
+    +'data-on-click="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
 }
 
 // ══ LES VISUELS DU COACH : « VICTOIRE DE LA SEMAINE » ET RÉCAP D'ÉQUIPE ══════
@@ -20169,19 +20544,19 @@ function htmlKit(k){
   const lundi=kitLundi(Date.parse(k.semaine+'T12:00:00')).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
   const prets=k.contenus.filter(c=>c.d).length;
   let h='<div class="aa-haut"><span>Mon kit · semaine du '+escapeHtml(lundi)+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" data-on-click="fermerKitCoach()">✕</button></div>'
     +'<div class="kit-corps">'
     +'<p class="kit-intro">Trois contenus prêts à poster (1080×1350), tirés des chiffres de ta team. Modifie la légende si tu veux, puis publie.</p>'
-    +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" onclick="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
-    +'<button type="button" class="btn btn-red btn-casse kit-tout" onclick="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
+    +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" data-on-click="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red btn-casse kit-tout" data-on-click="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
   k.contenus.forEach((c,i)=>{
     h+='<section class="kit-c"><div class="kit-t">'+(i+1)+' · '+escapeHtml(c.titre)+'</div>';
     if(!c.d){ h+='<p class="kit-vide">Pas encore de progression de charge à montrer cette semaine. Elle viendra.</p></section>'; return; }
     h+='<canvas class="kit-apercu" id="kit-cv-'+i+'" aria-label="Aperçu : '+escapeHtml(c.titre)+'"></canvas>'
       +'<label class="kit-l" for="kit-leg-'+i+'">Légende</label>'
-      +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" oninput="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'
-      +'<div class="kit-b"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitCopierLegende('+i+',this)">Copier la légende</button>'
-      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitTelecharger('+i+',this)">Télécharger</button></div></section>';
+      +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" data-on-input="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'
+      +'<div class="kit-b"><button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="kitCopierLegende('+i+',this)">Copier la légende</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="kitTelecharger('+i+',this)">Télécharger</button></div></section>';
   });
   h+=htmlElementsMarque()+'</div>';
   return h;
@@ -20244,10 +20619,10 @@ async function kitToutTelecharger(btn){
 function htmlElementsMarque(){
   return '<section class="kit-c kit-marque"><div class="kit-t">Éléments de marque</div>'
     +'<div class="kit-l">Logo</div><div class="kit-b">'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'sombre\')">Logo · fond sombre</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'clair\')">Logo · fond clair</button></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="kitLogo(\'sombre\')">Logo · fond sombre</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="kitLogo(\'clair\')">Logo · fond clair</button></div>'
     +'<div class="kit-l">Les 3 fonds (1080×1350)</div><div class="kit-b">'
-    +KIT_FONDS.map(f=>'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitFondTelecharger(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +KIT_FONDS.map(f=>'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="kitFondTelecharger(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
     +'<div class="kit-l">Emblèmes de rang</div><div class="kit-emb">'
     +RANGS.map(r=>'<a href="'+rangEmbleme(r.n,true)+'" download="repcore-rang-'+r.n+'.webp" title="'+escapeHtml(r.nom)+'"><img src="'+rangEmbleme(r.n)+'" alt="'+escapeHtml(r.nom)+'" loading="lazy" width="44" height="44"></a>').join('')+'</div>'
     +'<div class="kit-l">Règles d’usage</div><ol class="kit-regles">'+KIT_REGLES.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol></section>';
@@ -20329,11 +20704,11 @@ function fermerVisuelCoach(){
 // PURE. Les réglages de l'écran.
 function htmlReglagesVisuelCoach(vc){
   const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
-    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="vcReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
+    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" data-on-click="vcReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
   let h='';
   if(vc.type==='victoire'){
     const cons=vcConsentement(vc.u);
-    h+='<label class="vc-l" for="vc-exo">Victoire</label><select id="vc-exo" onchange="vcReglage(\'i\',this.value)">'
+    h+='<label class="vc-l" for="vc-exo">Victoire</label><select id="vc-exo" data-on-change="vcReglage(\'i\',this.value)">'
       +vc.victoires.slice(0,20).map((v,i)=>'<option value="'+i+'"'+(i===vc.i?' selected':'')+'>'
         +escapeHtml(v.exo+' · '+_vcKg(v.avant)+' → '+_vcKg(v.apres)+' kg (+'+v.pct+' %)')+'</option>').join('')+'</select>'
       +'<div class="vc-l">Nom</div>'+seg('mode',cons?vc.mode:'anonyme',VC_MODES.map(m=>[m.k,m.lib,!cons&&m.k!=='anonyme']))
@@ -20347,12 +20722,12 @@ function htmlReglagesVisuelCoach(vc){
 function _vcRendre(){
   const z=document.getElementById('vc-ecran'); if(!z||!_vc) return;
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?'<button type="button" class="btn btn-outline btn-casse vc-part" onclick="vcSortir(\'partager\',this)">'+icon('share',16)+' <span>Partager</span></button>':'';
+    ?'<button type="button" class="btn btn-outline btn-casse vc-part" data-on-click="vcSortir(\'partager\',this)">'+icon('share',16)+' <span>Partager</span></button>':'';
   z.innerHTML='<div class="aa-haut"><span>'+(_vc.type==='victoire'?'Victoire de '+escapeHtml(_vc.u.fname||'l’athlète'):'Récap de l’équipe')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" data-on-click="fermerVisuelCoach()">✕</button></div>'
     +'<div class="aa-apercu"><canvas id="vc-canvas" aria-label="Aperçu de l’image"></canvas></div>'
     +'<div class="aa-bas">'
-    +'<button type="button" class="btn btn-red vc-dl" onclick="vcSortir(\'telecharger\',this)">'+icon('download',18)+' <span>Télécharger</span></button>'+part
+    +'<button type="button" class="btn btn-red vc-dl" data-on-click="vcSortir(\'telecharger\',this)">'+icon('download',18)+' <span>Télécharger</span></button>'+part
     +'<details class="aa-perso" open><summary>Réglages</summary>'+htmlReglagesVisuelCoach(_vc)
     +'<div class="vc-l">Fond</div>'+_htmlVisuelFonds('vc-fonds')
     +'<div class="rcf-note" id="vc-note"></div></details></div>';
@@ -20404,7 +20779,7 @@ function htmlBoutonVictoire(u){
   let v=[]; try{ v=victoiresDe(u); }catch(e){ v=[]; }
   if(!v.length) return '';
   const b=v[0];
-  return '<button type="button" class="aa-bouton vc-bouton" onclick="ouvrirVictoireCoach(\''+escapeHtml(String(u.id||''))+'\')">'
+  return '<button type="button" class="aa-bouton vc-bouton" data-on-click="ouvrirVictoireCoach(\''+escapeHtml(String(u.id||''))+'\')">'
     +'<span class="aa-bouton-i" aria-hidden="true">'+icon('zap',18)+'</span>'
     +'<span><b>Partager une victoire</b><span>'+escapeHtml(b.exo+' : '+_vcKg(b.avant)+' → '+_vcKg(b.apres)+' kg')+'</span></span></button>';
 }
@@ -20423,7 +20798,7 @@ function _majConsentementCoachReglages(){
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
     +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
-    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' data-on-change="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
     +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label></div>';
 }
@@ -20524,14 +20899,14 @@ function htmlTutoSticker(){
   const url=escapeHtml(String(lienPerso('story')||'repcore…').replace(/^https?:\/\//,'').slice(0,34));
   const e=(n,titre,dessin)=>'<figure class="tsk-etape" style="--i:'+(n-1)+'"><div class="tsk-tel">'+dessin+'</div>'
     +'<figcaption><b>'+n+'</b> '+titre+'</figcaption></figure>';
-  return '<div class="tsk-carte" role="dialog" aria-modal="true" aria-labelledby="tsk-h" onclick="event.stopPropagation()">'
+  return '<div class="tsk-carte" role="dialog" aria-modal="true" aria-labelledby="tsk-h" data-on-click="event.stopPropagation()">'
     +'<h2 id="tsk-h">Ton lien, dans ta story</h2>'
     +'<p class="tsk-sous">Il est copié. Instagram ne lit pas les liens posés sur une image : c’est le sticker Lien qui les rend cliquables.</p>'
     +'<div class="tsk-etapes">'
     +e(1,'Touche l’icône <i>Sticker</i>','<div class="tsk-barre"><span>Aa</span><span class="tsk-on">☺</span><span>♫</span><span>✦</span></div><div class="tsk-img"></div>')
     +e(2,'Choisis <i>Lien</i>','<div class="tsk-grille"><span>LIEU</span><span class="tsk-on">LIEN</span><span>@ MENTION</span><span># HASHTAG</span></div>')
     +e(3,'Colle, et c’est fini','<div class="tsk-champ"><small>URL</small><span class="tsk-on">'+url+'</span></div><div class="tsk-ok">Terminé</div>')
-    +'</div><button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0;min-height:46px" onclick="fermerTutoSticker()">Compris</button></div>';
+    +'</div><button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0;min-height:46px" data-on-click="fermerTutoSticker()">Compris</button></div>';
 }
 function montrerTutoSticker(force){
   try{ if(!force&&localStorage.getItem(TUTO_STICKER_CLE)) return false; localStorage.setItem(TUTO_STICKER_CLE,String(Date.now())); }catch(e){}
@@ -20749,9 +21124,9 @@ function htmlReglagesPagePublique(u){
     +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
     // Trois gestes, du plus fort au plus léger : enregistrer (rouge), voir sa
     // page (cadre blanc, seulement quand elle est en ligne), copier le lien.
-    +'<button type="button" class="btn btn-red btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    +'<button type="button" class="btn btn-red btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" data-on-click="enregistrerPagePublique(this)">Enregistrer ma page</button>'
     +(url?'<a class="btn btn-sm pp-voir" href="'+escapeHtml(url)+'" target="_blank" rel="noopener">Visualiser ma page</a>':'')
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" data-on-click="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
 }
 // ── LA PROPOSITION, À UN PASSAGE DE RANG (28/09/2026) ────────────────────
 // Le moment où l'athlète a quelque chose à montrer : l'écran du nouveau rang
@@ -20783,7 +21158,7 @@ function htmlPropositionPage(u){
     +'<div class="pp-prop-t">Ta page, pour ta bio</div>'
     +'<p class="pp-prop-s">Ton emblème, tes volts, tes semaines et tes badges. Jamais de poids, de photo ni de santé.</p>'
     +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-prop-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(pseudoSuggere(u))+'" aria-label="Ton pseudo"></div>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="activerPageDepuisRang(this)">Mettre ma page en ligne</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" data-on-click="activerPageDepuisRang(this)">Mettre ma page en ligne</button>'
     +'</div>';
 }
 // Le passage est noté À L'AFFICHAGE : c'est « proposée », pas « acceptée ».
@@ -20813,7 +21188,7 @@ async function activerPageDepuisRang(btn){
   }
   if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne ⚡</div>'
     +'<p class="pp-prop-s">'+escapeHtml(urlPagePerso(u).replace(/^https?:\/\//,''))+'</p>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" data-on-click="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
   return true;
 }
 function _rendrePagePublique(){
@@ -20968,7 +21343,7 @@ function renderEntreeProspects(){
   if(!z||!currentUser||currentUser.role!=='coach') return false;
   if(!vitrineFormulesDe(currentUser).length&&!_prBrut){ z.innerHTML=''; if(!_prLu) _prCharger().then(()=>{ if(_prBrut&&Object.keys(_prBrut).length) renderEntreeProspects(); }).catch(()=>{}); return false; }
   const m=prospectsMesure(_prBrut,_prStats);
-  z.innerHTML='<button type="button" class="rel-entree pr-entree" onclick="ouvrirProspects()">'
+  z.innerHTML='<button type="button" class="rel-entree pr-entree" data-on-click="ouvrirProspects()">'
     +'<span class="rel-entree-t">Ma page</span>'
     +'<span class="rel-entree-e">'+m.vues+' visite'+(m.vues>1?'s':'')+' · '+m.interesses+' intéressé'+(m.interesses>1?'s':'')+' · '+m.athletes+' athlète'+(m.athletes>1?'s':'')
     +(m.enAttente?' · <b>'+m.enAttente+' attend'+(m.enAttente>1?'ent':'')+' ta réponse</b>':'')+'</span></button>';
@@ -21001,14 +21376,14 @@ function renderProspects(){
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'
       +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
-      +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
-      +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
-      +(st==='nouveau'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
+      +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" data-on-click="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
+      +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" data-on-click="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
+      +(st==='nouveau'?'<button type="button" class="cp-lien" data-on-click="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
       // « Inviter » : le code d'accès, prérempli, puis l'envoi (prospectInviter).
-      +(st!=='athlete'?'<button type="button" class="btn btn-red btn-sm" onclick="prospectInviter(\''+id+'\')">Inviter</button>':'')
-      +(st==='athlete'&&p.codeId?'<button type="button" class="cp-lien" onclick="prospectInviter(\''+id+'\')">Renvoyer l’invitation</button>':'')
-      +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
-      +(st!=='athlete'?'<button type="button" class="cp-lien pr-discret" onclick="prospectStatut(\''+id+'\',\'athlete\')">Marquer athlète sans inviter</button>':'')
+      +(st!=='athlete'?'<button type="button" class="btn btn-red btn-sm" data-on-click="prospectInviter(\''+id+'\')">Inviter</button>':'')
+      +(st==='athlete'&&p.codeId?'<button type="button" class="cp-lien" data-on-click="prospectInviter(\''+id+'\')">Renvoyer l’invitation</button>':'')
+      +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" data-on-click="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
+      +(st!=='athlete'?'<button type="button" class="cp-lien pr-discret" data-on-click="prospectStatut(\''+id+'\',\'athlete\')">Marquer athlète sans inviter</button>':'')
       +'</div></div>';
   }).join('');
   z.innerHTML=h;
@@ -21084,16 +21459,16 @@ function _prFeuilleEnvoi(p){
   const texte=_texteInvitationAthlete(c), k=prospectContactNet(p), E=escapeHtml;
   const lien=k&&k.tel?waLink(k.tel,texte):(k&&k.email?'mailto:'+encodeURIComponent(k.email)+'?subject='+encodeURIComponent('Ton accès RepCore')+'&body='+encodeURIComponent(texte):'');
   closeModal();
-  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" class="pr-inv" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" class="pr-inv" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:4px">Invitation prête pour '+E(String(p.prenom||'ton athlète'))+'</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Son code est créé ('+E(String(c.months||''))+' mois). Envoie-lui le message : rien ne part d’ici sans toi.</p>'
     +'<div class="pr-inv-msg">'+E(texte)+'</div>'
-    +(lien?'<a class="btn btn-red" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\')" style="margin-top:12px;display:flex;align-items:center;justify-content:center;text-decoration:none">'
+    +(lien?'<a class="btn btn-red" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" data-on-click="rcmCoach(\'coach_message_envoye\')" style="margin-top:12px;display:flex;align-items:center;justify-content:center;text-decoration:none">'
         +(k.tel?'Envoyer par WhatsApp':'Envoyer par e-mail')+'</a>'
       :'<div class="sub pr-inv-sans">Le contact laissé sur ta page n’est ni un numéro ni une adresse utilisable : copie le message et envoie-le par le moyen que tu as.</div>')
-    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="_prCopierInvitation('+_attrArg(p.codeId)+')">Copier le message</button>'
-    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button></div></div>');
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" data-on-click="_prCopierInvitation('+_attrArg(p.codeId)+')">Copier le message</button>'
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Fermer</button></div></div>');
   return true;
 }
 function _prCopierInvitation(codeId){
@@ -21167,7 +21542,7 @@ function htmlReglagePaiementCoach(u){
     +(e&&e.statut==='refuse'?' · PayPal a refusé ce compte'+(e.raison?' ('+E(String(e.raison).toLowerCase().replace(/_/g,' '))+')':''):'')+'</div>'
     +'<label class="pr-lab" for="coach-marchand">Mon identifiant marchand PayPal (ou l’e-mail de mon compte PayPal Business)</label>'
     +'<div class="pc-ligne"><input id="coach-marchand" autocomplete="off" maxlength="120" placeholder="ex. ABCD1234EFGH5">'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="relierPaiementCoach(this)">'+(relie?'Changer':'Relier')+'</button></div></div>';
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="relierPaiementCoach(this)">'+(relie?'Changer':'Relier')+'</button></div></div>';
   return h;
 }
 async function _pcChargerEtat(){
@@ -21334,7 +21709,7 @@ function _rendreLienVitrineCoach(){
   const url=urlPagePerso(currentUser);
   z.innerHTML='<div class="pp-lab">Ta page publique</div>'
     +(url?'<div class="pp-etat">'+escapeHtml(url.replace(/^https?:\/\//,''))+'</div>'
-          +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:8px 0 0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>'
+          +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:8px 0 0;min-height:44px" data-on-click="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>'
         :'<div class="pp-etat">Elle se publie à l’enregistrement de ton profil : photo (en ligne), bio, spécialités, programmes en vente.</div>');
 }
 // ══ L'ATTRIBUTION ET LA VIRALITÉ ═══════════════════════════════════════════
@@ -21629,7 +22004,7 @@ function viralitePeriode(n){ if(!_viral) return false; _viral.periode=Number(n)|
 // PURE.
 function htmlViralite(v){
   const pct=(a,b)=>b>0?Math.round(a/b*100)+' %':'-';
-  const seg='<div class="aa-seg vir-seg" role="group">'+[7,30,90].map(n=>'<button type="button" aria-pressed="'+(v.periode===n)+'" onclick="viralitePeriode('+n+')">'+n+' jours</button>').join('')+'</div>';
+  const seg='<div class="aa-seg vir-seg" role="group">'+[7,30,90].map(n=>'<button type="button" aria-pressed="'+(v.periode===n)+'" data-on-click="viralitePeriode('+n+')">'+n+' jours</button>').join('')+'</div>';
   let h=seg
     +'<div class="vir-k card"><div class="vir-k-v">'+(v.k==null?'-':String(v.k).replace('.',','))+'</div>'
     +'<div class="vir-k-l"><b>Coefficient viral estimé</b><span>'+v.inscriptionsPartage+' inscription'+(v.inscriptionsPartage>1?'s':'')+' venue'+(v.inscriptionsPartage>1?'s':'')
@@ -21839,7 +22214,7 @@ function htmlEvenementsKo(ko){
       +'<div class="amb-jl-tete"><b>'+escapeHtml(quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
       +(qui?'<div class="sub">'+escapeHtml(_koCompte(qui))+(x.par&&x.par!=='worker'&&x.dest?' · par '+escapeHtml(_koCompte(x.par)):'')+'</div>':'')
       +(x.erreur?'<div class="sub">Motif : '+escapeHtml(x.erreur)+'</div>':'')
-      +'<button type="button" class="dfi-lien" onclick="effacerEvenementKo(\''+escapeHtml(id)+'\',this)">Vu, effacer</button>'
+      +'<button type="button" class="dfi-lien" data-on-click="effacerEvenementKo(\''+escapeHtml(id)+'\',this)">Vu, effacer</button>'
       +'</div>';
   }
   return h+'</div>';
@@ -21895,12 +22270,12 @@ function htmlAmbassadeurs(tous,t){
     +'<label>Avantage de ses inscrits<select id="amb-avantage"><option value="essai+1mois">Mois offert grâce à lui</option>'
       +'<option value="ultime_demi">Offre de lancement : 1er mois d’Ultime à moitié prix</option></select></label>'
     +'</div><p class="sub amb-note">Un seul avantage par code : le mois offert (présenté comme offert grâce à lui), OU le 1er mois d’Ultime à moitié prix (plan PayPal ULTIME_DEMI, une fois par compte).</p>'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" onclick="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" data-on-click="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
   if(moisDispo.size){
     const ms=[...moisDispo].sort().reverse();
     h+='<div class="card amb-export"><div class="amb-t">Export mensuel</div>'
       +'<div class="amb-ligne"><select id="amb-mois">'+ms.map(m=>'<option>'+m+'</option>').join('')+'</select>'
-      +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" onclick="exporterCommissionsDues()">CSV des commissions dues</button></div>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" data-on-click="exporterCommissionsDues()">CSV des commissions dues</button></div>'
       +'<p class="sub amb-note">Aucun paiement n’est automatique : exporte, paie, puis marque le mois « payé » sur chaque carte.</p></div>';
   }
   if(!codes.length) return h+'<p class="sub" style="text-align:center;padding:20px 0">Aucun ambassadeur pour l’instant.</p>';
@@ -21910,7 +22285,7 @@ function htmlAmbassadeurs(tous,t){
     h+='<div class="card amb-carte'+(a.actif===false?' amb-eteint':'')+'">'
       +'<div class="amb-tete"><div><b>'+escapeHtml(a.nom||code)+'</b>'+(a.instagram?' <span class="sub">@'+escapeHtml(a.instagram)+'</span>':'')
       +'<div class="amb-code">'+escapeHtml(code)+' · '+(Number(a.commissionPct)||0)+' % → '+(Number(a.palierPct)||0)+' % au-delà de '+(Number(a.palierSeuil)||AMB_DEFAUTS.palierSeuil)+' · '+(Number(a.dureeMois)||12)+' mois</div></div>'
-      +'<label class="amb-actif"><input type="checkbox"'+(a.actif!==false?' checked':'')+' onchange="basculerAmbassadeur(\''+code+'\',this.checked)"> actif</label></div>'
+      +'<label class="amb-actif"><input type="checkbox"'+(a.actif!==false?' checked':'')+' data-on-change="basculerAmbassadeur(\''+code+'\',this.checked)"> actif</label></div>'
       +'<div class="amb-entonnoir">'
         +'<div><b>'+r.clics+'</b><span>clics</span></div><i>→ '+pct(r.inscrits,r.clics)+'</i>'
         +'<div><b>'+r.inscrits+'</b><span>inscrits</span></div><i>→ '+pct(r.payants,r.inscrits)+'</i>'
@@ -21922,11 +22297,11 @@ function htmlAmbassadeurs(tous,t){
         +'<div><span>En attente (30 j)</span><b>'+_ambEuros(r.attente)+'</b></div>'
         +(r.suspendue?'<div><span>Suspendue (litige)</span><b>'+_ambEuros(r.suspendue)+'</b></div>':'')
         +(r.rembourse?'<div><span>Annulée</span><b>'+_ambEuros(r.rembourse)+'</b></div>':'')+'</div>'
-      +(mdus.length?'<div class="amb-dus">'+mdus.map(m=>'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" onclick="marquerCommissionsPayees(\''+code+'\',\''+m+'\',this)">'
+      +(mdus.length?'<div class="amb-dus">'+mdus.map(m=>'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" data-on-click="marquerCommissionsPayees(\''+code+'\',\''+m+'\',this)">'
         +m+' : marquer '+_ambEuros(r.mois[m].due)+' payé</button>').join('')+'</div>':'')
       +'<div class="amb-liens">'
-        +'<button type="button" class="dfi-lien" onclick="ambCopier(\''+escapeHtml(ambLienInvitation(code))+'\',this)">Copier son lien d’invitation</button>'
-        +(a.secret?'<button type="button" class="dfi-lien" onclick="ambCopier(\''+escapeHtml(ambLienSecret(a.secret))+'\',this)">Copier sa page de suivi (lien secret)</button>':'')
+        +'<button type="button" class="dfi-lien" data-on-click="ambCopier(\''+escapeHtml(ambLienInvitation(code))+'\',this)">Copier son lien d’invitation</button>'
+        +(a.secret?'<button type="button" class="dfi-lien" data-on-click="ambCopier(\''+escapeHtml(ambLienSecret(a.secret))+'\',this)">Copier sa page de suivi (lien secret)</button>':'')
       +'</div></div>';
   }
   return h;
@@ -22338,7 +22713,7 @@ function htmlLigneFilleuls(u){
   if(actifs) bouts.push(actifs+' au travail');
   if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
   if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
-  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
+  return '<button type="button" class="clh-filleuls-b" data-on-click="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
     +escapeHtml(bouts.join(' · '))+'<span class="clh-filleuls-f" aria-hidden="true">›</span></button>';
 }
 // PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
@@ -22392,7 +22767,7 @@ function htmlParrainage(u){
     //   filleulQualifie), et au plus PARRAIN_MOIS_MAX_AN fois sur douze mois.
     +'<p class="pr-regle">Ton mois arrive quand ton pote s’abonne, après quatre jours d’entraînement sur au moins dix jours, adresse e-mail vérifiée.</p></div>'
     +'<div class="pr-carte-inv">'
-    +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
+    +'<button type="button" class="btn btn-red pr-carte-b" data-on-click="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
       +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
     +'<div class="pr-carte-note">Story : ton lien est copié, colle-le avec le sticker Lien. Post : la légende avec ton code est copiée.</div>'
     +_htmlVisuelFonds('pr-fonds')
@@ -22400,10 +22775,10 @@ function htmlParrainage(u){
     +'<div class="pr-code-carte pr-secondaire"><div class="pr-code-lib">Ton code</div>'
     +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
     +'<div class="pr-sec-btns">'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
-    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
+    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" data-on-click="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,actifs>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -22574,7 +22949,7 @@ function partagerCarteInvitation(btn,format){
 function htmlBoutonInviter(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!PARRAINAGE_ACTIF||!u||u.role==='coach') return '';
-  return '<button type="button" class="btn btn-outline btn-sm rc-inviter" onclick="event.stopPropagation();inviterUnPote(this)">'
+  return '<button type="button" class="btn btn-outline btn-sm rc-inviter" data-on-click="event.stopPropagation();inviterUnPote(this)">'
     +icon('share',14)+' <span>Inviter un pote</span></button>';
 }
 function inviterUnPote(btn){
@@ -22592,7 +22967,7 @@ function _rendreEntreeParrainage(){
   if(!z) return;
   if(!PARRAINAGE_ACTIF||!currentUser||currentUser.role==='coach'){ z.innerHTML=''; return; }
   const p=currentUser.parrainage||{};
-  z.innerHTML='<button type="button" class="card" onclick="ouvrirParrainage()" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 20px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)">'
+  z.innerHTML='<button type="button" class="card" data-on-click="ouvrirParrainage()" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 20px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">Inviter des amis</span>'
     +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+escapeHtml((Number(p.moisGagnes)||0)?(p.moisGagnes+' mois gagné'+(p.moisGagnes>1?'s':'')+' · ton code '+(p.code||'')):'1 mois offert par ami abonné')+'</span></span>'
     +'<span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span></button>';
@@ -22615,7 +22990,7 @@ function rendreRappelParrainage(u,o){
   if(!z) return false;
   let der=0; try{ der=Number(localStorage.getItem(PARRAINAGE_RAPPEL_CLE))||0; }catch(e){}
   if(!parrainageRappelDu(u,o,der)){ z.innerHTML=''; return false; }
-  z.innerHTML='<button type="button" class="pr-rappel" onclick="ouvrirParrainage()">Fais-le découvrir, gagne 1 mois <span aria-hidden="true">→</span></button>';
+  z.innerHTML='<button type="button" class="pr-rappel" data-on-click="ouvrirParrainage()">Fais-le découvrir, gagne 1 mois <span aria-hidden="true">→</span></button>';
   try{ localStorage.setItem(PARRAINAGE_RAPPEL_CLE,String(Date.now())); }catch(e){}
   return true;
 }
@@ -22848,26 +23223,26 @@ function openDefiCanal(id){
   const opt=Object.keys(DEFI_MESURES).map(k=>'<option value="'+k+'"'+((m?m.mesure:'seances')===k?' selected':'')+'>'+DEFI_MESURES[k].lib+'</option>').join('');
   const coll=m?!!m.collectif:false;
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="df-h" class="dfm-feuille">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="df-h" class="dfm-feuille">'
   +'<h2 id="df-h" style="margin-bottom:4px">'+(id?'Modifier le défi':'Créer un défi')+'</h2>'
   +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut du Canal de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
   +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
-    '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
+    '<button type="button" class="dfm-modele" data-i="'+i+'" data-on-click="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
   +'<label for="df-objectif">1 · Le défi</label>'
-  +'<div class="dfm-ligne"><input id="df-objectif" type="number" inputmode="decimal" min="1" step="any" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
-  +'<select id="df-mesure" onchange="_dfApercu()" aria-label="Mesure">'+opt+'</select></div>'
+  +'<div class="dfm-ligne"><input id="df-objectif" type="number" inputmode="decimal" min="1" step="any" value="'+val(m?m.objectif:12)+'" data-on-input="_dfApercu()" aria-label="Objectif">'
+  +'<select id="df-mesure" data-on-change="_dfApercu()" aria-label="Mesure">'+opt+'</select></div>'
   +'<div class="dfm-seg" role="radiogroup" aria-label="Individuel ou en équipe">'
-  +'<button type="button" role="radio" data-coll="0" aria-checked="'+(!coll)+'" onclick="_dfColl(false)">Chacun le sien</button>'
-  +'<button type="button" role="radio" data-coll="1" aria-checked="'+coll+'" onclick="_dfColl(true)">En équipe</button></div>'
+  +'<button type="button" role="radio" data-coll="0" aria-checked="'+(!coll)+'" data-on-click="_dfColl(false)">Chacun le sien</button>'
+  +'<button type="button" role="radio" data-coll="1" aria-checked="'+coll+'" data-on-click="_dfColl(true)">En équipe</button></div>'
   +'<label for="df-fin" style="margin-top:14px">2 · Jusqu’au</label>'
-  +'<input id="df-fin" type="date" value="'+val(localISODate(new Date(fin)))+'" min="'+val(localISODate(new Date()))+'" oninput="_dfApercu()">'
+  +'<input id="df-fin" type="date" value="'+val(localISODate(new Date(fin)))+'" min="'+val(localISODate(new Date()))+'" data-on-input="_dfApercu()">'
   +'<label for="df-recompense" style="margin-top:14px">3 · Récompense (optionnel)</label>'
   +'<input id="df-recompense" type="text" maxlength="120" value="'+val(m&&m.recompense)+'" placeholder="Une séance offerte, un t-shirt, la gloire…">'
   +'<div id="df-apercu" class="dfm-apercu" aria-live="polite"></div>'
   +'<div style="display:flex;gap:8px;margin-top:16px">'
-  +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
-  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerDefiCanal()">'+(id?'Enregistrer':'Lancer le défi')+'</button>'
+  +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="closeModal()">Annuler</button>'
+  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="enregistrerDefiCanal()">'+(id?'Enregistrer':'Lancer le défi')+'</button>'
   +'</div></div></div>');
   _dfApercu();
   return true;
@@ -23006,11 +23381,11 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
   }
   if(fini){
     h+='<div class="dfi-fait">'+(res&&res.champion?'Champion du défi':'✓ Défi relevé')+'</div>'
-      +'<button type="button" class="btn btn-outline btn-sm dfi-part" onclick="partagerDefi(\''+escapeHtml(m.id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>';
+      +'<button type="button" class="btn btn-outline btn-sm dfi-part" data-on-click="partagerDefi(\''+escapeHtml(m.id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>';
   }else if(actif&&!inscrit){
-    h+='<button type="button" class="btn btn-red dfi-go" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Je relève le défi</button>';
+    h+='<button type="button" class="btn btn-red dfi-go" data-on-click="defiRelever(\''+escapeHtml(m.id)+'\')">Je relève le défi</button>';
   }else if(actif&&inscrit){
-    h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
+    h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" data-on-click="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
   }
   h+='<div style="display:flex;gap:6px;margin-top:12px">'+_canalBoutonsReactions(m,compteurs||{},mienne||'')+'</div>';
   return h+'</div>';
@@ -23018,7 +23393,7 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
 function htmlCarteSysteme(m,coach){
   return '<div class="cnl-carte cnl-systeme"><div class="cnl-sys-t">'+escapeHtml(String(m.texte||''))+'</div>'
     +'<div class="cnl-sys-b"><span class="sub">'+escapeHtml(ago(Number(m.at)||Date.now()))+'</span>'
-    +(coach?'<button class="dfi-lien" onclick="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button>':'')+'</div></div>';
+    +(coach?'<button class="dfi-lien" data-on-click="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button>':'')+'</div></div>';
 }
 // La carte du coach : il voit tout le monde, avec l'emblème de rang.
 function htmlCarteDefiCoach(m,d,neuve){
@@ -23034,8 +23409,8 @@ function htmlCarteDefiCoach(m,d,neuve){
       +escapeHtml(_dfValeurTexte(m,x.v))+'</b></div>').join('')+'</div>'
     :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Personne n’a encore relevé le défi.</div>';
   h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
-    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openDefiCanal(\''+escapeHtml(m.id)+'\')">Modifier</button>'
-    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button></div>';
+    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" data-on-click="openDefiCanal(\''+escapeHtml(m.id)+'\')">Modifier</button>'
+    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" data-on-click="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button></div>';
   return h+'</div>';
 }
 // PURE. L'ordre du fil athlète : les défis en cours ÉPINGLÉS en tête (le plus
@@ -23081,18 +23456,18 @@ function defiRelever(id){
   const ins=(e.moi&&e.moi.inscription)||null;
   document.getElementById('modal-overlay')?.remove();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="dfr-h" class="dfm-feuille">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="dfr-h" class="dfm-feuille">'
   +'<h2 id="dfr-h" style="margin-bottom:4px">'+escapeHtml(m.titre||'Le défi')+'</h2>'
   +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:14px;line-height:1.55">'+escapeHtml(m.texte||'')+'</p>'
-  +'<label class="dfr-case"><input type="checkbox" id="dfr-classement"'+(ins&&ins.classement?' checked':'')+' onchange="document.getElementById(\'dfr-pseudo-z\').hidden=!this.checked">'
+  +'<label class="dfr-case"><input type="checkbox" id="dfr-classement"'+(ins&&ins.classement?' checked':'')+' data-on-change="document.getElementById(\'dfr-pseudo-z\').hidden=!this.checked">'
   +'<span><b>Apparaître au classement</b><span class="sub">Il ne porte que sur ta régularité ou ta progression en %, jamais sur tes charges. Sans lui, tu comptes pour l’équipe sans être nommé.</span></span></label>'
   +'<div id="dfr-pseudo-z"'+(ins&&ins.classement?'':' hidden')+'><label for="dfr-pseudo" style="margin-top:12px">Nom affiché (optionnel)</label>'
   +'<input id="dfr-pseudo" type="text" maxlength="24" value="'+escapeHtml((ins&&ins.pseudo)||'')+'" placeholder="'+escapeHtml(currentUser.fname||'Ton pseudo')+'"></div>'
   +'<div style="display:flex;gap:8px;margin-top:16px">'
-  +(ins?'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="defiInscrire(\''+escapeHtml(id)+'\',false)">Me retirer</button>'
-       :'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Plus tard</button>')
-  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="defiInscrire(\''+escapeHtml(id)+'\',true)">'+(ins?'Enregistrer':'C’est parti')+'</button>'
+  +(ins?'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="defiInscrire(\''+escapeHtml(id)+'\',false)">Me retirer</button>'
+       :'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="closeModal()">Plus tard</button>')
+  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="defiInscrire(\''+escapeHtml(id)+'\',true)">'+(ins?'Enregistrer':'C’est parti')+'</button>'
   +'</div></div></div>');
   return true;
 }
@@ -23146,7 +23521,7 @@ function htmlDefiAccueil(defis,u,inscrits,maintenant){
     corps='<div class="dfa-l"><b>'+escapeHtml(_dfValeurTexte(d,v))+'</b> / '+escapeHtml(defiTexteObjectif(d))+' · '+escapeHtml(reste)+'</div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(defiPartPerso(d,v,1)*100)+'%"></span></div>';
   }else corps='<div class="dfa-l">Ton coach a lancé un défi · '+escapeHtml(reste)+'</div><div class="dfa-go">Je relève le défi →</div>';
-  return '<div class="dfa-carte" role="button" tabindex="0" onclick="loadCanal()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();loadCanal()}">'
+  return '<div class="dfa-carte" role="button" tabindex="0" data-on-click="loadCanal()" data-on-keydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();loadCanal()}">'
     +'<div class="dfa-t"><span class="cnl-defi">Défi</span> '+escapeHtml(d.titre||'')+'</div>'+corps
     +(a.length>1?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:4px">+ '+(a.length-1)+' autre'+(a.length>2?'s':'')+' défi'+(a.length>2?'s':'')+'</div>':'')+'</div>';
 }
@@ -23364,7 +23739,7 @@ function htmlDuelsAccueil(u,duels,invite,maintenant){
   // reçue et les duels en cours s'ouvrent au toucher (ouvrirDuelsHub), avec
   // « Nouveau défi ». Une pastille dit combien il y en a.
   const n=(invite&&invite.prenom?1:0)+_duelsListe(duels,maintenant).length;
-  return '<div class="du-accueil"><button type="button" class="du-defier" onclick="ouvrirDuelsHub()">'
+  return '<div class="du-accueil"><button type="button" class="du-defier" data-on-click="ouvrirDuelsHub()">'
     +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',23)+'</span>'
     +'<span class="du-d-t">Défie un pote</span>'
     +'<span class="du-d-s" aria-hidden="true">Comparez-vous<br>et progressez</span>'
@@ -23384,12 +23759,12 @@ function htmlDuelsHub(u,duels,invite,maintenant){
   let h='';
   if(invite&&invite.prenom){
     h+='<div class="du-invite"><div class="du-invite-t">'+escapeHtml(invite.prenom)+' te défie : '+escapeHtml(texteDuel(invite.mesure,invite.duree))+'</div>'
-      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" onclick="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
-      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="duelOublierInvite();fermerDuelFeuille();_rendreDuelsAccueil()">Plus tard</button></div></div>';
+      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" data-on-click="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="duelOublierInvite();fermerDuelFeuille();_rendreDuelsAccueil()">Plus tard</button></div></div>';
   }
   const l=_duelsListe(duels,maintenant);
   if(l.length) h+='<div class="du-lab">Défis en cours</div><div class="du-liste">'+l.map(d=>
-    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+    '<button type="button" class="du-ligne" data-on-click="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
       +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>').join('')+'</div>';
   return h;
 }
@@ -23406,16 +23781,16 @@ function ouvrirDuelsHub(){
   d.id='duel-feuille'; d.className='du-fond';
   d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Mes défis');
   d.innerHTML='<div class="du-carte du-v2">'
-    +'<button type="button" class="du-x" aria-label="Fermer" onclick="fermerDuelFeuille()">'+icon('x',18)+'</button>'
+    +'<button type="button" class="du-x" aria-label="Fermer" data-on-click="fermerDuelFeuille()">'+icon('x',18)+'</button>'
     +'<div class="du-ecu">'+DUEL_ECUSSON+'</div>'
     +'<div class="du-titre"><span>Mes</span> défis</div>'
     +'<p class="du-sous">Tes défis, tes amis, ou un nouveau défi à lancer.</p>'
     +corps
     +'<div id="clh-amis" class="du-amis"></div>'
-    +'<button type="button" class="btn btn-red du-go du-lancer" onclick="ouvrirCreationDuel()">'
+    +'<button type="button" class="btn btn-red du-go du-lancer" data-on-click="ouvrirCreationDuel()">'
       +'<span class="du-l-ico" aria-hidden="true">'+icon('haches',26)+'</span><span class="du-l-t">Nouveau défi</span>'
       +'<span class="du-l-ch" aria-hidden="true">'+icon('chevron-right',22)+'</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" onclick="fermerDuelFeuille()">Fermer</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" data-on-click="fermerDuelFeuille()">Fermer</button>'
     +'</div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
   document.body.appendChild(d);
@@ -23693,7 +24068,7 @@ function htmlReactionsAmi(x,t,loc){
   if(!x||!reactionPossible(x.prof,t)) return '';
   const mien=(loc||{})[x.cle+'|'+x.prof.der]||'';
   return '<div class="am-reac" role="group" aria-label="Réagir à la séance de '+escapeHtml(x.prenom||x.p)+'">'
-    +REACTIONS_AMIS.map(e=>'<button type="button" class="'+(e===mien?'on':'')+'" onclick="amiReagir(\''+escapeHtml(x.p)+'\',\''+e+'\',this)">'+e+'</button>').join('')+'</div>';
+    +REACTIONS_AMIS.map(e=>'<button type="button" class="'+(e===mien?'on':'')+'" data-on-click="amiReagir(\''+escapeHtml(x.p)+'\',\''+e+'\',this)">'+e+'</button>').join('')+'</div>';
 }
 // PURE. Le palmarès des duels contre un ami : gagnés, perdus, égalités, et la
 // date du dernier. Ce que l'app a déjà (les duels suivis) : de l'affichage.
@@ -23735,20 +24110,20 @@ function htmlLigneAmi(x,t,o){
     +'<span class="am-id"><span class="am-nom"><b>'+escapeHtml(x.prenom||x.p)+'</b>'+(mut?'<i class="am-mut">ami</i>':'')+'</span>'
       +'<small>'+escapeHtml(rang?rang.charAt(0)+rang.slice(1).toLowerCase():'@'+x.p)+'</small></span>'
     +'<span class="am-v"><b>'+vs+'</b><small>V cette semaine</small></span>'
-    +(x.rev?'<button type="button" class="am-defi" onclick="event.stopPropagation();amiRevanche(\''+escapeHtml(x.p)+'\',\''+x.rev.mesure+'\','+x.rev.duree+',this)">Revanche</button>'
-      :'<button type="button" class="am-defi" onclick="event.stopPropagation();amiDefier(\''+escapeHtml(x.p)+'\')">Défier</button>')
+    +(x.rev?'<button type="button" class="am-defi" data-on-click="event.stopPropagation();amiRevanche(\''+escapeHtml(x.p)+'\',\''+x.rev.mesure+'\','+x.rev.duree+',this)">Revanche</button>'
+      :'<button type="button" class="am-defi" data-on-click="event.stopPropagation();amiDefier(\''+escapeHtml(x.p)+'\')">Défier</button>')
     +'</div>';
 }
 // PURE. La carte de l'accueil. Vide, elle dit quoi faire, et qui agit.
 function htmlAmisAccueil(liste,t,o,monPseudo,moi){
   const tete='<div class="am-tete"><span class="am-titre">Mes amis</span>'
-    +'<button type="button" class="am-tout" onclick="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
+    +'<button type="button" class="am-tout" data-on-click="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
   if(!liste.length){
     return '<div class="am-carte">'+tete
       +'<p class="am-vide">Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.</p>'
-      +'<div class="am-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirAmis()">Chercher un pseudo</button>'
-      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>'
-      +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>.</p>')
+      +'<div class="am-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="ouvrirAmis()">Chercher un pseudo</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="amiEnvoyerLien(this)">Envoyer mon lien</button></div>'
+      +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" data-on-click="amisVersPseudo();return false">Mon profil</a>.</p>')
       +'</div>';
   }
   return '<div class="am-carte">'+tete+htmlClassementSemaine(liste,t,o,moi||null)+'</div>';
@@ -23767,7 +24142,7 @@ function htmlClassementSemaine(liste,t,o,moi){
   return '<p class="am-phrase">'+escapeHtml(phrase)+'</p>'
     +(rappel?'<p class="am-serie am-rappel">'+escapeHtml(rappel)+'</p>':s.serie?'<p class="am-serie">'+escapeHtml(s.serie)+'</p>':'')
     +vus.map(x=>htmlLigneAmi(x,t,o)).join('')
-    +(n>vus.length?'<button type="button" class="am-plus" onclick="ouvrirAmis()">Voir les '+n+'</button>':'');
+    +(n>vus.length?'<button type="button" class="am-plus" data-on-click="ouvrirAmis()">Voir les '+n+'</button>':'');
 }
 // PURE. La fiche trouvée par la recherche.
 function htmlFicheAmi(r,suivi){
@@ -23777,7 +24152,7 @@ function htmlFicheAmi(r,suivi){
     +'<div class="am-fiche-t"><b>'+escapeHtml(r.prenom)+'</b><small>@'+escapeHtml(r.pseudo)+'</small>'
       +'<span class="am-fiche-r">'+(r.rang?escapeHtml(r.rang.nom):'Rang non affiché')+(r.volts!=null?' · '+Number(r.volts).toLocaleString('fr-FR')+' V':'')+'</span>'
       +(r.badges&&r.badges.length?'<span class="am-fiche-b">'+r.badges.map(escapeHtml).join(' · ')+'</span>':'')+'</div>'
-    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi ✓':'Suivre')+'</button>'
+    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" data-on-click="amiBasculerSuivi(this)">'+(suivi?'Suivi ✓':'Suivre')+'</button>'
     +'</div>';
 }
 // PURE. Personne à ce nom : on ne dit pas « n'existe pas » sèchement, on
@@ -23786,7 +24161,7 @@ function htmlAmiIntrouvable(p,invalide){
   return '<div class="am-fiche am-rien"><p>'+(invalide
       ?'Un pseudo RepCore fait de 3 à 20 caractères : lettres, chiffres, point ou tiret bas.'
       :'On ne trouve personne à ce nom'+(p?' (@'+escapeHtml(p)+')':'')+'. Ton pote n’a peut-être pas encore choisi le sien : envoie-lui ton lien, il te trouvera en un geste.')+'</p>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="amiEnvoyerLien(this)">Envoyer mon lien</button></div>';
 }
 async function _amisAvecProfils(){
   const l=amisListe();
@@ -23824,12 +24199,12 @@ async function renderEcranAmis(){
   const u=currentUser;
   if(!z||!u) return false;
   const mp=_monPseudo(u);
-  z.innerHTML='<form class="am-cherche" onsubmit="event.preventDefault();amiLancerRecherche()">'
+  z.innerHTML='<form class="am-cherche" data-on-submit="event.preventDefault();amiLancerRecherche()">'
       +'<input id="am-q" type="search" inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Son pseudo, ex. marc.fit" aria-label="Pseudo à chercher">'
       +'<button type="submit" class="btn btn-red btn-sm btn-casse">Chercher</button></form>'
     +'<div id="am-res"></div>'
     +(mp?'<p class="am-note">Tes potes te trouvent sous <b>@'+escapeHtml(mp)+'</b>.</p>'
-        :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
+        :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" data-on-click="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
     +'<div id="am-recues"></div>'
     +'<div class="am-lab">La semaine</div><div id="am-classement"></div>'
     +'<div class="am-lab">Ceux que tu suis</div><div id="am-liste"></div>';
@@ -23858,7 +24233,7 @@ function _rendreListeEcranAmis(l,moi){
     return '<div class="am-ligne-w">'+htmlLigneAmi(x,t,o)
       +(bd?'<p class="am-duels">'+escapeHtml(bd)+'</p>':'')
       +htmlReactionsAmi(x,t,loc)
-      +'<button type="button" class="am-retirer" onclick="amiRetirer(\''+escapeHtml(x.p)+'\')">Ne plus suivre</button></div>';
+      +'<button type="button" class="am-retirer" data-on-click="amiRetirer(\''+escapeHtml(x.p)+'\')">Ne plus suivre</button></div>';
   }).join('');
 }
 // PURE. Les réactions reçues sur ma dernière séance : « 🔥 Léa · 💪 Max ».
@@ -24036,20 +24411,20 @@ function ouvrirCreationDuel(cible){
   // l'écusson aux haches, une icône et un bouton radio par mesure, le bouton
   // de lancement avec ses haches et son chevron, une croix pour fermer.
   d.innerHTML='<div class="du-carte du-v2">'
-    +'<button type="button" class="du-x" aria-label="Fermer" onclick="fermerDuelFeuille()">'+icon('x',18)+'</button>'
+    +'<button type="button" class="du-x" aria-label="Fermer" data-on-click="fermerDuelFeuille()">'+icon('x',18)+'</button>'
     +'<div class="du-ecu">'+DUEL_ECUSSON+'</div>'
     +'<div class="du-titre"><span>Défie</span> un pote</div>'
     +'<p class="du-sous">Le duel commence à sa première séance.<br>Le gagnant décroche le badge <b>CHAMPION</b>.</p>'
     +'<div class="du-lab">Sur quoi ?</div>'
-    +'<div class="du-choix" role="radiogroup">'+DUEL_MESURES.map((m,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" class="du-c'+(i===0?' actif':'')+'" data-mesure="'+m.cle+'" onclick="_duelChoix(this)">'
+    +'<div class="du-choix" role="radiogroup">'+DUEL_MESURES.map((m,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" class="du-c'+(i===0?' actif':'')+'" data-mesure="'+m.cle+'" data-on-click="_duelChoix(this)">'
       +'<span class="du-c-ico" aria-hidden="true">'+icon(m.ico,26)+'</span>'
       +'<span class="du-c-t">'+m.lib+'<small>'+m.detail+'</small></span><span class="du-radio" aria-hidden="true"></span></button>').join('')+'</div>'
     +'<div class="du-lab">Combien de temps ?</div>'
-    +'<div class="du-choix du-duree" role="radiogroup">'+[7,14,28].map(j=>'<button type="button" role="radio" aria-checked="'+(j===14)+'" class="du-c'+(j===14?' actif':'')+'" data-duree="'+j+'" onclick="_duelChoix(this)">'+j+' jours</button>').join('')+'</div>'
-    +'<button type="button" class="btn btn-red du-go du-lancer" onclick="lancerDuel(this)">'
+    +'<div class="du-choix du-duree" role="radiogroup">'+[7,14,28].map(j=>'<button type="button" role="radio" aria-checked="'+(j===14)+'" class="du-c'+(j===14?' actif':'')+'" data-duree="'+j+'" data-on-click="_duelChoix(this)">'+j+' jours</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red du-go du-lancer" data-on-click="lancerDuel(this)">'
       +'<span class="du-l-ico" aria-hidden="true">'+icon('haches',26)+'</span><span class="du-l-t">Lancer le duel</span>'
       +'<span class="du-l-ch" aria-hidden="true">'+icon('chevron-right',22)+'</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" onclick="fermerDuelFeuille()">Annuler</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" data-on-click="fermerDuelFeuille()">Annuler</button>'
     +'</div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
   document.body.appendChild(d);
@@ -24073,7 +24448,7 @@ async function lancerDuel(btn){
     if(ra.ok){
       if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' ⚡</div>'
         +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Il n’a rien à accepter : sa prochaine séance lance le compte.</p>'
-        +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
+        +'<button type="button" class="btn btn-outline btn-sm du-go" data-on-click="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
       _rendreDuelsAccueil();
       return true;
     }
@@ -24086,9 +24461,9 @@ async function lancerDuel(btn){
   // iOS refuserait la feuille de partage ouverte hors du geste.
   if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
     +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Envoie-le à ton pote : il commence à sa première séance.</p>'
-    +'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
-    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
+    +'<button type="button" class="btn btn-red du-go" data-on-click="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" data-on-click="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" data-on-click="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
   _rendreDuelsAccueil();
   return true;
 }
@@ -24120,20 +24495,20 @@ async function ouvrirDuel(id){
   const fini=d.statut==='termine';
   f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
     +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
-    +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" data-on-click="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
     +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):'', dk=ap?pseudoPublicCle(ap):'';
       if(!ap||amisLocal().amis[dk]) return '';
       const nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
-      return '<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="amiSuivre(\''+escapeHtml(amiPseudoDeCle(ap))+'\',\''+nom+'\');this.remove()">Ajouter '+nom+' à mes amis</button>'; })()
+      return '<button type="button" class="btn btn-outline btn-sm btn-casse du-go" data-on-click="amiSuivre(\''+escapeHtml(amiPseudoDeCle(ap))+'\',\''+nom+'\');this.remove()">Ajouter '+nom+' à mes amis</button>'; })()
     // LA REVANCHE : un geste, la mesure et la durée de ce duel ; « Changer »,
     // discret, rouvre la feuille pour cet ami.
     +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):''; if(!ap) return '';
       const p=escapeHtml(amiPseudoDeCle(ap)), rp=revancheParams(d), nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
-      return '<button type="button" class="btn btn-red du-go" onclick="amiRevanche(\''+p+'\',\''+rp.mesure+'\','+rp.duree+',this)">Revanche</button>'
-        +'<button type="button" class="du-changer" onclick="fermerDuelFeuille();ouvrirCreationDuel({p:\''+p+'\',prenom:\''+nom+'\'})">Changer la mesure ou la durée</button>'; })()
-    +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" onclick="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
+      return '<button type="button" class="btn btn-red du-go" data-on-click="amiRevanche(\''+p+'\',\''+rp.mesure+'\','+rp.duree+',this)">Revanche</button>'
+        +'<button type="button" class="du-changer" data-on-click="fermerDuelFeuille();ouvrirCreationDuel({p:\''+p+'\',prenom:\''+nom+'\'})">Changer la mesure ou la durée</button>'; })()
+    +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" data-on-click="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
       +icon('share',14)+' <span>'+(fini?'Partager le résultat':'Partager la carte DUEL')+'</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Fermer</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm du-go" data-on-click="fermerDuelFeuille()">Fermer</button></div>';
   f.addEventListener('click',e=>{ if(e.target===f) fermerDuelFeuille(); });
   document.body.appendChild(f);
   return true;
@@ -24307,7 +24682,7 @@ function htmlDefiMoisAdmin(maintenant){
     +'<label class="pp-lab" for="dm-texte">Texte (facultatif)</label><input id="dm-texte" type="text" maxlength="300">'
     +'<label class="pp-lab" for="dm-mesure">Mesure</label><select id="dm-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>'
     +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="number" min="1" inputmode="decimal" placeholder="12">'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerDefiMois(this)">Publier le défi</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" data-on-click="enregistrerDefiMois(this)">Publier le défi</button></div>';
 }
 async function enregistrerDefiMois(btn){
   if(!estAdminAmbassadeurs()) return false;
@@ -24439,7 +24814,7 @@ function htmlBanniereSaison(s,u,stats,maintenant){
       +'<div class="rg-jauge sa-jauge sa-collectif" role="progressbar" aria-label="Le compteur collectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pc*100)+'"><span style="width:'+Math.round(pc*100)+'%"></span></div>'
       +'<div class="sa-val">'+escapeHtml(txt(tot))+' sur '+escapeHtml(txt(col))
         +(stats&&stats.participants?' · '+stats.participants+' participant'+(stats.participants>1?'s':''):'')+'</div>':'')
-    +(fait?'<button type="button" class="btn btn-sm sa-partager" onclick="partagerCarteSaison(\''+s.id+'\',this)">'+icon('share',14)+' <span>J’ai bouclé : partager ma carte</span></button>':'')
+    +(fait?'<button type="button" class="btn btn-sm sa-partager" data-on-click="partagerCarteSaison(\''+s.id+'\',this)">'+icon('share',14)+' <span>J’ai bouclé : partager ma carte</span></button>':'')
     +'</div>';
 }
 let _saisonMinuteur=null;
@@ -24614,7 +24989,7 @@ function htmlSaisonAdmin(){
     +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
     +L('sa-couleur','Couleur','<input id="sa-couleur" type="color" value="#E02020">')
     +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerSaison(this)">Créer l’édition</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" data-on-click="enregistrerSaison(this)">Créer l’édition</button></div>';
 }
 async function enregistrerSaison(btn){
   if(!estAdminAmbassadeurs()) return false;
@@ -24764,8 +25139,8 @@ function _defiEcran(id,reste){
     +'<h2 class="bdg-ecran-nom" id="dfe-titre">'+escapeHtml(d.titre)+'</h2>'
     +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · ⚡ '+escapeHtml(d.valeur):'')+'</div>'
     +_htmlVisuelFonds('dfe-fonds')
-    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerDefi(\''+escapeHtml(id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
+    +'<button type="button" class="btn btn-red bdg-ecran-part" data-on-click="partagerDefi(\''+escapeHtml(id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" data-on-click="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',d.champion?'Champion du défi':'Défi relevé');
   try{ monterSelecteurFond('dfe-fonds',f=>_dessinerCarteDefi(d,f),null); }catch(e){}
   try{ _bdgFoudre(z.querySelector('#dfe-titre'),arcReduit()?{son:false}:{eclairs:d.champion?3:2,conteneur:z}); }catch(e){}
@@ -24899,10 +25274,10 @@ function renderPropositionsCanal(){
   const E=escapeHtml, p=_cpListe[0];
   const carte=(x,i)=>'<div class="cp-carte'+(i?' cp-carte-2':'')+'"><div class="cp-t">'+E(x.titre)+'</div>'
     +'<div class="cp-x">'+E(x.texte)+'</div><div class="cp-b">'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="utiliserProposition('+i+')">Modifier et publier</button>'
-    +'<button type="button" class="cp-lien" onclick="utiliserProposition('+i+',true)">Programmer</button></div></div>';
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="utiliserProposition('+i+')">Modifier et publier</button>'
+    +'<button type="button" class="cp-lien" data-on-click="utiliserProposition('+i+',true)">Programmer</button></div></div>';
   z.innerHTML='<div class="cp"><div class="cp-h"><span>Cette semaine, tu peux publier…</span>'
-    +'<button type="button" class="cp-lien" onclick="passerPropositions()">Passer</button></div>'
+    +'<button type="button" class="cp-lien" data-on-click="passerPropositions()">Passer</button></div>'
     +carte(p,0)
     +(_cpListe.length>1?'<details class="cp-autres"><summary>'+(_cpListe.length-1)+' autre'+(_cpListe.length>2?'s':'')+' idée'+(_cpListe.length>2?'s':'')+'</summary>'
       +_cpListe.slice(1).map((x,k)=>carte(x,k+1)).join('')+'</details>':'')+'</div>';
@@ -24943,8 +25318,8 @@ function renderProgrammesCanal(){
     +l.map(m=>{ const id=E(m.id); return '<div class="cp-pl"><div class="cp-pd">'+E(_cpJour(Number(m.quand)))+', '+new Date(Number(m.quand)).getHours()+' h'
       +(m.manque?' <b>· pas parti à l’heure prévue</b>':'')+'</div>'
       +'<div class="cp-px">'+E(m.titre?m.titre+' : ':'')+E(String(m.texte||'').slice(0,140))+(String(m.texte||'').length>140?'…':'')+'</div>'
-      +'<div class="cp-b"><button type="button" class="cp-lien" onclick="modifierProgramme(\''+id+'\')">Modifier</button>'
-      +'<button type="button" class="cp-lien" onclick="annulerProgramme(\''+id+'\')">Annuler</button></div></div>'; }).join('')+'</div>';
+      +'<div class="cp-b"><button type="button" class="cp-lien" data-on-click="modifierProgramme(\''+id+'\')">Modifier</button>'
+      +'<button type="button" class="cp-lien" data-on-click="annulerProgramme(\''+id+'\')">Annuler</button></div></div>'; }).join('')+'</div>';
   return true;
 }
 function modifierProgramme(id){
@@ -25058,7 +25433,7 @@ async function _canalChargerCoach(idNeuf){
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
+      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" data-on-click="_canalChargerCoach()">Réessayer</button></div>`;
     return;
   }
   window._canalMsgsCoach=msgs||{};
@@ -25131,10 +25506,10 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
     ${lignes?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
             :'<div class="sub" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
-    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé : resynchroniser</button>`:''}
+    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" data-on-click="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé : resynchroniser</button>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
-      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
-      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" data-on-click="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" data-on-click="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
     </div></div>`;
 }
 // Le compteur public est ramené sur le décompte vrai. Les règles laissent le
@@ -25185,8 +25560,8 @@ function openMessageCanal(msgId){
   if(m.type==='defi') return openDefiCanal(msgId);
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
-  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
     <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
@@ -25202,9 +25577,9 @@ function openMessageCanal(msgId){
     </label>
     ${msgId?'':_cpBlocProgrammer(_p)}
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
-      ${msgId?'':`<button class="btn btn-outline btn-sm" id="cm-btn-prog" style="flex:1;margin:0;min-height:44px" onclick="_cpBoutonProgrammer()">${_p.programmer?'Programmer ce jour-là':'Programmer…'}</button>`}
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':(_p.progId?'Publier maintenant':'Publier')}</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="closeModal()">Annuler</button>
+      ${msgId?'':`<button class="btn btn-outline btn-sm" id="cm-btn-prog" style="flex:1;margin:0;min-height:44px" data-on-click="_cpBoutonProgrammer()">${_p.programmer?'Programmer ce jour-là':'Programmer…'}</button>`}
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="enregistrerMessageCanal()">${msgId?'Enregistrer':(_p.progId?'Publier maintenant':'Publier')}</button>
     </div>
   </div></div>`);
   if(_p.programmer) _cpSansEpingle();
@@ -25359,13 +25734,13 @@ function ouvrirCrmCoach(){
   const l=getClients().slice().sort((a,b)=>
     String((a.fname||'')+(a.lname||'')).localeCompare(String((b.fname||'')+(b.lname||''))));
   const adresses=_crmAdresses(l);
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">CARNET D'ADRESSES</h2>
     <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp : RepCore n'envoie rien à ta place.</div>
-    ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
+    ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" data-on-click="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
     ${l.length?_htmlSectionsSuivi(l,_crmLigne):'<div class="sub" style="text-align:center;padding:24px 0">Aucun athlète pour l\'instant.</div>'}
-    <button class="btn btn-outline" style="margin-top:16px" onclick="closeModal()">Fermer</button>
+    <button class="btn btn-outline" style="margin-top:16px" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -25407,24 +25782,24 @@ function openWaGroupe(rowIdx){
       </div>
     </label>`;
   }).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">Message groupé</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
     <label for="wag-texte" style="margin-top:0">Message : chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
     <textarea id="wag-texte" rows="3" style="resize:none" placeholder="petit point d'étape cette semaine 💪">${escapeHtml(source?_waCorpsGroupe(source.type):'')}</textarea>
     <div style="display:flex;gap:8px;margin:10px 0 4px">
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(true)">Tout cocher</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(false)">Tout décocher</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="_wagTout(true)">Tout cocher</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="_wagTout(false)">Tout décocher</button>
     </div>
     ${_htmlCocherEtiquette('wag-liste')}
     <div id="wag-liste">${lignes}</div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagCopierNumeros()">Copier les numéros</button>
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagPreparer()">Préparer les envois</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="_wagCopierNumeros()">Copier les numéros</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="_wagPreparer()">Préparer les envois</button>
     </div>
     <div id="wag-liens" style="margin-top:12px"></div>
-    <button class="btn btn-outline" style="margin-top:12px" onclick="closeModal()">Fermer</button>
+    <button class="btn btn-outline" style="margin-top:12px" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -25458,7 +25833,7 @@ function _wagPreparer(){
   zone.innerHTML=`<div class="sub" style="font-size:var(--fs-xs);margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp : ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
       style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-2);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:700"
-      onclick="rcmCoach('coach_message_envoye');noterContact(${_attrArg(s.id)});this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
+      data-on-click="rcmCoach('coach_message_envoye');noterContact(${_attrArg(s.id)});this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
 }
 
 // Rendu de la liste d'athletes. La recherche et le filtre sont lus dans le
@@ -25659,7 +26034,7 @@ function _htmlRiteCoach(c){
       ?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(q)}</div>`
       :`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Cycle clôturé sans question écrite.</div>`}
     <textarea id="${ta}" rows="3" placeholder="Ce que tu retiens de ce cycle, et ce qu'on ajuste." style="width:100%;box-sizing:border-box;margin-top:10px"></textarea>
-    <button class="btn btn-red btn-sm" onclick="saveReponseRite('${escapeHtml(c.email||'')}','${escapeHtml(String(r.cycle))}','${ta}')"
+    <button class="btn btn-red btn-sm" data-on-click="saveReponseRite('${escapeHtml(c.email||'')}','${escapeHtml(String(r.cycle))}','${ta}')"
       style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
   </div>`;
 }
@@ -25827,11 +26202,11 @@ function ouvrirRite(cycle){
   try{ vit=vitesseHebdo(serieWeight(u)); }catch(e){}
   const tauxLib=(c.taux&&c.taux.interpretable)?(c.taux.taux+' %'):'-';
   const muscles=c.muscles.filter(m=>m.mev!=null).slice(0,14);
-  const html=`<div id="modal-overlay" onclick="fermerRite()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="fermerRite()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px">
       <h2 style="margin:0">4 semaines</h2>
-      <button onclick="fermerRite()" aria-label="Fermer" style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">×</button>
+      <button data-on-click="fermerRite()" aria-label="Fermer" style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">×</button>
     </div>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Un point d'étape, pas une note. Tu peux fermer cet écran à tout moment.</p>
 
@@ -25864,7 +26239,7 @@ function ouvrirRite(cycle){
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);margin-bottom:2px">${escapeHtml(nom)}</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
       <div id="rite-jours" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
+        ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" data-on-click="riteJour(${i},this)"
           style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:#111;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -25874,8 +26249,8 @@ function ouvrirRite(cycle){
       </div>
     </div>
 
-    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="validerRite()">Enregistrer et repartir</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="fermerRite()">Plus tard</button>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" data-on-click="validerRite()">Enregistrer et repartir</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" data-on-click="fermerRite()">Plus tard</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   window._riteJours=(currentUser._woReminderDays||[]).slice();
@@ -26058,7 +26433,7 @@ function htmlVignetteAthlete(c){
   // « Ouvrir la fiche de … » : il doit l'ouvrir. Ces vignettes sont en HAUT de
   // l'ecran, loin de la liste — le tiroir qu'elles ouvraient apparaissait a
   // cote d'un tableau que le coach ne regardait meme pas.
-  return `<button type="button" class="vig-ath" onclick="openClientDetail('${escapeHtml(String(c.id||''))}',false,true)"
+  return `<button type="button" class="vig-ath" data-on-click="openClientDetail('${escapeHtml(String(c.id||''))}',false,true)"
     aria-label="Ouvrir la fiche de ${escapeHtml(nom)}">
     <span class="vig-rond" style="border-color:${couleur}">${dedans}</span>
     <span class="vig-nom">${escapeHtml(nom)}</span>
@@ -26467,7 +26842,7 @@ function renderFileReprise(){
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
-      <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
+      <select data-on-change="frSetDuree(this.value)" aria-label="Durée de mise en veille"
         style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:#101010;border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
@@ -26479,7 +26854,7 @@ function renderFileReprise(){
       Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici : ils gardent leur ligne dans « Mes notifications ».</div>`;
     return;
   }
-  const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
+  const bouton=(lib,act,fort)=>`<button type="button" data-on-click="${act}"
     style="flex:1;min-width:0;min-height:44px;padding:8px 6px;border-radius:var(--r-2);cursor:pointer;
       font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
@@ -26873,7 +27248,7 @@ let _ajCtx=null;
 // « un athlète, un geste » se tient par la structure des lignes.
 function _ajBouton(r,idx){
   if(!r||!r.texte||r.type==='drapeau') return '';
-  return '<button class="hit44" onclick="event.stopPropagation();ouvrirAjustement('+idx+')"'
+  return '<button class="hit44" data-on-click="event.stopPropagation();ouvrirAjustement('+idx+')"'
     +' title="Ajuster le programme" aria-label="Ajuster le programme"'
     +' style="background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;'
     +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:var(--r-1)">⚙</button>';
@@ -26891,8 +27266,8 @@ function ouvrirAjustement(idx){
   if(_ajCtx.creneaux.length) _ajCtx.slotChoisi=_ajCtx.creneaux[0].slot;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
+    '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
     +'<div id="aj-corps" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>'
     +'</div></div>');
   _ajRendre();
@@ -26950,11 +27325,11 @@ function _ajRendre(){
       h+='<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">'
         +'Présent sur '+cr.length+' créneaux. Sur lequel agir ?</div>'
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
-        +cr.map(x=>'<button onclick="ajPortee(\'jour\','+x.slot+')" class="hit44" style="min-height:44px;'
+        +cr.map(x=>'<button data-on-click="ajPortee(\'jour\','+x.slot+')" class="hit44" style="min-height:44px;'
           +'background:'+((_ajCtx.portee==='jour'&&_ajCtx.slotChoisi===x.slot)?'var(--red)':'var(--surface-1)')+';'
           +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">'
           +escapeHtml((x.jour||('créneau '+(x.slot+1)))+(x.active?'':' (inactif)'))+'</button>').join('')
-        +'<button onclick="ajPortee(\'tous\',null)" class="hit44" style="min-height:44px;'
+        +'<button data-on-click="ajPortee(\'tous\',null)" class="hit44" style="min-height:44px;'
         +'background:'+(_ajCtx.portee==='tous'?'var(--red)':'var(--surface-1)')+';'
         +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">Tous les jours</button>'
         +'</div>';
@@ -26963,10 +27338,10 @@ function _ajRendre(){
         +escapeHtml(cr[0].jour||('Créneau '+(cr[0].slot+1)))+(cr[0].active?'':' · créneau inactif')+'</div>';
     }
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
-      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajListeSubstituts()">Substituer</button>'
+      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="ajListeSubstituts()">Substituer</button>'
       +_ajBoutonAjouter(c)
       +_ajBoutonDurcir(c)
-      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajRetirerSerie()">Retirer une série</button>'
+      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="ajRetirerSerie()">Retirer une série</button>'
       +'</div>';
     // « Baisser l'intensité » n'est PAS rendu : aucun champ d'intensité
     // prescrite n'existe sur un exercice de sessions_config. L'action
@@ -26983,7 +27358,7 @@ function _ajRendre(){
         // seuls exercices cliquables hors de l'écran.
         const ordonnes=subs.slice().sort((a,b)=>(b.compatible?1:0)-(a.compatible?1:0));
         const vus=ordonnes.slice(0,30);
-        h+=vus.map(x=>'<button '+(x.compatible?'onclick="ajSubstituer('+JSON.stringify(x.nom).replace(/"/g,'&quot;')+')"':'disabled')
+        h+=vus.map(x=>'<button '+(x.compatible?'data-on-click="ajSubstituer('+JSON.stringify(x.nom).replace(/"/g,'&quot;')+')"':'disabled')
           +' class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;'
           +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;'
           +'margin-bottom:6px;font-size:var(--fs-sm);cursor:'+(x.compatible?'pointer':'not-allowed')+';'
@@ -26999,7 +27374,7 @@ function _ajRendre(){
       }
     }
   }
-  h+='<button class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajReporter()">Reporter 7 jours</button>'
+  h+='<button class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="ajReporter()">Reporter 7 jours</button>'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">'
     +'Chaque modification archive le programme précédent : tu peux revenir en arrière depuis la fiche.</div>';
   z.innerHTML=h;
@@ -27087,7 +27462,7 @@ function _ajBoutonDurcir(c){
   // LA DIRECTION EST MOTIVEE A L'ECRAN : le coach doit pouvoir refuser en
   // connaissance de cause, pas deviner ce que le bouton va faire.
   return '<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;'
-    +'letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajDurcirRir()" '
+    +'letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="ajDurcirRir()" '
     +'title="Une répétition de moins en réserve : plus d’intensité, à volume égal">'
     +'Pousser plus fort</button>';
 }
@@ -27099,7 +27474,7 @@ function ajDurcirRir(){
 function _ajBoutonAjouter(c){
   if(!_ajVolumeInsuffisant(c)) return '';
   return '<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;'
-    +'letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajAjouterSerie()">Ajouter une série</button>';
+    +'letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="ajAjouterSerie()">Ajouter une série</button>';
 }
 function ajAjouterSerie(){
   const c=_ajClient();
@@ -27219,7 +27594,7 @@ function blocDouleurAthlete(user){
       Tu as signalé une douleur sur <b>${escapeHtml(x.nom)}</b> lors de tes ${x.seances} dernières séances.
       Ne force pas dessus. Préviens ton coach.
     </div>
-    <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Préciser où ça fait mal</button>
+    <button class="btn btn-outline btn-sm" data-on-click="ouvrirFormContrainte('','moi')" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Préciser où ça fait mal</button>
     ${blocDisclaimerDouleur()}
   </div>`;
 }
@@ -27263,8 +27638,8 @@ function _renderPremiersPas(clients){
     +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">'
     +escapeHtml(PROMESSE_COACH)+'</div>'
-    +PREMIERS_PAS.map(a=>'<div onclick="'+a.action+'" role="button" tabindex="0" '
-      +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}" '
+    +PREMIERS_PAS.map(a=>'<div data-on-click="'+a.action+'" role="button" tabindex="0" '
+      +'data-on-keydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}" '
       +'style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-2);'
       +'border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:10px;'
       +'cursor:pointer;min-height:44px">'
@@ -27856,7 +28231,7 @@ function _rendreFils(){
   z.innerHTML=l.map(f=>{
     const d=f.dernier;
     const ap=d?(d.de==='coach'?'Toi : ':'')+String(d.texte||'').replace(/\s+/g,' ').slice(0,80):'Aucun message';
-    return '<button type="button" class="msg-fil'+(f.nonLus?' msg-fil-nl':'')+'" onclick="msgOuvrirFil('+_attrArg(f.cle)+')">'
+    return '<button type="button" class="msg-fil'+(f.nonLus?' msg-fil-nl':'')+'" data-on-click="msgOuvrirFil('+_attrArg(f.cle)+')">'
       +'<span class="msg-fil-h"><span class="msg-fil-n">'+escapeHtml(f.nom)+'</span>'
       +(d?'<span class="msg-fil-t">'+escapeHtml(msgHeure(d.at,t))+'</span>':'')+'</span>'
       +'<span class="msg-fil-a">'+escapeHtml(ap)+'</span>'
@@ -27915,23 +28290,23 @@ function _rendreFil(garderPosition){
   if(!z||!f) return;
   const moi=currentUser.role==='coach'?'coach':'athlete';
   const t=Date.now();
-  const tete=moi==='coach'?'<button type="button" class="msg-retour" onclick="msgRetourFils()">Tous les fils</button>':'';
+  const tete=moi==='coach'?'<button type="button" class="msg-retour" data-on-click="msgRetourFils()">Tous les fils</button>':'';
   let corps;
   if(f.charge) corps='<div class="msg-vide">Chargement…</div>';
   else if(f.erreur==='acces') corps='<div class="msg-vide">Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.')+'</div>';
   else if(f.erreur) corps='<div class="msg-vide">'+(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.')+'</div>';
   else if(!f.liste.length) corps='<div class="msg-vide">Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.')+'</div>';
-  else corps=(f.complet?'':'<button type="button" class="msg-anciens" onclick="msgPlusAnciens()">Messages plus anciens</button>')
+  else corps=(f.complet?'':'<button type="button" class="msg-anciens" data-on-click="msgPlusAnciens()">Messages plus anciens</button>')
     +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
       +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
   const ferme=f.erreur==='acces';
   z.innerHTML=tete+'<div class="msg-fil-titre">'+escapeHtml(f.nom)+'</div>'
     +'<div class="msg-liste" id="msg-liste">'+corps+'</div>'
     +(ferme?'':'<div class="msg-saisie">'
-      +'<textarea id="msg-texte" maxlength="'+MSG_TEXTE_MAX+'" rows="3" placeholder="Ton message" oninput="_msgCompteur()"></textarea>'
+      +'<textarea id="msg-texte" maxlength="'+MSG_TEXTE_MAX+'" rows="3" placeholder="Ton message" data-on-input="_msgCompteur()"></textarea>'
       +'<div class="msg-saisie-b"><span id="msg-compte" class="msg-compte"></span>'
-      +(moi==='coach'?'<button type="button" class="btn btn-outline btn-sm" style="margin:0;width:auto" onclick="ouvrirModeles(\'msg-texte\')">Modèles</button>':'')
-      +'<button type="button" class="btn btn-red btn-sm" id="msg-envoyer" style="margin:0;width:auto" onclick="msgEnvoyerSaisie()">Envoyer</button></div></div>');
+      +(moi==='coach'?'<button type="button" class="btn btn-outline btn-sm" style="margin:0;width:auto" data-on-click="ouvrirModeles(\'msg-texte\')">Modèles</button>':'')
+      +'<button type="button" class="btn btn-red btn-sm" id="msg-envoyer" style="margin:0;width:auto" data-on-click="msgEnvoyerSaisie()">Envoyer</button></div></div>');
   if(!garderPosition){ const l=document.getElementById('msg-liste'); if(l) l.scrollTop=l.scrollHeight; }
 }
 function _msgCompteur(){
@@ -27970,7 +28345,7 @@ function renderEntreeMessages(){
   if(!z||!currentUser||currentUser.role!=='coach') return false;
   const nl=_msgFils?_msgFils.fils.reduce((a,f)=>a+(Number(f.nonLus)||0),0):0;
   const attente=_msgFils?_msgFils.fils.filter(f=>msgSansReponse(f)).length:0;
-  z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirMessages()"><span class="rel-entree-t">Messages'
+  z.innerHTML='<button type="button" class="rel-entree" data-on-click="ouvrirMessages()"><span class="rel-entree-t">Messages'
     +(nl?' <span class="msg-pastille">'+nl+'</span>':'')+'</span>'
     +'<span class="rel-entree-e">'+(nl?nl+' non lu'+(nl>1?'s':''):attente?attente+' sans réponse':'un fil privé par athlète')+'</span></button>';
   if(!_msgFils) msgChargerFils().then(()=>{ try{ renderEntreeMessages(); renderTodoBlock(getClients()); }catch(e){} }).catch(()=>{});
@@ -27983,7 +28358,7 @@ async function _rendreEntreeMessagesAthlete(force){
   if(!z) return false;
   if(!u||u.role==='coach'||!u.coachEmailKey){ z.innerHTML=''; return false; }
   const peindre=()=>{ const n=_msgAth?_msgAth.nonLus:0;
-    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Mon coach'
+    z.innerHTML='<button type="button" class="rel-entree" data-on-click="msgOuvrirFil()"><span class="rel-entree-t">Mon coach'
       +(n?' <span class="msg-pastille">'+n+'</span>':'')+'</span><span class="rel-entree-e">'+(n?n+' message'+(n>1?'s':'')+' non lu'+(n>1?'s':''):'Lui écrire, en privé')+'</span></button>'; };
   peindre();
   if(!force&&_msgAth&&Date.now()-_msgAth.t<MSG_CACHE_MS) return true;
@@ -28001,7 +28376,7 @@ function renderEntreeRelances(){
   const n=RELANCE_SIGNAUX.filter(s=>r[s].actif).length;
   const etat=relancesEnPause(currentUser)?'en pause':(n?n+' règle'+(n>1?'s':'')+' allumée'+(n>1?'s':''):'coupées');
   const parties=_relJournal?relCetteSemaine(_relJournal).filter(e=>e.statut==='parti').length:null;
-  z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirRelances()">'
+  z.innerHTML='<button type="button" class="rel-entree" data-on-click="ouvrirRelances()">'
     +'<span class="rel-entree-t">Relances automatiques</span>'
     +'<span class="rel-entree-e">'+escapeHtml(etat)+(parties?' · '+parties+' partie'+(parties>1?'s':'')+' cette semaine':'')+'</span></button>';
   if(!_relJournal&&n) _relChargerJournal().then(()=>{ try{ renderEntreeRelances(); }catch(e){} });
@@ -28024,7 +28399,7 @@ function renderRelancesCoach(){
   let h='<div class="rel-frein'+(pause?' rel-frein-on':'')+'">'
     +'<div class="rel-frein-l"><b>Je reprends la main</b><span>'
     +(pause?'Rien ne part. Tes règles sont gardées telles quelles.':'Coupe tout, tout de suite, y compris ce qui allait partir aujourd’hui.')+'</span></div>'
-    +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
+    +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' data-on-change="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
   h+='<h2 class="rel-h">Cette semaine</h2>';
   if(!sem) h+='<div class="sub rel-vide">Lecture du journal…</div>';
@@ -28050,19 +28425,19 @@ function renderRelancesCoach(){
     const _perso=relancesTextes(currentUser)[l.type]||'';
     h+='<div class="rel-l'+(x.actif?' rel-l-on':'')+'">'
       +'<div class="rel-l-h"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
-      +'<label class="rel-switch"><input type="checkbox"'+(x.actif?' checked':'')+' onchange="relancesRegler(\''+l.type+'\',\'actif\',this.checked)" aria-label="'+escapeHtml(l.lib)+'"><span></span></label></div>'
+      +'<label class="rel-switch"><input type="checkbox"'+(x.actif?' checked':'')+' data-on-change="relancesRegler(\''+l.type+'\',\'actif\',this.checked)" aria-label="'+escapeHtml(l.lib)+'"><span></span></label></div>'
       +'<div class="rel-l-r">Le signal se lève '+escapeHtml(l.type==='inactif'?'après '+l.quand.replace('N',String(x.delai))+' ni bilan':l.quand)+'.</div>'
-      +'<div class="rel-l-c"><label>Après <select onchange="relancesRegler(\''+l.type+'\',\'delai\',this.value)">'
+      +'<div class="rel-l-c"><label>Après <select data-on-change="relancesRegler(\''+l.type+'\',\'delai\',this.value)">'
       +(l.type==='inactif'&&_delais.indexOf(x.delai)<0?[x.delai].concat(_delais).sort((a,b)=>a-b):_delais).map(d=>'<option value="'+d+'"'+(d===x.delai?' selected':'')+'>'+(d?d+' jour'+(d>1?'s':''):'le jour même')+'</option>').join('')
-      +'</select></label><label>Par <select onchange="relancesRegler(\''+l.type+'\',\'moyen\',this.value)">'
+      +'</select></label><label>Par <select data-on-change="relancesRegler(\''+l.type+'\',\'moyen\',this.value)">'
       +Object.keys(RELANCE_MOYENS).map(m=>'<option value="'+m+'"'+(m===x.moyen?' selected':'')+'>'+escapeHtml(RELANCE_MOYENS[m])+'</option>').join('')
       +'</select></label></div>'
       // LE TEXTE DU COACH, et son aperçu tel qu'il partira.
       +(x.actif?'<div class="rel-txt"><label for="rel-txt-'+l.type+'">Ton texte <span>facultatif, '+RELANCE_TEXTE_MAX+' caractères au plus'
         +(l.type==='inactif'?' ; {prénom} et {jours} sont remplacés':' ; {prénom} est remplacé')+'</span></label>'
-        +'<textarea id="rel-txt-'+l.type+'" rows="3" maxlength="'+RELANCE_TEXTE_MAX+'" placeholder="'+escapeHtml(relanceCorpsDefaut(l.type))+'" oninput="relApercu(\''+l.type+'\')" onchange="relancesTexte(\''+l.type+'\',this.value)">'+escapeHtml(_perso)+'</textarea>'
+        +'<textarea id="rel-txt-'+l.type+'" rows="3" maxlength="'+RELANCE_TEXTE_MAX+'" placeholder="'+escapeHtml(relanceCorpsDefaut(l.type))+'" data-on-input="relApercu(\''+l.type+'\')" data-on-change="relancesTexte(\''+l.type+'\',this.value)">'+escapeHtml(_perso)+'</textarea>'
         +'<div class="rel-ap"><span>Aperçu</span><div id="rel-ap-'+l.type+'">'+escapeHtml(_relApercuTexte(l.type,_perso,x.delai))+'</div></div>'
-        +(_perso?'<button type="button" class="rel-defaut" onclick="relancesTexte(\''+l.type+'\',\'\')">Revenir au texte par défaut</button>':'')+'</div>':'')
+        +(_perso?'<button type="button" class="rel-defaut" data-on-click="relancesTexte(\''+l.type+'\',\'\')">Revenir au texte par défaut</button>':'')+'</div>':'')
       +'</div>';
   }
   z.innerHTML=h;
@@ -28080,7 +28455,7 @@ function _relHtmlFiche(c,liste){
         +', '+escapeHtml((RELANCE_MOYENS[der.moyen]||'').toLowerCase())+'.'
       :'Aucune relance automatique ne lui est partie.')
     +(exclu?' <b>Exclu des relances automatiques.</b>':(relancesAllumees(currentUser)?'':' Tes relances sont coupées.'))+'</div>'
-    +'<button type="button" class="rel-lien" onclick="relanceExclure(\''+em+'\','+(exclu?'false':'true')+')">'
+    +'<button type="button" class="rel-lien" data-on-click="relanceExclure(\''+em+'\','+(exclu?'false':'true')+')">'
     +(exclu?'Le réintégrer aux relances':'L’exclure des relances automatiques')+'</button></div>';
 }
 function renderRelanceFiche(c){
@@ -28118,9 +28493,9 @@ async function _rendreRelanceAthlete(u){
   if(!m){ z.innerHTML=''; return false; }
   z.innerHTML='<div class="rel-carte"><div class="rel-carte-t">Un mot de ton coach</div>'
     +'<div class="rel-carte-l">'+escapeHtml(m.texte||'')+'</div>'
-    +'<div class="rel-carte-b"><button type="button" class="btn btn-outline btn-sm" onclick="relanceVue('+Number(m.at)+')">Compris</button>'
+    +'<div class="rel-carte-b"><button type="button" class="btn btn-outline btn-sm" data-on-click="relanceVue('+Number(m.at)+')">Compris</button>'
     // LOT M2 : répondre en privé, dans le fil.
-    +'<button type="button" class="btn btn-red btn-sm" onclick="relanceVue('+Number(m.at)+');msgOuvrirFil()">Répondre</button></div></div>';
+    +'<button type="button" class="btn btn-red btn-sm" data-on-click="relanceVue('+Number(m.at)+');msgOuvrirFil()">Répondre</button></div></div>';
   return true;
 }
 function relanceVue(at){
@@ -28197,7 +28572,7 @@ function _lundiLire(c){
 }
 function _htmlLundiLigne(l){
   const E=escapeHtml, id=E(String(l.id||''));
-  return '<button type="button" class="ld-l ld-'+l.cat+'" onclick="lundiOuvrir(\''+id+'\',\''+l.cat+'\')">'
+  return '<button type="button" class="ld-l ld-'+l.cat+'" data-on-click="lundiOuvrir(\''+id+'\',\''+l.cat+'\')">'
     +'<b>'+E(l.prenom)+'</b><span class="ld-s">'+E(l.signal)+'</span>'
     +'<span class="ld-d">'+(l.cat==='rien'?'':E(lundiDepuis(l.depuis)))+'</span></button>';
 }
@@ -28337,8 +28712,8 @@ function _rendreFileSignal(id){
   }
   const pos=_fileSignal.ids.indexOf(id)+1, tot=_fileSignal.ids.length;
   z.innerHTML='<span class="td-file-t">'+escapeHtml(_fileSignal.label)+' · '+pos+'/'+tot+'</span>'
-    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm td-file-b" onclick="_allerSignalSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>'
-      :'<button type="button" class="btn btn-outline btn-sm td-file-b" onclick="_quitterFileSignal()">Fin de la file</button>');
+    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm td-file-b" data-on-click="_allerSignalSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>'
+      :'<button type="button" class="btn btn-outline btn-sm td-file-b" data-on-click="_quitterFileSignal()">Fin de la file</button>');
   return true;
 }
 function _allerSignalSuivant(){
@@ -28407,7 +28782,7 @@ function todoAnnulerReport(){
 function _todoProposerAnnuler(msg){
   let z=document.getElementById('td-annuler');
   if(!z){ z=document.createElement('div'); z.id='td-annuler'; z.className='td-annuler'; z.setAttribute('role','status'); document.body.appendChild(z); }
-  z.innerHTML='<span>'+escapeHtml(msg)+'</span><button type="button" onclick="todoAnnulerReport()">Annuler</button>';
+  z.innerHTML='<span>'+escapeHtml(msg)+'</span><button type="button" data-on-click="todoAnnulerReport()">Annuler</button>';
   if(_todoAnnulerMinuteur) clearTimeout(_todoAnnulerMinuteur);
   _todoAnnulerMinuteur=setTimeout(()=>{ _todoAnnulerMinuteur=null; _todoAnnulable=null; const x=document.getElementById('td-annuler'); if(x) x.remove(); },TODO_ANNULER_MS);
 }
@@ -28419,15 +28794,15 @@ function _todoOuvrirFeuille(r){
   const cases=r.list.map(c=>{
     const ini=(c.lname||'').charAt(0);
     const nom=((c.fname||'')+(ini?' '+ini+'.':'')).trim()||'Athlète';
-    return '<label class="td-case"><input type="checkbox" checked value="'+escapeHtml(String(c.id))+'" onchange="_todoCocher()"> '+escapeHtml(nom)+'</label>';
+    return '<label class="td-case"><input type="checkbox" checked value="'+escapeHtml(String(c.id))+'" data-on-change="_todoCocher()"> '+escapeHtml(nom)+'</label>';
   }).join('');
-  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="_todoFermerFeuille()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Reporter" class="td-feuille">'
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" data-on-click="_todoFermerFeuille()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Reporter" class="td-feuille">'
     +'<div class="td-feuille-t">'+escapeHtml(r.label)+'</div>'
     +'<div class="td-feuille-d">Qui reporter de 7 jours ?</div>'
     +'<div class="td-cases">'+cases+'</div>'
-    +'<div class="td-feuille-pied"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_todoFermerFeuille()">Retour</button>'
-    +'<button type="button" id="td-feuille-ok" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="_todoReporterFeuille()">Reporter 7 jours</button></div>'
+    +'<div class="td-feuille-pied"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="_todoFermerFeuille()">Retour</button>'
+    +'<button type="button" id="td-feuille-ok" class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="_todoReporterFeuille()">Reporter 7 jours</button></div>'
     +'</div></div>');
 }
 function _todoCocher(){
@@ -28519,13 +28894,13 @@ function _htmlSuiteBilanBloc(c){
   const progs=((currentUser&&currentUser.coachPrograms)||[]).map((p,i)=>({p,i})).filter(x=>x.p);
   const enCours=c&&c.assignedProgramId;
   const suivants=_fileProgfinSuivants(c&&c.id);
-  const boutons=progs.slice(-6).reverse().map(x=>'<button type="button" class="bb-prog" onclick="progfinAssigner('+x.i+')">'
+  const boutons=progs.slice(-6).reverse().map(x=>'<button type="button" class="bb-prog" data-on-click="progfinAssigner('+x.i+')">'
     +escapeHtml(x.p.name||'Programme')+(enCours&&x.p.id===enCours?' <small>(en cours)</small>':'')+'</button>').join('');
   return '<div class="bb-suite"><div class="bb-suite-t">Assigner le bloc suivant</div>'
     +(progs.length?'<div class="bb-progs">'+boutons+'</div>'
-      +(progs.length>6?'<button type="button" class="bb-lien" onclick="progfinTousProgrammes()">Tous mes programmes</button>':'')
+      +(progs.length>6?'<button type="button" class="bb-lien" data-on-click="progfinTousProgrammes()">Tous mes programmes</button>':'')
       :'<div class="bb-s">Ta bibliothèque de programmes est vide.</div>')
-    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm bb-suivant" onclick="progfinSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>':'')
+    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm bb-suivant" data-on-click="progfinSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>':'')
     +'</div>';
 }
 function progfinAssigner(idx){
@@ -28720,9 +29095,9 @@ function renderFiltresEtiquettes(){
   z.style.display='';
   const a=(currentUser&&currentUser.etiquettesAth)||{};
   const compte=id=>Object.keys(a).filter(k=>etiquettesAthlete(currentUser,k).indexOf(id)>=0).length;
-  z.innerHTML=l.map(e=>'<button type="button" class="etq-filtre" style="--etq:'+e.couleur+'" aria-pressed="'+(_filtreEtiquette===e.id)+'" onclick="setFiltreEtiquette('+_attrArg(e.id)+')">'
+  z.innerHTML=l.map(e=>'<button type="button" class="etq-filtre" style="--etq:'+e.couleur+'" aria-pressed="'+(_filtreEtiquette===e.id)+'" data-on-click="setFiltreEtiquette('+_attrArg(e.id)+')">'
       +escapeHtml(e.lib)+' <b>'+compte(e.id)+'</b></button>').join('')
-    +'<button type="button" class="etq-gerer" onclick="ouvrirEtiquettes()">Gérer</button>';
+    +'<button type="button" class="etq-gerer" data-on-click="ouvrirEtiquettes()">Gérer</button>';
 }
 function setFiltreEtiquette(id){
   _filtreEtiquette=(_filtreEtiquette===id)?null:id;
@@ -28735,10 +29110,10 @@ let _etiqCibles=[];
 function ouvrirEtiquettes(ids){
   _etiqCibles=Array.isArray(ids)?ids.filter(Boolean):[];
   closeModal();
-  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" class="etq-feuille" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" class="etq-feuille" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
     <div id="etq-corps"></div>
-    <button class="btn btn-outline" style="margin-top:12px" onclick="closeModal();renderClientList()">Fermer</button>
+    <button class="btn btn-outline" style="margin-top:12px" data-on-click="closeModal();renderClientList()">Fermer</button>
   </div></div>`);
   _etiqRepeindre();
   return true;
@@ -28751,10 +29126,10 @@ function _etiqRepeindre(){
   const lignes=l.map(e=>{
     const ont=ids.filter(id=>etiquettesAthlete(currentUser,id).indexOf(e.id)>=0).length;
     const act=n
-      ?(ont<n?'<button type="button" class="btn btn-red btn-sm etq-b" onclick="_etiqPoser('+_attrArg(e.id)+',true)">Ajouter</button>':'')
-        +(ont?'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqPoser('+_attrArg(e.id)+',false)">Retirer</button>':'')
-      :'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqRenommer('+_attrArg(e.id)+')">Renommer</button>'
-        +'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqSupprimer('+_attrArg(e.id)+')">Supprimer</button>';
+      ?(ont<n?'<button type="button" class="btn btn-red btn-sm etq-b" data-on-click="_etiqPoser('+_attrArg(e.id)+',true)">Ajouter</button>':'')
+        +(ont?'<button type="button" class="btn btn-outline btn-sm etq-b" data-on-click="_etiqPoser('+_attrArg(e.id)+',false)">Retirer</button>':'')
+      :'<button type="button" class="btn btn-outline btn-sm etq-b" data-on-click="_etiqRenommer('+_attrArg(e.id)+')">Renommer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm etq-b" data-on-click="_etiqSupprimer('+_attrArg(e.id)+')">Supprimer</button>';
     return '<div class="etq-ligne">'+_etiqPuce(e)+(n&&ont?'<span class="sub etq-ont">'+(n>1?ont+' sur '+n:'posée')+'</span>':'')+'<div style="flex:1"></div>'+act+'</div>';
   }).join('');
   z.innerHTML='<h2 style="margin-bottom:4px">'+titre+'</h2>'
@@ -28763,8 +29138,8 @@ function _etiqRepeindre(){
     +(l.length<ETIQ_MAX
       ?'<div class="etq-nouvelle"><label for="etq-lib" style="margin-top:10px">Nouvelle étiquette</label>'
         +'<div style="display:flex;gap:8px"><input id="etq-lib" maxlength="'+ETIQ_LIB_MAX+'" placeholder="ex. Prépa compét" style="flex:1;margin:0">'
-        +'<button type="button" class="btn btn-red btn-sm" style="margin:0;min-height:44px" onclick="_etiqCreer()">Créer</button></div>'
-        +'<div class="etq-couleurs" role="radiogroup" aria-label="Couleur">'+ETIQ_COULEURS.map((c,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" aria-label="Couleur '+(i+1)+'" style="--etq:'+c+'" onclick="_etiqCouleur(this)"></button>').join('')+'</div></div>'
+        +'<button type="button" class="btn btn-red btn-sm" style="margin:0;min-height:44px" data-on-click="_etiqCreer()">Créer</button></div>'
+        +'<div class="etq-couleurs" role="radiogroup" aria-label="Couleur">'+ETIQ_COULEURS.map((c,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" aria-label="Couleur '+(i+1)+'" style="--etq:'+c+'" data-on-click="_etiqCouleur(this)"></button>').join('')+'</div></div>'
       :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Vingt étiquettes : c’est le maximum.</div>');
 }
 function _etiqCouleur(b){
@@ -28812,14 +29187,14 @@ function _rendreEtiquettesFiche(c){
   if(!z) return;
   if(!c||c._fromCode||!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return; }
   const t=etiquettesDe(currentUser), l=etiquettesAthlete(currentUser,c.id);
-  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">✕</button>')).join('')
-    +'<button type="button" class="etq-plus" onclick="ouvrirEtiquettes(['+_attrArg(c.id)+'])">+ Étiquette</button>';
+  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" data-on-click="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">✕</button>')).join('')
+    +'<button type="button" class="etq-plus" data-on-click="ouvrirEtiquettes(['+_attrArg(c.id)+'])">+ Étiquette</button>';
 }
 // « Cocher l'étiquette… » : dans les trois écrans qui cochent des athlètes.
 function _htmlCocherEtiquette(conteneur){
   const l=etiquettesDe(currentUser);
   if(!l.length) return '';
-  return '<select class="etq-cocher" aria-label="Cocher les athlètes d’une étiquette" onchange="cocherEtiquette('+_attrArg(conteneur)+',this.value);this.selectedIndex=0">'
+  return '<select class="etq-cocher" aria-label="Cocher les athlètes d’une étiquette" data-on-change="cocherEtiquette('+_attrArg(conteneur)+',this.value);this.selectedIndex=0">'
     +'<option value="">Cocher l’étiquette…</option>'
     +l.map(e=>'<option value="'+e.id+'">'+escapeHtml(e.lib)+'</option>').join('')+'</select>';
 }
@@ -28843,7 +29218,7 @@ function _crListe(l,fn,opts){
   const vus=l.slice(0,CADRE_REPLIE_MAX), reste=l.slice(CADRE_REPLIE_MAX);
   return renderDataList(vus,fn,opts)
     +(reste.length?'<div class="cr-plus" hidden>'+renderDataList(reste,fn,opts)+'</div>'
-      +'<button type="button" class="cr-voir" onclick="cadreVoirTout(this)">Voir tout ('+l.length+')</button>':'');
+      +'<button type="button" class="cr-voir" data-on-click="cadreVoirTout(this)">Voir tout ('+l.length+')</button>':'');
 }
 function cadreVoirTout(b){
   const z=b&&b.closest?b.closest('.cadre-replie'):null;
@@ -29038,7 +29413,7 @@ function renderTodoBlock(clients){
       // colorée de plus ferait trois rouges côte à côte et plus rien ne
       // ressortirait. Deux halos, un serré et un large : c'est ce qui fait le
       // néon plutôt qu'un simple trait clair.
-      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+      return{html:`<span style="flex-shrink:0;align-self:flex-start;margin-top:2px;display:inline-flex;color:#fff;filter:drop-shadow(0 0 4px rgba(255,255,255,.7)) drop-shadow(0 0 11px rgba(255,255,255,.3))">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button data-on-click="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:var(--r-1)" data-on-mouseover="this.style.color='var(--sub)'" data-on-mouseout="this.style.color='#444'">✕</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
@@ -29062,8 +29437,8 @@ function renderTodoBlock(clients){
       :`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
     </div>`).join('')}
     </div>
-    ${restant?`<button type="button" class="td-plus" onclick="todoDeplier(true)" aria-expanded="false">+ ${restant} autre${restant>1?'s':''}</button>`
-      :_repliable?`<button type="button" class="td-plus" onclick="todoDeplier(false)" aria-expanded="true">Réduire la liste</button>`:''}
+    ${restant?`<button type="button" class="td-plus" data-on-click="todoDeplier(true)" aria-expanded="false">+ ${restant} autre${restant>1?'s':''}</button>`
+      :_repliable?`<button type="button" class="td-plus" data-on-click="todoDeplier(false)" aria-expanded="true">Réduire la liste</button>`:''}
     ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
     ${aDouleur?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerDouleur()}</div>`:''}
   </div>`;
@@ -29288,11 +29663,11 @@ function _selMaj(){
     +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selEtiqueter()">Étiqueter</button>'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selCadence()">Cadence</button>'
-    +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="selEtiqueter()">Étiqueter</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="selVersDecharge()">Décharge</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="selVersProgramme()">Programme</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="selCadence()">Cadence</button>'
+    +'<button type="button" data-on-click="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
     +'</div>';
 }
 // Les cases de l'ecran de destination sont cochees APRES son rendu : c'est lui
@@ -29424,9 +29799,9 @@ function _htmlCurseurSuivi(c,taille){
   // stopPropagation : la ligne entiere est cliquable, et sans lui basculer le
   // suivi ouvrirait aussi la fiche.
   return '<label class="cr-swi'+(taille==='grand'?' cr-swi-g':'')+'"'
-    +' title="Suivi actif ou non" onclick="event.stopPropagation()">'
+    +' title="Suivi actif ou non" data-on-click="event.stopPropagation()">'
     +'<input type="checkbox"'+(on?' checked':'')
-    +' onchange="coachBasculerSuivi(\''+c.id+'\',event)"'
+    +' data-on-change="coachBasculerSuivi(\''+c.id+'\',event)"'
     +' aria-label="'+escapeHtml(lbl)+'">'
     +'<span class="cr-swi-p"></span>'
     +(taille==='grand'?'<span class="cr-swi-t">'+(on?'Suivi':'Sans suivi')+'</span>':'')
@@ -29482,9 +29857,9 @@ function renderClientRow(c){
   // N4.13 — LA CASE RELIT LE Set A CHAQUE RENDU : c'est ce qui la fait
   // survivre a la reecriture du conteneur toutes les trente secondes.
   const _coche=SEL_ATHLETES.has(c.id)?' checked':'';
-  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" data-on-click="openClientDetail('${c.id}')" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <input type="checkbox" class="cr-coche"${_coche} value="${c.id}"
-      onclick="selAthleteBascule('${c.id}',event)"
+      data-on-click="selAthleteBascule('${c.id}',event)"
       aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
     <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div>${objLine}${asLine}${diLine}${chLine}${biLine}</div>
@@ -29502,7 +29877,7 @@ function renderClientRow(c){
          porte un verbe fait ce que le verbe dit, du premier coup.
          Le clic sur le RESTE de la ligne, lui, garde l'apercu : c'est le
          geste vague, et il merite un apercu. -->
-    <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
+    <button class="btn btn-red btn-sm cr-fiche" data-on-click="event.stopPropagation();openClientDetail('${c.id}',false,true)"
       title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
       style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">Ouvrir la fiche</span><span class="cr-fiche-c">Voir profil</span></button>
     ${_htmlCurseurSuivi(c)}
@@ -30595,7 +30970,7 @@ function _htmlCadenceCoach(c){
     +'<div class="bcad-t" style="margin-top:12px">Tes questions en fin de bilan</div>'
     +'<div class="bcad-d">Jusqu’à trois, 120 caractères chacune. Elles s’ajoutent à son prochain bilan de suivi.</div>'
     +champs
-    +'<button type="button" class="btn btn-outline btn-sm bcad-b" onclick="ccdCadenceEnregistrer()">Enregistrer</button>'
+    +'<button type="button" class="btn btn-outline btn-sm bcad-b" data-on-click="ccdCadenceEnregistrer()">Enregistrer</button>'
     +'</div>';
 }
 // PURE (écrit dans c). La cadence et les questions lues dans le formulaire.
@@ -30627,14 +31002,14 @@ function selCadence(){
   if(!SEL_ATHLETES.size) return false;
   document.getElementById('modal-overlay')?.remove();
   const opt=(v,lib)=>'<option value="'+v+'">'+lib+'</option>';
-  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cadence des bilans" class="bcad-feuille">'
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cadence des bilans" class="bcad-feuille">'
     +'<div class="bcad-t">Cadence des bilans · '+SEL_ATHLETES.size+' athlète'+(SEL_ATHLETES.size>1?'s':'')+'</div>'
     +'<div class="bcad-l"><select id="bcad-m-freq" aria-label="Fréquence">'+opt('','Au choix de l’athlète')+opt(1,'Chaque semaine')+'<option value="2" selected>Toutes les 2 semaines</option>'+opt(4,'Toutes les 4 semaines')+'</select>'
     +'<select id="bcad-m-jour" aria-label="Jour">'+[1,2,3,4,5,6,0].map(j=>'<option value="'+j+'"'+(j===6?' selected':'')+'>'+BILAN_JOURS[j].charAt(0).toUpperCase()+BILAN_JOURS[j].slice(1)+'</option>').join('')+'</select></div>'
     +'<div class="bcad-d">L’échéance de chacun repart de son dernier bilan. Leurs questions de fin de bilan ne changent pas.</div>'
-    +'<div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="closeModal()">Annuler</button>'
-    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="selCadenceAppliquer()">Enregistrer</button></div></div></div>');
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="closeModal()">Annuler</button>'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="selCadenceAppliquer()">Enregistrer</button></div></div></div>');
   return true;
 }
 function selCadenceAppliquer(){
@@ -30975,8 +31350,8 @@ function jdRelancer(id){
     +'align-items:center;justify-content:center">'+lib+'</a>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
   +'<h2 style="margin-bottom:4px">Relancer</h2>'
   +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)
   +' · compte créé, aucune séance</div>'
@@ -30993,7 +31368,7 @@ function jdRelancer(id){
       +'Cette fiche ne porte ni numéro ni adresse : RepCore ne peut ouvrir aucun '
       +'message. Ajoute-les depuis le profil de l’athlète.</p>')
   +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0;min-height:44px" '
-  +'onclick="closeModal()">Fermer</button>'
+  +'data-on-click="closeModal()">Fermer</button>'
   +'</div></div>');
   return true;
 }
@@ -31050,11 +31425,11 @@ function _htmlJamaisDemarre(liste,maintenant){
         +'<div class="jd-cmd">'
         // UN SEUL GESTE, ET IL EST ROUGE. Demande de Kevin : c'est la seule
         // chose a faire pour quelqu'un qui a un compte et ne s'en sert pas.
-        +'<button type="button" class="btn btn-red btn-sm" onclick="jdRelancer(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
+        +'<button type="button" class="btn btn-red btn-sm" data-on-click="jdRelancer(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
         +'</div></div>';
     }).join('')
     +'</div>'
-    +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
+    +(reste?'<button type="button" data-on-click="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
       +'border-top:1px solid var(--border);color:var(--red-text);font-family:Montserrat,sans-serif;'
       +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
       +'cursor:pointer;padding:12px 14px;min-height:42px;text-align:left">Voir tout ('+n+')</button>':'')
@@ -31349,8 +31724,8 @@ function tunnelRelancer(codeId){
   const dernier=rang===TUNNEL_MAX;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
   +'<h2 style="margin-bottom:4px">Relance '+rang+'/'+TUNNEL_MAX+'</h2>'
   +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)+'</div>'
   // ⚠ LA DERNIERE TENTATIVE SE DIT AVANT, PAS APRES. Fermer un acces est
@@ -31361,7 +31736,7 @@ function tunnelRelancer(codeId){
   +'<div class="ml-lab" style="margin-bottom:6px">Canal utilisé</div>'
   +'<div id="tun-canaux" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:6px">'
   +TUNNEL_CANAUX.map((x,i)=>'<button type="button" class="btn btn-blanc btn-sm tun-c'+(i?'':' actif')+'" data-canal="'+x.cle+'"'
-     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:.3px">'+escapeHtml(x.lib)+'</button>').join('')
+     +' data-on-click="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:.3px">'+escapeHtml(x.lib)+'</button>').join('')
   +'</div>'
   // ⚠ ON N'ECRIT JAMAIS « ENVOYE ». RepCore n'envoie rien ici : il enregistre
   //   ce que le coach a fait de son cote. Les deux canaux qui SAVENT ouvrir un
@@ -31377,8 +31752,8 @@ function tunnelRelancer(codeId){
   +'<textarea id="tun-note" rows="3" maxlength="400" placeholder="WhatsApp envoyé : rappel de l’activation RepCore."'
   +' style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);resize:vertical;margin-bottom:14px"></textarea>'
   +'<div style="display:flex;gap:8px">'
-  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
-  +'<button type="button" id="tun-valider" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="tunnelValider(\''+escapeHtml(codeId)+'\')">Enregistrer la relance</button>'
+  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="closeModal()">Annuler</button>'
+  +'<button type="button" id="tun-valider" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="tunnelValider(\''+escapeHtml(codeId)+'\')">Enregistrer la relance</button>'
   +'</div></div></div>');
   // L'avis a besoin de savoir DE QUI il parle pour proposer le bon lien. Le
   // codeId voyage sur le noeud plutot qu'en variable globale : deux feuilles
@@ -31529,8 +31904,8 @@ function tunnelPlanifier(codeId,apresRelance){
   const hISO=p2(base.getHours())+':'+p2(base.getMinutes());
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">'
   +'<h2 style="margin-bottom:4px">'+(k.prochaine?'Replanifier':'Prochaine relance')+'</h2>'
   +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)
   +(apresRelance?' · relance '+k.relances.length+'/'+TUNNEL_MAX+' enregistrée':'')+'</div>'
@@ -31541,9 +31916,9 @@ function tunnelPlanifier(codeId,apresRelance){
   +'<input type="time" id="tun-heure" value="'+hISO+'" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)"></label>'
   +'</div>'
   +'<div style="display:flex;gap:8px">'
-  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">'
+  +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="closeModal()">'
   +(apresRelance?'Plus tard':'Annuler')+'</button>'
-  +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="tunnelPoserEcheance(\''+escapeHtml(codeId)+'\')">Planifier</button>'
+  +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="tunnelPoserEcheance(\''+escapeHtml(codeId)+'\')">Planifier</button>'
   +'</div></div></div>');
   return true;
 }
@@ -31692,7 +32067,7 @@ function tunnelRendre(){
   //   sans bouton « Tous » auraient enferme le coach dans un statut.
   const stat=(cle,n,lib,c)=>'<button type="button" class="tun-stat'
     +(_tunFiltre===cle?' actif':'')+'" style="--c:'+c+'"'
-    +' aria-pressed="'+(_tunFiltre===cle)+'" onclick="tunnelBasculer(\''+cle+'\')">'
+    +' aria-pressed="'+(_tunFiltre===cle)+'" data-on-click="tunnelBasculer(\''+cle+'\')">'
     +'<div class="tun-sil">'+_htmlSilhouette(34)+'</div>'
     +'<b>'+n+'</b><span>'+lib+'</span></button>';
   // ⚠ LES DEUX BARRES SONT RETIREES, demande de Kevin — sauf UNE porte, et elle
@@ -31706,7 +32081,7 @@ function tunnelRendre(){
   //   que Kevin a demande, sans rien de plus.
   const fini=(r.termines>0)
     ? '<div class="tun-fini"><button type="button" class="tun-fini-b'
-      +(_tunFiltre==='fini'?' actif':'')+'" onclick="tunnelBasculer(\'fini\')">'
+      +(_tunFiltre==='fini'?' actif':'')+'" data-on-click="tunnelBasculer(\'fini\')">'
       +(_tunFiltre==='fini'
         ? '← Revenir au tunnel'
         : (r.termines+' dossier'+(r.termines>1?'s':'')+' terminé'+(r.termines>1?'s':'')+' · voir'))
@@ -31762,10 +32137,10 @@ function _tunCarte(p){
     +'</div>'
     +'<div class="tun-cmd">'
       +(p.fini?''
-        :'<button type="button" class="btn btn-red btn-sm" onclick="tunnelRelancer(\''+escapeHtml(p.codeId)+'\')">Relancer</button>'
-         +'<button type="button" class="btn btn-blanc btn-sm" onclick="tunnelPlanifier(\''+escapeHtml(p.codeId)+'\')">'
+        :'<button type="button" class="btn btn-red btn-sm" data-on-click="tunnelRelancer(\''+escapeHtml(p.codeId)+'\')">Relancer</button>'
+         +'<button type="button" class="btn btn-blanc btn-sm" data-on-click="tunnelPlanifier(\''+escapeHtml(p.codeId)+'\')">'
          +(p.prochaine?'Replanifier':'Planifier')+'</button>')
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="openClientDetail(\''+escapeHtml(p.id)+'\',false,true)">Profil</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" data-on-click="openClientDetail(\''+escapeHtml(p.id)+'\',false,true)">Profil</button>'
     +'</div></div>';
 }
 /** PURE-ish. « 23/09 » — la forme la plus courte qui reste lisible. */
@@ -31950,7 +32325,7 @@ function renderCoachSessionRecap(c){
   if(!_coachSessions.length){el.innerHTML='';return;}
   el.innerHTML=`<h3 style="margin-bottom:12px">Séances</h3>
     <div id="ccd-sr-list"></div>
-    <button id="ccd-sr-more" onclick="showMoreCoachSessions()"
+    <button id="ccd-sr-more" data-on-click="showMoreCoachSessions()"
       style="display:none;width:100%;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;margin-bottom:4px;min-height:44px">Voir plus de séances</button>`;
   _renderSessionBatch(0,5);
 }
@@ -32094,7 +32469,7 @@ function _buildSessionCard(s,client){
     // ligne — ce que l'athlete a REELLEMENT fait — reste du texte.
     const _nomEch=escapeHtml(nm).replace(/'/g,'&#39;');
     return `<div style="padding:8px 0;border-top:1px solid #141414">
-      <button type="button" onclick="allerVersPrescription('${_nomEch}')"
+      <button type="button" data-on-click="allerVersPrescription('${_nomEch}')"
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
@@ -32106,7 +32481,7 @@ function _buildSessionCard(s,client){
   const _mot=(typeof s.noteAthlete==='string'&&s.noteAthlete.trim())
     ?`<div class="sc-note-ath"><span>Son mot</span>${escapeHtml(s.noteAthlete.trim().slice(0,NOTE_SEANCE_MAX))}</div>`:'';
   return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
-    <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div data-on-click="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
@@ -32251,7 +32626,7 @@ function _rendreContactCoach(u,users){
   // occupaient une rangee de l'accueil pour une question qu'on se pose
   // rarement — « ca mange de la place pour rien ». Le lien redevient donc ce
   // qu'il etait, LEGER, et les trois portes s'ouvrent au clic.
-  z.innerHTML='<button type="button" class="cct-lien" onclick="ouvrirContactCoach()" '
+  z.innerHTML='<button type="button" class="cct-lien" data-on-click="ouvrirContactCoach()" '
     +'title="'+escapeHtml(titre)+'">'
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
     +'stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">'
@@ -32270,9 +32645,9 @@ function ouvrirContactCoach(){
   if(!z||!_contactBouts.length) return null;
   z.innerHTML=_contactBouts.map(b=>b[0]==='a'
     ?'<a class="cct-b" href="'+escapeHtml(b[1])+'" target="_blank" rel="noopener noreferrer" '
-      +'onclick="_journaliserContactCoach();fermerContactCoach(true)" '
+      +'data-on-click="_journaliserContactCoach();fermerContactCoach(true)" '
       +'title="'+escapeHtml(_contactTitre)+'">'+escapeHtml(b[2])+'</a>'
-    :'<button type="button" class="cct-b" onclick="fermerContactCoach(true);'+b[1]+'">'
+    :'<button type="button" class="cct-b" data-on-click="fermerContactCoach(true);'+b[1]+'">'
       +escapeHtml(b[2])+'</button>').join('');
   const f=_feuilleOuvrir('rc-contact');
   try{ const p=document.querySelector('#cct-corps .cct-b'); if(p) p.focus({preventScroll:true}); }catch(e){}
@@ -32312,8 +32687,8 @@ function renderMotCoach(){
       +'style="width:100%;box-sizing:border-box;resize:vertical">'
       +escapeHtml(m?m.texte:'')+'</textarea>'
       +'<div style="display:flex;gap:6px;margin-top:8px">'
-      +'<button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="motEnregistrer()">Enregistrer</button>'
-      +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0" onclick="motAnnuler()">Annuler</button>'
+      +'<button class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="motEnregistrer()">Enregistrer</button>'
+      +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0" data-on-click="motAnnuler()">Annuler</button>'
       +'</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">'
       +escapeHtml(MOT_COACH_MENTION)+'</div></div>';
@@ -32337,7 +32712,7 @@ function renderMotCoach(){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;white-space:pre-wrap">'
     +escapeHtml(m.texte)+'</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0" '
-    +'onclick="motOuvrir()">Modifier</button></div>';
+    +'data-on-click="motOuvrir()">Modifier</button></div>';
   return true;
 }
 function motOuvrir(){ _motEdition=true; renderMotCoach(); return true; }
@@ -32548,7 +32923,7 @@ function _jrHtmlNote(n,nom){
     +escapeHtml(_jrDate(n.at))+(nom?' · '+escapeHtml(nom):'')
     +(n.tag?' · <span style="color:var(--sub)">'+escapeHtml(NOTE_TAG_LIB[n.tag]||n.tag)+'</span>':'')
     +'</span>'
-    +'<button class="hit44" onclick="jrSupprimer('+JSON.stringify(n.id).replace(/"/g,'&quot;')+')"'
+    +'<button class="hit44" data-on-click="jrSupprimer('+JSON.stringify(n.id).replace(/"/g,'&quot;')+')"'
     +' aria-label="Supprimer cette note" style="background:none;border:none;color:var(--text-faint);'
     +'font-size:var(--fs-lg);line-height:1;cursor:pointer;min-width:44px;min-height:44px;margin:-12px -10px -12px 0;'
     +'flex-shrink:0">×</button></div>'
@@ -32598,8 +32973,8 @@ function _tunnelHistorique(codeId){
     +'</div>'+frise+ech
     +(n<TUNNEL_MAX
       ?'<div style="display:flex;gap:6px;margin-top:12px">'
-       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelRelancer(\''+escapeHtml(codeId)+'\')">Relancer</button>'
-       +'<button type="button" class="btn btn-blanc btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelPlanifier(\''+escapeHtml(codeId)+'\')">'
+       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" data-on-click="tunnelRelancer(\''+escapeHtml(codeId)+'\')">Relancer</button>'
+       +'<button type="button" class="btn btn-blanc btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" data-on-click="tunnelPlanifier(\''+escapeHtml(codeId)+'\')">'
        +(k.prochaine?'Replanifier':'Planifier')+'</button></div>'
       :'')
     +'</div>';
@@ -32625,7 +33000,7 @@ function renderJournalCoach(c){
     corps=fil.length
       ?vues.map(n=>_jrHtmlNote(n,null)).join('')
         +(fil.length>vues.length||_jrTout
-          ?'<button onclick="jrBasculerTout()" style="background:none;border:none;color:var(--link);'
+          ?'<button data-on-click="jrBasculerTout()" style="background:none;border:none;color:var(--link);'
            +'font-family:inherit;font-size:var(--fs-xs);text-decoration:underline;cursor:pointer;padding:2px 0;'
            +'min-height:34px">'+(_jrTout?'réduire':'tout voir ('+fil.length+')')+'</button>'
           :'')
@@ -32643,7 +33018,7 @@ function renderJournalCoach(c){
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Mes notes</span>'
     +'</div>'
     +'<input id="jr-q" type="search" inputmode="search" placeholder="Chercher dans tous tes fils"'
-    +' value="'+escapeHtml(_jrQ)+'" oninput="jrChercher()" style="width:100%;margin-bottom:10px">'
+    +' value="'+escapeHtml(_jrQ)+'" data-on-input="jrChercher()" style="width:100%;margin-bottom:10px">'
     +corps
     +(surCode
       ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
@@ -32657,7 +33032,7 @@ function renderJournalCoach(c){
        // et la plupart n'ont rien a rappeler.
        +'<input type="date" id="jr-echeance" title="À revoir le… (facultatif)"'
        +' style="flex:1;min-width:0"'+'>'
-       +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="jrAjouter()">Enregistrer</button>'
+       +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="jrAjouter()">Enregistrer</button>'
        +'</div>'
        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
        +'</div>')
@@ -32999,7 +33374,7 @@ function _majBoutonBilan(c){
              catch(e){ quand=''; } }
   }
   z.innerHTML='<div class="ccd-tete-a">'
-    +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans()">'
+    +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" data-on-click="viewClientBilans()">'
     +(neuf?'<span class="ccd-tete-pt"></span>':'')
     +'<span class="ccd-tete-bt">'+(neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
     +(quand?('<small>reçu le '+escapeHtml(quand)+'</small>'):'')
@@ -33308,7 +33683,7 @@ function _htmlTiroirAthlete(c){
   return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
     +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;'
     +'text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(nom)+'</span>'
-    +'<button type="button" onclick="_tiroirFermer()" aria-label="Fermer le panneau" '
+    +'<button type="button" data-on-click="_tiroirFermer()" aria-label="Fermer le panneau" '
     +'style="background:none;border:none;color:var(--sub);font-size:var(--fs-md);'
     +'cursor:pointer;line-height:1;flex:none">×</button></div>'
     // RIEN QUAND RIEN N'EST MESURE : un panneau de six tirets ne dirait rien
@@ -33316,7 +33691,7 @@ function _htmlTiroirAthlete(c){
     +(corps||'<div style="font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.55;margin-top:8px">Aucune mesure encore.</div>')
     +'<button type="button" class="btn btn-red btn-sm" style="width:100%;margin-top:14px" '
-    +'onclick="openClientDetail(\''+String(c.id||'').replace(/'/g,'')+'\',false,true)">Ouvrir la fiche</button>';
+    +'data-on-click="openClientDetail(\''+String(c.id||'').replace(/'/g,'')+'\',false,true)">Ouvrir la fiche</button>';
 }
 function _tiroirOuvrir(cid){
   try{
@@ -33622,7 +33997,7 @@ function openClientDetail(cid,_refresh,_force){
         <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
       </div>`:''}
-      <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('',${jsArg(c.id)})" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
+      <button class="btn btn-outline btn-sm" data-on-click="ouvrirFormContrainte('',${jsArg(c.id)})" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
       ${blocDisclaimerSante()}
     </div>`;
   }
@@ -33668,7 +34043,7 @@ function openClientDetail(cid,_refresh,_force){
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
-        <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:6px" data-on-click="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
       </div>`:''}
     </div>`}).join('');
   }
@@ -33698,8 +34073,8 @@ function openClientDetail(cid,_refresh,_force){
         <div class="cvv-n">${escapeHtml(v.name)}</div>
         <div class="cvv-d">${new Date(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
       </div>
-      <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection(${jsArg(c.email)},${jsArg(v.id)})">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
-      ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses(${jsArg(c.email)},${jsArg(v.id)})">Comparer avec…</button>`:''}
+      <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" data-on-click="openVideoCorrection(${jsArg(c.email)},${jsArg(v.id)})">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
+      ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" data-on-click="comparerAnalyses(${jsArg(c.email)},${jsArg(v.id)})">Comparer avec…</button>`:''}
     </div>`).join('')}`);
 
   _majDemandesVideo();
@@ -33805,7 +34180,7 @@ function _htmlDemandesVideo(c){
           </select></span>
         <span class="dv-champ-fl" aria-hidden="true">${_DV_ICO_FLECHE}</span>
       </label>
-      <button type="button" class="dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
+      <button type="button" class="dv-btn" data-on-click="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
     </div>
     <div class="dv-pied">
       <span class="dv-info" aria-hidden="true">${_DV_ICO_INFO}</span>
@@ -34508,15 +34883,15 @@ function renderBilanEvolution(c){
         const img=_p&&(_p.src||(_p.cle?' ':''));
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
-          ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+          ?`<div data-cap="${safeCap}" data-on-click="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
               <div style="padding:6px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
-              <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
+              <input type="file" accept="image/*" style="display:none" data-on-change="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
               <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
               <div style="font-size:var(--fs-xs);color:#aaa;font-weight:700">B${i+1}</div>
               <div style="font-size:var(--fs-xs);color:#888">${date}</div>
@@ -34553,8 +34928,8 @@ function renderBilanEvolution(c){
       .some(q=>_texteReponse(b[q.k]))).length;
   const html=`<div class="pad" style="padding-bottom:40px">
     <div style="display:flex;gap:8px;margin-bottom:20px">
-      <button class="btn btn-red btn-sm" style="flex:1" data-evo-tab="mesures" onclick="evoTab('mesures')">Mesures</button>
-      <button class="btn btn-outline btn-sm" style="flex:1" data-evo-tab="reponses" onclick="evoTab('reponses')">Réponses${_avecRep?' ('+_avecRep+')':''}</button>
+      <button class="btn btn-red btn-sm" style="flex:1" data-evo-tab="mesures" data-on-click="evoTab('mesures')">Mesures</button>
+      <button class="btn btn-outline btn-sm" style="flex:1" data-evo-tab="reponses" data-on-click="evoTab('reponses')">Réponses${_avecRep?' ('+_avecRep+')':''}</button>
     </div>
     <div data-evo-pane="mesures">
       ${buildPhotos()}
@@ -36260,6 +36635,15 @@ function _garnirSeanceVierge(s){
   return s;
 }
 let progEx=[];
+// Les repetitions d'une ligne de l'editeur de programme. Une valeur negative
+// est refusee et le champ reprend l'ancienne.
+function progExPoserReps(i,champ){
+  if(/^-\d+$/.test(champ.value.trim())){
+    toast('Reps invalides : valeur négative non autorisée','var(--orange)');
+    champ.value=progEx[i].reps||''; return;
+  }
+  _progExDirty=true; progEx[i].reps=champ.value;
+}
 let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
 let _editProgTemplateIdx=null, _editProgTemplateGender='H', _assigningProgIdx=null;
@@ -36367,7 +36751,7 @@ function _htmlCarteProgVitrine(p){
   const vis=String(o.visuel||'').trim();
   return '<div class="vpr-c">'
     +(vis?('<img class="vpr-img" src="'+escapeHtml(vis)+'" alt="" loading="lazy" '
-           +'onerror="this.style.display=\'none\'">'):'')
+           +'data-on-error="this.style.display=\'none\'">'):'')
     +'<div class="vpr-b">'
     +'<div class="vpr-n">'+escapeHtml(nom)+'</div>'
     +(pitch?('<div class="vpr-p">'+escapeHtml(pitch)+'</div>'):'')
@@ -36375,7 +36759,7 @@ function _htmlCarteProgVitrine(p){
     // LE BOUTON N'APPARAIT QUE S'IL MENE QUELQUE PART. Un « Voir le programme »
     // qui n'ouvre rien est pire que pas de bouton : il fait croire a une panne.
     +(lien?('<a class="vpr-btn" href="'+safeUrl(lien)+'" target="_blank" '
-            +'rel="noopener noreferrer" onclick="rcmAchatProgramme()">Voir le programme</a>'):'')
+            +'rel="noopener noreferrer" data-on-click="rcmAchatProgramme()">Voir le programme</a>'):'')
     +'</div></div>';
 }
 // L'EVENEMENT DU DEPART. Il ne bloque rien et ne rend rien : le lien s'ouvre
@@ -36572,7 +36956,7 @@ function _htmlCplVersion(i,genre,p){
   const sym=(PROG_PUBLICS.find(x=>x.cle===genre)||{}).sym||'';
   return '<button type="button" class="cpl-v'+(n?'':' cpl-v-vide')+'" '
     +'data-pub="'+genre+'" '
-    +'onclick="editCoachProgTemplate('+i+',\''+genre+'\')">'
+    +'data-on-click="editCoachProgTemplate('+i+',\''+genre+'\')">'
     // ⚠ LE SIGNE EST DANS SON PROPRE SPAN, hors de `.cpl-v-g`. Le test de la
     //   rangee lit le libelle de cette classe et le compare au mot exact :
     //   l'y coller aurait rendu « ♂Homme » et casse une assertion qui parle du
@@ -36610,7 +36994,7 @@ function _htmlCplCarte(p,i,premier,dernier){
     +PROG_PUBLICS.map(x=>'<button type="button" role="radio" aria-checked="'+(x.cle===pu)+'"'
       +' class="cpl-pub-b'+(x.cle===pu?' on':'')+'" data-pub="'+x.cle+'"'
       +' title="'+escapeHtml(x.dit)+'"'
-      +' onclick="progPublicPoser('+i+',\''+x.cle+'\')">'
+      +' data-on-click="progPublicPoser('+i+',\''+x.cle+'\')">'
       +'<span class="cpl-pub-s" aria-hidden="true">'+x.sym+'</span>'
       +'<span class="cpl-pub-l">'+escapeHtml(x.lib)+'</span></button>').join('')
     +'</div>';
@@ -36636,7 +37020,7 @@ function _htmlCplCarte(p,i,premier,dernier){
   const vis=String(p.visuel||'').trim();
   const vign=vis
     ? '<div class="cpl-vig" aria-hidden="true">'
-      +'<img src="'+escapeHtml(vis)+'" alt="" loading="lazy" onerror="this.closest(\'.cpl-vig\').remove()">'
+      +'<img src="'+escapeHtml(vis)+'" alt="" loading="lazy" data-on-error="this.closest(\'.cpl-vig\').remove()">'
       +'</div>'
     : '';
   return '<div class="cpl-c'+(vis?' cpl-c-vig':'')+'">'
@@ -36654,20 +37038,20 @@ function _htmlCplCarte(p,i,premier,dernier){
       +(pu==='F'?'':_htmlCplVersion(i,'H',p))
       +(pu==='H'?'':_htmlCplVersion(i,'F',p))+'</div>'
     +'<div class="cpl-actions">'
-      +'<button class="btn btn-red btn-sm" onclick="openAssignProgram('+i+')">Assigner</button>'
+      +'<button class="btn btn-red btn-sm" data-on-click="openAssignProgram('+i+')">Assigner</button>'
       // L'ICONE DIT LEQUEL DES DEUX GESTES C'EST : le panier quand il s'agit
       // d'ouvrir la vente, le crayon quand elle est deja ouverte.
-      +'<button class="btn btn-outline btn-sm" onclick="'+vendre+'">'
+      +'<button class="btn btn-outline btn-sm" data-on-click="'+vendre+'">'
         +'<span class="cpl-ic" aria-hidden="true">'+icon(on?'pencil':'cart',15)+'</span>'
         +(on?'Modifier la vente':'Mettre en vente')+'</button>'
     +'</div>'
     // N4.18 — L'ORDRE SE REGLE, dans le rayon : les MEMES fleches que
     // l'editeur d'exercices, pour une liste qu'on reordonne trois fois par an.
     +'<div class="cpl-pied">'
-      +'<button type="button" class="cpl-mini" onclick="cplDeplacer('+i+',-1)"'+(premier?' disabled':'')+' aria-label="Monter ce programme">▲</button>'
-      +'<button type="button" class="cpl-mini" onclick="cplDeplacer('+i+',1)"'+(dernier?' disabled':'')+' aria-label="Descendre ce programme">▼</button>'
-      +'<button type="button" class="cpl-mini" onclick="duplicateCoachProgTemplate('+i+')">⧉ Dupliquer</button>'
-      +'<button type="button" class="cpl-mini cpl-sup" onclick="deleteCoachProgTemplate('+i+')">Supprimer</button>'
+      +'<button type="button" class="cpl-mini" data-on-click="cplDeplacer('+i+',-1)"'+(premier?' disabled':'')+' aria-label="Monter ce programme">▲</button>'
+      +'<button type="button" class="cpl-mini" data-on-click="cplDeplacer('+i+',1)"'+(dernier?' disabled':'')+' aria-label="Descendre ce programme">▼</button>'
+      +'<button type="button" class="cpl-mini" data-on-click="duplicateCoachProgTemplate('+i+')">⧉ Dupliquer</button>'
+      +'<button type="button" class="cpl-mini cpl-sup" data-on-click="deleteCoachProgTemplate('+i+')">Supprimer</button>'
     +'</div></div>';
 }
 // « DANS LA BOUTIQUE », pour le createur seul : les programmes vendus qu'aucun
@@ -36683,7 +37067,7 @@ function _htmlCplBoutique(){
     if(!e||!e.nom) return '';
     return '<div class="cpl-bq">'
       +'<div class="cpl-bq-img" aria-hidden="true">'
-        +(e.image?'<img src="'+escapeHtml(e.image)+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</div>'
+        +(e.image?'<img src="'+escapeHtml(e.image)+'" alt="" loading="lazy" data-on-error="this.remove()">':'')+'</div>'
       +'<div class="cpl-bq-c"><div class="cpl-bq-n">'+escapeHtml(e.nom)+'</div>'
         // ⚠ UN EMPLACEMENT A COMPLETER SE VOIT ICI, ET NULLE PART AILLEURS
         //   (lot 8). C'est l'ecran ou Kevin le remplira : le cacher ici
@@ -36692,7 +37076,7 @@ function _htmlCplBoutique(){
         +'<div class="cpl-bq-p">'+(e.aCompleter
           ?'À compléter, pas encore en vente'
           :(prixProgramme(e)+' · '+(e.masque?'Retiré de la vente':'En vente')))+'</div></div>'
-      +'<button class="btn btn-outline btn-sm" onclick="ouvrirFicheVente(\''+escapeHtml(id)+'\')">'
+      +'<button class="btn btn-outline btn-sm" data-on-click="ouvrirFicheVente(\''+escapeHtml(id)+'\')">'
       +(e.aCompleter?'Compléter':'Modifier')+'</button>'
       +'</div>';
   }).join('');
@@ -36731,7 +37115,7 @@ function _htmlCplHero(){
   return '<header class="cpl-hero">'
     +'<div class="cpl-hero-marque">'
       +'<div class="cpl-hero-l" aria-hidden="true">'
-        +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
+        +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" data-on-error="this.remove()">'
              :'<span>'+escapeHtml(ini)+'</span>')
       +'</div>'
       +(nom?'<div class="cpl-hero-n">'+escapeHtml(nom)+'</div>':'')
@@ -36747,7 +37131,7 @@ function _htmlCplHero(){
     +'<div class="cpl-hero-f">'
       +PROG_PUBLICS.map(x=>'<button type="button" class="cpl-f'+(f===x.cle?' on':'')+'"'
         +' data-pub="'+x.cle+'"'
-        +' aria-pressed="'+(f===x.cle)+'" onclick="cplFiltrer(\''+x.cle+'\')">'
+        +' aria-pressed="'+(f===x.cle)+'" data-on-click="cplFiltrer(\''+x.cle+'\')">'
         +'<span class="cpl-f-s" aria-hidden="true">'+x.sym+'</span>'
         +escapeHtml(x.lib)+'</button>').join('')
     +'</div></header>';
@@ -36772,7 +37156,7 @@ function _htmlCplBandeau(titre,aide){
   const ini=(nom.match(/\S/)||['R'])[0].toUpperCase();
   return '<div class="cpl-band">'
     +'<div class="cpl-band-l" aria-hidden="true">'
-      +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" onerror="this.remove()">'
+      +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" data-on-error="this.remove()">'
            :'<span>'+escapeHtml(ini)+'</span>')
     +'</div>'
 
@@ -36924,7 +37308,7 @@ function loadCoachProgramsList(){
     const lib=(PROG_PUBLICS.find(x=>x.cle===_cplFiltre)||{}).lib||'';
     container.insertAdjacentHTML('beforeend',
       '<p class="cpl-vide">Aucun programme « '+escapeHtml(lib)+' » pour l’instant. '
-      +'<button type="button" class="cpl-vide-b" onclick="cplFiltrer(\''+_cplFiltre+'\')">'
+      +'<button type="button" class="cpl-vide-b" data-on-click="cplFiltrer(\''+_cplFiltre+'\')">'
       +'Revoir tout le catalogue</button></p>');
   }
 }
@@ -37542,7 +37926,7 @@ function loadProgTemplateSlots(gender){
   // a essayer pour savoir.
   try{ renderPropagationEntree(); }catch(e){}
   const zr=document.getElementById('cpt-report');
-  if(zr) zr.innerHTML=`<button class="btn btn-outline btn-sm" onclick="cptReporterGenre()" style="width:100%;margin:0 0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Reporter ${gender==='H'?'HOMME → FEMME':'FEMME → HOMME'}</button>`;
+  if(zr) zr.innerHTML=`<button class="btn btn-outline btn-sm" data-on-click="cptReporterGenre()" style="width:100%;margin:0 0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Reporter ${gender==='H'?'HOMME → FEMME':'FEMME → HOMME'}</button>`;
   const container=document.getElementById('cpt-session-slots');if(!container)return;
   container.innerHTML=sessions.map((s,i)=>`
     <div style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">
@@ -37554,7 +37938,7 @@ function loadProgTemplateSlots(gender){
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
           </div>
         </div>
-        <div onclick="cptToggleDay(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div data-on-click="cptToggleDay(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;flex-shrink:0" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:${s.active?'23px':'3px'}"></div>
         </div>
       </div>
@@ -37562,9 +37946,9 @@ function loadProgTemplateSlots(gender){
       <div style="padding:14px 16px">
         <div style="margin-bottom:12px">
           <label style="margin-top:0">Nom de la séance</label>
-          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: PECS & TRICEPS" onchange="cptRenameSession(${i},this.value)" style="margin-top:4px">
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: PECS & TRICEPS" data-on-change="cptRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
-        <button class="btn btn-red btn-sm" style="width:100%" onclick="openProgTemplateSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+        <button class="btn btn-red btn-sm" style="width:100%" data-on-click="openProgTemplateSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
         ${_boutonsCopieJour('cptCopyDay',i)}
       </div>`:''}
     </div>
@@ -37869,13 +38253,13 @@ function ouvrirBilanBloc(){
   let b=null; try{ b=bilanBloc(c); }catch(e){ b=null; }
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Bilan du bloc" class="bb-feuille">'
+    '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Bilan du bloc" class="bb-feuille">'
     +'<h2 class="bb-t">Bilan du bloc</h2>'+htmlBilanBloc(b)
     // Et la suite : le bloc suivant à assigner, l'athlète suivant de la file.
     +_htmlSuiteBilanBloc(c)
-    +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" onclick="bilanBlocExporter()">Exporter</button>':'')
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div></div>');
+    +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" data-on-click="bilanBlocExporter()">Exporter</button>':'')
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="closeModal()">Fermer</button></div></div></div>');
   return true;
 }
 // L'EXPORT : le même chemin que les exports morpho (iframe srcdoc, polices du
@@ -37921,7 +38305,7 @@ function htmlBlocProgramme(c){
     +'Aucun bloc défini : le programme ci-dessous vaut semaine après semaine, '
     +'sans début ni fin, et sans décharge planifiée.</div>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
-    +'onclick="reglerBlocProgramme()">Définir un bloc</button></div>';
+    +'data-on-click="reglerBlocProgramme()">Définir un bloc</button></div>';
   const dep=new Date(p.debut);
   // Le DERNIER JOUR du bloc (le dimanche de sa dernière semaine), celui de finProgramme,
   // et non le lundi de la dernière semaine : « au 28 sept. » pour un bloc qui court jusqu'au 4 octobre.
@@ -37941,12 +38325,12 @@ function htmlBlocProgramme(c){
               :' · semaine '+(i+1)+' en cours')+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
-    +'onclick="reglerBlocProgramme()">Modifier le bloc</button>'
+    +'data-on-click="reglerBlocProgramme()">Modifier le bloc</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
-    +'onclick="retirerBlocProgramme()">Retirer</button>'
+    +'data-on-click="retirerBlocProgramme()">Retirer</button>'
     // LOT T7 : le bilan, en cours de bloc comme à sa fin (lu jusqu'à aujourd'hui).
     +'<button class="btn btn-outline btn-sm bb-ouvrir" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
-    +'onclick="ouvrirBilanBloc()">Bilan du bloc</button>'
+    +'data-on-click="ouvrirBilanBloc()">Bilan du bloc</button>'
     +'</div></div>';
 }
 async function reglerBlocProgramme(){
@@ -38034,14 +38418,15 @@ function renderCoachSessionsBloc(){
   const c=getOwnedClient(currentClientId);
   z.innerHTML=c?htmlBlocProgramme(c):'';
 }
+// actions-en-plus: cptCopyDay coachCopyDay
 function _boutonsCopieJour(fn,i){
   return `<div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
     <span class="sub" style="font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Copier vers</span>
-    ${DAYS.map((d,j)=>j===i?'':`<button onclick="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);min-width:44px;min-height:44px;padding:4px 8px;font-size:var(--fs-xs);font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
+    ${DAYS.map((d,j)=>j===i?'':`<button data-on-click="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);min-width:44px;min-height:44px;padding:4px 8px;font-size:var(--fs-xs);font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
     <!-- N4.17, ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
          athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
          seul appelant qui en ait un. -->
-    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
+    ${fn==='coachCopyDay'?`<button data-on-click="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
   </div>`;
 }
 function _copierSeance(src,dst){
@@ -38289,8 +38674,8 @@ function loadAssignAthletes(){
         ${(()=>{ const x=programmeRemplace(a); return x?`<div class="c4-encours">Programme en cours${x.nom?' : '+escapeHtml(x.nom):''}${x.bloc?', semaine '+x.bloc.semaine+' sur '+x.bloc.semaines:''}</div>`:''; })()}
       </label>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'var(--text)':'var(--sub)'}">H</button>
-        <button onclick="cpaSwitchGender('${a.id}','F')" id="cpa-g-F-${a.id}" style="padding:4px 10px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${defG==='F'?'var(--red)':'#222'};color:${defG==='F'?'var(--text)':'var(--sub)'}">F</button>
+        <button data-on-click="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'var(--text)':'var(--sub)'}">H</button>
+        <button data-on-click="cpaSwitchGender('${a.id}','F')" id="cpa-g-F-${a.id}" style="padding:4px 10px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${defG==='F'?'var(--red)':'#222'};color:${defG==='F'?'var(--text)':'var(--sub)'}">F</button>
       </div>
     </div>
   `;}).join('');
@@ -38659,13 +39044,13 @@ let _c4Recap=null;
 function ouvrirRecapAssignation(recap,prog){
   _c4Recap={recap,prog};
   const n=recap.length, morpho=recap.filter(r=>r.morpho&&r.morpho.length).length;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">Avant d’assigner</h2>
     <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px">« ${escapeHtml(prog.name||'Ce programme')} » à ${n} athlète${n>1?'s':''}. Rien n’est écrit tant que tu n’as pas confirmé.${morpho?' La revue morpho signale des réglages chez '+morpho+' d’entre eux : aucun exercice n’est retiré, tu ajustes si tu veux.':''}</p>
     <div id="c4-recap">${recap.map(_htmlRecapLigne).join('')}</div>
-    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="assignerDepuisRecap()">Assigner</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" data-on-click="assignerDepuisRecap()">Assigner</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -38719,7 +39104,7 @@ function renderPropagationEntree(){
   const aReporter=us.filter(x=>{ const o=opsPourAthlete(p,x.a); return !o.aJour&&o.ops.length; }).length;
   z.innerHTML='<div class="c4-entree"><span>'+us.length+' athlète'+(us.length>1?'s':'')+' l’utilise'+(us.length>1?'nt':'')
     +(aReporter?', '+aReporter+' n’'+(aReporter>1?'ont':'a')+' pas la dernière version':', tous à jour')+'.</span>'
-    +(aReporter?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirPropagation()">Reporter chez les athlètes qui l’utilisent</button>':'')+'</div>';
+    +(aReporter?'<button type="button" class="btn btn-outline btn-sm" data-on-click="ouvrirPropagation()">Reporter chez les athlètes qui l’utilisent</button>':'')+'</div>';
   return true;
 }
 function _c4LibOp(op){
@@ -38756,13 +39141,13 @@ function ouvrirPropagation(){
           +(r.detail?'<em>'+E(r.detail)+'</em>':'')+'</span></label>';
       }).join(''):'<div class="sub c4-vide">Déjà comme le modèle.</div>')+'</div>';
   }).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">Reporter la correction</h2>
     <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px">Seul le prescrit à venir change. Les séances faites, les charges saisies et ses réglages personnels ne bougent pas. Ce qui a été ajusté chez lui arrive décoché.</p>
     <div id="c4-prop">${corps}</div>
-    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="reporterPropagation()">Reporter</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" data-on-click="reporterPropagation()">Reporter</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -38822,17 +39207,17 @@ function openApplyTemplate(){
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="_atSwitchGenre(${i},'H')" id="at-g-H-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='H')};color:${fg(genreDefaut==='H')}">H</button>
-        <button onclick="_atSwitchGenre(${i},'F')" id="at-g-F-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='F')};color:${fg(genreDefaut==='F')}">F</button>
-        <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="applyTemplateToClient(${i})">Enregistrer</button>
+        <button data-on-click="_atSwitchGenre(${i},'H')" id="at-g-H-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='H')};color:${fg(genreDefaut==='H')}">H</button>
+        <button data-on-click="_atSwitchGenre(${i},'F')" id="at-g-F-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='F')};color:${fg(genreDefaut==='F')}">F</button>
+        <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="applyTemplateToClient(${i})">Enregistrer</button>
       </div>
     </div>`).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div class="mdl-large" data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">Appliquer un modèle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
     ${lignes}
-    <button class="btn btn-outline" style="margin-top:14px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-outline" style="margin-top:14px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -39003,7 +39388,7 @@ function renderSessionsHistory(){
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text-strong)">${escapeHtml(d)}</div>
         <div class="sub" style="font-size:var(--fs-xs)">${actifs} jour${actifs>1?'s':''} actif${actifs>1?'s':''}</div>
       </div>
-      <button class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0" onclick="restaurerSessionsConfig(${i})">Restaurer</button>
+      <button class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0" data-on-click="restaurerSessionsConfig(${i})">Restaurer</button>
     </div>`;
   }).join('');
 }
@@ -39067,7 +39452,7 @@ function loadCoachSessionSlots(){
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px" id="csm-sub-${i}">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
           </div>
         </div>
-        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div data-on-click="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>
         </div>
       </div>
@@ -39075,13 +39460,13 @@ function loadCoachSessionSlots(){
       <div style="padding:14px 16px">
         <div style="margin-bottom:12px">
           <label style="margin-top:0">Nom de la séance</label>
-          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" data-on-change="coachRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
         <label class="hit44" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
-          <input type="checkbox" ${s.deload?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+          <input type="checkbox" ${s.deload?'checked':''} data-on-change="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
           Séance de décharge : elle ne comptera pas dans la détection de plateau
         </label>
-        <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+        <button class="btn btn-red btn-sm" style="width:100%" data-on-click="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
         ${_boutonsCopieJour('coachCopyDay',i)}
       </div>`:''}
     </div>
@@ -40061,8 +40446,8 @@ function _bqLigne(f){
   const fav=estFavoriExo(f.slug);
   const sous=[(f.muscles||[]).slice(0,2).map(m=>(MUSCLES[m]||{}).lib||m).join(', '),
     f.materiel||''].filter(Boolean).join(' · ');
-  return `<div onclick="bqChoisir('${escapeHtml(f.slug)}')" role="button" tabindex="0"
-    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+  return `<div data-on-click="bqChoisir('${escapeHtml(f.slug)}')" role="button" tabindex="0"
+    data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     class="bq-l"
     style="display:flex;align-items:center;gap:12px;background:var(--surface-1);
     border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:8px;
@@ -40070,7 +40455,7 @@ function _bqLigne(f){
     ${img?`<img src="${escapeHtml(img)}"${_srcset}
       alt="" loading="lazy" decoding="async" width="64" height="48"
       data-plein="${escapeHtml(img2x||'')}"
-      onerror="_illusAbsente(this)"
+      data-on-error="_illusAbsente(this)"
       style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
       // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
@@ -40081,11 +40466,11 @@ function _bqLigne(f){
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3">${escapeHtml(f.nom)}${f.perso?' <span style="color:var(--sub);font-weight:600">· perso</span>':''}</div>
       ${sous?`<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">${escapeHtml(sous)}</div>`:''}
     </div>
-    <button onclick="bqFavori('${escapeHtml(f.slug)}',event)" aria-label="Favori"
+    <button data-on-click="bqFavori('${escapeHtml(f.slug)}',event)" aria-label="Favori"
       style="background:none;border:none;font-size:var(--fs-xl);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
       color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'★':'☆'}</button>
-    <button onclick="ouvrirFicheBanque('${escapeHtml(f.slug)}',event)" aria-label="Détail"
+    <button data-on-click="ouvrirFicheBanque('${escapeHtml(f.slug)}',event)" aria-label="Détail"
       style="background:none;border:none;font-size:var(--fs-lg);line-height:1;cursor:pointer;width:40px;
       height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
       color:var(--sub);flex-shrink:0">ⓘ</button>
@@ -40104,10 +40489,12 @@ function _bqRendreFiltres(){
     if(!vals.length) return '';
     return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch">`
       +vals.map(v=>`<button class="pf-chip${_bqFiltres[fam.cle]===v?' active':''}"
-        onclick="_bqBasculerFiltre('${fam.cle}','${escapeHtml(String(v))}')">${escapeHtml(fam.libelle(v))}</button>`).join('')
+        data-on-click="_bqBasculerFiltre('${fam.cle}','${escapeHtml(String(v))}')">${escapeHtml(fam.libelle(v))}</button>`).join('')
       +`</div>`;
   }).join('');
 }
+// Le geste « Réessayer » de l'état vide : recharge la banque, puis la rend.
+function bqRecharger(){ return chargerBanque(true).then(()=>_bqRendre()); }
 function _bqRendre(){
   const z=document.getElementById('bq-liste'); if(!z) return;
   // ══ LE VERROU (lot 4) : l'ecran garde sa barre et son titre ; la liste dit
@@ -40134,7 +40521,7 @@ function _bqRendre(){
     z.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Banque indisponible</strong>'
       +'<br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Elle n\'a pas encore '
       +'été téléchargée sur cet appareil. Reconnecte-toi au réseau, puis réessaie.</span>',
-      'Réessayer','chargerBanque(true).then(()=>_bqRendre())');
+      'Réessayer','bqRecharger()');
     return;
   }
   if(!res.length){
@@ -40198,7 +40585,7 @@ function _bqPuceMuscle(muscles){
   const z=document.getElementById('bq-puce-muscle'); if(!z) return false;
   const m=(muscles||[])[0];
   if(!m||!MUSCLES[m]||_bqFiltres.muscle===m){ z.innerHTML=''; return false; }
-  z.innerHTML=`<button class="pf-chip" onclick="_bqFiltrerMuscle('${m}')"
+  z.innerHTML=`<button class="pf-chip" data-on-click="_bqFiltrerMuscle('${m}')"
     style="border-color:${MUSCLES[m].c};color:${MUSCLES[m].c}">Filtrer sur ${escapeHtml(MUSCLES[m].lib)}</button>`;
   return true;
 }
@@ -40219,7 +40606,7 @@ function _bqTrop(n){
     +` Précise ta recherche ou pose un filtre.</div>`;
 }
 function _bqBoutonCreer(){
-  return '<button class="btn btn-red" style="margin-top:14px;width:100%" onclick="ouvrirCreationExo()">'
+  return '<button class="btn btn-red" style="margin-top:14px;width:100%" data-on-click="ouvrirCreationExo()">'
     +'+ Créer un exercice</button>';
 }
 
@@ -40265,10 +40652,10 @@ function ouvrirFicheBanque(slug,ev){
   // que les données portent réellement — inventer une liste de variantes
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div class="mdl-large" data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
-    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" decoding="async"${_d?` width="${_d[0]}" height="${_d[1]}"`:''} onerror="_illusAbsente(this)" style="display:block;margin:0 auto 12px;width:100%;${_d?`max-width:${_d[0]}px;`:''}height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">`
+    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" decoding="async"${_d?` width="${_d[0]}" height="${_d[1]}"`:''} data-on-error="_illusAbsente(this)" style="display:block;margin:0 auto 12px;width:100%;${_d?`max-width:${_d[0]}px;`:''}height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
     ${l('Muscles',(f.muscles||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '))}
     ${l('Schéma',SCHEMA_LIB[f.schema]||f.schema||'')}
@@ -40282,10 +40669,10 @@ function ouvrirFicheBanque(slug,ev){
     ${liste('Consignes',f.consignes)}
     ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:10px;font-size:var(--fs-sm);color:var(--link)">Vidéo technique${v.lib?' : '+escapeHtml(v.lib):''}</a>`).join('')}
     ${variantes.length?`<div style="margin-top:14px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Même schéma moteur</div>
-      ${variantes.map(v=>`<button class="pf-chip" style="margin:0 6px 6px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
-    <button class="btn btn-red" style="margin-top:16px" onclick="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
-    ${f.perso?`<button class="btn btn-outline" style="margin-top:10px;color:var(--red-light)" onclick="_supprimerExoPerso('${escapeHtml(f.slug)}')">Supprimer cet exercice</button>`:''}
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
+      ${variantes.map(v=>`<button class="pf-chip" style="margin:0 6px 6px 0" data-on-click="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
+    <button class="btn btn-red" style="margin-top:16px" data-on-click="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
+    ${f.perso?`<button class="btn btn-outline" style="margin-top:10px;color:var(--red-light)" data-on-click="_supprimerExoPerso('${escapeHtml(f.slug)}')">Supprimer cet exercice</button>`:''}
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -40302,8 +40689,8 @@ async function _supprimerExoPerso(slug){
 function ouvrirCreationExo(){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative : il n'y en aura pas.</p>
     <label for="ce-nom">Nom</label>
@@ -40317,8 +40704,8 @@ function ouvrirCreationExo(){
     <label for="ce-exec" style="margin-top:10px">Exécution (facultatif)</label>
     <textarea id="ce-exec" rows="4" placeholder="Ce que l'athlète doit faire, étape par étape."></textarea>
     <div id="ce-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:8px;display:none"></div>
-    <button class="btn btn-red" style="margin-top:14px" onclick="_validerCreationExo()">Créer</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:14px" data-on-click="_validerCreationExo()">Créer</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   setTimeout(()=>document.getElementById('ce-nom')?.focus(),80);
@@ -41522,11 +41909,11 @@ function _monterRepos(z){
     <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
          sert au moment où le son dérange : quelqu'un à côté, ou les écouteurs
          qu'on vient de retirer. -->
-    <button id="rep-son" class="rep-son hit44" onclick="basculerSonRepos()" aria-pressed="${_sonOn?'true':'false'}"
+    <button id="rep-son" class="rep-son hit44" data-on-click="basculerSonRepos()" aria-pressed="${_sonOn?'true':'false'}"
       aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
       title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}">${_icoSon(_sonOn,14)}</button>
     <div class="rep-corps">
-    <div class="rep-scene" role="button" tabindex="0" onclick="basculerCadranRepos()"
+    <div class="rep-scene" role="button" tabindex="0" data-on-click="basculerCadranRepos()"
       aria-label="Changer la taille du minuteur">
     <div class="rep-cadran">
       ${REPOS_ECLAIRS}
@@ -41555,11 +41942,11 @@ function _monterRepos(z){
     </div>
     </div>
     <div class="rep-actions">
-      <button class="rep-btn" onclick="ajusterRepos(-15)">
+      <button class="rep-btn" data-on-click="ajusterRepos(-15)">
         <span class="rep-btn-v">−15</span><span class="rep-btn-l">secondes</span></button>
-      <button class="rep-btn" onclick="ajusterRepos(15)">
+      <button class="rep-btn" data-on-click="ajusterRepos(15)">
         <span class="rep-btn-v">+15</span><span class="rep-btn-l">secondes</span></button>
-      <button class="rep-btn rep-btn-large" onclick="annulerRepos()">
+      <button class="rep-btn rep-btn-large" data-on-click="annulerRepos()">
         <span class="rep-btn-v rep-maj">Passer<span class="rep-chev">&#187;</span></span></button>
     </div>
     </div>
@@ -41855,7 +42242,7 @@ function _reposInviteSon(){
   z.dataset.type=m.type;
   z.innerHTML='<span class="rep-invite-t">'+escapeHtml(m.texte)+'</span>'
     +(m.lien?'<span class="rep-invite-sep" aria-hidden="true">·</span>'
-      +'<button type="button" class="rep-invite-b" onclick="activerSonDepuisRepos(event)">'+escapeHtml(m.lien)+'</button>':'');
+      +'<button type="button" class="rep-invite-b" data-on-click="activerSonDepuisRepos(event)">'+escapeHtml(m.lien)+'</button>':'');
   z.hidden=false;
   if(m.type==='propose') _compterVueSonRepos();
 }
@@ -42631,7 +43018,7 @@ function _selecteurTechnique(ex,i){
     +cles.map(k=>`<option value="${k}"${sel===k?' selected':''}>${escapeHtml(TECHNIQUES[k].nom+(TECHNIQUES[k].sous?' ('+TECHNIQUES[k].sous+')':''))}</option>`).join('');
   return `<div style="margin-bottom:10px">
     <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
-    <select ${cardio?'disabled':''} onchange="_progExTechnique(${i},this.value)"
+    <select ${cardio?'disabled':''} data-on-change="_progExTechnique(${i},this.value)"
       style="width:100%;box-sizing:border-box${cardio?';opacity:.45':''}">${opts}</select>
     ${m?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(m.desc)}
       ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
@@ -42642,7 +43029,7 @@ function _selecteurTechnique(ex,i){
     ${m?`<div style="margin-top:8px">
       <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Sur quelle(s) série(s)</label>
       <input value="${escapeHtml((ex&&ex.methodeSeries)||'')}" maxlength="40"
-        onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value;renderProgEx()"
+        data-on-change="_progExDirty=true;progEx[${i}].methodeSeries=this.value;renderProgEx()"
         placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
     ${_blocRegleMethode(ex,i)}
@@ -42679,7 +43066,7 @@ function _blocRegleMethode(ex,i){
     return '<div style="margin-top:6px;background:var(--surface-2);border:1px solid var(--border);'
       +'border-radius:var(--r-2);padding:8px 10px;font-size:var(--fs-2xs);color:var(--sub);line-height:1.55">'
       +'Règle d’emploi passée outre. C’est enregistré dans la fiche.'
-      +'<button onclick="_annulerForcageMethode('+i+')" style="background:none;border:none;padding:0 0 0 6px;'
+      +'<button data-on-click="_annulerForcageMethode('+i+')" style="background:none;border:none;padding:0 0 0 6px;'
       +'color:var(--link);font-size:var(--fs-2xs);cursor:pointer">revoir</button></div>';
   }
   const ev=_evaluerMethodeEditeur(ex);
@@ -42687,7 +43074,7 @@ function _blocRegleMethode(ex,i){
   return '<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);'
     +'border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
     +escapeHtml(ev.phrase)
-    +'<div style="margin-top:8px"><button onclick="_forcerMethode('+i+')" '
+    +'<div style="margin-top:8px"><button data-on-click="_forcerMethode('+i+')" '
     +'style="background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);'
     +'font-family:inherit;font-size:var(--fs-2xs);padding:6px 10px;cursor:pointer">Poser quand même</button></div>'
     +'</div>';
@@ -42922,7 +43309,7 @@ function renderProgEx(){
     // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
     const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
-      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
+      <button data-on-click="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
     </div>`;
     // Le badge de METHODE prime : il porte le nom exact du guide. Les badges
@@ -42937,17 +43324,17 @@ function renderProgEx(){
       <!-- Numéro + Nom -->
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
-          ${estTete?`<button type="button" class="px-poignee" aria-label="Déplacer ${escapeHtml(ex.name||'cet exercice')}" onpointerdown="_pxDragDebut(event,${i})">⠿</button>
+          ${estTete?`<button type="button" class="px-poignee" aria-label="Déplacer ${escapeHtml(ex.name||'cet exercice')}" data-on-pointerdown="_pxDragDebut(event,${i})">⠿</button>
           <span style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
-            <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
-            <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
+            <button type="button" class="px-mini" data-on-click="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
+            <button type="button" class="px-mini" data-on-click="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
           </span>`:''}
           <span style="background:#fff2;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 6px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
-          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" data-on-change="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
-          <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
+          <button data-on-click="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
+          <button data-on-click="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
       </div>
       <div style="padding:12px">
@@ -42961,8 +43348,8 @@ function renderProgEx(){
              bouton n'apparait donc pas dans SON editeur de seance. -->
         ${_bqDispo?`<div class="px-grp">Changer l'exercice</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
-          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
+          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
+          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
           </div>
         <!-- B2.10, L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
              Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
@@ -42994,13 +43381,13 @@ function renderProgEx(){
              dans le placeholder les aurait fait tronquer : trente et un
              caractères dans un champ de 106 px. -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
+          <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" data-on-change="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
             <label style="margin-top:0">Répétition</label>
-            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
+            <input value="${escapeHtml(ex.reps||'')}" data-on-change="progExPoserReps(${i},this)" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label style="margin-top:0">Repos</label><input class="px-court" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}" class="f-c f-sm"></div>
+          <div><label style="margin-top:0">Repos</label><input class="px-court" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" data-on-change="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}" class="f-c f-sm"></div>
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours,              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
              deux colonnes de la fiche imprimable, et ÉCRITS nulle part.
@@ -43017,7 +43404,7 @@ function renderProgEx(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <label>Charge cible</label>
-            <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg ou 75 %">
+            <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" data-on-change="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg ou 75 %">
             ${_htmlRepereCharge(ex)}
           </div>
           <div>
@@ -43029,7 +43416,7 @@ function renderProgEx(){
                  jamais effacee : un « 2-3 » tape a la main avant ce lot ne doit
                  pas disparaitre parce que la liste ne le connait pas. -->
             <label>RIR cible</label>
-            <select class="f-c" onchange="_progExDirty=true;progEx[${i}].rir=this.value">
+            <select class="f-c" data-on-change="_progExDirty=true;progEx[${i}].rir=this.value">
               ${_optionsRirCible(ex.rir)}
             </select>
             ${_direRirCible(ex.rir)?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:4px">${escapeHtml(_direRirCible(ex.rir))}</div>`:''}
@@ -43057,14 +43444,14 @@ function renderProgEx(){
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 : descente, bas, montée, haut)</span></label>
-          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
+          <input class="px-court" value="${escapeHtml(ex.tempo||'')}" data-on-change="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
              illisible partout où le nom sert de clef. -->
         <div style="margin-bottom:8px">
           <label>Matériel</label>
-          <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
+          <input value="${escapeHtml(ex.materiel||'')}" data-on-change="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
         </div>
         </div>
         ${_blocAvertissementContrainte(ex,i)}
@@ -43072,20 +43459,20 @@ function renderProgEx(){
         <!-- Description technique -->
         <div style="margin-bottom:8px">
           <label style="margin-top:0">Description / Technique</label>
-          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
+          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." data-on-change="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <div class="px-grp">MÉDIA</div>
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
-            <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
+            <input type="file" accept="image/*" style="display:none" data-on-change="_progExDirty=true;loadExImage(${i},this)">
             ${ex.image?`<img src="${srcImageAttr(ex.image)}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
             `<div style="width:60px;height:60px;border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);border:2px dashed var(--border)"></div>`}
           </label>
           <div style="flex:1">
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
+              <input value="${escapeHtml(ex.videoUrl||'')}" data-on-change="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
               ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
@@ -43096,7 +43483,7 @@ function renderProgEx(){
                  comporter pareil seraient deux champs à apprendre. -->
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:10px">2ᵉ lien vidéo (facultatif)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
+              <input value="${escapeHtml(ex.videoUrl2||'')}" data-on-change="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
               ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
@@ -43134,7 +43521,7 @@ function _majSommaireSeance(){
       +l.map((ex,i)=>{
         const nom=String((ex&&ex.name)||'').trim();
         return '<button type="button" class="pe-lien" data-rang="'+i+'" '
-          +'onclick="_sauterVersExercice('+i+')">'
+          +'data-on-click="_sauterVersExercice('+i+')">'
           +'<span class="pe-rang">'+(i+1)+'</span>'
           +'<span class="pe-nom">'+escapeHtml(nom||'Sans nom')+'</span></button>';
       }).join('');
@@ -43201,10 +43588,10 @@ function _htmlAlternativesEx(ex,i){
   return `<div class="px-grp">Remplaçants autorisés</div>
     <div class="alt-zone" style="margin-bottom:8px">
       <div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-bottom:6px">Jusqu’à ${ALTERNATIVES_MAX} mouvements que l’athlète pourra choisir d’un geste s’il doit remplacer celui-ci en séance.</div>
-      <div class="alt-l">${l.map((n,k)=>`<span class="alt-p">${escapeHtml(n)}<button type="button" class="alt-x" aria-label="Retirer ${escapeHtml(n)}" onclick="_altRetirer(${i},${k})">×</button></span>`).join('')}</div>
+      <div class="alt-l">${l.map((n,k)=>`<span class="alt-p">${escapeHtml(n)}<button type="button" class="alt-x" aria-label="Retirer ${escapeHtml(n)}" data-on-click="_altRetirer(${i},${k})">×</button></span>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-top:6px">
-        ${l.length<ALTERNATIVES_MAX?`<input list="rc-banque-noms" class="f-sm" style="flex:1;min-width:0" placeholder="Ajouter un mouvement de la banque" onchange="_altAjouter(${i},this)">`:''}
-        <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs);white-space:nowrap" onclick="_altSuggerer(${i})">Suggérer</button>
+        ${l.length<ALTERNATIVES_MAX?`<input list="rc-banque-noms" class="f-sm" style="flex:1;min-width:0" placeholder="Ajouter un mouvement de la banque" data-on-change="_altAjouter(${i},this)">`:''}
+        <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs);white-space:nowrap" data-on-click="_altSuggerer(${i})">Suggérer</button>
       </div>
     </div>`;
 }
@@ -43287,7 +43674,7 @@ function _htmlBoutonProgEx(ex,i){
   return `<div class="px-grp">Programmation</div>
     <div style="margin-bottom:8px">
       <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)"
-        onclick="ouvrirProgEx(${i})">${p?'Modifier la programmation':'Mettre en place une programmation'}</button>
+        data-on-click="ouvrirProgEx(${i})">${p?'Modifier la programmation':'Mettre en place une programmation'}</button>
       ${resume}
     </div>`;
 }
@@ -43346,12 +43733,12 @@ function _htmlLigneProgEx(s,i,max){
   return `<tr>
     <td style="padding:6px 4px;font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap">S${i+1}</td>
     <td style="padding:6px 4px"><input type="number" min="1" max="20" inputmode="numeric" value="${s.series==null?'':s.series}"
-      onchange="_progExChamp(${i},'series',this.value)" aria-label="Séries semaine ${i+1}"
+      data-on-change="_progExChamp(${i},'series',this.value)" aria-label="Séries semaine ${i+1}"
       style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
     <td style="padding:6px 4px"><input type="number" min="1" max="${RPE_REPS_MAX}" inputmode="numeric" value="${s.reps==null?'':s.reps}"
-      onchange="_progExChamp(${i},'reps',this.value)" aria-label="Répétitions semaine ${i+1}"
+      data-on-change="_progExChamp(${i},'reps',this.value)" aria-label="Répétitions semaine ${i+1}"
       style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
-    <td style="padding:6px 4px"><select onchange="_progExChamp(${i},'rpe',this.value)" aria-label="RPE semaine ${i+1}"
+    <td style="padding:6px 4px"><select data-on-change="_progExChamp(${i},'rpe',this.value)" aria-label="RPE semaine ${i+1}"
       style="width:100%;padding:6px 4px;margin:0"><option value="">-</option>${RPE_ECHELLE.slice().reverse().map(opt).join('')}</select></td>
     <td style="padding:6px 4px;text-align:right;white-space:nowrap;font-size:var(--fs-2xs)">
       ${kg!=null?`<b style="color:var(--text-strong)">${kg} kg</b><span style="color:var(--text-faint)"> · ${String(pct).replace('.',',')} %</span>`
@@ -43371,11 +43758,11 @@ function _rendreProgEx(){
       text-transform:uppercase;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nom)}</div>
     <label style="margin-top:0">Charge maximale sur 1 répétition (kg)</label>
     <input id="prog-ex-max" type="number" min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}" step="0.5" inputmode="decimal"
-      value="${b.max===''?'':b.max}" onchange="_progExMax(this.value)" placeholder="Ex : 145">
+      value="${b.max===''?'':b.max}" data-on-change="_progExMax(this.value)" placeholder="Ex : 145">
     ${rec}
     <label>Nombre de semaines</label>
     <input type="number" min="1" max="${PROG_EX_SEMAINES_MAX}" inputmode="numeric" value="${b.semaines.length}"
-      onchange="_progExSemaines(this.value)">
+      data-on-change="_progExSemaines(this.value)">
     <div style="overflow-x:auto;margin-top:12px" data-scroll-fade>
       <table style="width:100%;border-collapse:collapse;min-width:320px">
         <thead><tr>
@@ -43410,7 +43797,7 @@ function _htmlRappelRecord(nom){
   if(me&&me.valeur>0) bouts.push('max estimé '+me.valeur+' kg');
   if(!bouts.length) return '';
   return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
-    ${bouts.join(' · ')}${me&&me.valeur>0?` · <button type="button" onclick="_progExMax(${me.valeur});document.getElementById('prog-ex-max').value=${me.valeur}"
+    ${bouts.join(' · ')}${me&&me.valeur>0?` · <button type="button" data-on-click="_progExMax(${me.valeur});document.getElementById('prog-ex-max').value=${me.valeur}"
       style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer;padding:0;text-decoration:underline">reprendre</button>`:''}</div>`;
 }
 // VALIDER : c'est ICI, et seulement ici, que l'exercice est touche.
@@ -44270,8 +44657,8 @@ function loadClientHome(){
     const _l=ligneEcheance(currentUser);
     if(_z){
       _z.innerHTML=_l
-        ? '<div onclick="ouvrirEcheanceEcran()" role="button" tabindex="0" '
-          +'onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
+        ? '<div data-on-click="ouvrirEcheanceEcran()" role="button" tabindex="0" '
+          +'data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
           +'style="background:rgba(224,32,32,.07);border:1px solid var(--red);border-radius:var(--r-3);'
           +'padding:12px 14px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
           +escapeHtml(_l)+'</div>'
@@ -44578,7 +44965,7 @@ function loadClientHome(){
     if(!name){
       if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">${_accX('code')}
+      el.innerHTML=`<div data-acc data-on-click="go('s-client-code')" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -45084,7 +45471,7 @@ function renderNotifs(){
   _z.innerHTML=notifs.map(n=>n.braise
     ? _htmlNotifAssiduite(n.sem)
     : n.act
-    ? `<div class="notification" style="border-color:${n.c};cursor:pointer" onclick="${n.act}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${n.icon} ${n.msg}</div>`
+    ? `<div class="notification" style="border-color:${n.c};cursor:pointer" data-on-click="${n.act}" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${n.icon} ${n.msg}</div>`
     : `<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
   // Le liseré se pose APRES la mise en page : il lui faut la largeur reelle.
   _armerBraises(_z);
@@ -45167,7 +45554,7 @@ function htmlCarteSeanceSlot(i,s){
     <span class="cs-det">${escapeHtml(String(e.series||'')+'×'+String(e.reps||''))}</span>
   </li>`).join('');
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager ma séance</button>`:'';
+    ?`<button type="button" class="cs-btn cs-btn-plein" data-on-click="partagerSeanceSlot(${i})">${icon('share',14)}Partager ma séance</button>`:'';
   return `<div class="cs-carte">
     <div class="cs-tete">
       <span class="cs-sur">Séance du jour</span>
@@ -45177,7 +45564,7 @@ function htmlCarteSeanceSlot(i,s){
     <ol class="cs-liste">${lignes}</ol>
     ${coupes?`<div class="cs-plus">+ ${coupes} autre${coupes>1?'s':''}</div>`:''}
     <div class="cs-actions">
-      <button type="button" class="cs-btn" onclick="telechargerSeanceSlot(${i})">${icon('download',14)}Télécharger</button>
+      <button type="button" class="cs-btn" data-on-click="telechargerSeanceSlot(${i})">${icon('download',14)}Télécharger</button>
       ${part}
     </div>
     <!-- CE QUI SORT DE L'APPLICATION SE DIT AVANT LE GESTE, pas apres. La carte
@@ -45236,7 +45623,7 @@ function _htmlCarteProgramme(p){
     +'<div class="bq-dev-fond"><span class="bq-dev-nom">'+nom+'</span>'
     +(p.phase?'<span class="bq-dev-phase">'+escapeHtml(p.phase)+'</span>':'')+'</div>'
     +(p.image?'<img class="bq-dev-img" src="'+escapeHtml(p.image)+'" alt="" '
-      +'loading="lazy" onerror="this.remove()">':'')
+      +'loading="lazy" data-on-error="this.remove()">':'')
     +'</div>';
   return '<div class="bq-carte">'+dev
     +'<div class="bq-corps">'
@@ -45284,7 +45671,7 @@ function _rendreEntreeVente(){
   if(!z) return false;
   z.innerHTML=estVendeur()
     ?'<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 20px" '
-      +'onclick="ouvrirMesProgrammes()">Gérer mes programmes en vente</button>'
+      +'data-on-click="ouvrirMesProgrammes()">Gérer mes programmes en vente</button>'
     :'';
   return true;
 }
@@ -45337,23 +45724,23 @@ function ouvrirFicheVente(id,idxModele){
   const ea=s=>escapeHtml(String(s==null?'':s));
   z.innerHTML='<label class="vn-lab" for="vn-nom" style="margin-top:0">Titre</label>'
     +'<input id="vn-nom" class="vn-in" maxlength="79" autocomplete="off" value="'+ea(nom)+'" '
-      +'placeholder="Ex. : Programme débutant" oninput="_venteApercu()">'
+      +'placeholder="Ex. : Programme débutant" data-on-input="_venteApercu()">'
     // ⚠ LE PRIX SE SAISIT EN EUROS ET SE STOCKE EN CENTIMES. Un champ en
     // centimes serait une invitation a la faute de frappe a deux zeros pres.
     +'<label class="vn-lab" for="vn-prix">Prix</label>'
     +'<div class="vn-prix"><input id="vn-prix" class="vn-in" inputmode="decimal" autocomplete="off" '
       +'value="'+((typeof cts==='number'&&cts>0)?(cts/100).toFixed(2).replace('.',','):'')+'" '
-      +'placeholder="14,90" oninput="_venteApercu()"><span aria-hidden="true">€</span></div>'
+      +'placeholder="14,90" data-on-input="_venteApercu()"><span aria-hidden="true">€</span></div>'
     +'<label class="vn-lab" for="vn-acc">Pitch</label>'
     +'<textarea id="vn-acc" class="vn-in" rows="3" maxlength="'+VENTE_PITCH_MAX+'" '
-      +'placeholder="Ce que ce programme apporte, en deux phrases" oninput="_venteApercu()">'
+      +'placeholder="Ce que ce programme apporte, en deux phrases" data-on-input="_venteApercu()">'
       +ea(pitch.slice(0,VENTE_PITCH_MAX))+'</textarea>'
     +'<div class="cpv-compte" id="vn-reste"></div>'
     // MEME DEFAUT, MEME CAUSE : `input[type=file]{display:none}` est global, et
     // un champ fichier nu ne s'affiche pas. C'est le LABEL qui ouvre le selecteur.
     +'<div class="vn-lab">Visuel</div>'
     +'<label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Choisir une image'
-    +'<input type="file" id="vn-img" accept="image/*" style="display:none" onchange="_venteChoisirImage(this)">'
+    +'<input type="file" id="vn-img" accept="image/*" style="display:none" data-on-change="_venteChoisirImage(this)">'
     +'</label>'
     // RETIRER N'EST PAS SUPPRIMER : la fiche reste lisible par ceux qui l'ont
     // payee. La case n'existe que pour ce qui est deja dans la boutique.
@@ -45388,8 +45775,8 @@ function _venteApercu(){
     tags:(base&&base.tags)||null, phase:base&&base.phase,
     image:_venteImage||_venteImageDeja||''});
   z.querySelectorAll('button').forEach(b=>{
-    if(/offrirProgramme/.test(b.getAttribute('onclick')||'')) b.remove();
-    else b.removeAttribute('onclick');
+    if(/offrirProgramme/.test(b.getAttribute('data-on-click')||'')) b.remove();
+    else b.removeAttribute('data-on-click');
   });
   // Le compteur passe a l'orange au dernier dixieme : on previent avant la
   // butee, pas au moment ou la frappe cesse de repondre.
@@ -45529,16 +45916,16 @@ function _htmlActionProgramme(p){
   let h='';
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
-      +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
+      +'data-on-click="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
     if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
-      +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
+      +'data-on-click="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
     // ⚠ LE COACH L'APPLIQUE SANS PAYER, et c'est un pouvoir, pas un raccourci :
     // il vend ses propres programmes. La porte est fermee a tout autre compte.
     if(createur)
       h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
-        +'onclick="offrirProgramme(\''+id+'\')">L\'enregistrer sans payer (coach)</button>';
+        +'data-on-click="offrirProgramme(\''+id+'\')">L\'enregistrer sans payer (coach)</button>';
   }
   return h;
 }
@@ -45612,7 +45999,7 @@ function _chargerPaypalAchat(){
   sc.onload=rendre;
   sc.onerror=()=>{ const b=document.getElementById('ach-paypal');
     if(b) b.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%" '
-      +'onclick="_chargerPaypalAchat()">Erreur de chargement : réessayer</button>'; };
+      +'data-on-click="_chargerPaypalAchat()">Erreur de chargement : réessayer</button>'; };
   document.head.appendChild(sc);
 }
 function _rendreBoutonAchat(){
@@ -45767,9 +46154,9 @@ function ouvrirMerciAchat(id){
   const p=programmeDuCatalogue(id);
   if(!p) return false;
   const mois=(offre('boutique_prog')||{}).mois||3;
-  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+  const html='<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
@@ -45783,9 +46170,9 @@ function ouvrirMerciAchat(id){
     +escapeHtml(prixOffre('programme_perso'))+'.</div>'
     +'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
     +'Voir les formules de coaching</a></div>'
-    +'<button class="btn btn-red" style="width:100%" onclick="closeModal();loadSessionManager()">'
+    +'<button class="btn btn-red" style="width:100%" data-on-click="closeModal();loadSessionManager()">'
     +'Voir mes séances</button>'
-    +'<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="closeModal()">Plus tard</button>'
+    +'<button class="btn btn-outline" style="width:100%;margin-top:10px" data-on-click="closeModal()">Plus tard</button>'
     +'</div></div>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -45931,12 +46318,12 @@ function ouvrirMesExercices(){
   const vign=x=>{
     let sl=''; try{ sl=_slugIllustre(exSlug(x.nom))||''; }catch(e){ sl=''; }
     return sl?'<img src="'+escapeHtml(EXO_IMG_DOSSIER+sl+'.webp')+'" alt="" decoding="async" '
-      +'onerror="_illusAbsente(this)" style="width:44px;height:44px;object-fit:contain;'
+      +'data-on-error="_illusAbsente(this)" style="width:44px;height:44px;object-fit:contain;'
       +'background:#fff;border-radius:var(--r-2);flex-shrink:0">'
       :'<span style="width:44px;height:44px;border-radius:var(--r-2);background:var(--surface-2);flex-shrink:0"></span>';
   };
   const corps=()=>_mesExos.length
-    ?_mesExos.map((x,i)=>'<button type="button" onclick="ouvrirFicheMonExercice('+i+')" '
+    ?_mesExos.map((x,i)=>'<button type="button" data-on-click="ouvrirFicheMonExercice('+i+')" '
       +'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
       +'padding:8px 10px;margin-bottom:8px;cursor:pointer;font-family:inherit">'
@@ -45945,16 +46332,16 @@ function ouvrirMesExercices(){
       +escapeHtml(x.nom)+'</span></button>').join('')
     :'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6">Tes séances sont encore vides. '
       +'Dès qu\'un exercice y est posé, sa fiche apparaît ici.</p>';
-  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+  const html='<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Mes exercices</h2>'
     +'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">'
     +'Les mouvements de ton programme, avec l\'image et la vidéo quand elles existent.</p>'
     +'<div id="me-liste">'+corps()+'</div>'
-    +'<button class="btn btn-outline" style="margin-top:14px" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-outline" style="margin-top:14px" data-on-click="closeModal()">Fermer</button>'
     +'</div></div>';
   document.body.insertAdjacentHTML('beforeend',html);
   _meRejouer(()=>{ const z=document.getElementById('me-liste'); if(z) z.innerHTML=corps(); });
@@ -45976,14 +46363,14 @@ function ouvrirFicheMonExercice(i,rejoue){
     +'font-size:var(--fs-sm);padding:4px 0"><span style="color:var(--sub)">'+escapeHtml(t)+'</span>'
     +'<span style="color:var(--text);text-align:right">'+escapeHtml(v)+'</span></div>':'';
   let pastilles=''; try{ pastilles=htmlVideosExo(ex)||''; }catch(e){ pastilles=''; }
-  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+  const html='<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div id="me-fiche" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div id="me-fiche" data-on-click="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:10px;font-size:var(--fs-lg)">'+escapeHtml(nom)+'</h2>'
     +(img?'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(nom)+'" decoding="async"'
-      +(d?' width="'+d[0]+'" height="'+d[1]+'"':'')+' onerror="_illusAbsente(this)" '
+      +(d?' width="'+d[0]+'" height="'+d[1]+'"':'')+' data-on-error="_illusAbsente(this)" '
       +'style="display:block;margin:0 auto 12px;width:100%;'+(d?'max-width:'+d[0]+'px;':'')
       +'height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">'
       :'<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;'
@@ -45999,8 +46386,8 @@ function ouvrirFicheMonExercice(i,rejoue){
     +(pastilles?'':'<p class="sub" style="font-size:var(--fs-xs);margin-top:12px;line-height:1.6">'
       +'Aucune vidéo pour ce mouvement. Demande-la à ton coach dans le canal : il peut la filmer '
       +'pour toi.</p>')
-    +'<button class="btn btn-outline" style="margin-top:16px" onclick="closeModal();ouvrirMesExercices()">Retour à mes exercices</button>'
-    +'<button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-outline" style="margin-top:16px" data-on-click="closeModal();ouvrirMesExercices()">Retour à mes exercices</button>'
+    +'<button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Fermer</button>'
     +'</div></div>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -46026,7 +46413,7 @@ function _rendreOutilsSeances(){
   if(!z) return false;
   const b=[];
   const bouton=(lib,act,rouge)=>'<button type="button" class="btn '
-    +(rouge?'btn-red':'btn-outline')+'" onclick="'+act+'" '
+    +(rouge?'btn-red':'btn-outline')+'" data-on-click="'+act+'" '
     +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:10px 10px">'+lib+'</button>';
   try{
     // ⚠ PLUS DE CONDITION DE CAPACITE DEPUIS LE LOT 4 : l'ecran s'ouvre pour
@@ -46077,9 +46464,9 @@ function _htmlRelanceTransformation(u){
 // ecrit, et la personne doit savoir quand.
 function ouvrirMerciRevision(){
   const n=revisionsPayees(currentUser).length;
-  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+  const html='<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">Révision demandée.</h2>'
@@ -46089,7 +46476,7 @@ function ouvrirMerciRevision(){
     +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px">'
     +'Ton accès complet est rouvert pour un mois.</p>'
     +_htmlRelanceTransformation(currentUser)
-    +'<button class="btn btn-red" style="width:100%" onclick="closeModal()">J’ai compris</button>'
+    +'<button class="btn btn-red" style="width:100%" data-on-click="closeModal()">J’ai compris</button>'
     +'</div></div>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -46156,7 +46543,7 @@ function _renderSessionManager(){
         </div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
           <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
-          <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+          <div data-on-click="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>
           </div>
         </label>
@@ -46168,7 +46555,7 @@ function _renderSessionManager(){
         <!-- Nom de la séance -->
         <div style="margin-bottom:12px">
           <label style="margin-top:0">Nom de la séance</label>
-          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & ABDOS" onchange="renameSession(${i},this.value)" style="margin-top:4px">
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & ABDOS" data-on-change="renameSession(${i},this.value)" style="margin-top:4px">
         </div>
 
         <!-- L APERCU DE LA SEANCE, A LA PLACE DE LA PHOTO DE FICHE.
@@ -46184,8 +46571,8 @@ function _renderSessionManager(){
 
         <!-- Exercices + actions -->
         <div style="display:flex;gap:8px">
-          <button class="btn btn-blanc btn-sm" style="flex:1" onclick="openSessionExercises(${i})">Modifier ma séance (${s.exercises?.length||0})</button>
-          <button class="btn btn-red btn-sm" style="flex:1" onclick="startWorkoutSession(${i})">Démarrer</button>
+          <button class="btn btn-blanc btn-sm" style="flex:1" data-on-click="openSessionExercises(${i})">Modifier ma séance (${s.exercises?.length||0})</button>
+          <button class="btn btn-red btn-sm" style="flex:1" data-on-click="startWorkoutSession(${i})">Démarrer</button>
         </div>
         <!-- ══ ALTERNER : ECHANGER DEUX CRENEAUX ═══════════════════════
              Demande de Kevin, 08/09/2026. Il arrive qu'une seance tombe le
@@ -46195,7 +46582,7 @@ function _renderSessionManager(){
              boutons sur une rangee font 33 % de largeur chacun, et
              « Modifier ma séance » ne tient plus. -->
         <button class="btn btn-blanc btn-sm" style="width:100%;margin-top:8px"
-          onclick="alternerSeance(${i})">⇄ Alterner ma séance</button>
+          data-on-click="alternerSeance(${i})">⇄ Alterner ma séance</button>
         <div id="alt-${i}"></div>
       </div>`:
       `<div style="padding:10px 16px;text-align:center"><span class="sub" style="font-size:var(--fs-sm)">Active ce jour pour y mettre une séance</span></div>`}
@@ -46284,13 +46671,13 @@ function alternerSeance(i){
       +' » avec :')+'</div>'
     +cibles.map(c=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
-      +'text-align:left;padding:10px 12px" onclick="_alternerVers('+i+','+c.i+')">'
+      +'text-align:left;padding:10px 12px" data-on-click="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
       +'<span style="color:var(--text-faint)"> : '+escapeHtml(c.nom)+'</span>'
       +(c.actif?'':'<span style="color:var(--text-faint)"> · jour éteint</span>')
       +'</button>').join('')
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;'
-    +'margin:2px 0 0;opacity:.75" onclick="alternerSeance('+i+')">Annuler</button>'
+    +'margin:2px 0 0;opacity:.75" data-on-click="alternerSeance('+i+')">Annuler</button>'
     +'</div>';
   return true;
 }
@@ -46476,7 +46863,7 @@ function _htmlSeanceDepart(s){
       const img=illustrationExo(e);
       return (img
         ? '<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="52" height="40" '
-          +'onerror="_illusAbsente(this)" style="width:52px;height:40px;object-fit:cover;'
+          +'data-on-error="_illusAbsente(this)" style="width:52px;height:40px;object-fit:cover;'
           +'border-radius:6px;background:#f4f4f4;flex-shrink:0">'
         : '<div style="width:52px;height:40px;border-radius:6px;background:var(--surface-2);'
           +'border:1px solid var(--border);flex-shrink:0"></div>')
@@ -46487,7 +46874,7 @@ function _htmlSeanceDepart(s){
       +'</div>';
     },{pad:'9px 0',gap:11})
     +'<div style="margin-top:24px">'
-    +'<button class="btn btn-red" onclick="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
+    +'<button class="btn btn-red" data-on-click="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
     +'Démarrer ma première séance</button></div>'
     +'<div style="height:20px"></div>';
 }
@@ -46583,7 +46970,7 @@ function _htmlReprise(avecProgramme){
     +'line-height:1.25;margin-bottom:8px">On commence maintenant.</div>'
     +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:20px">'
     +'Quinze minutes suffisent pour commencer'+' '+': tu t’arrêtes quand tu veux.</div>'
-    +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
+    +'<button class="btn btn-red" data-on-click="reprendreMaintenant()" style="margin:0;min-height:52px;'
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
     +'Démarrer maintenant</button>'
     +(avecProgramme
@@ -46745,7 +47132,7 @@ function _htmlDemarrage(u){
         +'<span class="pd-sous">'+escapeHtml(l.sous)+'</span></span>';
       return l.fait
         ?'<div class="pd-ligne pd-fait">'+corps+'<span class="pd-etat">Fait</span></div>'
-        :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
+        :'<button type="button" class="pd-ligne" data-on-click="'+l.action+'">'+corps
           +'<span class="pd-go" aria-hidden="true">›</span></button>';
     }).join('')
     +(phraseParrainPremiereSeance(u)?'<div class="pd-parrain" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:10px">'
@@ -46846,7 +47233,7 @@ function _psRendre(){
   // une touche par question, soit trois de plus sur un parcours qui en promet
   // trois en tout.
   const choix=(lib,sous,onclick)=>
-    '<button type="button" onclick="'+onclick+'" class="ps-choix">'
+    '<button type="button" data-on-click="'+onclick+'" class="ps-choix">'
     +'<span style="font-size:var(--fs-md);font-weight:800;color:var(--text);display:block">'+lib+'</span>'
     +(sous?'<span class="sub" style="font-size:var(--fs-xs);display:block;margin-top:4px">'+sous+'</span>':'')
     +'</button>';
@@ -47159,8 +47546,8 @@ function openSessionPicker(){
     // cadence.
     const rang=_spRang++;
     return `<div class="sp-ligne${isToday?' sp-auj':''}" style="--i:${rang}"
-      onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      data-on-click="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       ${s.photo?`<img class="sp-photo" src="${srcImageAttr(s.photo)}" alt="">`:`<div class="sp-jour">${DAY_ICONS[i]}</div>`}
       <div class="sp-txt">
         <div class="sp-jourlib">${s.day||DAYS[i]}${isToday?' · Aujourd\'hui':''}</div>
@@ -47446,7 +47833,7 @@ function _cyclePreselectionner(){
   const v=_cycleOptionSuggeree(currentUser);
   if(!v) return null;
   const cible=Array.from(z.querySelectorAll('.obj-opt'))
-    .find(e=>(e.getAttribute('onclick')||'').indexOf("'"+v+"'")>=0);
+    .find(e=>(e.getAttribute('data-on-click')||'').indexOf("'"+v+"'")>=0);
   if(cible) cible.classList.add('sel');
   return v;
 }
@@ -48058,7 +48445,7 @@ function _htmlVignetteExo(ex){
   const nom=String((ex||{}).name||'');
   // Le slug d'abord : c'est lui qui a servi a trouver l'image.
   const ref=String((ex||{}).exSlug||'').trim()||nom;
-  return `<button type="button" onclick="ouvrirIllustration('${escapeHtml(ref).replace(/'/g,"&#39;")}')"
+  return `<button type="button" data-on-click="ouvrirIllustration('${escapeHtml(ref).replace(/'/g,"&#39;")}')"
     aria-label="Agrandir l'illustration de ${escapeHtml(nom)}"
     style="flex-shrink:0;padding:0;border:1px solid var(--border);border-radius:var(--r-2);
     background:#fff;cursor:zoom-in;line-height:0;width:96px;height:70px">
@@ -48226,7 +48613,7 @@ function _apLigne(ex,i){
   // vignette qu'on reconnaît d'un coup d'œil en salle, pas une décoration.
   const _nomEx=String(ex.name||'');
   const vign=img
-    ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();ouvrirIllustration('${escapeHtml(String(ex.exSlug||'').trim()||_nomEx).replace(/'/g,"&#39;")}')"
+    ? `<button type="button" data-on-click="event.preventDefault();event.stopPropagation();ouvrirIllustration('${escapeHtml(String(ex.exSlug||'').trim()||_nomEx).replace(/'/g,"&#39;")}')"
          aria-label="Agrandir l'illustration de ${escapeHtml(_nomEx)}"
          style="position:relative;flex-shrink:0;width:76px;height:76px;padding:0;
          border-radius:var(--r-3);background:transparent;cursor:zoom-in;
@@ -49185,7 +49572,7 @@ function _htmlVisuelFormats(id){
   const k0=visuelFormatChoisi();
   return '<div class="vfmt" role="radiogroup" aria-label="Format de l’image" data-pour="'+id+'">'
     +Object.keys(VISUEL_FORMATS).map(k=>'<button type="button" class="vfmt-b'+(k===k0?' actif':'')+'" role="radio" aria-checked="'+(k===k0)+'"'
-      +' data-format="'+k+'" onclick="visuelFormatChoisir(\''+id+'\',\''+k+'\')">'
+      +' data-format="'+k+'" data-on-click="visuelFormatChoisir(\''+id+'\',\''+k+'\')">'
       +VISUEL_FORMATS[k].lib+'<small>'+VISUEL_FORMATS[k].ratio+'</small></button>').join('')
     +'</div>';
 }
@@ -49204,15 +49591,15 @@ function visuelFormatChoisir(id,k){
 function _htmlVisuelFonds(id){
   const f=visuelFondEffectif();
   return _htmlVisuelFormats(id)
-    +'<button type="button" class="vf-legende" onclick="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
+    +'<button type="button" class="vf-legende" data-on-click="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
     +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
     +visuelFondsListe().map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
       +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
-      +' onclick="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
+      +' data-on-click="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
       +'<canvas class="vf-c" width="'+VISUEL_FOND.VL+'" height="'+VISUEL_FOND.VH+'" aria-hidden="true"></canvas>'
       +'<span>'+VISUEL_FOND.LIB[k]+'</span></button>').join('')
-    +'<input type="file" accept="image/*" capture="environment" class="vf-f" hidden onchange="visuelFondPhoto(\''+id+'\',this)">'
+    +'<input type="file" accept="image/*" capture="environment" class="vf-f" hidden data-on-change="visuelFondPhoto(\''+id+'\',this)">'
     +'</div>';
 }
 /** La note sous les boutons : ce que le fichier sera, selon le fond. */
@@ -49945,7 +50332,7 @@ function _ouvrirApercuStory(url,nomFichier,fmt){
     +'<a href="'+url+'" download="'+escapeHtml(nom)+'" type="'+escapeHtml((fmt&&fmt.type)||'image/png')+'" class="btn btn-outline btn-sm" '
     +'style="width:auto;padding:8px 20px">Télécharger</a>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" '
-    +'onclick="fermerApercuStory()">Fermer</button>';
+    +'data-on-click="fermerApercuStory()">Fermer</button>';
   document.body.appendChild(d);
 }
 function fermerApercuStory(){
@@ -50184,12 +50571,12 @@ function voirLegende(type){
   d.innerHTML='<div style="width:min(420px,100%);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px">'
     +'<div style="font-weight:800;margin-bottom:6px">La légende de ton post</div>'
     +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Modifie-la si tu veux : c’est elle qui sera copiée au partage en post.</div>'
-    +'<textarea id="legende-texte" rows="5" maxlength="'+LEGENDE_MAX+'" style="width:100%;box-sizing:border-box" oninput="legendeModifiee(\''+t+'\',this.value)">'
+    +'<textarea id="legende-texte" rows="5" maxlength="'+LEGENDE_MAX+'" style="width:100%;box-sizing:border-box" data-on-input="legendeModifiee(\''+t+'\',this.value)">'
     +escapeHtml(texte)+'</textarea>'
     +'<div class="sub" id="legende-compte" style="font-size:var(--fs-2xs);text-align:right;margin:4px 0 10px">'+texte.length+' / '+LEGENDE_MAX+'</div>'
     +'<div style="display:flex;gap:8px">'
-    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="copierLegende(\''+t+'\')">Copier</button>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" onclick="fermerLegende()">Fermer</button>'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" data-on-click="copierLegende(\''+t+'\')">Copier</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" data-on-click="fermerLegende()">Fermer</button>'
     +'</div></div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerLegende(); });
   document.body.appendChild(d);
@@ -50356,7 +50743,7 @@ function _htmlVisuelMedia(){
   return '<div class="vmed" role="radiogroup" aria-label="Partager une image ou une vidéo">'
     +[['image','Image','fixe'],['video','Vidéo','9:16 animée']].map(([k,l,p])=>
       '<button type="button" class="vmed-b'+(k===m?' actif':'')+'" role="radio" aria-checked="'+(k===m)+'" data-media="'+k+'"'
-      +' onclick="event.stopPropagation();visuelMediaChoisir(\''+k+'\')">'+l+'<small>'+p+'</small></button>').join('')
+      +' data-on-click="event.stopPropagation();visuelMediaChoisir(\''+k+'\')">'+l+'<small>'+p+'</small></button>').join('')
     +'</div>';
 }
 // ── Les scènes : ce qu'on peint à l'instant t (ms de vidéo) ────────────
@@ -50622,7 +51009,7 @@ function _videoEcran(duree){
     +'<div class="vid-titre">Ta vidéo se prépare…</div>'
     +'<div class="vid-sous">Elle s’enregistre en temps réel ('+Math.round(duree/100)/10+' s) : garde l’app ouverte.</div>'
     +'<div class="vid-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="vid-barre-i"></i></div>'
-    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="annulerVideo()">Annuler</button>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" data-on-click="annulerVideo()">Annuler</button>'
     +'</div>';
   document.body.appendChild(d);
   return d;
@@ -50647,10 +51034,10 @@ function _videoEcranPret(r,scene){
     +'<video class="vid-apercu" src="'+url+'" autoplay muted loop playsinline aria-label="Aperçu de ta vidéo"></video>'
     +'<div class="vid-sous">'+(Math.round(r.taille/1e5)/10).toLocaleString('fr-FR')+' Mo · '+r.ext.toUpperCase()
       +(lourde?' · lourde : Instagram peut la recompresser':'')+'</div>'
-    +(partage?'<button type="button" class="btn btn-red vid-btn" onclick="partagerVideoPrete()">'+icon('share',16)+' <span>Partager la vidéo</span></button>':'')
-    +'<a class="btn btn-outline vid-btn" href="'+url+'" download="'+escapeHtml(r.nom)+'" onclick="telechargerVideoPrete()">'
+    +(partage?'<button type="button" class="btn btn-red vid-btn" data-on-click="partagerVideoPrete()">'+icon('share',16)+' <span>Partager la vidéo</span></button>':'')
+    +'<a class="btn btn-outline vid-btn" href="'+url+'" download="'+escapeHtml(r.nom)+'" data-on-click="telechargerVideoPrete()">'
       +icon('download',16)+' <span>Télécharger</span></a>'
-    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="fermerVideo()">Fermer</button>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" data-on-click="fermerVideo()">Fermer</button>'
     +'</div>';
   return true;
 }
@@ -50785,7 +51172,7 @@ function bilanEquivalentBasculer(on){
 }
 function _htmlBilanEquivalent(){
   return '<label class="rcf-eq-opt"><input type="checkbox"'+(bilanEquivalentActif()?' checked':'')
-    +' onchange="bilanEquivalentBasculer(this.checked)"> Ajouter l’équivalent fun</label>';
+    +' data-on-change="bilanEquivalentBasculer(this.checked)"> Ajouter l’équivalent fun</label>';
 }
 function _bilanDonneesDe(sc){
   if(!sc){
@@ -50864,12 +51251,12 @@ function renderPartageBilan(){
   // Deux boutons de meme poids laissaient le choix a l'utilisateur alors que
   // l'un des deux est la bonne reponse neuf fois sur dix.
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?'<button type="button" class="rcf-share" onclick="partagerBilanSeance()">'
+    ?'<button type="button" class="rcf-share" data-on-click="partagerBilanSeance()">'
       +'Partager ma séance</button>':'';
   // LE FOND AVANT LES BOUTONS : on choisit, puis on télécharge.
   z.innerHTML=_htmlVisuelFonds('wd-fonds')+_htmlBilanEquivalent()
     +'<button type="button" class="rcf-dl" id="wd-dl" '
-    +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
+    +'data-on-click="_telechargerAvecEtat(this)">'+icon('download',18)
     +'<span>Télécharger ma séance</span></button>'+part
     // Les deux phrases, et les deux-points. « en blanc : c'est normal » se lit
     // comme une explication ; un tiret ou un separateur graphique en aurait
@@ -50948,7 +51335,7 @@ function _renderWeeklyInto(el,sc){
               const bg=isSel?'rgba(255,255,255,.28)':s.active?'rgba(255,255,255,.1)':'rgba(0,0,0,.25)';
               const col=isSel?'var(--text)':s.active?'rgba(255,255,255,.75)':'rgba(255,255,255,.25)';
               const bord=isToday&&!isSel?'1px solid rgba(255,255,255,.55)':'1px solid transparent';
-              return `<div class="sem-jour" onclick="_setWeekDay(${i})" style="background:${bg};border:${bord};color:${col}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${DAY_ICONS[i]}</div>`;
+              return `<div class="sem-jour" data-on-click="_setWeekDay(${i})" style="background:${bg};border:${bord};color:${col}" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${DAY_ICONS[i]}</div>`;
             }).join('')}
             </div>
           </div>
@@ -50964,7 +51351,7 @@ function _renderWeeklyInto(el,sc){
             </div>`).join('')}
         </div>`:''}
         ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end;gap:8px">
-          <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
+          <button id="story-btn" type="button" data-on-click="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
@@ -50977,7 +51364,7 @@ function _renderWeeklyInto(el,sc){
                ce serait deux boutons pour une seule action, sur tout le bureau.
                Placé à droite, au bord : c'est le geste qu'on vient chercher. -->
           ${(typeof navigator!=='undefined'&&navigator.share)?`
-          <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
+          <button id="story-partage-btn" type="button" data-on-click="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
@@ -51178,8 +51565,8 @@ function _compteurRelances(idx){
   return `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
     <span style="font-size:var(--fs-xs);color:var(--sub)">Relances :</span>
     <span id="rel-n-${idx}" style="font-size:var(--fs-lg);font-weight:400;font-family:var(--pile-titre);letter-spacing:1px">${faites}</span>
-    <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-lg);font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
-    ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-md);min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
+    <button data-on-click="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-lg);font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
+    ${faites?`<button data-on-click="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-md);min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
   </div>`;
 }
 function _ajouterRelance(idx){
@@ -51447,7 +51834,7 @@ function renderWoEx(){
   // Photo programme en haut si disponible
   const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:var(--r-3);overflow:hidden;border:1px solid var(--border)">
     <div style="font-size:var(--fs-xs);color:var(--sub);padding:6px 10px;background:var(--surface-2)"> Ta fiche programme (référence)</div>
-    <img src="${srcImageAttr(woState.sessionPhoto)}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <img src="${srcImageAttr(woState.sessionPhoto)}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" data-on-click="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
   </div>`:'';
 
   const blocs=groupe.map(i=>_blocExo(i,estSS));
@@ -51608,7 +51995,7 @@ function _htmlVideoTechniqueExo(ex){
   //   ouvrait un onglet ou l'application YouTube, et l'athlete perdait son
   //   ecran de seance. Elle s'ouvre dans une feuille basse de l'app ; le href
   //   reste, pour le clic milieu et les lecteurs d'ecran.
-  return u?`<a href="${safeUrl(u)}" data-demo="${escapeHtml(cle)}" onclick="return _videoDemoOuvrir(this,event)" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+  return u?`<a href="${safeUrl(u)}" data-demo="${escapeHtml(cle)}" data-on-click="return _videoDemoOuvrir(this,event)" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
@@ -51648,7 +52035,7 @@ function htmlFeuilleDemo(url,ex,enLigne){
   }
   return '<div class="demo-poignee" aria-hidden="true"></div>'
     +'<div class="demo-tete"><div class="demo-titre">'+titre+'</div>'
-    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">✕</button></div>'
+    +'<button type="button" class="demo-fermer" data-on-click="_videoDemoFermer()" aria-label="Fermer la vidéo">✕</button></div>'
     +corps;
 }
 function _videoDemoOuvrir(a,e){
@@ -52327,7 +52714,7 @@ function _majActionsSeries(ex,data,idx){
   const peutRetirer=n>1&&der&&der.done!==true;
   const base='min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;letter-spacing:.5px;display:inline-flex;align-items:center;justify-content:center;gap:8px';
   z.innerHTML='<div style="display:flex;gap:8px;margin-top:10px">'
-    +'<button type="button" class="hit44" onclick="ajouterSerie('+idx+')" '
+    +'<button type="button" class="hit44" data-on-click="ajouterSerie('+idx+')" '
     +'aria-label="Ajouter une série à cet exercice" '
     +'style="flex:1;'+base+';background:var(--surface-2);border:1px dashed var(--border);'
     +'color:var(--sub);font-size:var(--fs-xs)">'
@@ -52338,7 +52725,7 @@ function _majActionsSeries(ex,data,idx){
     // ouvre directement la camera : aucun ecran intermediaire, aucune
     // question. Absent quand aucune serie n'est visee.
     +(_videoSerieVisee(data)>=0
-      ?'<button type="button" class="hit44" onclick="filmerSerie('+idx+')" '
+      ?'<button type="button" class="hit44" data-on-click="filmerSerie('+idx+')" '
         +'aria-label="Filmer cette série" title="Filmer cette série" '
         +'style="width:52px;'+base+';background:none;border:1px solid var(--border);'
         +'color:var(--text-faint)">'
@@ -52348,7 +52735,7 @@ function _majActionsSeries(ex,data,idx){
         +'</svg></button>'
       :'')
     +(peutRetirer
-      ?'<button type="button" class="hit44" onclick="retirerSerie('+idx+')" '
+      ?'<button type="button" class="hit44" data-on-click="retirerSerie('+idx+')" '
         +'aria-label="Retirer la dernière série" title="Retirer la dernière série" '
         +'style="width:52px;'+base+';background:none;border:1px solid var(--border);'
         +'color:var(--text-faint)">'
@@ -52496,7 +52883,7 @@ function _majBandeTempo(ex,data,idx){
   let h='<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">';
   if(enCours){
     const s=Math.max(0,Math.round((Date.now()-_tempoEtat.debut)/1000));
-    h+='<button class="btn btn-red btn-sm" '+B+' onclick="tempoArreter(true)">'
+    h+='<button class="btn btn-red btn-sm" '+B+' data-on-click="tempoArreter(true)">'
       +'Terminer · '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+'</button>';
     if(_tempoEtat.guide){
       h+='<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px">'
@@ -52506,13 +52893,13 @@ function _majBandeTempo(ex,data,idx){
         +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span></div>';
     }
   } else {
-    h+='<button class="btn btn-outline btn-sm" '+B+' onclick="tempoDemarrer('+idx+',false)">'
+    h+='<button class="btn btn-outline btn-sm" '+B+' data-on-click="tempoDemarrer('+idx+',false)">'
       +'Démarrer la série</button>';
     // « Guider » n'apparait QUE sur un tempo normalise, et il ne part jamais
     // seul : c'est un appui, a chaque serie, et c'est ce qui le rend
     // supportable.
     if(guidable)
-      h+='<button class="btn btn-outline btn-sm" '+B+' onclick="tempoDemarrer('+idx+',true)">'
+      h+='<button class="btn btn-outline btn-sm" '+B+' data-on-click="tempoDemarrer('+idx+',true)">'
         +'Guider</button>';
   }
   h+='</div>';
@@ -52747,7 +53134,7 @@ function renderSets(ex,data,idx,opts){
       const done=s.done;
       return `<tr class="${done?'done':''}">
         <td style="font-weight:700">${i+1}</td>
-        <td><button data-arc="off" onclick="toggleSet(${i},${idx})"
+        <td><button data-arc="off" data-on-click="toggleSet(${i},${idx})"
           style="width:40px;height:40px;border-radius:var(--r-full);border:2px solid ${done?'var(--text)':'var(--border)'};background:${done?'#1a1a1a':'transparent'};color:var(--sub);font-size:var(--fs-lg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;${done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">
           ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
         </button></td>
@@ -52864,13 +53251,13 @@ function renderSets(ex,data,idx,opts){
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
     const isWide=enCartes;
     const weightInner=isDeg
-      ?`<input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      ?`<input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" data-on-change="${onChW}" ${dis}><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f;margin-left:4px" data-on-change="${onChW2}" ${dis}>`
+      :`<div><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} data-on-change="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
-      ?`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      ?`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" data-on-change="${onChW}" ${dis}></td><td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f" data-on-change="${onChW2}" ${dis}></td>`
+      :`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} data-on-change="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
@@ -52954,7 +53341,7 @@ function renderSets(ex,data,idx,opts){
         const _rirVal=RIR_OPTS.indexOf(cur)>=0?cur:'';
         const court=_rirVal==='echec'?'Échec':(_rirVal||'RIR');
         return `<button type="button" class="rir-choix${s.done?' fermee':''}" aria-haspopup="listbox" aria-expanded="false"`
-          +` aria-label="RIR de la série ${i+1} : ${_rirVal?court:'non noté'}" onclick="rirMenuOuvrir(${idx},${i},this)" ${dis}>`
+          +` aria-label="RIR de la série ${i+1} : ${_rirVal?court:'non noté'}" data-on-click="rirMenuOuvrir(${idx},${i},this)" ${dis}>`
           +`<span aria-hidden="true">${court}</span><span class="gene-fl" aria-hidden="true">▾</span></button>${_consRappel}`;
       })();
 
@@ -52975,7 +53362,7 @@ function renderSets(ex,data,idx,opts){
     // la definition deux fois plus petite. La case est un <button>.
     const _painVal=PAIN_OPTS.indexOf(String(s.pain))>=0?String(s.pain):'';
     const painSelect=`<button type="button" class="gene-choix" aria-haspopup="listbox" aria-expanded="false"`
-      +` aria-label="Gêne ressentie sur la série ${i+1} : ${_painVal||'non notée'}" onclick="geneMenuOuvrir(${idx},${i},this)">`
+      +` aria-label="Gêne ressentie sur la série ${i+1} : ${_painVal||'non notée'}" data-on-click="geneMenuOuvrir(${idx},${i},this)">`
       +`<span aria-hidden="true">${_painVal||'-'}</span><span class="gene-fl" aria-hidden="true">▾</span></button>`;
 
     // ══ R29 — LES REPETITIONS FAITES, SUR UNE FOURCHETTE SEULEMENT ══════
@@ -52989,7 +53376,7 @@ function renderSets(ex,data,idx,opts){
     const repsAffiche=(taille)=>_fourch
       ?`<input class="set-input wo-reps" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
         +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_fourch.min}-${_fourch.max}"`
-        +` aria-label="Répétitions faites à la série ${i+1}, fourchette de ${_fourch.min} à ${_fourch.max}" onchange="_woRepsSaisie(${idx},${i},this)" ${dis}>`
+        +` aria-label="Répétitions faites à la série ${i+1}, fourchette de ${_fourch.min} à ${_fourch.max}" data-on-change="_woRepsSaisie(${idx},${i},this)" ${dis}>`
       :`<span style="font-family:var(--pile-titre);font-size:${taille}px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>`;
 
     // Done button
@@ -53020,7 +53407,7 @@ function renderSets(ex,data,idx,opts){
             <div class="wo-intensite" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px">
               ${rirSelect}
               ${painSelect}
-              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="margin-left:auto;width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
+              <button class="hit44" data-arc="off" data-on-click="toggleSet(${i},${idx})" style="margin-left:auto;width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -53034,7 +53421,7 @@ function renderSets(ex,data,idx,opts){
       ${weightCell}
       <td class="wo-intensite">${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
+      <td><button class="hit44" data-arc="off" data-on-click="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   });
   if(_lignesSeules) return lignes;
@@ -53102,7 +53489,7 @@ function _htmlEncartSurcharge(idx){
   return `<div class="wo-surcharge" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-top:10px">
     <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.4;margin-bottom:6px">${escapeHtml(SURCHARGE_ENCART_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(SURCHARGE_ENCART_TEXTE)}</div>
-    <button onclick="accuserEncartSurcharge()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
+    <button data-on-click="accuserEncartSurcharge()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
 }
 // Repeint la seule zone de l'encart. C'est ICI que l'exercice prend l'encart
@@ -54327,7 +54714,7 @@ function _carteCalibrageRir(groupe,dernier){
       <div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Perception du RIR</div>
       <div style="font-size:var(--fs-xs);color:#bbb;line-height:1.6">Va jusqu'à ne plus pouvoir en faire une propre. On compare avec ce que tu avais annoncé.</div>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">Sur ${escapeHtml(ex.name)}${kg>0?' · '+kg+' kg':''}</div>
-      <button id="cal-ouvrir" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="calOuvrirTest(${i})">Tester ma perception</button>
+      <button id="cal-ouvrir" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="calOuvrirTest(${i})">Tester ma perception</button>
       <div id="cal-form" style="display:none;margin-top:12px">
         <!-- LA REGLE GLOBALE « label » MET EN MAJUSCULES ET ESPACE LES LETTRES,
              et sur trois colonnes de 100 px chaque intitule passait sur deux
@@ -54340,7 +54727,7 @@ function _carteCalibrageRir(groupe,dernier){
           <div style="flex:1;min-width:0"><label for="cal-rr" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">Reps au total</label><input type="number" inputmode="numeric" min="1" id="cal-rr" placeholder="12"></div>
         </div>
         <div id="cal-err" style="color:var(--red-light);font-size:var(--fs-xs);margin-top:8px;display:none"></div>
-        <button class="btn btn-red btn-sm" style="width:100%;margin-top:10px" onclick="calEnregistrer(${i})">Enregistrer le test</button>
+        <button class="btn btn-red btn-sm" style="width:100%;margin-top:10px" data-on-click="calEnregistrer(${i})">Enregistrer le test</button>
       </div>
       <div id="cal-retour" style="display:none;margin-top:10px;font-size:var(--fs-xs);color:var(--text);line-height:1.6"></div>
     </div>`;
@@ -56265,7 +56652,7 @@ function _htmlCorpsCadre(c,o){
     return '<button type="button" class="cc-corps-o'+(ferme?'':' actif')
       +'" aria-pressed="'+(ferme?'false':'true')+'"'
       +(t?(' title="'+escapeHtml(t)+'" aria-label="'+escapeHtml(lib+' : '+t)+'"'):'')
-      +' onclick="corpsVue(\''+k+'\')">'+escapeHtml(lib)
+      +' data-on-click="corpsVue(\''+k+'\')">'+escapeHtml(lib)
       +(n?'<span class="cc-corps-pa" aria-hidden="true"></span>':'')
       +'</button>';
   };
@@ -56282,7 +56669,7 @@ function _htmlCorpsCadre(c,o){
     const on=(mode===k);
     return '<button type="button" class="cc-corps-o'+(on?' actif':'')
       +'" aria-pressed="'+(on?'true':'false')+'" title="'+escapeHtml(t)+'"'
-      +' onclick="corpsMode(\''+k+'\')">'+escapeHtml(lib)+'</button>';
+      +' data-on-click="corpsMode(\''+k+'\')">'+escapeHtml(lib)+'</button>';
   };
   const tete='<div class="cc-corps-h">'
     +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
@@ -56423,7 +56810,7 @@ function _htmlCorpsCadre(c,o){
       // clavier ni au lecteur d'ecran. La definition vit dans RC_LEXIQUE, avec
       // les vingt autres — pas dans un panneau de plus qui divergerait.
       +Object.keys(GC_COULEURS).map(k=>'<button type="button" class="cc-corps-lp hit44"'
-        +(GC_ZONE_LEX[k]?(' onclick="rcInfoOuvrir(\''+GC_ZONE_LEX[k]+'\')"'
+        +(GC_ZONE_LEX[k]?(' data-on-click="rcInfoOuvrir(\''+GC_ZONE_LEX[k]+'\')"'
           +' aria-label="'+escapeHtml('Que veut dire '+k+' ?')+'"'):' disabled')
         +'><i style="background:'+escapeHtml(GC_COULEURS[k])+'"></i>'
         +escapeHtml(k)+'</button>').join('')
@@ -56650,7 +57037,7 @@ function _ccdCarte(libelle,valeur,delta,phrase,source,o){
     +(source?'<span class="ccd-v-s">'+escapeHtml(source)+'</span>':'')
     +'</div>'
     +(o.spark||'')
-    +(o.clic?'<button type="button" class="ccdx-chev" onclick="'+o.clic+'" aria-label="'+escapeHtml(o.clicLib||'Voir')+'">'+CCD_ICO.droite+'</button>':'')
+    +(o.clic?'<button type="button" class="ccdx-chev" data-on-click="'+o.clic+'" aria-label="'+escapeHtml(o.clicLib||'Voir')+'">'+CCD_ICO.droite+'</button>':'')
     +'</article>';
 }
 /**
@@ -56923,10 +57310,10 @@ function _htmlCcdBarre(){
     +'<span class="cc-corps-vue ccd-lec" role="group" aria-label="Ce que les cartes affichent">'
     +CCD_LECTURES.map(x=>'<button type="button" class="cc-corps-o'
       +((x.cle===_ccdLecture)?' actif':'')+'" aria-pressed="'+((x.cle===_ccdLecture)?'true':'false')
-      +'" title="'+escapeHtml(x.aide)+'" onclick="ccdLecture(\''+x.cle+'\')">'
+      +'" title="'+escapeHtml(x.aide)+'" data-on-click="ccdLecture(\''+x.cle+'\')">'
       +escapeHtml(x.lib)+'</button>').join('')+'</span>'
     +'<button type="button" class="ccd-out-b" aria-expanded="false"'
-    +' aria-controls="ccd-out-c" onclick="ccdOutils(this)">Outils</button>'
+    +' aria-controls="ccd-out-c" data-on-click="ccdOutils(this)">Outils</button>'
     +'</div></div>';
 }
 function _htmlCcdOutils(u){
@@ -56939,17 +57326,17 @@ function _htmlCcdOutils(u){
   const epi=ccdEpingles();
   return '<div class="ccd-out-c" id="ccd-out-c" hidden>'
     +(bl.length>1
-      ?('<div class="ccd-out-l"><label>Comparer<select onchange="ccdPaireDepuisEcran()" id="ccd-pa">'
-        +opts(a)+'</select></label><label>à<select onchange="ccdPaireDepuisEcran()" id="ccd-pb">'
+      ?('<div class="ccd-out-l"><label>Comparer<select data-on-change="ccdPaireDepuisEcran()" id="ccd-pa">'
+        +opts(a)+'</select></label><label>à<select data-on-change="ccdPaireDepuisEcran()" id="ccd-pb">'
         +opts(b)+'</select></label>'
-        +(ccdPaireActive()?'<button type="button" class="ccd-out-r" onclick="_ccdFenetre=null;ccdPaire(0,0)">Revenir aux deux derniers</button>':'')
+        +(ccdPaireActive()?'<button type="button" class="ccd-out-r" data-on-click="_ccdFenetre=null;ccdPaire(0,0)">Revenir aux deux derniers</button>':'')
         +'</div><p class="ccd-out-p">Les cartes et la silhouette se recalculent entre ces deux bilans. '
         +'Les courbes, elles, suivent la période choisie dans « Ses courbes ».</p>')
       :'<p class="ccd-out-p">Il faut deux bilans pour en comparer deux.</p>')
     +'<div class="ccd-out-l ccd-out-e">'
     +ccdEpinglables().map(x=>'<button type="button" class="ccd-epi-b'
       +((epi.indexOf(x.cle)>=0)?' actif':'')+'" aria-pressed="'+((epi.indexOf(x.cle)>=0)?'true':'false')
-      +'" onclick="ccdEpingler(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')
+      +'" data-on-click="ccdEpingler(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')
     +'</div><p class="ccd-out-p">Trois mesures épinglées au plus : la quatrième '
     +'remplace la plus ancienne. Le choix se garde pour cet athlète.</p>'
     +'</div>';
@@ -57213,10 +57600,10 @@ function _htmlCcdManque(c){
     +escapeHtml(ccdPhraseManque(m))+'</span>'
     +(d
       ?('<span class="ccd-manque-d">Demandé le '+escapeHtml(_ccdJour(d.date))+'.'
-        +'<button type="button" class="ccd-out-r" onclick="annulerDemandeMesure(\''+m.cle+'\')">Retirer la demande</button></span>')
-      :('<button type="button" class="ccd-manque-b" onclick="demanderMesure(\''+m.cle+'\')">Le lui demander</button>'))
+        +'<button type="button" class="ccd-out-r" data-on-click="annulerDemandeMesure(\''+m.cle+'\')">Retirer la demande</button></span>')
+      :('<button type="button" class="ccd-manque-b" data-on-click="demanderMesure(\''+m.cle+'\')">Le lui demander</button>'))
     +(autres.length?('<button type="button" class="ccd-manque-b ccd-manque-tous"'
-      +' onclick="demanderMesureATous(\''+m.cle+'\')">'
+      +' data-on-click="demanderMesureATous(\''+m.cle+'\')">'
       +escapeHtml(libTous)+'</button>'):'')
     +'</p>';
 }
@@ -57301,7 +57688,7 @@ function ccdSignaux(c){
 // ligne qui mene a un bloc se touche en entier et finit par un chevron.
 const _CCD_CHEVRON='<svg class="ccd-sig-ch" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function _htmlCcdSignal(s,premier){
-  const va=s.ancre?(' onclick="ccdVoirDetail(\''+s.ancre+'\')"'):'';
+  const va=s.ancre?(' data-on-click="ccdVoirDetail(\''+s.ancre+'\')"'):'';
   return '<li class="ccd-sig ccd-sig-'+(s.ton||'g')+(s.bloque?' ccd-sig-b':'')
     +(premier?' ccd-sig-1':'')+(s.ancre?' ccd-sig-a':'')+'"'+va+'>'
     +'<span class="ccd-sig-p" aria-hidden="true"><i></i></span>'
@@ -57313,7 +57700,7 @@ function _htmlCcdSignal(s,premier){
     +'</span>'
     +(s.ancre?('<button type="button" class="ccd-out-r ccd-sig-v"'
       +(s.geste?'':' aria-label="Voir le détail"')
-      +' onclick="event.stopPropagation();ccdVoirDetail(\''+s.ancre+'\')">'
+      +' data-on-click="event.stopPropagation();ccdVoirDetail(\''+s.ancre+'\')">'
       +(s.geste?'<span>Voir le détail</span>':'')+_CCD_CHEVRON+'</button>'):'')
     +'</li>';
 }
@@ -57543,13 +57930,13 @@ function _htmlCcdTete(u){
     +'<span class="cc-corps-vue ccd-lec ccdx-lec" role="group" aria-label="Ce que les cartes affichent">'
       +CCD_LECTURES.map(x=>'<button type="button" class="cc-corps-o'+((x.cle===_ccdLecture)?' actif':'')
         +'" aria-pressed="'+((x.cle===_ccdLecture)?'true':'false')+'" title="'+escapeHtml(x.aide)
-        +'" onclick="ccdLecture(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')+'</span>'
+        +'" data-on-click="ccdLecture(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')+'</span>'
     +'<span class="ccdx-per" role="group" aria-label="Période comparée">'
       +CCD_FENETRES.map(f=>'<button type="button" class="ccdx-per-b'+(_ccdFenetre===f.k?' actif':'')+'"'
         +' aria-pressed="'+(_ccdFenetre===f.k)+'"'+(bl.length<2?' disabled':'')
-        +' onclick="ccdPeriodeVerdict(\''+f.k+'\')">'+f.lib+'</button>').join('')+'</span>'
+        +' data-on-click="ccdPeriodeVerdict(\''+f.k+'\')">'+f.lib+'</button>').join('')+'</span>'
     +'<button type="button" class="ccdx-plage ccd-out-b" aria-expanded="false" aria-controls="ccd-out-c"'
-      +' onclick="ccdOutils(this)" title="Choisir les deux bilans comparés, et les mesures épinglées">'
+      +' data-on-click="ccdOutils(this)" title="Choisir les deux bilans comparés, et les mesures épinglées">'
       +CCD_ICO.calendrier+'<span>'+escapeHtml(plage)+'</span>'+CCD_ICO.bas+'</button>'
     +'</div>';
 }
@@ -57561,8 +57948,8 @@ function _htmlCcdComparer(u){
     +'<span class="ccdx-bande-i">'+CCD_ICO.info+'</span>'
     +'<div class="ccdx-bande-c"><h5>Comparer les périodes</h5>'
       +'<span>Analyse les évolutions de l’athlète en comparant différentes périodes (7 jours, 28 jours, 3 mois) pour identifier les tendances et ajuster l’entraînement.</span></div>'
-    +'<button type="button" class="btn btn-red ccdx-bande-b" onclick="ccdComparerPeriodes()">'+CCD_ICO.barres+'<span>Les comparer</span></button>'
-    +'<button type="button" class="ccdx-bande-b2" onclick="ccdChoisirPeriode()">'+CCD_ICO.calendrier+'<span>Choisir une période</span></button>'
+    +'<button type="button" class="btn btn-red ccdx-bande-b" data-on-click="ccdComparerPeriodes()">'+CCD_ICO.barres+'<span>Les comparer</span></button>'
+    +'<button type="button" class="ccdx-bande-b2" data-on-click="ccdChoisirPeriode()">'+CCD_ICO.calendrier+'<span>Choisir une période</span></button>'
     +'</div>';
 }
 function ccdChoisirPeriode(){
@@ -57611,7 +57998,7 @@ function _htmlCcdIncomplet(c){
     +'<div class="ccdx-inc-c"><h5>Données incomplètes</h5>'
       +'<span>'+l.length+' mesure'+(l.length>1?'s manquent':' manque')+' à son dossier. '
       +escapeHtml(ccdPhraseManque(ccdMesureManquante(u)).split('. ')[0])+' d’abord : c’est elle qui débloque le plus.</span></div>'
-    +'<button type="button" class="ccdx-inc-lien" onclick="ccdVoirManques()">Voir les données manquantes'+CCD_ICO.droite+'</button>'
+    +'<button type="button" class="ccdx-inc-lien" data-on-click="ccdVoirManques()">Voir les données manquantes'+CCD_ICO.droite+'</button>'
     +'</div>';
 }
 function ccdVoirManques(){
@@ -57626,7 +58013,7 @@ function ccdVoirManques(){
       return '<div class="ccdx-manq"><div><b>'+escapeHtml(m.lib.charAt(0).toUpperCase()+m.lib.slice(1))+'</b>'
         +'<span>Pour '+escapeHtml(m.debloque)+'. '+escapeHtml(m.effort)+'</span></div>'
         +(d?'<em>Demandé le '+escapeHtml(_ccdJour(d.date))+'</em>'
-          :'<button type="button" class="ccd-manque-b" onclick="demanderMesure(\''+m.cle+'\');ccdVoirManques()">Le lui demander</button>')
+          :'<button type="button" class="ccd-manque-b" data-on-click="demanderMesure(\''+m.cle+'\');ccdVoirManques()">Le lui demander</button>')
         +'</div>';
     }).join('')+'</div>');
 }
@@ -57837,7 +58224,7 @@ function _htmlCcdPeriodes(){
     +'<span class="cc-corps-vue">'
     +CCD_PERIODES.map(p=>'<button type="button" class="cc-corps-o'
       +((p.j===_ccdPeriode)?' actif':'')+'" aria-pressed="'+((p.j===_ccdPeriode)?'true':'false')
-      +'" onclick="ccdPeriode('+p.j+')">'+escapeHtml(p.lib)+'</button>').join('')
+      +'" data-on-click="ccdPeriode('+p.j+')">'+escapeHtml(p.lib)+'</button>').join('')
     +'</span></div>';
 }
 // L'ETAGE DES COURBES EST LE TABLEAU DE BORD DE LA MAQUETTE (28/09/2026) :
@@ -58140,7 +58527,7 @@ function _dbCourbe(o){
   return '<div class="db-zone-g" id="'+escapeHtml(o.id)+'"><svg class="db-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+escapeHtml(o.titre||'Courbe')+'">'
     +'<defs>'+defs+'</defs>'+g+bandes+aires+repere+traits+points
     +'<line class="db-curseur" x1="0" x2="0" y1="'+ph+'" y2="'+(H-pb)+'" style="display:none"/>'
-    +'<rect x="'+pg+'" y="0" width="'+(W-pg-pd)+'" height="'+(H-pb)+'" fill="transparent" onpointermove="dbSurvol(event,\''+escapeHtml(o.id)+'\')" onpointerdown="dbSurvol(event,\''+escapeHtml(o.id)+'\')" onpointerleave="dbQuitter(\''+escapeHtml(o.id)+'\')"/>'
+    +'<rect x="'+pg+'" y="0" width="'+(W-pg-pd)+'" height="'+(H-pb)+'" fill="transparent" data-on-pointermove="dbSurvol(event,\''+escapeHtml(o.id)+'\')" data-on-pointerdown="dbSurvol(event,\''+escapeHtml(o.id)+'\')" data-on-pointerleave="dbQuitter(\''+escapeHtml(o.id)+'\')"/>'
     +'</svg><div class="db-bulle" style="display:none"></div></div>';
 }
 function dbSurvol(ev,id){
@@ -58169,7 +58556,7 @@ function dbQuitter(id){
 
 // ── LES CARTES ─────────────────────────────────────────────────────────────
 function _dbInfo(cle,texte){
-  return '<button type="button" class="db-i" aria-label="Explication" aria-expanded="false" onclick="dbInfo(this)">i</button>'
+  return '<button type="button" class="db-i" aria-label="Explication" aria-expanded="false" data-on-click="dbInfo(this)">i</button>'
     +'<p class="db-info" hidden>'+escapeHtml(texte)+'</p>';
 }
 function dbInfo(b){
@@ -58180,7 +58567,7 @@ function dbInfo(b){
 function _dbPeriodes(){
   const L={182:'6M',365:'1 an',0:'Tout'};
   return '<span class="db-seg" role="group" aria-label="Période">'
-    +CCD_PERIODES.map(p=>'<button type="button" class="'+(p.j===_ccdPeriode?'actif':'')+'" aria-pressed="'+(p.j===_ccdPeriode)+'" onclick="ccdPeriode('+p.j+')">'+escapeHtml(L[p.j]||p.lib)+'</button>').join('')+'</span>';
+    +CCD_PERIODES.map(p=>'<button type="button" class="'+(p.j===_ccdPeriode?'actif':'')+'" aria-pressed="'+(p.j===_ccdPeriode)+'" data-on-click="ccdPeriode('+p.j+')">'+escapeHtml(L[p.j]||p.lib)+'</button>').join('')+'</span>';
 }
 function _dbCarte(cls,titre,info,droite,corps){
   return '<section class="db-carte '+cls+'"><div class="db-tete"><h4 class="db-titre">'+escapeHtml(titre)+(info?' '+info:'')+'</h4>'+(droite||'')+'</div>'+corps+'</section>';
@@ -58220,7 +58607,7 @@ function _dbCarteMens(u,W){
   const k=_dbUnite==='in'?1/2.54:1, u2=_dbUnite==='in'?' in':' cm';
   const series=DB_TOURS.map(t=>({lib:t.lib,couleur:t.c,points:ccdFenetre(dbPointsTour(u,t)).map(p=>({x:p.x,v:Math.round(p.v*k*10)/10})),aire:false,fmt:v=>_dbNb(v,1)+u2}))
     .filter(s=>s.points.length);
-  const seg='<span class="db-seg" role="group" aria-label="Unité"><button type="button" class="'+(_dbUnite==='cm'?'actif':'')+'" onclick="dbUnite(\'cm\')">cm</button><button type="button" class="'+(_dbUnite==='in'?'actif':'')+'" onclick="dbUnite(\'in\')">inch</button></span>';
+  const seg='<span class="db-seg" role="group" aria-label="Unité"><button type="button" class="'+(_dbUnite==='cm'?'actif':'')+'" data-on-click="dbUnite(\'cm\')">cm</button><button type="button" class="'+(_dbUnite==='in'?'actif':'')+'" data-on-click="dbUnite(\'in\')">inch</button></span>';
   if(!series.some(s=>s.points.length>1)) return _dbCarte('db-c-me','Mensurations',info,seg,_dbVide('Il faut deux bilans avec un même tour pour tracer une courbe.'));
   return _dbCarte('db-c-me','Mensurations',info,seg,_dbLegende(series)+_dbCourbe({id:'db-me',titre:'Mensurations',W,H:150,series}));
 }
@@ -58248,7 +58635,7 @@ function _dbCarteRepartition(v){
 function _dbCarteZones(u,v){
   const info=_dbInfo('cz','Tours : l’écart du ruban depuis la première mesure, zone par zone ; la couleur dit le sens de la mesure, jamais un jugement. '
     +'Séries : la charge de '+(v?v.ref.lib:'la semaine')+' par zone et sa part du total. Les masses par zone demanderaient une balance à impédance segmentaire.');
-  const seg='<span class="db-seg db-seg-l" role="group" aria-label="Lecture"><button type="button" class="'+(_dbZone==='tours'?'actif':'')+'" onclick="dbZone(\'tours\')">Tours</button><button type="button" class="'+(_dbZone==='series'?'actif':'')+'" onclick="dbZone(\'series\')">Séries</button></span>';
+  const seg='<span class="db-seg db-seg-l" role="group" aria-label="Lecture"><button type="button" class="'+(_dbZone==='tours'?'actif':'')+'" data-on-click="dbZone(\'tours\')">Tours</button><button type="button" class="'+(_dbZone==='series'?'actif':'')+'" data-on-click="dbZone(\'series\')">Séries</button></span>';
   const z=dbZones(u,_dbZone,v?v.ref.muscles:null);
   const max=Math.max(0.0001,...z.map(x=>Math.abs(x.valeur||0)));
   const tuiles=z.map(x=>{
@@ -58277,7 +58664,7 @@ const DB_ICONES={
 function _dbCarteRapports(u,neutre){
   const info=_dbInfo('rk','IMC : poids / taille². Ratio taille / hanches : tour de taille divisé par tour de hanches. Ratio masse maigre : part du poids qui n’est pas du gras. '
     +'Métabolisme : dépense au repos, par Katch-McArdle (masse maigre) ou, à défaut, la formule retenue pour ce dossier (Harris-Benedict ou Mifflin-St Jeor). Écarts comparés à la mesure précédente ou à la première.');
-  const sel='<select class="db-sel" onchange="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
+  const sel='<select class="db-sel" data-on-change="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
   const masquer=new Set(neutre?['imc','maigre','mb']:[]);
   const t=dbRapports(u,_dbRef).filter(r=>!masquer.has(r.cle)).map(r=>{
     const vide=r.valeur==null;
@@ -61187,8 +61574,8 @@ function _htmlDeveloppeRes(l){
 function _htmlDeveloppeCtl(l){
   const cfg=_anatDevCfg();
   return '<div class="an-sq an-dev-c" role="group" aria-label="Régler le développé">'
-    +'<label class="an-sq-c"><span>Humérus en bas <output id="an-dev-th">'+_anatN(cfg.theta,0)+'°</output></span><input type="range" min="'+ANAT_DEV.THETA_MIN+'" max="'+ANAT_DEV.THETA_MAX+'" step="1" value="'+cfg.theta+'" oninput="anatDevRegler(\'theta\',this.value)" aria-label="Écart de l’humérus au tronc en bas du mouvement"></label>'
-    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.arche?' checked':'')+' onchange="anatDevRegler(\'arche\',this.checked)"><span>Arche (−'+ANAT_DEV.ARCHE_CM+' cm)</span></label>'
+    +'<label class="an-sq-c"><span>Humérus en bas <output id="an-dev-th">'+_anatN(cfg.theta,0)+'°</output></span><input type="range" min="'+ANAT_DEV.THETA_MIN+'" max="'+ANAT_DEV.THETA_MAX+'" step="1" value="'+cfg.theta+'" data-on-input="anatDevRegler(\'theta\',this.value)" aria-label="Écart de l’humérus au tronc en bas du mouvement"></label>'
+    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.arche?' checked':'')+' data-on-change="anatDevRegler(\'arche\',this.checked)"><span>Arche (−'+ANAT_DEV.ARCHE_CM+' cm)</span></label>'
     +'</div>';
 }
 function anatDevRegler(k,v){
@@ -61244,8 +61631,8 @@ function anatPrioObjectif(o){
 function _htmlAnatPriorites(res,c){
   const auto=anatObjectif(c), obj=_anatPrioObj||auto;
   const l=anatPriorites(res,obj);
-  const seg='<span class="an-prio-o" role="group" aria-label="Objectif">'+Object.keys(ANAT_PRIO.OBJ).map(k=>'<button type="button" class="'+(k===obj?'actif':'')+'" aria-pressed="'+(k===obj)+'" onclick="anatPrioObjectif(\''+k+'\')">'+ANAT_PRIO.LIB[k]+(k===auto?' <small>(bilan)</small>':'')+'</button>').join('')+'</span>';
-  const corps=l.length?'<div class="an-prio-l">'+l.map((x,i)=>'<button type="button" class="an-prio-c" data-k="'+x.cle+'" data-n="'+Math.abs(x.niveau)+'" onclick="anatOuvrir(\''+x.cle+'\',true)">'
+  const seg='<span class="an-prio-o" role="group" aria-label="Objectif">'+Object.keys(ANAT_PRIO.OBJ).map(k=>'<button type="button" class="'+(k===obj?'actif':'')+'" aria-pressed="'+(k===obj)+'" data-on-click="anatPrioObjectif(\''+k+'\')">'+ANAT_PRIO.LIB[k]+(k===auto?' <small>(bilan)</small>':'')+'</button>').join('')+'</span>';
+  const corps=l.length?'<div class="an-prio-l">'+l.map((x,i)=>'<button type="button" class="an-prio-c" data-k="'+x.cle+'" data-n="'+Math.abs(x.niveau)+'" data-on-click="anatOuvrir(\''+x.cle+'\',true)">'
       +'<span class="an-prio-n">'+(i+1)+'</span><span class="an-prio-t"><b>'+escapeHtml(x.lib)+'</b><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em>'
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
     :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
@@ -61418,8 +61805,8 @@ async function anatExporter(mode,o){
 function _htmlAnatExport(){
   return '<details class="an-exp"><summary aria-label="Exporter l’analyse">'+ANAT_SVG.export+'<span>Exporter</span>'+ANAT_SVG.chev+'</summary>'
     +'<div class="an-exp-m" role="menu">'
-    +'<button type="button" role="menuitem" onclick="anatExporter(\'coach\')"><b>Coach</b><span>Tous les chiffres, sources, dates et marges</span></button>'
-    +'<button type="button" role="menuitem" onclick="anatExporter(\'athlete\')"><b>Athlète</b><span>Sa photo et ses consignes d’exécution</span></button>'
+    +'<button type="button" role="menuitem" data-on-click="anatExporter(\'coach\')"><b>Coach</b><span>Tous les chiffres, sources, dates et marges</span></button>'
+    +'<button type="button" role="menuitem" data-on-click="anatExporter(\'athlete\')"><b>Athlète</b><span>Sa photo et ses consignes d’exécution</span></button>'
     +'</div></details>';
 }
 /** E1 : ce que le contrôle à l'envoi a dit des photos de ce bilan, pour le coach. */
@@ -61454,10 +61841,10 @@ function _htmlAnatExos(slugs,dossier){
     // Les slugs d'ANAT_EXOS_LIENS existent tous dans app/exercices (un test le vérifie) :
     // l'image n'attend pas le chargement de l'index.
     const img=_anatSafe(()=>_illustrationParSlug(sl))||(EXO_IMG_DOSSIER+sl+'.webp');
-    return '<button type="button" class="an-exo" data-exo="'+escapeHtml(sl)+'" onclick="anatOuvrirExo(\''+escapeHtml(sl)+'\')" title="Ouvrir la fiche">'
+    return '<button type="button" class="an-exo" data-exo="'+escapeHtml(sl)+'" data-on-click="anatOuvrirExo(\''+escapeHtml(sl)+'\')" title="Ouvrir la fiche">'
       +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="28" height="20">':'')+'<span>'+escapeHtml(_anatNomExo(sl))+'</span></button>';
   }).join('');
-  const menu=sc.length?'<select class="an-exo-aj" aria-label="Ajouter au programme" onchange="if(this.value){anatAjouterExo(this.value);this.value=\'\';}">'
+  const menu=sc.length?'<select class="an-exo-aj" aria-label="Ajouter au programme" data-on-change="if(this.value){anatAjouterExo(this.value);this.value=\'\';}">'
     +'<option value="">+ Ajouter au programme…</option>'
     +l.map(sl=>'<optgroup label="'+escapeHtml(_anatNomExo(sl))+'">'+sc.map((x,i)=>'<option value="'+escapeHtml(sl)+'|'+i+'">'+escapeHtml((x&&x.name)||('Séance '+(i+1)))+'</option>').join('')+'</optgroup>').join('')
     +'</select>':'';
@@ -61573,16 +61960,16 @@ function _htmlAnatVideo(l){
   const loin=Math.abs(v.ecart)>ANAT_VIDEO_ECART;
   return '<p class="an-vid'+(loin?' an-vid-loin':'')+'">Prévu <b>'+_anatN(v.prevu,0)+'°</b> · mesuré en vidéo <b>'+_anatN(v.mesure,0)+'°</b> ('+_anatDateFr(v.date)+') : écart '+_anatSN(v.ecart,0)+'°.'
     +(loin?' '+escapeHtml(ANAT_VIDEO_PHRASE):'')
-    +(c&&v.videoId?' <button type="button" class="an-vid-b" onclick="ouvrirMotionLab(\''+escapeHtml(c.email)+'\',\''+escapeHtml(String(v.videoId))+'\')">Voir la vidéo analysée</button>':'')+'</p>';
+    +(c&&v.videoId?' <button type="button" class="an-vid-b" data-on-click="ouvrirMotionLab(\''+escapeHtml(c.email)+'\',\''+escapeHtml(String(v.videoId))+'\')">Voir la vidéo analysée</button>':'')+'</p>';
 }
 /** Les quatre contrôles : cheville, écart, barre haute / basse, cale. */
 function _htmlSquatCtl(l){
   const cfg=_anatSquatCfg(l), M=l.modele;
   return '<div class="an-sq" role="group" aria-label="Régler le squat">'
-    +'<label class="an-sq-c"><span>Cheville <output id="an-sq-a">'+_anatN(cfg.alpha,0)+'°</output></span><input type="range" min="'+ANAT_SQUAT.ALPHA_MIN+'" max="'+ANAT_SQUAT.ALPHA_MAX+'" step="1" value="'+Math.round(cfg.alpha)+'" oninput="anatSquatRegler(\'alpha\',this.value)" aria-label="Inclinaison du tibia'+(M.alphaSrc==='test'?' (départ : test du genou au mur)':'')+'"></label>'
-    +'<label class="an-sq-c"><span>Écart <output id="an-sq-b">'+_anatN(cfg.beta,0)+'°</output></span><input type="range" min="0" max="45" step="1" value="'+Math.round(cfg.beta)+'" oninput="anatSquatRegler(\'beta\',this.value)" aria-label="Abduction de hanche : écart et ouverture des pieds"></label>'
-    +'<div class="an-sq-t" role="group" aria-label="Position de la barre">'+['haute','basse'].map(b=>'<button type="button" class="'+(cfg.barre===b?'actif':'')+'" aria-pressed="'+(cfg.barre===b)+'" onclick="anatSquatRegler(\'barre\',\''+b+'\')">Barre '+b+'</button>').join('')+'</div>'
-    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.cale?' checked':'')+' onchange="anatSquatRegler(\'cale\',this.checked)"><span>Cale</span></label>'
+    +'<label class="an-sq-c"><span>Cheville <output id="an-sq-a">'+_anatN(cfg.alpha,0)+'°</output></span><input type="range" min="'+ANAT_SQUAT.ALPHA_MIN+'" max="'+ANAT_SQUAT.ALPHA_MAX+'" step="1" value="'+Math.round(cfg.alpha)+'" data-on-input="anatSquatRegler(\'alpha\',this.value)" aria-label="Inclinaison du tibia'+(M.alphaSrc==='test'?' (départ : test du genou au mur)':'')+'"></label>'
+    +'<label class="an-sq-c"><span>Écart <output id="an-sq-b">'+_anatN(cfg.beta,0)+'°</output></span><input type="range" min="0" max="45" step="1" value="'+Math.round(cfg.beta)+'" data-on-input="anatSquatRegler(\'beta\',this.value)" aria-label="Abduction de hanche : écart et ouverture des pieds"></label>'
+    +'<div class="an-sq-t" role="group" aria-label="Position de la barre">'+['haute','basse'].map(b=>'<button type="button" class="'+(cfg.barre===b?'actif':'')+'" aria-pressed="'+(cfg.barre===b)+'" data-on-click="anatSquatRegler(\'barre\',\''+b+'\')">Barre '+b+'</button>').join('')+'</div>'
+    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.cale?' checked':'')+' data-on-change="anatSquatRegler(\'cale\',this.checked)"><span>Cale</span></label>'
     +'</div>';
 }
 /** Un contrôle bouge : le résultat se recalcule sur place, les contrôles restent sous le doigt. */
@@ -62413,7 +62800,7 @@ function _anatBrancherEdition(z){
     const cs=z2&&z2.querySelector('.an-consigne');
     if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k,e.opts,e.vue).aide)+'</span>'; }
     if(z2) z2.querySelectorAll('.an-rep-c').forEach(x=>{
-      const b=x.querySelector('.an-rep-n'); const on=!!b&&(b.getAttribute('onclick')||'').indexOf("'"+k+"'")>=0;
+      const b=x.querySelector('.an-rep-n'); const on=!!b&&(b.getAttribute('data-on-click')||'').indexOf("'"+k+"'")>=0;
       x.classList.toggle('actif',on);
     });
   };
@@ -62678,7 +63065,7 @@ function _htmlAnatChoixBilan(c,pb,fige){
   const opts=liste.slice().reverse().map(x=>'<option value="'+(x.defaut?'auto':x.date)+'"'+(x.date===pb.date?' selected':'')+'>'
     +escapeHtml(nomDe(x)+(x.defaut?' (auto)':'')+(x.dos?'':' · sans dos'))+'</option>').join('');
   return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
-    +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
+    +' aria-label="Bilan dont on analyse les photos" data-on-change="anatChoisirBilan(this.value)">'+opts+'</select></label>';
 }
 function _htmlAnat(c){
   if(!c) return '';
@@ -62699,7 +63086,7 @@ function _htmlAnat(c){
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
         return '<button type="button" role="tab" class="an-vue-b'+(on?' actif':'')+'" aria-selected="'+on+'"'+((edit||sans)?' disabled':'')
-          +(sans?' title="Pas de photo de profil sur ce bilan"':'')+' onclick="anatVue(\''+v+'\')">'+({face:'Face',dos:'Dos',profil:'Profil'})[v]+'</button>'; }).join('')
+          +(sans?' title="Pas de photo de profil sur ce bilan"':'')+' data-on-click="anatVue(\''+v+'\')">'+({face:'Face',dos:'Dos',profil:'Profil'})[v]+'</button>'; }).join('')
       +'</div>')+'</div>';
 
   if(grise){
@@ -62720,7 +63107,7 @@ function _htmlAnat(c){
       +'<div class="an-attente-ph"><img src="'+escapeHtml(pb.face)+'" alt="Photo de face du premier bilan"></div>'
       +'<div class="an-attente-c">'+(echec
         ?'<b>La photo n’a pas pu être lue</b><span>'+escapeHtml(echec)+'.</span>'
-          +'<div class="an-attente-b"><button type="button" class="btn btn-red btn-casse an-relance" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Réessayer</span></button></div>'
+          +'<div class="an-attente-b"><button type="button" class="btn btn-red btn-casse an-relance" data-on-click="anatRelancer()">'+ANAT_SVG.relancer+'<span>Réessayer</span></button></div>'
         :'<span class="an-roue" aria-hidden="true"></span><b>Détection des repères anatomiques…</b><span>Les photos de face et de dos du premier bilan passent dans le moteur de pose, sur cet appareil. Quelques secondes la première fois ; les points pourront ensuite être ajustés à la main.</span>')
       +'</div></div></div>';
   }
@@ -62783,7 +63170,7 @@ function _htmlAnat(c){
         // L'étiquette ne sort jamais de la scène : sa largeur est bornée à
         // la marge qui lui reste, bord compris.
         +(e.cote==='g'?'right:'+(100-pctX(xl)).toFixed(2)+'%;max-width:'+(pctX(xl)-1).toFixed(2)+'%'
-          :'left:'+pctX(xl).toFixed(2)+'%;max-width:'+(99-pctX(xl)).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)"'+(e.f.court?' aria-label="'+escapeHtml(e.f.lib)+'"':'')+'>'+escapeHtml(e.f.court||e.f.lib)+'</button>';
+          :'left:'+pctX(xl).toFixed(2)+'%;max-width:'+(99-pctX(xl)).toFixed(2)+'%')+'" data-on-click="anatOuvrir(\''+e.f.cle+'\',true)"'+(e.f.court?' aria-label="'+escapeHtml(e.f.lib)+'"':'')+'>'+escapeHtml(e.f.court||e.f.lib)+'</button>';
     });
   }
   const echelle=res.echelle;
@@ -62803,11 +63190,11 @@ function _htmlAnat(c){
   // Sous la scène : l'échelle, les options, et le geste d'édition.
   const ath=(s)=>{ const cc=anatCotes('face',!!opts.miroir); return s===cc.g?'gauche':'droit'; };
   const optsHtml=vueAct==='face'?'<div class="an-opts">'
-      +(edit?'<label class="an-opt"><input type="checkbox"'+(opts.miroir?' checked':'')+' onchange="anatOption(\'miroir\',this.checked)"><span>Photo prise dans un miroir</span></label>'
-        +'<label class="an-opt"><input type="checkbox"'+(opts.cheveux?' checked':'')+' onchange="anatOption(\'cheveux\',this.checked)"><span>Cheveux volumineux (sommet du crâne sur l’os)</span></label>'
-        +'<label class="an-opt"><input type="checkbox"'+((opts.paumes!=null?opts.paumes:res.opts.paumes)?' checked':'')+' onchange="anatOption(\'paumes\',this.checked)"><span>Paumes tournées vers l’avant (angle de port des coudes)</span></label>'
+      +(edit?'<label class="an-opt"><input type="checkbox"'+(opts.miroir?' checked':'')+' data-on-change="anatOption(\'miroir\',this.checked)"><span>Photo prise dans un miroir</span></label>'
+        +'<label class="an-opt"><input type="checkbox"'+(opts.cheveux?' checked':'')+' data-on-change="anatOption(\'cheveux\',this.checked)"><span>Cheveux volumineux (sommet du crâne sur l’os)</span></label>'
+        +'<label class="an-opt"><input type="checkbox"'+((opts.paumes!=null?opts.paumes:res.opts.paumes)?' checked':'')+' data-on-change="anatOption(\'paumes\',this.checked)"><span>Paumes tournées vers l’avant (angle de port des coudes)</span></label>'
         +'<div class="an-opt-seg" role="group" aria-label="Bras qui tient le téléphone"><span>Téléphone tenu :</span>'
-        +[['','aucun'],[anatCotes('face',!!opts.miroir).g,'bras gauche'],[anatCotes('face',!!opts.miroir).d,'bras droit']].map(([v,l])=>'<button type="button" class="'+((opts.telephone||'')===v?'actif':'')+'" onclick="anatOption(\'telephone\','+(v?'\''+v+'\'':'null')+')">'+l+'</button>').join('')+'</div>'
+        +[['','aucun'],[anatCotes('face',!!opts.miroir).g,'bras gauche'],[anatCotes('face',!!opts.miroir).d,'bras droit']].map(([v,l])=>'<button type="button" class="'+((opts.telephone||'')===v?'actif':'')+'" data-on-click="anatOption(\'telephone\','+(v?'\''+v+'\'':'null')+')">'+l+'</button>').join('')+'</div>'
       :'<span class="an-puce">'+(opts.miroir?'Photo au miroir':'Photo sans miroir')+'</span>'
         +(opts.cheveux?'<span class="an-puce">Cheveux volumineux : crâne posé sur l’os, échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %</span>':'')
         +(opts.paumes?'<span class="an-puce">Paumes vers l’avant</span>':'')
@@ -62818,8 +63205,8 @@ function _htmlAnat(c){
       +anatCles(vueAct).filter(k=>pts[k]).map(k=>{
         const e2=pts[k][2];
         return '<span class="an-rep-c'+(edit.sel===k?' actif':'')+'" data-e="'+(e2>=2?'man':e2<1?'est':'auto')+'">'
-          +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k,null,vueAct).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
-          +'<button type="button" class="an-rep-a" aria-label="Consigne : '+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">*</button></span>';
+          +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" data-on-click="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k,null,vueAct).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
+          +'<button type="button" class="an-rep-a" aria-label="Consigne : '+escapeHtml(anatNomPoint(vueAct,k))+'" data-on-click="anatChoisirPoint(\''+k+'\')">*</button></span>';
       }).join('')+'</div>'
       +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel,edit&&edit.opts,vueAct).aide)+'</span>'
         :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
@@ -62830,34 +63217,34 @@ function _htmlAnat(c){
   // liste-là ».
   const photoHtml='<div class="an-ph"><div class="an-ph-t">'+ANAT_SVG.reglage+'<span>Réglages de la photo</span>'
       +(modif?'<i>modifiée</i>':'')
-      +'<label class="an-net" title="Accentuation et niveaux automatiques de l’affichage"><input type="checkbox"'+(reg.net!==false?' checked':'')+' onchange="anatReglerPhoto(\''+vueAct+'\',{net:this.checked},true)"><span>Netteté auto</span></label></div>'
+      +'<label class="an-net" title="Accentuation et niveaux automatiques de l’affichage"><input type="checkbox"'+(reg.net!==false?' checked':'')+' data-on-change="anatReglerPhoto(\''+vueAct+'\',{net:this.checked},true)"><span>Netteté auto</span></label></div>'
       +'<div class="an-ph-l">'
-      +'<label class="an-ph-r"><span>Luminosité</span><input type="range" min="40" max="250" step="5" value="'+reg.lum+'" data-r="lum" oninput="anatCurseur(this,\'lum\')" onchange="anatCurseur(this,\'lum\',true)"><output>'+reg.lum+' %</output></label>'
-      +'<label class="an-ph-r"><span>Contraste</span><input type="range" min="40" max="250" step="5" value="'+reg.con+'" data-r="con" oninput="anatCurseur(this,\'con\')" onchange="anatCurseur(this,\'con\',true)"><output>'+reg.con+' %</output></label>'
+      +'<label class="an-ph-r"><span>Luminosité</span><input type="range" min="40" max="250" step="5" value="'+reg.lum+'" data-r="lum" data-on-input="anatCurseur(this,\'lum\')" data-on-change="anatCurseur(this,\'lum\',true)"><output>'+reg.lum+' %</output></label>'
+      +'<label class="an-ph-r"><span>Contraste</span><input type="range" min="40" max="250" step="5" value="'+reg.con+'" data-r="con" data-on-input="anatCurseur(this,\'con\')" data-on-change="anatCurseur(this,\'con\',true)"><output>'+reg.con+' %</output></label>'
       +'</div><div class="an-ph-b">'+(_anatRecadre
-        ?'<button type="button" class="an-b3 actif" onclick="anatModeRecadrage(false)">'+ANAT_SVG.x+'<span>Annuler le recadrage</span></button><span class="an-ph-aide">Trace sur la photo le rectangle à garder.</span>'
-        :'<button type="button" class="an-b3" onclick="anatModeRecadrage(true)">'+ANAT_SVG.recadrer+'<span>Recadrer</span></button>'
-          +'<button type="button" class="an-b3" onclick="anatCadrerPersonne()">'+ANAT_SVG.cadrer+'<span>Cadrer</span></button>'
-          +'<button type="button" class="an-b3" onclick="anatPhotoEntiere()"'+(reg.cadre?'':' disabled')+'>'+ANAT_SVG.entiere+'<span>Photo entière</span></button>'
-          +'<button type="button" class="an-b3" onclick="anatReinitialiserPhoto()"'+(modif?'':' disabled')+'>'+ANAT_SVG.relancer+'<span>Réinitialiser</span></button>')
+        ?'<button type="button" class="an-b3 actif" data-on-click="anatModeRecadrage(false)">'+ANAT_SVG.x+'<span>Annuler le recadrage</span></button><span class="an-ph-aide">Trace sur la photo le rectangle à garder.</span>'
+        :'<button type="button" class="an-b3" data-on-click="anatModeRecadrage(true)">'+ANAT_SVG.recadrer+'<span>Recadrer</span></button>'
+          +'<button type="button" class="an-b3" data-on-click="anatCadrerPersonne()">'+ANAT_SVG.cadrer+'<span>Cadrer</span></button>'
+          +'<button type="button" class="an-b3" data-on-click="anatPhotoEntiere()"'+(reg.cadre?'':' disabled')+'>'+ANAT_SVG.entiere+'<span>Photo entière</span></button>'
+          +'<button type="button" class="an-b3" data-on-click="anatReinitialiserPhoto()"'+(modif?'':' disabled')+'>'+ANAT_SVG.relancer+'<span>Réinitialiser</span></button>')
       +'</div></div>';
   // LA SAUVEGARDE : l'état courant (points, options, réglages) enregistré
   // sous une date, et les versions précédentes qu'on peut restaurer.
   const sauv=Array.isArray(a.sauvegardes)?a.sauvegardes:[];
   const sauvHtml='<details class="an-sv"><summary>'+ANAT_SVG.disquette+'<span>Sauvegarde</span>'+(sauv.length?'<i>'+sauv.length+'</i>':'')+ANAT_SVG.chev+'</summary>'
-    +'<div class="an-sv-m"><button type="button" class="an-sv-b an-sv-p" onclick="anatSauvegarder()">'+ANAT_SVG.disquette+'<span>Enregistrer cette version<small>points, options et réglages de la photo</small></span></button>'
+    +'<div class="an-sv-m"><button type="button" class="an-sv-b an-sv-p" data-on-click="anatSauvegarder()">'+ANAT_SVG.disquette+'<span>Enregistrer cette version<small>points, options et réglages de la photo</small></span></button>'
     +(sauv.length?'<p class="an-sv-t">Versions enregistrées</p>'+sauv.slice().reverse().map(x=>'<div class="an-sv-v"><span>'+escapeHtml(_anatDateHeure(x.date))+'<small>'+escapeHtml(_anatResumeSauvegarde(x))+'</small></span>'
-        +'<button type="button" class="an-sv-r" onclick="anatRestaurer(\''+escapeHtml(String(x.id))+'\')">Restaurer</button>'
-        +'<button type="button" class="an-sv-x" aria-label="Supprimer cette version" onclick="anatSupprimerSauvegarde(\''+escapeHtml(String(x.id))+'\')">'+ANAT_SVG.x+'</button></div>').join('')
+        +'<button type="button" class="an-sv-r" data-on-click="anatRestaurer(\''+escapeHtml(String(x.id))+'\')">Restaurer</button>'
+        +'<button type="button" class="an-sv-x" aria-label="Supprimer cette version" data-on-click="anatSupprimerSauvegarde(\''+escapeHtml(String(x.id))+'\')">'+ANAT_SVG.x+'</button></div>').join('')
       :'<p class="an-sv-t">Aucune version enregistrée pour l’instant.</p>')
     +'</div></details>';
   const outils=edit
     ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; double-clic ou appui pour le saisir ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés : à vérifier en priorité.</p>'+liste
-      +'<div class="an-outils-b"><button type="button" class="btn btn-red btn-casse an-analyser" onclick="anatEnregistrerPoints()">'+ANAT_SVG.relancer+'<span>Analyser avec ces points</span></button>'
-      +'<button type="button" class="an-b2" onclick="anatPointsAutomatiques()">Points automatiques</button>'
-      +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button>'
-      +'<button type="button" class="an-b2" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button>'+sauvHtml+'</div></div>'
-    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'+sauvHtml+'</div>';
+      +'<div class="an-outils-b"><button type="button" class="btn btn-red btn-casse an-analyser" data-on-click="anatEnregistrerPoints()">'+ANAT_SVG.relancer+'<span>Analyser avec ces points</span></button>'
+      +'<button type="button" class="an-b2" data-on-click="anatPointsAutomatiques()">Points automatiques</button>'
+      +'<button type="button" class="an-b2" data-on-click="anatAnnulerEdition()">Annuler</button>'
+      +'<button type="button" class="an-b2" data-on-click="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button>'+sauvHtml+'</div></div>'
+    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" data-on-click="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'+sauvHtml+'</div>';
   // LES LEVIERS, SOUS LA PHOTO, EN MENU DÉROULANT SUR UNE LIGNE. Kevin : « je
   // réduirais le petit degré au centre ; modèle plan dans un petit carré à
   // gauche, le squat à droite, deux parties sur la même ligne ; les petites
@@ -62873,16 +63260,16 @@ function _htmlAnat(c){
         souleve:'Au décollage : barre à 22,5 cm du sol au-dessus du milieu du pied, épaule 1,5 cm devant, tibia contre la barre ; en sumo, hanches ouvertes à 40° et tibia à 10° au plus.',
         developpe:'Allongé, vu de face : humérus écarté du tronc de θ en bas, avant-bras vertical ; trajet = verrouillage − poitrine.',
         couples:'Pour chaque mouvement, le bras de levier de l’articulation principale, rapporté au même calcul sur des proportions moyennes, à taille égale.'}[l.cle]||'';
-      return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
+      return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' data-on-toggle="_anatDeplie.lev=this.open">'
         +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
         +'<span class="an-dr-r">'+escapeHtml(l.lib)+' · <b>'+escapeHtml(val)+'</b></span>'+ANAT_SVG.chev+'</summary>'
         +'<div class="an-lev-g">'
         +'<div class="an-lev-mod"><b>Modèle plan</b><p>'+escapeHtml(modele)+'</p><p class="an-lev-n">Appliqué aux longueurs de l’athlète, puis aux proportions moyennes publiées par de Leva (1996), du même sexe : c’est l’écart qui renseigne.</p>'
           +(l.source?'<p class="an-lev-n">Source : '+escapeHtml(l.source)+'.</p>':'')+'</div>'
         +'<div class="an-lev-c"><div class="an-lev-top"><b>'+escapeHtml(l.lib)+'</b>'
-          +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
+          +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" data-on-click="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
-          +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
+          +'<button type="button" aria-label="Levier suivant" data-on-click="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
           +(l.cle==='couples'?_htmlCouples(l,c)
           :l.cle==='developpe'&&l.prise?'<div id="an-dev-res">'+_htmlDeveloppeRes(l)+'</div>'+_htmlDeveloppeCtl(l)
           :l.cle==='souleve'&&l.styles?_htmlSouleve(l)
@@ -62894,7 +63281,7 @@ function _htmlAnat(c){
     })():'';
   // ET DESSOUS, CE QUI « ÉVALUE » LA PHOTO : l'échelle, l'origine des points,
   // le miroir et le téléphone — replié par défaut.
-  const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' ontoggle="_anatDeplie.inf=this.open">'
+  const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' data-on-toggle="_anatDeplie.inf=this.open">'
     +'<summary><span class="an-dr-i">'+ANAT_SVG.info+'</span><span class="an-dr-t">Échelle et prise de vue</span>'
     +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+(res.rotation&&res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' · corps tourné ≈ '+_anatN(res.rotation.deg,0)+'°':'')+'</span>'+ANAT_SVG.chev+'</summary>'
     +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % : perspective et posture.'
@@ -62922,8 +63309,8 @@ function _htmlAnat(c){
     +optsHtml
     // A10 : la demande de photos du prochain bilan. Elle ne descend chez
     // l'athlète que comme une consigne de prise de vue.
-    +'<label class="an-opt an-demande"><input type="checkbox"'+(res.opts.sol?' checked':'')+' onchange="anatReglerOption(\'sol\',this.checked)"><span>Photo prise vers le sol (pieds vus du dessus) : ouverture des pieds lue telle quelle</span></label>'
-    +'<label class="an-opt an-demande"><input type="checkbox"'+(c.photoPaumes?' checked':'')+' onchange="anatDemanderPaumes(this.checked)"><span>Demander les prochaines photos de face paumes vers l’avant</span></label>'
+    +'<label class="an-opt an-demande"><input type="checkbox"'+(res.opts.sol?' checked':'')+' data-on-change="anatReglerOption(\'sol\',this.checked)"><span>Photo prise vers le sol (pieds vus du dessus) : ouverture des pieds lue telle quelle</span></label>'
+    +'<label class="an-opt an-demande"><input type="checkbox"'+(c.photoPaumes?' checked':'')+' data-on-change="anatDemanderPaumes(this.checked)"><span>Demander les prochaines photos de face paumes vers l’avant</span></label>'
     +'</div></details>';
 
   const carte=(f)=>{
@@ -62948,17 +63335,17 @@ function _htmlAnat(c){
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
       +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> : '+escapeHtml(x.reglage)
         +_htmlAnatExos(x.exercices,c)
-        +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" onclick="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
+        +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" data-on-click="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
       +'<p class="an-f-src">Source : '+escapeHtml(f.source||'')+(f.tolerance?' · marge '+escapeHtml(f.tolerance):'')+' · bilan du '+_anatDateFr(a.bilan)+'</p>'
       +'</div>';
     return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'">'
-      +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
+      +'<button type="button" class="an-f-vig" '+(cad?'data-on-click="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
       +(cad?_anatImg(s2,cad,f.vue,anatFiltre(anatReglage(a,f.vue)))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
       +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'
         +(f.conf?'<i class="an-conf" data-c="'+f.conf+'" title="'+escapeHtml(f.confPourquoi||'')+'" aria-label="'+escapeHtml(f.confPourquoi||'')+'">'+f.conf+'</i>':'')+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
       +'<p class="an-f-court">'+escapeHtml(t.court||'')+'</p>'
-      +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
+      +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" data-on-click="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
       +'</div>'+detail+'</div>';
   };
   // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
@@ -62978,13 +63365,13 @@ function _htmlAnat(c){
   const nSurv=cpt.surveiller, nMarge=cpt.marge, nIll=cpt.illisibles, nConf=cpt.confirmer;
   const resHtml='<div class="an-res"><div class="an-res-h"><h5>Résultats de l’analyse</h5>'
     +'<div class="an-res-k"><span data-t="s"><b>'+nSurv+'</b>à surveiller</span><span data-t="m"><b>'+nMarge+'</b>dans la marge</span>'+(nConf?'<span data-t="c" title="Niveau net ou marqué sur des points estimés : à confirmer en les replaçant"><b>'+nConf+'</b>à confirmer</span>':'')+(nIll?'<span data-t="i"><b>'+nIll+'</b>non lisible'+(nIll>1?'s':'')+'</span>':'')+'</div></div>'
-    +'<div class="an-res-l">'+fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
+    +'<div class="an-res-l">'+fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" data-on-click="anatOuvrir(\''+f.cle+'\',true)">'
       +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+(f.stat?'<small class="an-r-p">'+escapeHtml(f.stat.court||f.stat.txt)+'</small>':'')+'</span></button>').join('')+'</div>'
     +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : non lisible</span></p></div>';
   const pourquoi='<div class="an-pq"><span class="an-pq-i">'+ANAT_SVG.info+'</span><div class="an-pq-c"><h5>Méthode</h5>'
     +'<span>Les repères sont posés sur les vraies photos du bilan : automatiquement, puis ajustables à la main. La photo est mise à l’échelle par la taille du dossier (du sommet du crâne aux talons), les longueurs sont mesurées d’un centre articulaire à l’autre et comparées aux longueurs publiées par de Leva (1996), mesurées elles aussi d’un centre articulaire à l’autre, pour le même sexe ; la hauteur de hanche et les largeurs d’os, aux moyennes ANSUR II (2012). Sous chaque mesure, sa définition. Un écart à la moyenne est un levier à connaître, pas un défaut. '
     +escapeHtml(MORPHO_DISCLAIMER)+'</span></div>'
-    +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
+    +'<button type="button" class="an-b2" data-on-click="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
     +(_anatSafe(()=>_htmlAnatPriorites(res,c))||'')
     +'<div class="an-grille">'+colG
@@ -63346,8 +63733,8 @@ function renderPlateauxCoach(c){
       <div class="plx-c">${g.exercices.map(ligne).join('')}</div>
     </details>`).join('')}
     <div class="plx-actions">
-      <button type="button" class="btn btn-red" onclick="openCoachSessions()">Modifier le programme</button>
-      <button type="button" class="btn btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
+      <button type="button" class="btn btn-red" data-on-click="openCoachSessions()">Modifier le programme</button>
+      <button type="button" class="btn btn-blanc" data-on-click="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
     </div>
     </div>
     ${PERF_ENCADRE}
@@ -63390,17 +63777,17 @@ function coachAttribuerMuscles(){
   const corps=n
     ?_coachExSansMuscle.map((a,i)=>`<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:8px">
         <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.nom)}</span>
-        <button class="btn btn-outline btn-sm" style="width:auto;flex:0 0 auto;margin:0" onclick="_coachClasserMuscles(${i})">Attribuer</button>
+        <button class="btn btn-outline btn-sm" style="width:auto;flex:0 0 auto;margin:0" data-on-click="_coachClasserMuscles(${i})">Attribuer</button>
       </div>`).join('')
     :emptyState('check','Tous les exercices du programme ont leurs muscles.',null,null,'padding:24px 0');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Attribuer les muscles</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${n
         ?n+' exercice'+(n>1?'s':'')+' du programme sans groupe musculaire : il'+(n>1?'s ne comptent':' ne compte')+' ni dans le volume, ni dans ce qui bloque.'
         :'Rien à attribuer.'}</p>
       <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">${corps}</div>
-      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Fermer</button>
     </div></div>`;
   const old=document.getElementById('modal-overlay'); if(old) old.remove();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -64143,7 +64530,7 @@ function _htmlSelecteurCreneau(u){
   // s'arrête là.
   if(l.length===1) return '';
   return `<div data-scroll-fade style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px">
-    ${l.map(x=>`<button onclick="_perfSetCreneau(${x.slot})" class="hit44"
+    ${l.map(x=>`<button data-on-click="_perfSetCreneau(${x.slot})" class="hit44"
       style="flex:0 0 auto;min-height:38px;padding:8px 14px;border-radius:var(--r-2);cursor:pointer;white-space:nowrap;font-size:var(--fs-sm);font-weight:700;
       background:${cur&&cur.slot===x.slot?'#1a0505':'var(--surface-1)'};border:1px solid ${cur&&cur.slot===x.slot?'var(--red)':'var(--border)'};
       color:${cur&&cur.slot===x.slot?'var(--text)':'#bbb'}">${escapeHtml(x.nom)}</button>`).join('')}
@@ -64566,7 +64953,7 @@ function _htmlBadge(b,grand,sansTexte){
   // recouvre entierement ; si elle manque, `onerror` la retire et le glyphe est
   // deja la, sans clignotement et sans requete supplementaire.
   const img=f?('<img class="rc-badge-img" src="'+escapeHtml(f)+'" alt="" '
-    +'loading="lazy" decoding="async" onerror="_badgeSansImage(this)">'):'';
+    +'loading="lazy" decoding="async" data-on-error="_badgeSansImage(this)">'):'';
   return '<div class="rc-badge'+(grand?' rc-badge-xl':'')+'" role="img" aria-label="'+escapeHtml(b.titre+'. '+b.desc)+'">'
     +'<div class="rc-badge-hex'+(f?' rc-badge-vrai':'')+'" style="width:'+t+'px;height:'+t+'px">'
       +'<div class="rc-badge-ico">'+_htmlGlyphe(b.icone)+'</div>'+img+'</div>'
@@ -64823,10 +65210,10 @@ function _rendrePartageSeanceRelue(sc){
   if(!d){ z.innerHTML=''; return true; }
   try{ _prechaufferMarqueCoach(); }catch(e){}
   const part=(typeof navigator!=='undefined'&&navigator.share)
-    ?'<button type="button" class="rcf-share" onclick="partagerSeanceRelue()">'
+    ?'<button type="button" class="rcf-share" data-on-click="partagerSeanceRelue()">'
       +'Partager cette séance</button>':'';
   z.innerHTML=_htmlVisuelFonds('sd-fonds')+_htmlBilanEquivalent()
-    +'<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
+    +'<button type="button" class="rcf-dl" data-on-click="telechargerSeanceRelue(this)">'
     +icon('download',18)+'<span>Télécharger cette séance</span></button>'+part
     +'<div class="rcf-note" id="sd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
   // Relu à chaque vignette : la case de l'équivalent fun change la carte.
@@ -64988,7 +65375,7 @@ function _htmlRecordsFin(ctx,date,cle){
   if(k) _recordsAffiches[k]={liste:rec,date:date||Date.now()};
   const bouton=(i,lib,cls,aria)=>k?('<button type="button" class="'+cls+'" '
     +(aria?'aria-label="'+escapeHtml(aria)+'" ':'')
-    +'onclick="partagerRecord(\''+k+'\','+i+',this)">'+icon('share',14)
+    +'data-on-click="partagerRecord(\''+k+'\','+i+',this)">'+icon('share',14)
     +'<span>'+lib+'</span></button>'):'';
   // LE BOUTON EST AU-DESSUS DE LA LISTE, ET C'EST UN BOUTON. « Partager ce
   // record » était un lien rouge en petites capitales sous chaque ligne, que
@@ -65451,7 +65838,7 @@ function _htmlRessentiFin(){
           // Ici le chiffre sert deux fois : il rend le bouton visible, et il dit
           // ou l'on vise sur l'echelle au lieu de le faire deviner.
           return '<button type="button" class="rcf-p'+(v===5?' on':'')+'" data-v="'+v+'"'
-            +' aria-label="'+v+' sur 10" onclick="rcfNoter(\''+o.id+'\','+v+')">'+v+'</button>';
+            +' aria-label="'+v+' sur 10" data-on-click="rcfNoter(\''+o.id+'\','+v+')">'+v+'</button>';
         }).join('')
       +'</div>'
       // R12 — l'ancrage, sous l'echelle : ce que veut dire 1, ce que veut dire 10.
@@ -65460,14 +65847,14 @@ function _htmlRessentiFin(){
       // Le porteur de la donnee. Cache, mais c'est bien lui que tout le reste
       // de l'application lit et ecrit.
       +'<input type="range" id="ps-'+o.id+'" min="0" max="10" value="5" hidden'
-      +' oninput="'+suite+'">'
+      +' data-on-input="'+suite+'">'
       +'</div>';
   };
   return '<div class="rcf-fb">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
       +'<span class="rcf-fb-t">Comment tu te sens ?</span>'
       +'<button type="button" class="rcf-fb-plus" id="ps-detail-btn" '
-        +'onclick="togglePsDetail()">Plus de détails</button></div>'
+        +'data-on-click="togglePsDetail()">Plus de détails</button></div>'
     +RCF_QUESTIONS.map(q).join('')
     // LE MOT POUR LE COACH (30/09/2026) : facultatif, 280 caracteres, range
     // dans la seance (sess.noteAthlete) et lu dans son detail cote coach.
@@ -65766,9 +66153,9 @@ function _htmlEauSuivi(u,jourEstOn){
     ${bes?`<div role="progressbar" aria-label="Eau bue" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" style="height:8px;background:var(--surface-2);border-radius:var(--r-2);overflow:hidden;margin-bottom:10px">
       <div style="height:100%;width:${pct}%;background:var(--success);border-radius:var(--r-2)"></div></div>`:''}
     <div style="display:flex;gap:8px">
-      <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(250)">+250 ml</button>
-      <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(500)">+500 ml</button>
-      <button type="button" class="hit44" style="${btn};color:var(--sub)${_eauAjouts.length?'':';opacity:.45'}" onclick="annulerEau()"${_eauAjouts.length?'':' disabled'}>Annuler</button>
+      <button type="button" class="hit44" style="${btn}" data-on-click="ajouterEau(250)">+250 ml</button>
+      <button type="button" class="hit44" style="${btn}" data-on-click="ajouterEau(500)">+500 ml</button>
+      <button type="button" class="hit44" style="${btn};color:var(--sub)${_eauAjouts.length?'':';opacity:.45'}" data-on-click="annulerEau()"${_eauAjouts.length?'':' disabled'}>Annuler</button>
     </div>
   </div>`;
 }
@@ -67889,13 +68276,13 @@ function rapRendre(){
   const pz=document.getElementById('rap-presets');
   if(pz) pz.innerHTML=RAP_PRESETS.map(x=>{
     const actif=_rapPresetActif===x.cle;
-    return `<button type="button" onclick="rapPreset('${x.cle}')" aria-pressed="${actif?'true':'false'}" style="flex:1;min-height:38px;padding:0 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;background:${actif?'#1a0000':'var(--surface-1)'};border:1px solid ${actif?'var(--red)':'var(--border)'};color:${actif?'var(--red-light)':'var(--sub)'}">${escapeHtml(x.lib)}</button>`;
+    return `<button type="button" data-on-click="rapPreset('${x.cle}')" aria-pressed="${actif?'true':'false'}" style="flex:1;min-height:38px;padding:0 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;background:${actif?'#1a0000':'var(--surface-1)'};border:1px solid ${actif?'var(--red)':'var(--border)'};color:${actif?'var(--red-light)':'var(--sub)'}">${escapeHtml(x.lib)}</button>`;
   }).join('');
   const c=document.getElementById('rap-cases');
   if(c&&!c.dataset.pose){
     c.dataset.pose='1';
     c.innerHTML=RAP_BLOCS.map(b=>`<label class="rap-case"><input type="checkbox" ${_rapBlocs[b.cle]?'checked':''}
-      onchange="rapBasculer('${b.cle}',this.checked)"> ${escapeHtml(b.lib)}</label>`).join('');
+      data-on-change="rapBasculer('${b.cle}',this.checked)"> ${escapeHtml(b.lib)}</label>`).join('');
   }
 }
 function rapBasculer(cle,val){ _rapBlocs[cle]=!!val; rapRendre(); }
@@ -69643,7 +70030,7 @@ function _rendreUniteReglages(){
   if(!z||!currentUser) return false;
   const u=uniteCharge(currentUser);
   z.innerHTML='<div class="cr-unite"><label for="cr-unite-sel">Unité des charges</label>'
-    +'<select id="cr-unite-sel" onchange="choisirUnite(this.value)">'
+    +'<select id="cr-unite-sel" data-on-change="choisirUnite(this.value)">'
     +'<option value="kg"'+(u==='kg'?' selected':'')+'>Kilos (kg)</option>'
     +'<option value="lb"'+(u==='lb'?' selected':'')+'>Livres (lb)</option></select>'
     +'<div class="cr-unite-d">Tes charges restent enregistrées en kilos ; elles s’affichent et se saisissent dans l’unité choisie.</div></div>';
@@ -69898,7 +70285,7 @@ function _htmlMonteeCharge(chargeTravail,ex,idx){
   const txt=memesReps
     ? paliers.map(p=>_fmtChargeMontee(chargeSuggereeAffichee(p.charge,{ex,user:currentUser,sens:'proche'}))).join(' · ')+' '+_unite()+' × '+paliers[0].reps
     : paliers.map(p=>_fmtChargeMontee(chargeSuggereeAffichee(p.charge,{ex,user:currentUser,sens:'proche'}))+' '+_unite()+' × '+p.reps).join(' · ');
-  return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:12px"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
+  return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:12px"><button type="button" data-on-click="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
 }
 // Préférence GLOBALE, pas par exercice : replier la rampe une fois la replie
 // partout, sinon il faudrait la replier à chaque exercice de chaque séance.
@@ -70055,7 +70442,7 @@ function _rirBandeOuvrir(idx,i){
   if(!z||!ex||!s||!s.done||s.rpeCible||isCardio(ex)||(s.rir!==''&&s.rir!=null)){ _rirBandeFermer(); return false; }
   z.innerHTML=`<div class="rir-bande" role="group" aria-label="RIR de la série ${i+1}">`
     +`<span class="rir-bande-t">RIR<br>série ${i+1}</span><div class="rir-bande-p">`
-    +RIR_CHOIX.map(c=>`<button type="button" class="rir-pastille" onclick="_rirBandeChoisir(${idx},${i},'${c[0]}')"`
+    +RIR_CHOIX.map(c=>`<button type="button" class="rir-pastille" data-on-click="_rirBandeChoisir(${idx},${i},'${c[0]}')"`
       +` aria-label="${escapeHtml(c[1]+' : '+c[2])}">${escapeHtml(c[1])}</button>`).join('')
     +`</div></div>`;
   z.dataset.serie=idx+':'+i;
@@ -70391,7 +70778,7 @@ function _rendreGrilleCharge(){
     // qu'il faut pouvoir le changer.
     const ecart=(()=>{ try{ return semainePorteEcart(u,i); }catch(e){ return false; } })();
     h+='<th style="'+th+';text-align:center'+(m.decharge?';color:var(--info)':'')+'">'
-      +'<button type="button" onclick="ajusterSemaineBloc('+i+')" '
+      +'<button type="button" data-on-click="ajusterSemaineBloc('+i+')" '
       +'title="Modifier cette semaine" '
       +'style="background:none;border:none;padding:2px 4px;cursor:pointer;font:inherit;'
       +'color:'+(m.decharge?'var(--info)':(ecart?'var(--red-text)':'inherit'))+'">'
@@ -71354,14 +71741,14 @@ function _htmlEcheanceCoach(c){
   if(!e)
     return tete+'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:8px">'
       +'Aucune échéance active. Une seule à la fois : en ouvrir une seconde remplace la première.</div>'
-      +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="_echOuvrirDialogue()">Ouvrir une échéance</button></div>';
+      +'<button class="btn btn-outline btn-sm" style="width:100%" data-on-click="_echOuvrirDialogue()">Ouvrir une échéance</button></div>';
   const lib=({COMPETITION:'Compétition',SHOOTING:'Shooting',OBJECTIF:'Objectif'})[e.type]||'Échéance';
   return tete
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(lib)+(j?(' · '+(j.j>=0?('J-'+j.j):('J+'+(-j.j)))):'')
     +(e.federation?' · '+escapeHtml(e.federation):'')+'</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
-    +'onclick="ouvrirEcheanceEcran(getOwnedClient(currentClientId))">Ouvrir le compte à rebours</button></div>';
+    +'data-on-click="ouvrirEcheanceEcran(getOwnedClient(currentClientId))">Ouvrir le compte à rebours</button></div>';
 }
 // L'OUVERTURE. Le remplacement est CONFIRME — deux echeances, ce sont deux
 // comptes a rebours et deux jeux de cibles pour le meme jour.
@@ -71399,8 +71786,8 @@ function _echEditer(n){
   const val=v=>v==null?'':String(v);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:86vh;overflow-y:auto">'
+    '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:86vh;overflow-y:auto">'
     +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">J-'+n+'</div>'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">'
     +escapeHtml(ECH_PHRASE_CANEVAS)+'</div>'
@@ -71415,7 +71802,7 @@ function _echEditer(n){
     +'<label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:10px 0;display:inline-flex;align-items:center;gap:6px">'
     +'<input type="checkbox" id="ech-poses" style="width:auto;margin:0"'+(f.poses?' checked':'')+'>Séance de poses</label>'
     +'<div id="ech-err" style="color:var(--red-light);font-size:var(--fs-xs);line-height:1.55;margin:6px 0;display:none"></div>'
-    +'<button class="btn btn-red" style="width:100%;margin-top:6px" onclick="_echEnregistrer('+n+')">Enregistrer</button>'
+    +'<button class="btn btn-red" style="width:100%;margin-top:6px" data-on-click="_echEnregistrer('+n+')">Enregistrer</button>'
     +'</div></div>');
   return true;
 }
@@ -71506,7 +71893,7 @@ function _renderEcheance(){
   if(sortie){
     h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(sortie.phrase)+'</div>'
-      +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
+      +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
   }
   if(j&&j.phase==='AFFUTAGE'){
     // L'AFFUTAGE NE FAIT RIEN DE NEUF : il resserre ce qui existe. On le DIT,
@@ -71556,7 +71943,7 @@ function _echHtmlFiches(u,e,estCoach){
         h+='<div class="ech-equiv" data-jour="'+n+'" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px;line-height:1.5"></div>';
     }
     if(estCoach)
-      h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="_echEditer('+n+')">'
+      h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="_echEditer('+n+')">'
         +(vide?'Poser cette journée':'Modifier')+'</button>';
     h+='</div>';
   }
@@ -71986,13 +72373,13 @@ function rcRendreSrpe(){
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
-    +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
+    +'<button type="button" aria-label="Passer" data-on-click="rcPasserSrpe()" '
     +'style="background:none;border:none;color:rgba(255,255,255,.45);font-size:var(--fs-lg);line-height:1;'
     +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">✕</button></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +SRPE_ECHELLE.map(e=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="flex:1 1 auto;min-width:0;padding:10px 6px;font-size:var(--fs-xs)" '
-      +'onclick="rcNoterSeance('+JSON.stringify(e.cle).replace(/"/g,'&quot;')+')">'
+      +'data-on-click="rcNoterSeance('+JSON.stringify(e.cle).replace(/"/g,'&quot;')+')">'
       +escapeHtml(e.lib)+'</button>').join('')
     +'</div></div>';
   z.style.display='block';
@@ -72634,7 +73021,7 @@ function _htmlSelecteurSalle(){
   const a=salleActive(currentUser);
   return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
     +'<span style="font-size:var(--fs-2xs);color:var(--sub);flex-shrink:0">Salle</span>'
-    +'<select onchange="choisirSalle(this.value)" style="flex:1;min-width:0;background:var(--surface-2);'
+    +'<select data-on-change="choisirSalle(this.value)" style="flex:1;min-width:0;background:var(--surface-2);'
     +'border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--r-2);'
     +'font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">'
     +l.map(s=>'<option value="'+escapeHtml(s.id)+'"'+((a&&a.id===s.id)?' selected':'')+'>'
@@ -73139,7 +73526,7 @@ function _htmlBlocPriorite(c){
       +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">'
       +'Concentrer le volume sur un à trois muscles, à budget de récupération constant. '
       +'Ce qu’on ajoute quelque part se retire ailleurs.</div>'
-      +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="blocOuvrir()">Ouvrir un bloc</button></div>';
+      +'<button class="btn btn-outline btn-sm" style="width:100%" data-on-click="blocOuvrir()">Ouvrir un bloc</button></div>';
   }
   const a=blocArbitrage(u);
   const p=blocPlafond(u,a);
@@ -73183,9 +73570,9 @@ function _htmlBlocPriorite(c){
     +'<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
     +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px"'
     +(depasse?' disabled style="width:100%;margin-bottom:8px;opacity:.45"':'')
-    +' onclick="blocAppliquerSeries('+JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
+    +' data-on-click="blocAppliquerSeries('+JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
     +'Enregistrer les séries</button>'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="blocAppliquerOrdre('
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" data-on-click="blocAppliquerOrdre('
     +JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
     +'Remonter les prioritaires en tête de séance</button>'
     +(freq
@@ -73194,7 +73581,7 @@ function _htmlBlocPriorite(c){
         +' séries sur '+freq.seances+' séance'+(freq.seances>1?'s':'')+', soit '+volAffiche(freq.parSeance)
         +' par séance. Une séance de plus les répartirait mieux.</div>'
       : '')
-    +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="blocFermer()">Clore le bloc</button>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%" data-on-click="blocFermer()">Clore le bloc</button>'
     +'</div></div>';
 }
 function renderBlocPriorite(c){
@@ -73643,12 +74030,13 @@ function _htmlDispo(idx){
     +escapeHtml(d.motif)+'</div>'
     +(dejaAllege
       ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">✓ Dernière série retirée pour aujourd’hui.</div>'
-      : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
+      : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="'
+        // actions-en-plus: dispoReporterSeance dispoAllegerSeance
         +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
         +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
         +(rouge?'Alléger la semaine':'Enregistrer')+'</button>')
     +(rouge
-      ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="clientTab(\'canal\')">En parler à ton coach</button>'
+      ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="clientTab(\'canal\')">En parler à ton coach</button>'
       : '')
     +'</div>';
 }
@@ -74028,7 +74416,7 @@ function _htmlChoixRetour(muscle,champ,libs){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +Object.keys(libs).map(v=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="flex:1 1 auto;min-width:0;padding:10px 8px;font-size:var(--fs-xs)" '
-      +'onclick="rcRepondreRetour(this,'+JSON.stringify(muscle).replace(/"/g,'&quot;')+','
+      +'data-on-click="rcRepondreRetour(this,'+JSON.stringify(muscle).replace(/"/g,'&quot;')+','
       +JSON.stringify(champ).replace(/"/g,'&quot;')+','+JSON.stringify(v).replace(/"/g,'&quot;')+')">'
       +escapeHtml(libs[v])+'</button>').join('')
     +'</div></div>';
@@ -74167,7 +74555,7 @@ function _htmlBoutonReperes(c){
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px">'
     +'Repères ajustés sur ses retours : '+escapeHtml(noms)+'.</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%" '
-    +'onclick="rcReinitReperes()">Revenir aux repères de référence</button></div>';
+    +'data-on-click="rcReinitReperes()">Revenir aux repères de référence</button></div>';
 }
 // LE GESTE. Confirme avant d'agir : les seuils de l'athlete changent, et sa
 // jauge changera de couleur sans qu'il ait rien fait.
@@ -74969,8 +75357,8 @@ function pickBilChoice(groupId,val,multi){
 // regarde, et un athlète distrait y inscrirait le poids d'il y a quinze jours.
 // Aucune mensuration ne passe par bQ : seul le poids est concerné.
 function bQ(id){const _r=_bilEstReprise(id);
-  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:#080808;border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
-function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
+  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" data-on-input="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:#080808;border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
+function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" data-on-input="bilData['${id}']=this.value">`;}
 // ⚠ UNE DATE DE NAISSANCE, PAS UN AGE. « 26 » saisi une fois reste 26 pour
 // toujours : deux ans plus tard le metabolisme de base se calcule sur un age
 // faux, et rien ne le signale — c'est la seule des quatre entrees du calcul
@@ -74983,7 +75371,7 @@ function bDate(id){
   const a=bilData[id]?_ageRevolu(bilData[id]):null;
   return `<span style="display:inline-flex;align-items:center;gap:10px">`
     +`<input type="date" id="${id}" value="${v}" max="${_dateMaxNaissance()}"`
-    +` oninput="bilData['${id}']=this.value;bMajAge('${id}')"`
+    +` data-on-input="bilData['${id}']=this.value;bMajAge('${id}')"`
     +` style="padding:6px 8px;font-size:var(--fs-sm);font-weight:700;margin:0;`
     +`background:#080808;border:1px solid #222;border-radius:var(--r-1);color:var(--text)">`
     +`<span id="${id}-age" style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">`
@@ -75001,7 +75389,7 @@ function _dateMaxNaissance(){
   const d=new Date();
   return (d.getFullYear()-10)+'-12-31';
 }
-function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
+function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" data-on-input="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
 // R35 — LE LIBELLE D'UN CHOIX PEUT DIFFERER DE SA VALEUR. bC enregistre la
 // chaine du choix telle quelle, et d'autres calculs la comparent (le type de
 // diete relu par saveBilanFinal, par exemple) : corriger un libelle en
@@ -75026,7 +75414,7 @@ function _texteReponseLue(k,val){
   return _texteReponse(Array.isArray(val)?val.map(v=>_libelleChoix(k,v)):_libelleChoix(k,val));
 }
 function bC(gid,choices,multi){
-  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${_libelleChoix(gid,c)}</div>`).join('');
+  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" data-on-click="pickBilChoice('${gid}',this.dataset.val,${!!multi})" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${_libelleChoix(gid,c)}</div>`).join('');
 }
 // Échelle d'émojis néon — visages SVG au trait (rendu identique sur tous les appareils)
 // Mêmes valeurs stockées que bC (compat stats coach)
@@ -75045,7 +75433,7 @@ const BEMO_FACES={
 function bEmojiScale(gid,opts){
   return `<div class="emo-row">`+opts.map(o=>{
     const inner=o.svg||('<circle cx="24" cy="24" r="20"/>'+BEMO_FACES[o.f]);
-    return `<div class="emo-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" style="--eo:${o.c};--eo-glow:${o.c}55" onclick="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
+    return `<div class="emo-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" style="--eo:${o.c};--eo-glow:${o.c}55" data-on-click="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
     `<svg class="emo" viewBox="0 0 48 48" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`+
     `<span class="emo-lbl">${o.l||o.v}</span></div>`;}).join('')+`</div>`;
 }
@@ -75060,7 +75448,7 @@ const BICON={
 function bGenderCards(gid){
   const opts=[{v:'Homme',b:BSCH_M},{v:'Femme',b:BSCH_F}];
   return `<div class="gsl-row">`+opts.map(o=>
-    `<div class="gsl-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" onclick="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
+    `<div class="gsl-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" data-on-click="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
     `<svg viewBox="0 48 360 484" preserveAspectRatio="xMidYMid meet"><path class="gsl-body" d="${o.b.body}" fill-rule="evenodd"/></svg>`+
     `<div class="gsl-lbl">${o.v.toUpperCase()}</div></div>`).join('')+`</div>`;
 }
@@ -75201,8 +75589,8 @@ function bPhotoCards(prefix){
     return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:10px">${p.l}</div>
-      <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
-      <button type="button" class="bil-minut" onclick="bilMinuteur('${key}','${p.k}')">Minuteur 10 s</button>
+      <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" data-on-change="loadBilPhoto(this,'${key}')"></label>
+      <button type="button" class="bil-minut" data-on-click="bilMinuteur('${key}','${p.k}')">Minuteur 10 s</button>
     </div>`;
   }).join('')+`</div>`
     // E1 : le verdict de chaque photo, puis les guides, sur toute la largeur.
@@ -75223,7 +75611,7 @@ function bSlider(gid){
   return `<div class="bsl-wrap">
     <div class="bsl-value" id="bsl-num-${gid}" style="color:${c};${set?`--halo-c:${c};text-shadow:var(--halo-2)66`:''}">${set?v:'–'}<span class="bsl-max">/10</span></div>
     <div class="bsl-feedback" id="bsl-fb-${gid}" style="color:${set?c:'var(--text-dim)'}">${set?BSL_LABELS[v-1]:'Fais glisser le curseur'}</div>
-    <input type="range" min="1" max="10" step="1" value="${v}" class="bslider" id="bsl-in-${gid}" style="--bsl:${set?c:'#555'};--bsl-glow:${set?c+'66':'transparent'};background:${track}" oninput="bSliderInput('${gid}',this.value)">
+    <input type="range" min="1" max="10" step="1" value="${v}" class="bslider" id="bsl-in-${gid}" style="--bsl:${set?c:'#555'};--bsl-glow:${set?c+'66':'transparent'};background:${track}" data-on-input="bSliderInput('${gid}',this.value)">
     <div class="bsl-scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
   </div>`;
 }
@@ -75248,7 +75636,7 @@ function bMetier(id){
   const n=facteurProfession(v);
   return `<div style="position:relative">
     <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
-      value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
+      value="${escapeHtml(v)}" data-on-input="_bMetierSaisie('${id}',this.value)" data-on-focus="_bMetierSaisie('${id}',this.value)">
     <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 var(--r-3) var(--r-3);max-height:210px;overflow:auto"></div>
     <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:6px;color:${n?'var(--success)':'var(--text-faint)'}">${
       n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
@@ -75265,7 +75653,7 @@ function _bMetierSaisie(id,val){
     // resterait ouverte par-dessus la suite du formulaire.
     const exact=!!niveauMetier(val);
     zs.style.display=(l.length&&!exact)?'block':'none';
-    zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" data-n="${escapeHtml(m.nom)}"
+    zs.innerHTML=l.map(m=>`<div data-on-click="_bMetierChoisi('${id}',this.dataset.n)" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" data-n="${escapeHtml(m.nom)}"
       style="padding:10px 12px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer;border-bottom:1px solid var(--border)">
       ${escapeHtml(m.nom)}<span style="color:var(--text-faint);font-size:var(--fs-2xs)"> · ${escapeHtml(m.fam)}</span></div>`).join('');
   }
@@ -75290,7 +75678,7 @@ function _bMetierSaisie(id,val){
 function bNaf(id){
   const cur=nafDepuisReponse(bilData[id]);
   return NAF_ECHELLE.map(x=>
-    `<div class="choice-opt naf-opt${cur&&cur.cle===x.cle?' sel':''}" data-grp="${id}" data-val="${escapeHtml(x.lib)}" onclick="pickBilChoice('${id}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
+    `<div class="choice-opt naf-opt${cur&&cur.cle===x.cle?' sel':''}" data-grp="${id}" data-val="${escapeHtml(x.lib)}" data-on-click="pickBilChoice('${id}',this.dataset.val,false)" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
     `<span class="naf-lib">${escapeHtml(x.lib)}</span>`+
     `<span class="naf-aide">${escapeHtml(x.aide)}</span>`+
     `</div>`).join('');
@@ -75325,18 +75713,18 @@ function bSports(id){
   const ligne=(e,i)=>{
     const kh=kcalHeureSport(e.sport,e.intensite,_kg);
     return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-      <select onchange="_bSportSet('${id}',${i},'sport',this.value)"
+      <select data-on-change="_bSportSet('${id}',${i},'sport',this.value)"
         style="flex:2;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${noms.map(n=>`<option value="${escapeHtml(n)}"${e.sport===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}
       </select>
-      <select onchange="_bSportSet('${id}',${i},'intensite',this.value)"
+      <select data-on-change="_bSportSet('${id}',${i},'intensite',this.value)"
         style="flex:1.3;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${SPORT_INTENSITES.map(x=>`<option value="${x.cle}"${e.intensite===x.cle?' selected':''}>${x.lib}</option>`).join('')}
       </select>
       <input type="number" min="0" step="0.5" value="${e.heures!=null?e.heures:''}" placeholder="h/sem"
-        oninput="_bSportSet('${id}',${i},'heures',this.value)"
+        data-on-input="_bSportSet('${id}',${i},'heures',this.value)"
         style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:#080808;border:1px solid #222;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-weight:700;margin:0">
-      <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
+      <button type="button" data-on-click="_bSportRetirer('${id}',${i})" class="hit44"
         style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px;min-width:30px">✕</button>
     </div>
     ${kh!=null&&Number(e.heures)>0?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin:-4px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
@@ -75344,7 +75732,7 @@ function bSports(id){
   const total=depenseSportsParJour(l,_kg);
   return `<div id="${id}-zone">
     ${l.map(ligne).join('')}
-    <button type="button" onclick="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
+    <button type="button" data-on-click="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
       style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)">+ Ajouter un sport</button>
     <div data-sports-total style="font-size:var(--fs-xs);color:var(--success);line-height:1.6;margin-top:8px">${total.semaine>0?total.semaine+' kcal par semaine, soit '+total.jour+' kcal par jour ajoutés à ta dépense.':''}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici ce que tu fais EN DEHORS de RepCore. Tes créneaux du programme sont déjà comptés à part : si tu ajoutes quand même une ligne « Musculation », elle ne s'additionne pas à eux.</div>
@@ -75528,8 +75916,8 @@ function bBodySchema(prefix){
         <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
           <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
-            oninput="bMesureSaisie('${id}',this.value)"
-            onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
+            data-on-input="bMesureSaisie('${id}',this.value)"
+            data-on-focus="bBodyFocus('${id}',1)" data-on-blur="bBodyFocus('${id}',0)"
             style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:right;padding:4px 0;margin:0">
           <span style="font-size:8.5px;color:var(--text-dim);font-weight:700;margin-left:1px">cm</span>
         </div>
@@ -75549,7 +75937,7 @@ function bLongueurs(){
     ${schema||''}
     <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
       <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
-        oninput="bilData['${id}']=this.value"
+        data-on-input="bilData['${id}']=this.value"
         style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:center;padding:6px 0;margin:0">
       <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
     </div>
@@ -75623,7 +76011,7 @@ async function bilMinuteur(key,vue){
     c.toBlob(b=>{
       if(!b) return;
       const f=new File([b],'minuteur.jpg',{type:'image/jpeg'});
-      const input=document.querySelector('input[type=file][onchange*="\''+key+'\'"]');
+      const input=document.querySelector('input[type=file][data-on-change*="\''+key+'\'"]');
       if(input){ const dt=new DataTransfer(); dt.items.add(f); input.files=dt.files; loadBilPhoto(input,key); }
     },'image/jpeg',0.92);
   };
@@ -75873,7 +76261,7 @@ function _htmlCalendrierBilansCoach(c){
     const bord=n&&!sel?'1px solid rgba(224,32,32,.55)':(iso===auj?'1px dashed var(--sub)':'1px solid transparent');
     const coul=sel?'#fff':n?'var(--red-text)':'var(--text-dim)';
     cases+='<button type="button"'+(n?'':' disabled')
-      +' onclick="ccdBilCalJour(\''+iso+'\')"'
+      +' data-on-click="ccdBilCalJour(\''+iso+'\')"'
       +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?', '+n+' bilan'+(n>1?'s':''):'')+'"'
       +' style="aspect-ratio:1;min-height:26px;display:flex;align-items:center;justify-content:center;'
       +'background:'+fond+';border:'+bord+';border-radius:var(--r-2);color:'+coul+';'
@@ -75887,7 +76275,7 @@ function _htmlCalendrierBilansCoach(c){
   const minCle=_ccdBilMoisCle(jours[0]),maxCle=_ccdBilMoisCle(dernier);
   const prec=cle>minCle,suiv=cle<maxCle;
   const fleche=(actif,pas,txt)=>'<button type="button"'+(actif?'':' disabled')
-    +' onclick="ccdBilCalMois('+pas+')" aria-label="'+(pas<0?'Mois précédent':'Mois suivant')+'"'
+    +' data-on-click="ccdBilCalMois('+pas+')" aria-label="'+(pas<0?'Mois précédent':'Mois suivant')+'"'
     +' style="min-width:32px;min-height:32px;background:none;border:1px solid var(--border);border-radius:var(--r-2);'
     +'color:'+(actif?'var(--text)':'var(--text-faint)')+';cursor:'+(actif?'pointer':'default')+'">'+txt+'</button>';
   const b=(par[_ccdBilCal.sel]||[])
@@ -76168,7 +76556,7 @@ function _htmlAlerteTension(user){
 // DISCRET À DESSEIN. Ce sont des données de santé : le geste doit être
 // possible, pas invitant. Et il passe de toute façon par une confirmation.
 function _htmlRetraitReleve(appel,quoi){
-  return '<button type="button" class="hit44" onclick="'+appel+'" '
+  return '<button type="button" class="hit44" data-on-click="'+appel+'" '
     +'aria-label="Supprimer '+quoi+'" title="Supprimer" '
     +'style="flex:none;width:44px;height:44px;min-width:44px;min-height:44px;'
     +'display:inline-flex;align-items:center;justify-content:center;padding:0;'
@@ -76281,7 +76669,7 @@ function loadSante(){
         <span class="sub" style="font-size:var(--fs-md)">/</span>
         <input id="ct-dia" type="number" inputmode="numeric" placeholder="80" aria-label="Diastolique" style="width:72px;text-align:center">
         <input id="ct-pouls" type="number" inputmode="numeric" placeholder="bpm" aria-label="Pouls, facultatif" style="width:72px;text-align:center">
-        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" onclick="ajouterTension()">Ajouter</button>
+        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" data-on-click="ajouterTension()">Ajouter</button>
       </div>
       ${_htmlAlerteTension(u)}
       <div style="margin-top:10px">${_htmlConstantes(u)}</div>
@@ -76289,12 +76677,12 @@ function loadSante(){
     <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Analyses</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-        <select id="an-marqueur" onchange="_majUnites()" style="flex:1;min-width:130px">
+        <select id="an-marqueur" data-on-change="_majUnites()" style="flex:1;min-width:130px">
           ${MARQUEURS.map(m=>`<option value="${escapeHtml(m.cle)}">${escapeHtml(m.lib)}</option>`).join('')}
         </select>
         <input id="an-valeur" type="number" step="any" inputmode="decimal" placeholder="valeur" aria-label="Valeur" style="width:92px;text-align:center">
         <select id="an-unite" style="width:104px"></select>
-        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" onclick="ajouterAnalyse()">Ajouter</button>
+        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" data-on-click="ajouterAnalyse()">Ajouter</button>
       </div>
       <div style="margin-top:8px">${_htmlAnalyses(u)}</div>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(ANALYSES_PHRASE)}</div>
@@ -76307,7 +76695,7 @@ function loadSante(){
         <input type="checkbox" class="dg-case" value="${escapeHtml(d.cle)}" style="width:16px;height:16px;margin:0;accent-color:var(--red);flex-shrink:0">
         ${escapeHtml(d.lib)}
       </label>`).join('')}
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="declarerDrapeauGeneral()">Signaler</button>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="declarerDrapeauGeneral()">Signaler</button>
     </div>`;
   _majUnites();
 }
@@ -76412,7 +76800,7 @@ function _ctReset(zone){
 }
 function _ctPuce(actif,txt,onclick,couleur){
   const c=couleur||'var(--red)';
-  return `<button onclick="${onclick}" class="hit44" style="min-height:40px;padding:8px 12px;border-radius:var(--r-2);cursor:pointer;
+  return `<button data-on-click="${onclick}" class="hit44" style="min-height:40px;padding:8px 12px;border-radius:var(--r-2);cursor:pointer;
     background:${actif?'#1a0505':'var(--surface-1)'};border:1px solid ${actif?c:'var(--border)'};
     color:${actif?'var(--text)':'#bbb'};font-size:var(--fs-sm);font-weight:700;text-align:left">${txt}</button>`;
 }
@@ -76426,7 +76814,7 @@ function _htmlFormContrainte(){
     // Le style global des <label> est en majuscules espacees : sur cinq
     // phrases completes, ca se lit comme des titres et plus comme des cases.
     return `<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;cursor:pointer;min-height:44px;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit;margin:0">
-      <input type="checkbox" ${on?'checked':''} onchange="_ctDrapeau('${d.cle}',this.checked)"
+      <input type="checkbox" ${on?'checked':''} data-on-change="_ctDrapeau('${d.cle}',this.checked)"
         style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(d.lib)}</span>
     </label>`;}).join('');
@@ -76442,7 +76830,7 @@ function _htmlFormContrainte(){
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">${niveaux}</div>
 
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Précision (facultatif)</div>
-    <input id="ct-libelle" value="${escapeHtml(s.libelle)}" oninput="_ctSaisie.libelle=this.value"
+    <input id="ct-libelle" value="${escapeHtml(s.libelle)}" data-on-input="_ctSaisie.libelle=this.value"
       placeholder="Ex : depuis une chute à ski en 2023"
       style="width:100%;box-sizing:border-box;margin-bottom:16px">
 
@@ -76453,8 +76841,8 @@ function _htmlFormContrainte(){
     </div>
     ${blocDisclaimerSante()}
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn btn-red btn-sm" onclick="_ctValider()" style="flex:1;letter-spacing:1px">Enregistrer</button>
-      <button class="btn btn-outline btn-sm" onclick="closeModal()" style="flex:0 0 auto;padding:0 16px;letter-spacing:1px;font-size:var(--fs-2xs)">Annuler</button>
+      <button class="btn btn-red btn-sm" data-on-click="_ctValider()" style="flex:1;letter-spacing:1px">Enregistrer</button>
+      <button class="btn btn-outline btn-sm" data-on-click="closeModal()" style="flex:0 0 auto;padding:0 16px;letter-spacing:1px;font-size:var(--fs-2xs)">Annuler</button>
     </div>
   </div>`;
 }
@@ -76474,8 +76862,8 @@ function ouvrirFormContrainte(zone,cible){
   _ctCible=cible||null;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Signaler une gêne</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">
           Ça sert à adapter ce qu'on te propose. Rien n'est supprimé de ton programme sans que ton coach le décide.
@@ -76562,7 +76950,7 @@ function afficherEcranArret(zone){
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
         ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:10px">${escapeHtml(t)}</div>`).join('')}
         <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:10px">Zone concernée : ${escapeHtml(libZone(zone))}.</div>
-        <button class="btn btn-red" onclick="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
+        <button class="btn btn-red" data-on-click="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
       </div></div>`);
 }
 // ── Restitution ─────────────────────────────────────────────────────────────
@@ -76573,7 +76961,7 @@ function _ligneContrainte(c,pourCoach,cible){
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}</div>
     </div>
-    <button onclick="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer" aria-label="Retirer">✕</button>
+    <button data-on-click="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer" aria-label="Retirer">✕</button>
   </div>`;
 }
 function _ctRetirer(id,cible){
@@ -76792,7 +77180,7 @@ function loadCharges(){
 function _chCase(s,z){
   const v=chargeSchema(s,z);
   const c=v==null?'var(--text-faint)':(v>=2?'var(--orange)':(v===0?'var(--sub)':'var(--text-strong)'));
-  return `<button onclick="_chCycle('${s}','${z}')" class="hit44"
+  return `<button data-on-click="_chCycle('${s}','${z}')" class="hit44"
     style="min-width:34px;min-height:38px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-md);font-weight:800;
     background:${v>=2?'#1a0f00':'var(--surface-1)'};border:1px solid ${v>=2?'var(--orange)':'var(--border)'};color:${c}">${v==null?'·':v}</button>`;
 }
@@ -76840,7 +77228,7 @@ function renderCharges(){
     const ouvert=_chSchemaOuvert===s;
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 10px;margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:4px;min-width:max-content">
-        <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div style="flex:0 0 132px;cursor:pointer" data-on-click="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.25">${escapeHtml(m.lib)}</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
@@ -76899,7 +77287,7 @@ function _blocAvertissementContrainte(ex,i){
   if(ex.justificationContrainte){
     return `<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Contrainte ${escapeHtml(libZone(c.zone))} maintenue : « ${escapeHtml(ex.justificationContrainte)} »
-      <button onclick="_annulerJustification(${i})" style="background:none;border:none;padding:0 0 0 6px;color:var(--link);font-size:var(--fs-xs);cursor:pointer">revoir</button>
+      <button data-on-click="_annulerJustification(${i})" style="background:none;border:none;padding:0 0 0 6px;color:var(--link);font-size:var(--fs-xs);cursor:pointer">revoir</button>
     </div>`;
   }
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
@@ -76914,12 +77302,12 @@ function _blocAvertissementContrainte(ex,i){
       ${subs.map(s=>`<div style="margin-top:6px">
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${escapeHtml(s.lib)} · charge ${s.charge}/3</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-          ${_exemplesSubstitut(s,3).map(n=>`<button onclick="_remplacerParExo(${i},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+          ${_exemplesSubstitut(s,3).map(n=>`<button data-on-click="_remplacerParExo(${i},${JSON.stringify(n).replace(/"/g,'&quot;')})"
             style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;font-size:var(--fs-2xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
         </div></div>`).join('')}`
       :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button onclick="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:var(--fs-2xs)">Garder : je sais ce que je fais</button>
+      <button data-on-click="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:var(--fs-2xs)">Garder : je sais ce que je fais</button>
     </div>
     ${blocDisclaimerSante()}
   </div>`;
@@ -76973,7 +77361,7 @@ function _blocContrainteSeance(ex,idx){
       Tu as signalé une gêne au ${escapeHtml(libZone(c.zone))}. Cet exercice sollicite beaucoup cette zone.
       Reste sur une charge où ta technique est parfaite, et arrête si ça pince.
     </div>
-    ${subs.length?`<button onclick="_jeRemplace(${idx})" class="btn btn-outline btn-sm" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Je remplace</button>`:''}
+    ${subs.length?`<button data-on-click="_jeRemplace(${idx})" class="btn btn-outline btn-sm" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Je remplace</button>`:''}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -76989,8 +77377,8 @@ function _jeRemplace(idx){
   if(!subs.length){ toast('Aucun remplacement à proposer','var(--orange)'); return; }
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Remplacer pour aujourd'hui</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n'est pas modifié. Ton coach verra l'échange.
@@ -76998,7 +77386,7 @@ function _jeRemplace(idx){
         ${subs.map(s=>`<div style="margin-bottom:10px">
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">${escapeHtml(s.lib)}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-            ${_exemplesSubstitut(s,4).map(n=>`<button onclick="_appliquerSubstitut(${idx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+            ${_exemplesSubstitut(s,4).map(n=>`<button data-on-click="_appliquerSubstitut(${idx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
               class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
           </div></div>`).join('')}
         ${blocDisclaimerSante()}
@@ -77163,7 +77551,7 @@ function htmlHistoriqueExo(user,nom){
 }
 function _htmlBoutonHistorique(idx,ex){
   if(!ex||!ex.name||isCardio(ex)) return '';
-  return `<button type="button" class="hit44 wo-histo-btn" onclick="ouvrirHistoriqueExo(${idx})" aria-label="Historique de cet exercice"
+  return `<button type="button" class="hit44 wo-histo-btn" data-on-click="ouvrirHistoriqueExo(${idx})" aria-label="Historique de cet exercice"
     style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Historique</button>`;
 }
@@ -77212,7 +77600,7 @@ function ecrireNoteExo(nom,texte){
 function _htmlNoteExo(idx,ex){
   if(!ex||!ex.name) return '';
   const n=noteExo(currentUser,ex.name);
-  return `<button type="button" class="wo-note-exo${n?'':' vide'}" onclick="editerNoteExo(${idx})"
+  return `<button type="button" class="wo-note-exo${n?'':' vide'}" data-on-click="editerNoteExo(${idx})"
     aria-label="${n?'Ma note sur cet exercice : '+escapeHtml(n.texte)+'. Toucher pour la modifier':'Ajouter une note sur cet exercice'}">${n?escapeHtml(n.texte):'+ Ma note (réglage, prise…)'}</button>`;
 }
 function editerNoteExo(idx){
@@ -77221,14 +77609,14 @@ function editerNoteExo(idx){
   const n=noteExo(currentUser,ex.name);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="note-exo-t" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 20px;width:100%;max-width:480px">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="note-exo-t" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 20px;width:100%;max-width:480px">
         <div id="note-exo-t" style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Ma note · ${escapeHtml(ex.name)}</div>
         <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Elle revient à chaque séance. Ton coach la voit.</div>
         <textarea id="note-exo-champ" maxlength="${NOTE_EXO_MAX}" rows="3" style="width:100%;resize:none" placeholder="Siège au cran 4, prise large…">${n?escapeHtml(n.texte):''}</textarea>
         <div style="display:flex;gap:8px;margin-top:12px">
-          ${n?'<button type="button" class="btn btn-outline" style="flex:1;margin:0" onclick="_noteExoValider('+idx+',true)">Effacer</button>':''}
-          <button type="button" class="btn btn-red" style="flex:2;margin:0" onclick="_noteExoValider(${idx})">Enregistrer</button>
+          ${n?'<button type="button" class="btn btn-outline" style="flex:1;margin:0" data-on-click="_noteExoValider('+idx+',true)">Effacer</button>':''}
+          <button type="button" class="btn btn-red" style="flex:2;margin:0" data-on-click="_noteExoValider(${idx})">Enregistrer</button>
         </div>
       </div></div>`);
   setTimeout(()=>{ try{ const c=document.getElementById('note-exo-champ'); c.focus(); }catch(e){} },50);
@@ -77243,7 +77631,7 @@ function _noteExoValider(idx,effacer){
   // La ligne sous le nom, repeinte EN PLACE : renderWoEx referait tout
   // l'ecran, et le chronometre de repos avec.
   document.querySelectorAll('#wo-content .wo-note-exo').forEach(b=>{
-    const m=/editerNoteExo\((\d+)\)/.exec(b.getAttribute('onclick')||'');
+    const m=/editerNoteExo\((\d+)\)/.exec(b.getAttribute('data-on-click')||'');
     if(m&&Number(m[1])===idx){ const t=document.createElement('div'); t.innerHTML=_htmlNoteExo(idx,ex).trim(); b.replaceWith(t.firstChild); }
   });
   return true;
@@ -77252,7 +77640,7 @@ function _htmlBoutonRemplacer(idx,ex){
   if(!ex||!ex.name) return '';
   if(isCardio(ex)) return '';
   if(drapeauQuelconqueActif(currentUser)) return '';
-  return `<button class="hit44" onclick="ouvrirRemplacement(${idx})"
+  return `<button class="hit44" data-on-click="ouvrirRemplacement(${idx})"
     style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Remplacer</button>`;
 }
@@ -77267,28 +77655,28 @@ function ouvrirRemplacement(idx){
   const _alts=normaliserAlternatives(ex.alternatives,ex.name);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Remplacer pour aujourd'hui</div>
         ${_estCoach?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">
           Ton programme n\'est pas modifié. Choisis dans la banque d\'exercices.
         </div>
         <input id="rempl-q" type="search" inputmode="search" placeholder="Chercher un mouvement"
-          oninput="_rendreListeRemplacement()" style="width:100%;margin-bottom:10px">
+          data-on-input="_rendreListeRemplacement()" style="width:100%;margin-bottom:10px">
         <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>`
         :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n\'est pas modifié, et ton coach verra l\'échange.
           <b style="color:var(--text-strong)">${_alts.length?'Choisis un remplaçant prévu par ton coach, ou écris le mouvement que tu as fait.':'Écris le nom du mouvement que tu as fait à la place.'}</b>
         </div>
         ${_alts.length?`<div class="rempl-alts">${_alts.map(n=>`<button type="button" class="hit44 rempl-alt" data-nom="${escapeHtml(n)}"
-          onclick="_appliquerSubstitut(${idx},this.getAttribute('data-nom'));_demanderMotifEcart(${idx})">${escapeHtml(n.toLowerCase())}</button>`).join('')}</div>
+          data-on-click="_appliquerSubstitut(${idx},this.getAttribute('data-nom'));_demanderMotifEcart(${idx})">${escapeHtml(n.toLowerCase())}</button>`).join('')}</div>
         <label for="rempl-manuel" style="margin:6px 0 4px">Autre…</label>`:''}
         <input id="rempl-manuel" type="text" maxlength="60" autocomplete="off"
           placeholder="Ex : développé incliné haltères"
-          onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();validerRemplacementManuel()}"
+          data-on-keydown="if(event.key===&quot;Enter&quot;){event.preventDefault();validerRemplacementManuel()}"
           style="width:100%;margin-bottom:10px">
         <div id="rempl-erreur" style="font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-bottom:8px;display:none"></div>
-        <button class="btn btn-red" onclick="validerRemplacementManuel()" style="font-size:var(--fs-sm);letter-spacing:1px">Remplacer</button>
+        <button class="btn btn-red" data-on-click="validerRemplacementManuel()" style="font-size:var(--fs-sm);letter-spacing:1px">Remplacer</button>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">
           La banque d\'exercices est tenue par ton coach : c\'est lui qui choisit
           les mouvements de ton programme.
@@ -77310,14 +77698,14 @@ function _demanderMotifEcart(idx){
   _motifIdx=idx;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px">'
+    '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px">'
     +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Pourquoi ce changement ?</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'
     +'Ton coach le verra. Trois fois le même échange, c’est le programme qu’il faut corriger.</div>'
     +Object.keys(ECART_MOTIFS).map(m=>
       '<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" '
-      +'onclick="_poserMotifEcart('+JSON.stringify(m).replace(/"/g,'&quot;')+')">'
+      +'data-on-click="_poserMotifEcart('+JSON.stringify(m).replace(/"/g,'&quot;')+')">'
       +escapeHtml(ECART_MOTIFS[m])+'</button>').join('')
     +'</div></div>');
   return true;
@@ -77388,7 +77776,7 @@ function _rendreListeRemplacement(){
   }
   const vus=l.slice(0,REMPL_MAX_LISTE);
   // Le reste n'est pas caché en silence : on dit combien, et quoi faire.
-  z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')});_demanderMotifEcart(${_remplIdx})"
+  z.innerHTML=vus.map(n=>`<button data-on-click="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')});_demanderMotifEcart(${_remplIdx})"
       class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer">`
       +escapeHtml(n.toLowerCase())+'</button>').join('')
     +(l.length>vus.length?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;padding:4px 2px 2px">'
@@ -77611,7 +77999,7 @@ function openReponseBilan(id){
 // Onglet Notes de l'écran Évolution. Sert aussi aux lignes « bilan transmis ».
 function openBilanNotes(id){
   go('s-progress');
-  const btn=document.querySelector('#prog-tabs button[onclick*="notes"]');
+  const btn=document.querySelector('#prog-tabs button[data-on-click*="notes"]');
   showProgressTab('notes',btn);
   if(id) try{ _bnVoir(id); }catch(e){}
   if(id) setTimeout(()=>{
@@ -77989,16 +78377,16 @@ function _rbCurseurFin(ta){
 // Le réglage, une fois : une ouverture et une clôture, {prénom} reconnu.
 function ouvrirFormulesReponse(){
   const f=formulesReponse(currentUser);
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Ma formule</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Elle encadre chaque brouillon de réponse aux bilans. {prénom} est remplacé par le prénom de l'athlète.</p>
     <label class="sub" for="rbf-ouv" style="display:block;font-size:var(--fs-xs);margin-bottom:4px;text-transform:none">Ouverture</label>
     <input id="rbf-ouv" maxlength="${BROUILLON_FORMULE_MAX}" value="${escapeHtml(f.ouverture)}" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:10px">
     <label class="sub" for="rbf-clo" style="display:block;font-size:var(--fs-xs);margin-bottom:4px;text-transform:none">Clôture</label>
     <input id="rbf-clo" maxlength="${BROUILLON_FORMULE_MAX}" value="${escapeHtml(f.cloture)}" autocomplete="off" style="width:100%;box-sizing:border-box">
-    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="enregistrerFormulesReponse()">Enregistrer</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Fermer</button>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" data-on-click="enregistrerFormulesReponse()">Enregistrer</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -78040,19 +78428,19 @@ function blocReponseBilan(b,c){
       const pre=(!bro&&!bilanRepondu(b))?_brouillonPourChamp(b,c):'';
       const val=bro||(b.reponseCoach||'')||pre;
       const em=escapeHtml(c.email||''), ide=escapeHtml(id);
-      return `<textarea id="${_taIdBilan(id)}" rows="${pre?9:3}"${pre?' data-brouillon="1" onfocus="_rbCurseurFin(this)"':''} oninput="rbNoterBrouillon('${em}','${ide}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
+      return `<textarea id="${_taIdBilan(id)}" rows="${pre?9:3}"${pre?' data-brouillon="1" data-on-focus="_rbCurseurFin(this)"':''} data-on-input="rbNoterBrouillon('${em}','${ide}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
         +(bro&&bro!==(b.reponseCoach||'')
           ?`<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:4px">Brouillon non envoyé, retrouvé tel que tu l’avais laissé.</div>`
           :'')
         +(pre
           ?`<div class="rb-pre" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:4px;font-size:var(--fs-2xs);line-height:1.5">
               <span class="sub">Brouillon pré-écrit : relis-le avant d’envoyer.</span>
-              <button type="button" id="rb-zero_${ide}" class="rb-lien" onclick="rbRepartirDeZero('${em}','${ide}','${_taIdBilan(id)}')">Repartir de zéro</button>
-              <button type="button" class="rb-lien" onclick="ouvrirFormulesReponse()">Ma formule</button>
+              <button type="button" id="rb-zero_${ide}" class="rb-lien" data-on-click="rbRepartirDeZero('${em}','${ide}','${_taIdBilan(id)}')">Repartir de zéro</button>
+              <button type="button" class="rb-lien" data-on-click="ouvrirFormulesReponse()">Ma formule</button>
             </div>`
           :'');
     })()}
-    <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
+    <button class="btn btn-red btn-sm" data-on-click="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
       style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
     ${_rvHtml(b,c)}
   </div>`;
@@ -78235,7 +78623,7 @@ function renderReponsesBilans(bilans,client){
     // son libellé : le point rouge des pastilles n'existe plus.
     const opts=vus.map((v,i)=>`<option value="${escapeHtml(v.id)}"${i===0?' selected':''}>${escapeHtml(v.nom)}${v.attend?' · sans réponse':''}</option>`).join('');
     const cartes=vus.map((v,i)=>i===0?v.html:v.html.replace('class="bn-bilan"','class="bn-bilan" hidden')).join('');
-    return `<div class="bn">${vus.length>1?`<div class="bn-choix"><select class="bn-select" aria-label="Bilan affiché" onchange="_bnVoir(this.value)">${opts}</select></div>`:''}${cartes}</div>`;
+    return `<div class="bn">${vus.length>1?`<div class="bn-choix"><select class="bn-select" aria-label="Bilan affiché" data-on-change="_bnVoir(this.value)">${opts}</select></div>`:''}${cartes}</div>`;
   }
   return client
     ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
@@ -78343,7 +78731,7 @@ const DEB_STEPS=[
     // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
     `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
-      <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
+      <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} data-on-change="bilData['deb-traitement']=this.checked">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">Je suis un traitement médicamenteux régulier</span>
     </label>`+
     bT('deb-traitement-detail','Si tu veux préciser (facultatif)')+
@@ -78352,7 +78740,7 @@ const DEB_STEPS=[
     // l'athlète veut que l'app en tienne compte, il le structure ici lui-même.
     `<div style="margin-top:8px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">Si une zone te gêne à l'entraînement, tu peux la préciser. C'est facultatif, et ça sert à adapter ce qu'on te propose.</div>
-      <button type="button" class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="letter-spacing:1px;font-size:var(--fs-2xs)">Signaler une gêne</button>
+      <button type="button" class="btn btn-outline btn-sm" data-on-click="ouvrirFormContrainte('','moi')" style="letter-spacing:1px;font-size:var(--fs-2xs)">Signaler une gêne</button>
     </div>`
   ),
   // Step 2 : Mensurations initiales — schéma corporel interactif
@@ -78899,12 +79287,12 @@ function showBilanNotifBanner(){
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" data-on-click="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
+    <button data-on-click="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000); // auto-dismiss après 60s
@@ -78974,8 +79362,8 @@ function showBilanNotifPrompt(){
     <p style="text-align:center;color:var(--text-faint);font-size:var(--fs-xs);line-height:1.6;margin-bottom:20px">
       Sur iPhone, les rappels ne s'affichent que quand l'app est ouverte.
     </p>
-    <button class="btn btn-red" onclick="requestBilanNotifPermission();document.getElementById('notif-perm-modal')?.remove()" style="margin-bottom:10px;letter-spacing:1.5px">Activer les notifications</button>
-    <button class="btn btn-outline" onclick="document.getElementById('notif-perm-modal')?.remove()" style="font-size:var(--fs-xs);letter-spacing:1px;color:var(--sub)">Plus tard</button>
+    <button class="btn btn-red" data-on-click="requestBilanNotifPermission();document.getElementById('notif-perm-modal')?.remove()" style="margin-bottom:10px;letter-spacing:1.5px">Activer les notifications</button>
+    <button class="btn btn-outline" data-on-click="document.getElementById('notif-perm-modal')?.remove()" style="font-size:var(--fs-xs);letter-spacing:1px;color:var(--sub)">Plus tard</button>
   </div>`;
   document.body.appendChild(m);
 }
@@ -79106,7 +79494,7 @@ function htmlRepriseSeance(u){
     ${ci?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(ci)}</div>`:''}
     ${zero?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">${escapeHtml(zero)}</div>`:''}
     <label class="hit44" style="display:flex;align-items:center;gap:10px;margin:12px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
-      <input type="checkbox" ${repriseDeloadPropose(u)?'checked':''} onchange="toggleRepriseDeload(this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+      <input type="checkbox" ${repriseDeloadPropose(u)?'checked':''} data-on-change="toggleRepriseDeload(this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
       Volume réduit pour cette séance
     </label>
     ${blocDisclaimerDouleur()}
@@ -79137,8 +79525,8 @@ function htmlLeveeCoach(c){
     ${lignes.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin-bottom:6px">${escapeHtml(t)}</div>`).join('')}
     ${sp.actif?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">Toi seul peux lever cette pause. RepCore ne le fera jamais à ta place.</div>
-    ${dg?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="coachLeverDrapeau('general')">Lever le signalement général</button>`:''}
-    ${dr?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="coachLeverDrapeau('articulaire')">Lever le drapeau rouge</button>`:''}
+    ${dg?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="coachLeverDrapeau('general')">Lever le signalement général</button>`:''}
+    ${dr?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="coachLeverDrapeau('articulaire')">Lever le drapeau rouge</button>`:''}
     ${blocDisclaimerDouleur()}
   </div>`;
 }
@@ -79200,7 +79588,7 @@ function htmlHabitudes(u,opts){
     <div style="display:flex;gap:8px">
       ${l.map(h=>{
         const on=habCoche(u,h.cle,auj);
-        return `<button type="button" onclick="habAppui('${escapeHtml(h.cle)}')"
+        return `<button type="button" data-on-click="habAppui('${escapeHtml(h.cle)}')"
           aria-pressed="${on?'true':'false'}"
           style="flex:1;min-width:0;min-height:44px;border-radius:var(--r-3);cursor:pointer;padding:8px 6px;
             font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;line-height:1.35;
@@ -79301,7 +79689,7 @@ function htmlHabitudesCoach(c){
   const reco=HAB_RECOMMANDEES.map(r=>{
     const deja=l.some(h=>h.cle===r.cle);
     return '<button type="button" class="hbc-reco" data-ton="'+r.ton+'"'+((deja||plein)?' disabled':'')
-      +(deja?' data-deja=""':'')+' onclick="habCoachAjouter(\''+r.cle+'\')"'
+      +(deja?' data-deja=""':'')+' data-on-click="habCoachAjouter(\''+r.cle+'\')"'
       +' title="'+escapeHtml(deja?'Déjà assignée':plein?'Trois habitudes au maximum':'Ajouter : '+((HAB_CATALOGUE.find(x=>x.cle===r.cle)||{}).lib||r.lib))+'">'
       +'<span class="hbc-reco-i">'+HAB_ICO[r.ico]+'</span>'
       +'<span class="hbc-reco-c"><b>'+escapeHtml(r.lib)+'</b><span>'+(deja?'Déjà assignée':escapeHtml(r.sous))+'</span></span>'
@@ -79316,7 +79704,7 @@ function htmlHabitudesCoach(c){
             +'<span class="hbc-h-j" role="img" aria-label="'+n+' jours cochés cette semaine">'
               +sem.map(x=>'<i data-e="'+(x===true?'ok':(x===null?'futur':'vide'))+'"></i>').join('')+'<em>'+n+'/7</em></span></div>'
           +'<div class="hbc-h-t"><strong>'+habTaux(c,h.cle)+'&nbsp;%</strong><span>sur '+HAB_FENETRE_JOURS+' jours</span></div>'
-          +'<button type="button" class="hbc-h-x" onclick="habCoachRetirer(\''+escapeHtml(h.cle)+'\')" aria-label="Retirer '+escapeHtml(h.libelle||h.cle)+'">'+HAB_ICO.croix+'</button>'
+          +'<button type="button" class="hbc-h-x" data-on-click="habCoachRetirer(\''+escapeHtml(h.cle)+'\')" aria-label="Retirer '+escapeHtml(h.libelle||h.cle)+'">'+HAB_ICO.croix+'</button>'
           +'</div>';
       }).join('')
       +(g!=null?'<div class="hbc-moy">Moyenne sur '+HAB_FENETRE_JOURS+' jours : <b>'+g+'&nbsp;%</b>. Fenêtre glissante, le jour en cours n’est pas compté.</div>':'')
@@ -79324,10 +79712,10 @@ function htmlHabitudesCoach(c){
       +'<span>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.</span></div>';
   return '<section class="hbc'+(_habReplie?' hbc-replie':'')+'">'
     +'<div class="hbc-tete">'
-      +'<button type="button" class="hbc-pli" onclick="habCoachPlier()" aria-expanded="'+(!_habReplie)+'" aria-label="Replier les habitudes">'+HAB_ICO.chevron+'</button>'
+      +'<button type="button" class="hbc-pli" data-on-click="habCoachPlier()" aria-expanded="'+(!_habReplie)+'" aria-label="Replier les habitudes">'+HAB_ICO.chevron+'</button>'
       +'<h3>Habitudes</h3><span class="hbc-compte">'+l.length+'/'+HAB_MAX+'</span>'
       +'<span class="hbc-tete-s">Les habitudes permettent de suivre des comportements clés en dehors des entraînements.</span>'
-      +'<button type="button" class="hbc-info" onclick="habCoachRegles()" aria-label="Les règles des habitudes">'+HAB_ICO.info+'</button>'
+      +'<button type="button" class="hbc-info" data-on-click="habCoachRegles()" aria-label="Les règles des habitudes">'+HAB_ICO.info+'</button>'
     +'</div>'
     +'<div class="hbc-corps">'
       +'<div class="hbc-carte">'
@@ -79345,8 +79733,8 @@ function htmlHabitudesCoach(c){
               +dispo.map(x=>'<option value="'+x.cle+'">'+escapeHtml(x.lib)+'</option>').join('')+'</select>'+HAB_ICO.chevron+'</label>'
             +'<span class="hbc-ou">ou</span>'
             +'<label class="hbc-champ">'+HAB_ICO.crayon
-              +'<input id="hab-libre" maxlength="'+HAB_LIBELLE_MAX+'" placeholder="Saisis-en une ('+HAB_LIBELLE_MAX+' caractères max)" aria-label="Habitude à saisir" onkeydown="if(event.key===\'Enter\')habCoachAjouter()"></label>'
-            +'<button type="button" class="btn btn-red hbc-ajouter" onclick="habCoachAjouter()">'+HAB_ICO.plus+'<span>Ajouter</span></button>'
+              +'<input id="hab-libre" maxlength="'+HAB_LIBELLE_MAX+'" placeholder="Saisis-en une ('+HAB_LIBELLE_MAX+' caractères max)" aria-label="Habitude à saisir" data-on-keydown="if(event.key===\'Enter\')habCoachAjouter()"></label>'
+            +'<button type="button" class="btn btn-red hbc-ajouter" data-on-click="habCoachAjouter()">'+HAB_ICO.plus+'<span>Ajouter</span></button>'
           +'</div>')
         +'<div class="hbc-lbl hbc-lbl-reco">'+HAB_ICO.etoile+'Habitudes recommandées</div>'
         +'<div class="hbc-recos">'+reco+'</div>'
@@ -79423,7 +79811,7 @@ function renderWoReminderCard(){
   el.innerHTML=''; return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
+    el.innerHTML=`<button data-on-click="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
@@ -79438,7 +79826,7 @@ function renderWoReminderCard(){
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
-    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
+    <button data-on-click="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
   </div>`;
 }
 function checkWoReminderToday(){
@@ -79480,13 +79868,13 @@ function showWoReminderBanner(){
   const b=document.createElement('div');
   b.id='wo-reminder-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" data-on-click="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(texteRappelRecord(currentUser)||'C\'est l\'heure de t\'entraîner ! Clique pour démarrer.')}</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+    <button data-on-click="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000);
@@ -79499,29 +79887,29 @@ function openWoReminderConfig(){
     (u.sessions_config||[]).reduce((a,s,i)=>{if(s.active)a.push(i);return a;},[])
   );
   const DS=['L','Ma','Me','J','V','S','D'];
-  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:var(--r-2);padding:10px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">${d}</button>`).join('');
+  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" data-on-click="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:var(--r-2);padding:10px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">${d}</button>`).join('');
   const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
   document.getElementById('wo-reminder-config')?.remove();
-  document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
+  document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center" data-on-click="if(event.target===this)this.remove()">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
-      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
+      <button data-on-click="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Heure du rappel</label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <select id="wrd-hour" style="flex:1;font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2)">${hourOpts}</select>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:var(--r-1);padding:6px 12px;font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'var(--text)':'var(--sub)'}">:00</button>
-        <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:var(--r-1);padding:6px 12px;font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'var(--text)':'var(--sub)'}">:30</button>
+        <button id="wrd-min-0" data-on-click="wrdSetMin(0)" style="border-radius:var(--r-1);padding:6px 12px;font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'var(--text)':'var(--sub)'}">:00</button>
+        <button id="wrd-min-30" data-on-click="wrdSetMin(30)" style="border-radius:var(--r-1);padding:6px 12px;font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'var(--text)':'var(--sub)'}">:30</button>
       </div>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Jours d'entraînement</label>
     <div style="display:flex;gap:6px;margin-bottom:24px">${dayBtns}</div>
-    <label class="rg-reglage"><input type="checkbox" ${(u.nutrition&&u.nutrition.rappelAvantSeance===true)?'checked':''} onchange="basculerRappelAvantSeance(this.checked)">
+    <label class="rg-reglage"><input type="checkbox" ${(u.nutrition&&u.nutrition.rappelAvantSeance===true)?'checked':''} data-on-change="basculerRappelAvantSeance(this.checked)">
       <span>Avant la séance, me prévenir s’il me reste l’essentiel de mes glucides <em>(3 h avant, une fois par jour au plus)</em></span></label>
-    <button class="btn btn-red" onclick="saveWoReminderConfig()" style="margin-bottom:10px;letter-spacing:1.5px">Activer le rappel</button>
-    ${u._woReminderEnabled?`<button class="btn btn-outline" onclick="disableWoReminder()" style="font-size:var(--fs-xs);color:var(--sub)">Désactiver les rappels</button>`:''}
+    <button class="btn btn-red" data-on-click="saveWoReminderConfig()" style="margin-bottom:10px;letter-spacing:1.5px">Activer le rappel</button>
+    ${u._woReminderEnabled?`<button class="btn btn-outline" data-on-click="disableWoReminder()" style="font-size:var(--fs-xs);color:var(--sub)">Désactiver les rappels</button>`:''}
   </div></div>`);
   window._wrdDays=[...curDays];
   window._wrdMin=curM;
@@ -79706,7 +80094,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
       +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
       +'font-size:var(--fs-sm);color:var(--text)">'
       +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
-      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
+      +' data-on-change="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
       +escapeHtml(g.titre)+'</label>').join('');
   const aucune=!NOTIF_GROUPES.some(g=>ch[g.cle]);
   return cadre('Et la prochaine ?',
@@ -79717,9 +80105,9 @@ function _htmlInvitationNotif(etat,phrase,choix){
       +escapeHtml(texteInvitationNotif(ch))+'</div>',
     '<div style="display:flex;gap:8px">'
     +'<button type="button" id="inv-notif-oui" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
-    +(aucune?'disabled ':'')+'onclick="invNotifOui()">Oui, préviens-moi</button>'
+    +(aucune?'disabled ':'')+'data-on-click="invNotifOui()">Oui, préviens-moi</button>'
     +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;'
-    +'min-height:44px;letter-spacing:.5px" onclick="invNotifNon()">Non merci</button>'
+    +'min-height:44px;letter-spacing:.5px" data-on-click="invNotifNon()">Non merci</button>'
     +'</div>');
 }
 // Le tour impur : decider, rendre, et MARQUER.
@@ -79978,14 +80366,14 @@ function htmlReglagesPush(u,etat){
   if(etat==='installer') aide='Sur iPhone, les notifications n’existent que dans l’app installée : Partager, puis « Sur l’écran d’accueil ». Ouvre ensuite RepCore depuis l’icône et reviens ici.';
   else if(etat==='refuse') aide='Pour les réactiver : réglages du navigateur, puis Notifications, puis RepCore.';
   const bouton=etat==='proposer'
-    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushActiverDepuisReglages()">Activer sur cet appareil</button>'
+    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" data-on-click="pushActiverDepuisReglages()">Activer sur cet appareil</button>'
     :etat==='actif'
-    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushDesactiverDepuisReglages()">Désactiver sur cet appareil</button>':'';
+    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" data-on-click="pushDesactiverDepuisReglages()">Désactiver sur cet appareil</button>':'';
   const cases=PUSH_TYPES.map(t=>{
     const on=pushTypeActif(u,t.cle);
     return '<label for="cr-push-'+t.cle+'" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;padding:10px 0;border-top:1px solid var(--border);text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
       +'<input type="checkbox" id="cr-push-'+t.cle+'" data-push="'+t.cle+'"'+(on?' checked':'')
-      +' onchange="basculerPushType(\''+t.cle+'\',this.checked)"'
+      +' data-on-change="basculerPushType(\''+t.cle+'\',this.checked)"'
       +' style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
@@ -79997,7 +80385,7 @@ function htmlReglagesPush(u,etat){
     +(aide?'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'+escapeHtml(aide)+'</div>':'')
     +bouton+cases
     // LE RAPPEL DE SÉANCE, descendu de l'accueil (28/09/2026).
-    +((u&&u.role!=='coach'&&(etat==='actif'||etat==='proposer'))?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:12px 0 0;min-height:44px" onclick="openWoReminderConfig()">'
+    +((u&&u.role!=='coach'&&(etat==='actif'||etat==='proposer'))?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:12px 0 0;min-height:44px" data-on-click="openWoReminderConfig()">'
       +(u._woReminderEnabled?'Modifier mon rappel séance':'Configurer un rappel séance')+'</button>':'')
     +'</div>';
 }
@@ -80172,9 +80560,9 @@ function _htmlInvitationInstall(etat,aussiNotif){
     +(aussiNotif?' C’est aussi ce qui rend les rappels possibles.':'')+'</div>'
     +'<div style="display:flex;gap:8px">'
     +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;'
-    +'letter-spacing:.5px" onclick="'+geste+'">'+lib+'</button>'
+    +'letter-spacing:.5px" data-on-click="'+geste+'">'+lib+'</button>'
     +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;'
-    +'padding:0 16px;margin:0;min-height:44px;letter-spacing:.5px" onclick="invInstallNon()">'
+    +'padding:0 16px;margin:0;min-height:44px;letter-spacing:.5px" data-on-click="invInstallNon()">'
     +'Plus tard</button></div></div>';
 }
 // Le tour impur : decider, rendre, et MARQUER.
@@ -80366,28 +80754,29 @@ function _htmlPointDuJour(etat){
       +'<input type="number" id="pdj-poids" inputmode="decimal" step="0.1" '
       +'min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="-" class="pes-champ">'
       +'<span class="pes-unite">kg</span></span></label>'
-      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPoids()">Enregistrer</button></div>';
+      +'<button class="btn btn-red btn-sm pdj-ok" data-on-click="pdjValiderPoids()">Enregistrer</button></div>';
   } else if(etat.question==='pas'){
     controle='<div class="pdj-ligne">'
       +'<label class="pes-boite" for="pdj-pas"><span class="pes-duo">'
       +'<input type="number" id="pdj-pas" inputmode="numeric" step="100" '
       +'min="0" max="99999" placeholder="-" class="pes-champ">'
       +'<span class="pes-unite">pas</span></span></label>'
-      +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPas()">Enregistrer</button></div>';
+      +'<button class="btn btn-red btn-sm pdj-ok" data-on-click="pdjValiderPas()">Enregistrer</button></div>';
   } else if(etat.question==='sommeil'){
     controle='<div class="pdj-choix">'+PDJ_NUITS.map((h,i)=>
-      '<button type="button" class="pdj-past" onclick="pdjValiderSommeil('+h+')">'
+      '<button type="button" class="pdj-past" data-on-click="pdjValiderSommeil('+h+')">'
       +h+'h'+(i===PDJ_NUITS.length-1?'+':'')+'</button>').join('')+'</div>';
   } else {
     controle='<div class="pdj-choix">'+Array.from({length:PDJ_ENERGIE_MAX},(_,i)=>{
       const v=i+1;
       return '<button type="button" class="pdj-past" aria-label="'
-        +escapeHtml(PDJ_ENERGIE_LIB[v])+'" onclick="pdjValiderEnergie('+v+')">'+v+'</button>';
+        +escapeHtml(PDJ_ENERGIE_LIB[v])+'" data-on-click="pdjValiderEnergie('+v+')">'+v+'</button>';
     }).join('')+'</div>'
     +'<div class="pdj-echelle"><span>1 · à plat</span><span>5 · en forme</span></div>';
   }
+  // actions-en-plus: loadSleep loadSteps
   const lien=def.ecran
-    ? '<button type="button" class="pdj-lien" onclick="'+def.ecran+'()">'
+    ? '<button type="button" class="pdj-lien" data-on-click="'+def.ecran+'()">'
       +escapeHtml(def.lienDit)+' →</button>'
     : '';
   return '<div class="pdj-carte" id="pdj-carte" data-acc>'+_accX('pdj')
@@ -80488,7 +80877,7 @@ function htmlSortiePack(u,maintenant){
     +'<div class="vrr-p">Rien n’est effacé : tes séances, ton programme et ton '
     +'historique restent à toi.</div>'
     +'<div class="vrr-deux">'+reprendre
-    +'<button type="button" class="vrr-b vrr-b2" onclick="garderLApp()">Garder l’app</button>'
+    +'<button type="button" class="vrr-b vrr-b2" data-on-click="garderLApp()">Garder l’app</button>'
     +'</div></div>';
 }
 // LA SECONDE PORTE. Elle memorise l'offre choisie comme la carte de l'ecran
@@ -80519,7 +80908,7 @@ function _rendreEssai(){
   try{ const r=essaiJoursRestants(currentUser); if(r!==null&&r<=3) lien='Voir Ultime'; }catch(e){}
   z.innerHTML=t
     ? '<div class="ess-ligne"><span>'+escapeHtml(t)+'</span>'
-      +'<button type="button" class="ess-lien" onclick="ouvrirAbonnementDepuisEssai()">'
+      +'<button type="button" class="ess-lien" data-on-click="ouvrirAbonnementDepuisEssai()">'
       +escapeHtml(lien)+'</button></div>'
     : '';
 }
@@ -80559,7 +80948,7 @@ function rendreEssaiBilan(u){
       +ligne('Ta diète calculée et tes compléments')
       +'</ul>'
       +'<button type="button" class="btn btn-red" style="width:100%" '
-      +'onclick="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
+      +'data-on-click="accueilChoisir(\'ultime\',true)">Continuer avec Ultime</button>'
     +'</div>'
     +'<div class="eb-carte">'
       +'<div class="eb-c-nom">Essentielle</div>'
@@ -80570,14 +80959,14 @@ function rendreEssaiBilan(u){
       +ligne('Ta nutrition et ton lifestyle')
       +'</ul>'
       +'<button type="button" class="btn btn-outline" style="width:100%" '
-      +'onclick="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
+      +'data-on-click="accueilChoisir(\'essentielle\',true)">Continuer avec Essentielle</button>'
     +'</div>'
     +'<div class="eb-pied">'
       +'<p class="eb-coach">Tu veux que quelqu’un s’en occupe pour toi&nbsp;? '
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
       +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +'Voir les formules de coaching</a>'
-      +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
+      +'<button type="button" class="eb-lien" data-on-click="ouvrirCodeCoach()">J’ai un code coach</button>'
     +'</div>';
   return true;
 }
@@ -80621,7 +81010,7 @@ function accueilMasquer(cle,bouton){
   return true;
 }
 function _accX(cle){
-  return '<button type="button" class="acc-x" aria-label="Masquer" onclick="event.stopPropagation();accueilMasquer(\''+cle+'\',this)">'
+  return '<button type="button" class="acc-x" aria-label="Masquer" data-on-click="event.stopPropagation();accueilMasquer(\''+cle+'\',this)">'
     +'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
 }
 function _rendrePointDuJour(){
@@ -80878,7 +81267,7 @@ function _htmlBadgeImg(id,o){
   const vis=o.verrou?BADGE_VERROU:badgeVisuel(id,o.grand);
   const repli=badgeAcquisFichier(id);
   return '<img src="'+escapeHtml(vis)+'" alt="" loading="lazy"'+(o.id?' id="'+o.id+'"':'')
-    +' onerror="this.onerror=null;this.src=\''+escapeHtml(repli)+'\'">';
+    +' data-on-error="rcImageRepli(this,\''+escapeHtml(repli)+'\')">';
 }
 function badgeAcquisDef(id){ return BADGES_ACQUIS.find(b=>b&&b.id===id)||null; }
 function _bdgNieme(l,n){ return (Array.isArray(l)&&l.length>=n)?(Number(l[n-1])||0):0; }
@@ -81319,9 +81708,9 @@ function htmlTropheesDuJour(items){
     +'<div class="tr-liste" role="list">'+l.map((x,i)=>{
       const v=tropheeVignette(x,u);
       return '<div class="tr-v" role="listitem">'
-        +'<button type="button" class="tr-fiche" onclick="ouvrirTrophee('+i+')" aria-label="'+escapeHtml(v.sur+' : '+v.nom)+'">'
+        +'<button type="button" class="tr-fiche" data-on-click="ouvrirTrophee('+i+')" aria-label="'+escapeHtml(v.sur+' : '+v.nom)+'">'
         +'<span class="tr-img">'+v.img+'</span><span class="tr-sur">'+escapeHtml(v.sur)+'</span><span class="tr-nom">'+escapeHtml(v.nom)+'</span></button>'
-        +'<button type="button" class="tr-part" onclick="partagerTrophee('+i+',this)">'+icon('share',12)+' <span>Partager</span></button></div>';
+        +'<button type="button" class="tr-part" data-on-click="partagerTrophee('+i+',this)">'+icon('share',12)+' <span>Partager</span></button></div>';
     }).join('')+'</div></div>';
 }
 // LA FICHE, au toucher : celle du badge, ou l'écran du trophée SANS FOUDRE.
@@ -81368,7 +81757,7 @@ function partagerTrophee(i,btn){
 function htmlReglageCelebrations(u){
   if(!u||u.role==='coach') return '';
   const m=celebrationsMode(u);
-  const b=(k,l,s)=>'<button type="button" class="cel-b'+(m===k?' actif':'')+'" role="radio" aria-checked="'+(m===k)+'" onclick="celebrationsChoisir(\''+k+'\')">'+l+'<small>'+s+'</small></button>';
+  const b=(k,l,s)=>'<button type="button" class="cel-b'+(m===k?' actif':'')+'" role="radio" aria-checked="'+(m===k)+'" data-on-click="celebrationsChoisir(\''+k+'\')">'+l+'<small>'+s+'</small></button>';
   return '<div class="card cel-carte"><div class="pp-titre">Célébrations</div>'
     +'<div class="cel-choix" role="radiogroup" aria-label="Célébrations">'
     +b('completes','Complètes','Un écran plein pour le plus rare')
@@ -81428,9 +81817,9 @@ function _bdgEcran(id,reste){
     +'<div class="bdg-ecran-rar"'+(rar?'':' hidden')+'>'+escapeHtml(rar)+'</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>'
     +_htmlVisuelFonds('bdg-ecran-fonds')
-    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerBadge(\''+id+'\',this)">'
+    +'<button type="button" class="btn btn-red bdg-ecran-part" data-on-click="partagerBadge(\''+id+'\',this)">'
       +icon('share',16)+' <span>Partager</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" data-on-click="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
     secret?'Badge secret découvert : '+b.nom:'Badge débloqué : '+b.nom);
@@ -81528,7 +81917,7 @@ function _bdgEcranRecap(ids){
       return '<div>'+v.img+'<span>'+escapeHtml(v.nom)+'</span></div>'; }).join('')+'</div>'
     +(n>vus.length?'<div class="bdg-ecran-meta">et '+(n-vus.length)+' autre'+(n-vus.length>1?'s':'')+'</div>':'')
     +'<p class="bdg-ecran-cond">Retrouve-les dans ton profil, avec la date de chacun, et partage-les depuis leur fiche.</p>'
-    +'<button type="button" class="btn btn-red bdg-ecran-tard" onclick="bdgPlusTard()">Voir plus tard</button>'
+    +'<button type="button" class="btn btn-red bdg-ecran-tard" data-on-click="bdgPlusTard()">Voir plus tard</button>'
     +'</div>',
     'Tu as débloqué '+n+' badges');
   // SANS FOUDRE : un rattrapage n'est pas un événement d'aujourd'hui.
@@ -81572,7 +81961,7 @@ function htmlMesBadges(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   let f=null; try{ f=_badgesFaits(u||{},t); }catch(e){ f=null; }
   const n=BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0).length;
-  const a=id=>' onclick="ouvrirFicheBadge(\''+id+'\')" role="button" tabindex="0"';
+  const a=id=>' data-on-click="ouvrirFicheBadge(\''+id+'\')" role="button" tabindex="0"';
   let h='<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
     +'text-transform:uppercase;display:block;margin-bottom:10px">Mes badges'
     +' <span class="bdg-compte"> : '+n+'/'+BADGES_ACQUIS.length+'</span></label>';
@@ -81626,7 +82015,7 @@ function htmlDefisReleves(u){
     .sort((a,b)=>(Number(b.fin)||0)-(Number(a.fin)||0));
   if(!l.length) return '';
   return '<div class="bdg-sous">Défis relevés <span class="bdg-compte">'+l.length+'</span></div><div class="dfr-liste">'
-    +l.map(x=>'<button type="button" class="dfr-badge" onclick="partagerDefi(\''+escapeHtml(x.id)+'\',null)">'
+    +l.map(x=>'<button type="button" class="dfr-badge" data-on-click="partagerDefi(\''+escapeHtml(x.id)+'\',null)">'
       +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?'🏆':'⚡')+'</span>'
       +'<span class="dfr-c"><b>'+escapeHtml(x.champion?'CHAMPION · ':'DÉFI RELEVÉ · ')+escapeHtml(defiMoisTexte(x.fin).replace(/^D’|^DE /,''))+'</b>'
       +'<span>'+escapeHtml(x.titre)+' · '+escapeHtml(_bdgDate(Number(x.termineLe)||Number(x.fin)))+'</span></span></button>').join('')+'</div>';
@@ -81658,8 +82047,8 @@ function ouvrirFicheBadge(id){
   if(!g&&_bdgInactif(b)) etat='Bientôt disponible.';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="'+escapeHtml(secret?'Badge secret':b.nom)+'" class="bdg-fiche">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="'+escapeHtml(secret?'Badge secret':b.nom)+'" class="bdg-fiche">'
   +'<div class="bdg-fiche-img'+(g?'':' attente')+'">'+_htmlBadgeImg(id,{grand:true,verrou:secret,id:'bdg-fiche-img'})+'</div>'
   +'<h2>'+escapeHtml(secret?'???':b.nom)+'</h2>'
   +(g?'<div class="bdg-fiche-date">Obtenu le '+escapeHtml(_bdgDate(m[id].at))+'</div>':'')
@@ -81667,9 +82056,9 @@ function ouvrirFicheBadge(id){
   +(etat?'<p class="bdg-fiche-etat">'+escapeHtml(etat)+'</p>':'')
   +(g&&badgeRareteTexte(id)?'<div class="bdg-fiche-rar">'+escapeHtml(badgeRareteTexte(id))+'</div>':'')
   +(g?_htmlVisuelFonds('bdg-fiche-fonds'):'')
-  +(g?('<button type="button" class="btn btn-red" onclick="partagerBadge(\''+id+'\',this)">'
+  +(g?('<button type="button" class="btn btn-red" data-on-click="partagerBadge(\''+id+'\',this)">'
       +icon('share',16)+' <span>Partager</span></button>'):'')
-  +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()" style="margin-top:8px">Fermer</button>'
+  +'<button type="button" class="btn btn-outline btn-sm" data-on-click="closeModal()" style="margin-top:8px">Fermer</button>'
   +'</div></div>');
   // Le sélecteur de fond dessine la vraie carte : il attend le médaillon.
   if(g){
@@ -82115,9 +82504,9 @@ function ouvrirWrapped(cle){
   _wr={w,per,i:0,minuteur:null};
   const sl=wrappedSlides(w,per);
   z.innerHTML='<div class="wr-barres">'+sl.map(()=>'<span><i></i></span>').join('')+'</div>'
-    +'<div class="wr-haut"><button type="button" class="wr-btn" aria-label="Partager cette slide" onclick="event.stopPropagation();partagerWrapped(_wr?_wr.i:0)">'+icon('share',18)+'</button>'
-    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">✕</button></div>'
-    +'<div class="wr-slides" onclick="_wrTap(event)">'+sl.map((s,k)=>_wrHtmlSlide(s,k)).join('')+'</div>';
+    +'<div class="wr-haut"><button type="button" class="wr-btn" aria-label="Partager cette slide" data-on-click="event.stopPropagation();partagerWrapped(_wr?_wr.i:0)">'+icon('share',18)+'</button>'
+    +'<button type="button" class="wr-btn" aria-label="Fermer" data-on-click="event.stopPropagation();fermerWrapped()">✕</button></div>'
+    +'<div class="wr-slides" data-on-click="_wrTap(event)">'+sl.map((s,k)=>_wrHtmlSlide(s,k)).join('')+'</div>';
   try{ localStorage.setItem('rc_wrapped_vu_'+per.cle,'1'); }catch(e){}
   go('s-wrapped');
   _wrAller(0);
@@ -82141,11 +82530,11 @@ function _wrHtmlSlide(s,k){
       +'<div class="wr-resume">'+s.resume.map(([v,l])=>'<div><b>'+escapeHtml(v)+'</b><span>'+escapeHtml(l)+'</span></div>').join('')+'</div>'
       +(s.equivalent?'<p class="wr-equiv">= '+escapeHtml(s.equivalent.texte)+' '+s.equivalent.emoji+'</p>':'')
       +_htmlVisuelMedia()
-      +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
+      +'<button type="button" class="btn btn-red wr-partager" data-on-click="event.stopPropagation();partagerWrapped(4,this)">'
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
-      +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
+      +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" data-on-click="event.stopPropagation();partagerCarrouselWrapped(this)">'
         +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
-      +'<button type="button" class="vf-legende" onclick="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
+      +'<button type="button" class="vf-legende" data-on-click="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
       +htmlBoutonInviter()
       +'</section>';
   }
@@ -82286,7 +82675,7 @@ function _wrCarrouselUnParUn(urls,noms){
       +'<img src="'+u+'" alt="Slide '+(i+1)+' sur 5" style="width:min(300px,80vw);aspect-ratio:4/5;border-radius:var(--r-3);box-shadow:var(--e4)">'
       +'<a href="'+u+'" download="'+escapeHtml(noms[i])+'" type="image/jpeg" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px">'
       +'Enregistrer '+(i+1)+'/5</a></figure>').join('')
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" onclick="fermerApercuStory()">Fermer</button>';
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" data-on-click="fermerApercuStory()">Fermer</button>';
   document.body.appendChild(d);
   return true;
 }
@@ -82304,7 +82693,7 @@ function _rendreCarteWrapped(){
       const w=calculerWrapped(u||{},p.debut,p.fin);
       if(!w.seances) continue;
       let vu=false; try{ vu=localStorage.getItem('rc_wrapped_vu_'+p.cle)==='1'; }catch(e){}
-      html+='<button type="button" class="wr-carte" onclick="ouvrirWrapped(\''+p.cle+'\')">'
+      html+='<button type="button" class="wr-carte" data-on-click="ouvrirWrapped(\''+p.cle+'\')">'
         +'<span class="wr-carte-eclair" aria-hidden="true">'+icon('zap',18)+'</span>'
         +'<span class="wr-carte-t"><b>'+escapeHtml(p.carte)+'</b>'
         +'<span>'+w.seances+' séance'+(w.seances>1?'s':'')+(w.profil?' · '+escapeHtml(vu?w.profil.nom:'ton profil t’attend'):'')+'</span></span>'
@@ -82657,8 +83046,8 @@ function htmlCarteMuscles(id,d,o){
     // séance, Kevin 28/09/2026 — seul le visuel de la séance y est à télécharger).
     +(o.sansPartage?'':(_htmlVisuelFonds('musc-'+id+'-fonds')
     +'<div class="musc-actions">'
-      +'<button type="button" class="btn btn-red btn-casse" onclick="partagerCarteMuscles(\''+id+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
-      +'<button type="button" class="btn btn-outline" onclick="telechargerCarteMuscles(\''+id+'\',this)">'+icon('download',16)+' <span>Télécharger</span></button>'
+      +'<button type="button" class="btn btn-red btn-casse" data-on-click="partagerCarteMuscles(\''+id+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
+      +'<button type="button" class="btn btn-outline" data-on-click="telechargerCarteMuscles(\''+id+'\',this)">'+icon('download',16)+' <span>Télécharger</span></button>'
     +'</div>'))+'</section>';
 }
 // Peint les trois toiles de chaque vue, une fois les images lues.
@@ -82783,7 +83172,7 @@ function rendreMusclesEvolution(){
   const debut=mois?fin-28*864e5:lundi.getTime();
   const ses=(u.sessions||[]).filter(s=>s&&s.date>=debut&&s.date<fin);
   const bascule='<div class="musc-bascule" role="group" aria-label="Période">'
-    +['semaine','mois'].map(k=>'<button type="button" aria-pressed="'+(_muscEvoPeriode===k)+'" onclick="muscEvoPeriode(\''+k+'\')">'
+    +['semaine','mois'].map(k=>'<button type="button" aria-pressed="'+(_muscEvoPeriode===k)+'" data-on-click="muscEvoPeriode(\''+k+'\')">'
       +(k==='semaine'?'Semaine':'4 semaines')+'</button>').join('')+'</div>';
   const d=muscDonnees(ses,{user:u,semaines:mois?4:1,periode:mois?'4 semaines':'la semaine'});
   z.innerHTML=htmlCarteMuscles('ev',d,{genre:woGenreAvatar(u),bascule});
@@ -82870,7 +83259,7 @@ function htmlBoutonAvantApres(u,role){
   // ROUGE, AVEC LE LOGO INSTAGRAM (Kevin, 28/09/2026) : le bouton mène à une
   // story, il le dit par son logo plutôt que par un éclair. La variante
   // aa-bouton-ig ne touche que lui : « Partager une victoire » garde son style.
-  return '<button type="button" class="aa-bouton aa-bouton-ig" onclick="ouvrirAvantApres(\''+(role==='coach'?'coach':'athlete')+'\')">'
+  return '<button type="button" class="aa-bouton aa-bouton-ig" data-on-click="ouvrirAvantApres(\''+(role==='coach'?'coach':'athlete')+'\')">'
     +'<span class="aa-bouton-i" aria-hidden="true">'+icon('instagram',26)+'</span>'
     +'<span><b>'+(role==='coach'?'Avant / après':'Mon avant/après')+'</b>'
     +'<span>'+(role==='coach'?'Aperçu composé en un geste':'Composé en un geste, prêt pour ta story')+'</span></span></button>';
@@ -83218,32 +83607,32 @@ function _aaRendreEcran(){
   const date=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
   const opts=sel=>l.map(b=>'<option value="'+Number(b.date)+'"'+(Number(b.date)===sel?' selected':'')+'>'+escapeHtml(date(b))+'</option>').join('');
   const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
-    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="aaReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
+    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" data-on-click="aaReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
   const vues=aaVuesDisponibles(u);
   const cons=u&&u.consentementPartageCoach&&Number(u.consentementPartageCoach.date)>0;
   z.innerHTML='<div class="aa-haut"><span>'+(role==='coach'?'Avant / après de '+escapeHtml(u.fname||'l’athlète'):'Mon avant/après')+'</span>'
-    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">✕</button></div>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" data-on-click="fermerAvantApres()">✕</button></div>'
     +'<div class="aa-apercu"><canvas id="aa-canvas" aria-label="Aperçu de l’image"></canvas><div class="aa-charge" id="aa-charge">Composition…</div></div>'
     +'<div class="aa-bas">'
     +(autorise
-      ?('<button type="button" class="btn btn-red aa-partager" onclick="aaPartager(this)">'+icon('share',18)
+      ?('<button type="button" class="btn btn-red aa-partager" data-on-click="aaPartager(this)">'+icon('share',18)
           +' <span>'+(o.format==='post'?'Partager en post':'Partager en story')+'</span></button>'
-        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>'
-        +'<button type="button" class="vf-legende" onclick="voirLegende(\'avant\')">Voir la légende</button>')
+        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" data-on-click="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>'
+        +'<button type="button" class="vf-legende" data-on-click="voirLegende(\'avant\')">Voir la légende</button>')
       :'<p class="aa-refus">L’export demande l’accord de '+escapeHtml(u.fname||'l’athlète')
         +'. Il peut l’accorder depuis son propre avant/après, sous « Personnaliser ».</p>')
     +'<p class="aa-avert" id="aa-avert" hidden></p>'
     +'<details class="aa-perso"><summary>Personnaliser</summary>'
-      +'<label>Avant<select onchange="aaReglage(\'avant\',this.value)">'+opts(o.avant)+'</select></label>'
-      +'<label>Après<select onchange="aaReglage(\'apres\',this.value)">'+opts(o.apres)+'</select></label>'
+      +'<label>Avant<select data-on-change="aaReglage(\'avant\',this.value)">'+opts(o.avant)+'</select></label>'
+      +'<label>Après<select data-on-change="aaReglage(\'apres\',this.value)">'+opts(o.apres)+'</select></label>'
       +'<div class="aa-l">Angle</div>'+seg('vue',o.vue,AA_VUES.map(v=>[v.k,v.lib,vues.indexOf(v.k)<0]))
       +'<div class="aa-l">Chiffre</div>'+seg('indicateur',o.indicateur,[['aucun','Aucun'],['taille','Tour de taille'],['charge','Charge max']])
       +'<div class="aa-l">Fond</div>'+seg('fond',o.fond,[['noir','Noir'],['rouge','Rouge']])
       +'<div class="aa-l">Format</div>'+seg('format',o.format,[['story','Story 9:16'],['post','Post 4:5']])
-      +'<label class="aa-case"><input type="checkbox"'+(o.flou?' checked':'')+' onchange="aaReglage(\'flou\',this.checked)"> Flouter le visage</label>'
-      +'<label class="aa-case"><input type="checkbox"'+(o.poids?' checked':'')+' onchange="aaReglage(\'poids\',this.checked)"> Afficher le poids</label>'
+      +'<label class="aa-case"><input type="checkbox"'+(o.flou?' checked':'')+' data-on-change="aaReglage(\'flou\',this.checked)"> Flouter le visage</label>'
+      +'<label class="aa-case"><input type="checkbox"'+(o.poids?' checked':'')+' data-on-change="aaReglage(\'poids\',this.checked)"> Afficher le poids</label>'
       +((role!=='coach'&&u&&u.coachId)
-        ?'<label class="aa-case"><input type="checkbox"'+(cons?' checked':'')+' onchange="aaConsentementCoach(this.checked)"> Autoriser mon coach à partager mes progrès</label>':'')
+        ?'<label class="aa-case"><input type="checkbox"'+(cons?' checked':'')+' data-on-change="aaConsentementCoach(this.checked)"> Autoriser mon coach à partager mes progrès</label>':'')
       +'<p class="aa-local">Tout est composé sur ton téléphone : aucune photo n’est envoyée.</p>'
     +'</details></div>';
 }
@@ -83340,8 +83729,8 @@ function _aaSortir(partager,btn,confirme){
     if(p){
       const qui=_aa.role==='coach'?('la photo de '+escapeHtml(_aa.u.fname||'ton athlète')):'ta photo';
       p.innerHTML='Cette image contient '+qui+'. Continuer ?'
-        +'<span><button type="button" class="btn btn-red btn-sm" onclick="_aaSortir('+(partager?'true':'false')+',null,true)">Continuer</button>'
-        +'<button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'aa-avert\').hidden=true">Annuler</button></span>';
+        +'<span><button type="button" class="btn btn-red btn-sm" data-on-click="_aaSortir('+(partager?'true':'false')+',null,true)">Continuer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" data-on-click="document.getElementById(\'aa-avert\').hidden=true">Annuler</button></span>';
       p.hidden=false;
     }
     return false;
@@ -83497,14 +83886,14 @@ function _riteAfficherFin(d){
   _riteCarte=d;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cycle terminé" class="rite-fin">'
+  '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cycle terminé" class="rite-fin">'
   +'<div class="rite-fin-sur">'+d.jours+' jours</div>'
   +'<h2>Cycle '+d.cycle+' terminé</h2>'
   +'<p>Nouveau cycle noté. Prochain chapitre : <b>'+escapeHtml(d.prochain)+'</b>.</p>'
   +_htmlVisuelFonds('rite-fonds')
-  +'<button type="button" class="btn btn-red" onclick="partagerCycle(this)">'+icon('share',16)+' <span>Partager mon cycle</span></button>'
-  +'<button type="button" class="btn btn-outline" style="margin-top:8px" onclick="closeModal()">Fermer</button>'
+  +'<button type="button" class="btn btn-red" data-on-click="partagerCycle(this)">'+icon('share',16)+' <span>Partager mon cycle</span></button>'
+  +'<button type="button" class="btn btn-outline" style="margin-top:8px" data-on-click="closeModal()">Fermer</button>'
   +'</div></div>');
   const monter=res=>{ try{ monterSelecteurFond('rite-fonds',f=>_dessinerCarteCycle(_riteCarte||d,f,res||null),null); }catch(e){} };
   monter(null);
@@ -83563,9 +83952,9 @@ function _serieEcran(n,reste){
     +'<div class="serie-cal" aria-hidden="true">'+Array.from({length:d.semaines},()=>'<i></i>').join('')+'</div>'
     +(d.jokers?'<p class="bdg-ecran-cond">Dont '+d.jokers+' semaine'+(d.jokers>1?'s':'')+' sauvée'+(d.jokers>1?'s':'')+' par un joker</p>':'')
     +_htmlVisuelFonds('serie-fonds')
-    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerSerie(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-red bdg-ecran-part" data-on-click="partagerSerie(this)">'+icon('share',16)+' <span>Partager</span></button>'
     +htmlBoutonInviter()
-    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" data-on-click="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
     d.semaines+' semaines d’affilée');
@@ -83880,8 +84269,8 @@ function _rendreSerieAssiette(u){
     el=document.createElement('div');
     el.id='clh-assiette'; el.className='sk-badge';
     el.setAttribute('role','button'); el.tabIndex=0; el.setAttribute('aria-haspopup','dialog');
-    el.setAttribute('onclick',"rcInfoOuvrir('assiette')");
-    el.setAttribute('onkeydown',"if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}");
+    el.setAttribute('data-on-click',"rcInfoOuvrir('assiette')");
+    el.setAttribute('data-on-keydown',"if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}");
     el.innerHTML='<div class="sk-cadre"><div class="sk-dial"></div>'
       +'<div class="sk-chiffres"><span id="clh-assiette-val"></span><span class="sk-lbl"></span>'
       +'<span class="sk-reste" id="clh-assiette-reste"></span><span class="sk-date" id="clh-assiette-sous"></span></div>'
@@ -84231,7 +84620,7 @@ function htmlParcoursAccueil(u,maintenant){
     +'<div class="mst-points" aria-hidden="true">'+parcoursEtapes(undefined,p.jeu).map(y=>'<i class="'+(et[y.cle]?'on':'')+'"></i>').join('')+'</div>'
     +(x&&attend?'<div class="mst-suite"><span>'+escapeHtml(x.attente)+'</span></div>'
       :x?'<div class="mst-suite"><span>'+escapeHtml(x.lib)+(x.volts?' <em>+'+x.volts+' V</em>':'')+'</span>'
-      +(x.action?'<button type="button" class="btn btn-red btn-sm mst-b" onclick="'+x.action+'">'+escapeHtml(x.bouton||'Y aller')+'</button>':'')+'</div>':'')
+      +(x.action?'<button type="button" class="btn btn-red btn-sm mst-b" data-on-click="'+x.action+'">'+escapeHtml(x.bouton||'Y aller')+'</button>':'')+'</div>':'')
     +'<div class="mst-note">Les '+e.total+' étapes débloquent le badge SOUS TENSION.</div></div>';
 }
 function _rendreParcours(u){
@@ -85013,11 +85402,11 @@ function htmlCarteAccueil(u){
   const av=Number(c.avant)||0;
   return '<div class="ca-accueil" role="region" aria-label="Ta carte d’athlète">'
     +'<div class="ca-tete"><b>Ta note monte'+(av?' : '+av+' → '+c.globale:' : '+c.globale)+'</b>'
-    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">✕</button></div>'
+    +'<button type="button" class="ca-fermer" aria-label="Fermer" data-on-click="fermerCarteAccueil()">✕</button></div>'
     +'<canvas class="ca-vignette" id="ca-vignette" width="360" height="504" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
     +'<div class="ca-btns">'
-    +'<button type="button" class="btn btn-red btn-sm" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'story\')">En story</button>'
+    +'<button type="button" class="btn btn-red btn-sm" data-on-click="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" data-on-click="partagerCarteAthlete(this,\'story\')">En story</button>'
     +'</div></div>';
 }
 function _peindreVignetteCarte(id,u){
@@ -85143,11 +85532,11 @@ function _rangEcran(n,reste){
     +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
     +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
-    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-red bdg-ecran-part" data-on-click="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
     +htmlBoutonInviter()
     // LA PAGE PUBLIQUE, proposée à la fin : ce qu'on vient de gagner se montre.
     +(propose?htmlPropositionPage(u):'')
-    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" data-on-click="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
     'Nouveau rang : '+d.nom);
@@ -85405,7 +85794,7 @@ function _ouvrirJoursEntrainement(){
   const z=document.getElementById('jen-jours');
   const DS=['L','Ma','Me','J','V','S','D'];
   if(z) z.innerHTML=DS.map((d,i)=>
-    '<button type="button" id="jen-j-'+i+'" onclick="jenJour('+i+')" '
+    '<button type="button" id="jen-j-'+i+'" data-on-click="jenJour('+i+')" '
     +'aria-pressed="'+(_jenJours.includes(i)?'true':'false')+'" '
     +'style="flex:1;min-width:0;min-height:52px;border-radius:var(--r-2);cursor:pointer;'
     +'font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800">'+d+'</button>').join('');
@@ -85545,7 +85934,7 @@ function _htmlEncartOsseux(user){
   if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
-    <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
+    <button data-on-click="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
 }
 function _renderEncartOsseux(){
@@ -85829,8 +86218,8 @@ function _htmlRestitutionBilan(user){
   return '<h1 class="rb-titre">Bilan enregistré</h1>'
     +corps
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
-    +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
-    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+    +'<button type="button" class="btn btn-red" data-on-click="loadProgress()">Voir ma progression</button>'
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" data-on-click="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
 }
 // LA REPRISE APRES L'ACCORD DE SANTE. Le bilan attendait en memoire (bilData,
 // bilType) pendant la question : on l'enregistre, et l'ecran de restitution
@@ -86301,13 +86690,13 @@ function renderVolume(){
   const fmt=d=>d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0');
 
   const nav=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
-      <button class="hit44" onclick="_volNav(1)" ${_volDecalage>=VOL_SEMAINES_MAX-1?'disabled':''}
+      <button class="hit44" data-on-click="_volNav(1)" ${_volDecalage>=VOL_SEMAINES_MAX-1?'disabled':''}
         style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:${_volDecalage>=VOL_SEMAINES_MAX-1?'var(--text-faint)':'var(--text)'};width:38px;height:34px;cursor:pointer;font-size:var(--fs-lg)">←</button>
       <div style="text-align:center;flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:800">${_volDecalage===0?'Cette semaine':(_volDecalage===1?'Semaine dernière':'Il y a '+_volDecalage+' semaines')}</div>
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:1px">${fmt(lundi)} au ${fmt(dim)}</div>
       </div>
-      <button class="hit44" onclick="_volNav(-1)" ${_volDecalage<=0?'disabled':''}
+      <button class="hit44" data-on-click="_volNav(-1)" ${_volDecalage<=0?'disabled':''}
         style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:${_volDecalage<=0?'var(--text-faint)':'var(--text)'};width:38px;height:34px;cursor:pointer;font-size:var(--fs-lg)">→</button>
     </div>`;
 
@@ -86358,7 +86747,7 @@ function renderVolume(){
     const illus=_volIllus(m);
     const mc=(MUSCLES[m]||{}).c||'var(--text)';
     return `<div class="vc${illus?'':' vc-sans-illus'}" style="--vc-c:${z?z.c:'#3a3a3a'}">
-      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
+      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" data-on-error="this.remove()">`:''}
       <div class="vc-corps">
         <div class="vc-tete">
           <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
@@ -86384,7 +86773,7 @@ function renderVolume(){
     alertes+=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       ${c.nonRattachees} série${c.nonRattachees>1?'s':''} non rattachée${c.nonRattachees>1?'s':''} à un muscle
       (${c.exNonRattaches.slice(0,3).map(escapeHtml).join(', ')}${c.exNonRattaches.length>3?'…':''}).
-      <button onclick="loadExClassify()" style="background:none;border:none;color:var(--link);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">Les classer</button>
+      <button data-on-click="loadExClassify()" style="background:none;border:none;color:var(--link);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">Les classer</button>
     </div>`;
   }
 
@@ -86907,7 +87296,7 @@ function _htmlEcartPrescrit(c){
 function _htmlComptageCoach(c){
   const v=reperesComptageDe(c);
   return '<label class="vol-comptage">Compter le travail indirect<span class="vol-comptage-d">Les repères RP sont écrits en séries directes.</span>'
-    +'<select onchange="ccdComptageEnregistrer(this.value)" aria-label="Compter le travail indirect">'
+    +'<select data-on-change="ccdComptageEnregistrer(this.value)" aria-label="Compter le travail indirect">'
     +'<option value="fractionne"'+(v==='fractionne'?' selected':'')+'>À 0,5 série (par défaut)</option>'
     +'<option value="direct"'+(v==='direct'?' selected':'')+'>Non, séries directes</option>'
     +'</select></label>';
@@ -86994,7 +87383,7 @@ function renderVolumeCoach(c){
     +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
-      <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
+      <button data-on-click="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
     </div>
     ${corps}
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
@@ -87039,9 +87428,9 @@ function _htmlCarteDecharge(c){
       +escapeHtml(String(m.libelle||''))+` · <b>`+escapeHtml(String(m.valeur))+`</b> `
       +escapeHtml(String(m.unite||''))+`</div>`).join('')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdAppliquer()">Enregistrer</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdReporter()">Reporter</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="cdRefuser()">Refuser</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="cdAppliquer()">Enregistrer</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="cdReporter()">Reporter</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:var(--fs-2xs)" data-on-click="cdRefuser()">Refuser</button>
     </div></div>`;
 }
 function _cdCible(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } }
@@ -87283,8 +87672,8 @@ function _htmlBoutonDecharge(c){
          l editeur de seances. Sept clics par athlete pour defaire un geste qui
          en coutait un. -->
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      ${dejaTout?'':`<button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Programmer une semaine de décharge</button>`}
-      ${enDecharge?`<button class="btn btn-outline btn-sm" onclick="programmerDecharge(false)" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Retirer la décharge</button>`:''}
+      ${dejaTout?'':`<button class="btn btn-outline btn-sm" data-on-click="programmerDecharge()" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Programmer une semaine de décharge</button>`}
+      ${enDecharge?`<button class="btn btn-outline btn-sm" data-on-click="programmerDecharge(false)" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Retirer la décharge</button>`:''}
     </div>
   </div>`;
 }
@@ -87398,7 +87787,7 @@ function loadDechargeAthletes(){
     const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
     return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
-      <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" data-on-change="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(_nomAthlete(a))}</div>
         ${empeche?'':_cdgMotifs(a)}
@@ -87965,7 +88354,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
       +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
       +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
         +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
-        +'onclick="checkinRepondre(\''+q.cle+'\','+n+')">'+n+'</button>').join('')+'</span></div>').join('')
+        +'data-on-click="checkinRepondre(\''+q.cle+'\','+n+')">'+n+'</button>').join('')+'</span></div>').join('')
     +'<div class="ci-note">1 = '+escapeHtml(CHECKIN_QUESTIONS[0].bas.toLowerCase())+' · 5 = '+escapeHtml(CHECKIN_QUESTIONS[0].haut.toLowerCase())
       +' ; courbatures : 1 = aucune ; faim : 1 = faible, facultatif · +10 V</div>'
     +'</div>';
@@ -88043,7 +88432,7 @@ function _htmlCiFaimApres(fait){
   return '<div class="ci-ligne ci-faim"><span class="ci-lib">'+escapeHtml(q.lib)+'</span>'
     +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p" '
       +'aria-label="'+escapeHtml('Faim : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
-      +'onclick="checkinRepondre(\'faim\','+n+')">'+n+'</button>').join('')+'</span></div>';
+      +'data-on-click="checkinRepondre(\'faim\','+n+')">'+n+'</button>').join('')+'</span></div>';
 }
 // ══ LOT N5 : LA FAIM DANS LE CHECK-IN, ET CE QU'ELLE DÉCLENCHE (29/09/2026) ══
 // La faim est la quatrième question du check-in, FACULTATIVE : checkinComplet
@@ -88186,8 +88575,8 @@ function htmlPauseFatigue(e){
     +'<div class="ps-pause-k">Au maintien : '+lib(k.on.kcal)+' les jours d’entraînement, '+lib(k.off.kcal)+' les jours de repos. Protéines et lipides ne changent pas.</div>'
     +'<label class="ps-rdv">Durée : <select id="ps-pause-j" aria-label="Durée de la pause">'
       +PAUSE_FATIGUE_JOURS.map(j=>'<option value="'+j+'"'+(j===PAUSE_FATIGUE_DEFAUT?' selected':'')+'>'+j+' jours</option>').join('')+'</select></label>'
-    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="appliquerPauseFatigue(document.getElementById(\'ps-pause-j\').value)">Je fais la pause</button>'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="pointSemaineDecider(\'garde\')">Pas maintenant</button></div>'
+    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" data-on-click="appliquerPauseFatigue(document.getElementById(\'ps-pause-j\').value)">Je fais la pause</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="pointSemaineDecider(\'garde\')">Pas maintenant</button></div>'
     +'</div>';
 }
 // Côté coach : les quatre réponses sur 14 jours, même courbe pour chacune, et
@@ -88269,8 +88658,8 @@ function htmlRepriseDouce(u,maintenant){
     +'<div class="eyebrow eyebrow-act">Reprise en douceur</div>'
     +'<p class="rd-txt">Ta dernière séance date de '+n+' jours. On te propose de baisser de <b>10 %</b> les charges de ta prochaine séance : '
     +'elle comptera comme une décharge, et tu repars sur de bonnes bases. C’est toi qui décides.</p>'
-    +'<div class="rd-actions"><button type="button" class="btn btn-red btn-sm" onclick="repriseDouceChoisir(true)">Baisser de 10 %</button>'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="repriseDouceChoisir(false)">Garder mes charges</button></div></div>';
+    +'<div class="rd-actions"><button type="button" class="btn btn-red btn-sm" data-on-click="repriseDouceChoisir(true)">Baisser de 10 %</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="repriseDouceChoisir(false)">Garder mes charges</button></div></div>';
 }
 function _afficherRepriseDouce(u){
   const z=document.getElementById('clh-reprise-douce');
@@ -88351,7 +88740,7 @@ function _retourEcran(r,reste){
     +'<div class="rc-phenix"><div class="rc-phenix-cases" aria-hidden="true">'
       +Array.from({length:PHENIX_SEMAINES},(_,i)=>'<i'+(i<r.faites?' class="on"':'')+'></i>').join('')+'</div>'
       +'<div class="rc-phenix-txt">'+escapeHtml(textePhenixNoir(r))+'</div></div>'
-    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" data-on-click="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Continuer')+'</button>'
     +'</div>','Retour au combat');
   try{ _bdgFoudre(z.querySelector('#rc-retour-img'),{eclairs:2,conteneur:z}); }catch(e){}
@@ -88707,7 +89096,7 @@ const PROG_ONGLETS=Object.freeze(['poids','mensus','masseGrasse','perf','volume'
 // Le bouton de la bande qui porte cet onglet — et non plus « le premier ».
 function _progBoutonOnglet(tab){
   return [...document.querySelectorAll('#prog-tabs button')]
-    .find(b=>(b.getAttribute('onclick')||'').indexOf("showProgressTab('"+tab+"'")===0)||null;
+    .find(b=>(b.getAttribute('data-on-click')||'').indexOf("showProgressTab('"+tab+"'")===0)||null;
 }
 // Une photo de bilan, sous toutes les clefs ou elle a pu etre rangee. Sortie
 // de showProgressTab pour que _progOngletVide lise EXACTEMENT la meme chose.
@@ -88969,11 +89358,11 @@ function showProgressTab(tab,btn,sansMemo){
           <div style="flex:1;min-width:80px">
             <label style="font-size:var(--fs-xs)">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
-              <button onclick="setEvolGender('H')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${!female?'var(--red)':'var(--border)'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
-              <button onclick="setEvolGender('F')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
+              <button data-on-click="setEvolGender('H')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${!female?'var(--red)':'var(--border)'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
+              <button data-on-click="setEvolGender('F')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
             </div>
           </div>
-          <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Enregistrer</button>
+          <button class="btn btn-red btn-sm" data-on-click="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Enregistrer</button>
         </div>
         ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:''}
         ${msgMesures?`<div class="mg-manque" style="margin-top:10px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">${escapeHtml(msgMesures)}</div>`:''}
@@ -89066,7 +89455,7 @@ function showProgressTab(tab,btn,sansMemo){
       <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée</div></div>
     </div>
     ${_blocFormePerf}
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(currentUser)">Rapport de la période</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" data-on-click="ouvrirRapport(currentUser)">Rapport de la période</button>
     <div id="perf-etats" style="margin-bottom:20px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Progression par exercice</div>
       ${_lst.length?_lst.map((x,i)=>_ligneEtat(x,i===_iE1rm)).join(''):'<div class="sub" style="font-size:var(--fs-sm)">Aucun exercice suivi pour l\'instant.</div>'}
@@ -89163,7 +89552,7 @@ function showProgressTab(tab,btn,sansMemo){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" data-on-click="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
                     :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
@@ -89567,8 +89956,8 @@ function _htmlDossierSante(user,pourCoach){
         _dossDate(x.date))).join(''):''}
     ${blocDisclaimerSante()}
     ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-      <button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="telechargerDossierSante()">Télécharger mon dossier</button>
-      ${d.journal.length?`<button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="purgerHistoriqueSante()">Effacer l'historique des déclarations</button>`:''}
+      <button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" data-on-click="telechargerDossierSante()">Télécharger mon dossier</button>
+      ${d.journal.length?`<button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" data-on-click="purgerHistoriqueSante()">Effacer l'historique des déclarations</button>`:''}
     </div>`:''}
   </div>`;
 }
@@ -89982,7 +90371,7 @@ function verifierRappelAvantSeance(){
     document.getElementById('rappel-gluc-banniere')?.remove();
     const b=document.createElement('div');
     b.id='rappel-gluc-banniere'; b.className='rg-banniere'; b.setAttribute('role','status');
-    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">✕</button>';
+    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" data-on-click="this.parentNode.remove()">✕</button>';
     document.body.appendChild(b);
     setTimeout(()=>{ try{ b.remove(); }catch(err){} },30000);
   }catch(err){}
@@ -90395,8 +90784,8 @@ function _htmlPostPartum(user){
   const f=ppFenetre(u);
   const renvoi=ppRenvoi(u);
   const modes=PP_MODES_NAISSANCE.map(m=>
-    `<div class="obj-opt${e.mode===m.cle?' sel':''}" onclick="ppSetMode('${m.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${e.mode===m.cle?' sel':''}" data-on-click="ppSetMode('${m.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(m.lib)}</div>
     </div>`).join('');
   // La fenêtre est nommée en mots courants. Aucun terme médical, aucune
@@ -90411,20 +90800,20 @@ function _htmlPostPartum(user){
     </div>`:'';
   const evalRow=(f==='12_plus'||f==='6_12')
     ?`<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
-        <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
+        <input type="checkbox" ${e.evaluationPerineale?'checked':''} data-on-change="ppSetEvaluation(this.checked)"
           style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
         <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
       </label>`:'';
   return `<div class="card" style="margin-bottom:14px">
     <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">${escapeHtml(PP_TITRE)}</label>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PP_INTRO)}</div>
-    <input type="date" value="${escapeHtml(e.date||'')}" onchange="ppSetDate(this.value)"
+    <input type="date" value="${escapeHtml(e.date||'')}" data-on-change="ppSetDate(this.value)"
       aria-label="Date d'accouchement"
       style="width:100%;padding:10px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">
     ${e.date?`<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${modes}</div>`:''}
     ${bloc}${evalRow}
     ${renvoi?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px">${escapeHtml(renvoi)}</div>`:''}
-    ${e.date?`<button onclick="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
+    ${e.date?`<button data-on-click="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -90441,13 +90830,13 @@ function _htmlPpQuestions(user){
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
-          `<button type="button" onclick="ppRepondre('${x.cle}',${v},this)"
+          `<button type="button" data-on-click="ppRepondre('${x.cle}',${v},this)"
             style="flex:1;min-height:36px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
               background:${s[x.cle]===(v==='1')?'rgba(224,32,32,.14)':'#111'};border:1px solid ${s[x.cle]===(v==='1')?'var(--red)':'var(--border)'};color:${s[x.cle]===(v==='1')?'var(--text)':'var(--sub)'}">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
-    <button class="btn btn-red" style="width:100%;margin-top:12px" onclick="ppValiderQuestions()">Envoyer</button>
-    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="ppPlusTard()">Plus tard</button>
+    <button class="btn btn-red" style="width:100%;margin-top:12px" data-on-click="ppValiderQuestions()">Envoyer</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px" data-on-click="ppPlusTard()">Plus tard</button>
   </div>`;
 }
 let _ppRep={};
@@ -90538,7 +90927,7 @@ function _htmlPostPartumCoach(c){
     ${causes.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Cause : ${escapeHtml(causes.join(', '))}.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Impacts ${impact===true?'sans restriction de RepCore':'non proposés par RepCore'}.</div>
     ${e.levee?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">Levée le ${escapeHtml(dat(e.levee.date))}${e.levee.par?' par '+escapeHtml(e.levee.par):''}.</div>`
-      :`<button onclick="ppCoachLever()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px">Lever pour cette athlète</button>`}
+      :`<button data-on-click="ppCoachLever()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px">Lever pour cette athlète</button>`}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -91363,7 +91752,7 @@ function _htmlCiblesAthlete(u){
     //   personnel — des ecarts a la grille du coach, pas la grille elle-meme.
     const _gr=(function(){ try{ return cibleTableur(u,{}); }catch(e){ return null; } })();
     const _ech=(bas,haut)=>{ const o=[];for(let x=bas;x<=haut;x+=0.1) o.push(Math.round(x*10)/10); return o; };
-    const _sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
+    const _sel=(quoi,val,bas,haut)=>'<select data-on-change="athGkg(\''+quoi+'\',this.value)" data-on-click="event.stopPropagation()" '
       +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
       +'font-size:var(--fs-2xs);padding:4px 6px">'
       +_ech(bas,haut).map(x=>'<option value="'+x+'"'+(Math.abs(x-val)<0.05?' selected':'')+'>'+String(x).replace('.',',')+' g/kg</option>').join('')
@@ -91395,11 +91784,11 @@ function _htmlCiblesAthlete(u){
     return '<div class="rc-obj-carte">'
       +'<div class="rc-obj-titre">Mes cibles</div>'
       +'<div class="rc-obj-kcal">'
-        +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
+        +'<button type="button" class="rc-obj-pas" data-on-click="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
         +'<div class="rc-obj-centre">'
           +'<div class="rc-obj-nb">'+Number(v.kcal).toLocaleString('fr-FR')+'</div>'
           +'<div class="rc-obj-u">'+_libJour+'</div></div>'
-        +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
+        +'<button type="button" class="rc-obj-pas" data-on-click="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
       +(_dl?'<div class="rc-obj-ajust">Mis à jour : '+_dl+'</div>':'')
       +'<div class="rc-obj-macros">'
@@ -91428,10 +91817,10 @@ function _htmlCiblesAthlete(u){
   const per=_athPerso(u);
   const bouton=(o)=>'<button type="button" class="rc-obj-b'+(c.objectif===o.k?' actif':'')
     +'" aria-pressed="'+(c.objectif===o.k?'true':'false')
-    +'" onclick="athObjectif(\''+o.k+'\')">'+o.lib+'</button>';
+    +'" data-on-click="athObjectif(\''+o.k+'\')">'+o.lib+'</button>';
   // +1e-9 : 0,6 + 9 × 0,1 vaut 1,5000000000000002, et la borne 1,5 sautait.
   const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut+1e-9;x+=0.1) o.push(Math.round(x*10)/10); return o; };
-  const sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
+  const sel=(quoi,val,bas,haut)=>'<select data-on-change="athGkg(\''+quoi+'\',this.value)" data-on-click="event.stopPropagation()" '
     +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
     +'font-size:var(--fs-2xs);padding:4px 6px">'
     +ech(bas,haut).map(x=>'<option value="'+x+'"'+(Math.abs(x-val)<0.05?' selected':'')+'>'+String(x).replace('.',',')+' g/kg</option>').join('')
@@ -91443,14 +91832,14 @@ function _htmlCiblesAthlete(u){
     +'<div class="rc-obj-titre">Mon objectif</div>'
     +'<div class="rc-obj-choix">'+ATH_OBJECTIFS.map(bouton).join('')+'</div>'
     +'<div class="rc-obj-kcal">'
-      +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
+      +'<button type="button" class="rc-obj-pas" data-on-click="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
       +'<div class="rc-obj-centre">'
         // LE MEME TOTAL QUE LA GRILLE DU COACH : la somme des grammes
         // AFFICHES, et non le total avant leur arrondi. Les deux ecrans
         // s'ecartaient d'une kilocalorie, ce qui suffit a faire douter.
         +'<div class="rc-obj-nb">'+Number(_bloc(c.p,c.l,c.g).kcal).toLocaleString('fr-FR')+'</div>'
         +'<div class="rc-obj-u">kcal par jour</div></div>'
-      +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
+      +'<button type="button" class="rc-obj-pas" data-on-click="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +'</div>'
     +(libelleAjustKcal(u,'athlete')?'<div class="rc-obj-ajust">Mis à jour : '+libelleAjustKcal(u,'athlete')+'</div>':'')
     +'<div class="rc-obj-macros">'
@@ -91576,8 +91965,8 @@ function _htmlSuggestionCycle(user){
   return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(s.libelle)}</div>
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button onclick="accepterSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Ajouter</button>
-      <button onclick="refuserSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Non merci</button>
+      <button data-on-click="accepterSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Ajouter</button>
+      <button data-on-click="refuserSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Non merci</button>
     </div>
   </div>`;
 }
@@ -91592,8 +91981,8 @@ function _htmlMigrationCycleSupp(user){
   return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Cette ligne avait été ajoutée automatiquement par l'app. Tu peux la garder ou la retirer.</div>
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button onclick="garderSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Je la garde</button>
-      <button onclick="retirerSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">La retirer</button>
+      <button data-on-click="garderSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Je la garde</button>
+      <button data-on-click="retirerSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">La retirer</button>
     </div>
   </div>`;
 }
@@ -91689,7 +92078,7 @@ function _renderCycleNutSettings(nut){
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Dernières règles</div>
       <input type="date" id="cycle-last-period" value="${lastP}" max="${today}"
         style="width:100%;padding:10px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
-        onchange="saveCycleNutSettings()">
+        data-on-change="saveCycleNutSettings()">
     </div>
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Longueur du cycle (jours)</div>
@@ -91701,13 +92090,13 @@ function _renderCycleNutSettings(nut){
            blur, quand la valeur est complète. -->
       <input type="number" id="cycle-len" value="${len}" min="20" max="40"
         style="width:100%;padding:10px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
-        onchange="saveCycleNutSettings()">
+        data-on-change="saveCycleNutSettings()">
     </div>
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Intensité des règles</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'var(--border)'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
-        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'var(--border)'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
+        <button data-on-click="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'var(--border)'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
+        <button data-on-click="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'var(--border)'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
@@ -91716,7 +92105,7 @@ function _renderCycleNutSettings(nut){
         <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${_calSeul?'Sans effet sur les macros sous contraception cyclique':'+4% calories jours OFF en phase lutéale tardive'}</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
-        <input type="checkbox" id="cycle-pms" ${pms?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+        <input type="checkbox" id="cycle-pms" ${pms?'checked':''} data-on-change="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
         <span style="position:absolute;inset:0;background:${pms?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
           <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${pms?'20px':'0px'})"></span>
         </span>
@@ -91728,7 +92117,7 @@ function _renderCycleNutSettings(nut){
         <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Coupé : seule ta réponse du jour (« règles, c'est dur », « ça va ») modifie la charge proposée.</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
-        <input type="checkbox" id="cycle-ajuster" ${conf.ajusterAuto?'checked':''} onchange="saveCycleNutSettings()" aria-label="Ajuster la charge d'après la phase" style="opacity:0;width:0;height:0;position:absolute">
+        <input type="checkbox" id="cycle-ajuster" ${conf.ajusterAuto?'checked':''} data-on-change="saveCycleNutSettings()" aria-label="Ajuster la charge d'après la phase" style="opacity:0;width:0;height:0;position:absolute">
         <span style="position:absolute;inset:0;background:${conf.ajusterAuto?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
           <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${conf.ajusterAuto?'20px':'0px'})"></span>
         </span>
@@ -91740,7 +92129,7 @@ function _renderCycleNutSettings(nut){
            dire quelque chose. RepCore ne donne aucun conseil sur ce sujet. -->
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Contraception</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${CONTRACEPTIONS.map(c=>`<button onclick="saveCycleNutSettings('contraception','${c.cle}')"
+        ${CONTRACEPTIONS.map(c=>`<button data-on-click="saveCycleNutSettings('contraception','${c.cle}')"
           style="text-align:left;padding:10px 12px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'var(--border)'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'var(--text)':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 2px;margin-top:10px;border-top:1px solid var(--border)">
@@ -91749,7 +92138,7 @@ function _renderCycleNutSettings(nut){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.5">Désactivé, cette réponse ne quitte pas ce téléphone, et un changement d'appareil la perd.</div>
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
-          <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+          <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} data-on-change="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
           <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
             <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${_partage?'20px':'0px'})"></span>
           </span>
@@ -91763,19 +92152,19 @@ function _renderCycleNutSettings(nut){
            n'est choisi, aucun des deux n'est allumé. -->
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Régularité</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'var(--border)'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
-        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'var(--border)'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
+        <button data-on-click="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'var(--border)'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
+        <button data-on-click="saveCycleNutSettings('regulier','non')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'var(--border)'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
       </div>
       ${obsHtml}
     </div>
     ${_refusCycle?`<div style="border-top:1px solid var(--border);padding-top:10px">
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin-bottom:8px">Tu as écarté une suggestion de complément.</div>
-      <button onclick="revoirSuggestionsCycle()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Revoir les suggestions</button>
+      <button data-on-click="revoirSuggestionsCycle()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Revoir les suggestions</button>
     </div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:10px">
-      <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
+      <button data-on-click="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
       <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
-        <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+        <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} data-on-change="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
         <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>
     </div>
@@ -91788,7 +92177,7 @@ function _renderCycleNutSettings(nut){
         <div style="font-size:var(--fs-xs);color:#888">Ajuste tes macros selon ta phase</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
-        <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+        <input type="checkbox" id="cycle-enabled" ${on?'checked':''} data-on-change="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
         <span style="position:absolute;inset:0;background:${on?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
           <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${on?'20px':'0px'})"></span>
         </span>
@@ -91900,7 +92289,7 @@ function _htmlDepartAthlete(nut){
       ${bloc('JOUR ON',b.on,'var(--success)')}
       ${bloc('JOUR OFF',b.off,'var(--sub)')}
     </div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="utiliserBesoinsProposes()">Enregistrer ces objectifs</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="utiliserBesoinsProposes()">Enregistrer ces objectifs</button>
     <!-- R10 : LES HYPOTHESES SONT REPLIEES, PAS REECRITES. Le texte du repli
          est celui d'avant, au caractere pres : seul le ⓘ du NEAT s'y ajoute,
          apres le premier emploi du mot. -->
@@ -92151,7 +92540,7 @@ function htmlMacroUnite(user,idSuffixe,sansNote){
     <div class="nut-seg">
     ${MACRO_UNITES.map(x=>{
       const dispo=macroUniteDisponible(x,pr);
-      return `<button type="button" onclick="setMacroUnite('${x}')" ${dispo?'':'disabled'}
+      return `<button type="button" data-on-click="setMacroUnite('${x}')" ${dispo?'':'disabled'}
         aria-pressed="${x===u&&dispo?'true':'false'}"
         title="${dispo?'':'Aucun poids au dossier'}">${libs[x]}</button>`;}).join('')}
     </div>
@@ -92422,7 +92811,7 @@ function htmlConsigneJournal(date,vide){
       <div class="nut-cap" style="margin-bottom:10px">Pour commencer</div>
       <ol class="fj-etapes">${etapes}</ol>
     </div>`:''}
-    <button class="btn btn-red" style="width:100%;margin:${vide?'12px 0 0':'0'};letter-spacing:1.5px" onclick="openFoodSearch('${date}')">+ Ajouter un aliment</button>
+    <button class="btn btn-red" style="width:100%;margin:${vide?'12px 0 0':'0'};letter-spacing:1.5px" data-on-click="openFoodSearch('${date}')">+ Ajouter un aliment</button>
   </div>`;
 }
 // LA CIBLE DE SEL N'EST PAS UNE MACRO. Elle ne sort pas de
@@ -92736,8 +93125,8 @@ function _htmlStrictVerrou(raison){
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text-strong);margin-bottom:10px">${escapeHtml(v.titre)}</div>
       <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
       <p style="margin:0 0 20px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
-      <button class="btn btn-outline btn-sm btn-doigt" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
-      ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="go('s-client-code')">J'ai un code coach</button>`:''}
+      <button class="btn btn-outline btn-sm btn-doigt" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" data-on-click="setNutriDietType('flexible')">Passer en diète flexible</button>
+      ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-xs)" data-on-click="go('s-client-code')">J'ai un code coach</button>`:''}
     </div>
   </div>`;
 }
@@ -92789,7 +93178,7 @@ function _htmlChoixDiete(user){
     const ici=o.type===actuel;
     return '<button type="button" class="dch-opt'+(ici?' actif':'')+'" data-diete="'+o.type+'"'
       +(ici?' aria-current="true"':'')
-      +(verrou?' disabled':' onclick="choisirDiete(\''+o.type+'\')"')+'>'
+      +(verrou?' disabled':' data-on-click="choisirDiete(\''+o.type+'\')"')+'>'
       +'<span class="dch-tete"><span class="dch-nom">'+o.nom+(verrou?' 🔒':'')+'</span>'
       +(ici?'<span class="dch-etat">Actuelle</span>':'')+'</span>'
       +'<span class="dch-desc">'+escapeHtml(o.desc)+'</span>'
@@ -92907,7 +93296,7 @@ function _renderStrictDiet(){
   //   ne porte lui-meme AUCUN bouton, et une assertion le garde. Sans plan,
   //   _htmlPlanAthlete ne rend rien — pas de fiche, rien a imprimer.
   const ficheAlim=`<button class="btn btn-red btn-doigt" style="width:100%;margin:0 0 16px"
-      onclick="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`;
+      data-on-click="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`;
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:20px;animation:fadeInUp var(--t-3) var(--c-out)">
@@ -93010,7 +93399,7 @@ function _htmlSuiviAlimentaire(u,sjour){
   const bouton=(val,titre,sous,ico)=>{
     const actif=(r===val);
     return '<button type="button" class="sa-rep" data-v="'+(val?'oui':'non')+'"'+(actif?' data-actif=""':'')
-      +' aria-pressed="'+actif+'" onclick="setNutriRespected(\''+sjour+'\','+val+')">'
+      +' aria-pressed="'+actif+'" data-on-click="setNutriRespected(\''+sjour+'\','+val+')">'
       +'<span class="sa-rep-i">'+ico+'</span><span class="sa-rep-t"><b>'+titre+'</b><span>'+sous+'</span></span></button>';
   };
   // Les sept pastilles, aux abscisses de la maquette : 142 d'ecart, la
@@ -93019,7 +93408,7 @@ function _htmlSuiviAlimentaire(u,sjour){
     const e=saEtatJour(u,j.iso,auj);
     const lib=j.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
     return '<button type="button" class="sa-j'+(j.iso===sjour?' sa-j-vise':'')+'" style="left:calc('+(28+142*i)+' * var(--u))"'
-      +' onclick="setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
+      +' data-on-click="setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
       +' aria-label="'+escapeHtml(lib+' : '+(e==='oui'?'plan respecté':e==='non'?'plan non respecté':'pas de réponse'))+'">'
       +_saPastille(e)+'<span>'+escapeHtml(_saJourCourt(j.d))+'</span></button>';
   }).join('');
@@ -93028,7 +93417,7 @@ function _htmlSuiviAlimentaire(u,sjour){
     +'<h3 class="sa-titre">Suivi <span>alimentaire</span></h3>'
     +'<span class="sa-q">J’ai respecté mon plan<br>'+(sAuj?'aujourd’hui':'ce jour-là')+' ?</span>'
     +'<label class="sa-date">'+SA_ICO.calendrier+'<span>'+escapeHtml(dateLib)+'</span>'+SA_ICO.bas
-      +'<select onchange="setStrictJour(this.value===\''+auj+'\'?\'\':this.value)" aria-label="Choisir le jour">'+opts+'</select></label>'
+      +'<select data-on-change="setStrictJour(this.value===\''+auj+'\'?\'\':this.value)" aria-label="Choisir le jour">'+opts+'</select></label>'
     +bouton(true,'Oui','Plan respecté',SA_ICO.oui)
     +bouton(false,'Non','Plan non respecté',SA_ICO.non)
     +'<i class="sa-vl sa-vl2" aria-hidden="true"></i>'
@@ -93039,7 +93428,7 @@ function _htmlSuiviAlimentaire(u,sjour){
     +'<i class="sa-hl" aria-hidden="true"></i>'
     +pastilles
     +'<i class="sa-vl sa-vl3" aria-hidden="true"></i>'
-    +'<button type="button" class="sa-voir" onclick="saVoirSuivi()">'+SA_ICO.histo
+    +'<button type="button" class="sa-voir" data-on-click="saVoirSuivi()">'+SA_ICO.histo
       +'<span>Voir mon suivi</span>'+SA_ICO.droite+'</button>'
     +'</div></section>';
 }
@@ -93052,7 +93441,7 @@ function saVoirSuivi(){
   const oui=jours.filter(j=>saEtatJour(u,j.iso,auj)==='oui').length;
   const grille=jours.map(j=>{
     const e=saEtatJour(u,j.iso,auj);
-    return '<button type="button" class="sa-j" onclick="sanFermer();setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
+    return '<button type="button" class="sa-j" data-on-click="sanFermer();setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
       +' aria-label="'+escapeHtml(j.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'">'
       +_saPastille(e)+'<span>'+j.d.getDate()+'</span></button>';
   }).join('');
@@ -94555,8 +94944,8 @@ function onPlanSearch(val){
     const rappel=macro
       ?`<span style="font-size:var(--fs-xs);font-weight:800;color:${(v>0)?'var(--green)':'var(--orange)'}">${v==null?'-':String(v).replace('.',',')} g${macro==='p'?' prot.':' gluc.'}/100 g</span>`
       :`<span style="font-size:var(--fs-2xs);color:var(--sub)">P ${f.p==null?'-':f.p} · G ${f.c==null?'-':f.c} · L ${f.l==null?'-':f.l}</span>`;
-    return `<div onclick="planCoachChoisirAliment(${f.id})" role="button" tabindex="0"
-      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    return `<div data-on-click="planCoachChoisirAliment(${f.id})" role="button" tabindex="0"
+      data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="padding:12px 16px;border-bottom:1px solid var(--surface-2);cursor:pointer">
       <div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">${escapeHtml(f.n)}</div>
       ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:4px">${escapeHtml(_ev.libelle+' : '+_ev.raison)}</div>`:''}
@@ -94753,7 +95142,7 @@ function _cplMacroTxt(m){
     +' · '+Math.round(m.kcal)+' kcal';
 }
 function _cplInput(val,oninput,largeur,pas){
-  return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" oninput="${oninput}"
+  return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" data-on-input="${oninput}"
     style="width:${largeur||'62px'};padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
 }
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
@@ -95099,7 +95488,7 @@ function _cplHtmlSources(){
       <div class="plan-corps">
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:8px 0 6px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
       ${table}
-      <details class="plan-src"${_cplSrcOuvert[macro]?' open':''} ontoggle="cplNoterSources('${macro}',this.open)">
+      <details class="plan-src"${_cplSrcOuvert[macro]?' open':''} data-on-toggle="cplNoterSources('${macro}',this.open)">
         <summary style="color:var(--sub)">Modifier le catalogue<span class="plan-src-nb">${ids.length}</span></summary>
         <div class="plan-src-liste">
       ${ids.map((s,i)=>{
@@ -95112,12 +95501,12 @@ function _cplHtmlSources(){
             <div style="font-size:var(--fs-xs);font-weight:600;line-height:1.35">${escapeHtml(r?r.nom:'-')}${marque}</div>
             <div style="font-size:var(--fs-2xs);color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
           </div>
-          <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
+          <button data-on-click="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
             style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
         </div>`;
       }).join('')}
       <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:.5px"
-        onclick="ouvrirRecherchePlan({mode:'source',macro:'${macro}'})">+ Ajouter une source</button>
+        data-on-click="ouvrirRecherchePlan({mode:'source',macro:'${macro}'})">+ Ajouter une source</button>
         </div>
       </details>
       </div>
@@ -95127,7 +95516,7 @@ function _cplHtmlSources(){
 }
 function _cplHtmlLigne(item){
   const nom=planNomItem(item);
-  const sup=`<button onclick="cplSupprimerLigne('${item.id}')" aria-label="Retirer cette ligne"
+  const sup=`<button data-on-click="cplSupprimerLigne('${item.id}')" aria-label="Retirer cette ligne"
     style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>`;
   // Couleurs PLAN_COULEURS : le coach voit ici exactement ce que son athlète
   // verra sur sa fiche. Les protéines étaient en bleu de ce côté-ci et en rouge
@@ -95148,13 +95537,13 @@ function _cplHtmlLigne(item){
   }
   if(item.note!=null){
     return `<div class="plan-l">
-      <input value="${escapeHtml(item.note)}" placeholder="Note de préparation (ex : sous forme de PANCAKES)" oninput="cplSetChamp('${item.id}','note',this.value)"
+      <input value="${escapeHtml(item.note)}" placeholder="Note de préparation (ex : sous forme de PANCAKES)" data-on-input="cplSetChamp('${item.id}','note',this.value)"
         style="flex:1;min-width:0;padding:6px 8px;background:#111;border:1px dashed var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-style:italic;box-sizing:border-box">
       ${sup}</div>`;
   }
   const m=planMacrosItem(item);
   const champNom=item.libre!=null
-    ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" oninput="cplSetChamp('${item.id}','libre',this.value)"
+    ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" data-on-input="cplSetChamp('${item.id}','libre',this.value)"
         style="width:100%;padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
     : `<div style="font-size:var(--fs-sm);font-weight:700;line-height:1.35">${escapeHtml(nom)}${item.recette?' <span class="rct-b">recette</span>':''}</div>`;
   const macrosMain=item.libre!=null
@@ -95171,14 +95560,14 @@ function _cplHtmlLigne(item){
   //   (planLigneRetenue) : elle s'affichait pourtant ici comme les autres.
   const _masquee=!!(item.comp&&!(_cplPlan&&_cplPlan.avecComplements));
   const _noteMasquee=_masquee?`<div class="cpl-masquee">Masquée chez l’athlète : les compléments sont désactivés sur ce plan, cette ligne n’est ni comptée ni envoyée.
-      <button type="button" onclick="cplInclureLigne('${item.id}')">L’inclure quand même</button></div>`:'';
+      <button type="button" data-on-click="cplInclureLigne('${item.id}')">L’inclure quand même</button></div>`:'';
   return `<div class="plan-l${_masquee?' cpl-l-masquee':''}" style="display:block">
     <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">${champNom}
         <div id="cpl-m-${item.id}" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${_cplMacroLigne(item)}</div>
       </div>
       ${_cplInput(item.q,`cplSetChamp('${item.id}','q',this.value)`,'64px')}
-      <input value="${escapeHtml(planUniteItem(item))}" oninput="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
+      <input value="${escapeHtml(planUniteItem(item))}" data-on-input="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
         style="width:62px;padding:6px 6px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
       ${sup}
     </div>
@@ -95200,7 +95589,7 @@ function _cplHtmlModele(c){
   const pose=_cplPlan&&_cplPlan.modele;
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
-    return `<button onclick="cplPoserModele('${k}')"
+    return `<button data-on-click="cplPoserModele('${k}')"
       style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
@@ -95232,7 +95621,7 @@ function _cplHtmlMoment(c,moment){
   let q=null; try{ q=_periSeanceCle(c); }catch(e){}
   const choix=PLAN_MOMENTS.map(m=>{
     const actif=(moment===m.cle);
-    return `<button onclick="cplSetMoment('${m.cle}')"
+    return `<button data-on-click="cplSetMoment('${m.cle}')"
       style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
   }).join('');
   // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
@@ -95241,7 +95630,7 @@ function _cplHtmlMoment(c,moment){
     ?('Ton choix.'+(q&&q!==pose?' Son questionnaire dit « '+escapeHtml(planMomentLib(q))+' ».':''))
     :(q?'D\'après son questionnaire de départ.':'Aucune réponse à son questionnaire : position d\'origine.');
   const retour=pose
-    ?`<button onclick="cplSetMoment('')" style="background:none;border:none;color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);text-decoration:underline;cursor:pointer;padding:8px 0 0">Suivre sa réponse plutôt que la mienne</button>`
+    ?`<button data-on-click="cplSetMoment('')" style="background:none;border:none;color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);text-decoration:underline;cursor:pointer;padding:8px 0 0">Suivre sa réponse plutôt que la mienne</button>`
     :'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Moment de la séance</div>
@@ -95287,8 +95676,8 @@ function renderPlanCoach(){
     const replie=!!_cplPliage[cle];
     const tot=planTotalRepasHtml(planTotalRepas(_cCouv.parRepas[cle],_cRest,_cNSrc));
     return `<div class="plan-card">
-      <div class="plan-titre" onclick="cplPlier('${cle}')" role="button" tabindex="0"
-        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+      <div class="plan-titre" data-on-click="cplPlier('${cle}')" role="button" tabindex="0"
+        data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
         style="cursor:pointer">
         <span class="plan-titre-t">${escapeHtml(planLibRepas(cle))}</span>
         <span class="cpl-tot" data-repas="${escapeHtml(cle)}" style="display:contents">${tot}</span>
@@ -95299,14 +95688,14 @@ function renderPlanCoach(){
       ${replie?'':`
         ${lignes.map(_cplHtmlLigne).join('')}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="ouvrirRecherchePlan({mode:'squelette',repas:'${cle}'})">+ Aliment Ciqual</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplChoisirRecette('${cle}')">+ Recette</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterLibre('${cle}')">+ Ligne libre</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','p')">+ Source protéines au choix</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','c')">+ Source glucides au choix</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterFruit('${cle}')">+ Portion de fruit au choix</button>
-          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterNote('${cle}')">+ Note de préparation</button>
-          <select onchange="if(this.value){cplAjouterPortion('${cle}',this.value);this.value='';}"
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="ouvrirRecherchePlan({mode:'squelette',repas:'${cle}'})">+ Aliment Ciqual</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplChoisirRecette('${cle}')">+ Recette</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplAjouterLibre('${cle}')">+ Ligne libre</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplAjouterMarqueur('${cle}','p')">+ Source protéines au choix</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplAjouterMarqueur('${cle}','c')">+ Source glucides au choix</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplAjouterFruit('${cle}')">+ Portion de fruit au choix</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="cplAjouterNote('${cle}')">+ Note de préparation</button>
+          <select data-on-change="if(this.value){cplAjouterPortion('${cle}',this.value);this.value='';}"
             style="flex:1 1 100%;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
             <option value="">+ Portion à la pièce (œuf, scoop, gélule…)</option>${optionsPortions}
           </select>
@@ -95346,7 +95735,7 @@ function renderPlanCoach(){
            les yeux. L'athlete, lui, ne verra ces lignes qu'apres
            « Enregistrer » : c'est deja la regle de cet ecran. -->
     <button class="btn btn-outline btn-doigt" style="width:100%;margin-bottom:14px"
-      onclick="ouvrirFicheAlim(_cplAthlete())">Fiche alimentaire à imprimer</button>
+      data-on-click="ouvrirFicheAlim(_cplAthlete())">Fiche alimentaire à imprimer</button>
     <div id="cpl-alertes">${_cplHtmlAlertes()}</div>
     <div id="cpl-apercu" style="margin-bottom:16px">${_cplHtmlApercu()}</div>
 
@@ -95357,7 +95746,7 @@ function renderPlanCoach(){
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:2px">Affiche ou masque les lignes marquées « complément ». C'est le seul effet de cet interrupteur.</div>
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
-          <input type="checkbox" ${_cplPlan.avecComplements?'checked':''} onchange="cplToggleComplements()" style="opacity:0;width:0;height:0;position:absolute">
+          <input type="checkbox" ${_cplPlan.avecComplements?'checked':''} data-on-change="cplToggleComplements()" style="opacity:0;width:0;height:0;position:absolute">
           <span style="position:absolute;inset:0;background:${_cplPlan.avecComplements?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
             <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${_cplPlan.avecComplements?'20px':'0px'})"></span>
           </span>
@@ -95375,7 +95764,7 @@ function renderPlanCoach(){
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Squelette de repas</div>
     ${_cplHtmlMoment(c,moment)}
     ${clesUtilisees.map(blocRepas).join('')}
-    <select onchange="if(this.value){cplAjouterMarqueur(this.value,'p');this.value='';}"
+    <select data-on-change="if(this.value){cplAjouterMarqueur(this.value,'p');this.value='';}"
       style="width:100%;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;margin-bottom:20px">
       <option value="">+ Ouvrir un nouveau repas…</option>
       ${planOrdreCles(moment).filter(k=>clesUtilisees.indexOf(k)<0).map(k=>`<option value="${k}">${escapeHtml(planLibRepas(k))}</option>`).join('')}
@@ -95391,8 +95780,8 @@ function renderPlanCoach(){
     <div id="cpl-sources">${_cplHtmlSources()}</div>
 
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:16px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
-    <button class="btn btn-red" onclick="savePlanCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">Enregistrer le plan</button>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="supprimerPlanCoach()">Supprimer le plan de cet athlète</button>
+    <button class="btn btn-red" data-on-click="savePlanCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">Enregistrer le plan</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;font-size:var(--fs-2xs);letter-spacing:.5px" data-on-click="supprimerPlanCoach()">Supprimer le plan de cet athlète</button>
   </div></div>`;
 }
 
@@ -95772,7 +96161,7 @@ function _htmlPlanAthlete(user,intercale){
   // La cible tactile ne descend pas pour autant — le select garde 34px, et
   // la regle WCAG est tenue par sa largeur, pas par l interligne.
   const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #1c1c1c">
-      <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
+      <select data-on-change="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:var(--r-2);cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
           border:1px solid ${stock?'rgba(34,197,94,.42)':'var(--border)'};
@@ -95797,7 +96186,7 @@ function _htmlPlanAthlete(user,intercale){
     }).join('');
     const q=choisi?Math.round(Number(choisi.split('|')[1])*LC_REPAS):null;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">
-      <select onchange="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
+      <select data-on-change="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
         style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:#101010;border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         <option value="">${macro==='p'?'Protéines':'Glucides'} au choix…</option>
         ${opts}
@@ -95814,7 +96203,7 @@ function _htmlPlanAthlete(user,intercale){
 // poussaient tout le reste hors de vue, et on ne la consulte qu au moment de
 // faire ses courses. <details> natif, comme les historiques : aucun script,
 // le clavier l ouvre, et le lecteur d ecran l annonce.
-const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:none;border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
+const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:none;border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px"${_lcOuvert?' open':''} data-on-toggle="_lcOuvert=this.open">
     <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -14px 8px;padding:12px 14px;border-radius:var(--r-2) var(--r-2) 0 0;background:linear-gradient(180deg,var(--text),#e9e9e9);box-shadow:var(--e1);min-height:44px">
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="display:inline-flex;align-items:center;gap:10px;flex-shrink:0">
@@ -96132,7 +96521,7 @@ function _fjDerniereQty(id){
 function _htmlEpingle(id,grand){
   const on=estFavori(id);
   const t=grand?18:15;
-  return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${id},event)"
+  return `<button id="${grand?'fja-epingle':''}" data-on-click="toggleFavFood(${id},event)"
     title="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     aria-label="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'★':'☆'}</button>`;
@@ -96280,12 +96669,12 @@ function _htmlUnites(f){
   if(l.length<=1) return '';          // règle 5 : seul « g », écran d'avant
   return `<div id="fja-unites" style="margin-top:10px">
     <div style="display:flex;gap:8px;align-items:center">
-      <select id="fja-unite" onchange="fjaChangerUnite(this.value)" style="flex:1"
+      <select id="fja-unite" data-on-change="fjaChangerUnite(this.value)" style="flex:1"
         aria-label="Unité de saisie">
         ${l.map(u=>`<option value="${escapeHtml(u.cle)}"${u.cle===_fjUnite?' selected':''}>${escapeHtml(u.cle==='g'?'grammes':u.lib)}</option>`).join('')}
       </select>
       <input id="fja-unite-n" type="number" min="0.5" step="0.5" value="1"
-        oninput="fjaMajDepuisUnite()" aria-label="Nombre d'unités"
+        data-on-input="fjaMajDepuisUnite()" aria-label="Nombre d'unités"
         style="width:88px;box-sizing:border-box;text-align:center;font-size:var(--fs-lg);font-weight:800;display:none">
     </div>
     <div id="fja-unite-eq" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px"></div>
@@ -96362,7 +96751,7 @@ function _htmlPortions(f){
   const l=portionsPourGroupe(f&&f.g);
   if(!l.length) return '';
   return `<div style="display:flex;gap:8px;margin-top:10px">
-    ${l.map(p=>`<button onclick="setFjaQty(${p.g})"
+    ${l.map(p=>`<button data-on-click="setFjaQty(${p.g})"
       style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
   </div>
   <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;line-height:1.5">${escapeHtml(FJ_PORTIONS_NOTE)}</div>`;
@@ -96689,13 +97078,13 @@ function _cplRecettesRendre(q){
   const tout=recettesMiennes();
   const l=words.length?recettesTrouvees(tout,words):tout;
   if(!tout.length){
-    el.innerHTML='<div class="rct-vide">Ta bibliothèque de recettes est vide.<br><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" onclick="fermerRecherchePlan();ouvrirRecettes()">Créer une recette</button></div>';
+    el.innerHTML='<div class="rct-vide">Ta bibliothèque de recettes est vide.<br><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" data-on-click="fermerRecherchePlan();ouvrirRecettes()">Créer une recette</button></div>';
     return;
   }
   el.innerHTML=l.map(r=>{
     const m=recetteMacros(r,1);
-    return '<div class="fj-result" role="button" tabindex="0" onclick="planCoachChoisirRecette('+_attrArg(r.id)+')"'
-      +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+    return '<div class="fj-result" role="button" tabindex="0" data-on-click="planCoachChoisirRecette('+_attrArg(r.id)+')"'
+      +' data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
       +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
       +'<div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div></div>';
   }).join('')||'<div class="rct-vide">Aucune recette pour « '+escapeHtml(q)+' ».</div>';
@@ -96756,19 +97145,19 @@ function _htmlRecettesSaisie(){
   const puces=lp.map(it=>{
     const r=cache.find(x=>x.id===it.recette);
     const e=entreeLignePlanRecette(it,r,1);
-    return '<button type="button" class="fj-rec" onclick="ajouterRecettePlan('+_attrArg(it.id)+')">'
+    return '<button type="button" class="fj-rec" data-on-click="ajouterRecettePlan('+_attrArg(it.id)+')">'
       +'<span class="rct-pl"><span class="fj-rec-n">'+escapeHtml(e.nom)+'</span>'
       +'<span class="fj-rec-q">'+escapeHtml(e.unite)+' · '+e.kcal+' kcal · '+escapeHtml(planLibRepas(it.repas))+'</span></span>'
       +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>';
   }).join('');
   return (puces?'<div class="rct-plan">'+puces+'</div>':'')
-    +'<div class="rct-actions"><button type="button" class="rct-lien" onclick="ouvrirRecettes()">'
+    +'<div class="rct-actions"><button type="button" class="rct-lien" data-on-click="ouvrirRecettes()">'
     +((recettesMiennes().length||cache.length)?'Mes recettes':'+ Créer une recette')+'</button></div>';
 }
 function _htmlRecetteResultat(r,de){
   const m=recetteMacros(r,1);
-  return '<div class="fj-result" role="button" tabindex="0" onclick="ouvrirPortionRecette('+_attrArg(de)+','+_attrArg(r.id)+')"'
-    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+  return '<div class="fj-result" role="button" tabindex="0" data-on-click="ouvrirPortionRecette('+_attrArg(de)+','+_attrArg(r.id)+')"'
+    +' data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
     +'<div class="rct-m">'+_recMacrosHtml(m,' / portion')+(de==='coach'?' · <span class="rct-nw">de ton coach</span>':'')+'</div></div>';
 }
@@ -96786,8 +97175,8 @@ function ouvrirPortionRecette(de,id){
   if(!r) return false;
   _recPortion={de,id,n:1,repas:(typeof _fjRepas!=='undefined'&&_fjRepas)?_fjRepas:'matin'};
   document.getElementById('modal-overlay')?.remove();
-  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="fermerPortionRecette()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Portions" class="rct-feuille"><div id="rct-portion"></div></div></div>');
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" data-on-click="fermerPortionRecette()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Portions" class="rct-feuille"><div id="rct-portion"></div></div></div>');
   _rendrePortionRecette();
   return true;
 }
@@ -96800,16 +97189,16 @@ function _rendrePortionRecette(){
   const r=recetteTrouver(_recPortion.de,_recPortion.id);
   if(!r){ fermerPortionRecette(); return; }
   const m=recetteMacros(r,_recPortion.n);
-  const btn=(k,lib)=>'<button type="button" class="fj-repas-btn'+(_recPortion.repas===k?' active':'')+'" onclick="portionRecetteRepas('+_attrArg(k)+')">'+lib+'</button>';
+  const btn=(k,lib)=>'<button type="button" class="fj-repas-btn'+(_recPortion.repas===k?' active':'')+'" data-on-click="portionRecetteRepas('+_attrArg(k)+')">'+lib+'</button>';
   z.innerHTML='<div class="rct-n" style="font-size:var(--fs-lg)">'+escapeHtml(r.nom)+'</div>'
     +'<div class="rct-m">Recette pour '+escapeHtml(recettePortionsTxt(r.portions))+(r.etapes?' · '+escapeHtml(String(r.etapes).slice(0,80))+(String(r.etapes).length>80?'…':''):'')+'</div>'
-    +'<div class="rct-pas"><button type="button" onclick="portionRecettePas(-0.5)" aria-label="Moins une demi-portion">−</button>'
+    +'<div class="rct-pas"><button type="button" data-on-click="portionRecettePas(-0.5)" aria-label="Moins une demi-portion">−</button>'
     +'<b>'+escapeHtml(recettePortionsTxt(_recPortion.n))+'</b>'
-    +'<button type="button" onclick="portionRecettePas(0.5)" aria-label="Plus une demi-portion">+</button></div>'
+    +'<button type="button" data-on-click="portionRecettePas(0.5)" aria-label="Plus une demi-portion">+</button></div>'
     +'<div class="rct-tot">'+_recMacrosHtml(m)+'</div>'
     +(m.manquants.length?'<div class="rct-m" style="color:var(--orange)">Sans valeurs : '+escapeHtml(m.manquants.join(', '))+'</div>':'')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0">'+btn('matin','Matin')+btn('dejeuner','Déjeuner')+btn('diner','Dîner')+btn('collation','Collation')+btn('coucher','Nuit')+'</div>'
-    +'<button type="button" class="btn btn-red" onclick="validerPortionRecette()">Ajouter au journal</button>';
+    +'<button type="button" class="btn btn-red" data-on-click="validerPortionRecette()">Ajouter au journal</button>';
 }
 function validerPortionRecette(){
   const s=_recPortion;
@@ -96845,10 +97234,10 @@ function _htmlRecetteCarte(r,de,miennes){
   const id=_attrArg(r.id);
   const tags=(r.tags||[]).length?'<div class="rct-tags">'+r.tags.map(t=>'<span>'+escapeHtml(t)+'</span>').join('')+'</div>':'';
   const actions=miennes
-    ?'<button type="button" class="rct-lien" onclick="modifierRecette('+id+')">Modifier</button>'
-      +'<button type="button" class="rct-lien" onclick="dupliquerRecette('+_attrArg(de)+','+id+')">Dupliquer</button>'
-      +'<button type="button" class="rct-lien rct-sup" onclick="supprimerRecette('+id+')">Supprimer</button>'
-    :'<button type="button" class="rct-lien" onclick="dupliquerRecette('+_attrArg(de)+','+id+')">Copier dans mes recettes</button>';
+    ?'<button type="button" class="rct-lien" data-on-click="modifierRecette('+id+')">Modifier</button>'
+      +'<button type="button" class="rct-lien" data-on-click="dupliquerRecette('+_attrArg(de)+','+id+')">Dupliquer</button>'
+      +'<button type="button" class="rct-lien rct-sup" data-on-click="supprimerRecette('+id+')">Supprimer</button>'
+    :'<button type="button" class="rct-lien" data-on-click="dupliquerRecette('+_attrArg(de)+','+id+')">Copier dans mes recettes</button>';
   return '<div class="rct-carte"><div class="rct-n">'+escapeHtml(r.nom)+'</div>'
     +'<div class="rct-m">'+escapeHtml(recettePortionsTxt(r.portions))+' · '+(r.ingredients||[]).length+' ingrédient'+((r.ingredients||[]).length>1?'s':'')
     +'</div><div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div>'
@@ -96865,7 +97254,7 @@ function renderRecettes(){
   z.innerHTML='<p class="sub rct-intro">'+(coach
       ?'Tes recettes, partagées à tous tes athlètes. Ajoute-les à un repas du plan, ou laisse-les dans leur recherche d’aliments.'
       :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
-    +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
+    +'<button type="button" class="btn btn-red" data-on-click="nouvelleRecette()">Nouvelle recette</button>'
     +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
     +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):'<div class="rct-vide">Aucune recette pour l’instant.</div>')
     +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
@@ -96920,23 +97309,23 @@ function _rendreEditeurRecette(z){
   const t=document.getElementById('rct-titre'); if(t) t.textContent=e.id?'Modifier la recette':'Nouvelle recette';
   const ing=e.ingredients.map((x,i)=>'<div class="rct-ing"><div class="rct-ing-n">'+escapeHtml(x.nom||'?')
       +(x.src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
-      +'<input type="number" inputmode="numeric" min="1" max="2000" value="'+escapeHtml(String(x.grammes==null?'':x.grammes))+'" aria-label="Grammes" oninput="recetteIngGrammes('+i+',this.value)"><span class="rct-m">g</span>'
-      +'<button type="button" class="rct-x" aria-label="Retirer" onclick="recetteIngRetirer('+i+')">×</button></div>').join('');
+      +'<input type="number" inputmode="numeric" min="1" max="2000" value="'+escapeHtml(String(x.grammes==null?'':x.grammes))+'" aria-label="Grammes" data-on-input="recetteIngGrammes('+i+',this.value)"><span class="rct-m">g</span>'
+      +'<button type="button" class="rct-x" aria-label="Retirer" data-on-click="recetteIngRetirer('+i+')">×</button></div>').join('');
   z.innerHTML='<label class="rct-lab" for="rct-nom">Nom</label>'
-    +'<input id="rct-nom" class="rct-champ" maxlength="80" value="'+escapeHtml(e.nom||'')+'" placeholder="Ex : porridge protéiné" oninput="recetteChamp(\'nom\',this.value)">'
+    +'<input id="rct-nom" class="rct-champ" maxlength="80" value="'+escapeHtml(e.nom||'')+'" placeholder="Ex : porridge protéiné" data-on-input="recetteChamp(\'nom\',this.value)">'
     +'<label class="rct-lab" for="rct-portions">Portions</label>'
-    +'<input id="rct-portions" class="rct-champ" inputmode="decimal" value="'+escapeHtml(String(e.portions==null?'':e.portions).replace('.',','))+'" oninput="recetteChamp(\'portions\',this.value)">'
+    +'<input id="rct-portions" class="rct-champ" inputmode="decimal" value="'+escapeHtml(String(e.portions==null?'':e.portions).replace('.',','))+'" data-on-input="recetteChamp(\'portions\',this.value)">'
     +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||'<div class="rct-vide">Aucun ingrédient.</div>')
     +(e.ingredients.length<RECETTE_ING_MAX
-      ?'<input id="rct-cherche" class="rct-champ" type="search" autocomplete="off" placeholder="Ajouter un ingrédient" value="'+escapeHtml(_recEdCherche)+'" oninput="recetteChercher(this.value)">'
+      ?'<input id="rct-cherche" class="rct-champ" type="search" autocomplete="off" placeholder="Ajouter un ingrédient" value="'+escapeHtml(_recEdCherche)+'" data-on-input="recetteChercher(this.value)">'
         +'<div id="rct-resultats"></div>':'')
     +'<div id="rct-total" class="rct-total"></div>'
     +'<label class="rct-lab" for="rct-etapes">Étapes (facultatif)</label>'
-    +'<textarea id="rct-etapes" class="rct-champ" rows="4" maxlength="4000" oninput="recetteChamp(\'etapes\',this.value)">'+escapeHtml(e.etapes||'')+'</textarea>'
+    +'<textarea id="rct-etapes" class="rct-champ" rows="4" maxlength="4000" data-on-input="recetteChamp(\'etapes\',this.value)">'+escapeHtml(e.etapes||'')+'</textarea>'
     +'<label class="rct-lab" for="rct-tags">Étiquettes, séparées par des virgules (facultatif)</label>'
-    +'<input id="rct-tags" class="rct-champ" value="'+escapeHtml(e.tags||'')+'" placeholder="Ex : petit-déjeuner, rapide" oninput="recetteChamp(\'tags\',this.value)">'
-    +'<div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn btn-outline" style="flex:1" onclick="annulerRecette()">Annuler</button>'
-    +'<button type="button" class="btn btn-red" style="flex:1" onclick="validerRecette()">Enregistrer</button></div>';
+    +'<input id="rct-tags" class="rct-champ" value="'+escapeHtml(e.tags||'')+'" placeholder="Ex : petit-déjeuner, rapide" data-on-input="recetteChamp(\'tags\',this.value)">'
+    +'<div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn btn-outline" style="flex:1" data-on-click="annulerRecette()">Annuler</button>'
+    +'<button type="button" class="btn btn-red" style="flex:1" data-on-click="validerRecette()">Enregistrer</button></div>';
   _rendreTotalRecette();
   _rendreResultatsIngredient();
 }
@@ -96949,14 +97338,14 @@ function _rendreResultatsIngredient(){
   if(!_ciqualDB){ z.innerHTML='<div class="rct-vide">Chargement de la table…</div>'; _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
   const normQ=_fjNorm(q), words=normQ.split(/\s+/).filter(w=>w.length>1);
   const res=_classerAliments(_ciqualDB.filter(f=>_fjContientTous(f.s,words)),normQ,words).slice(0,12).map(x=>x.f);
-  const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
-    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+  const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" data-on-click="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
+    +' data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div class="rct-n" style="font-size:var(--fs-sm)">'+escapeHtml(a.n)+(src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
     +'<div class="rct-m">'+(a.k!=null?_recF(a.k)+' kcal/100 g':'énergie non renseignée')+' · P '+_recF(a.p)+' · G '+_recF(a.c)+' · L '+_recF(a.l)+'</div></div>';
   let h=res.map(f=>ligne('ciqual',f,f.id)).join('');
   if(_recOff&&_recOff.liste) h+=_fjTitreSection('Produits de marque (Open Food Facts)')+_recOff.liste.slice(0,10).map(a=>ligne('off',a,a.id)).join('');
   else if(_recOff&&_recOff.raison) h+='<div class="rct-vide">'+escapeHtml(_recOff.raison)+'</div>';
-  else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" onclick="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';
+  else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" data-on-click="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';
   z.innerHTML=h||'<div class="rct-vide">Aucun résultat.</div>';
 }
 async function recetteChercherOff(){
@@ -97099,46 +97488,46 @@ function _prepRendre(){
   const t=document.getElementById('prep-titre');
   if(t) t.textContent=PREP_MODES[e.mode];
   const ch=(v)=>escapeHtml(v==null?'':String(v));
-  const onglet=(m,lib)=>'<button type="button" class="btn btn-sm" onclick="prepMode(\''+m+'\')" style="flex:1;margin:0;'
+  const onglet=(m,lib)=>'<button type="button" class="btn btn-sm" data-on-click="prepMode(\''+m+'\')" style="flex:1;margin:0;'
     +'border:1px solid '+(e.mode===m?'var(--red)':'var(--border)')+';background:'+(e.mode===m?'rgba(224,32,32,.16)':'transparent')
     +';color:'+(e.mode===m?'var(--red-text)':'var(--text-dim)')+'">'+lib+'</button>';
   const lignes=e.ing.map((l,i)=>
     '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;margin-bottom:6px">'
-      +'<input placeholder="Ingrédient" value="'+ch(l.n)+'" oninput="prepChamp('+i+',\'n\',this.value)" style="flex:1;min-width:0">'
-      +'<button type="button" onclick="prepRetirerLigne('+i+')" aria-label="Retirer" style="min-width:44px;min-height:44px;'
+      +'<input placeholder="Ingrédient" value="'+ch(l.n)+'" data-on-input="prepChamp('+i+',\'n\',this.value)" style="flex:1;min-width:0">'
+      +'<button type="button" data-on-click="prepRetirerLigne('+i+')" aria-label="Retirer" style="min-width:44px;min-height:44px;'
       +'background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer">×</button>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px">'
-      +'<input type="number" inputmode="decimal" placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="grammes" value="'+ch(l.g)+'" data-on-input="prepChamp('+i+',\'g\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="kcal/100g" value="'+ch(l.k)+'" data-on-input="prepChamp('+i+',\'k\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="P/100g" value="'+ch(l.p)+'" data-on-input="prepChamp('+i+',\'p\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="G/100g" value="'+ch(l.c)+'" data-on-input="prepChamp('+i+',\'c\',this.value)">'
+      +'<input type="number" inputmode="decimal" placeholder="L/100g" value="'+ch(l.l)+'" data-on-input="prepChamp('+i+',\'l\',this.value)">'
     +'</div></div>').join('');
   const diviseur=e.mode==='prep'
     ? '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">En combien de repas ?</div>'
-      +'<input type="number" inputmode="numeric" min="1" value="'+ch(e.portions)+'" oninput="prepDiviseur(\'portions\',this.value)" style="width:100%">'
+      +'<input type="number" inputmode="numeric" min="1" value="'+ch(e.portions)+'" data-on-input="prepDiviseur(\'portions\',this.value)" style="width:100%">'
     : '<div style="display:flex;gap:8px;margin-bottom:8px">'
-        +'<button type="button" class="btn btn-sm" onclick="prepBase(\'g\')" style="flex:1;margin:0;border:1px solid '
+        +'<button type="button" class="btn btn-sm" data-on-click="prepBase(\'g\')" style="flex:1;margin:0;border:1px solid '
           +(e.base==='g'?'var(--red)':'var(--border)')+';background:transparent;color:'+(e.base==='g'?'var(--red-text)':'var(--text-dim)')+'">En grammes</button>'
-        +'<button type="button" class="btn btn-sm" onclick="prepBase(\'pc\')" style="flex:1;margin:0;border:1px solid '
+        +'<button type="button" class="btn btn-sm" data-on-click="prepBase(\'pc\')" style="flex:1;margin:0;border:1px solid '
           +(e.base==='pc'?'var(--red)':'var(--border)')+';background:transparent;color:'+(e.base==='pc'?'var(--red-text)':'var(--text-dim)')+'">En parts</button>'
       +'</div>'
       +(e.base==='g'
         ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          +'<input type="number" inputmode="decimal" placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
-          +'<input type="number" inputmode="decimal" placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
+          +'<input type="number" inputmode="decimal" placeholder="poids total (g)" value="'+ch(e.total_g)+'" data-on-input="prepDiviseur(\'total_g\',this.value)">'
+          +'<input type="number" inputmode="decimal" placeholder="ma part (g)" value="'+ch(e.part_g)+'" data-on-input="prepDiviseur(\'part_g\',this.value)">'
           +'</div><div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">'
           +'Poids total vide : on prend la somme des ingrédients. À remplir si le plat a perdu de l\'eau à la cuisson.</div>'
         : '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Quelle part en as-tu mangée ?</div>'
-          +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
+          +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" data-on-input="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" data-on-click="prepAjouterLigne()">+ Ingrédient</button>'
     +'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:16px">'+diviseur+'</div>'
     +'<div id="prep-resultat" style="margin-bottom:16px"></div>'
-    +'<button type="button" class="btn btn-red" id="prep-ajouter" onclick="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
+    +'<button type="button" class="btn btn-red" id="prep-ajouter" data-on-click="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
   _prepResultat();
 }
 function prepJournaliser(){
@@ -97268,7 +97657,7 @@ function _htmlRecentsSaisie(){
   if(!l.length) return '';
   return l.map((r,i)=>{
     const e=r.e, q=e.unite||((e.qty!=null?e.qty:'')+' g');
-    return '<button type="button" class="fj-rec" onclick="ajouterRecent('+i+')">'
+    return '<button type="button" class="fj-rec" data-on-click="ajouterRecent('+i+')">'
       +'<span class="fj-rec-n">'+escapeHtml(e.nom)+'</span>'
       +'<span class="fj-rec-q">'+escapeHtml(String(q))+(e.kcal!=null?' · '+escapeHtml(String(e.kcal))+' kcal':'')+'</span>'
       +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>';
@@ -97299,11 +97688,11 @@ function _htmlRepasTypes(){
   if(!l.length) return '';
   return l.map(r=>{
     const kcal=r.entries.reduce((a,e)=>a+(Number(e.kcal)||0),0);
-    return '<div class="fj-rt"><button type="button" class="fj-rec" onclick="ajouterRepasType(\''+escapeHtml(r.id)+'\')">'
+    return '<div class="fj-rt"><button type="button" class="fj-rec" data-on-click="ajouterRepasType(\''+escapeHtml(r.id)+'\')">'
       +'<span class="fj-rec-n">'+escapeHtml(r.nom)+'</span>'
       +'<span class="fj-rec-q">'+r.entries.length+' aliment'+(r.entries.length>1?'s':'')+' · '+Math.round(kcal)+' kcal</span>'
       +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>'
-      +'<button type="button" class="fj-rt-x" aria-label="Retirer ce repas enregistré" onclick="retirerRepasType(\''+escapeHtml(r.id)+'\')">×</button></div>';
+      +'<button type="button" class="fj-rt-x" aria-label="Retirer ce repas enregistré" data-on-click="retirerRepasType(\''+escapeHtml(r.id)+'\')">×</button></div>';
   }).join('');
 }
 function ajouterRepasType(id){
@@ -97346,9 +97735,9 @@ function enregistrerRepasType(date,repas,nom){
 function _htmlNommerRepas(date,repas){
   if(!_fjNommer||_fjNommer.date!==date||_fjNommer.repas!==repas) return '';
   return '<div class="fj-nommer"><input id="fj-rt-nom" maxlength="40" placeholder="Petit-déj semaine" '
-    +'onkeydown="if(event.key===\'Enter\')enregistrerRepasType(\''+date+'\',\''+repas+'\',this.value)">'
-    +'<button type="button" class="btn btn-red btn-sm" onclick="enregistrerRepasType(\''+date+'\',\''+repas+'\',document.getElementById(\'fj-rt-nom\').value)">Enregistrer</button>'
-    +'<button type="button" class="fj-nommer-x" aria-label="Annuler" onclick="fermerEnregistrerRepas()">×</button></div>';
+    +'data-on-keydown="if(event.key===\'Enter\')enregistrerRepasType(\''+date+'\',\''+repas+'\',this.value)">'
+    +'<button type="button" class="btn btn-red btn-sm" data-on-click="enregistrerRepasType(\''+date+'\',\''+repas+'\',document.getElementById(\'fj-rt-nom\').value)">Enregistrer</button>'
+    +'<button type="button" class="fj-nommer-x" aria-label="Annuler" data-on-click="fermerEnregistrerRepas()">×</button></div>';
 }
 // ── « Comme hier » ─────────────────────────────────────────────────────────
 function commeHier(date,repas){
@@ -97366,7 +97755,7 @@ function _htmlRepasVide(date,repas,libelle){
   const hier=s.date===_jourPlus(date,-1);
   const quand=hier?'Comme hier':'Comme le '+new Date(s.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
   return '<div class="fj-vide"><span>'+escapeHtml(libelle)+'</span>'
-    +'<button type="button" class="fj-comme" onclick="commeHier(\''+date+'\',\''+repas+'\')">'+escapeHtml(quand)
+    +'<button type="button" class="fj-comme" data-on-click="commeHier(\''+date+'\',\''+repas+'\')">'+escapeHtml(quand)
     +' <small>('+s.entries.length+' aliment'+(s.entries.length>1?'s':'')+')</small></button></div>';
 }
 
@@ -97588,7 +97977,7 @@ function _htmlEquivalents(e){
   const descriptif=equivalenceDescriptive(currentUser);
   const entete=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase">Équivalences</span>
-      <button onclick="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:32px">×</button>
+      <button data-on-click="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:32px">×</button>
     </div>`;
   const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:10px">${entete}${corps}</div>`;
   // RÈGLE 8 : produit OFF ou groupe vide ⇒ aucune équivalence, et on dit
@@ -97642,7 +98031,7 @@ function _htmlEquivalents(e){
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g${x.plafonne?' <span style="color:var(--orange)">· plafonné</span>':''} &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
         ${x.plafonne?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:2px">Quantité plafonnée à ${plafondEquivalence(alim.g)} g : l'équivalence exacte demanderait davantage, ce qui ne se mange pas.</div>`:''}
       </div>
-      <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
+      <button data-on-click="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
         class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`).join('')}
     ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
@@ -97654,7 +98043,7 @@ function _htmlEquivalents(e){
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
         <div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:2px">${escapeHtml(evictionMention(_ev))}</div>
       </div>
-      <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
+      <button data-on-click="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
         class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`;}).join('')}`:''}
     <div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:10px">${escapeHtml(EQ_RESERVE_ALLERGENE)}</div>
@@ -97843,7 +98232,7 @@ function _htmlDernierAjout(date){
   if(!a||a.date!==date) return '';
   return `<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--success);line-height:1.5">${escapeHtml(a.quoi)}</div>
-    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
+    <button data-on-click="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
   </div>`;
 }
 function openFoodSearch(date){
@@ -97888,17 +98277,17 @@ function _renderFjActions(){
   // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
   const scan=(typeof navigator!=='undefined'&&navigator.onLine===false)?''
-    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner</button>';
+    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" data-on-click="ouvrirScan()">Scanner</button>';
   // DEUX ENTREES DE PLUS, sur une seconde ligne : quatre boutons cote a cote
   // ne tiendraient pas a 320 px, et ces deux-la repondent a une autre question
   // que « quel aliment » — « combien dans mon assiette ».
   el.innerHTML='<div style="display:flex;gap:8px;margin-bottom:8px">'
-    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan+'</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" data-on-click="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan+'</div>'
     +'<div style="display:flex;gap:8px">'
-    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'prep\')">Meal prep</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" data-on-click="ouvrirPrep(\'prep\')">Meal prep</button>'
     // LOT R1 : « Recettes » ouvre la bibliothèque. Le calcul d'une part d'un
     // tout reste dans l'onglet « Recette » de l'écran Meal prep.
-    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirRecettes()">Recettes</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" data-on-click="ouvrirRecettes()">Recettes</button></div>';
 }
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
@@ -98055,8 +98444,8 @@ function _attrArg(v){
 function _htmlCoachResult(a){
   const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
-  return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+_attrArg(a.id)+')"'
-    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+  return '<div class="fj-result" role="button" tabindex="0" data-on-click="selectCoachFood('+_attrArg(a.id)+')"'
+    +' data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>';
@@ -98088,15 +98477,15 @@ function selectCoachFood(id){
 function _htmlPersoResult(a){
   const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
-  return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+_attrArg(a.id)+')"'
-    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
+  return '<div class="fj-result" role="button" tabindex="0" data-on-click="selectPersoFood('+_attrArg(a.id)+')"'
+    +' data-on-keydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
     +' style="display:flex;align-items:center;gap:10px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
-    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
+    +' data-on-click="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){
@@ -98106,7 +98495,7 @@ function _fjResultHtml(f,avecEpingle){
   // résultats de recherche restent rendus exactement comme avant.
   const _ep=avecEpingle?_htmlEpingle(f.id,false):'';
   const _dq=(avecEpingle&&estFavori(f.id))?_fjDerniereQty(f.id):null;
-  return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:8px">
+  return `<div class="fj-result" data-on-click="selectFjFood(${f.id})" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:8px">
     <div style="flex:1;min-width:0">
     <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(f.n)}${_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:''}</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
@@ -98603,7 +98992,7 @@ function htmlScanBouton(){
   // OFF, et sans réseau il n'y a rien à lire — scanner mènerait à un mur.
   if(typeof navigator!=='undefined'&&navigator.onLine===false) return '';
   return `<button id="scan-btn" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px"
-    onclick="ouvrirScan()">Scanner un code-barres</button>`;
+    data-on-click="ouvrirScan()">Scanner un code-barres</button>`;
 }
 function ouvrirScan(){
   _scanEssais=0;
@@ -98619,14 +99008,14 @@ function _htmlScanViseur(){
     </div>
     <div id="scan-etat" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:10px;min-height:34px">Démarrage de la caméra…</div>
     <div id="scan-torche-slot"></div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:4px" onclick="scanSaisieManuelle()">Saisir le code à la main</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:4px" data-on-click="scanSaisieManuelle()">Saisir le code à la main</button>
     <!-- TOUJOURS accessible : un produit peut n être dans aucune base, et
          l athlete ne doit pas avoir a echouer deux fois pour le decouvrir. -->
     <!-- LA DEUXIEME VOIE, a cote de la premiere. Un produit sans code-barres
          lisible, ou absent des bases, porte toujours son tableau
          nutritionnel : c est le dernier recours qui marche toujours. -->
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="photographierEtiquette()">Photographier le tableau nutritionnel</button>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="creerAlimentDepuisScan()">Créer l'aliment à la main</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="photographierEtiquette()">Photographier le tableau nutritionnel</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="creerAlimentDepuisScan()">Créer l'aliment à la main</button>
     <div id="scan-manuel"></div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">Aucune image n'est enregistrée, ni transmise, ni mise en cache. La caméra ne sert qu'à lire le code, sur ton appareil.</div>`;
 }
@@ -98646,7 +99035,7 @@ function _majScanTorche(){
   const z=document.getElementById('scan-torche-slot');
   if(!z) return;
   if(!_scanTorcheDispo()){ z.innerHTML=''; return; }
-  z.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="scanBasculerTorche()">'
+  z.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="scanBasculerTorche()">'
     +(_scanTorche?'Éteindre la lampe':'Allumer la lampe')+'</button>';
 }
 async function scanBasculerTorche(){
@@ -98847,8 +99236,8 @@ function scanSaisieManuelle(){
     <input id="scan-ean" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
       maxlength="${SCAN_EAN_MAX}" placeholder="${SCAN_EAN_MIN} à ${SCAN_EAN_MAX} chiffres"
       style="width:100%;box-sizing:border-box;font-size:var(--fs-lg);letter-spacing:2px;text-align:center"
-      onkeydown="if(event.key==='Enter'){event.preventDefault();scanValiderManuel()}">
-    <button class="btn btn-red" style="width:100%;margin-top:8px" onclick="scanValiderManuel()">Chercher ce produit</button>
+      data-on-keydown="if(event.key==='Enter'){event.preventDefault();scanValiderManuel()}">
+    <button class="btn btn-red" style="width:100%;margin-top:8px" data-on-click="scanValiderManuel()">Chercher ce produit</button>
     <div id="scan-manuel-etat" style="font-size:var(--fs-xs);line-height:1.6;margin-top:8px"></div>
   </div>`;
   const i=document.getElementById('scan-ean');
@@ -98875,7 +99264,7 @@ async function scanTraiterCode(code,zone){
   if(!ex.ok){
     if(e){
       e.innerHTML='<span style="color:var(--orange)">'+escapeHtml(ex.raison)+'</span>'
-        +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="photographierEtiquette()">Photographier le tableau nutritionnel</button>';
+        +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="photographierEtiquette()">Photographier le tableau nutritionnel</button>';
     }
     return false;
   }
@@ -98894,8 +99283,8 @@ async function scanTraiterCode(code,zone){
     dire('');
     if(e) e.innerHTML=`<span style="color:var(--orange)">${escapeHtml(r.raison)}</span>
       <span style="color:var(--sub)"> Le code ${escapeHtml(r.code||code)} est valide, mais aucune fiche n'existe encore.</span>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="creerAlimentDepuisScan('${escapeHtml(r.code||code)}')">Créer cet aliment à la main</button>
-      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="scanFermer()">Chercher par nom à la place</button>`;
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="creerAlimentDepuisScan('${escapeHtml(r.code||code)}')">Créer cet aliment à la main</button>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" data-on-click="scanFermer()">Chercher par nom à la place</button>`;
     return false;
   }
   dire(r.raison,(r.quota||r.horsLigne)?'var(--sub)':'var(--orange)');
@@ -98978,7 +99367,7 @@ function _offBoutonHtml(q){
   if(typeof navigator!=='undefined'&&navigator.onLine===false) return '';
   return `<div id="off-zone" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
     <button id="off-btn" class="btn btn-outline btn-sm" style="width:100%"
-      onclick="offChercherUI()">Chercher un produit de marque</button>
+      data-on-click="offChercherUI()">Chercher un produit de marque</button>
     ${htmlScanBouton()}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Un seul appel, quand tu le demandes. ${escapeHtml(OFF_ATTRIBUTION)}</div>
     <div id="off-results"></div>
@@ -99020,8 +99409,8 @@ async function offChercherUI(){
 function _offResultHtml(a){
   const d=a._off||{};
   const detail=[d.marque,d.format].filter(Boolean).join(' · ');
-  return `<div class="fj-result" onclick="selectOffFood('${escapeHtml(a._off.ean)}')" role="button" tabindex="0"
-    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+  return `<div class="fj-result" data-on-click="selectOffFood('${escapeHtml(a._off.ean)}')" role="button" tabindex="0"
+    data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     style="display:flex;align-items:center;gap:8px">
     <div style="flex:1;min-width:0">
       <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(a.n)}</div>
@@ -99323,7 +99712,7 @@ function majPersoCoherence(){
   if(k==null){
     el.innerHTML='<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'
       +'D&apos;après les macros, environ <b style="color:var(--text)">'+arr+' kcal</b> pour 100 g. '
-      +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" onclick="persoAppliquerKcal('+arr+')">Utiliser cette valeur</button></div>';
+      +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" data-on-click="persoAppliquerKcal('+arr+')">Utiliser cette valeur</button></div>';
     return;
   }
   const ecart=arr>0?Math.abs(k-arr)/arr:0;
@@ -99423,7 +99812,7 @@ function selectPersoFood(id){
   const ep=document.getElementById('fja-epingle-slot');
   if(ep) ep.innerHTML='';
   const po=document.getElementById('fja-portions');
-  if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirAlimentPerso('+_attrArg(a.id)+')">Modifier mes valeurs</button>';
+  if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="ouvrirAlimentPerso('+_attrArg(a.id)+')">Modifier mes valeurs</button>';
   _majFjaFiabilite();
   _fjUnite='g';
   const pu=document.getElementById('fja-unites-slot');
@@ -100105,8 +100494,8 @@ function _htmlFjBandeau(s){
   return '<div class="fj-bandeau'+(s.annule?' annule':'')+'">'
     +'<div class="fj-bandeau-t">'+phrase+'</div>'
     +'<div class="fj-bandeau-a">'
-    +(_fjAjoutRetirable(s)?'<button type="button" class="fj-bandeau-annuler" onclick="annulerAjoutAliment()">Annuler</button>':'<span></span>')
-    +'<button type="button" class="btn btn-sm fj-bandeau-fin" onclick="terminerSaisieAliments()">Terminer</button>'
+    +(_fjAjoutRetirable(s)?'<button type="button" class="fj-bandeau-annuler" data-on-click="annulerAjoutAliment()">Annuler</button>':'<span></span>')
+    +'<button type="button" class="btn btn-sm fj-bandeau-fin" data-on-click="terminerSaisieAliments()">Terminer</button>'
     +'</div></div>';
 }
 function _renderFjBandeau(){
@@ -100207,7 +100596,7 @@ function _renderFjDaySummary(date){
   const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
     ?`<button disabled style="flex-shrink:0;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
-    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
+    :`<button data-on-click="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
@@ -100247,7 +100636,7 @@ function _renderFjDaySummary(date){
   if(_nav) _nav.innerHTML=`
     <div style="margin-bottom:20px;${_animEntree('fj-nav')}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
+        <button data-on-click="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
         <div style="flex:1;min-width:0;text-align:center">
           <div class="nut-titre" style="transform:none">${dateLbl}</div>
           <div style="margin-top:6px">${dayBadge}</div>
@@ -100265,14 +100654,14 @@ function _renderFjDaySummary(date){
          grande : 12 en donnaient donc 14, et les deux paraissaient colles. C est
          la marge du BOUTON qu on ouvre, pas celle du bloc : ce dernier est
          partage avec l ecran de progression et la fiche coach. -->
-    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
+    ${isToday?`<button data-on-click="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${_htmlHydratationNut(currentUser)}
     ${repasOrder.map(r=>!grouped[r]?(date<=todayStr?_htmlRepasVide(date,r,repasLabels[r]):''):`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
-          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:6px 10px;cursor:pointer">Refaire aujourd'hui</button>`:''}
-          <button type="button" class="fj-enr" onclick="ouvrirEnregistrerRepas('${date}','${r}')" aria-label="Enregistrer ce repas">Enregistrer</button>
+          ${!isToday?`<button data-on-click="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:6px 10px;cursor:pointer">Refaire aujourd'hui</button>`:''}
+          <button type="button" class="fj-enr" data-on-click="ouvrirEnregistrerRepas('${date}','${r}')" aria-label="Enregistrer ce repas">Enregistrer</button>
         </div>
         ${_htmlNommerRepas(date,r)}
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
@@ -100282,9 +100671,9 @@ function _renderFjDaySummary(date){
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal${e.kcalEstimee?' estimées':''}</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
-            <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
+            <button class="hit44" data-on-click="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
-            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
+            <button class="hit44" data-on-click="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
@@ -102324,7 +102713,7 @@ function _htmlMigrationSopk(c){
   return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:14px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
-    <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
+    <button data-on-click="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
 }
 // ÉCRIT, et seulement sur un clic : l'indicateur est posé par le coach, pas
@@ -102795,7 +103184,7 @@ function _htmlStrictAccesCoach(c){
           :'Ton athlète voit un écran verrouillé. Il ne verra rien tant que tu n\'auras pas ouvert.'}</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
-        <input type="checkbox" ${ouvert?'checked':''} onchange="saveClientStrictAcces(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
+        <input type="checkbox" ${ouvert?'checked':''} data-on-change="saveClientStrictAcces(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
         <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
           <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${ouvert?'20px':'0px'})"></span>
         </span>
@@ -102810,7 +103199,7 @@ function _htmlStrictAccesCoach(c){
 // tout ce qui se règle vraiment se règle sur l'écran dédié.
 function _htmlPlanResumeCoach(c){
   const plan=planDe(c);
-  const bouton=(lib)=>`<button onclick="ouvrirPlanCoach()" style="width:100%;margin-top:8px;padding:12px 0;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">${lib}</button>`;
+  const bouton=(lib)=>`<button data-on-click="ouvrirPlanCoach()" style="width:100%;margin-top:8px;padding:12px 0;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">${lib}</button>`;
   // Même précaution que sur l'écran de l'athlète : le résumé compte des
   // sources, et le décompte des alertes ne veut rien dire sans Ciqual.
   // On repasse le MÊME objet client plutôt que de le relire : getOwnedClient
@@ -103608,7 +103997,7 @@ function _htmlTableauxTableur(c){
     +'</th><td>'+val+'</td></tr>';
   // Une valeur lue dans le dossier, dans sa case — elle ne se saisit pas ici.
   const vb=v=>'<span class="tbk-v">'+v+'</span>';
-  const sel=(id,quoi,options,courant)=>'<select id="'+id+'" onchange="majTableauTableur(\''
+  const sel=(id,quoi,options,courant)=>'<select id="'+id+'" data-on-change="majTableauTableur(\''
     +quoi+'\',this.value)">'
     +options.map(o=>'<option value="'+escapeHtml(String(o.v))+'"'
       +(String(o.v)===String(courant)?' selected':'')+'>'+escapeHtml(o.lib)+'</option>').join('')
@@ -103616,7 +104005,7 @@ function _htmlTableauxTableur(c){
   // Meme enveloppe, mais les options viennent deja montees par
   // _optionsEchelle — qui pose lui-meme `selected`, la mention « suggere » et
   // la valeur hors bareme.
-  const selEch=(id,quoi,optionsHtml)=>'<select id="'+id+'" onchange="majTableauTableur(\''
+  const selEch=(id,quoi,optionsHtml)=>'<select id="'+id+'" data-on-change="majTableauTableur(\''
     +quoi+'\',this.value)">'+optionsHtml+'</select>';
 
   // ── TABLEAU 1 — LES FACTEURS ────────────────────────────────────────
@@ -103692,20 +104081,20 @@ function _htmlTableauxTableur(c){
     const nom=escapeHtml(String(x.sport));
     return '<tr class="tbk-sp"><th><span class="tbk-l"><span class="tbk-ri" aria-hidden="true">'
       +_tbkIco(_estMusculation(x.sport)?'haltere':'activity',16)+'</span><span class="tbk-lt">'
-      +'<select class="tbk-sp-s" aria-label="Sport" onchange="majSportTableur('+i+',\'sport\',this.value)">'
+      +'<select class="tbk-sp-s" aria-label="Sport" data-on-change="majSportTableur('+i+',\'sport\',this.value)">'
       +optSport(String(x.sport))+'</select>'
       +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
       +'</span></span></th>'
       +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="number" '
       +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine, '+nom+'" '
       +'value="'+escapeHtml(String(Number(x.heures)||0))+'" '
-      +'onchange="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
+      +'data-on-change="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
       +'<td style="text-align:left"><select class="tbk-sp-n tbk-sp-n-'+escapeHtml(String(x.intensite||'moderee'))+'" '
-      +'aria-label="Intensité, '+nom+'" onchange="majSportTableur('+i+',\'intensite\',this.value)">'
+      +'aria-label="Intensité, '+nom+'" data-on-change="majSportTableur('+i+',\'intensite\',this.value)">'
       +optInt(x.intensite||'moderee')+'</select></td>'
       +'<td><span class="tbk-sp-d">'+(sem!=null?(_tbNb(sem)+' kcal')
         :'<span style="color:var(--orange);font-weight:700">hors barème</span>')+'</span>'
-      +'<button type="button" class="tbk-sp-x" onclick="retirerSportTableur('+i+')" '
+      +'<button type="button" class="tbk-sp-x" data-on-click="retirerSportTableur('+i+')" '
       +'aria-label="Retirer '+nom+'" title="Retirer ce sport">×</button></td></tr>';
   }).join('');
   if(!lignesSp.length)
@@ -103713,9 +104102,9 @@ function _htmlTableauxTableur(c){
       +'</th><td></td><td></td><td>0 kcal</td></tr>';
   // L'AJOUT, et quand la liste est celle du coach, le retour a l'automatique.
   hSport+='<tr class="tbk-sp-add"><td colspan="4"><div class="tbk-sp-bas">'
-    +'<button type="button" class="tbk-sp-plus" onclick="ajouterSportTableur()">+ Ajouter un sport</button>'
+    +'<button type="button" class="tbk-sp-plus" data-on-click="ajouterSportTableur()">+ Ajouter un sport</button>'
     +(spCoach?'<span class="tbk-sp-note">Réglés par toi : les créneaux RepCore et le bilan ne sont plus lus. '
-      +'<button type="button" class="tbk-sp-auto" onclick="sportsTableurAuto()">Revenir au calcul automatique</button></span>'
+      +'<button type="button" class="tbk-sp-auto" data-on-click="sportsTableurAuto()">Revenir au calcul automatique</button></span>'
       :'<span class="tbk-sp-note">Modifie une ligne ou ajoute un sport : la liste devient la tienne.</span>')
     +'</div></td></tr>';
   // LE LIBELLE PREND LES TROIS PREMIERES COLONNES : sur un tiers de la largeur
@@ -103788,7 +104177,7 @@ function _htmlTableauxTableur(c){
   // les glucides de ±15 %, le tableau annoncait 3 139 et le dossier recevait
   // 3 360. Deux chiffres pour la meme decision, et le second n'apparaissait
   // nulle part.
-  const _optCyc='<select id="tbk-cycle" onchange="saveClientNutriCycle(this.value)">'
+  const _optCyc='<select id="tbk-cycle" data-on-change="saveClientNutriCycle(this.value)">'
     +'<option value="1"'+(_cycT?' selected':'')+'>Oui, jour ON et jour OFF</option>'
     +'<option value="0"'+(_cycT?'':' selected')+'>Non, mêmes valeurs tous les jours</option>'
     +'</select>';
@@ -103902,7 +104291,7 @@ function _htmlTableauxTableur(c){
   // ce que les cinq suivantes montrent : le mettre en dessous obligerait a le
   // chercher apres avoir constate que les champs ne repondent pas.
   const _swi='<label class="tbk-swi"><input type="checkbox"'+(_man?' checked':'')
-    +' onchange="saveClientNutriManuel(this.checked)"><span class="tbk-swi-p"></span></label>';
+    +' data-on-change="saveClientNutriManuel(this.checked)"><span class="tbk-swi-p"></span></label>';
   // LES CINQ MACROS EN CARTES (build 1403) : .tbk-mac les range en grille, le
   // commutateur remonte a droite de l'en-tete quand la carte est large.
   // mv : la valeur, en grand ; mi : un champ de saisie.
@@ -103923,8 +104312,8 @@ function _htmlTableauxTableur(c){
   // (build 1412). Le meme pas, le meme champ et le meme ecrivain que le ±20
   // de l'athlete : voir appliquerDeltaKcal.
   const _d20='<span class="tbk-d20">'
-    +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
-    +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
+    +'<button type="button" class="tbk-d20-b" data-on-click="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
+    +'<button type="button" class="tbk-d20-b" data-on-click="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +(libelleAjustKcal(c)?'<span class="tbk-d20-l">Mis à jour : '+libelleAjustKcal(c)+'</span>':'')
     +'</span>';
   h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
@@ -104026,16 +104415,16 @@ function _htmlTableauxTableur(c){
   const _nbH=histoCibles(c).length;
   h+='<div class="tbk-trio">'
     +(_man?('<button type="button" class="btn btn-outline tbk-trio-b" '
-      +'onclick="proposerPointDepart()">Proposer un point de départ</button>'):'')
+      +'data-on-click="proposerPointDepart()">Proposer un point de départ</button>'):'')
     +'<button type="button" class="btn btn-outline tbk-trio-b tbk-h-b" aria-expanded="'
-      +(_histoOuvert?'true':'false')+'" onclick="basculerHistoTableur()">'
+      +(_histoOuvert?'true':'false')+'" data-on-click="basculerHistoTableur()">'
       +'Historique des modifications'+(_nbH?' ('+_nbH+')':'')+'</button>'
     +'<button type="button" class="btn btn-outline tbk-trio-b" '
-      +'onclick="reinitialiserCalculs()">Remettre les calculs au point de départ</button>'
+      +'data-on-click="reinitialiserCalculs()">Remettre les calculs au point de départ</button>'
     +'</div>'
     +(_histoOuvert?_htmlHistoTableur(c):'')
     +'<button type="button" class="btn btn-red tbk-save-c" '
-    +'onclick="enregistrerEtTransmettre()">Enregistrer et transmettre à l’athlète</button>';
+    +'data-on-click="enregistrerEtTransmettre()">Enregistrer et transmettre à l’athlète</button>';
 
 
 
@@ -104106,7 +104495,7 @@ function _htmlHistoTableur(c){
   const cur=_histoBloc(((c.nutrition||{}).macros||{}).on||{});
   const annul=(_histoAnnul&&_histoAnnul.email===c.email)
     ? '<div class="tbk-h-an"><span>Remis en place : '+_tbNb(_histoAnnul.remis)+' kcal.</span>'
-      +'<button type="button" class="tbk-h-x" onclick="histoAnnuler()">Annuler et revenir à l’état précédent</button></div>'
+      +'<button type="button" class="tbk-h-x" data-on-click="histoAnnuler()">Annuler et revenir à l’état précédent</button></div>'
     : '';
   if(!l.length) return '<div class="tbk-histo">'+annul
     +'<div class="tbk-h-vide">Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
@@ -104126,7 +104515,7 @@ function _htmlHistoTableur(c){
       +'<div class="tbk-h-m">Glucides '+_tbNb(e.on.g)+' g · Protéines '+_tbNb(e.on.p)
       +' g · Lipides '+_tbNb(e.on.l)+' g'
       +(cyc&&e.off.kcal!==e.on.kcal?(' · jour OFF '+_tbNb(e.off.kcal)+' kcal'):'')+'</div>'
-      +(enCours?'':'<button type="button" class="tbk-h-r" onclick="histoRemettre('+i+')">Remettre en place</button>')
+      +(enCours?'':'<button type="button" class="tbk-h-r" data-on-click="histoRemettre('+i+')">Remettre en place</button>')
       +'</div>';
   }).join('');
   return '<div class="tbk-histo">'+annul+lignes+'</div>';
@@ -104483,7 +104872,7 @@ function _htmlDieteChoix(c){
     const d=DIETES[k], on=(dt===k);
     return '<button type="button" class="dtc-t'+(on?' actif':'')+'" style="--dt:'+d.c+'"'
       +' aria-pressed="'+(on?'true':'false')+'"'
-      +' onclick="saveClientNutriDiet('+JSON.stringify(k).replace(/"/g,'&quot;')+')">'
+      +' data-on-click="saveClientNutriDiet('+JSON.stringify(k).replace(/"/g,'&quot;')+')">'
       +'<span class="dtc-nom">Diète '+escapeHtml(d.lib)+'</span>'
       +'<span class="dtc-sous">'+escapeHtml(d.sous)+'</span>'
       +'<span class="dtc-etat">'+(on?'en cours':'basculer')+'</span>'
@@ -104496,7 +104885,7 @@ function _htmlDieteChoix(c){
   // IL EST ICI ET NON AU FOND DE LA SECTION « Diete stricte » : c'est le geste
   // qui decoule directement de la tuile qu'on vient d'allumer.
   const plan=(dt==='strict')
-    ? '<button type="button" class="btn btn-red dtc-plan" onclick="ouvrirPlanCoach()">'
+    ? '<button type="button" class="btn btn-red dtc-plan" data-on-click="ouvrirPlanCoach()">'
       +'Modifier le programme alimentaire</button>'
     : '';
   return '<div class="dtc">'+tuile('flexible')+tuile('strict')+'</div>'+plan;
@@ -104718,7 +105107,7 @@ function _htmlJournalCal(c){
   const titre=(()=>{ const d=new Date(parseInt(ym.slice(0,4),10),parseInt(ym.slice(5,7),10)-1,1);
     const x=d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
     return x.charAt(0).toUpperCase()+x.slice(1); })();
-  const fleche=(m,f,lib)=>'<button type="button" class="jr-nav" onclick="ccdCalMois('
+  const fleche=(m,f,lib)=>'<button type="button" class="jr-nav" data-on-click="ccdCalMois('
     +JSON.stringify(m).replace(/"/g,'&quot;')+')" aria-label="'+lib+'">'+f+'</button>';
   // ── LA BARRE : le mois, les deux vues, et l'ajout ──────────────────────
   const barre='<div class="jr-bar">'
@@ -104727,12 +105116,12 @@ function _htmlJournalCal(c){
       +fleche(_calDecale(ym,1),'›','Mois suivant')+'</div>'
     +'<div class="jr-act">'
       +'<button type="button" class="jr-vb'+(_ccdCalVue==='grille'?' actif':'')+'" aria-pressed="'
-        +(_ccdCalVue==='grille'?'true':'false')+'" title="Vue calendrier" onclick="ccdCalVue(\'grille\')">'
+        +(_ccdCalVue==='grille'?'true':'false')+'" title="Vue calendrier" data-on-click="ccdCalVue(\'grille\')">'
         +icon('calendar',16)+'</button>'
       +'<button type="button" class="jr-vb'+(_ccdCalVue==='liste'?' actif':'')+'" aria-pressed="'
-        +(_ccdCalVue==='liste'?'true':'false')+'" onclick="ccdCalVue(\'liste\')">'
+        +(_ccdCalVue==='liste'?'true':'false')+'" data-on-click="ccdCalVue(\'liste\')">'
         +icon('clipboard',16)+'<span>Vue liste</span></button>'
-      +'<button type="button" class="jr-add" onclick="ccdJournalAjout(\'\')">'
+      +'<button type="button" class="jr-add" data-on-click="ccdJournalAjout(\'\')">'
         +icon('plus-circle',16)+'<span>Ajouter un repas</span></button>'
     +'</div></div>';
   // ── LES CHIFFRES DU MOIS ───────────────────────────────────────────────
@@ -104755,7 +105144,7 @@ function _htmlJournalCal(c){
     +bloc('wheat','#f5c518',m.pcG+' %','glucides',nb(m.g)+' g')
     +bloc('droplet','#22c55e',m.pcL+' %','lipides',nb(m.l)+' g')
     +donut
-    +'<button type="button" class="jr-stats-b" onclick="ccdAller(\'ccd-diete-respect\')">'
+    +'<button type="button" class="jr-stats-b" data-on-click="ccdAller(\'ccd-diete-respect\')">'
       +icon('chart-bar',15)+'<span>Voir les statistiques</span></button>'
     +'</div>';
   // ── LE FORMULAIRE D'AJOUT ──────────────────────────────────────────────
@@ -104777,8 +105166,8 @@ function _htmlJournalCal(c){
       +'<label>Lipides (g)<input type="number" id="ccd-jr-l" min="0" inputmode="numeric" placeholder="15"></label>'
       +'</div>'
       +'<div class="jr-form-b">'
-      +'<button type="button" class="jr-form-x" onclick="ccdJournalAjout(\'\')">Annuler</button>'
-      +'<button type="button" class="jr-add" onclick="ccdJournalEnregistrer()">'+icon('check',15)
+      +'<button type="button" class="jr-form-x" data-on-click="ccdJournalAjout(\'\')">Annuler</button>'
+      +'<button type="button" class="jr-add" data-on-click="ccdJournalEnregistrer()">'+icon('check',15)
       +'<span>Ajouter au journal</span></button></div>'
       +'<div class="jr-form-n">Sans kilocalories, elles se déduisent des macros (4 · 4 · 9). '
       +'Le repas apparaîtra dans le journal de ton athlète, marqué comme ajouté par toi.</div></div>';
@@ -104798,7 +105187,7 @@ function _htmlJournalCal(c){
     const iso=ym+'-'+p2(j);
     const tj=journalTotalJour(log,iso);
     if(!tj.n) return '<button type="button" class="jr-j jr-vide'+(iso===auj?' jr-auj':'')+'"'
-      +' onclick="ccdJournalAjout('+JSON.stringify(iso).replace(/"/g,'&quot;')+')"'
+      +' data-on-click="ccdJournalAjout('+JSON.stringify(iso).replace(/"/g,'&quot;')+')"'
       +' aria-label="Ajouter un repas le '+j+'">'
       +'<span class="jr-t"><span class="jr-n">'+j+'</span></span>'
       +'<span class="jr-plus">'+icon('plus-circle',20)+'<span>Ajouter un repas</span></span></button>';
@@ -104807,7 +105196,7 @@ function _htmlJournalCal(c){
     const pastille=v===true?icon('check-circle',15):(v===false?icon('x-circle',15):icon('clock',15));
     return '<button type="button" class="jr-j jr-'+et+(iso===auj?' jr-auj':'')
       +(_ccdCalJour===iso?' jr-ouvert':'')+'" aria-pressed="'+(_ccdCalJour===iso?'true':'false')+'"'
-      +' onclick="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
+      +' data-on-click="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
       +'<span class="jr-t"><span class="jr-n">'+j+'</span>'
       +'<span class="jr-b" aria-hidden="true">'+pastille+'</span>'
       +'<span class="jr-k">'+nb(tj.kcal)+' kcal</span></span>'
@@ -104839,7 +105228,7 @@ function _htmlJournalCal(c){
       const d=new Date(iso+'T12:00:00');
       const lib=isNaN(d.getTime())?iso:d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
       lignes.push('<button type="button" class="jr-li jr-'+et+(_ccdCalJour===iso?' jr-ouvert':'')+'"'
-        +' onclick="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
+        +' data-on-click="ccdCalJour('+JSON.stringify(iso).replace(/"/g,'&quot;')+')">'
         +'<span class="jr-li-d">'+escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</span>'
         +'<span class="jr-li-r">'+repasDuJour(iso)+'</span>'
         +'<span class="jr-li-k">'+nb(tj.kcal)+' kcal</span></button>');
@@ -104863,14 +105252,14 @@ function _htmlJournalCal(c){
       +(e.kcal!=null?nb(e.kcal)+' kcal':'-')
       +(e.par==='coach'?('<button type="button" class="jr-ret" title="Retirer ce repas"'
         +' aria-label="Retirer '+escapeHtml(e.nom||'ce repas')+'"'
-        +' onclick="event.stopPropagation();ccdJournalRetirer('+JSON.stringify(_ccdCalJour).replace(/"/g,'&quot;')
+        +' data-on-click="event.stopPropagation();ccdJournalRetirer('+JSON.stringify(_ccdCalJour).replace(/"/g,'&quot;')
         +','+JSON.stringify(String(e.id||'')).replace(/"/g,'&quot;')+')">×</button>'):'')
       +'</span></div>').join('');
     detail='<div class="cal-d">'
       +'<div class="cal-d-t">'+escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</div>'
       +'<div class="cal-d-m">'+nb(tj.kcal)+' kcal · '+nb(tj.p)+' P · '+nb(tj.c)+' G · '+nb(tj.l)+' L</div>'
       +(lignes||'<div class="cal-d-v">Aucun aliment ce jour-là.</div>')
-      +'<button type="button" class="jr-add jr-add-j" onclick="ccdJournalAjout('
+      +'<button type="button" class="jr-add jr-add-j" data-on-click="ccdJournalAjout('
         +JSON.stringify(_ccdCalJour).replace(/"/g,'&quot;')+')">'+icon('plus-circle',15)
       +'<span>Ajouter un repas ce jour-là</span></button>'
       +'</div>';
@@ -105056,7 +105445,7 @@ function _htmlDieteRespect(c){
     // Un jour note s'ouvre dans le journal ; les autres ne menent a rien.
     return k.note
       ?'<button type="button" class="'+cl+'" title="'+titre+'" aria-label="'+titre+'"'
-        +' onclick="drsOuvrirJour('+JSON.stringify(k.iso).replace(/"/g,'&quot;')+')">'+dedans+'</button>'
+        +' data-on-click="drsOuvrirJour('+JSON.stringify(k.iso).replace(/"/g,'&quot;')+')">'+dedans+'</button>'
       :'<span class="'+cl+'" title="'+titre+'" role="img" aria-label="'+titre+'">'+dedans+'</span>';
   }).join('');
   const neutres=d.cases.some(k=>k.et==='neutre');
@@ -105094,13 +105483,13 @@ function _htmlDieteRespect(c){
     // possibilite de telecharger le visuel avec ce bouton ». « Reste
     // régulier ! » passe dans l'image : c'est a l'athlete que la phrase parle,
     // et c'est lui qui la recevra.
-    +'<button type="button" class="drs-dl" onclick="telechargerDieteRespectee()">'
+    +'<button type="button" class="drs-dl" data-on-click="telechargerDieteRespectee()">'
     +'<span class="drs-dl-ico">'+_DRS_SVG('<path d="M12 3.5v11.5"/><path d="m7 10.5 5 5 5-5"/><path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/>',22)+'</span>'
     +'<span class="drs-dl-t"><b>Télécharger le visuel</b><span>Image PNG, prête à envoyer à ton athlète</span></span>'
     +'</button>'
     +'</div><div class="drs-droite">'
     +'<label class="drs-per"><span class="drs-per-ico">'+_DRS_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="M8 13.5h3M8 16.5h6"/>',22)+'</span>'
-      +'<select onchange="drsFenetre(this.value)" aria-label="Période affichée">'
+      +'<select data-on-change="drsFenetre(this.value)" aria-label="Période affichée">'
       +d.periodes.map((p,k)=>'<option value="'+k+'"'+(k===d.w?' selected':'')+'>'+p+'</option>').join('')
       +'</select><span class="drs-per-fl">'+_DV_ICO_FLECHE+'</span></label>'
     +'<div class="drs-pan">'
@@ -105433,7 +105822,7 @@ function htmlObservanceCoach(c,finISO){
       +'demande-lui de noter ses repas trois jours de suite, même approximativement, dont un jour de week-end. C’est assez pour voir un motif se dessiner.</p></div>';
   const cases=o.jours.map(j=>{
     const t=escapeHtml(_obsTexteJour(j));
-    return '<button type="button" class="obs-j obs-'+j.etat+'" title="'+t+'" aria-label="'+t+'" data-t="'+t+'" onclick="obsMontrer(this)"></button>';
+    return '<button type="button" class="obs-j obs-'+j.etat+'" title="'+t+'" aria-label="'+t+'" data-t="'+t+'" data-on-click="obsMontrer(this)"></button>';
   }).join('');
   return '<div class="obs">'+tete
     +'<div class="obs-bande" role="group" aria-label="14 jours, du plus ancien au plus récent">'+cases+'</div>'
@@ -106106,7 +106495,7 @@ function renderEditeurEviction(){
   h+='<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
     +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Ce que ça vise</span>'
-    +'<select id="eve-type" onchange="_evMajType()" style="width:100%;box-sizing:border-box;'
+    +'<select id="eve-type" data-on-change="_evMajType()" style="width:100%;box-sizing:border-box;'
     +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
     +'color:var(--text);padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +[['motif','Un mot, cherché dans le nom et le groupe'],
@@ -106119,7 +106508,7 @@ function renderEditeurEviction(){
     +'flex-wrap:wrap;gap:6px;margin:-4px 0 12px">'
     +EV_MOTIFS_COURANTS.map(([val,lib])=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="margin:0;font-size:var(--fs-2xs);padding:6px 10px" '
-      +'onclick="_evPoserMotif('+JSON.stringify(val).replace(/"/g,'&quot;')+','
+      +'data-on-click="_evPoserMotif('+JSON.stringify(val).replace(/"/g,'&quot;')+','
       +JSON.stringify(lib).replace(/"/g,'&quot;')+')">'+escapeHtml(lib)+'</button>').join('')
     +'</div>';
   h+=champ('eve-val','Valeur','type="text" maxlength="80" value="'
@@ -106128,10 +106517,10 @@ function renderEditeurEviction(){
   h+=champ('eve-note','Note','type="text" maxlength="'+EV_NOTE_MAX
     +'" value="'+v(e&&e.note)+'" placeholder="choc anaphylactique en 2019"');
   h+='<button type="button" class="btn" style="width:100%;margin:4px 0 0" '
-    +'onclick="sauverEviction()">Enregistrer</button>';
+    +'data-on-click="sauverEviction()">Enregistrer</button>';
   if(e)
     h+='<button type="button" class="btn btn-outline" style="width:100%;margin:10px 0 0" '
-      +'onclick="supprimerEviction()">Retirer cette éviction</button>';
+      +'data-on-click="supprimerEviction()">Retirer cette éviction</button>';
   z.innerHTML=h;
   return true;
 }
@@ -106212,7 +106601,7 @@ function renderEvictions(){
   const l=evictions(currentUser);
   const LIB={allergie:'Allergie',intolerance:'Intolérance',choix:'Choix'};
   z.innerHTML='<button type="button" class="btn" style="width:100%;margin:12px 0 14px" '
-    +'onclick="ouvrirEditeurEviction(currentUser.email,null,\'s-evictions\')">'
+    +'data-on-click="ouvrirEditeurEviction(currentUser.email,null,\'s-evictions\')">'
     +'+ Ajouter une éviction</button>'
     +(l.length?l.map(e=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
@@ -106223,7 +106612,7 @@ function renderEvictions(){
       +'<span style="display:block;font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">'
       +escapeHtml(LIB[e.niveau]+' · '+e.cible.type+' « '+e.cible.valeur+' »')+'</span></span>'
       +'<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
-      +'font-size:var(--fs-2xs);padding:4px 8px" onclick="ouvrirEditeurEviction(currentUser.email,\''
+      +'font-size:var(--fs-2xs);padding:4px 8px" data-on-click="ouvrirEditeurEviction(currentUser.email,\''
       +escapeHtml(e.id)+'\',\'s-evictions\')">Modifier</button></div>').join('')
       :'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:8px 0">'
        +'Aucune éviction déclarée. Ce que tu déclares ici est retiré de toutes '
@@ -106671,7 +107060,7 @@ function renderTraitements(){
     // ELLE EST VIDE. Sans lui, le module n'avait aucune porte d'entree : il
     // savait tout calculer et rien recevoir.
     h+='<button type="button" class="btn" style="width:100%;margin:0 0 14px" '
-      +'onclick="ouvrirEditeurTraitement(currentUser.email,null,\'s-traitements\')">'
+      +'data-on-click="ouvrirEditeurTraitement(currentUser.email,null,\'s-traitements\')">'
       +'+ Ajouter un traitement</button>';
     if(!actifs.length){
       h+='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:14px 0">'
@@ -106700,7 +107089,7 @@ function renderTraitements(){
             +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
             +'text-transform:none;letter-spacing:normal;font-weight:400">'
             +'<input type="checkbox" '+(coche?'checked':'')+' '
-            +'onchange="basculerPrise(currentUser,\'trt\',\''+escapeHtml(t.id)+'\',\''+m+'\');renderTraitements()" '
+            +'data-on-change="basculerPrise(currentUser,\'trt\',\''+escapeHtml(t.id)+'\',\''+m+'\');renderTraitements()" '
             +'style="width:18px;height:18px;margin:0;accent-color:var(--red);flex-shrink:0">'
             +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:'
             +(coche?'var(--text-faint)':'var(--text)')+';'+(coche?'text-decoration:line-through':'')+'">'
@@ -106712,7 +107101,7 @@ function renderTraitements(){
             +'</span>'
             +'<button type="button" class="btn btn-outline btn-sm" style="margin:0;flex:0 0 auto;'
             +'font-size:var(--fs-2xs);padding:4px 8px" '
-            +'onclick="event.preventDefault();event.stopPropagation();ouvrirEditeurTraitement(currentUser.email,\''+escapeHtml(t.id)+'\',\'s-traitements\')">Modifier</button>'
+            +'data-on-click="event.preventDefault();event.stopPropagation();ouvrirEditeurTraitement(currentUser.email,\''+escapeHtml(t.id)+'\',\'s-traitements\')">Modifier</button>'
             +'</label>';
         }
       }
@@ -106724,7 +107113,7 @@ function renderTraitements(){
           +'Au besoin, sans jour fixe : '
           // ATTEIGNABLES EUX AUSSI. Un ponctuel n'a pas de case a cocher : sans
           // ce lien, il n'existait aucun chemin pour le modifier ni l'arreter.
-          +ponct.map(t=>'<a href="#" onclick="event.preventDefault();'
+          +ponct.map(t=>'<a href="#" data-on-click="event.preventDefault();'
             +'ouvrirEditeurTraitement(currentUser.email,\''+escapeHtml(t.id)+'\',\'s-traitements\')" '
             +'style="color:var(--text-dim);text-decoration:underline">'
             +escapeHtml(t.nom)+'</a>').join(', ')+'.</div>';
@@ -106743,7 +107132,7 @@ function renderTraitements(){
        // et elle explique parfois une periode entiere, des annees plus tard.
        +finis.map(t=>'<div style="font-size:var(--fs-xs);color:var(--text-faint);'
          +'line-height:1.6">'
-         +'<a href="#" onclick="event.preventDefault();ouvrirFicheTraitement(\''
+         +'<a href="#" data-on-click="event.preventDefault();ouvrirFicheTraitement(\''
          +escapeHtml(t.id)+'\')" style="color:var(--text-faint);text-decoration:underline">'
          +escapeHtml(t.nom)+'</a>, jusqu’au '
          +new Date(Number(t.fin)).toLocaleDateString('fr-FR')+'</div>').join('')
@@ -106928,7 +107317,7 @@ function renderEditeurTraitement(){
     +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;font-size:var(--fs-sm);'
     +'color:var(--text);text-transform:none;letter-spacing:normal;font-weight:400">'
     +'<input type="radio" name="trte-ryt" value="'+val+'"'+(ryt===val?' checked':'')
-    +' onchange="_trtMajRythme()" style="width:16px;height:16px;margin:0;accent-color:var(--red)">'
+    +' data-on-change="_trtMajRythme()" style="width:16px;height:16px;margin:0;accent-color:var(--red)">'
     +escapeHtml(lib)+'</label>';
   h+='<div style="margin-bottom:14px">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
@@ -106987,10 +107376,10 @@ function renderEditeurTraitement(){
       +'ne sera donc pas retrouvé si tu en changes.</span></span></label>';
 
   h+='<button type="button" class="btn" style="width:100%;margin:4px 0 0" '
-    +'onclick="sauverTraitement()">Enregistrer</button>';
+    +'data-on-click="sauverTraitement()">Enregistrer</button>';
   if(t&&!traitementTermine(t))
     h+='<button type="button" class="btn btn-outline" style="width:100%;margin:10px 0 0" '
-      +'onclick="arreterTraitement()">Arrêter ce traitement</button>';
+      +'data-on-click="arreterTraitement()">Arrêter ce traitement</button>';
   // ⚠ AUCUN BOUTON « SUPPRIMER ». On n'efface pas un traitement : la trace est
   // une donnee medicale, et elle explique parfois une periode entiere des
   // annees plus tard. On l'arrete, il passe dans les termines.
@@ -107489,6 +107878,7 @@ function _suppMajCoches(){
     bt.textContent=tout?'✓ Tout pris':'Tout prendre ('+l.length+')';
   });
 }
+// actions-en-plus: openSuppEdit openCoachSuppEdit
 function _renderSuppTable(list, isCoach, editFn){
   _suppAssurerIds(list);
   // L encart de sourcing survivait ici a la liste vide — l athlete qui n a
@@ -107552,7 +107942,7 @@ function _renderSuppTable(list, isCoach, editFn){
       +bloc(s.notes,'color:var(--text-dim);font-style:italic')
       +bloc(_suppEcartMoment(s),'color:var(--text-dim);line-height:1.5');
     if(!corps) return '';
-    return `<details onclick="event.stopPropagation()" style="flex-shrink:0;min-width:0;${pose||''}">
+    return `<details data-on-click="event.stopPropagation()" style="flex-shrink:0;min-width:0;${pose||''}">
       <summary style="font-size:var(--fs-sm);color:var(--sub);cursor:pointer;list-style:none;padding:0 2px">▾</summary>
       ${corps}
     </details>`;
@@ -107587,7 +107977,7 @@ function _renderSuppTable(list, isCoach, editFn){
   // liste REÇUE — filtrée sur les actifs côté athlète — pendant que
   // openSuppEdit relisait le store complet. Un inactif placé avant un actif
   // suffisait à ouvrir, puis écraser, la mauvaise entrée.
-  const ouverture=s=>`onclick="${editFn}(${s.id})" role="button" tabindex="0" aria-label="${escapeHtml(s.name||'Complément')}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`;
+  const ouverture=s=>`data-on-click="${editFn}(${s.id})" role="button" tabindex="0" aria-label="${escapeHtml(s.name||'Complément')}" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`;
 
   // LA COCHE DU JOUR : l'athlete seul, et seulement sur un produit actif.
   // Son clic et sa touche s'arretent a elle : sans quoi la carte, qui ouvre
@@ -107596,7 +107986,7 @@ function _renderSuppTable(list, isCoach, editFn){
   const pris=new Set(isCoach?[]:suppPrisesDuJour(currentUser,iso));
   const coche=(s,mid)=>{
     const k=_suppCle(s.id,mid);
-    return `<button type="button" class="supp-coche" data-supp-coche="${k}" aria-pressed="${pris.has(k)?'true':'false'}" aria-label="Pris : ${escapeHtml(s.name||'Complément')}" onclick="event.stopPropagation();basculerPriseSupp(${s.id},'${mid}')" onkeydown="event.stopPropagation()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>`;
+    return `<button type="button" class="supp-coche" data-supp-coche="${k}" aria-pressed="${pris.has(k)?'true':'false'}" aria-label="Pris : ${escapeHtml(s.name||'Complément')}" data-on-click="event.stopPropagation();basculerPriseSupp(${s.id},'${mid}')" data-on-keydown="event.stopPropagation()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>`;
   };
 
   // ── LA CARTE ───────────────────────────────────────────────────────────
@@ -107632,7 +108022,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const actifs=sec.items.filter(e=>e.s.active!==false);
     const tous=actifs.length>0&&actifs.every(e=>pris.has(_suppCle(e.s.id,sec.id)));
     const tout=(!isCoach&&actifs.length)
-      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" onclick="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?'✓ Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
+      ?`<button type="button" class="supp-tout" data-supp-tout="${sec.id}" data-on-click="prendreToutSupp('${sec.id}')"${tous?' disabled':''}>${tous?'✓ Tout pris':'Tout prendre ('+actifs.length+')'}</button>`:'';
     return `<section class="supp-moment" style="--mc:${mc}" data-moment="${sec.id}">
       <div class="supp-mh">
         <span class="supp-mi" aria-hidden="true">${_suppTimingIcon(sec.id,26,mc)}</span>
@@ -107714,7 +108104,7 @@ function _htmlBlocSupplements(list,avant){
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
         <h3 style="margin:0">Mes compléments</h3>
       </div>
-      <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ Ajouter</button>
+      <button class="btn btn-red btn-sm" data-on-click="openSuppEdit(-1)">+ Ajouter</button>
     </div>
     ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px">
@@ -107722,12 +108112,12 @@ function _htmlBlocSupplements(list,avant){
            conseille, un medicament ne se conseille pas. Les melanger sur le
            meme ecran ferait croire qu'ils se lisent de la meme facon. -->
       <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 14px"
-        onclick="ouvrirTraitements()">Mes traitements</button>
+        data-on-click="ouvrirTraitements()">Mes traitements</button>
       <!-- CE QUE JE NE MANGE PAS. Pose ici et pas dans un reglage : une
            eviction se declare au moment ou on pense a ce qu'on mange, pas au
            moment ou on regle l'application. -->
       <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 14px"
-        onclick="go('s-evictions');renderEvictions()">Ce que je ne mange pas</button>
+        data-on-click="go('s-evictions');renderEvictions()">Ce que je ne mange pas</button>
       ${avant||''}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>`;
 }
@@ -107804,7 +108194,7 @@ function openSuppEdit(id){
   const grid=document.getElementById('supp-timings-grid');
   if(grid) grid.innerHTML=TIMINGS_LIST.map(t=>`
     <button type="button" class="supp-timing-chip${selected.includes(t.id)?' active':''}"
-      onclick="toggleSuppTimingChip(this,'${t.id}')">${t.label}</button>`).join('');
+      data-on-click="toggleSuppTimingChip(this,'${t.id}')">${t.label}</button>`).join('');
 }
 
 // Le sélecteur de forme suit le nom saisi. Un produit sans formes[] — ou un
@@ -108096,7 +108486,7 @@ function _htmlMobilisationAccueil(u,maintenant){
   return '<div class="mob-carte" data-acc>'+_accX('mob')
     +'<div class="mob-l">Ta séance du jour demande de l’amplitude à '+escapeHtml(m.zone)
     +' : '+m.mobilisations.length+' mobilisations pour t’y préparer, cinq minutes.</div>'
-    +'<button type="button" class="btn btn-outline btn-sm mob-voir" onclick="voirMobilisations()">Voir</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm mob-voir" data-on-click="voirMobilisations()">Voir</button></div>';
 }
 function _rendreMobilisation(u){
   const z=document.getElementById('clh-mobilisation');
@@ -108113,11 +108503,11 @@ function voirMobilisations(){
   if(!m) return false;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Avant ta séance" class="mob-feuille">'
+    '<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div data-on-click="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Avant ta séance" class="mob-feuille">'
     +'<h2>Avant ta séance</h2><p class="mob-s">Trois mouvements pour préparer '+escapeHtml(m.zone)+'. Une préparation, pas une obligation : fais-les avant ta première série, ou passe directement à la séance.</p>'
     +'<ol class="mob-liste">'+m.mobilisations.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol>'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div>');
+    +'<button type="button" class="btn btn-outline btn-sm" data-on-click="closeModal()">Fermer</button></div></div>');
   return true;
 }
 // ── LA COURBE ─────────────────────────────────────────────────────────────
@@ -108213,7 +108603,7 @@ function renderCoachAmplitudesSection(c){
     +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(new Date(_der.date).toLocaleDateString('fr-FR'))}`
       +(_der.rappel?` : il y a ${_der.semaines} semaines, c’est le moment de refaire les tests.`:'.')+`</div>`:'')
     +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
-    +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
+    +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" data-on-click="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
     // ⚠ UNE SEULE LIGNE, ET NON LA LISTE (lot 6). La premiere de la liste
     //   est deja celle qui debloque le plus ; les autres reviendront une a une,
     //   quand celle-ci sera saisie.
@@ -108272,14 +108662,14 @@ function renderCoachSuppSection(c){
         <div style="margin-bottom:10px">
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Moment(s) <span style="color:var(--red-text)">*</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:6px" id="ccd-supp-timings">
-            ${TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip" onclick="this.classList.toggle('active')">${t.label}</button>`).join('')}
+            ${TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip" data-on-click="this.classList.toggle('active')">${t.label}</button>`).join('')}
           </div>
         </div>
         <div style="margin-bottom:10px">
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Notes (optionnel)</div>
           <input id="ccd-supp-notes" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="Ex: à jeun, avec repas…">
         </div>
-        <button onclick="saveClientSuppEntry()" style="width:100%;padding:12px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ Ajouter au programme</button>
+        <button data-on-click="saveClientSuppEntry()" style="width:100%;padding:12px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ Ajouter au programme</button>
       </div>
     </div>`;
 }
@@ -108334,16 +108724,16 @@ function openCoachSuppEdit(id){
   const list=_suppAssurerIds(c.nutrition?.supplements||[]);
   const idx=_suppIndexParId(list,id);
   const s=idx>=0?list[idx]:null;
-  const timingChips=TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip${s&&(s.timings||[]).includes(t.id)?' active':''}" onclick="this.classList.toggle('active')">${t.label}</button>`).join('');
+  const timingChips=TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip${s&&(s.timings||[]).includes(t.id)?' active':''}" data-on-click="this.classList.toggle('active')">${t.label}</button>`).join('');
   const unitOpts=['g','mg','mcg','ml','gélule(s)','comprimé(s)','scoop(s)','cuillère(s)'];
   const unitLabels={'gélule(s)':'gél.','comprimé(s)':'cpr.','scoop(s)':'scoop','cuillère(s)':'c.à.s'};
   const unitOptions=unitOpts.map(u=>`<option value="${u}"${s&&s.dosage_unit===u?' selected':''}>${unitLabels[u]||u}</option>`).join('');
   const isActive=s?s.active!==false:true;
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2>${s?'Modifier le complément':'Nouveau complément'}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button data-on-click="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <div style="margin-bottom:14px">
       <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">NOM</div>
@@ -108376,12 +108766,12 @@ function openCoachSuppEdit(id){
       <div style="display:flex;align-items:center;gap:8px">
         <span id="coach-supp-active-lbl" style="font-size:var(--fs-xs);color:var(--sub)">${isActive?'Oui':'Non'}</span>
         <input type="checkbox" id="coach-supp-active" style="width:16px;height:16px;cursor:pointer" ${isActive?'checked':''}
-          onchange="document.getElementById('coach-supp-active-lbl').textContent=this.checked?'Oui':'Non'">
+          data-on-change="document.getElementById('coach-supp-active-lbl').textContent=this.checked?'Oui':'Non'">
       </div>
     </div>
     <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
-    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:14px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px;text-transform:uppercase">Enregistrer</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:12px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">Supprimer ce complément</button>`:''}
+    <button data-on-click="saveCoachSuppEdit()" style="width:100%;padding:14px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px;text-transform:uppercase">Enregistrer</button>
+    ${s?`<button data-on-click="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:12px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">Supprimer ce complément</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -109083,7 +109473,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     // de cette liste. Un second bouton pour le meme geste, a deux pas du
     // premier, serait du bruit.
     ?emptyState('coffee','Aucune prise notée ce jour. Le bouton « + Enregistrer une prise », au-dessus, l\'ajoute.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button class="hit44" onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
+    :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" data-on-change="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button class="hit44" data-on-click="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
@@ -109205,7 +109595,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
        désactivée sur aujourd'hui, et addCaffeineEntry le refuse de toute façon. -->
   <!-- R31, CTA de l'ecran Caféine, mais pas de la Nutrition qui l'embarque :
        la, les capitales vont a « + Ajouter un aliment », et a lui seul. -->
-  <button class="btn btn-red${deleteFnName==='embedded'?' btn-casse':''}" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise${isToday?'':' le '+dateLbl}</button>
+  <button class="btn btn-red${deleteFnName==='embedded'?' btn-casse':''}" data-on-click="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise${isToday?'':' le '+dateLbl}</button>
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
     <div style="width:20px;height:2px;background:var(--red)"></div>
     <h3>${dateLbl}</h3>
@@ -109305,10 +109695,10 @@ function _renderCaffeineEmbedded(){
   const auFond=prevStr<minStr;
   const navPrev=auFond
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
+    :`<button data-on-click="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
+    :`<button data-on-click="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
@@ -109550,14 +109940,14 @@ function renderCaffeineProducts(type){
         <label class="form-label">Volume / portion (optionnel)</label>
         <input class="form-input" id="caff-custom-volume" placeholder="Ex: 330ml"/>
       </div>
-      <button class="btn btn-red" onclick="saveCaffeineCustom()">Enregistrer</button>
+      <button class="btn btn-red" data-on-click="saveCaffeineCustom()">Enregistrer</button>
     </div>`;
     return;
   }
   const products=CAFFEINE_DB.filter(p=>p.type===type);
   grid.innerHTML=products.map(p=>{
     const safe=encodeURIComponent(JSON.stringify(p));
-    return `<div class="caff-product-tile" data-id="${p.id}" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    return `<div class="caff-product-tile" data-id="${p.id}" data-on-click="confirmCaffeineAdd(decodeURIComponent('${safe}'))" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="margin-bottom:8px;line-height:0">${caffIcone(p.type,26)}</div>
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3;margin-bottom:4px">${p.name}</div>
       <div style="color:var(--red-text);font-weight:900;font-size:var(--fs-md)">${p.mg}mg</div>
@@ -109588,12 +109978,12 @@ function _renderCaffeineConfirmPanel(qty){
         <div style="color:var(--red-text);font-weight:900;font-size:var(--fs-lg)">${totalMg}mg</div>
         <div style="color:var(--sub);font-size:var(--fs-xs)">${vol}</div>
       </div>
-      <button onclick="cancelCaffeineAdd()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px">×</button>
+      <button data-on-click="cancelCaffeineAdd()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px">×</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      ${[1,2,3].map(n=>`<button onclick="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'var(--border)'};border-radius:var(--r-2);color:${qty===n?'var(--text)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:900;cursor:pointer">×${n}</button>`).join('')}
+      ${[1,2,3].map(n=>`<button data-on-click="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'var(--border)'};border-radius:var(--r-2);color:${qty===n?'var(--text)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:900;cursor:pointer">×${n}</button>`).join('')}
     </div>
-    <button onclick="_commitCaffeineAdd(${qty})" style="width:100%;padding:12px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">AJOUTER</button>
+    <button data-on-click="_commitCaffeineAdd(${qty})" style="width:100%;padding:12px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">AJOUTER</button>
   </div>`;
 }
 function cancelCaffeineAdd(){
@@ -109746,7 +110136,7 @@ function _videoEmbed(url,vidId='vc-video'){
   if(!url) return `<div style="margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm)">Lien vidéo invalide</div>`;
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) return `<iframe src="https://www.youtube.com/embed/${ytM[1]}" frameborder="0" allowfullscreen style="width:100%;height:190px;border-radius:var(--r-2);margin-top:8px"></iframe>`;
-  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${escapeHtml(vidId)}" src="${escapeHtml(url)}" controls preload="none" playsinline webkit-playsinline onerror="_videoIndisponible(this)" style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
+  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${escapeHtml(vidId)}" src="${escapeHtml(url)}" controls preload="none" playsinline webkit-playsinline data-on-error="_videoIndisponible(this)" style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
   return `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--red-text);font-size:var(--fs-sm);font-weight:700;text-decoration:none">Voir la vidéo</a>`;
 }
 
@@ -109822,7 +110212,7 @@ function _renderVideosListe(){
       :'')
     +'<div id="vid-card-list"></div>'
     +(()=>{ try{ return htmlCorrectionsOrphelines(currentUser); }catch(e){ return ''; } })()
-    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
+    +'<button id="vid-more-btn" data-on-click="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
   _renderVideoBatch(0,20);
 }
 function _renderVideoBatch(from,count){
@@ -109872,7 +110262,7 @@ function _buildVideoCard(v){
   const hasFb=v.feedback||v.feedbackTimestamps?.length||_motion||_annot;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
-  const motionBtn=(_motion||_annot)?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" onclick="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">${_motion?'Voir la correction vidéo · '+_motionDuree(_motion.dureeMs):'Voir ma vidéo annotée par mon coach'}</button>`:'';
+  const motionBtn=(_motion||_annot)?`<button class="btn btn-red btn-sm" style="width:100%;margin:${v.feedback||tsInner?'10px':'2px'} 0 0" data-on-click="ouvrirCorrectionMotion('${escapeHtml(currentUser?.email||'')}','${escapeHtml(v.id)}')">${_motion?'Voir la correction vidéo · '+_motionDuree(_motion.dureeMs):'Voir ma vidéo annotée par mon coach'}</button>`:'';
   const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px;margin-top:10px;font-size:var(--fs-sm)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}${motionBtn}</div>`:'';
   // ⚠ LE BOUTON « COMPARER AVEC LA PREMIERE PRISE » EST PARTI AU LOT 7, avec
   //   tout le comparateur. Ce qui le remplace n'est pas un autre bouton :
@@ -109892,8 +110282,8 @@ function _buildVideoCard(v){
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">
           Le fichier sera supprimé de l’hébergeur. Le nom, la date et le retour de ton coach restent.</div>
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" onclick="gardeVideo('${escapeHtml(v.id)}')">Garder</button>
-          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" onclick="telechargerVideo('${escapeHtml(v.id)}')">Télécharger</button>
+          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" data-on-click="gardeVideo('${escapeHtml(v.id)}')">Garder</button>
+          <button class="btn btn-outline btn-sm btn-doigt" style="flex:1" data-on-click="telechargerVideo('${escapeHtml(v.id)}')">Télécharger</button>
         </div></div>`
     :'';
   // UNE EXPIREE RESTE A L'ECRAN, et dit ce qui s'est passe. La faire
@@ -109907,7 +110297,7 @@ function _buildVideoCard(v){
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button data-on-click="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
@@ -110025,7 +110415,7 @@ async function telechargerVideo(id){
 }
 
 // LE BOUTON « × » NE FAISAIT RIEN, ET AUCUNE ERREUR N'EN SORTAIT. Il portait
-// `onclick="if(await rcConfirm(...))deleteVideo(...)"` : le contenu d'un
+// `data-on-click="if(await rcConfirm(...))deleteVideo(...)"` : le contenu d'un
 // gestionnaire en ligne est compile comme le corps d'une fonction ORDINAIRE, et
 // un `await` y est une erreur de syntaxe. Le gestionnaire n'etait donc jamais
 // cree — verifie : `typeof bouton.onclick` vaut « object », c'est-a-dire null,
@@ -112195,15 +112585,15 @@ function _tplListe(){
 function ouvrirModeles(cible){
   const l=_tplListe();
   window._tplCible=cible||'vc-general';
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Le texte reste modifiable après insertion : rien ne part sans que tu l'aies relu.</p>
-    <input id="tpl-rech" placeholder="Rechercher un titre…" oninput="_tplFiltrer()" autocomplete="off"
+    <input id="tpl-rech" placeholder="Rechercher un titre…" data-on-input="_tplFiltrer()" autocomplete="off"
       style="width:100%;font-size:var(--fs-md);padding:10px 12px;box-sizing:border-box;margin-bottom:10px">
     <div id="tpl-liste"></div>
-    <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="ouvrirGestionModeles()">Gérer mes modèles</button>
-    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Fermer</button>
+    <button class="btn btn-outline" style="margin-top:12px;width:100%" data-on-click="ouvrirGestionModeles()">Gérer mes modèles</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   _tplFiltrer();
@@ -112223,7 +112613,7 @@ function _tplFiltrer(){
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.6px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
     ${parCat[c].map(t=>{
       const v=templateVariables(t.corps);
-      return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
+      return `<button type="button" data-on-click="tplInserer('${escapeHtml(t.id)}')"
         style="width:100%;text-align:left;min-height:44px;padding:10px 12px;margin-bottom:6px;border-radius:var(--r-2);cursor:pointer;
           background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(t.titre)}</div>
@@ -112274,27 +112664,27 @@ function ouvrirGestionModeles(){
   closeModal();
   const l=_tplListe();
   const opts=(sel)=>Object.keys(TPL_CAT_LIB).map(c=>`<option value="${c}"${c===sel?' selected':''}>${escapeHtml(TPL_CAT_LIB[c])}</option>`).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Mes modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">Variables reconnues : {prénom}, {exercice}, {séance}, {charge}. Elles sont remplies au moment où tu insères le modèle.</p>
     ${l.map(t=>`<div style="border:1px solid var(--border);border-radius:var(--r-3);padding:10px 10px;margin-bottom:8px">
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
         <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
-        <button onclick="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
+        <button data-on-click="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
           style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">✕</button>
       </div>
-      <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
+      <textarea data-on-input="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
         style="width:100%;margin-top:8px;font-size:var(--fs-sm);box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
     </div>`).join('')}
     <div style="border:1px dashed var(--border);border-radius:var(--r-3);padding:10px;margin-top:6px">
       <input id="tpl-n-titre" placeholder="Titre (ex : Genoux)" maxlength="40" style="width:100%;font-size:var(--fs-md);margin-bottom:6px;box-sizing:border-box">
       <select id="tpl-n-cat" style="width:100%;font-size:var(--fs-md);margin-bottom:6px">${opts('technique')}</select>
       <textarea id="tpl-n-corps" rows="2" placeholder="Texte du modèle…" style="width:100%;font-size:var(--fs-md);box-sizing:border-box"></textarea>
-      <button class="btn btn-red btn-sm" style="width:100%;margin-top:8px" onclick="tplCreer()">Ajouter ce modèle</button>
+      <button class="btn btn-red btn-sm" style="width:100%;margin-top:8px" data-on-click="tplCreer()">Ajouter ce modèle</button>
     </div>
-    <button class="btn btn-outline" style="margin-top:10px;width:100%" onclick="closeModal()">Fermer</button>
+    <button class="btn btn-outline" style="margin-top:10px;width:100%" data-on-click="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -112363,17 +112753,17 @@ function _renderQuickCommentChips(liste){
   const cible='vc-general';
   const el=document.getElementById(zone);if(!el)return;
   const qcs=_getQC(liste);
-  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
+  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" data-on-click="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
     // La liste du bilan est fixe : pas de bouton de gestion.
     // La feuille complete est atteignable des DEUX zones : c est la meme
     // bibliotheque, il n y a plus de raison de la reserver a la video.
-    +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
+    +`<button data-on-click="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
 }
 // LE MEME GABARIT POUR LES DEUX CHEMINS. Deux copies du même balisage
 // finiraient par diverger — ce fichier en a déjà fait les frais ailleurs.
 function _htmlChipsQC(qcs,cible){
-  return ((qcs&&qcs.length)?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
-    +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
+  return ((qcs&&qcs.length)?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" data-on-click="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
+    +`<button data-on-click="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:var(--r-4);padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
 }
 // LES VARIABLES SONT RESOLUES AVANT L INSERTION, comme dans tplInserer.
 //
@@ -112424,8 +112814,8 @@ function qcEditRow(id){
     <input id="qce-lbl-${c.id}" value="${escapeHtml(c.label)}" maxlength="40" style="width:100%;box-sizing:border-box;margin-bottom:4px;font-size:var(--fs-sm)">
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:var(--fs-xs)">
   </div>
-  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:8px 12px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
-  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
+  <button data-id="${c.id}" data-on-click="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:8px 12px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
+  <button data-on-click="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
 function qcSaveEdit(id){
@@ -112604,13 +112994,13 @@ const _VCX_P=Object.freeze({
 function htmlLecteurCorrection(vidId,video){
   const segs=video?segmentsVideo(video):[];
   const q='\''+vidId+'\'';
-  const b=(lib,act,titre,extra,cl)=>`<button type="button" class="rcx-b${cl?' '+cl:''}" onclick="${act}" title="${escapeHtml(titre)}"
+  const b=(lib,act,titre,extra,cl)=>`<button type="button" class="rcx-b${cl?' '+cl:''}" data-on-click="${act}" title="${escapeHtml(titre)}"
     aria-label="${escapeHtml(titre)}" ${extra||''} disabled>${lib}</button>`;
   return `<div id="rc-barre-${vidId}" data-vid="${vidId}" class="rcx">
     <section class="vcx-carte rcx-carte">
       <div class="vcx-ct" role="heading" aria-level="3">${_VCX_SVG(_VCX_P.jauge,22)}Vitesse de lecture</div>
       <div class="rcx-vitesses">
-      ${VID_RATES.map(r=>`<button type="button" class="rcx-b rcx-v" onclick="rcVitesse(${q},${r})"
+      ${VID_RATES.map(r=>`<button type="button" class="rcx-b rcx-v" data-on-click="rcVitesse(${q},${r})"
         data-rate="${r}" disabled aria-pressed="false"
         aria-label="Lire à ${String(r).replace('.',',')} fois la vitesse normale">${String(r).replace('.',',')}×</button>`).join('')}
       </div>
@@ -112627,7 +113017,7 @@ function htmlLecteurCorrection(vidId,video){
       </div>
       <div class="rcx-temps">
         <input type="range" id="rc-pos-${vidId}" class="rcx-pos" min="0" max="1000" step="1" value="0" disabled
-          aria-label="Position dans la vidéo" oninput="rcAller(${q},this.value)">
+          aria-label="Position dans la vidéo" data-on-input="rcAller(${q},this.value)">
         <span id="rc-t-${vidId}" class="rcx-t">0:00 / 0:00</span>
       </div>
       <div id="rc-boucle-${vidId}" class="rcx-ab">
@@ -112943,11 +113333,11 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span class="ts-saut" data-vid="${escapeHtml(videoId)}" data-sec="${Number(_tsSec(t))||0}" style="font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="${escapeHtml(t.ts)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${escapeHtml(t.ts)}</span>
+          <span class="ts-saut" data-vid="${escapeHtml(videoId)}" data-sec="${Number(_tsSec(t))||0}" style="font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="${escapeHtml(t.ts)}" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${escapeHtml(t.ts)}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${srcAudioSure(t.audioUrl)}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:var(--fs-sm)">${escapeHtml(t.note)}</span>`}
-          ${readonly?'':`<button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
+          ${readonly?'':`<button data-on-click="removeTsAnnotation(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
         </div>`;
       }).join('')
     :readonly?'':`<div class="sub" style="font-size:var(--fs-xs);padding:6px 0">Aucun repère : ajoute des annotations ci-dessous.</div>`;
@@ -113010,7 +113400,7 @@ function _vcCorpsHtml(email,videoId){
   const logo=String((currentUser||{}).logo||'').trim();
   return `<div class="vcx">
     <header class="vcx-tete">
-      <button type="button" class="vcx-retour" onclick="closeModal()" title="Annuler" aria-label="Annuler et fermer">${S(P.retour,22)}</button>
+      <button type="button" class="vcx-retour" data-on-click="closeModal()" title="Annuler" aria-label="Annuler et fermer">${S(P.retour,22)}</button>
       <div class="vcx-tt">
         <h2 class="vcx-titre">Corriger <em>la vidéo</em></h2>
         <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
@@ -113019,7 +113409,7 @@ function _vcCorpsHtml(email,videoId){
         <p class="vcx-sous">${escapeHtml(v.name)} · ${quand}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
       </div>
       <div class="vcx-devise" aria-hidden="true"><i></i><span>Discipline, travail et résultats</span></div>
-      ${logo?`<img class="vcx-logo" src="${escapeHtml(logo)}" alt="" onerror="this.remove()">`:''}
+      ${logo?`<img class="vcx-logo" src="${escapeHtml(logo)}" alt="" data-on-error="this.remove()">`:''}
     </header>
     <div class="vcx-grille">
       <div class="vcx-g">
@@ -113037,38 +113427,38 @@ function _vcCorpsHtml(email,videoId){
       <div class="vcx-c">
         <div class="vcx-cadre">
           ${fichier?`<span class="vcx-badge" id="vcx-badge" hidden></span>
-          <button type="button" class="vcx-plein" onclick="rcPleinEcran('vc-video')" title="Plein écran" aria-label="Plein écran">${S(P.plein,20)}</button>`:''}
+          <button type="button" class="vcx-plein" data-on-click="rcPleinEcran('vc-video')" title="Plein écran" aria-label="Plein écran">${S(P.plein,20)}</button>`:''}
           ${_videoEmbed(v.url)}
         </div>
       </div>
       <div class="vcx-d">
         <!-- MOTION LAB : SEULEMENT POUR UNE VIDEO DEPOSEE. Un lien YouTube ou Drive
              ne donne acces ni a un element <video> ni a ses images. -->
-        ${fichier?`<button type="button" class="vcx-ml" onclick="ouvrirMotionLab(window._vcEmail,window._vcVideoId)"
+        ${fichier?`<button type="button" class="vcx-ml" data-on-click="ouvrirMotionLab(_vcEmail,_vcVideoId)"
           aria-label="Motion Lab : découper, tracer, corriger${nSeg?' ('+nSeg+')':''}">
           <span class="vcx-ml-ico">${S(P.ciseaux,34)}</span>
           <span class="vcx-ml-t"><b>Motion Lab</b><span>Découper, tracer, corriger ta vidéo${nSeg?' · '+nSeg+' répétition'+(nSeg>1?'s':''):''}</span></span>
           <span class="vcx-ml-fl">${S(P.fleche,24)}</span></button>`
-          +((motionCorrectionValide(v.motion)||annotAMontrer(v.annot))?`<button type="button" class="vcx-revoir" onclick="ouvrirCorrectionMotion(window._vcEmail,window._vcVideoId)">Revoir la correction envoyée${(()=>{ const d=(v.motion&&v.motion.envoyeLe)||(v.annot&&v.annot.majLe); return d?' le '+new Date(d).toLocaleDateString('fr-FR'):''; })()}</button>`:''):''}
+          +((motionCorrectionValide(v.motion)||annotAMontrer(v.annot))?`<button type="button" class="vcx-revoir" data-on-click="ouvrirCorrectionMotion(_vcEmail,_vcVideoId)">Revoir la correction envoyée${(()=>{ const d=(v.motion&&v.motion.envoyeLe)||(v.annot&&v.annot.majLe); return d?' le '+new Date(d).toLocaleDateString('fr-FR'):''; })()}</button>`:''):''}
         <section class="vcx-carte vcx-com">
           <div class="vcx-ct" role="heading" aria-level="3"><label for="vc-general">${S(P.bulle,22)}Commentaire général</label></div>
           <div id="qc-chips" class="vcx-chips" style="display:flex;gap:8px"></div>
-          <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution..." oninput="_vcxCompte()">${escapeHtml(v.feedback||'')}</textarea>
+          <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution..." data-on-input="_vcxCompte()">${escapeHtml(v.feedback||'')}</textarea>
           <div id="vcx-compte" class="vcx-compte" aria-live="off"></div>
         </section>
         <section class="vcx-carte vcx-rep">
           <div class="vcx-ct" role="heading" aria-level="3">${S(P.horloge,22)}Repères par timestamp <span class="vcx-opt">optionnel</span></div>
           <div id="vc-ts-list" class="vcx-ts-list"></div>
           <div class="vcx-ts">
-            <input id="vc-ts-time" placeholder="0:45" aria-label="Moment du repère (m:ss)" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
-            <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" aria-label="Ce que tu vois à ce moment" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
-            <button type="button" class="vcx-plus" onclick="addTsAnnotation()" title="Ajouter le repère" aria-label="Ajouter le repère">+</button>
+            <input id="vc-ts-time" placeholder="0:45" aria-label="Moment du repère (m:ss)" data-on-keydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
+            <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" aria-label="Ce que tu vois à ce moment" data-on-keydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
+            <button type="button" class="vcx-plus" data-on-click="addTsAnnotation()" title="Ajouter le repère" aria-label="Ajouter le repère">+</button>
           </div>
           <div class="vcx-ts-pied"><span>Format m:ss : ex: 0:15 · 1:30 · 12:05</span>
             ${/* « ANNOTER ICI » quitte la barre pour la carte des repères : c'est
                  elle qu'il remplit. data-rc-hors le rattache au lecteur, qui
                  l'active avec le reste quand les metadonnees arrivent. */
-              fichier?`<button type="button" class="vcx-annoter" data-rc-hors="vc-video" disabled onclick="rcAnnoterIci('vc-video')"
+              fichier?`<button type="button" class="vcx-annoter" data-rc-hors="vc-video" disabled data-on-click="rcAnnoterIci('vc-video')"
               title="Créer une annotation au temps exact affiché" aria-label="Créer une annotation au temps exact affiché">${S(P.horloge,16)} Annoter ici</button>`:''}
           </div>
         </section>
@@ -113079,22 +113469,22 @@ function _vcCorpsHtml(email,videoId){
         <div class="vcx-audio-l">
           <span class="vcx-audio-t">${S(P.micro,20)}Message audio</span>
           <input id="vc-audio-ts" placeholder="0:45" aria-label="Moment du message audio (m:ss)">
-          <button id="vc-audio-btn" type="button" class="vcx-rec" onclick="toggleAudioRec()">${icon('mic',14)} Démarrer l'enregistrement</button>
+          <button id="vc-audio-btn" type="button" class="vcx-rec" data-on-click="toggleAudioRec()">${icon('mic',14)} Démarrer l'enregistrement</button>
           <label class="vcx-import">
-            <input type="file" accept="audio/*" style="display:none" onchange="uploadAudioFile(this)">
+            <input type="file" accept="audio/*" style="display:none" data-on-change="uploadAudioFile(this)">
             ${S(P.dossier,18)}<span>Ou importe un mémo vocal existant</span>
           </label>
         </div>
         <div id="vc-audio-preview" style="display:none">
           <audio id="vc-audio-player" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-red btn-sm" style="flex:1" onclick="confirmAudioAnnotation()">✓ Ajouter ce message</button>
-            <button class="btn btn-outline btn-sm" style="flex:1" onclick="cancelAudioAnnotation()">✗ Recommencer</button>
+            <button class="btn btn-red btn-sm" style="flex:1" data-on-click="confirmAudioAnnotation()">✓ Ajouter ce message</button>
+            <button class="btn btn-outline btn-sm" style="flex:1" data-on-click="cancelAudioAnnotation()">✗ Recommencer</button>
           </div>
         </div>
         <div id="vc-audio-status" class="vcx-audio-s"></div>
       </div>
-      <button type="button" class="btn btn-red vcx-save" onclick="saveVideoCorrection()">Enregistrer la correction ${S(P.fleche,20)}</button>
+      <button type="button" class="btn btn-red vcx-save" data-on-click="saveVideoCorrection()">Enregistrer la correction ${S(P.fleche,20)}</button>
     </footer>
   </div>`;
 }
@@ -113114,8 +113504,8 @@ function _vcApres(){
 function openVideoCorrection(email,videoId){
   const corps=_vcCorpsHtml(email,videoId);
   if(corps==null) return;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large mdl-video" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div class="mdl-large mdl-video" data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   _vcApres();
   // La correction d'une vidéo compte dans le temps passé sur cet athlète.
@@ -114062,15 +114452,15 @@ function _rvHtml(b,c){
 function _rvCorps(email,id,deja){
   const s=_rv&&_rv.email===email&&_rv.id===id?_rv:null;
   const em=_attrArg(String(email||'')), ide=_attrArg(String(id||''));
-  if(!s) return '<button type="button" class="btn btn-outline btn-sm rv-b" onclick="rvDemarrer('+em+','+ide+')">'+icon('mic',14)+' '+(deja?'Nouvelle réponse vocale':'Répondre en vocal')+'</button>';
+  if(!s) return '<button type="button" class="btn btn-outline btn-sm rv-b" data-on-click="rvDemarrer('+em+','+ide+')">'+icon('mic',14)+' '+(deja?'Nouvelle réponse vocale':'Répondre en vocal')+'</button>';
   if(s.etat==='rec') return '<div class="rv-rec" role="status"><span class="rv-point" aria-hidden="true"></span><span id="rv-temps">'+dureeAudioTxt(s.ctrl?s.ctrl.secondes:0)+' / '+dureeAudioTxt(AUDIO_BILAN_MAX_S)+'</span>'
-    +'<button type="button" class="btn btn-red btn-sm rv-b2" onclick="rvArreter()">Arrêter</button></div>';
+    +'<button type="button" class="btn btn-red btn-sm rv-b2" data-on-click="rvArreter()">Arrêter</button></div>';
   if(s.etat==='envoi') return '<div class="rv-rec" role="status">Envoi de ta réponse vocale…</div>';
   return '<div class="rv-ecoute"><audio controls src="'+escapeHtml(s.url||'')+'"></audio>'
     +'<div class="rv-l">'+(s.blob&&!s.blob.size?'Enregistrement vide : vérifie ton micro et recommence.':escapeHtml(dureeAudioTxt(s.duree))+(s.enAttente?' · en attente du réseau':''))+'</div>'
-    +'<div class="rv-bs"><button type="button" class="btn btn-outline btn-sm rv-b2" onclick="rvRecommencer()">Recommencer</button>'
-    +'<button type="button" class="btn btn-red btn-sm rv-b2" onclick="rvEnvoyer()">Envoyer</button></div>'
-    +'<button type="button" class="rv-lien" onclick="rvAnnuler()">Annuler</button></div>';
+    +'<div class="rv-bs"><button type="button" class="btn btn-outline btn-sm rv-b2" data-on-click="rvRecommencer()">Recommencer</button>'
+    +'<button type="button" class="btn btn-red btn-sm rv-b2" data-on-click="rvEnvoyer()">Envoyer</button></div>'
+    +'<button type="button" class="rv-lien" data-on-click="rvAnnuler()">Annuler</button></div>';
 }
 function _rvRepeindre(){
   if(!_rv) return;
@@ -114377,6 +114767,7 @@ function _rerenderLifestyle(){
 // `retention` reste un PARAMETRE et non une constante en dur : la cafeine
 // borne a CAFF_RETENTION_JOURS, les pas a STEPS_RETENTION_JOURS, et ces deux
 // bornes ne doivent pas fusionner.
+// actions-en-plus: _caffAllerJour _caffEmbedAllerJour changeStepsDate changeSleepDate
 function _bandeauJour(inputId,jour,handler,opts){
   const {avecFleches=false,prev=null,next=null,retention=null,libelle=null}=opts||{};
   const auj=localISODate(new Date());
@@ -114392,7 +114783,7 @@ function _bandeauJour(inputId,jour,handler,opts){
   // LES FLECHES, quand l ecran en demande. Style repris tel quel de la version
   // cafeine : fond transparent, bordure #333, et la variante desactivee en #222.
   const _fl=(cible,txt,actif)=>actif
-    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
+    ?`<button data-on-click="${handler}('${cible}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
     :`<button disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
   const _gauche=avecFleches?_fl(prev,'←',!!prev&&prev>=min):'';
   const _droite=avecFleches?_fl(next,'→',!!next&&next<=auj):'';
@@ -114400,8 +114791,8 @@ function _bandeauJour(inputId,jour,handler,opts){
     ${_gauche}
     <div style="flex:1;min-width:0;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
     ${_droite}
-    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
-    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid var(--border);color:#ccc;border-radius:var(--r-2);padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
+    ${estAuj?'':`<button data-on-click="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
+    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" data-on-change="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid var(--border);color:#ccc;border-radius:var(--r-2);padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
   </div>`;
 }
 
@@ -114581,14 +114972,14 @@ function loadSteps(containerId='steps-content',opts){
              permet de revenir sur un autre jour, et le libelle mentirait. -->
         <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${selStr===todayStr?'Aujourd\'hui':'Ce jour-là'} :</div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
+          <button data-on-click="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
+          <button data-on-click="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
         </div>
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
           style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:12px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
         <!-- R28, « Enregistrer », comme partout ailleurs dans l app. -->
-        <button class="btn btn-red" onclick="saveSteps()">Enregistrer</button>
+        <button class="btn btn-red" data-on-click="saveSteps()">Enregistrer</button>
         <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE : l athlete
              qui n a pas note ses journees est precisement celui qui ne fait
              pas defiler. R28, dans la carte, sous le bouton, en alternative
@@ -114658,7 +115049,7 @@ function loadSteps(containerId='steps-content',opts){
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
+        <button data-on-click="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
       </div>
     </div>
   `;
@@ -115416,8 +115807,8 @@ function _htmlAjustement(user,lectureSeule){
     ${regimeHtml}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:${lectureSeule?'0':'11px'}">Tes protéines et tes lipides ne changent pas. Un seul ajustement par quinzaine.</div>
     ${lectureSeule?'':`<div style="display:flex;gap:8px">
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" onclick="appliquerAjustement()">Enregistrer</button>
-      <button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;padding:0 14px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="refuserAjustement()">Garder comme ça</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" data-on-click="appliquerAjustement()">Enregistrer</button>
+      <button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;padding:0 14px;letter-spacing:1px;font-size:var(--fs-2xs)" data-on-click="refuserAjustement()">Garder comme ça</button>
     </div>`}
     ${lectureSeule?'':blocDisclaimerSante()}
   </div>`;
@@ -115667,19 +116058,19 @@ function enregistrerPointSemaine(u,e,decision){
 function htmlPointSemaine(e,u){
   if(!e) return '';
   const jour=pointJourDe(u);
-  const choixJour='<label class="ps-rdv">Mon point : <select onchange="pointJourChoisir(this.value)" aria-label="Jour du point de la semaine">'
+  const choixJour='<label class="ps-rdv">Mon point : <select data-on-change="pointJourChoisir(this.value)" aria-label="Jour du point de la semaine">'
     +PTS_JOURS.map((n,i)=>'<option value="'+i+'"'+(i===jour?' selected':'')+'>'+n+'</option>').join('')+'</select></label>';
   if(e.finPause) return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
     +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'
-    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="finPauseFatigue(\'reprendre\')">Je reprends ma sèche</button>'
-    +(e.prolongeable?'<button type="button" class="btn btn-outline btn-sm" onclick="finPauseFatigue(\'prolonger\')">Une semaine de plus</button>':'')+'</div>'
+    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" data-on-click="finPauseFatigue(\'reprendre\')">Je reprends ma sèche</button>'
+    +(e.prolongeable?'<button type="button" class="btn btn-outline btn-sm" data-on-click="finPauseFatigue(\'prolonger\')">Une semaine de plus</button>':'')+'</div>'
     +choixJour+'</div>';
   if(e.manque) return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
     +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'
-    +'<button type="button" class="btn btn-red btn-sm ps-btn" onclick="ouvrirPeseeAccueil()">Me peser</button>'+choixJour+'</div>';
+    +'<button type="button" class="btn btn-red btn-sm ps-btn" data-on-click="ouvrirPeseeAccueil()">Me peser</button>'+choixJour+'</div>';
   const boutons=(e.a&&!e.drapeau)
-    ?'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="pointSemaineDecider(\'applique\')">J’applique</button>'
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="pointSemaineDecider(\'garde\')">Je garde comme ça</button></div>':'';
+    ?'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" data-on-click="pointSemaineDecider(\'applique\')">J’applique</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" data-on-click="pointSemaineDecider(\'garde\')">Je garde comme ça</button></div>':'';
   return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
     +'<div class="ps-tendance"><b>'+escapeHtml(String(e.tendance).replace('.',','))+' kg</b><span>ta tendance sur sept jours</span></div>'
     +'<div class="ps-note">On lit la tendance, pas la balance du matin.</div>'
@@ -116788,7 +117179,7 @@ function _htmlObjectifsCoach(c){
         <input type="number" id="ccd-pas-off" min="0" max="99999" inputmode="numeric" value="${v(g.off)}"
           style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
     </div>
-    <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:10px 0 0;min-height:44px">Enregistrer les objectifs</button>
+    <button class="btn btn-outline btn-sm" data-on-click="coachPoserObjectifsPas()" style="width:100%;margin:10px 0 0;min-height:44px">Enregistrer les objectifs</button>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">L'athlète peut les changer depuis son écran : c'est alors sa valeur qui s'applique.</div>
   </div>`;
 }
@@ -116949,7 +117340,7 @@ function _htmlCsGraphe(c,quoi){
       +(x.sous&&!dense?'<span class="cso-b-d">'+escapeHtml(x.sous)+'</span>':'')
       +'</div>';
   }).join('');
-  const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(E.vue===k?' actif':'')+'" aria-pressed="'+(E.vue===k)+'" onclick="csVue(\''+k+'\',\''+q+'\')">'+l+'</button>';
+  const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(E.vue===k?' actif':'')+'" aria-pressed="'+(E.vue===k)+'" data-on-click="csVue(\''+k+'\',\''+q+'\')">'+l+'</button>';
   const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':'Moyenne de chaque semaine, sur 3 mois';
   return '<section class="cso-carte cso-graphe">'
     +'<div class="cso-g-tete"><span class="cso-g-ico">'+CS_ICO.barres+'</span>'
@@ -116995,7 +117386,7 @@ function _htmlDomaineCoach(c,quoi){
   if(s.vides.length) att.push({ico:'moins',ton:'orange',t:_csPl(s.vides.length,D,'non renseigné'),
     d:'Donnée manquante : '+s.vides.map(j=>_csJour(j.d,true)).join(', ')+'.',vise:s.vides.map(j=>j.iso)});
   const attH=att.length?att.map(a=>'<button type="button" class="cso-att" data-ton="'+a.ton+'"'
-      +(a.vise.length?' onclick="csViser('+escapeHtml(JSON.stringify(a.vise))+',\''+q+'\')"':'')+'>'
+      +(a.vise.length?' data-on-click="csViser('+escapeHtml(JSON.stringify(a.vise))+',\''+q+'\')"':'')+'>'
       +'<span class="cso-att-i">'+CS_ICO[a.ico]+'</span><span class="cso-att-c"><b>'+escapeHtml(a.t)+'</b><span>'+escapeHtml(a.d)+'</span></span>'
       +(a.vise.length?'<span class="cso-chev">'+CS_ICO.droite+'</span>':'')+'</button>').join('')
     :'<div class="cso-rien">Rien à signaler sur cette période.</div>';
@@ -117026,7 +117417,7 @@ function _htmlDomaineCoach(c,quoi){
       +'<span class="cso-t-ico">'+CS_ICO[D.ico]+'</span>'
       +'<div class="cso-t-c"><h3>'+D.titre+'</h3><span>'+D.sous+'</span></div>'
       +'<label class="cso-per">'+CS_ICO.calendrier+'<span>'+libPer+'</span>'+CS_ICO.bas
-        +'<select onchange="csPeriode(this.value,\''+q+'\')" aria-label="Période">'+opts+'</select></label>'
+        +'<select data-on-change="csPeriode(this.value,\''+q+'\')" aria-label="Période">'+opts+'</select></label>'
       +_htmlSyncCoach(_sanSyncCoachLire(c))
     +'</section>'
     +'<div class="cso-kpis">'
@@ -117038,13 +117429,13 @@ function _htmlDomaineCoach(c,quoi){
       +'<div class="cso-carte cso-k"><span class="cso-k-ico cso-gris">'+CS_ICO.cible+'</span><div>'
         +'<span class="cso-k-l">Objectif</span><div class="cso-k-v"><strong>'+objV+'</strong></div>'
         +(objS?'<span class="cso-k-s">'+objS+'</span>':'')+'</div>'
-        +'<button type="button" class="cso-edit" onclick="csObjectif(\''+q+'\')" aria-label="Modifier l’objectif">'+CS_ICO.crayon+'</button></div>'
+        +'<button type="button" class="cso-edit" data-on-click="csObjectif(\''+q+'\')" aria-label="Modifier l’objectif">'+CS_ICO.crayon+'</button></div>'
       +'<div class="cso-carte cso-k"><div class="cso-anneau" data-niv="'+nivA+'"><svg viewBox="0 0 100 100" aria-hidden="true">'
           +'<circle cx="50" cy="50" r="42" class="cso-an-f"/><circle cx="50" cy="50" r="42" class="cso-an-p" stroke-dasharray="'+(C*part).toFixed(1)+' '+C.toFixed(1)+'"/></svg>'
           +'<span>'+Math.round(part*100)+'%</span></div><div>'
         +'<span class="cso-k-l">'+Nom+' atteint'+(D.f?'e':'')+'s</span><div class="cso-k-v"><strong>'+s.atteints+' / 7</strong></div>'
         +'<span class="cso-points" role="img" aria-label="'+s.atteints+' '+D.noms+' sur 7 atteignent l’objectif">'+points+'</span></div></div>'
-      +'<button type="button" class="cso-carte cso-k cso-k-tend" onclick="csVue(\'28j\',\''+q+'\')" aria-label="Voir 28 jours"><span class="cso-k-ico cso-gris">'+CS_ICO.barres+'</span><div>'
+      +'<button type="button" class="cso-carte cso-k cso-k-tend" data-on-click="csVue(\'28j\',\''+q+'\')" aria-label="Voir 28 jours"><span class="cso-k-ico cso-gris">'+CS_ICO.barres+'</span><div>'
         +'<span class="cso-k-l">Tendance</span><div class="cso-k-v"><strong class="cso-k-t" data-sens="'+t.sens+'">'+t.lib+'</strong></div>'
         +'<span class="cso-k-s">'+escapeHtml(t.phrase)+'</span></div><span class="cso-chev">'+CS_ICO.droite+'</span></button>'
     +'</div>'
@@ -117101,7 +117492,7 @@ function csObjectif(q){
     '<label class="san-lab">Objectif par nuit</label>'
     +'<input id="cso-obj" inputmode="text" placeholder="8h00" value="'+escapeHtml(sanHM(sanObjSommeil(c)))+'">'
     +'<div class="san-aide">« 8h », « 7h30 » ou « 450 » minutes. L’athlète peut le changer depuis son écran : c’est alors sa valeur qui s’applique.</div>'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" onclick="csObjectifEnregistrer()">Enregistrer</button>');
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" data-on-click="csObjectifEnregistrer()">Enregistrer</button>');
 }
 function csObjectifEnregistrer(){
   const m=sanLireDuree((document.getElementById('cso-obj')||{}).value||'');
@@ -117516,8 +117907,8 @@ function _htmlPauseProposition(c){
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phrase)}</div>
     ${tca?`<div style="font-size:var(--fs-xs);color:var(--warning);line-height:1.6;margin-top:8px">${escapeHtml(PAUSE_MENTION_TCA)}</div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="appliquerPause(${prop.jours})">Proposer la pause</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="refuserPause()">Pas maintenant</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="appliquerPause(${prop.jours})">Proposer la pause</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="refuserPause()">Pas maintenant</button>
     </div>
     ${blocDisclaimerSante()}
   </div>`;
@@ -117545,8 +117936,8 @@ function _htmlPauseEnCours(c){
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">Ta pause est terminée. On reprend la sèche, ou on s'arrête là ?</div>
     ${peutReprendre?'':`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:6px">Les objectifs d'avant la pause sont introuvables : seul le passage en maintien reste possible.</div>`}
     <div style="display:flex;gap:8px;margin-top:10px">
-      ${peutReprendre?`<button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="reprendreSeche()">Reprendre la sèche</button>`:''}
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="ouvrirTransitionMaintien()">Passer en maintien</button>
+      ${peutReprendre?`<button class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="reprendreSeche()">Reprendre la sèche</button>`:''}
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0" data-on-click="ouvrirTransitionMaintien()">Passer en maintien</button>
     </div>
   </div>`;
 }
@@ -117563,7 +117954,7 @@ function _htmlFinPrevue(c){
   if(j<0||j>FIN_PREVUE_PREAVIS_JOURS) return '';
   return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Ta ${escapeHtml(PHASES[p.type].apres)} se termine dans ${j} jour${j>1?'s':''}. On prépare la sortie ?</div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirTransitionMaintien()">Préparer la sortie</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" data-on-click="ouvrirTransitionMaintien()">Préparer la sortie</button>
   </div>`;
 }
 
@@ -118042,14 +118433,14 @@ function htmlLeafq(){
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
-          `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
+          `<button type="button" data-on-click="leafqRepondre('${it.k}',${v},this)"
             style="flex:1;min-height:36px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
               background:#111;border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
-    <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="leafqValider()">Envoyer mes réponses</button>
-    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="leafqPlusTard()">Plus tard</button>
-    <button class="btn btn-outline" style="width:100%;margin-top:8px;font-size:var(--fs-2xs)" onclick="leafqNePlusProposer()">Ne plus me proposer</button>
+    <button class="btn btn-red" style="width:100%;margin-top:14px" data-on-click="leafqValider()">Envoyer mes réponses</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px" data-on-click="leafqPlusTard()">Plus tard</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px;font-size:var(--fs-2xs)" data-on-click="leafqNePlusProposer()">Ne plus me proposer</button>
   </div>`;
 }
 function leafqRepondre(k,v,el){
@@ -118318,7 +118709,7 @@ function renderCartePesee(){
           <span class="pes-unite">kg</span>
         </span>
       </label>
-      <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
+      <button class="btn btn-red btn-sm" data-on-click="savePesee()" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div class="pes-sous">${sous}</div>
   </div>`;
@@ -118522,7 +118913,7 @@ function _carteCourbePoids(serie,opts){
   const jours=o.jours||per.j;
   const corps=_courbePesee(serie,Object.assign({},o,{jours}));
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
-      `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
+      `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" data-on-click="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
   const vide=(serie&&serie.length>=2)
     ?'<div class="pc-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
     :'<div class="pc-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
@@ -118669,7 +119060,7 @@ function blocPoids(user){
   if(user&&user.masquerPoids){
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;text-align:center">
       <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:12px">Le suivi du poids est masqué.</div>
-      <button class="btn btn-outline btn-sm" onclick="togglePoidsMasque()" style="letter-spacing:1px">Réafficher</button>
+      <button class="btn btn-outline btn-sm" data-on-click="togglePoidsMasque()" style="letter-spacing:1px">Réafficher</button>
     </div>`;
   }
   const serie=serieWeight(user);
@@ -118716,7 +119107,7 @@ function blocPoids(user){
   return entete+neutreNote+vitesse+courbe+noteCycle
     +`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">
        RepCore n'est pas un dispositif médical et ne remplace pas un avis professionnel.</div>
-     <button class="btn btn-outline btn-sm" onclick="togglePoidsMasque()" style="letter-spacing:1px;font-size:var(--fs-2xs);margin-bottom:14px">Masquer le suivi du poids</button>`;
+     <button class="btn btn-outline btn-sm" data-on-click="togglePoidsMasque()" style="letter-spacing:1px;font-size:var(--fs-2xs);margin-bottom:14px">Masquer le suivi du poids</button>`;
 }
 function togglePoidsMasque(){
   if(!currentUser) return;
@@ -118821,7 +119212,7 @@ function _htmlChoixPhase(){
   // phases qu'on s'autorise a proposer a quelqu'un qui n'a pas de coach.
   const opts=PHASES_ATHLETE.map(t=>{
     const p=PHASES[t], sel=_phChoix===t;
-    return `<button onclick="_phSet('${t}')" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border-radius:var(--r-3);cursor:pointer;
+    return `<button data-on-click="_phSet('${t}')" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border-radius:var(--r-3);cursor:pointer;
       background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'}">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
         <span style="font-size:var(--fs-md);font-weight:800;color:${sel?'var(--text)':'var(--text-strong)'}">${p.lib}</span>
@@ -118839,9 +119230,9 @@ function _htmlChoixPhase(){
     </div>
     ${opts}
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-red btn-sm" onclick="confirmerPhase()" ${_phChoix?'':'disabled'}
+      <button class="btn btn-red btn-sm" data-on-click="confirmerPhase()" ${_phChoix?'':'disabled'}
         style="flex:1;letter-spacing:1px${_phChoix?'':';opacity:.45'}">Confirmer</button>
-      <button class="btn btn-outline btn-sm" onclick="refuserPhase()" style="flex:0 0 auto;padding:0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Plus tard</button>
+      <button class="btn btn-outline btn-sm" data-on-click="refuserPhase()" style="flex:0 0 auto;padding:0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Plus tard</button>
     </div>
   </div>`;
 }
@@ -118889,8 +119280,8 @@ function ouvrirChoixPhase(){
   _phChoix=typePhase(currentUser);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+    `<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div data-on-click="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         ${_htmlChoixPhase()}
       </div></div>`);
 }
@@ -118905,7 +119296,7 @@ function _htmlBandeauPhase(user){
   if(!p) return '';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 12px;margin-bottom:14px">
     <span style="font-size:var(--fs-xs);color:var(--sub)">Objectif actuel : <b style="color:var(--text-strong)">${PHASES[p.type].lib}</b></span>
-    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--red-text);font-weight:700">Changer</button>
+    <button data-on-click="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--red-text);font-weight:700">Changer</button>
   </div>`;
 }
 function renderBandeauPhase(){
@@ -118922,7 +119313,7 @@ function renderRelancePhase(){
   const msg=currentUser?relancePhase(currentUser):null;
   z.innerHTML=msg?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(msg)}</div>
-    <button class="btn btn-outline btn-sm" onclick="ouvrirChoixPhase()" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Mettre à jour ma phase</button>
+    <button class="btn btn-outline btn-sm" data-on-click="ouvrirChoixPhase()" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Mettre à jour ma phase</button>
   </div>`:'';
 }
 // Étiquette compacte, posée à côté des macros. AUCUN calcul n'en découle : la
@@ -118976,7 +119367,7 @@ function _htmlPhaseCoach(c){
   // scene. L'athlete, lui, n'a que PHASES_ATHLETE : voir _htmlChoixPhase.
   const boutons=Object.keys(PHASES).map(t=>{
     const sel=p&&p.type===t;
-    return `<button onclick="coachSetPhase('${t}')" style="flex:1 1 auto;min-width:88px;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-xs);font-weight:800;
+    return `<button data-on-click="coachSetPhase('${t}')" style="flex:1 1 auto;min-width:88px;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-xs);font-weight:800;
       background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'};color:${sel?'var(--text)':'#bbb'}">${PHASES[t].lib}</button>`;
   }).join('');
   // ══ CE QUE LA PEAK WEEK AJOUTE A L'ECRAN, ET RIEN DE PLUS ══════════════
@@ -118991,7 +119382,7 @@ function _htmlPhaseCoach(c){
     return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label for="ccd-peak-date" style="margin:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase">Date de scène</label>
-        <input id="ccd-peak-date" type="date" value="${escapeHtml(d)}" onchange="coachSetPeakDate(this.value)"
+        <input id="ccd-peak-date" type="date" value="${escapeHtml(d)}" data-on-change="coachSetPeakDate(this.value)"
           style="flex:1;min-width:140px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
         ${quand?`<span style="font-size:var(--fs-md);font-weight:800;color:var(--red-text);white-space:nowrap">${escapeHtml(quand)}</span>`:''}
       </div>
@@ -119340,8 +119731,8 @@ function _htmlCadreImportCapture(quoi,opts){
     return `
     <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
-      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
-      <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" data-on-change="importerCaptureStats(this)">
+      <button type="button" class="btn btn-outline btn-sm" data-on-click="this.previousElementSibling.click()"
         style="width:100%;min-height:44px;margin:0;letter-spacing:1.2px">Envoyer une capture</button>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px;text-align:center">
         La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.
@@ -119372,8 +119763,8 @@ function _htmlCadreImportCapture(quoi,opts){
            les navigateurs de bureau ne le font, et la photo la plus courante
            du telephone le plus courant se trouvait refusee par le selecteur
            lui-meme, avant meme d'etre lue. -->
-      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
-      <button class="btn" onclick="this.previousElementSibling.click()"
+      <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" data-on-change="importerCaptureStats(this)">
+      <button class="btn" data-on-click="this.previousElementSibling.click()"
         style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
       <!-- LA PHRASE DE CONFIDENTIALITE EST UN ENGAGEMENT, PAS UNE MENTION
            LEGALE A ENTERRER : elle passe de --fs-2xs / --text-faint, ou elle
@@ -119665,7 +120056,7 @@ const _TRK_ICO={
 function _trkCarte(a){
   const nuit=(_trkQuoi!=='pas');
   const q=a.onglet?(nuit?a.onglet.sommeil:a.onglet.pas):(nuit?'Sommeil':'Pas');
-  return '<button type="button" class="trk-a" onclick="_trkFiche(\''+a.id+'\')">'
+  return '<button type="button" class="trk-a" data-on-click="_trkFiche(\''+a.id+'\')">'
     +'<img class="trk-a-logo" src="img/appareils/'+a.id+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">'
     +'<span class="trk-a-c"><span class="trk-a-h"><span class="trk-a-nom">'+escapeHtml(a.nom)+'</span>'
       +'<span class="trk-a-b" data-b="'+escapeHtml(a.badge)+'">'+escapeHtml(a.badge)+'</span></span>'
@@ -119683,8 +120074,8 @@ function _trkCarteAutre(){
       +'<span class="trk-a-b" data-b="Autre">Autre</span></span>'
       +'<span class="trk-a-ch">'+_TRK_ICO.envoi+'<span>Importer une capture d’écran</span></span>'
       +'<span class="trk-a-d">Envoie une capture de ton application de santé.</span></span>'
-    +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="sanFermer();importerCaptureStats(this)">'
-    +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Importer une capture d’écran</button>'
+    +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" data-on-change="sanFermer();importerCaptureStats(this)">'
+    +'<button type="button" class="sv-tuile-go" data-on-click="this.previousElementSibling.click()">Importer une capture d’écran</button>'
     +'</div>';
 }
 function sanAide(quoi){
@@ -119700,11 +120091,11 @@ function _trkEtape1(){
     '<div class="trk-tete"><div><h3 class="trk-t">Mes appareils</h3>'
       +'<span class="trk-s">Choisis ton écosystème pour voir où trouver les données.</span></div>'
       +'<label class="san-per-sel trk-tri"><span class="san-per-lib">'+(_trkTri==='az'?'De A à Z':'Popularité')+'</span>'+SAN_ICO.bas
-        +'<select onchange="_trkTri=this.value;_trkEtape1()" aria-label="Trier les appareils">'
+        +'<select data-on-change="_trkTri=this.value;_trkEtape1()" aria-label="Trier les appareils">'
           +'<option value="pop"'+(_trkTri==='pop'?' selected':'')+'>Popularité</option>'
           +'<option value="az"'+(_trkTri==='az'?' selected':'')+'>De A à Z</option></select></label></div>'
     +'<div class="trk-liste">'+liste.map(_trkCarte).join('')+_trkCarteAutre()+'</div>'
-    +'<button type="button" class="trk-lien trk-perdu" onclick="_trkPerdu()">Ma montre n’est pas dans la liste</button>');
+    +'<button type="button" class="trk-lien trk-perdu" data-on-click="_trkPerdu()">Ma montre n’est pas dans la liste</button>');
 }
 // La tuile a initiale, pour les resultats de la recherche de « Ma montre
 // n'est pas dans la liste ».
@@ -119712,7 +120103,7 @@ function _trkTuile(t){
   // AUCUN LOGO DE MARQUE : le projet n'en detient pas les droits et un logo
   // approximatif vaut moins qu'une initiale nette. Fallback generique partout.
   const ini=String(t.marque||'?').trim().charAt(0).toUpperCase();
-  return '<button type="button" class="trk-tuile" onclick="_trkFiche(\''+t.id+'\')">'
+  return '<button type="button" class="trk-tuile" data-on-click="_trkFiche(\''+t.id+'\')">'
     +'<span class="trk-ini" aria-hidden="true">'+escapeHtml(ini)+'</span>'
     +'<span class="trk-nom">'+escapeHtml(t.marque)+'</span></button>';
 }
@@ -119726,8 +120117,8 @@ function _trkFiche(id){
     const g=htmlGarminFiche(_garminEtat,Date.now());
     if(g){
       _sanFeuille(t.marque,g+'<div class="san-f-actions">'
-        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir à la main</button>'
-        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_trkEtape1()">Retour</button></div>');
+        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir à la main</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="_trkEtape1()">Retour</button></div>');
       return;
     }
     // L'état n'est pas encore connu : la fiche se repeint s'il ouvre la connexion.
@@ -119764,9 +120155,9 @@ function _trkFiche(id){
     +'de l\'application et tape « '+(_trkQuoi==='pas'?'pas':'sommeil')+' ».</div>'
     +'<div class="san-f-actions">'
       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
-        +'onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">J\'ai trouvé</button>'
+        +'data-on-click="sanFermer();sanSaisir(\''+_trkQuoi+'\')">J\'ai trouvé</button>'
       +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
-        +'onclick="_trkEtape1()">Retour</button>'
+        +'data-on-click="_trkEtape1()">Retour</button>'
     +'</div>');
 }
 // ── JE NE TROUVE PAS MA MONTRE ─────────────────────────────────────────
@@ -119775,20 +120166,20 @@ function _trkPerdu(){
   _sanFeuille('On va la retrouver',
     '<div class="san-aide" style="margin-bottom:12px">Qu\'est-ce que tu connais ?</div>'
     +'<div class="san-src-l">'
-      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'marque\')">Ma marque</button>'
-      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'app\')">Le nom de l\'application</button>'
-      +'<button type="button" class="san-src-o" onclick="_trkParTexte(\'modele\')">Le modèle</button>'
-      +'<button type="button" class="san-src-o" onclick="_trkRien()">Rien de tout ça</button>'
+      +'<button type="button" class="san-src-o" data-on-click="_trkParTexte(\'marque\')">Ma marque</button>'
+      +'<button type="button" class="san-src-o" data-on-click="_trkParTexte(\'app\')">Le nom de l\'application</button>'
+      +'<button type="button" class="san-src-o" data-on-click="_trkParTexte(\'modele\')">Le modèle</button>'
+      +'<button type="button" class="san-src-o" data-on-click="_trkRien()">Rien de tout ça</button>'
     +'</div>');
 }
 function _trkParTexte(quoi){
   const lib=quoi==='app'?'Nom de l\'application':(quoi==='modele'?'Nom du modèle':'Nom de la marque');
   _sanFeuille(lib,
     '<input id="trk-libre" inputmode="search" placeholder="'+escapeHtml(lib)+'" '
-    +'oninput="_trkLibreRes(this.value)">'
+    +'data-on-input="_trkLibreRes(this.value)">'
     +'<div id="trk-libre-res"></div>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:14px 0 0" '
-    +'onclick="_trkPerdu()">Retour</button>');
+    +'data-on-click="_trkPerdu()">Retour</button>');
   const i=document.getElementById('trk-libre'); if(i) i.focus();
 }
 function _trkLibreRes(q){
@@ -119799,7 +120190,7 @@ function _trkLibreRes(q){
     ?'<div class="trk-grille" style="margin-top:10px">'+r.map(_trkTuile).join('')+'</div>'
     :(String(q||'').trim()
       ?'<div class="san-vide">Rien trouvé. '
-        +'<button type="button" class="trk-lien" onclick="_trkSignaler()">Signaler ma montre</button></div>':'');
+        +'<button type="button" class="trk-lien" data-on-click="_trkSignaler()">Signaler ma montre</button></div>':'');
 }
 function _trkRien(){
   _sanFeuille('On va la retrouver',
@@ -119808,13 +120199,13 @@ function _trkRien(){
     +'<div class="san-aide" style="margin-bottom:10px">Tu peux aussi simplement nous donner '
     +'le nom écrit sur ta montre.</div>'
     +'<label class="san-lab">Nom de ma montre</label>'
-    +'<input id="trk-libre" inputmode="search" oninput="_trkLibreRes(this.value)">'
+    +'<input id="trk-libre" inputmode="search" data-on-input="_trkLibreRes(this.value)">'
     +'<div id="trk-libre-res"></div>'
     +'<div class="san-f-actions">'
       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
-        +'onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir mes données</button>'
+        +'data-on-click="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir mes données</button>'
       +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
-        +'onclick="_trkSignaler()">Signaler ma montre</button>'
+        +'data-on-click="_trkSignaler()">Signaler ma montre</button>'
     +'</div>');
 }
 function _trkSignaler(){
@@ -119825,7 +120216,7 @@ function _trkSignaler(){
     +'<label class="san-lab">Modèle</label><input id="sig-modele">'
     +'<label class="san-lab">Application</label><input id="sig-app">'
     +'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
-    +'onclick="_trkEnvoyerSignal()">Envoyer</button>');
+    +'data-on-click="_trkEnvoyerSignal()">Envoyer</button>');
 }
 function _trkEnvoyerSignal(){
   const v=id=>String((document.getElementById(id)||{}).value||'').trim().slice(0,60);
@@ -120153,7 +120544,7 @@ function _sanGraphe(quoi,serie,obj,fmt){
     const niv=sanNiveau(quoi,x.v,obj);
     const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
     return '<button type="button" class="san-bar sv-bar" data-niv="'+(niv||'vide')+'"'
-      +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
+      +' data-on-click="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
       +' aria-label="'+escapeHtml(lib+' : '+(x.v==null?'aucune donnée':fmt(x.v)))+'">'
       +'<span class="sv-bar-z">'
         +(x.v==null?'<span class="sv-bar-v">-</span>'
@@ -120204,7 +120595,7 @@ function _svEnTete(quoi,r,bloc,fmt){
     +'<div class="sv-g-t"><h3>'+(nuit?'Durée de sommeil':'Nombre de pas')+'</h3>'
       +'<span>'+escapeHtml(sous)+'</span></div>'
     +'<div class="sv-g-obj"><span>Objectif quotidien</span><strong>'+obj+'</strong></div>'
-    +'<button type="button" class="sv-g-edit" onclick="sanObjectif(\''+quoi+'\')"'
+    +'<button type="button" class="sv-g-edit" data-on-click="sanObjectif(\''+quoi+'\')"'
       +(verrou?' data-verrou="" title="Ton coach a fixé cet objectif"':'')
       +' aria-label="'+(verrou?'Objectif fixé par ton coach':'Modifier mon objectif')+'">'
       +(verrou?SAN_ICO.cadenas:SAN_ICO.crayon)+'</button>'
@@ -120258,7 +120649,7 @@ function _svDette(u){
   return '<div class="sv-dette">'
     +'<span class="sv-dette-ico">'+SAN_ICO.lit+'</span>'
     +'<div class="sv-dette-c"><span class="sv-dette-t">Dette de sommeil'
-      +'<button type="button" class="sv-info" onclick="sanDetteAide()" aria-label="Comment la dette est calculée">'+SAN_ICO.info+'</button></span>'
+      +'<button type="button" class="sv-info" data-on-click="sanDetteAide()" aria-label="Comment la dette est calculée">'+SAN_ICO.info+'</button></span>'
       +'<span class="sv-dette-s">sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
         +' · objectif '+escapeHtml(sanHM(d.objectif))+'</span></div>'
     +'<strong class="sv-dette-v" style="color:'+_teinteDette(d.dette,d.objectif)+'">'
@@ -120286,7 +120677,7 @@ function _htmlRattraper(u,quoi){
   const q=quoi==='sommeil'?'nuit':'jour';
   const prem=premierJourVide(u,quoi,7);
   const lbl=prem?new Date(prem+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'}):'';
-  return '<button type="button" class="san-rattrap sv-rep" onclick="sanRattraper(\''+quoi+'\')">'
+  return '<button type="button" class="san-rattrap sv-rep" data-on-click="sanRattraper(\''+quoi+'\')">'
     +_svImg(quoi==='sommeil'?'rep-som':'rep-pas','sv-rep-deco')
     +'<span class="sv-rep-ico">'+SAN_ICO.eclair+'</span>'
     +'<span class="sv-rep-c"><span class="san-rattrap-t">On reprend !</span>'
@@ -120329,7 +120720,7 @@ function _svMethodes(u,quoi){
       +'<span>Choisis la méthode qui te convient</span></div></div>'
     +'<div class="sv-meth-g">'
       +_svTuileSync(u,quoi)
-      +'<button type="button" class="sv-tuile sv-tuile-m" onclick="sanSaisir(\''+quoi+'\')">'
+      +'<button type="button" class="sv-tuile sv-tuile-m" data-on-click="sanSaisir(\''+quoi+'\')">'
         +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.clavier+'</span>'
           +'<span class="sv-tuile-t">Saisie manuelle</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
         +'<span class="sv-tuile-d">'+(nuit?'Renseigne la durée de ton sommeil du jour en quelques secondes.'
@@ -120345,15 +120736,15 @@ function _svMethodes(u,quoi){
           +'<span class="sv-tuile-t">Depuis une capture d’écran</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
         +'<span class="sv-tuile-d">Importe une photo de ton application de santé (Apple Santé, Samsung Health, etc.).</span>'
         +_svImg(nuit?'tel-c-som':'tel-c-pas','sv-tel')
-        +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">'
-        +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Envoyer une capture</button>'
+        +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" data-on-change="importerCaptureStats(this)">'
+        +'<button type="button" class="sv-tuile-go" data-on-click="this.previousElementSibling.click()">Envoyer une capture</button>'
       +'</div>'
     +'</div>'
     +'<div class="sv-cadenas">'+SAN_ICO.cadenas+'<span>La capture est lue sur ton téléphone. Elle n\'est ni envoyée ni conservée.</span></div>'
     +'<div class="sv-pied">'
       +_svPiedSource(u,quoi)
       +'<span aria-hidden="true">·</span>'
-      +'<button type="button" class="san-src" onclick="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
+      +'<button type="button" class="san-src" data-on-click="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
     +'</div>'
     +'</div>';
 }
@@ -120372,7 +120763,7 @@ function _htmlCarteSante(u,quoi){
     +(nuit?_svDette(u):'')
     +_htmlRattraper(u,quoi)
     +'<div class="san-actions">'
-      +'<button type="button" class="btn btn-red san-a1 sv-saisir" onclick="sanSaisir(\''+quoi+'\')">'
+      +'<button type="button" class="btn btn-red san-a1 sv-saisir" data-on-click="sanSaisir(\''+quoi+'\')">'
         +SAN_ICO.crayon+'<span>Ajouter / modifier mes données</span>'+SAN_ICO.droite+'</button>'
     +'</div>'
     +'<div class="sv-ou" aria-hidden="true"><span>ou</span></div>'
@@ -120394,7 +120785,7 @@ function _htmlSanPeriode(quoi){
     o+='<option value="'+k+'"'+(k===_sanOffset?' selected':'')+'>'+lib(k)+'</option>';
   return '<label class="san-per-sel">'+SAN_ICO.calendrier
     +'<span class="san-per-lib">'+escapeHtml(court(_sanOffset))+'</span>'+SAN_ICO.bas
-    +'<select onchange="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select></label>';
+    +'<select data-on-change="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select></label>';
 }
 function sanPeriodeChoisir(v){
   const n=Math.round(Number(v));
@@ -120417,7 +120808,7 @@ function sanObjectif(quoi){
         +escapeHtml(String(((u.stepsGoals||STEPS_GOALS_DEFAUT||{}).off)||''))+'">';
   _sanFeuille(quoi==='sommeil'?'Mon objectif de sommeil':'Mon objectif de pas',
     corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
-      +'onclick="sanObjectifEnregistrer(\''+quoi+'\')">Enregistrer</button>');
+      +'data-on-click="sanObjectifEnregistrer(\''+quoi+'\')">Enregistrer</button>');
 }
 function sanObjectifEnregistrer(quoi){
   const u=currentUser;
@@ -120510,21 +120901,21 @@ function sanOuvrirJour(quoi,iso){
   _sanFeuille(titre,corps
     +'<div class="san-f-actions">'
       +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" '
-        +'onclick="sanFermer();sanSaisir(\''+quoi+'\',\''+iso+'\')">Modifier</button>'
+        +'data-on-click="sanFermer();sanSaisir(\''+quoi+'\',\''+iso+'\')">Modifier</button>'
       +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" '
-        +'onclick="sanSupprimer(\''+quoi+'\',\''+iso+'\')">Supprimer</button>'
+        +'data-on-click="sanSupprimer(\''+quoi+'\',\''+iso+'\')">Supprimer</button>'
     +'</div>');
 }
 function _sanL(t,v){ return '<div class="san-l"><span>'+escapeHtml(t)+'</span><strong>'+escapeHtml(String(v))+'</strong></div>'; }
 function _sanFeuille(titre,html){
   let z=document.getElementById('san-feuille');
   if(!z){ z=document.createElement('div'); z.id='san-feuille'; document.body.appendChild(z); }
-  z.innerHTML='<div class="san-f-fond" onclick="sanFermer()"></div>'
+  z.innerHTML='<div class="san-f-fond" data-on-click="sanFermer()"></div>'
     +'<div class="san-f" role="dialog" aria-modal="true" aria-label="'+escapeHtml(titre)+'">'
       +'<div class="san-f-poignee"></div>'
       +'<div class="san-f-t">'+escapeHtml(titre)+'</div>'+html
       +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0" '
-        +'onclick="sanFermer()">Fermer</button></div>';
+        +'data-on-click="sanFermer()">Fermer</button></div>';
   z.style.display='block';
 }
 function sanFermer(){ const z=document.getElementById('san-feuille'); if(z){ z.style.display='none'; z.innerHTML=''; } }
@@ -120550,7 +120941,7 @@ function sanSaisir(quoi,iso){
       +'<input id="san-km" inputmode="decimal" placeholder="8,4" value="'+((e&&e.km)||'')+'">';
   _sanFeuille(quoi==='sommeil'?'Mon sommeil':'Mes pas',
     corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
-      +'onclick="sanEnregistrer(\''+quoi+'\')">Enregistrer</button>');
+      +'data-on-click="sanEnregistrer(\''+quoi+'\')">Enregistrer</button>');
 }
 function sanEnregistrer(quoi){
   // ⚠ CETTE FONCTION N'EMPRUNTE PAS _recordSleep / _recordSteps : elle ecrit
@@ -120656,7 +121047,7 @@ function _sanSrcDesc(k,quoi){
 }
 function _sanSrcLigne(quoi,k,act){
   return '<button type="button" class="san-src-o sv-src-o'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
-    +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'
+    +' data-on-click="sanPoserSource(\''+quoi+'\',\''+k+'\')">'
     +'<span class="sv-src-logo"><img src="img/sources/'+k+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async"></span>'
     +'<span class="sv-src-c"><span class="sv-src-t">'+escapeHtml(SAN_SOURCES[k])+'</span>'
       +'<span class="sv-src-d">'+escapeHtml(_sanSrcDesc(k,quoi))+'</span></span>'
@@ -120673,7 +121064,7 @@ function sanChangerSource(quoi){
   const montre=_SV_SVG+'<rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l.7-3.5h4.6L15 6M9 18l.7 3.5h4.6L15 18"/></svg>';
   const autres=Object.keys(SAN_SOURCES).filter(k=>SAN_SRC_APPS.indexOf(k)<0&&SAN_SRC_MONTRES.indexOf(k)<0)
     .map(k=>'<button type="button" class="san-src-o sv-src-p'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
-      +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
+      +' data-on-click="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
   // CE QUE CE CHOIX NE FAIT PAS : il ne synchronise rien. Il dit d'ou vient la
   // donnee, et l'historique deja enregistre garde SA source d'origine.
   _sanFeuille('Modifier ma source',
@@ -120727,9 +121118,9 @@ function htmlGarminFiche(etat,maintenant){
     +'<div class="san-aide">'+(e.derniereReception?'Dernière réception '+escapeHtml(_sanIlYa(e.derniereReception,maintenant))+'.'
       :'Rien reçu pour l’instant : Garmin envoie après la prochaine synchronisation de ta montre.')+'</div>'
     +'<div class="san-aide">'+quoi+' arrivent seuls, sans rien recopier.</div>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0" onclick="sanFermer();sanSyncOuvrir()">Gérer la connexion</button>';
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0" data-on-click="sanFermer();sanSyncOuvrir()">Gérer la connexion</button>';
   return '<div class="san-aide" style="margin-bottom:12px">Relie ton compte Garmin Connect : '+quoi.charAt(0).toLowerCase()+quoi.slice(1)+' arrivent seuls, même quand ton téléphone dort.</div>'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:0" onclick="garminConnecter()">Connecter Garmin</button>'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:0" data-on-click="garminConnecter()">Connecter Garmin</button>'
     +'<div class="san-aide" style="margin-top:10px">Garmin te demande ton accord, puis te ramène ici.</div>';
 }
 // PURE. Le bloc Garmin des réglages santé ; '' quand la connexion n'est pas ouverte.
@@ -120738,10 +121129,10 @@ function htmlGarminReglages(etat,maintenant){
   if(!e||!e.dispo) return '';
   if(e.lie) return '<div class="ss-garmin"><div class="ss-garmin-t"><span class="sv-sync-pt" data-recu="'+!!e.derniereReception+'" aria-hidden="true"></span><b>Garmin Connect</b> · connecté</div>'
     +'<div class="ss-d">'+(e.derniereReception?'Dernière réception '+escapeHtml(_sanIlYa(e.derniereReception,maintenant)):'Rien reçu pour l’instant')+'</div>'
-    +'<button type="button" class="ss-deco" onclick="garminDeconnecter()">Déconnecter Garmin</button></div>';
+    +'<button type="button" class="ss-deco" data-on-click="garminDeconnecter()">Déconnecter Garmin</button></div>';
   return '<div class="ss-garmin"><div class="ss-garmin-t"><b>Tu as une montre Garmin ?</b></div>'
     +'<div class="ss-d">Relie Garmin Connect : ta montre envoie seule, sans le téléphone.</div>'
-    +'<button type="button" class="ss-btn" onclick="garminConnecter()">Connecter Garmin</button></div>';
+    +'<button type="button" class="ss-btn" data-on-click="garminConnecter()">Connecter Garmin</button></div>';
 }
 async function garminConnecter(){
   if(!demanderConsentementSante('pas',()=>garminConnecter())) return null;
@@ -121045,7 +121436,7 @@ function htmlBandeSante(meta,depuis,maintenant){
   return '<div class="san-bande" role="status">'
     +'<div class="san-bande-t">Ta nuit n’est pas encore arrivée</div>'
     +'<div class="san-bande-d">Lance le Raccourci RepCore Santé : tes données arrivent en quelques secondes.</div>'
-    +'<a class="btn btn-red san-bande-b" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer mes données</a>'
+    +'<a class="btn btn-red san-bande-b" href="'+SAN_SYNC_RACCOURCI_LANCER+'" data-on-click="sanEnvoiLance()">Envoyer mes données</a>'
     +'</div>';
 }
 function _sanBandeDepuis(){ try{ return Number(localStorage.getItem('rc_sante_bande'))||0; }catch(e){ return 0; } }
@@ -121092,7 +121483,7 @@ try{ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) san
 function _svTuileSync(u,quoi){
   const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
   const nuit=(quoi==='sommeil');
-  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.relancer?' sv-sync-relancer':(e.actif?' sv-sync-on':''))+'" onclick="sanSyncOuvrir()">'
+  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.relancer?' sv-sync-relancer':(e.actif?' sv-sync-on':''))+'" data-on-click="sanSyncOuvrir()">'
     +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.synchro+'</span>'
       +'<span class="sv-tuile-t">'+(e.actif?escapeHtml(e.lib):'Synchronisation automatique')+'</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
     +(e.actif
@@ -121104,9 +121495,9 @@ function _svTuileSync(u,quoi){
 }
 function _svPiedSource(u,quoi){
   const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
-  if(e.actif) return '<button type="button" class="san-src" onclick="sanSyncOuvrir()">'+escapeHtml(e.lib)
+  if(e.actif) return '<button type="button" class="san-src" data-on-click="sanSyncOuvrir()">'+escapeHtml(e.lib)
     +(e.source?' : <strong>'+escapeHtml(e.source)+'</strong>':'')+' · '+escapeHtml(e.quand)+'</button>';
-  return '<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(sanSource(u,quoi).lib)+'</strong></button>';
+  return '<button type="button" class="san-src" data-on-click="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(sanSource(u,quoi).lib)+'</strong></button>';
 }
 
 // ── LA FEUILLE « CONNECTER MES DONNÉES SANTÉ » ────────────────────────────
@@ -121115,7 +121506,7 @@ function _ssEtape(n,titre,texte,extra){
     +'<div class="ss-t">'+titre+'</div>'+(texte?'<div class="ss-d">'+texte+'</div>':'')+(extra||'')+'</div></div>';
 }
 function _ssBouton(lib,action,second){
-  return '<button type="button" class="ss-btn'+(second?' ss-btn-2':'')+'" onclick="'+action+'">'+lib+'</button>';
+  return '<button type="button" class="ss-btn'+(second?' ss-btn-2':'')+'" data-on-click="'+action+'">'+lib+'</button>';
 }
 function _ssPlateforme(){
   try{
@@ -121126,7 +121517,7 @@ function _ssPlateforme(){
 }
 function _ssAdresseHtml(){
   if(!_ssAdresse) return _ssBouton(sanSyncActif()?'Créer une nouvelle adresse':'Créer et copier mon adresse','sanSyncCreer()');
-  return '<input class="ss-adr" readonly value="'+escapeHtml(_ssAdresse)+'" onclick="this.select()" aria-label="Ton adresse personnelle">'
+  return '<input class="ss-adr" readonly value="'+escapeHtml(_ssAdresse)+'" data-on-click="this.select()" aria-label="Ton adresse personnelle">'
     +_ssBouton('Copier','sanSyncCopier()',true)
     +'<div class="ss-d ss-avert">Affichée une seule fois. Ne la partage pas : elle suffit pour envoyer des données à ton dossier.</div>';
 }
@@ -121149,7 +121540,7 @@ function _htmlSanSyncFeuille(){
       +_ssEtape(3,'Automatise-le à <span class="ss-r">9 h</span>',
         'Raccourcis › Automatisation › + › Heure de la journée : 09:00, tous les jours, Exécuter immédiatement › RepCore Santé.')
       +_ssEtape(4,'Teste maintenant','Lance le Raccourci une fois : RepCore guette la réception pendant 2 minutes.',
-        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance();sanSyncGuetter()">Tester maintenant</a>')
+        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" data-on-click="sanEnvoiLance();sanSyncGuetter()">Tester maintenant</a>')
       +_ssEtape(5,'C’est reçu ?','',_ssGuetHtml()||'<div class="ss-etat">Le test s’affiche ici.</div>');
   } else if(p==='apk'){
     const src=(TRK_APPAREILS.find(a=>a.id===sanSource(currentUser,'pas').cle)||{}).app||'l’application de ta montre';
@@ -121175,11 +121566,11 @@ function _htmlSanSyncFeuille(){
         +'<li><b>iPhone verrouillé</b> à l’heure de l’automatisation : iOS la reporte, parfois jusqu’au lendemain.</li>'
         +'<li><b>Automatisation désactivée</b> : Raccourcis › Automatisation › RepCore Santé, « Exécuter immédiatement » coché.</li>'
         +'<li><b>Autorisations Santé refusées</b> au Raccourci : Réglages › Santé › Accès aux données › Raccourcis.</li></ul></div>':'')
-      +'<a class="ss-btn ss-envoi" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer maintenant</a>'
+      +'<a class="ss-btn ss-envoi" href="'+SAN_SYNC_RACCOURCI_LANCER+'" data-on-click="sanEnvoiLance()">Envoyer maintenant</a>'
       +corps;
   }
   return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
-      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
+      +'<button type="button" class="ss-x" data-on-click="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
     +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
       +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
     // LOT G1 : Garmin, qui envoie sans le téléphone. Relié, il passe devant les étapes du téléphone.
@@ -121188,7 +121579,7 @@ function _htmlSanSyncFeuille(){
     +((_garminEtat&&_garminEtat.lie)?'':htmlGarminReglages(_garminEtat,Date.now()))
     +'<div class="ss-note">Pas, sommeil, fréquence cardiaque au repos, variabilité, poids : rien d’autre. Une saisie à la main reste prioritaire.</div>'
     // Le jeton Health Connect seulement : un compte relié à Garmin seul n'en a pas.
-    +(sanSyncActif()?'<button type="button" class="ss-deco" onclick="sanSyncDeconnecter()">Déconnecter</button>':'');
+    +(sanSyncActif()?'<button type="button" class="ss-deco" data-on-click="sanSyncDeconnecter()">Déconnecter</button>':'');
 }
 function _ssPeindre(){
   const z=document.getElementById('sante-sync-feuille');
@@ -121407,15 +121798,15 @@ function loadSleep(containerId='sleep-content',user,opts){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" data-on-input="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" data-on-input="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
         <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:12px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
-        <button class="btn btn-red" onclick="saveSleep()">Enregistrer</button>
+        <button class="btn btn-red" data-on-click="saveSleep()">Enregistrer</button>
         <!-- Jumelle de la carte des pas : sous le bouton de la nuit, en
              alternative. R28 : dans la carte, comme sur Lifestyle. -->
         ${_avecImport?_htmlCadreImportCapture('sommeil',{alternative:true}):''}
@@ -121782,7 +122173,13 @@ function srcImageAttr(s){
 // escapeHtml seul n'y protege de rien — l'attribut est decode avant que le JS
 // ne soit lu, voir escapeHtml. JSON.stringify en fait un litteral JS sur, puis
 // escapeHtml le rend inoffensif dans l'attribut. S'ecrit SANS guillemets
-// autour : onclick="f(${jsArg(x)})".
+// autour : data-on-click="f(${jsArg(x)})".
+// Une image qui ne charge pas prend son repli, UNE fois : si le repli manque
+// aussi, on ne boucle pas.
+function rcImageRepli(img,repli){
+  if(img.dataset.repli) return;
+  img.dataset.repli='1'; img.src=repli;
+}
 function jsArg(v){ return escapeHtml(JSON.stringify(String(v==null?'':v))); }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 // Retourne true si la donnée est réellement sur l'appareil, false si le quota
@@ -122482,7 +122879,7 @@ async function importVideoLinksFromPdf(input){
       <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <b style="color:var(--red-light)">Aucun lien trouvé : Diagnostic</b>
-          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+          <button data-on-click="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
         </div>
         <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Copie ce texte et envoie-le pour qu'on diagnostique :</p>
         <div style="font-size:var(--fs-xs);margin-bottom:6px;color:var(--green)">Annotations trouvées (${annotUrls.length}) :</div>
@@ -122538,7 +122935,7 @@ async function analyzeProgPhotos(){
           <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
               <b style="color:var(--red-light)">Lecture automatique : texte brut</b>
-              <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+              <button data-on-click="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
             </div>
             <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
             <div style="font-size:var(--fs-xs);color:var(--green);margin-bottom:4px">M1 original :</div>
@@ -123074,7 +123471,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     // « prise serrée » de « large », et la fiche papier ne le dit pas.
     const _autres=_propose&&_vg.length>1
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">`
-        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
+        +_vg.map(v=>`<button data-on-click="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
         +`</div>` : '';
     const _mention=_propose
       ? `<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:4px">Proposé depuis ton guide</div>` : '';
@@ -123115,19 +123512,19 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
         <input value="${v2}" id="ocr-v2-${i}" placeholder="https://youtu.be/..." style="font-size:var(--fs-xs);padding:8px 10px">
         ${_autres}
       </div>
-      <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
+      <button data-on-click="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
     </div>`;}).join('');
 
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2> ${exercises.length} exercices lus</h2>
-      <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
+      <button data-on-click="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Vérifie et corrige si besoin, puis importe. <span style="color:var(--green);font-size:var(--fs-xs)">v233</span></p>
     <div id="ocr-rows">${rows}</div>
-    <button class="btn btn-red" style="margin-top:4px" onclick="importOcrExercises(${idx===null||idx===undefined?'null':idx},${exercises.length})"> ${currentUser?.role==='coach'?"Importer dans l'éditeur":'Importer dans la séance'}</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:4px" data-on-click="importOcrExercises(${idx===null||idx===undefined?'null':idx},${exercises.length})"> ${currentUser?.role==='coach'?"Importer dans l'éditeur":'Importer dans la séance'}</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -123321,7 +123718,7 @@ function showPdfSeancesModal(seances,targetEmail){
   _pendingPdfSeances=seances;_pendingPdfTarget=targetEmail;
   const rows=seances.map((s,si)=>`
     <div style="background:#111;border:1px solid var(--border);border-radius:var(--r-2);margin-bottom:10px;overflow:hidden">
-      <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" data-on-click="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${s.exercises.length} exercice${s.exercises.length>1?'s':''} détecté${s.exercises.length>1?'s':''}</div>
@@ -123340,16 +123737,16 @@ function showPdfSeancesModal(seances,targetEmail){
       </div>
     </div>`).join('');
   document.getElementById('modal-overlay')?.remove();
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2>${seances.length} séance${seances.length>1?'s':''} détectée${seances.length>1?'s':''}</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button data-on-click="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:16px;line-height:1.6">Clique sur une séance pour voir les exercices. Les jours de pratique seront à définir ensuite dans le programme.</p>
     ${rows}
-    <button class="btn btn-red" style="margin-top:4px" onclick="importPdfSeances()">Importer les ${seances.length} séance${seances.length>1?'s':''}</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:4px" data-on-click="importPdfSeances()">Importer les ${seances.length} séance${seances.length>1?'s':''}</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -123358,11 +123755,11 @@ function showDrivePdfModal(driveUrl,targetEmail){
   _pendingPdfTarget=targetEmail;
   document.getElementById('modal-overlay')?.remove();
   const openUrl=_driveOpenUrl(driveUrl);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px">
+  const html=`<div id="modal-overlay" data-on-click="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="font-size:var(--fs-lg)"> PDF Google Drive</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
+      <button data-on-click="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:20px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
     <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
@@ -123373,9 +123770,9 @@ function showDrivePdfModal(driveUrl,targetEmail){
     </a>
     <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:var(--red);border:none;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase">
        Sélectionner le fichier téléchargé
-      <input type="file" accept=".pdf" style="display:none" onchange="_parsePdfFromDriveFile(this)">
+      <input type="file" accept=".pdf" style="display:none" data-on-change="_parsePdfFromDriveFile(this)">
     </label>
-    <button onclick="closeModal()" style="display:block;width:100%;padding:12px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
+    <button data-on-click="closeModal()" style="display:block;width:100%;padding:12px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -123451,8 +123848,8 @@ function openAddAthlete(){
   // parce que l'affilié est plafonné à 12 mois par code et le créateur non :
   // annoncer la même durée aux deux serait faux pour l'un des deux.
   const estCreateur=currentUser?.email===CREATOR_EMAIL;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:var(--fs-sm)">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
@@ -123471,14 +123868,14 @@ function openAddAthlete(){
     </select></div>`}
     <div id="aa-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:8px;display:none"></div>
     <div style="position:sticky;bottom:0;height:36px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-40px"></div>
-    <button class="btn btn-red" style="margin-top:10px" onclick="createAthlete()">${estCreateur?'Créer et activer l\'accès':'Créer le compte'}</button>
-    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-red" style="margin-top:10px" data-on-click="createAthlete()">${estCreateur?'Créer et activer l\'accès':'Créer le compte'}</button>
+    <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
 // Échap ferme la modale, quand le fond la ferme deja au clic. Le balisage
-// porte l'intention : `onclick="closeModal()"` sur l'overlay signifie
-// « renvoyable », `onclick=""` signifie « il faut trancher ». On ne cree
+// porte l'intention : `data-on-click="closeModal()"` sur l'overlay signifie
+// « renvoyable », `data-on-click=""` signifie « il faut trancher ». On ne cree
 // donc aucune politique nouvelle, on rend la meme accessible au clavier.
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
@@ -123524,7 +123921,7 @@ document.addEventListener('keydown',e=>{
   }
   const ov=document.getElementById('modal-overlay');
   if(!ov) return;
-  const oc=ov.getAttribute('onclick')||'';
+  const oc=ov.getAttribute('data-on-click')||'';
   if(oc.indexOf('closeModal')<0&&oc.indexOf('this.remove')<0) return;
   e.preventDefault();
   try{ closeModal(); }catch(x){ ov.remove(); }
@@ -125140,8 +125537,8 @@ function _renderContactCoach(){
   const c=_contactCourant();
   const mode=CONTACT_MODES.indexOf(c.mode)>=0?c.mode:'aucun';
   z.innerHTML=CONTACT_MODES.map(m=>
-    `<div class="obj-opt${mode===m?' sel':''}" onclick="setModeContact('${m}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${mode===m?' sel':''}" data-on-click="setModeContact('${m}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(CONTACT_LIB[m])}</div>
     </div>`).join('');
   const wa=document.getElementById('coach-contact-wa');
@@ -125999,12 +126396,12 @@ function addCoachBannerRow(imageUrl, linkUrl){
     :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:var(--r-1);font-size:var(--fs-xs);color:var(--text-dim)">Ajouter une photo</div>`;
   row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:1px">BANNIÈRE ${n}</span>
-    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">✕</button>
+    <button data-on-click="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">✕</button>
   </div>
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>
     <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;letter-spacing:1px">APPUYER POUR CHANGER LA PHOTO</div>
-    <input type="file" accept="image/*" style="display:none" onchange="handleBannerImage(this)">
+    <input type="file" accept="image/*" style="display:none" data-on-change="handleBannerImage(this)">
   </label>
   <input type="url" placeholder="URL du lien au clic (https://…)" value="${escapeHtml(linkUrl||'')}" style="width:100%;font-size:var(--fs-sm);padding:8px 10px;box-sizing:border-box;border-radius:var(--r-1)">`;
   list.appendChild(row);
@@ -126077,11 +126474,11 @@ function _renderPromoBanners(coach){
   if(!banners.length){el.style.display='none';el.innerHTML='';_promoRelancer();return;}
   el.style.display='block';
   const items=banners.map((b,k)=>{
-    const img=`<img src="${escapeHtml(b.imageUrl)}" alt="" style="width:100%;height:auto;display:block;border-radius:var(--r-2);border:1px solid var(--border)" onerror="this.style.display='none'">`;
+    const img=`<img src="${escapeHtml(b.imageUrl)}" alt="" style="width:100%;height:auto;display:block;border-radius:var(--r-2);border:1px solid var(--border)" data-on-error="this.style.display='none'">`;
     return `<div class="promo-item${k===0?' on':''}" aria-hidden="${k===0?'false':'true'}">${b.linkUrl?`<a href="${safeUrl(b.linkUrl)}" target="_blank" rel="noopener" style="display:block"${k===0?'':' tabindex="-1"'}>${img}</a>`:img}</div>`;
   }).join('');
   const pts=banners.length>1
-    ?'<div class="promo-pts">'+banners.map((b,k)=>`<button type="button" class="promo-pt" aria-label="Bannière ${k+1}" aria-current="${k===0?'true':'false'}" onclick="promoAller(${k})"></button>`).join('')+'</div>'
+    ?'<div class="promo-pts">'+banners.map((b,k)=>`<button type="button" class="promo-pt" aria-label="Bannière ${k+1}" aria-current="${k===0?'true':'false'}" data-on-click="promoAller(${k})"></button>`).join('')+'</div>'
     :'';
   el.innerHTML=`<div class="promo-pile">${items}</div>${pts}`;
   _promoIdx=0;
@@ -126138,8 +126535,8 @@ function _renderAtpTraitement(){
   if(!on) return;
   const z=document.getElementById('atp-trait-opts');
   if(z) z.innerHTML=FAMILLES_TRAITEMENT.map(f=>
-    `<div class="obj-opt${_atpFamilles.indexOf(f.cle)>=0?' sel':''}" onclick="basculerFamilleTraitement('${f.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${_atpFamilles.indexOf(f.cle)>=0?' sel':''}" data-on-click="basculerFamilleTraitement('${f.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(f.lib)}</div>
     </div>`).join('');
   const n=document.getElementById('atp-trait-note');
@@ -126241,16 +126638,16 @@ function _renderAtpGrossesse(){
       `<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">${escapeHtml(GROSSESSE_MSG)}</div>`
       +(e==='allaitement'
         ?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-top:10px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
-      +`<button onclick="accuserMessageGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>`;
+      +`<button data-on-click="accuserMessageGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>`;
   }
   const cons=document.getElementById('atp-gross-consent-row');
   if(cons) cons.style.display=e?'none':'block';
   z.innerHTML=GROSSESSE_ETATS.map(x=>
-    `<div class="obj-opt${e===x.cle?' sel':''}" onclick="declarerGrossesse('${x.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${e===x.cle?' sel':''}" data-on-click="declarerGrossesse('${x.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(x.lib)}</div>
     </div>`).join('')
-    +(e?`<button onclick="revoquerGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette déclaration</button>`:'');
+    +(e?`<button data-on-click="revoquerGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette déclaration</button>`:'');
 }
 // Le retour post-partum suit le meme rythme de rendu que la declaration
 // dont il depend : declarer, revoquer et accuser passent tous par la.
@@ -126258,16 +126655,16 @@ function _renderAtpEtats(){
   const z=document.getElementById('atp-etats-opts');
   if(!z) return;
   z.innerHTML=ETATS_DECLARABLES.map(e=>
-    `<div class="obj-opt${_atpEtats.indexOf(e.cle)>=0?' sel':''}" onclick="basculerAtpEtat('${e.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${_atpEtats.indexOf(e.cle)>=0?' sel':''}" data-on-click="basculerAtpEtat('${e.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(e.lib)}</div>
     </div>`).join('');
   const bloc=document.getElementById('atp-thyroide-bloc');
   if(bloc) bloc.style.display=(_atpEtats.indexOf('thyroide')>=0)?'block':'none';
   const zt=document.getElementById('atp-thyroide-etats');
   if(zt) zt.innerHTML=THYROIDE_ETATS.map(t=>
-    `<div class="obj-opt${_atpThyEtat===t.cle?' sel':''}" onclick="setAtpThyroide('${t.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${_atpThyEtat===t.cle?' sel':''}" data-on-click="setAtpThyroide('${t.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(t.lib)}</div>
     </div>`).join('');
   const c=document.getElementById('atp-thyroide-trait');
@@ -126277,8 +126674,8 @@ function _renderAtpEtats(){
   if(bh) bh.style.display=_hormonalApplicable(currentUser)?'block':'none';
   const zh=document.getElementById('atp-hormo-opts');
   if(zh) zh.innerHTML=STATUTS_HORMONAUX.map(x=>
-    `<div class="obj-opt${_atpHormo===x.cle?' sel':''}" onclick="setAtpHormonal('${x.cle}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${_atpHormo===x.cle?' sel':''}" data-on-click="setAtpHormonal('${x.cle}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(x.lib)}</div>
     </div>`).join('');
   const ch=document.getElementById('atp-hormo-trait');
@@ -126304,8 +126701,8 @@ function _renderAtpCycle(){
   carte.style.display=montrer?'block':'none';
   if(!montrer) return;
   z.innerHTML=ATP_CYCLE_OPTIONS.map(([v,titre,sous])=>
-    `<div class="obj-opt${_atpCycleSuivi===v?' sel':''}" onclick="setAtpCycleSuivi('${v}')"
-      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    `<div class="obj-opt${_atpCycleSuivi===v?' sel':''}" data-on-click="setAtpCycleSuivi('${v}')"
+      role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(titre)}</div>
       ${sous?`<div class="sub" style="font-size:var(--fs-xs);margin-top:4px">${escapeHtml(sous)}</div>`:''}
     </div>`).join('');
@@ -126615,8 +127012,8 @@ function _htmlAccesBoutons(c){
   // `avant:'suivi'` : ce qui était ouvert quand rien n'est posé. Sans lui,
   // rouvrir un athlète suivi lui aurait rendu « Essentielle ».
   return ferme
-    ?'<button class="btn btn-red btn-sm" style="'+st+'" onclick="accesRouvrir('+arg+')">Rouvrir</button>'
-    :'<button class="btn btn-outline btn-sm" style="'+st+'" onclick="accesSuspendre('+arg+',{avant:&#39;suivi&#39;})">Fermer</button>';
+    ?'<button class="btn btn-red btn-sm" style="'+st+'" data-on-click="accesRouvrir('+arg+')">Rouvrir</button>'
+    :'<button class="btn btn-outline btn-sm" style="'+st+'" data-on-click="accesSuspendre('+arg+',{avant:&#39;suivi&#39;})">Fermer</button>';
 }
 function _rendreAccesAthletes(){
   const z=document.getElementById('mon-acces-athletes');
@@ -126653,7 +127050,7 @@ function _rendreAccesAthletes(){
         +'</div>'+_htmlAccesPose(c)+'</div>'
         +(e.relancable
           ?'<button class="btn btn-red btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:8px 14px;min-height:34px" '
-            +'onclick="relancerAccesAthlete(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
+            +'data-on-click="relancerAccesAthlete(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
           :'')
         +_htmlAccesBoutons(c)
         +'</div>';
@@ -126744,7 +127141,7 @@ function loadMonetisationTab(){
     const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+(s.paymentStatus||'Inactif')+'</span>';
     const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:var(--fs-xs)">Coach : '+escapeHtml(s.coachName)+'</div>':'';
     const _snm=((s.fname||'')+' '+(s.lname||'')).trim()||'';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button data-on-click="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
   // Section admin offboarding — visible créateur seulement
   // LE LIEN VERS L'ÉCRAN « Accès ». Créateur seulement : lui seul peut écrire
@@ -126827,9 +127224,9 @@ function offboardCoach(coachId){
     +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Libérer (sans coach assigné)</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';
   const ov=document.createElement('div');
-  ov.id='modal-overlay';ov.onclick=closeModal;
+  ov.id='modal-overlay';ov.setAttribute('data-on-click','closeModal()');
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
-  ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
+  ov.innerHTML='<div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
     +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:var(--r-1);margin:0 auto 20px"></div>'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
@@ -126837,8 +127234,8 @@ function offboardCoach(coachId){
     +'<div style="background:var(--surface-1);border-radius:var(--r-2);padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">'+reassignBlock+creatorBlock+freeBlock+'</div>'
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="closeModal()" style="flex:1;background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:12px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Annuler</button>'
-    +'<button onclick="executeOffboard(\''+coachId+'\')" style="flex:2;background:var(--red);border:none;border-radius:var(--r-2);padding:12px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">RÉASSIGNER '+athletes.length+' ATHLÈTE'+(athletes.length>1?'S':'')+' →</button>'
+    +'<button data-on-click="closeModal()" style="flex:1;background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:12px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Annuler</button>'
+    +'<button data-on-click="executeOffboard(\''+coachId+'\')" style="flex:2;background:var(--red);border:none;border-radius:var(--r-2);padding:12px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px">RÉASSIGNER '+athletes.length+' ATHLÈTE'+(athletes.length>1?'S':'')+' →</button>'
     +'</div></div>';
   document.body.appendChild(ov);
 }
@@ -127322,18 +127719,18 @@ function _htmlInvitationsEnAttente(user){
       //   limite technique : c'est ce qui separe un rappel d'un harcelement, et
       //   le rectangle DIT le temps qui reste plutot que de griser un bouton.
       +(r.ok
-        ? '<button type="button" class="btn btn-red btn-sm" onclick="relancerInvitation('+jeton+')">Relancer</button>'
+        ? '<button type="button" class="btn btn-red btn-sm" data-on-click="relancerInvitation('+jeton+')">Relancer</button>'
         : '<span class="jd-attendre">Encore '+r.reste+' h</span>')
       // « SON CODE » RESTE OUVERT MEME PENDANT LES 48 H : copier une invitation
       // n'envoie rien a personne, c'est le coach qui decide ou il la colle.
-      +'<button type="button" class="btn btn-blanc btn-sm" onclick="invCopierCode('+jeton+')">Son code</button>'
+      +'<button type="button" class="btn btn-blanc btn-sm" data-on-click="invCopierCode('+jeton+')">Son code</button>'
       +'</div></div>';
   }).join('');
   return '<div style="margin-bottom:20px">'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:8px">En attente ('+l.length+')</div>'
     +'<div class="jd-grille" style="padding:0">'+lignes+'</div>'
-    +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
+    +(reste?'<button type="button" data-on-click="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
       +'color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;'
       +'letter-spacing:1px;text-transform:uppercase;cursor:pointer;padding:10px 0 0;min-height:36px;'
       +'text-align:left">+ '+reste+' autre'+(reste>1?'s':'')+' · tout afficher</button>':'')
@@ -127962,8 +128359,8 @@ function loadStudentCodes(){
       +'<div style="font-size:var(--fs-xs);color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
-      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
-      +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">+3 mois</button>'
+      +'<button data-on-click="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
+      +'<button data-on-click="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">+3 mois</button>'
       +'</div>'
       // ══ LE GESTE PRINCIPAL DE LA LIGNE, ET IL PREND SA PROPRE LARGEUR ══
       // « Copier » etait un troisieme bouton de la rangee, du meme rang que
@@ -127971,14 +128368,14 @@ function loadStudentCodes(){
       // genere un code : on l'envoie. Et « Copier l'invitation » ne tient pas
       // dans un tiers de carte sur un telephone — il s'y couperait en trois
       // lignes. Il passe donc sur sa propre ligne, au-dessus du rouge.
-      +'<button onclick="_copierInvitationAthlete('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier l\'invitation</button>'
+      +'<button data-on-click="_copierInvitationAthlete('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier l\'invitation</button>'
       // ══ LE QUATRIEME GESTE : FERMER ET EFFACER ══════════════════════════
       // Demande de Kevin, 08/09/2026 : « ca m'eviterait de devoir rechercher
       // des codes ou des athletes avec qui je ne peux plus travailler ».
       // Desactiver laisse la ligne ; celui-ci la retire, et emporte la fiche
       // de l'eleve avec elle quand il y en a une. Il est SEUL SUR SA LIGNE et
       // en rouge : ce n'est pas une quatrieme option du meme rang.
-      +'<button onclick="supprimerCodeEtFiche('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #3a0000;color:var(--red-light);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Rendre inactif et supprimer la fiche + le code</button>'
+      +'<button data-on-click="supprimerCodeEtFiche('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #3a0000;color:var(--red-light);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Rendre inactif et supprimer la fiche + le code</button>'
       +'</div>';
   }).join('');
 }
@@ -128225,8 +128622,8 @@ function _renderSubPaliers(){
   }
   zone.innerHTML=dispo.map(p=>{
     const sel=p.cle===_subPalier;
-    return `<div onclick="_choisirPalier('${p.cle}')" role="button" tabindex="0"
-      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    return `<div data-on-click="_choisirPalier('${p.cle}')" role="button" tabindex="0"
+      data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="flex:1;position:relative;cursor:pointer;border:2px solid ${sel?'var(--red)':'var(--border)'};
       background:${sel?'rgba(224,32,32,.08)':'transparent'};border-radius:var(--r-3);padding:14px 12px;
       text-align:center;transition:border-color var(--t-1),background var(--t-1);min-height:44px">
@@ -128365,7 +128762,7 @@ function loadSubscribePage(mode,payload){
   if(!currentUser){
     // goRegisterPourSouscrire pose l'intention de retour : après création du
     // compte, doRegister ramène ici au lieu d'envoyer vers l'écran de code.
-    if(_pp) _pp.innerHTML='<button class="btn btn-red" onclick="goRegisterPourSouscrire()">Créer mon compte pour souscrire →</button>'
+    if(_pp) _pp.innerHTML='<button class="btn btn-red" data-on-click="goRegisterPourSouscrire()">Créer mon compte pour souscrire →</button>'
       +'<div style="font-size:var(--fs-xs);color:var(--sub);text-align:center;margin-top:10px;line-height:1.6">Le paiement se fait juste après, en une étape.</div>';
     // LE VERROU EST LEVÉ EXPLICITEMENT. _majBoutonPaypal vient de le poser
     // quelques lignes plus haut, sur la foi d'un renoncement absent — et il
@@ -128392,11 +128789,11 @@ function loadSubscribePage(mode,payload){
   //   chose vraie : ce qui se paie aujourd'hui.
   if(!_paliersDispo().length){
     _pp.innerHTML=(subOffreChoisie()==='ultime')
-      ?'<button class="btn btn-outline" onclick="subPrendreEssentielle()">'
+      ?'<button class="btn btn-outline" data-on-click="subPrendreEssentielle()">'
         +'Prendre Essentielle à '+escapeHtml(prixOffre('essentielle'))+' par mois</button>'
       :'<div class="bq-note">Aucun abonnement n’est ouvert au paiement pour le moment.</div>';
   }else{
-    _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
+    _pp.innerHTML='<button class="btn btn-red" data-on-click="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
     // Ecrit apres l insertion : le bouton doit exister pour recevoir son libelle.
     _majBoutonSouscrire();
   }
@@ -128454,7 +128851,7 @@ function initPaypalSubscription(){
   script.src='https://www.paypal.com/sdk/js?client-id='+clientId
     +'&vault=true&intent=subscription&currency=EUR&enable-funding=card';
   script.onload=()=>renderPaypalButton(planId,coachId);
-  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
+  script.onerror=()=>{toast('Erreur chargement PayPal. Vérifie la connexion.');if(_ppCon)_ppCon.innerHTML='<button class="btn btn-red" data-on-click="initPaypalSubscription()" id="paypal-loading-btn">Réessayer →</button>';};
   document.head.appendChild(script);
 }
 function renderPaypalButton(planId,coachId){
@@ -128624,7 +129021,7 @@ function _ligneMuscles(ex,i){
     ? [...r.p.map(g=>past(g,true)),...r.s.map(g=>past(g,false))].join(' ')
       +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
-  return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+  return `<div data-on-click="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     style="margin-bottom:10px;padding:8px 10px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
@@ -128647,23 +129044,24 @@ function ouvrirSelecteurMuscles(i){
   _selMusclesIdx=i; _selMusclesP=r?r.p.slice():[]; _selMusclesS=r?r.s.slice():[];
   _rendreSelecteurMuscles(escapeHtml(ex.name));
 }
+// actions-en-plus: _selMusclePrim _selMuscleSec
 function _rendreSelecteurMuscles(titre){
   const lignes=Object.keys(MUSCLES).map(g=>{
     const m=MUSCLES[g],p=_selMusclesP.includes(g),s=_selMusclesS.includes(g);
-    const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:8px 4px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;`
+    const b=(actif,col,lbl,fn)=>`<button data-on-click="${fn}('${g}')" style="flex:1;padding:8px 4px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;`
       +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:var(--text-dim);border:1px solid var(--border)`)+`">${lbl}</button>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #161616">
       <span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:${(p||s)?'var(--text)':'var(--sub)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.lib}</span>
       <div style="display:flex;gap:6px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
     </div>`;
   }).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Muscles travaillés</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${titre}</p>
       <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px">${lignes}</div>
-      <button class="btn btn-red" onclick="_validerSelecteurMuscles()">Enregistrer</button>
-      <button class="btn btn-outline" style="margin-top:8px" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-red" data-on-click="_validerSelecteurMuscles()">Enregistrer</button>
+      <button class="btn btn-outline" style="margin-top:8px" data-on-click="closeModal()">Annuler</button>
     </div></div>`;
   const old=document.getElementById('modal-overlay'); if(old) old.remove();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -128741,8 +129139,8 @@ function loadExClassify(){
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(a.nom)}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${a.seances?a.seances+' séance'+(a.seances>1?'s':''):'jamais réalisé'}</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_classerDepuisFile('${escapeHtml(a.k).replace(/'/g,"\'")}')">Classer</button>
-        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="ouvrirFusion('${escapeHtml(a.k).replace(/'/g,"\'")}')">Fusionner avec…</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="_classerDepuisFile('${escapeHtml(a.k).replace(/'/g,"\'")}')">Classer</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" data-on-click="ouvrirFusion('${escapeHtml(a.k).replace(/'/g,"\'")}')">Fusionner avec…</button>
       </div>
     </div>`).join('');
 }
@@ -128773,16 +129171,16 @@ function ouvrirFusion(k){
   const cibles=[...vus.entries()].filter(([kk])=>kk!==k)
     .sort((a,b)=>b[1].seances-a[1].seances).slice(0,60);
   if(!cibles.length) return toast('Aucun autre exercice avec qui fusionner.','var(--orange)');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Fusionner</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:6px;line-height:1.5">« ${escapeHtml(k)} » désigne en réalité :</p>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5;color:var(--text-dim)">L'historique de charge des deux noms sera réuni. Rien n'est renommé ni effacé.</p>
       <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
-        ${cibles.map(([kk,e])=>`<button onclick="_confirmerFusion('${escapeHtml(k).replace(/'/g,"\'")}','${escapeHtml(kk).replace(/'/g,"\'")}')" style="width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px;margin-bottom:8px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">
+        ${cibles.map(([kk,e])=>`<button data-on-click="_confirmerFusion('${escapeHtml(k).replace(/'/g,"\'")}','${escapeHtml(kk).replace(/'/g,"\'")}')" style="width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px;margin-bottom:8px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">
           ${escapeHtml(e.nom)}<span style="display:block;color:var(--sub);font-size:var(--fs-2xs);font-weight:400;margin-top:2px">${e.seances?e.seances+' séance'+(e.seances>1?'s':''):'jamais réalisé'}</span></button>`).join('')}
       </div>
-      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Annuler</button>
     </div></div>`;
   const old=document.getElementById('modal-overlay'); if(old) old.remove();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -128840,16 +129238,16 @@ function _detecterRenommage(){
     const idx=_indexSessionData(s); return idx&&idx[x]!==undefined;
   });
   if(!aDeLHistorique) return;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">
+  const html=`<div id="modal-overlay" data-on-click="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div data-on-click="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">
       <h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Même exercice ?</h2>
       <p class="sub" style="font-size:var(--fs-sm);line-height:1.65;margin-bottom:16px">
         « <strong style="color:var(--text)">${escapeHtml(x)}</strong> » a disparu et
         « <strong style="color:var(--text)">${escapeHtml(y)}</strong> » est apparu dans cette séance.<br><br>
         Répondre oui conserve l'historique de charge : les séries déjà réalisées sous l'ancien nom continueront d'alimenter la charge suggérée.
       </p>
-      <button class="btn btn-red" onclick="_confirmerRenommage('${escapeHtml(x).replace(/'/g,"\'")}','${escapeHtml(y).replace(/'/g,"\'")}')">Oui, c'est le même</button>
-      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Non, ce sont deux exercices</button>
+      <button class="btn btn-red" data-on-click="_confirmerRenommage('${escapeHtml(x).replace(/'/g,"\'")}','${escapeHtml(y).replace(/'/g,"\'")}')">Oui, c'est le même</button>
+      <button class="btn btn-outline" style="margin-top:10px" data-on-click="closeModal()">Non, ce sont deux exercices</button>
     </div></div>`;
   // Différée : saveProgram enchaîne sur un go() de sortie, et la modale posée
   // tout de suite s'afficherait par-dessus l'éditeur qu'on quitte.
@@ -128896,7 +129294,7 @@ function _rendreSuggestionsProto(){
       // celle-ci. Un aplat saturé sur fond noir a la luminosité d'un bouton :
       // il se lisait comme une action à faire, et surtout il passait devant le
       // nom du protocole, qui est pourtant ce qu'on vient lire.
-      return `<button type="button" class="pr-carte"${pose?' data-pose':''} style="--c:${o.c}" onclick="_appliquerProto('${p.slug}','${champ}')">
+      return `<button type="button" class="pr-carte"${pose?' data-pose':''} style="--c:${o.c}" data-on-click="_appliquerProto('${p.slug}','${champ}')">
         <div class="pr-haut">
           <span class="pr-nom">${escapeHtml(p.nom)}</span>
           <span class="pr-meta">
@@ -128911,7 +129309,7 @@ function _rendreSuggestionsProto(){
         ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}
       </button>`;
     }).join('')
-    +`<button type="button" class="pr-tous" onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
+    +`<button type="button" class="pr-tous" data-on-click="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');
   if(t) t.textContent=type?('Séance reconnue : '+_PROTO_TYPE_LIB[type]):'Type de séance indéterminé, suggestions générales';
@@ -129205,16 +129603,16 @@ function _carteProtocole(txt,titre,couleur,id,replie,refKg){
         // ajoute 16px de marge haute : lisible pour un intitulé de champ,
         // illisible pour une consigne d'exercice. On la neutralise ici.
         return `<label style="display:flex;align-items:center;gap:10px;padding:8px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
-        <input type="checkbox" id="ck-case-${cle}-${i}" ${coche?'checked':''} onchange="_ckCocher('${cle}',${i},this.checked)" style="width:17px;height:17px;margin:0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
+        <input type="checkbox" id="ck-case-${cle}-${i}" ${coche?'checked':''} data-on-change="_ckCocher('${cle}',${i},this.checked)" style="width:17px;height:17px;margin:0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
         <span style="flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.5;color:${coche?'var(--text-faint)':'#ccc'};${coche?'text-decoration:line-through':''}">${escapeHtml(e)}</span>
-        ${secs?`<button type="button" id="ck-chrono-${cle}-${i}" data-libelle="${_ckMMSS(secs)}" onclick="event.preventDefault();_ckDemarrerChrono('${cle}',${i},${secs})" class="ck-chrono">${_ckMMSS(secs)}</button>`:''}
+        ${secs?`<button type="button" id="ck-chrono-${cle}-${i}" data-libelle="${_ckMMSS(secs)}" data-on-click="event.preventDefault();_ckDemarrerChrono('${cle}',${i},${secs})" class="ck-chrono">${_ckMMSS(secs)}</button>`:''}
       </label>`;
       }).join('')
     : `<div style="font-size:var(--fs-sm);line-height:1.6;color:#ccc;white-space:pre-wrap">${escapeHtml(lignes.join('\n'))}</div>`;
   const faits=etapes.length?Object.keys(et).filter(k=>et[k]).length:0;
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:var(--r-3);margin-bottom:14px;overflow:hidden">
-    <div onclick="const c=document.getElementById('${id}');c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.chev').textContent=c.style.display==='none'?'▸':'▾'"
-         role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    <div data-on-click="const c=document.getElementById('${id}');c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.chev').textContent=c.style.display==='none'?'▸':'▾'"
+         role="button" tabindex="0" data-on-keydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
          style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">
       <span style="flex:1;min-width:0">
         <span style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:${couleur};text-transform:uppercase">${titre}</span>
@@ -129344,15 +129742,15 @@ document.addEventListener('pointercancel',_peDragFin);
 function _peLigneEtape(e,i,total){
   return `<div id="pe-ligne-${i}" data-pe-idx="${i}" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
     <button type="button" class="pe-poignee" aria-label="Déplacer l'étape ${i+1}"
-      onpointerdown="_peDragDebut(event,${i})">⠿</button>
+      data-on-pointerdown="_peDragDebut(event,${i})">⠿</button>
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);padding-top:12px;min-width:14px;text-align:right">${i+1}</span>
-    <textarea id="pe-et-${i}" rows="1" oninput="_peEtapeTexte(${i},this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+    <textarea id="pe-et-${i}" rows="1" data-on-input="_peEtapeTexte(${i},this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
       placeholder="Ex : Rameur, 3 min" style="flex:1;font-size:var(--fs-sm);padding:8px 10px;margin:0;line-height:1.5;resize:none;min-height:38px">${escapeHtml(e)}</textarea>
     <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
-      <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i-1})" ${i===0?'disabled':''} aria-label="Monter">▲</button>
-      <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i+1})" ${i===total-1?'disabled':''} aria-label="Descendre">▼</button>
+      <button type="button" class="pe-mini" data-on-click="_peDeplacerEtape(${i},${i-1})" ${i===0?'disabled':''} aria-label="Monter">▲</button>
+      <button type="button" class="pe-mini" data-on-click="_peDeplacerEtape(${i},${i+1})" ${i===total-1?'disabled':''} aria-label="Descendre">▼</button>
     </div>
-    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">✕</button>
+    <button type="button" class="pe-mini pe-suppr" data-on-click="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">✕</button>
   </div>`;
 }
 function _peRendreEtapes(){
@@ -129392,7 +129790,7 @@ function _peNormaliser(){
 function _peRendre(){
   const z=document.getElementById('pe-corps'); if(!z||!_peBrouillon) return;
   const b=_peBrouillon;
-  const puce=(actif,lib,onclick)=>`<button type="button" class="pf-chip${actif?' active':''}" onclick="${onclick}">${lib}</button>`;
+  const puce=(actif,lib,onclick)=>`<button type="button" class="pf-chip${actif?' active':''}" data-on-click="${onclick}">${lib}</button>`;
   const groupe=(titre,contenu,aide)=>`<div style="margin-bottom:16px">
     <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">${titre}</div>
     ${aide?`<div style="font-size:var(--fs-2xs);color:var(--sub);margin-bottom:6px;line-height:1.5">${aide}</div>`:''}
@@ -129401,7 +129799,7 @@ function _peRendre(){
   z.innerHTML=`
     <div style="margin-bottom:16px">
       <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Nom</div>
-      <input id="pe-nom" value="${escapeHtml(b.nom)}" oninput="_peBrouillon.nom=this.value;_peModifie=true;_peMajApercu()"
+      <input id="pe-nom" value="${escapeHtml(b.nom)}" data-on-input="_peBrouillon.nom=this.value;_peModifie=true;_peMajApercu()"
         placeholder="Ex : Échauffement épaules sensibles" style="font-size:var(--fs-md);padding:10px 12px;margin:0">
     </div>
     ${groupe('Moment',
@@ -129412,15 +129810,15 @@ function _peRendre(){
     <div style="margin-bottom:16px">
       <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Durée (minutes)</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <input type="number" min="1" max="120" value="${b.dureeMin}" oninput="_peBrouillon.dureeMin=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
+        <input type="number" min="1" max="120" value="${b.dureeMin}" data-on-input="_peBrouillon.dureeMin=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">à</span>
-        <input type="number" min="1" max="120" value="${b.dureeMax}" oninput="_peBrouillon.dureeMax=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
+        <input type="number" min="1" max="120" value="${b.dureeMax}" data-on-input="_peBrouillon.dureeMax=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">min</span>
       </div>
     </div>
     <div style="margin-bottom:16px">
       <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Description</div>
-      <textarea rows="2" oninput="_peBrouillon.desc=this.value;_peModifie=true" placeholder="À quoi sert ce protocole, en une phrase." style="font-size:var(--fs-sm);padding:10px 12px;margin:0;line-height:1.5">${escapeHtml(b.desc)}</textarea>
+      <textarea rows="2" data-on-input="_peBrouillon.desc=this.value;_peModifie=true" placeholder="À quoi sert ce protocole, en une phrase." style="font-size:var(--fs-sm);padding:10px 12px;margin:0;line-height:1.5">${escapeHtml(b.desc)}</textarea>
     </div>
 
     <div style="margin-bottom:16px">
@@ -129433,7 +129831,7 @@ function _peRendre(){
         (« Rameur, 3 min ») devient chronométrable pour l'athlète.
       </div>
       <div id="pe-etapes"></div>
-      <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:6px 0 0" onclick="_peAjouterEtape()">+ Ajouter une étape</button>
+      <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:6px 0 0" data-on-click="_peAjouterEtape()">+ Ajouter une étape</button>
     </div>
 
     ${groupe('Matériel',
@@ -129455,7 +129853,7 @@ function _peRendre(){
     </div>
 
     ${estProtoPerso(b.slug)&&protocolesPerso().some(p=>p.slug===b.slug)?
-      `<button type="button" class="btn btn-outline" style="color:var(--red-light);border-color:#3a0000;margin-bottom:8px" onclick="_peSupprimer()">Supprimer ce protocole</button>`:''}
+      `<button type="button" class="btn btn-outline" style="color:var(--red-light);border-color:#3a0000;margin-bottom:8px" data-on-click="_peSupprimer()">Supprimer ce protocole</button>`:''}
   `;
   _peRendreEtapes();
 }
@@ -129585,7 +129983,7 @@ function _pfRendre(){
   const _zq=document.getElementById('pf-q'); if(_zq) _zq.style.display='';
   const f=_pfFiltres;
   const puce=(actif,libelle,onclick)=>
-    `<button class="pf-chip${actif?' active':''}" onclick="${onclick}">${libelle}</button>`;
+    `<button class="pf-chip${actif?' active':''}" data-on-click="${onclick}">${libelle}</button>`;
   const ligne=(titre,contenu)=>
     `<div style="margin-bottom:8px"><div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:4px">${titre}</div>
      <div style="display:flex;flex-wrap:wrap;gap:6px">${contenu}</div></div>`;
@@ -129600,7 +129998,7 @@ function _pfRendre(){
     f.type?(_PROTO_TYPE_LIB[f.type]||f.type):''
   ].filter(Boolean).join(' · ');
 
-  const barre=`<button onclick="_pfOuvert=!_pfOuvert;_pfRendre()"
+  const barre=`<button data-on-click="_pfOuvert=!_pfOuvert;_pfRendre()"
       style="display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:2px 0;cursor:pointer;font-family:Montserrat,sans-serif;text-align:left">
       <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">☰ Filtres${actifs?' ('+actifs+')':''}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-2xs);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(resume)}</span>
@@ -129622,13 +130020,13 @@ function _pfRendre(){
       _PF_DUREES.map(([v,lib])=>puce(f.duree===v,lib,`_pfSet('duree',${v})`)).join(''))
    +ligne('Matériel',
       puce(f.materiel==='AUCUN','Sans matériel',"_pfSet('materiel','AUCUN')")+
-      `<select onchange="_pfSet('materiel',this.value)" class="pf-select">
+      `<select data-on-change="_pfSet('materiel',this.value)" class="pf-select">
         <option value="">Tout matériel</option>
         ${Object.keys(PROTO_MATERIEL).filter(m=>m!=='AUCUN').map(m=>
           `<option value="${m}" ${f.materiel===m?'selected':''}>${PROTO_MATERIEL[m]}</option>`).join('')}
       </select>`)
    +ligne('Type de séance',
-      `<select onchange="_pfSet('type',this.value)" class="pf-select">
+      `<select data-on-change="_pfSet('type',this.value)" class="pf-select">
         <option value="">Tous les types</option>
         ${PROTO_TYPES.map(t=>
           `<option value="${t}" ${f.type===t?'selected':''}>${_PROTO_TYPE_LIB[t]||t}</option>`).join('')}
@@ -129643,10 +130041,10 @@ function _pfRendreListe(){
   const actifs=[f.phase,f.objectif,f.duree,f.materiel,f.type,f.q].filter(Boolean).length;
   const zl=document.getElementById('pf-liste'); if(!zl) return;
 
-  const entete=`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="ouvrirEditeurProto(null,'s-protocoles')">+ Créer un protocole</button>
+  const entete=`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" data-on-click="ouvrirEditeurProto(null,'s-protocoles')">+ Créer un protocole</button>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
       <span style="font-size:var(--fs-xs);color:var(--sub)">${liste.length} protocole${liste.length>1?'s':''} sur ${tousProtocoles().length}</span>
-      ${actifs?`<button onclick="_pfReset()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Tout afficher</button>`:''}
+      ${actifs?`<button data-on-click="_pfReset()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Tout afficher</button>`:''}
     </div>`;
 
   if(!liste.length){
@@ -129680,8 +130078,8 @@ function _pfRendreListe(){
       </div>
       ${p.contreInd.length?`<div style="font-size:var(--fs-2xs);color:var(--orange);margin-top:6px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px">
-        ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:0;flex:1" onclick="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
-        ${estProtoPerso(p.slug)?`<button class="btn btn-outline btn-sm" style="margin:0;${_pfCible?'flex:0 0 auto;width:auto;padding:0 14px':'flex:1'}" onclick="ouvrirEditeurProto('${p.slug}','s-protocoles')">Modifier</button>`:''}
+        ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:0;flex:1" data-on-click="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
+        ${estProtoPerso(p.slug)?`<button class="btn btn-outline btn-sm" style="margin:0;${_pfCible?'flex:0 0 auto;width:auto;padding:0 14px':'flex:1'}" data-on-click="ouvrirEditeurProto('${p.slug}','s-protocoles')">Modifier</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -129820,3 +130218,214 @@ async function chargerTests(){
   }
   return testExercices();
 }
+
+// gestes-vars:debut
+// LES VARIABLES D'ETAT QU'UN GESTE PEUT LIRE [lecture] OU POSER [lecture,
+// ecriture]. Tenue a la main : scripts/verif/gestes.mjs refuse un geste qui en
+// lit une autre. N'y mettre que de l'etat d'ecran, jamais un objet qui porte
+// des methodes (CLOUD, DB) : ses proprietes deviendraient toutes appelables.
+Object.assign(RC_GESTE_VARS,{
+  currentUser:[()=>currentUser],
+  currentClientId:[()=>currentClientId],
+  progEx:[()=>progEx],
+  bilData:[()=>bilData],
+  _anatDeplie:[()=>_anatDeplie],
+  _ctSaisie:[()=>_ctSaisie],
+  _peBrouillon:[()=>_peBrouillon],
+  _wr:[()=>_wr],
+  _vcEmail:[()=>window._vcEmail],
+  _vcVideoId:[()=>window._vcVideoId],
+  _progExDirty:[()=>_progExDirty,(v)=>{ _progExDirty=v; }],
+  _ccdFenetre:[()=>_ccdFenetre,(v)=>{ _ccdFenetre=v; }],
+  _chSchemaOuvert:[()=>_chSchemaOuvert,(v)=>{ _chSchemaOuvert=v; }],
+  _volCoachDeplie:[()=>_volCoachDeplie,(v)=>{ _volCoachDeplie=v; }],
+  _lcOuvert:[()=>_lcOuvert,(v)=>{ _lcOuvert=v; }],
+  _caffeineEmbedDate:[()=>_caffeineEmbedDate,(v)=>{ _caffeineEmbedDate=v; }],
+  _trkTri:[()=>_trkTri,(v)=>{ _trkTri=v; }],
+  _peModifie:[()=>_peModifie,(v)=>{ _peModifie=v; }],
+  _pfOuvert:[()=>_pfOuvert,(v)=>{ _pfOuvert=v; }]
+});
+// gestes-vars:fin
+// actions:debut
+// TABLE BLANCHE DES GESTES. Ecrite par `node scripts/verif/gestes.mjs --ecrire` : ne pas
+// la retoucher a la main, la CI la compare a ce que le code demande.
+rcActions({
+  _aaSortir,_adminOffboardSelected,_ajouterRelance,_allerSignalSuivant,_altAjouter,_altRetirer,_altSuggerer,
+  _alternerVers,_anatNetPixels,_annulerForcageMethode,_annulerJustification,_apercuVisuelNom,_appliquerProto,
+  _appliquerSecondCompte,_appliquerSubstitut,_atSwitchGenre,_bMetierChoisi,_bMetierSaisie,_bSportAjouter,
+  _bSportRetirer,_bSportSet,_badgeSansImage,_basculerSS,_bnVoir,_bqBasculerFiltre,_bqFiltrerMuscle,_bqSaisie,
+  _bqToutEffacer,_caffAllerJour,_caffEmbedAllerJour,_canalCharger,_canalChargerCoach,_cdgMajBouton,_chCycle,
+  _chargerPaypalAchat,_choisirPalier,_ckCocher,_ckDemarrerChrono,_classerDepuisFile,_coachClasserMuscles,
+  _commitCaffeineAdd,_confirmerFusion,_confirmerImportAthlete,_confirmerRenommage,_confirmerResiliation,
+  _copierInvitationAthlete,_copierInviteCoach,_cpBoutonProgrammer,_cplAthlete,_cpvApercu,_cpvChoisirVisuel,
+  _crmCopierAdresses,_ctDrapeau,_ctRetirer,_ctSet,_ctValider,_demanderMotifEcart,_demanderSuppressionVideo,
+  _dfApercu,_dfColl,_duelChoix,_dupliquerExUI,_echEditer,_echEnregistrer,_echOuvrirDialogue,_entrerFileBilans,
+  _entrerFileProgfin,_entrerFileSignal,_entrerFileVideos,_envoyerInvitation,_etiqApres,_etiqCouleur,_etiqCreer,
+  _etiqPoser,_etiqRenommer,_etiqSupprimer,_evMajType,_evPoserMotif,_feuilleFermer,_focusEnvoiVideo,_forcerMethode,
+  _garderMalgreContrainte,_illusAbsente,_inscriptionPhoto,_inscriptionPhotoAbandonner,_jeRemplace,
+  _journaliserContactCoach,_majBoutonAchat,_majConsentementCoachReglages,_majImageVitrine,_majRenonciation,
+  _majSelecteurComptes,_majUnites,_msgCompteur,_noteExoValider,_nutRaccourci,_ocrChoisirVideo,
+  _ouvrirJoursEntrainement,_ouvrirResiliation,_ouvrirRiteClient,_parsePdfFromDriveFile,_peAjouterEtape,_peBascule,
+  _peDeplacerEtape,_peDragDebut,_peEnregistrer,_peEtapeTexte,_peMajApercu,_peQuitter,_peSet,_peSupprimer,
+  _peSupprimerEtape,_perfSetCreneau,_pfRendre,_pfReset,_pfRetourner,_pfSet,_pfUtiliser,_phSet,_poserMotifEcart,
+  _prCopierInvitation,_progExChamp,_progExFermer,_progExMax,_progExSemaines,_progExTechnique,_progTempoSaisie,
+  _pxDeplacerParFleche,_pxDragDebut,_quitterFileSignal,_rbCurseurFin,_refuserImportAthlete,
+  _rejoindreCompteExistant,_relCle,_remplacerParExo,_renderCaffeineConfirmPanel,_renderCaffeineEmbedded,
+  _renderFjDaySummary,_rendreDuelsAccueil,_rendreListeRemplacement,_retirerRelance,_rirBandeChoisir,
+  _sauterVersExercice,_selMusclePrim,_selMuscleSec,_setWeekDay,_subOuvrirCode,_supprimerEx,_supprimerExoPerso,
+  _telechargerAvecEtat,_tiroirFermer,_todoCocher,_todoFermerFeuille,_todoReporterFeuille,_tplFiltrer,
+  _trkEnvoyerSignal,_trkEtape1,_trkFiche,_trkLibreRes,_trkParTexte,_trkPerdu,_trkRien,_trkSignaler,_trtMajRythme,
+  _validerCreationExo,_validerInviteCoach,_validerReconsentement,_validerSelecteurMuscles,_vcxCompte,_venteApercu,
+  _venteChoisirImage,_videoDemoFermer,_videoDemoOuvrir,_videoIndisponible,_videoSerieEnvoyer,_viderImageVitrine,
+  _volNav,_wagCopierNumeros,_wagPreparer,_wagTout,_woChargeSaisie,_woRepsSaisie,_wrTap,aaConsentementCoach,
+  aaEnregistrer,aaPartager,aaReglage,accepterArretCycle,accepterConsentementSante,accepterSuggestionCycle,
+  accesOuvrir,accesProlonger,accesRouvrir,accesSuspendre,accesVoir,accueilChoisir,accueilMasquer,
+  accueilOuvrirBilanDepart,accueilPeriode,accueilVersTarifs,accuserEncartOsseux,accuserEncartSurcharge,
+  accuserMessageGrossesse,accuserMigrationSopk,activerPageDepuisRang,activerSonDepuisRepos,actualiserClient,
+  addBilanPhoto,addCoachBannerRow,addExercise,addTsAnnotation,addVideoLink,aeToggleCode,ajAjouterSerie,
+  ajDurcirRir,ajListeSubstituts,ajPortee,ajReporter,ajRetirerSerie,ajSubstituer,ajouterAnalyse,ajouterCompte,
+  ajouterDepuisBanque,ajouterDiplomeRow,ajouterEau,ajouterRecent,ajouterRecettePlan,ajouterRepasType,ajouterSerie,
+  ajouterSportTableur,ajouterTension,ajusterRepos,ajusterSemaineBloc,allerVersPrescription,alternerSeance,
+  ambCopier,amiBasculerSuivi,amiDefier,amiEnvoyerLien,amiLancerRecherche,amiReagir,amiRetirer,amiRevanche,
+  amiSuivre,amisVersPseudo,ampSaisie,anatAjouterExo,anatAnnulerEdition,anatCadrerPersonne,anatChoisirBilan,
+  anatChoisirPoint,anatCurseur,anatDemanderPaumes,anatDevRegler,anatEditer,anatEnregistrerPoints,
+  anatEnvoyerConsigne,anatExporter,anatLevier,anatModeRecadrage,anatOption,anatOuvrir,anatOuvrirExo,
+  anatPhotoEntiere,anatPointsAutomatiques,anatPrioObjectif,anatReglerOption,anatReglerPhoto,
+  anatReinitialiserPhoto,anatRelancer,anatRestaurer,anatSauvegarder,anatSquatRegler,anatSupprimerSauvegarde,
+  anatVue,anatZoom,annulerAjoutAliment,annulerDemandeMesure,annulerDernierAjout,annulerEau,annulerProgramme,
+  annulerRecette,annulerRepos,annulerVideo,apercuVitrineCoach,appliquerAjustement,appliquerEquivalence,
+  appliquerPause,appliquerPauseFatigue,appliquerProgramme,applyTemplateToClient,arreterTraitement,
+  assignerDepuisRecap,athDelta,athGkg,athObjectif,bBodyFocus,bMajAge,bMesureSaisie,bSliderInput,
+  basculerAmbassadeur,basculerAtpEtat,basculerCadranRepos,basculerCompte,basculerConsentContact,
+  basculerEcranAllume,basculerFamilleTraitement,basculerHistoTableur,basculerMonteeCharge,basculerPES,
+  basculerPartagePES,basculerPrise,basculerPriseSupp,basculerPushType,basculerRappelAvantSeance,basculerReaction,
+  basculerSonRepos,bdgPlusTard,bilBack,bilMinuteur,bilNext,bilPlusTard,bilResumeAndGo,bilanBlocExporter,
+  bilanEquivalentBasculer,blocAppliquerOrdre,blocAppliquerSeries,blocFermer,blocOuvrir,bqChoisir,bqFavori,
+  bqOnglet,bqRecharger,cadreVoirTout,calEnregistrer,calOuvrirTest,cancelAudioAnnotation,cancelCaffeineAdd,
+  cancelWorkout,ccdAller,ccdBilCalJour,ccdBilCalMois,ccdCadenceEnregistrer,ccdCalJour,ccdCalMois,ccdCalVue,
+  ccdChoisirPeriode,ccdComparerPeriodes,ccdComptageEnregistrer,ccdEpingler,ccdEtage,ccdJournalAjout,
+  ccdJournalEnregistrer,ccdJournalRetirer,ccdLecture,ccdOutils,ccdPaire,ccdPaireDepuisEcran,ccdPeriode,
+  ccdPeriodeVerdict,ccdVoirDetail,ccdVoirManques,ccdVue,cdAppliquer,cdRefuser,cdReporter,cdgSelectAll,
+  celebrationsChoisir,changeSleepDate,changeStepsDate,checkSuppCaffeineRedirect,checkinRepondre,choisirDiete,
+  choisirSalle,choisirUnite,clientTab,closeIosInstallGuide,closeModal,cloudAfficherQR,coachAttribuerMuscles,
+  coachBasculerSuivi,coachCopyDay,coachLeverDrapeau,coachPoserObjectifsPas,coachRenameSession,coachSetPeakDate,
+  coachSetPhase,coachTab,coachToggleDay,coachToggleDeload,cocherEtiquette,commeHier,commencerDepuisApercu,
+  comparerAnalyses,confirmAssignProgram,confirmAudioAnnotation,confirmCaffeineAdd,confirmDechargeGroupee,
+  confirmDeleteClient,confirmPauseWorkout,confirmerPhase,copierHier,copierLegende,copierLienBio,
+  copierSeanceVersAthlete,copyCoachInviteLink,copyStudentCode,corpsMode,corpsVue,cpaSelectAll,cpaSwitchGender,
+  cplAjouterFruit,cplAjouterLibre,cplAjouterMarqueur,cplAjouterNote,cplAjouterPortion,cplChoisirRecette,
+  cplDeplacer,cplFiltrer,cplInclureLigne,cplNoterSources,cplPlier,cplPoserModele,cplRetirerSource,cplSetChamp,
+  cplSetMoment,cplSetNSources,cplSupprimerLigne,cplToggleComplements,cptCopyDay,cptRenameSession,cptReporterGenre,
+  cptToggleDay,createAthlete,createCoachProgTemplate,creerAlimentDepuisScan,creerAmbassadeur,csObjectif,
+  csObjectifEnregistrer,csPeriode,csViser,csVue,dbInfo,dbQuitter,dbRapportRef,dbSurvol,dbUnite,dbZone,
+  declarerAbsenceCycle,declarerDrapeauGeneral,declarerGrossesse,declarerReglesAujourdhui,defiAppliquerModele,
+  defiInscrire,defiRelever,deleteCaffeineEntry,deleteCoachProgTemplate,deleteCoachSuppEdit,deleteFoodEntry,
+  deleteSuppEntry,demanderMesure,demanderMesureATous,demanderVideo,disableWoReminder,dismissTodoRow,
+  dispoAllegerSeance,dispoReporterSeance,doAthleteCode,doLinkCoach,doLogin,doNewPwdRecovery,doRegister,doRescue,
+  drsFenetre,drsOuvrirJour,duelOublierInvite,duplicateCoachProgTemplate,dupliquerRecette,echeanceOuvrirSortie,
+  editCoachProgTemplate,editerNoteExo,effacerEvenementKo,enregistrerAlimentPerso,enregistrerAmplitudes,
+  enregistrerDefiCanal,enregistrerDefiMois,enregistrerEtTransmettre,enregistrerFicheVente,
+  enregistrerFormulesReponse,enregistrerMessageCanal,enregistrerMotionLab,enregistrerPagePublique,
+  enregistrerRepasType,enregistrerSaison,enregistrerVenteProgramme,envoyerDuel,etiquetterAthletes,evoTab,
+  executeOffboard,exporterCommissionsDues,exporterGrilleCharge,exporterMesDonnees,exporterMesDonneesConfirme,
+  extendStudentCode,faImprimer,fermerAchatProgramme,fermerApercu,fermerApercuStory,fermerAvantApres,fermerBanque,
+  fermerCaffeineAdd,fermerCarteAccueil,fermerChoixDiete,fermerContactCoach,fermerCorrectionMotion,
+  fermerDuelFeuille,fermerEcheance,fermerEditeurEviction,fermerEditeurTraitement,fermerEnregistrerRepas,
+  fermerEquivalents,fermerFicheVente,fermerHistoriqueExo,fermerKitCoach,fermerLegende,fermerMotionLab,
+  fermerPortionRecette,fermerRecherchePlan,fermerRite,fermerTutoSticker,fermerVenteProgramme,fermerVideo,
+  fermerVisuelCoach,fermerWrapped,filmerSerie,finPauseFatigue,finishWorkoutEarly,fjaChangerUnite,
+  fjaMajDepuisUnite,fjaQtyTouchee,forgotPassword,frMarquer,frRelancer,frSetDuree,gardeVideo,garderLApp,
+  garderSuggestionCycleAuto,garminConnecter,garminDeconnecter,geneMenuOuvrir,generateCoachInvite,
+  generateStudentCode,getOwnedClient,go,goAvecRetour,goRegisterAthlete,goRegisterCoach,goRegisterPourSouscrire,
+  habAppui,habCoachAjouter,habCoachPlier,habCoachRegles,habCoachRetirer,handleBannerImage,histoAnnuler,
+  histoRemettre,importOcrExercises,importPdfSeances,importerCaptureStats,initPaypalSubscription,insertQC,
+  installApp,invCopierCode,invInstallInviter,invInstallIos,invInstallNon,invNotifMaj,invNotifNon,invNotifOui,
+  inviterUnPote,jdRelancer,jdVoirTout,jenJour,jenMin,jenPlusTard,jenValider,jrAjouter,jrBasculerTout,jrChercher,
+  jrSupprimer,kitCopierLegende,kitFond,kitFondTelecharger,kitLegendeModifiee,kitLogo,kitTelecharger,
+  kitToutTelecharger,lancerDuel,lcChoisir,lcStock,leafqNePlusProposer,leafqPlusTard,leafqRepondre,leafqValider,
+  legendeModifiee,leverDeficit,lireEtiquette,lireMorphoPhoto,loadBilPhoto,loadCanal,loadCanalCoach,loadCharges,
+  loadClientHome,loadCoachActivite,loadCoachHome,loadExClassify,loadExImage,loadFileReprise,loadHistoriqueSeances,
+  loadMetrics,loadMoreVideos,loadNutrition,loadProgTemplateSlots,loadProgress,loadSante,loadSessionManager,
+  loadSleep,loadSteps,loadSubscribePage,loadVideos,logout,lundiOuvrir,majNoteForme,majPersoCoherence,
+  majSelectForme,majSportTableur,majTableauTableur,marquerCommissionsPayees,modifierProgramme,modifierRecette,
+  motAnnuler,motEnregistrer,motOuvrir,motOuvrirDepuisContact,mqChamp,mqEnregistrer,mqLogoFichier,mqLogoProfil,
+  mqRetirer,mqUtiliser,msgEnvoyerSaisie,msgOuvrirFil,msgPlusAnciens,msgRetourFils,muscEvoPeriode,
+  normaliserUrlVideo,noterContact,nouvelleRecette,obsMontrer,offChercherUI,offboardCoach,offrirProgramme,
+  onFjSearch,onPlanSearch,openAddAthlete,openApplyTemplate,openAssignProgram,openAthleteProfile,openBilan,
+  openBilanChoice,openCaffeineAdd,openClientDetail,openCoachPrograms,openCoachSessionExercises,openCoachSessions,
+  openCoachSuppEdit,openDechargeGroupee,openDefiCanal,openFoodSearch,openMessageCanal,openPhotoFull,
+  openProgTemplateSessionExercises,openQCManager,openReponseBilan,openSessionExercises,openSessionPicker,
+  openSuppEdit,openVideoCorrection,openWaGroupe,openWoReminderConfig,ouvrirAbonnementDepuisEssai,
+  ouvrirAccesConsole,ouvrirAchatProgramme,ouvrirAjustement,ouvrirAlimentPerso,ouvrirAmbassadeurs,ouvrirAmis,
+  ouvrirAmplitudes,ouvrirAvantApres,ouvrirBilanBloc,ouvrirBoutique,ouvrirChoixDiete,ouvrirChoixPhase,
+  ouvrirCodeCoach,ouvrirComptes,ouvrirContactCoach,ouvrirCorrectionMotion,ouvrirCreationDuel,ouvrirCreationExo,
+  ouvrirCrmCoach,ouvrirDuel,ouvrirDuelsHub,ouvrirEcheanceEcran,ouvrirEditeurEviction,ouvrirEditeurProto,
+  ouvrirEditeurTraitement,ouvrirEnregistrerRepas,ouvrirEquivalents,ouvrirEtiquettes,ouvrirFicheAlim,
+  ouvrirFicheBadge,ouvrirFicheBanque,ouvrirFicheMonExercice,ouvrirFicheTraitement,ouvrirFicheVente,
+  ouvrirFormContrainte,ouvrirFormulesReponse,ouvrirFusion,ouvrirGestionModeles,ouvrirGrilleCharge,
+  ouvrirHistoriqueExo,ouvrirIllustration,ouvrirInviteCoach,ouvrirKitCoach,ouvrirLundi,ouvrirMesExercices,
+  ouvrirMesProgrammes,ouvrirMessages,ouvrirModeles,ouvrirMonAbonnement,ouvrirMotionLab,ouvrirParrainage,
+  ouvrirPeseeAccueil,ouvrirPlanCoach,ouvrirPortionRecette,ouvrirPrep,ouvrirProgEx,ouvrirProgrammePrint,
+  ouvrirPropagation,ouvrirProspects,ouvrirProtocoles,ouvrirRapport,ouvrirRecapTeam,ouvrirRecettes,
+  ouvrirRecherchePlan,ouvrirReglagesAthlete,ouvrirRelances,ouvrirRemplacement,ouvrirScan,ouvrirSelecteurMuscles,
+  ouvrirTraitements,ouvrirTransitionMaintien,ouvrirTrophee,ouvrirVenteProgramme,ouvrirVictoireCoach,
+  ouvrirViralite,ouvrirWrapped,parcoursActiverNotifs,parrainageAllerAuChamp,parrainageCodeSaisi,parrainageCopier,
+  parrainagePartager,partagerBadge,partagerBilanSeance,partagerCarrouselWrapped,partagerCarteAthlete,
+  partagerCarteDuel,partagerCarteInvitation,partagerCarteMuscles,partagerCarteSaison,partagerCycle,partagerDefi,
+  partagerRang,partagerRecord,partagerSeanceDuJour,partagerSeanceRelue,partagerSeanceSlot,partagerSerie,
+  partagerTrophee,partagerVideoPrete,partagerWrapped,passerIdentite,passerNaissance,passerPropositions,
+  pauseWorkout,pcCopierLienPayer,pdLancerSeance,pdjValiderEnergie,pdjValiderPas,pdjValiderPoids,pdjValiderSommeil,
+  persoAppliquerKcal,pesPeriode,photographierEtiquette,pickBilChoice,pilNoterBande,pilVoirTout,
+  planCoachChoisirAliment,planCoachChoisirRecette,pointJourChoisir,pointSemaineDecider,portionRecettePas,
+  portionRecetteRepas,ppCoachLever,ppEffacerDate,ppPlusTard,ppRepondre,ppSetDate,ppSetEvaluation,ppSetMode,
+  ppValiderQuestions,prendreToutSupp,prepAjouterLigne,prepBase,prepChamp,prepDiviseur,prepJournaliser,prepMode,
+  prepRetirerLigne,progExPoserReps,progPublicPoser,progfinAssigner,progfinSuivant,progfinTousProgrammes,
+  programmerDecharge,promoAller,proposerPointDepart,prospectInviter,prospectStatut,psLancer,psPasser,psRepondre,
+  purgerHistoriqueSante,pushActiverDepuisReglages,pushDesactiverDepuisReglages,qcSaveEdit,rapBasculer,rapImprimer,
+  rapPeriodeChange,rapPreset,rbNoterBrouillon,rbRepartirDeZero,rcAller,rcAnnoterIci,rcBanniereInstallAgir,
+  rcBanniereInstallFermer,rcEffacerBoucle,rcImageRepli,rcInfoFermer,rcInfoOuvrir,rcInstallAgir,rcInstallLocal,
+  rcInstallPasser,rcLecture,rcMarque,rcNoterSeance,rcOuvrirDansNavigateur,rcPas,rcPasserSrpe,rcPleinEcran,
+  rcReinitReperes,rcRepetition,rcRepondreRetour,rcSon,rcVerrouUltime,rcVitesse,rcfNoter,rcmAchatProgramme,
+  rcmCoach,recetteAjouterIngredient,recetteChamp,recetteChercher,recetteChercherOff,recetteIngGrammes,
+  recetteIngRetirer,refaireMorphoInitiale,refaireRepas,refreshMG,refuserAjustement,refuserArretCycle,
+  refuserConsentementSante,refuserPause,refuserPhase,refuserSuggestionCycle,regenCoachCode,reglerBlocProgramme,
+  reinitialiserCalculs,rejoindreDuel,relApercu,relanceExclure,relanceVue,relancerAccesAthlete,relancerInvitation,
+  relancesRegler,relancesReprendreLaMain,relancesTexte,relierPaiementCoach,removeTsAnnotation,
+  remplacerDepuisBanque,renameSession,renderCharges,renderClientList,renderEvictions,renderFormeSeance,
+  renderMarqueCoach,renderProgEx,renderTraitements,renderVolumeCoach,repondreCorrectionMotion,repondreCycleChoix,
+  reporterCycleChoix,reporterPropagation,reprendreMaintenant,reprendreSeche,repriseDouceChoisir,
+  requestAccountDeletion,requestBilanNotifPermission,restaurerSessionsConfig,resyncCompteursCanal,
+  retirerBlocProgramme,retirerCompte,retirerProgEx,retirerRepasType,retirerSerie,retirerSportTableur,
+  retirerSuggestionCycleAuto,retourDe,revoirSuggestionsCycle,revoquerGrossesse,rirMenuOuvrir,riteJour,rvAnnuler,
+  rvArreter,rvDemarrer,rvEnvoyer,rvRecommencer,saVoirSuivi,sanAide,sanChangerSource,sanDetteAide,sanEnregistrer,
+  sanEnvoiLance,sanFermer,sanObjectif,sanObjectifEnregistrer,sanOuvrirJour,sanPeriodeChoisir,sanPoserSource,
+  sanRattraper,sanSaisir,sanSupprimer,sanSyncApk,sanSyncCopier,sanSyncCreer,sanSyncDeconnecter,sanSyncFermer,
+  sanSyncGuetter,sanSyncOuvrir,sauverEviction,sauverTraitement,saveAthleteProfile,saveCaffeineCustom,
+  saveClientNutriCycle,saveClientNutriDiet,saveClientNutriManuel,saveClientStrictAcces,saveClientSuppEntry,
+  saveCloudinaryConfig,saveCoachBanners,saveCoachDispo,saveCoachIdentity,saveCoachPhone,saveCoachProgTemplate,
+  saveCoachProgTemplateName,saveCoachSessions,saveCoachSessionsAsTemplate,saveCoachSuppEdit,saveCycleNutSettings,
+  saveFoodEntry,saveHorairesContact,savePesee,savePlanCoach,savePostSession,saveProgram,saveReponseBilan,
+  saveReponseRite,saveSleep,saveSteps,saveStepsGoals,saveSuppEntry,saveVideoCorrection,saveWarmupTemplate,
+  saveWoReminderConfig,scanBasculerTorche,scanFermer,scanSaisieManuelle,scanValiderManuel,selAthleteBascule,
+  selAthleteVider,selCadence,selCadenceAppliquer,selEtiqueter,selVersDecharge,selVersProgramme,selectCoachFood,
+  selectFjFood,selectOffFood,selectPersoFood,selectRepas,selectRole,setAthleteGender,setAtpCycleSuivi,
+  setAtpHormonal,setAtpThyroide,setBilanFreq,setClientPhone,setCyclePhase,setEvolGender,setExerciseCount,
+  setFiltreClients,setFiltreEtiquette,setFjaQty,setMacroUnite,setModeContact,setNutriDietType,setNutriRespected,
+  setStrictJour,setTriClients,setVisuelNom,showCoachCode,showIosInstallGuide,showMoreCoachSessions,
+  showNewPwdRecovery,showProgressTab,skipFirstBilan,souscrireCoach,sportsTableurAuto,startWorkoutSession,
+  stepFjaQty,stepsToggleType,subPrendreEssentielle,supprimerAlimentPerso,supprimerAnalyseUI,
+  supprimerAthleteDefinitivement,supprimerCodeEtFiche,supprimerConstanteUI,supprimerEviction,
+  supprimerMessageCanal,supprimerPlanCoach,supprimerRecette,switchCaffeineType,tbkDelta,telechargerCarteMuscles,
+  telechargerDieteRespectee,telechargerDossierSante,telechargerSeanceDuJour,telechargerSeanceRelue,
+  telechargerSeanceSlot,telechargerVideo,telechargerVideoPrete,tempoArreter,tempoDemarrer,terminerSaisieAliments,
+  themeChoisir,todoAnnulerReport,todoDeplier,toggleAudioRec,toggleDayActive,toggleFavFood,togglePoidsMasque,
+  togglePsDetail,toggleRepriseDeload,toggleSCard,toggleSet,toggleStudentCode,toggleSubStatus,toggleSuppTimingChip,
+  tplCreer,tplInserer,tplMajCorps,tplSupprimer,tunnelBasculer,tunnelChoisirCanal,tunnelOuvrir,tunnelPlanifier,
+  tunnelPoserEcheance,tunnelRelancer,tunnelValider,typeDuSelecteur,updateCaffeineEntryTime,updateCalcTable,
+  updateSleepPreview,uploadAthletePhoto,uploadAudioFile,uploadCoachPhoto,uploadVideoFile,utiliserBesoinsProposes,
+  utiliserProposition,validerIdentite,validerNaissanceGenre,validerPortionRecette,validerProgEx,validerRecette,
+  validerRemplacementManuel,validerRite,vcReglage,vcSortir,viewClientBilans,viralitePeriode,visuelFondChoisir,
+  visuelFondPhoto,visuelFormatChoisir,visuelMediaChoisir,voirContenuExport,voirLegende,voirMobilisations,woNav,
+  woResumeAndGo,wrdSetMin,wrdToggleDay
+});
+// actions:fin

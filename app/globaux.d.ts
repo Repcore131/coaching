@@ -73,6 +73,9 @@ declare function toastEcriture(ok: any, succes: string, perdu: string): boolean;
 declare function rcConfirm(titre: string, texte?: string, libelleOk?: string, libelleNon?: string): Promise<boolean>;
 declare function rcSaisie(titre: string, valeur?: string, opts?: any): Promise<string | null>;
 declare function escapeHtml(s: any): string;
+// La table blanche des gestes delegues (data-on-click=…) : le module y inscrit
+// ses propres actions, en fin de fichier. Voir scripts/verif/gestes.mjs.
+declare function rcActions(t: Record<string, unknown>): void;
 declare function safeUrl(u: any): string;
 declare function safeUrlRaw(u: any): string;
 declare function _tok(nom: string, repli: string): string;

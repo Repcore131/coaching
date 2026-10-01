@@ -30,6 +30,17 @@ function _prodSrc(){
   return s;
 }
 
+// UN GESTE « QUI COMPILE », DEPUIS LES GESTES DELEGUES (build 1760). Avant, on
+// demandait au navigateur : typeof el.onclick==='function'. Il n'y a plus de
+// gestionnaire en ligne a compiler ; le geste est le texte de data-on-<evt>,
+// et il vaut s'il s'analyse et n'appelle que des fonctions de RC_ACTIONS.
+function _gesteValide(el,evt){
+  try{
+    const r=rcGesteNoms(el.getAttribute('data-on-'+(evt||'click'))||'');
+    return r.fonctions.size>0&&[...r.fonctions].every(f=>typeof RC_ACTIONS[f]==='function');
+  }catch(e){ return false; }
+}
+
 // ══ LE CSS DU PRODUIT, POUR LES ASSERTIONS QUI LE LISENT ══════════════════
 //
 // Depuis le build 1417, la feuille de styles ne vit plus dans un <style> : elle
@@ -1639,11 +1650,11 @@ async function testExercices(){
        _actif()==='s-coach-home'||_actif()==='s-client-home',_actif());
     ok('Plus aucun bouton retour sur history.back()',
        !Array.from(document.querySelectorAll('.back-btn'))
-         .some(b=>/history\.back/.test(b.getAttribute('onclick')||'')));
+         .some(b=>/history\.back/.test(b.getAttribute('data-on-click')||'')));
 
     // ══════ TOUT HANDLER D'ATTRIBUT EXISTE SUR window ══════
     //
-    // Un attribut `onclick="foo()"` est compilé dans une portée qui remonte
+    // Un attribut `data-on-click="foo()"` est compilé dans une portée qui remonte
     // jusqu'à l'objet global : `foo` doit y être une fonction. Une déclaration
     // `function foo(){}` de premier niveau y est ; un `const foo=…` de premier
     // niveau, NON — il vit dans la portée du script, visible depuis l'attribut
@@ -1667,7 +1678,7 @@ async function testExercices(){
         +'touchstart|touchend|touchmove|error|load|mouseenter|mouseleave|mousedown|'
         +'mouseup|paste|wheel|scroll|dblclick|contextmenu|drop|dragover|animationend|'
         +'transitionend|pointerdown|pointerup';
-      const reAttr=new RegExp('\\bon('+ATTRS+')\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')','g');
+      const reAttr=new RegExp('\\bdata-on-('+ATTRS+')\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')','g');
       // Mots-clefs et globales : ce ne sont pas des handlers du produit.
       const NATIFS=new Set(('if,for,while,switch,catch,return,typeof,new,delete,void,'
         +'function,do,else,try,finally,throw,in,of,instanceof,'
@@ -1695,6 +1706,9 @@ async function testExercices(){
         while((a=reAppel.exec(corps))!==null){
           const nom=a[2];
           if(NATIFS.has(nom)) continue;
+          // escapeHtml(…), jsArg(…) : lus dans la partie calculée du geste
+          // ('+jsArg(x)+'), ce sont des fabriques d'argument, pas des actions.
+          if(nom==='escapeHtml'||nom==='jsArg'||nom==='_attrArg') continue;
           noms.add(nom);
           if(!ou[nom]) ou[nom]='on'+m[1];
         }
@@ -1703,11 +1717,155 @@ async function testExercices(){
       // rien, et c'est exactement l'état dans lequel une regex trop gourmande
       // la laisserait.
       if(noms.size<400) return _echec(noms.size+' handlers extraits : la sonde ne regarde plus le fichier');
-      const absents=[...noms].filter(x=>typeof window[x]!=='function');
+      // Depuis les gestes delegues (1760), « sur window » ne suffit plus : le
+      // moteur n'appelle que ce qui est inscrit dans RC_ACTIONS.
+      const absents=[...noms].filter(x=>typeof RC_ACTIONS[x]!=='function');
       return absents.length
-        ? _echec(absents.length+' handler(s) absent(s) de window : '
+        ? _echec(absents.length+' handler(s) absent(s) de RC_ACTIONS : '
             +absents.slice(0,5).map(x=>x+' ('+ou[x]+')').join(', '))
         : true;})());
+    // ══════ GESTES DÉLÉGUÉS (build 1760) ══════
+    // script-src ne porte plus 'unsafe-inline' : un onclick="…" écrit dans une
+    // chaîne HTML est un bouton MORT en production, et vivant sur un serveur
+    // local sans en-tête. Ces assertions tiennent donc ce que l'œil ne voit pas.
+    ok('GESTES — AUCUN gestionnaire en ligne dans la source (objectif : 0)',(()=>{
+      const EV='click|dblclick|change|input|submit|keydown|keyup|keypress|focus|blur|error|load|toggle|'
+        +'mouseover|mouseout|mouseenter|mouseleave|mousedown|mouseup|pointerdown|pointerup|pointermove|pointerleave|'
+        +'touchstart|touchend|touchmove|paste|wheel|scroll|contextmenu|drop|dragover|animationend|transitionend';
+      const re=new RegExp('[\\s"\'`]on('+EV+')\\s*=\\s*\\\\?["\']','g');
+      const src=_prodSrc().replace(/<!--[\s\S]*?-->/g,'').split('\n').filter(l=>!/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+      const vus=src.match(re)||[];
+      if(vus.length) return _echec(vus.length+' attribut(s) on…= restant(s) : '+vus.slice(0,4).join(' ')+' (écrire data-on-…)');
+      // Et il y a bien des gestes : à zéro, la sonde ne regarderait plus rien.
+      const n=(src.match(/data-on-[a-z]+="/g)||[]).length;
+      return n>1500?true:_echec('seulement '+n+' gestes data-on-* trouvés dans la source');})());
+    ok('GESTES — aucun élément du document ne porte d’attribut on…',(()=>{
+      const l=[...document.querySelectorAll('*')].filter(e=>[...e.attributes].some(a=>/^on/i.test(a.name)));
+      return l.length?_echec(l.length+' élément(s), dont <'+l[0].tagName.toLowerCase()+' '
+        +[...l[0].attributes].filter(a=>/^on/i.test(a.name)).map(a=>a.name).join(' ')+'>'):true;})());
+    ok('GESTES — le moteur appelle une action inscrite, avec ses arguments, this et event',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(){ vu.push([this===undefined||this===window,...arguments]); };
+      const el=document.createElement('button'); el.value='v';
+      const evt=new Event('click');
+      try{
+        rcGesteJouer("__gT('a\\'b',\"c\\\"d\\u00e9\",-1.5,true,null,this,event,this.value,{k:[1,2]},'x'+'y')",el,evt);
+      }finally{ delete RC_ACTIONS.__gT; }
+      const a=vu[0]||[];
+      return a[1]==="a'b"&&a[2]==='c"dé'&&a[3]===-1.5&&a[4]===true&&a[5]===null&&a[6]===el&&a[7]===evt
+        &&a[8]==='v'&&JSON.stringify(a[9])==='{"k":[1,2]}'&&a[10]==='xy'?true:_echec(JSON.stringify(a.slice(1,6)));})());
+    ok('GESTES — tout ce qui n’est pas inscrit est REFUSÉ, et consigné',(()=>{
+      const avant=_rcGestesRefus.length;
+      const err=console.error; let dits=0; console.error=()=>{ dits++; };
+      window.__gX=0;
+      const el=document.createElement('div');
+      const essais=["alert(1)","eval('window.__gX=1')","window.__gX=1","this.innerHTML='<b>x</b>'",
+        "this.constructor.constructor('window.__gX=1')()","document.location='https://exemple.invalid/'",
+        "document.cookie","setTimeout('window.__gX=1',0)","fetch('https://exemple.invalid/')",
+        "this.ownerDocument.defaultView.__gX=1","new Function('window.__gX=1')()","(function(){window.__gX=1})()",
+        "DB.set('x',1)","CLOUD.push()","currentUser=null","this['inner'+'HTML']='x'"];
+      try{ for(const g of essais) rcGesteJouer(g,el,new Event('click')); }
+      finally{ console.error=err; }
+      const n=_rcGestesRefus.length-avant;
+      _rcGestesRefus.length=avant;
+      if(window.__gX||el.innerHTML) { delete window.__gX; return _echec('un geste interdit a agi'); }
+      delete window.__gX;
+      return n===essais.length&&dits===essais.length?true:_echec(n+' refus consignés sur '+essais.length);})());
+    ok('GESTES — le clic remonte de la cible vers la racine, et stopPropagation l’arrête',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(x){ vu.push(x); };
+      const z=document.createElement('div');
+      z.innerHTML='<div data-on-click="__gT(\'dehors\')"><div data-on-click="event.stopPropagation();__gT(\'milieu\')">'
+        +'<button type="button" data-on-click="__gT(\'dedans\')"><span id="__gS">x</span></button></div>'
+        +'<a href="#__gA" id="__gL" data-on-click="__gT(\'lien\');return false">l</a></div>';
+      document.body.appendChild(z);
+      let annule=null;
+      try{
+        z.querySelector('#__gS').click();
+        const e=new MouseEvent('click',{bubbles:true,cancelable:true});
+        z.querySelector('#__gL').dispatchEvent(e); annule=e.defaultPrevented;
+      }finally{ z.remove(); delete RC_ACTIONS.__gT; }
+      return vu.join(',')==='dedans,milieu,lien,dehors'&&annule===true?true:_echec(vu.join(',')+' / annulé : '+annule);})());
+    ok('GESTES — Entrée sur un role="button" joue son clic ; un champ joue input et change',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(x){ vu.push(x); };
+      const z=document.createElement('div');
+      z.innerHTML='<div role="button" tabindex="0" id="__gB" data-on-click="__gT(\'clic\')" '
+        +'data-on-keydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}"></div>'
+        +'<input id="__gI" data-on-input="__gT(\'i:\'+this.value)" data-on-change="__gT(\'c:\'+this.value.trim())">';
+      document.body.appendChild(z);
+      try{
+        z.querySelector('#__gB').dispatchEvent(new KeyboardEvent('keydown',{key:'a',bubbles:true}));
+        z.querySelector('#__gB').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+        const i=z.querySelector('#__gI'); i.value=' 12 ';
+        i.dispatchEvent(new Event('input',{bubbles:true})); i.dispatchEvent(new Event('change',{bubbles:true}));
+      }finally{ z.remove(); delete RC_ACTIONS.__gT; }
+      return vu.join('|')==='clic|i: 12 |c:12'?true:_echec(vu.join('|'));})());
+    ok('GESTES — error, focus et toggle ne remontent pas : ils sont joués sur la cible seule',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(x){ vu.push(x); };
+      const z=document.createElement('div');
+      z.setAttribute('data-on-error',"__gT('parent')");
+      z.innerHTML='<img id="__gM" alt="" data-on-error="__gT(\'image\');this.remove()">'
+        +'<details id="__gD" data-on-toggle="__gT(\'pli:\'+this.open)"><summary>s</summary></details>';
+      document.body.appendChild(z);
+      try{
+        z.querySelector('#__gM').dispatchEvent(new Event('error'));
+        z.querySelector('#__gD').dispatchEvent(new Event('toggle'));
+      }finally{ const reste=!!z.querySelector('#__gM'); z.remove(); delete RC_ACTIONS.__gT; if(reste) vu.push('image restée'); }
+      return vu.join('|')==='image|pli:false'?true:_echec(vu.join('|'));})());
+    ok('GESTES — el.onclick=fn l’emporte sur data-on-click, et rcGesteClic joue l’un ou l’autre',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(x){ vu.push(x); return 'r:'+x; };
+      const z=document.createElement('div');
+      z.innerHTML='<button type="button" data-on-click="__gT(\'balisage\')">x</button>';
+      document.body.appendChild(z);
+      const b=z.firstChild; let r1,r2;
+      try{
+        b.click(); r1=rcGesteClic(b);
+        b.onclick=()=>{ vu.push('propriete'); return 'p'; };
+        b.click(); r2=rcGesteClic(b);
+        b.onclick=null; b.click();
+      }finally{ z.remove(); delete RC_ACTIONS.__gT; }
+      return vu.join(',')==='balisage,balisage,propriete,propriete,balisage'&&r1==='r:balisage'&&r2==='p'
+        ?true:_echec(vu.join(',')+' / '+r1+' / '+r2);})());
+    ok('GESTES — un élément hors du document se joue par rcGesteDeclencher',(()=>{
+      const vu=[]; RC_ACTIONS.__gT=function(x){ vu.push(x); };
+      const z=document.createElement('div');
+      z.innerHTML='<div data-on-click="__gT(\'parent\')"><button data-on-click="__gT(\'bouton\')">x</button></div>';
+      try{ rcGesteDeclencher(z.querySelector('button'),'click'); }finally{ delete RC_ACTIONS.__gT; }
+      return vu.join(',')==='bouton,parent'?true:_echec(vu.join(','));})());
+    ok('GESTES — chaque geste du balisage s’analyse, et n’appelle que la table blanche',(()=>{
+      // Le balisage statique de index.html : le texte y est entier (aucune
+      // partie calculée), on le passe donc tel quel au moteur.
+      const ko=[]; let n=0;
+      const d=new DOMParser().parseFromString(_prodSrc().replace(/<script[\s\S]*?<\/script>/g,''),'text/html');
+      for(const el of d.querySelectorAll('*')) for(const a of el.attributes){
+        if(a.name.indexOf('data-on-')!==0) continue;
+        n++;
+        const evt=a.name.slice(8);
+        if(RC_GESTE_BULLE.indexOf(evt)<0&&RC_GESTE_CIBLE.indexOf(evt)<0){ ko.push(a.name+' : événement non écouté'); continue; }
+        try{
+          const r=rcGesteNoms(a.value);
+          for(const f of r.fonctions) if(typeof RC_ACTIONS[f]!=='function') ko.push(f+' hors de RC_ACTIONS');
+          for(const v of r.variables) if(!(v in RC_GESTE_VARS)) ko.push(v+' hors de RC_GESTE_VARS');
+          for(const p of r.props) if(!RC_GESTE_PROPS.has(p)) ko.push('.'+p+' hors de RC_GESTE_PROPS');
+        }catch(e){ ko.push('illisible ('+e.message+') : '+a.value.slice(0,50)); }
+      }
+      if(n<300) return _echec('seulement '+n+' gestes lus dans le balisage');
+      return ko.length?_echec(ko.length+' faute(s) : '+ko.slice(0,4).join(' ; ')):true;})());
+    ok('GESTES — chaque variable inscrite se lit, chaque action inscrite est une fonction',(()=>{
+      const ko=[];
+      for(const k in RC_GESTE_VARS){ try{ RC_GESTE_VARS[k][0](); }catch(e){ ko.push(k+' : '+e.message); } }
+      for(const k in RC_ACTIONS) if(typeof RC_ACTIONS[k]!=='function') ko.push(k);
+      if(Object.keys(RC_ACTIONS).length<1000) ko.push('table presque vide : '+Object.keys(RC_ACTIONS).length);
+      return ko.length?_echec(ko.slice(0,5).join(' ; ')):true;})());
+    okA('GESTES — la CSP de firebase.json ne porte plus unsafe-inline dans script-src',async()=>{
+      let t=''; try{ const r=await fetch('../firebase.json',{cache:'no-store'}); if(r.ok) t=await r.text(); }catch(e){}
+      if(!t) return true;                               // firebase.json non servi ici
+      const l=t.match(/script-src [^;"]*/g)||[];
+      const csp=l.filter(x=>/'self'/.test(x));
+      if(csp.length<2) return _echec('script-src introuvable sur /app et /app/**');
+      for(const x of csp){
+        if(/'unsafe-inline'|'unsafe-eval'/.test(x)) return _echec('script-src porte encore '+x.match(/'unsafe-[a-z]+'/)[0]);
+        if(!/'sha256-/.test(x)) return _echec('aucune empreinte : les scripts en ligne de index.html seraient refusés');
+      }
+      return true;});
     Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
     Object.assign(_ecranOrigine,_orSauve);
 
@@ -2770,7 +2928,7 @@ async function testExercices(){
           const v=_cyclePreselectionner();
           const sel=z.querySelectorAll('.obj-opt.sel');
           const ok1=v==='j22_28'&&sel.length===1
-            &&(sel[0].getAttribute('onclick')||'').indexOf("'j22_28'")>=0;
+            &&(sel[0].getAttribute('data-on-click')||'').indexOf("'j22_28'")>=0;
           z.querySelectorAll('.obj-opt').forEach(e=>e.classList.remove('sel'));
           return ok1?true:_echec('suggérée '+v+', '+sel.length+' option(s) marquée(s)');})());
         ok('Sans cycle calculable, rien n\'est pré-sélectionné',(()=>{
@@ -3014,9 +3172,9 @@ async function testExercices(){
             const el=document.getElementById('cycle-len');
             if(!el) return _echec('le champ n\'est pas rendu');
             // Le gestionnaire est onchange, et SURTOUT pas oninput.
-            if(el.getAttribute('oninput'))
-              return _echec('le champ est branché sur oninput : '+el.getAttribute('oninput'));
-            if(!/saveCycleNutSettings/.test(el.getAttribute('onchange')||''))
+            if(el.getAttribute('data-on-input'))
+              return _echec('le champ est branché sur oninput : '+el.getAttribute('data-on-input'));
+            if(!/saveCycleNutSettings/.test(el.getAttribute('data-on-change')||''))
               return _echec('aucun onchange sur le champ');
             // La frappe, chiffre par chiffre. Le nœud doit être le MÊME d'un bout à
             // l'autre : c'est sa recréation qui volait le focus.
@@ -7482,7 +7640,7 @@ async function testExercices(){
           const b=[...z.querySelectorAll('button')]
             .find(x=>/SUPPRIMER MON COMPTE/i.test(x.innerText||x.textContent||''));
           if(!b) return _echec('aucun bouton de suppression');
-          if(!/requestAccountDeletion\(\)/.test(b.getAttribute('onclick')||''))
+          if(!/requestAccountDeletion\(\)/.test(b.getAttribute('data-on-click')||''))
             return _echec('le bouton n\'appelle pas la suppression');
           // Le texte vit dans la confirmation (28/09/2026) : le profil ne
           // garde qu'un lien discret en pied de page.
@@ -9873,7 +10031,7 @@ async function testExercices(){
         (()=>{
           ok('Une video qui ne charge pas le DIT, et propose le retrait',(()=>{
             const h=_videoEmbed('https://res.cloudinary.com/x/video/upload/v1/a.mp4','vc-video-42');
-            if(h.indexOf('onerror="_videoIndisponible(this)"')<0)
+            if(h.indexOf('data-on-error="_videoIndisponible(this)"')<0)
               return _echec('aucun repli sur la vidéo');
             // LE REPLI LUI-MEME, joue en vrai : une sonde de source ne dirait
             // rien d'un message reste dans une branche que personne n'atteint.
@@ -9905,7 +10063,7 @@ async function testExercices(){
               } finally { d2.remove(); }
             } finally { d.remove(); currentUser=_cu; }})());
           ok('Le bouton × d\'une vidéo a un gestionnaire QUI COMPILE',(()=>{
-            // IL N'EN AVAIT PLUS. « onclick="if(await rcConfirm(...))..." » : le
+            // IL N'EN AVAIT PLUS. « data-on-click="if(await rcConfirm(...))..." » : le
             // contenu d'un gestionnaire en ligne est compile comme le corps
             // d'une fonction ORDINAIRE, et un `await` y est une erreur de
             // syntaxe. Le gestionnaire n'etait donc jamais cree, et supprimer
@@ -9917,18 +10075,18 @@ async function testExercices(){
             // en DEBUT DE LIGNE, jamais sur un « // » quelconque, qui vit aussi
             // au milieu des URL.
             const src=_prodSrc().split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
-            if(/onclick="[^"]*await /.test(src))
+            if(/data-on-click="[^"]*await /.test(src))
               return _echec('un gestionnaire en ligne contient encore un await');
             if(typeof _demanderSuppressionVideo!=='function')
               return _echec('la fonction nommée de suppression a disparu');
             // ET LE GESTIONNAIRE EXISTE VRAIMENT une fois la carte rendue.
             const d=document.createElement('div');
-            d.innerHTML='<button onclick="_demanderSuppressionVideo(\'a@b.fr\',\'42\')">×</button>';
-            return typeof d.firstChild.onclick==='function'
+            d.innerHTML='<button data-on-click="_demanderSuppressionVideo(\'a@b.fr\',\'42\')">×</button>';
+            return _gesteValide(d.firstChild)
               ?true:_echec('le gestionnaire ne compile pas');})());
           ok('Une illustration qui ne charge pas bascule sur le message écrit',(()=>{
             const src=_prodSrc();
-            if((src.match(/onerror="_illusAbsente\(this\)"/g)||[]).length<2)
+            if((src.match(/data-on-error="_illusAbsente\(this\)"/g)||[]).length<2)
               return _echec('les deux rendus n’ont pas tous les deux leur repli');
             // LE REPLI DE LA FICHE reprend le message deja ecrit ; celui de la
             // liste rend le cadre neutre, parce que c'est la HAUTEUR qui compte.
@@ -11634,7 +11792,7 @@ async function testExercices(){
             const st=l.getAttribute('style')||'';
             if(/background:\s*(#|rgb|var\(--red)/i.test(st))
               return _echec('il porte un fond plein');
-            if(!/rcInstallPasser\(\)/.test(l.getAttribute('onclick')||''))
+            if(!/rcInstallPasser\(\)/.test(l.getAttribute('data-on-click')||''))
               return _echec('il ne compte pas le refus');
             return /go\('s-welcome'\)/.test(String(rcInstallPasser))
               ?true:_echec('il ne mène pas à l’accueil');})());
@@ -11987,7 +12145,7 @@ async function testExercices(){
             const c=(txt||ico)?'x':(getComputedStyle(b,'::before').content||'')
               .replace(/["']/g,'').replace(/^(none|normal)$/,'').trim();
             if(!txt&&!ico&&!c)
-              vides.push((b.id||b.className||b.getAttribute('onclick')||'?').slice(0,40));
+              vides.push((b.id||b.className||b.getAttribute('data-on-click')||'?').slice(0,40));
           });
           if(vides.length)
             return _echec(vides.length+' commande(s) sans glyphe : '+vides.slice(0,3).join(' | '));
@@ -11999,7 +12157,7 @@ async function testExercices(){
           if(!woBack) return _echec('la sortie de l\'écran de séance a disparu');
           if(!(woBack.textContent||'').trim())
             return _echec('la sortie de l\'écran de séance n\'a plus de flèche');
-          if(!/pauseWorkout/.test(woBack.getAttribute('onclick')||''))
+          if(!/pauseWorkout/.test(woBack.getAttribute('data-on-click')||''))
             return _echec('la flèche de séance n\'ouvre plus la modale Pause');
           const croix=document.querySelector('#session-picker button');
           return (croix&&/[✕×]/.test(croix.textContent||''))
@@ -12072,9 +12230,9 @@ async function testExercices(){
           try{
             if(lu(poser('back-btn'))!=='←')
               return _echec('un retour vidé ne récupère pas sa flèche : '+lu(temoins[0]));
-            if(lu(poser(null,{onclick:"closeModal('x')"}))!=='✕')
+            if(lu(poser(null,{'data-on-click':"closeModal('x')"}))!=='✕')
               return _echec('une fermeture vidée ne récupère pas sa croix');
-            if(lu(poser(null,{onclick:"document.getElementById('x').style.display='none'"}))!=='✕')
+            if(lu(poser(null,{'data-on-click':"document.getElementById('x').style.display='none'"}))!=='✕')
               return _echec('la variante display=none ne récupère pas sa croix');
             // ET IL NE DÉBORDE PAS : un bouton qui a déjà son glyphe n'en reçoit
             // pas un second. :empty ne matche que ce qui n'a AUCUN contenu.
@@ -13263,7 +13421,7 @@ async function testExercices(){
               const garder=[...b.querySelectorAll('button')]
                 .find(x=>/Garder l’app/.test(x.textContent));
               if(!garder) return _echec('aucune seconde porte : l’écran ne propose qu’une issue');
-              if((garder.getAttribute('onclick')||'').indexOf('garderLApp()')<0)
+              if((garder.getAttribute('data-on-click')||'').indexOf('garderLApp()')<0)
                 return _echec('la seconde porte ne mène nulle part');
               const nb=String.fromCharCode(160);
               if(b.textContent.indexOf(prixOffre('ultime').split(nb).join(' '))<0
@@ -13368,7 +13526,7 @@ async function testExercices(){
             if(champs.length) return _echec(champs.length+' champ(s) de saisie sur l’arrivée');
             const seul=[...w.querySelectorAll('.wel-p')].find(e=>/entraîne seul/i.test(e.textContent||''));
             if(!seul) return _echec('la porte « je m’entraîne seul » a disparu');
-            return (seul.getAttribute('onclick')||'').indexOf('accueilVersTarifs')>=0
+            return (seul.getAttribute('data-on-click')||'').indexOf('accueilVersTarifs')>=0
               ?true:_echec('elle ne mène pas aux tarifs');
           } finally { currentUser=_sv;
             document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
@@ -14161,7 +14319,7 @@ async function testExercices(){
               return _echec('mode '+_progEditorCtx.mode+' à l\'ouverture du modèle');
             const bb=document.querySelector('#s-coach-program .back-btn');
             if(!bb) return _echec('pas de bouton retour');
-            bb.onclick();
+            bb.click();
             // 2. La séance d'un ATHLÈTE : le contexte est REMPLACÉ, pas complété.
             openCoachSessionExercises(0);
             if(_progEditorCtx.mode!=='coachClient')
@@ -15545,10 +15703,10 @@ async function testExercices(){
           const blanc=bs.find(b=>/btn-blanc/.test(b.className));
           if(!rouge) return _echec('aucun bouton rouge');
           if(!blanc) return _echec('aucun bouton blanc');
-          if((rouge.getAttribute('onclick')||'').indexOf('relancerInvitation')!==0)
-            return _echec('le rouge ne relance pas : '+rouge.getAttribute('onclick'));
-          if((blanc.getAttribute('onclick')||'').indexOf('invCopierCode')!==0)
-            return _echec('le blanc ne copie pas le code : '+blanc.getAttribute('onclick'));
+          if((rouge.getAttribute('data-on-click')||'').indexOf('relancerInvitation')!==0)
+            return _echec('le rouge ne relance pas : '+rouge.getAttribute('data-on-click'));
+          if((blanc.getAttribute('data-on-click')||'').indexOf('invCopierCode')!==0)
+            return _echec('le blanc ne copie pas le code : '+blanc.getAttribute('data-on-click'));
           // ⚠ LE JETON VOYAGE, PAS L'INDEX. Un index dans studentCodes bouge des
           //   qu'un code est cree ou supprime : le bouton d'un rectangle rendu
           //   il y a dix secondes aurait copie l'invitation de quelqu'un
@@ -15572,7 +15730,7 @@ async function testExercices(){
           //   a personne : c'est le coach qui decide ou il la colle, et lui
           //   fermer cette porte n'aurait protege personne.
           return bs.some(b=>/btn-blanc/.test(b.className)
-            &&(b.getAttribute('onclick')||'').indexOf('invCopierCode')===0)
+            &&(b.getAttribute('data-on-click')||'').indexOf('invCopierCode')===0)
             ?true:_echec('« Son code » a disparu pendant le delai');})());
         ok('Au-dela de huit invitations, le surplus est replie — pas perdu',(()=>{
           const t=Date.now();
@@ -15652,7 +15810,7 @@ async function testExercices(){
           const prod=tout;
           // relancerInvitation ne doit être appelée que depuis un onclick.
           const appels=(prod.match(/relancerInvitation\(/g)||[]).length;
-          const depuisClic=(prod.match(/onclick=\\?"relancerInvitation\(/g)||[]).length;
+          const depuisClic=(prod.match(/data-on-click=\\?"relancerInvitation\(/g)||[]).length;
           if(appels-depuisClic>1) return _echec(appels+' appels dont '+depuisClic+' par clic');
           for(const f of [_rendreInvitations,_htmlInvitationsEnAttente]){
             if(/setTimeout|setInterval/.test(String(f)))
@@ -16095,7 +16253,7 @@ async function testExercices(){
           if(!/id\.startsWith\('s-coach-'\)/.test(String(go)))
             return _echec('la garde de préfixe a disparu');
           const src=String(_rendreGrilleCharge);
-          for(const m of ['onchange=','oninput=','contenteditable'])
+          for(const m of ['data-on-change=','data-on-input=','contenteditable'])
             if(src.indexOf(m)>=0) return _echec('la vue porte une édition : '+m);
           // Un seul onclick dans la vue : aucun. L'export est dans la topbar.
           //
@@ -18444,7 +18602,7 @@ async function testExercices(){
             if(lignes.length<2) return _echec('le démarrage a disparu de la source');
             for(const l of lignes){
               if(/function tempoDemarrer/.test(l)) continue;
-              if(l.indexOf('onclick=')>=0) continue;
+              if(l.indexOf('data-on-click=')>=0) continue;
               return _echec('tempoDemarrer appelé hors d’un appui : '+l.trim().slice(0,70));
             }
             // ET LA MESURE MARCHE SANS LE GUIDE : le chronomètre est un geste
@@ -19710,7 +19868,7 @@ async function testExercices(){
           // vaut que pour les codes courts.
           const champ=document.getElementById('ae-code');
           if(!champ) return _echec('champ absent');
-          const oi=champ.getAttribute('oninput')||'';
+          const oi=champ.getAttribute('data-on-input')||'';
           for(const prefixe of ['http','RCACCESS','RCLINK'])
             if(oi.indexOf("startsWith('"+prefixe+"')")<0)
               return _echec('« '+prefixe+' » n\'est plus épargné par la mise en majuscules');
@@ -20874,10 +21032,10 @@ async function testExercices(){
         if(d.querySelector(t)) return _echec('<'+t+'> a été monté');
       // Aucun gestionnaire d'evenement en dehors de ceux qu'on ecrit
       // nous-memes : onerror sur la devanture, onclick sur le bouton d'achat.
-      const permis={'IMG':['onerror'],'A':['onclick']};
+      const permis={'IMG':['data-on-error'],'A':['data-on-click']};
       for(const x of d.querySelectorAll('*'))
         for(const a of x.attributes)
-          if(/^on/i.test(a.name)&&(permis[x.tagName]||[]).indexOf(a.name)<0)
+          if(/^(data-)?on/i.test(a.name)&&(permis[x.tagName]||[]).indexOf(a.name)<0)
             return _echec(x.tagName+' porte '+a.name+'="'+a.value.slice(0,40)+'"');
       // Le nom saisi reste du TEXTE, entier, et n'est pas devenu une balise.
       const n=d.querySelector('.vpr-n');
@@ -21361,7 +21519,7 @@ async function testExercices(){
         if(p[0].textContent.trim()!=='En vente') return _echec('1re pastille : '+p[0].textContent);
         if(p[1].textContent.trim()!=='Privé') return _echec('2e pastille : '+p[1].textContent);
         // Ce n'est PAS un bouton : rien ne doit pouvoir se cliquer dessus.
-        if(p.some(x=>x.tagName==='BUTTON'||x.getAttribute('onclick')))
+        if(p.some(x=>x.tagName==='BUTTON'||x.getAttribute('data-on-click')))
           return _echec('la pastille est cliquable');
         // JAMAIS DE ROUGE : garder un programme pour soi n'est pas une faute.
         for(const x of p){
@@ -24390,7 +24548,7 @@ async function testExercices(){
         if(!/youtube\.com\/embed\/aaaaaaaaaaa/.test(_videoEmbed('youtu.be/aaaaaaaaaaa'))) return _echec('YouTube court refusé');
         if(!/<a href="https:\/\/firebasestorage/.test(_videoEmbed('https://firebasestorage.googleapis.com/v0/b/x/o/a'))) return _echec('Firebase Storage refusé');
         return /Lien vidéo invalide/.test(_videoEmbed('https://drive.google.com/file/d/abc/view'))?true:_echec('un hôte hors liste passe');})());
-      ok('XSS — renderBilanEvolution : une photo « "><svg onload=1> » ne produit aucun svg ni [onerror]/[onload]',(()=>{
+      ok('XSS — renderBilanEvolution : une photo « "><svg onload=1> » ne produit aucun svg ni [data-on-error]/[onload]',(()=>{
         const el=document.getElementById('evo-content');
         if(!el) return _echec('#evo-content absent');
         const sv=el.innerHTML;
@@ -24517,7 +24675,7 @@ async function testExercices(){
           for(const sel of ['.vcx-g','.vcx-c','.vcx-d','.vcx-pied','#vc-general','#qc-chips','#vc-ts-time','#vc-ts-note',
                             '#vc-ts-list','#vc-audio-ts','#vc-audio-btn','#vc-audio-preview','#vc-audio-status','#vc-video'])
             if(!z.querySelector(sel)) return _echec('la feuille a perdu '+sel);
-          if(!z.querySelector('[onclick="saveVideoCorrection()"]')||!z.querySelector('[onclick="closeModal()"]'))
+          if(!z.querySelector('[data-on-click="saveVideoCorrection()"]')||!z.querySelector('[data-on-click="closeModal()"]'))
             return _echec('enregistrer ou annuler a disparu');
           // « ANNOTER ICI » VIT DANS LES REPÈRES, rattaché au lecteur.
           const an=z.querySelector('[data-rc-hors="vc-video"]');
@@ -25698,7 +25856,7 @@ async function testExercices(){
            ||!document.getElementById('clh-resume-bilan-sub'))
           return _echec('la carte n\'a pas ses deux lignes');
         // Elle doit mener à la reprise, pas rouvrir un bilan neuf.
-        const clic=el.getAttribute('onclick')||'';
+        const clic=el.getAttribute('data-on-click')||'';
         if(!/bilResumeAndGo\(\)/.test(clic)) return _echec('la carte ne reprend pas : '+clic);
         // Et si le brouillon a disparu entre-temps, la carte se retire au
         // lieu d'ouvrir un bilan vide.
@@ -25789,8 +25947,8 @@ async function testExercices(){
       ok('Le sélecteur ne propose pas de basculer vers l\'actif',(()=>{
         const d=document.createElement('div');
         d.innerHTML=htmlSelecteurComptes();
-        const l=[...d.querySelectorAll('[onclick^="basculerCompte"]')];
-        return l.length===1&&l[0].getAttribute('onclick').indexOf(CO)>=0;})());
+        const l=[...d.querySelectorAll('[data-on-click^="basculerCompte"]')];
+        return l.length===1&&l[0].getAttribute('data-on-click').indexOf(CO)>=0;})());
       ok('Avec un seul compte, le titre, le compte rangé sous son rôle et le bouton d\'ajout',(()=>{
         _poser();
         currentUser=(DB.get('users'))[CO];
@@ -31375,7 +31533,7 @@ async function testExercices(){
           if(cases.filter(x=>x.classList.contains('drs-c-vide')).length!==DRS_COLONNES-2)
             return _echec('un jour sans saisie est coloré');
           // UN JOUR NOTE S'OUVRE DANS LE JOURNAL ; un jour vide ne mène à rien.
-          if(hier.tagName!=='BUTTON'||String(hier.getAttribute('onclick')).indexOf(iso(1))<0)
+          if(hier.tagName!=='BUTTON'||String(hier.getAttribute('data-on-click')).indexOf(iso(1))<0)
             return _echec('le jour noté ne s’ouvre pas dans le journal');
           if(cases[0].tagName==='BUTTON') return _echec('un jour vide est cliquable');
           // L'ANNEAU ET LES COMPTEURS RESUMENT LE CALENDRIER.
@@ -31393,7 +31551,7 @@ async function testExercices(){
           // LE BOUTON TELECHARGE LE VISUEL (Kevin, 21/09/2026). « Reste
           // régulier ! » vit dans l'image, plus dans un bouton du bloc.
           const dl=b.querySelector('button.drs-dl');
-          if(!dl||String(dl.getAttribute('onclick')).indexOf('telechargerDieteRespectee')<0)
+          if(!dl||String(dl.getAttribute('data-on-click')).indexOf('telechargerDieteRespectee')<0)
             return _echec('le bouton de téléchargement du visuel manque');
           if(b.textContent.indexOf('Reste régulier')>=0) return _echec('« Reste régulier » est encore un bouton du bloc');
           const cv=dessinerDieteRespectee(u);
@@ -33154,7 +33312,7 @@ async function testExercices(){
         // On la repere par son GESTE — la suppression de compte — et non par
         // son texte : le panneau entier contient ce texte, et un find sur le
         // texte remonte au conteneur au lieu du bloc.
-        const sup=p.querySelector('[onclick*="requestAccountDeletion"]');
+        const sup=p.querySelector('[data-on-click*="requestAccountDeletion"]');
         if(!sup) return _echec('la zone dangereuse a disparu');
         const tous=Array.prototype.slice.call(p.querySelectorAll('*'));
         if(rang('exp-manifeste')>tous.indexOf(sup))
@@ -35275,15 +35433,15 @@ async function testExercices(){
         document.body.appendChild(d);
         try{
           for(const l of lignes){
-            const a=l.getAttribute('onclick')||'';
+            const a=l.getAttribute('data-on-click')||'';
             if(!/^select(Perso|Coach)Food\("[pc]1790146202429"\)$/.test(a))
               return _echec('attribut : '+a);
-            if(typeof l.onclick!=='function') return _echec('le gestionnaire ne compile pas : '+a);
+            if(!_gesteValide(l)) return _echec('le gestionnaire ne compile pas : '+a);
           }
           const cr=d.querySelector('.fj-result button[aria-label*="Modifier"]');
           if(!cr) return _echec('le crayon a disparu');
-          if(typeof cr.onclick!=='function')
-            return _echec('le crayon ne compile pas : '+cr.getAttribute('onclick'));
+          if(!_gesteValide(cr))
+            return _echec('le crayon ne compile pas : '+cr.getAttribute('data-on-click'));
           return true;
         } finally { d.remove(); }})());
 
@@ -35294,7 +35452,7 @@ async function testExercices(){
         // les quinze autres endroits du fichier le faisaient deja.
         const src=_prodSrc();
         const mauvais=[];
-        const re=/onclick="[^"]*?'\+\s*JSON\.stringify\(([^)]*)\)([^+]*)\+/g;
+        const re=/data-on-click="[^"]*?'\+\s*JSON\.stringify\(([^)]*)\)([^+]*)\+/g;
         let m;
         while((m=re.exec(src))){
           const suite=src.slice(m.index,m.index+260);
@@ -35700,12 +35858,12 @@ async function testExercices(){
         // à l'écran de rattachement. ouvrirCodeCoach choisit (26/09/2026).
         const _codeCoachAiguille=()=>{ const f=String(ouvrirCodeCoach);
           return f.indexOf("go('s-client-code')")>=0&&f.indexOf("go('s-athlete-entry')")>=0; };
-        if(((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
-          &&!((portes[0].getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')>=0&&_codeCoachAiguille()))
+        if(((portes[0].getAttribute('data-on-click')||'').indexOf('s-client-code')<0)
+          &&!((portes[0].getAttribute('data-on-click')||'').indexOf('ouvrirCodeCoach()')>=0&&_codeCoachAiguille()))
           return _echec('« J’ai un code coach » ne mène pas à l’écran de code');
         if((portes[1].getAttribute('href')||'').indexOf('beacons.ai/kevin.gllc')<0)
           return _echec('« Je cherche un coach » ne mène pas à la page de coaching');
-        if((portes[2].getAttribute('onclick')||'').indexOf('accueilVersTarifs')<0)
+        if((portes[2].getAttribute('data-on-click')||'').indexOf('accueilVersTarifs')<0)
           return _echec('« Je m’entraîne seul » ne mène pas aux tarifs');
         // L'ACCROCHE EST CONCRETE (26/09/2026) : « Entraîne-toi comme un pro »
         // est un slogan qui irait a n'importe quelle app ; celle-ci dit ce que
@@ -35971,7 +36129,7 @@ async function testExercices(){
             if(b[0].getAttribute('target')!=='_blank'||!/noopener/.test(b[0].getAttribute('rel')||''))
               return _echec(c+' ouvre le lien sans précaution');
           } else {
-            if((b[0].getAttribute('onclick')||'').indexOf('rcVerrouUltime()')<0)
+            if((b[0].getAttribute('data-on-click')||'').indexOf('rcVerrouUltime()')<0)
               return _echec(c+' ne mène pas à Ultime');
             // LES CHIFFRES VENDENT, et ils viennent de la table des offres.
             const p=(d.querySelector('.vrr-p')||{}).textContent||'';
@@ -37336,7 +37494,7 @@ async function testExercices(){
           if(txt.indexOf('Petit-déj.')<0||txt.indexOf('520 kcal')<0) return _echec('le petit-déjeuner manque : '+txt);
           // UN JOUR VIDE OUVRE L'AJOUT ; un jour du mois voisin ne fait rien.
           const vide=cases.find(x=>x.classList.contains('jr-vide'));
-          if(!vide||(vide.getAttribute('onclick')||'').indexOf('ccdJournalAjout')<0)
+          if(!vide||(vide.getAttribute('data-on-click')||'').indexOf('ccdJournalAjout')<0)
             return _echec('une case vide ne propose pas d’ajouter');
           const hors=cases.find(x=>x.classList.contains('jr-hors'));
           if(hors&&hors.tagName==='BUTTON') return _echec('un jour du mois voisin est cliquable');
@@ -38029,7 +38187,7 @@ async function testExercices(){
               if(!b.includes('Garder')) return _echec('pas de bouton Garder : '+b.join('|'));
               if(!b.includes('Télécharger')) return _echec('pas de bouton Télécharger : '+b.join('|'));
               // LES DEUX GESTES SONT CÂBLÉS SUR DES FONCTIONS QUI EXISTENT.
-              const on=[...d.querySelectorAll('button')].map(x=>x.getAttribute('onclick')||'').join(' ');
+              const on=[...d.querySelectorAll('button')].map(x=>x.getAttribute('data-on-click')||'').join(' ');
               if(!/gardeVideo\('p'\)/.test(on)) return _echec('Garder n’est pas câblé : '+on);
               if(!/telechargerVideo\('p'\)/.test(on)) return _echec('Télécharger n’est pas câblé');
               if(typeof gardeVideo!=='function'||typeof telechargerVideo!=='function')
@@ -39081,8 +39239,8 @@ async function testExercices(){
               if(!b[i].classList.contains('hit44')) return _echec(k+' n’a pas de cible tactile');
               const cle=GC_ZONE_LEX[k];
               if(!cle) return _echec(k+' n’a pas de fiche de lexique');
-              if(((b[i].getAttribute('onclick')||'')).indexOf('rcInfoOuvrir(\''+cle+'\')')<0)
-                return _echec(k+' n’ouvre pas sa fiche : '+b[i].getAttribute('onclick'));
+              if(((b[i].getAttribute('data-on-click')||'')).indexOf('rcInfoOuvrir(\''+cle+'\')')<0)
+                return _echec(k+' n’ouvre pas sa fiche : '+b[i].getAttribute('data-on-click'));
               const e=RC_LEXIQUE[cle];
               if(!e||!e.d) return _echec(cle+' n’existe pas dans le lexique');
               // LA FICHE DIT LA ZONE DONT ELLE PARLE, et pas une autre.
@@ -39326,7 +39484,7 @@ async function testExercices(){
           if(m.indexOf(bout)<0) return _echec('« '+bout+' » manque : '+m);
         // ON NE REMET PAS EN PLACE LA CIBLE DEJA EN PLACE.
         if(e[0].querySelector('.tbk-h-r')) return _echec('la cible en cours s’offre d’être remise');
-        return /histoRemettre\(0\)/.test((e[1].querySelector('.tbk-h-r')||{}).getAttribute&&e[1].querySelector('.tbk-h-r').getAttribute('onclick')||'')
+        return /histoRemettre\(0\)/.test((e[1].querySelector('.tbk-h-r')||{}).getAttribute&&e[1].querySelector('.tbk-h-r').getAttribute('data-on-click')||'')
           ?true:_echec('l’ancienne ligne ne se remet pas en place');})());
 
       okA('1408 — REMETTRE EN PLACE TIENT, NE CHANGE PAS LE MODE, ET S’ANNULE',async()=>{
@@ -40085,8 +40243,8 @@ async function testExercices(){
         // onmouseover/onmouseout compensaient a la main ce que le CSS ne
         // faisait pas. Le rendu qui en FABRIQUE une, parametree, reste : c'est
         // une fabrique, pas une duplication.
-        if(document.querySelectorAll('[onmouseover]').length)
-          return _echec(document.querySelectorAll('[onmouseover]').length+' éléments gardent un survol en attribut');
+        if(document.querySelectorAll('[data-on-mouseover]').length)
+          return _echec(document.querySelectorAll('[data-on-mouseover]').length+' éléments gardent un survol en attribut');
         // ET LE SURVOL NE CHANGE PAS LA HAUTEUR d'une ligne de tableau : sur
         // .cc-sect-t, le fond seul, aucun deplacement vertical.
         const i=css.indexOf('#s-coach-client .cc-sect-t:hover');
@@ -40266,7 +40424,7 @@ async function testExercices(){
             // largeur selon l'etat de l'athlete.
             const sw=r&&r.querySelector('.cr-swi input[type=checkbox]');
             if(!sw) return _echec('aucun interrupteur dans la ligne');
-            if(!/coachBasculerSuivi/.test(sw.getAttribute('onchange')||''))
+            if(!/coachBasculerSuivi/.test(sw.getAttribute('data-on-change')||''))
               return _echec('l\'interrupteur ne bascule rien');
             if(sw.checked!==true) return _echec('l\'etat du dossier n\'est pas reporte');
             // ET IL SE NOMME POUR UN LECTEUR D'ECRAN : un interrupteur nu ne se
@@ -40278,7 +40436,7 @@ async function testExercices(){
             // curseur basculerait le suivi ET ouvrirait l'athlete.
             const lab=r&&r.querySelector('.cr-swi');
             if(!lab) return _echec('aucun interrupteur');
-            if(!/stopPropagation/.test(lab.getAttribute('onclick')||''))
+            if(!/stopPropagation/.test(lab.getAttribute('data-on-click')||''))
               return _echec('le clic remonte a la ligne');
             return /stopPropagation/.test(String(coachBasculerSuivi))
               ?true:_echec('le gestionnaire ne coupe pas la propagation');})());
@@ -40423,7 +40581,7 @@ async function testExercices(){
         if(/background:/.test(st)) return _echec('PUBLIER garde son fond en attribut');
         // « + CRÉER », l'autre action primaire nommee par le document.
         const c=[...document.querySelectorAll('button')]
-          .find(x=>(x.getAttribute('onclick')||'').indexOf('createCoachProgTemplate')>=0);
+          .find(x=>(x.getAttribute('data-on-click')||'').indexOf('createCoachProgTemplate')>=0);
         if(!c) return _echec('le bouton de création a disparu');
         return c.classList.contains('btn')&&c.classList.contains('btn-red')
           ?true:_echec('« + CRÉER » n’est toujours pas un .btn : '+c.className);})());
@@ -40475,9 +40633,9 @@ async function testExercices(){
         // N6.2 — ouvrirGrilleCharge n'avait AUCUN appelant : le coach n'avait
         // jamais vu la vue qui lui dit comment son volume se repartit.
         const b=[...document.querySelectorAll('#s-coach-client button')]
-          .find(x=>(x.getAttribute('onclick')||'').indexOf('ouvrirGrilleCharge')>=0);
+          .find(x=>(x.getAttribute('data-on-click')||'').indexOf('ouvrirGrilleCharge')>=0);
         if(!b) return _echec('aucune entrée vers la grille de charge');
-        if((b.getAttribute('onclick')||'').indexOf('currentClientId')<0)
+        if((b.getAttribute('data-on-click')||'').indexOf('currentClientId')<0)
           return _echec('l’athlète courant n’est pas passé à la fonction');
         // Elle est dans l'onglet ENTRAINEMENT, a cote de la fiche a imprimer.
         const v=b.closest('.ccd-vue');
@@ -40915,7 +41073,7 @@ async function testExercices(){
             return _echec('l’intensité se tape encore à la main');
           // IL ECRIT LE CHAMP ETABLI, celui que l'apercu de seance et la fiche
           // imprimable lisent depuis toujours.
-          if((champ.getAttribute('onchange')||'').indexOf('.rir=')<0)
+          if((champ.getAttribute('data-on-change')||'').indexOf('.rir=')<0)
             return _echec('le menu n’écrit pas dans le champ établi');
           // UNE VALEUR HORS ECHELLE DEJA ECRITE EST GARDEE, jamais effacee.
           const h=_optionsRirCible('2-3');
@@ -42094,7 +42252,7 @@ async function testExercices(){
         // enregistre. Trois ecrans complets pour un depliage.
         for(const f of ['loadFileReprise()','loadCoachActivite()','openDechargeGroupee()']){
           const b=Array.from(document.querySelectorAll('button'))
-            .filter(x=>(x.getAttribute('onclick')||'')===f);
+            .filter(x=>(x.getAttribute('data-on-click')||'')===f);
           if(!b.length) return _echec('plus aucun point d\'entree pour '+f);
           // UN SEUL CHEMIN VISIBLE A CHAQUE LARGEUR. Depuis N1.15 la barre
           // laterale porte les memes destinations au-dela de 1025 px : les
@@ -42124,7 +42282,7 @@ async function testExercices(){
         for(const x of document.querySelectorAll('.ch-nav-large')){
           const st=x.getAttribute('style')||'';
           if(/(^|;)\s*display\s*:/.test(st))
-            return _echec('display inline sur '+(x.getAttribute('onclick')||'?')
+            return _echec('display inline sur '+(x.getAttribute('data-on-click')||'?')
               +' : la regle qui l’eteint au-dela de 1025 px ne prendra pas');
         }
         // Et ils ont QUITTE le volet : remontes, ils n'y sont plus.
@@ -42136,7 +42294,7 @@ async function testExercices(){
         // gabarit, ni appel indirect. Sa fonction prend un ATHLETE : sa place
         // est dans l'onglet Entrainement de la fiche.
         const b=Array.from(document.querySelectorAll('button'))
-          .filter(x=>/ouvrirGrilleCharge/.test(x.getAttribute('onclick')||''));
+          .filter(x=>/ouvrirGrilleCharge/.test(x.getAttribute('data-on-click')||''));
         if(!b.length) return _echec('toujours aucun point d\'entree');
         const v=b[0].closest('.ccd-vue');
         if(!v||v.dataset.vue!=='entrainement')
@@ -43412,7 +43570,7 @@ async function testExercices(){
           if(!b) return _echec('le bouton de remise au point de départ manque');
           if(!b.closest('.tbk-trio')) return _echec('il n’est pas dans la barre des trois : '+b.className);
           if(b.classList.contains('btn-red')) return _echec('il est resté rouge : '+b.className);
-          return /reinitialiserCalculs\(\)/.test(b.getAttribute('onclick')||'')
+          return /reinitialiserCalculs\(\)/.test(b.getAttribute('data-on-click')||'')
             ?true:_echec('le bouton n’appelle plus la remise au point de départ');})());
 
         ok('Le bouton de remise a zero est atteignable, et separe du bouton rouge',(()=>{
@@ -43428,8 +43586,8 @@ async function testExercices(){
           const save=z.innerHTML.indexOf('enregistrerEtTransmettre()');
           if(save<0) return _echec('le bouton d\'enregistrement a disparu');
           if(!(reinit<save)) return _echec('la remise passe derriere l\'enregistrement');
-          const br=[...z.querySelectorAll('button')].find(x=>/reinitialiserCalculs/.test(x.getAttribute('onclick')||''));
-          const be=[...z.querySelectorAll('button')].find(x=>/enregistrerEtTransmettre/.test(x.getAttribute('onclick')||''));
+          const br=[...z.querySelectorAll('button')].find(x=>/reinitialiserCalculs/.test(x.getAttribute('data-on-click')||''));
+          const be=[...z.querySelectorAll('button')].find(x=>/enregistrerEtTransmettre/.test(x.getAttribute('data-on-click')||''));
           if(br.classList.contains('btn-red')) return _echec('la remise est rouge elle aussi');
           return be.classList.contains('btn-red')
             ?true:_echec('l\'enregistrement n\'est plus le rouge du groupe');})());
@@ -43607,7 +43765,7 @@ async function testExercices(){
       const h=blocTempo({tempo:'3-1-1-0'});
       return /Tempo 3-1-1-0/.test(h)&&h.indexOf('Descends en 3 secondes, marque 1 seconde en bas, remonte en 1 seconde.')>=0;})());
     ok('Critère 8 : aucun champ de saisie de tempo en séance',
-       !/<input|<select|onchange/.test(blocTempo({tempo:'3-1-1-0'})));
+       !/<input|<select|on-?change/.test(blocTempo({tempo:'3-1-1-0'})));
     ok('Sans tempo, aucun bloc',blocTempo({})===''&&blocTempo({tempo:'   '})==='');
     ok('Un tempo libre est affiché tel quel, SANS glose de format',(()=>{
       // ELLE ATTENDAIT « excentrique · pause basse · concentrique · pause
@@ -44443,7 +44601,7 @@ async function testExercices(){
         if(b.length!==2) return _echec(e+' : '+b.length+' bouton(s)');
         if(!/plus tard/i.test(b[1].textContent)) return _echec('la sortie dit : '+b[1].textContent);
         // LE GESTE EST CELUI QUI CONVIENT AU CAS.
-        const g=b[0].getAttribute('onclick')||'';
+        const g=b[0].getAttribute('data-on-click')||'';
         if(e==='ios'&&g.indexOf('invInstallIos')<0) return _echec('iOS n’ouvre pas le guide');
         if(e==='inviter'&&g.indexOf('invInstallInviter')<0) return _echec('l’invitation n’est pas declenchee');
       }
@@ -44618,7 +44776,7 @@ async function testExercices(){
         if(!document.getElementById('clh-demarrer').innerHTML) return _echec('« Pour démarrer » ne parait pas');
         if(!vis(h)) return _echec('la carte Entraînement reste masquée');
         if(document.getElementById('clh-demarrer').nextElementSibling!==h) return _echec('la carte n’est pas juste sous « Pour démarrer »');
-        if(!h.querySelector('[onclick="loadSessionManager()"]')) return _echec('« Gérer mes séances » a disparu de la carte');
+        if(!h.querySelector('[data-on-click="loadSessionManager()"]')) return _echec('« Gérer mes séances » a disparu de la carte');
         // « Ton suivi se termine » (#clh-essai) vient APRES la carte.
         const ess=document.getElementById('clh-essai');
         if(ess&&!(h.compareDocumentPosition(ess)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la ligne du suivi passe devant la carte');
@@ -45625,9 +45783,9 @@ async function testExercices(){
         if(!der.classList.contains('plx-actions')) return _echec('la case des boutons n’est pas la dernière');
         const bs=[...der.querySelectorAll('button')];
         if(bs.length!==2) return _echec(bs.length+' boutons dans la case');
-        if(!bs[0].classList.contains('btn-red')||(bs[0].getAttribute('onclick')||'').indexOf('openCoachSessions')<0)
+        if(!bs[0].classList.contains('btn-red')||(bs[0].getAttribute('data-on-click')||'').indexOf('openCoachSessions')<0)
           return _echec('le premier bouton n’est pas « Modifier le programme », en rouge');
-        if(!bs[1].classList.contains('btn-blanc')||(bs[1].getAttribute('onclick')||'').indexOf('coachAttribuerMuscles')<0)
+        if(!bs[1].classList.contains('btn-blanc')||(bs[1].getAttribute('data-on-click')||'').indexOf('coachAttribuerMuscles')<0)
           return _echec('le second bouton n’est pas l’attribution des muscles, en blanc');
       } finally { window.plateauxParGroupe=sv; z.innerHTML=avant; }
       // TROIS COLONNES : la regle vit dans la feuille de style.
@@ -46673,7 +46831,7 @@ async function testExercices(){
       if(!et) return _echec('l’étage du détail a disparu');
       const b=[...et.querySelectorAll('button')].find(x=>/Rapport de la période/.test(x.textContent||''));
       if(!b) return _echec('le bouton du rapport n’est pas dans l’étage 6');
-      if(!/ouvrirRapport/.test(b.getAttribute('onclick')||'')) return _echec('le bouton n’ouvre pas le rapport');
+      if(!/ouvrirRapport/.test(b.getAttribute('data-on-click')||'')) return _echec('le bouton n’ouvre pas le rapport');
       const det=document.getElementById('ccd-detail');
       if(!det) return _echec('le bloc replié a disparu');
       // ⚠ AVANT LE BLOC REPLIÉ : un bouton rangé dans le repli demande deux
@@ -49192,7 +49350,7 @@ async function testExercices(){
       //   — `codeDeLAthlete` — est parti avec le bouton qu'il servait : ici
       //   personne n'a plus besoin de son code, il est deja entre. Le code se
       //   copie dans « En attente », juste en dessous, ou il a encore un sens.
-      const cmd=[...d.querySelectorAll('button')].map(b=>b.getAttribute('onclick')||'');
+      const cmd=[...d.querySelectorAll('button')].map(b=>b.getAttribute('data-on-click')||'');
       if(cmd.length!==1) return _echec('il faut UN bouton, il y en a '+cmd.length+' : '+cmd.join(' | '));
       if(cmd[0].indexOf('jdRelancer')!==0)
         return _echec('le bouton ne relance pas : '+cmd[0]);
@@ -49886,9 +50044,9 @@ async function testExercices(){
         for(const x of ['BADGE DÉBLOQUÉ','TONNAGE II','PALIER II','01/09/2026'])
           if(t.indexOf(x)<0) return _echec('« '+x+' » manque');
         if(!/-512\.webp/.test(z.innerHTML)) return _echec('pas le visuel 512 px');
-        if(!z.querySelector('[onclick^="partagerBadge("]')) return _echec('pas de Partager');
+        if(!z.querySelector('[data-on-click^="partagerBadge("]')) return _echec('pas de Partager');
         if(!z.querySelector('#bdg-ecran-fonds')) return _echec('pas de sélecteur de fond');
-        if(!z.querySelector('[onclick="bdgPlusTard()"]')) return _echec('pas de Plus tard');
+        if(!z.querySelector('[data-on-click="bdgPlusTard()"]')) return _echec('pas de Plus tard');
         z.querySelector('.bdg-ecran-part').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
         if(document.getElementById('bdg-ecran')) return _echec('Échap ne ferme pas');
         // Un secret : le titre change.
@@ -50003,7 +50161,7 @@ async function testExercices(){
       if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
       // TOUCHER UN BADGE OUVRE SA FICHE.
       // 8 familles + 24 cases (les 5 de l'assiette depuis le lot N4).
-      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==32) return _echec('un badge ne s’ouvre pas');
+      if(d.querySelectorAll('[data-on-click^="ouvrirFicheBadge("]').length!==32) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
       return v.indexOf('0/56')>=0?true:_echec('le dossier vierge ne dit pas 0/56');})());
@@ -50017,12 +50175,12 @@ async function testExercices(){
         if(!/-512\.webp/.test(f.innerHTML)) return _echec('la fiche ne montre pas le grand visuel');
         if(f.textContent.indexOf('01/09/2026')<0) return _echec('la date manque');
         if(f.textContent.indexOf('Remplis un premier bilan')<0) return _echec('la condition manque');
-        if(!f.querySelector('[onclick^="partagerBadge("]')) return _echec('pas de bouton Partager');
+        if(!f.querySelector('[data-on-click^="partagerBadge("]')) return _echec('pas de bouton Partager');
         closeModal();
         ouvrirFicheBadge('aube');
         f=document.querySelector('#modal-overlay .bdg-fiche');
         if(f.textContent.indexOf('???')<0||f.textContent.indexOf('avant 6 h')>=0) return _echec('le secret est dévoilé');
-        if(f.querySelector('[onclick^="partagerBadge("]')) return _echec('un badge non obtenu se partage');
+        if(f.querySelector('[data-on-click^="partagerBadge("]')) return _echec('un badge non obtenu se partage');
         closeModal();
         return true;
       } finally { try{ closeModal(); }catch(e){} currentUser=sv; }})());
@@ -50331,7 +50489,7 @@ async function testExercices(){
         _wrAller(4);
         const prof=z.querySelector('.wr-slide[data-k="4"]');
         if(prof.hidden) return _echec('la slide profil n’apparaît pas');
-        if(!prof.querySelector('[onclick*="partagerWrapped(4"]')) return _echec('pas de partage du résumé');
+        if(!prof.querySelector('[data-on-click*="partagerWrapped(4"]')) return _echec('pas de partage du résumé');
         return String(_wrAller).indexOf('rcFoudre')>=0?true:_echec('pas de foudre au profil');
       } finally { _wrFermer(); window.go=svGo; currentUser=sv; }})());
 
@@ -50419,7 +50577,7 @@ async function testExercices(){
       const h=htmlCarteMuscles('t',{titre:'X',periode:'p',chiffres:[{v:'1',l:'a'},{v:'2',l:'b'},{v:'3',l:'c'}],groupes:{}},{});
       const d=document.createElement('div'); d.innerHTML=h;
       if(d.querySelectorAll('.musc-vue').length!==2) return _echec('pas face + dos');
-      if(!d.querySelector('[onclick^="partagerCarteMuscles("]')||!d.querySelector('[onclick^="telechargerCarteMuscles("]'))
+      if(!d.querySelector('[data-on-click^="partagerCarteMuscles("]')||!d.querySelector('[data-on-click^="telechargerCarteMuscles("]'))
         return _echec('boutons Partager / Télécharger');
       return d.querySelector('#musc-t-fonds')?true:_echec('pas de sélecteur de fond');})());
 
@@ -50706,7 +50864,7 @@ async function testExercices(){
         validerRite();
         const z=document.querySelector('#modal-overlay .rite-fin');
         if(!z) return _echec('pas d’écran de fin');
-        if(!z.querySelector('[onclick^="partagerCycle("]')||z.textContent.indexOf('Partager mon cycle')<0) return _echec('pas de bouton');
+        if(!z.querySelector('[data-on-click^="partagerCycle("]')||z.textContent.indexOf('Partager mon cycle')<0) return _echec('pas de bouton');
         if(!z.querySelector('#rite-fonds')) return _echec('pas de sélecteur de fond');
         if(!(u.badges&&u.badges.cycles_1&&u.badges.cycles_1.at>0)) return _echec('CYCLES I non débloqué');
         const src=String(partagerCycle);
@@ -51588,7 +51746,7 @@ async function testExercices(){
       const a=htmlMarqueLogo({nom:'KG Performance',couleur:'#2E7D32',logoUrl:null});
       if(a.indexOf('>KP<')<0||a.indexOf('<img')>=0) return _echec('sans logo : '+a);
       const b=htmlMarqueLogo(marqueValide(_MQ));
-      if(b.indexOf('>KP<')<0||b.indexOf('onerror="this.remove()"')<0) return _echec('avec logo : '+b);
+      if(b.indexOf('>KP<')<0||b.indexOf('data-on-error="this.remove()"')<0) return _echec('avec logo : '+b);
       if(marqueValide(Object.assign({},_MQ,{logoUrl:'https://ailleurs.test/x.png'})).logoUrl!==null) return _echec('logo hors Cloudinary gardé');
       if(initialesMarque('  ')!=='RC'||initialesMarque('Élan Coaching')!=='ÉC') return _echec('initiales');
       return true;})());
@@ -52555,7 +52713,7 @@ async function testExercices(){
         _rbCurseurFin(ta);
         if(ta.dataset.brouillon) return _echec('le curseur est replacé à chaque focus');
         // L'envoi reste le geste du coach : saveReponseBilan n'est appelé que par le bouton.
-        return /onfocus="_rbCurseurFin\(this\)"/.test(h)&&!/saveReponseBilan/.test(String(_brouillonPourChamp))?true:_echec('envoi hors du bouton');
+        return /data-on-focus="_rbCurseurFin\(this\)"/.test(h)&&!/saveReponseBilan/.test(String(_brouillonPourChamp))?true:_echec('envoi hors du bouton');
       } finally { if(av==null) localStorage.removeItem(RB_BROUILLON_CLE); else localStorage.setItem(RB_BROUILLON_CLE,av); }})());
     ok('C2 — la formule du coach : réglée une fois, classée dans le dossier, bornée',(()=>{
       const f=formulesReponse({reponseFormules:{ouverture:'Hello {prénom} !',cloture:'À lundi, Kévin'}});
@@ -53760,7 +53918,7 @@ async function testExercices(){
         const h=htmlPropositionPage(currentUser);
         const d=document.createElement('div'); d.innerHTML=h;
         const i=d.querySelector('#pp-prop-pseudo'), b=d.querySelector('button');
-        if(!i||i.value!=='julie'||!b||!/activerPageDepuisRang\(this\)/.test(b.getAttribute('onclick'))) return _echec('carte');
+        if(!i||i.value!=='julie'||!b||!/activerPageDepuisRang\(this\)/.test(b.getAttribute('data-on-click'))) return _echec('carte');
         if(d.querySelectorAll('button').length!==1) return _echec('plus d’un geste');
         if(!/Jamais de poids, de photo ni de santé/.test(d.textContent)) return _echec('la promesse manque');
         _rangEcran(3,0);
@@ -54177,7 +54335,7 @@ async function testExercices(){
       const reg=document.getElementById('s-register');
       const form=reg&&reg.querySelector('.scroll-area');
       if(form&&form.querySelector('#r-parrain-appel')!==form.querySelector('button,input,label')) return _echec('le bouton n’est pas en haut du formulaire');
-      if(!/oninput="parrainageCodeSaisi/.test((document.getElementById('r-parrain')||{}).outerHTML||'')) return _echec('un code tapé ne dit pas de qui il vient');
+      if(!/data-on-input="parrainageCodeSaisi/.test((document.getElementById('r-parrain')||{}).outerHTML||'')) return _echec('un code tapé ne dit pas de qui il vient');
       // Le prénom gardé par /i est repris.
       let sv=null; try{ sv=localStorage.getItem('rc_parrain_invite'); localStorage.setItem('rc_parrain_invite',JSON.stringify({code:'JULIE7K2',prenom:'Julie',rang:3})); }catch(e){}
       const g=parrainInviteGarde('JULIE7K2'), g2=parrainInviteGarde('TOMMY2K9');
@@ -55020,7 +55178,7 @@ async function testExercices(){
       const p=_PU({parcours:{debut:_PT0,etapes:{premiere_seance:_PT0,premier_record:_PT0}}});
       const e=document.createElement('div'); e.innerHTML=htmlParcoursAccueil(p,_PT0);
       const b=e.querySelector('.mst-b');
-      if(!b||b.getAttribute('onclick')!=='openAthleteProfile()') return _echec('bouton profil');
+      if(!b||b.getAttribute('data-on-click')!=='openAthleteProfile()') return _echec('bouton profil');
       return document.getElementById('clh-parcours')?true:_echec('#clh-parcours absent de l’accueil');})());
     ok('Parcours : fini, le badge unique SOUS TENSION tombe à sa date ; il passe devant un palier IV',(()=>{
       const b=badgeAcquisDef(PARCOURS_BADGE);
@@ -55775,7 +55933,7 @@ async function testExercices(){
       const iCarte=kids.indexOf('pr-carte-inv'), iCode=kids.findIndex(c=>/pr-code-carte/.test(c));
       if(iCarte<0||iCode<0||iCarte>iCode) return _echec('ordre : '+kids.join());
       const rouge=d.querySelector('button.btn-red');
-      if(!rouge||!/Partager ma carte d’invitation/.test(rouge.textContent)||!/partagerCarteInvitation/.test(rouge.getAttribute('onclick'))) return _echec('bouton principal');
+      if(!rouge||!/Partager ma carte d’invitation/.test(rouge.textContent)||!/partagerCarteInvitation/.test(rouge.getAttribute('data-on-click'))) return _echec('bouton principal');
       if(!d.querySelector('.pr-carte-inv .vfmt')||!d.querySelector('.pr-carte-inv #pr-fonds')) return _echec('formats et fonds absents');
       const sec=[...d.querySelectorAll('.pr-secondaire button')].map(b=>b.textContent);
       // « Défie un pote » (les duels) vit avec eux, en second.
@@ -55976,8 +56134,8 @@ async function testExercices(){
         const d=document.createElement('div');
         _sanSyncMeta=null; d.innerHTML=_htmlSanSyncFeuille();
         const t=[...d.querySelectorAll('a')].find(a=>a.textContent==='Tester maintenant');
-        if(!t||t.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance\(\)/.test(t.getAttribute('onclick'))) return _echec('tester');
-        if(/preventDefault/.test(t.getAttribute('onclick'))) return _echec('geste annulé');
+        if(!t||t.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance\(\)/.test(t.getAttribute('data-on-click'))) return _echec('tester');
+        if(/preventDefault/.test(t.getAttribute('data-on-click'))) return _echec('geste annulé');
         _sanSyncMeta=_sanMetaNorm({empreinte:'e',plateforme:'ios',source:'raccourci',derniereReception:Date.now()-3600e3});
         d.innerHTML=_htmlSanSyncFeuille();
         const e=d.querySelector('a.ss-envoi');
@@ -56007,7 +56165,7 @@ async function testExercices(){
       const t=Date.now(), dep=t-600e3;
       const d=document.createElement('div'); d.innerHTML=htmlBandeSante({empreinte:'e',derniereReception:t-86400e3},dep,t);
       const a=d.querySelector('.san-bande a');
-      if(!a||a.textContent!=='Envoyer mes données'||a.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance/.test(a.getAttribute('onclick'))) return _echec('bande');
+      if(!a||a.textContent!=='Envoyer mes données'||a.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance/.test(a.getAttribute('data-on-click'))) return _echec('bande');
       if(htmlBandeSante({empreinte:'e',derniereReception:t-60e3},dep,t)!=='') return _echec('reçu : la bande reste');
       if(htmlBandeSante(null,t-25*3600e3,t)!==''||htmlBandeSante(null,0,t)!=='') return _echec('24 h / sans notification');
       if(!/#sante-envoyer/.test(String(sanEnvoyerOuvrir)+_prodSrc().slice(0,0))&&!/sante-envoyer/.test(_prodSrc())) return _echec('ancre');
@@ -57168,7 +57326,7 @@ async function testExercices(){
         if(b.length<4) return _echec(b.length+' portes seulement');
         if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
           return _echec('aucune porte ne mène au coaching');
-        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('onclick')||'')))
+        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('data-on-click')||'')))
           return _echec('aucune porte ne mène au code coach');
         // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
         if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
@@ -57188,7 +57346,7 @@ async function testExercices(){
       if(i<0) return _echec('la case de renonciation a disparu');
       const bal=src.slice(src.lastIndexOf('<input',i),src.indexOf('>',i));
       // ⚠ L'ATTRIBUT, PAS LE MOT. La balise porte
-      // onchange="_majRenonciation(this.checked)" : un \bchecked\b y trouvait
+      // data-on-change="_majRenonciation(this.checked)" : un \bchecked\b y trouvait
       // « this.checked » et accusait de pré-cochage une case parfaitement
       // décochée. On cherche l'attribut autonome.
       if(/(^|\s)checked(\s|=|$)/.test(bal.replace(/this\.checked/g,'')))
@@ -57338,7 +57496,7 @@ async function testExercices(){
       // Ce qui compte est qu'aucune balise ne s'ouvre.
       if(/<img/i.test(x)) return _echec('le nom n’est pas échappé : une balise s’ouvre');
       if(x.indexOf('&lt;img')<0) return _echec('le nom n’est pas passé par escapeHtml');
-      if(/onclick="ouvrirSeanceHistorique\('/.test(x))
+      if(/data-on-click="ouvrirSeanceHistorique\('/.test(x))
         return _echec('l’identifiant est concaténé dans un onclick');
       // UNE SÉANCE PARTIELLE SE SIGNALE, sans être punie : elle a eu lieu.
       if(_htmlLigneHistorique({id:'p',date:Date.now(),name:'P',complete:false},Date.now())
@@ -57910,13 +58068,13 @@ async function testExercices(){
       const act=(h.indexOf('ouvrirAchatProgramme')>=0?1:0)
         +(h.indexOf('appliquerProgramme')>=0?1:0);
       if(act!==1) return _echec(act+' action(s) sur la carte : '
-        +(h.match(/onclick="[^"]*"/g)||[]).join(' | '));
+        +(h.match(/data-on-click="[^"]*"/g)||[]).join(' | '));
       // ⚠ LA DEVANTURE SE RETIRE ELLE-MEME SI LE FICHIER MANQUE. L'affiche de
       // Fondations est dans le dépôt, mais elle manque hors ligne avant toute
       // première vue, et un programme publié peut pointer vers une image
       // morte. Une devanture cassée abîme plus la page que son absence, et le
       // dessin CSS est DESSOUS, prêt à apparaître.
-      if(h.indexOf('onerror="this.remove()"')<0)
+      if(h.indexOf('data-on-error="this.remove()"')<0)
         return _echec('une image de devanture absente laisserait un cadre cassé');
       if(h.indexOf('bq-dev-fond')<0) return _echec('pas de devanture de repli');
       // Un programme sans image ne rend pas de balise <img> vide.
@@ -57994,13 +58152,13 @@ async function testExercices(){
     // posée là où la question se pose : devant sept jours vides.
     ok('La boutique s\'ouvre depuis l\'écran des séances',(()=>{
       const src=_prodSrc();
-      if(src.indexOf('onclick="ouvrirBoutique()"')<0)
+      if(src.indexOf('data-on-click="ouvrirBoutique()"')<0)
         return _echec('aucun bouton n’ouvre la boutique');
       if(!document.getElementById('s-boutique')) return _echec('l’écran n’existe pas');
       // R13 — btq-liste : bq-liste appartient à la banque d'exercices du coach.
       if(!document.getElementById('btq-liste')) return _echec('la liste n’existe pas');
       const i=src.indexOf('id="s-session-manager"');
-      const j=src.indexOf('onclick="ouvrirBoutique()"');
+      const j=src.indexOf('data-on-click="ouvrirBoutique()"');
       if(i<0||j<0||Math.abs(j-i)>2000)
         return _echec('le bouton n’est pas sur l’écran des séances');
       return true;})());
@@ -58159,7 +58317,7 @@ async function testExercices(){
       const e=z&&z.querySelector('.empty-state'); if(!e) return null;
       const b=e.querySelector('button');
       return {msg:e.textContent.replace(b?b.textContent:'','').replace(/\s+/g,' ').trim(),
-        cta:b?b.textContent.trim():null, fn:b?b.getAttribute('onclick'):null, b};
+        cta:b?b.textContent.trim():null, fn:b?b.getAttribute('data-on-click'):null, b};
     };
 
     ok('R13 — le bouton d’état vide est secondaire, et n’existe qu’avec son libellé ET son geste',(()=>{
@@ -58170,7 +58328,7 @@ async function testExercices(){
       for(const cl of ['btn','btn-outline','btn-sm'])
         if(!b.classList.contains(cl)) return _echec('classe « '+cl+' » absente : '+b.className);
       if(b.classList.contains('btn-red')) return _echec('le bouton est rouge plein');
-      if(b.getAttribute('onclick')!=='faire()') return _echec('onclick : '+b.getAttribute('onclick'));
+      if(b.getAttribute('data-on-click')!=='faire()') return _echec('onclick : '+b.getAttribute('data-on-click'));
       d.innerHTML=emptyState('clipboard','X','Faire',null)+emptyState('clipboard','X',null,'faire()');
       return d.querySelector('button')?_echec('un bouton sans libellé ou sans geste est rendu'):true;})());
 
@@ -58284,14 +58442,14 @@ async function testExercices(){
       let r=_r13Lire(d);
       if(!r||r.cta) return _echec('compléments athlète : un bouton double « + AJOUTER »');
       if(!/Ajouter/.test(r.msg)) return _echec('compléments athlète : le message ne dit pas où est le geste');
-      if(_htmlBlocSupplements([]).indexOf('onclick="openSuppEdit(-1)"')<0) return _echec('le « + AJOUTER » du bloc a disparu');
+      if(_htmlBlocSupplements([]).indexOf('data-on-click="openSuppEdit(-1)"')<0) return _echec('le « + AJOUTER » du bloc a disparu');
       d.innerHTML=_renderSuppTable([],true,'openCoachSuppEdit');
       r=_r13Lire(d);
       if(!r||r.cta) return _echec('compléments coach : un bouton double le formulaire');
       // Caféine : le bouton principal est juste au-dessus de la liste.
       const cf=String(_renderCaffeineBlock);
       if(cf.indexOf('Aucune prise notée ce jour')<0) return _echec('caféine : message non reformulé');
-      if(cf.indexOf('onclick="openCaffeineAdd()"')<0) return _echec('caféine : le bouton principal a disparu');
+      if(cf.indexOf('data-on-click="openCaffeineAdd()"')<0) return _echec('caféine : le bouton principal a disparu');
       if(/Aucune prise notée ce jour[^)]*,\s*'openCaffeineAdd\(\)'/.test(cf)) return _echec('caféine : un second bouton est posé');
       return true;})());
 
@@ -58308,7 +58466,7 @@ async function testExercices(){
         for(const [m,quoi] of [["'Générer un code','generateStudentCode()'",'codes'],
             ["'Inviter un athlète','openAddAthlete()'",'athlètes'],
             ["'Modifier le programme','openCoachSessions()'",'grille de charge'],
-            ["'Réessayer','chargerBanque(true).then(()=>_bqRendre())'",'banque indisponible'],
+            ["'Réessayer','bqRecharger()'",'banque indisponible'],
             ["'Effacer la recherche','_bqToutEffacer()'",'banque sans résultat']])
           if(src.indexOf(m)<0) return _echec(quoi+' : le geste n’est pas proposé');
         for(const f of ['generateStudentCode','openAddAthlete','openCoachSessions','createCoachProgTemplate','chargerBanque','_bqRendre','_bqToutEffacer'])
@@ -58321,12 +58479,12 @@ async function testExercices(){
       // on relit l'attribut. Il doit revenir intact, sans une lettre de moins.
       const G=['ouvrirPeseeAccueil()','openBilanChoice()','openSessionPicker()','loadSessionManager()',
         '_focusEnvoiVideo()','openAddAthlete()','createCoachProgTemplate()','generateStudentCode()',
-        'openCoachSessions()','chargerBanque(true).then(()=>_bqRendre())','_bqToutEffacer()',"go('s-client-code')"];
+        'openCoachSessions()','bqRecharger()','_bqToutEffacer()',"go('s-client-code')"];
       const d=document.createElement('div'), casse=[];
       for(const g of G){
         d.innerHTML=emptyState('x','m','Faire',g);
         const b=d.querySelector('button');
-        if(!b||b.getAttribute('onclick')!==g) casse.push(g+' → '+(b&&b.getAttribute('onclick')));
+        if(!b||b.getAttribute('data-on-click')!==g) casse.push(g+' → '+(b&&b.getAttribute('data-on-click')));
       }
       return casse.length?_echec(casse.join(' | ')):true;})());
 
@@ -58422,15 +58580,15 @@ async function testExercices(){
         for(const t of ['Objectif les jours d\'entraînement','Objectif les jours de repos'])
           if(txt.indexOf(t)<0) return _echec('libellé d’objectif absent : « '+t+' »');
         // MARQUAGE : on dit ce qu'était le jour.
-        const b=[...d.querySelectorAll('button')].filter(x=>/stepsToggleType/.test(x.getAttribute('onclick')||''));
+        const b=[...d.querySelectorAll('button')].filter(x=>/stepsToggleType/.test(x.getAttribute('data-on-click')||''));
         if(b.map(x=>x.textContent.trim()).join('|')!=='Entraînement|Repos') return _echec('boutons : '+b.map(x=>x.textContent).join('|'));
         // « Aujourd'hui » seulement si le jour choisi EST aujourd'hui.
         const auj=_jourSteps()===localISODate(new Date());
         if(!(auj?/Aujourd'hui :/:/Ce jour-là :/).test(txt))
           return _echec('le marquage ne nomme pas le jour choisi ('+(auj?'aujourd’hui':'un autre jour')+')');
         // LES CLÉS NE CHANGENT PAS : 'on' et 'off' restent écrits.
-        if((b[0].getAttribute('onclick')||'').indexOf('stepsToggleType(\'on\')')<0
-           ||(b[1].getAttribute('onclick')||'').indexOf('stepsToggleType(\'off\')')<0)
+        if((b[0].getAttribute('data-on-click')||'').indexOf('stepsToggleType(\'on\')')<0
+           ||(b[1].getAttribute('data-on-click')||'').indexOf('stepsToggleType(\'off\')')<0)
           return _echec('les valeurs enregistrées ont changé');
         // L'HISTORIQUE porte les mêmes mots.
         // R34 — l'historique n'est plus replié.
@@ -58614,7 +58772,7 @@ async function testExercices(){
         sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:2,reps:'8'},{name:'SQUAT',series:2,reps:'5'}]}],
         nutrition:{type:'flexible'},consent:{health:true,policyVersion:POLICY_VERSION}};
     };
-    const _r10Cle=b=>((b&&b.getAttribute('onclick'))||'').replace(/^rcInfoOuvrir\('|'\)$/g,'');
+    const _r10Cle=b=>((b&&b.getAttribute('data-on-click'))||'').replace(/^rcInfoOuvrir\('|'\)$/g,'');
     const _r10Infos=(z,cle)=>[...z.querySelectorAll('.rc-i')].filter(b=>!cle||_r10Cle(b)===cle);
     // Rend un onglet d'Évolution et rend la main intacte.
     const _r10Onglet=(tab,f)=>{
@@ -58881,7 +59039,7 @@ async function testExercices(){
         currentUser=_r09Ath({vus:{surcharge:true}});
         if(!_lexEntree('surcharge')) return _echec('l’entrée « surcharge » du lexique manque');
         const compte=tb=>[...tb.querySelectorAll('.rc-i')].filter(b=>
-          (b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'surcharge\')')>=0);
+          (b.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'surcharge\')')>=0);
         const sets=_r09Seance();
         let tb=_r09Rendre(d,_r09Ex,sets);
         let b=compte(tb);
@@ -59072,7 +59230,7 @@ async function testExercices(){
           &&x.firstChild.nodeType===3&&x.firstChild.textContent.trim()==='Gêne');
         if(!porteur) return _echec(nom+' : pas de libellé « Gêne » — « '+t.textContent.trim()+' »');
         const b=porteur.querySelector('.rc-i');
-        if(!b||(b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'douleur\')')<0)
+        if(!b||(b.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'douleur\')')<0)
           return _echec(nom+' : le ⓘ « douleur » manque à côté de « Gêne »');
         // À DROITE du libellé : le dernier élément du porteur.
         if(porteur.lastElementChild!==b) return _echec(nom+' : le ⓘ n’est pas à droite du libellé');
@@ -59543,10 +59701,10 @@ async function testExercices(){
       if(envoi.textContent.indexOf('Envoyer une vidéo')>envoi.textContent.indexOf('Choisir une vidéo')) return _echec('le titre suit le bouton');
       const fb=document.getElementById('vid-file-btn');
       if(fb.textContent.trim()!=='Choisir une vidéo') return _echec('bouton fichier : « '+fb.textContent.trim()+' »');
-      if(fb.getAttribute('for')!=='vid-file-input'||document.getElementById('vid-file-input').getAttribute('onchange')!=='uploadVideoFile(this)')
+      if(fb.getAttribute('for')!=='vid-file-input'||document.getElementById('vid-file-input').getAttribute('data-on-change')!=='uploadVideoFile(this)')
         return _echec('le bouton n’ouvre plus le sélecteur branché sur uploadVideoFile');
       if(fb.getAttribute('tabindex')!=='0') return _echec('le bouton fichier n’est pas atteignable au clavier');
-      const bl=[...lien.querySelectorAll('button')].find(x=>/addVideoLink\(\)/.test(x.getAttribute('onclick')||''));
+      const bl=[...lien.querySelectorAll('button')].find(x=>/addVideoLink\(\)/.test(x.getAttribute('data-on-click')||''));
       if(!bl||bl.textContent.trim()!=='Envoyer à mon coach') return _echec('bouton lien : « '+(bl&&bl.textContent.trim())+' »');
       const txt=document.getElementById('s-videos').textContent;
       if(/upload/i.test(txt)) return _echec('« upload » reste affiché');
@@ -59562,8 +59720,8 @@ async function testExercices(){
         if(h.style.display!=='none') return _echec('un lien YouTube affiche l’avertissement');
       } finally { u.value=sv; h.style.display='none'; }
       // AUCUN LIEN MORT : chaque go() de l'écran vise un écran qui existe.
-      for(const el of document.querySelectorAll('#s-videos [onclick]')){
-        const m=(el.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
+      for(const el of document.querySelectorAll('#s-videos [data-on-click]')){
+        const m=(el.getAttribute('data-on-click')||'').match(/go\('([^']+)'\)/);
         if(m&&!document.getElementById(m[1])) return _echec('lien mort vers '+m[1]);
       }
       return true;})());
@@ -59622,7 +59780,7 @@ async function testExercices(){
         for(const id of MASQUES.concat(['clh-echeance','clh-contraintes','clh-douleur'])){ const e=document.getElementById(id); svD[id]=e.style.display; e.style.display='block'; }
         currentUser=_r36Ath();
         if(_rendreDemarrage()!==true) return _echec('le bloc ne paraît pas pour un compte neuf');
-        const b=[...z.querySelectorAll('button.pd-ligne')].map(x=>x.getAttribute('onclick'));
+        const b=[...z.querySelectorAll('button.pd-ligne')].map(x=>x.getAttribute('data-on-click'));
         if(b.join('|')!=='openBilan(\'depart\')|pdLancerSeance()|loadNutrition()') return _echec('actions : '+b.join('|'));
         const titres=[...z.querySelectorAll('.pd-titre')].map(x=>x.textContent).join('|');
         if(titres!=='1 · Complète ton questionnaire|2 · Lance ta première séance|3 · Note ton premier repas') return _echec('titres : '+titres);
@@ -59859,11 +60017,11 @@ async function testExercices(){
           if(vu!==depart) return _echec(nom+' : bilan de départ « '+vu+' » au lieu de « '+depart+' »');
         }
         // LE BILAN COACHING, SA FREQUENCE ET LE COMPTE A REBOURS, SUR L'ECRAN.
-        if(!choix.querySelector('[onclick="openBilan(\'coaching\')"]')) return _echec('le bilan coaching manque');
+        if(!choix.querySelector('[data-on-click="openBilan(\'coaching\')"]')) return _echec('le bilan coaching manque');
         for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2','bilan-countdown'])
           if(!choix.contains(document.getElementById(id))) return _echec(id+' n’est pas sur l’écran de choix');
         for(const id of ['bilan-freq-btn-1','bilan-freq-btn-2'])
-          if(document.getElementById(id).getAttribute('onclick')!=='setBilanFreq('+id.slice(-1)+');event.stopPropagation()') return _echec(id+' n’appelle plus setBilanFreq');
+          if(document.getElementById(id).getAttribute('data-on-click')!=='setBilanFreq('+id.slice(-1)+');event.stopPropagation()') return _echec(id+' n’appelle plus setBilanFreq');
         // ET PLUS AILLEURS : ni « Mon suivi » dans Réglages, ni ligne en tête d'Évolution.
         if(document.getElementById('cr-suivi')) return _echec('« Mon suivi » est encore dans Réglages');
         if(document.getElementById('s-progress').contains(document.getElementById('bilan-countdown'))) return _echec('le compte à rebours est resté dans Évolution');
@@ -59896,7 +60054,7 @@ async function testExercices(){
         openBilanChoice();
         if(actif()!=='s-bilan-choice') return _echec('écran : '+actif());
         if(questions.length) return _echec('une question avant le choix : '+questions[0]);
-        document.querySelector('#s-bilan-choice [onclick="openBilan(\'coaching\')"]').click();
+        document.querySelector('#s-bilan-choice [data-on-click="openBilan(\'coaching\')"]').click();
         for(let i=0;i<20&&actif()!=='s-bilan';i++) await new Promise(r=>setTimeout(r,25));
         if(questions.length!==1) return _echec(questions.length+' question(s) : '+questions.join(' | '));
         if(!/^Reprendre ton bilan en cours/.test(questions[0])) return _echec('question posée : « '+questions[0]+' »');
@@ -60069,7 +60227,7 @@ async function testExercices(){
         // Libellé et valeur sont deux cellules côte à côte : leur texte se lit collé.
         if(t.indexOf('Poids+0,4 kg')<0||t.indexOf('Tour de taille−0,8 cm')<0||t.indexOf('Tour de hanchestable')<0) return _echec('écarts : '+t);
         if(t.indexOf('Ton coach est prévenu.')<0) return _echec('coach : '+t);
-        const b=[...document.querySelectorAll('#bf-contenu button')].map(x=>x.textContent.trim()+'>'+x.getAttribute('onclick'));
+        const b=[...document.querySelectorAll('#bf-contenu button')].map(x=>x.textContent.trim()+'>'+x.getAttribute('data-on-click'));
         if(b.join(' | ')!=='Voir ma progression>loadProgress() | Retour à l\'accueil>go(\'s-client-home\');loadClientHome()') return _echec('boutons : '+b.join(' | '));
         // LE RETOUR NE BOUCLE PAS : depuis Évolution, on rentre à l'accueil.
         document.querySelector('#bf-contenu .btn-red').click();
@@ -60114,7 +60272,7 @@ async function testExercices(){
         const txt=pc.textContent;
         if(txt.indexOf('16.4%')<0||txt.indexOf('17.2%')<0) return _echec('les valeurs brutes ont disparu');
         // Le ⓘ est à côté du pourcentage affiché.
-        const i=[...pc.querySelectorAll('.rc-i')].filter(b=>/masse_grasse/.test(b.getAttribute('onclick')||''));
+        const i=[...pc.querySelectorAll('.rc-i')].filter(b=>/masse_grasse/.test(b.getAttribute('data-on-click')||''));
         if(i.length!==1||!/MG actuel/.test((i[0].closest('.metric-box')||{}).textContent||'')) return _echec('le ⓘ masse_grasse n’est pas sur « MG actuel »');
         if(pc.querySelector('.mg-manque')||pc.querySelector('.mg-anciens')) return _echec('un manque signalé sur des bilans complets');
         // Au-delà du seuil, l'écart reste signé et coloré.
@@ -60937,7 +61095,7 @@ async function testExercices(){
         if(ouvrirCodeCoach()!=='s-client-code'||ecran!=='s-client-code') return _echec('connecté : '+ecran);
         // Les deux boutons de l'accueil passent par là.
         const w=document.querySelector('#s-welcome .wel-p-code');
-        if(!w||(w.getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')<0) return _echec('bouton de l’accueil : '+(w&&w.getAttribute('onclick')));
+        if(!w||(w.getAttribute('data-on-click')||'').indexOf('ouvrirCodeCoach()')<0) return _echec('bouton de l’accueil : '+(w&&w.getAttribute('data-on-click')));
         return true;
       }finally{ currentUser=sU; window.go=sGo; }})());
 
@@ -61066,9 +61224,9 @@ async function testExercices(){
 
     okA('R28/R34 — Pas : saisie, objectif du jour, semaine, historique, réglages, sans repli, sur l’écran dédié comme dans Lifestyle',async()=>{
       const sU=currentUser, svD=_stepsDate;
-      const PAS=[['bandeau du jour','#steps-date-input'],['marquage du jour','button[onclick="stepsToggleType(\'on\')"]'],
-        ['champ','#steps-today-input'],['Enregistrer','button[onclick="saveSteps()"]'],
-        ['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],['import','input[onchange="importerCaptureStats(this)"]'],
+      const PAS=[['bandeau du jour','#steps-date-input'],['marquage du jour','button[data-on-click="stepsToggleType(\'on\')"]'],
+        ['champ','#steps-today-input'],['Enregistrer','button[data-on-click="saveSteps()"]'],
+        ['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],['import','input[data-on-change="importerCaptureStats(this)"]'],
         ['objectif du jour',null,'Objectif :'],['avancement','#steps-pct-jour'],['semaine',null,'Cette semaine'],
         ['moyenne',null,'Moyenne hebdomadaire'],['historique',null,'Historique'],['réglages',null,'Régler mes objectifs'],['objectif entraînement','#steps-goal-on']];
       try{
@@ -61079,15 +61237,15 @@ async function testExercices(){
           const z=document.getElementById(conteneur);
           const o=_r28Ordre(z,PAS); if(o) return _echec(ou+' : '+o);
           if(conteneur==='steps-content'&&(document.querySelector('.screen.active')||{}).id!=='s-steps') return _echec('l’écran dédié ne s’ouvre plus');
-          const b=z.querySelector('button[onclick="saveSteps()"]');
+          const b=z.querySelector('button[data-on-click="saveSteps()"]');
           if(b.textContent.trim()!=='Enregistrer'||/\bSauver\b/.test(z.textContent)) return _echec(ou+' : bouton « '+b.textContent.trim()+' »');
           // L'import DANS la carte de saisie, sous son bouton.
-          if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de saisie');
+          if(z.querySelector('input[data-on-change="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de saisie');
           // R34 — AUCUN REPLI : l'historique et les objectifs sont affichés en entier.
           if(z.querySelector('details,summary')) return _echec(ou+' : un repli est encore là');
           if(!z.querySelector('.hist-bloc')||z.querySelector('.hist-bloc').textContent.indexOf('Historique')<0) return _echec(ou+' : l’historique manque');
           const regl=z.querySelector('.steps-reglages');
-          if(!regl||!regl.querySelector('#steps-goal-on')||!regl.querySelector('#steps-goal-off')||!regl.querySelector('button[onclick="saveStepsGoals()"]')) return _echec(ou+' : les objectifs ne sont pas dans leur carte');
+          if(!regl||!regl.querySelector('#steps-goal-on')||!regl.querySelector('#steps-goal-off')||!regl.querySelector('button[data-on-click="saveStepsGoals()"]')) return _echec(ou+' : les objectifs ne sont pas dans leur carte');
         }
         // Sans import, la phrase part avec lui.
         loadSteps('lifestyle-steps-content',{avecImport:false});
@@ -61100,7 +61258,7 @@ async function testExercices(){
     okA('R28/R34 — Sommeil : la nuit à saisir d’abord, puis la semaine et l’historique sans repli, sur les deux rendus',async()=>{
       const sU=currentUser, svD=_sleepDate;
       const SOM=[['bandeau du jour','#sleep-date-input'],['coucher','#sleep-bed-input'],['lever','#sleep-wake-input'],
-        ['Enregistrer','button[onclick="saveSleep()"]'],['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],
+        ['Enregistrer','button[data-on-click="saveSleep()"]'],['« ou importe »',null,'ou importe une capture d\'écran de ton application de santé'],
         ['semaine',null,'Cette semaine'],['moyenne',null,'Moyenne hebdomadaire'],['historique','.hist-bloc']];
       try{
         currentUser=_r28Compte(); _sleepDate=null;
@@ -61109,8 +61267,8 @@ async function testExercices(){
           loadSleep(conteneur);
           const z=document.getElementById(conteneur);
           const o=_r28Ordre(z,SOM); if(o) return _echec(ou+' : '+o);
-          const b=z.querySelector('button[onclick="saveSleep()"]');
-          if(z.querySelector('input[onchange="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de la nuit');
+          const b=z.querySelector('button[data-on-click="saveSleep()"]');
+          if(z.querySelector('input[data-on-change="importerCaptureStats(this)"]').closest('.card-nut')!==b.closest('.card-nut')) return _echec(ou+' : l’import n’est pas dans la carte de la nuit');
           if(z.querySelector('details,summary')) return _echec(ou+' : un repli est encore là');
           if(z.querySelector('.hist-bloc').textContent.indexOf('Historique')<0) return _echec(ou+' : l’historique n’a plus son titre');
         }
@@ -64180,12 +64338,12 @@ async function testExercices(){
         if(!_ml.deplEtiq||_ml.deplEtiq.kind!=='leg') return 'le double-clic ne prend pas la légende';
         pe('pointermove',L0.x+8,500,0); pe('pointerdown',L0.x+8,500,1); pe('pointerup',L0.x+8,500,0);
         if(typeof _ml.annot.leg.y!=='number'||_ml.annot.leg.y<600) return 'la légende ne descend pas : '+_ml.annot.leg.y;
-        if(!document.querySelector('#mlx-legende [onclick="mlLegendeReplacer()"]')) return 'le panneau n’offre pas de remettre la légende dans son coin';
+        if(!document.querySelector('#mlx-legende [data-on-click="mlLegendeReplacer()"]')) return 'le panneau n’offre pas de remettre la légende dans son coin';
         mlLegendeReplacer();
         if('y' in _ml.annot.leg) return 'la légende ne revient pas dans son coin';
         // L'ÉDITEUR : « Le remettre près du tracé ».
         mlAnnotChoisir(a.id,true);
-        if(!document.querySelector('#mlx-editeur [onclick="mlEtiqReplacer()"]')) return 'l’éditeur n’offre pas de remettre l’étiquette';
+        if(!document.querySelector('#mlx-editeur [data-on-click="mlEtiqReplacer()"]')) return 'l’éditeur n’offre pas de remettre l’étiquette';
         mlEtiqReplacer();
         if('eo' in _mlxAnnot(a.id)) return 'l’étiquette ne revient pas près du tracé';
         return null;
@@ -64787,7 +64945,7 @@ async function testExercices(){
         if(!vg.classList.contains('cpl-v-vide')||!/Aucune séance/.test(vg.textContent)) return _echec('version vide : '+vg.textContent);
         // L'INDEX EST CELUI DU TABLEAU, pas de la section : « Spécial fessiers »
         // est le troisième modèle, et le deuxième de sa section.
-        const oc=fg.querySelectorAll('.cpl-v')[1].getAttribute('onclick');
+        const oc=fg.querySelectorAll('.cpl-v')[1].getAttribute('data-on-click');
         if(oc!=="editCoachProgTemplate(2,'F')") return _echec('la version Femme ouvre : '+oc);
         if(!/openAssignProgram\(2\)/.test(fg.innerHTML)) return _echec('Assigner ne vise pas le bon modèle');
         // ⚠ L'ORIGINE SURVIT A LA PERTE DE SON TITRE. C'est le FAIT — d'ou
@@ -65039,13 +65197,13 @@ async function testExercices(){
         currentUser={id:'c27',email:'c27@t.fr',role:'coach',coachPrograms:[_r27Modele('g','Spécial fessiers',[],['Fessiers A'])]};
         loadCoachProgramsList();
         const bAutre=document.querySelectorAll('#cpl-list .cpl-actions .btn')[1];
-        if(bAutre.getAttribute('onclick')!=='ouvrirVenteProgramme(0)') return 'autre coach : '+bAutre.getAttribute('onclick');
+        if(bAutre.getAttribute('data-on-click')!=='ouvrirVenteProgramme(0)') return 'autre coach : '+bAutre.getAttribute('data-on-click');
         // LE CRÉATEUR vend par la boutique.
         currentUser={id:'k27',email:CREATOR_EMAIL,role:'coach',coachPrograms:[
           _r27Modele('g','Spécial fessiers',[],['Fessiers A','Fessiers B']),_r27Modele('v','Vide',[],[])]};
         loadCoachProgramsList();
         const b=document.querySelectorAll('#cpl-list .cpl-actions .btn')[1];
-        if(b.getAttribute('onclick')!=='ouvrirFicheVente(null,0)') return 'créateur : '+b.getAttribute('onclick');
+        if(b.getAttribute('data-on-click')!=='ouvrirFicheVente(null,0)') return 'créateur : '+b.getAttribute('data-on-click');
         if(!ouvrirFicheVente(null,0)) return 'la fiche ne s’ouvre pas';
         const f=document.getElementById('rc-vente');
         if(f.style.display!=='flex'||!f.querySelector('.sp-feuille')) return 'la fiche n’est pas une feuille ouverte';
@@ -65174,7 +65332,7 @@ async function testExercices(){
       const pad=document.querySelector('#s-nutrition .pad');
       const l=g('nut-approche');
       if(!l||pad.firstElementChild!==l) return _echec('« Mon approche » n’est pas en tête de l’écran');
-      if(l.tagName!=='BUTTON'||l.getAttribute('onclick')!=='ouvrirChoixDiete()') return _echec('« Mon approche » n’est pas un bouton qui ouvre la feuille');
+      if(l.tagName!=='BUTTON'||l.getAttribute('data-on-click')!=='ouvrirChoixDiete()') return _echec('« Mon approche » n’est pas un bouton qui ouvre la feuille');
       if(!l.classList.contains('banner-hero')) return _echec('le bouton ne prend pas le style rouge de .banner-hero');
       if(!/^Mon approche : /.test(l.querySelector('.nut-approche-l').textContent)) return _echec('libellé : « '+l.textContent.trim()+' »');
       if((l.querySelector('.nut-approche-b')||{}).textContent!=='Changer') return _echec('l’indication « Changer » manque');
@@ -65183,7 +65341,7 @@ async function testExercices(){
       const lire=u=>{ const d=document.createElement('div'); d.innerHTML=_htmlChoixDiete(u);
         return [...d.querySelectorAll('.dch-opt')].map(x=>({type:x.dataset.diete,off:x.disabled,actif:x.classList.contains('actif'),
           nom:x.querySelector('.dch-nom').textContent,desc:x.querySelector('.dch-desc').textContent,
-          verrou:x.querySelector('.dch-verrou'),clic:x.getAttribute('onclick')})); };
+          verrou:x.querySelector('.dch-verrou'),clic:x.getAttribute('data-on-click')})); };
       // OUVERTE : deux options, flexible d'abord, les phrases demandées.
       const o=lire(_pa({coachId:'c',nutrition:{dietType:'flexible',strictAcces:true}}));
       if(o.map(x=>x.type).join()!=='flexible,strict') return _echec('ordre : '+o.map(x=>x.type));
@@ -65819,13 +65977,13 @@ async function testExercices(){
         const lib=th.map(t=>t.textContent.replace('ⓘ','').trim());
         if(JSON.stringify(lib)!==JSON.stringify(['','à l\'échec','RIR 1','RIR 2','RIR 3'])) return _echec('en-têtes : '+JSON.stringify(lib));
         const i1=th[1].querySelector('.rc-i');
-        if(!i1||(i1.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0) return _echec('pas de ⓘ RIR sur « à l’échec »');
+        if(!i1||(i1.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'rir\')')<0) return _echec('pas de ⓘ RIR sur « à l’échec »');
         if(th.slice(2).some(t=>t.querySelector('.rc-i'))) return _echec('un ⓘ de trop dans la bande');
         // LA FORCE MAX.
         const bloc=g('calc-e1rm-display');
         if(!/^Force max estimée/.test(bloc.firstElementChild.textContent.trim())) return _echec('bloc : « '+bloc.firstElementChild.textContent.trim()+' »');
         const i2=bloc.querySelector('.rc-i');
-        if(!i2||(i2.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'e1rm\')')<0) return _echec('pas de ⓘ e1rm sur la force max');
+        if(!i2||(i2.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'e1rm\')')<0) return _echec('pas de ⓘ e1rm sur la force max');
         // UNE SECONDE OUVERTURE NE DOUBLE PAS LES ⓘ.
         openCalc('100','8','2','homme');
         if(m.querySelectorAll('.rc-i').length!==2) return _echec(m.querySelectorAll('.rc-i').length+' ⓘ après deux ouvertures');
@@ -65957,7 +66115,7 @@ async function testExercices(){
           if(!ou||!ou.classList.contains('sv-ou')||ou.nextElementSibling!==imp)
             return _echec(quoi+' : l’import ne suit pas la saisie, derrière son « ou »');
           const inp=imp.querySelector('input[type="file"]');
-          if(!inp||inp.getAttribute('onchange')!=='importerCaptureStats(this)') return _echec(quoi+' : le champ n’appelle plus importerCaptureStats');
+          if(!inp||inp.getAttribute('data-on-change')!=='importerCaptureStats(this)') return _echec(quoi+' : le champ n’appelle plus importerCaptureStats');
           // Le gestionnaire retrouve son bouton par nextElementSibling, et y
           // ecrit par textContent : le bouton ne porte que du texte.
           const b=inp.nextElementSibling;
@@ -65988,11 +66146,11 @@ async function testExercices(){
       if(!b) return _echec('le bouton Tension n’est pas dans le menu médical');
       if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
         return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
-      const m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
+      const m=(b.getAttribute('data-on-click')||'').match(/go\('([^']+)'\)/);
       if(!m||m[1]!=='s-sante') return _echec('mène à '+(m&&m[1]));
       if(/^s-coach-/.test(m[1])||!document.getElementById(m[1])) return _echec('écran inatteignable pour un athlète');
       // Une seule entrée : l'ancien bouton du milieu est retiré.
-      const n=[...document.querySelectorAll('#s-athlete-profile [onclick]')].filter(x=>/go\('s-sante'\)/.test(x.getAttribute('onclick'))).length;
+      const n=[...document.querySelectorAll('#s-athlete-profile [data-on-click]')].filter(x=>/go\('s-sante'\)/.test(x.getAttribute('data-on-click'))).length;
       if(n!==1) return _echec(n+' entrées vers la santé dans le profil');
       // La phrase d'avertissement reste, mot pour mot.
       if(document.getElementById('s-sante').textContent.indexOf('RepCore conserve tes mesures et tes analyses pour que tu les aies sous la main. Il ne les interprète pas.')<0)
@@ -66034,7 +66192,7 @@ async function testExercices(){
         const m=src[i].match(/<div id="(s-[a-z0-9-]+)" class="screen/); if(m) ecran=m[1];
         if(!/class="back-btn/.test(src[i])) continue;
         n++;
-        const oc=(src[i].match(/onclick="([^"]*)"/)||[])[1]||'';
+        const oc=(src[i].match(/data-on-click="([^"]*)"/)||[])[1]||'';
         if(/^retourDe\('/.test(oc)){
           const r=oc.match(/^retourDe\('([^']+)'/);
           if(r[1]!==ecran) hors.push(ecran+' : retourDe(\''+r[1]+'\') vise un autre écran');
@@ -66523,8 +66681,8 @@ async function testExercices(){
         if(p.querySelector('.rc-i')) return _echec('le ⓘ est enfermé dans le role="img" : il est inatteignable');
         const b=c.querySelector('.rc-i');
         if(!b) return _echec('la pastille du lexique est absente de la cellule');
-        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rpe\')')<0)
-          return _echec('le ⓘ n’ouvre pas « rpe » : '+b.getAttribute('onclick'));
+        if((b.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'rpe\')')<0)
+          return _echec('le ⓘ n’ouvre pas « rpe » : '+b.getAttribute('data-on-click'));
         // Et il est bien À DROITE de la pastille.
         if(!(b.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_PRECEDING))
           return _echec('le ⓘ n’est pas à droite de la pastille');
@@ -66538,7 +66696,7 @@ async function testExercices(){
         const th=_r07Th();
         const b=th&&th.querySelector('.rc-i');
         if(!b) return _echec('le ⓘ n’est pas rendu dans l’en-tête');
-        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
+        if((b.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
           return _echec('l’en-tête n’ouvre pas « rir »');
         // SUR LA BANDE ROUGE le gris de base disparaîtrait : la pastille y
         // vire au blanc voilé, sans changer de taille.
@@ -66776,8 +66934,8 @@ async function testExercices(){
           return _echec('pas de type="button" : la pastille soumettrait un formulaire');
         if(!b.classList.contains('rc-i')||!b.classList.contains('hit44'))
           return _echec('classes : '+b.className);
-        if((b.getAttribute('onclick')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
-          return _echec('onclick : '+b.getAttribute('onclick'));
+        if((b.getAttribute('data-on-click')||'').indexOf('rcInfoOuvrir(\'rir\')')<0)
+          return _echec('onclick : '+b.getAttribute('data-on-click'));
         const al=b.getAttribute('aria-label')||'';
         if(al!=='Qu\'est-ce que '+RC_LEXIQUE.rir.t+' ?') return _echec('aria-label : « '+al+' »');
         if(b.textContent.trim()!=='ⓘ') return _echec('glyphe : « '+b.textContent.trim()+' »');
@@ -66939,14 +67097,14 @@ async function testExercices(){
         if(btns.length!==1) return _echec(btns.length+' boutons : '+btns.map(b=>b.textContent.trim()).join(' | '));
         if(btns[0].textContent.trim()!=='J\'ai compris')
           return _echec('le bouton dit « '+btns[0].textContent.trim()+' »');
-        if((btns[0].getAttribute('onclick')||'').indexOf('rcInfoFermer')<0)
+        if((btns[0].getAttribute('data-on-click')||'').indexOf('rcInfoFermer')<0)
           return _echec('le bouton ne ferme pas');
         // LE FOCUS ARRIVE DESSUS : au clavier, le seul geste possible est
         // d'en sortir.
         if(document.activeElement!==btns[0])
           return _echec('le focus est sur '+(document.activeElement&&document.activeElement.id||'?'));
         // Il ferme vraiment.
-        btns[0].onclick(); rcInfoFermer(true);
+        btns[0].click(); rcInfoFermer(true);
         return z.style.display==='none'?true:_echec('display='+z.style.display);
       } finally { try{ rcInfoFermer(true); }catch(e){} }})());
 
@@ -66955,7 +67113,7 @@ async function testExercices(){
       const z=document.getElementById('rc-lexique');
       const src=_prodSrc();
       // LE VOILE : le clic sur le fond, et LUI SEUL — event.target===this.
-      const oc=z.getAttribute('onclick')||'';
+      const oc=z.getAttribute('data-on-click')||'';
       if(oc.indexOf('event.target===this')<0||oc.indexOf('rcInfoFermer')<0)
         return _echec('le voile ne ferme pas : '+oc);
       // ÉCHAP : le gestionnaire global doit connaître la feuille, et la
@@ -68777,7 +68935,7 @@ async function testExercices(){
           if(!(iN<iB)) return _echec('la nutrition passe derrière le badge');
           // Elle est un VRAI bouton : curseur, rôle et clavier compris.
           const el=z.children[iN];
-          if((el.getAttribute('onclick')||'').indexOf('loadNutrition()')<0)
+          if((el.getAttribute('data-on-click')||'').indexOf('loadNutrition()')<0)
             return _echec('l’entrée n’ouvre pas la nutrition');
           if(el.getAttribute('role')!=='button') return _echec('l’entrée n’est pas un bouton');
           // Trois rendus de suite n'en font toujours qu'une.
@@ -69119,7 +69277,7 @@ async function testExercices(){
         const d=document.createElement('div');
         d.innerHTML=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
         const det=d.querySelector('details');
-        return !!(det&&/stopPropagation/.test(det.getAttribute('onclick')||''));})());
+        return !!(det&&/stopPropagation/.test(det.getAttribute('data-on-click')||''));})());
       ok('Critère : la légende dit ce que valent A, B et C',(()=>{
         const h=_htmlSuppLegende();
         // escapeHtml transforme les apostrophes en &#39; : on compare la forme
@@ -69129,7 +69287,7 @@ async function testExercices(){
         return SUPP_LEGENDE_PREUVE.length===3;})());
       ok('La légende n\'est pas masquable',(()=>{
         const h=_htmlSuppLegende();
-        return h.indexOf('<button')<0&&h.indexOf('onclick')<0&&h.indexOf('display:none')<0;})());
+        return h.indexOf('<button')<0&&h.indexOf('data-on-click')<0&&h.indexOf('display:none')<0;})());
       ok('La légende est présente sous le tableau, athlète comme coach',(()=>{
         const l=[_s('Créatine monohydrate',['matin'])];
         const a=_renderSuppTable(l,false,'openSuppEdit');
@@ -69432,7 +69590,7 @@ async function testExercices(){
           if(!tout||!/Tout prendre \(1\)/.test(tout.textContent)) return _echec('« Tout prendre » du coucher : '+(tout?tout.textContent:'absent'));
           // La coche ne rouvre pas la fiche : son clic et sa touche s'arrêtent à elle.
           const b=d.querySelector('[data-supp-coche="1@matin"]');
-          if(!/stopPropagation/.test(b.getAttribute('onclick')||'')||!/stopPropagation/.test(b.getAttribute('onkeydown')||''))
+          if(!/stopPropagation/.test(b.getAttribute('data-on-click')||'')||!/stopPropagation/.test(b.getAttribute('data-on-keydown')||''))
             return _echec('la coche laisse passer le clic à la carte');
           // COCHER, DÉCOCHER, TOUT PRENDRE — dans le dossier, sous la date du jour.
           const iso=localISODate(new Date());
@@ -70593,7 +70751,7 @@ async function testExercices(){
         const _av=zone?zone.innerHTML:null;
         try{
           window.saveUser=()=>true;
-          const attaque='<img src=x onerror="window.__xssTemoin=1">';
+          const attaque='<img src=x data-on-error="window.__xssTemoin=1">';
           delete window.__xssTemoin;
           currentUser={id:'x1',email:'x1@t',role:'athlete',fname:'A',bilans:[],
             sessions:[],nutrition:{},exAlias:{},exMuscles:{},programs:{},
@@ -70603,7 +70761,7 @@ async function testExercices(){
           // Aucune balise hostile n'a ete CONSTRUITE : c'est le seul critere
           // fiable. Attendre qu'une alerte parte serait asynchrone, et un
           // navigateur qui n'execute pas onerror ferait passer un test faux.
-          if(zone.querySelectorAll('img[onerror]').length)
+          if(zone.querySelectorAll('img[data-on-error]').length)
             return _echec('une balise img hostile a été construite');
           // Et le nom s'affiche LITTERALEMENT, ce qui est le comportement voulu.
           return (zone.innerText||'').indexOf('<img src=x')>=0
@@ -70614,14 +70772,14 @@ async function testExercices(){
         // ?coachpkg= se fabrique a la main et s'envoie par message : c'est la
         // source la moins fiable de toutes, et elle atterrissait telle quelle
         // dans un innerHTML.
-        const attaque='<img src=x onerror="window.__xssTemoin=1">';
+        const attaque='<img src=x data-on-error="window.__xssTemoin=1">';
         const payload={id:'c9',fname:'X',lname:'Y',email:'c@t',
           code:'RC-AAAA-BBBB',role:'coach',coachName:attaque};
         const b64=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
         const lu=JSON.parse(decodeURIComponent(escape(atob(b64))));
         const d=document.createElement('div');
         d.innerHTML='<div>Code de <strong>'+escapeHtml(lu.coachName||'ton coach')+'</strong></div>';
-        if(d.querySelectorAll('img[onerror]').length)
+        if(d.querySelectorAll('img[data-on-error]').length)
           return _echec('une balise a été construite depuis le paquet');
         // TEMOIN : sans echappement, la balise EST construite. Sans lui, le
         // test passerait meme si escapeHtml ne faisait rien.
@@ -70725,12 +70883,12 @@ async function testExercices(){
         TABBAR_ECRANS['s-canal']==='canal');
       ok('Le bouton du coach est câblé sur le canal',(()=>{
         const b=Array.from(document.querySelectorAll('button'))
-          .find(x=>/loadCanalCoach\(\)/.test(x.getAttribute('onclick')||''));
+          .find(x=>/loadCanalCoach\(\)/.test(x.getAttribute('data-on-click')||''));
         if(!b) return _echec('aucun bouton ne l\'appelle');
         // Et il n'a pas remplacé le message groupé WhatsApp, qui reste le
         // canal pour joindre quelqu'un hors de l'app.
         const wa=Array.from(document.querySelectorAll('button'))
-          .find(x=>/openWaGroupe\(\)/.test(x.getAttribute('onclick')||''));
+          .find(x=>/openWaGroupe\(\)/.test(x.getAttribute('data-on-click')||''));
         return wa?true:_echec('le message groupé WhatsApp a disparu');})());
       ok('canalDernier et canalEpingle voyagent dans le profil public',(()=>{
         // pushProfilCoach fait un PUT du profil ENTIER reconstruit depuis cette
@@ -71075,7 +71233,7 @@ async function testExercices(){
           renderCoachMicroSection(c);
           const h=document.getElementById('ccd-micro').innerHTML;
           // Aucun bouton dans tout le bloc : ni fermeture, ni report.
-          return h.indexOf('<button')<0&&h.indexOf('onclick')<0
+          return h.indexOf('<button')<0&&h.indexOf('data-on-click')<0
             ?true:_echec('un contrôle permet de le faire disparaître');})());
         ok('Aucun texte saisi par l\'athlète n\'est recopié dans le bloc',(()=>{
           // C'est ce qui rend l'échappement défensif plutôt que nécessaire : les
@@ -72892,7 +73050,7 @@ async function testExercices(){
         const u=_m1(180,{'deb-entrejambe':'95'});
         u.morphoTests={cheville:{cm:7,date:Date.now()-200*864e5}};
         const h=_htmlQuestionsMorpho(u);
-        if(h.indexOf('<button')>=0||h.indexOf('onclick')>=0)
+        if(h.indexOf('<button')>=0||h.indexOf('data-on-click')>=0)
           return _echec('un contrôle est entré dans la zone de lecture');
         // Le test périmé y est dit, avec sa date.
         return /périmé/.test(h)&&/7 cm au mur/.test(h)
@@ -73370,7 +73528,7 @@ async function testExercices(){
       ok('M5 — la fiche coach reste une zone de LECTURE, même remplie',(()=>{
         const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
         const h=_htmlQuestionsMorpho(u);
-        if(h.indexOf('<button')>=0||h.indexOf('onclick')>=0)
+        if(h.indexOf('<button')>=0||h.indexOf('data-on-click')>=0)
           return _echec('un contrôle est entré dans la zone de lecture');
         // Le piège du profil est AFFICHÉ : c'est la partie la plus utile.
         if(h.indexOf('Le piège')<0) return _echec('le piège n’est pas montré');
@@ -78035,7 +78193,7 @@ async function testExercices(){
             if(!w) return _echec('pas de whey dans le modèle de sèche');
             const txt=el=>(el&&el.textContent||'').replace(/\s+/g,' ').trim();
             const reste=lib=>{ const b=[...document.querySelectorAll('#s-coach-plan .cpl-side .cpl-s-b')].find(x=>txt(x.querySelector('.cpl-s-l'))===lib); return txt(b&&b.querySelector('.cpl-s-r')); };
-            const champ=[...document.querySelectorAll('#s-coach-plan input[type=number]')].find(i=>(i.getAttribute('oninput')||'').indexOf("'"+w.id+"','q'")>=0);
+            const champ=[...document.querySelectorAll('#s-coach-plan input[type=number]')].find(i=>(i.getAttribute('data-on-input')||'').indexOf("'"+w.id+"','q'")>=0);
             if(!champ) return _echec('champ de quantité introuvable');
             const avant={p:reste('Protéines'),l:txt(document.getElementById('cpl-m-'+w.id)),t:txt(document.querySelector('#s-coach-plan .cpl-tot[data-repas="'+w.repas+'"]'))};
             if(!/1 scoop = P 25/.test(avant.l)) return _echec('la ligne ne dit pas ce que vaut un scoop : '+avant.l);
@@ -79464,7 +79622,7 @@ vendredi 78 6h 44m
           if(!document.getElementById('ls-per-'+q)) return _echec('l’en-tête '+q+' n’a plus de place pour sa période');
           const x=document.createElement('div'); x.innerHTML=_htmlSanPeriode(q);
           const sel=x.querySelector('select');
-          if(!sel||sel.options.length!==12||sel.getAttribute('onchange')!=='sanPeriodeChoisir(this.value)')
+          if(!sel||sel.options.length!==12||sel.getAttribute('data-on-change')!=='sanPeriodeChoisir(this.value)')
             return _echec('le menu de période de '+q+' est incomplet');
         }
         if(typeof _htmlSemaineSante!=='undefined'||typeof _htmlPisteSante!=='undefined')
@@ -79502,7 +79660,7 @@ vendredi 78 6h 44m
     // le libelle du bouton : un libelle se reecrit sans rien casser, ce champ
     // est ce qui rend la fonction atteignable.
     (()=>{
-      const SEL='input[onchange="importerCaptureStats(this)"]';
+      const SEL='input[data-on-change="importerCaptureStats(this)"]';
       const cadres=el=>el?el.querySelectorAll(SEL).length:-1;
       const bac=document.createElement('div');
       bac.style.display='none';
@@ -80130,8 +80288,8 @@ vendredi 78 6h 44m
         // C'est le geste répété 25 à 40 fois par séance : un seul bouton
         // oublié, et une ligne sur deux se comporte autrement.
         const src=renderSets.toString();
-        const n=(src.match(/onclick="toggleSet\(/g)||[]).length;
-        const avec=(src.match(/data-arc="off" onclick="toggleSet\(/g)||[]).length;
+        const n=(src.match(/data-on-click="toggleSet\(/g)||[]).length;
+        const avec=(src.match(/data-arc="off" data-on-click="toggleSet\(/g)||[]).length;
         if(!n) return _echec('aucun bouton toggleSet trouvé');
         return n===avec?true:_echec(avec+' sur '+n+' boutons');})());
 

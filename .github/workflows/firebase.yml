@@ -158,6 +158,14 @@ jobs:
       - name: Verifier la CSP de l'app
         run: node scripts/verif/csp.mjs
 
+      # LES GESTES DELEGUES (build 1760). script-src ne porte plus
+      # 'unsafe-inline' : un onclick="…" ecrit dans une chaine HTML est un
+      # bouton MORT en production, et un data-on-click="f()" dont f n'est pas
+      # dans la table blanche RC_ACTIONS est refuse par le moteur. Ni l'un ni
+      # l'autre ne se voit sur un serveur local sans en-tete.
+      - name: Verifier les gestes delegues (aucun gestionnaire en ligne, table blanche a jour)
+        run: node scripts/verif/gestes.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -219,8 +227,12 @@ jobs:
             exit 0
           fi
           # La RACINE du depot, et non app/ : la suite lit ../database.rules.json.
-          python3 -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
+          # SERVIE AVEC LA CSP de firebase.json (build 1760), et non par
+          # http.server : sans en-tete, un onclick="…" ecrit par megarde marche
+          # ici et meurt en production. CSP=1 fait tomber la suite sur tout
+          # refus de script-src et sur tout geste refuse par le moteur.
+          node scripts/verif/serveur-csp.mjs 8000 >/dev/null 2>&1 &
           "$CHROME" --headless=new --no-sandbox --disable-gpu --no-first-run \
             --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >/dev/null 2>&1 &
           for i in $(seq 1 30); do curl -s http://127.0.0.1:9223/json/version >/dev/null && break; sleep 1; done
-          VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223
+          CSP=1 VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223

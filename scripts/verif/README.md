@@ -81,3 +81,48 @@ substitution lève à mi-parcours ; la suite étant un seul `try`, tout ce qui
 suivait ne s'exécutait plus. Mesuré : **2 117** tests joués sans ce
 chargement, **3 729** avec. 1 612 assertions passaient pour absentes, et un
 lot pouvait en casser sans que rien ne l'indique.
+
+## Les gestes délégués, et la suite servie avec la CSP
+
+Depuis le build 1760, `script-src` (firebase.json, `/app` et `/app/**`) ne porte
+plus `'unsafe-inline'`. Trois conséquences, qu'aucun serveur local sans en-tête
+ne montre :
+
+- **un `onclick="…"` écrit dans une chaîne HTML est un bouton mort en
+  production.** On écrit `data-on-click="f(x)"` (et `data-on-change`,
+  `data-on-input`, `data-on-keydown`, `data-on-error`…). Le texte est le même,
+  mais il n'est plus exécuté par le navigateur : il est lu par le moteur de
+  gestes en tête de `rc-core.<build>.js`, qui n'appelle que les fonctions de la
+  table blanche `RC_ACTIONS` ;
+- **`f` doit être dans `RC_ACTIONS`**, sinon le geste est refusé (console :
+  `[geste] …`). La table est écrite par le script, jamais à la main ;
+- **les `<script>` en ligne de `app/index.html` passent par leur empreinte**
+  (`'sha256-…'` dans la CSP). `python scripts/versionner_actifs.py` les recalcule
+  à chaque build, `csp.mjs` les vérifie avant le déploiement.
+
+```bash
+node scripts/verif/gestes.mjs            # vérifie (aucun on…=, table à jour, gestes lisibles)
+node scripts/verif/gestes.mjs --ecrire   # réécrit la table après avoir ajouté un geste
+node scripts/verif/csp.mjs               # pas d'unsafe-inline, empreintes à jour
+```
+
+Un nom de fonction composé à l'exécution (`` `${fn}(${i})` ``) n'est pas
+lisible par le script : on le déclare à côté par un commentaire
+`// actions-en-plus: nomUn nomDeux`. Une variable d'état lue ou posée par un
+geste (`_pfOuvert=!_pfOuvert`) s'inscrit dans `RC_GESTE_VARS`, en fin de
+rc-core. `el.onclick=fn` posé par le code l'emporte toujours sur le
+`data-on-click` du balisage ; pour appeler le geste d'un bouton,
+`rcGesteClic(el)` et non `el.onclick()`.
+
+Pour jouer la suite **dans les conditions de la production** :
+
+```bash
+node scripts/verif/serveur-csp.mjs 8000 &
+CSP=1 VW=1280 VH=2000 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223
+```
+
+Le serveur pose la CSP de firebase.json sur `/app/**`, plus `'unsafe-eval'` et
+`blob:` dont `tests.js` a besoin (et lui seul). Avec `CSP=1`, la suite échoue
+sur tout refus de `script-src` et sur tout geste refusé par le moteur ; les
+refus d'`img-src` ou `connect-src` viennent des jeux d'essai (domaines
+factices) et sont seulement listés.

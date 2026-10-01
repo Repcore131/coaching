@@ -7,7 +7,12 @@
 //     donnee de dossier injectee pourrait alors exfiltrer vers n'importe ou ;
 //   · un domaine que l'app appelle (fetch('https://…')) et que connect-src
 //     n'admet pas — la fonction casse en production, et seulement la.
+// Et deux autres depuis le build 1760 :
+//   · 'unsafe-inline' qui revient dans script-src ;
+//   · l'empreinte d'un script en ligne de app/index.html qui n'est plus la
+//     bonne (le bloc est alors refuse par le navigateur, en production seule).
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {fichierCode} from './source-prod.mjs';
 
 const conf=JSON.parse(readFileSync('firebase.json','utf8'));
@@ -29,6 +34,27 @@ if(String(dir['base-uri'])!=="'self'") fautes.push("base-uri doit valoir 'self'"
 for(const d of ['connect-src','img-src','media-src','script-src','default-src'])
   if(!dir[d]) fautes.push(d+' absent');
   else if(dir[d].some((v)=>v==='*'||v==='https:'||v==='http:')) fautes.push(d+' ouvert a tout domaine ('+dir[d].join(' ')+')');
+// PAS DE 'unsafe-inline' NI DE 'unsafe-eval' DANS script-src (build 1760). Les
+// gestionnaires en ligne ont ete remplaces par des gestes delegues
+// (data-on-*, voir scripts/verif/gestes.mjs) : y remettre 'unsafe-inline',
+// c'est rendre a une donnee injectee le droit d'executer du code.
+const ss=dir['script-src']||[];
+for(const interdit of ["'unsafe-inline'","'unsafe-eval'","'unsafe-hashes'",'data:','blob:'])
+  if(ss.includes(interdit)) fautes.push('script-src ne doit pas porter '+interdit);
+// LES SCRIPTS EN LIGNE DE app/index.html PASSENT PAR LEUR EMPREINTE. Elle
+// change des qu'un caractere du bloc change — donc a CHAQUE build, le premier
+// bloc portant RC_BUILD. scripts/versionner_actifs.py les recalcule ; une
+// empreinte perimee, et le navigateur refuse le bloc en production : plus de
+// RC_BUILD, plus de theme, plus de _tok. L'empreinte porte sur le texte tel
+// que l'analyseur HTML le rend, c'est-a-dire en LF.
+const html=readFileSync('app/index.html','utf8');
+const attendues=[...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+  .map((m)=>"'sha256-"+createHash('sha256').update(m[1].replace(/\r\n?/g,'\n'),'utf8').digest('base64')+"'");
+const portees=ss.filter((v)=>v.startsWith("'sha256-"));
+for(const h of attendues) if(!portees.includes(h))
+  fautes.push('script-src ne porte pas l empreinte '+h+' d un script en ligne de app/index.html — lancer `python scripts/versionner_actifs.py`');
+for(const h of portees) if(!attendues.includes(h))
+  fautes.push('script-src porte une empreinte qui ne correspond a aucun script en ligne : '+h+' — lancer `python scripts/versionner_actifs.py`');
 // Les domaines appeles par l'app.
 const code=readFileSync(fichierCode(),'utf8');
 const admis=(liste,h)=>liste.some((v)=>{
@@ -40,4 +66,5 @@ const hotes=new Set([...code.matchAll(/fetch\(\s*['`]https:\/\/([a-z0-9.-]+)/g)]
 for(const h of ['repcore-sync-default-rtdb.firebaseio.com','repcore-serveur.repcore.workers.dev']) hotes.add(h);
 for(const h of hotes) if(!admis(dir['connect-src']||[],h)) fautes.push('connect-src n admet pas '+h+', que l app appelle');
 if(fautes.length){ console.error('CSP :\n  '+fautes.join('\n  ')); process.exit(1); }
-console.log('CSP : presente sur /app et /app/**, bornee ('+hotes.size+' domaines appeles, tous admis)');
+console.log('CSP : presente sur /app et /app/**, bornee ('+hotes.size+' domaines appeles, tous admis), script-src sans unsafe-inline ('
+  +attendues.length+' scripts en ligne admis par empreinte)');

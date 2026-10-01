@@ -7944,9 +7944,9 @@ textarea.vn-in{resize:vertical;line-height:1.5}
    masquer un bouton correct : :empty ne matche que ce qui n'a AUCUN contenu,
    pas même un SVG ou un espace. */
 .back-btn:empty::before{content:'←'}
-button[onclick*="closeModal"]:empty::before,
-button[onclick*="display='none'"]:empty::before,
-button[onclick*="?.remove()"]:empty::before{content:'✕'}
+button[data-on-click*="closeModal"]:empty::before,
+button[data-on-click*="display='none'"]:empty::before,
+button[data-on-click*="?.remove()"]:empty::before{content:'✕'}
 /* ── Un emplacement vide n'occupe RIEN ──────────────────────────────────
    Ces conteneurs sont remplis à l'exécution — on ne peut donc pas les
    supprimer, ils portent le nom de l'athlète, la version du service worker,
