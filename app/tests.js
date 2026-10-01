@@ -40769,6 +40769,13 @@ async function testExercices(){
           if(bord(l2,l2.querySelector('select'))>2) return _echec('« RIR cible » ne va pas au bord de la ligne');
           if(bord(l2.children[1],l2.querySelector('input'))>2) return _echec('« Charge cible » ne remplit pas sa case');
           const grp=[...carte.querySelectorAll('.px-grp')];
+          // 01/10/2026 (Kevin) : les titres de groupe et leur trait sont rouges, et le bouton de la programmation aussi.
+          const _rg=(()=>{ const d=document.createElement('div'); d.style.color=getComputedStyle(document.documentElement).getPropertyValue('--red-text').trim();
+            document.body.appendChild(d); const v=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return v; })();
+          if(!grp.length||grp.some(g=>getComputedStyle(g).color.replace(/\s/g,'')!==_rg)) return _echec('un titre de groupe n’est pas rouge');
+          if(grp.some(g=>!/224, ?32, ?32/.test(getComputedStyle(g,'::after').backgroundImage))) return _echec('le trait d’un titre de groupe n’est pas rouge');
+          const bp=carte.querySelector('.px-b-prog');
+          if(bp&&!bp.classList.contains('btn-red')) return _echec('le bouton de la programmation n’est pas rouge');
           const iExec=grp.findIndex(g=>/EXÉCUTION/.test(g.textContent));
           const lab=[...carte.querySelectorAll('label')].find(l=>/^Technique/.test(l.textContent.trim()));
           if(iExec<0||!lab) return _echec('la carte a changé de structure');

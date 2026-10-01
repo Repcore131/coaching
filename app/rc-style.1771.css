@@ -4339,9 +4339,11 @@ html{scroll-behavior:smooth}
   background:linear-gradient(90deg,rgba(255,255,255,.30),transparent 55%);
   opacity:0;animation:ccVise 480ms var(--c-out) both}
 @keyframes ccVise{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
+/* EN ROUGE (Kevin, 01/10/2026) : les titres de groupe de la carte (Programmation,
+   Exécution…) et le trait qui les suit. --red-text se lit sur fond sombre comme clair. */
 .px-grp{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:var(--fs-xs);
-  font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)}
-.px-grp::after{content:'';flex:1;height:1px;background:var(--border)}
+  font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text)}
+.px-grp::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.75),rgba(224,32,32,.18))}
 .px-grp:first-child{margin-top:0}
 .bq-l{transition:border-color var(--t-1),background var(--t-1),transform var(--t-1)}
 .bq-l:hover{border-color:rgba(224,32,32,.55);background:var(--surface-2)}
@@ -13185,8 +13187,8 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .ccd-b4:hover,:root[data-theme="clair"] .ccd-b4:focus-visible{background:var(--surface-2)}
 :root[data-theme="clair"] .ccd-b4-agit{color:var(--red);text-shadow:0 0 8px rgba(224,32,32,.45);border-left-color:var(--red)}
 :root[data-theme="clair"] .cc-sect-t.cc-vise::before{background:linear-gradient(90deg,rgba(9,9,9,0.3),transparent 55%)}
-:root[data-theme="clair"] .px-grp{color:var(--sub)}
-:root[data-theme="clair"] .px-grp::after{background:var(--border)}
+:root[data-theme="clair"] .px-grp{color:var(--red-text)}
+:root[data-theme="clair"] .px-grp::after{background:linear-gradient(90deg,rgba(224,32,32,.75),rgba(224,32,32,.18))}
 :root[data-theme="clair"] .bq-l:hover{border-color:rgba(224,32,32,.55);background:var(--surface-2)}
 :root[data-theme="clair"] .bq-l:active{border-color:var(--red)}
 :root[data-theme="clair"] #ch-clients-list .client-row.cr-neuve::after{background:linear-gradient(90deg,rgba(224,32,32,.30),rgba(224,32,32,.06) 62%,transparent)}
