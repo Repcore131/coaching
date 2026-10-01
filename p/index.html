@@ -18,10 +18,13 @@
 <!--og:fin-->
 <meta name="theme-color" content="#0b0b0c">
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
+<link rel="stylesheet" href="/charte.css">
 <style>
-:root{--rouge:#E02020;--rouge2:#ff4a3d;--fond:#08080a;--carte:rgba(22,22,26,.78);--bord:#2a2a2e;--gris:#a1a1aa}
+/* Charte commune : /charte.css. */
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--fond);color:#fff;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+html,body{margin:0;color:#fff;font-size:15px;line-height:1.5;overflow-x:hidden}
+/* Le fond vit sur <html> seul : peint sur <body>, il cachait .aura (z-index:-1). */
+body{background:transparent;min-height:100dvh}
 /* L'AURA : deux halos rouges qui derivent derriere tout, et une grille fine. */
 .aura{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
   background:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px) 0 0/100% 32px,linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px) 0 0/32px 100%}
@@ -30,62 +33,59 @@ html,body{margin:0;background:var(--fond);color:#fff;font:15px/1.5 -apple-system
 .aura:before{top:-35vmax;left:-25vmax}
 .aura:after{bottom:-40vmax;right:-30vmax;opacity:.3;animation-duration:22s;animation-direction:alternate-reverse}
 @keyframes der{to{transform:translate(12vmax,10vmax) scale(1.15)}}
-main{max-width:480px;margin:0 auto;padding:30px 16px calc(28px + env(safe-area-inset-bottom,0px))}
+main{max-width:480px;margin:0 auto;min-height:calc(100dvh - 44px);padding:22px 16px calc(28px + env(safe-area-inset-bottom,0px))}
 .tete{text-align:center;position:relative}
 /* LA PHOTO dans un anneau qui tourne, l'embleme accroche en bas a droite. */
 .av{position:relative;width:150px;height:150px;margin:0 auto 14px}
 .av:before{content:"";position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(from 0deg,#e02020,#ff8a5c,#5a0707,#e02020);animation:tour 3.5s linear infinite;
   box-shadow:0 0 40px rgba(224,32,32,.55)}
-.av>img.ph{position:relative;width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--fond);display:block}
+.av>img.ph{position:relative;width:150px;height:150px;border-radius:50%;object-fit:cover;border:4px solid var(--bg);display:block}
 .av>img.pe{position:absolute;right:-18px;bottom:-12px;width:78px;height:78px;object-fit:contain;filter:drop-shadow(0 0 14px rgba(224,32,32,.8));animation:flotte 3s ease-in-out infinite}
 @keyframes tour{to{transform:rotate(360deg)}}
 .emb{display:block;width:230px;height:230px;max-width:66vw;max-height:66vw;margin:0 auto 6px;object-fit:contain;
   filter:drop-shadow(0 0 28px rgba(224,32,32,.65));animation:flotte 3.6s ease-in-out infinite,lueur 3.6s ease-in-out infinite}
 @keyframes flotte{50%{transform:translateY(-8px)}}
 @keyframes lueur{50%{filter:drop-shadow(0 0 44px rgba(255,60,50,.9))}}
-.pseudo{display:inline-block;color:var(--gris);font-size:13px;letter-spacing:.5px;border:1px solid var(--bord);border-radius:99px;padding:3px 12px;background:rgba(0,0,0,.35)}
-h1{font-size:38px;line-height:1.05;margin:10px 0 6px;letter-spacing:.5px;font-weight:900;
+.pseudo{display:inline-block;color:var(--sub);font-size:13px;letter-spacing:.5px;border:1px solid var(--border);border-radius:var(--r-2);padding:3px 12px;background:rgba(0,0,0,.35)}
+h1{font-size:54px;line-height:1;margin:12px 0 6px;letter-spacing:2px;
   background:linear-gradient(100deg,#fff 30%,#ffb3a8 45%,#fff 60%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:brille 4s linear infinite}
 @keyframes brille{to{background-position:-250% 0}}
 .rang{display:inline-flex;gap:6px;align-items:center;color:#fff;font-weight:800;letter-spacing:3px;font-size:12px;text-transform:uppercase;
-  background:linear-gradient(90deg,#8e0b0b,#e02020);border-radius:99px;padding:6px 14px;box-shadow:0 6px 24px rgba(224,32,32,.4)}
-.depuis{color:var(--gris);font-size:13px;margin-top:10px}
-.carte{background:var(--carte);border:1px solid var(--bord);border-radius:16px;padding:16px;margin-top:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  background:linear-gradient(90deg,#8e0b0b,var(--red));border-radius:var(--r-2);padding:6px 14px;box-shadow:0 6px 24px rgba(224,32,32,.4)}
+.depuis{color:var(--sub);font-size:13px;margin-top:10px}
+.carte{background:color-mix(in srgb,var(--surface-1) 80%,transparent);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-top:14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .jauge{height:10px;border-radius:5px;background:#262626;margin:10px 0 6px;overflow:hidden;position:relative}
 .jauge i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#c10b0b,#e32424 55%,#ff6a5c);box-shadow:0 0 14px rgba(255,70,60,.8);
   transition:width 1.6s cubic-bezier(.2,.8,.2,1) .3s;position:relative}
 .jauge i:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent) 0 0/40% 100% no-repeat;animation:eclair 2.2s ease-in-out infinite}
 @keyframes eclair{from{background-position:-60% 0}to{background-position:160% 0}}
-.volts{display:flex;justify-content:space-between;color:var(--gris);font-size:13px}
+.volts{display:flex;justify-content:space-between;color:var(--sub);font-size:13px}
 .volts b{color:#fff;font-size:20px}
 .grille{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
-.grille div{background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:14px 10px;text-align:center;position:relative;overflow:hidden}
-.grille div:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--rouge),transparent)}
+.grille div{background:color-mix(in srgb,var(--surface-1) 80%,transparent);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 10px;text-align:center;position:relative;overflow:hidden}
+.grille div:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent)}
 .grille b{display:block;font-size:30px;line-height:1.05;font-weight:900;font-variant-numeric:tabular-nums}
-.grille span{font-size:12px;color:var(--gris)}
+.grille span{font-size:12px;color:var(--sub)}
 .grille div:last-child:nth-child(odd){grid-column:1/-1}
 .fun{text-align:center;color:#ffb3a8;font-size:13px;margin-top:10px}
-h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);margin:0 0 10px;display:flex;justify-content:space-between}
-h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
+h2{font-size:20px;letter-spacing:1.5px;color:var(--sub);margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline}
+h2 em{font-style:normal;color:#fff;letter-spacing:1px}
 .sem{display:grid;grid-template-columns:repeat(12,1fr);gap:5px}
-.sem i{aspect-ratio:1;border-radius:5px;background:#1f1f23;border:1px solid var(--bord)}
-.sem i.v{background:var(--rouge);border-color:var(--rouge2);box-shadow:0 0 10px rgba(224,32,32,.6)}
+.sem i{aspect-ratio:1;border-radius:5px;background:#1f1f23;border:1px solid var(--border)}
+.sem i.v{background:var(--red);border-color:var(--red-text);box-shadow:0 0 10px rgba(224,32,32,.6)}
 .sem i.e{border:1px dashed #8a8a92;animation:pouls 1.6s ease-in-out infinite}
-@keyframes pouls{50%{border-color:var(--rouge2)}}
+@keyframes pouls{50%{border-color:var(--red-text)}}
 .bdg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.bdg figure{margin:0;text-align:center;font-size:11px;color:var(--gris);line-height:1.2}
+.bdg figure{margin:0;text-align:center;font-size:11px;color:var(--sub);line-height:1.2}
 .bdg img{display:block;width:100%;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6))}
 .bdg .s{color:#ff6b6b}
-.rec{padding:8px 0;border-bottom:1px solid var(--bord);font-size:14px}
+.rec{padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
 .rec:last-child{border:0}
 .rec div{display:flex;justify-content:space-between;gap:10px}
 .rec span{color:#fff;font-weight:800;white-space:nowrap}
 .rec u{display:block;height:4px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,#8e0b0b,#ff4a3d);width:0;transition:width 1.2s ease .2s;text-decoration:none}
-.cta{display:block;margin:26px 0 10px;background:linear-gradient(180deg,#f02a2a,#b80d0d);color:#fff;text-align:center;text-decoration:none;font-weight:800;
-  letter-spacing:.5px;padding:17px 14px;border-radius:14px;font-size:17px;box-shadow:0 10px 30px rgba(224,32,32,.4);animation:appel 2.4s ease-in-out infinite}
-@keyframes appel{50%{box-shadow:0 10px 44px rgba(255,50,40,.75)}}
-.part{display:block;width:100%;background:transparent;color:#fff;border:1.5px solid #fff;border-radius:14px;padding:13px;font:inherit;font-weight:700;cursor:pointer}
-.sous{text-align:center;color:var(--gris);font-size:13px;margin-top:10px}
+main .cta{margin:26px 0 10px;min-height:52px}
+.sous{text-align:center;color:var(--sub);font-size:13px;margin-top:10px}
 .acarte{display:flex;align-items:center;gap:14px;margin:18px auto 0;max-width:340px;padding:14px;border-radius:18px;background:#0e0e10;border:3px solid #4a4a50}
 .acarte.elite{border-color:#ff3b3b}.acarte.legendaire{border-color:#ffcf5a}
 .acarte .g{font-size:54px;font-weight:900;line-height:1;text-align:center;min-width:76px}
@@ -93,7 +93,6 @@ h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
 .acarte ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:14px}
 .pied{text-align:center;margin-top:30px;font-size:12px;color:#6b6b72}
 .pied a{color:#6b6b72}
-.vide{text-align:center;padding:60px 10px;color:var(--gris)}
 .sq{background:linear-gradient(90deg,#161619,#1f1f23,#161619);background-size:200% 100%;animation:s 1.2s infinite;border-radius:10px}
 @keyframes s{to{background-position:-200% 0}}
 /* L'APPARITION : chaque bloc monte a son tour, une fois visible. */
@@ -107,6 +106,7 @@ h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
 </head>
 <body>
 <div class="aura" aria-hidden="true"></div>
+<a class="marque-bandeau" href="/" aria-label="RepCore, accueil"><img src="/app/img/vente/logo-72.webp" width="28" height="28" alt="">REPCORE</a>
 <main id="m" aria-busy="true">
   <div class="sq" style="width:200px;height:200px;max-width:60vw;max-height:60vw;margin:0 auto 14px;border-radius:50%"></div>
   <div class="sq" style="height:38px;width:60%;margin:0 auto 10px"></div>
@@ -125,7 +125,7 @@ h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
   var z=document.getElementById('m');
   var calme=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-  function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="vide"><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
+  function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="introuvable"><img src="/app/img/vente/logo-72.webp" width="64" height="64" alt="RepCore"><h1>Page introuvable</h1><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
   if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
@@ -204,7 +204,7 @@ h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
       var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src+(/^d[a-z0-9]{10,24}$/.test(duel)?'&duel='+duel:'');
       h+='<a class="cta r" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
       if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Grâce à '+prenom+', ton premier mois est offert.</div>';
-      h+='<button type="button" class="part r" id="part">Partager cette page</button>';
+      h+='<button type="button" class="cta-sec part r" id="part">Partager cette page</button>';
       h+='<div class="pied"><a href="'+racine+'">RepCore</a> · l’app d’entraînement qui te suit séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
       document.getElementById('part').onclick=function(){

@@ -1,0 +1,84 @@
+/* ══ LA CHARTE DE REPCORE, POUR LES PAGES PUBLIQUES (01/10/2026) ═══════════
+   i/ (le lien court), p/ (la page d'un athlete, /@pseudo), c/ (la vitrine d'un
+   coach, /coach/slug) et 404.html avaient chacune leurs variables, leur police
+   systeme et un vert acide que ni la landing ni l'app n'emploient.
+   Cette feuille leur donne la charte de la landing (index.html) et de l'app :
+   Montserrat pour le texte, Bebas Neue en capitales pour les titres, le rouge
+   de la marque, un seul jeu de jetons.
+
+   LIEE PAR UN CHEMIN ABSOLU : <link rel="stylesheet" href="/charte.css">. p/ et
+   c/ sont aussi servies en /@pseudo et /coach/slug (reecritures de
+   firebase.json) : un chemin relatif y chercherait /@julie/../charte.css.
+
+   LES JETONS sont ceux de :root dans app/rc-style.<build>.css ; les polices,
+   les @font-face d'app/index.html (memes fichiers, memes plages). Les adresses
+   des polices sont RELATIVES A CETTE FEUILLE, qui vit a la racine du site.
+   Publiee par scripts/assembler_site.sh. */
+
+@font-face{
+  font-family:'Montserrat';
+  font-style:normal;
+  font-weight:100 900;   /* variable : toute la plage en un fichier */
+  font-display:swap;
+  src:url('app/fonts/montserrat-var-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Bebas Neue';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('app/fonts/bebasneue-400-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root{
+  /* Surfaces et texte */
+  --bg:#080808;--surface-1:#111111;--surface-2:#181818;--border:#242424;
+  --text:#efefef;--sub:#8a8a8a;
+  /* Marque */
+  --red:#E02020;--red-text:#FF5A4A;--green:#22c55e;
+  /* Rayons */
+  --r-1:4px;--r-2:8px;--r-3:12px;--r-4:18px;
+  /* Tailles de texte */
+  --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fs-2xl:26px;--fs-3xl:44px;
+  /* Piles de polices : la police de la marque, puis un repli proche */
+  --pile-sans:Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --pile-titre:'Bebas Neue',Impact,'Arial Narrow Bold','Haettenschweiler','Franklin Gothic Bold',sans-serif;
+}
+
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--text);font-family:var(--pile-sans);-webkit-font-smoothing:antialiased}
+h1,h2{font-family:var(--pile-titre);font-weight:400;text-transform:uppercase;letter-spacing:1.5px;line-height:1.02}
+
+/* LE BOUTON PRINCIPAL : celui de « Essayer gratuitement » sur la landing.
+   Rouge plat, capitales Montserrat 800. */
+.cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;
+  padding:0 22px;margin:6px 0;background:var(--red);color:#fff;border:0;border-radius:var(--r-3);
+  font-family:var(--pile-sans);font-weight:800;font-size:var(--fs-md);letter-spacing:1.5px;text-transform:uppercase;
+  text-align:center;text-decoration:none;cursor:pointer;box-shadow:0 8px 30px rgba(224,32,32,.38);
+  transition:transform .15s,background .15s}
+.cta:hover{background:#c91a1a}
+.cta:active{transform:translateY(1px)}
+.cta:focus-visible,.cta-sec:focus-visible{outline:2px solid var(--red-text);outline-offset:2px}
+/* LE BOUTON SECONDAIRE : le meme, en contour. */
+.cta-sec{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:48px;
+  padding:0 22px;margin:6px 0;background:transparent;color:var(--text);border:1px solid #333;border-radius:var(--r-3);
+  font-family:var(--pile-sans);font-weight:800;font-size:var(--fs-md);letter-spacing:1.5px;text-transform:uppercase;
+  text-align:center;text-decoration:none;cursor:pointer;transition:border-color .15s,background .15s}
+.cta-sec:hover{border-color:#555;background:#121212}
+
+.carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px}
+
+/* LE BANDEAU DE MARQUE, comme l'en-tete de la landing (.nav .marque). */
+.marque-bandeau{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 16px 0;
+  font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#fff;text-decoration:none}
+.marque-bandeau img{width:28px;height:28px;border-radius:7px;display:block}
+
+/* L'ETAT VIDE : une page introuvable dit ce qu'elle est, et ou aller. */
+.introuvable{text-align:center;padding:56px 8px 24px;max-width:420px;margin:0 auto}
+.introuvable img{width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 18px}
+.introuvable h1{font-size:var(--fs-3xl);margin:0 0 10px;color:#fff}
+.introuvable p{color:var(--sub);font-size:var(--fs-md);line-height:1.6;margin:0 0 22px}
+
+@media (prefers-reduced-motion:reduce){.cta,.cta-sec{transition:none}}

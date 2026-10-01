@@ -54045,7 +54045,14 @@ async function testExercices(){
       const p=lire('../p/index.html'), c=lire('../c/index.html'), fj=lire('../firebase.json');
       if(!/profils_publics/.test(p)||!/<!--og:debut-->[\s\S]*og:image[\s\S]*<!--og:fin-->/.test(p)) return _echec('p/index.html');
       if(!/\/vitrines\//.test(c)||!/Commencer avec/.test(c)) return _echec('c/index.html');
-      if(/<script[^>]+src=|<link[^>]+stylesheet/.test(p+c)) return _echec('une ressource externe bloquante');
+      // UNE SEULE FEUILLE EXTERNE, LA CHARTE (01/10/2026) : polices et jetons
+      // communs a la landing et a l'app, demandes par Kevin. Elle est petite et
+      // sur le meme domaine ; aucune autre feuille, aucun script externe.
+      if(/<script[^>]+src=/.test(p+c)) return _echec('un script externe bloquant');
+      const feuilles=(p+c).match(/<link[^>]+stylesheet[^>]*>/g)||[];
+      if(feuilles.length!==2||feuilles.some(l=>!/href="\/charte\.css"/.test(l))) return _echec('une ressource externe bloquante : '+feuilles.join(' '));
+      const ch=lire('../charte.css');
+      if(!ch||ch.length>8000) return _echec('charte.css absente ou trop lourde ('+ch.length+' octets)');
       // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
       // La vitrine a grandi (formules et « Ça m'intéresse », lot C6, 29/09/2026) : 16 Ko,
       // toujours sans ressource externe ; le tableau des offres (tarifs.json) se lit en parallèle.

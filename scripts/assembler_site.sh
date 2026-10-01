@@ -33,6 +33,9 @@ cp -a app blog i maj p c a "$DEST"/
 rm -f "$DEST/app/tests.js"
 cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html "$DEST"/
 cp -a logo.png og-image.png robots.txt sitemap.xml "$DEST"/
+# LA CHARTE DES PAGES PUBLIQUES (01/10/2026) : i/, p/, c/ et 404.html la lient
+# en /charte.css. Ses polices sont lues dans app/fonts/, deja copie.
+cp -a charte.css "$DEST"/
 # LOT C6 : le tableau des offres, que la vitrine d'un coach lit pour ses formules.
 cp -a tarifs.json "$DEST"/
 # well-known/ (sans point dans le dépôt) → .well-known/. Absent, Firebase sert
