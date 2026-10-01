@@ -2254,9 +2254,8 @@ function loadCoachProgramsList(){
   if(_cplFiltre&&!container.querySelector('.cpl-c')){
     const lib=(PROG_PUBLICS.find(x=>x.cle===_cplFiltre)||{}).lib||'';
     container.insertAdjacentHTML('beforeend',
-      '<p class="cpl-vide">Aucun programme « '+escapeHtml(lib)+' » pour l’instant. '
-      +'<button type="button" class="cpl-vide-b" onclick="cplFiltrer(\''+_cplFiltre+'\')">'
-      +'Revoir tout le catalogue</button></p>');
+      emptyState('folder','Aucun programme « '+escapeHtml(lib)+' » pour l’instant.',
+        'Revoir tout le catalogue','cplFiltrer(\''+_cplFiltre+'\')','padding:24px 8px'));
   }
 }
 

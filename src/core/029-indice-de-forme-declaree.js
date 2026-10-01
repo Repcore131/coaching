@@ -2062,7 +2062,7 @@ function rapPreset(cle){
   return true;
 }
 function _rapInsuffisant(){
-  return `<div class="rap-vide">${escapeHtml(RAP_INSUFFISANT)}</div>`;
+  return emptyState('',escapeHtml(RAP_INSUFFISANT),null,null,'padding:12px 0');
 }
 function htmlRapport(r){
   const B=_rapBlocs;
@@ -2247,7 +2247,7 @@ function rapRendre(){
   if(_vrr){ z.innerHTML=_vrr; return; }
   let r=null;
   try{ r=rapportPeriode(_rapCible,_rapDebut,_rapFin); }catch(e){ r=null; }
-  z.innerHTML=r?htmlRapport(r):'<div class="rap-vide">Rapport indisponible.</div>';
+  z.innerHTML=r?htmlRapport(r):emptyState('','Rapport indisponible.',null,null,'padding:12px 0');
   const d=document.getElementById('rap-d'), f=document.getElementById('rap-f');
   // TOUJOURS, et non « seulement si le champ est vide ». ouvrirRapport remet
   // _rapDebut et _rapFin au mois précédent à CHAQUE ouverture : les champs

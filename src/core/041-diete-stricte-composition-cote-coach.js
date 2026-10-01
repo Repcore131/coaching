@@ -2305,7 +2305,7 @@ function _cplRecettesRendre(q){
   const tout=recettesMiennes();
   const l=words.length?recettesTrouvees(tout,words):tout;
   if(!tout.length){
-    el.innerHTML='<div class="rct-vide">Ta bibliothèque de recettes est vide.<br><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" onclick="fermerRecherchePlan();ouvrirRecettes()">Créer une recette</button></div>';
+    el.innerHTML=emptyState('utensils','Ta bibliothèque de recettes est vide.','Créer une recette','fermerRecherchePlan();ouvrirRecettes()','padding:16px 8px');
     return;
   }
   el.innerHTML=l.map(r=>{
@@ -2314,7 +2314,7 @@ function _cplRecettesRendre(q){
       +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
       +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
       +'<div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div></div>';
-  }).join('')||'<div class="rct-vide">Aucune recette pour « '+escapeHtml(q)+' ».</div>';
+  }).join('')||emptyState('','Aucune recette pour « '+escapeHtml(q)+' ».',null,null,'padding:12px 0');
 }
 function cplChoisirRecette(repas){
   ouvrirRecherchePlan({mode:'recette',repas});
@@ -2483,7 +2483,7 @@ function renderRecettes(){
       :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
     +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
     +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
-    +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):'<div class="rct-vide">Aucune recette pour l’instant.</div>')
+    +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):emptyState('','Aucune recette pour l’instant.',null,null,'padding:12px 0'))
     +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
 }
 function nouvelleRecette(){
@@ -2542,7 +2542,7 @@ function _rendreEditeurRecette(z){
     +'<input id="rct-nom" class="rct-champ" maxlength="80" value="'+escapeHtml(e.nom||'')+'" placeholder="Ex : porridge protéiné" oninput="recetteChamp(\'nom\',this.value)">'
     +'<label class="rct-lab" for="rct-portions">Portions</label>'
     +'<input id="rct-portions" class="rct-champ" inputmode="decimal" value="'+escapeHtml(String(e.portions==null?'':e.portions).replace('.',','))+'" oninput="recetteChamp(\'portions\',this.value)">'
-    +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||'<div class="rct-vide">Aucun ingrédient.</div>')
+    +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||emptyState('','Aucun ingrédient.',null,null,'padding:12px 0'))
     +(e.ingredients.length<RECETTE_ING_MAX
       ?'<input id="rct-cherche" class="rct-champ" type="search" autocomplete="off" placeholder="Ajouter un ingrédient" value="'+escapeHtml(_recEdCherche)+'" oninput="recetteChercher(this.value)">'
         +'<div id="rct-resultats"></div>':'')
@@ -2562,7 +2562,7 @@ function _rendreResultatsIngredient(){
   if(!z) return;
   const q=_recEdCherche.trim();
   if(q.length<2){ z.innerHTML=''; return; }
-  if(!_ciqualDB){ z.innerHTML='<div class="rct-vide">Chargement de la table…</div>'; _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
+  if(!_ciqualDB){ z.innerHTML=etatChargement(2); _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
   const normQ=_fjNorm(q), words=normQ.split(/\s+/).filter(w=>w.length>1);
   const res=_classerAliments(_ciqualDB.filter(f=>_fjContientTous(f.s,words)),normQ,words).slice(0,12).map(x=>x.f);
   const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
@@ -2571,9 +2571,9 @@ function _rendreResultatsIngredient(){
     +'<div class="rct-m">'+(a.k!=null?_recF(a.k)+' kcal/100 g':'énergie non renseignée')+' · P '+_recF(a.p)+' · G '+_recF(a.c)+' · L '+_recF(a.l)+'</div></div>';
   let h=res.map(f=>ligne('ciqual',f,f.id)).join('');
   if(_recOff&&_recOff.liste) h+=_fjTitreSection('Produits de marque (Open Food Facts)')+_recOff.liste.slice(0,10).map(a=>ligne('off',a,a.id)).join('');
-  else if(_recOff&&_recOff.raison) h+='<div class="rct-vide">'+escapeHtml(_recOff.raison)+'</div>';
+  else if(_recOff&&_recOff.raison) h+=emptyState('',escapeHtml(_recOff.raison),null,null,'padding:12px 0');
   else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" onclick="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';
-  z.innerHTML=h||'<div class="rct-vide">Aucun résultat.</div>';
+  z.innerHTML=h||emptyState('','Aucun résultat.',null,null,'padding:12px 0');
 }
 async function recetteChercherOff(){
   const q=_recEdCherche.trim();

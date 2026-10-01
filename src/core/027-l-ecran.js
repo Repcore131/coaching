@@ -400,7 +400,7 @@ function _htmlAnatPriorites(res,c){
   const corps=l.length?'<div class="an-prio-l">'+l.map((x,i)=>'<button type="button" class="an-prio-c" data-k="'+x.cle+'" data-n="'+Math.abs(x.niveau)+'" onclick="anatOuvrir(\''+x.cle+'\',true)">'
       +'<span class="an-prio-n">'+(i+1)+'</span><span class="an-prio-t"><b>'+escapeHtml(x.lib)+'</b><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em>'
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
-    :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
+    :emptyState('','Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.',null,null,'padding:12px 0');
   return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
 }
 // ── LES DEUX EXPORTS (E5, 26/09/2026) ─────────────────────────────────────

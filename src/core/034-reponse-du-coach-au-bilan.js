@@ -732,7 +732,7 @@ function renderReponsesBilans(bilans,client){
           </div>
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
-        ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
+        ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
         ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">
           <div class="bn-reponse-t">Réponse de ton coach</div>
           ${b.reponseCoach?`<div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>`:''}
@@ -1836,8 +1836,8 @@ function htmlHabitudesCoach(c){
           +'</div>';
       }).join('')
       +(g!=null?'<div class="hbc-moy">Moyenne sur '+HAB_FENETRE_JOURS+' jours : <b>'+g+'&nbsp;%</b>. Fenêtre glissante, le jour en cours n’est pas compté.</div>':'')
-    : '<div class="hbc-vide">'+HAB_ICO.haltere+'<b>Aucune habitude assignée pour le moment.</b>'
-      +'<span>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.</span></div>';
+    : emptyState('haltere','<b>Aucune habitude assignée pour le moment.</b>'
+      +'<br>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.',null,null,'padding:20px 8px');
   return '<section class="hbc'+(_habReplie?' hbc-replie':'')+'">'
     +'<div class="hbc-tete">'
       +'<button type="button" class="hbc-pli" onclick="habCoachPlier()" aria-expanded="'+(!_habReplie)+'" aria-label="Replier les habitudes">'+HAB_ICO.chevron+'</button>'
@@ -1885,9 +1885,9 @@ function habCoachPlier(){
 }
 function habCoachRegles(){
   _sanFeuille('Les habitudes',
-    '<div class="san-vide">Trois habitudes au plus par athlète. Il les coche d’un appui sur son accueil, pour le jour même ou jusqu’à deux jours en arrière.</div>'
-    +'<div class="san-vide">Le pourcentage se lit sur '+HAB_FENETRE_JOURS+' jours glissants, sans le jour en cours. Retirer une habitude garde ses coches : la remettre plus tard retrouve tout.</div>'
-    +'<div class="san-vide">Une habitude ne peut porter ni sur un poids, ni sur une mesure, ni sur une restriction alimentaire : ce sont des données de santé.</div>');
+    '<div class="san-aide">Trois habitudes au plus par athlète. Il les coche d’un appui sur son accueil, pour le jour même ou jusqu’à deux jours en arrière.</div>'
+    +'<div class="san-aide">Le pourcentage se lit sur '+HAB_FENETRE_JOURS+' jours glissants, sans le jour en cours. Retirer une habitude garde ses coches : la remettre plus tard retrouve tout.</div>'
+    +'<div class="san-aide">Une habitude ne peut porter ni sur un poids, ni sur une mesure, ni sur une restriction alimentaire : ce sont des données de santé.</div>');
 }
 // N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
 // second argument rend un objet DETACHE : DB.get reparse le JSON a chaque

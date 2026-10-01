@@ -1398,8 +1398,8 @@ function loadHistoriqueSeances(){
   if(z){
     z.innerHTML=l.length
       ? l.map(x=>_htmlLigneHistorique(x,Date.now())).join('')
-      : '<div class="hs-vide">Aucune séance enregistrée pour l\'instant.<br>'
-        +'Elles apparaîtront ici dès la première terminée.</div>';
+      : emptyState('clock','Aucune séance enregistrée pour l\'instant.<br>'
+        +'Elles apparaîtront ici dès la première terminée.',null,null,'');
     // UN SEUL ECOUTEUR, sur le conteneur : deux cents lignes font deux cents
     // ecouteurs autrement, et ils survivraient a chaque rendu.
     z.onclick=e=>{

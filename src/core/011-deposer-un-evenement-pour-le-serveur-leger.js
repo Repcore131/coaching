@@ -985,7 +985,7 @@ function htmlAmisAccueil(liste,t,o,monPseudo,moi){
     +'<button type="button" class="am-tout" onclick="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
   if(!liste.length){
     return '<div class="am-carte">'+tete
-      +'<p class="am-vide">Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.</p>'
+      +emptyState('','Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.',null,null,'padding:12px 0')
       +'<div class="am-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirAmis()">Chercher un pseudo</button>'
       +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>'
       +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>.</p>')
@@ -1088,7 +1088,7 @@ async function renderEcranAmis(){
 }
 function _rendreListeEcranAmis(l,moi){
   const z=document.getElementById('am-liste'); if(!z) return;
-  if(!l.length){ z.innerHTML='<p class="am-vide">Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.</p>'; return; }
+  if(!l.length){ z.innerHTML=emptyState('','Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.',null,null,'padding:12px 0'); return; }
   const o=amisLocal(), t=Date.now(), loc=reactionsLocales();
   const mk=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
   const cl=document.getElementById('am-classement');

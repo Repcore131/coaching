@@ -1092,20 +1092,14 @@ label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text
 h1{font-weight:400;line-height:1.05}
 h2{font-weight:400}
 h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
-.brand-font{font-family:var(--pile-titre);font-weight:400;letter-spacing:1px}
 .txt-hero{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1}
-.txt-title{font-family:var(--pile-titre);font-size:var(--fs-2xl)}
 .txt-stat{font-family:var(--pile-titre);font-size:var(--fs-2xl)}
-.txt-stat-sm{font-family:var(--pile-titre);font-size:var(--fs-xl)}
 .red{color:var(--red-text)}.sub{color:var(--sub);font-size:var(--fs-md)}
 .pad{padding:24px 20px}.gap{gap:12px;display:flex;flex-direction:column}
 .row{display:flex;align-items:center;gap:10px}.row2{display:flex;gap:10px}
 
 /* ====== CARDS ====== */
 .card{background:var(--surface-1);border-radius:var(--r-3);padding:16px;border:1px solid var(--border);box-shadow:var(--e2)}
-.card-accent{border-left:1px solid var(--border)!important;border-radius:0 var(--r-1) var(--r-1) 0}
-.card-warn{border-left:1px solid var(--border)!important;border-radius:0 var(--r-1) var(--r-1) 0}
-.card-ok{border-left:1px solid var(--border)!important;border-radius:0 var(--r-1) var(--r-1) 0}
 .badge-green{background:#16532222;color:var(--green);border:1px solid #1a5c2a44}
 .badge-red{background:#7f1d1d22;color:var(--red-light);border:1px solid #7f1d1d44}
 .badge-orange{background:#7c2d1222;color:var(--orange);border:1px solid #7c2d1244}.badge-gray{background:color-mix(in srgb,var(--surface-3) 26.7%,transparent);color:var(--sub)}
@@ -1160,7 +1154,6 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--red);flex-shrink:0;background:var(--bg);position:relative}
 
 /* ====== ACCENT LINE ====== */
-.accent-line{width:32px;height:2px;background:var(--red);display:block;margin-bottom:12px}
 
 /* topbar red stripe: now via border-bottom */
 /* ====== TABS ====== */
@@ -2799,11 +2792,6 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .hbc-reco-ok{width:18px;height:18px;flex-shrink:0;color:#34e89e}
 .hbc-reco-ok svg{width:100%;height:100%}
 .hbc-poses{display:flex;flex-direction:column;gap:8px}
-.hbc-vide{display:flex;flex-direction:column;align-items:center;gap:4px;padding:20px 16px;border-radius:var(--r-3);border:1px solid var(--border);
-  background:var(--surface-0);text-align:center}
-.hbc-vide svg{width:30px;height:30px;color:var(--sub);margin-bottom:4px}
-.hbc-vide b{font-size:var(--fs-sm);color:#fff}
-.hbc-vide span{font-size:var(--fs-xs);color:var(--text-mid);line-height:1.5;max-width:640px}
 .hbc-h{display:flex;align-items:center;gap:12px;padding:10px 6px 10px 12px;border-radius:var(--r-3);border:1px solid var(--border);background:var(--surface-0)}
 .hbc-h-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .hbc-h-c b{font-size:var(--fs-sm);color:#fff;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3127,7 +3115,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-l strong{color:#fff}
 .san-sous{font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);
   font-weight:800;margin-top:14px}
-.san-vide{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0 10px}
+.san-aide{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0 10px}
 .san-f-actions{display:flex;gap:8px;margin-top:14px}
 .san-lab{display:block;font-size:var(--fs-2xs);letter-spacing:1.2px;text-transform:uppercase;
   color:var(--sub);font-weight:800;margin:12px 0 6px}
@@ -6644,8 +6632,6 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   border:1px solid color-mix(in srgb,var(--text) 16%,transparent);background:color-mix(in srgb,var(--text) 5%,transparent);color:var(--text);
   font-family:Montserrat,sans-serif;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
 .tbk-h-r:hover,.tbk-h-r:focus-visible{border-color:color-mix(in srgb,var(--red) 50%,transparent);color:#ff5a5a}
-.tbk-h-vide{padding:10px 12px;border-radius:var(--r-3);border:1px dashed color-mix(in srgb,var(--text) 14%,transparent);
-  font-size:11.5px;color:var(--text-faint);line-height:1.45}
 .tbk-h-an{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:8px 12px;
   border-radius:var(--r-3);border:1px solid rgba(245,197,66,.45);background:rgba(245,197,66,.10);
   font-size:11.5px;color:var(--text)}
@@ -6931,7 +6917,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 /* LE GRIS N'EST PAS UN ECHEC ATTENUE : c'est un jour dont on ne sait rien.
    Plus sombre que les autres et sans saturation, il ne se lit pas comme une
    troisieme note sur la meme echelle. */
-.drs-p-vide,.drs-c-vide{background:color-mix(in srgb,var(--text) 10%,transparent);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.drs-c-vide{background:color-mix(in srgb,var(--text) 10%,transparent);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
 .drs-sub{border-top:1px solid color-mix(in srgb,var(--text) 12%,transparent);margin-top:10px;padding-top:14px;
   font-size:var(--fs-sm);color:var(--sub);line-height:1.5}
 .drs-dl{display:flex;align-items:center;gap:14px;width:100%;margin:0;text-align:left;cursor:pointer;
@@ -7121,8 +7107,6 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .jr-li-r{display:flex;flex-wrap:wrap;gap:2px 14px;min-width:0;margin-top:2px}
 .jr-li-r .jr-r{width:auto}
 .jr-li-r .jr-rk{margin-left:4px}
-.jr-vide-t{padding:12px;border-radius:var(--r-3);border:1px dashed color-mix(in srgb,var(--text) 14%,transparent);
-  font-size:12px;color:var(--text-faint);text-align:center}
 /* LE FORMULAIRE D'AJOUT. */
 .jr-form{margin:0 0 12px;padding:12px 12px;border-radius:var(--r-3);
   border:1px solid color-mix(in srgb,var(--red) 35%,transparent);background:color-mix(in srgb,var(--red) 6%,transparent)}
@@ -7199,7 +7183,6 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .cal-c{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:1px;aspect-ratio:1;border-radius:var(--r-2);border:1px solid transparent;
   font-family:Montserrat,sans-serif;padding:0;background:none}
-.cal-vide{border:none}
 .cal-rien{color:var(--text-faint);border-color:color-mix(in srgb,var(--text) 5%,transparent)}
 .cal-j{font-size:var(--fs-2xs);font-weight:800;line-height:1}
 .cal-k{font-size:8.5px;font-weight:700;line-height:1;opacity:.85}
@@ -7431,6 +7414,9 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
 /* R13 — le geste d'un etat vide : secondaire, centre, jamais pleine largeur. */
 .empty-state .empty-cta{margin-top:16px;width:auto}
+/* LE CHARGEMENT A LA PLACE DU BLOC (etatChargement, 01/10/2026) : memes marges
+   laterales que l'etat vide, moins haut, les squelettes centres. */
+.etat-chargement{padding:24px 20px}
 .empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--red) 30%,transparent))}
 .obj-opt{padding:14px;border-radius:var(--r-3);background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:var(--fs-md);font-weight:600;transition:border-color var(--t-2),background var(--t-2),color var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
 .obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red-text)}
@@ -7863,10 +7849,6 @@ textarea.vn-in{resize:vertical;line-height:1.5}
 }
 /* Le mot quand le filtre ne rend rien : une reponse vide n'est pas une panne,
    et le chemin du retour est dans la phrase. */
-.cpl-vide{font-size:var(--fs-xs);color:var(--sub);line-height:1.7;margin:2px 0 24px;
-  padding:14px;border:1px dashed var(--border);border-radius:var(--r-3);text-align:center}
-.cpl-vide-b{background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;
-  font-size:var(--fs-xs);font-weight:800;cursor:pointer;padding:0;text-decoration:underline}
 /* La vignette de vente, a gauche du nom. Format portrait : c'est celui des
    visuels de programme, et l'etirer en carre couperait les tetes. */
 .cpl-vig{float:left;width:62px;height:82px;margin:0 14px 8px 0;border-radius:var(--r-3);
@@ -9254,8 +9236,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .hs-part{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:var(--r-1);
   background:var(--surface-3);color:var(--sub);font-size:var(--fs-xs);
   font-weight:700;letter-spacing:.3px;vertical-align:middle}
-.hs-vide{padding:28px 16px;text-align:center;color:var(--sub);
-  font-size:var(--fs-sm);line-height:1.6}
 /* Le ressenti relu : des valeurs, pas des curseurs. L'ecran de detail ne
    REDEMANDE rien — il montre ce qui a ete repondu ce jour-la. */
 .hs-res{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
@@ -10128,7 +10108,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rap-nb{font-size:var(--fs-xl);font-weight:800;color:var(--text)}
 .rap-u{font-size:var(--fs-2xs);color:var(--sub);font-weight:400}
 .rap-note{font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.6;margin:8px 0 0}
-.rap-vide{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;font-style:italic}
 .rap-vol{margin-bottom:10px}
 .rap-vol-t{display:flex;justify-content:space-between;font-size:var(--fs-xs);margin-bottom:2px}
 .rap-tbl{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
@@ -10215,7 +10194,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .rap-bloc{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .rap-bloc h2{color:var(--text-faint)!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
-  .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
+  .rap-lbl,.rap-u,.rap-note,.rap-meta{color:var(--text-dim)!important}
   /* LE TABLEAU AU PAPIER. Une largeur fixe, un en-tete qui se repete d une page
      a l autre, et une ligne sur deux teintee : sur une feuille imprimee, l oeil
      n a plus le survol pour se reperer dans une ligne longue. */
@@ -10421,7 +10400,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .fa-pied-d span{color:var(--fa-rouge)}
 .fa-pied-d em{display:block;font-style:normal;font-family:Montserrat,sans-serif;
   font-size:7px;letter-spacing:3.4px;color:#6f6f6f;margin-top:2px}
-.fa-vide{padding:28px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm);line-height:1.7}
 
 /* ══ L'ARRIVEE (lot 2) ═══════════════════════════════════════════════════
    Le premier ecran porte l'accroche et les trois portes, sans defilement, a
@@ -11175,7 +11153,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-prio-t b{font-size:12px;color:#fff}
 .an-prio-t em{font-style:normal;font-size:10.5px;color:#fb923c}
 .an-prio-a{font-size:10.5px;color:var(--text-strong);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.an-prio-vide{margin:0;font-size:11.5px;color:var(--text-strong)}
 @media (max-width:760px){ .an-prio-l{grid-template-columns:minmax(0,1fr)} }
 /* A21 : du texte à l'action — puces d'exercices, ajout au programme, consigne. */
 .an-exos{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px;align-items:center}
@@ -11477,7 +11454,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   background:color-mix(in srgb,var(--text) 2%,transparent);font-size:var(--fs-sm);color:#c5c5c5;line-height:1.55}
 .pc-note-i{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:var(--r-3);color:#ff3b3b;
   background:color-mix(in srgb,var(--red) 10%,transparent);border:1px solid color-mix(in srgb,var(--red) 35%,transparent)}
-.pc-vide{font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
 @media (max-width:480px){
   .pv-ico{width:52px;height:52px}
   .pc-carte{padding:14px 12px 12px}
@@ -11562,7 +11538,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .bn-note{display:flex;align-items:center;color:rgba(255,255,255,.62);font-size:var(--fs-xs);line-height:1.4}
 /* Le bloc de réponse du coach apportait son trait de séparation : dans sa propre carte, il n'a plus rien à séparer. */
 .bn-rub-coach > div:first-child{margin-top:0!important;border-top:0!important;padding-top:0!important}
-.bn-vide{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5}
 .bn-reponse{padding:10px 12px;border-radius:var(--r-2);background:var(--surface-2);border-left:3px solid var(--green)}
 .bn-reponse-t{font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px}
 .bn-reponse-v{font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6}
@@ -11826,7 +11801,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .am-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .am-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text,#ff4d4d)}
 .am-tout{background:none;border:0;padding:4px 0;color:var(--sub,var(--text-mid));font:700 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
-.am-vide{font-size:var(--fs-sm);color:var(--text-dim,#bdbdbd);line-height:1.5;margin:0 0 10px}
 .am-note{font-size:var(--fs-xs);color:var(--sub,var(--text-mid));line-height:1.5;margin:10px 0 0}
 .am-note a{color:var(--red-text,#ff4d4d)}
 .am-btns{display:flex;gap:8px}
@@ -11946,7 +11920,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ca-evo-notes div{display:flex;align-items:baseline;gap:8px}
 .ca-evo-notes b{font-family:var(--pile-titre);font-size:24px;min-width:34px;font-variant-numeric:tabular-nums}
 .ca-evo-notes span{color:var(--sub,var(--text-mid));font-size:var(--fs-xs)}
-.ca-note,.ca-vide{font-size:var(--fs-xs);color:var(--sub,var(--text-mid));line-height:1.5;margin:6px 0 0}
+.ca-note{font-size:var(--fs-xs);color:var(--sub,var(--text-mid));line-height:1.5;margin:6px 0 0}
 .ca-courbe{display:block;width:100%;height:auto}
 .ca-axe{stroke:var(--border,#2b2b2b);stroke-width:1}
 .ca-ligne{stroke:var(--red,var(--red));stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
@@ -12434,7 +12408,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rvm-r{margin-top:4px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}
 .rvm-r b{font-weight:700;color:var(--text-strong)}
 .rvm-src{margin-top:4px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.45}
-.rvm-vide,.rvm-manque{margin-top:8px;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55}
+.rvm-manque{margin-top:8px;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55}
 /* ══ LOT T6 : LES AMPLITUDES RESSORTENT (29/09/2026) ══════════════════════ */
 .mob-carte{position:relative;display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:12px 48px 12px 14px;
   border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface-1)}
@@ -12461,7 +12435,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .bb td{color:var(--text)}
 .bb td.v{font-weight:800;white-space:nowrap}
 .bb td small{display:block;color:var(--text-faint);font-size:var(--fs-2xs)}
-.bb-vide,.bb-s{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin:4px 0}
+.bb-s{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin:4px 0}
 .bb-btns{display:flex;gap:8px;margin-top:16px}
 .bb-btns .btn{flex:1;margin:0}
 /* ══ LE VOILE DES ECRANS D'ENTREE (s-coach-entry, s-athlete-entry) ═══════
@@ -12577,7 +12551,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   background:var(--surface-2);color:var(--text);font:inherit;font-size:var(--fs-sm);line-height:1.5;resize:vertical}
 .kit-b{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .kit-b .btn{flex:1;min-width:140px;margin:0}
-.kit-vide{font-size:var(--fs-sm);color:var(--sub);margin:0}
 .kit-emb{display:flex;flex-wrap:wrap;gap:8px}
 .kit-emb img{display:block;width:44px;height:44px;object-fit:contain}
 .kit-regles{margin:0;padding-left:20px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}
@@ -12631,7 +12604,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .db-bulle b{font-size:11.5px;margin-bottom:2px}
 .db-bulle span{display:flex;align-items:center;gap:6px}
 .db-bulle i{width:8px;height:8px;border-radius:var(--r-full)}
-.db-vide{margin:10px 0 6px;font-size:12.5px;color:#9a9a9a;line-height:1.55}
 .db-carte .ccd-proj{margin:6px 0 0;font-size:11.5px}
 /* L'anneau */
 .db-rep{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
@@ -12651,6 +12623,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .db-tz-c{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
 .db-tz-n{font-size:11px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#fff}
 .db-tz-v{font-size:15px;font-weight:900;white-space:nowrap}
+/* LA NOTE D'UNE CARTE DE COURBE (« deux mesures au moins », « courbe masquee ») :
+   une seule classe pour le tableau de bord et la carte du poids (01/10/2026). */
+.graphe-vide{margin:10px 0 6px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
 .db-tz-vide{font-size:11px;font-weight:600;color:var(--sub);white-space:normal}
 .db-tz-b{display:block;height:7px;border-radius:var(--r-1);background:var(--surface-3);overflow:hidden}
 .db-tz-b i{display:block;height:100%;border-radius:var(--r-1)}
@@ -12767,7 +12742,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rel-switch input:focus-visible+span{outline:2px solid var(--text);outline-offset:2px}
 .rel-h{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--sub);margin:18px 0 8px}
 .rel-p{font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px}
-.rel-vide{font-size:var(--fs-sm);line-height:1.6}
 .rel-sem-n{font-size:var(--fs-sm);font-weight:800;margin-bottom:8px}
 .rel-j{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 0;border-top:1px solid var(--border);font-size:var(--fs-sm);line-height:1.45}
 .rel-j-d{color:var(--sub);font-size:var(--fs-xs);white-space:nowrap}
@@ -12807,7 +12781,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .c4-op-s{color:var(--sub);font-weight:700}
 .c4-op em{display:block;font-style:normal;color:var(--orange)}
 .c4-op-off{opacity:.55;cursor:default}
-.c4-vide{font-size:var(--fs-xs)}
 /* LOT C5 : la proposition de la semaine et les messages programmés du canal */
 .cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .cp{border-left:3px solid var(--red)}
@@ -12845,7 +12818,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pr-chiffres div{display:flex;flex-direction:column;gap:2px;padding:12px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);min-width:0}
 .pr-chiffres b{font-size:var(--fs-2xl);font-weight:900;line-height:1;color:var(--text)}
 .pr-chiffres span{font-size:var(--fs-2xs);color:var(--sub);line-height:1.35}
-.pr-vide{font-size:var(--fs-sm);line-height:1.6;color:var(--text);padding:14px;margin:12px 0;background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3)}
 .pr-l{display:flex;flex-direction:column;gap:4px;padding:12px 14px;margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .pr-nouveau{border-left:3px solid var(--orange)}
 .pr-athlete{border-left:3px solid var(--green)}
@@ -12895,7 +12867,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ld-plateau,.ld-absence{border-left-color:var(--sub)}
 .ld-rien{opacity:.7}
 .ld-rien .ld-s{color:var(--sub)}
-.ld-attente,.ld-vide{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;padding:10px 2px}
+.ld-attente{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;padding:10px 2px}
 /* LOT T5 : deux dates, un mouvement */
 .mlc-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:6px 0 10px}
 .mlc-l{font-size:var(--fs-xs);color:var(--sub);text-transform:none;letter-spacing:0}
@@ -12926,7 +12898,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rct-acts{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
 .rct-lien{background:none;border:none;padding:6px 0;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .rct-sup{color:var(--sub)}
-.rct-vide{padding:14px 0;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6}
 .rct-actions{padding:4px 16px 8px}
 .rct-lab{display:block;font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin:14px 0 6px}
 .rct-champ{width:100%;box-sizing:border-box;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md)}
@@ -12997,7 +12968,6 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .td-annuler span{flex:1;min-width:0;line-height:1.4}
 .td-annuler button{flex:none;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;padding:8px 12px;min-height:40px;cursor:pointer}
 /* LOT M2 : la messagerie coach ↔ athlète */
-.msg-vide{padding:18px 4px;font-size:var(--fs-sm);color:var(--sub);line-height:1.6}
 .msg-fil{position:relative;display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px;color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer}
 .msg-fil-nl{border-color:var(--red)}
 .msg-fil-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding-right:30px}

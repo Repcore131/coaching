@@ -928,8 +928,8 @@ function _carteCourbePoids(serie,opts){
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
       `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
   const vide=(serie&&serie.length>=2)
-    ?'<div class="pc-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
-    :'<div class="pc-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
+    ?'<div class="graphe-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
+    :'<div class="graphe-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
   return `<div class="evo-carte pc-carte" id="${o.id}">
       <div class="pc-tete">
         <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>

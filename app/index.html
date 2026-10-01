@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1777';
+window.RC_BUILD='1778';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1777.css">
+<link rel="stylesheet" href="./rc-style.1778.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1777.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1778.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -861,7 +861,7 @@ const COACH_PHOTO='icons/coach.jpg';
          deux : sans lui, impossible de savoir si le telephone tourne sur le
          code qu'on vient de livrer ou sur celui d'hier. Quatre lots ont ete
          indiscernables faute de cette ligne. -->
-    <div id="rc-inst-version" style="text-align:center;margin-top:14px;font-size:var(--fs-2xs);color:rgba(255,255,255,.28);font-family:Montserrat,sans-serif"></div>
+    <div id="rc-inst-version" aria-hidden="true" style="text-align:center;margin-top:14px;font-size:var(--fs-2xs);color:rgba(255,255,255,.28);font-family:Montserrat,sans-serif"></div>
 
     <div style="text-align:center;margin-top:20px">
       <!-- JAMAIS UN BOUTON PLEIN. L'installation est le chemin par défaut ;
@@ -6092,5 +6092,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1777.js"></script>
+<script src="./rc-core.1778.js"></script>
 </body></html>

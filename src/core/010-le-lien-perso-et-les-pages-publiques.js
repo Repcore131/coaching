@@ -563,10 +563,10 @@ function renderProspects(){
     +'<div><b>'+m.athletes+'</b><span>devenu'+(m.athletes>1?'s':'')+' athlète'+(m.athletes>1?'s':'')+'</span></div></div>'
     +'<p class="sub pr-p">Sur les trente derniers jours. C’est ce qui dit si ta page travaille.</p>';
   if(!vitrineFormulesDe(currentUser).length)
-    h+='<div class="pr-vide">Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.</div>';
+    h+=emptyState('','Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.',null,null,'padding:16px 8px');
   const l=prospectsListe(_prBrut);
   if(!_prBrut) h+='<div class="sub pr-p">Lecture…</div>';
-  else if(!l.length) h+='<div class="pr-vide">Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.</div>';
+  else if(!l.length) h+=emptyState('','Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.',null,null,'padding:16px 8px');
   else h+=l.map(p=>{
     const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'

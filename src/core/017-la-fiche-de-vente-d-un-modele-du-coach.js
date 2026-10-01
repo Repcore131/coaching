@@ -748,17 +748,17 @@ function _htmlBilanBlocCorps(b){
     ?'<table><thead><tr><th>Exercice</th><th>Séances</th><th>Début</th><th>Fin</th><th>Écart</th></tr></thead><tbody>'
       +b.exercices.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.seances+'</td><td>'+nb(x.debut)+' kg</td><td>'+nb(x.fin)+' kg</td>'
         +'<td class="v">'+(x.ecart>0?'+':'')+nb(x.ecart)+' kg</td></tr>').join('')+'</tbody></table>'
-    :'<p class="bb-vide">Aucun exercice fait au moins '+BILAN_BLOC_MIN_SEANCES_EXO+' fois pendant le bloc : en dessous, l’écart ne vaut rien.</p>';
+    :emptyState('','Aucun exercice fait au moins '+BILAN_BLOC_MIN_SEANCES_EXO+' fois pendant le bloc : en dessous, l’écart ne vaut rien.',null,null,'padding:12px 0');
   h+='<h2>Ce qui a fait mal</h2>';
   h+=b.douleurs.length
     ?'<table><thead><tr><th>Exercice</th><th>Séries</th><th>Maximum</th><th>Jours</th></tr></thead><tbody>'
       +b.douleurs.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.series+'</td><td>'+x.max+'</td><td>'+x.dates.length+'</td></tr>').join('')
       +'</tbody></table><p class="bb-s">Séries déclarées à '+b.seuilDouleur+' ou plus. '+E(DISCLAIMER_DOULEUR)+'</p>'
-    :'<p class="bb-vide">Aucune série déclarée à '+b.seuilDouleur+' ou plus pendant le bloc.</p>';
+    :emptyState('','Aucune série déclarée à '+b.seuilDouleur+' ou plus pendant le bloc.',null,null,'padding:12px 0');
   return h;
 }
 function htmlBilanBloc(b){
-  if(!b) return '<p class="bb-vide">Aucun bloc défini : le bilan se lit sur un bloc de plusieurs semaines.</p>';
+  if(!b) return emptyState('','Aucun bloc défini : le bilan se lit sur un bloc de plusieurs semaines.',null,null,'padding:12px 0');
   return '<div class="bb">'+_htmlBilanBlocCorps(b)+'</div>';
 }
 function bilanBlocExportHtml(c,b){
@@ -1661,7 +1661,7 @@ function ouvrirPropagation(){
         return '<label class="c4-op'+(off?' c4-op-off':'')+'"><input type="checkbox" data-a="'+i+'" data-o="'+k+'"'+(r.coche?' checked':'')+(off?' disabled':'')+'>'
           +'<span><span class="c4-op-s">'+E(r.op.seance||DAYS[r.op.jour]||'')+'</span> '+_c4LibOp(r.op)
           +(r.detail?'<em>'+E(r.detail)+'</em>':'')+'</span></label>';
-      }).join(''):'<div class="sub c4-vide">Déjà comme le modèle.</div>')+'</div>';
+      }).join(''):emptyState('','Déjà comme le modèle.',null,null,'padding:12px 0'))+'</div>';
   }).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">

@@ -2488,7 +2488,11 @@ function _dbCarte(cls,titre,info,droite,corps){
 function _dbLegende(series){
   return '<div class="db-leg">'+series.map(s=>'<span><i style="background:'+escapeHtml(s.couleur)+';color:'+escapeHtml(s.couleur)+'"></i>'+escapeHtml(s.lib)+'</span>').join('')+'</div>';
 }
-function _dbVide(t){ return '<p class="db-vide">'+escapeHtml(t)+'</p>'; }
+// UNE NOTE DANS UNE CARTE DE GRAPHIQUE (« courbe masquee », « deux mesures au
+// moins »), pas un etat d'ecran : elle ne passe pas par emptyState, dont la
+// presence dit « onglet vide » (_progOngletVide). Meme classe .graphe-vide
+// pour toutes les cartes de courbe (01/10/2026).
+function _dbVide(t){ return '<p class="graphe-vide">'+escapeHtml(t)+'</p>'; }
 
 function _dbCartePoids(u,W,neutre){
   const info=_dbInfo('pg','Poids relevé au bilan (axe de gauche) et masse grasse estimée par la formule de la Navy à partir des tours de taille, de cou'

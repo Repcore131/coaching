@@ -166,9 +166,9 @@ function ouvrirMessages(){
 function _rendreFils(){
   const z=document.getElementById('msg-corps');
   if(!z) return;
-  if(!_msgFils){ z.innerHTML='<div class="msg-vide">Chargement des fils…</div>'; return; }
+  if(!_msgFils){ z.innerHTML=etatChargement(3); return; }
   const l=msgFilsTries(_msgFils.fils);
-  if(!l.length){ z.innerHTML='<div class="msg-vide">Aucun athlète rattaché pour l’instant.</div>'; return; }
+  if(!l.length){ z.innerHTML=emptyState('users','Aucun athlète rattaché pour l’instant.'); return; }
   const t=Date.now();
   z.innerHTML=l.map(f=>{
     const d=f.dernier;
@@ -234,10 +234,10 @@ function _rendreFil(garderPosition){
   const t=Date.now();
   const tete=moi==='coach'?'<button type="button" class="msg-retour" onclick="msgRetourFils()">Tous les fils</button>':'';
   let corps;
-  if(f.charge) corps='<div class="msg-vide">Chargement…</div>';
-  else if(f.erreur==='acces') corps='<div class="msg-vide">Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.')+'</div>';
-  else if(f.erreur) corps='<div class="msg-vide">'+(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.')+'</div>';
-  else if(!f.liste.length) corps='<div class="msg-vide">Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.')+'</div>';
+  if(f.charge) corps=etatChargement(3);
+  else if(f.erreur==='acces') corps=etatErreur('Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.'));
+  else if(f.erreur) corps=etatErreur(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.','Réessayer','msgOuvrirFil('+_attrArg(f.cle)+')');
+  else if(!f.liste.length) corps=emptyState('message-circle','Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.'),null,null,'padding:24px 8px');
   else corps=(f.complet?'':'<button type="button" class="msg-anciens" onclick="msgPlusAnciens()">Messages plus anciens</button>')
     +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
       +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
@@ -344,8 +344,8 @@ function renderRelancesCoach(){
     +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
   h+='<h2 class="rel-h">Cette semaine</h2>';
-  if(!sem) h+='<div class="sub rel-vide">Lecture du journal…</div>';
-  else if(!sem.length) h+='<div class="sub rel-vide">Rien n’est parti ces sept derniers jours.</div>';
+  if(!sem) h+=etatChargement(2);
+  else if(!sem.length) h+=emptyState('','Rien n’est parti ces sept derniers jours.',null,null,'padding:12px 0');
   else h+='<div class="rel-sem-n">'+partis.length+' message'+(partis.length>1?'s':'')+' parti'+(partis.length>1?'s':'')
     +(sem.length>partis.length?', '+(sem.length-partis.length)+' pas parti'+(sem.length-partis.length>1?'s':''):'')+'</div>'
     +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
@@ -523,7 +523,7 @@ function renderLundi(){
   const z=document.getElementById('ld-corps');
   if(!z) return false;
   let clients=[]; try{ clients=getClients().filter(c=>c&&!c._fromCode); }catch(e){ clients=[]; }
-  if(!clients.length){ z.innerHTML='<div class="ld-vide">Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.</div>'; return true; }
+  if(!clients.length){ z.innerHTML=emptyState('users','Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.',null,null,''); return true; }
   const jeton=++_lundiJeton, lignes=[];
   const peindre=fini=>{
     if(jeton!==_lundiJeton) return;

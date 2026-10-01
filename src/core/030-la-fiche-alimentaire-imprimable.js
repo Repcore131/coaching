@@ -134,7 +134,7 @@ function ficheAlimDonnees(user,chercher){
 /** Le document. Deux planches, dans l'ordre des deux PDF du coach. */
 function htmlFicheAlim(user,chercher){
   const d=ficheAlimDonnees(user,chercher);
-  if(!d.ok) return `<div class="fa-vide">${escapeHtml(d.raison)}</div>`;
+  if(!d.ok) return emptyState('clipboard',escapeHtml(d.raison));
   const E=escapeHtml;
   // L'EN-TÊTE, LE PIED ET LES DEUX RAILS sont communs aux deux planches : ils
   // FONT la planche. Les écrire deux fois les aurait fait diverger au premier
@@ -271,7 +271,7 @@ function faRendre(){
   if(!_ciqualDB){ try{ _loadCiqual().then(()=>{ if(_faCible) faRendre(); }); }catch(e){} }
   let h='';
   try{ h=htmlFicheAlim(_faCible); }
-  catch(e){ h='<div class="fa-vide">Fiche indisponible : '+escapeHtml(String(e&&e.message||e))+'</div>'; }
+  catch(e){ h=etatErreur('Fiche indisponible : '+escapeHtml(String(e&&e.message||e))); }
   z.innerHTML=h;
   faEchelle();
   return true;
@@ -471,7 +471,7 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>';
+  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0');
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -506,7 +506,7 @@ function ppRendre(){
   const z=document.getElementById('pp-corps');
   if(!z) return false;
   let h='';
-  try{ h=htmlProgrammePrint(_ppCible); }catch(e){ h='<div class="rap-vide">Fiche indisponible.</div>'; }
+  try{ h=htmlProgrammePrint(_ppCible); }catch(e){ h=emptyState('','Fiche indisponible.',null,null,'padding:12px 0'); }
   z.innerHTML=h;
   return true;
 }

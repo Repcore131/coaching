@@ -570,8 +570,8 @@ function _htmlHistoTableur(c){
       +'<button type="button" class="tbk-h-x" onclick="histoAnnuler()">Annuler et revenir à l’état précédent</button></div>'
     : '';
   if(!l.length) return '<div class="tbk-histo">'+annul
-    +'<div class="tbk-h-vide">Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
-    +'et tu pourras en remettre une en place.</div></div>';
+    +emptyState('','Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
+    +'et tu pourras en remettre une en place.',null,null,'padding:12px 0')+'</div>';
   // UNE SEULE LIGNE PORTE « EN COURS » : la plus recente qui a ces chiffres.
   // Deux lignes identiques — une remise en place puis son annulation — se
   // presentaient toutes les deux comme la cible du moment.
@@ -1306,7 +1306,7 @@ function _htmlJournalCal(c){
         +'<span class="jr-li-k">'+nb(tj.kcal)+' kcal</span></button>');
     }
     grille='<div class="jr-liste">'+(lignes.join('')
-      ||'<div class="jr-vide-t">Aucun jour saisi ce mois-ci.</div>')+'</div>';
+      ||emptyState('','Aucun jour saisi ce mois-ci.',null,null,'padding:12px 0'))+'</div>';
   }
   // ── LE DETAIL D'UN JOUR ────────────────────────────────────────────────
   let detail='';

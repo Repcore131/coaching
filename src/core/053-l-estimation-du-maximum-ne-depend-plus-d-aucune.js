@@ -1338,6 +1338,13 @@ function rcNavigateurSamsung(){
 // navigateur inconnu ; celle-ci ne laisse passer que ce qui est verifie.
 const RC_ANDROID_SAIT_INSTALLER=/Chrome\/[0-9]/i;
 const RC_ANDROID_PAS_CHROME=/SamsungBrowser|OPR\/|OPX\/|UCBrowser|MiuiBrowser|HeyTapBrowser|VivoBrowser|OppoBrowser|QuarkBrowser|Whale|YaBrowser|DuckDuckGo|Brave|Ecosia|Instagram|FBAN|FBAV|FB_IAB/i;
+// LE MODE DEBOGAGE : ?debug=1 dans l'adresse, ou localStorage rc_debug = '1'
+// (pour le garder d'une ouverture a l'autre). Il montre les reperes techniques
+// que l'utilisateur n'a pas a voir (numero de build de s-install).
+function rcModeDebug(){
+  try{ if(/[?&]debug=1(&|$)/.test(location.search||'')) return true; }catch(e){}
+  try{ return localStorage.getItem('rc_debug')==='1'; }catch(e){ return false; }
+}
 function rcInstallBloquePar(){
   try{
     const u=String(navigator.userAgent||'');
@@ -1834,9 +1841,18 @@ function rcInstallDecider(){
     // avant que la branche ne soit choisie. Ce qu'il porte suffit — le numéro
     // de build dit si le téléphone tourne sur le code livré, et la raison de
     // blocage dit si la garde s'est levée.
-    if(_v) _v.textContent='build '+(window.RC_BUILD||'?')
-      +' · '+(rcInstallBloquePar()||'invitation ok')
-      +(rcNavigateurSamsung()?' · SI '+rcNavigateurSamsung():'');
+    // RESERVE AU DEBOGAGE (01/10/2026) : un athlete n'a que faire d'un numero
+    // de build sous le bouton d'installation. Le repere ne s'ecrit qu'avec
+    // ?debug=1 dans l'adresse, ou localStorage rc_debug = '1' ; sinon
+    // l'element reste vide et cache aux lecteurs d'ecran.
+    if(_v){
+      if(rcModeDebug()){
+        _v.textContent='build '+(window.RC_BUILD||'?')
+          +' · '+(rcInstallBloquePar()||'invitation ok')
+          +(rcNavigateurSamsung()?' · SI '+rcNavigateurSamsung():'');
+        _v.removeAttribute('aria-hidden');
+      } else { _v.textContent=''; _v.setAttribute('aria-hidden','true'); }
+    }
   }catch(e){}
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };

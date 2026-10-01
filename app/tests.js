@@ -56957,6 +56957,46 @@ async function testExercices(){
       const nu=h.replace(/<!--[\s\S]*?-->/g,'').replace(/^[ \t]*\/\/.*$/gm,'');
       const e=nu.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{21C4}]/gu);
       return e?_echec('index.html garde '+e.length+' emoji(s) : '+[...new Set(e)].join(' ')):true;})());
+    // ══ LE REPÈRE DE BUILD DE s-install, RÉSERVÉ AU DÉBOGAGE (01/10/2026) ══
+    ok('s-install : le repère « build » ne s’écrit qu’en mode débogage (?debug=1 ou rc_debug=1)',(()=>{
+      const v=document.getElementById('rc-inst-version');
+      if(!v) return _echec('#rc-inst-version absent');
+      let sv=null; try{ sv=localStorage.getItem('rc_debug'); }catch(e){}
+      const remettre=()=>{ try{ if(sv==null) localStorage.removeItem('rc_debug'); else localStorage.setItem('rc_debug',sv); }catch(e){} };
+      try{
+        try{ localStorage.removeItem('rc_debug'); }catch(e){}
+        if(/[?&]debug=1/.test(location.search)) return _echec('la suite tourne avec ?debug=1 : le cas ordinaire ne se vérifie pas');
+        rcInstallDecider();
+        if(v.textContent!=='') return _echec('sans débogage, le repère dit « '+v.textContent+' »');
+        if(v.getAttribute('aria-hidden')!=='true') return _echec('le repère vide n’est pas caché aux lecteurs d’écran');
+        localStorage.setItem('rc_debug','1');
+        rcInstallDecider();
+        if(!/^build /.test(v.textContent)) return _echec('rc_debug=1 n’affiche pas le build : « '+v.textContent+' »');
+        if(v.hasAttribute('aria-hidden')) return _echec('le repère affiché reste caché');
+        // LA GARDE N'A PAS BOUGÉ : rcInstallBloquePar est toujours lu par le décideur.
+        if(!/rcInstallBloquePar\(\)/.test(String(rcInstallDecider))) return _echec('rcInstallBloquePar n’est plus consulté');
+        return /debug=1/.test(String(rcModeDebug))?true:_echec('?debug=1 n’est plus reconnu');
+      } finally { remettre(); try{ rcInstallDecider(); }catch(e){} }})());
+    // ══ LES TROIS ÉTATS D'UN BLOC : VIDE, CHARGEMENT, ERREUR ══════════════
+    ok('emptyState, etatChargement et etatErreur partagent la racine .etat',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=emptyState('users','Rien ici.','Ajouter','void 0')+etatChargement()+etatChargement(5)+etatErreur('Échec.','Réessayer','void 0')+emptyState('','Sans icône.');
+      const r=[...d.children];
+      if(r.length!==5||r.some(x=>!x.classList.contains('etat'))) return _echec('racine .etat absente');
+      const sq=r[1].querySelectorAll('.skeleton.fx-loop');
+      if(sq.length!==3||[...sq].map(x=>x.style.width).join()!=='62%,88%,35%') return _echec('squelettes : '+[...sq].map(x=>x.style.width));
+      if(r[2].querySelectorAll('.skeleton').length!==5||r[1].getAttribute('aria-busy')!=='true') return _echec('lignes ou aria-busy');
+      const b=r[3].querySelector('button.btn.btn-outline.btn-sm');
+      if(!b||b.textContent!=='Réessayer'||!r[3].querySelector('svg')||r[3].getAttribute('role')!=='alert') return _echec('etatErreur : bouton, icône ou rôle');
+      if(!/var\(--sub\)/.test(r[3].innerHTML)) return _echec('le message d’erreur n’est pas en --sub');
+      return r[4].querySelector('.empty-illus')?_echec('un état sans icône garde sa place d’illustration'):true;})());
+    ok('Les états vides d’écran passent par emptyState : moins de 15 classes « -vide » dans la feuille, plus de classes mortes',(()=>{
+      const css=_stylesProd().map(s=>s.textContent).join('\n');
+      const vides=[...new Set((css.match(/\.[a-zA-Z0-9_]+(?:-[a-zA-Z0-9_]+)*-vide(?:-[a-zA-Z0-9_]+)*\b/g)||[]))];
+      if(vides.length>=15) return _echec(vides.length+' classes -vide : '+vides.join(' '));
+      const mortes=['txt-title','txt-stat-sm','brand-font','card-accent','card-warn','card-ok','accent-line','msg-vide','rct-vide','pr-vide','rap-vide'];
+      const la=mortes.filter(c=>new RegExp('\\.'+c+'(?![\\w-])').test(css));
+      return la.length?_echec('encore dans la feuille : '+la.join(' ')):true;})());
     ok('.btn et .btn-sm ont le même rayon (--r-3) ; .btn-red est un rouge plat',(()=>{
       const d=document.createElement('div'); d.style.cssText='position:absolute;left:-9999px';
       d.innerHTML='<button class="btn">a</button><button class="btn btn-sm">b</button><button class="btn btn-red">c</button>';

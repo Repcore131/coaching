@@ -2225,7 +2225,7 @@ function htmlKit(k){
     +'<button type="button" class="btn btn-red btn-casse kit-tout" onclick="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
   k.contenus.forEach((c,i)=>{
     h+='<section class="kit-c"><div class="kit-t">'+(i+1)+' · '+escapeHtml(c.titre)+'</div>';
-    if(!c.d){ h+='<p class="kit-vide">Pas encore de progression de charge à montrer cette semaine. Elle viendra.</p></section>'; return; }
+    if(!c.d){ h+=emptyState('','Pas encore de progression de charge à montrer cette semaine. Elle viendra.',null,null,'padding:12px 0')+'</section>'; return; }
     h+='<canvas class="kit-apercu" id="kit-cv-'+i+'" aria-label="Aperçu : '+escapeHtml(c.titre)+'"></canvas>'
       +'<label class="kit-l" for="kit-leg-'+i+'">Légende</label>'
       +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" oninput="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'

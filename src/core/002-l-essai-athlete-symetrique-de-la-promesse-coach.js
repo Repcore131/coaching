@@ -1604,6 +1604,7 @@ const ICONS={
 Object.assign(ICONS,{
   eclair:ICONS.zap, muscle:ICONS.biceps, flamme:ICONS.flame, cafe:ICONS.coffee,
   gelule:ICONS.pill, cible:ICONS.target, coche:ICONS.check, croix:ICONS.x,
+  alerte:ICONS['alert-triangle'],
   // La regle graduee (mesures en cm du bilan de depart), dessin Lucide « ruler » (ISC).
   regle:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
   // La tasse sans fumee, son fil et son etiquette : le the, distinct du cafe.
@@ -1656,7 +1657,27 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="etat empty-state"${sa}>${ico?`<div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div>`:''}<div>${message}</div>${cta}</div>`;}
+// ══ LES TROIS ETATS D'UN BLOC : VIDE, EN CHARGEMENT, EN ERREUR (01/10/2026) ══
+// Meme structure et meme racine .etat que emptyState : un bloc qui attend, qui
+// a echoue ou qui n'a rien a montrer occupe la meme place et se lit pareil.
+// etatChargement : des lignes squelettes aux largeurs du fil du canal (62 %,
+// 88 %, 35 %, puis de nouveau), avec fx-loop pour que prefers-reduced-motion
+// coupe le balayage.
+function etatChargement(lignes=3){
+  const L=[62,88,35], n=Math.max(1,Math.min(8,Number(lignes)||3));
+  let h='';
+  for(let k=0;k<n;k++) h+='<div class="skeleton fx-loop" style="height:'+(k===0?15:11)+'px;width:'+L[k%3]+'%;margin:'+(k===0?'0 auto 10px':'0 auto 6px')+'"></div>';
+  return '<div class="etat etat-chargement" aria-busy="true" aria-label="Chargement">'+h+'</div>';
+}
+// etatErreur : l'icone d'alerte, le message en --sub, et un seul geste,
+// secondaire comme celui de emptyState. fnReessayer est une CHAINE posee dans
+// un onclick entre guillemets doubles (meme regle que ctaFn).
+function etatErreur(message,libelleReessayer,fnReessayer){
+  const cta=(libelleReessayer&&fnReessayer)?'<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="'+fnReessayer+'">'+libelleReessayer+'</button>':'';
+  return '<div class="etat empty-state etat-erreur" role="alert"><div class="empty-illus" style="opacity:.6;margin-bottom:14px">'+icon('alerte',40)+'</div>'
+    +'<div style="color:var(--sub)">'+message+'</div>'+cta+'</div>';
+}
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
 // pas concurrencer l'action principale de l'ecran. ctaFn est une CHAINE posee

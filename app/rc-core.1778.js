@@ -3273,6 +3273,7 @@ const ICONS={
 Object.assign(ICONS,{
   eclair:ICONS.zap, muscle:ICONS.biceps, flamme:ICONS.flame, cafe:ICONS.coffee,
   gelule:ICONS.pill, cible:ICONS.target, coche:ICONS.check, croix:ICONS.x,
+  alerte:ICONS['alert-triangle'],
   // La regle graduee (mesures en cm du bilan de depart), dessin Lucide « ruler » (ISC).
   regle:'<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
   // La tasse sans fumee, son fil et son etiquette : le the, distinct du cafe.
@@ -3325,7 +3326,27 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="etat empty-state"${sa}>${ico?`<div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div>`:''}<div>${message}</div>${cta}</div>`;}
+// ══ LES TROIS ETATS D'UN BLOC : VIDE, EN CHARGEMENT, EN ERREUR (01/10/2026) ══
+// Meme structure et meme racine .etat que emptyState : un bloc qui attend, qui
+// a echoue ou qui n'a rien a montrer occupe la meme place et se lit pareil.
+// etatChargement : des lignes squelettes aux largeurs du fil du canal (62 %,
+// 88 %, 35 %, puis de nouveau), avec fx-loop pour que prefers-reduced-motion
+// coupe le balayage.
+function etatChargement(lignes=3){
+  const L=[62,88,35], n=Math.max(1,Math.min(8,Number(lignes)||3));
+  let h='';
+  for(let k=0;k<n;k++) h+='<div class="skeleton fx-loop" style="height:'+(k===0?15:11)+'px;width:'+L[k%3]+'%;margin:'+(k===0?'0 auto 10px':'0 auto 6px')+'"></div>';
+  return '<div class="etat etat-chargement" aria-busy="true" aria-label="Chargement">'+h+'</div>';
+}
+// etatErreur : l'icone d'alerte, le message en --sub, et un seul geste,
+// secondaire comme celui de emptyState. fnReessayer est une CHAINE posee dans
+// un onclick entre guillemets doubles (meme regle que ctaFn).
+function etatErreur(message,libelleReessayer,fnReessayer){
+  const cta=(libelleReessayer&&fnReessayer)?'<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="'+fnReessayer+'">'+libelleReessayer+'</button>':'';
+  return '<div class="etat empty-state etat-erreur" role="alert"><div class="empty-illus" style="opacity:.6;margin-bottom:14px">'+icon('alerte',40)+'</div>'
+    +'<div style="color:var(--sub)">'+message+'</div>'+cta+'</div>';
+}
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
 // pas concurrencer l'action principale de l'ecran. ctaFn est une CHAINE posee
@@ -16860,7 +16881,7 @@ function htmlRevueMorpho(etat){
       +(l.suspendu?' · test à refaire':'')+'</div></div>';
   }
   if(!g.length&&e.profilsSortis)
-    h+='<div class="rvm-vide">Aucun exercice de son programme ne relève des aménagements de ses profils.</div>';
+    h+=emptyState('','Aucun exercice de son programme ne relève des aménagements de ses profils.',null,null,'padding:12px 0');
   if(bloques.length)
     h+='<div class="rvm-manque">Une partie de la lecture des leviers attend un repère calibré sur tes athlètes : '
       +bloques.map(b=>E(b.court)+', '+b.n+' athlète'+(b.n>1?'s':'')+' mesuré'+(b.n>1?'s':'')+' sur '+MORPHO_CALIB_MIN
@@ -20348,7 +20369,7 @@ function htmlKit(k){
     +'<button type="button" class="btn btn-red btn-casse kit-tout" onclick="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
   k.contenus.forEach((c,i)=>{
     h+='<section class="kit-c"><div class="kit-t">'+(i+1)+' · '+escapeHtml(c.titre)+'</div>';
-    if(!c.d){ h+='<p class="kit-vide">Pas encore de progression de charge à montrer cette semaine. Elle viendra.</p></section>'; return; }
+    if(!c.d){ h+=emptyState('','Pas encore de progression de charge à montrer cette semaine. Elle viendra.',null,null,'padding:12px 0')+'</section>'; return; }
     h+='<canvas class="kit-apercu" id="kit-cv-'+i+'" aria-label="Aperçu : '+escapeHtml(c.titre)+'"></canvas>'
       +'<label class="kit-l" for="kit-leg-'+i+'">Légende</label>'
       +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" oninput="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'
@@ -21164,10 +21185,10 @@ function renderProspects(){
     +'<div><b>'+m.athletes+'</b><span>devenu'+(m.athletes>1?'s':'')+' athlète'+(m.athletes>1?'s':'')+'</span></div></div>'
     +'<p class="sub pr-p">Sur les trente derniers jours. C’est ce qui dit si ta page travaille.</p>';
   if(!vitrineFormulesDe(currentUser).length)
-    h+='<div class="pr-vide">Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.</div>';
+    h+=emptyState('','Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.',null,null,'padding:16px 8px');
   const l=prospectsListe(_prBrut);
   if(!_prBrut) h+='<div class="sub pr-p">Lecture…</div>';
-  else if(!l.length) h+='<div class="pr-vide">Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.</div>';
+  else if(!l.length) h+=emptyState('','Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.',null,null,'padding:16px 8px');
   else h+=l.map(p=>{
     const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'
@@ -23917,7 +23938,7 @@ function htmlAmisAccueil(liste,t,o,monPseudo,moi){
     +'<button type="button" class="am-tout" onclick="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
   if(!liste.length){
     return '<div class="am-carte">'+tete
-      +'<p class="am-vide">Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.</p>'
+      +emptyState('','Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.',null,null,'padding:12px 0')
       +'<div class="am-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirAmis()">Chercher un pseudo</button>'
       +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>'
       +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>.</p>')
@@ -24020,7 +24041,7 @@ async function renderEcranAmis(){
 }
 function _rendreListeEcranAmis(l,moi){
   const z=document.getElementById('am-liste'); if(!z) return;
-  if(!l.length){ z.innerHTML='<p class="am-vide">Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.</p>'; return; }
+  if(!l.length){ z.innerHTML=emptyState('','Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.',null,null,'padding:12px 0'); return; }
   const o=amisLocal(), t=Date.now(), loc=reactionsLocales();
   const mk=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
   const cl=document.getElementById('am-classement');
@@ -28021,9 +28042,9 @@ function ouvrirMessages(){
 function _rendreFils(){
   const z=document.getElementById('msg-corps');
   if(!z) return;
-  if(!_msgFils){ z.innerHTML='<div class="msg-vide">Chargement des fils…</div>'; return; }
+  if(!_msgFils){ z.innerHTML=etatChargement(3); return; }
   const l=msgFilsTries(_msgFils.fils);
-  if(!l.length){ z.innerHTML='<div class="msg-vide">Aucun athlète rattaché pour l’instant.</div>'; return; }
+  if(!l.length){ z.innerHTML=emptyState('users','Aucun athlète rattaché pour l’instant.'); return; }
   const t=Date.now();
   z.innerHTML=l.map(f=>{
     const d=f.dernier;
@@ -28089,10 +28110,10 @@ function _rendreFil(garderPosition){
   const t=Date.now();
   const tete=moi==='coach'?'<button type="button" class="msg-retour" onclick="msgRetourFils()">Tous les fils</button>':'';
   let corps;
-  if(f.charge) corps='<div class="msg-vide">Chargement…</div>';
-  else if(f.erreur==='acces') corps='<div class="msg-vide">Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.')+'</div>';
-  else if(f.erreur) corps='<div class="msg-vide">'+(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.')+'</div>';
-  else if(!f.liste.length) corps='<div class="msg-vide">Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.')+'</div>';
+  if(f.charge) corps=etatChargement(3);
+  else if(f.erreur==='acces') corps=etatErreur('Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.'));
+  else if(f.erreur) corps=etatErreur(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.','Réessayer','msgOuvrirFil('+_attrArg(f.cle)+')');
+  else if(!f.liste.length) corps=emptyState('message-circle','Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.'),null,null,'padding:24px 8px');
   else corps=(f.complet?'':'<button type="button" class="msg-anciens" onclick="msgPlusAnciens()">Messages plus anciens</button>')
     +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
       +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
@@ -28199,8 +28220,8 @@ function renderRelancesCoach(){
     +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
   h+='<h2 class="rel-h">Cette semaine</h2>';
-  if(!sem) h+='<div class="sub rel-vide">Lecture du journal…</div>';
-  else if(!sem.length) h+='<div class="sub rel-vide">Rien n’est parti ces sept derniers jours.</div>';
+  if(!sem) h+=etatChargement(2);
+  else if(!sem.length) h+=emptyState('','Rien n’est parti ces sept derniers jours.',null,null,'padding:12px 0');
   else h+='<div class="rel-sem-n">'+partis.length+' message'+(partis.length>1?'s':'')+' parti'+(partis.length>1?'s':'')
     +(sem.length>partis.length?', '+(sem.length-partis.length)+' pas parti'+(sem.length-partis.length>1?'s':''):'')+'</div>'
     +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
@@ -28378,7 +28399,7 @@ function renderLundi(){
   const z=document.getElementById('ld-corps');
   if(!z) return false;
   let clients=[]; try{ clients=getClients().filter(c=>c&&!c._fromCode); }catch(e){ clients=[]; }
-  if(!clients.length){ z.innerHTML='<div class="ld-vide">Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.</div>'; return true; }
+  if(!clients.length){ z.innerHTML=emptyState('users','Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.',null,null,''); return true; }
   const jeton=++_lundiJeton, lignes=[];
   const peindre=fini=>{
     if(jeton!==_lundiJeton) return;
@@ -37115,9 +37136,8 @@ function loadCoachProgramsList(){
   if(_cplFiltre&&!container.querySelector('.cpl-c')){
     const lib=(PROG_PUBLICS.find(x=>x.cle===_cplFiltre)||{}).lib||'';
     container.insertAdjacentHTML('beforeend',
-      '<p class="cpl-vide">Aucun programme « '+escapeHtml(lib)+' » pour l’instant. '
-      +'<button type="button" class="cpl-vide-b" onclick="cplFiltrer(\''+_cplFiltre+'\')">'
-      +'Revoir tout le catalogue</button></p>');
+      emptyState('folder','Aucun programme « '+escapeHtml(lib)+' » pour l’instant.',
+        'Revoir tout le catalogue','cplFiltrer(\''+_cplFiltre+'\')','padding:24px 8px'));
   }
 }
 
@@ -38033,17 +38053,17 @@ function _htmlBilanBlocCorps(b){
     ?'<table><thead><tr><th>Exercice</th><th>Séances</th><th>Début</th><th>Fin</th><th>Écart</th></tr></thead><tbody>'
       +b.exercices.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.seances+'</td><td>'+nb(x.debut)+' kg</td><td>'+nb(x.fin)+' kg</td>'
         +'<td class="v">'+(x.ecart>0?'+':'')+nb(x.ecart)+' kg</td></tr>').join('')+'</tbody></table>'
-    :'<p class="bb-vide">Aucun exercice fait au moins '+BILAN_BLOC_MIN_SEANCES_EXO+' fois pendant le bloc : en dessous, l’écart ne vaut rien.</p>';
+    :emptyState('','Aucun exercice fait au moins '+BILAN_BLOC_MIN_SEANCES_EXO+' fois pendant le bloc : en dessous, l’écart ne vaut rien.',null,null,'padding:12px 0');
   h+='<h2>Ce qui a fait mal</h2>';
   h+=b.douleurs.length
     ?'<table><thead><tr><th>Exercice</th><th>Séries</th><th>Maximum</th><th>Jours</th></tr></thead><tbody>'
       +b.douleurs.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.series+'</td><td>'+x.max+'</td><td>'+x.dates.length+'</td></tr>').join('')
       +'</tbody></table><p class="bb-s">Séries déclarées à '+b.seuilDouleur+' ou plus. '+E(DISCLAIMER_DOULEUR)+'</p>'
-    :'<p class="bb-vide">Aucune série déclarée à '+b.seuilDouleur+' ou plus pendant le bloc.</p>';
+    :emptyState('','Aucune série déclarée à '+b.seuilDouleur+' ou plus pendant le bloc.',null,null,'padding:12px 0');
   return h;
 }
 function htmlBilanBloc(b){
-  if(!b) return '<p class="bb-vide">Aucun bloc défini : le bilan se lit sur un bloc de plusieurs semaines.</p>';
+  if(!b) return emptyState('','Aucun bloc défini : le bilan se lit sur un bloc de plusieurs semaines.',null,null,'padding:12px 0');
   return '<div class="bb">'+_htmlBilanBlocCorps(b)+'</div>';
 }
 function bilanBlocExportHtml(c,b){
@@ -38946,7 +38966,7 @@ function ouvrirPropagation(){
         return '<label class="c4-op'+(off?' c4-op-off':'')+'"><input type="checkbox" data-a="'+i+'" data-o="'+k+'"'+(r.coche?' checked':'')+(off?' disabled':'')+'>'
           +'<span><span class="c4-op-s">'+E(r.op.seance||DAYS[r.op.jour]||'')+'</span> '+_c4LibOp(r.op)
           +(r.detail?'<em>'+E(r.detail)+'</em>':'')+'</span></label>';
-      }).join(''):'<div class="sub c4-vide">Déjà comme le modèle.</div>')+'</div>';
+      }).join(''):emptyState('','Déjà comme le modèle.',null,null,'padding:12px 0'))+'</div>';
   }).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
@@ -58747,7 +58767,11 @@ function _dbCarte(cls,titre,info,droite,corps){
 function _dbLegende(series){
   return '<div class="db-leg">'+series.map(s=>'<span><i style="background:'+escapeHtml(s.couleur)+';color:'+escapeHtml(s.couleur)+'"></i>'+escapeHtml(s.lib)+'</span>').join('')+'</div>';
 }
-function _dbVide(t){ return '<p class="db-vide">'+escapeHtml(t)+'</p>'; }
+// UNE NOTE DANS UNE CARTE DE GRAPHIQUE (« courbe masquee », « deux mesures au
+// moins »), pas un etat d'ecran : elle ne passe pas par emptyState, dont la
+// presence dit « onglet vide » (_progOngletVide). Meme classe .graphe-vide
+// pour toutes les cartes de courbe (01/10/2026).
+function _dbVide(t){ return '<p class="graphe-vide">'+escapeHtml(t)+'</p>'; }
 
 function _dbCartePoids(u,W,neutre){
   const info=_dbInfo('pg','Poids relevé au bilan (axe de gauche) et masse grasse estimée par la formule de la Navy à partir des tours de taille, de cou'
@@ -61807,7 +61831,7 @@ function _htmlAnatPriorites(res,c){
   const corps=l.length?'<div class="an-prio-l">'+l.map((x,i)=>'<button type="button" class="an-prio-c" data-k="'+x.cle+'" data-n="'+Math.abs(x.niveau)+'" onclick="anatOuvrir(\''+x.cle+'\',true)">'
       +'<span class="an-prio-n">'+(i+1)+'</span><span class="an-prio-t"><b>'+escapeHtml(x.lib)+'</b><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em>'
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
-    :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
+    :emptyState('','Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.',null,null,'padding:12px 0');
   return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
 }
 // ── LES DEUX EXPORTS (E5, 26/09/2026) ─────────────────────────────────────
@@ -65195,8 +65219,8 @@ function loadHistoriqueSeances(){
   if(z){
     z.innerHTML=l.length
       ? l.map(x=>_htmlLigneHistorique(x,Date.now())).join('')
-      : '<div class="hs-vide">Aucune séance enregistrée pour l\'instant.<br>'
-        +'Elles apparaîtront ici dès la première terminée.</div>';
+      : emptyState('clock','Aucune séance enregistrée pour l\'instant.<br>'
+        +'Elles apparaîtront ici dès la première terminée.',null,null,'');
     // UN SEUL ECOUTEUR, sur le conteneur : deux cents lignes font deux cents
     // ecouteurs autrement, et ils survivraient a chaque rendu.
     z.onclick=e=>{
@@ -68239,7 +68263,7 @@ function rapPreset(cle){
   return true;
 }
 function _rapInsuffisant(){
-  return `<div class="rap-vide">${escapeHtml(RAP_INSUFFISANT)}</div>`;
+  return emptyState('',escapeHtml(RAP_INSUFFISANT),null,null,'padding:12px 0');
 }
 function htmlRapport(r){
   const B=_rapBlocs;
@@ -68424,7 +68448,7 @@ function rapRendre(){
   if(_vrr){ z.innerHTML=_vrr; return; }
   let r=null;
   try{ r=rapportPeriode(_rapCible,_rapDebut,_rapFin); }catch(e){ r=null; }
-  z.innerHTML=r?htmlRapport(r):'<div class="rap-vide">Rapport indisponible.</div>';
+  z.innerHTML=r?htmlRapport(r):emptyState('','Rapport indisponible.',null,null,'padding:12px 0');
   const d=document.getElementById('rap-d'), f=document.getElementById('rap-f');
   // TOUJOURS, et non « seulement si le champ est vide ». ouvrirRapport remet
   // _rapDebut et _rapFin au mois précédent à CHAQUE ouverture : les champs
@@ -68626,7 +68650,7 @@ function ficheAlimDonnees(user,chercher){
 /** Le document. Deux planches, dans l'ordre des deux PDF du coach. */
 function htmlFicheAlim(user,chercher){
   const d=ficheAlimDonnees(user,chercher);
-  if(!d.ok) return `<div class="fa-vide">${escapeHtml(d.raison)}</div>`;
+  if(!d.ok) return emptyState('clipboard',escapeHtml(d.raison));
   const E=escapeHtml;
   // L'EN-TÊTE, LE PIED ET LES DEUX RAILS sont communs aux deux planches : ils
   // FONT la planche. Les écrire deux fois les aurait fait diverger au premier
@@ -68763,7 +68787,7 @@ function faRendre(){
   if(!_ciqualDB){ try{ _loadCiqual().then(()=>{ if(_faCible) faRendre(); }); }catch(e){} }
   let h='';
   try{ h=htmlFicheAlim(_faCible); }
-  catch(e){ h='<div class="fa-vide">Fiche indisponible : '+escapeHtml(String(e&&e.message||e))+'</div>'; }
+  catch(e){ h=etatErreur('Fiche indisponible : '+escapeHtml(String(e&&e.message||e))); }
   z.innerHTML=h;
   faEchelle();
   return true;
@@ -68963,7 +68987,7 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>';
+  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0');
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -68998,7 +69022,7 @@ function ppRendre(){
   const z=document.getElementById('pp-corps');
   if(!z) return false;
   let h='';
-  try{ h=htmlProgrammePrint(_ppCible); }catch(e){ h='<div class="rap-vide">Fiche indisponible.</div>'; }
+  try{ h=htmlProgrammePrint(_ppCible); }catch(e){ h=emptyState('','Fiche indisponible.',null,null,'padding:12px 0'); }
   z.innerHTML=h;
   return true;
 }
@@ -78808,7 +78832,7 @@ function renderReponsesBilans(bilans,client){
           </div>
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
-        ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
+        ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
         ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">
           <div class="bn-reponse-t">Réponse de ton coach</div>
           ${b.reponseCoach?`<div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>`:''}
@@ -79912,8 +79936,8 @@ function htmlHabitudesCoach(c){
           +'</div>';
       }).join('')
       +(g!=null?'<div class="hbc-moy">Moyenne sur '+HAB_FENETRE_JOURS+' jours : <b>'+g+'&nbsp;%</b>. Fenêtre glissante, le jour en cours n’est pas compté.</div>':'')
-    : '<div class="hbc-vide">'+HAB_ICO.haltere+'<b>Aucune habitude assignée pour le moment.</b>'
-      +'<span>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.</span></div>';
+    : emptyState('haltere','<b>Aucune habitude assignée pour le moment.</b>'
+      +'<br>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.',null,null,'padding:20px 8px');
   return '<section class="hbc'+(_habReplie?' hbc-replie':'')+'">'
     +'<div class="hbc-tete">'
       +'<button type="button" class="hbc-pli" onclick="habCoachPlier()" aria-expanded="'+(!_habReplie)+'" aria-label="Replier les habitudes">'+HAB_ICO.chevron+'</button>'
@@ -79961,9 +79985,9 @@ function habCoachPlier(){
 }
 function habCoachRegles(){
   _sanFeuille('Les habitudes',
-    '<div class="san-vide">Trois habitudes au plus par athlète. Il les coche d’un appui sur son accueil, pour le jour même ou jusqu’à deux jours en arrière.</div>'
-    +'<div class="san-vide">Le pourcentage se lit sur '+HAB_FENETRE_JOURS+' jours glissants, sans le jour en cours. Retirer une habitude garde ses coches : la remettre plus tard retrouve tout.</div>'
-    +'<div class="san-vide">Une habitude ne peut porter ni sur un poids, ni sur une mesure, ni sur une restriction alimentaire : ce sont des données de santé.</div>');
+    '<div class="san-aide">Trois habitudes au plus par athlète. Il les coche d’un appui sur son accueil, pour le jour même ou jusqu’à deux jours en arrière.</div>'
+    +'<div class="san-aide">Le pourcentage se lit sur '+HAB_FENETRE_JOURS+' jours glissants, sans le jour en cours. Retirer une habitude garde ses coches : la remettre plus tard retrouve tout.</div>'
+    +'<div class="san-aide">Une habitude ne peut porter ni sur un poids, ni sur une mesure, ni sur une restriction alimentaire : ce sont des données de santé.</div>');
 }
 // N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
 // second argument rend un objet DETACHE : DB.get reparse le JSON a chaque
@@ -97304,7 +97328,7 @@ function _cplRecettesRendre(q){
   const tout=recettesMiennes();
   const l=words.length?recettesTrouvees(tout,words):tout;
   if(!tout.length){
-    el.innerHTML='<div class="rct-vide">Ta bibliothèque de recettes est vide.<br><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" onclick="fermerRecherchePlan();ouvrirRecettes()">Créer une recette</button></div>';
+    el.innerHTML=emptyState('utensils','Ta bibliothèque de recettes est vide.','Créer une recette','fermerRecherchePlan();ouvrirRecettes()','padding:16px 8px');
     return;
   }
   el.innerHTML=l.map(r=>{
@@ -97313,7 +97337,7 @@ function _cplRecettesRendre(q){
       +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
       +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
       +'<div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div></div>';
-  }).join('')||'<div class="rct-vide">Aucune recette pour « '+escapeHtml(q)+' ».</div>';
+  }).join('')||emptyState('','Aucune recette pour « '+escapeHtml(q)+' ».',null,null,'padding:12px 0');
 }
 function cplChoisirRecette(repas){
   ouvrirRecherchePlan({mode:'recette',repas});
@@ -97482,7 +97506,7 @@ function renderRecettes(){
       :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
     +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
     +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
-    +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):'<div class="rct-vide">Aucune recette pour l’instant.</div>')
+    +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):emptyState('','Aucune recette pour l’instant.',null,null,'padding:12px 0'))
     +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
 }
 function nouvelleRecette(){
@@ -97541,7 +97565,7 @@ function _rendreEditeurRecette(z){
     +'<input id="rct-nom" class="rct-champ" maxlength="80" value="'+escapeHtml(e.nom||'')+'" placeholder="Ex : porridge protéiné" oninput="recetteChamp(\'nom\',this.value)">'
     +'<label class="rct-lab" for="rct-portions">Portions</label>'
     +'<input id="rct-portions" class="rct-champ" inputmode="decimal" value="'+escapeHtml(String(e.portions==null?'':e.portions).replace('.',','))+'" oninput="recetteChamp(\'portions\',this.value)">'
-    +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||'<div class="rct-vide">Aucun ingrédient.</div>')
+    +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||emptyState('','Aucun ingrédient.',null,null,'padding:12px 0'))
     +(e.ingredients.length<RECETTE_ING_MAX
       ?'<input id="rct-cherche" class="rct-champ" type="search" autocomplete="off" placeholder="Ajouter un ingrédient" value="'+escapeHtml(_recEdCherche)+'" oninput="recetteChercher(this.value)">'
         +'<div id="rct-resultats"></div>':'')
@@ -97561,7 +97585,7 @@ function _rendreResultatsIngredient(){
   if(!z) return;
   const q=_recEdCherche.trim();
   if(q.length<2){ z.innerHTML=''; return; }
-  if(!_ciqualDB){ z.innerHTML='<div class="rct-vide">Chargement de la table…</div>'; _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
+  if(!_ciqualDB){ z.innerHTML=etatChargement(2); _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
   const normQ=_fjNorm(q), words=normQ.split(/\s+/).filter(w=>w.length>1);
   const res=_classerAliments(_ciqualDB.filter(f=>_fjContientTous(f.s,words)),normQ,words).slice(0,12).map(x=>x.f);
   const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
@@ -97570,9 +97594,9 @@ function _rendreResultatsIngredient(){
     +'<div class="rct-m">'+(a.k!=null?_recF(a.k)+' kcal/100 g':'énergie non renseignée')+' · P '+_recF(a.p)+' · G '+_recF(a.c)+' · L '+_recF(a.l)+'</div></div>';
   let h=res.map(f=>ligne('ciqual',f,f.id)).join('');
   if(_recOff&&_recOff.liste) h+=_fjTitreSection('Produits de marque (Open Food Facts)')+_recOff.liste.slice(0,10).map(a=>ligne('off',a,a.id)).join('');
-  else if(_recOff&&_recOff.raison) h+='<div class="rct-vide">'+escapeHtml(_recOff.raison)+'</div>';
+  else if(_recOff&&_recOff.raison) h+=emptyState('',escapeHtml(_recOff.raison),null,null,'padding:12px 0');
   else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" onclick="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';
-  z.innerHTML=h||'<div class="rct-vide">Aucun résultat.</div>';
+  z.innerHTML=h||emptyState('','Aucun résultat.',null,null,'padding:12px 0');
 }
 async function recetteChercherOff(){
   const q=_recEdCherche.trim();
@@ -104726,8 +104750,8 @@ function _htmlHistoTableur(c){
       +'<button type="button" class="tbk-h-x" onclick="histoAnnuler()">Annuler et revenir à l’état précédent</button></div>'
     : '';
   if(!l.length) return '<div class="tbk-histo">'+annul
-    +'<div class="tbk-h-vide">Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
-    +'et tu pourras en remettre une en place.</div></div>';
+    +emptyState('','Aucun enregistrement pour l’instant : les cibles enregistrées s’ajouteront ici, '
+    +'et tu pourras en remettre une en place.',null,null,'padding:12px 0')+'</div>';
   // UNE SEULE LIGNE PORTE « EN COURS » : la plus recente qui a ces chiffres.
   // Deux lignes identiques — une remise en place puis son annulation — se
   // presentaient toutes les deux comme la cible du moment.
@@ -105462,7 +105486,7 @@ function _htmlJournalCal(c){
         +'<span class="jr-li-k">'+nb(tj.kcal)+' kcal</span></button>');
     }
     grille='<div class="jr-liste">'+(lignes.join('')
-      ||'<div class="jr-vide-t">Aucun jour saisi ce mois-ci.</div>')+'</div>';
+      ||emptyState('','Aucun jour saisi ce mois-ci.',null,null,'padding:12px 0'))+'</div>';
   }
   // ── LE DETAIL D'UN JOUR ────────────────────────────────────────────────
   let detail='';
@@ -119145,8 +119169,8 @@ function _carteCourbePoids(serie,opts){
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
       `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
   const vide=(serie&&serie.length>=2)
-    ?'<div class="pc-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
-    :'<div class="pc-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
+    ?'<div class="graphe-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
+    :'<div class="graphe-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
   return `<div class="evo-carte pc-carte" id="${o.id}">
       <div class="pc-tete">
         <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
@@ -124541,6 +124565,13 @@ function rcNavigateurSamsung(){
 // navigateur inconnu ; celle-ci ne laisse passer que ce qui est verifie.
 const RC_ANDROID_SAIT_INSTALLER=/Chrome\/[0-9]/i;
 const RC_ANDROID_PAS_CHROME=/SamsungBrowser|OPR\/|OPX\/|UCBrowser|MiuiBrowser|HeyTapBrowser|VivoBrowser|OppoBrowser|QuarkBrowser|Whale|YaBrowser|DuckDuckGo|Brave|Ecosia|Instagram|FBAN|FBAV|FB_IAB/i;
+// LE MODE DEBOGAGE : ?debug=1 dans l'adresse, ou localStorage rc_debug = '1'
+// (pour le garder d'une ouverture a l'autre). Il montre les reperes techniques
+// que l'utilisateur n'a pas a voir (numero de build de s-install).
+function rcModeDebug(){
+  try{ if(/[?&]debug=1(&|$)/.test(location.search||'')) return true; }catch(e){}
+  try{ return localStorage.getItem('rc_debug')==='1'; }catch(e){ return false; }
+}
 function rcInstallBloquePar(){
   try{
     const u=String(navigator.userAgent||'');
@@ -125037,9 +125068,18 @@ function rcInstallDecider(){
     // avant que la branche ne soit choisie. Ce qu'il porte suffit — le numéro
     // de build dit si le téléphone tourne sur le code livré, et la raison de
     // blocage dit si la garde s'est levée.
-    if(_v) _v.textContent='build '+(window.RC_BUILD||'?')
-      +' · '+(rcInstallBloquePar()||'invitation ok')
-      +(rcNavigateurSamsung()?' · SI '+rcNavigateurSamsung():'');
+    // RESERVE AU DEBOGAGE (01/10/2026) : un athlete n'a que faire d'un numero
+    // de build sous le bouton d'installation. Le repere ne s'ecrit qu'avec
+    // ?debug=1 dans l'adresse, ou localStorage rc_debug = '1' ; sinon
+    // l'element reste vide et cache aux lecteurs d'ecran.
+    if(_v){
+      if(rcModeDebug()){
+        _v.textContent='build '+(window.RC_BUILD||'?')
+          +' · '+(rcInstallBloquePar()||'invitation ok')
+          +(rcNavigateurSamsung()?' · SI '+rcNavigateurSamsung():'');
+        _v.removeAttribute('aria-hidden');
+      } else { _v.textContent=''; _v.setAttribute('aria-hidden','true'); }
+    }
   }catch(e){}
   const dire=(t)=>{ if(sous) sous.textContent=t||''; };
   const montrer=(id)=>{ const b=document.getElementById(id); if(b) b.style.display='block'; };

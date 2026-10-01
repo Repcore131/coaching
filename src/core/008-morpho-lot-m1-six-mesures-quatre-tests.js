@@ -1302,7 +1302,7 @@ function htmlRevueMorpho(etat){
       +(l.suspendu?' · test à refaire':'')+'</div></div>';
   }
   if(!g.length&&e.profilsSortis)
-    h+='<div class="rvm-vide">Aucun exercice de son programme ne relève des aménagements de ses profils.</div>';
+    h+=emptyState('','Aucun exercice de son programme ne relève des aménagements de ses profils.',null,null,'padding:12px 0');
   if(bloques.length)
     h+='<div class="rvm-manque">Une partie de la lecture des leviers attend un repère calibré sur tes athlètes : '
       +bloques.map(b=>E(b.court)+', '+b.n+' athlète'+(b.n>1?'s':'')+' mesuré'+(b.n>1?'s':'')+' sur '+MORPHO_CALIB_MIN
