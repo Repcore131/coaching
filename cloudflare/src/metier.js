@@ -1875,7 +1875,7 @@ export function creerMetier(deps) {
 
   return { envoyerPush, enFile, alerteKo, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
-    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
+    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits, dejaPaye,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache,

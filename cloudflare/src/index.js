@@ -39,7 +39,8 @@ import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
-import { creerAppelsDroits } from './droits-appels.js';
+import { creerAppelsDroits, cleDe } from './droits-appels.js';
+import { creerEssai } from './essai.js';
 import { noter429, viderPouls, surveillerQuota } from './pouls.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
@@ -47,11 +48,16 @@ import { noter429, viderPouls, surveillerQuota } from './pouls.js';
 const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
 // garmin : relier sa montre Garmin (OAuth), l'état, la révocation (garmin.js).
 const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
-// Les droits (droits-appels.js) : consommer un code, ouvrir l'essai, devenir
-// coach, prolonger un code. L'app ne les écrit plus elle-même (règles gelées).
+// Les droits (droits-appels.js) : consommer un code, devenir coach,
+// prolonger un code. L'app ne les écrit plus elle-même (règles gelées).
 const droitsAppel = (nom) => (req, ctx) => creerAppelsDroits(ctx)[nom](req);
+// L'essai (essai.js) et l'achat d'un programme annoncé par l'app (paypal.js,
+// même chemin que le webhook) : portés de functions/index.js le 01/10/2026.
+const ouvrirEssai = (req, ctx) => creerEssai(ctx).ouvrirEssai(req);
+const verifierAchatProgramme = ({ auth, data }, ctx) =>
+  ctx.M.paypal.verifierAchat(cleDe(auth.email), data && data.orderId, data && data.programmeId);
 const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin,
-  redeemCode: droitsAppel('redeemCode'), ouvrirEssai: droitsAppel('ouvrirEssai'),
+  ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
   emailVerifie: droitsAppel('emailVerifie') };
 

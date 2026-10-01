@@ -23253,7 +23253,7 @@ async function testExercices(){
     ok('SERVEUR LÉGER — SANS ADRESSE, RIEN NE PART ; LE CLASSEMENT D’UN DÉFI SUIT LA RÈGLE DU SERVEUR',(()=>{
       if(typeof deposerEvenement!=='function'||typeof defisPublierProgression!=='function') return _echec('le dépôt d’événements manque');
       if(SERVEUR_LEGER!==!!SERVEUR_LEGER_URL) return _echec('SERVEUR_LEGER ne suit pas son adresse');
-      if(PARRAINAGE_ACTIF!==(FONCTIONS_SERVEUR||SERVEUR_LEGER)) return _echec('le parrainage ne s’ouvre pas avec le serveur léger');
+      if(PARRAINAGE_ACTIF!==SERVEUR_LEGER) return _echec('le parrainage ne s’ouvre pas avec le serveur léger');
       // Un défi de tonnage se classe aux séances ; progression et série, à leur propre valeur.
       const u={sessions:[],sessions_config:[]};
       const d={type:'defi',mesure:'tonnage',objectif:10000,debut:0,fin:9e15};
@@ -38433,6 +38433,47 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          // ⚠ 1759 — LES FONCTIONS PORTÉES DE functions/ PARTENT VERS LE WORKER.
+          // FONCTIONS_SERVEUR (toujours faux) coupait ouvrirEssai et
+          // verifierAchatProgramme. FONCTIONS_WORKER les nomme, et l'app les
+          // envoie à SERVEUR_LEGER_URL/fn/<nom> dès que le Worker existe.
+          okA('1759 — L’APP APPELLE /fn/ouvrirEssai DU WORKER QUAND SERVEUR_LEGER EST VRAI (jeton, jours borné), ET L’ACHAT APPELLE verifierAchatProgramme',async()=>{
+            const f0=window.fetch, g0=CLOUD._getToken, vus=[];
+            try{
+              if(typeof FONCTIONS_SERVEUR!=='undefined') return _echec('l’ancien booléen FONCTIONS_SERVEUR traîne encore');
+              if(JSON.stringify(FONCTIONS_WORKER)!==JSON.stringify(['ouvrirEssai','verifierAchatProgramme','cloudinaryDestroy','santeJeton']))
+                return _echec('FONCTIONS_WORKER = '+JSON.stringify(FONCTIONS_WORKER));
+              if(!SERVEUR_LEGER) return _echec('SERVEUR_LEGER est faux : rien ne partirait');
+              if(!fonctionWorker('ouvrirEssai')||!fonctionWorker('verifierAchatProgramme')) return _echec('fonctionWorker ne reconnaît pas la liste');
+              if(fonctionWorker('fonctionInconnue')) return _echec('fonctionWorker accepte un nom hors liste');
+              CLOUD._getToken=async()=>'jeton-1759';
+              window.fetch=async(url,o)=>{
+                vus.push({url:String(url),o:o||{}});
+                return new Response(JSON.stringify({result:{ok:true,deja:false,essaiFinit:Date.now()+86400000}}),
+                  {status:200,headers:{'Content-Type':'application/json'}});
+              };
+              const u={email:'essai1759@t.fr',role:'athlete'};
+              if(essaiOuvrir(u)!==true) return _echec('essaiOuvrir n’ouvre pas');
+              for(let k=0;k<20&&!vus.some(v=>/\/fn\/ouvrirEssai$/.test(v.url));k++) await new Promise(r=>setTimeout(r,10));
+              const a=vus.find(v=>/\/fn\/ouvrirEssai$/.test(v.url));
+              if(!a) return _echec('aucun appel à /fn/ouvrirEssai');
+              if(a.url!==SERVEUR_LEGER_URL+'/fn/ouvrirEssai') return _echec('appel ailleurs que sur le Worker : '+a.url);
+              if(String(a.o.method).toUpperCase()!=='POST') return _echec('pas un POST');
+              if(((a.o.headers||{}).Authorization||'')!=='Bearer jeton-1759') return _echec('le jeton Firebase ne part pas');
+              const corps=JSON.parse(a.o.body||'{}');
+              if(!corps.data||corps.data.jours!==ESSAI_JOURS) return _echec('jours envoyé : '+JSON.stringify(corps.data));
+              // Un coach n'ouvre pas d'essai, donc n'appelle rien.
+              const n=vus.length;
+              essaiOuvrir({email:'coach1759@t.fr',role:'coach'});
+              await new Promise(r=>setTimeout(r,20));
+              if(vus.slice(n).some(v=>/ouvrirEssai/.test(v.url))) return _echec('un coach appelle ouvrirEssai');
+              // L'ACHAT : gardé par la même liste, plus par l'ancien booléen.
+              const src=String(_enregistrerAchat);
+              if(src.indexOf("fonctionWorker('verifierAchatProgramme')")<0) return _echec('l’achat n’est pas gardé par fonctionWorker');
+              if(String(essaiOuvrir).indexOf("fonctionWorker('ouvrirEssai')")<0) return _echec('l’essai n’est pas gardé par fonctionWorker');
+              return true;
+            } finally { window.fetch=f0; CLOUD._getToken=g0; }
+          });
           ok('1758 — LE FUSEAU DE L’APPAREIL S’ÉCRIT DANS LE DOSSIER, ET UNE VALEUR INVALIDE RETOMBE SUR PARIS',(()=>{
             const u={tz:'Europe/Paris'};
             if(fuseauAssurer(u,'Europe/Paris')) return _echec('inchangé : rien à enregistrer');
@@ -53527,7 +53568,7 @@ async function testExercices(){
     ok('Parrainage : le miroir est classé non-santé, et l’entrée reste fermée sans fonctions serveur',(()=>{
       if(CHAMPS_NON_SANTE.indexOf('parrainage')<0) return _echec('non classé');
       // Le serveur léger (Cloudflare, 0 €) ouvre le parrainage autant que les Cloud Functions.
-      return PARRAINAGE_ACTIF===(FONCTIONS_SERVEUR||SERVEUR_LEGER)?true:_echec('PARRAINAGE_ACTIF découplé des serveurs');})());
+      return PARRAINAGE_ACTIF===SERVEUR_LEGER?true:_echec('PARRAINAGE_ACTIF découplé du serveur léger');})());
 
     // ── LE LIEN PERSO ET LES PAGES PUBLIQUES ────────────────────────────
     const _PPU=o=>Object.assign({role:'athlete',email:'j@t.fr',fname:'Julie',sessions:[],parrainage:{code:'JULIE7K2'}},o||{});

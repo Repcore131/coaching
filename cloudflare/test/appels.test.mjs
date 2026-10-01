@@ -8,6 +8,7 @@ import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
 import { creerMetier } from '../src/metier.js';
 import { creerAppelsDroits } from '../src/droits-appels.js';
+import { creerEssai } from '../src/essai.js';
 import { ErreurAppel } from '../src/appels.js';
 import { planifierDroitsCoachs } from '../src/migration.js';
 import { CREATOR_EMAIL } from '../src/metier.js';
@@ -210,7 +211,7 @@ function mondeDroits(initial) {
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl: F.fetchImpl });
   const w = { F, t: T0 };
   const M = creerMetier({ db, vapid: { publique: 'x', privee: 'y' }, fetchImpl: F.fetchImpl, maintenant: () => w.t });
-  w.A = creerAppelsDroits({ db, M, maintenant: () => w.t });
+  w.A = Object.assign(creerAppelsDroits({ db, M, maintenant: () => w.t }), creerEssai({ db, M, maintenant: () => w.t }));
   w.appel = (nom, email, data) => w.A[nom]({ auth: { email }, data: data || {} });
   return w;
 }

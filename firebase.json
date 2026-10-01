@@ -2,19 +2,8 @@
   "database": {
     "rules": "database.rules.json"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log"
-      ]
-    }
-  ],
   "hosting": {
+    "//functions": "⛔ PAS DE CODEBASE functions (01/10/2026) : le Worker (cloudflare/) fait leur travail, et les deux ensemble traiteraient chaque paiement deux fois. Retire pour qu un firebase deploy, meme en Blaze, ne publie rien de functions/. Voir functions/README.md.",
     "public": "_site",
     "//": "/i est le lien court. Il sert i/index.html, une page AUTONOME (10/09/2026) qui renvoie sur /app/ en gardant les parametres, et qui explique quoi faire dans le navigateur integre d'Instagram au lieu d'y rediriger. PAS DE REDIRECTION /i -> /app/#install (version du 02/09) : chez Firebase une redirection passe AVANT le contenu statique, elle masquerait cette page. Le defaut du 02/09 — /app/index.html REECRIT sous /i, ressources relatives en 404 — ne se pose plus : ce n'est plus l'app qui est servie sous /i. Fusion du 16/09/2026.",
     "//ignore": "⚠ .well-known EST EXEMPTE, ET C'EST L'ETAPE QUE TOUT LE MONDE RATE. La regle **/.* exclut du deploiement tout fichier ou dossier commencant par un point — .well-known/assetlinks.json en fait partie. Sans exemption il n'est jamais publie, Android ne peut pas verifier que le domaine autorise l'application, et la TWA s'ouvre AVEC LA BARRE D'ADRESSE : elle se comporte comme un onglet de navigateur deguise. Le defaut ne dit rien, il se constate a l'ecran.",

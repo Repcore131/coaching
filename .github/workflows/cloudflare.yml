@@ -45,6 +45,10 @@ on:
       - 'tarifs.json'
       - 'scripts/veille_serveur.mjs'
       - '.github/workflows/cloudflare.yml'
+      # deploiement.test.mjs : aucun chemin de déploiement ne publie functions/.
+      - 'firebase.json'
+      - 'deploie.sh'
+      - '.github/workflows/*.yml'
   schedule:
     # La concordance, chaque matin à 05:23 UTC.
     - cron: '23 5 * * *'

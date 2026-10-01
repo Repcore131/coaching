@@ -1,3 +1,48 @@
+# ⛔ NE PAS DÉPLOYER : doublerait le Worker
+
+**Ce dossier n'est publié par rien, et il ne doit pas l'être.** Tout ce que ces Cloud Functions
+devaient faire tourne dans le **serveur léger** (`cloudflare/`, déployé par
+`.github/workflows/cloudflare.yml`). Déployées en plus, elles traiteraient chaque événement **deux
+fois** : un paiement PayPal crédité deux fois, un mois de parrainage donné deux fois, chaque push
+envoyé deux fois.
+
+- `firebase.json` **ne déclare plus de codebase `functions`** (retiré le 01/10/2026) : un
+  `firebase deploy` — même après un passage en Blaze, même sans `--only` — ne publie rien d'ici.
+- Aucun workflow ni `deploie.sh` ne publie ce dossier (`--only hosting,database`).
+- Les fichiers `*-calcul.js` restent ici **parce que le Worker les importe** (calculs purs partagés,
+  testés des deux côtés). `index.js` n'est plus qu'une référence.
+
+## Ce qui a été porté dans le Worker
+
+| Cloud Function | Dans le Worker |
+|---|---|
+| `ouvrirEssai` | `/fn/ouvrirEssai` — `cloudflare/src/essai.js` (01/10/2026) |
+| `verifierAchatProgramme` | `/fn/verifierAchatProgramme` — `paypal.js` (`verifierAchat`, même chemin que le webhook) |
+| `cloudinaryDestroy` | `/fn/cloudinaryDestroy` — `medias.js` |
+| `getCloudinarySignature` | `/fn/cloudinarySigner` — `medias.js` (envois signés, lot 5) |
+| `paypalWebhook`, `verifyPaypalSubscription` | `/paypal` — `paypal.js` (abonnement et commande relus chez PayPal) |
+| `generateAccessToken`, `extendAccessToken`, `verifyAccessToken` | remplacés par `/fn/redeemCode` et `/fn/prolongerCode` — `droits-appels.js` (plus de jeton HMAC : le code est consommé en transaction, `droits/` écrit par le serveur) |
+| `migrerDroits` | `cloudflare/scripts/remplir-droits.mjs` et `migration.js` |
+| `statsBadges` | travail `stats_badges` — `planif.js` |
+| `pushSerieEnDanger`, `pushWrappedPret`, `pushRappelBilan`, `pushBadgeProche`, `pushApresHeuresCalmes` | travaux `serie`, `wrapped`, `bilan`, `badge`, `attente` — `planif.js`, `metier.js` |
+| `pushReponseCoachBilan`, `pushReponseCoachRite`, `pushFilleulInscrit`, `pushDefiCanal`, `defiApresSeance`, `defiInscription`, `parrainageDemande`, `ambassadeurDemande` | événements déposés par l'app dans `/evenements` — `metier.js` |
+| `defisQuotidien`, `ambassadeursQuotidien` | travaux `defis`, `ambassadeurs` — `planif.js` |
+| `pagePublique` | `/@<pseudo>`, `/coach/<slug>` — `pages.js` |
+| `ambClic`, `attribArrivee` | `/amb-clic`, `/arrivee` — `index.js` |
+
+## Ce qui est abandonné
+
+| Cloud Function | Pourquoi |
+|---|---|
+| `anonymizeCoach` | jamais appelée depuis l'app (`offboardCoach` efface côté client) ; à reprendre avec la suppression des nœuds du serveur à la fermeture d'un compte |
+| `ocrParseImage` | l'import de fiche par photo lit l'image sur l'appareil (Tesseract) ; plus de proxy OCR.space |
+| `togglePaymentStatus` | `paymentStatus` est gelé par les règles ; l'accès se pose dans `droits/` (écran Accès du créateur, ou PayPal) |
+| le mois de mentorat de l'Ultime | pas encore porté (voir `cloudflare/README.md`, « Pas encore branché ») |
+
+---
+
+*Ce qui suit est l'ancienne documentation, gardée pour référence.*
+
 # Déploiement — Cloud Functions RepCore
 
 Ce dossier contient 4 Cloud Functions :
@@ -18,7 +63,7 @@ rejouée à chaque démarrage et affichée. Le jour où le projet passe en Blaze
 à l'app. En attendant, `scripts/purge_cloudinary_orphelins.py` produit la liste des fichiers
 orphelins à valider à la main.
 
-Avant de publier le nouveau `index.html`, ces fonctions doivent être déployées.
+~~Avant de publier le nouveau `index.html`, ces fonctions doivent être déployées.~~ Plus vrai depuis le Worker : voir l'en-tête.
 
 ## Déploiement manuel (décidé le 01/10/2026)
 

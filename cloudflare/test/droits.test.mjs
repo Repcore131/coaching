@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { recevoirWebhook } from '../src/paypal.js';
+import { recevoirWebhook, creerPaypal } from '../src/paypal.js';
+import { creerEssai, ESSAI_JOURS, joursEssai } from '../src/essai.js';
+import { ErreurAppel } from '../src/appels.js';
 import { planifierMigration } from '../src/migration.js';
 import { fausseBase } from './fausse-base.mjs';
 
@@ -193,6 +195,96 @@ await test('le rattrapage ne croit pas le dossier : abonnement d’un autre, com
   assert.equal(rapport.refuses.length, 2);
   assert.equal(maj['droits/lea@t,fr'], undefined, 'un accès posé à la main n’est pas remplacé');
   assert.ok(maj['paypal_premiers/lea@t,fr']);
+});
+
+// ══ PORTÉS DE functions/index.js (01/10/2026) : ouvrirEssai, verifierAchatProgramme ══
+const refuse = (statut) => (e) => e instanceof ErreurAppel && e.statut === statut;
+
+await test('ouvrirEssai : ouvert une fois (Ultime, source essai, ESSAI_JOURS au plus), puis idempotent', async () => {
+  const w = monde({ users: { 'zoe@t,fr': { role: 'athlete' } } });
+  const E = creerEssai(w.ctx);
+  assert.equal(ESSAI_JOURS, 30);
+  assert.equal(joursEssai(400), 30); assert.equal(joursEssai(7), 7); assert.equal(joursEssai('x'), 30); assert.equal(joursEssai(-3), 30);
+  const r = await E.ouvrirEssai({ auth: { email: 'Zoe@t.fr' }, data: { jours: 400 } });
+  assert.equal(r.deja, false); assert.equal(r.echeance, T0 + 30 * J);
+  const d = w.droits('zoe@t,fr');
+  assert.equal(d.palier, 'ultime'); assert.equal(d.source, 'essai');
+  assert.equal(d.echeance, T0 + 30 * J); assert.equal(d.essaiFinit, T0 + 30 * J); assert.equal(d.essaiOuvertLe, T0);
+  // Un second appel, plus tard : l'échéance existante, rien de réécrit.
+  w.t = T0 + 40 * J;
+  const avant = JSON.stringify(w.F.lire('droits/zoe@t,fr'));
+  const r2 = await E.ouvrirEssai({ auth: { email: 'zoe@t.fr' }, data: {} });
+  assert.equal(r2.deja, true); assert.equal(r2.echeance, T0 + 30 * J);
+  assert.equal(JSON.stringify(w.F.lire('droits/zoe@t,fr')), avant, 'idempotent : rien de réécrit');
+});
+
+await test('ouvrirEssai : refusé à qui a déjà payé (premier paiement, abonnement, droits PayPal), et à un coach', async () => {
+  const w = monde({ users: { 'pay@t,fr': { role: 'athlete' }, 'abo@t,fr': { role: 'athlete', paypalSubscriptionId: 'I-ABC12345678' },
+    'dro@t,fr': { role: 'athlete' }, 'kev@t,fr': { role: 'coach' } },
+    paypal_premiers: { 'pay@t,fr': { le: 1 } }, droits: { 'dro@t,fr': { palier: 'aucun', echeance: 1, source: 'paypal' } },
+    coachs_registre: { 'kev@t,fr': { plan: 'libre' } } });
+  const E = creerEssai(w.ctx);
+  for (const m of ['pay@t.fr', 'abo@t.fr', 'dro@t.fr'])
+    await assert.rejects(() => E.ouvrirEssai({ auth: { email: m }, data: {} }), refuse(409), m);
+  await assert.rejects(() => E.ouvrirEssai({ auth: { email: 'kev@t.fr' }, data: {} }), refuse(400));
+  assert.equal(w.F.lire('droits/pay@t,fr'), null, 'rien d’écrit pour un payant');
+  assert.equal(w.F.lire('droits/abo@t,fr'), null);
+  assert.equal(w.F.lire('droits/dro@t,fr/essaiOuvertLe'), null);
+});
+
+// Une commande capturée, telle que PayPal la rend sur /v2/checkout/orders/<id>.
+const commandeProg = (custom, v, statut) => ({ id: 'ORD00000009', status: statut || 'COMPLETED', purchase_units: [{ custom_id: custom,
+  amount: { currency_code: 'EUR', value: v || '14.90' },
+  payments: { captures: [{ id: 'CAP00000009', status: 'COMPLETED', amount: { currency_code: 'EUR', value: v || '14.90' } }] } }] });
+
+await test('verifierAchatProgramme : commande relue chez PayPal → droits/<clé>/programmes/<id>, Ultime 3 mois ; le webhook ne rouvre pas', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: null }), boutique: { p1: { prixCts: 1490 } } },
+    { commandes: { ORD00000009: commandeProg('lea@t,fr|p1') } });
+  const P = creerPaypal(w.ctx);
+  const r = await P.verifierAchat('lea@t,fr', 'ORD00000009', 'p1');
+  assert.equal(r.ouvert, true); assert.equal(r.jusqua, T0 + 3 * MOIS);
+  // LE MÊME RÉSULTAT QUE LE WEBHOOK (même chemin) : preuve d'achat, ultimeJusqu, trace, registre, premier paiement.
+  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + 3 * MOIS, programmes: { p1: T0 } });
+  assert.equal(w.F.lire('users/lea@t,fr/programmesAchetes/p1/ouvertJusqu'), T0 + 3 * MOIS);
+  assert.equal(w.F.lire('paypal_transactions/CAP00000009/prog'), 'p1');
+  assert.ok(w.F.lire('paypal_premiers/lea@t,fr'));
+  // Un second appel, puis le webhook de la même capture : rien ne s'ajoute.
+  w.t = T0 + J;
+  const r2 = await P.verifierAchat('lea@t,fr', 'ORD00000009', 'p1');
+  assert.equal(r2.ouvert, false); assert.equal(r2.deja, true); assert.equal(r2.jusqua, T0 + 3 * MOIS);
+  assert.equal(await w.envoyer('PAYMENT.CAPTURE.COMPLETED', { id: 'CAP00000009', status: 'COMPLETED', amount: { value: '14.90', currency_code: 'EUR' },
+    supplementary_data: { related_ids: { order_id: 'ORD00000009' } } }), 'deja_ouvert');
+  assert.equal(w.droits().ultimeJusqu, T0 + 3 * MOIS, 'trois mois, pas six');
+});
+
+await test('verifierAchatProgramme : montant faux, commande d’un autre compte, non capturée, introuvable → refusés, rien d’ouvert', async () => {
+  const w = monde({ users: Object.assign(LEA({ paypalSubscriptionId: null }), { 'zoe@t,fr': { role: 'athlete' } }), boutique: { p1: { prixCts: 1490 } } },
+    { commandes: { ORD0000FAUX: commandeProg('lea@t,fr|p1', '1.00'), ORD000AUTRE: commandeProg('zoe@t,fr|p1'),
+      ORD0000PROG: commandeProg('lea@t,fr|p2'), ORD000ATTEN: commandeProg('lea@t,fr|p1', null, 'APPROVED') } });
+  const P = creerPaypal(w.ctx);
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD0000FAUX', 'p1'), refuse(403), 'montant');
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD000AUTRE', 'p1'), refuse(403), 'autre compte');
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD0000PROG', 'p1'), refuse(403), 'autre programme');
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD000ATTEN', 'p1'), refuse(409), 'pas encore capturée');
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD000ABSEN', 'p1'), refuse(404), 'introuvable');
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'x', 'p1'), refuse(400), 'mal formée');
+  assert.equal(w.droits(), null, 'aucun droit ouvert');
+  assert.equal(w.F.lire('droits/zoe@t,fr'), null, 'la commande de Zoé n’ouvre rien chez Zoé non plus');
+  assert.equal(w.F.lire('paypal_premiers'), null);
+  assert.equal(w.F.lire('paypal_transactions/CAP00000009/ouvert'), null, 'un achat non compté ne pose pas la garde');
+});
+
+await test('verifierAchatProgramme : une panne après la garde la relâche — le renvoi du webhook ouvre bien l’achat', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: null }), boutique: { p1: { prixCts: 1490 } } },
+    { commandes: { ORD00000009: commandeProg('lea@t,fr|p1') } });
+  const P = creerPaypal(w.ctx);
+  const maj = w.M.majDroits;
+  w.M.majDroits = async () => { throw new Error('base injoignable'); };
+  await assert.rejects(() => P.verifierAchat('lea@t,fr', 'ORD00000009', 'p1'));
+  assert.equal(w.F.lire('paypal_transactions/CAP00000009/ouvert'), null, 'garde relâchée');
+  w.M.majDroits = maj;
+  const r = await P.verifierAchat('lea@t,fr', 'ORD00000009', 'p1');
+  assert.equal(r.ouvert, true); assert.equal(w.droits().ultimeJusqu, T0 + 3 * MOIS);
 });
 
 console.log(ok + ' tests passés');

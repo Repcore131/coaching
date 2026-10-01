@@ -133,8 +133,11 @@ jamais par GitHub.
   plus tard dans la minute, **relit la base** pour vérifier ce qu'il annonce, agit, puis le supprime.
 - **Le Worker ne relit jamais les séances d'un athlète** (10 ms de calcul) : c'est l'app de
   l'athlète qui écrit sa progression dans chaque défi où il est inscrit.
-- **Le Worker n'écrit jamais dans `droits/`** : dans l'app, un nœud `droits/` non vide prime sur le
-  dossier, et y écrire aurait coupé l'essai d'un filleul ou rétrogradé un parrain abonné.
+- **Le Worker écrit `droits/` par `majDroits`, en transaction, et ne réécrit jamais un accès posé à
+  la main** (source `main` ou `suspension`, écran Accès du créateur). C'est lui seul qui l'écrit : le
+  paiement PayPal (`/paypal`), l'essai (`/fn/ouvrirEssai`, `essai.js`), l'achat d'un programme
+  (`/fn/verifierAchatProgramme`, même chemin que le webhook), les codes de coach, le parrainage. Les
+  règles le ferment à tous les clients ; dans l'app, un nœud `droits/` non vide prime sur le dossier.
 - État de travail (curseurs des lots) : `/worker/jobs/<nom>`, fermé à tous les clients.
 - **Un événement à la fois par type, par compte et par cible** : l'app écrit l'événement ET son
   verrou `evenements_attente/<compte>/<type>/<cible>` (`{id, at}`, `at` à l'heure du serveur) dans la
@@ -487,7 +490,7 @@ instructions du guide Garmin.
 
 ## Pas encore branché
 
-- **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).
+- **Le mois de mentorat** de l'Ultime (il vivait dans `droits/` côté Cloud Functions ; pas encore porté dans le Worker).
 - **L'aperçu personnalisé** des liens `/@pseudo` et `/coach/slug` (emblème du rang, prénom) : ils
   gardent l'aperçu par défaut.
 

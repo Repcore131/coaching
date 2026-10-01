@@ -29,6 +29,7 @@
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
+import { ErreurAppel } from './appels.js';
 
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
@@ -104,6 +105,8 @@ export const COUT_SUITE = Object.freeze({ parrainage: 12, ambassadeur: 14, attri
 // en demandait ~40 d'un bloc.
 export const BUDGET_ANNULER = 16;
 export const COUT_REPRISE_PREMIER = 28;
+// L'achat d'un programme, de la garde au registre (voir achat) : 2 + 6 + 8 + 8, arrondi.
+export const BUDGET_ACHAT = 16;
 export class ErreurBudget extends Error {
   constructor(etape, reste) { super('budget : ' + etape + ' (reste ' + reste + ')'); this.budget = true; }
 }
@@ -392,11 +395,13 @@ export function creerPaypal(ctx) {
   // Le compte est dans la commande (custom_id = « <clé>|<programme> », posé
   // par l'app), RELUE CHEZ PAYPAL. Le montant doit être le prix de la
   // boutique, en euros, sur la commande comme sur la capture.
-  async function achat(evt) {
+  // `commandeLue` : la commande déjà relue chez PayPal (verifierAchat), pour
+  // ne pas la relire une seconde fois.
+  async function achat(evt, commandeLue) {
     const ress = evt.resource || {};
     const rel = ress.supplementary_data && ress.supplementary_data.related_ids;
     const idCommande = String((rel && rel.order_id) || '');
-    const commande = idCommande ? await lireCommande(idCommande, env, ctx.fetchImpl) : null;
+    const commande = commandeLue || (idCommande ? await lireCommande(idCommande, env, ctx.fetchImpl) : null);
     const pu = commande && Array.isArray(commande.purchase_units) ? commande.purchase_units[0] : null;
     if (pu && lireCustomId(pu.custom_id)) return PC.evenementCapture(evt, commande);
     const [cle, prog] = String((pu && pu.custom_id) || '').split('|');
@@ -410,6 +415,28 @@ export function creerPaypal(ctx) {
     const valide = role !== 'coach' && Number.isFinite(Number(prixCts)) && Number(prixCts) > 0
       && devise(pu.amount) === 'EUR' && devise(ress.amount) === 'EUR'
       && centimes(pu.amount.value) === Number(prixCts) && centimes(ress.amount.value) === Number(prixCts);
+    // UNE CAPTURE N'OUVRE QU'UNE FOIS. Le webhook et l'appel de l'app
+    // (verifierAchatProgramme) annoncent le même achat : le second ne rouvre
+    // pas trois mois de plus. La garde, en transaction, sur le registre.
+    // ⚠ TOUT LE BUDGET DE L'ÉTAPE AVANT LA GARDE (garde 2, premier paiement
+    //   6, droits 8, registre 8, moins ce qui est déjà consommé en route) :
+    //   une ErreurBudget APRÈS la garde laisserait l'achat marqué ouvert sans
+    //   l'être, et le renvoi de PayPal le sauterait. Et toute autre erreur
+    //   (base, réseau) relâche la garde avant de remonter.
+    const garde = valide && net(ress.id) ? db.ref('paypal_transactions/' + net(ress.id) + '/ouvert') : null;
+    if (garde) {
+      exigerBudget('garde_achat', BUDGET_ACHAT);
+      const g = await garde.transaction((v) => (v ? undefined : now()));
+      if (!g.committed) return 'deja_ouvert';
+    }
+    try {
+      return await achatOuvrir(evt, { cle, prog, prixCts, valide, idCommande, ress });
+    } catch (e) {
+      if (garde) await garde.remove().catch(() => null);
+      throw e;
+    }
+  }
+  async function achatOuvrir(evt, { cle, prog, prixCts, valide, idCommande, ress }) {
     const premier = valide ? await premierPaiement(cle, null, ress) : false;
     // LE PROGRAMME OUVRE ULTIME TROIS MOIS, par-dessus le palier de
     // l'abonnement (ultimeJusqu), sans le remplacer.
@@ -431,6 +458,39 @@ export function creerPaypal(ctx) {
     await lancerSuites();
     if (!valide) return 'achat_non_compte';
     return premier ? 'premier_paiement' : 'paiement';
+  }
+
+  // ── L'ACHAT ANNONCÉ PAR L'APP (verifierAchatProgramme) ─────────────────
+  // Porté de functions/index.js. L'app envoie l'identifiant de la commande
+  // dès la capture, sans attendre le webhook : le contenu s'ouvre tout de
+  // suite. RIEN N'EST CRU DU CLIENT : la commande est relue chez PayPal,
+  // elle doit être COMPLETED, porter custom_id = « <clé de l'appelant>|<programme> »
+  // et une capture COMPLETED au prix de la boutique. Puis c'est LE MÊME
+  // chemin que le webhook (achat) : premier paiement, droits, trace, registre.
+  // Rend {ouvert, deja, jusqua} ; lève ErreurAppel sinon.
+  async function verifierAchat(cle, orderId, programmeId) {
+    const id = String(orderId || '').trim(), prog = String(programmeId || '').trim();
+    if (!/^[A-Z0-9]{8,40}$/.test(id)) throw new ErreurAppel(400, 'Commande PayPal mal formée.');
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(prog)) throw new ErreurAppel(400, 'Programme mal formé.');
+    const commande = await lireCommande(id, env, ctx.fetchImpl);
+    if (!commande) throw new ErreurAppel(404, 'Commande PayPal introuvable.');
+    const pu = Array.isArray(commande.purchase_units) ? commande.purchase_units[0] : null;
+    // LA COMMANDE D'UN AUTRE COMPTE (ou d'un autre programme) : refusée, et
+    // rien n'est écrit — c'est le webhook qui la rangera chez son titulaire.
+    if (!pu || String(pu.custom_id || '') !== cle + '|' + prog) throw new ErreurAppel(403, "Cette commande n'est pas la tienne.");
+    const caps = (pu.payments && Array.isArray(pu.payments.captures)) ? pu.payments.captures : [];
+    const cap = caps.find((c) => c && c.status === 'COMPLETED');
+    if (commande.status !== 'COMPLETED' || !cap) {
+      throw new ErreurAppel(409, 'Paiement pas encore encaissé chez PayPal (statut : ' + String(commande.status || 'inconnu') + ').');
+    }
+    const evt = { event_type: 'PAYMENT.CAPTURE.COMPLETED',
+      resource: Object.assign({}, cap, { supplementary_data: { related_ids: { order_id: id } } }) };
+    const r = await achat(evt, commande);
+    if (r === 'achat_non_compte') throw new ErreurAppel(403, 'Montant ou devise différents du prix de la boutique : achat non ouvert.');
+    if (r === 'orphelin') throw new ErreurAppel(403, "Cette commande n'est pas la tienne.");
+    const d = await lire('droits/' + cle);
+    return { ok: true, ouvert: r !== 'deja_ouvert', deja: r === 'deja_ouvert',
+      jusqua: Number(d && d.ultimeJusqu) || 0, programme: prog };
   }
 
   // ── LE REGISTRE DES ENCAISSEMENTS ──────────────────────────────────────
@@ -825,7 +885,7 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
+  return { traiter, verifierAchat, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════

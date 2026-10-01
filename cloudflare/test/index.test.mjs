@@ -41,6 +41,17 @@ await test('POST /fn/cloudinaryDestroy sans jeton : 401, avec les en-têtes CORS
   assert.equal(j.error.status, 'UNAUTHENTICATED');
 });
 
+await test('/fn/ouvrirEssai et /fn/verifierAchatProgramme sont servis (401 sans jeton, pas 404) ; une fonction inconnue : 404', async () => {
+  const post = (nom) => worker.fetch(new Request('https://s.t/fn/' + nom, { method: 'POST',
+    headers: { Origin: ORIGINE, 'Content-Type': 'application/json' }, body: JSON.stringify({ data: {} }) }), ENV, CTX);
+  for (const nom of ['ouvrirEssai', 'verifierAchatProgramme', 'cloudinaryDestroy', 'santeJeton']) {
+    const r = await post(nom);
+    assert.equal(r.status, 401, nom);
+    corsPresent(r);
+  }
+  assert.equal((await post('fonctionQuiNExistePas')).status, 404);
+});
+
 await test('les autres réponses sans corps (arrivée par un lien, 204) passent aussi', async () => {
   const r = await worker.fetch(new Request('https://s.t/arrivee?src=story'), ENV, CTX);
   assert.equal(r.status, 204);

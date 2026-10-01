@@ -80,26 +80,6 @@ const RC_WHATSAPP='33778439205';
 // pris pour autre chose.
 // L'ORDRE PAYPAL, LUI, EST REEL : l'argent est bien encaisse, et
 // l'identifiant de transaction est conserve dans le dossier.
-// ══ Y A-T-IL UN SERVEUR ? NON, ET CE N'EST PAS UN OUBLI ═════════════════
-//
-// Decision de Kevin, 24/09/2026 : « je ne payerai pas le plan Blaze ». Les
-// Cloud Functions de functions/index.js sont ecrites et ne tourneront pas.
-//
-// CE QUE CE BOOLEEN TIENT : les deux appels que le client leur adressait, a
-// l'inscription (ouvrirEssai) et a l'achat d'un programme
-// (verifierAchatProgramme). Ils echouaient tous les deux, sans consequence
-// mais pour de vrai : une requete pour rien, et une erreur reseau dans la
-// console de chaque athlete. On ne les envoie plus.
-//
-// ⚠ LA SUPPRESSION DISTANTE DES VIDEOS N'EST PAS GARDEE PAR CE BOOLEEN, et
-//   c'est volontaire : _cldDetruire se rend compte tout seul de l'absence de
-//   la fonction, des le premier appel, et met tout en file. Elle repartirait
-//   donc d'elle-meme si la fonction apparaissait, sans que personne ait a
-//   penser a ce fichier.
-//
-// LE JOUR OU CES FONCTIONS TOURNENT : ce booleen passe a true, et rien
-// d'autre ne bouge.
-const FONCTIONS_SERVEUR=false;
 // ══ LE SERVEUR LÉGER : 0 €, UN CLOUDFLARE WORKER (27/09/2026) ════════════
 //
 // Kevin : « le but, 0 € dépensé ». Ce que les Cloud Functions devaient faire
@@ -113,6 +93,20 @@ const FONCTIONS_SERVEUR=false;
 // VIDE, rien ne part, et tout se comporte comme avant.
 const SERVEUR_LEGER_URL='https://repcore-serveur.repcore.workers.dev';
 const SERVEUR_LEGER=!!SERVEUR_LEGER_URL;
+// ══ LES CLOUD FUNCTIONS NE TOURNERONT PAS ; LE WORKER LES REMPLACE ═══════
+//
+// Decision de Kevin, 24/09/2026 : « je ne payerai pas le plan Blaze ». Les
+// fonctions de functions/index.js ne sont deployees par rien (voir
+// functions/README.md, « NE PAS DEPLOYER »). Ce qu'elles devaient faire pour
+// l'app, le Worker le fait, au meme protocole (/fn/<nom>, jeton Firebase
+// verifie). FONCTIONS_WORKER (01/10/2026) remplace l'ancien booleen
+// FONCTIONS_SERVEUR, qui coupait ouvrirEssai et verifierAchatProgramme : ce
+// sont les appels portes de functions/ vers le Worker. On ne les envoie que
+// si le Worker existe (SERVEUR_LEGER) — fonctionWorker(nom).
+// (Les appels nes avec le Worker — redeemCode, devenirCoach, paiementCoach,
+// garmin… — ne passent pas par cette liste : ils n'existent que la.)
+const FONCTIONS_WORKER=Object.freeze(['ouvrirEssai','verifierAchatProgramme','cloudinaryDestroy','santeJeton']);
+function fonctionWorker(nom){ return SERVEUR_LEGER&&FONCTIONS_WORKER.indexOf(nom)>=0; }
 const RC_BOUTIQUE_GRATUITE=false;
 const RC_PROGRAMMES=Object.freeze([
   Object.freeze({
@@ -1719,7 +1713,7 @@ const ESSAI_JOURS=TARIFS.essai.jours;
 // Tant que les fonctions ne tournent pas (plan Spark), l'essai est garde par
 // le dossier : `essai.ouvertLe` et `essai.finit`. Les deux se reecrivent
 // depuis la console d'un navigateur, et on ne fait pas semblant du contraire.
-// La barriere reelle arrive avec `ouvrirEssai` (functions/index.js), qui pose
+// La barriere reelle est `ouvrirEssai` (le Worker, cloudflare/src/essai.js), qui pose
 // l'echeance dans droits/ — noeud en ecriture interdite pour tout le monde.
 // essaiFin lit le serveur D'ABORD : le jour ou la fonction tourne, le dossier
 // ne decide plus de rien, sans qu'une ligne d'interface change.
@@ -1745,15 +1739,12 @@ function essaiOuvrir(u,bonusJours){
   const b=Math.max(0,Math.min(60,Math.round(Number(bonusJours)||0)));
   u.essai={ouvertLe:t,finit:t+(ESSAI_JOURS+b)*86400000};
   if(b) u.essai.bonusParrainage=b;
-  // LE SERVEUR SERAIT PREVENU, S'IL Y EN AVAIT UN. Il n'y en a pas : voir
-  // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
-  // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
-  // lecture de droits/, sans qu'une ligne d'interface change.
-  // LE WORKER OUVRE L'ESSAI (30/09/2026) : droits/<cle>, une fois par compte.
-  // Sa duree est celle de tarifs.json, cote serveur ; le palier se relit apres.
+  // LE WORKER OUVRE L'ESSAI (30/09/2026) : droits/<cle>, une fois par compte,
+  // refuse a qui a deja paye. Il borne `jours` a ESSAI_JOURS (tarifs.json) ;
+  // le palier se relit apres, et son echeance prend la main sur u.essai.
   try{
-    if(CLOUD&&CLOUD._callFn)
-      CLOUD._callFn('ouvrirEssai',{})
+    if(fonctionWorker('ouvrirEssai')&&CLOUD&&CLOUD._callFn)
+      CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS})
         .then(()=>rafraichirDroits(u,true)).then(()=>{ try{ _planifierRepeint(u.email); }catch(e){} }).catch(()=>{});
   }catch(e){}
   return true;
@@ -4423,8 +4414,8 @@ const CLOUD={
   // cette signature n'existe pas.
   //
   // ⚠ 27/09/2026 : LE SERVEUR LÉGER RÉPOND À CES APPELS (/fn/<nom>, même
-  //   protocole, jeton Firebase vérifié). Seul cloudinaryDestroy y est ;
-  //   ouvrirEssai et verifierAchatProgramme restent coupés par FONCTIONS_SERVEUR.
+  //   protocole, jeton Firebase vérifié). Depuis le 01/10/2026, ouvrirEssai et
+  //   verifierAchatProgramme y sont aussi : voir FONCTIONS_WORKER.
   get _functionsBase(){ return SERVEUR_LEGER?SERVEUR_LEGER_URL+'/fn':'https://europe-west1-repcore-sync.cloudfunctions.net'; },
   async _callFn(name,data){
     const token=await this._getToken();
@@ -21448,11 +21439,12 @@ function attribOrigineInscription(u){
   return u.origine;
 }
 // AU PREMIER PAIEMENT : la date. Le serveur la pose (attributionPaiement) et
-// compte le payant ; sans lui (plan Spark), l'app le fait à sa place.
+// compte le payant ; sans lui, l'app le fait à sa place. Le Worker le compte
+// (paypal.js → attributionPaiement) : avec lui, l'app ne recompte pas.
 function attribPremierPaiement(u){
   if(!u||!u.origine||u.origine.payeLe) return false;
   u.origine.payeLe=Date.now();
-  if(!FONCTIONS_SERVEUR) attribCompter('payant',u.origine.src);
+  if(!SERVEUR_LEGER) attribCompter('payant',u.origine.src);
   return true;
 }
 // ── L'écran « Viralité » (administrateur) ─────────────────────────────────
@@ -22038,11 +22030,10 @@ function ambCopier(l,btn){
 //   rien. u.parrainage n'est qu'un MIROIR, recopié de /parrainage/comptes, pour
 //   l'affichage et pour dater RECRUTEUR et MENTOR.
 //
-// ⚠ TOUT CE QUI RÉCOMPENSE PASSE PAR LES CLOUD FUNCTIONS. Tant qu'elles ne
-//   tournent pas (FONCTIONS_SERVEUR, plan Spark), personne ne serait jamais
-//   crédité : l'écran et le rappel restent donc fermés. Un code saisi à
+// ⚠ TOUT CE QUI RÉCOMPENSE PASSE PAR LE SERVEUR (le Worker). Sans lui,
+//   personne ne serait jamais crédité : l'écran et le rappel restent fermés. Un code saisi à
 //   l'inscription, lui, fonctionne déjà (demande enregistrée, essai allongé).
-const PARRAINAGE_ACTIF=FONCTIONS_SERVEUR||SERVEUR_LEGER;
+const PARRAINAGE_ACTIF=SERVEUR_LEGER;
 const PARRAINAGE_CODE_RE=/^[A-Z]{4,6}[A-Z2-9]{3}$/;
 // Sans 0/O, 1/I : un code se dicte et se recopie.
 const PARRAINAGE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -45733,9 +45724,9 @@ function _enregistrerAchat(id,ordre){
   // ⚠ UN PROGRAMME ACHETE OUVRE ULTIME PENDANT SA DUREE (lot 8). Quelqu'un qui
   //   paie un programme de huit a douze semaines doit pouvoir l'utiliser
   //   jusqu'au bout : la bibliotheque, la charge du bloc, la diete calculee.
-  //   L'ECHEANCE SERIEUSE EST CELLE DU SERVEUR — verifierAchatProgramme la
-  //   pose dans droits/ apres avoir verifie l'ordre chez PayPal. Celle-ci est
-  //   le repli tant que les fonctions ne tournent pas, et elle vaut ce que
+  //   L'ECHEANCE SERIEUSE EST CELLE DU SERVEUR — verifierAchatProgramme (le
+  //   Worker) la pose dans droits/ apres avoir relu l'ordre chez PayPal. Celle-ci
+  //   est le repli tant que droits/ n'est pas relu, et elle vaut ce que
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
   const mois=(offre('boutique_prog')||{}).mois||3;
@@ -45746,7 +45737,7 @@ function _enregistrerAchat(id,ordre){
   // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
   // a la premiere lecture de droits/.
   try{
-    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn&&ordre)
+    if(fonctionWorker('verifierAchatProgramme')&&CLOUD&&CLOUD._callFn&&ordre)
       CLOUD._callFn('verifierAchatProgramme',{orderId:String(ordre),programmeId:p.id})
         .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
   }catch(e){}

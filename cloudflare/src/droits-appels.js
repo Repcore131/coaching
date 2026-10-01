@@ -7,7 +7,7 @@
 // service, qu'ils s'écrivent :
 //
 //   redeemCode({code})        un code d'accès de coach → droits/<athlète> suivi
-//   ouvrirEssai()             l'essai Ultime, une fois par compte
+//   (ouvrirEssai              l'essai Ultime : essai.js)
 //   devenirCoach({invitation}) une invitation du créateur (ou une place Libre)
 //                             → coachs_registre/<clé> et users/<clé>/role
 //   prolongerCode({code})     le coach a prolongé un code déjà consommé
@@ -15,12 +15,10 @@
 // Chaque appel est authentifié (appels.js : jeton Firebase vérifié) ; l'adresse
 // vient du jeton, jamais des données envoyées.
 
-import T from '../../tarifs.json' with { type: 'json' };
 import { ErreurAppel } from './appels.js';
 import { CREATOR_EMAIL, MONTH_MS } from './metier.js';
 import { estCreateur } from './createur.js';
 
-const JOUR_MS = 86400000;
 export const CODE_MOIS_MAX_AFFILIE = 12;      // = CODE_MOIS_MAX_AFFILIE de l'app
 export const LIBRE_MAX = 200;                 // = LIBRE_MAX de l'app
 const CODE_RE = /^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
@@ -134,27 +132,6 @@ export function creerAppelsDroits(ctx) {
       coachName: d.coachName || null, droits: droits || null };
   }
 
-  // ── ouvrirEssai ───────────────────────────────────────────────────────
-  // UNE FOIS PAR COMPTE, en transaction sur essaiOuvertLe. La durée est celle
-  // de tarifs.json : ce que le client envoie (`jours`) est ignoré.
-  async function ouvrirEssai({ auth }) {
-    const cle = cleDe(auth.email), t = now();
-    if (await lire('coachs_registre/' + cle)) throw new ErreurAppel(400, "Un compte coach n'a pas d'essai.");
-    const tx = await db.ref('droits/' + cle + '/essaiOuvertLe').transaction((cur) => (cur ? undefined : t));
-    if (!tx.committed) {
-      const d = await lire('droits/' + cle);
-      return { ok: true, deja: true, essaiFinit: Number(d && d.essaiFinit) || 0 };
-    }
-    const fin = t + Number(T.essai.jours) * JOUR_MS;
-    const d = await M.majDroits(cle, (x) => {
-      const ouvert = palierOuvert(x, t);
-      // Un palier ultime ou suivi déjà ouvert plus loin : l'essai ne le raccourcit pas.
-      if ((ouvert === 'ultime' || ouvert === 'suivi') && (Number(x.echeance) === 0 || Number(x.echeance) >= fin)) return { essaiFinit: fin };
-      return { palier: 'ultime', echeance: fin, source: 'essai', essaiFinit: fin };
-    });
-    return { ok: true, deja: false, essaiFinit: fin, droits: d || null };
-  }
-
   // ── devenirCoach ──────────────────────────────────────────────────────
   // Avec une invitation : un code de type 'coach' ÉMIS PAR LE CRÉATEUR, non
   // consommé. Sans : une place Libre, comptée ici (coachs_libres), en
@@ -223,5 +200,5 @@ export function creerAppelsDroits(ctx) {
     return { ok: true, parrainage };
   }
 
-  return { redeemCode, ouvrirEssai, devenirCoach, prolongerCode, emailVerifie, poserSuivi };
+  return { redeemCode, devenirCoach, prolongerCode, emailVerifie, poserSuivi };
 }
