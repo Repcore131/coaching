@@ -7,8 +7,9 @@ ses jetons : environ 1 700 couleurs sont ecrites en dur dans la feuille, 1 100
 dans les styles en ligne du code, 300 dans app/index.html. Les repeindre a la
 main, c'est des semaines ; en oublier une, c'est un texte blanc sur fond blanc.
 Ce script relit TOUTES les regles qui portent une couleur et en ecrit une
-copie « claire », prefixee par :root[data-theme="clair"], a la fin de
-app/rc-style.<build>.css, entre deux marqueurs. Il est IDEMPOTENT : il retire
+copie « claire », prefixee par :root[data-theme="clair"], entre deux
+marqueurs, dans app/rc-theme.<build>.css depuis le 01/10/2026 (avant : a la
+fin de app/rc-style.<build>.css ; voir scripts/extraire_theme_clair.py). Il est IDEMPOTENT : il retire
 d'abord le bloc qu'il avait genere.
 
 LA TRANSFORMATION (voir `clair`) : la luminosite est RETOURNEE, la teinte et la
@@ -370,6 +371,33 @@ def main():
     js_f = sorted(glob.glob(os.path.join(RACINE, 'app', 'rc-core.*.js')))
     if len(css_f) != 1 or len(js_f) != 1:
         sys.exit('un seul rc-style.*.css et un seul rc-core.*.js attendus')
+    # ══ DEPUIS LE 01/10/2026, LE BLOC VIT DANS app/rc-theme.<build>.css ══
+    # (scripts/extraire_theme_clair.py). La feuille sombre (rc-style) est lue,
+    # suivie des regles claires ecrites a la main qui precedent le bloc dans
+    # rc-theme — elles etaient lues avec la feuille sombre avant l'extraction
+    # (d'ou six regles doublement prefixees qu'on reproduit a l'identique) — et
+    # le bloc est reecrit A SA PLACE dans rc-theme.
+    import extraire_theme_clair as X
+    _, f_theme = X.fichiers()
+    if os.path.exists(f_theme):
+        css = open(css_f[0], encoding='utf-8').read()
+        # Comme avant l'extraction : seulement ce qui precede la place du bloc.
+        if X.REPERE in css:
+            css = css[:css.index(X.REPERE)]
+        t_avant, t_bloc, t_apres = X.morceaux_theme(open(f_theme, encoding='utf-8').read())
+        base = (css.rstrip('\n') + '\n' + t_avant.strip('\n') + '\n') if t_avant.strip() else css
+        lire_jetons(sans_commentaires(base))
+        gen = generer_css(sans_commentaires(base))
+        html = open(os.path.join(RACINE, 'app', 'index.html'), encoding='utf-8', newline='').read()
+        lignes = styles_en_ligne([html, open(js_f[0], encoding='utf-8').read()])
+        bloc = '\n'.join([DEBUT, gen, lignes, JETONS, FIN])
+        open(f_theme, 'w', encoding='utf-8').write(X.ENTETE + t_avant.strip('\n') + ('\n' if t_avant.strip() else '')
+            + bloc + '\n' + t_apres.strip('\n') + ('\n' if t_apres.strip() else ''))
+        print('theme clair : %d regles de feuille, %d styles en ligne, %d Ko (dans %s)' % (
+            gen.count('{') - gen.count('@'), lignes.count('!important'), len(bloc.encode('utf-8')) // 1024, os.path.basename(f_theme)))
+        # Une regle claire ecrite a la main dans rc-style depuis le dernier passage : deplacee.
+        X.extraire(verbeux=False)
+        return
     css = open(css_f[0], encoding='utf-8').read()
     i = css.find(DEBUT)
     base = css[:i].rstrip('\n') + '\n' if i >= 0 else css
@@ -388,6 +416,9 @@ def main():
     open(css_f[0], 'w', encoding='utf-8').write(base + bloc + ('\n' + apres if apres else ''))
     print('theme clair : %d regles de feuille, %d styles en ligne, %d Ko' % (
         gen.count('{') - gen.count('@'), lignes.count('!important'), len(bloc.encode('utf-8')) // 1024))
+    # Premier passage apres le 01/10/2026 : le bloc et les regles claires sortent dans rc-theme.
+    import extraire_theme_clair as X
+    X.extraire()
 
 
 if __name__ == '__main__':

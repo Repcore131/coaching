@@ -35,6 +35,10 @@ une assertion dont le motif finissait par « \n\s*\}\n » ne trouvait plus rien 
 l'envoi vers sante_privee semblait avoir disparu. On sort donc en LF, ce que la
 page avait toujours vu. (Gain accessoire : 102 107 octets de moins avant gzip.)
 
+Le theme clair (app/rc-theme.<build>.css) est renomme avec eux depuis le
+01/10/2026. Ensuite : python3 scripts/theme_clair.py (qui regenere son bloc
+dans rc-theme et y sort toute regle claire laissee dans rc-style).
+
 Usage :  python scripts/versionner_actifs.py [--verifier]
          --verifier ne change rien : il dit ce qui serait fait, et les poids.
 """
@@ -147,6 +151,18 @@ def main():
             html = html.replace(m.group(1), js_nom)
             faits.append('code renomme %s en %s' % (m.group(1), js_nom))
 
+    # ── LE THEME CLAIR (rc-theme.<build>.css, 01/10/2026) ───────────────
+    # Sorti de rc-style par scripts/extraire_theme_clair.py, lie juste apres
+    # elle. Renomme au meme geste, sinon la page demanderait un 404 en clair.
+    theme_nom = 'rc-theme.%s.css' % build
+    m = re.search(r'href="\./(rc-theme\.\d+\.css)"', html)
+    if m and m.group(1) != theme_nom:
+        ancien = os.path.join(RACINE, 'app', m.group(1))
+        if os.path.exists(ancien) and not verifier:
+            os.rename(ancien, os.path.join(RACINE, 'app', theme_nom))
+        html = html.replace(m.group(1), theme_nom)
+        faits.append('theme renomme %s en %s' % (m.group(1), theme_nom))
+
     # ── LES DEUX FICHIERS SORTENT EN LF ──────────────────────────────────
     # Toujours, y compris au passage de renommage : c'est ce que la page
     # voyait quand ces blocs etaient en ligne (voir l'avertissement en tete).
@@ -163,6 +179,7 @@ def main():
     sw = lire(SW)
     sw2 = re.sub(r"'\./rc-core\.\d+\.js'", "'./%s'" % js_nom, sw)
     sw2 = re.sub(r"'\./rc-style\.\d+\.css'", "'./%s'" % css_nom, sw2)
+    sw2 = re.sub(r"'\./rc-theme\.\d+\.css'", "'./%s'" % theme_nom, sw2)
     if sw2 != sw and not verifier:
         ecrire(SW, sw2)
         faits.append('sw.js : ASSETS mis a jour')
@@ -180,7 +197,7 @@ def main():
     print('  index.html APRES : ' + poids(apresb))
     print('  CRLF : %d -> %d' % (crlf_avant, html.count('\r\n')))
     for n in sorted(os.listdir(os.path.join(RACINE, 'app'))):
-        if re.match(r'rc-(core|style)\.\d+\.(js|css)$', n):
+        if re.match(r'rc-(core|style|theme)\.\d+\.(js|css)$', n):
             print('  app/%s : %s' % (n, poids(lire(os.path.join(RACINE, 'app', n), binaire=True))))
 
 

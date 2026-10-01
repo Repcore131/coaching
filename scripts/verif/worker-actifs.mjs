@@ -194,13 +194,14 @@ const page = (texte, statut, type) => new Response(texte, {status: statut || 200
 {
   // Un worker « v1001 » : CACHE et les deux actifs renommes, le reste tel quel.
   const src = SW.replace(/const CACHE = 'repcore-v\d+'/, "const CACHE = 'repcore-v1001'")
-    .replace(/rc-core\.\d+\.js/g, 'rc-core.1001.js').replace(/rc-style\.\d+\.css/g, 'rc-style.1001.css');
+    .replace(/rc-core\.\d+\.js/g, 'rc-core.1001.js').replace(/rc-style\.\d+\.css/g, 'rc-style.1001.css')
+    .replace(/rc-theme\.\d+\.css/g, 'rc-theme.1001.css');
   const ASSETS_SW = new Function(src.slice(src.indexOf('const AVATARS'), src.indexOf('// Une séance en cours interdit')) + '; return ASSETS;')();
   const {caches, appels, ecoutes} = mondeReseau(src, (u) => page('reseau:' + u, 200, /\.html$/.test(u) ? 'text/html' : 'application/octet-stream'));
   // L'ANCIEN CACHE v1000 : rc-core.1001.js (la page vient de le demander a
   // l'ancien worker), toutes les images sauf une, et une image vieille de 40 jours.
   const vieux = await caches.open('repcore-v1000');
-  const statiques = ASSETS_SW.filter(a => !/index\.html$/.test(a) && !/rc-(core|style)\./.test(a));
+  const statiques = ASSETS_SW.filter(a => !/index\.html$/.test(a) && !/rc-(core|style|theme)\./.test(a));
   const absente = statiques[statiques.length - 1], perimee = statiques[statiques.length - 2];
   const jour = 864e5;
   const copie = (date) => new Response('ancien', {status: 200, headers: {date: new Date(date).toUTCString()}});
@@ -212,7 +213,8 @@ const page = (texte, statut, type) => new Response(texte, {status: statut || 200
   await p;
   const neuf = await caches.open('repcore-v1001');
   const ranges = (await neuf.keys()).length;
-  const attendus = ['./index.html', './rc-style.1001.css', absente, perimee].sort();
+  // rc-theme.1001.css, absent de l'ancien cache comme rc-style : telecharge.
+  const attendus = ['./index.html', './rc-style.1001.css', './rc-theme.1001.css', absente, perimee].sort();
   const vus = appels.map(a => a.url).sort();
   console.log('\nSCENE 3 — install de v1001 sur un cache v1000 (' + ASSETS_SW.length + ' entrees d’ASSETS)');
   console.log('  telecharges : ' + vus.join(', '));

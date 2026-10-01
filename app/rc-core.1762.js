@@ -2402,6 +2402,9 @@ function themeAppliquer(choix){
   const e=themeEffectif(choix||themeChoisi(),sys);
   const r=document.documentElement;
   if(e==='clair') r.setAttribute('data-theme','clair'); else r.removeAttribute('data-theme');
+  // LA FEUILLE DU THEME CLAIR (rc-theme.<build>.css) : appliquee en clair
+  // seulement, sinon media="not all" — voir index.html, rcThemeFeuille.
+  try{ const l=document.getElementById('rc-theme-clair'); if(l) l.media=e==='clair'?'all':'not all'; }catch(err){}
   const m=document.querySelector('meta[name="theme-color"]');
   if(m) m.setAttribute('content',e==='clair'?'#f4f4f4':'#0A0A0A');
   return e;
@@ -129765,6 +129768,7 @@ async function chargerTests(){
       };
       await _rendreEnLigne(document.querySelector('link[rel="stylesheet"][href*="rc-style."]'),
         'href','<style>','<'+'/style>');
+      await _rendreEnLigne(document.getElementById('rc-theme-clair'),'href','<style>','<'+'/style>');
       await _rendreEnLigne(document.querySelector('script[src*="rc-core."]'),
         'src','<script>','<'+'/script>');
       window._RC_SRC_PROD=src;
@@ -129778,6 +129782,11 @@ async function chargerTests(){
       const _l=document.querySelector('link[rel="stylesheet"][href*="rc-style."]');
       if(_l){ const r=await fetch(_l.getAttribute('href'),{cache:'no-store'});
         if(r.ok) css=await r.text(); }
+      // ET LE THEME CLAIR, sorti dans sa propre feuille (01/10/2026) : les
+      // assertions qui lisent ses regles le trouvent a la suite, dans l'ordre.
+      const _t=document.getElementById('rc-theme-clair');
+      if(_t){ const r=await fetch(_t.getAttribute('href'),{cache:'no-store'});
+        if(r.ok) css+='\n'+await r.text(); }
     }catch(e){}
     window._RC_CSS_PROD=css;
   }

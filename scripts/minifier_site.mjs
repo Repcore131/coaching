@@ -18,7 +18,7 @@
 //     (sans lui, chaque « é » devient « \u00E9 » : +43 Ko sur rc-core). JAMAIS
 //     --minify-identifiers : les noms globaux sont appelés depuis des
 //     onclick="…" et des chaînes innerHTML ;
-//   · rc-style.*.css : esbuild --minify (chargeur CSS, par l'extension) ;
+//   · rc-style.*.css et rc-theme.*.css : esbuild --minify (chargeur CSS, par l'extension) ;
 //   · index.html : les commentaires HTML <!-- … --> hors <script>/<style>
 //     (sauf les conditionnels <!--[ ) ; dans les <script> en ligne, les lignes
 //     qui ne sont qu'un commentaire // — SEULEMENT si le bloc minifié par
@@ -71,7 +71,8 @@ function traiter(nom, fn) {
 
 const fichiers = readdirSync(APP);
 const JS = fichiers.filter((f) => /^rc-core\.\d+\.js$/.test(f) || f === 'motion-lab.js');
-const CSS = fichiers.filter((f) => /^rc-style\.\d+\.css$/.test(f));
+// rc-theme : le theme clair, sorti de rc-style le 01/10/2026 (scripts/extraire_theme_clair.py).
+const CSS = fichiers.filter((f) => /^rc-(style|theme)\.\d+\.css$/.test(f));
 if (!JS.some((f) => f.startsWith('rc-core.'))) erreurs.push('aucun rc-core.<build>.js dans ' + APP);
 if (!CSS.length) erreurs.push('aucun rc-style.<build>.css dans ' + APP);
 

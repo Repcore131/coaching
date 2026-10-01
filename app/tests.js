@@ -37488,7 +37488,7 @@ async function testExercices(){
         // Le worker doit les connaitre, sinon ils ne sont pas hors ligne.
         const sw=(typeof window!=='undefined'&&window._RC_SW)||'';
         if(!sw) return true;                       // sw.js non servi : on le dit ailleurs
-        for(const n of ['rc-core.'+b+'.js','rc-style.'+b+'.css'])
+        for(const n of ['rc-core.'+b+'.js','rc-style.'+b+'.css','rc-theme.'+b+'.css'])
           if(sw.indexOf(n)<0) return _echec(n+' manque a ASSETS du worker : il ne serait pas hors ligne');
         return true;})());
 
@@ -37501,8 +37501,10 @@ async function testExercices(){
         // laisserait sans code, hors ligne compris.
         const sw=(typeof window!=='undefined'&&window._RC_SW)||'';
         if(!sw) return true;
-        if(sw.indexOf('rc-(?:core|style)')<0)
-          return _echec('le worker ne reconnait pas un actif versionne');
+        // rc-theme (le theme clair, sorti de rc-style le 01/10/2026) est un
+        // actif versionne comme les deux autres : purge a deux versions aussi.
+        if(sw.indexOf('rc-(?:core|style|theme)')<0)
+          return _echec('le worker ne reconnait pas un actif versionne (core, style et theme)');
         if(sw.indexOf('.slice(0, 2)')<0&&sw.indexOf('.slice(0,2)')<0)
           return _echec('le worker ne plafonne plus a deux versions');
         if(sw.indexOf('_actifGarde')<0) return _echec('la garde des actifs a disparu');
@@ -38433,6 +38435,38 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          // ⚠ 1762 — LE THEME CLAIR VIT DANS SA PROPRE FEUILLE (rc-theme.<build>.css,
+          // scripts/extraire_theme_clair.py), liee APRES rc-style avec
+          // media="not all". On BASCULE pour de vrai : en clair, la feuille
+          // s'applique et le fond comme une .card temoin passent au clair ; en
+          // sombre, elle n'est pas appliquee.
+          okA('1762 — Thème clair à part : media bascule, le fond du body et une .card témoin changent, rc-theme vient après rc-style',async()=>{
+            const l=document.getElementById('rc-theme-clair');
+            if(!l) return _echec('lien #rc-theme-clair absent');
+            const s=document.querySelector('link[rel="stylesheet"][href*="rc-style."]');
+            if(!s||!(s.compareDocumentPosition(l)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('rc-theme n’est pas lié après rc-style');
+            const choix0=document.documentElement.getAttribute('data-theme')==='clair'?'clair':'sombre';
+            const carte=document.createElement('div'); carte.className='card'; carte.textContent='témoin';
+            document.body.appendChild(carte);
+            const image=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+            const lum=(c)=>{ const m=String(c).match(/[\d.]+/g)||[]; return (Number(m[0])*0.2126+Number(m[1])*0.7152+Number(m[2])*0.0722)/255; };
+            try{
+              themeAppliquer('sombre'); await image();
+              if(l.media!=='not all') return _echec('en sombre, media vaut « '+l.media+' »');
+              const fondS=getComputedStyle(document.body).backgroundColor, carteS=getComputedStyle(carte).backgroundColor;
+              themeAppliquer('clair');
+              for(let k=0;k<50&&!l.sheet;k++) await new Promise(r=>setTimeout(r,100));
+              await image();
+              if(l.media!=='all') return _echec('en clair, media vaut « '+l.media+' »');
+              const fondC=getComputedStyle(document.body).backgroundColor, carteC=getComputedStyle(carte).backgroundColor;
+              if(fondC===fondS) return _echec('le fond du body ne change pas ('+fondS+')');
+              if(carteC===carteS) return _echec('la .card ne change pas ('+carteS+')');
+              if(!(lum(fondC)>0.8)) return _echec('fond clair trop sombre : '+fondC);
+              if(!(lum(carteC)>0.8)) return _echec('.card claire trop sombre : '+carteC);
+              if(!(lum(carteS)<0.2)) return _echec('.card sombre trop claire : '+carteS);
+              return true;
+            } finally { carte.remove(); themeAppliquer(choix0==='clair'?'clair':'sombre'); }
+          });
           // ⚠ 1761 — LE SPLASH SE PEINT SANS ATTENDRE rc-style NI rc-core. Le logo
           // et son halo etaient en opacity:0 jusqu'a la pose de leurs animations
           // par rc-core : ecran noir 13 s en 4G lente. Ils s'animent maintenant

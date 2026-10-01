@@ -23,6 +23,8 @@ export function sourceProd() {
   let s = readFileSync(INDEX, 'utf8');
   for (const [re, ouvrant, fermant] of [
     [/<link rel="stylesheet" href="\.\/(rc-style\.\d+\.css)">/, '<style>', '</style>'],
+    // Le theme clair, a SA place (apres rc-style) : sorti le 01/10/2026.
+    [/<link rel="stylesheet" id="rc-theme-clair" href="\.\/(rc-theme\.\d+\.css)" media="not all">/, '<style>', '</style>'],
     [/<script src="\.\/(rc-core\.\d+\.js)"><\/script>/, '<script>', '</script>'],
   ]) {
     const m = s.match(re);

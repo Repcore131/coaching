@@ -77,6 +77,8 @@ def source_prod():
     s = lire(INDEX)
     for motif, ouvrant, fermant in (
             (r'<link rel="stylesheet" href="\./(rc-style\.\d+\.css)">', '<style>', '</style>'),
+            # Le theme clair, a SA place (apres rc-style) : sorti le 01/10/2026.
+            (r'<link rel="stylesheet" id="rc-theme-clair" href="\./(rc-theme\.\d+\.css)" media="not all">', '<style>', '</style>'),
             (r'<script src="\./(rc-core\.\d+\.js)"></script>', '<script>', '</script>')):
         m = re.search(motif, s)
         if not m:
