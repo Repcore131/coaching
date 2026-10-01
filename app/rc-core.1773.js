@@ -128628,7 +128628,10 @@ function _rendreSuggestionsProto(){
                                    ['cooldown','proto-sug-cooldown','prog-cooldown']]){
     const el=document.getElementById(zone); if(!el) continue;
     const actuel=(document.getElementById(champ)?.value||'').trim();
-    el.innerHTML=sug[phase].map(p=>{
+    // 01/10/2026 (Kevin) : SUR ORDINATEUR, LES TROIS SUGGESTIONS CÔTE À CÔTE,
+    // en trois colonnes de même taille (.pr-grille), au lieu d'être empilées.
+    // Sur téléphone et tablette, la grille ne fait rien : une carte par rang.
+    el.innerHTML='<div class="pr-grille">'+sug[phase].map(p=>{
       const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
       // Comparaison sur la ligne d'en-tête entière, pas sur un préfixe : deux
       // protocoles peuvent partager un début de nom.
@@ -128653,7 +128656,7 @@ function _rendreSuggestionsProto(){
         <div class="pr-desc">${escapeHtml(p.desc)}</div>
         ${p.contreInd.length?`<div class="pr-ci">À éviter si : ${escapeHtml(p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '))}</div>`:''}
       </button>`;
-    }).join('')
+    }).join('')+'</div>'
     +`<button type="button" class="pr-tous" onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');

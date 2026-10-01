@@ -40729,6 +40729,15 @@ async function testExercices(){
           sv.forEach(e=>e.classList.add('active'));
         }})());
 
+      ok('Protocoles de séance : sur ordinateur, les trois suggestions d’une phase en trois colonnes égales',(()=>{
+        // 01/10/2026 (Kevin) : côte à côte sur ordinateur, empilées sur téléphone.
+        if(String(_rendreSuggestionsProto).indexOf('<div class="pr-grille">')<0) return _echec('les cartes ne sont plus dans .pr-grille');
+        const css=_stylesProd().map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+        const i=css.indexOf('.pr-grille{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))');
+        if(i<0) return _echec('la règle des trois colonnes égales est introuvable');
+        // Bornée aux écrans larges : sous 1025 px, les cartes restent empilées.
+        return css.lastIndexOf('@media (min-width:1025px){',i)>css.lastIndexOf('}\n}',i)||/@media \(min-width:1025px\)\{\s*\.pr-grille\{/.test(css)
+          ?true:_echec('la grille n’est pas bornée aux écrans larges');})());
       ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
         // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
         // choisit dans une liste, l'athlete qui veut une technique la tape

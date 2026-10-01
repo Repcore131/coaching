@@ -3821,6 +3821,18 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
   border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;
   background:linear-gradient(180deg,#151515,#0f0f0f);border:1px solid #1e1e1e;
   box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.035)}
+/* TROIS COLONNES SUR ORDINATEUR (Kevin, 01/10/2026) : les trois suggestions
+   d'une phase côte à côte, de même largeur et de même hauteur. En dessous de
+   1025 px, .pr-grille n'est qu'un div : les cartes restent empilées. */
+@media (min-width:1025px){
+  .pr-grille{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch;margin-bottom:10px}
+  /* Un <button> centre son contenu en hauteur : dans une carte étirée à la hauteur
+     de sa voisine, le texte flottait au milieu. Il part du haut, comme les autres. */
+  .pr-grille .pr-carte{margin-bottom:0;height:100%;display:flex;flex-direction:column;justify-content:flex-start}
+  /* Colonne étroite : la durée et l'objectif passent sous le nom plutôt que de déborder. */
+  .pr-grille .pr-haut{align-items:flex-start;flex-wrap:wrap}
+  .pr-grille .pr-nom{flex:1 1 150px}
+}
 /* LE RAIL, A LA PLACE DE L APLAT. L objectif se lisait sur une pastille pleine
    et tres saturee — vert vif, violet vif — qui tirait l oeil avant le nom du
    protocole. La couleur passe sur un filet de 3 px au bord gauche : elle
