@@ -40616,6 +40616,11 @@ async function testExercices(){
           if(/Changer l'exercice/.test(c.textContent)) return _echec('le titre « Changer l’exercice » reste dans le corps');
           // La différence entre les deux gestes reste expliquée, et les muscles et la silhouette restent.
           if(c.textContent.indexOf('quelle différence')<0) return _echec('l’explication a disparu');
+          // Elle est SOUS les deux boutons, dans la bannière, et plus au-dessus de « Séries » ; la silhouette n'a pas de fond.
+          const dif=[...c.querySelectorAll('details')].filter(x=>x.textContent.indexOf('quelle différence')>=0);
+          if(dif.length!==1||!dif[0].closest('.px-cmd-bq')||!dif[0].closest('.px-tete')) return _echec('l’explication n’est pas sous les boutons de la bannière');
+          if(dif[0].open) return _echec('l’explication s’impose dépliée');
+          if(getComputedStyle(c.querySelector('.px-ava')).backgroundColor.replace(/\s/g,'')!=='rgba(0,0,0,0)') return _echec('la silhouette a encore un fond');
           return (c.querySelector('.px-mus')&&c.querySelector('.px-ava img')&&l1.querySelector('[onclick^="_dupliquerExUI"]')&&l1.querySelector('[onclick^="_supprimerEx"]'))
             ?true:_echec('muscles, silhouette, copie ou suppression manquent');
         } finally {

@@ -5597,9 +5597,19 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .px-mus-v{color:rgba(255,255,255,.8);font-style:italic}
 /* La silhouette : mêmes images et même calque que .wo-ava (wo-ava-img, wo-ava-z). */
 .px-ava{position:relative;flex:0 0 auto;height:92px;min-width:34px;display:flex;align-items:flex-end;justify-content:center}
-/* Le fond sombre est une OMBRE PORTÉE, pas une marge intérieure : le calque des muscles
-   (inset:0) doit rester exactement sur l'image. */
-.px-ava{background:#0b0b0b;border-radius:6px;margin:5px 7px 5px 5px;box-shadow:0 0 0 5px #0b0b0b}
+/* SANS FOND (Kevin, 01/10/2026) : le dessin est un PNG détouré, posé à même le
+   rouge. Le halo rouge de la séance ne se verrait pas ici ; une ombre sombre
+   détache la silhouette de la bannière. */
+.px-ava{margin:0 6px 0 2px}
+.px-ava .wo-ava-img{filter:drop-shadow(0 2px 3px rgba(0,0,0,.55)) drop-shadow(0 0 10px rgba(0,0,0,.35))}
+/* L'explication, sous les deux boutons de la banque. */
+.px-cmd-bq{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;max-width:100%}
+.px-diff{max-width:290px;font-size:var(--fs-2xs);line-height:1.45;color:rgba(255,255,255,.88)}
+.px-diff summary{cursor:pointer;list-style:none;text-decoration:underline;text-decoration-color:rgba(255,255,255,.45);text-underline-offset:2px}
+.px-diff summary::-webkit-details-marker{display:none}
+.px-diff summary:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.px-diff>div{padding:5px 0 0}
+.px-diff b{color:#fff}
 .px-poignee{background:#fff2;border:none;color:var(--text);font-size:var(--fs-lg);line-height:1;padding:0;border-radius:var(--r-2);cursor:grab;flex-shrink:0;width:30px;height:34px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
 .px-poignee:active{cursor:grabbing;background:#fff4}
 /* 22x12 etait intouchable au doigt. Deux fleches empilees ne peuvent pas
@@ -13339,7 +13349,11 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .px-mus b{color:#090909}
 :root[data-theme="clair"] .px-mus-s{color:rgba(9,9,9,0.78)}
 :root[data-theme="clair"] .px-mus-v{color:rgba(9,9,9,0.8)}
-:root[data-theme="clair"] .px-ava{background:#f1f1f1;box-shadow:0 0 0 5px rgba(11,11,11,0.35)}
+:root[data-theme="clair"] .px-ava .wo-ava-img{filter:drop-shadow(0 2px 3px rgba(0,0,0,0.193)) drop-shadow(0 0 10px rgba(0,0,0,0.122))}
+:root[data-theme="clair"] .px-diff{color:rgba(9,9,9,0.88)}
+:root[data-theme="clair"] .px-diff summary{text-decoration-color:rgba(9,9,9,0.45)}
+:root[data-theme="clair"] .px-diff summary:focus-visible{outline:2px solid #090909}
+:root[data-theme="clair"] .px-diff b{color:#090909}
 :root[data-theme="clair"] .px-poignee{background:rgba(9,9,9,0.133);color:var(--text)}
 :root[data-theme="clair"] .px-poignee:active{background:rgba(9,9,9,0.267)}
 :root[data-theme="clair"] .px-mini{background:rgba(9,9,9,0.133);color:var(--text)}

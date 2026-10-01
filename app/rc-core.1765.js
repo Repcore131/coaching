@@ -42656,9 +42656,20 @@ function renderProgEx(){
              Sur un téléphone la rangée se replie : le nom garde la première
              ligne, les boutons passent dessous. -->
         <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();_pxMajMuscles(${i})" placeholder="NOM DE L'EXERCICE" class="f-inline px-nom" style="font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1 1 150px;min-width:0;box-sizing:border-box">
-        ${_bqDispo?`<span class="px-cmd px-cmd-bq">
+        ${_bqDispo?`<span class="px-cmd-bq">
+          <span class="px-cmd">
           <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
           <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
+          </span>
+          <!-- L'EXPLICATION, SOUS LES DEUX BOUTONS QU'ELLE EXPLIQUE (Kevin,
+               01/10/2026) : elle était au-dessus de « Séries », un rang plus
+               bas que les boutons. Toujours repliée (B2.10 : quarante mots
+               répétés dans chaque carte reculaient la prescription), toujours
+               à un clic, et le texte n'est ni raccourci ni réécrit. -->
+          <details class="px-diff">
+            <summary>Remplacer ou mettre à jour : quelle différence ?</summary>
+            <div><b>Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b>Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
+          </details>
         </span>`:''}
         <span class="px-cmd px-cmd-ed">
           <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
@@ -42678,23 +42689,6 @@ function renderProgEx(){
              liens video et son execution.
              RESERVE AUX COACHS : la banque leur est fermee cote athlete, et le
              bouton n'apparait donc pas dans SON editeur de seance. -->
-        ${_bqDispo?`
-        <!-- B2.10, L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
-             Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
-             exercice : sur une seance de huit, le coach faisait defiler huit
-             fois le meme paragraphe, et la prescription, la seule chose
-             qu'il vient ecrire, reculait d'autant.
-             LE TEXTE N'EST NI RACCOURCI NI REECRIT : c'est sa repetition
-             qui posait probleme, pas son contenu. La distinction entre
-             remplacer et mettre a jour n'est pas devinable, elle reste donc
-             a portee, d'un clic, depuis n'importe quelle carte.
-             <details> ET NON UN PANNEAU : natif, refermable, sans une ligne
-             de JS, et il garde son etat ouvert tant que le coach ne le
-             referme pas. -->
-        <details style="margin-bottom:8px">
-          <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Remplacer ou mettre à jour : quelle différence ?</summary>
-          <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding:6px 0 0"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
-        </details>`:''}
         <!-- SÉRIES / RÉPÉTITIONS / REPOS, TROIS CASES DE MÊME LARGEUR.
              LE TITRE « PRESCRIPTION » EST PARTI (Kevin, 15/09/2026) : il nommait
              un groupe dont le contenu se nomme déjà lui-même, et il coûtait un
