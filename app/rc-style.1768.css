@@ -3809,8 +3809,10 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
   border:1px solid color-mix(in srgb,var(--c) 42%,transparent);
   background:color-mix(in srgb,var(--c) 11%,transparent);
   box-shadow:0 0 11px color-mix(in srgb,var(--c) 20%,transparent)}
+/* EN ROUGE (Kevin, 01/10/2026) : « Échauffement » et « Étirements / retour au calme ».
+   Le jeton --red-text, celui des titres rouges de l'app, lisible sur fond sombre comme clair. */
 .pr-lbl{display:inline;margin:0;font-size:var(--fs-xs);font-weight:800;
-  letter-spacing:1.9px;text-transform:uppercase;color:var(--text-strong)}
+  letter-spacing:1.9px;text-transform:uppercase;color:var(--red-text)}
 .pr-type{font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;
   margin:0 0 10px 40px}
 /* ── Une carte de protocole ──────────────────────────────────────────── */
@@ -13079,7 +13081,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pr-phase{--c:#787878}
 :root[data-theme="clair"] .pr-phase+.pr-phase{border-top:1px solid rgba(9,9,9,0.06)}
 :root[data-theme="clair"] .pr-ico{color:var(--c);border:1px solid color-mix(in srgb,var(--c) 42%,transparent);background:color-mix(in srgb,var(--c) 11%,transparent);box-shadow:0 0 11px color-mix(in srgb,var(--c) 20%,transparent)}
-:root[data-theme="clair"] .pr-lbl{color:var(--text-strong)}
+:root[data-theme="clair"] .pr-lbl{color:var(--red-text)}
 :root[data-theme="clair"] .pr-type{color:var(--text-faint)}
 :root[data-theme="clair"] .pr-carte{--c:#787878;background:linear-gradient(180deg,#e7e7e7,#ededed);border:1px solid #dfdfdf;box-shadow:0 3px 10px rgba(0,0,0,0.133),inset 0 1px 0 rgba(255,255,255,.035)}
 :root[data-theme="clair"] .pr-carte::before{background:var(--c);box-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent)}

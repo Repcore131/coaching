@@ -14996,6 +14996,11 @@ async function testExercices(){
             if(cs.backgroundColor.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('une commande n est pas blanche : '+cs.backgroundColor);
             if(cs.color.replace(/\s/g,'')!=='rgb(20,20,20)') return _echec('son texte ne se lit pas sur le blanc : '+cs.color);
           }
+          // Les deux titres de phase, « Échauffement » et « Étirements / retour au calme », sont en rouge.
+          const _rouge=(()=>{ const d=document.createElement('div'); d.style.color=getComputedStyle(document.documentElement).getPropertyValue('--red-text').trim();
+            document.body.appendChild(d); const v=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return v; })();
+          const lbl=[...document.querySelectorAll('.pr-bloc .pr-sect .pr-lbl')];
+          if(lbl.length!==2||lbl.some(x=>getComputedStyle(x).color.replace(/\s/g,'')!==_rouge)) return _echec('les titres de phase ne sont pas rouges');
           return document.querySelectorAll('.pr-tete .pr-cmd').length===2?true:_echec('deux commandes attendues dans la bannière');})());
         ok('Les quatre pictogrammes sont des SVG du jeu d\'icones',(()=>{
           const b=document.querySelector('.pr-bloc');
