@@ -12466,6 +12466,37 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .mst-b{flex:none}
 .mst-note{margin-top:10px;font-size:var(--fs-xs);color:var(--sub)}
 
+/* ══ LES LIGUES : la ligne sous le rang, l'écran du classement ══ */
+.lg-zone{padding:8px 16px 0}
+.lg-carte{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:8px 12px;border-radius:var(--r-3);
+  border:1px solid var(--border);background:var(--surface-1);color:var(--text);text-align:left;cursor:pointer;font:inherit}
+.lg-carte.lg-monte{border-color:color-mix(in srgb,var(--green) 60%,transparent)}
+.lg-carte.lg-descend{border-color:color-mix(in srgb,var(--red) 60%,transparent)}
+.lg-ico{flex:none;display:flex;color:var(--red-text)}
+.lg-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.lg-txt b{font-family:var(--pile-titre);font-weight:400;font-size:var(--fs-md);letter-spacing:1px;text-transform:uppercase}
+.lg-txt span{font-size:var(--fs-xs);color:var(--sub)}
+.lg-v{flex:none;font-weight:800;font-size:var(--fs-sm);font-variant-numeric:tabular-nums}
+.lg-feuille{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;background:color-mix(in srgb,var(--bg) 82%,transparent)}
+.lg-feuille-c{width:100%;max-width:420px;max-height:88vh;overflow:auto;padding:20px 16px;border-radius:var(--r-4);background:var(--surface-1);border:1px solid var(--border);box-shadow:var(--e3);display:flex;flex-direction:column;gap:12px}
+.lg-tete{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.lg-tete b{font-family:var(--pile-titre);font-weight:400;font-size:var(--fs-xl);letter-spacing:1px;text-transform:uppercase}
+.lg-tete span{font-size:var(--fs-xs);color:var(--sub)}
+.lg-legende{display:flex;flex-wrap:wrap;gap:12px;font-size:var(--fs-xs);color:var(--sub)}
+.lg-l-monte::before,.lg-l-descend::before{content:'';display:inline-block;width:8px;height:8px;margin-right:4px;border-radius:var(--r-full);background:var(--green)}
+.lg-l-descend::before{background:var(--red)}
+.lg-liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.lg-ligne{display:flex;align-items:center;gap:8px;padding:8px;border-radius:var(--r-2);border-left:3px solid transparent;background:var(--surface-2);font-size:var(--fs-sm)}
+.lg-ligne.lg-monte{border-left-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--surface-2))}
+.lg-ligne.lg-descend{border-left-color:var(--red);background:color-mix(in srgb,var(--red) 10%,var(--surface-2))}
+.lg-ligne.lg-moi{outline:1px solid var(--text-dim)}
+.lg-p{flex:none;width:24px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sub)}
+.lg-nom{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:600}
+.lg-n{flex:none;font-size:var(--fs-xs);color:var(--sub)}
+.lg-pts{flex:none;font-weight:800;font-variant-numeric:tabular-nums}
+.lg-note,.lg-hors{margin:0;font-size:var(--fs-xs);color:var(--sub)}
+.lg-off{align-self:flex-start;padding:4px 0;background:none;border:0;color:var(--sub);font:inherit;font-size:var(--fs-xs);text-decoration:underline;cursor:pointer}
+
 /* ══ LA MISSION DU JOUR (accueil) : trois cases qui se cochent seules, un coffre ══ */
 .mj-carte{margin:0 0 16px;padding:14px 16px;border-radius:var(--r-4);border:1px solid var(--border);background:var(--surface-1)}
 .mj-tete{display:flex;align-items:baseline;justify-content:space-between;gap:12px}

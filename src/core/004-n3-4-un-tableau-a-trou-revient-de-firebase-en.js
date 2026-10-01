@@ -469,7 +469,7 @@ function _validateAthletePkg(o){
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
-      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
+      ||!!params.get('duel')||params.get('duels')==='1'||params.get('ligue')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
       ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
       ||!!params.get('garmin')||params.get('messages')==='1');
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
@@ -594,6 +594,8 @@ function _validateAthletePkg(o){
     if(params.get('reprise')==='1') window._pendingRepriseOpen=true;
     // ?duels=1 — les push des duels (début, J-2, résultat).
     if(params.get('duels')==='1') window._pendingDuelsOpen=true;
+    // ?ligue=1 — les push des ligues (zone de bascule, résultat du lundi).
+    if(params.get('ligue')==='1') window._pendingLigueOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
     if(params.get('paiements')==='1') window._pendingPaiementsOpen=true;
   }catch(e){}
@@ -800,6 +802,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'xp','xpRang','xpArchive',
   // Les défis bouclés (titre, dates, champion) : recopiés de /defis_resultats.
   'defisReleves',
+  // Les ligues (01/10/2026) : les résultats recopiés du serveur (place,
+  // mouvement, division) et le choix de ne pas y participer. Des classements
+  // et une préférence, comme les défis.
+  'liguesReleves','liguesOff',
   // Le MIROIR du parrainage (code, compteurs, dates des filleuls abonnés) —
   // l'original, qui seul fait foi, vit dans /parrainage/comptes.
   'parrainage',
@@ -2232,6 +2238,8 @@ function routeUser(){
     setTimeout(()=>{ try{ chargerSaisons(true).then(()=>renderSaisonAccueil()); }catch(e){} },1000);}
   if(window._pendingRepriseOpen){ window._pendingRepriseOpen=false;
     setTimeout(()=>{ try{ ouvrirRepriseDouce(); }catch(e){} },1000);}
+  if(window._pendingLigueOpen){ window._pendingLigueOpen=false;
+    setTimeout(()=>{ try{ ouvrirLigue(); }catch(e){} },1000);}
   if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
     setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
   if(window._pendingMessagesOpen){ window._pendingMessagesOpen=false;

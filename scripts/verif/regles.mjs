@@ -558,6 +558,11 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','valeur'],
     ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','metrique'],
     ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','maj'],
+    // LES LIGUES (01/10/2026) : classement, groupes, résultats, tout vient du Worker.
+    ['ligues','$lundi','$g'],
+    ['ligues_public','$lundi','$g'],
+    ['ligues_membres','$k'],
+    ['ligues_resultats','$k'],
   ];
   const fautes=[];
   for(const c of chemins){
@@ -586,11 +591,14 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     if(/method:\s*'(PUT|PATCH|POST)'/.test(source.slice(m.index,m.index+260))) fautes.push("l'app ecrit encore saisons_progres");
   }
   if(/participants\/'\+moi,\s*\{valeur/.test(source)) fautes.push("l'app ecrit encore participants/<moi>/valeur");
+  for(const m of source.matchAll(/'ligues(?:_public|_membres|_resultats)?\/'\+/g)){
+    if(/method:\s*'(PUT|PATCH|POST)'|,'(PUT|PATCH|POST)'/.test(source.slice(m.index,m.index+200))) fautes.push("l'app ecrit dans les ligues");
+  }
   if(fautes.length){
     console.error('\nSCORES ECRITS PAR UN CLIENT :\n  '+fautes.join('\n  '));
     process.exit(1);
   }
-  console.log('scores (defis du Canal, duels, saisons) : aucune ecriture client ; le Worker seul');
+  console.log('scores (defis du Canal, duels, saisons, ligues) : aucune ecriture client ; le Worker seul');
 }
 
 // ══ LE FUSEAU : UN MOTIF, TROIS COPIES (01/10/2026) ═══════════════════════

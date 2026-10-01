@@ -2766,3 +2766,141 @@ function missionProchaineVoir(){
   try{ _rendreMission(u); }catch(e){}
   return true;
 }
+// ══ LES LIGUES (01/10/2026) ═══════════════════════════════════════════════
+//
+// Chaque lundi, le serveur range les athlètes actifs en groupes de 20 par
+// division (BRONZE → LÉGENDE) ; le lundi suivant, le top 5 monte, les 5
+// derniers descendent (cloudflare/src/ligues.js). LE SCORE EST CELUI DU
+// SERVEUR, les volts d'entraînement de la semaine : l'app ne calcule rien,
+// elle LIT ligues_membres/<moi> (sa ligue) puis ligues_public/<lundi>/<groupe>
+// (lisible par les seuls membres du groupe), et n'écrit jamais dans les
+// ligues. Les résultats (ligues_resultats/<moi>) arrivent avec les autres
+// récompenses du serveur (majRecompensesServeur) et datent PROMU et SOMMET.
+// ⚠ Le classement affiché suit la règle du serveur : volts, puis séances,
+//   puis la dernière séance la plus tôt. Hors ligue (coach, opt-out
+//   u.liguesOff, suspension, absent deux semaines) : pas de carte.
+const LIGUES_DIVISIONS=Object.freeze([
+  {cle:'bronze',nom:'BRONZE'},{cle:'acier',nom:'ACIER'},{cle:'voltage',nom:'VOLTAGE'},
+  {cle:'foudre',nom:'FOUDRE'},{cle:'titan',nom:'TITAN'},{cle:'legende',nom:'LÉGENDE'}
+].map(Object.freeze));
+const LIGUE_CACHE_MS=10*60e3;
+let _ligue={lu:0,cle:'',v:null};
+function ligueIndex(cle){ return Math.max(0,LIGUES_DIVISIONS.findIndex(d=>d.cle===cle)); }
+function ligueNomDivision(cle){ return LIGUES_DIVISIONS[ligueIndex(cle)].nom; }
+// Combien montent (et descendent) : 5 à partir de 15 membres, un tiers en dessous.
+function ligueNMonte(n){ return Math.max(0,Math.min(5,Math.floor(n/3))); }
+/** PURE. Le classement du groupe (ligues_public) : [{cle, nom, v, n, der, place}]. */
+function ligueClasser(pub){
+  const l=Object.keys((pub&&typeof pub==='object')?pub:{}).map(k=>{ const x=pub[k]||{};
+    return {cle:k,nom:String(x.nom||k).slice(0,40),v:Math.max(0,Math.round(Number(x.v)||0)),n:Math.max(0,Number(x.n)||0),der:Number(x.der)||0}; });
+  l.sort((a,b)=>(b.v-a.v)||(b.n-a.n)||((a.der||Infinity)-(b.der||Infinity))||(a.cle<b.cle?-1:1));
+  return l.map((x,i)=>Object.assign(x,{place:i+1}));
+}
+/** PURE. L'état de ma ligue : division, lignes avec leur zone, ma place. */
+function ligueEtat(m,pub){
+  if(!m||!m.lundi||!m.groupe) return null;
+  const lignes=ligueClasser(pub), n=lignes.length, q=ligueNMonte(n), d=ligueIndex(m.division);
+  for(const x of lignes) x.zone=(x.place<=q&&d<LIGUES_DIVISIONS.length-1)?'monte':(x.place>n-q&&d>0)?'descend':'';
+  const moi=lignes.find(x=>x.nom===m.nom)||null;
+  return {division:m.division||'bronze',groupe:m.groupe,lundi:m.lundi,lignes,taille:n,q,moi};
+}
+function _lgPlace(p){ return p+(p===1?'er':'e'); }
+/** PURE. La carte de l'accueil, sous le rang. */
+function htmlLigueAccueil(e){
+  if(!e||!e.moi) return '';
+  const E=escapeHtml, z=e.moi.zone;
+  const etat=z==='monte'?'Zone de montée':z==='descend'?'Zone de descente':(e.q?'Le top '+e.q+' monte':'');
+  return '<button type="button" class="lg-carte'+(z?' lg-'+z:'')+'" onclick="ouvrirLigue()" aria-label="Ma ligue '+E(ligueNomDivision(e.division))+', '+_lgPlace(e.moi.place)+' sur '+e.taille+'">'
+    +'<span class="lg-ico" aria-hidden="true">'+icon('bouclier',16)+'</span>'
+    +'<span class="lg-txt"><b>Ligue '+E(ligueNomDivision(e.division))+'</b><span>'+E(_lgPlace(e.moi.place)+' sur '+e.taille+(etat?' · '+etat:''))+'</span></span>'
+    +'<span class="lg-v">'+E(xpFormat(e.moi.v))+' V</span></button>';
+}
+/** PURE. L'écran : la liste, zones de montée et de descente colorées. */
+function htmlLigueListe(e,off){
+  const E=escapeHtml;
+  if(off) return '<div class="lg-hors">Tu ne participes pas aux ligues.</div>'
+    +'<button type="button" class="btn btn-red btn-sm" onclick="liguesBasculer(true)">Rejoindre les ligues</button>';
+  if(!e) return emptyState('','Pas de ligue cette semaine. Une séance, et tu entres dans une ligue de ta division.');
+  const lignes=e.lignes.map(x=>'<li class="lg-ligne'+(x.zone?' lg-'+x.zone:'')+(e.moi&&x.cle===e.moi.cle?' lg-moi':'')+'">'
+    +'<span class="lg-p">'+x.place+'</span><span class="lg-nom">'+E(x.nom)+'</span>'
+    +'<span class="lg-n">'+x.n+' séance'+(x.n>1?'s':'')+'</span><span class="lg-pts">'+E(xpFormat(x.v))+' V</span></li>').join('');
+  return '<div class="lg-tete"><b>Ligue '+E(ligueNomDivision(e.division))+'</b><span>'+e.taille+' athlètes · se clôt dimanche soir</span></div>'
+    +'<div class="lg-legende"><span class="lg-l-monte">Les '+e.q+' premiers montent</span>'
+    +(ligueIndex(e.division)>0?'<span class="lg-l-descend">Les '+e.q+' derniers descendent</span>':'')+'</div>'
+    +'<ol class="lg-liste">'+lignes+'</ol>'
+    +'<p class="lg-note">Le score : tes volts d’entraînement de la semaine, comptés par le serveur. À égalité, le nombre de séances, puis la séance la plus tôt.</p>'
+    +'<button type="button" class="lg-off" onclick="liguesBasculer(false)">Ne plus participer aux ligues</button>';
+}
+async function chargerLigue(force){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach'||u.liguesOff||!SERVEUR_LEGER||!CLOUD||!CLOUD.ok()) return null;
+  const moi=_cleCompte(u);
+  if(!force&&_ligue.cle===moi&&Date.now()-_ligue.lu<LIGUE_CACHE_MS) return _ligue.v;
+  _ligue={lu:Date.now(),cle:moi,v:_ligue.cle===moi?_ligue.v:null};
+  // HORS LIGNE (ou un refus passager) : la dernière ligue connue reste.
+  const m=await _fbJson('ligues_membres/'+moi);
+  if(!m.ok) return _ligue.v;
+  if(!m.v||!m.v.lundi||!m.v.groupe){ _ligue.v=null; return null; }
+  const p=await _fbJson('ligues_public/'+m.v.lundi+'/'+m.v.groupe);
+  if(!p.ok) return _ligue.v;
+  _ligue.v={m:m.v,pub:p.v};
+  return _ligue.v;
+}
+function _ligueEtatCourant(){ const v=_ligue.v; return v?ligueEtat(v.m,v.pub):null; }
+function _rendreLigue(u){
+  const z=document.getElementById('clh-ligue');
+  if(!z) return null;
+  if(!u||u.role==='coach'||u.liguesOff){ z.innerHTML=''; z.hidden=true; return null; }
+  const peindre=()=>{ const e=_ligueEtatCourant(); z.innerHTML=htmlLigueAccueil(e); z.hidden=!z.innerHTML; return e; };
+  const e=peindre();
+  chargerLigue().then(()=>{ try{ peindre(); }catch(er){} }).catch(()=>{});
+  return e;
+}
+function ouvrirLigue(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  document.querySelectorAll('.lg-feuille').forEach(x=>x.remove());
+  const d=document.createElement('div');
+  d.className='lg-feuille'; d.setAttribute('role','dialog'); d.setAttribute('aria-label','Ma ligue');
+  const peindre=()=>{ d.innerHTML='<div class="lg-feuille-c">'+htmlLigueListe(_ligueEtatCourant(),!!u.liguesOff)
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="this.closest(\'.lg-feuille\').remove()">Fermer</button></div>'; };
+  peindre();
+  d.addEventListener('click',e=>{ if(e.target===d) d.remove(); });
+  document.body.appendChild(d);
+  chargerLigue(true).then(()=>{ if(d.isConnected) peindre(); }).catch(()=>{});
+  return true;
+}
+// L'opt-out : u.liguesOff. Le serveur le lit au lundi suivant (hors ligue).
+function liguesBasculer(on){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(on) delete u.liguesOff; else u.liguesOff=true;
+  try{ saveUser(); }catch(e){}
+  try{ toast(on?'Tu rejoins les ligues dès ta prochaine séance.':'Tu ne participes plus aux ligues.','var(--green)'); }catch(e){}
+  try{ _rendreLigue(u); }catch(e){}
+  document.querySelectorAll('.lg-feuille').forEach(x=>x.remove());
+  return true;
+}
+/** PURE (écrit dans u). Les résultats du serveur, recopiés une fois : PROMU, SOMMET. */
+function liguesFusionnerResultats(u,r){
+  if(!u||!r||typeof r!=='object') return 0;
+  const m=(u.liguesReleves&&typeof u.liguesReleves==='object')?u.liguesReleves:{};
+  let n=0;
+  for(const l of Object.keys(r)){
+    const x=r[l];
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(l)||!x||typeof x!=='object'||m[l]) continue;
+    m[l]={division:ligueIndex(x.division)>=0?LIGUES_DIVISIONS[ligueIndex(x.division)].cle:'bronze',vers:LIGUES_DIVISIONS[ligueIndex(x.vers)].cle,
+      place:Math.max(0,Math.round(Number(x.place)||0)),mouvement:['monte','descend','reste','sorti'].indexOf(x.mouvement)>=0?x.mouvement:'reste',
+      taille:Math.max(0,Math.round(Number(x.taille)||0)),at:Number(x.at)||0};
+    n++;
+  }
+  if(n) u.liguesReleves=m;
+  return n;
+}
+/** PURE. PROMU : la 1re montée ; SOMMET : 1er d'une semaine en LÉGENDE. Des dates. */
+function liguesFaits(u){
+  const m=(u&&u.liguesReleves&&typeof u.liguesReleves==='object')?u.liguesReleves:{};
+  const l=Object.keys(m).sort().map(k=>m[k]).filter(x=>x&&Number(x.at)>0);
+  const p=l.find(x=>x.mouvement==='monte'), s=l.find(x=>x.division==='legende'&&x.place===1&&x.mouvement!=='sorti');
+  return {promu:p?Number(p.at):0,sommet:s?Number(s.at):0};
+}

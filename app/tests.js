@@ -50243,9 +50243,10 @@ async function testExercices(){
       if(!Array.isArray(BADGES_ACQUIS)) return _echec('BADGES_ACQUIS n’est pas une liste');
       // Huit familles de quatre paliers, dix uniques (SOUS TENSION, le
       // parcours de démarrage, depuis le 28/09/2026 ; SEPT SUR SEPT, la
-      // mission du jour, depuis le 01/10/2026), dix secrets.
+      // mission du jour, depuis le 01/10/2026 ; PROMU et SOMMET, les ligues,
+      // depuis le 01/10/2026), dix secrets.
       const par=f=>BADGES_ACQUIS.filter(b=>b.famille===f).length;
-      if(par('unique')!==10||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
+      if(par('unique')!==12||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
       for(const fam of BADGE_FAMILLES)
         if(par(fam.cle)!==4) return _echec(fam.cle+' : '+par(fam.cle)+' paliers');
       // Les cinq anciennes clés, telles quelles : elles vivent dans u.badges.
@@ -50262,7 +50263,7 @@ async function testExercices(){
       const ids=BADGES_ACQUIS.map(b=>b.id);
       if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
       if(par('assiette')!==5) return _echec(par('assiette')+' badges de l’assiette');
-      if(ids.length!==57) return _echec(ids.length+' badges au lieu de cinquante-sept');
+      if(ids.length!==59) return _echec(ids.length+' badges au lieu de cinquante-neuf');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -50550,15 +50551,15 @@ async function testExercices(){
         sessions:[],bilans:[],sessions_config:[{active:true}]},new Date(2026,8,2).getTime());
       const d=document.createElement('div'); d.innerHTML=h;
       // 56 depuis le lot N4 (29/09/2026) : les cinq badges de l'assiette ;
-      // 57 avec SEPT SUR SEPT (mission du jour, 01/10/2026).
-      if(h.indexOf('1/57')<0) return _echec('le compteur global ne dit pas 1/57');
+      // 57 avec SEPT SUR SEPT (mission du jour, 01/10/2026), 59 avec PROMU et SOMMET (ligues).
+      if(h.indexOf('1/59')<0) return _echec('le compteur global ne dit pas 1/59');
       const fams=d.querySelectorAll('.bdg-fam');
       if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
       if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
       if(d.querySelectorAll('.bdg-barre').length!==8) return _echec('une famille sans barre');
       const cases=d.querySelectorAll('.bdg-case');
       // + 5 depuis le lot N4 (29/09/2026) : la ligne de l'assiette, entre les uniques et les secrets.
-      if(cases.length!==25) return _echec(cases.length+' cases au lieu de 10 uniques + 5 de l’assiette + 10 secrets');
+      if(cases.length!==27) return _echec(cases.length+' cases au lieu de 12 uniques + 5 de l’assiette + 10 secrets');
       if(d.querySelectorAll('.bdg-grille-assiette .bdg-case').length!==5) return _echec('la ligne de l’assiette');
       if(h.indexOf('01/09/2026')<0) return _echec('la date d’obtention n’est pas montrée');
       // LES SECRETS NE SE DÉVOILENT PAS : ??? et l'indice, jamais la condition.
@@ -50571,11 +50572,11 @@ async function testExercices(){
       if((h.match(/>\?\?\?</g)||[]).length!==10) return _echec('les secrets ne s’affichent pas en ???');
       if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
       // TOUCHER UN BADGE OUVRE SA FICHE.
-      // 8 familles + 25 cases (les 5 de l'assiette depuis le lot N4, SEPT SUR SEPT depuis le 01/10/2026).
-      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==33) return _echec('un badge ne s’ouvre pas');
+      // 8 familles + 27 cases (les 5 de l'assiette depuis le lot N4, SEPT SUR SEPT, PROMU et SOMMET depuis le 01/10/2026).
+      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==35) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      return v.indexOf('0/57')>=0?true:_echec('le dossier vierge ne dit pas 0/57');})());
+      return v.indexOf('0/59')>=0?true:_echec('le dossier vierge ne dit pas 0/59');})());
     ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',(()=>{
       const sv=currentUser;
       try{
@@ -51536,6 +51537,68 @@ async function testExercices(){
         currentUser=Object.assign({},currentUser,{role:'coach'}); _rendreMission(currentUser);
         return z.innerHTML===''?true:_echec('carte chez un coach');
       } finally { window.Date=svD; currentUser=sv; try{ _rendreMission(currentUser); }catch(e){} }})());
+    // ══ LES LIGUES (01/10/2026) ══════════════════════════════════════════
+    const _LG={m:{lundi:'2026-10-12',groupe:'foudre-1',division:'foudre',nom:'Athlète 6'},
+      pub:Object.fromEntries(Array.from({length:20},(_,i)=>['Athlète_'+(i+1),{nom:'Athlète '+(i+1),v:1000-i*10,n:3,der:1}]))};
+    ok('Ligues : le classement du serveur (volts, séances, la séance la plus tôt), les zones',(()=>{
+      const l=ligueClasser({a:{nom:'a',v:500,n:2,der:30},b:{nom:'b',v:500,n:3,der:50},c:{nom:'c',v:500,n:2,der:10},d:{nom:'d',v:900,n:1,der:5}});
+      if(l.map(x=>x.nom).join()!=='d,b,c,a') return _echec('ordre '+l.map(x=>x.nom));
+      if(ligueNMonte(20)!==5||ligueNMonte(15)!==5||ligueNMonte(8)!==2) return _echec('nMonte');
+      const e=ligueEtat(_LG.m,_LG.pub);
+      if(e.taille!==20||e.q!==5||e.moi.place!==6) return _echec('état '+JSON.stringify([e.taille,e.q,e.moi&&e.moi.place]));
+      const z=e.lignes.map(x=>x.zone);
+      if(z.slice(0,5).some(x=>x!=='monte')||z.slice(5,15).some(Boolean)||z.slice(15).some(x=>x!=='descend')) return _echec('zones '+z.join());
+      // En BRONZE, pas de zone de descente ; en LÉGENDE, pas de zone de montée.
+      if(ligueEtat(Object.assign({},_LG.m,{division:'bronze'}),_LG.pub).lignes.some(x=>x.zone==='descend')) return _echec('bronze');
+      if(ligueEtat(Object.assign({},_LG.m,{division:'legende'}),_LG.pub).lignes.some(x=>x.zone==='monte')) return _echec('légende');
+      return ligueEtat({division:'bronze'},_LG.pub)===null?true:_echec('hors ligue');})());
+    ok('Ligues : la carte « Ma ligue » sous le rang, et l’écran (zones colorées, opt-out)',(()=>{
+      const e=ligueEtat(_LG.m,_LG.pub);
+      const h=htmlLigueAccueil(e);
+      if(!/Ligue FOUDRE/.test(h)||!/6e sur 20/.test(h)||!/onclick="ouvrirLigue\(\)"/.test(h)||!/950 V/.test(h)) return _echec('carte : '+h);
+      const e2=ligueEtat(Object.assign({},_LG.m,{nom:'Athlète 3'}),_LG.pub);
+      if(!/lg-monte/.test(htmlLigueAccueil(e2))||!/Zone de montée/.test(htmlLigueAccueil(e2))) return _echec('zone de montée');
+      const d=document.createElement('div'); d.innerHTML=htmlLigueListe(e);
+      if(d.querySelectorAll('.lg-ligne').length!==20||d.querySelectorAll('.lg-ligne.lg-monte').length!==5||d.querySelectorAll('.lg-ligne.lg-descend').length!==5) return _echec('liste');
+      if(!d.querySelector('.lg-ligne.lg-moi')||d.querySelector('.lg-moi .lg-p').textContent!=='6') return _echec('ma ligne');
+      if(!/liguesBasculer\(false\)/.test(d.innerHTML)) return _echec('opt-out');
+      if(!/liguesBasculer\(true\)/.test(htmlLigueListe(null,true))) return _echec('rejoindre');
+      // Les deux couleurs passent par les jetons (vert de la montée, rouge de la descente).
+      const css=[...document.styleSheets].flatMap(s=>{ try{ return [...s.cssRules]; }catch(er){ return []; } }).map(r=>r.cssText).join('\n');
+      if(!/\.lg-ligne\.lg-monte[^}]*var\(--green\)/.test(css)||!/\.lg-ligne\.lg-descend[^}]*var\(--red\)/.test(css)) return _echec('couleurs des zones');
+      // Le rendu dans l'accueil : #clh-ligue, juste sous la bande du rang ; rien chez un coach ni après l'opt-out.
+      const z=document.getElementById('clh-ligue');
+      if(!z) return _echec('#clh-ligue absent');
+      const t=document.querySelector('#s-client-home .clh-tete');
+      if(!t||!(t.compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('place');
+      const sv={u:currentUser,l:_ligue};
+      try{
+        currentUser={role:'athlete',email:'lea@t.fr'};
+        _ligue={lu:Date.now(),cle:_cleCompte(currentUser),v:{m:_LG.m,pub:_LG.pub}};
+        _rendreLigue(currentUser);
+        if(z.hidden||!/Ligue FOUDRE/.test(z.innerHTML)) return _echec('carte non rendue : '+z.innerHTML);
+        currentUser.liguesOff=true; _rendreLigue(currentUser);
+        if(!z.hidden||z.innerHTML) return _echec('carte après opt-out');
+        currentUser={role:'coach',email:'c@t.fr'}; _rendreLigue(currentUser);
+        return (z.hidden&&!z.innerHTML)?true:_echec('carte chez un coach');
+      } finally { currentUser=sv.u; _ligue=sv.l; }})());
+    ok('Ligues : PROMU (1re montée) et SOMMET (1er de LÉGENDE), datés par les résultats du serveur',(()=>{
+      const u={role:'athlete',sessions:[]};
+      const r={'2026-10-05':{division:'bronze',vers:'bronze',place:9,mouvement:'reste',taille:20,at:1000},
+               '2026-10-12':{division:'bronze',vers:'acier',place:2,mouvement:'monte',taille:20,at:2000},
+               '2026-10-19':{division:'legende',vers:'legende',place:1,mouvement:'reste',taille:18,at:3000}};
+      if(liguesFusionnerResultats(u,r)!==3||liguesFusionnerResultats(u,r)!==0) return _echec('fusion');
+      const f=_badgesFaits(u,4000);
+      if(f.promu!==2000||f.sommet!==3000) return _echec(JSON.stringify([f.promu,f.sommet]));
+      if(badgeAcquisDef('promu').test(f)!==2000||badgeAcquisDef('sommet').test(f)!==3000) return _echec('badges');
+      // Un résultat mal formé ne passe pas ; une semaine « sorti » ne fait pas un SOMMET.
+      const v={role:'athlete'}; liguesFusionnerResultats(v,{'x':{mouvement:'monte'},'2026-10-26':{division:'legende',place:1,mouvement:'sorti',at:5}});
+      const g=_badgesFaits(v,10);
+      if(g.promu||g.sommet) return _echec('mal formé ou sorti');
+      // L'app n'écrit jamais dans les ligues : elle lit (GET) ligues_membres et ligues_public.
+      const src=String(chargerLigue)+String(liguesBasculer)+String(ouvrirLigue);
+      if(/'(PUT|PATCH|POST)'/.test(src)) return _echec('écriture client');
+      return CHAMPS_NON_SANTE.indexOf('liguesReleves')>=0&&CHAMPS_NON_SANTE.indexOf('liguesOff')>=0?true:_echec('champs non classés');})());
     ok('Série : les jokers s’affichent en boucliers à côté du compteur',(()=>{
       if(!document.getElementById('clh-streak')) return true;
       _rendreStreak({streakJokers:2,sessions_config:[]},5);
@@ -54184,7 +54247,7 @@ async function testExercices(){
       if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
       const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
       if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
-      if(BADGES_ACQUIS.length!==57) return _echec('la collection n’est plus de cinquante-sept');
+      if(BADGES_ACQUIS.length!==59) return _echec('la collection n’est plus de cinquante-neuf');
       const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
       return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);})());
     ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',(()=>{

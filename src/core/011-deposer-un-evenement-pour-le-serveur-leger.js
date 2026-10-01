@@ -1907,7 +1907,13 @@ async function majRecompensesServeur(o){
     ns=saisonsFusionnerResultats(u,(rs&&rs.ok)?await rs.json():null);
     if(ns) toast('Édition bouclée '+ICO.eclair+' Ton badge t’attend dans ta collection.','var(--green)',4000);
   }catch(e){ ns=0; }
-  const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns;
+  // Les ligues : /ligues_resultats/<moi>, écrit par le Worker le lundi (PROMU, SOMMET).
+  let nl=0;
+  if(SERVEUR_LEGER) try{
+    const rl=await _fbJson('ligues_resultats/'+String(u.email||'').replace(/\./g,','));
+    nl=rl.ok?liguesFusionnerResultats(u,rl.v):0;
+  }catch(e){ nl=0; }
+  const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns+nl;
   if(n){
     try{ saveUser(); }catch(e){}
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI

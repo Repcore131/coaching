@@ -66,7 +66,9 @@ const db_coachs = (M) => (M.coachsAvecAthletes ? M.coachsAvecAthletes() : []);
 const COUT_RELANCE = 24;
 // La fin de séance recalcule les volts ET rafraîchit le profil de relance
 // (sept champs, une écriture) : elle attend d'avoir de quoi faire les deux.
-const COUT_SEANCE = 22;
+// +6 depuis les ligues (01/10/2026) : la ligne du groupe, ou l'entrée d'un
+// compte hors ligue (dossier, index, transaction, pseudo).
+const COUT_SEANCE = 28;
 // Un orphelin PayPal rejoué : un paiement peut ouvrir l'accès et créditer un
 // parrain. S'il manque de budget en route, paypal.js lève AVANT d'écrire, et
 // il reste en file (voir la boucle ci-dessous).
@@ -132,6 +134,16 @@ export function travaux(M) {
     // Les prospects sans réponse depuis 48 h (lot C6) : CHAQUE HEURE, au coach.
     { nom: 'prospects', heure: true, quand: (p) => p.heure >= 8 && p.heure < 21, une: (t) => (M.prospectsRelanceHeure ? M.prospectsRelanceHeure(t) : null) },
     { nom: 'saisons', heure: true, quand: () => true, une: (t) => (M.saisonsHeure ? M.saisonsHeure(t) : null) },
+    // LES LIGUES (01/10/2026) : le lundi 00 h 30, la clôture de la semaine et
+    // les nouveaux groupes (un compte par pas, la répartition à la fin) ; le
+    // samedi 11 h, la zone de bascule ; le lundi 9 h, le résultat. Les deux
+    // derniers ne font qu'enfiler des push (sous-tâches) : pas de fenêtre.
+    { nom: 'ligues', quand: (p) => p.joursem === 1 && apres(p, 0, 30), cles: () => (M.liguesComptes ? M.liguesComptes() : []),
+      un: (k, t, acc) => M.liguesUn(k, t, acc), fin: (acc, t) => M.liguesFin(acc, t), cout: 8 },
+    { nom: 'ligues_sam', quand: (p) => p.joursem === 6 && apres(p, 11, 0) && p.heure < 21, cles: (t) => (M.liguesGroupes ? M.liguesGroupes(M.lundiDe(t)) : []),
+      un: (g, t) => M.liguesSamediUn(g, t), cout: 6 },
+    { nom: 'ligues_lundi', quand: (p) => p.joursem === 1 && apres(p, 9, 0) && p.heure < 21, cles: (t) => (M.liguesGroupes ? M.liguesGroupes(M.lundiDe(t, -1)) : []),
+      un: (g, t) => M.liguesLundiUn(g, t), cout: 4 },
   ];
 }
 
@@ -239,7 +251,7 @@ async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj, enfiles }) 
       if (page.length < PAGE_FILE) etat.fini = true;
     }
   } else {
-    const cles = (await w.cles()).sort();
+    const cles = (await w.cles(t)).sort();
     etat.total = cles.length;
     // LA REPRISE SE FAIT APRÈS LA DERNIÈRE CLÉ TRAITÉE, pas à un index :
     // une liste qui rétrécit entre deux réveils (un duel clos sort de
@@ -274,7 +286,7 @@ async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj, enfiles }) 
     }
     etat.curseur = i;
     if (i >= cles.length) {
-      if (w.fin) await w.fin(etat.acc || {});
+      if (w.fin) await w.fin(etat.acc || {}, t);
       etat.fini = true;
     }
   }

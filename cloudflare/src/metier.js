@@ -35,6 +35,7 @@ import * as RL from './relances.js';
 import * as PR from './prospects.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
+import * as L from './ligues.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -120,6 +121,7 @@ export function lundiParis(t) {
 export const PUSH_PRIORITE = Object.freeze({
   duel_fin: 90, serie: 85, duel_j2: 80,
   defi: 70,                       // les 48 h d'un défi, une saison, un duel qui commence
+  ligue: 65,                      // les ligues (01/10/2026) : la zone de bascule du samedi, le résultat du lundi
   retour: 60, parcours: 60, accueil: 60,
   wrapped: 55, badge: 50, filleul: 50, coach: 50, message: 50,
   reactions: 45, bilan: 40, acces: 40, prospect: 40, relance: 30, sante: 20 });
@@ -1769,6 +1771,9 @@ export function creerMetier(deps) {
         ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies, sem, derJour }, XPS.voltsPublics(r.total))
         : (sem ? { sem, derJour, maj: t } : null);
     }
+    // LES LIGUES : le score de la semaine dans le groupe (une écriture de plus,
+    // dans la même mise à jour), ou l'entrée d'un compte hors ligue à sa séance.
+    if (nouvelles.length) { try { await liguesApresSeance(k, etat, t, maj); } catch (e) { /* les volts passent d'abord */ } }
     await db.ref().update(maj);
     // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : le mois de son parrain.
     // Relu une fois le seuil passé, jusqu'à ce que ce soit réglé (etat.parr) ;
@@ -1787,6 +1792,159 @@ export function creerMetier(deps) {
     // Un lot plein : la suite en sous-tâche.
     if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
     return 'recalcule';
+  }
+
+
+  // ══ LES LIGUES (ligues.js, 01/10/2026) ══════════════════════════════════
+  // LE LUNDI 00 H 30 (Paris) : le travail « ligues » lit chaque compte de
+  // xp_etat (sa semaine close, sa ligue, son dossier), puis, à la fin, CLÔT
+  // la semaine passée (ligues_resultats/<k>/<lundi>) et CRÉE les groupes de la
+  // nouvelle (ligues/<lundi>/<g>, ligues_public, ligues_membres), en UNE
+  // écriture multi-chemins. Les clés de compte ne sortent jamais du Worker :
+  // ligues_prive/<lundi>/<g>/<k> (aucune lecture client) fait le lien ;
+  // ligues/<lundi>/<g>.membres et ligues_public ne portent qu'un nom public
+  // (pseudo vérifié, ou « Athlète N »).
+  // EN SEMAINE : xpRecalculer met à jour la ligne du compte dans
+  // ligues_public, ou fait entrer un compte hors ligue dans un groupe de sa
+  // division (ligues_index, le nombre de membres par groupe, en transaction).
+  const LIGUES_GARDE = 3;                // semaines gardées en base
+  const liguesComptes = () => db.ref('xp_etat').shallow();
+  // Le pseudo public, s'il est bien le sien (pseudos/<clé> → son compte).
+  async function _pseudoVerifie(k, s) {
+    const pp = await _objet(k, s, 'pagePublique');
+    const ps = pp && typeof pp.pseudo === 'string' ? pp.pseudo : '';
+    if (!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(ps)) return '';
+    return (await _val('pseudos/' + ps.replace(/\./g, '__'))) === k ? ps : '';
+  }
+  async function liguesUn(k, t, acc) {
+    if (!/^[^/.#$\[\]]{3,200}$/.test(k)) return 'cle';
+    const lundi = lundiParis(t), prec = L.lundiPlus(lundi, -1), avant = L.lundiPlus(lundi, -2);
+    const [sem, der, debut, m, s0] = await Promise.all([_val('xp_etat/' + k + '/sem'), _val('xp_etat/' + k + '/derniere'),
+      _val('xp_etat/' + k + '/debut'), _val('ligues_membres/' + k), _surface(k)]);
+    const s = s0 || {};
+    const [susp, ps] = await Promise.all([_objet(k, s, 'suspension'), _pseudoVerifie(k, s)]);
+    const w = (sem && sem[prec]) || {}, wa = (sem && sem[avant]) || {};
+    if (!acc.c || typeof acc.c !== 'object') acc.c = {};
+    acc.c[k] = { d: (m && m.division) || 'bronze', g: (m && m.lundi === prec && m.groupe) || '',
+      v: Number(w.v) || 0, n: Number(w.n) || 0, nA: Number(wa.n) || 0, der: Number(der) || 0, debut: Number(debut) || 0,
+      coach: s.role === 'coach' ? 1 : 0, off: s.liguesOff === true ? 1 : 0, susp: susp && susp.actif ? 1 : 0, ps };
+    return 'lu';
+  }
+  // PURE. Les écritures de la clôture et de la répartition (exportée pour les tests).
+  function liguesEcritures(acc, t) {
+    const lundi = lundiParis(t), prec = L.lundiPlus(lundi, -1);
+    const c = (acc && acc.c) || {};
+    const maj = {}, division = {};
+    // 1. LA CLÔTURE de la semaine passée, groupe par groupe.
+    const parGroupe = {};
+    for (const k of Object.keys(c).sort()) if (c[k].g) (parGroupe[c[k].g] = parGroupe[c[k].g] || []).push({ k, division: c[k].d });
+    for (const g of Object.keys(parGroupe)) {
+      const semV = {};
+      for (const m of parGroupe[g]) { const x = c[m.k]; semV[m.k] = { v: x.v, n: x.n, der: x.der, nAvant: x.nA, suspendu: !!x.susp }; }
+      for (const r of L.cloturer({ membres: parGroupe[g] }, semV)) {
+        division[r.k] = r.vers;
+        const res = { division: r.division, vers: r.vers, place: r.place, mouvement: r.mouvement, taille: r.taille, at: t };
+        maj['ligues_resultats/' + r.k + '/' + prec] = res;
+        maj['ligues_prive/' + prec + '/' + g + '/' + r.k + '/r'] = res;
+      }
+    }
+    // 2. LA RÉPARTITION de la semaine qui commence.
+    const comptes = Object.keys(c).map((k) => ({ k, division: division[k] || c[k].d, sem: { [prec]: { n: c[k].n } },
+      debut: c[k].debut, coach: !!c[k].coach, off: !!c[k].off, suspendu: !!c[k].susp }));
+    const places = new Set();
+    for (const gr of L.repartir(comptes, t, lundi)) {
+      const membres = {};
+      gr.membres.forEach((m, i) => {
+        const nom = L.nomPublic(c[m.k].ps, i), cle = L.cleNom(nom);
+        membres[cle] = true; places.add(m.k);
+        maj['ligues_prive/' + lundi + '/' + gr.id + '/' + m.k] = { nom, division: m.division };
+        maj['ligues_membres/' + m.k] = { lundi, groupe: gr.id, division: m.division, nom };
+        maj['ligues_public/' + lundi + '/' + gr.id + '/' + cle] = { nom, v: 0, n: 0, der: 0 };
+      });
+      maj['ligues/' + lundi + '/' + gr.id] = { division: gr.division, membres, n: gr.membres.length };
+      maj['ligues_index/' + lundi + '/' + gr.division + '/' + gr.id] = gr.membres.length;
+    }
+    // Hors ligue cette semaine : la division est gardée pour son retour.
+    for (const k of Object.keys(c)) if (!places.has(k) && division[k]) maj['ligues_membres/' + k] = { division: division[k] };
+    // Les semaines anciennes partent.
+    const vieux = L.lundiPlus(lundi, -LIGUES_GARDE);
+    for (const n of ['ligues', 'ligues_public', 'ligues_prive', 'ligues_index']) maj[n + '/' + vieux] = null;
+    return maj;
+  }
+  async function liguesFin(acc, t) {
+    const maj = liguesEcritures(acc, typeof t === 'number' ? t : now());
+    await db.ref().update(maj);
+    return Object.keys(maj).length;
+  }
+  // EN SEMAINE, après une séance recalculée. Écrit dans `maj` (l'update de
+  // xpRecalculer) ; seule l'entrée dans un groupe prend sa place par transaction.
+  async function liguesApresSeance(k, etat, t, maj) {
+    const lundi = lundiParis(t);
+    const w = (etat && etat.sem && etat.sem[lundi]) || { v: 0, n: 0 };
+    const ligne = (nom) => ({ nom, v: Number(w.v) || 0, n: Number(w.n) || 0, der: Number(etat && etat.derniere) || 0 });
+    const m = await _val('ligues_membres/' + k);
+    if (m && m.lundi === lundi && m.groupe && m.nom) {
+      maj['ligues_public/' + lundi + '/' + m.groupe + '/' + L.cleNom(m.nom)] = ligne(m.nom);
+      return 'maj';
+    }
+    // HORS LIGUE : il y entre à sa séance, dans sa division (BRONZE au début).
+    const s = (await _surface(k)) || {};
+    if (s.role === 'coach' || s.liguesOff === true) return 'hors';
+    const susp = await _objet(k, s, 'suspension');
+    if (susp && susp.actif) return 'hors';
+    const div = (m && m.division) || 'bronze';
+    const index = (await _val('ligues_index/' + lundi)) || {};
+    let choix = L.groupeDArrivee(index, div);
+    let rang = 1;
+    if (choix) {
+      const tx = await db.ref('ligues_index/' + lundi + '/' + choix.division + '/' + choix.g)
+        .transaction((cur) => ((Number(cur) || 0) >= L.TAILLE_MAX ? undefined : (Number(cur) || 0) + 1));
+      if (!tx.committed) choix = null; else rang = Number(tx.snapshot.val()) || 1;
+    }
+    if (!choix) {
+      choix = { g: div + '-' + (Object.keys(index[div] || {}).length + 1), division: div, neuf: true };
+      maj['ligues_index/' + lundi + '/' + div + '/' + choix.g] = 1;
+      maj['ligues/' + lundi + '/' + choix.g + '/division'] = div;
+    }
+    const nom = L.nomPublic(await _pseudoVerifie(k, s), rang - 1), cle = L.cleNom(nom);
+    maj['ligues/' + lundi + '/' + choix.g + '/membres/' + cle] = true;
+    maj['ligues_prive/' + lundi + '/' + choix.g + '/' + k] = { nom, division: div };
+    maj['ligues_membres/' + k] = { lundi, groupe: choix.g, division: div, nom };
+    maj['ligues_public/' + lundi + '/' + choix.g + '/' + cle] = ligne(nom);
+    return 'entre';
+  }
+  // LE SAMEDI 11 H : la zone de bascule, groupe par groupe (deux lectures),
+  // un push en sous-tâche pour chacun de ceux qui y sont.
+  const liguesGroupes = (lundi) => db.ref('ligues_prive/' + lundi).shallow();
+  async function liguesSamediUn(g, t) {
+    const lundi = lundiParis(t);
+    const [pub, prive] = await Promise.all([_val('ligues_public/' + lundi + '/' + g), _val('ligues_prive/' + lundi + '/' + g)]);
+    if (!prive) return 'vide';
+    const semV = {}, membres = [];
+    for (const k of Object.keys(prive)) {
+      const x = prive[k] || {}, l = (pub && pub[L.cleNom(x.nom || '')]) || {};
+      membres.push({ k, division: x.division || 'bronze' });
+      semV[k] = { v: l.v, n: l.n, der: l.der };
+    }
+    const ordre = L.classer(membres, semV), taches = [];
+    ordre.forEach((m, i) => {
+      const zone = L.zoneBascule(i + 1, ordre.length, m.division);
+      if (zone) taches.push(tachePush(m.k, L.messageBascule(i + 1, ordre.length, m.division, zone)));
+    });
+    if (taches.length) await differer(taches);
+    return taches.length;
+  }
+  // LE LUNDI 9 H : le résultat de la semaine close, à chacun de ceux qui ont été classés.
+  async function liguesLundiUn(g, t) {
+    const prec = L.lundiPlus(lundiParis(t), -1);
+    const prive = (await _val('ligues_prive/' + prec + '/' + g)) || {};
+    const taches = [];
+    for (const k of Object.keys(prive)) {
+      const r = prive[k] && prive[k].r;
+      if (r && r.mouvement !== 'sorti') taches.push(tachePush(k, Object.assign({ tag: 'ligue-' + prec }, L.messageResultat(r))));
+    }
+    if (taches.length) await differer(taches);
+    return taches.length;
   }
 
   // ══ LES SCORES ÉCRITS PAR LE SERVEUR (01/10/2026) ═══════════════════════
@@ -2199,5 +2357,6 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache, enfiler, enModeFile, abonnesPage,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes,
+    lundiDe: (t, d) => L.lundiPlus(lundiParis(t), d || 0), liguesComptes, liguesUn, liguesFin, liguesEcritures, liguesApresSeance, liguesGroupes, liguesSamediUn, liguesLundiUn };
 }

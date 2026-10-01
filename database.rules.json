@@ -181,7 +181,7 @@
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension|sept_sur_sept|promu|sommet|assiette_premier_jour|assiette_7|assiette_21|assiette_100|assiette_proteines)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
@@ -1981,6 +1981,21 @@
     },
     "xp_etat": { ".read": false, ".write": false },
     "volts_publics": { "$p": { ".read": true, ".write": false } },
+    // LES LIGUES (01/10/2026) : ecrites par le Worker SEUL (cloudflare/src/
+    // ligues.js, metier.js). Le score est celui du serveur (xp_etat/<k>.sem) :
+    // aucune ecriture client, nulle part. ligues_membres/<k> = {lundi, groupe,
+    // division, nom}, lu par son titulaire ; c est lui qui ouvre la lecture
+    // du groupe (ligues/<lundi>/<g> et ligues_public/<lundi>/<g>) AUX SEULS
+    // MEMBRES de ce groupe, cette semaine-la. ligues_prive (les cles de
+    // compte) et ligues_index ne se lisent pas : ils n ont pas de regle.
+    "ligues_membres": { "$k": { ".read": "auth != null && $k === auth.token.email.replace('.', ',')", ".write": false } },
+    "ligues_resultats": { "$k": { ".read": "auth != null && $k === auth.token.email.replace('.', ',')", ".write": false } },
+    "ligues": { "$lundi": { "$g": {
+      ".read": "auth != null && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/lundi').val() === $lundi && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/groupe').val() === $g",
+      ".write": false } } },
+    "ligues_public": { "$lundi": { "$g": {
+      ".read": "auth != null && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/lundi').val() === $lundi && root.child('ligues_membres/' + auth.token.email.replace('.', ',') + '/groupe').val() === $g",
+      ".write": false } } },
     // LES REACTIONS ENTRE AMIS (lot D, 29/09/2026) : cinq emojis FIXES, jamais
     // de texte. /reactions/<pseudo>/<jour de sa seance>/<pseudo de l envoyeur>.
     // Ecrit par l envoyeur (son pseudo, et il suit le destinataire), une par
