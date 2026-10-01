@@ -205,11 +205,14 @@ test('les constantes du serveur sont celles de l’app (rc-core)', async () => {
   assert.equal(X.XP.seance, 100);
   // Lot N2 : la cible tenue, 40 V par jour, bornée par le nombre de jours.
   assert.equal(X.XP.cible, 40);
-  assert.equal(X.totalServeur(X.etatVide(), { cible: 400 }, { debut: Date.now() - 2 * 864e5 }, Date.now()).cat.cible, 120);
+  // UN SEUL instant : deux Date.now() à une milliseconde d'écart donnaient
+  // 2 jours + 1 ms, arrondis à 3, donc 4 jours (160) — échec au hasard.
+  const t0 = Date.now();
+  assert.equal(X.totalServeur(X.etatVide(), { cible: 400 }, { debut: t0 - 2 * 864e5 }, t0).cat.cible, 120);
   // Lot N4 : la semaine d'assiette, 75 V, une par semaine au plus (comme la semaine d'entraînement).
   assert.equal(X.XP.semaineAssiette, 75);
   assert.match(src, /\bsemaineAssiette:75\b/);
-  assert.equal(X.totalServeur(X.etatVide(), { semaineAssiette: 75 * 9 }, { debut: Date.now() - 10 * 864e5 }, Date.now()).cat.semaineAssiette, 150);
+  assert.equal(X.totalServeur(X.etatVide(), { semaineAssiette: 75 * 9 }, { debut: t0 - 10 * 864e5 }, t0).cat.semaineAssiette, 150);
 });
 
 // ══ LE MOIS DU PARRAIN : LES QUATRE PREMIÈRES SÉANCES DU FILLEUL (lot C) ══
