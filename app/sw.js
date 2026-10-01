@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1762';
+const CACHE = 'repcore-v1763';
 // ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
 // Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
 // (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
@@ -6,7 +6,7 @@ const CACHE = 'repcore-v1762';
 // quota Hosting du plan Spark est de 360 Mo par jour. Désormais l'install
 // cherche d'abord une copie dans les anciens caches repcore-v<n>, du plus
 // récent au plus ancien :
-//   · rc-core.<n>.js, rc-style.<n>.css : MÊME NOM = MÊME CONTENU. Recopié
+//   · rc-core.<n>.js, rc-style.<n>.css, rc-theme.<n>.css : MÊME NOM = MÊME CONTENU. Recopié
 //     s'il existe ; sinon un fetch NORMAL (le cache HTTP immutable suffit) ;
 //   · index.html : toujours cache:'reload' (voir le commentaire du 27/09) ;
 //   · tout le reste (images, polices, vendor/, manifest) : recopié si la copie
@@ -182,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1762.js', './rc-style.1762.css',
+const ASSETS = ['./index.html', './rc-core.1763.js', './rc-style.1763.css', './rc-theme.1763.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -247,7 +247,7 @@ self.addEventListener('install', e => {
         const d = Date.parse((r.headers && r.headers.get('date')) || '');
         return d > 0 && Date.now() - d < STATIC_TTL_MS;
       };
-      const _actifVersionne = a => /\/rc-(core|style)\.\d+\.(js|css)$/.test(a);
+      const _actifVersionne = a => /\/rc-(core|style|theme)\.\d+\.(js|css)$/.test(a);
       await Promise.allSettled(ASSETS.map(async a => {
         if (/index\.html$/.test(a)) {
           // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
@@ -397,7 +397,7 @@ self.addEventListener('activate', e => {
       // Un appareil qui a encore l'ancien index.html en memoire (page ouverte
       // avant la mise a jour) demande encore l'ancien nom ; le lui retirer le
       // laisserait sans code jusqu'au rechargement, hors ligne compris.
-      const _ACTIF = /\/rc-(?:core|style)\.(\d+)\.(?:js|css)$/;
+      const _ACTIF = /\/rc-(?:core|style|theme)\.(\d+)\.(?:js|css)$/;
       const _versionActif = u => { const m = String(u).match(_ACTIF); return m ? Number(m[1]) : null; };
       const _versionsVues = new Set();
       { const m = CACHE.match(/(\d+)/); if (m) _versionsVues.add(Number(m[1])); }

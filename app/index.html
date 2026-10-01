@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1762';
+window.RC_BUILD='1763';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -54,6 +54,12 @@ window.RC_MAJ='2026-10-01';
   if(c==='clair'||(c==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches))
     document.documentElement.setAttribute('data-theme','clair');
 }catch(e){} })();
+// LA FEUILLE DU THEME CLAIR (rc-theme.<build>.css, 01/10/2026) est liee plus
+// bas, APRES rc-style, avec media="not all" : telechargee, jamais appliquee en
+// sombre. Elle n'existe pas encore ici ; le petit script colle a son <link> la
+// bascule a media="all" des que l'analyse l'atteint (rcThemeFeuille).
+window.rcThemeFeuille=function(){ try{ var l=document.getElementById('rc-theme-clair');
+  if(l) l.media=document.documentElement.getAttribute('data-theme')==='clair'?'all':'not all'; }catch(e){} };
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -690,7 +696,14 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1762.css">
+<link rel="stylesheet" href="./rc-style.1763.css">
+<!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
+     ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
+     doit pas appliquer. media="not all" par defaut ; le script suivant le passe
+     a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
+     dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1763.css" media="not all">
+<script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
 <!-- ══════════ L'ÉCRAN D'INSTALLATION ══════════════════════════════════════
@@ -6055,5 +6068,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1762.js"></script>
+<script src="./rc-core.1763.js"></script>
 </body></html>
