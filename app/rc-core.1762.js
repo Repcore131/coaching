@@ -43285,6 +43285,58 @@ function ajouterDepuisBanque(){
     toast('« '+f.nom+' » ajouté ✓','var(--green)');
   },'s-coach-program');
 }
+// ══ LA SILHOUETTE DANS L'ÉDITEUR DU COACH (01/10/2026) ═══════════════════
+// Kevin : « sur la page création du programme par le coach, stylise ça comme
+// les pages athlète, avec les images des muscles ». La même silhouette que la
+// séance de l'athlète (woSrcAvatar, woHtmlZones) : ses muscles PRIMAIRES
+// allumés, de dos quand ils sont tous dorsaux. Le coach voit, en composant, ce
+// que chaque exercice travaille — et un nom que l'app ne reconnaît pas se
+// repère tout de suite : la silhouette reste éteinte.
+// ⚠ PAS la classe .wo-ava : woMajAvatar retire toutes les .wo-ava de la page
+//   sauf la première, et un athlète qui édite sa séance puis la lance aurait
+//   vu la silhouette de la séance partir à la place de celles-ci.
+// L'athlète dont on compose le programme ; pour un modèle, le genre du modèle.
+function _pxPorteur(){
+  try{
+    if(currentUser&&currentUser.role==='coach'&&currentClientId){
+      const c=getOwnedClient(currentClientId); if(c) return c;
+    }
+  }catch(e){}
+  return currentUser;
+}
+function _pxGenreAvatar(){
+  try{
+    if(_progEditorCtx&&_progEditorCtx.mode==='template'&&_progEditorCtx.gender!=null)
+      return isFemale(_progEditorCtx.gender)?'f':'h';
+  }catch(e){}
+  return woGenreAvatar(_pxPorteur());
+}
+function _pxHtmlAvatar(ex){
+  try{
+    const mus=(ex&&ex.name)?woMusclesAvatar(ex,_pxPorteur()):[];
+    const vue=woVueAvatar(mus), g=_pxGenreAvatar();
+    const src=woSrcAvatar(WO_AVA_NIV,g,vue);
+    return '<img class="wo-ava-img" alt="" aria-hidden="true" src="'+src+'">'+woHtmlZones(mus,src,vue,WO_AVA_NIV,g);
+  }catch(e){ return ''; }
+}
+// Les muscles, en toutes lettres : les primaires, puis les secondaires en retrait.
+function _pxHtmlMuscles(ex){
+  try{
+    if(!ex||!ex.name) return '<span class="px-mus-v">Écris le nom de l’exercice : ses muscles s’afficheront ici.</span>';
+    const cls=resoudreMusclesLecture(ex.name,ex,_pxPorteur());
+    const lib=m=>escapeHtml((MUSCLES[m]&&MUSCLES[m].lib)||m);
+    const p=(cls&&cls.p)||[], sec=(cls&&cls.s)||[];
+    if(!p.length&&!sec.length) return '<span class="px-mus-v">Muscles non reconnus pour ce nom.</span>';
+    return '<b>'+p.map(lib).join(' · ')+'</b>'+(sec.length?'<span class="px-mus-s"> + '+sec.map(lib).join(', ')+'</span>':'');
+  }catch(e){ return ''; }
+}
+// Le nom vient de changer : la silhouette et la ligne des muscles suivent.
+function _pxMajMuscles(i){
+  const ex=progEx[i];
+  const a=document.getElementById('px-ava-'+i), m=document.getElementById('px-mus-'+i);
+  if(a) a.innerHTML=_pxHtmlAvatar(ex);
+  if(m) m.innerHTML=_pxHtmlMuscles(ex);
+}
 function renderProgEx(){
   // Lu UNE FOIS pour tout le rendu : peutConsulterBanque relit currentUser a
   // chaque appel, et une carte de dix exercices l'appellerait dix fois.
@@ -43330,21 +43382,30 @@ function renderProgEx(){
       pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 8px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
     return `${lien}
     <div id="px-carte-${i}" data-px-idx="${i}" data-ex-nom="${escapeHtml(ex.name||'')}" style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
-      <!-- Numéro + Nom -->
-      <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
+      <!-- Numéro + Nom, et la silhouette de l'athlète (01/10/2026) : la même
+           tête que sur sa page de séance, nom en rouge et muscles allumés. -->
+      <div class="px-tete">
+      <div class="px-tete-g">
+      <div class="px-tete-l1">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
           ${estTete?`<button type="button" class="px-poignee" aria-label="Déplacer ${escapeHtml(ex.name||'cet exercice')}" data-on-pointerdown="_pxDragDebut(event,${i})">⠿</button>
           <span style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
             <button type="button" class="px-mini" data-on-click="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
             <button type="button" class="px-mini" data-on-click="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
           </span>`:''}
-          <span style="background:#fff2;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 6px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
-          <input value="${escapeHtml(ex.name||'')}" data-on-change="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
+          <span class="px-num">${_repereEx(progEx,i)}</span>
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <button data-on-click="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
           <button data-on-click="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
+      </div>
+      <!-- LE NOM SUR SA LIGNE : dans la rangée des commandes il était coupé à
+           sept lettres sur un téléphone (« DEVELOP »). -->
+      <input value="${escapeHtml(ex.name||'')}" data-on-change="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();_pxMajMuscles(${i})" placeholder="NOM DE L'EXERCICE" class="f-inline px-nom" style="font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;width:100%;box-sizing:border-box">
+      <div class="px-mus" id="px-mus-${i}">${_pxHtmlMuscles(ex)}</div>
+      </div>
+      <div class="px-ava" id="px-ava-${i}">${_pxHtmlAvatar(ex)}</div>
       </div>
       <div style="padding:12px">
         ${_htmlMorphoExercice(ex)}
@@ -89084,18 +89145,41 @@ function renderVolumePrescrit(cfg,user){
         : 'Séries programmées sur les créneaux actifs. Aucune intensité n’est prescrite : c’est un maximum, le volume réellement dur sera au plus égal.'}
     </div>
     ${lignes.map(m=>{
+      // ⚠ LA CARTE DE L'ATHLÈTE, PAS UNE SECONDE MISE EN PAGE (01/10/2026).
+      //   Kevin : « fais cette partie comme celle de l'athlète avec les
+      //   images ». Mêmes classes que renderVolume (.vc, .vc-illus, .vb) :
+      //   l'illustration du muscle, son nom à sa couleur, la barre et le
+      //   statut avec son icône. Le coach lit son programme comme l'athlète
+      //   lira sa semaine.
+      const n=v.muscles[m];
       const rep=reperesEffectifs(u,m);
-      const zo=zoneVolume(v.muscles[m],rep,u);
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
-          <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
+      const zo=zoneVolume(n,rep,u);
+      const illus=_volIllus(m);
+      const mc=(MUSCLES[m]||{}).c||'var(--text)';
+      const _s=(rep&&rep.source)||'table';
+      const src=_s==='table'?'':`<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`;
+      return `<div class="vc${illus?'':' vc-sans-illus'}" data-muscle="${m}" style="--vc-c:${zo?zo.c:'#3a3a3a'}">
+      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" data-on-error="this.remove()">`:''}
+      <div class="vc-corps">
+        <div class="vc-tete">
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${src}</span>
+          <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}</span></span>
         </div>
-        ${_volBarre(m,v.muscles[m],rep,false,u)}
-      </div>`;}).join('')}
+        ${_volBarre(m,n,rep,false,u)}
+        <div class="vc-zone" style="color:${zo?zo.c:'var(--text-faint)'}">
+          ${_volIconeZone(zo)}<span>${zo?zo.lib:'pas de repère établi'}</span>
+        </div>
+      </div>
+    </div>`;}).join('')}
     ${(()=>{ try{ return _htmlRatioPousseeTirage(cfg,u); }catch(e){ return ''; } })()}
     ${v.nonRattaches?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${v.nonRattaches} série${v.nonRattaches>1?'s':''} sur exercice non classé</div>`:''}
-  </div>`;
+  </div>`;  // Le remplissage des barres : posé à width:0, il attend _animerJauges, comme
+  // chez l'athlète. Sans cet appel, la barre restait vide et seul le trait de
+  // repère se voyait.
+  try{
+    z.querySelectorAll('.rc-barre').forEach((b,k)=>b.style.setProperty('--rcv-d',Math.min(k,8)*40+'ms'));
+    _animerJauges(z);
+  }catch(e){}
 }
 
 // ══ R20 — ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ═══════════════════════
@@ -130278,7 +130362,7 @@ rcActions({
   _peDeplacerEtape,_peDragDebut,_peEnregistrer,_peEtapeTexte,_peMajApercu,_peQuitter,_peSet,_peSupprimer,
   _peSupprimerEtape,_perfSetCreneau,_pfRendre,_pfReset,_pfRetourner,_pfSet,_pfUtiliser,_phSet,_poserMotifEcart,
   _prCopierInvitation,_progExChamp,_progExFermer,_progExMax,_progExSemaines,_progExTechnique,_progTempoSaisie,
-  _pxDeplacerParFleche,_pxDragDebut,_quitterFileSignal,_rbCurseurFin,_refuserImportAthlete,
+  _pxDeplacerParFleche,_pxDragDebut,_pxMajMuscles,_quitterFileSignal,_rbCurseurFin,_refuserImportAthlete,
   _rejoindreCompteExistant,_relCle,_remplacerParExo,_renderCaffeineConfirmPanel,_renderCaffeineEmbedded,
   _renderFjDaySummary,_rendreDuelsAccueil,_rendreListeRemplacement,_retirerRelance,_rirBandeChoisir,
   _sauterVersExercice,_selMusclePrim,_selMuscleSec,_setWeekDay,_subOuvrirCode,_supprimerEx,_supprimerExoPerso,
