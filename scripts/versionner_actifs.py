@@ -39,6 +39,12 @@ Le theme clair (app/rc-theme.<build>.css) est renomme avec eux depuis le
 01/10/2026. Ensuite : python3 scripts/theme_clair.py (qui regenere son bloc
 dans rc-theme et y sort toute regle claire laissee dans rc-style).
 
+rc-core EST ASSEMBLE D'ABORD (01/10/2026) : sa source vit dans src/core/
+(scripts/assembler_core.mjs, src/core/LISEZMOI.md). Le premier geste de ce
+script est donc `node scripts/assembler_core.mjs` (avec --verifier sous
+--verifier) ; s'il echoue — rc-core modifie a la main, par exemple — on
+s'arrete avant de renommer quoi que ce soit.
+
 Usage :  python scripts/versionner_actifs.py [--verifier]
          --verifier ne change rien : il dit ce qui serait fait, et les poids.
 """
@@ -47,6 +53,7 @@ import os
 import re
 import sys
 import gzip
+import subprocess
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(RACINE, 'app', 'index.html')
@@ -94,8 +101,19 @@ def bloc(html, ouvrant, fermant, mini):
         i = fin + len(fermant)
 
 
+def assembler_core(verifier):
+    """rc-core depuis src/core/, avant tout renommage. Sans src/core/, rien."""
+    if not os.path.isdir(os.path.join(RACINE, 'src', 'core')):
+        return
+    cmd = ['node', os.path.join(RACINE, 'scripts', 'assembler_core.mjs')] + (['--verifier'] if verifier else [])
+    r = subprocess.run(cmd, cwd=RACINE)
+    if r.returncode != 0:
+        sys.exit('assembler_core.mjs a echoue : rien n\'a ete renomme.')
+
+
 def main():
     verifier = '--verifier' in sys.argv
+    assembler_core(verifier)
     html = lire(INDEX)
     crlf_avant = html.count('\r\n')
     build = build_de(html)

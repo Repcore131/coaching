@@ -43,6 +43,21 @@ jobs:
         with:
           node-version: '22'
 
+      # rc-core EST ASSEMBLE DE src/core/ (01/10/2026, src/core/LISEZMOI.md).
+      # On le regenere, puis on exige que le fichier committe soit IDENTIQUE :
+      # une modification faite dans un seul des deux (src/core/ sans
+      # reassembler, ou rc-core a la main) echoue ici.
+      - name: Assembler rc-core depuis src/core et comparer au fichier committe
+        run: |
+          node scripts/assembler_core.mjs --forcer
+          if [ -n "$(git status --porcelain -- app/)" ]; then
+            git status --short -- app/
+            git diff --stat -- app/
+            echo "::error::app/rc-core.<build>.js differe de l'assemblage de src/core/ : lancer node scripts/assembler_core.mjs et committer les deux."
+            exit 1
+          fi
+          node scripts/assembler_core.mjs --verifier
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &
