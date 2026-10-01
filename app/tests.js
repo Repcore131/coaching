@@ -38433,6 +38433,32 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          // ⚠ 1760 — L'INSTALL DU WORKER NE RETÉLÉCHARGE PLUS TOUT. cache:'reload'
+          // sur les 141 entrées d'ASSETS refaisait partir ~4,8 Mo à chaque build
+          // (quota Hosting Spark : 360 Mo par jour). Il ne reste que pour
+          // index.html ; le reste se recopie des anciens caches (banc :
+          // scripts/verif/worker-actifs.mjs, scène 3).
+          // XHR SYNCHRONE, comme le test de la base alimentaire : une assertion
+          // différée peut trouver window.fetch encore bouchonné par une autre.
+          ok('1760 — sw.js : le handler install ne demande cache:reload QUE pour index.html, et STATIC_TTL_MS vaut 30 jours',(()=>{
+            let src='';
+            try{ const x=new XMLHttpRequest(); x.open('GET','sw.js',false); x.send(); src=String(x.responseText||'').replace(/\r\n/g,'\n'); }catch(e){ return _echec('sw.js illisible'); }
+            if(!src) return _echec('sw.js vide');
+            const d=src.indexOf("self.addEventListener('install'");
+            if(d<0) return _echec('handler install introuvable');
+            const f=src.indexOf('self.addEventListener(',d+10);
+            const install=src.slice(d,f>0?f:undefined);
+            const b=install.indexOf('if (/index\\.html$/.test(a)) {');
+            if(b<0) return _echec('la branche index.html du handler install a disparu');
+            const fb=install.indexOf('\n        }\n',b);
+            const branche=install.slice(b,fb), horsIndex=install.slice(0,b)+install.slice(fb);
+            if(!/cache:\s*'reload'/.test(branche)) return _echec('index.html n’est plus demandé avec cache:reload');
+            if(/cache:\s*'reload'/.test(horsIndex)) return _echec('cache:reload hors de la branche index.html du handler install');
+            if(!/const STATIC_TTL_MS = 30 \* 24 \* 3600 \* 1000;/.test(src)) return _echec('STATIC_TTL_MS absent ou différent de 30 jours');
+            if(!/_copie\(a, _actifVersionne\(a\) \? \(\) => true : _fraiche\)/.test(install)) return _echec('l’install ne cherche plus de copie dans les anciens caches');
+            if(!/r\.ok && r\.status === 200 && \(r\.headers\.get\('content-type'\) \|\| ''\)\.includes\('text\/html'\)/.test(src))
+              return _echec('le fetch d’index.html met en cache sans vérifier 200 et text/html');
+            return true;})());
           // ⚠ 1759 — LES FONCTIONS PORTÉES DE functions/ PARTENT VERS LE WORKER.
           // FONCTIONS_SERVEUR (toujours faux) coupait ouvrirEssai et
           // verifierAchatProgramme. FONCTIONS_WORKER les nomme, et l'app les

@@ -1,4 +1,19 @@
-const CACHE = 'repcore-v1759';
+const CACHE = 'repcore-v1760';
+// ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
+// Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
+// (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
+// premier passage : la page le demandait, puis l'install le redemandait. Le
+// quota Hosting du plan Spark est de 360 Mo par jour. Désormais l'install
+// cherche d'abord une copie dans les anciens caches repcore-v<n>, du plus
+// récent au plus ancien :
+//   · rc-core.<n>.js, rc-style.<n>.css : MÊME NOM = MÊME CONTENU. Recopié
+//     s'il existe ; sinon un fetch NORMAL (le cache HTTP immutable suffit) ;
+//   · index.html : toujours cache:'reload' (voir le commentaire du 27/09) ;
+//   · tout le reste (images, polices, vendor/, manifest) : recopié si la copie
+//     a moins de STATIC_TTL_MS (en-tête 'date' de la réponse rangée), sinon
+//     un fetch normal. Une image réécrite SOUS LE MÊME NOM met donc au plus
+//     trente jours à arriver — PURGE_EXERCICES reste l'outil pour l'imposer.
+const STATIC_TTL_MS = 30 * 24 * 3600 * 1000;
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1759.js', './rc-style.1759.css',
+const ASSETS = ['./index.html', './rc-core.1760.js', './rc-style.1760.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -216,10 +231,34 @@ self.addEventListener('install', e => {
     // faire échouer toute l'installation du Service Worker.
     try {
       const c = await caches.open(CACHE);
-      // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
-      // Pages sert index.html avec max-age=600 : un worker neuf installe dans
-      // ces dix minutes rangeait l'ANCIENNE page dans le cache NEUF.
-      await Promise.allSettled(ASSETS.map(a => c.add(new Request(a, { cache: 'reload' }))));
+      // LES ANCIENS CACHES, du plus récent au plus ancien (STATIC_TTL_MS, en tête).
+      const _num = k => Number((k.match(/(\d+)$/) || [])[1]) || 0;
+      const anciens = [];
+      for (const k of (await caches.keys()).filter(k => /^repcore-v\d+$/.test(k) && k !== CACHE).sort((x, y) => _num(y) - _num(x))) {
+        try { anciens.push(await caches.open(k)); } catch (err) {}
+      }
+      const _copie = async (a, accepter) => {
+        for (const v of anciens) {
+          try { const r = await v.match(a); if (r && r.ok && accepter(r)) return r; } catch (err) {}
+        }
+        return null;
+      };
+      const _fraiche = r => {
+        const d = Date.parse((r.headers && r.headers.get('date')) || '');
+        return d > 0 && Date.now() - d < STATIC_TTL_MS;
+      };
+      const _actifVersionne = a => /\/rc-(core|style)\.\d+\.(js|css)$/.test(a);
+      await Promise.allSettled(ASSETS.map(async a => {
+        if (/index\.html$/.test(a)) {
+          // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
+          // Pages sert index.html avec max-age=600 : un worker neuf installe dans
+          // ces dix minutes rangeait l'ANCIENNE page dans le cache NEUF.
+          return c.add(new Request(a, { cache: 'reload' }));
+        }
+        const vieille = await _copie(a, _actifVersionne(a) ? () => true : _fraiche);
+        if (vieille) return c.put(a, vieille);
+        return c.add(a);
+      }));
     } catch (err) {}
     // Sans séance en cours, comportement inchangé : la mise à jour est
     // immédiate. Avec, on retient la bascule jusqu'à SEANCE_TERMINEE.
@@ -555,9 +594,14 @@ self.addEventListener('fetch', e => {
         // La mise en cache est DÉTACHÉE de la réponse servie : si le quota
         // est saturé, on journalise et on sert quand même. Un put qui échoue
         // ne doit pas casser un affichage qui, lui, fonctionne.
-        const clone = r.clone();
-        caches.open(CACHE).then(c => c.put('./index.html', clone))
-          .catch(err => console.warn('[RepCore SW] put index.html:', err));
+        // SEULE UNE VRAIE PAGE REMPLACE LA COPIE (01/10/2026) : un 503 de
+        // l'hébergeur, une page d'erreur d'un portail captif ou une
+        // redirection ne doivent pas écraser l'index.html hors ligne.
+        if (r.ok && r.status === 200 && (r.headers.get('content-type') || '').includes('text/html')) {
+          const clone = r.clone();
+          caches.open(CACHE).then(c => c.put('./index.html', clone))
+            .catch(err => console.warn('[RepCore SW] put index.html:', err));
+        }
         return r;
       });
       const enCache = await caches.match('./index.html');
