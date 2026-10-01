@@ -233,6 +233,31 @@ await test('seance_fin : tout compte connecté, cible « - » seulement', async 
   assert.equal((await deposer(LEA, { type: 'seance_fin', cible: '-' })).statut, 200);
   assert.equal((await deposer(KEV, { type: 'seance_fin', cible: 'x' })).statut, 401);
 });
+await test('compte_supprime : seulement pour un compte dont le dossier n’existe plus, cible = dest, jamais un chemin', async () => {
+  const PARTI = 'parti@t,fr';
+  // Le dossier existe encore : refusé, pour soi comme pour un autre.
+  assert.equal((await deposer(LEA, { type: 'compte_supprime', dest: K(LEA), cible: K(LEA) })).statut, 401, 'son propre compte, encore là');
+  assert.equal((await deposer(KEV, { type: 'compte_supprime', dest: K(LEA), cible: K(LEA) })).statut, 401, 'le compte d’un autre, encore là');
+  // Le dossier n'existe pas : accepté, avec son verrou sous la clé du déposant.
+  const r = await deposer(KEV, { type: 'compte_supprime', dest: PARTI, cible: PARTI });
+  assert.equal(r.statut, 200, r.corps);
+  assert.equal(JSON.parse((await appel('owner', 'GET', 'evenements_attente/' + K(KEV) + '/compte_supprime/' + PARTI)).corps).id, r.id);
+  assert.equal((await deposer(KEV, { type: 'compte_supprime', dest: PARTI, cible: PARTI })).statut, 401, 'un deuxième tant que le premier attend');
+  // La cible doit être dest ; ni vide, ni « - », ni un chemin.
+  assert.equal((await deposer(KEV, { type: 'compte_supprime', dest: 'autre@t,fr', cible: '-' })).statut, 401, 'cible ≠ dest');
+  assert.equal((await deposer(KEV, { type: 'compte_supprime', cible: '-' })).statut, 401, 'sans dest');
+  assert.notEqual((await deposer(KEV, { type: 'compte_supprime', dest: 'a/b', cible: 'a/b' })).statut, 200, 'un chemin');
+  // Celui qui supprime son compte : son dossier parti, il dépose pour lui-même.
+  const SOI = 'soi@t.fr';
+  await appel('owner', 'PUT', 'users/' + K(SOI), { fname: 'Soi' });
+  assert.equal((await deposer(SOI, { type: 'compte_supprime', dest: K(SOI), cible: K(SOI) })).statut, 401);
+  await appel('owner', 'DELETE', 'users/' + K(SOI));
+  assert.equal((await deposer(SOI, { type: 'compte_supprime', dest: K(SOI), cible: K(SOI) })).statut, 200);
+  // Et les nœuds du Worker restent fermés aux clients : lui seul les efface.
+  await appel('owner', 'PUT', 'worker/profils/' + PARTI, { fname: 'Parti' });
+  assert.equal((await appel(KEV, 'DELETE', 'worker/profils/' + PARTI)).statut, 401);
+  assert.equal((await appel(KEV, 'GET', 'worker/profils/' + PARTI)).statut, 401);
+});
 await test('xp_serveur : écrit par le Worker seul, lu par l’athlète et son coach ; volts_publics lisible par tous', async () => {
   await appel('owner', 'PUT', 'users/' + K(LEA) + '/coachEmailKey', K(KEVIN));
   await appel('owner', 'PUT', 'xp_serveur/' + K(LEA), { total: 5000 });

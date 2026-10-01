@@ -146,6 +146,40 @@ jamais par GitHub.
   elle doit exister (un coach ne vise que ses athlètes, un défi que son Canal). Testé sur l'émulateur :
   `node test/regles-evenements.emu.mjs` (Java et l'émulateur de la Realtime Database requis).
 
+### Un compte supprimé (`compte_supprime`)
+
+Le Worker tient pour chaque compte des nœuds **hors de son dossier**, fermés aux clients : l'app,
+qui efface `users/<clé>`, ne peut pas les effacer. Sans ce geste, le prénom et le statut d'abonnement
+survivaient au compte (RGPD, article 17).
+
+- **Qui dépose** : l'app, événement `{type: 'compte_supprime', dest: <clé>, cible: <clé>}`, sur ses
+  trois parcours : l'athlète ou le coach qui supprime son compte (`requestAccountDeletion` : après
+  l'effacement de son dossier, **avant** celui de son identité, tant qu'il a un jeton), et le coach
+  qui efface le dossier d'un athlète (`CLOUD.supprimerDossier`, deux écrans).
+- **Ce que les règles exigent** : `cible === dest`, non vide, sans « / », et `users/<dest>` **n'existe
+  plus** au moment du dépôt. Un compte vivant ne peut donc pas être visé.
+- **Ce que fait le Worker** (`compteSupprime`, `metier.js`) : il contrôle la clé (vide, ou avec un
+  « / », elle viserait un nœud entier), relit la surface de `users/<clé>` (s'il existe : `compte_existe`,
+  rien n'est écrit), puis efface en **un seul update multi-chemins** :
+
+| Nœud effacé | Ce qu'il portait |
+|---|---|
+| `worker/profils/<clé>` | prénom, série, dernière séance, échéance d'accès, statut, suspension, fuseau |
+| `worker/relances_acces/<clé>` | les relances de fin d'accès déjà envoyées |
+| `push_log/<clé>` | la dernière notification (jour, heure, type) |
+| `push_attente/<clé>` | la notification gardée pour après les heures calmes |
+| `retour_etat/<clé>` | les paliers de relance d'inactivité déjà passés |
+| `xp_etat/<clé>` | l'état du recalcul des volts (records par exercice compris) |
+| `xp_serveur/<clé>` | le total de volts et le rang |
+| `evenements_attente/<clé>` | ses verrous de file (et celui de cet événement, sous la clé du coach s'il vient de lui) |
+
+  La liste est `COMPTE_NOEUDS` (`metier.js`) : **tout nouveau nœud tenu par compte doit la rejoindre**,
+  et ce tableau avec. Deux requêtes par événement. Tests : `test/compte-supprime.test.mjs`, et les
+  règles sur l'émulateur (`test/regles-evenements.emu.mjs`).
+- **Ce que ce geste ne couvre pas** : ce que l'app efface elle-même (`users/`, santé privée,
+  `sante_sync/`, `activite/`, codes d'accès), et un compte supprimé hors ligne ou avant le déploiement
+  de ce type (aucun événement n'est parti : à purger à la main).
+
 ## Les événements saisonniers (`src/saisons.js`)
 
 Des éditions limitées dans `/saisons/<id>` (`/evenements` est la file du

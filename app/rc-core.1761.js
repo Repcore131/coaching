@@ -5423,6 +5423,9 @@ const CLOUD={
       if(!token) return false;
       const url=this._fbUrl.replace('users.json','users/'+key+'.json');
       const r=await fetch(url+'?auth='+token,{method:'DELETE'});
+      // Le dossier parti, le serveur léger efface ce que LUI tient pour ce
+      // compte (profil de relance, journal des push, volts) : voir compteSupprimeSignaler.
+      if(r.ok) compteSupprimeSignaler(key).catch(()=>{});
       return r.ok;
     }catch(e){ console.error('[RepCore] suppression dossier:',e); return false; }
   },
@@ -22773,11 +22776,22 @@ function abonnementSignaler(id,force){
 }
 // PURE. Ce que l'événement vise, pour son verrou (voir evenementPoser) : les
 // règles exigent exactement cette valeur, type par type.
+// UN COMPTE SUPPRIMÉ, DIT AU SERVEUR LÉGER. Il tient pour chaque compte des
+// nœuds que l'app ne peut pas effacer (worker/profils : prénom, statut,
+// échéance ; push_log, push_attente, retour_etat, xp_etat, xp_serveur,
+// worker/relances_acces). À déposer APRÈS l'effacement de users/<clé> (les
+// règles refusent tant que le dossier existe, et le Worker le relit) et, pour
+// son propre compte, AVANT celui de l'identité : il faut encore un jeton.
+function compteSupprimeSignaler(cle){
+  return deposerEvenement({type:'compte_supprime',dest:String(cle||'')});
+}
 function evenementCible(ev){
   const t=ev&&ev.type;
   // Un message privé : l'événement vise le message (les règles vérifient qu'il existe et qui l'a écrit).
   if(t==='message') return /^m[a-z0-9]{8,20}$/.test(String(ev.i||''))?String(ev.i):'';
   if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
+  // Un compte supprimé : l'événement vise la clé du compte parti (les règles vérifient que son dossier n'existe plus).
+  if(t==='compte_supprime') return /^[^.#$\[\]\/]{1,200}$/.test(String(ev.dest||''))?String(ev.dest):'';
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
@@ -127017,6 +127031,10 @@ async function requestAccountDeletion(){
       await fetch(CLOUD._fbUrl.replace('users.json','users/'+safeKey+'.json')
         +(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
+
+    // 1 a. Ce que le serveur léger tient pour ce compte, hors du dossier :
+    //    lui seul peut l'effacer. Attendu : après l'étape 4, plus de jeton.
+    try{ await compteSupprimeSignaler(safeKey); }catch(e){}
 
     // 1 bis. Sante privee. Elle vit HORS de users/ : supprimer le dossier la
     //    laisserait intacte, ce qui serait un manquement RGPD — des donnees

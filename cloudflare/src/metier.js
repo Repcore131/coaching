@@ -212,6 +212,13 @@ export const COUT_PUSH = 8;
 // Le profil de relance (worker/profils/<uid>) : ses champs, et sa durée de vie.
 export const PROFIL_CHAMPS = ['streak', 'streakWeek', 'lastSession', 'fname', 'accessExpiry', 'status', 'suspension', 'tz'];
 export const PROFIL_VALIDITE_MS = 7 * 864e5;
+// Ce que le Worker tient PAR COMPTE, hors du dossier : effacé quand le compte
+// est supprimé (événement compte_supprime). Un nœud par compte ajouté ici
+// ailleurs dans ce fichier doit rejoindre cette liste (et le README).
+export const COMPTE_NOEUDS = ['worker/profils', 'worker/relances_acces', 'push_log', 'push_attente', 'retour_etat', 'xp_etat', 'xp_serveur'];
+// Une clé de compte : non vide, et aucun caractère qu'une clé Firebase refuse
+// (le « / » ferait d'elle un chemin).
+export const cleCompteValide = (k) => typeof k === 'string' && k.length > 0 && k.length <= 200 && !/[.#$\[\]\/\x00-\x1f\x7f]/.test(k);
 export const MAX_CHIFFREMENTS = 5;
 const MARGE = 2;
 
@@ -1324,7 +1331,32 @@ export function creerMetier(deps) {
       if (r !== 'cle') await rafraichirProfil(k, t);
       return r;
     }
+    if (type === 'compte_supprime') return compteSupprime(e);
     return 'type_inconnu';
+  }
+
+  // ══ UN COMPTE SUPPRIMÉ (compte_supprime, 01/10/2026) ═══════════════════
+  // Ce que le Worker tient pour un compte (COMPTE_NOEUDS) vit hors de son
+  // dossier, sous des nœuds fermés aux clients : l'app, qui efface users/<clé>,
+  // ne peut pas les effacer. Sans ce geste, le prénom et le statut
+  // d'abonnement (worker/profils) survivaient au compte.
+  // L'événement ne dit rien que le Worker croie : la clé est contrôlée (une
+  // clé vide ou un « / » viserait un nœud ENTIER), et le dossier est relu,
+  // en surface. Tant qu'il existe, rien n'est effacé.
+  // DEUX REQUÊTES : la surface du dossier, et UN update multi-chemins.
+  async function compteSupprime(e) {
+    const cle = e && e.dest;
+    if (!cleCompteValide(cle)) return 'cle_invalide';
+    if ((await db.ref('users/' + cle).shallow()).length) return 'compte_existe';
+    const maj = {};
+    for (const n of COMPTE_NOEUDS) maj[n + '/' + cle] = null;
+    // Les verrous de file de ce compte portent sa clé, et celui de cet
+    // événement aussi (déposé par un coach, il vit sous la clé du coach).
+    maj['evenements_attente/' + cle] = null;
+    const par = String((e && e.par) || '');
+    if (par !== cle && cleCompteValide(par)) maj['evenements_attente/' + par + '/compte_supprime/' + cle] = null;
+    await db.ref().update(maj);
+    return 'efface';
   }
 
   // ══ LES DUELS (voir duels.js) ═════════════════════════════════════════
