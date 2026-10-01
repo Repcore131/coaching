@@ -40470,6 +40470,32 @@ async function testExercices(){
         return /\(_photo\|\|_nv\)\?'var\(--green\)':'var\(--orange\)'/.test(s)
           ?true:_echec('un exercice sans média reçoit quand même un ✓ vert');})());
 
+      ok('Volume prescrit (coach) : les cartes de l’athlète, illustration du muscle, barre et statut',(()=>{
+        // Kevin, 01/10/2026 : « fais cette partie comme celle de l'athlète avec les images ».
+        const z=document.getElementById('csm-volume');
+        if(!z) return _echec('#csm-volume absent');
+        const av=z.innerHTML;
+        try{
+          const u={id:'vp',email:'vp@t.fr',role:'athlete',gender:'H',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+          renderVolumePrescrit([{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:5,reps:'8'},{name:'SQUAT',series:4,reps:'6'}]},
+            {active:false,name:'Off',exercises:[{name:'CURL BICEPS',series:9,reps:'10'}]}],u);
+          const c=m=>z.querySelector('.vc[data-muscle="'+m+'"]');
+          if(!c('PECTORAUX')) return _echec('pas de carte Pectoraux : '+z.textContent.slice(0,80));
+          const img=c('PECTORAUX').querySelector('img.vc-illus');
+          if(!img||(img.getAttribute('src')||'').indexOf('img/muscles/pectoraux.webp')<0) return _echec('illustration absente');
+          if(!c('PECTORAUX').querySelector('.vb .vb-rempli')||!(parseFloat(c('PECTORAUX').querySelector('.vb-rempli').dataset.barW)>0)) return _echec('barre sans remplissage');
+          if(!c('PECTORAUX').querySelector('.vc-zone .vc-ico')) return _echec('statut sans icône');
+          if(c('PECTORAUX').querySelector('.vc-series').textContent.indexOf('5 séries')<0) return _echec('séries : '+c('PECTORAUX').querySelector('.vc-series').textContent);
+          if(!c('QUADRICEPS')) return _echec('pas de carte Quadriceps');
+          // Un créneau inactif ne compte pas : aucune carte Biceps.
+          if(c('BICEPS')) return _echec('un créneau inactif est compté');
+          // Chaque muscle affiché a son illustration (les 18 de la planche).
+          const sans=[...z.querySelectorAll('.vc')].filter(x=>!x.querySelector('.vc-illus')).map(x=>x.dataset.muscle);
+          if(sans.length) return _echec('sans illustration : '+sans.join(', '));
+          // Le remplissage est bien lancé (appel à _animerJauges).
+          return String(renderVolumePrescrit).indexOf('_animerJauges(z)')>=0?true:_echec('le remplissage n’est pas lancé');
+        } finally { z.innerHTML=av; }})());
+
       ok('Éditeur du coach : chaque exercice porte la silhouette de la page athlète, muscles allumés, et elle suit le nom',(()=>{
         // Kevin, 01/10/2026 : « stylise ça comme les pages athlète avec les images des muscles ».
         const sv=[...document.querySelectorAll('.screen.active')];

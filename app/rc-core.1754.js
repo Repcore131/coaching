@@ -88250,18 +88250,41 @@ function renderVolumePrescrit(cfg,user){
         : 'Séries programmées sur les créneaux actifs. Aucune intensité n’est prescrite : c’est un maximum, le volume réellement dur sera au plus égal.'}
     </div>
     ${lignes.map(m=>{
+      // ⚠ LA CARTE DE L'ATHLÈTE, PAS UNE SECONDE MISE EN PAGE (01/10/2026).
+      //   Kevin : « fais cette partie comme celle de l'athlète avec les
+      //   images ». Mêmes classes que renderVolume (.vc, .vc-illus, .vb) :
+      //   l'illustration du muscle, son nom à sa couleur, la barre et le
+      //   statut avec son icône. Le coach lit son programme comme l'athlète
+      //   lira sa semaine.
+      const n=v.muscles[m];
       const rep=reperesEffectifs(u,m);
-      const zo=zoneVolume(v.muscles[m],rep,u);
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
-          <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
+      const zo=zoneVolume(n,rep,u);
+      const illus=_volIllus(m);
+      const mc=(MUSCLES[m]||{}).c||'var(--text)';
+      const _s=(rep&&rep.source)||'table';
+      const src=_s==='table'?'':`<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`;
+      return `<div class="vc${illus?'':' vc-sans-illus'}" data-muscle="${m}" style="--vc-c:${zo?zo.c:'#3a3a3a'}">
+      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
+      <div class="vc-corps">
+        <div class="vc-tete">
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${src}</span>
+          <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}</span></span>
         </div>
-        ${_volBarre(m,v.muscles[m],rep,false,u)}
-      </div>`;}).join('')}
+        ${_volBarre(m,n,rep,false,u)}
+        <div class="vc-zone" style="color:${zo?zo.c:'var(--text-faint)'}">
+          ${_volIconeZone(zo)}<span>${zo?zo.lib:'pas de repère établi'}</span>
+        </div>
+      </div>
+    </div>`;}).join('')}
     ${(()=>{ try{ return _htmlRatioPousseeTirage(cfg,u); }catch(e){ return ''; } })()}
     ${v.nonRattaches?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${v.nonRattaches} série${v.nonRattaches>1?'s':''} sur exercice non classé</div>`:''}
-  </div>`;
+  </div>`;  // Le remplissage des barres : posé à width:0, il attend _animerJauges, comme
+  // chez l'athlète. Sans cet appel, la barre restait vide et seul le trait de
+  // repère se voyait.
+  try{
+    z.querySelectorAll('.rc-barre').forEach((b,k)=>b.style.setProperty('--rcv-d',Math.min(k,8)*40+'ms'));
+    _animerJauges(z);
+  }catch(e){}
 }
 
 // ══ R20 — ÉVOLUTION ROUVRE SUR LE DERNIER ONGLET ═══════════════════════
