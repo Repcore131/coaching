@@ -12270,6 +12270,13 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .bb-vide,.bb-s{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin:4px 0}
 .bb-btns{display:flex;gap:8px;margin-top:16px}
 .bb-btns .btn{flex:1;margin:0}
+/* ══ LE VOILE DES ECRANS D'ENTREE (s-coach-entry, s-athlete-entry) ═══════
+   Il assombrit les bords de la photo de fond pour que le texte s'y lise. Il
+   vivait en style="" dans index.html, ou le theme clair ne pouvait que le
+   laisser noir : sur fond clair, deux voiles sales autour du contenu. En classe,
+   scripts/theme_clair.py le rend transparent en clair (fond tout en noir
+   translucide, sur un calque position:absolute;inset:0). */
+.vignette-entree{position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 90% 78% at 50% 58%,transparent 22%,rgba(0,0,0,.48) 62%,rgba(0,0,0,.88) 100%)}
 /* ═══ THEME CLAIR : sorti dans rc-theme.<build>.css (scripts/extraire_theme_clair.py). theme_clair.py ne lit que ce qui precede ce repere. ═══ */
 /* LE HALO DES SILHOUETTES dans la carte musculaire a l ecran (27/09/2026) :
    meme lecon que le visuel exporte, le corps au repos se perdait dans le fond. */

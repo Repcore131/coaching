@@ -58,6 +58,12 @@ jobs:
           fi
           node scripts/assembler_core.mjs --verifier
 
+      # LE CONTRASTE DU THEME CLAIR (01/10/2026) : chaque texte genere par
+      # scripts/theme_clair.py tient 4,5:1 (WCAG AA) sur les fonds clairs. Le
+      # mode --verifier ne modifie rien et sort en 1 au premier texte sous le seuil.
+      - name: Verifier le contraste du theme clair
+        run: python3 scripts/theme_clair.py --verifier
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &

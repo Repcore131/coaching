@@ -56659,6 +56659,54 @@ async function testExercices(){
       const css=[...document.styleSheets].map(f=>{ try{ return [...f.cssRules].map(r=>r.cssText).join('\n'); }catch(e){ return ''; } }).join('\n');
       if(css.indexOf('[data-theme="clair"]')<0) return _echec('la surcouche claire manque (scripts/theme_clair.py)');
       return true;})());
+    // ══ LE CONTRASTE DU THEME CLAIR (01/10/2026) ═══════════════════════
+    // scripts/theme_clair.py inversait la luminosite sans mesurer : --sub et
+    // --text-dim tombaient a #787878 (4,0:1 sur #f4f4f4), --text-faint a
+    // #808080 (3,5:1), et --green restait #22c55e en texte (1,8:1). Ces sondes
+    // lisent le BLOC GENERE de la feuille rc-theme, pas ce fichier-ci.
+    const _blocClair=(()=>{
+      try{
+        const l=document.getElementById('rc-theme-clair');
+        const x=new XMLHttpRequest(); x.open('GET',l?l.getAttribute('href'):'',false); x.send();
+        const t=x.status===200?x.responseText:'';
+        const i=t.indexOf('THEME CLAIR — GENERE'), j=t.indexOf('FIN DU THEME CLAIR GENERE');
+        return (i>=0&&j>i)?t.slice(i,j):'';
+      }catch(e){ return ''; }
+    })();
+    const _lumWcag=h=>{ const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4));
+      return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]; };
+    const _ratio=(a,b)=>{ const x=_lumWcag(a), y=_lumWcag(b); return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05); };
+    const _jetonClair=n=>{ const m=new RegExp(':root\\[data-theme="clair"\\]\\{[^}]*?'+n.replace(/-/g,'\\-')+':(#[0-9a-fA-F]{6})[;}]').exec(_blocClair); return m?m[1].toLowerCase():null; };
+    ok('Thème clair : --sub, --text-dim et --text-faint tiennent 4,5:1 sur #f4f4f4 et #ebebeb',(()=>{
+      if(!_blocClair) return _echec('bloc généré introuvable dans rc-theme');
+      for(const n of ['--sub','--text-dim','--text-faint']){
+        const c=_jetonClair(n);
+        if(!c) return _echec(n+' absent du :root clair');
+        for(const f of ['#f4f4f4','#ebebeb']){
+          const k=_ratio(c,f);
+          if(k<4.5) return _echec(n+' = '+c+' : '+k.toFixed(2)+':1 sur '+f);
+        }
+      }
+      return true;})());
+    ok('Thème clair : les couleurs de marque ont une variante texte, et color:var(--green) y passe',(()=>{
+      if(!_blocClair) return _echec('bloc généré introuvable');
+      for(const n of ['--green-text','--orange-text']){
+        const c=_jetonClair(n);
+        if(!c) return _echec(n+' absent du :root clair');
+        if(_ratio(c,'#f4f4f4')<4.5||_ratio(c,'#ebebeb')<4.5) return _echec(n+' = '+c+' sous 4,5:1');
+      }
+      // --green reste vif : il sert aussi de fond et de bordure.
+      if(_jetonClair('--green')!=='#22c55e') return _echec('--green a changé : '+_jetonClair('--green'));
+      return _blocClair.split('}').some(r=>r.indexOf('color:var(--green)"]')>=0&&r.indexOf('{color:var(--green-text)!important')>=0)
+        ?true:_echec('les styles en ligne color:var(--green) ne passent pas à --green-text');})());
+    ok('Thème clair : aucun voile noir rgba(0,0,0,.88) en radial-gradient, et le voile des écrans d’entrée disparaît',(()=>{
+      if(!_blocClair) return _echec('bloc généré introuvable');
+      const regles=_blocClair.split('}').filter(r=>/radial-gradient/.test(r)&&/rgba\(0,\s*0,\s*0,\s*\.88\)/.test(r));
+      if(regles.length) return _echec(regles.length+' règle(s) : '+regles[0].slice(0,120));
+      if(!/:root\[data-theme="clair"\] \.vignette-entree\{background:none\}/.test(_blocClair)) return _echec('.vignette-entree reste peinte en clair');
+      const h=String(window._RC_PAGE_PROD||'');
+      return (h&&!/style="[^"]*rgba\(0,0,0,\.88\) 100%\)/.test(h)&&(h.match(/class="vignette-entree"/g)||[]).length===2)
+        ?true:_echec('les deux voiles d’index.html ne sont pas passés en classe');})());
     ok('Aide : apparence, FAQ dépliable, contact du créateur, date de mise à jour',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlPrefsAide('client','clair','2026-09-26','1598','UA');
       const seg=[...d.querySelectorAll('.prf-theme button')];

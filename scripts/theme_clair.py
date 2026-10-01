@@ -27,10 +27,33 @@ changer) perdrait contre la copie claire d'une regle plus generale.
 LES STYLES EN LIGNE (style="background:#111" ecrit par le code) : un selecteur
 d'attribut [style*="background:#111"] les rattrape, en !important.
 
+LE CONTRASTE EST GARANTI (01/10/2026). Retourner la luminosite ne suffisait
+pas : --sub et --text-dim tombaient sur #787878 (4,0:1 sur #f4f4f4, 3,5:1 sur
+#e4e4e4), --text-faint sur #808080 (3,5:1), pour des textes de 10 a 12 px.
+Chaque couleur au role 'texte' (dont chaque jeton texte de :root) est donc
+ASSOMBRIE, meme teinte, par pas de 0,01 de luminosite, jusqu'a 4,5:1 (WCAG 2.1,
+AA) contre CHACUN des fonds clairs (FONDS_CLAIRS : #f4f4f4, #ebebeb, et les
+surfaces --bg, --surface-0 a --surface-3 et --dark telles qu'elles sortent en
+clair). Les couleurs de marque (--green, --orange, --info, --warning-*,
+--amber, --gluc, --pub-*) gardent leur eclat en fond et en bordure : elles
+recoivent une VARIANTE TEXTE (--green-text, --orange-text…), et
+color:var(--green) devient color:var(--green-text) dans les regles copiees et
+dans les styles en ligne. Un texte clair sur un fond franc (bouton rouge) passe
+au blanc pur s'il n'atteint pas 4,5:1.
+
+LES VOILES NOIRS — un fond dont tous les arrets sont rgba(0,0,0,a) ou
+transparent, sur un calque position:absolute;inset:0 — deviennent transparents
+en clair : sur fond clair, ils ne faisaient que salir (.vignette-entree des
+ecrans d'entree).
+
 CE QUI NE CHANGE PAS : les images, les <canvas> (les visuels partages restent
 aux couleurs de la marque), les @keyframes.
 
-Usage : python3 scripts/theme_clair.py      (apres versionner_actifs.py)
+Usage : python3 scripts/theme_clair.py              (apres versionner_actifs.py)
+        python3 scripts/theme_clair.py --verifier   ne modifie rien. Calcule le
+            contraste de chaque jeton texte (et variante) contre chaque fond
+            clair, et de chaque paire (color, background) resolue des regles
+            generees ; sort en 1 s'il reste un texte sous 4,5:1.
 """
 import colorsys, glob, os, re, sys
 
@@ -118,9 +141,176 @@ def clair(c, role):
     else:
         l2 = l
     if abs(l2 - l) < 1e-6:
+        out = c
+    else:
+        r2, g2, b2 = colorsys.hls_to_rgb(h, l2, s)
+        out = ecrire(r2 * 255, g2 * 255, b2 * 255, a, forme)
+    # UN TEXTE TIENT 4,5:1 SUR TOUS LES FONDS CLAIRS (01/10/2026).
+    return lisible(out) if role == 'texte' else out
+
+
+# ── LE CONTRASTE, WCAG 2.1 ───────────────────────────────────────────────────
+SEUIL = 4.5
+# Les fonds clairs contre lesquels un texte doit tenir. Les deux premiers sont
+# ceux du cahier des charges (--bg et --surface-1 en clair) ; preparer_fonds()
+# y ajoute les autres surfaces, telles que ce script les produit.
+FONDS_CLAIRS = [(244, 244, 244), (235, 235, 235)]
+
+
+def _lin(c):
+    c = c / 255
+    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def luminance(rgb):
+    r, g, b = rgb[:3]
+    return 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+
+
+def _rgba(c):
+    """Une couleur (chaine CSS ou tuple) en (r, g, b, a)."""
+    if isinstance(c, str):
+        return lire(c)
+    return tuple(c) + ((1.0,) if len(c) == 3 else ())
+
+
+def contraste(c1, c2):
+    """Rapport de contraste WCAG 2.1 de c1 (texte) sur c2 (fond opaque). Un
+    texte translucide est d'abord pose sur le fond."""
+    a, b = _rgba(c1), _rgba(c2)
+    if a is None or b is None:
+        return None
+    t = a[3]
+    texte = tuple(a[i] * t + b[i] * (1 - t) for i in range(3))
+    l1, l2 = luminance(texte), luminance(b)
+    return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+
+
+def contraste_min(c, fonds=None):
+    return min(contraste(c, f) for f in (fonds or FONDS_CLAIRS))
+
+
+# Les fonds propres de la regle en cours (regle_claire), quand elle en porte un
+# d'une seule couleur : le texte se juge alors contre LUI, pas contre les fonds
+# clairs de l'application (une page « papier » retournee en sombre, un bandeau).
+FONDS_REGLE = None
+
+
+def lisible(c, fonds=None):
+    """Ajuste c (meme teinte, meme saturation, luminosite par pas de 0,01)
+    jusqu'a SEUIL contre chacun des fonds : FONDS_REGLE s'il est pose, sinon
+    FONDS_CLAIRS. On ASSOMBRIT sur un fond clair, on ECLAIRCIT sur un fond
+    sombre. Rend c tel quel s'il tient deja, ou si ce n'est pas une couleur que
+    ce script sait lire."""
+    fonds = fonds or FONDS_REGLE or FONDS_CLAIRS
+    v = lire(c)
+    if v is None or contraste_min(v, fonds) >= SEUIL:
         return c
-    r2, g2, b2 = colorsys.hls_to_rgb(h, l2, s)
-    return ecrire(r2 * 255, g2 * 255, b2 * 255, a, forme)
+    r, g, b, a = v
+    forme = 'rgb' if c.startswith('rgb') or a < 0.999 else 'hex'
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    fond_clair = sum(luminance(f) for f in fonds) / len(fonds) > 0.18
+    pas = -0.01 if fond_clair else 0.01
+    out = c
+    while 0 < l < 1:
+        l = max(0.0, min(1.0, round(l + pas, 4)))
+        r2, g2, b2 = colorsys.hls_to_rgb(h, l, s)
+        out = ecrire(r2 * 255, g2 * 255, b2 * 255, a, forme)
+        # On juge la couleur ECRITE (arrondie), pas la valeur calculee.
+        if contraste_min(lire(out), fonds) >= SEUIL:
+            break
+    return out
+
+
+def preparer_fonds():
+    """Ajoute aux fonds de reference les surfaces que ce script produit en clair."""
+    for n in ('--bg', '--surface-0', '--surface-1', '--surface-2', '--surface-3', '--dark'):
+        v = JETONS_SOMBRES.get(n)
+        c = lire(clair(v, 'fond')) if v else None
+        if c and c[3] >= 0.999:
+            t = tuple(round(x) for x in c[:3])
+            if t not in FONDS_CLAIRS:
+                FONDS_CLAIRS.append(t)
+
+
+# ── LES VARIANTES TEXTE DES COULEURS DE MARQUE ─────────────────────────────
+# Ces jetons sont des couleurs franches : en fond et en bordure, elles gardent
+# leur eclat ; en TEXTE sur fond clair, --green #22c55e tombait a 1,8:1 (« Ton
+# premier mois est complet », s-athlete-entry). Chacun recoit un jumeau
+# --<nom>-text, assombri jusqu'a SEUIL, et les proprietes de texte des regles
+# copiees (et des styles en ligne) y sont redirigees.
+PREFIXES_VARIANTE = ('--green', '--orange', '--info', '--warning', '--amber', '--gluc', '--pub', '--success')
+# Un jeton de fond, de bordure ou de lueur n'est pas une couleur de texte.
+NON_TEXTE = re.compile(r'-(bg|border|glow|shadow|halo)(-|$)')
+VARIANTES = {}          # nom -> valeur claire de sa variante (couleur, ou 'alias')
+ALIAS = {}              # nom -> le jeton dont il est l'alias (var(--y))
+
+
+def peut_varier(nom):
+    return nom.startswith(PREFIXES_VARIANTE) and not NON_TEXTE.search(nom) and not nom.endswith('-text')
+
+
+def preparer_variantes(css):
+    """Les jetons de marque litteraux de :root, puis, jusqu'a stabilite, tout
+    alias --x: var(--y) (dans :root ou dans une regle) dont --y a une variante."""
+    for n, v in JETONS_SOMBRES.items():
+        if peut_varier(n):
+            VARIANTES[n] = lisible(clair(v, 'fond'))
+
+    def parcourir(c):
+        for tete, corps in blocs(c):
+            if tete.startswith('@'):
+                parcourir(corps)
+                continue
+            for p, v in declarations(corps):
+                m = re.fullmatch(r'var\((--[\w-]+)\)', v.strip())
+                if p.startswith('--') and m and not NON_TEXTE.search(p) and not p.endswith('-text'):
+                    ALIAS.setdefault(p, set()).add(m.group(1))
+    parcourir(css)
+    change = True
+    while change:
+        change = False
+        for p, cibles in ALIAS.items():
+            if p not in VARIANTES and any(c in VARIANTES for c in cibles):
+                VARIANTES[p] = 'alias'
+                change = True
+
+
+def vers_variante(valeur):
+    """var(--green) -> var(--green-text), pour les jetons qui ont une variante."""
+    return re.sub(r'var\((--[\w-]+)', lambda m: 'var(' + m.group(1) + '-text' if m.group(1) in VARIANTES else m.group(0), valeur)
+
+
+def variante_de(p, v):
+    """La declaration de la variante texte d'un jeton --p, ou None."""
+    if p not in VARIANTES:
+        return None
+    m = re.fullmatch(r'var\((--[\w-]+)\)', v.strip())
+    if m and m.group(1) in VARIANTES:
+        return p + '-text:var(' + m.group(1) + '-text)'
+    if VARIANTES[p] != 'alias' and RE_COUL.fullmatch(v.strip()):
+        return p + '-text:' + lisible(clair(v.strip(), 'fond'))
+    return None
+
+
+# ── LES VOILES NOIRS ─────────────────────────────────────────────────────────
+def voile_noir(decl):
+    """Un calque position:absolute;inset:0 dont le fond n'est fait que de noir
+    translucide (et de transparent) : en clair, il ne fait que salir."""
+    d = {p: v.strip() for p, v in decl}
+    if d.get('position') != 'absolute' or d.get('inset') not in ('0', '0px'):
+        return False
+    fond = d.get('background') or d.get('background-image') or ''
+    if 'gradient' not in fond:
+        return False
+    arrets = RE_COUL.findall(fond)
+    if not arrets:
+        return False
+    for a in arrets:
+        v = lire(a)
+        if v is None or v[:3] != (0, 0, 0) or v[3] >= 0.999:
+            return False
+    return True
 
 
 def serialise(valeur):
@@ -248,7 +438,10 @@ def prefixer(sel):
     return ','.join(out)
 
 
-FOND_VIF = re.compile(r'var\(--(red|green|danger|success|orange|amber|warning|gold|info|accent|pub-|cycle|arc-)|#(e02020|b81515|ff3345|22c55e|f97316|f59e0b|f5c518|ff3b30)', re.I)
+# ⚠ var(--red-bg), var(--warning-bg)… NE SONT PAS des fonds francs (01/10/2026) :
+#   en clair, ce sont des roses et des cremes tres pales. Les prendre pour du
+#   rouge laissait du texte blanc dessus (1,00:1 : .pf-chip.active, .choice-opt.sel).
+FOND_VIF = re.compile(r'var\(--(?:red|green|danger|success|orange|amber|warning|gold|info|accent|pub-|cycle|arc-)(?![\w-]*-(?:bg|border)\b)|#(e02020|b81515|ff3345|22c55e|f97316|f59e0b|f5c518|ff3b30)', re.I)
 
 
 def vif(valeur):
@@ -274,16 +467,110 @@ def regle_claire(sel, corps):
         # rang face a une copie claire plus generale (var() de couleur).
         pass
     fond_vif = any(p.startswith('background') and vif(v) for p, v in coul)
+    noir = voile_noir(decl)
+    global FONDS_REGLE
+    FONDS_REGLE = fond_propre(coul)
     lignes = []
     for p, v in coul:
         role = role_de(p)
+        if noir and p in ('background', 'background-image'):
+            lignes.append(p + ':none')
+            continue
         if role == 'texte' and fond_vif:
             # Du blanc sur un bouton rouge reste blanc — y compris quand il est
             # ecrit var(--text), jeton qui, lui, passe au noir en clair.
             v = re.sub(r'var\((--[\w-]+)\)', lambda m: JETONS_SOMBRES.get(m.group(1), m.group(0)) if 'text' in m.group(1) else m.group(0), v)
+            v = blanc_si_mieux(v, [vv for pp, vv in coul if pp.startswith('background')])
             role = 'garder'
+        elif role == 'texte':
+            v = vers_variante(v)
+            v = jeton_sur_fond_propre(v)
         lignes.append(p + ':' + transformer(v, role))
+        var = variante_de(p, v)
+        if var:
+            lignes.append(var)
+    FONDS_REGLE = None
     return prefixer(sel) + '{' + ';'.join(lignes) + '}'
+
+
+def jeton_sur_fond_propre(v):
+    """Un texte ecrit var(--jeton) sur un fond que la regle pose elle-meme :
+    le jeton tient 4,5:1 sur les fonds de l'application, pas forcement sur
+    celui-ci (.sv-tuile-ico : --text-dim sur #dbdbe0, 4,49:1). Il est alors
+    remplace, dans la copie claire de CETTE regle, par sa valeur ajustee."""
+    global FONDS_REGLE
+    m = re.fullmatch(r'var\((--[\w-]+)\)', v.strip())
+    if not FONDS_REGLE or not m:
+        return v
+    nom = m.group(1)
+    base = nom[:-5] if nom.endswith('-text') and nom[:-5] in VARIANTES else nom
+    sombre = JETONS_SOMBRES.get(base)
+    if not sombre:
+        return v
+    propre, FONDS_REGLE = FONDS_REGLE, None
+    try:
+        jeton = clair(sombre, 'fond') if base != nom else clair(sombre, role_de(nom))
+        jeton = lisible(jeton)                       # sa valeur, sur les fonds de l'application
+    finally:
+        FONDS_REGLE = propre
+    c = lire(jeton)
+    if not c or contraste_min(c, propre) >= SEUIL:
+        return v
+    return lisible(jeton, propre)
+
+
+def fond_propre(coul):
+    """Le fond d'UNE couleur opaque que la regle pose elle-meme, tel qu'il sort
+    en clair ; None s'il n'y en a pas (ou si c'est un degrade, une image, un
+    melange : le texte se juge alors contre les fonds de l'application)."""
+    for p, v in coul:
+        if p not in ('background', 'background-color'):
+            continue
+        v = v.replace('!important', '').strip()
+        if re.search(r'gradient|url\(|color-mix|\s', v):
+            return None
+        m = re.fullmatch(r'var\((--[\w-]+)(?:,[^()]*)?\)', v)
+        if m:
+            v = JETONS_SOMBRES.get(m.group(1), '')
+        if not RE_COUL.fullmatch(v or ''):
+            return None
+        c = lire(clair(v, 'fond'))
+        if c and c[3] >= 0.95:
+            return [tuple(round(x) for x in c[:3])]
+        return None
+    return None
+
+
+def couleurs_de_fond(valeurs):
+    """Les couleurs opaques d'un fond (litterales, ou jetons resolus en sombre :
+    les fonds francs ne changent pas en clair)."""
+    out = []
+    for v in valeurs:
+        v = re.sub(r'var\((--[\w-]+)\)', lambda m: JETONS_SOMBRES.get(m.group(1), m.group(0)), v)
+        for m in RE_COUL.finditer(v):
+            c = lire(m.group(0))
+            if c and c[3] >= 0.95:
+                out.append(c[:3])
+    return out
+
+
+def blanc_si_mieux(v, fonds):
+    """Un texte clair sur un fond franc qui n'atteint pas SEUIL : du blanc pur
+    s'il y suffit (#efefef sur le rouge de la marque : 4,2:1 ; #fff : 4,8:1),
+    sinon un quasi-noir s'il fait mieux (le blanc sur le vert #22c55e plafonne
+    a 2,3:1, le noir y atteint 9:1). Les fonds francs ne changent pas en clair :
+    on les lit tels que la feuille sombre les ecrit."""
+    c = lire(v.strip()) if RE_COUL.fullmatch(v.strip()) else None
+    fs = couleurs_de_fond(fonds)
+    if not c or not fs or c[3] < 0.999 or luminance(c) < 0.5:
+        return v
+    k = lambda x: min(contraste(x, f) for f in fs)
+    if k(c) >= SEUIL:
+        return v
+    for cand, val in (((255, 255, 255), '#ffffff'), ((10, 10, 10), '#0a0a0a')):
+        if k(cand) >= SEUIL:
+            return val
+    return '#ffffff' if k((255, 255, 255)) >= k((10, 10, 10)) else '#0a0a0a'
 
 
 JETONS_SOMBRES = {}
@@ -302,6 +589,11 @@ def generer_css(css):
     for tete, corps in blocs(css):
         if tete.startswith('@'):
             nom = tete.split()[0].lower()
+            # L'IMPRESSION N'A PAS DE THEME (01/10/2026) : les regles @media print
+            # sont deja pensees pour le papier blanc ; leur copie « claire » les
+            # retournait en page noire.
+            if nom == '@media' and re.search(r'\bprint\b', tete) and not re.search(r'\bscreen\b', tete):
+                continue
             if nom in ('@media', '@supports', '@container', '@layer'):
                 inner = generer_css(corps)
                 if inner:
@@ -359,14 +651,124 @@ def styles_en_ligne(textes):
         sels = [s.replace('\\', '\\\\') for s in sels]
         prop = 'background-color' if p == 'background' and not re.search(r'gradient|url\(', v) and len(v.split()) == 1 else p
         out.append(','.join(sels) + '{' + prop + ':' + nv + '!important}')
+    # LES COULEURS DE MARQUE EN TEXTE, ECRITES EN LIGNE (01/10/2026) :
+    # style="color:var(--green)" — « Ton premier mois est complet » a 1,8:1.
+    # Elles passent a leur variante texte ; un fond franc sur le meme element
+    # (pas_vif) les laisse telles quelles.
+    jetons = set()
+    for t in textes:
+        for m in RE_LIGNE_VAR.finditer(t):
+            if m.group(1) in VARIANTES:
+                jetons.add(m.group(1))
+    for j in sorted(jetons):
+        cles = ['color:var(%s)' % j, 'color: var(%s)' % j]
+        sels = []
+        for c in cles:
+            sels += ['[style^="%s"]' % c, '[style*=";%s"]' % c, '[style*="; %s"]' % c, '[style*=" %s"]' % c]
+        out.append(','.join(PREFIXE + ' ' + s + pas_vif for s in sels) + '{color:var(%s-text)!important}' % j)
     return '\n'.join(out)
+
+
+# « color:var(--green) » en ligne — et pas « background-color:var(--green) » :
+# le nom de la propriete ne doit pas suivre un tiret ou une lettre.
+RE_LIGNE_VAR = re.compile(r'(?<![\w-])color\s*:\s*var\((--[\w-]+)\)')
 
 
 JETONS = """%s{color-scheme:light;--scrim:rgba(0,0,0,.45)}
 %s img,%s video,%s canvas{color-scheme:normal}""" % (PREFIXE, PREFIXE, PREFIXE, PREFIXE)
 
 
+def preparer(base):
+    """Tout ce que la generation lit avant d'ecrire : les jetons sombres, les
+    fonds clairs de reference, les variantes texte."""
+    propre = sans_commentaires(base)
+    lire_jetons(propre)
+    preparer_fonds()
+    preparer_variantes(propre)
+    return propre
+
+
+# ── --verifier : LE CONTRASTE DE CE QUI SERAIT GENERE ────────────────────────
+def _jetons_clairs(gen):
+    """Les jetons tels que le bloc genere les pose sur :root en clair."""
+    out = {}
+    for tete, corps in blocs(gen):
+        if tete.strip() == PREFIXE:
+            for p, v in declarations(corps):
+                if p.startswith('--'):
+                    out[p] = v.strip()
+    return out
+
+
+def _resoudre(v, jetons, prof=0):
+    """Une valeur en couleur lisible, en suivant les var() (clair, puis sombre)."""
+    v = v.strip().replace('!important', '').strip()
+    m = re.fullmatch(r'var\((--[\w-]+)(?:\s*,\s*([^()]+))?\)', v)
+    if m and prof < 8:
+        cible = jetons.get(m.group(1)) or JETONS_SOMBRES.get(m.group(1)) or m.group(2)
+        return _resoudre(cible, jetons, prof + 1) if cible else None
+    return v if RE_COUL.fullmatch(v) and lire(v) else None
+
+
+def verifier(gen, lignes):
+    jetons = _jetons_clairs(gen)
+    echecs, vus = [], 0
+    # 1. Chaque jeton TEXTE (et chaque variante) contre chaque fond clair.
+    for n, v in sorted(jetons.items()):
+        if not (role_de(n) == 'texte' or (n.endswith('-text') and n[:-5] in VARIANTES)):
+            continue
+        c = _resoudre(v, jetons)
+        if not c:
+            continue
+        vus += 1
+        k = contraste_min(lire(c))
+        if k < SEUIL:
+            pire = min(FONDS_CLAIRS, key=lambda f: contraste(lire(c), f))
+            echecs.append('jeton %s = %s : %.2f:1 sur rgb%s' % (n, c, k, pire))
+    # 2. Chaque regle generee qui porte a la fois color et un fond opaque
+    #    resolvables : le texte contre chacune des couleurs de ce fond.
+    def regles(css):
+        for tete, corps in blocs(css):
+            if tete.startswith('@'):
+                yield from regles(corps)
+            else:
+                yield tete, declarations(corps)
+    paires = 0
+    for tete, decl in regles(gen + '\n' + lignes):
+        d = {}
+        for p, v in decl:
+            d[p] = v
+        if 'color' not in d:
+            continue
+        coul = _resoudre(d['color'], jetons)
+        fond = d.get('background-color') or d.get('background')
+        if not coul or not fond:
+            continue
+        # UN FOND RESOLU, c'est une seule couleur opaque (litterale ou jeton) :
+        # un degrade, une image ou un color-mix n'ont pas UNE couleur a opposer
+        # au texte, et la regle n'est pas jugee ici.
+        f1 = fond.replace('!important', '').strip()
+        if re.search(r'gradient|url\(|color-mix', f1) or len(f1.split()) != 1:
+            continue
+        c = _resoudre(f1, jetons)
+        c = lire(c) if c else None
+        if not c or c[3] < 0.95:
+            continue
+        fonds = [c[:3]]
+        paires += 1
+        k = min(contraste(lire(coul), f) for f in fonds)
+        if k < SEUIL:
+            echecs.append('%s : color %s sur %s : %.2f:1' % (tete[:90], coul, fond.strip()[:60], k))
+    print('verification du theme clair : %d jeton(s) texte, %d paire(s) color/fond resolues, fonds de reference %s'
+          % (vus, paires, ', '.join('#%02x%02x%02x' % f for f in FONDS_CLAIRS)))
+    for e in echecs:
+        print('  SOUS 4,5:1  ' + e)
+    print('%d texte(s) sous 4,5:1.' % len(echecs))
+    return 1 if echecs else 0
+
+
 def main():
+    verif = '--verifier' in sys.argv
     css_f = sorted(glob.glob(os.path.join(RACINE, 'app', 'rc-style.*.css')))
     js_f = sorted(glob.glob(os.path.join(RACINE, 'app', 'rc-core.*.js')))
     if len(css_f) != 1 or len(js_f) != 1:
@@ -379,6 +781,8 @@ def main():
     # le bloc est reecrit A SA PLACE dans rc-theme.
     import extraire_theme_clair as X
     _, f_theme = X.fichiers()
+    html = open(os.path.join(RACINE, 'app', 'index.html'), encoding='utf-8', newline='').read()
+    js = open(js_f[0], encoding='utf-8').read()
     if os.path.exists(f_theme):
         css = open(css_f[0], encoding='utf-8').read()
         # Comme avant l'extraction : seulement ce qui precede la place du bloc.
@@ -386,10 +790,10 @@ def main():
             css = css[:css.index(X.REPERE)]
         t_avant, t_bloc, t_apres = X.morceaux_theme(open(f_theme, encoding='utf-8').read())
         base = (css.rstrip('\n') + '\n' + t_avant.strip('\n') + '\n') if t_avant.strip() else css
-        lire_jetons(sans_commentaires(base))
-        gen = generer_css(sans_commentaires(base))
-        html = open(os.path.join(RACINE, 'app', 'index.html'), encoding='utf-8', newline='').read()
-        lignes = styles_en_ligne([html, open(js_f[0], encoding='utf-8').read()])
+        gen = generer_css(preparer(base))
+        lignes = styles_en_ligne([html, js])
+        if verif:
+            sys.exit(verifier(gen, lignes))
         bloc = '\n'.join([DEBUT, gen, lignes, JETONS, FIN])
         open(f_theme, 'w', encoding='utf-8').write(X.ENTETE + t_avant.strip('\n') + ('\n' if t_avant.strip() else '')
             + bloc + '\n' + t_apres.strip('\n') + ('\n' if t_apres.strip() else ''))
@@ -406,18 +810,17 @@ def main():
     #   effaces a chaque regeneration : le bloc allait jusqu'au bout du fichier.
     j = css.find(FIN, i) if i >= 0 else -1
     apres = css[j + len(FIN):].lstrip('\n') if j >= 0 else ''
-    lire_jetons(sans_commentaires(base))
-    gen = generer_css(sans_commentaires(base))
-    html = open(os.path.join(RACINE, 'app', 'index.html'), encoding='utf-8', newline='').read()
+    gen = generer_css(preparer(base))
     # La feuille en ligne de index.html (polices) n'a pas de couleur a traiter ;
     # ses styles en ligne, si.
-    lignes = styles_en_ligne([html, open(js_f[0], encoding='utf-8').read()])
+    lignes = styles_en_ligne([html, js])
+    if verif:
+        sys.exit(verifier(gen, lignes))
     bloc = '\n'.join([DEBUT, gen, lignes, JETONS, FIN]) + '\n'
     open(css_f[0], 'w', encoding='utf-8').write(base + bloc + ('\n' + apres if apres else ''))
     print('theme clair : %d regles de feuille, %d styles en ligne, %d Ko' % (
         gen.count('{') - gen.count('@'), lignes.count('!important'), len(bloc.encode('utf-8')) // 1024))
     # Premier passage apres le 01/10/2026 : le bloc et les regles claires sortent dans rc-theme.
-    import extraire_theme_clair as X
     X.extraire()
 
 
