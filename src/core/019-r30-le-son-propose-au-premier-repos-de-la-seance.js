@@ -1165,7 +1165,7 @@ function renderProgEx(){
       <div class="px-tete">
       <div class="px-tete-g">
       <div class="px-tete-l1">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
           ${estTete?`<button type="button" class="px-poignee" aria-label="Déplacer ${escapeHtml(ex.name||'cet exercice')}" onpointerdown="_pxDragDebut(event,${i})">⠿</button>
           <span style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
             <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
@@ -1173,14 +1173,21 @@ function renderProgEx(){
           </span>`:''}
           <span class="px-num">${_repereEx(progEx,i)}</span>
         </div>
-        <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <!-- LE NOM À CÔTÉ DU NUMÉRO, EN GRAND ET EN BLANC, et « Remplacer » /
+             « Mettre à jour » sur la MÊME ligne (Kevin, 01/10/2026) : ils
+             vivaient un rang plus bas, sous un titre « Changer l'exercice ».
+             Sur un téléphone la rangée se replie : le nom garde la première
+             ligne, les boutons passent dessous. -->
+        <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();_pxMajMuscles(${i})" placeholder="NOM DE L'EXERCICE" class="f-inline px-nom" style="font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1 1 150px;min-width:0;box-sizing:border-box">
+        ${_bqDispo?`<span class="px-cmd px-cmd-bq">
+          <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
+          <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
+        </span>`:''}
+        <span class="px-cmd px-cmd-ed">
           <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
           <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
       </div>
-      <!-- LE NOM SUR SA LIGNE : dans la rangée des commandes il était coupé à
-           sept lettres sur un téléphone (« DEVELOP »). -->
-      <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();_pxMajMuscles(${i})" placeholder="NOM DE L'EXERCICE" class="f-inline px-nom" style="font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;width:100%;box-sizing:border-box">
       <div class="px-mus" id="px-mus-${i}">${_pxHtmlMuscles(ex)}</div>
       </div>
       <div class="px-ava" id="px-ava-${i}">${_pxHtmlAvatar(ex)}</div>
@@ -1194,11 +1201,7 @@ function renderProgEx(){
              liens video et son execution.
              RESERVE AUX COACHS : la banque leur est fermee cote athlete, et le
              bouton n'apparait donc pas dans SON editeur de seance. -->
-        ${_bqDispo?`<div class="px-grp">Changer l'exercice</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
-          <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
-          </div>
+        ${_bqDispo?`
         <!-- B2.10, L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
              Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
              exercice : sur une seance de huit, le coach faisait defiler huit
@@ -1212,7 +1215,7 @@ function renderProgEx(){
              de JS, et il garde son etat ouvert tant que le coach ne le
              referme pas. -->
         <details style="margin-bottom:8px">
-          <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Quelle différence ?</summary>
+          <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Remplacer ou mettre à jour : quelle différence ?</summary>
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding:6px 0 0"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
         </details>`:''}
         <!-- SÉRIES / RÉPÉTITIONS / REPOS, TROIS CASES DE MÊME LARGEUR.
