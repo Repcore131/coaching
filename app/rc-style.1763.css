@@ -5475,6 +5475,24 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .pe-mini:disabled{opacity:.3;cursor:default}
 .pe-mini.pe-suppr{width:26px;height:38px;font-size:var(--fs-sm);color:var(--red-light)}
 .pe-saisi{opacity:.55;outline:2px dashed var(--red);outline-offset:3px;border-radius:var(--r-2)}
+/* ══ L'EN-TÊTE D'UN EXERCICE DANS L'ÉDITEUR DU COACH (01/10/2026) ══════════
+   La tête de la page de séance de l'athlète : fond sombre, nom en rouge, la
+   silhouette à droite avec les muscles allumés. Le bandeau rouge plein est
+   parti — c'est le NOM qui porte la couleur, comme chez l'athlète (.wo-nom). */
+.px-tete{display:flex;align-items:stretch;gap:10px;padding:10px 10px 8px 14px;
+  background:linear-gradient(180deg,#161616,#0c0c0c);border-bottom:1px solid var(--border)}
+.px-tete-g{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
+.px-tete-l1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.px-num{background:var(--red);color:#fff;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 6px;
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0}
+.px-nom{color:#ff2020;font-weight:800;min-width:0;font-size:var(--fs-md);padding:2px 0}
+.px-nom::placeholder{color:rgba(255,32,32,.45)}
+.px-mus{font-size:var(--fs-xs);line-height:1.45;color:var(--sub)}
+.px-mus b{color:var(--text-strong);font-weight:800;letter-spacing:.2px}
+.px-mus-s{color:var(--text-faint)}
+.px-mus-v{color:var(--text-faint);font-style:italic}
+/* La silhouette : mêmes images et même calque que .wo-ava (wo-ava-img, wo-ava-z). */
+.px-ava{position:relative;flex:0 0 auto;height:92px;min-width:34px;display:flex;align-items:flex-end;justify-content:center}
 .px-poignee{background:#fff2;border:none;color:var(--text);font-size:var(--fs-lg);line-height:1;padding:0;border-radius:var(--r-2);cursor:grab;flex-shrink:0;width:30px;height:34px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
 .px-poignee:active{cursor:grabbing;background:#fff4}
 /* 22x12 etait intouchable au doigt. Deux fleches empilees ne peuvent pas

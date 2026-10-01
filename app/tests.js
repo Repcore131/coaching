@@ -41036,6 +41036,68 @@ async function testExercices(){
         return /\(_photo\|\|_nv\)\?'var\(--green\)':'var\(--orange\)'/.test(s)
           ?true:_echec('un exercice sans média reçoit quand même un ✓ vert');})());
 
+      ok('Volume prescrit (coach) : les cartes de l’athlète, illustration du muscle, barre et statut',(()=>{
+        // Kevin, 01/10/2026 : « fais cette partie comme celle de l'athlète avec les images ».
+        const z=document.getElementById('csm-volume');
+        if(!z) return _echec('#csm-volume absent');
+        const av=z.innerHTML;
+        try{
+          const u={id:'vp',email:'vp@t.fr',role:'athlete',gender:'H',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+          renderVolumePrescrit([{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:5,reps:'8'},{name:'SQUAT',series:4,reps:'6'}]},
+            {active:false,name:'Off',exercises:[{name:'CURL BICEPS',series:9,reps:'10'}]}],u);
+          const c=m=>z.querySelector('.vc[data-muscle="'+m+'"]');
+          if(!c('PECTORAUX')) return _echec('pas de carte Pectoraux : '+z.textContent.slice(0,80));
+          const img=c('PECTORAUX').querySelector('img.vc-illus');
+          if(!img||(img.getAttribute('src')||'').indexOf('img/muscles/pectoraux.webp')<0) return _echec('illustration absente');
+          if(!c('PECTORAUX').querySelector('.vb .vb-rempli')||!(parseFloat(c('PECTORAUX').querySelector('.vb-rempli').dataset.barW)>0)) return _echec('barre sans remplissage');
+          if(!c('PECTORAUX').querySelector('.vc-zone .vc-ico')) return _echec('statut sans icône');
+          if(c('PECTORAUX').querySelector('.vc-series').textContent.indexOf('5 séries')<0) return _echec('séries : '+c('PECTORAUX').querySelector('.vc-series').textContent);
+          if(!c('QUADRICEPS')) return _echec('pas de carte Quadriceps');
+          // Un créneau inactif ne compte pas : aucune carte Biceps.
+          if(c('BICEPS')) return _echec('un créneau inactif est compté');
+          // Chaque muscle affiché a son illustration (les 18 de la planche).
+          const sans=[...z.querySelectorAll('.vc')].filter(x=>!x.querySelector('.vc-illus')).map(x=>x.dataset.muscle);
+          if(sans.length) return _echec('sans illustration : '+sans.join(', '));
+          // Le remplissage est bien lancé (appel à _animerJauges).
+          return String(renderVolumePrescrit).indexOf('_animerJauges(z)')>=0?true:_echec('le remplissage n’est pas lancé');
+        } finally { z.innerHTML=av; }})());
+
+      ok('Éditeur du coach : chaque exercice porte la silhouette de la page athlète, muscles allumés, et elle suit le nom',(()=>{
+        // Kevin, 01/10/2026 : « stylise ça comme les pages athlète avec les images des muscles ».
+        const sv=[...document.querySelectorAll('.screen.active')];
+        const svEx=progEx, svU=currentUser, svC=currentClientId, svCtx=_progEditorCtx;
+        try{
+          currentUser={id:'C1',email:'c@t.fr',role:'coach'}; currentClientId=null; _progEditorCtx={mode:'clientProgram'};
+          progEx=[{name:'DEVELOPPE COUCHE',series:4,reps:'8',repos:'2 min'},{name:'TIRAGE VERTICAL',series:4,reps:'10',repos:'90 s'},{name:'',series:3,reps:'10',repos:'1 min'}];
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          document.getElementById('s-coach-program').classList.add('active');
+          renderProgEx();
+          const c=i=>document.querySelector('#prog-exercises [data-px-idx="'+i+'"]');
+          const src=i=>((c(i).querySelector('.px-ava img.wo-ava-img')||{getAttribute:()=>''}).getAttribute('src')||'');
+          if(src(0).indexOf('icons/avatar/n7-h.png')<0) return _echec('silhouette de face absente : '+src(0));
+          if(!c(0).querySelectorAll('.px-ava .wo-ava-z polygon').length) return _echec('aucun muscle allumé sur le développé couché');
+          if(c(0).querySelector('.px-mus').textContent.indexOf('Pectoraux')<0) return _echec('muscles non écrits : '+c(0).querySelector('.px-mus').textContent);
+          // Un exercice purement dorsal : la silhouette de dos.
+          if(src(1).indexOf('n7-h-dos.png')<0) return _echec('le tirage n’est pas vu de dos : '+src(1));
+          // Sans nom : la silhouette éteinte, et la ligne qui dit quoi faire.
+          if(c(2).querySelectorAll('.px-ava polygon').length||c(2).querySelector('.px-mus').textContent.indexOf('Écris le nom')<0) return _echec('carte sans nom');
+          // Le nom reste le PREMIER champ de la carte, et le changer met la silhouette à jour.
+          const nom=c(2).querySelector('input');
+          if(!nom.classList.contains('px-nom')) return _echec('le premier champ n’est plus le nom');
+          nom.value='squat'; nom.dispatchEvent(new Event('change'));
+          if(progEx[2].name!=='SQUAT'||!c(2).querySelectorAll('.px-ava polygon').length||c(2).querySelector('.px-mus').textContent.indexOf('Quadriceps')<0)
+            return _echec('la silhouette ne suit pas le nom : '+c(2).querySelector('.px-mus').textContent);
+          // Jamais la classe .wo-ava : woMajAvatar retire toutes les .wo-ava sauf la première.
+          if(document.querySelector('#prog-exercises .wo-ava')) return _echec('.wo-ava dans l’éditeur');
+          // Un modèle « femme » : la silhouette féminine.
+          _progEditorCtx={mode:'template',gender:'F'};
+          return _pxGenreAvatar()==='f'?true:_echec('genre du modèle : '+_pxGenreAvatar());
+        } finally {
+          progEx=svEx; currentUser=svU; currentClientId=svC; _progEditorCtx=svCtx;
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
+
       ok('UN SEUL CHAMP « RIR CIBLE », et c\'est un menu deroulant',(()=>{
         // Defaut introduit par N6.3, signale par Kevin : un champ en saisie
         // libre existait DEJA, ecrivant ex.rir ; N6.3 en a ajoute un second, en
