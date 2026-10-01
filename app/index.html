@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1771';
+window.RC_BUILD='1772';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -280,8 +280,8 @@ if('serviceWorker' in navigator){
       b.id='rc-maj-bandeau';
       b.setAttribute('role','status');
       b.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;'
-        +'display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;'
-        +'background:var(--surface-1);border:1px solid var(--red);box-shadow:0 10px 30px rgba(0,0,0,.6);'
+        +'display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-3);'
+        +'background:var(--surface-1);border:1px solid var(--red);box-shadow:var(--e3);'
         +'font-family:Montserrat,sans-serif;color:var(--text);font-size:13px;line-height:1.45;'
         +'max-width:520px;margin:0 auto';
       const t=document.createElement('span');
@@ -289,7 +289,7 @@ if('serviceWorker' in navigator){
       t.textContent='Une nouvelle version de RepCore est disponible.';
       const a=document.createElement('button');
       a.type='button';
-      a.style.cssText='flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
+      a.style.cssText='flex:0 0 auto;border:none;border-radius:var(--r-2);cursor:pointer;'
         +'background:var(--red);color:#fff;font-family:Montserrat,sans-serif;'
         +'font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;'
         +'padding:10px 14px;min-height:40px';
@@ -690,7 +690,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Le halo sur son propre calque, sous le logo : rendu equivalent aux trois
          drop-shadow d'avant, aucun flou recalcule par image. -->
     <div style="position:relative;display:flex;justify-content:center;align-items:center">
-      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--red) 55%,transparent),transparent 70%)"></div>
+      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:var(--r-full);pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--red) 55%,transparent),transparent 70%)"></div>
       <div id="splash-logo-anim" style="position:relative">
         <img src="./icons/logo.webp" style="display:block;width:240px;height:240px">
       </div>
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1771.css">
+<link rel="stylesheet" href="./rc-style.1772.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1771.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1772.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3383,7 +3383,7 @@ const COACH_PHOTO='icons/coach.jpg';
          l'athlète a souvent ses écouteurs. Il compte surtout sur iOS, où
          Safari n'expose pas navigator.vibrate : sans lui, la fin du repos n'y
          émet aucun signal. État posé par ouvrirReglagesAthlete. -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
       <label for="cr-son-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
         <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()"
           style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
@@ -3399,7 +3399,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- L'ÉCRAN ALLUMÉ PENDANT LA SÉANCE (Wake Lock). Activé par défaut : un
          écran qui s'éteint pendant le repos gèle le minuteur, et la vibration
          de fin n'arrive qu'au rallumage. État posé par _majSonReglages. -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
       <label for="cr-ecran-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
         <input type="checkbox" id="cr-ecran-case" onchange="basculerEcranAllume()" checked
           style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
@@ -3425,7 +3425,7 @@ const COACH_PHOTO='icons/coach.jpg';
          revenue sur l'ecran « QUEL BILAN ? », avec le compte a rebours
          (Kevin, 17/09/2026). -->
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mes données</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
       <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="exporterMesDonnees()">Télécharger tout ce que RepCore sait de moi</button>
@@ -3656,7 +3656,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px color-mix(in srgb,var(--red) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:var(--r-3);padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px color-mix(in srgb,var(--red) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:8px">Entraînement</div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
@@ -3721,7 +3721,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
-      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,var(--bg));border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,var(--bg));border:1px solid #1c4266;border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
@@ -3771,7 +3771,7 @@ const COACH_PHOTO='icons/coach.jpg';
            demeure pour que ses appelants continuent de la trouver. -->
       <div id="clh-retour-zone" style="display:none;margin-bottom:16px"></div>
       <!-- 1er BILAN EN ATTENTE -->
-      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:6px;display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px;color:var(--text)">Questionnaire de départ</div>
         <!-- Le texte disait quoi faire, pas ce que ça rapporte. Depuis que le
@@ -6092,5 +6092,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1771.js"></script>
+<script src="./rc-core.1772.js"></script>
 </body></html>

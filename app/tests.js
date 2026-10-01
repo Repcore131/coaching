@@ -56817,6 +56817,36 @@ async function testExercices(){
       if(nCss) return _echec(nCss+' #E02020 dans la feuille hors :root');
       if(horsDecl.length) return _echec(horsDecl.length+' ligne(s) de rc-core : '+horsDecl[0].trim().slice(0,90));
       return (lignes.length===1&&typeof ROUGE_MARQUE==='string'&&ROUGE_MARQUE.toUpperCase()==='#E02020')?true:_echec('ROUGE_MARQUE absent ou déclaré '+lignes.length+' fois');})());
+    // ══ RAYONS ET ÉLÉVATIONS SUR UNE ÉCHELLE (01/10/2026) ════════════════
+    // scripts/rayons.py cale les border-radius sur --r-1..--r-4 et --r-full, et
+    // les ombres noires simples sur --e1..--e3. Les anciennes familles (--elev-*,
+    // --el-*) et les alias de rayon (--r-sm, --r-lg) n'existent plus.
+    ok('Une seule famille d’élévations : aucune déclaration ni usage de --elev- ou --el- ; cinq rayons dans :root',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const lien=document.querySelector('link[rel="stylesheet"][href*="rc-style."]');
+      const scr=document.querySelector('script[src*="rc-core."]');
+      const css=lien?lire(lien.getAttribute('href')):'', js=scr?lire(scr.getAttribute('src')):'';
+      if(!css||!js) return _echec('feuille ou rc-core illisible');
+      const sansComm=css.replace(/\/\*[\s\S]*?\*\//g,'');
+      const decl=sansComm.match(/--(elev|el)-[\w-]*\s*:/g);
+      if(decl) return _echec(decl.length+' déclaration(s) : '+decl[0]);
+      const usages=(sansComm+js).match(/var\(--(elev|el)-[\w-]*\)/g);
+      if(usages) return _echec(usages.length+' usage(s) : '+usages[0]);
+      const root=(sansComm.match(/(^|\n):root\{([\s\S]*?)\n\}/)||[])[2]||'';
+      const rayons=(root.match(/--r-[\w-]+(?=\s*:)/g)||[]).sort().join();
+      return rayons==='--r-1,--r-2,--r-3,--r-4,--r-full'?true:_echec('rayons de :root : '+rayons);})());
+    ok('.btn et .btn-sm ont le même rayon (--r-3) ; .btn-red est un rouge plat',(()=>{
+      const d=document.createElement('div'); d.style.cssText='position:absolute;left:-9999px';
+      d.innerHTML='<button class="btn">a</button><button class="btn btn-sm">b</button><button class="btn btn-red">c</button>';
+      document.body.appendChild(d);
+      try{
+        const [a,b,c]=[...d.children].map(x=>getComputedStyle(x));
+        const r3=getComputedStyle(document.documentElement).getPropertyValue('--r-3').trim();
+        if(a.borderTopLeftRadius!==b.borderTopLeftRadius) return _echec('.btn '+a.borderTopLeftRadius+' / .btn-sm '+b.borderTopLeftRadius);
+        if(a.borderTopLeftRadius!==r3) return _echec('.btn '+a.borderTopLeftRadius+' au lieu de --r-3 ('+r3+')');
+        if(c.backgroundImage!=='none') return _echec('.btn-red garde un dégradé : '+c.backgroundImage.slice(0,60));
+        return c.boxShadow&&c.boxShadow!=='none'?true:_echec('.btn-red sans --glow-red');
+      } finally { d.remove(); }})());
     ok('Aide : apparence, FAQ dépliable, contact du créateur, date de mise à jour',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlPrefsAide('client','clair','2026-09-26','1598','UA');
       const seg=[...d.querySelectorAll('.prf-theme button')];

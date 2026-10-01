@@ -801,7 +801,7 @@ function loadClientHome(){
     if(!name){
       if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
+      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-3);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -812,7 +812,7 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
       
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,

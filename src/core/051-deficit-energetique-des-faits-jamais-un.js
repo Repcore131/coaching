@@ -705,7 +705,7 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}

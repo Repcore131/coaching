@@ -1478,8 +1478,8 @@ function _bandeauJour(inputId,jour,handler,opts){
   // LES FLECHES, quand l ecran en demande. Style repris tel quel de la version
   // cafeine : fond transparent, bordure #333, et la variante desactivee en #222.
   const _fl=(cible,txt,actif)=>actif
-    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid var(--border-strong);color:var(--text-mid);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
-    :`<button disabled style="flex:none;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
+    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid var(--border-strong);color:var(--text-mid);border-radius:var(--r-2);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
+    :`<button disabled style="flex:none;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
   const _gauche=avecFleches?_fl(prev,'←',!!prev&&prev>=min):'';
   const _droite=avecFleches?_fl(next,'→',!!next&&next<=auj):'';
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">

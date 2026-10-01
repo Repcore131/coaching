@@ -190,7 +190,10 @@ def fichiers():
 def masque_commentaires(s, js):
     """Le texte, commentaires remplaces par des espaces (memes positions)."""
     out = list(s)
-    for m in re.finditer(r'/\*[\s\S]*?\*/', s):
+    # « image/* » (un type MIME dans une chaine) n'ouvre pas de commentaire :
+    # un /* colle a un mot ne compte pas, sinon tout jusqu'au */ suivant serait
+    # masque (des centaines de lignes de src/core/054).
+    for m in re.finditer(r'(?<![\w"\'])/\*[\s\S]*?\*/' if js else r'/\*[\s\S]*?\*/', s):
         for i in range(m.start(), m.end()):
             if out[i] != '\n':
                 out[i] = ' '

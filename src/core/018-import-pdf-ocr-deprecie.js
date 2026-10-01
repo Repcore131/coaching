@@ -508,7 +508,7 @@ function _illusAbsente(el){
       +'background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px';
     d.textContent='Aucune illustration pour cet exercice.';
   } else {
-    d.style.cssText='width:64px;height:48px;border-radius:8px;background:var(--surface-2);'
+    d.style.cssText='width:64px;height:48px;border-radius:var(--r-2);background:var(--surface-2);'
       +'border:1px solid var(--border);flex-shrink:0';
   }
   el.replaceWith(d);
@@ -578,11 +578,11 @@ function _bqLigne(f){
       alt="" loading="lazy" decoding="async" width="64" height="48"
       data-plein="${escapeHtml(img2x||'')}"
       onerror="_illusAbsente(this)"
-      style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
+      style="width:64px;height:48px;object-fit:cover;border-radius:var(--r-2);background:#f4f4f4;
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
       // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
       // ligne se décalerait et la liste deviendrait un escalier.
-      :`<div style="width:64px;height:48px;border-radius:8px;background:var(--surface-2);
+      :`<div style="width:64px;height:48px;border-radius:var(--r-2);background:var(--surface-2);
         border:1px solid var(--border);flex-shrink:0"></div>`}
     <div style="flex:1;min-width:0">
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3">${escapeHtml(f.nom)}${f.perso?' <span style="color:var(--sub);font-weight:600">· perso</span>':''}</div>

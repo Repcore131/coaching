@@ -1350,7 +1350,7 @@ function _ouvrirApercuStory(url,nomFichier,fmt){
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
   d.innerHTML='<img src="'+url+'" alt="Ton visuel RepCore" '
-    +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e4)">'
+    +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e3)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
@@ -2445,7 +2445,7 @@ function _renderProgExercisesInto(el){
   const essai=currentUser.sessions_config||initSessionsConfig();
   if(essai.some(s=>s.active&&s.exercises?.length)){_rendreSemaineAvecBandeau(el,essai);return;}
   // Filet de sécurité : ni programme, ni repli exploitable.
-  el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface-0);margin-bottom:14px">'
+  el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-3);background:var(--surface-0);margin-bottom:14px">'
     // R13 — QUI DOIT AGIR. Avec un coach, c'est lui : aucun bouton, on dit
     // qu'on attend sa publication. Sans coach, l'athlete peut agir : le code.
     +(currentUser.coachId

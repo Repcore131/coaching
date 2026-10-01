@@ -420,8 +420,8 @@ function _htmlVitrineCoach(pub){
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
-  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const CARTE="background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 52%,var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:20px;margin-bottom:16px;box-shadow:var(--e1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -465,20 +465,20 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;font-weight:400;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:15px;color:#d8d8d8;letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
     :'';
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
   const tete=p.photoVitrine
-    ?('<div style="position:relative;border-radius:var(--r-4);overflow:hidden;margin-bottom:20px;box-shadow:var(--e4)">'
+    ?('<div style="position:relative;border-radius:var(--r-4);overflow:hidden;margin-bottom:20px;box-shadow:var(--e3)">'
       +img(p.photoVitrine,'width:100%;display:block')
       +'<div style="position:absolute;inset:0;background:'+TRAME+';pointer-events:none"></div>'
-      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 20px 20px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
+      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 20px 20px;background:linear-gradient(to top,color-mix(in srgb,var(--bg) 97%,transparent),color-mix(in srgb,var(--bg) 78%,transparent) 42%,transparent)">'
       +eyebrow+titre+'</div>'
-      +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px rgba(224,32,32,.85)"></div>'
+      +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px color-mix(in srgb,var(--red) 85%,transparent)"></div>'
       +'</div>'+(phrase?('<div style="margin:-8px 4px 20px">'+phrase+'</div>'):''))
     :('<div style="margin-bottom:20px">'+eyebrow+titre+phrase+'</div>');
   return '<div class="pad" style="padding-bottom:48px">'
@@ -507,15 +507,15 @@ function _htmlDiplomesCoach(p){
   const carte=(p||{}).cartePro||'';
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
-  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const CARTE="background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 52%,var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:20px;margin-bottom:16px;box-shadow:var(--e1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);margin-top:12px;display:block;box-shadow:var(--e2)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
   // c est lui qui fait lire la ligne comme une validation.
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
-    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(224,32,32,.6)">✓</span>'
+    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">✓</span>'
     +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
@@ -525,9 +525,9 @@ function _htmlDiplomesCoach(p){
   h+='</div></div>';
   // L encart pedagogique : fond plus chaud, liseré lumineux. Il parle du
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
-  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:1px solid var(--border);border-radius:var(--r-4);padding:20px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
+  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,var(--red-bg),var(--red-bg));border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-left:1px solid var(--border);border-radius:var(--r-4);padding:20px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
     +'<div style="position:relative">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:10px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:10px;--halo-c:color-mix(in srgb,var(--red) 70%,transparent);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '

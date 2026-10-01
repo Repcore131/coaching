@@ -2633,7 +2633,7 @@ function marqueCss(couleur){
   return ':root,:root[data-theme="clair"]{'+decl(t.commun)+'}'
     +':root{'+decl(t.sombre)+'}'
     +':root[data-theme="clair"]{'+decl(t.clair)+'}'
-    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red-deep));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
+    +M+'.btn-red,'+M+'.btn-red:hover{background:var(--red);border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
     +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red-deep));color:var(--mq-sur)}'
     +M+'.banner-hero{background:linear-gradient(145deg,var(--mq-sombre) 0%,var(--mq-nuit) 100%)}'
     +M+'#clh-athlete-avatar{border-color:var(--red)}';
@@ -20546,7 +20546,7 @@ function _majConsentementCoachReglages(){
   if(!z) return;
   const u=currentUser;
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
     +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
     +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
@@ -29126,7 +29126,7 @@ function renderTodoBlock(clients){
     total:rows.filter(r=>_bande(r)===i).length,
     // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
-  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
+  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
@@ -31142,12 +31142,12 @@ function _htmlJamaisDemarre(liste,maintenant){
   const jour=t=>{ if(!t) return '-'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
     return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear(); };
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-3);margin-bottom:20px;'
     // ⚠ L'ESPACE AU-DESSUS, demande par Kevin : le bandeau « Jamais démarré »
     //   touchait le pied du cadre precedent, et les deux se lisaient comme un
     //   seul bloc dont on ne voyait plus la couture.
     +'margin-top:24px;'
-    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
@@ -31980,8 +31980,8 @@ function _htmlInactifs(liste,maintenant){
   const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
     +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
   return '<div class="cadre-replie" style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
-    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-3);margin-bottom:20px;'
+    +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
@@ -40218,7 +40218,7 @@ function _illusAbsente(el){
       +'background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px';
     d.textContent='Aucune illustration pour cet exercice.';
   } else {
-    d.style.cssText='width:64px;height:48px;border-radius:8px;background:var(--surface-2);'
+    d.style.cssText='width:64px;height:48px;border-radius:var(--r-2);background:var(--surface-2);'
       +'border:1px solid var(--border);flex-shrink:0';
   }
   el.replaceWith(d);
@@ -40288,11 +40288,11 @@ function _bqLigne(f){
       alt="" loading="lazy" decoding="async" width="64" height="48"
       data-plein="${escapeHtml(img2x||'')}"
       onerror="_illusAbsente(this)"
-      style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
+      style="width:64px;height:48px;object-fit:cover;border-radius:var(--r-2);background:#f4f4f4;
       box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
       // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
       // ligne se décalerait et la liste deviendrait un escalier.
-      :`<div style="width:64px;height:48px;border-radius:8px;background:var(--surface-2);
+      :`<div style="width:64px;height:48px;border-radius:var(--r-2);background:var(--surface-2);
         border:1px solid var(--border);flex-shrink:0"></div>`}
     <div style="flex:1;min-width:0">
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3">${escapeHtml(f.nom)}${f.perso?' <span style="color:var(--sub);font-weight:600">· perso</span>':''}</div>
@@ -44967,7 +44967,7 @@ function loadClientHome(){
     if(!name){
       if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
+      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-3);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -44978,7 +44978,7 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
       
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
@@ -46866,8 +46866,8 @@ function _htmlSeanceDepart(s){
       return (img
         ? '<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="52" height="40" '
           +'onerror="_illusAbsente(this)" style="width:52px;height:40px;object-fit:cover;'
-          +'border-radius:6px;background:#f4f4f4;flex-shrink:0">'
-        : '<div style="width:52px;height:40px;border-radius:6px;background:var(--surface-2);'
+          +'border-radius:var(--r-2);background:#f4f4f4;flex-shrink:0">'
+        : '<div style="width:52px;height:40px;border-radius:var(--r-2);background:var(--surface-2);'
           +'border:1px solid var(--border);flex-shrink:0"></div>')
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+escapeHtml(e.name)+'</div>'
@@ -46964,7 +46964,7 @@ function _doitProposerReprise(u,maintenant){
 // pas a apprendre ici l'etat du travail de son coach.
 function _htmlReprise(avecProgramme){
   return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));'
-    +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;'
+    +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:var(--r-3);'
     +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
     +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
     +'<div class="eyebrow eyebrow-act" style="margin-bottom:12px">Ta première séance</div>'
@@ -50327,7 +50327,7 @@ function _ouvrirApercuStory(url,nomFichier,fmt){
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
   d.innerHTML='<img src="'+url+'" alt="Ton visuel RepCore" '
-    +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e4)">'
+    +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e3)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
@@ -51422,7 +51422,7 @@ function _renderProgExercisesInto(el){
   const essai=currentUser.sessions_config||initSessionsConfig();
   if(essai.some(s=>s.active&&s.exercises?.length)){_rendreSemaineAvecBandeau(el,essai);return;}
   // Filet de sécurité : ni programme, ni repli exploitable.
-  el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface-0);margin-bottom:14px">'
+  el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-3);background:var(--surface-0);margin-bottom:14px">'
     // R13 — QUI DOIT AGIR. Avec un coach, c'est lui : aucun bouton, on dit
     // qu'on attend sa publication. Sans coach, l'athlete peut agir : le code.
     +(currentUser.coachId
@@ -68191,8 +68191,8 @@ function htmlRapport(r){
     else{
       const d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'});
       h+=`<div style="display:flex;gap:12px;align-items:flex-start">
-        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.avant.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
-        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.apres.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.avant.src)}" alt="" style="width:100%;border-radius:var(--r-2);display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.apres.src)}" alt="" style="width:100%;border-radius:var(--r-2);display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
       </div>`;
     }
     h+=`</section>`;
@@ -75754,7 +75754,7 @@ function bSports(id){
       </select>
       <input type="number" min="0" step="0.5" value="${e.heures!=null?e.heures:''}" placeholder="h/sem"
         oninput="_bSportSet('${id}',${i},'heures',this.value)"
-        style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:#080808;border:1px solid #222;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-weight:700;margin:0">
+        style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-weight:700;margin:0">
       <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
         style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px;min-width:30px">✕</button>
     </div>
@@ -75815,7 +75815,7 @@ function _bSportSet(id,i,champ,val){
   }
 }
 
-function bSec(title,html){return`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);--halo-c:rgba(224,32,32,.4);text-shadow:var(--halo-2)">${title}</div>${html}</div>`;}
+function bSec(title,html){return`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--red) 28%,transparent);--halo-c:color-mix(in srgb,var(--red) 40%,transparent);text-shadow:var(--halo-2)">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
 // ── Schéma corporel interactif (mensurations) ─────────────────────────
@@ -75944,7 +75944,7 @@ function bBodySchema(prefix){
       // que l'athlète touche la case — voir bMesureSaisie.
       const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:34%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:var(--surface-0);border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
           <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
             oninput="bMesureSaisie('${id}',this.value)"
@@ -75966,7 +75966,7 @@ function bLongueurs(){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:4px">${lbl}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:6px">${aide}</div>
     ${schema||''}
-    <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
+    <div style="display:flex;align-items:center;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
       <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
         oninput="bilData['${id}']=this.value"
         style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:center;padding:6px 0;margin:0">
@@ -80412,7 +80412,7 @@ function htmlReglagesPush(u,etat){
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
     +'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Notifications</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
     +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
@@ -82705,7 +82705,7 @@ function _wrCarrouselUnParUn(urls,noms){
     +'Garde les cinq images dans l’ordre, puis publie-les en <b>carrousel</b>. '
     +'Sur iPhone : appui <b>long</b> sur chaque image, puis <b>Ajouter aux photos</b>.</div>'
     +urls.map((u,i)=>'<figure style="margin:0;display:flex;flex-direction:column;align-items:center;gap:8px">'
-      +'<img src="'+u+'" alt="Slide '+(i+1)+' sur 5" style="width:min(300px,80vw);aspect-ratio:4/5;border-radius:var(--r-3);box-shadow:var(--e4)">'
+      +'<img src="'+u+'" alt="Slide '+(i+1)+' sur 5" style="width:min(300px,80vw);aspect-ratio:4/5;border-radius:var(--r-3);box-shadow:var(--e3)">'
       +'<a href="'+u+'" download="'+escapeHtml(noms[i])+'" type="image/jpeg" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px">'
       +'Enregistrer '+(i+1)+'/5</a></figure>').join('')
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" onclick="fermerApercuStory()">Fermer</button>';
@@ -114843,8 +114843,8 @@ function _bandeauJour(inputId,jour,handler,opts){
   // LES FLECHES, quand l ecran en demande. Style repris tel quel de la version
   // cafeine : fond transparent, bordure #333, et la variante desactivee en #222.
   const _fl=(cible,txt,actif)=>actif
-    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid var(--border-strong);color:var(--text-mid);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
-    :`<button disabled style="flex:none;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
+    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid var(--border-strong);color:var(--text-mid);border-radius:var(--r-2);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
+    :`<button disabled style="flex:none;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
   const _gauche=avecFleches?_fl(prev,'←',!!prev&&prev>=min):'';
   const _droite=avecFleches?_fl(next,'→',!!next&&next<=auj):'';
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -118752,7 +118752,7 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
@@ -126051,8 +126051,8 @@ function _htmlVitrineCoach(pub){
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
-  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const CARTE="background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 52%,var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:20px;margin-bottom:16px;box-shadow:var(--e1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -126096,20 +126096,20 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;font-weight:400;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:15px;color:#d8d8d8;letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
     :'';
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
   const tete=p.photoVitrine
-    ?('<div style="position:relative;border-radius:var(--r-4);overflow:hidden;margin-bottom:20px;box-shadow:var(--e4)">'
+    ?('<div style="position:relative;border-radius:var(--r-4);overflow:hidden;margin-bottom:20px;box-shadow:var(--e3)">'
       +img(p.photoVitrine,'width:100%;display:block')
       +'<div style="position:absolute;inset:0;background:'+TRAME+';pointer-events:none"></div>'
-      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 20px 20px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
+      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 20px 20px;background:linear-gradient(to top,color-mix(in srgb,var(--bg) 97%,transparent),color-mix(in srgb,var(--bg) 78%,transparent) 42%,transparent)">'
       +eyebrow+titre+'</div>'
-      +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px rgba(224,32,32,.85)"></div>'
+      +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px color-mix(in srgb,var(--red) 85%,transparent)"></div>'
       +'</div>'+(phrase?('<div style="margin:-8px 4px 20px">'+phrase+'</div>'):''))
     :('<div style="margin-bottom:20px">'+eyebrow+titre+phrase+'</div>');
   return '<div class="pad" style="padding-bottom:48px">'
@@ -126138,15 +126138,15 @@ function _htmlDiplomesCoach(p){
   const carte=(p||{}).cartePro||'';
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
-  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const CARTE="background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 52%,var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:20px;margin-bottom:16px;box-shadow:var(--e1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);margin-top:12px;display:block;box-shadow:var(--e2)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
   // c est lui qui fait lire la ligne comme une validation.
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
-    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(224,32,32,.6)">✓</span>'
+    +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">✓</span>'
     +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
@@ -126156,9 +126156,9 @@ function _htmlDiplomesCoach(p){
   h+='</div></div>';
   // L encart pedagogique : fond plus chaud, liseré lumineux. Il parle du
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
-  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:1px solid var(--border);border-radius:var(--r-4);padding:20px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
+  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,var(--red-bg),var(--red-bg));border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-left:1px solid var(--border);border-radius:var(--r-4);padding:20px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
     +'<div style="position:relative">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:10px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:10px;--halo-c:color-mix(in srgb,var(--red) 70%,transparent);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '

@@ -1318,7 +1318,7 @@ function renderTodoBlock(clients){
     total:rows.filter(r=>_bande(r)===i).length,
     // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
-  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
+  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>

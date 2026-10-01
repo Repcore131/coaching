@@ -261,8 +261,8 @@ function _htmlSeanceDepart(s){
       return (img
         ? '<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="52" height="40" '
           +'onerror="_illusAbsente(this)" style="width:52px;height:40px;object-fit:cover;'
-          +'border-radius:6px;background:#f4f4f4;flex-shrink:0">'
-        : '<div style="width:52px;height:40px;border-radius:6px;background:var(--surface-2);'
+          +'border-radius:var(--r-2);background:#f4f4f4;flex-shrink:0">'
+        : '<div style="width:52px;height:40px;border-radius:var(--r-2);background:var(--surface-2);'
           +'border:1px solid var(--border);flex-shrink:0"></div>')
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+escapeHtml(e.name)+'</div>'
@@ -359,7 +359,7 @@ function _doitProposerReprise(u,maintenant){
 // pas a apprendre ici l'etat du travail de son coach.
 function _htmlReprise(avecProgramme){
   return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));'
-    +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;'
+    +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:var(--r-3);'
     +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
     +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
     +'<div class="eyebrow eyebrow-act" style="margin-bottom:12px">Ta première séance</div>'

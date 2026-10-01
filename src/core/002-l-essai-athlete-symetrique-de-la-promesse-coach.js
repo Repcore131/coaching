@@ -964,7 +964,7 @@ function marqueCss(couleur){
   return ':root,:root[data-theme="clair"]{'+decl(t.commun)+'}'
     +':root{'+decl(t.sombre)+'}'
     +':root[data-theme="clair"]{'+decl(t.clair)+'}'
-    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red-deep));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
+    +M+'.btn-red,'+M+'.btn-red:hover{background:var(--red);border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
     +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red-deep));color:var(--mq-sur)}'
     +M+'.banner-hero{background:linear-gradient(145deg,var(--mq-sombre) 0%,var(--mq-nuit) 100%)}'
     +M+'#clh-athlete-avatar{border-color:var(--red)}';

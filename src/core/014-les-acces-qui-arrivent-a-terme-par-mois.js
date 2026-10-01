@@ -1102,12 +1102,12 @@ function _htmlJamaisDemarre(liste,maintenant){
   const jour=t=>{ if(!t) return '-'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
     return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear(); };
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-3);margin-bottom:20px;'
     // ⚠ L'ESPACE AU-DESSUS, demande par Kevin : le bandeau « Jamais démarré »
     //   touchait le pied du cadre precedent, et les deux se lisaient comme un
     //   seul bloc dont on ne voyait plus la couture.
     +'margin-top:24px;'
-    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
@@ -1940,8 +1940,8 @@ function _htmlInactifs(liste,maintenant){
   const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
     +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
   return '<div class="cadre-replie" style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
-    +'overflow:hidden;box-shadow:var(--el-1)">'
+    +'border-left:3px solid var(--sub);border-radius:var(--r-3);margin-bottom:20px;'
+    +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'

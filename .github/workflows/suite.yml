@@ -74,6 +74,11 @@ jobs:
       - name: Verifier les espacements
         run: python3 scripts/espacements.py --verifier
 
+      # LES RAYONS ET LES OMBRES SUR LEURS ECHELLES (01/10/2026) : aucun
+      # border-radius en px calable, aucune ombre noire simple en dur.
+      - name: Verifier les rayons et les ombres
+        run: python3 scripts/rayons.py --verifier
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &

@@ -2184,8 +2184,8 @@ function htmlRapport(r){
     else{
       const d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'});
       h+=`<div style="display:flex;gap:12px;align-items:flex-start">
-        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.avant.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
-        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.apres.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.avant.src)}" alt="" style="width:100%;border-radius:var(--r-2);display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.apres.src)}" alt="" style="width:100%;border-radius:var(--r-2);display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
       </div>`;
     }
     h+=`</section>`;
