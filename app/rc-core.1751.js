@@ -52346,16 +52346,9 @@ function renderSets(ex,data,idx,opts){
   const _eh=(i,champ)=>(champ!=='repsDone'&&i===_iDernierOuvert&&(champ==='weight2'||!isDeg))?'done':'next';
   const _attrs=(i,champ)=>`data-serie="${i}" data-champ="${champ}" enterkeyhint="${_eh(i,champ)}"`;
 
-  // La même série de la dernière séance du créneau (prevSeries).
-  const _prec=(!isDeg&&woState)?prevSeries(ex.name,woState.slot,woState.progName):[];
-  const _precHtml=(s,i)=>{
-    const p=_prec[i];
-    if(!p||s.done||s.rpeCible) return '';
-    const kg=String(kgVersAffiche(p.kg,currentUser)).replace('.',',');
-    const t=kg+(p.reps?'×'+p.reps:'');
-    return `<button type="button" class="wo-prec" onclick="_woPrecCopier(${idx},${i})"`
-      +` aria-label="Reprendre la série ${i+1} de la dernière séance : ${kg}${_unite()}${p.reps?' pour '+p.reps+' répétitions':''}">${t}</button>`;
-  };
+  // ⚠ L'ÉTIQUETTE « 140×3 » SOUS LE NUMÉRO N'EST PLUS AFFICHÉE (Kevin,
+  // 01/10/2026 : « ça perd la personne »). La dernière séance sert toujours :
+  // une série vide se valide avec elle (toggleSet), et _woPrecCopier reste.
   const lignes=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
     const dis=s.done?'disabled':'';
@@ -52539,7 +52532,6 @@ function renderSets(ex,data,idx,opts){
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}${_badgeVideoSerie(s)}</div>
                 <div>${repsAffiche(18)}</div>
-                ${_precHtml(s,i)}
               </div>
               ${weightInner}
             </div>
@@ -52556,7 +52548,6 @@ function renderSets(ex,data,idx,opts){
       <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}${_badgeVideoSerie(s)}</span>
         ${repsAffiche(20)}
-        ${_precHtml(s,i)}
       </td>
       ${weightCell}
       <td class="wo-intensite">${rirSelect}</td>
