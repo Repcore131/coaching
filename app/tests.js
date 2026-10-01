@@ -38435,6 +38435,67 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          // ⚠ 1763 — TROIS BUGS TROUVES PAR LE LINT (scripts/verif/lint.mjs).
+          // (a) offRecherche : un hit valide et un hit sans nutriments, par un faux
+          //     _offFetch — un garde, un rejete, et rien ne leve.
+          okA('1763 — offRecherche : un hit valide gardé, un hit sans nutriments rejeté et compté',async()=>{
+            const f0=window._offFetch;
+            const rep=(j)=>({ok:true,status:200,headers:{get:()=>'application/json'},json:async()=>j});
+            let n=0;
+            window._offFetch=async()=>{ n++; return n===1
+              ?rep({hits:[{code:'111',product_name:'Yaourt nature',brands:'Test',
+                  nutriments:{'energy-kcal_100g':60,proteins_100g:4,carbohydrates_100g:5,fat_100g:2}},
+                {code:'222',product_name:'Fiche vide',nutriments:{}}]})
+              :rep({products:[]}); };
+            try{
+              const r=await offRecherche('x yaourt');
+              if(!r||r.ok!==true) return _echec('offRecherche : '+JSON.stringify(r));
+              if(!Array.isArray(r.liste)||r.liste.length!==1) return _echec('liste de '+(r.liste&&r.liste.length));
+              if(r.rejetes!==1) return _echec('rejetes = '+r.rejetes);
+              return true;
+            } finally { window._offFetch=f0; }
+          });
+          // (b) L'ECHEANCE REPEINT LA FICHE DU CLIENT OUVERT : renderClientDetail
+          //     n'existait pas. C'est openClientDetail(id, true) qui est appele.
+          okA('1763 — Échéance : ouvrir puis fermer repeint la fiche du client (openClientDetail(id,true))',async()=>{
+            const sauve={cu:currentUser,cid:currentClientId,oc:window.openClientDetail,goc:window.getOwnedClient,
+              oe:window.ouvrirEcheance,ech:window.echeance,sa:window.rcSaisie,ts:window.toastSync,to:window.toast,go:window.go,po:CLOUD.pushOne};
+            const appels=[];
+            try{
+              const client={id:'c_ech',email:'ech@t.fr',fname:'E'};
+              currentUser={email:'coach@t.fr',role:'coach'}; currentClientId='c_ech';
+              window.getOwnedClient=(id)=>id==='c_ech'?client:null;
+              window.rcSaisie=async()=>'01/12/2026';
+              window.echeance=()=>null;
+              window.ouvrirEcheance=()=>({ok:true,remplacee:false});
+              window.toastSync=()=>{}; window.toast=()=>{}; window.go=()=>{};
+              CLOUD.pushOne=async()=>({ok:true});
+              window.openClientDetail=(id,ref)=>{ appels.push([id,ref]); };
+              await _echOuvrirDialogue();
+              if(!appels.some(a=>a[0]==='c_ech'&&a[1]===true)) return _echec('après l’ouverture : '+JSON.stringify(appels));
+              appels.length=0;
+              fermerEcheance();
+              if(!appels.some(a=>a[0]==='c_ech'&&a[1]===true)) return _echec('après la fermeture : '+JSON.stringify(appels));
+              return true;
+            } finally {
+              currentUser=sauve.cu; currentClientId=sauve.cid; window.openClientDetail=sauve.oc; window.getOwnedClient=sauve.goc;
+              window.ouvrirEcheance=sauve.oe; window.echeance=sauve.ech; window.rcSaisie=sauve.sa; window.toastSync=sauve.ts;
+              window.toast=sauve.to; window.go=sauve.go; CLOUD.pushOne=sauve.po;
+            }
+          });
+          // (c) motion-lab.js : UNE seule mlAnnulerTrace (le trace d'annotation),
+          //     et la sortie du mode trajectoire sous son propre nom.
+          ok('1763 — Motion Lab : mlAnnulerTrace annule le tracé, mlAnnulerTrajectoire sort du mode trajectoire',(()=>{
+            let src='';
+            try{ const x=new XMLHttpRequest(); x.open('GET','./motion-lab.js?v='+Date.now(),false); x.send(); src=String(x.responseText||''); }catch(e){ return _echec('motion-lab.js illisible'); }
+            if(!src) return _echec('motion-lab.js vide');
+            const n=(src.match(/function mlAnnulerTrace\(/g)||[]).length;
+            if(n!==1) return _echec(n+' définition(s) de mlAnnulerTrace');
+            if(!/function mlAnnulerTrace\(\)\{ return _mlxAnnulerTrace\(\); \}/.test(src)) return _echec('mlAnnulerTrace n’appelle plus _mlxAnnulerTrace');
+            if(!/function mlAnnulerTrajectoire\(\)/.test(src)) return _echec('mlAnnulerTrajectoire absente');
+            if((src.match(/class="mlx-b" onclick="mlAnnulerTrace\(\)">Annuler/g)||[]).length!==2) return _echec('les deux « Annuler » du tracé n’appellent plus mlAnnulerTrace');
+            if(!/onclick="mlAnnulerTrajectoire\(\)">Annuler/.test(src)) return _echec('l’« Annuler » de la trajectoire n’appelle pas mlAnnulerTrajectoire');
+            return true;})());
           // ⚠ 1762 — LE THEME CLAIR VIT DANS SA PROPRE FEUILLE (rc-theme.<build>.css,
           // scripts/extraire_theme_clair.py), liee APRES rc-style avec
           // media="not all". On BASCULE pour de vrai : en clair, la feuille

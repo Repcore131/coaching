@@ -1634,9 +1634,12 @@ function mlTempoComparaison(prescrit,lignes){
  */
 function _mlTempoPrescrit(){
   try{
-    if(!_ml) return '';
-    const users=DB.get('users')||{}, c=users[_ml.email];
-    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===_ml.videoId);
+    // Une copie locale : dans la fleche de .find, TypeScript ne garde pas le
+    // « _ml non nul » du test au-dessus (_ml peut changer entre-temps).
+    const ml=_ml;
+    if(!ml) return '';
+    const users=DB.get('users')||{}, c=users[ml.email];
+    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===ml.videoId);
     const lien=v&&v.lien;
     if(!lien||!lien.exerciceCle) return '';
     if(lien.tempo) return String(lien.tempo);
@@ -9244,7 +9247,7 @@ function _mlMajTrajectoire(){
             +(_ml&&_ml.sens===o[0])+'" onclick="mlSens(\''+o[0]+'\')">'+o[1]+'</button>').join('')+'</span></div>')
       +'<div class="ml-traj-cmd"><button type="button" class="btn btn-red btn-sm" onclick="'+(replacer?'mlRelancer()':'mlAnalyser()')+'"'
         +(pose?'':' disabled')+'>'+(replacer?'Relancer depuis ici':'Analyser')+'</button>'
-      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlAnnulerTrace()">Annuler</button></div>';
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="mlAnnulerTrajectoire()">Annuler</button></div>';
   } else if(_ml.mode==='analyse'){
     h+='</div><div class="ml-progres" role="progressbar" aria-label="Analyse en cours"><i id="ml-progres-barre"></i></div>'
       +'<p class="ml-traj-aide" id="ml-progres-txt" aria-live="polite">'+escapeHtml(_ml.progres||'Chargement de la vidéo…')+'</p>'
@@ -9616,7 +9619,12 @@ function mlSens(s){
   _mlMajTrajectoire();
   return true;
 }
-function mlAnnulerTrace(){
+// SORTIR DU MODE TRAJECTOIRE (01/10/2026 : renommee). Elle s'appelait aussi
+// mlAnnulerTrace, comme celle qui annule le trace d'annotation, plus haut :
+// declaree en second, elle l'ECRASAIT, et les boutons « Annuler » du trace en
+// cours sortaient du mode trajectoire au lieu d'effacer le trait. Trouve par
+// le lint (no-redeclare, scripts/verif/lint.mjs).
+function mlAnnulerTrajectoire(){
   if(!_ml) return false;
   _ml.mode='lecture'; _ml.graine=null;
   _mlLoupe(false);
@@ -12822,6 +12830,7 @@ function _mlAnatMasque(m,w,h,z){
 
 const MLC_HP_MAX=15;
 const MLC_TOL_AMPL_M=0.015, MLC_TOL_AMPL_PART=0.03, MLC_TOL_V=0.05, MLC_TOL_PD=3;
+/** @type {(l:number[])=>(number|null)} */
 const _mlcMed=(l)=>{ const v=l.filter((x)=>isFinite(x)).slice().sort((a,b)=>a-b); if(!v.length) return null; const k=Math.floor(v.length/2); return v.length%2?v[k]:(v[k-1]+v[k])/2; };
 
 /**
@@ -12860,9 +12869,24 @@ function mlcPointDurPct(Y,i){
 function mlcResume(v){
   const segs=(typeof segmentsVideo==='function')?segmentsVideo(v):[];
   const lignes=mlTableauSerie(segs);
-  const exc=[], con=[], pau=[], pd=[], amp=[], hp=[], fps=[], trace=[];
+  /** @type {number[]} */
+  const exc=[];
+  /** @type {number[]} */
+  const con=[];
+  /** @type {number[]} */
+  const pau=[];
+  /** @type {number[]} */
+  const pd=[];
+  /** @type {number[]} */
+  const amp=[];
+  /** @type {number[]} */
+  const hp=[];
+  /** @type {number[]} */
+  const fps=[];
+  /** @type {{x:number[],y:number[]}[]} */
+  const trace=[];
   let echelleOk=true, aplombOk=true, sens='', mode='vertical', n=0;
-  segs.forEach((s,k)=>{
+  segs.forEach((/** @type {any} */ s,/** @type {number} */ k)=>{
     const l=lignes[k], b=s.barre;
     if(!l||!l.analysee||!b) return;
     n++;
@@ -12878,10 +12902,10 @@ function mlcResume(v){
     if(r){
       if(r.mode!=='vertical') mode='chemin';
       let iPic=-1, mx=-Infinity;
-      r.v.forEach((x,i)=>{ if(isFinite(x)&&x>mx){ mx=x; iPic=i; } });
+      r.v.forEach((/** @type {number} */ x,/** @type {number} */ i)=>{ if(isFinite(x)&&x>mx){ mx=x; iPic=i; } });
       const z=mlZoneFaiblesse(r.v,iPic);
-      const H=r.mode==='vertical'?r.Y:r.X.map((x,i)=>(r.axe?x*r.axe.ux+r.Y[i]*r.axe.uy:NaN));
-      if(z) pd.push(mlcPointDurPct(H,z.i));
+      const H=r.mode==='vertical'?r.Y:r.X.map((/** @type {number} */ x,/** @type {number} */ i)=>(r.axe?x*r.axe.ux+r.Y[i]*r.axe.uy:NaN));
+      if(z){ const p=mlcPointDurPct(H,z.i); if(p!=null) pd.push(p); }
       if(!trace.length) trace.push(mlcNormaliser(r.X,r.Y));
     }
   });
@@ -12891,7 +12915,7 @@ function mlcResume(v){
   return {date:Number(v&&v.date)||0,id:v&&v.id,reps:n,excMs:e,conMs:c,pauseMs:_mlcMed(pau),
     partLente:(e!=null&&c!=null&&e+c>0)?Math.round(e/(e+c)*1000)/10:null,
     pointDurPct:_mlcMed(pd),amplitudeM:a,
-    vConMoy:(a!=null&&c>0)?Math.round(a/(c/1000)*1000)/1000:null,
+    vConMoy:(a!=null&&c!=null&&c>0)?Math.round(a/(c/1000)*1000)/1000:null,
     fpsMin:fps.length?Math.min(...fps.filter((x)=>x>0)):0,
     horsPlan:hps.length===hp.length&&hps.length?Math.max(...hps):null,
     echelleOk,aplombOk,sens,mode,trace:trace[0]||{x:[],y:[]}};
@@ -12901,8 +12925,9 @@ function mlcResume(v){
  * @param {any} a @param {any} b  deux résumés (mlcResume)
  */
 function mlcComparabilite(a,b){
+  /** @type {string[]} */
   const r=[];
-  const jour=(x)=>{ try{ return new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
+  const jour=(/** @type {any} */ x)=>{ try{ return new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
   for(const x of [a,b]){
     if(x.horsPlan==null) r.push('le hors-plan de la vidéo du '+jour(x)+' n’est pas connu (articulations non analysées)');
     else if(x.horsPlan>MLC_HP_MAX) r.push('hors-plan de '+Math.round(x.horsPlan)+'° sur la vidéo du '+jour(x)+' (15° au plus)');
@@ -12912,6 +12937,10 @@ function mlcComparabilite(a,b){
   const cotes=a.sens&&b.sens&&a.sens!==b.sens&&a.sens!=='mixte'&&b.sens!=='mixte';
   return {cm:r.length===0,raisons:r,memeCote:!cotes};
 }
+/**
+ * @param {number|null} avant @param {number|null} apres @param {number} tol
+ * @param {(x:number)=>string} fmt @param {string} unite
+ */
 function _mlcEcart(avant,apres,tol,fmt,unite){
   if(avant==null||apres==null) return {avant,apres,ecart:null,tol,etat:'absent',texte:'mesure absente sur l’une des deux'};
   const d=apres-avant;
@@ -12923,12 +12952,14 @@ function _mlcEcart(avant,apres,tol,fmt,unite){
  * PURE. Le tableau : trois à cinq lignes, chacune avec son écart et sa
  * tolérance, ou le refus motivé. a = la plus ancienne, b = la plus récente.
  */
+/** @param {any} a @param {any} b */
 function mlcComparer(a,b){
   const cmp=mlcComparabilite(a,b);
   const fps=Math.min(a.fpsMin||30,b.fpsMin||30)||30;
   const tolMs=Math.round(2*1000/fps);
-  const s=(x)=>(Math.round(x/100)/10).toLocaleString('fr-FR')+' s';
-  const f1=(x)=>(Math.round(x*10)/10).toLocaleString('fr-FR');
+  const s=(/** @type {number} */ x)=>(Math.round(x/100)/10).toLocaleString('fr-FR')+' s';
+  const f1=(/** @type {number} */ x)=>(Math.round(x*10)/10).toLocaleString('fr-FR');
+  /** @type {any[]} */
   const lignes=[];
   lignes.push(Object.assign({cle:'tempo',lib:'Tempo : descente, remontée',
     valeurs:[a,b].map((x)=>(x.excMs!=null&&x.conMs!=null)?s(x.excMs)+' puis '+s(x.conMs):'non mesuré')},
@@ -12952,16 +12983,19 @@ function mlcComparer(a,b){
 }
 
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
+/** @type {any} */
 let _mlcEtat=null;
+/** @param {any} c @param {string} cle */
 function _mlcAnalysesDe(c,cle){
-  return ((c&&c.videos)||[]).filter((v)=>v&&v.lien&&v.lien.exerciceCle===cle
-    &&segmentsVideo(v).some((s)=>s.barre)).sort((a,b)=>Number(a.date)-Number(b.date));
+  return ((c&&c.videos)||[]).filter((/** @type {any} */ v)=>v&&v.lien&&v.lien.exerciceCle===cle
+    &&segmentsVideo(v).some((/** @type {any} */ s)=>s.barre)).sort((/** @type {any} */ a,/** @type {any} */ b)=>Number(a.date)-Number(b.date));
 }
+/** @param {any} a @param {any} b */
 function _mlcSvg(a,b){
   const W=320,H=220,M=14;
   // Centré dans le cadre : une trajectoire presque verticale ne colle pas au bord gauche.
   const mx=Math.max(0,...a.trace.x.filter(isFinite),...b.trace.x.filter(isFinite)), dx=(1-mx)/2*(H-2*M);
-  const pts=(t)=>t.x.map((x,i)=>(isFinite(x)&&isFinite(t.y[i]))?((W-(H-2*M))/2+dx+x*(H-2*M)).toFixed(1)+','+(H-M-t.y[i]*(H-2*M)).toFixed(1):null).filter(Boolean).join(' ');
+  const pts=(/** @type {{x:number[],y:number[]}} */ t)=>t.x.map((x,i)=>(isFinite(x)&&isFinite(t.y[i]))?((W-(H-2*M))/2+dx+x*(H-2*M)).toFixed(1)+','+(H-M-t.y[i]*(H-2*M)).toFixed(1):null).filter(Boolean).join(' ');
   return '<svg class="mlc-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Les deux trajectoires, à la même échelle">'
     +'<rect x="0" y="0" width="'+W+'" height="'+H+'" rx="10" fill="#101012"/>'
     +'<polyline points="'+pts(a.trace)+'" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linejoin="round"/>'
@@ -12971,26 +13005,27 @@ function _mlcRendre(){
   const z=document.getElementById('mlc-corps');
   if(!z||!_mlcEtat) return;
   const E=escapeHtml;
-  const liste=_mlcEtat.liste, a=liste.find((v)=>v.id===_mlcEtat.autre), b=liste.find((v)=>v.id===_mlcEtat.id);
+  const liste=_mlcEtat.liste, a=liste.find((/** @type {any} */ v)=>v.id===_mlcEtat.autre), b=liste.find((/** @type {any} */ v)=>v.id===_mlcEtat.id);
   if(!a||!b){ z.innerHTML='<p class="mlc-p">Choisis une autre analyse de cet exercice.</p>'; return; }
   const [ancien,recent]=Number(a.date)<=Number(b.date)?[a,b]:[b,a];
   const ra=mlcResume(ancien), rb=mlcResume(recent), r=mlcComparer(ra,rb);
   _mlcEtat.dernier={ra,rb,r};
-  const jour=(v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  const jour=(/** @type {any} */ v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   z.innerHTML='<div class="mlc-leg"><span class="mlc-a">'+E(jour(ancien))+'</span><span class="mlc-b">'+E(jour(recent))+'</span></div>'
     +_mlcSvg(ra,rb)
     +'<table class="mlc-t"><tr><th></th><th>'+E(jour(ancien))+'</th><th>'+E(jour(recent))+'</th></tr>'
-    +r.lignes.map((l)=>'<tr class="mlc-'+l.etat+'"><td>'+E(l.lib)+'</td><td>'+E(l.valeurs[0])+'</td><td>'+E(l.valeurs[1])+'</td></tr>'
+    +r.lignes.map((/** @type {any} */ l)=>'<tr class="mlc-'+l.etat+'"><td>'+E(l.lib)+'</td><td>'+E(l.valeurs[0])+'</td><td>'+E(l.valeurs[1])+'</td></tr>'
       +'<tr class="mlc-e mlc-'+l.etat+'"><td colspan="3">'+E(l.texte)+'</td></tr>').join('')+'</table>'
     +'<p class="mlc-p">Deux mesures et leur écart, rien d’autre : ni note, ni verdict.'+(r.comparabilite.memeCote?'':' Les deux vidéos ne sont pas filmées du même côté.')+'</p>';
 }
+/** @param {string} email @param {string} videoId */
 function mlOuvrirComparaison(email,videoId){
   const users=(DB.get('users')||{});
   const c=users[email];
-  const v=c&&(c.videos||[]).find((x)=>x&&x.id===videoId);
+  const v=c&&(c.videos||[]).find((/** @type {any} */ x)=>x&&x.id===videoId);
   if(!v||!v.lien||!v.lien.exerciceCle){ toast('Cette vidéo n’est rattachée à aucun exercice.','var(--orange)'); return false; }
   const liste=_mlcAnalysesDe(c,v.lien.exerciceCle);
-  const autres=liste.filter((x)=>x.id!==videoId);
+  const autres=liste.filter((/** @type {any} */ x)=>x.id!==videoId);
   if(!autres.length){ toast('Aucune autre analyse de cet exercice à comparer.','var(--orange)'); return false; }
   _mlcEtat={email,id:videoId,autre:autres[0].id,liste};
   const E=escapeHtml;
@@ -13000,13 +13035,14 @@ function mlOuvrirComparaison(email,videoId){
     +'<h2 style="margin-bottom:4px">Comparer deux analyses</h2>'
     +'<p class="mlc-p">'+E(v.lien.exerciceNom||'')+' · la plus ancienne est proposée d’abord.</p>'
     +'<label class="mlc-l" for="mlc-choix">Comparer avec</label><select id="mlc-choix" onchange="mlChoisirComparaison(this.value)">'
-    +autres.map((x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
+    +autres.map((/** @type {any} */ x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
     +'<div id="mlc-corps"></div>'
     +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlFermerComparaison()">Fermer</button>'
     +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlExporterComparaison()">Exporter l’image</button></div></div></div>');
   _mlcRendre();
   return true;
 }
+/** @param {string} id */
 function mlChoisirComparaison(id){ if(_mlcEtat){ _mlcEtat.autre=id; _mlcRendre(); } }
 function mlFermerComparaison(){ document.getElementById('modal-overlay')?.remove(); _mlcEtat=null; }
 // L'IMAGE : les deux tracés et le tableau, dessinés sur un canevas, à joindre à
@@ -13017,7 +13053,7 @@ function mlExporterComparaison(){
   const g=cv.getContext('2d'); if(!g) return false;
   g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H);
   g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,100);
-  const trace=(t,coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
+  const trace=(/** @type {{x:number[],y:number[]}} */ t,/** @type {string} */ coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
     t.x.forEach((x,i)=>{ if(!isFinite(x)||!isFinite(t.y[i])){ p=false; return; } const X=90+x*900, Y=720-t.y[i]*560; if(p) g.lineTo(X,Y); else { g.moveTo(X,Y); p=true; } }); g.stroke(); };
   g.fillStyle='#161618'; g.fillRect(60,130,960,620);
   trace(d.ra.trace,'#8a8a8a'); trace(d.rb.trace,'#E02020');

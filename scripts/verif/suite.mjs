@@ -84,11 +84,29 @@ console.log('regles :', await ev(`(async()=>{ try{
 }catch(e){ return 'NON SERVIES : '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
-    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''))}; }
+    liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':'')),
+    noms:r.detail.filter(x=>!x.ok).map(x=>x.n)}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
 // LE CODE DE SORTIE DIT LE RESULTAT (30/09/2026) : la CI le lit. Une suite
 // interrompue (erreur, ou moins de 1000 tests joues) est un echec aussi.
 const MIN = +(process.env.SUITE_MIN || 1000);
+// LES ECHECS ATTENDUS (01/10/2026, .github/workflows/suite.yml). Un Chrome de
+// CI n'est pas un vrai navigateur (pas de GPU, de codecs, de polices du
+// systeme…) : certains tests y echouent pour cette seule raison. Ils sont
+// FIGES, par leur nom, dans le fichier que designe SUITE_ATTENDUS
+// (scripts/verif/echecs-attendus.json) ; seul un echec ABSENT de la liste fait
+// echouer. Un attendu qui passe desormais est signale : il faut l'en retirer.
+if (process.env.SUITE_ATTENDUS && rap && !rap.erreur) {
+  const {readFileSync} = await import('node:fs');
+  const attendus = new Set((JSON.parse(readFileSync(process.env.SUITE_ATTENDUS, 'utf8')).echecs) || []);
+  const noms = rap.noms || [];
+  const imprevus = noms.filter((n) => !attendus.has(n));
+  const gueris = [...attendus].filter((n) => !noms.includes(n));
+  console.log('\nEchecs attendus (hors navigateur reel) : ' + (noms.length - imprevus.length) + ' sur ' + attendus.size + '.');
+  if (gueris.length) console.log('::warning::Attendu(s) qui passe(nt) desormais, a retirer de ' + process.env.SUITE_ATTENDUS + ' :\n  ' + gueris.join('\n  '));
+  if (imprevus.length) console.log('::error::Echec(s) IMPREVU(S) :\n  ' + imprevus.join('\n  '));
+  process.exit(imprevus.length === 0 && rap.total >= MIN ? 0 : 1);
+}
 process.exit(rap && !rap.erreur && rap.echecs === 0 && rap.total >= MIN ? 0 : 1);

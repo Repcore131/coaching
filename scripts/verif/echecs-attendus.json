@@ -1,0 +1,4 @@
+{
+  "//": "LES ECHECS ATTENDUS DE LA SUITE NAVIGATEUR EN CI (Chrome headless du runner, pas un vrai navigateur : pas de GPU, de codecs, de polices du systeme). Un nom par test, exactement le libelle passe a ok()/okA() dans app/tests.js. .github/workflows/suite.yml ne fait echouer le job que sur un echec ABSENT de cette liste ; un attendu qui passe de nouveau est signale pour etre retire. Liste vide au 01/10/2026 : la suite joue 0 echec en local (headless_shell de Chromium, 1280x2000). Ne jamais y ajouter un test qui echoue aussi dans un vrai navigateur : c'est un bug, pas un attendu.",
+  "echecs": []
+}

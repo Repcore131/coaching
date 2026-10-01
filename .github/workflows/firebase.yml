@@ -104,6 +104,15 @@ jobs:
           # Et la version MINIFIEE, celle qui part.
           node scripts/verif/syntaxe.mjs _site/app/index.html
 
+      # LE LINT (01/10/2026), BLOQUANT. Tous les scripts de la page partagent la
+      # meme portee globale : une fonction appelee et jamais definie, ou deux
+      # fonctions du meme nom dont la seconde ecrase la premiere, ne se voient
+      # pas a la lecture et un try/catch les avale a l'execution. ESLint 9
+      # (no-undef, no-redeclare, no-dupe-keys) sur la page concatenee, chaque
+      # erreur ramenee a fichier:ligne. Voir scripts/verif/lint.mjs.
+      - name: Lint
+        run: node scripts/verif/lint.mjs
+
       # LES ACTIFS VERSIONNES. Depuis le build 1417, index.html ne porte plus le
       # code : il le DEMANDE, sous un nom qui contient le numero de build, et
       # l'hebergement sert ces deux fichiers immuables pour un an. Un nom qui ne

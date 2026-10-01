@@ -66996,11 +66996,9 @@ function savePostSession(versBilan){
 // séance. Une semaine est acquise quand le nombre de séances prévues au
 // programme a été réalisé ; elle n'est perdue qu'après une absence dépassant
 // d'une semaine pleine le rythme normal de l'athlète (voir _streakPerime).
-function _lundiDe(d){
-  const x=new Date(d);x.setHours(0,0,0,0);
-  x.setDate(x.getDate()-((x.getDay()+6)%7));   // même formule que renderNutriDots
-  return x;
-}
+// _lundiDe(d) : la MEME fonction est definie plus haut (« Le lundi de la semaine
+// contenant t »). Cette seconde copie, identique, l'ecrasait : retiree le
+// 01/10/2026 (lint, no-redeclare).
 // Nombre de séances actives au programme — le quota hebdomadaire à atteindre.
 // PURE. Le nombre de creneaux actifs du programme, TEL QUEL — zero compris.
 // ⚠ ZERO EST UNE INFORMATION ICI, et c'est pourquoi cette fonction existe a
@@ -71394,7 +71392,10 @@ async function _echOuvrirDialogue(){
   }
   const r=ouvrirEcheance(c,{date:ts,type:'COMPETITION'});
   if(!r.ok){ try{ toast(r.raison,'var(--orange)'); }catch(e){} return false; }
-  try{ renderClientDetail(); }catch(e){}
+  // LA FICHE DU CLIENT OUVERT, REPEINTE. renderClientDetail n'a jamais existe
+  // (trouve par le lint, 01/10/2026) : l'appel levait, avale par le catch, et
+  // la fiche gardait l'ancienne echeance jusqu'a la synchro suivante.
+  try{ if(currentClientId) openClientDetail(currentClientId,true); }catch(e){}
   try{
     const _envoi=CLOUD.pushOne(c.email,c);
     toastSync(true,_envoi,r.remplacee?'Échéance remplacée ✓':'Échéance ouverte ✓','l’échéance');
@@ -71464,7 +71465,7 @@ function ouvrirEcheanceEcran(user){
 function fermerEcheance(){
   const coach=!!(currentUser&&currentUser.role==='coach');
   _echCible=null;
-  if(coach){ go('s-coach-client'); try{ renderClientDetail(); }catch(e){} }
+  if(coach){ go('s-coach-client'); try{ if(currentClientId) openClientDetail(currentClientId,true); }catch(e){} }
   else { go('s-client-home'); try{ loadClientHome(); }catch(e){} }
   return true;
 }
@@ -79100,7 +79101,10 @@ function toggleRepriseDeload(val){
   currentUser._repriseDeload=!!val;
   woState.deload=!!val;
   saveUser();
-  try{ renderWorkoutHeader&&renderWorkoutHeader(); }catch(e){}
+  // LE BANDEAU DE DECHARGE est dessine par renderWoEx (htmlRepriseSeance et le
+  // badge woState.deload). renderWorkoutHeader n'a jamais existe : l'appel
+  // levait, avale par le catch, et la case ne changeait rien a l'ecran.
+  try{ if(woState&&Array.isArray(woState.exercises)&&woState.exercises.length) renderWoEx(); }catch(e){}
 }
 // Le mouvement incriminé, rappelé avec la contre-indication au dossier.
 // _rappelContreIndication rend un FRAGMENT commençant par une espace, prévu
@@ -97158,7 +97162,9 @@ function prepJournaliser(){
   if(!(r.portion.kcal>0)) return;
   // UNE SEULE ENTREE, avec des valeurs ABSOLUES : c'est exactement ce que le
   // journal additionne deja. Rien de neuf dans le modele de donnees.
-  const date=(typeof _fjJour==='function')?_fjJour():localISODate(new Date());
+  // LE JOUR DU JOURNAL OUVERT, comme toute autre saisie (_fjDate). _fjJour
+  // n'a jamais existe : la preparation partait toujours sur aujourd'hui.
+  const date=_fjDate||localISODate(new Date());
   // `nom`, comme toute entrée : `n` laissait la ligne sans nom et hors des récents.
   const e={nom:prepNom(_prepEtat),kcal:r.portion.kcal,p:r.portion.p,c:r.portion.c,l:r.portion.l};
   const ok=_fjAjouter(_fjCopier([e],date,(typeof _fjRepas!=='undefined'&&_fjRepas)||'matin'),date,prepNom(_prepEtat));
@@ -111083,6 +111089,10 @@ async function uploadVideoFile(input,options){
   pan.maj(0,file.size);
   if(progEl){progEl.style.display='block';progEl.textContent='Préparation…';}
   noter('demarre',dureeS==null?'duree illisible':dureeS+' s');
+  // L'ENTREE DE FILE, DECLAREE HORS DU try (01/10/2026, trouve par le lint) :
+  // posee dedans avec `let`, elle etait invisible du catch, ou `typeof fileId`
+  // valait toujours 'undefined' — un refus definitif ne vidait jamais la file.
+  let fileId='';
   try{
     // ══ 2. ALLÉGER. Le panneau dit « Allègement », jamais « Envoi » : rien
     //    n'est parti, et quelqu'un qui coupe ici ne coupe pas un envoi.
@@ -111206,7 +111216,7 @@ async function uploadVideoFile(input,options){
     // ⚠ ON POSE DANS LA FILE AVANT DE TENTER. Le téléphone qui se verrouille
     //   pendant deux minutes d’envoi tue le transfert avec l’onglet : sans
     //   cette ligne, rien au retour ne dirait qu’une vidéo a failli partir.
-    let fileId=_opt.fileId||'';
+    fileId=_opt.fileId||'';
     if(!fileId){
       try{ fileId=await fileEnvoiPoser({blob:aEnvoyer,nom:_opt.nom||file.name||'',
         emailCible:targetEmail,octetsOrigine:_opt.octetsOrigine||file.size,voieCompression:voie,
@@ -111359,7 +111369,7 @@ async function uploadVideoFile(input,options){
     // ⚠ UN REFUS DÉFINITIF VIDE LA FILE. Reproposer chaque matin un fichier
     //   que le serveur a refusé est une nuisance ; une coupure réseau, elle,
     //   garde son entrée — c’est exactement pour elle que la file existe.
-    try{ if(typeof fileId!=='undefined'&&fileId&&!_envoiReessayable(e)
+    try{ if(fileId&&!_envoiReessayable(e)
       &&!/annulé/i.test(String(e&&e.message))) await fileEnvoiRetirer(fileId); }catch(x){}
     noter('echec',(e&&e.message)||String(e));
     const msg=_cloudinaryUserMsg(e,'video');
@@ -124086,7 +124096,7 @@ function rcEcranDeDepart(frag){
 // suite eprouve la branche F. Sans elle, un Chrome qui offre vraiment
 // l'installation prendrait toujours la branche C, et le repli resterait a
 // jamais non verifie.
-function rcInstallInvite(){ return deferredPrompt; }
+function rcInstallInvite(){ return window.deferredPrompt; }
 // ══════════ LE QR, DESSINE ICI ET NULLE PART AILLEURS ══════════════════
 //
 // AUCUN APPEL RESEAU. L'encodeur vit dans vendor/qr.js, embarque depuis le lot
@@ -129836,5 +129846,6 @@ async function chargerTests(){
       document.head.appendChild(s);
     });
   }
-  return testExercices();
+  // testExercices est defini par tests.js, charge juste au-dessus.
+  return window.testExercices();
 }
