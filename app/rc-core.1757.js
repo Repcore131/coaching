@@ -37448,13 +37448,13 @@ function htmlBlocProgramme(c){
   const p=(()=>{ try{ return programmeDe(c); }catch(e){ return null; } })();
   const t=(s)=>'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
     +'text-transform:uppercase;font-weight:800;margin-bottom:6px">'+s+'</div>';
-  if(!p) return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+  if(!p) return '<div class="csm-bloc-c" style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
     +t('Bloc d’entraînement')
     +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:10px">'
     +'Aucun bloc défini : le programme ci-dessous vaut semaine après semaine, '
     +'sans début ni fin, et sans décharge planifiée.</div>'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'<button class="btn btn-blanc btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="reglerBlocProgramme()">Définir un bloc</button></div>';
   const dep=new Date(p.debut);
   // Le DERNIER JOUR du bloc (le dimanche de sa dernière semaine), celui de finProgramme,
@@ -37465,7 +37465,7 @@ function htmlBlocProgramme(c){
   const dech=p.decharges.length
     ? p.decharges.map(x=>'S'+(x+1)).join(', ')
     : 'aucune';
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+  return '<div class="csm-bloc-c" style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
     +t('Bloc d’entraînement')
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">'
@@ -37474,7 +37474,7 @@ function htmlBlocProgramme(c){
     +(i===null?' · <span style="color:var(--orange)">hors bloc aujourd’hui</span>'
               :' · semaine '+(i+1)+' en cours')+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'<button class="btn btn-blanc btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="reglerBlocProgramme()">Modifier le bloc</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="retirerBlocProgramme()">Retirer</button>'
@@ -38520,26 +38520,110 @@ function _seancesCoachRendre(){
 
 // Versions precedentes de la configuration de seances. Alimente par
 // _snapshotSessionsConfig, appele avant chaque application de modele.
+// ⚠ CHAQUE VERSION SE COCHE (01/10/2026, Kevin : « que je puisse cliquer dessus,
+//   sélectionner les versions, et copier, en faire quelque chose »). La ligne
+//   dit ce que la version CONTIENT (jours actifs, noms des séances, nombre
+//   d'exercices) : une date seule ne permettait pas de choisir. Deux gestes sur
+//   la sélection : restaurer (une seule version à la fois) et copier dans Mes
+//   programmes (une ou plusieurs). Pas de suppression : la publication relit
+//   l'historique enregistré, une ligne retirée ici reviendrait.
+let _histSel=new Set();
+function _histDate(ts){
+  return new Date(ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+// PURE. Ce qu'une version contient, en une ligne.
+function resumeVersionSeances(e){
+  const act=((e&&e.sessions_config)||[]).filter(x=>x&&x.active);
+  const noms=act.map(x=>String(x.name||'').trim()).filter(Boolean);
+  const exos=act.reduce((n,x)=>n+((x.exercises||[]).length),0);
+  return {actifs:act.length,noms,exos};
+}
+function histBasculer(i){
+  if(_histSel.has(i)) _histSel.delete(i); else _histSel.add(i);
+  renderSessionsHistory();
+}
 function renderSessionsHistory(){
   const box=document.getElementById('csm-history');
   const list=document.getElementById('csm-history-list');
   if(!box||!list) return;
   const hist=(_coachEditClient&&_coachEditClient.sessions_config_history)||[];
-  if(!hist.length){box.style.display='none';return;}
+  if(!hist.length){box.style.display='none';_histSel=new Set();return;}
   box.style.display='block';
+  // Une sélection qui pointe au-delà de la liste (version archivée entre-temps) tombe.
+  _histSel=new Set([..._histSel].filter(i=>i>=0&&i<hist.length));
   const n=document.getElementById('csm-history-n');
   if(n) n.textContent=hist.length;
+  const nSel=_histSel.size;
   list.innerHTML=hist.map((e,i)=>{
-    const d=new Date(e.ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    const actifs=((e.sessions_config)||[]).filter(s=>s&&s.active).length;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #1a1a1a">
-      <div style="min-width:0">
-        <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text-strong)">${escapeHtml(d)}</div>
-        <div class="sub" style="font-size:var(--fs-xs)">${actifs} jour${actifs>1?'s':''} actif${actifs>1?'s':''}</div>
-      </div>
-      <button class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0" onclick="restaurerSessionsConfig(${i})">Restaurer</button>
+    const r=resumeVersionSeances(e), on=_histSel.has(i);
+    return `<label class="csm-hist-v${on?' on':''}" data-version="${i}">
+      <input type="checkbox" ${on?'checked':''} onchange="histBasculer(${i})" aria-label="Sélectionner la version du ${escapeHtml(_histDate(e.ts))}">
+      <span class="csm-hist-coche" aria-hidden="true"></span>
+      <span class="csm-hist-c">
+        <span class="csm-hist-d">${escapeHtml(_histDate(e.ts))}</span>
+        <span class="csm-hist-r">${r.actifs} jour${r.actifs>1?'s':''} actif${r.actifs>1?'s':''} · ${r.exos} exercice${r.exos>1?'s':''}</span>
+        ${r.noms.length?`<span class="csm-hist-noms">${escapeHtml(r.noms.join(' · '))}</span>`:''}
+      </span>
+    </label>`;
+  }).join('')
+  +`<div class="csm-hist-actions">
+      <span class="csm-hist-sel">${nSel?nSel+' sélectionnée'+(nSel>1?'s':''):'Coche une version pour la restaurer ou la copier.'}</span>
+      <span class="csm-hist-btns">
+        <button type="button" class="btn btn-red btn-sm" style="margin:0" onclick="histRestaurer()" ${nSel===1?'':'disabled'}>Restaurer</button>
+        <button type="button" class="btn btn-blanc btn-sm" style="margin:0" onclick="histCopier()" ${nSel?'':'disabled'}>Copier dans mes programmes</button>
+      </span>
     </div>`;
-  }).join('');
+}
+// Restaurer LA version cochée (une seule : on ne restaure pas deux programmes).
+function histRestaurer(){
+  if(_histSel.size!==1) return false;
+  const i=[..._histSel][0];
+  _histSel=new Set();
+  return restaurerSessionsConfig(i);
+}
+// Copier la ou les versions cochées dans « Mes programmes ». Une seule : le nom
+// est demandé. Plusieurs : chacune prend le prénom et sa date, sans question.
+async function histCopier(){
+  const c=_coachEditClient;
+  const hist=(c&&c.sessions_config_history)||[];
+  const sel=[..._histSel].filter(i=>hist[i]&&hist[i].sessions_config).sort((a,b)=>a-b);
+  if(!c||!sel.length) return false;
+  const nomDe=i=>((c.fname||'Athlète')+' : version du '+_histDate(hist[i].ts));
+  let noms=sel.map(nomDe);
+  if(sel.length===1){
+    const n=(await rcSaisie('Nom du modèle ?',noms[0],{libelleOk:'Enregistrer'})||'').trim();
+    if(!n) return false;
+    noms=[n];
+  }
+  let faits=0;
+  sel.forEach((i,k)=>{ if(_ajouterModeleDepuis(hist[i].sessions_config,noms[k],c,k)) faits++; });
+  if(!faits){ toast('Aucune séance à copier : ces versions n’ont aucun jour actif avec des exercices.','var(--orange)'); return false; }
+  _histSel=new Set();
+  renderSessionsHistory();
+  toastEcriture(saveUser(),faits>1?faits+' versions copiées dans Mes programmes':'« '+noms[0]+' » ajouté à Mes programmes',
+    faits>1?'les programmes sont':'le programme est');
+  return true;
+}
+// Un modèle de « Mes programmes » fabriqué depuis une configuration de séances.
+// Rend false quand il n'y a rien à enregistrer (aucun jour actif avec exercices).
+function _ajouterModeleDepuis(src,nom,c,rang){
+  src=src||[];
+  if(!src.some(x=>x&&x.active&&x.exercises&&x.exercises.length)) return false;
+  // Les photos de séance sont écartées : elles sont en base64 et les modèles
+  // vivent dans currentUser, poussé en entier à chaque synchro.
+  const copie=()=>src.map(x=>({
+    day:x.day,name:x.name||'',active:!!x.active,notes:x.notes||'',
+    warmup:x.warmup||'',cooldown:x.cooldown||'',photo:null,photo2:null,
+    exercises:JSON.parse(JSON.stringify(x.exercises||[]))
+  }));
+  if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
+  currentUser.coachPrograms.push({
+    // `rang` : deux modèles créés dans la même milliseconde gardent deux identifiants.
+    id:(Date.now()+(rang||0)).toString(36),name:nom,createdAt:Date.now(),
+    origine:'athlete',depuis:String((c&&c.fname)||'').trim().slice(0,40),
+    sessions_H:copie(),sessions_F:copie()
+  });
+  return true;
 }
 // Restauration : on remet la copie en memoire et on redessine. On N'ENREGISTRE
 // PAS — le coach valide par SAUVEGARDER, comme pour toute autre modification.

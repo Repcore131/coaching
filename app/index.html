@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1756';
+window.RC_BUILD='1757';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1756.css">
+<link rel="stylesheet" href="./rc-style.1757.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2935,11 +2935,17 @@ const COACH_PHOTO='icons/coach.jpg';
            « rollback possible » et _snapshotSessionsConfig ecrit bien
            l'historique, mais aucun ecran ne permettait de s'en servir : la
            promesse etait fausse. Rempli par renderSessionsHistory(). -->
-      <details id="csm-history" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);margin-bottom:14px;display:none">
-        <summary style="cursor:pointer;padding:12px 14px;font-size:var(--fs-sm);font-weight:700;letter-spacing:.5px;color:var(--sub);list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:44px">
-          <span>Versions precedentes</span><span id="csm-history-n" style="color:var(--red-text)"></span>
+      <!-- 01/10/2026 (Kevin) : la ligne se distingue (texture, icone, compteur en
+           pastille, chevron), et chaque version se COCHE : restaurer celle
+           qu'on a choisie, ou en copier une ou plusieurs dans Mes programmes. -->
+      <details id="csm-history" class="csm-hist" style="display:none">
+        <summary class="csm-hist-s">
+          <svg class="csm-hist-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7.5V12l3 2"/></svg>
+          <span class="csm-hist-t">Versions précédentes</span>
+          <span id="csm-history-n" class="csm-hist-n"></span>
+          <span class="csm-hist-fl" aria-hidden="true">▾</span>
         </summary>
-        <div id="csm-history-list" style="padding:0 14px 12px"></div>
+        <div id="csm-history-list" class="csm-hist-l"></div>
       </details>
       <!-- Placé ici et non dans la topbar : celle-ci porte déjà retour, titre et
            SAUVEGARDER, un quatrième élément déborderait à 375 px.
@@ -2949,8 +2955,8 @@ const COACH_PHOTO='icons/coach.jpg';
            programme en cours est sous les yeux — et son symetrique, qui en
            fabrique un modele, est juste a cote. -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
-        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="openApplyTemplate()">Partir d'un modèle</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer dans mes programmes</button>
+        <button class="btn btn-red btn-sm" style="width:100%;margin:0" onclick="openApplyTemplate()">Partir d'un modèle</button>
+        <button class="btn btn-blanc btn-sm" style="width:100%;margin:0" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer dans mes programmes</button>
       </div>
       <div id="csm-volume"></div>
       <div id="coach-session-slots"></div>
@@ -6011,5 +6017,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1756.js"></script>
+<script src="./rc-core.1757.js"></script>
 </body></html>
