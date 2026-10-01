@@ -38403,11 +38403,12 @@ async function testExercices(){
             faImprimer();
             const k1=Number(p[0].style.getPropertyValue('--fa-k-print'));
             const k2=Number(p[1].style.getPropertyValue('--fa-k-print'));
-            if(!(k1>0&&k1<=0.672)) return _echec('facteur hors bornes : '+k1);
+            if(!(k1>0&&k1<=0.731)) return _echec('facteur hors bornes : '+k1);
             // La haute planche est bornée par sa HAUTEUR, la courte par sa
-            // largeur : 1 009 × 0,93 / 1 600 = 0,586 ; 687,9 / 1 024 = 0,671.
-            if(Math.abs(k1-0.586)>0.01) return _echec('facteur de la planche haute : '+k1);
-            if(Math.abs(k2-0.671)>0.01) return _echec('facteur de la planche courte : '+k2);
+            // largeur, sur la page « fa » à marges de 6 mm (198 × 285 mm) :
+            // 1 077,2 × 0,93 / 1 600 = 0,626 ; 748,3 / 1 024 = 0,730.
+            if(Math.abs(k1-0.626)>0.01) return _echec('facteur de la planche haute : '+k1);
+            if(Math.abs(k2-0.730)>0.01) return _echec('facteur de la planche courte : '+k2);
             // DEUX APPELS DE SUITE DONNENT LE MÊME FACTEUR : c'est ce qui
             // prouve que la mesure ne s'empile pas sur elle-même.
             faImprimer();

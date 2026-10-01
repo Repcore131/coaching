@@ -10053,14 +10053,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   #s-fiche-alim.active .pad,#s-fiche-alim.active .scroll-area{padding:0!important;overflow:visible!important}
   #s-fiche-alim.active .fa-page{
     /* L ECHELLE D ECRAN NE SUIT PAS SUR LE PAPIER : faEchelle reduit la
-       planche pour la faire tenir dans un telephone, l imprimante a 182 mm
-       utiles (A4 moins les marges de 14 mm) et n en a pas besoin. */
+       planche pour la faire tenir dans un telephone, l imprimante a 198 mm
+       utiles (A4 moins les marges de 6 mm) et n en a pas besoin. */
     /* LA MEME MISE EN PAGE QU'A L ECRAN, A L ECHELLE. Poser 182 mm de large
        ferait TOUT reflower : colonnes, retours a la ligne, coupures de
        tableau — et le papier ne montrerait plus ce que l apercu a montre. On
        garde donc les 1024 px, et faImprimer() calcule le facteur qui fait
-       entrer la planche dans 182 x 267 mm. */
-    width:1024px!important;zoom:var(--fa-k-print,.672)!important;
+       entrer la planche dans 198 x 285 mm. */
+    width:1024px!important;zoom:var(--fa-k-print,.73)!important;
     transform:none!important;height:auto!important;
     /* CENTREE : une planche bornee par sa HAUTEUR n occupe pas toute la
        largeur utile — 594 px sur 688 pour la seconde — et collee a gauche
@@ -10072,6 +10072,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   /* Un bloc de repas coupe en deux d une page a l autre est illisible. */
   #s-fiche-alim.active .fa-repas,#s-fiche-alim.active .fa-carte{
     break-inside:avoid;page-break-inside:avoid}
+  /* LA FICHE PREND UNE PAGE NOMMEE A PETITES MARGES (6 mm, retour de Kevin le
+     30/09/2026 : la planche doit venir pres des bords). Le rapport et la fiche
+     programme gardent les 14 mm de la regle generale. faImprimer calcule son
+     facteur sur cette surface : 198 x 285 mm. */
+  @page fa{size:A4;margin:6mm}
+  #s-fiche-alim.active .fa-page{page:fa}
+  /* LA SECONDE PLANCHE EST PLUS LARGE, A L ECRAN COMME AU PAPIER. Ses tableaux
+     la rendent haute : a 1 024 px, c est sa hauteur qui fixait l echelle, et
+     elle laissait une bande blanche de chaque cote de la feuille. A 1 120 px,
+     les noms passent moins a la ligne et la planche remplit la largeur. */
+  #s-fiche-alim.active .fa-page.fa-p2{width:1120px!important}
   .rap-bloc{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .rap-bloc h2{color:var(--text-faint)!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
@@ -10142,10 +10153,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 }
 
 /* ══ LA FICHE ALIMENTAIRE IMPRIMABLE ═══════════════════════════════════════
-   Les planches que Kevin livre a ses athletes : fond noir, filet rouge en
-   diagonale, blocs de repas numerotes, tableaux de sources. Elles sont faites
-   pour etre imprimees ou enregistrees en PDF, et le fond NOIR est tenu jusqu au
-   papier (print-color-adjust) — c est la marque du coach, pas une coquetterie.
+   Les planches que Kevin livre a ses athletes : feuille blanche, en-tetes de
+   repas et de tableaux en couleur, lignes blanches et blanc casse une sur deux
+   (30/09/2026 — les lignes noires faisaient une planche lourde). Les couleurs
+   des en-tetes sont tenues jusqu au papier (print-color-adjust).
 
    ⚠ TOUT EST EN PIXELS ET EN LARGEUR FIXE DE PLANCHE. Le reste de
    l application est fluide ; ici non : une planche A4 a des proportions, et un
@@ -10161,11 +10172,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   background:#fff; color:#111;
   background-image:radial-gradient(120% 55% at 50% 0,rgba(224,32,32,.055),transparent 62%);
   border:1px solid #d9d9d9; border-radius:10px;
-  padding:28px 28px 20px; margin:0 auto 24px;
+  padding:18px 16px 14px; margin:0 auto 24px;
   font-family:Montserrat,system-ui,sans-serif}
 /* L EN-TETE : la marque a gauche, le coach a droite. */
 .fa-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:6px}
-.fa-logo-img{height:34px;max-width:230px;object-fit:contain;display:block}
+.fa-logo-img{height:112px;max-width:170px;object-fit:contain;display:block}
+.fa-rail-logo{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:-26px}
+/* LE LOGO DU COACH EST LA SIGNATURE DE LA PLANCHE (retour de Kevin le
+   30/09/2026) : a 34 px il passait pour une puce. Il revient en pied, a cote
+   de son nom. */
+.fa-pied-g{display:flex;align-items:center;gap:12px}
+.fa-pied-logo{height:40px;max-width:120px;object-fit:contain;display:block}
 .fa-logo-txt{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
   font-size:30px;line-height:1;letter-spacing:1px;color:#111}
 .fa-logo-txt span{color:var(--fa-rouge)}
@@ -10177,7 +10194,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .fa-tete-sous{font-size:8px;letter-spacing:2.6px;color:var(--fa-rouge);margin-top:4px;font-weight:700}
 /* LE BANDEAU DE TITRE, avec ses deux rails. Les rails sont des reperes de
    marque : ils ne portent aucune donnee, et ils ne bougent jamais. */
-.fa-bandeau{display:grid;grid-template-columns:120px 1fr 120px;align-items:start;
+.fa-bandeau{display:grid;grid-template-columns:170px 1fr 170px;align-items:start;
   gap:10px;margin:10px 0 20px}
 .fa-rail{font-size:9px;line-height:1.85;letter-spacing:2.2px;color:#6f6f6f;font-weight:700}
 .fa-rail-d{text-align:right}
@@ -10189,59 +10206,80 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .fa-h1-sous{font-size:15px;color:#333;margin-top:4px;letter-spacing:1px}
 .fa-h1-note{font-size:9.5px;color:#6f6f6f;letter-spacing:1.4px;margin-top:6px;line-height:1.5}
 /* ── UN REPAS ─────────────────────────────────────────────────────────── */
-.fa-repas{border:1px solid rgba(224,32,32,.45);border-radius:9px;overflow:hidden;margin-bottom:12px;
-  background:linear-gradient(180deg,#131313,#0c0c0c)}
-.fa-repas-tete{display:flex;align-items:center;gap:12px;padding:8px 12px;
-  background:linear-gradient(90deg,rgba(224,32,32,.60),rgba(120,6,6,.28) 62%,rgba(10,10,10,0));
-  border-bottom:1px solid rgba(224,32,32,.35)}
+.fa-repas{border:5px solid #8e1212;border-radius:10px;overflow:hidden;margin-bottom:14px;
+  background:#fff}
+/* L EN-TETE RESTE SOMBRE ET PLEIN : sur une carte blanche, un degrade qui
+   s efface vers le transparent laissait le moment et le numero, en blanc,
+   sur du blanc. */
+.fa-repas-tete{display:flex;align-items:center;gap:12px;padding:10px 16px;
+  background:linear-gradient(90deg,#b31414 0%,#5e0a0a 55%,#1b1b1b 100%);
+  border-bottom:1px solid #8a1010}
 .fa-repas-ico{font-size:15px;line-height:1;flex:none}
 .fa-repas-t{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
   font-size:19px;letter-spacing:1.6px;color:#fff;text-transform:uppercase;flex:none}
-.fa-repas-t em{font-style:normal;color:#ff9a9a}
+.fa-repas-t em{font-style:normal;color:#ffb3b3}
 .fa-repas-note{font-size:9.5px;color:#d8d8d8;letter-spacing:1.6px;font-weight:700;
   border-left:1px solid rgba(255,255,255,.28);padding-left:12px;text-transform:uppercase}
-.fa-repas-moment{margin-left:auto;font-size:8.5px;letter-spacing:2.2px;color:#bdbdbd;font-weight:700}
+.fa-repas-moment{margin-left:auto;font-size:9.5px;letter-spacing:2.2px;color:#e0e0e0;font-weight:700}
 .fa-repas-num{font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
   font-size:19px;color:#fff;letter-spacing:1px;min-width:26px;text-align:right}
 .fa-tbl{width:100%;border-collapse:collapse;table-layout:fixed}
-.fa-tbl td{padding:6px 12px;font-size:12px;border-top:1px solid #1d1d1d;vertical-align:middle}
-.fa-l td:first-child{color:#e8e8e8}
-.fa-l-q{text-align:left;width:46%;color:#cfcfcf}
-.fa-l-q b{color:var(--fa-rouge-clair);font-weight:800;font-size:13px}
-.fa-tbl tr:nth-child(odd) td{background:rgba(255,255,255,.022)}
+.fa-tbl td{padding:13px 16px;font-size:16px;border-top:1px solid #ebe7e2;vertical-align:middle;
+  background:#fff}
+/* BLANC ET BLANC CASSE, UNE LIGNE SUR DEUX (retour de Kevin le 30/09/2026 :
+   les lignes noires faisaient une planche lourde). La couleur ne reste que
+   dans les en-tetes et dans les trois lignes qui renvoient aux tableaux. */
+.fa-tbl tr:nth-child(even) td{background:#f7f4ef}
+.fa-l td:first-child{color:#1c1c1c}
+.fa-l-q{text-align:left;width:46%;color:#444}
+.fa-l-q b{color:#cc1515;font-weight:800;font-size:17px}
 /* Une ligne de note du coach : elle titre le groupe, elle ne se lit pas comme
    un aliment. */
-.fa-note td{color:#b9b9b9;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;
-  background:rgba(255,255,255,.04)!important;font-weight:700}
+.fa-note td{color:#6a6a6a;font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;
+  background:#efebe5!important;font-weight:700}
 /* LES TROIS LIGNES QUI RENVOIENT AUX TABLEAUX. Teintees comme sur la planche
    du coach : rouge pour les proteines, or pour les glucides, vert pour le
    fruit. C est le seul endroit ou la couleur porte une information. */
-.fa-l-prot td{background:rgba(224,32,32,.16)!important}
-.fa-l-gluc td{background:rgba(245,197,24,.16)!important}
-.fa-l-fruit td{background:rgba(34,197,94,.16)!important}
-.fa-l-prot .fa-l-n,.fa-l-gluc .fa-l-n,.fa-l-fruit .fa-l-n{color:#fff;font-weight:700}
+.fa-l-prot td{background:#fbe3e3!important}
+.fa-l-gluc td{background:#fbf1cf!important}
+.fa-l-fruit td{background:#dff3e5!important}
+.fa-l-prot .fa-l-n,.fa-l-gluc .fa-l-n,.fa-l-fruit .fa-l-n{color:#111;font-weight:700}
+.fa-l-prot .fa-l-q,.fa-l-gluc .fa-l-q,.fa-l-fruit .fa-l-q{color:#333}
 /* ── LES TABLEAUX DE LA SECONDE PLANCHE ───────────────────────────────── */
-.fa-cols{display:grid;grid-template-columns:1.45fr 1fr;gap:14px;align-items:start}
-.fa-carte{border:1px solid #1d1d1d;border-radius:9px;overflow:hidden;margin-bottom:14px;
-  background:linear-gradient(180deg,#121212,#0b0b0b)}
-.fa-carte-t{display:flex;align-items:center;gap:10px;padding:8px 12px;
+.fa-page.fa-p2{width:1120px}
+.fa-cols{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:14px;align-items:start}
+.fa-carte{border:5px solid #8e1212;border-radius:10px;overflow:hidden;margin-bottom:14px;
+  background:#fff}
+/* LA BORDURE EPAISSE PREND LA COULEUR DE L EN-TETE : elle ferme le tableau
+   sans ajouter une teinte de plus a la planche. */
+.fa-carte.fa-c-fruit{border-color:#1a7d40}
+.fa-carte.fa-c-gluc{border-color:#b8900a}
+.fa-carte-t{display:flex;align-items:center;gap:10px;padding:10px 14px;
   font-family:var(--pile-titre),Bebas Neue,Montserrat,sans-serif;
   font-size:17px;letter-spacing:2px;color:#fff;text-transform:uppercase}
-.fa-c-prot .fa-carte-t{background:linear-gradient(90deg,rgba(224,32,32,.75),rgba(90,4,4,.30))}
-.fa-c-fruit .fa-carte-t{background:linear-gradient(90deg,rgba(34,197,94,.70),rgba(8,70,34,.28))}
-.fa-c-gluc .fa-carte-t{background:linear-gradient(90deg,rgba(245,197,24,.75),rgba(110,84,6,.28));color:#111}
+.fa-c-prot .fa-carte-t{background:linear-gradient(90deg,#c01818,#5e0a0a)}
+.fa-c-fruit .fa-carte-t{background:linear-gradient(90deg,#1f9a4f,#0d4a26)}
+.fa-c-gluc .fa-carte-t{background:linear-gradient(90deg,#f0c020,#a07c08);color:#111}
 .fa-t4,.fa-t2{width:100%;border-collapse:collapse;table-layout:fixed}
-.fa-t4 th,.fa-t2 th{font-size:9.5px;letter-spacing:1.2px;padding:6px 10px;text-align:center;
-  background:rgba(255,255,255,.07);color:#e6e6e6;font-weight:800;border-bottom:1px solid #262626}
-.fa-t4 td,.fa-t2 td{font-size:11px;padding:4px 10px;text-align:center;color:#d6d6d6;
-  border-top:1px solid #1b1b1b}
-.fa-t4 tr:nth-child(even) td,.fa-t2 tr:nth-child(even) td{background:rgba(255,255,255,.022)}
+.fa-t4 th,.fa-t2 th{font-size:10.5px;letter-spacing:1px;padding:7px 8px;line-height:1.2;text-align:center;
+  background:#ece7e0;color:#222;font-weight:800;border-bottom:1px solid #d8d1c7}
+.fa-t4 td,.fa-t2 td{font-size:13.5px;padding:6px 10px;line-height:1.25;text-align:center;color:#2a2a2a;
+  border-top:1px solid #ebe7e2;background:#fff}
+.fa-t4 tr:nth-child(even) td,.fa-t2 tr:nth-child(even) td{background:#f7f4ef}
 /* ⚠ « .fa-t4 td » PORTE DEJA text-align:center ET GAGNE EN SPECIFICITE
    (0,1,1 contre 0,1,0) : la colonne des aliments se centrait malgre cette
    regle. On qualifie le selecteur, on n ajoute pas un !important. */
-.fa-t4 td.fa-t4-n,.fa-t2 td.fa-t4-n{text-align:left;color:#fff}
-.fa-alerte{color:var(--fa-or)}
-.fa-vide-t{padding:10px 12px;font-size:11px;color:#8a8a8a}
+.fa-t4 td.fa-t4-n,.fa-t2 td.fa-t4-n{text-align:left;color:#111;font-weight:600}
+/* LA LISTE LONGUE EN DEUX COLONNES : trente glucides sur une seule colonne
+   imposaient de reduire toute la planche pour la faire tenir en hauteur. */
+.fa-2col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+.fa-2col>.fa-t4+.fa-t4{border-left:1px solid #e3ded7}
+/* LA COLONNE DES NOMS D ABORD : a colonnes egales, un nom Ciqual passait sur
+   trois ou quatre lignes et chaque ligne du tableau triplait de hauteur. */
+.fa-col-nom{width:42%} .fa-col-jour{width:22%} .fa-col-fruit{width:36%}
+.fa-2col .fa-col-nom{width:44%} .fa-2col .fa-t4 td,.fa-2col .fa-t4 th{padding-left:8px;padding-right:8px}
+.fa-alerte{color:#a87800;font-weight:700}
+.fa-vide-t{padding:12px 14px;font-size:13px;color:#777}
 .fa-motto{text-align:center;font-size:9.5px;letter-spacing:2.4px;color:#6f6f6f;margin:14px 0 10px}
 /* ── LE PIED ──────────────────────────────────────────────────────────── */
 .fa-pied{display:flex;align-items:center;justify-content:space-between;gap:16px;
@@ -14244,7 +14282,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rap-case{color:var(--sub)}
 @media print{html[data-theme="clair"],:root[data-theme="clair"] body{background:#090909!important;color:#fbfbfb!important}
 :root[data-theme="clair"] #s-rapport.active,:root[data-theme="clair"] #s-programme-print.active{background:#090909!important;color:#fbfbfb!important}
-:root[data-theme="clair"] #s-fiche-alim.active{background:#090909!important;color:#ebebeb!important}
 :root[data-theme="clair"] .rap-bloc h2{color:var(--text-faint)!important;border-bottom-color:#4a4a4a!important}
 :root[data-theme="clair"] .rap-nb{color:#fbfbfb!important}
 :root[data-theme="clair"] .rap-lbl,:root[data-theme="clair"] .rap-u,:root[data-theme="clair"] .rap-note,:root[data-theme="clair"] .rap-meta,:root[data-theme="clair"] .rap-vide{color:var(--text-dim)!important}
@@ -14259,56 +14296,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pp-lbl,:root[data-theme="clair"] .pp-meta{color:var(--text-dim)!important}
 :root[data-theme="clair"] .pp-txt,:root[data-theme="clair"] .pp-nom{color:#fbfbfb!important}
 :root[data-theme="clair"] svg{color:#fbfbfb}}
-:root[data-theme="clair"] .fa-page{--fa-rouge:#E02020;--fa-rouge-clair:#ff3b30;--fa-or:#f5c518;--fa-vert:#22c55e;background:#090909;color:#ebebeb;background-image:radial-gradient(120% 55% at 50% 0,rgba(224,32,32,.055),transparent 62%);border:1px solid #2d2d2d}
-:root[data-theme="clair"] .fa-logo-txt{color:#ebebeb}
-:root[data-theme="clair"] .fa-logo-txt span{color:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-logo-sous{color:#929292}
-:root[data-theme="clair"] .fa-tete-coach{color:#ebebeb}
-:root[data-theme="clair"] .fa-tiret{background:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-tete-sous{color:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-rail{color:#929292}
-:root[data-theme="clair"] .fa-rail-d b{color:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-h1{color:#ebebeb}
-:root[data-theme="clair"] .fa-h1 em{color:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-h1-sous{color:#cbcbcb}
-:root[data-theme="clair"] .fa-h1-note{color:#929292}
-:root[data-theme="clair"] .fa-repas{border:1px solid rgba(224,32,32,.45);background:linear-gradient(180deg,#e9e9e9,#f0f0f0)}
-:root[data-theme="clair"] .fa-repas-tete{background:linear-gradient(90deg,rgba(224,32,32,.60),rgba(120,6,6,.28) 62%,rgba(242,242,242,0));border-bottom:1px solid rgba(224,32,32,.35)}
-:root[data-theme="clair"] .fa-repas-t{color:#090909}
-:root[data-theme="clair"] .fa-repas-t em{color:#cc0000}
-:root[data-theme="clair"] .fa-repas-note{color:#2e2e2e;border-left:1px solid rgba(9,9,9,0.28)}
-:root[data-theme="clair"] .fa-repas-moment{color:#484848}
-:root[data-theme="clair"] .fa-repas-num{color:#090909}
-:root[data-theme="clair"] .fa-tbl td{border-top:1px solid #e0e0e0}
-:root[data-theme="clair"] .fa-l td:first-child{color:#1f1f1f}
-:root[data-theme="clair"] .fa-l-q{color:#373737}
-:root[data-theme="clair"] .fa-l-q b{color:var(--fa-rouge-clair)}
-:root[data-theme="clair"] .fa-tbl tr:nth-child(odd) td{background:rgba(9,9,9,0.022)}
-:root[data-theme="clair"] .fa-note td{color:#4b4b4b;background:rgba(9,9,9,0.04)!important}
-:root[data-theme="clair"] .fa-l-prot td{background:rgba(224,32,32,.16)!important}
-:root[data-theme="clair"] .fa-l-gluc td{background:rgba(245,197,24,.16)!important}
-:root[data-theme="clair"] .fa-l-fruit td{background:rgba(34,197,94,.16)!important}
-:root[data-theme="clair"] .fa-l-prot .fa-l-n,:root[data-theme="clair"] .fa-l-gluc .fa-l-n,:root[data-theme="clair"] .fa-l-fruit .fa-l-n{color:#090909}
-:root[data-theme="clair"] .fa-carte{border:1px solid #e0e0e0;background:linear-gradient(180deg,#eaeaea,#f1f1f1)}
-:root[data-theme="clair"] .fa-carte-t{color:#090909}
-:root[data-theme="clair"] .fa-c-prot .fa-carte-t{background:linear-gradient(90deg,rgba(224,32,32,.75),rgba(90,4,4,.30))}
-:root[data-theme="clair"] .fa-c-fruit .fa-carte-t{background:linear-gradient(90deg,rgba(34,197,94,.70),rgba(8,70,34,.28))}
-:root[data-theme="clair"] .fa-c-gluc .fa-carte-t{background:linear-gradient(90deg,rgba(245,197,24,.75),rgba(110,84,6,.28));color:#111}
-:root[data-theme="clair"] .fa-t4 th,:root[data-theme="clair"] .fa-t2 th{background:rgba(9,9,9,0.07);color:#212121;border-bottom:1px solid #d7d7d7}
-:root[data-theme="clair"] .fa-t4 td,:root[data-theme="clair"] .fa-t2 td{color:#303030;border-top:1px solid #e2e2e2}
-:root[data-theme="clair"] .fa-t4 tr:nth-child(even) td,:root[data-theme="clair"] .fa-t2 tr:nth-child(even) td{background:rgba(9,9,9,0.022)}
-:root[data-theme="clair"] .fa-t4 td.fa-t4-n,:root[data-theme="clair"] .fa-t2 td.fa-t4-n{color:#090909}
-:root[data-theme="clair"] .fa-alerte{color:var(--fa-or)}
-:root[data-theme="clair"] .fa-vide-t{color:#787878}
-:root[data-theme="clair"] .fa-motto{color:#929292}
-:root[data-theme="clair"] .fa-pied{border-top:1px solid #2d2d2d}
-:root[data-theme="clair"] .fa-pied-g b{color:#ebebeb}
-:root[data-theme="clair"] .fa-pied-g span{color:#929292}
-:root[data-theme="clair"] .fa-pied-c{color:#929292}
-:root[data-theme="clair"] .fa-pied-d{color:#ebebeb}
-:root[data-theme="clair"] .fa-pied-d span{color:var(--fa-rouge)}
-:root[data-theme="clair"] .fa-pied-d em{color:#929292}
-:root[data-theme="clair"] .fa-vide{color:var(--text-dim)}
 :root[data-theme="clair"] .wel-logo img{filter:drop-shadow(5px 8px 18px rgba(0,0,0,0.262))}
 :root[data-theme="clair"] .wel-titre{color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,0.315)}
 :root[data-theme="clair"] .wel-titre-r{color:#b31919;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,0.315)}

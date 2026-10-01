@@ -296,6 +296,9 @@ def lire_jetons(css):
                     JETONS_SOMBRES[p] = v.strip()
 
 
+RE_FICHE = re.compile(r'(^|[\s,>+~(])\.fa-|#s-fiche-alim')
+
+
 def generer_css(css):
     out = []
     for tete, corps in blocs(css):
@@ -305,6 +308,12 @@ def generer_css(css):
                 inner = generer_css(corps)
                 if inner:
                     out.append(tete + '{' + inner + '}')
+            continue
+        # LA FICHE ALIMENTAIRE NE SUIT PAS LE THEME (30/09/2026). C'est un
+        # document a imprimer, blanc avec des en-tetes de marque, et il doit
+        # sortir identique quel que soit le reglage de l'ecran. Inverse, il
+        # redevenait noir en theme clair.
+        if RE_FICHE.search(tete):
             continue
         r = regle_claire(tete, corps)
         if r:
