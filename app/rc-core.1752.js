@@ -53349,8 +53349,8 @@ function finishWorkout(incomplete=false){
   // 4. LA PERFORMANCE, delta compris.
   _pose('wd-stats',(()=>{ try{
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
-  // 4 bis. LA CARTE MUSCULAIRE de la séance, sous le bilan.
-  try{ rendreMusclesFinSeance(currentUser,sess); }catch(e){}
+  // 4 bis. La carte musculaire a quitté la fin de séance (Kevin, 01/10/2026) :
+  // elle vit dans Évolution > Volume.
   // 6. L'ASCENSION.
   _pose('wd-objectif',(()=>{ try{ return _htmlProchainObjectif(_ctxFin); }catch(e){ return ''; } })());
   // L'ascension du grimpeur se mesure : elle ne peut pas partir avant que le
@@ -82270,19 +82270,8 @@ function _muscSortir(id,btn,partager){
 function partagerCarteMuscles(id,btn){ return _muscSortir(id,btn,true); }
 function telechargerCarteMuscles(id,btn){ return _muscSortir(id,btn,false); }
 
-// ── LES DEUX PLACES ───────────────────────────────────────────────────
-// Fin de séance : la séance qui vient de se terminer, rapportée à sa part de
-// la semaine prévue (1/quota).
-function rendreMusclesFinSeance(u,sess){
-  const z=document.getElementById('wd-muscles'); if(!z) return false;
-  if(!sess||!sess.data){ z.innerHTML=''; return false; }
-  let q=1; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=1; }
-  const d=muscDonnees([sess],{user:u,semaines:1/q,periode:'cette séance'});
-  if(!d.series||!Object.values(d.series).some(v=>v>0)){ z.innerHTML=''; return false; }
-  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u),sansPartage:true});
-  monterCarteMuscles('wd');
-  return true;
-}
+// ── SA PLACE ──────────────────────────────────────────────────────────
+// La fin de séance ne la porte plus (Kevin, 01/10/2026) : seule Évolution.
 // Évolution : la semaine affichée par l'onglet Volume, ou les quatre
 // semaines qui finissent avec elle (« mois »).
 let _muscEvoPeriode='semaine';
