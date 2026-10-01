@@ -71,3 +71,10 @@ android/.kotlin/
 *.apk
 *.aab
 *.idsig
+
+# Les sauvegardes de la base (scripts/sauvegarde_base.mjs) : des données
+# personnelles, en clair avant chiffrement. Jamais dans le dépôt.
+sauvegarde-*/
+sauvegarde-*.tar
+*.tar.enc
+restauration-*/
