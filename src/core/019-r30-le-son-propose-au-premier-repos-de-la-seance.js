@@ -1342,31 +1342,24 @@ function renderProgEx(){
           <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <div class="px-grp">MÉDIA</div>
-        <!-- Image + Vidéo exercice -->
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
+        <!-- L'IMAGE ET LES DEUX VIDÉOS (Kevin, 01/10/2026).
+             L'IMAGE EST CELLE DE L'EXERCICE : la photo posée à la main d'abord,
+             sinon l'illustration du guide (illustrationExo, par le slug puis par
+             le nom). La case restait vide pour tout exercice venu de la banque,
+             dont l'image est justement retirée au profit du slug.
+             DEUX LIENS, DEUX RÔLES, CÔTE À CÔTE : le premier montre comment
+             EXÉCUTER le mouvement, le second explique la TECHNIQUE
+             D'INTENSIFICATION posée sur l'exercice. C'est déjà ce que la séance
+             en fait (videosExo lit videoUrl, videoMethodeExo lit videoUrl2) :
+             seul le libellé « 2ᵉ lien vidéo (facultatif) » ne le disait pas. -->
+        <div class="px-media">
+          <label class="px-media-img" data-px-img="${i}" title="Changer l’image">
             <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
-            ${ex.image?`<img src="${srcImageAttr(ex.image)}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
-            `<div style="width:60px;height:60px;border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);border:2px dashed var(--border)"></div>`}
+            ${_imgCarte(ex)?`<img src="${escapeHtml(_imgCarte(ex))}" alt="" loading="lazy">`:`<div class="px-media-vide"></div>`}
           </label>
-          <div style="flex:1">
-            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
-            <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
-            </div>
-            ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
-            <!-- SECOND LIEN. La vue en séance l'affichait déjà (« VIDÉO 2 »)
-                 et la banque en porte parfois un : rien ne permettait de le
-                 saisir. Même normalisation et même avertissement que le
-                 premier : deux champs qui se ressembleraient sans se
-                 comporter pareil seraient deux champs à apprendre. -->
-            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:10px">2ᵉ lien vidéo (facultatif)</label>
-            <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
-            </div>
-            ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
+          <div class="px-media-liens">
+            ${_champVideoCarte(ex,i,'videoUrl','Vidéo d’exécution du mouvement','')}
+            ${_champVideoCarte(ex,i,'videoUrl2','Vidéo de la technique d’intensification',_aideVideoMethode(ex))}
           </div>
         </div>
       </div>
@@ -1379,6 +1372,25 @@ function renderProgEx(){
   }
   _majEtatEnregistrement();
   _majSommaireSeance();
+  _majImagesCartes();
+}
+// L'INDEX DES ILLUSTRATIONS N'EST PAS FORCÉMENT LÀ quand l'éditeur s'ouvre :
+// sans lui, illustrationExo ne rend rien et la case restait vide. On le
+// charge, puis on pose les images DANS les cases déjà rendues, sans relancer
+// renderProgEx : un second rendu effacerait une frappe en cours.
+function _majImagesCartes(){
+  if(_exoIndex) return;
+  let p=null; try{ p=chargerIndexIllustrations(); }catch(e){ p=null; }
+  if(!p||!p.then) return;
+  p.then(()=>{
+    if(!_exoIndex) return;
+    document.querySelectorAll('#prog-exercises .px-media-img[data-px-img]').forEach(l=>{
+      const v=l.querySelector('.px-media-vide'); if(!v) return;
+      const src=_imgCarte((progEx||[])[+l.dataset.pxImg]); if(!src) return;
+      const im=document.createElement('img'); im.alt=''; im.loading='lazy'; im.src=src;
+      v.replaceWith(im);
+    });
+  }).catch(()=>{});
 }
 // ══════ B2.F2 — LE SOMMAIRE, CONSTRUIT DEPUIS progEx ═══════════════════
 //

@@ -893,6 +893,36 @@ const SERIES_MAX=20;
 // il n'y a rien a battre dans une phrase.
 // LE MATÉRIEL COMMENCE PAR UNE MAJUSCULE (Kevin, 01/10/2026) : la banque écrit
 // « barre », la carte affiche « Barre ». Seule la première lettre change.
+// L'IMAGE DE LA CARTE : la photo du coach, sinon l'illustration du guide.
+function _imgCarte(ex){
+  if(ex&&ex.image) return ex.image;
+  try{ return illustrationExo(ex)||''; }catch(e){ return ''; }
+}
+// UN CHAMP DE LIEN VIDÉO : même normalisation et même avertissement pour les
+// deux, deux champs qui se ressemblent doivent se comporter pareil.
+function _champVideoCarte(ex,i,cle,libelle,aide){
+  const brut=(ex&&ex[cle])||'';
+  let u=''; try{ u=normaliserUrlVideo(brut); }catch(e){ u=''; }
+  return `<div class="px-media-lien">
+    <label style="margin-top:0">${libelle}</label>
+    <div class="px-media-champ">
+      <input value="${escapeHtml(brut)}" onchange="_progExDirty=true;progEx[${i}].${cle}=normaliserUrlVideo(this.value);this.value=progEx[${i}].${cle};renderProgEx()" placeholder="https://youtu.be/..." class="f-sm">
+      ${u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" class="px-media-lire" aria-label="Ouvrir la vidéo">▶</a>`:''}
+    </div>
+    ${brut&&!u?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
+    ${aide?`<div class="px-sous" style="white-space:normal">${escapeHtml(aide)}</div>`:''}
+  </div>`;
+}
+// CE QUE L'ATHLÈTE VERRA SI LE SECOND CHAMP RESTE VIDE : la vidéo du guide pour
+// la technique choisie, quand elle existe (videoMethodeExo fait ce repli).
+function _aideVideoMethode(ex){
+  if(ex&&ex.videoUrl2) return '';
+  const m=(ex&&ex.methode&&TECHNIQUES[ex.methode])||null;
+  if(!m) return 'À remplir seulement si une technique est posée sur l’exercice.';
+  let v=''; try{ v=videoTechnique(m)||''; }catch(e){ v=''; }
+  return v?('Vide : l’athlète verra la vidéo du guide pour « '+m.nom+' ».')
+          :('Le guide n’a pas de vidéo pour « '+m.nom+' » : colle la tienne ici.');
+}
 function _materielMajuscule(v){
   const t=String(v==null?'':v).trim();
   return t?t.charAt(0).toLocaleUpperCase('fr')+t.slice(1):'';

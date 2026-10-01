@@ -40091,9 +40091,30 @@ function ficheBanque(ref,user){
   const k=_aliasPour(exKey(ref),user||currentUser);
   return _banque.parSlug[k.toLowerCase().replace(/ /g,'-')]||null;
 }
+// LES MUSCLES D'UNE FICHE SUIVENT LA TABLE DE L'APP (01/10/2026). La banque en
+// ligne est une COPIE figée au jour de son remplissage : après la révision des
+// signatures du 30/09, les dips y restaient « pectoraux d'abord » et les
+// écartés gardaient le triceps. La recherche classait donc sur des muscles
+// périmés. Quand le guide connaît le nom, c'est lui qui fait foi : principal
+// en premier, secondaires ensuite. Une fiche inconnue du guide garde les siens.
+function _musclesAJour(f){
+  if(!f||!f.nom||f.perso) return f;
+  let k=''; try{ k=exKey(f.nom); }catch(e){ return f; }
+  if(!k) return f;
+  try{
+    const g=_exGuide().get(k);
+    if(g) f.muscles=g.p.concat(g.s);
+    const tag=_exGuideEstPosing(k)?'posing':(_exGuideEstCardio(k)?'cardio':'');
+    if(tag){
+      const t=Array.isArray(f.tags)?f.tags:[];
+      if(t.indexOf(tag)<0) f.tags=t.concat([tag]);
+    }
+  }catch(e){}
+  return f;
+}
 function _indexerBanque(liste){
   const parSlug={};
-  for(const f of (liste||[])) if(f&&f.slug) parSlug[f.slug]=f;
+  for(const f of (liste||[])) if(f&&f.slug) parSlug[f.slug]=_musclesAJour(f);
   return {liste:(liste||[]),parSlug,at:Date.now()};
 }
 // Réseau d'abord, cache ensuite. Un coach hors ligne garde la banque qu'il
@@ -40419,8 +40440,8 @@ function _bqRendre(){
   const res=rechercherBanque(q,filtres);
   // Les muscles nommes par la requete servent DEUX fois : a grouper la liste
   // et a proposer la puce. Une seule lecture.
-  const _musclesQ=musclesDeRequete(q);
-  _bqPuceMuscle(_musclesQ);
+  const _musclesQ=musclesVises(q,filtres);
+  _bqPuceMuscle(musclesDeRequete(q));
   const cpt=document.getElementById('bq-compte');
   if(cpt) cpt.textContent=res.length?String(res.length):'';
 
@@ -40842,7 +40863,11 @@ const BQ_SCORE=Object.freeze({
 // musclesDeRequete(q), calcule UNE fois par recherche et passe ici.
 function scoreBanque(f,q,muscles,user){
   const n=_normRech(q);
-  if(!n) return 0;
+  // 01/10/2026 : LE MUSCLE COMPTE MÊME SANS TEXTE. Un muscle choisi par sa
+  // tuile arrive ici avec une requête vide : le score valait 0 pour toutes les
+  // fiches, et la liste sortait triée par longueur de nom, un développé
+  // couché (triceps secondaire) devant une extension à la poulie.
+  if(!n&&!(muscles||[]).length) return 0;
   let sc=0;
   const nom=_normRech(f.nom), lib=f.libelle?_normRech(f.libelle):'';
   const prim=(f.muscles||[])[0]||null;
@@ -40850,6 +40875,10 @@ function scoreBanque(f,q,muscles,user){
   for(const m of (muscles||[])){
     if(prim===m) sc+=BQ_SCORE.primaire;
     else if(sec.indexOf(m)>=0) sc+=BQ_SCORE.secondaire;
+  }
+  if(!n){
+    if((f.tags||[]).some(t=>t==='posing'||t==='cardio')) sc+=BQ_SCORE.horsSujet;
+    return sc;
   }
   const mots=n.split(' ').filter(Boolean);
   if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0)) sc+=BQ_SCORE.nom;
@@ -40867,12 +40896,21 @@ function scoreBanque(f,q,muscles,user){
     sc+=BQ_SCORE.horsSujet;
   return sc;
 }
+// PURE. Les muscles que la recherche VISE : ceux que la requête nomme, plus
+// celui du filtre (la tuile). Les deux chemins classent donc pareil : muscle
+// principal d'abord, secondaire ensuite.
+function musclesVises(q,filtres){
+  const l=musclesDeRequete(q).slice();
+  const m=filtres&&filtres.muscle;
+  if(m&&l.indexOf(m)<0) l.push(m);
+  return l;
+}
 // PURE. Rend les fiches correspondantes, la plus PERTINENTE d'abord. Voir le
 // barème ci-dessus : à score égal, la plus courte, puis l'ordre alphabétique.
 function rechercherBanque(q,filtres,source,user){
   const liste=source||catalogueCoach(user);
   const mots=_normRech(q).split(' ').filter(Boolean);
-  const muscles=musclesDeRequete(q);
+  const muscles=musclesVises(q,filtres);
   const out=[];
   for(const f of liste){
     if(!f||!f.slug) continue;
@@ -40882,7 +40920,7 @@ function rechercherBanque(q,filtres,source,user){
     // tri fait O(n log n) comparaisons : le calculer dedans, c'est le refaire
     // trois mille fois sur 450 fiches, a chaque frappe, sous un debounce de
     // 250 ms.
-    f._sc=mots.length?scoreBanque(f,q,muscles,user):0;
+    f._sc=(mots.length||muscles.length)?scoreBanque(f,q,muscles,user):0;
     out.push(f);
   }
   out.sort((a,b)=>{
@@ -43518,31 +43556,24 @@ function renderProgEx(){
           <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <div class="px-grp">MÉDIA</div>
-        <!-- Image + Vidéo exercice -->
-        <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
+        <!-- L'IMAGE ET LES DEUX VIDÉOS (Kevin, 01/10/2026).
+             L'IMAGE EST CELLE DE L'EXERCICE : la photo posée à la main d'abord,
+             sinon l'illustration du guide (illustrationExo, par le slug puis par
+             le nom). La case restait vide pour tout exercice venu de la banque,
+             dont l'image est justement retirée au profit du slug.
+             DEUX LIENS, DEUX RÔLES, CÔTE À CÔTE : le premier montre comment
+             EXÉCUTER le mouvement, le second explique la TECHNIQUE
+             D'INTENSIFICATION posée sur l'exercice. C'est déjà ce que la séance
+             en fait (videosExo lit videoUrl, videoMethodeExo lit videoUrl2) :
+             seul le libellé « 2ᵉ lien vidéo (facultatif) » ne le disait pas. -->
+        <div class="px-media">
+          <label class="px-media-img" data-px-img="${i}" title="Changer l’image">
             <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
-            ${ex.image?`<img src="${srcImageAttr(ex.image)}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
-            `<div style="width:60px;height:60px;border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);border:2px dashed var(--border)"></div>`}
+            ${_imgCarte(ex)?`<img src="${escapeHtml(_imgCarte(ex))}" alt="" loading="lazy">`:`<div class="px-media-vide"></div>`}
           </label>
-          <div style="flex:1">
-            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
-            <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
-            </div>
-            ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
-            <!-- SECOND LIEN. La vue en séance l'affichait déjà (« VIDÉO 2 »)
-                 et la banque en porte parfois un : rien ne permettait de le
-                 saisir. Même normalisation et même avertissement que le
-                 premier : deux champs qui se ressembleraient sans se
-                 comporter pareil seraient deux champs à apprendre. -->
-            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:10px">2ᵉ lien vidéo (facultatif)</label>
-            <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
-            </div>
-            ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
+          <div class="px-media-liens">
+            ${_champVideoCarte(ex,i,'videoUrl','Vidéo d’exécution du mouvement','')}
+            ${_champVideoCarte(ex,i,'videoUrl2','Vidéo de la technique d’intensification',_aideVideoMethode(ex))}
           </div>
         </div>
       </div>
@@ -43555,6 +43586,25 @@ function renderProgEx(){
   }
   _majEtatEnregistrement();
   _majSommaireSeance();
+  _majImagesCartes();
+}
+// L'INDEX DES ILLUSTRATIONS N'EST PAS FORCÉMENT LÀ quand l'éditeur s'ouvre :
+// sans lui, illustrationExo ne rend rien et la case restait vide. On le
+// charge, puis on pose les images DANS les cases déjà rendues, sans relancer
+// renderProgEx : un second rendu effacerait une frappe en cours.
+function _majImagesCartes(){
+  if(_exoIndex) return;
+  let p=null; try{ p=chargerIndexIllustrations(); }catch(e){ p=null; }
+  if(!p||!p.then) return;
+  p.then(()=>{
+    if(!_exoIndex) return;
+    document.querySelectorAll('#prog-exercises .px-media-img[data-px-img]').forEach(l=>{
+      const v=l.querySelector('.px-media-vide'); if(!v) return;
+      const src=_imgCarte((progEx||[])[+l.dataset.pxImg]); if(!src) return;
+      const im=document.createElement('img'); im.alt=''; im.loading='lazy'; im.src=src;
+      v.replaceWith(im);
+    });
+  }).catch(()=>{});
 }
 // ══════ B2.F2 — LE SOMMAIRE, CONSTRUIT DEPUIS progEx ═══════════════════
 //
@@ -52409,6 +52459,36 @@ const SERIES_MAX=20;
 // il n'y a rien a battre dans une phrase.
 // LE MATÉRIEL COMMENCE PAR UNE MAJUSCULE (Kevin, 01/10/2026) : la banque écrit
 // « barre », la carte affiche « Barre ». Seule la première lettre change.
+// L'IMAGE DE LA CARTE : la photo du coach, sinon l'illustration du guide.
+function _imgCarte(ex){
+  if(ex&&ex.image) return ex.image;
+  try{ return illustrationExo(ex)||''; }catch(e){ return ''; }
+}
+// UN CHAMP DE LIEN VIDÉO : même normalisation et même avertissement pour les
+// deux, deux champs qui se ressemblent doivent se comporter pareil.
+function _champVideoCarte(ex,i,cle,libelle,aide){
+  const brut=(ex&&ex[cle])||'';
+  let u=''; try{ u=normaliserUrlVideo(brut); }catch(e){ u=''; }
+  return `<div class="px-media-lien">
+    <label style="margin-top:0">${libelle}</label>
+    <div class="px-media-champ">
+      <input value="${escapeHtml(brut)}" onchange="_progExDirty=true;progEx[${i}].${cle}=normaliserUrlVideo(this.value);this.value=progEx[${i}].${cle};renderProgEx()" placeholder="https://youtu.be/..." class="f-sm">
+      ${u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" class="px-media-lire" aria-label="Ouvrir la vidéo">▶</a>`:''}
+    </div>
+    ${brut&&!u?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
+    ${aide?`<div class="px-sous" style="white-space:normal">${escapeHtml(aide)}</div>`:''}
+  </div>`;
+}
+// CE QUE L'ATHLÈTE VERRA SI LE SECOND CHAMP RESTE VIDE : la vidéo du guide pour
+// la technique choisie, quand elle existe (videoMethodeExo fait ce repli).
+function _aideVideoMethode(ex){
+  if(ex&&ex.videoUrl2) return '';
+  const m=(ex&&ex.methode&&TECHNIQUES[ex.methode])||null;
+  if(!m) return 'À remplir seulement si une technique est posée sur l’exercice.';
+  let v=''; try{ v=videoTechnique(m)||''; }catch(e){ v=''; }
+  return v?('Vide : l’athlète verra la vidéo du guide pour « '+m.nom+' ».')
+          :('Le guide n’a pas de vidéo pour « '+m.nom+' » : colle la tienne ici.');
+}
 function _materielMajuscule(v){
   const t=String(v==null?'':v).trim();
   return t?t.charAt(0).toLocaleUpperCase('fr')+t.slice(1):'';
