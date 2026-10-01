@@ -5563,20 +5563,43 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
    La tête de la page de séance de l'athlète : fond sombre, nom en rouge, la
    silhouette à droite avec les muscles allumés. Le bandeau rouge plein est
    parti — c'est le NOM qui porte la couleur, comme chez l'athlète (.wo-nom). */
-.px-tete{display:flex;align-items:stretch;gap:10px;padding:10px 10px 8px 14px;
-  background:linear-gradient(180deg,#161616,#0c0c0c);border-bottom:1px solid var(--border)}
-.px-tete-g{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
-.px-tete-l1{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.px-num{background:var(--red);color:#fff;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 6px;
-  display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0}
-.px-nom{color:#ff2020;font-weight:800;min-width:0;font-size:var(--fs-md);padding:2px 0}
-.px-nom::placeholder{color:rgba(255,32,32,.45)}
-.px-mus{font-size:var(--fs-xs);line-height:1.45;color:var(--sub)}
-.px-mus b{color:var(--text-strong);font-weight:800;letter-spacing:.2px}
-.px-mus-s{color:var(--text-faint)}
-.px-mus-v{color:var(--text-faint);font-style:italic}
+/* LA BANNIÈRE ROUGE, TYPO BLANCHE (Kevin, 01/10/2026) : le bandeau rouge
+   revient, le nom y est en blanc et en grand, à côté de son numéro, et les
+   deux boutons de la banque y sont en blanc. La silhouette garde un fond
+   sombre : sur du rouge, ses muscles rouges ne se verraient plus. */
+.px-tete{display:flex;align-items:stretch;gap:10px;padding:10px 10px 9px 14px;color:#fff;
+  background:linear-gradient(160deg,#e21414,#8d0000);border-bottom:1px solid rgba(255,90,90,.4)}
+.px-tete-g{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.px-tete-l1{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px}
+.px-num{background:#fff;color:#b00000;border-radius:var(--r-full);min-width:26px;height:26px;padding:0 7px;
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:900;flex-shrink:0}
+.px-nom{color:#fff;font-weight:900;font-size:var(--fs-lg);letter-spacing:.3px;padding:2px 0;
+  text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.px-nom::placeholder{color:rgba(255,255,255,.6)}
+.px-cmd{display:flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;max-width:100%;flex-wrap:wrap}
+/* SUR UN TÉLÉPHONE, TROIS RANGS : le numéro avec « Copie » et la poubelle,
+   le nom en grand sur sa ligne (à côté du numéro il serait coupé), puis les
+   deux boutons de la banque. Sur un écran large, tout tient sur une ligne. */
+@media (max-width:699px){
+  .px-cmd-ed{order:1;margin-left:auto}
+  .px-tete-l1 .px-nom{order:2;flex:1 1 100%}
+  .px-cmd-bq{order:3;flex:1 1 100%}
+}
+.px-b-blanc{height:30px;padding:0 12px;background:#fff;color:#141414;border:none;border-radius:var(--r-2);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;cursor:pointer;white-space:nowrap;
+  box-shadow:0 1px 0 rgba(0,0,0,.25);transition:transform var(--arc-strike) var(--arc-c-discharge),background var(--t-1)}
+.px-b-blanc:hover{background:#f1f1f1}
+.px-b-blanc:active{transform:scale(var(--arc-scale-charge))}
+.px-b-blanc:focus-visible{outline:2px solid #141414;outline-offset:2px}
+.px-mus{font-size:var(--fs-xs);line-height:1.45;color:rgba(255,255,255,.85)}
+.px-mus b{color:#fff;font-weight:800;letter-spacing:.2px}
+.px-mus-s{color:rgba(255,255,255,.78)}
+.px-mus-v{color:rgba(255,255,255,.8);font-style:italic}
 /* La silhouette : mêmes images et même calque que .wo-ava (wo-ava-img, wo-ava-z). */
 .px-ava{position:relative;flex:0 0 auto;height:92px;min-width:34px;display:flex;align-items:flex-end;justify-content:center}
+/* Le fond sombre est une OMBRE PORTÉE, pas une marge intérieure : le calque des muscles
+   (inset:0) doit rester exactement sur l'image. */
+.px-ava{background:#0b0b0b;border-radius:6px;margin:5px 7px 5px 5px;box-shadow:0 0 0 5px #0b0b0b}
 .px-poignee{background:#fff2;border:none;color:var(--text);font-size:var(--fs-lg);line-height:1;padding:0;border-radius:var(--r-2);cursor:grab;flex-shrink:0;width:30px;height:34px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
 .px-poignee:active{cursor:grabbing;background:#fff4}
 /* 22x12 etait intouchable au doigt. Deux fleches empilees ne peuvent pas
@@ -13305,14 +13328,18 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}
 :root[data-theme="clair"] .bq-mus.on{border-color:var(--bq-c,var(--red));background:rgba(9,9,9,0.05);box-shadow:0 0 0 1px var(--bq-c,var(--red)) inset}
 :root[data-theme="clair"] .bq-mus.on span{color:var(--bq-c,var(--red-text))}
-:root[data-theme="clair"] .px-tete{background:linear-gradient(180deg,#e6e6e6,#f0f0f0);border-bottom:1px solid var(--border)}
-:root[data-theme="clair"] .px-num{background:var(--red);color:#fff}
-:root[data-theme="clair"] .px-nom{color:#cc0000}
-:root[data-theme="clair"] .px-nom::placeholder{color:rgba(204,0,0,0.45)}
-:root[data-theme="clair"] .px-mus{color:var(--sub)}
-:root[data-theme="clair"] .px-mus b{color:var(--text-strong)}
-:root[data-theme="clair"] .px-mus-s{color:var(--text-faint)}
-:root[data-theme="clair"] .px-mus-v{color:var(--text-faint)}
+:root[data-theme="clair"] .px-tete{color:#fff;background:linear-gradient(160deg,#e21414,#8d0000);border-bottom:1px solid rgba(255,90,90,.4)}
+:root[data-theme="clair"] .px-num{background:#090909;color:#b00000}
+:root[data-theme="clair"] .px-nom{color:#090909;text-shadow:0 1px 2px rgba(0,0,0,0.122)}
+:root[data-theme="clair"] .px-nom::placeholder{color:rgba(9,9,9,0.6)}
+:root[data-theme="clair"] .px-b-blanc{background:#090909;color:#e8e8e8;box-shadow:0 1px 0 rgba(0,0,0,0.087)}
+:root[data-theme="clair"] .px-b-blanc:hover{background:#161616}
+:root[data-theme="clair"] .px-b-blanc:focus-visible{outline:2px solid #e8e8e8}
+:root[data-theme="clair"] .px-mus{color:rgba(9,9,9,0.85)}
+:root[data-theme="clair"] .px-mus b{color:#090909}
+:root[data-theme="clair"] .px-mus-s{color:rgba(9,9,9,0.78)}
+:root[data-theme="clair"] .px-mus-v{color:rgba(9,9,9,0.8)}
+:root[data-theme="clair"] .px-ava{background:#f1f1f1;box-shadow:0 0 0 5px rgba(11,11,11,0.35)}
 :root[data-theme="clair"] .px-poignee{background:rgba(9,9,9,0.133);color:var(--text)}
 :root[data-theme="clair"] .px-poignee:active{background:rgba(9,9,9,0.267)}
 :root[data-theme="clair"] .px-mini{background:rgba(9,9,9,0.133);color:var(--text)}

@@ -40585,6 +40585,45 @@ async function testExercices(){
           return String(renderVolumePrescrit).indexOf('_animerJauges(z)')>=0?true:_echec('le remplissage n’est pas lancé');
         } finally { z.innerHTML=av; }})());
 
+      ok('Éditeur du coach : bannière rouge, nom en blanc à côté du numéro, « Remplacer » et « Mettre à jour » en blanc dans la bannière',(()=>{
+        // Kevin, 01/10/2026.
+        const sv=[...document.querySelectorAll('.screen.active')];
+        const svEx=progEx, svU=currentUser, svC=currentClientId, svCtx=_progEditorCtx;
+        try{
+          currentUser={id:'C1',email:'c@t.fr',role:'coach'}; currentClientId=null; _progEditorCtx={mode:'clientProgram'};
+          if(!peutConsulterBanque()) return _echec('fixture : la banque n’est pas ouverte à ce coach');
+          progEx=[{name:'BENCH COMP',series:5,reps:'4',repos:'3 min'}];
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          document.getElementById('s-coach-program').classList.add('active');
+          renderProgEx();
+          const c=document.querySelector('#prog-exercises [data-px-idx="0"]');
+          const tete=c.querySelector('.px-tete'), l1=c.querySelector('.px-tete-l1');
+          // La bannière est rouge, le nom blanc et plus gros que le texte courant.
+          const fond=getComputedStyle(tete).backgroundImage+getComputedStyle(tete).backgroundColor;
+          if(!/226,\s*20,\s*20|141,\s*0,\s*0/.test(fond)) return _echec('la bannière n’est pas rouge : '+fond.slice(0,80));
+          const nom=c.querySelector('input');
+          if(!nom.classList.contains('px-nom')||nom.parentElement!==l1) return _echec('le nom n’est pas sur la ligne du numéro');
+          const cs=getComputedStyle(nom);
+          if(cs.color.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('le nom n’est pas blanc : '+cs.color);
+          if(!(parseFloat(cs.fontSize)>=parseFloat(getComputedStyle(c.querySelector('.px-mus')).fontSize)+4)) return _echec('le nom n’est pas plus gros : '+cs.fontSize);
+          if(!l1.querySelector('.px-num')||l1.querySelector('.px-num').textContent.trim()!=='1') return _echec('le numéro manque');
+          // Les deux boutons de la banque sont DANS la bannière, en blanc ; le corps ne les porte plus.
+          const b=[...l1.querySelectorAll('.px-b-blanc')];
+          if(b.length!==2||b[0].textContent.trim()!=='Remplacer'||b[1].textContent.trim()!=='Mettre à jour') return _echec('boutons de la bannière : '+b.map(x=>x.textContent).join(','));
+          if(getComputedStyle(b[0]).backgroundColor.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('« Remplacer » n’est pas blanc');
+          if((b[0].getAttribute('onclick')||'').indexOf("remplacerDepuisBanque(0,'remplacer')")<0||(b[1].getAttribute('onclick')||'').indexOf("remplacerDepuisBanque(0,'maj')")<0) return _echec('les boutons ne sont plus câblés');
+          if(c.querySelectorAll('button[onclick^="remplacerDepuisBanque"]').length!==2) return _echec('les boutons sont en double');
+          if(/Changer l'exercice/.test(c.textContent)) return _echec('le titre « Changer l’exercice » reste dans le corps');
+          // La différence entre les deux gestes reste expliquée, et les muscles et la silhouette restent.
+          if(c.textContent.indexOf('quelle différence')<0) return _echec('l’explication a disparu');
+          return (c.querySelector('.px-mus')&&c.querySelector('.px-ava img')&&l1.querySelector('[onclick^="_dupliquerExUI"]')&&l1.querySelector('[onclick^="_supprimerEx"]'))
+            ?true:_echec('muscles, silhouette, copie ou suppression manquent');
+        } finally {
+          progEx=svEx; currentUser=svU; currentClientId=svC; _progEditorCtx=svCtx;
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+          sv.forEach(e=>e.classList.add('active'));
+        }})());
+
       ok('Éditeur du coach : chaque exercice porte la silhouette de la page athlète, muscles allumés, et elle suit le nom',(()=>{
         // Kevin, 01/10/2026 : « stylise ça comme les pages athlète avec les images des muscles ».
         const sv=[...document.querySelectorAll('.screen.active')];
