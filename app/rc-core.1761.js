@@ -2663,7 +2663,11 @@ function appliquerMarque(m){
   const st=document.createElement('style');
   st.id='rc-marque';
   st.textContent=marqueCss(v.couleur);
-  document.head.appendChild(st);
+  // DANS LE <body>, APRES rc-style (01/10/2026). La feuille de l'app est liee
+  // sous #s-splash, dans le <body> (index.html, CSS critique) : une feuille
+  // ajoutee au <head> passerait AVANT elle dans l'ordre du document, et ses
+  // :root{--red…} perdraient a specificite egale.
+  (document.body||document.head).appendChild(st);
   document.documentElement.setAttribute('data-marque','coach');
   _marqueActive=v;
   _rendreMarqueEntetes();
@@ -7961,8 +7965,13 @@ window.onload=()=>{
         const _m=document.getElementById('splash-word');
         if(_f) _f.style.animation='screenFlash var(--t-3) var(--c-out) both';
         if(_b) _b.style.animation='boltFlash var(--t-4) var(--c-out) both';
-        logoAnim.style.animation='rcStrike 420ms var(--c-out) both';
-        if(_h) _h.style.animation='rcHalo 420ms var(--c-out) both';
+        // IDEMPOTENT (01/10/2026) : le logo et le halo sont deja animes par le
+        // CSS critique d'index.html, des la premiere peinture. Relancer leur
+        // animation ici les ferait reflasher. On ne la pose que s'il n'y en a
+        // aucune (une page servie sans ce CSS, une copie ancienne en cache).
+        const _sansAnim=el=>{ try{ return getComputedStyle(el).animationName==='none'; }catch(e){ return true; } };
+        if(_sansAnim(logoAnim)) logoAnim.style.animation='rcStrike 420ms var(--c-out) both';
+        if(_h&&_sansAnim(_h)) _h.style.animation='rcHalo 420ms var(--c-out) both';
         if(_l) _l.style.animation='splashLineIn var(--t-3) var(--c-out) 260ms both';
         if(_m) _m.style.animation='splashTextIn var(--t-2) var(--c-out) 340ms both';
       }catch(e){}
