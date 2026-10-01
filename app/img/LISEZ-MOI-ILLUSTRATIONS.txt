@@ -1,0 +1,171 @@
+CAHIER DES CHARGES DES ILLUSTRATIONS DE REPCORE (01/10/2026)
+=============================================================
+
+Ce fichier ne contient aucune image. Il dit ce que les prochaines doivent
+etre, pour l'illustrateur ou l'outil qui les produira. Les images sont des
+fichiers, pas du code : on les remplace a l'identique (meme nom, meme taille,
+meme format), et le code n'a pas a changer.
+
+
+0. CE QUI VAUT POUR TOUTES
+--------------------------
+
+- Fond : l'app est sombre (#080808, cartes #111111 a #181818). Le theme
+  clair (#f4f4f4) existe aussi : une illustration sur fond TRANSPARENT doit
+  se lire sur les deux.
+- Rouge de la marque : #E02020 (jeton --red). Rouge lisible en texte sur fond
+  sombre : #FF5A4A (--red-text). Pas de violet, pas de vert acide, pas de
+  bleu dans les illustrations de marque.
+- Formats : WebP pour l'app (qualite 82 a 88), JPEG pour les apercus de
+  partage (og). Pas de PNG pour une image peinte, sauf les cartes de zones
+  (section 3), qui sont des donnees.
+- Nommage : on garde EXACTEMENT les noms actuels. Le code, le service worker
+  (app/sw.js) et le Worker (cloudflare/src/pages.js) les appellent par leur
+  nom.
+- Livraison : les fichiers remplacent les anciens dans le meme dossier. Apres
+  livraison : python3 scripts/versionner_actifs.py (le service worker relit
+  ses listes), puis verification a l'oeil sur un telephone.
+
+
+1. LES RANGS 1 A 10 (app/img/rangs/)
+------------------------------------
+
+CE QUI EXISTE. Dix emblemes en bouclier de metal sombre, tous a lueur rouge.
+Ils se ressemblent trop :
+  - rang_3 (VOLTAGE) et rang_5 (ELITE) portent le MEME eclair au centre ;
+    rang_4 le reprend dans un engrenage, rang_6 le triple ;
+  - le metal ne change pas de 1 a 8 : rien ne dit qu'on monte.
+Un athlete doit savoir, d'un coup d'oeil et sans lire, si un rang est au-
+dessus d'un autre.
+
+LES DIX RANGS (src/core/036, constante RANGS ; seuils en volts V) :
+   1 ETINCELLE        0      6 SURTENSION  20 000
+   2 IMPULSION    1 800      7 MONSTRE     29 000
+   3 VOLTAGE      3 800      8 FOUDRE      37 000
+   4 MACHINE      7 500      9 TITAN       53 000
+   5 ELITE       14 000     10 LEGENDE     85 000
+
+LA PROGRESSION se lit par DEUX signaux qui montent ensemble :
+
+  a) LE METAL DU CADRE, par paliers :
+       rangs 1-3   bronze      (#8a5a32 -> #c08050, patine sombre)
+       rangs 4-6   argent      (#9aa0a6 -> #e6e8ea)
+       rangs 7-8   or          (#b8860b -> #f2c94c)
+       rangs 9-10  rouge incandescent : le metal lui-meme rougeoie
+                   (#7a0d0d -> #E02020 -> coeur #ff8a5a), avec la lueur.
+     Le passage de palier (3->4, 6->7, 8->9) doit se voir sans comparer.
+
+  b) DES CHEVRONS sous l'embleme, un par rang DANS le palier :
+       bronze : 1, 2, 3   argent : 1, 2, 3   or : 1, 2   incandescent : 1, 2
+     Chevrons pleins, de la couleur du metal du palier, empiles et alignes au
+     centre, lisibles a 32 px.
+
+LE MOTIF CENTRAL : un seul par rang, jamais repris d'un autre. Il illustre le
+nom du rang. Suggestions (libres) :
+   1 ETINCELLE   une etincelle (l'actuelle convient)
+   2 IMPULSION   une onde / un battement
+   3 VOLTAGE     UN eclair (le seul du jeu)
+   4 MACHINE     un engrenage SANS eclair
+   5 ELITE       une couronne de laurier SANS eclair, ou une etoile
+   6 SURTENSION  un compteur a aiguille en butee
+   7 MONSTRE     la tete de taureau (l'actuelle)
+   8 FOUDRE      le poing dans la foudre (l'actuel ; seul a garder l'eclair
+                 en motif secondaire)
+   9 TITAN       le casque (l'actuel)
+  10 LEGENDE     la couronne et les ailes (l'actuel)
+Le rouge de lueur reste la signature de la marque a TOUS les rangs ; c'est le
+metal du cadre et les chevrons qui portent la progression, pas la lueur.
+
+LISIBILITE : l'embleme s'affiche de 28 px (liste d'amis, classement) a 512 px
+(ecran de rang). A 28 px, seuls la silhouette du cadre, sa couleur et le
+nombre de chevrons doivent rester distincts : pas de detail fin indispensable.
+
+FICHIERS, par rang N de 1 a 10 (30 fichiers) :
+  rang_N.webp       256 x 256, fond transparent (RGBA), embleme centre,
+                    marge de 8 px.
+  rang_N-512.webp   512 x 512, la meme image, fond transparent.
+  rang_N-og.jpg     1200 x 630, JPEG, fond #080808 : l'embleme a gauche
+                    (environ 460 px de haut), le NOM DU RANG a droite en
+                    Bebas Neue capitales blanc, « RANG N » au-dessus en
+                    Montserrat 800 #FF5A4A. Apercu des liens /@pseudo
+                    (cloudflare/src/pages.js).
+
+
+2. LES MUSCLES (app/img/muscles/)
+---------------------------------
+
+CE QUI EXISTE. 18 vignettes (et non 17) de 128 x 128, WebP opaque, un ecorche
+gris sombre ou le muscle vise est peint d'une couleur PROPRE A CHAQUE MUSCLE
+(orange les abdos, violet les biceps, bleu les dorsaux, vert les fessiers…).
+Ces couleurs ne veulent rien dire, et elles se battent avec la couleur de la
+zone de volume affichee juste a cote.
+
+LES 18 FICHIERS (src/core/037, VOL_ILLUS) :
+  abdos, abducteurs, adducteurs, avant-bras, biceps, delt-ant, delt-lat,
+  delt-post, dorsaux, fessiers, ischios, lombaires, mollets, pectoraux,
+  quadriceps, trap-med, trap-sup, triceps
+
+CE QUI EST DEMANDE : UNE SEULE RAMPE DE ROUGES, 5 INTENSITES, qui dit le
+VOLUME de la semaine. Le muscle n'a plus de couleur a lui : sa teinte vaut la
+zone de volume ou il se trouve (src/core/016, VOL_ZONES) :
+
+  intensite  zone (VOL_ZONES)                  rouge du muscle
+  1          SOUS      sous le minimum         #3a1a1a  (a peine teinte)
+  2          MAINTIEN  maintien                #6e1c1c
+  3          PROGRES   zone de progres         #a81e1e
+  4          ELEVE     volume eleve            #E02020  (le rouge de marque)
+  5          AU_DESSUS au-dessus du repere     #ff4a3a, avec une lueur
+                                               exterieure de 4 px
+
+L'ecorche autour reste le meme pour les 18 et pour les 5 intensites : gris
+#2a2a2a a #4a4a4a, traits #111. Seul le muscle vise change.
+
+DEUX FACONS DE LIVRER (a choisir avec Kevin avant de produire) :
+
+  A) 90 FICHIERS : <muscle>-1.webp a <muscle>-5.webp, 128 x 128, WebP
+     opaque, fond #0b0b0b. Le code choisira le fichier selon la zone
+     (_volIllus dans src/core/037 : un suffixe a ajouter).
+
+  B) 18 FICHIERS + LA RAMPE EN CSS (recommande) : <muscle>.webp ou le muscle
+     est peint en NIVEAUX DE GRIS CLAIRS (le modele seul, sans couleur), et
+     un masque <muscle>-masque.webp (blanc = muscle, noir = reste). Le code
+     teinte le muscle avec la couleur de la rampe (mask-image + background).
+     Moins de fichiers, et une rampe qui se regle sans redessiner.
+
+Dans les deux cas : meme cadrage que les vignettes actuelles (le muscle
+occupe environ 60 % de la vignette, centre), memes noms de base.
+
+
+3. LE CORPS (app/img/corps/)
+----------------------------
+
+LE STYLE : celui des quatre silhouettes peintes, h-face, h-dos, f-face,
+f-dos (.webp, homme 360 x 898, femme 310 x 866) : ecorche realiste, peau
+grise, muscles rouges, short noir, fond noir. C'est le seul style des corps.
+
+LES QUATRE z-*.png NE SONT PAS DES ILLUSTRATIONS. Ce sont des CARTES DE
+ZONES, jamais affichees : une image en niveaux de gris de la meme taille que
+la silhouette, ou chaque pixel de muscle vaut le rang de son muscle dans
+CORPS_ZONES_ORDRE fois 12 (0 hors muscle). Le code s'en sert pour teinter
+chaque muscle de la silhouette selon son volume.
+  - Elles sont REFERENCEES : src/core/024 (CORPS_PLANCHE, champ zones),
+    app/sw.js (mises en cache avec les .webp). ELLES RESTENT.
+  - Leur decoupage se decide dans scripts/corps_zones.py, qui les recoupe et
+    les verifie (--verif). Aucun workflow ne l'appelle aujourd'hui : le
+    lancer a la main apres toute retouche.
+  - Il n'y a donc RIEN A « REFAIRE DANS LE MEME RENDU ». Il n'y a rien a
+    peindre ; il y a une contrainte :
+
+SI UNE SILHOUETTE EST REDESSINEE, sa carte doit etre recalculee pour
+correspondre au pixel pres (meme taille, meme pose, memes contours), sinon la
+teinte deborde du muscle. Concretement :
+  - garder les dimensions exactes (360 x 898, 310 x 866) et la pose ;
+  - livrer la nouvelle silhouette avec les contours des 18 muscles (calque
+    separe, ou points releves), pour que scripts/corps_zones.py recalcule
+    z-<nom>.png ;
+  - lancer python3 scripts/corps_zones.py --verif apres livraison.
+
+CE QUI RESTE A HARMONISER DANS LE STYLE : rien entre les quatre webp, qui
+partagent deja le rendu. Si une variante est ajoutee (une autre morphologie),
+elle suit ces quatre-la : meme eclairage, meme gris de peau, meme rouge des
+muscles (#E02020 dans les ombres, plus clair sur les reliefs), meme fond.
