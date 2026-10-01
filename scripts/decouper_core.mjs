@@ -32,6 +32,12 @@
 // Usage :
 //   node scripts/decouper_core.mjs            refuse si src/core/ contient deja des .js
 //   node scripts/decouper_core.mjs --forcer   efface les .js de src/core/ et recoupe
+//   node scripts/decouper_core.mjs --garder-coupes
+//       recoupe rc-core AUX MEMES FRONTIERES et sous les MEMES NOMS que les
+//       morceaux existants : chaque morceau recommence a sa premiere ligne
+//       actuelle, retrouvee dans rc-core. Sert a reporter dans src/core/ une
+//       modification faite sur rc-core (la fusion d'une branche qui ne connait
+//       pas encore src/core/, par exemple), sans renumeroter.
 // acorn est installe a la demande dans un dossier temporaire (comme ESLint
 // pour scripts/verif/lint.mjs) : rien dans le depot.
 import {readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, unlinkSync} from 'node:fs';
@@ -63,7 +69,8 @@ if (texte.includes('\r')) { console.error(fichier + ' contient des CR : attendu 
 if (!texte.endsWith('\n')) { console.error(fichier + ' ne finit pas par un saut de ligne.'); process.exit(1); }
 
 const dejaLa = existsSync(SRC) ? readdirSync(SRC).filter((f) => f.endsWith('.js')) : [];
-if (dejaLa.length && !process.argv.includes('--forcer')) {
+const GARDER = process.argv.includes('--garder-coupes');
+if (dejaLa.length && !process.argv.includes('--forcer') && !GARDER) {
   console.error('src/core/ contient deja ' + dejaLa.length + ' morceau(x). Les modifications se font LA, pas dans '
     + fichier.replace(RACINE + '/', '') + '. Pour tout recouper depuis rc-core : --forcer.');
   process.exit(1);
@@ -131,6 +138,25 @@ coupes.forEach((c, i) => {
   if (n < MIN || n > MAX) ecarts.push('morceau de ' + n + ' lignes a partir de la ligne ' + (c + 1) + ' (hors de ' + MIN + '-' + MAX + ')');
 });
 
+// ── --garder-coupes : LES FRONTIERES ET LES NOMS DES MORCEAUX EXISTANTS ───
+let nomsGardes = null;
+if (GARDER) {
+  const anciens = dejaLa.filter((f) => /^\d{3}-.*\.js$/.test(f)).sort();
+  if (!anciens.length) { console.error('--garder-coupes : aucun morceau dans src/core/.'); process.exit(1); }
+  const admis = new Set(candidats);
+  const garde = [0];
+  for (const f of anciens.slice(1)) {
+    const premiere = readFileSync(join(SRC, f), 'utf8').split('\n')[0];
+    let l = garde[garde.length - 1] + 1;
+    while (l < nLignes && !(ligneTexte(l) === premiere && admis.has(l))) l++;
+    if (l >= nLignes) { console.error('--garder-coupes : la premiere ligne de ' + f + ' est introuvable apres la coupe precedente :\n  ' + premiere); process.exit(1); }
+    garde.push(l);
+  }
+  coupes.length = 0; coupes.push(...garde);
+  ecarts.length = 0;
+  nomsGardes = anciens;
+}
+
 // ── LA PREUVE : CHAQUE COUPE TOMBE ENTRE DEUX NOEUDS DU PROGRAM ───────────
 for (const c of coupes.slice(1)) {
   const pos = debuts[c] - 1;  // le saut de ligne qui precede le bandeau
@@ -153,7 +179,7 @@ const slug = (l) => {
 };
 const morceaux = coupes.map((c, i) => {
   const fin = i + 1 < coupes.length ? debuts[coupes[i + 1]] : texte.length;
-  const nom = String(i + 1).padStart(3, '0') + '-' + (i === 0 ? 'debut' : slug(c)) + '.js';
+  const nom = nomsGardes ? nomsGardes[i] : String(i + 1).padStart(3, '0') + '-' + (i === 0 ? 'debut' : slug(c)) + '.js';
   return {nom, texte: texte.slice(debuts[c], fin), lignes: (i + 1 < coupes.length ? coupes[i + 1] : nLignes) - c};
 });
 

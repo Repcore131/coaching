@@ -1023,6 +1023,11 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pe-mini{background:var(--surface-2);border:1px solid var(--border);color:var(--sub)}
 :root[data-theme="clair"] .pe-mini.pe-suppr{color:var(--red-light)}
 :root[data-theme="clair"] .pe-saisi{outline:2px dashed var(--red)}
+:root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
+:root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:#f0f0f0}
+:root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}
+:root[data-theme="clair"] .bq-mus.on{border-color:var(--bq-c,var(--red));background:rgba(9,9,9,0.05);box-shadow:0 0 0 1px var(--bq-c,var(--red)) inset}
+:root[data-theme="clair"] .bq-mus.on span{color:var(--bq-c,var(--red-text))}
 :root[data-theme="clair"] .px-tete{background:linear-gradient(180deg,#e6e6e6,#f0f0f0);border-bottom:1px solid var(--border)}
 :root[data-theme="clair"] .px-num{background:var(--red);color:#fff}
 :root[data-theme="clair"] .px-nom{color:#cc0000}

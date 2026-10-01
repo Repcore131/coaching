@@ -5475,6 +5475,37 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .pe-mini:disabled{opacity:.3;cursor:default}
 .pe-mini.pe-suppr{width:26px;height:38px;font-size:var(--fs-sm);color:var(--red-light)}
 .pe-saisi{opacity:.55;outline:2px dashed var(--red);outline-offset:3px;border-radius:var(--r-2)}
+/* ══ LA GRILLE DES MUSCLES DE LA BANQUE D'EXERCICES (01/10/2026) ═══════════
+   Un carré par muscle : l'illustration du volume, le nom dessous. Cinq par
+   ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,
+   pour que dix-huit vignettes ne deviennent pas dix-huit affiches. */
+.bq-mus-grille{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:10px}
+@media (min-width:700px){ .bq-mus-grille{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px} }
+.bq-mus{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;min-width:0;
+  padding:5px 3px 6px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);
+  color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer;
+  transition:border-color var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}
+.bq-mus:active{transform:scale(var(--arc-scale-charge))}
+.bq-mus img,.bq-mus i{display:block;width:100%;max-width:72px;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:#0c0c0c}
+.bq-mus span{display:block;width:100%;font-size:11px;font-weight:800;line-height:1.15;text-align:center;
+  color:var(--text-strong)}
+/* CINQ PAR LIGNE SUR UN TÉLÉPHONE : 59 px pour le nom. « Abdominaux » et
+   « Quadriceps » n'y tiennent pas à 11 px et se coupaient au milieu du mot
+   (« Quadrice / ps »). Le corps cède d'un point et le crénage se resserre :
+   un nom se coupe à l'espace ou au trait d'union, jamais ailleurs. */
+@media (max-width:699px){
+  .bq-mus{padding:5px 1px 6px}
+  .bq-mus span{font-size:10px;letter-spacing:-.35px}
+}
+.bq-mus.on{border-color:var(--bq-c,var(--red));background:rgba(255,255,255,.05);box-shadow:0 0 0 1px var(--bq-c,var(--red)) inset}
+.bq-mus.on span{color:var(--bq-c,var(--red-text))}
+/* Sous 360 px de large, quatre par ligne : à cinq, les noms ne tiennent plus. */
+@media (max-width:359px){ .bq-mus-grille{grid-template-columns:repeat(4,minmax(0,1fr))} }
+/* Replié sur le muscle choisi : sa vignette, et les deux gestes pour en sortir. */
+.bq-mus-choisi{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bq-mus-choisi .bq-mus{flex:0 0 84px}
+.bq-mus-cmd{display:flex;flex-direction:column;gap:6px;min-width:0}
+.bq-mus-cmd .pf-chip{min-height:34px}
 /* ══ L'EN-TÊTE D'UN EXERCICE DANS L'ÉDITEUR DU COACH (01/10/2026) ══════════
    La tête de la page de séance de l'athlète : fond sombre, nom en rouge, la
    silhouette à droite avec les muscles allumés. Le bandeau rouge plein est

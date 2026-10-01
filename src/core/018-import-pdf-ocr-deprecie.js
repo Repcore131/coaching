@@ -418,7 +418,7 @@ async function ouvrirBanque(cb,retour){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   _bqCb=(typeof cb==='function')?cb:null;
   _bqRetour=retour||(document.querySelector('.screen.active')||{}).id||'s-coach-home';
-  _bqOnglet='banque'; _bqFiltres={};
+  _bqOnglet='banque'; _bqFiltres={}; _bqMusclesOuvert=false;
   const q=document.getElementById('bq-q'); if(q) q.value='';
   go('s-coach-banque');
   _bqRendre();                       // ce qu'on a déjà, tout de suite
@@ -439,6 +439,8 @@ function _bqSaisie(){ clearTimeout(_bqTimer); _bqTimer=setTimeout(_bqRendre,BQ_D
 function _bqBasculerFiltre(cle,val){
   _bqFiltres[cle]=(_bqFiltres[cle]===val)?null:val;
   if(!_bqFiltres[cle]) delete _bqFiltres[cle];
+  // Un muscle choisi (ou retiré) : la grille se replie sur lui, ou se rouvre entière.
+  if(cle==='muscle') _bqMusclesOuvert=false;
   _bqRendre();
 }
 // Choisir un exercice : on le note en récent, on l'enregistre, et on rend la
@@ -602,9 +604,40 @@ function _bqSection(titre,fiches){
     text-transform:uppercase;margin:12px 0 8px">${escapeHtml(titre)}</div>`
     +fiches.map(_bqLigne).join('');
 }
+// ══ LES MUSCLES, EN GRILLE DE VIGNETTES (01/10/2026) ════════════════════
+// Kevin : « ne mets pas sous forme de liste déroulante : un carré, un muscle,
+// les uns par-dessus les autres, cinq par ligne, la petite image comme pour le
+// volume, et le nom du muscle ». Dix-huit puces sur une seule rangée : il
+// fallait la faire glisser pour savoir ce qu'elle contenait.
+// Les illustrations sont celles du volume (_volIllus). Un muscle choisi, la
+// grille se replie sur lui : la liste des exercices remonte, et « Changer »
+// la rouvre.
+let _bqMusclesOuvert=false;
+function _bqMusclesOuvrir(){ _bqMusclesOuvert=true; _bqRendre(); }
+function _bqVignetteMuscle(m,actif){
+  const illus=_volIllus(m);
+  // « Abdominaux » est le seul nom qui ne tient pas dans une vignette de téléphone.
+  const lib=m==='ABDOS'?'Abdos':((MUSCLES[m]||{}).lib||m);
+  return `<button type="button" class="bq-mus${actif?' on':''}" data-muscle="${m}" aria-pressed="${actif?'true':'false'}"
+    onclick="_bqBasculerFiltre('muscle','${m}')" style="--bq-c:${(MUSCLES[m]||{}).c||'var(--red)'}">
+    ${illus?`<img src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:'<i></i>'}
+    <span>${escapeHtml(lib)}</span></button>`;
+}
+function _bqHtmlMuscles(){
+  const sel=_bqFiltres.muscle;
+  if(sel&&MUSCLES[sel]&&!_bqMusclesOuvert){
+    return `<div class="bq-mus-choisi">${_bqVignetteMuscle(sel,true)}
+      <div class="bq-mus-cmd">
+        <button type="button" class="pf-chip" onclick="_bqMusclesOuvrir()">Changer de muscle</button>
+        <button type="button" class="pf-chip" onclick="_bqBasculerFiltre('muscle','${sel}')">Tous les muscles</button>
+      </div></div>`;
+  }
+  return `<div class="bq-mus-grille">`+Object.keys(MUSCLES).map(m=>_bqVignetteMuscle(m,sel===m)).join('')+`</div>`;
+}
 function _bqRendreFiltres(){
   const z=document.getElementById('bq-filtres'); if(!z) return;
   z.innerHTML=BQ_FAMILLES.map(fam=>{
+    if(fam.cle==='muscle') return _bqHtmlMuscles();
     const vals=fam.valeurs();
     if(!vals.length) return '';
     return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch">`

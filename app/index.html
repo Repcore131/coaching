@@ -5873,11 +5873,13 @@ const COACH_PHOTO='icons/coach.jpg';
       <button id="bq-tab-banque" class="pf-chip active" style="flex:1;min-height:34px" onclick="bqOnglet('banque')">BANQUE</button>
       <button id="bq-tab-perso" class="pf-chip" style="flex:1;min-height:34px" onclick="bqOnglet('perso')">MES EXERCICES</button>
     </div>
-    <!-- Filtres : une rangee par famille, defilement horizontal. Empiler
-         quatre listes verticalement mangerait tout l'ecran du telephone. -->
-    <div id="bq-filtres" style="margin-top:10px"></div>
   </div>
   <div class="scroll-area" style="flex:1;padding:4px 14px 20px">
+    <!-- LES FILTRES DEFILENT AVEC LA LISTE (01/10/2026). Les muscles sont une
+         grille de vignettes, plus une rangee a faire glisser : dans l'en-tete
+         fixe, elle aurait pris la moitie de l'ecran du telephone. Les trois
+         autres familles restent des rangees de puces. -->
+    <div id="bq-filtres" style="margin:6px 0 4px"></div>
     <div id="bq-liste"></div>
   </div>
 </div>
