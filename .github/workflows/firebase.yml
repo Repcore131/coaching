@@ -169,8 +169,19 @@ jobs:
       # (ni *, ni https: en connect-src / img-src / media-src), object-src
       # 'none', et tout domaine que l'app appelle admis — sinon la fonction
       # casse en production, et seulement la.
+      #
+      # ⚠ DEUX PASSES, ET LA SECONDE ECRIT. script-src ne porte plus
+      # 'unsafe-inline' : les <script> en ligne de index.html passent par leur
+      # empreinte. La premiere passe verifie le DEPOT (firebase.json contre
+      # app/index.html). Mais la copie publiee a ete minifiee plus haut — ses
+      # blocs en ligne ont perdu leurs commentaires, donc change d'empreinte :
+      # la seconde les recalcule sur _site et les pose dans le firebase.json
+      # du runner, celui que `firebase deploy` lit. Sans elle, le navigateur
+      # refuserait RC_BUILD et _tok en production.
       - name: Verifier la CSP de l'app
-        run: node scripts/verif/csp.mjs
+        run: |
+          node scripts/verif/csp.mjs
+          node scripts/verif/csp.mjs --site _site --poser
 
       # LES GESTES DELEGUES (build 1760). script-src ne porte plus
       # 'unsafe-inline' : un onclick="…" ecrit dans une chaine HTML est un

@@ -126,3 +126,13 @@ Le serveur pose la CSP de firebase.json sur `/app/**`, plus `'unsafe-eval'` et
 sur tout refus de `script-src` et sur tout geste refusé par le moteur ; les
 refus d'`img-src` ou `connect-src` viennent des jeux d'essai (domaines
 factices) et sont seulement listés.
+
+**La copie publiée est minifiée** (`scripts/minifier_site.mjs`) : ses scripts en
+ligne n'ont plus les empreintes du dépôt. Le déploiement Firebase les recalcule
+sur `_site` et les pose dans le firebase.json du runner :
+
+```bash
+node scripts/verif/csp.mjs --site _site --poser
+```
+
+`deploie.sh` ne minifie pas : les empreintes du dépôt y sont les bonnes.

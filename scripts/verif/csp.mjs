@@ -11,7 +11,7 @@
 //   · 'unsafe-inline' qui revient dans script-src ;
 //   · l'empreinte d'un script en ligne de app/index.html qui n'est plus la
 //     bonne (le bloc est alors refuse par le navigateur, en production seule).
-import {readFileSync} from 'node:fs';
+import {readFileSync, writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fichierCode} from './source-prod.mjs';
 
@@ -47,12 +47,35 @@ for(const interdit of ["'unsafe-inline'","'unsafe-eval'","'unsafe-hashes'",'data
 // empreinte perimee, et le navigateur refuse le bloc en production : plus de
 // RC_BUILD, plus de theme, plus de _tok. L'empreinte porte sur le texte tel
 // que l'analyseur HTML le rend, c'est-a-dire en LF.
-const html=readFileSync('app/index.html','utf8');
+//
+// ⚠ LA COPIE PUBLIEE N'EST PAS LE DEPOT. scripts/minifier_site.mjs retire les
+// lignes de commentaire des <script> en ligne de _site/app/index.html : leurs
+// empreintes ne sont donc PLUS celles du source. Le deploiement appelle
+//   node scripts/verif/csp.mjs --site _site --poser
+// qui recalcule les empreintes sur la copie assemblee et les ecrit dans
+// firebase.json (celui du poste qui deploie, jamais commite), puis verifie.
+// Sans --site : le depot, c'est-a-dire ce que serveur-csp.mjs et deploie.sh
+// (qui ne minifie pas) servent.
+const args=process.argv.slice(2);
+const iSite=args.indexOf('--site');
+const SITE=iSite>=0?args[iSite+1]:'';
+const fichierIndex=(SITE?SITE.replace(/[\\/]+$/,'')+'/':'')+'app/index.html';
+const html=readFileSync(fichierIndex,'utf8');
 const attendues=[...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
   .map((m)=>"'sha256-"+createHash('sha256').update(m[1].replace(/\r\n?/g,'\n'),'utf8').digest('base64')+"'");
+if(args.includes('--poser')){
+  if(!SITE){ console.error('CSP : --poser ne vaut qu avec --site <dossier> (dans le depot, c est scripts/versionner_actifs.py)'); process.exit(1); }
+  const brut=readFileSync('firebase.json','utf8');
+  const neuf=brut.replace(/script-src ('self'[^;"]*)/g,(_,v)=>{
+    const l=v.split(/\s+/).filter((x)=>x&&!x.startsWith("'sha256-"));
+    return 'script-src '+[l[0],...attendues,...l.slice(1)].join(' ');
+  });
+  if(neuf!==brut){ writeFileSync('firebase.json',neuf); console.log('CSP : empreintes de '+fichierIndex+' posees dans firebase.json'); }
+  ss.splice(0,ss.length,...((neuf.match(/script-src ('self'[^;"]*)/)||['',''])[1].split(/\s+/)));
+}
 const portees=ss.filter((v)=>v.startsWith("'sha256-"));
 for(const h of attendues) if(!portees.includes(h))
-  fautes.push('script-src ne porte pas l empreinte '+h+' d un script en ligne de app/index.html — lancer `python scripts/versionner_actifs.py`');
+  fautes.push('script-src ne porte pas l empreinte '+h+' d un script en ligne de '+fichierIndex+' — lancer `python scripts/versionner_actifs.py`');
 for(const h of portees) if(!attendues.includes(h))
   fautes.push('script-src porte une empreinte qui ne correspond a aucun script en ligne : '+h+' — lancer `python scripts/versionner_actifs.py`');
 // Les domaines appeles par l'app.
