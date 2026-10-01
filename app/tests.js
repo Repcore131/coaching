@@ -64992,11 +64992,16 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
+    // ⚠ LA REGLE A CHANGE LE 01/10/2026. motion-lab.js?v=<build> etait ecarte
+    // du report en bloc ; il suit desormais la garde des actifs rc-* : la
+    // version courante (et la precedente) se reporte, les autres sont purgees.
+    // L'intention de R28 tient toujours : une version ANCIENNE ne passe pas de
+    // cache en cache. scripts/verif/worker-actifs.mjs l'eprouve pour de vrai.
     okA('R28 — le service worker ne reconduit pas motion-lab.js d’une version à l’autre',async()=>{
       let src='';
       try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }catch(e){ return _echec('sw.js illisible'); }
-      const ex=/const _exclu = u =>([\s\S]{0,400}?);/.exec(src);
-      if(!ex||ex[1].indexOf('motion-lab')<0) return _echec('motion-lab.js n’est pas écarté du report');
+      if(!/const _ML = .*motion-lab/.test(src)||!/String\(u\)\.match\(_ML\)/.test(src))
+        return _echec('motion-lab.js?v= n’est pas soumis à la garde des versions (_versionActif)');
       const as=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
       if(!as||/motion-lab/.test(as[1])) return _echec('motion-lab.js est téléchargé d’office par tous');
       return true;
@@ -81128,6 +81133,50 @@ vendredi 78 6h 44m
         const build=String(window.RC_BUILD||'');
         return build===m[1]?true
           :_echec('RC_BUILD='+build+' alors que sw.js est en v'+m[1]);})());
+      // ══ UNE SEULE REQUETE DE VERSION PAR OUVERTURE (01/10/2026) ══════════
+      // La sonde lisait sw.js (18 Ko en brotli), en plus de reg.update() et de
+      // la verification du navigateur : trois fois le script du worker a chaque
+      // ouverture. Elle lit desormais version.json, de quelques octets.
+      const _lireSync=(u)=>{ try{ const r=new XMLHttpRequest(); r.open('GET',u,false); r.send(null);
+        return r.status===200?String(r.responseText||''):null; }catch(e){ return null; } };
+      ok('version.json porte le même build que la page',(()=>{
+        const t=_lireSync('version.json?t='+Date.now());
+        if(t==null) return _echec('version.json illisible');
+        let j=null; try{ j=JSON.parse(t); }catch(e){ return _echec('version.json n’est pas du JSON : '+t.slice(0,80)); }
+        return String(j&&j.build)===String(window.RC_BUILD||'')?true
+          :_echec('version.json='+JSON.stringify(j)+' alors que RC_BUILD='+window.RC_BUILD);})());
+      ok('La sonde de version lit version.json, plus sw.js, et l’inscription ne force plus update()',(()=>{
+        const page=String(window._RC_PAGE_PROD||'');
+        if(!page) return _echec('page de production illisible');
+        const sonde=String(window._rcVerifierVersion||'');
+        if(sonde.indexOf("fetch('./version.json'")<0) return _echec('la sonde ne lit pas version.json');
+        if(/fetch\(\s*['"]\.\/sw\.js\?v=/.test(sonde)) return _echec('la sonde lit encore sw.js');
+        // Le seul update() du document est celui de la sonde, quand une version plus recente est publiee.
+        // Les commentaires citent reg.update() pour dire qu'il est parti : on ne compte que le code.
+        const code=page.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+        const appels=(code.match(new RegExp('\\.'+'update\\(\\)','g'))||[]).length;
+        if(appels!==1) return _echec(appels+' appel(s) à update() dans la page (attendu : 1, dans la sonde)');
+        if(sonde.indexOf('g.'+'update()')<0) return _echec('update() n’est pas dans la sonde');
+        return /register\('\.\/sw\.js'\)\.then\(\(\)=>/.test(page)?true:_echec('l’inscription appelle encore reg.update()');})());
+      ok('Le worker laisse version.json au réseau, et reporte motion-lab.js?v= comme les actifs rc-*',(()=>{
+        const sw=_lireSync('sw.js?t='+Date.now());
+        if(sw==null) return _echec('sw.js illisible');
+        const ex=/const _exclu = [\s\S]*?;\n/.exec(sw.replace(/\r\n/g,'\n'));
+        if(!ex) return _echec('_exclu introuvable dans sw.js');
+        if(/motion-lab/.test(ex[0])) return _echec('_exclu exclut encore motion-lab : '+ex[0].slice(0,200));
+        if(!/_ML\s*=.*motion-lab/.test(sw)) return _echec('motion-lab.js?v= n’est pas reconnu par _versionActif');
+        return /\\\/version\\\.json\$\/\.test\(_chemin\)/.test(sw)?true:_echec('version.json passe par la branche générique (il serait mis en cache)');})());
+      ok('Le défilement hors de la fiche athlète ne lit plus les sections #ccd-et-*',(()=>{
+        const f=String(window._ccdArmerAncres||'');
+        if(!f) return _echec('_ccdArmerAncres introuvable');
+        const garde="getElementById('s-coach-"+"client')?.classList.contains('active')";
+        const i=f.indexOf(garde), j=f.indexOf('.getBounding'+'ClientRect(');
+        if(i<0) return _echec('le garde s-coach-client manque dans l’écouteur scroll');
+        return (j<0||i<j)?true:_echec('le garde vient après la lecture des sections');})());
+      okA('En production, chargerTests() dit « suite non disponible ici »',async()=>{
+        const f=String(window.chargerTests||'');
+        return /Suite de tests non disponible ici/.test(f)&&/navigator\.onLine/.test(f)?true
+          :_echec('le message de chargerTests ne distingue pas la production du hors-ligne');});
       // ══ LES DEFAUTS D'INSCRIPTION NE DOIVENT PAS REVENIR ═══════════════
       // Chacune de ces sondes correspond a une panne payee une fois. Les
       // motifs sont ASSEMBLES PAR MORCEAUX : une sonde ecrite en clair se

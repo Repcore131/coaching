@@ -45,6 +45,11 @@
         "headers": [{ "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com; style-src 'self' 'unsafe-inline' https://*.paypal.com; img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com https://*.paypal.com https://*.paypalobjects.com; media-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com; font-src 'self' data:; connect-src 'self' data: blob: https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.cloudinary.com https://res.cloudinary.com https://firebasestorage.googleapis.com https://repcore-serveur.repcore.workers.dev https://*.paypal.com https://world.openfoodfacts.org https://search.openfoodfacts.org https://europe-west1-repcore-sync.cloudfunctions.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.paypal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" }]
       },
       {
+        "//": "LA SONDE DE VERSION d'index.html lit ce fichier ({\"build\":\"N\"}, ecrit par scripts/versionner_actifs.py) a chaque ouverture et a chaque retour au premier plan : moins de 1 Ko, au lieu de sw.js (18 Ko en brotli). Jamais de cache, sinon une mise en ligne ne serait vue qu'a l'expiration.",
+        "source": "/app/version.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
         "//": "L'APK Android (MiseAJour.kt) lit ce fichier a chaque ouverture : jamais de cache, sinon la notification de mise a jour arrive des heures en retard.",
         "source": "/app/apk-version.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]

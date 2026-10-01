@@ -202,6 +202,17 @@ def main():
         ecrire(SW, sw2)
         faits.append('sw.js : ASSETS mis a jour')
 
+    # ── version.json : CE QUE LA SONDE DE VERSION LIT (01/10/2026) ─────────
+    # index.html demandait sw.js (18 Ko en brotli) pour y lire repcore-v<n> ;
+    # il lit desormais ce fichier de quelques octets, servi en no-cache
+    # (firebase.json) et jamais mis en cache par le worker (sw.js, fetch).
+    VERSION = os.path.join(RACINE, 'app', 'version.json')
+    v_txt = '{"build":"%s"}\n' % build
+    if (lire(VERSION) if os.path.exists(VERSION) else None) != v_txt:
+        if not verifier:
+            ecrire(VERSION, v_txt)
+        faits.append('version.json : build %s' % build)
+
     if not verifier:
         if html.count('\n') - html.count('\r\n') != 0:
             raise SystemExit('REFUS : des fins de ligne LF seules sont apparues')

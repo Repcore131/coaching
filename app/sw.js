@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1764';
+const CACHE = 'repcore-v1765';
 // ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
 // Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
 // (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
@@ -182,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1764.js', './rc-style.1764.css', './rc-theme.1764.css',
+const ASSETS = ['./index.html', './rc-core.1765.js', './rc-style.1765.css', './rc-theme.1765.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -383,9 +383,12 @@ self.addEventListener('activate', e => {
       // et sans cette ligne le report la ferait passer de version en version,
       // indefiniment, pour un fichier que plus personne ne lira jamais.
       //
-      // motion-lab.js NON PLUS : index.html le demande avec ?v=<build>, et
-      // chaque report reconduirait la copie d'une version que plus aucune
-      // page ne demandera.
+      // motion-lab.js?v=<build> SE REPORTE DESORMAIS (01/10/2026), comme les
+      // actifs rc-* : rc-core le demande avec ?v=<build>, et la version
+      // COURANTE reportee evite 660 Ko de reseau a la premiere ouverture du
+      // Motion Lab apres chaque mise a jour. Les AUTRES versions sont gardees
+      // ou purgees par la meme regle que rc-* (_versionActif, juste en
+      // dessous) : la courante et la precedente, pas plus.
       // ══ LES ACTIFS VERSIONNES : LA COURANTE ET LA PRECEDENTE, PAS PLUS ══
       //
       // rc-core.<build>.js pese 5,5 Mo. Le report general recopie tout ce qu'un
@@ -398,7 +401,12 @@ self.addEventListener('activate', e => {
       // avant la mise a jour) demande encore l'ancien nom ; le lui retirer le
       // laisserait sans code jusqu'au rechargement, hors ligne compris.
       const _ACTIF = /\/rc-(?:core|style|theme)\.(\d+)\.(?:js|css)$/;
-      const _versionActif = u => { const m = String(u).match(_ACTIF); return m ? Number(m[1]) : null; };
+      // motion-lab.js?v=<build> : meme numero, meme regle de garde.
+      const _ML = /\/motion-lab\.js\?(?:[^#]*&)?v=(\d+)(?:&|#|$)/;
+      const _versionActif = u => {
+        const m = String(u).match(_ACTIF) || String(u).match(_ML);
+        return m ? Number(m[1]) : null;
+      };
       const _versionsVues = new Set();
       { const m = CACHE.match(/(\d+)/); if (m) _versionsVues.add(Number(m[1])); }
       for (const k of anciens) {
@@ -417,7 +425,6 @@ self.addEventListener('activate', e => {
       const _exclu = u => !_actifGarde(u)
         || /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
         || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
-        || /\/motion-lab\.js(\?|$)/.test(u)
         || /\/data\/ciqual\.(json|version)$/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
@@ -663,8 +670,12 @@ self.addEventListener('fetch', e => {
   // chargeur de tests.js dit déjà « il faut être en ligne » — et non répondre
   // avec une version périmée d'eux-mêmes.
   const _chemin = url.split('?')[0];
+  // ET version.json (01/10/2026) : la sonde de version d'index.html le lit a
+  // chaque ouverture. Mis en cache par la branche generique, il rendrait pour
+  // toujours le numero du jour de sa premiere lecture — et plus aucune mise a
+  // jour ne serait vue.
   if (/\/sw\.js$/.test(_chemin) || /\/tests\.js$/.test(_chemin)
-      || /\/database\.rules\.json$/.test(_chemin)) return;
+      || /\/database\.rules\.json$/.test(_chemin) || /\/version\.json$/.test(_chemin)) return;
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
   // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
   // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/

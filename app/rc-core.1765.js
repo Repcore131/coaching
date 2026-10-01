@@ -33362,6 +33362,12 @@ function _ccdArmerAncres(){
       let tic=false;
       // SUR window, ET NON SUR .scroll-area : c'est le document qui defile.
       window.addEventListener('scroll',()=>{
+        // HORS DE LA FICHE ATHLETE, RIEN (01/10/2026). L'ecouteur est pose une
+        // fois pour toutes sur window : sans ce garde, il lisait la position
+        // des sections #ccd-et-* — un getBoundingClientRect, donc une mise en
+        // page forcee — a chaque defilement de n'importe quel ecran, tant que
+        // _ccdVue restait sur 'donnees'.
+        if(!document.getElementById('s-coach-client')?.classList.contains('active')) return;
         if(tic) return;
         tic=true;
         requestAnimationFrame(()=>{
@@ -130069,7 +130075,19 @@ async function chargerTests(){
       const s=document.createElement('script');
       s.src='./tests.js';
       s.onload=res;
-      s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
+      // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
+      // et scripts/assembler_site.sh le retirent) : en production, la suite
+      // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
+      // ligne, c'est l'autre cas : il n'est jamais mis en cache.
+      s.onerror=()=>{
+        const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
+        const msg=horsLigne
+          ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
+          :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
+        try{ console.warn('[RepCore] '+msg); }catch(e){}
+        try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
+        rej(new Error(msg));
+      };
       document.head.appendChild(s);
     });
   }

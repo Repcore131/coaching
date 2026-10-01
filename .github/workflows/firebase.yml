@@ -60,7 +60,13 @@ jobs:
       # LA LISTE DE CE QUI EST PUBLIC vit dans scripts/assembler_site.sh,
       # partagée avec deploie.sh et pages.yml (deux copies divergeaient).
       - name: Assembler _site
-        run: bash scripts/assembler_site.sh _site
+        run: |
+          bash scripts/assembler_site.sh _site
+          # LA SUITE DE TESTS NE PART JAMAIS (5,3 Mo). assembler_site.sh la retire
+          # deja ; on la retire ICI aussi, au plus pres de l'envoi, pour qu'une
+          # modification de la liste partagee ne la republie pas en silence.
+          # En ligne, chargerTests() dit « suite non disponible ici ».
+          rm -f _site/app/tests.js
 
       # LA COPIE PUBLIEE EST MINIFIEE, LE DEPOT JAMAIS (01/10/2026) : tests.js
       # et assertNoCycleRuleAltersSeries lisent le SOURCE des fonctions

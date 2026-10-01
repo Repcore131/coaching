@@ -2330,7 +2330,19 @@ async function chargerTests(){
       const s=document.createElement('script');
       s.src='./tests.js';
       s.onload=res;
-      s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
+      // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
+      // et scripts/assembler_site.sh le retirent) : en production, la suite
+      // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
+      // ligne, c'est l'autre cas : il n'est jamais mis en cache.
+      s.onerror=()=>{
+        const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
+        const msg=horsLigne
+          ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
+          :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
+        try{ console.warn('[RepCore] '+msg); }catch(e){}
+        try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
+        rej(new Error(msg));
+      };
       document.head.appendChild(s);
     });
   }

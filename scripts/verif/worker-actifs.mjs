@@ -69,13 +69,19 @@ function scene({avecDocument}) {
     // Le cas reel d'un appareil passe par plusieurs livraisons avant ce lot.
     await semer('repcore-v' + VIEUX, [['./rc-core.' + VIEUX + '.js', 5500000],
       ['./rc-style.' + VIEUX + '.css', 590000], ['./icons/icon-192x192.png', 4000],
-      ['./exercices/squat.webp', 40000]]);
+      ['./exercices/squat.webp', 40000],
+      // motion-lab.js?v=<build> (01/10/2026) : une version ancienne, a purger.
+      ['./motion-lab.js?v=' + VIEUX, 660000]]);
     await semer('repcore-v' + PRECEDENT, [['./rc-core.' + PRECEDENT + '.js', 5500000],
       ['./rc-style.' + PRECEDENT + '.css', 590000], ['./data/ciqual.json', 672000],
       // La base porte sa version (sw.js, CIQUAL_VERSION) : c'est elle qui l'autorise a passer.
-      ['./data/ciqual.version', 10, ((SW.match(/const CIQUAL_VERSION = '([^']+)'/) || [])[1]) || '']]);
+      ['./data/ciqual.version', 10, ((SW.match(/const CIQUAL_VERSION = '([^']+)'/) || [])[1]) || ''],
+      // La version COURANTE de motion-lab, chargee par le nouvel index.html
+      // alors que l'ancien worker tenait encore la page : elle doit passer.
+      ['./motion-lab.js?v=' + BUILD, 660000]]);
     const neuf = [['./rc-core.' + BUILD + '.js', 5500000], ['./rc-style.' + BUILD + '.css', 590000],
-      ['./rc-core.' + POLLUANT + '.js', 5500000]];               // la pollution
+      ['./rc-core.' + POLLUANT + '.js', 5500000],                // la pollution
+      ['./motion-lab.js?v=' + POLLUANT, 660000]];
     if (avecDocument) neuf.push(['./index.html', 440000, "window.RC_BUILD='" + BUILD + "';"]);
     await semer('repcore-v' + BUILD, neuf);
   })();
@@ -139,6 +145,12 @@ const ko = [];
   if (!PURGE_IMAGES && !imageReportee) ko.push('le report a perdu exercices/squat.webp');
   if (PURGE_IMAGES && imageReportee) ko.push('la purge des illustrations est annoncee mais exercices/squat.webp a ete reporte');
   if (restes.length !== 1) ko.push('les anciens caches n’ont pas ete supprimes : ' + restes.join(', '));
+  // motion-lab.js?v= : la courante reportee, les anciennes purgees (meme garde que rc-*).
+  const ml = restants.filter(u => /^motion-lab\.js\?v=/.test(u));
+  console.log('  motion-lab gardes : ' + (ml.join(', ') || 'aucun'));
+  if (!ml.includes('motion-lab.js?v=' + BUILD)) ko.push('motion-lab.js?v=' + BUILD + ' (courant) n’a pas ete reporte');
+  if (ml.includes('motion-lab.js?v=' + VIEUX)) ko.push('motion-lab.js?v=' + VIEUX + ' (ancien) a ete reporte');
+  if (ml.includes('motion-lab.js?v=' + POLLUANT)) ko.push('motion-lab.js?v=' + POLLUANT + ' (ancien, dans le cache neuf) n’a pas ete purge');
 }
 // ══ SCENE 2 : LE CACHE NEUF EST INUTILISABLE ══════════════════════════════
 // Sans document, la purge des anciens caches doit etre REPORTEE : les retirer

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1764';
+window.RC_BUILD='1765';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -310,10 +310,18 @@ if('serviceWorker' in navigator){
       const now=Date.now();
       if(!forcer&&now-_rcDerniereVerifMaj<60000) return false;
       _rcDerniereVerifMaj=now;
-      const r=await fetch('./sw.js?v='+now,{cache:'no-store'});
+      // version.json, PLUS sw.js (01/10/2026). La sonde telechargeait le
+      // script du worker entier — 18 Ko en brotli — pour y lire un numero ;
+      // avec reg.update() et la verification du navigateur, cela faisait
+      // trois fois sw.js a chaque ouverture. version.json pese quelques
+      // octets ({"build":"N"}, ecrit par scripts/versionner_actifs.py), est
+      // servi en no-cache (firebase.json) et le worker le laisse au reseau.
+      // no-store : jamais le cache HTTP, et pas de ?v= qui ferait une adresse
+      // neuve a chaque ouverture.
+      const r=await fetch('./version.json',{cache:'no-store'});
       if(!r.ok) return false;
-      const m=(await r.text()).match(/repcore-v(\d+)/);
-      const distant=m?parseInt(m[1],10):0;
+      let j=null; try{ j=await r.json(); }catch(e){}
+      const distant=(j&&/^\d+$/.test(String(j.build)))?parseInt(j.build,10):0;
       // A JOUR : on efface le verrou. Sans cela, une tentative ancienne
       // resterait inscrite et bloquerait la prochaine mise a jour de la
       // session.
@@ -354,6 +362,13 @@ if('serviceWorker' in navigator){
       //   prochain ecran sur (go() consomme le drapeau), ou a la prochaine
       //   ouverture. Personne n'a rien a toucher.
       if(actif&&RC_MAJ_SURS.indexOf(actif.id)<0){
+        // LE SEUL reg.update() DE LA PAGE (01/10/2026) : une version plus
+        //   recente est publiee, et on ne recharge pas tout de suite. Le
+        //   worker neuf s'installe en arriere-plan pendant que l'ecran reste
+        //   tel quel ; son message « maj » rechargera au prochain ecran sur.
+        //   L'inscription ne l'appelle plus a chaque ouverture : le navigateur
+        //   verifie deja sw.js de lui-meme, et cette sonde dit quand c'est utile.
+        try{ navigator.serviceWorker.getRegistration().then(g=>{ if(g) g.update(); }).catch(()=>{}); }catch(e){}
         window._swUpdatePending=true; return false;
       }
       sessionStorage.setItem('rc_maj_forcee',String(distant));
@@ -411,8 +426,9 @@ if('serviceWorker' in navigator){
       _rcRechargerSiPossible();
     });
   }catch(e){}
-  navigator.serviceWorker.register('./sw.js').then(reg=>{
-    reg.update();
+  // PLUS DE reg.update() ICI (01/10/2026) : la sonde de version le fait,
+  // seulement quand version.json annonce un build plus recent que RC_BUILD.
+  navigator.serviceWorker.register('./sw.js').then(()=>{
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
       if(!_rcControleurInitial) return;
       _rcRechargerSiPossible();
@@ -696,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1764.css">
+<link rel="stylesheet" href="./rc-style.1765.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1764.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1765.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -6070,5 +6086,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1764.js"></script>
+<script src="./rc-core.1765.js"></script>
 </body></html>

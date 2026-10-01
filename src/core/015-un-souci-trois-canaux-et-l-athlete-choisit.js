@@ -1027,6 +1027,12 @@ function _ccdArmerAncres(){
       let tic=false;
       // SUR window, ET NON SUR .scroll-area : c'est le document qui defile.
       window.addEventListener('scroll',()=>{
+        // HORS DE LA FICHE ATHLETE, RIEN (01/10/2026). L'ecouteur est pose une
+        // fois pour toutes sur window : sans ce garde, il lisait la position
+        // des sections #ccd-et-* — un getBoundingClientRect, donc une mise en
+        // page forcee — a chaque defilement de n'importe quel ecran, tant que
+        // _ccdVue restait sur 'donnees'.
+        if(!document.getElementById('s-coach-client')?.classList.contains('active')) return;
         if(tic) return;
         tic=true;
         requestAnimationFrame(()=>{
