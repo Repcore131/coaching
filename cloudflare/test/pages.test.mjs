@@ -161,8 +161,10 @@ test('le Worker route /@ et /coach/ vers la page, le reste ne change pas', async
     assert.match(await r.text(), /og:title" content="Julie · rang VOLTAGE/);
     const n = await worker.fetch(req('/@a'), { FIREBASE_DB_URL: BASE }, ctx());
     assert.equal(n.status, 404);
+    // /sante reste /sante (le pouls du serveur, pas une page) : ici, aucun pouls.
     const s = await worker.fetch(req('/sante'), { FIREBASE_DB_URL: BASE }, ctx());
-    assert.equal(s.status, 200);
+    assert.equal(s.status, 503);
+    assert.equal((await s.json()).ok, false);
   } finally { globalThis.fetch = sv; }
 });
 

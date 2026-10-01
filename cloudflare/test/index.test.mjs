@@ -54,17 +54,6 @@ await test('une URL illisible ne sort jamais sans CORS', async () => {
   corsPresent(r);
 });
 
-await test('/sante public : ok, base, vapid — et plus rien sur le mode d’accès à la base (« acces ») ni sur les secrets', async () => {
-  const compte = JSON.stringify({ client_email: 'w@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' });
-  for (const env of [ENV, Object.assign({}, ENV, { FIREBASE_SERVICE_ACCOUNT: compte }), { FIREBASE_DB_URL: 'https://b' }]) {
-    const r = await worker.fetch(new Request('https://s.t/sante'), env, CTX);
-    const texte = await r.text();
-    assert.equal(r.status, 200);
-    assert.ok(!/acces/.test(texte), texte);
-    assert.deepEqual(Object.keys(JSON.parse(texte)).sort(), ['base', 'ok', 'vapid']);
-  }
-});
-
 await test('/sante?cles=1 (administrateur) dit toujours le mode d’accès : compte de service, ou l’ancien secret à retirer', async () => {
   const vrai = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('hors ligne'); };
@@ -144,6 +133,60 @@ await test('chaque 429 servi est compté dans worker/pouls_429/<heure UTC>', asy
   // suivante (ou la tâche programmée) pour être versés.
   assert.ok(total >= 1 && total <= 5, JSON.stringify(seaux));
   assert.match(Object.keys(seaux)[0], /^20\d{8}$/);
+});
+
+// ══ /sante : LE POULS (01/10/2026) ══════════════════════════════════════════
+await test('/sante : 503 sans pouls, 503 si le pouls a plus de 5 min, 200 sinon ; jamais « acces » ni secret', async () => {
+  const lire = async () => { const r = await worker.fetch(new Request('https://s.t/sante'), ENV2, CTX2); const texte = await r.text(); return { r, texte, j: JSON.parse(texte) }; };
+  F.ecrire('worker/verrou', { jusqua: 0 });
+  let x = await lire();
+  assert.equal(x.r.status, 503); assert.equal(x.j.ok, false); assert.equal(x.j.raison, 'pouls_absent');
+  corsPresent(x.r);
+  F.ecrire('worker/verrou/pouls', { t: Date.now() - 6 * 60e3, requetes: 5, evenements: 0, echecs: 0, erreur: null, source: 'cron' });
+  x = await lire();
+  assert.equal(x.r.status, 503); assert.equal(x.j.raison, 'pouls_ancien'); assert.ok(x.j.derniereMinuteIlYA_s >= 360);
+  F.ecrire('worker/verrou/pouls/t', Date.now() - 40e3);
+  F.ecrire('evenements_ko', { k1: { type: 'message' }, k2: { type: 'reaction' } });
+  F.ecrire('evenements', { e1: { type: 'x' }, e2: { type: 'y' }, e3: { type: 'z' } });
+  x = await lire();
+  assert.equal(x.r.status, 200, x.texte);
+  assert.equal(x.j.ok, true); assert.equal(x.j.ko, 2); assert.equal(x.j.file, 3);
+  assert.ok(x.j.derniereMinuteIlYA_s >= 40 && x.j.derniereMinuteIlYA_s < 60);
+  assert.ok(!/acces|secret|paypal|cloudinary/.test(x.texte), x.texte);
+  // Une file de plus de 50 : « 50+ », sans tout lire.
+  F.ecrire('evenements', Object.fromEntries(Array.from({ length: 60 }, (_, i) => ['e' + String(i).padStart(3, '0'), { type: 'x' }])));
+  assert.equal((await lire()).j.file, '50+');
+  F.ecrire('evenements', null); F.ecrire('evenements_ko', null); F.ecrire('worker/verrou', null);
+  await Promise.all(enAttente.splice(0));
+});
+
+await test('/sante : une base injoignable (secret faux, réseau) donne 503', async () => {
+  const f0 = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 401, headers: { get: () => null }, text: async () => '{"error":"Permission denied"}', json: async () => ({ error: 'Permission denied' }) });
+  try {
+    const r = await worker.fetch(new Request('https://s.t/sante'), ENV2, CTX2);
+    assert.equal(r.status, 503);
+    assert.equal((await r.json()).raison, 'base_injoignable');
+  } finally { globalThis.fetch = f0; }
+});
+
+await test('/sante : une réponse calculée est gardée 30 s (caches.default) — pas de lecture de la base au second appel', async () => {
+  const magasin = new Map();
+  globalThis.caches = { default: { match: async (q) => (magasin.get(q.url) || undefined) && magasin.get(q.url).clone(),
+    put: async (q, r) => { magasin.set(q.url, r); } } };
+  try {
+    F.ecrire('worker/verrou/pouls', { t: Date.now(), requetes: 5 });
+    const avant = F.requetes();
+    const r1 = await worker.fetch(new Request('https://s.t/sante'), ENV2, CTX2);
+    await Promise.all(enAttente.splice(0));
+    const lus = F.requetes() - avant;
+    assert.equal(r1.status, 200);
+    assert.ok(lus >= 1 && lus <= 3, lus + ' lectures');
+    assert.match(magasin.get('https://s.t/sante').headers.get('Cache-Control'), /max-age=30/);
+    const r2 = await worker.fetch(new Request('https://s.t/sante?x=1'), ENV2, CTX2);
+    assert.equal(r2.status, 200);
+    assert.equal(F.requetes() - avant, lus, 'servi par le cache');
+  } finally { delete globalThis.caches; F.ecrire('worker/verrou', null); }
 });
 globalThis.fetch = fetchReel;
 

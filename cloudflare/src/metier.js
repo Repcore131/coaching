@@ -311,6 +311,18 @@ export function creerMetier(deps) {
   // LES ABONNÉS, UNE LECTURE PAR RÉVEIL : serie, acces, retour, bilan… la
   // demandaient chacun, à chaque minute. fixerBudget (début de réveil) l'oublie.
   let _abonnes = null;
+  // ══ L'ALERTE D'UN ÉVÉNEMENT EN ÉCHEC (01/10/2026) ═════════════════════
+  // Un événement rangé dans evenements_ko (cinq échecs) ne se voyait qu'en
+  // ouvrant l'écran des échecs. Le créateur reçoit un push URGENT, une fois
+  // par heure de Paris au plus : worker/alerte_ko porte l'heure du dernier,
+  // posée en transaction (deux réveils ne l'envoient pas deux fois).
+  async function alerteKo(type, erreur, t) {
+    const p = paris(t), heure = p.jour + 'h' + p.heure;
+    const tx = await db.ref('worker/alerte_ko').transaction((v) => (v === heure ? undefined : heure));
+    if (!tx.committed) return { envoye: 0, raison: 'deja' };
+    return envoyerPush(CLE_CREATEUR_PUSH, { type: 'coach', url: './', tag: 'serveur-ko-' + heure,
+      title: 'Serveur : un événement en échec', body: String(type || '?') + ' : ' + String(erreur || '').slice(0, 140) }, { urgent: true });
+  }
   const abonnes = () => (_abonnes = _abonnes || db.ref('push').shallow().catch((e) => { _abonnes = null; throw e; }));
   // La surface d'un dossier (base.js, surface) : ses champs simples en UNE
   // requête ; un champ objet y vaut `true` et se relit à part s'il sert.
@@ -1747,7 +1759,7 @@ export function creerMetier(deps) {
     return 'tache_inconnue';
   }
 
-  return { envoyerPush, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
+  return { envoyerPush, alerteKo, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,

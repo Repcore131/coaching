@@ -52,7 +52,8 @@ refusés jusqu'à minuit (UTC).
    npx wrangler@4 deploy
    ```
 6. Vérifier : `https://repcore-serveur.<sous-domaine>.workers.dev/sante` doit répondre
-   `{"ok":true,"base":true,"vapid":true}`. Le détail (mode d'accès à la base, secrets posés) est
+   `{"ok":true,"base":true,"vapid":true,"derniereMinuteIlYA_s":…,"file":0,"ko":0}` — `ok` n'est vrai
+   qu'une fois la première minute passée (voir « La veille »). Le détail (mode d'accès à la base, secrets posés) est
    réservé à l'administrateur : `/sante?cles=1` (voir « Limites »).
 
 L'adresse du serveur est ensuite posée dans l'app (`SERVEUR_LEGER_URL`, `app/rc-core.*.js`) et dans
@@ -126,6 +127,27 @@ vérification à la main : `docs/apercu-liens.md`.
 - **Purge** : le 1er du mois, 4 h 10, `paypal_evenements` de plus de 90 jours (PayPal ne renvoie
   plus rien après trois jours), par lots de 200, les plus anciens d'abord (`.indexOn: ["at"]`).
 
+## La veille
+
+- **Le pouls** : chaque minute écrit, dans la même écriture que le bail rendu (aucune requête de
+  plus), `worker/verrou/pouls` = `{t, requetes, evenements, echecs, erreur, source}`.
+- **`/sante`** (public, mis en cache 30 s, 3 lectures au plus) rend
+  `{ok, base, vapid, derniereMinuteIlYA_s, file, ko}` : `file` = les événements en attente (`50+`
+  au-delà), `ko` = ceux rangés en échec. **503** si le pouls manque ou a plus de 5 minutes, ou si la
+  base ne répond pas (`raison` : `pouls_absent`, `pouls_ancien`, `base_injoignable`).
+- **`.github/workflows/veille-serveur.yml`**, toutes les 15 minutes : `curl` sur `/sante`. Si ça
+  échoue, ou si `ko` a monté depuis le dernier courriel : un courriel (`scripts/envoyer_mail.mjs`,
+  mêmes secrets `MAIL_*` que le rapport payeur), **un par heure au plus**, et le travail échoue tant
+  que la panne dure. Une panne est vue en 20 minutes au pire, plus le retard éventuel des travaux
+  programmés de GitHub.
+- **Un événement rangé dans `evenements_ko`** (cinq échecs) envoie aussi un push urgent au créateur,
+  un par heure au plus (`worker/alerte_ko`).
+- **Les journaux** : `[observability]` dans `wrangler.toml` garde un réveil sur dix (le bilan JSON de
+  la minute, et les erreurs) : tableau de bord Cloudflare > Workers > repcore-serveur > Logs.
+- **L'essayer** : couper le déclencheur (Workers > repcore-serveur > Settings > Triggers), attendre
+  5 minutes, puis lancer la veille à la main (Actions > Veille du serveur > Run workflow) : croix
+  rouge et courriel. Remettre le déclencheur.
+
 ## Le créateur, reconnu par son UID
 
 Depuis le 01/10/2026, les règles de la base et le Worker ne reconnaissent plus le créateur à son
@@ -159,7 +181,7 @@ l'est pas, cliquer le lien de vérification reçu par e-mail, puis se déconnect
   Invoke-RestMethod https://repcore-serveur.repcore.workers.dev/sante?cles=1 -Headers @{Authorization="Bearer $s"}
   ```
   Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public, et ne dit
-  plus que `ok`, `base` et `vapid` : le mode d'accès à la base (`acces`) et les secrets posés
+  que `ok`, `base`, `vapid` et le pouls (voir « La veille ») : le mode d'accès à la base (`acces`) et les secrets posés
   (`paypalPose`, `cloudinaryPose`, `garmin`) ne sortent que par `/sante?cles=1`.
 - **Aucune route publique sans limite** (01/10/2026). Trois limiteurs par adresse IP, déclarés dans
   `wrangler.toml` et posés par `npx wrangler deploy` (rien à régler à la main) :

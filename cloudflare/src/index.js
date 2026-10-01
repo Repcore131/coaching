@@ -92,6 +92,53 @@ function egalSecret(a, b) {
   for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x.charCodeAt(i % x.length) || 0) ^ (y.charCodeAt(i % y.length) || 0);
   return d === 0;
 }
+// ══ /sante, PUBLIC : LE SERVEUR TOURNE-T-IL VRAIMENT ? (01/10/2026) ══════
+// Le pouls (worker/verrou/pouls, écrit par chaque réveil sans requête de
+// plus : planif.js) dit quand la dernière minute a tourné. Plus de
+// POULS_MAX_S secondes, ou une base qui ne répond pas : 503 — c'est ce que
+// guette .github/workflows/veille-serveur.yml.
+//   { ok, base, vapid, derniereMinuteIlYA_s, file, ko }
+// file : les événements en attente (jusqu'à FILE_MAX, au-delà « 50+ ») ;
+// ko : les événements rangés en échec (evenements_ko).
+// TROIS LECTURES, MISES EN CACHE 30 s (caches.default) : /sante ne peut pas
+// servir de porte vers le quota de la base. Rien d'autre ne sort : ni mode
+// d'accès, ni secret (ceux-là : /sante?cles=1, administrateur).
+export const POULS_MAX_S = 300;
+const FILE_MAX = 50;
+const SANTE_CACHE_S = 30;
+async function santePublique(url, env, ctx) {
+  const cache = (typeof caches !== 'undefined' && caches && caches.default) ? caches.default : null;
+  const cle = new Request(url.origin + '/sante', { method: 'GET' });
+  if (cache) {
+    try { const vu = await cache.match(cle); if (vu) return vu; } catch (e) { /* sans cache, on calcule */ }
+  }
+  const corps = { ok: false, base: !!env.FIREBASE_DB_URL, vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) };
+  let statut = 503;
+  try {
+    const { db } = outils(env);
+    const [verrou, file, ko] = await Promise.all([db.ref('worker/verrou').get().then((s) => s.val()),
+      db.ref('evenements').orderByKey().limitToFirst(FILE_MAX + 1).get().then((s) => s.val()),
+      db.ref('evenements_ko').shallow()]);
+    const t = Number(verrou && verrou.pouls && verrou.pouls.t) || 0;
+    corps.derniereMinuteIlYA_s = t ? Math.max(0, Math.round((Date.now() - t) / 1000)) : null;
+    const n = file && typeof file === 'object' ? Object.keys(file).length : 0;
+    corps.file = n > FILE_MAX ? FILE_MAX + '+' : n;
+    corps.ko = ko.length;
+    corps.ok = t > 0 && corps.derniereMinuteIlYA_s <= POULS_MAX_S;
+    if (!corps.ok) corps.raison = t ? 'pouls_ancien' : 'pouls_absent';
+    statut = corps.ok ? 200 : 503;
+  } catch (e) {
+    corps.raison = 'base_injoignable';
+  }
+  const r = reponse(JSON.stringify(corps), statut);
+  if (cache) {
+    const c = r.clone();
+    c.headers.set('Cache-Control', 'public, max-age=' + SANTE_CACHE_S);
+    try { ctx.waitUntil(cache.put(cle, c)); } catch (e) { /* la réponse part quand même */ }
+  }
+  return r;
+}
+
 // CE QUI EST POSÉ, pour l'administrateur seul (/sante?cles=1).
 // `acces` : « compte_service » est l'état voulu ; « secret_historique » dit
 // que l'ancien code secret sert encore et qu'il reste à le retirer.
@@ -140,7 +187,9 @@ export default {
   },
   async scheduled(event, env, ctx) {
     const o = outils(env);
-    ctx.waitUntil(minute(o));
+    // Le bilan du réveil part dans les journaux du Worker (observability,
+    // wrangler.toml : un sur dix est gardé) ; un échec y laisse sa trace.
+    ctx.waitUntil(minute(o).then((b) => console.log(JSON.stringify(b))).catch((e) => console.error('minute', e && e.message)));
     // L'alerte de quota : lit le seau de l'heure, prévient le créateur au-delà
     // de 500 refus (pouls.js). Une instance du Worker de plus, c'est un compte
     // en mémoire de plus : on vide aussi le sien.
@@ -267,14 +316,7 @@ async function servir(req, env, ctx) {
       const r = await servirPagePublique(req, { env, ctx, db: url.pathname.startsWith('/coach/') ? outils(env).db : null });
       if (r) return r;
     }
-    if (url.pathname === '/sante') {
-      // PUBLIC : vivant, base configurée, notifications possibles — rien de
-      // plus (01/10/2026). Le MODE D'ACCÈS à la base et la liste des secrets
-      // posés disaient à un attaquant quelle porte essayer : ils sont passés
-      // derrière ADMIN_SECRET, dans /sante?cles=1 (configDe).
-      return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL,
-        vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) }));
-    }
+    if (url.pathname === '/sante') return await santePublique(url, env, ctx);
     return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
   } catch (e) {
     return reponse(JSON.stringify({ erreur: 'interne' }), 500);

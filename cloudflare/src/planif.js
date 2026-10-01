@@ -57,6 +57,9 @@ const COUT_RELANCE = 24;
 // La fin de séance recalcule les volts ET rafraîchit le profil de relance
 // (sept champs, une écriture) : elle attend d'avoir de quoi faire les deux.
 const COUT_SEANCE = 22;
+// L'alerte d'un événement en échec : la garde horaire (transaction : 2) et
+// un push urgent (abonnements, un envoi par appareil).
+const COUT_ALERTE_KO = 8;
 
 export function travaux(M) {
   return [
@@ -137,7 +140,9 @@ async function traiter(db, M, e) {
 // dans evenements_ko. Une seule écriture : retrait et dépôt ensemble. Le
 // verrou de l'app (evenements_attente) suit le nouvel identifiant, pour que
 // l'événement compte toujours comme « en attente ».
-async function echec(db, id, e, err, t) {
+// AU CINQUIÈME ÉCHEC, LE CRÉATEUR EST PRÉVENU (push urgent, une fois par
+// heure au plus : metier.js, alerteKo), si le budget du réveil le permet.
+async function echec(db, id, e, err, t, M, reste) {
   const essais = (Number(e && e.essais) || 0) + 1;
   const erreur = texteErreur(err);
   const maj = { ['evenements/' + id]: null };
@@ -150,6 +155,9 @@ async function echec(db, id, e, err, t) {
       maj['evenements_attente/' + e.par + '/' + e.type + '/' + e.cible + '/id'] = nid;
   }
   await db.ref().update(maj);
+  if (essais >= ESSAIS_MAX && M && M.alerteKo && (!reste || reste() >= COUT_ALERTE_KO)) {
+    try { await M.alerteKo(String((e && e.type) || '?'), erreur, t); } catch (e2) { /* l'événement est rangé : c'est l'essentiel */ }
+  }
   return essais;
 }
 
@@ -277,7 +285,7 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         ok = false;
         bilan.echecs++;
         bilan.erreur = texteErreur(err);
-        try { await echec(db, id, e, err, t); } catch (e2) { /* il reste en tête : réessayé au réveil suivant */ }
+        try { await echec(db, id, e, err, t, M, reste); } catch (e2) { /* il reste en tête : réessayé au réveil suivant */ }
       }
       if (ok) await db.ref('evenements/' + id).remove();
       bilan.evenements++;
@@ -292,16 +300,21 @@ export async function minute({ db, M, compteur, maintenant, source }) {
       for (const w of travaux(M)) await unTravail(w, jobs[w.nom], { db, M, t, p, reste, bilan, maj });
     }
   } finally {
+    // LE POULS : ce que ce réveil a fait, écrit DANS LA MÊME écriture que le
+    // bail rendu — aucune requête de plus. /sante le lit : un pouls de plus
+    // de 5 minutes, c'est un cron arrêté ou une base injoignable.
+    const pouls = { t: horloge(), requetes: compteur(), evenements: bilan.evenements, echecs: bilan.echecs,
+      erreur: bilan.erreur || null, source: source || 'cron' };
     // LE BAIL EST RENDU, et l'heure de la file notée — s'il est encore à nous.
     // D'ordinaire DANS LE MÊME update que les travaux : à moins de 40 s du
     // début, le bail de 55 s ne peut pas avoir été repris par un autre.
     const direct = horloge() - t < RENDU_DIRECT_MS;
-    if (direct) Object.assign(maj, { 'worker/verrou/jusqua': 0, 'worker/verrou/id': null }, fileLe ? { 'worker/verrou/fileLe': fileLe } : {});
+    if (direct) Object.assign(maj, { 'worker/verrou/jusqua': 0, 'worker/verrou/id': null, 'worker/verrou/pouls': pouls }, fileLe ? { 'worker/verrou/fileLe': fileLe } : {});
     try { if (Object.keys(maj).length) await db.ref().update(maj); } catch (e) { bilan.erreur = texteErreur(e); }
     if (!direct) {
       try {
         await db.ref('worker/verrou').transaction((v) => (v && v.id === moi
-          ? Object.assign({}, v, { jusqua: 0, id: null }, fileLe ? { fileLe } : {}) : undefined));
+          ? Object.assign({}, v, { jusqua: 0, id: null, pouls }, fileLe ? { fileLe } : {}) : undefined));
       } catch (e) { /* le bail expire seul dans 55 s */ }
     }
   }

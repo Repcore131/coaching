@@ -30,6 +30,13 @@ name = "LIMITE_ROUTES"
 namespace_id = "1003"
 simple = { limit = 120, period = 60 }
 
+# LES JOURNAUX DU WORKER : le bilan de chaque minute (console.log dans
+# scheduled) et les erreurs, gardés un sur dix (tableau de bord Cloudflare >
+# Workers > repcore-serveur > Logs). Gratuit dans les limites du plan.
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
 [vars]
 FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"
 # La clé PUBLIQUE VAPID : la même que VAPID_PUBLIQUE dans l'app.

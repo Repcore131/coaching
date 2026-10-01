@@ -313,8 +313,14 @@ await test('le Worker route /sante/i/… avec CORS, sans casser /sante', async (
   const r = await worker.fetch(new Request('https://s.t/sante/i/x', { method: 'OPTIONS' }), { FIREBASE_DB_URL: 'https://b.t', FIREBASE_DB_SECRET: 'x' }, { waitUntil() {} });
   assert.equal(r.status, 204);
   assert.match(r.headers.get('Access-Control-Allow-Headers'), /X-RepCore-Jeton/);
-  const g = await worker.fetch(new Request('https://s.t/sante'), { FIREBASE_DB_URL: 'https://b.t' }, { waitUntil() {} });
-  assert.equal((await g.json()).ok, true);
+  // /sante (le pouls du serveur) répond toujours en JSON, base joignable ou non.
+  const f0 = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('hors ligne'); };
+  try {
+    const g = await worker.fetch(new Request('https://s.t/sante'), { FIREBASE_DB_URL: 'https://b.t' }, { waitUntil() {} });
+    assert.equal(g.status, 503);
+    assert.equal((await g.json()).ok, false);
+  } finally { globalThis.fetch = f0; }
   const t = await worker.fetch(new Request('https://s.t/sante/i/court', { method: 'POST', body: '{}' }), { FIREBASE_DB_URL: 'https://b.t', FIREBASE_DB_SECRET: 'x' }, { waitUntil() {} });
   assert.equal(t.status, 401);
   assert.equal(t.headers.get('Access-Control-Allow-Origin'), '*');
