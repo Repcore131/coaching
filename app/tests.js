@@ -60475,9 +60475,9 @@ async function testExercices(){
         if(d.sets[1].weight!=='') return _echec('la série 2 est pré-remplie avant toute validation');
         // La suggestion n'ouvre pas l'encart « Ta charge monte toute seule ».
         if(_surchargeProposee(d.sets[0])) return _echec('la suggestion passe pour une surcharge');
-        // « Préc. » : 80×8 sous le numéro de la série 1.
-        const t1=document.querySelector('#sets-body-0 tr:nth-child(1) .wo-prec');
-        if(!t1||t1.textContent.replace(/\s/g,'')!=='80×8') return _echec('Préc. série 1 : '+(t1&&t1.textContent));
+        // « Préc. » (80×8 sous le numéro) n'est plus dessiné : il perdait la
+        // personne (Kevin, 01/10/2026). La dernière séance sert toujours en coulisse.
+        if(document.querySelector('#sets-body-0 .wo-prec')) return _echec('l’étiquette Préc. est revenue sous le numéro');
         // 2. Valider la série 1 SANS RIR recopie la charge sur la série 2.
         toggleSet(0,0); await pause(50);
         if(String(d.sets[1].weight)!==String(d.sets[0].weight)||!d.sets[1].isAuto) return _echec('série 2 après validation sans RIR : '+JSON.stringify(d.sets[1]));
