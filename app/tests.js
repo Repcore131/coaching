@@ -40768,6 +40768,18 @@ async function testExercices(){
           if(lib.length!==3||!/^Technique/.test(lib[0])||lib[1]!=='Charge cible'||lib[2]!=='RIR cible') return _echec('ordre de la 2e ligne : '+lib.join(' | '));
           if(bord(l2,l2.querySelector('select'))>2) return _echec('« RIR cible » ne va pas au bord de la ligne');
           if(bord(l2.children[1],l2.querySelector('input'))>2) return _echec('« Charge cible » ne remplit pas sa case');
+          // 01/10/2026 (Kevin) : Tempo, Matériel, Muscles sur une même ligne ; l'exemple du tempo
+          // ne vit que dans la case, et le matériel commence par une majuscule.
+          const l3=carte.querySelector('.px-l3');
+          if(!l3) return _echec('la ligne Tempo / Matériel / Muscles a disparu');
+          const lt=l3.querySelector('.px-tempo');
+          if(lt.querySelector('label').textContent.trim()!=='Tempo') return _echec('le libellé du tempo porte encore son exemple');
+          if(lt.querySelector('input').placeholder!=='3-1-1-0'||lt.querySelector('.px-sous').textContent.trim()!=='(descente, bas, montée, haut)') return _echec('l’exemple ou la légende du tempo a changé');
+          if(!(parseFloat(getComputedStyle(lt.querySelector('.px-sous')).fontSize)<parseFloat(getComputedStyle(lt.querySelector('label')).fontSize))) return _echec('la légende du tempo n’est pas plus petite que le libellé');
+          const mq=l3.querySelector('.px-musc');
+          if(!mq||mq.parentElement!==l3) return _echec('les muscles ne sont pas dans la ligne');
+          if(Math.abs(mq.getBoundingClientRect().right-l3.getBoundingClientRect().right)>2) return _echec('les muscles ne vont pas au bord de la ligne');
+          if(_materielMajuscule('barre')!=='Barre'||_materielMajuscule(' haltères, banc ')!=='Haltères, banc'||_materielMajuscule('')!==''||_materielMajuscule(null)!=='') return _echec('majuscule du matériel');
           const grp=[...carte.querySelectorAll('.px-grp')];
           // 01/10/2026 (Kevin) : les titres de groupe et leur trait sont rouges, et le bouton de la programmation aussi.
           const _rg=(()=>{ const d=document.createElement('div'); d.style.color=getComputedStyle(document.documentElement).getPropertyValue('--red-text').trim();
