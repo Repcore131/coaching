@@ -40738,6 +40738,31 @@ async function testExercices(){
         // Bornée aux écrans larges : sous 1025 px, les cartes restent empilées.
         return css.lastIndexOf('@media (min-width:1025px){',i)>css.lastIndexOf('}\n}',i)||/@media \(min-width:1025px\)\{\s*\.pr-grille\{/.test(css)
           ?true:_echec('la grille n’est pas bornée aux écrans larges');})());
+      ok('Banque : un muscle choisi par sa tuile classe le muscle principal d’abord, comme la recherche tapée',(()=>{
+        // 01/10/2026 (Kevin) : « triceps » doit donner d'abord les exercices dont le triceps est
+        // le muscle principal, les secondaires à la suite. La requête tapée le faisait ; le filtre
+        // par tuile triait par longueur de nom.
+        const src=[
+          {slug:'dc',nom:'DC',muscles:['PECTORAUX','TRICEPS']},
+          {slug:'dips',nom:'DIPS',muscles:['PECTORAUX','TRICEPS']},
+          {slug:'ext',nom:'EXTENSION TRICEPS POULIE HAUTE CORDE',muscles:['TRICEPS']},
+          {slug:'baf',nom:'BARRE AU FRONT',muscles:['TRICEPS']},
+          {slug:'pose',nom:'SIDE TRICEPS',muscles:['TRICEPS'],tags:['posing']},
+          {slug:'curl',nom:'CURL',muscles:['BICEPS']}];
+        const ordre=(q,ft)=>rechercherBanque(q,ft,src.map(f=>Object.assign({},f)),null).map(f=>f.slug).join(',');
+        const parTuile=ordre('',{muscle:'TRICEPS'}), parTexte=ordre('triceps',null);
+        if(parTuile!=='baf,ext,dc,dips,pose') return _echec('par la tuile : '+parTuile);
+        // Tapé, « triceps » est aussi dans le nom de l'extension : elle passe devant la barre au front.
+        if(parTexte!=='ext,baf,dc,dips,pose') return _echec('par le texte : '+parTexte);
+        if(musclesVises('',{muscle:'TRICEPS'}).join()!=='TRICEPS'||musclesVises('',null).length||musclesVises('triceps',{muscle:'TRICEPS'}).length!==1) return _echec('musclesVises');
+        // La banque en ligne peut dater d'avant une révision des muscles : au chargement, le guide fait foi.
+        const nomG=[..._exGuide().keys()][0], sigG=_exGuide().get(nomG);
+        const bq=_indexerBanque([{slug:'g',nom:nomG,muscles:['MOLLETS']},{slug:'z',nom:'ZZ INCONNU DU GUIDE',muscles:['MOLLETS']},{slug:'sp',nom:'SIDE TRICEPS',muscles:['TRICEPS']}]);
+        if(bq.parSlug.g.muscles.join()!==sigG.p.concat(sigG.s).join()) return _echec('la fiche ne suit pas le guide : '+bq.parSlug.g.muscles.join());
+        if(bq.parSlug.z.muscles.join()!=='MOLLETS') return _echec('une fiche inconnue du guide a perdu ses muscles');
+        if((bq.parSlug.sp.tags||[]).indexOf('posing')<0) return _echec('SIDE TRICEPS n’est pas marquée comme pose');
+        // Sans muscle ni texte, rien ne change : pas de score.
+        return scoreBanque(src[0],'',[],null)===0?true:_echec('un score sans requête ni muscle');})());
       ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
         // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
         // choisit dans une liste, l'athlete qui veut une technique la tape
