@@ -6682,14 +6682,66 @@ const DB={
   // `users` est la carte de tous les dossiers, `session` est le dossier
   // courant : ce sont les deux seules portes par lesquelles un sessions_config
   // venu de Firebase entre dans le code qui le lit.
+  //
+  // ══ LE CACHE MEMOIRE (build 1764) ══════════════════════════════════════
+  // POURQUOI. get('users') faisait JSON.parse PUIS l'aplatissement a CHAQUE
+  // appel — 216 appels dans rc-core, dont 212 sur 'users' — pour 3 Mo de
+  // dossiers chez un coach : ~60 ms l'appel a CPU x4, et un rendu en enchaine
+  // plusieurs.
+  //
+  // CE QUI EST GARDE : _memo, clef -> {brut, val}. `brut` est la chaine RENDUE
+  // PAR localStorage.getItem, et c'est elle qu'on compare (===) a celle du
+  // prochain getItem : Chrome rend la MEME chaine tant que la valeur n'a pas
+  // change, et la comparaison est alors immediate (0,04 ms contre 6,5 ms pour
+  // deux chaines de 3 Mo distinctes). Une ecriture DIRECTE —
+  // un setItem direct de la clef, hors de DB, un autre onglet — change la
+  // chaine : le cache rate, et on relit. Il ne peut donc pas servir une valeur
+  // perimee, meme sans passer par setLocal.
+  // `val` est la valeur DEJA APLATIE. On ne la rend JAMAIS : les appelants
+  // modifient ce qu'ils lisent (users[email]=…, puis DB.set).
+  //
+  // LA COPIE, MESUREE (rc_users synthetique de 2,3 Mo, CPU x4, Chromium 141) :
+  //   JSON.parse ~74-103 ms · structuredClone ~243 ms · _dbCopie ~39 ms.
+  // structuredClone coute ~3x le parse : il est ecarte (la consigne : pas plus
+  // de 30 % du parse). _dbCopie, la copie d'un arbre JSON, coute ~40 % du parse.
+  // Pour 'users', la copie est en plus PARESSEUSE, dossier par dossier
+  // (_dbCopieUsers) : get('users')[email] ne copie qu'un dossier sur cinquante.
+  //
+  // CE QUI A ETE GAGNE, mesure (scripts/verif/banc-db.mjs, rc_users synthetique
+  // de 2,87 Mo — 52 dossiers de 60 seances —, CPU x4, trois passages) :
+  //                                         avant (1763)   apres (1764)
+  //   10 x DB.get('users')                  587-661 ms     < 1 ms
+  //   10 x DB.get('users')[un dossier]      446-761 ms     8-18 ms
+  //   10 x Object.values(DB.get('users'))…  390-745 ms     315-532 ms
+  // La derniere ligne lit TOUS les dossiers : chacun est copie, et le gain se
+  // borne a l'aplatissement evite (la copie coute ~40 % du parse, mais
+  // Object.values passe par les accesseurs) — de 1,2 a 1,4x selon le passage.
+  //
+  // CE QUI N'A PAS CHANGE : la synchronisation (CLOUD.*) ne voit rien de ce
+  // cache ; set/setLocal ecrivent comme avant. Apres un quota plein, le
+  // stockage n'a pas change : le cache rend l'ANCIENNE copie, comme le
+  // JSON.parse d'avant (CLOUD._doPush s'appuie sur _echecLocal pour ce cas).
+  _memo:new Map(),
+  _perfMs:0,
   get(k){
-    let v=null;
-    try{ v=JSON.parse(localStorage.getItem('rc_'+k)); }catch(e){ return null; }
+    const t0=DB_PERF?performance.now():0;
     try{
-      if(k==='users') _aplatirTousSessionsConfig(v);
-      else if(k==='session') _aplatirSessionsConfig(v);
-    }catch(e){}
-    return v;
+      let brut;
+      try{ brut=localStorage.getItem('rc_'+k); }catch(e){ return null; }
+      if(brut==null){ this._memo.delete(k); return null; }
+      const m=this._memo.get(k);
+      if(m&&m.brut===brut) return k==='users'?_dbCopieUsers(m.val):_dbCopie(m.val);
+      let v=null;
+      try{ v=JSON.parse(brut); }catch(e){ this._memo.delete(k); return null; }
+      try{
+        if(k==='users') _aplatirTousSessionsConfig(v);
+        else if(k==='session') _aplatirSessionsConfig(v);
+      }catch(e){}
+      // Un scalaire n'a rien a proteger : il est rendu tel quel, sans cache.
+      if(v===null||typeof v!=='object') return v;
+      this._memo.set(k,{brut,val:v});
+      return k==='users'?_dbCopieUsers(v):_dbCopie(v);
+    }finally{ if(DB_PERF) this._perfMs+=performance.now()-t0; }
   },
   // Le quota local ne doit pas empêcher l'envoi au cloud : l'ancien `return`
   // dans le catch sautait CLOUD.push, donc un stockage saturé faisait perdre
@@ -6729,11 +6781,62 @@ const DB={
         if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le ✓','var(--orange)');
       } else throw e;
     }
+    // Le cache : oublie apres une ecriture reussie (le prochain get relit et
+    // repart du nouveau texte). Apres un echec, le stockage n'a pas bouge, et
+    // ce que garde le cache est toujours exact.
+    if(localOk) this._memo.delete(k);
     this._echecLocal[k]=!localOk;
     return localOk;
   },
-  del(k){localStorage.removeItem('rc_'+k)},
+  del(k){ this._memo.delete(k); localStorage.removeItem('rc_'+k); },
 };
+// ?perf=1 : chaque seconde, le temps passe dans DB.get pendant cette seconde.
+const DB_PERF=(()=>{ try{ return new URLSearchParams(location.search).get('perf')==='1'; }catch(e){ return false; } })();
+if(DB_PERF) setInterval(()=>{
+  if(DB._perfMs>0) console.log('[perf] DB.get : '+DB._perfMs.toFixed(1)+' ms dans la derniere seconde');
+  DB._perfMs=0;
+},1000);
+// UN AUTRE ONGLET a ecrit : sa clef est oubliee (clear() : key null, tout).
+// Par prudence seulement — la comparaison du texte brut le verrait aussi.
+try{
+  window.addEventListener('storage',(e)=>{
+    if(e.key==null) DB._memo.clear();
+    else if(e.key.startsWith('rc_')) DB._memo.delete(e.key.slice(3));
+  });
+}catch(e){}
+// LA COPIE PROFONDE D'UN ARBRE JSON (objets, tableaux, scalaires) — ce que
+// rend JSON.parse, aplati. Les TROUS d'un tableau sont gardes : sessions_config
+// et sessions_H/F en portent a dessein (l'indice y est le jour de la semaine,
+// _aplatirChamp), et un `undefined` ecrit a leur place changerait `i in t`.
+function _dbCopie(x){
+  if(x===null||typeof x!=='object') return x;
+  if(Array.isArray(x)){
+    const n=x.length,o=new Array(n);
+    for(let i=0;i<n;i++) if(i in x) o[i]=_dbCopie(x[i]);
+    return o;
+  }
+  const o={};
+  for(const c in x) o[c]=_dbCopie(x[c]);
+  return o;
+}
+// LA CARTE DES DOSSIERS, COPIEE DOSSIER PAR DOSSIER, A LA DEMANDE. Chaque
+// clef est un accesseur qui, a la premiere lecture, copie son dossier
+// (_dbCopie) et se remplace par une propriete ordinaire. Une ecriture
+// (users[email]=…) la remplace aussi, sans copier. Pour l'appelant, c'est une
+// copie profonde : chaque objet qu'il atteint est neuf, et rien de ce qu'il
+// modifie n'atteint le cache. Object.keys, for…in, `in`, delete,
+// JSON.stringify et Object.values se comportent comme sur l'objet d'avant
+// (les deux derniers lisent tout, donc copient tout).
+function _dbCopieUsers(m){
+  if(!m||typeof m!=='object'||Array.isArray(m)) return _dbCopie(m);
+  const o={};
+  for(const c in m){
+    Object.defineProperty(o,c,{enumerable:true,configurable:true,
+      get(){ const v=_dbCopie(m[c]); Object.defineProperty(this,c,{value:v,writable:true,enumerable:true,configurable:true}); return v; },
+      set(v){ Object.defineProperty(this,c,{value:v,writable:true,enumerable:true,configurable:true}); }});
+  }
+  return o;
+}
 // ══════ N3.7 — MARQUER UNE ENTREE COMME SUPPRIMEE ═════════════════════════
 // TOUTE suppression d'une seance ou d'un bilan doit passer par ici, sinon
 // l'union de CLOUD._mergeUser la ressuscitera a la prochaine descente sur
@@ -121915,6 +122018,13 @@ function saveUser(){
   // échec sur 'users' court-circuiterait l'écriture de 'session'.
   const usersOk=DB.set('users',users);
   const sessionOk=DB.set('session',aEcrire);
+  // ⚠ A L'EQUIPE SYNCHRO (01/10/2026, lot du cache de DB.get) : cet envoi
+  //   DOUBLE celui que DB.set('users',…) vient de programmer deux lignes plus
+  //   haut (set pousse deja 'users'). Laisse tel quel a dessein — le lot ne
+  //   touche pas a CLOUD.* — mais a examiner. Aujourd'hui CLOUD.push remet
+  //   son minuteur de 2 s a zero, donc un seul envoi part : le second appel
+  //   ne fait que repousser le premier. Sans cet amortissement, chaque
+  //   saveUser enverrait deux fois.
   if(CLOUD.canWrite()){
     CLOUD.push(users);
   }

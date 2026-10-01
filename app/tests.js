@@ -28695,6 +28695,57 @@ async function testExercices(){
   // fois dans toute la suite, et sous SUSPENSION — c'est-a-dire dans le seul
   // cas ou il ne doit RIEN faire. La regle qui fait monter le compteur n'etait
   // verifiee nulle part.
+  // ══ LE CACHE MEMOIRE DE DB.get (build 1764) ═════════════════════════════
+  // DB.get garde le texte brut et la valeur aplatie, et rend une COPIE. Les
+  // tests ecrivent rc_users DIRECTEMENT (localStorage) pour la plupart : DB.set
+  // pousserait vers le cloud. Le texte d'origine est remis a la fin.
+  {
+    const _brutU=localStorage.getItem('rc_users');
+    const _ecrire=o=>localStorage.setItem('rc_users',JSON.stringify(o));
+    const _jeu=()=>({'cache1@t,fr':{email:'cache1@t.fr',sessions:[{id:'s1',date:1,data:{SQUAT:{sets:[{weight:'60',reps:'8'}]}}}],
+      sessions_config:{0:{name:'Lundi',exercises:{0:{name:'SQUAT'},2:{name:'ROWING'}}},3:{name:'Jeudi'}}},
+      'cache2@t,fr':{email:'cache2@t.fr',sessions:[]}});
+    try{
+      _ecrire(_jeu());
+      const a=DB.get('users'),b=DB.get('users');
+      ok('DB.get : deux lectures rendent deux objets DISTINCTS et égaux',
+        a!==b&&a['cache1@t,fr']!==b['cache1@t,fr']&&a['cache1@t,fr'].sessions!==b['cache1@t,fr'].sessions
+        &&JSON.stringify(a)===JSON.stringify(b)&&Object.keys(a).join()==='cache1@t,fr,cache2@t,fr',
+        JSON.stringify(a).slice(0,200));
+      ok('DB.get : la valeur rendue est aplatie (sessions_config en tableau, trous gardés), comme avant',
+        Array.isArray(a['cache1@t,fr'].sessions_config)&&a['cache1@t,fr'].sessions_config.length===4
+        &&!(1 in a['cache1@t,fr'].sessions_config)&&a['cache1@t,fr'].sessions_config[3].name==='Jeudi'
+        &&Array.isArray(a['cache1@t,fr'].sessions_config[0].exercises)&&a['cache1@t,fr'].sessions_config[0].exercises.length===2,
+        JSON.stringify(a['cache1@t,fr'].sessions_config));
+      a['cache1@t,fr'].sessions[0].data.SQUAT.sets[0].weight='999';
+      a['cache1@t,fr'].sessions_config.push({name:'ajout'});
+      a['cache3@t,fr']={email:'cache3@t.fr'};
+      delete a['cache2@t,fr'];
+      const c=DB.get('users');
+      ok('DB.get : modifier l\'objet rendu ne touche pas la lecture suivante',
+        c['cache1@t,fr'].sessions[0].data.SQUAT.sets[0].weight==='60'&&c['cache1@t,fr'].sessions_config.length===4
+        &&!('cache3@t,fr' in c)&&('cache2@t,fr' in c),JSON.stringify(c).slice(0,200));
+      ok('DB.get : l\'objet rendu se modifie et s\'écrit comme un objet ordinaire',
+        (()=>{ const o=JSON.parse(JSON.stringify(a)); return o['cache3@t,fr'].email==='cache3@t.fr'&&!('cache2@t,fr' in o)
+          &&o['cache1@t,fr'].sessions[0].data.SQUAT.sets[0].weight==='999'; })());
+      const _sPush=CLOUD.push; CLOUD.push=()=>{};
+      try{ DB.set('users',{'cache4@t,fr':{email:'cache4@t.fr'}}); } finally { CLOUD.push=_sPush; }
+      const d=DB.get('users');
+      ok('DB.set puis DB.get rend la nouvelle valeur',
+        Object.keys(d).join()==='cache4@t,fr'&&d['cache4@t,fr'].email==='cache4@t.fr',JSON.stringify(d));
+      localStorage.setItem('rc_users',JSON.stringify({'cache5@t,fr':{email:'cache5@t.fr'}}));
+      const e=DB.get('users');
+      ok('Un localStorage.setItem(\'rc_users\',…) direct est vu par le DB.get suivant',
+        Object.keys(e).join()==='cache5@t,fr',JSON.stringify(e));
+      DB.get('users');
+      window.dispatchEvent(new StorageEvent('storage',{key:'rc_users'}));
+      ok('Un événement storage (autre onglet) oublie la clef du cache',!DB._memo.has('users'));
+      DB.del('users');
+      ok('DB.del oublie la clef, et DB.get rend null',!DB._memo.has('users')&&DB.get('users')===null);
+    } finally {
+      if(_brutU==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',_brutU);
+    }
+  }
   ok('Une semaine au quota crédite UN point, et un seul',(()=>{
     const _sv=currentUser, _ss=window.saveUser;
     try{
