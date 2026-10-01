@@ -12400,7 +12400,9 @@ function _mlInjecterStyle(){
     // LE TÉLÉPHONE DU COACH EN SALLE : une colonne, la vidéo d'abord.
     '@media (max-width:820px){.mlx-grille{grid-template-columns:minmax(0,1fr)}.mlx-g{grid-template-columns:minmax(0,1fr)}.mlx-devise,.mlx-sous-t{display:none}.mlx .mlx-titre{font-size:26px}.mlx .ml-scene video{height:auto;max-height:56vh;max-height:56dvh}.mlx-tl-corps{grid-template-columns:100px minmax(0,1fr)}.mlx-outils{grid-template-columns:repeat(4,minmax(0,1fr))}.mlx-enreg{flex:1 1 100%}.mlx-pied-b{flex:1 1 0;justify-content:center;padding:0 10px}.mlx-logo{height:34px;max-width:90px}}',
   ].join('\n');
-  document.head.appendChild(s);
+  // DANS LE <body>, apres rc-style, liee sous #s-splash (index.html) : au
+  // <head>, ces regles passeraient avant elle et perdraient a specificite egale.
+  (document.body||document.head).appendChild(s);
 }
 
 // ══ MORPHO — LOT M6 : CE QU'UNE PHOTO PEUT DIRE, ET CE QU'ELLE NE PEUT PAS ══

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1760';
+window.RC_BUILD='1762';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -413,9 +413,12 @@ if('serviceWorker' in navigator){
     });
   });
 }</script>
-<!-- Encodeur QR local. Charge avec la page : 10 Ko, et il remplace un appel
-     reseau a chaque ouverture de la fenetre de synchronisation. -->
-<script src="./vendor/qr.js"></script>
+<!-- Encodeur QR local : 10 Ko, et il remplace un appel reseau a chaque
+     ouverture de la fenetre de synchronisation. EN DEFER (01/10/2026) : il ne
+     retient plus l'analyse de la page. Personne ne l'appelle au chargement —
+     les trois appels de rc-core sont gardes par window.RepCoreQR&&… et vivent
+     dans des fenetres ouvertes a la main. -->
+<script defer src="./vendor/qr.js"></script>
 <!-- ALLEGER AVANT D ENVOYER. Quinze kilo-octets en defer ; les deux copies
      figees de vendor/mp4/ (230 Ko) ne partent qu a la premiere compression,
      et pas du tout si le telephone ne sait pas encoder. -->
@@ -453,11 +456,48 @@ if('serviceWorker' in navigator){
 }
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
+/* ══ LE SPLASH SANS ATTENDRE LES 1,6 Mo DE rc-style (01/10/2026) ══════════
+   Le logo et son halo etaient en opacity:0 jusqu'a ce que rc-core leur pose
+   leurs animations : ecran noir jusqu'a la fin de l'execution de rc-core
+   (2,8 s en 4G, 13 s en 4G lente). Le minimum pour peindre le splash vit
+   donc ICI, et rc-style n'est lie qu'APRES #s-splash (voir le <link> sous
+   lui) : une feuille liee dans le <body> ne retient que ce qui la suit, et
+   rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer.
+   VALEURS RECOPIEES DE rc-style — .carbon-bg, .screen, body, rcStrike,
+   rcHalo, --c-out — et a y tenir alignees. Sans !important : les regles de
+   rc-style, qui en portent, reprennent la main des qu'elles arrivent.
+   LE THEME CLAIR (data-theme="clair", pose par le premier script) : --bg
+   n'est defini que dans rc-style, d'ou les replis. */
+body{margin:0 auto;max-width:480px;background:var(--bg,#080808)}
+:root[data-theme="clair"] body{background:var(--bg,#f4f4f4)}
+.screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
+.screen.active{display:flex}
+.carbon-bg{background-color:#050505}
+:root[data-theme="clair"] .carbon-bg{background-color:#f6f6f6}
+@keyframes rcStrike{
+  0%       {opacity:0;transform:scale(.4) translateY(30px)}
+  7%       {opacity:1;transform:scale(1.26) translateY(-10px)}
+  14%      {opacity:1;transform:scale(.95) translateY(0)}
+  30%      {opacity:1;transform:scale(.98) translateY(0)}
+  42%      {opacity:1;transform:scale(1.07) translateY(0)}
+  62%,100% {opacity:1;transform:scale(1) translateY(0)}
+}
+@keyframes rcHalo{0%{opacity:0}7%{opacity:1}30%{opacity:.35}100%{opacity:.07}}
+/* LE SPLASH N'ENTRE QU'UNE FOIS. rc-style donne a tout .screen l'entree
+   screenAv (opacite 0, glissement de 20 px) : arrivee apres la premiere
+   peinture, elle referait disparaitre puis glisser l'ecran deja affiche. */
+#s-splash{animation:none}
+/* EN CSS PUR, sans JS : rc-core ne les relance pas (voir la pose du splash). */
+#splash-logo-anim{animation:rcStrike 420ms cubic-bezier(.16,1,.3,1) both}
+#splash-halo{animation:rcHalo 420ms cubic-bezier(.16,1,.3,1) both}
+/* Mouvement reduit : l'etat final tout de suite, comme la regle generale de rc-style. */
+@media(prefers-reduced-motion:reduce){#splash-logo-anim,#splash-halo{animation-duration:.01ms}}
 </style>
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1760.css">
+<!-- rc-style EST LIEE PLUS BAS, juste apres #s-splash (01/10/2026) : voir le
+     CSS critique ci-dessus. -->
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -628,8 +668,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Le halo sur son propre calque, sous le logo : rendu equivalent aux trois
          drop-shadow d'avant, aucun flou recalcule par image. -->
     <div style="position:relative;display:flex;justify-content:center;align-items:center">
-      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(224,32,32,.55),transparent 70%);opacity:0"></div>
-      <div id="splash-logo-anim" style="position:relative;opacity:0">
+      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(224,32,32,.55),transparent 70%)"></div>
+      <div id="splash-logo-anim" style="position:relative">
         <img src="./icons/logo.webp" style="display:block;width:240px;height:240px">
       </div>
     </div>
@@ -645,6 +685,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- Vignette — assombrit les bords, fait ressortir l'éclair au centre -->
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 20%,rgba(0,0,0,.92) 100%);pointer-events:none;z-index:6"></div>
 </div>
+<!-- LA FEUILLE DE L'APP, ICI ET NON DANS <head> (01/10/2026). Liee dans le
+     <body>, elle ne retient QUE ce qui la suit : le splash, au-dessus, se
+     peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
+     rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
+     comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
+<link rel="stylesheet" href="./rc-style.1762.css">
 
 <!-- WELCOME -->
 <!-- ══════════ L'ÉCRAN D'INSTALLATION ══════════════════════════════════════
@@ -6009,5 +6055,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1760.js"></script>
+<script src="./rc-core.1762.js"></script>
 </body></html>

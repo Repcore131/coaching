@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { chiffrer, jetonVapid, b64uVersOctets, octetsVersB64u, envoyerA } from '../src/push.js';
 import { creerBase } from '../src/base.js';
 import { creerMetier, fusionAttente, messageDuMatin, PRIO_PUSH } from '../src/metier.js';
-import { minute, ESSAIS_MAX } from '../src/planif.js';
+import { minute, ESSAIS_MAX, consommerLot } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
@@ -152,6 +152,52 @@ await test('503 de l’unique appareil : la tâche repart en file avec essais = 
   assert.equal((await w2.M.envoyerPush(LEA, { type: 'coach', title: 'x' })).raison, 'echec');
   assert.equal(w2.F.lire('push/' + LEA), null);
   assert.ok(ESSAIS_MAX >= 2);
+});
+
+await test('mode file : differer envoie les push dans la file (paquets de 100), le reste dans /evenements ; pousserA n’envoie rien lui-même', async () => {
+  const F = fausseBase({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } } });
+  const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: F.fetchImpl });
+  const paquets = [];
+  const file = { async sendBatch(l) { paquets.push(l.map((m) => m.body)); } };
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: F.fetchImpl, maintenant: () => PARIS('2026-09-28T12:00:00'), file });
+  assert.equal(M.enModeFile(), true);
+  const pushs = Array.from({ length: 250 }, (_, i) => ({ quoi: 'push', uid: 'u' + i, message: { type: 'defi' } }));
+  await M.differer(pushs.concat([{ quoi: 'paiement_suite', etape: 'parrainage', cle: LEA }]));
+  assert.deepEqual(paquets.map((p) => p.length), [100, 100, 50]);
+  const file0 = Object.values(F.lire('evenements') || {});
+  assert.equal(file0.length, 1, 'seule la suite PayPal reste dans /evenements (son ordre compte)');
+  assert.equal(file0[0].quoi, 'paiement_suite');
+  const r = await M.pousser1(LEA, { type: 'coach', title: 'x' });
+  assert.deepEqual(r, { envoyes: 0, differes: 1 });
+  assert.equal(F.recus.length, 0, 'le consommateur envoie, pas l’appelant');
+  assert.equal(paquets[3][0].uid, LEA);
+  // Sans file : le chemin gratuit, inchangé.
+  const M2 = creerMetier({ db, vapid: VAPID, fetchImpl: F.fetchImpl, maintenant: () => PARIS('2026-09-28T12:00:00') });
+  assert.equal(M2.enModeFile(), false);
+});
+
+await test('consommateur : ack si envoyé, retry sur 503 (push_log intact), ack d’un abonnement supprimé (410)', async () => {
+  const F = fausseBase({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } } });
+  let n = 0;
+  const f = (u, i) => { n++; return F.fetchImpl(u, i); };
+  const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: f });
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: f, maintenant: () => PARIS('2026-09-28T12:00:00'), file: { async sendBatch() {} } });
+  const lot = () => { const m = { body: { quoi: 'push', uid: LEA, message: { type: 'defi', title: 'x' } } };
+    m.ack = () => { m.r = 'ack'; }; m.retry = () => { m.r = 'retry'; }; return { m, batch: { messages: [m] } }; };
+  F.pushStatut = 503;
+  let { m, batch } = lot();
+  await consommerLot(batch, { M, compteur: () => n, budget: 900 });
+  assert.equal(m.r, 'retry'); assert.equal(F.lire('push_log/' + LEA), null);
+  F.pushStatut = 201;
+  ({ m, batch } = lot());
+  await consommerLot(batch, { M, compteur: () => n, budget: 900 });
+  assert.equal(m.r, 'ack'); assert.ok(F.lire('push_log/' + LEA));
+  F.ecrire('push_log/' + LEA, null);
+  F.pushStatut = 410;
+  ({ m, batch } = lot());
+  await consommerLot(batch, { M, compteur: () => n, budget: 900 });
+  assert.equal(m.r, 'ack', 'abonnement supprimé : rien à rejouer');
+  assert.equal(F.lire('push/' + LEA), null, 'le 410 a bien retiré l’abonnement');
 });
 
 console.log(ok + ' tests passés');

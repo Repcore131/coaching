@@ -27,6 +27,10 @@ rm -rf "$DEST" && mkdir -p "$DEST"
 # service worker de l'app. p/, c/, a/ : les pages publiques /@pseudo,
 # /coach/slug et la page secrète d'un ambassadeur.
 cp -a app blog i maj p c a "$DEST"/
+# LA SUITE DE TESTS NE PART PAS (01/10/2026) : 5,5 Mo publics qui ne servent
+# qu'en local (scripts/verif/suite.mjs sert le dépôt, pas la production).
+# En ligne, chargerTests() dit alors « tests.js introuvable ».
+rm -f "$DEST/app/tests.js"
 cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html "$DEST"/
 cp -a logo.png og-image.png robots.txt sitemap.xml "$DEST"/
 # LOT C6 : le tableau des offres, que la vitrine d'un coach lit pour ses formules.

@@ -38591,6 +38591,54 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          // ⚠ 1761 — LE SPLASH SE PEINT SANS ATTENDRE rc-style NI rc-core. Le logo
+          // et son halo etaient en opacity:0 jusqu'a la pose de leurs animations
+          // par rc-core : ecran noir 13 s en 4G lente. Ils s'animent maintenant
+          // en CSS pur, depuis le <style> en ligne, et rc-style n'est liee
+          // qu'apres #s-splash. On lit le HTML SERVI (XHR synchrone : une
+          // assertion differee peut avoir bouchonne window.fetch).
+          ok('1761 — Le splash se peint seul : ni opacity:0 en ligne sur le logo, rcStrike dans un <style> en ligne, rc-style liee apres #s-splash',(()=>{
+            let html='';
+            try{ const x=new XMLHttpRequest(); x.open('GET','./index.html?v='+Date.now(),false); x.send(); html=String(x.responseText||''); }catch(e){ return _echec('index.html illisible'); }
+            if(!html) return _echec('index.html vide');
+            const logo=/<div id="splash-logo-anim"[^>]*>/.exec(html), halo=/<div id="splash-halo"[^>]*>/.exec(html);
+            if(!logo||!halo) return _echec('logo ou halo du splash introuvable');
+            if(/opacity\s*:\s*0(?![.\d])/.test(logo[0])) return _echec('#splash-logo-anim porte encore opacity:0 en ligne');
+            if(/opacity\s*:\s*0(?![.\d])/.test(halo[0])) return _echec('#splash-halo porte encore opacity:0 en ligne');
+            const enLigne=[...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n');
+            if(!/@keyframes\s+rcStrike\s*\{/.test(enLigne)) return _echec('@keyframes rcStrike absente des <style> en ligne');
+            if(!/#splash-logo-anim\s*\{[^}]*animation\s*:\s*rcStrike/.test(enLigne)) return _echec('le logo n’est pas anime par le CSS en ligne');
+            const iSplash=html.indexOf('id="s-splash"'), iLien=html.search(/<link rel="stylesheet" href="\.\/rc-style\.\d+\.css">/);
+            if(iLien<0) return _echec('lien vers rc-style introuvable');
+            if(iLien<iSplash) return _echec('rc-style est liee avant #s-splash : elle bloque de nouveau la premiere peinture');
+            if(!/<script defer src="\.\/vendor\/qr\.js"><\/script>/.test(html)) return _echec('vendor/qr.js n’est plus en defer');
+            return true;})());
+          // ⚠ 1760 — L'INSTALL DU WORKER NE RETÉLÉCHARGE PLUS TOUT. cache:'reload'
+          // sur les 141 entrées d'ASSETS refaisait partir ~4,8 Mo à chaque build
+          // (quota Hosting Spark : 360 Mo par jour). Il ne reste que pour
+          // index.html ; le reste se recopie des anciens caches (banc :
+          // scripts/verif/worker-actifs.mjs, scène 3).
+          // XHR SYNCHRONE, comme le test de la base alimentaire : une assertion
+          // différée peut trouver window.fetch encore bouchonné par une autre.
+          ok('1760 — sw.js : le handler install ne demande cache:reload QUE pour index.html, et STATIC_TTL_MS vaut 30 jours',(()=>{
+            let src='';
+            try{ const x=new XMLHttpRequest(); x.open('GET','sw.js',false); x.send(); src=String(x.responseText||'').replace(/\r\n/g,'\n'); }catch(e){ return _echec('sw.js illisible'); }
+            if(!src) return _echec('sw.js vide');
+            const d=src.indexOf("self.addEventListener('install'");
+            if(d<0) return _echec('handler install introuvable');
+            const f=src.indexOf('self.addEventListener(',d+10);
+            const install=src.slice(d,f>0?f:undefined);
+            const b=install.indexOf('if (/index\\.html$/.test(a)) {');
+            if(b<0) return _echec('la branche index.html du handler install a disparu');
+            const fb=install.indexOf('\n        }\n',b);
+            const branche=install.slice(b,fb), horsIndex=install.slice(0,b)+install.slice(fb);
+            if(!/cache:\s*'reload'/.test(branche)) return _echec('index.html n’est plus demandé avec cache:reload');
+            if(/cache:\s*'reload'/.test(horsIndex)) return _echec('cache:reload hors de la branche index.html du handler install');
+            if(!/const STATIC_TTL_MS = 30 \* 24 \* 3600 \* 1000;/.test(src)) return _echec('STATIC_TTL_MS absent ou différent de 30 jours');
+            if(!/_copie\(a, _actifVersionne\(a\) \? \(\) => true : _fraiche\)/.test(install)) return _echec('l’install ne cherche plus de copie dans les anciens caches');
+            if(!/r\.ok && r\.status === 200 && \(r\.headers\.get\('content-type'\) \|\| ''\)\.includes\('text\/html'\)/.test(src))
+              return _echec('le fetch d’index.html met en cache sans vérifier 200 et text/html');
+            return true;})());
           // ⚠ 1759 — LES FONCTIONS PORTÉES DE functions/ PARTENT VERS LE WORKER.
           // FONCTIONS_SERVEUR (toujours faux) coupait ouvrirEssai et
           // verifierAchatProgramme. FONCTIONS_WORKER les nomme, et l'app les

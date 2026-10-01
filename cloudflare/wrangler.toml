@@ -51,3 +51,31 @@ PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPU
 # et, pour les paiements et la suppression des vidéos (secrets-paiements.ps1) :
 #   PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 # et, facultatif (dntu57ml a défaut) : CLOUDINARY_CLOUD_NAME
+
+# ══ LE PLAN PAYANT (Workers Paid, 5 $/mois) : PRÉPARÉ, PAS ACTIVÉ ════════
+# Quand et comment basculer : docs/capacite.md. Tant que ce bloc reste en
+# commentaire, le Worker tourne exactement comme sur le plan gratuit : sans
+# liaison PUSHS ni FILE_PUSH, tout passe par /evenements et le réveil.
+# ⚠ NE PAS DÉCOMMENTER SUR LE PLAN GRATUIT : le déploiement (cloudflare.yml)
+#   échouerait faute de files créées et de plan qui les porte.
+#
+# 1. Les deux files (une fois) :
+#      npx wrangler@4 queues create repcore-push
+#      npx wrangler@4 queues create repcore-push-ko
+# 2. Décommenter :
+#
+# [[queues.producers]]
+# binding = "PUSHS"
+# queue = "repcore-push"
+#
+# [[queues.consumers]]
+# queue = "repcore-push"
+# max_batch_size = 20
+# max_retries = 5
+# dead_letter_queue = "repcore-push-ko"
+#
+# 3. Et ajouter dans [vars] (plus haut) :
+#      FILE_PUSH = "queue"          # le drapeau : sans lui, la file n'est pas utilisée
+#      BUDGET = "900"               # requêtes par réveil (plafond payant : 1 000)
+#      MAX_CHIFFREMENTS = "200"     # chiffrements de push par exécution (30 s de calcul)
+#    (COUT_PUSH, ~8 requêtes par push, ne change pas.)

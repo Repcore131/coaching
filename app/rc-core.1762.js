@@ -2,11 +2,11 @@
 // ══════ GESTES DELEGUES (build 1760) ═════════════════════════════════════════
 // PLUS AUCUN GESTIONNAIRE EN LIGNE. La Content-Security-Policy de l'app
 // (firebase.json) ne porte plus 'unsafe-inline' dans script-src : un
-// onclick="…" ecrit dans une chaine HTML n'est plus execute par le navigateur,
+// data-on-click="…" ecrit dans une chaine HTML n'est plus execute par le navigateur,
 // et c'est le but. Une donnee de dossier qui echapperait a escapeHtml ne peut
 // donc plus faire tourner de code.
 //
-// CE QUI REMPLACE onclick="f(x)" : data-on-click="f(x)". Le texte est le meme,
+// CE QUI REMPLACE data-on-click="f(x)" : data-on-click="f(x)". Le texte est le meme,
 // mais ce n'est plus du JavaScript : c'est lu par le petit interprete
 // ci-dessous, qui ne sait faire que trois choses :
 //   · appeler une fonction INSCRITE dans RC_ACTIONS (la table blanche, en fin
@@ -3037,7 +3037,11 @@ function appliquerMarque(m){
   const st=document.createElement('style');
   st.id='rc-marque';
   st.textContent=marqueCss(v.couleur);
-  document.head.appendChild(st);
+  // DANS LE <body>, APRES rc-style (01/10/2026). La feuille de l'app est liee
+  // sous #s-splash, dans le <body> (index.html, CSS critique) : une feuille
+  // ajoutee au <head> passerait AVANT elle dans l'ordre du document, et ses
+  // :root{--red…} perdraient a specificite egale.
+  (document.body||document.head).appendChild(st);
   document.documentElement.setAttribute('data-marque','coach');
   _marqueActive=v;
   _rendreMarqueEntetes();
@@ -8336,8 +8340,13 @@ window.onload=()=>{
         const _m=document.getElementById('splash-word');
         if(_f) _f.style.animation='screenFlash var(--t-3) var(--c-out) both';
         if(_b) _b.style.animation='boltFlash var(--t-4) var(--c-out) both';
-        logoAnim.style.animation='rcStrike 420ms var(--c-out) both';
-        if(_h) _h.style.animation='rcHalo 420ms var(--c-out) both';
+        // IDEMPOTENT (01/10/2026) : le logo et le halo sont deja animes par le
+        // CSS critique d'index.html, des la premiere peinture. Relancer leur
+        // animation ici les ferait reflasher. On ne la pose que s'il n'y en a
+        // aucune (une page servie sans ce CSS, une copie ancienne en cache).
+        const _sansAnim=el=>{ try{ return getComputedStyle(el).animationName==='none'; }catch(e){ return true; } };
+        if(_sansAnim(logoAnim)) logoAnim.style.animation='rcStrike 420ms var(--c-out) both';
+        if(_h&&_sansAnim(_h)) _h.style.animation='rcHalo 420ms var(--c-out) both';
         if(_l) _l.style.animation='splashLineIn var(--t-3) var(--c-out) 260ms both';
         if(_m) _m.style.animation='splashTextIn var(--t-2) var(--c-out) 340ms both';
       }catch(e){}

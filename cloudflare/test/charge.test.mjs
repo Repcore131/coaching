@@ -19,8 +19,8 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, MAX_CHIFFREMENTS, COUT_PUSH } from '../src/metier.js';
-import { minute, BUDGET } from '../src/planif.js';
+import { creerMetier, MAX_CHIFFREMENTS, COUT_PUSH, limitesDe } from '../src/metier.js';
+import { minute, BUDGET, consommerLot, PAGE_FILE } from '../src/planif.js';
 import { surveillerQuota } from '../src/pouls.js';
 import { chiffrer } from '../src/push.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
@@ -186,6 +186,77 @@ const epreuves = [];
   }
   assert.ok(w.total() < 8000, '(c) ' + w.total() + ' sous-requêtes dans la journée');
   epreuves.push('(c) base vide, 1 440 minutes : ' + w.total() + ' sous-requêtes (moins de 8 000), au plus ' + max + ' par réveil');
+  console.log('ok   ' + epreuves[epreuves.length - 1]);
+}
+
+// (d) LE MODE FILE (plan payant, FILE_PUSH='queue') : 10 000 abonnés, la
+//     série du jeudi. Une fausse file en mémoire tient lieu de Cloudflare
+//     Queues : le réveil enfile un message par athlète (pages de 500), le
+//     consommateur les prend par lots de 20 (max_batch_size), acquitte ou
+//     rejoue. Plafonds du plan payant : BUDGET=900, MAX_CHIFFREMENTS=200.
+//     Attendu : 100 % servis en moins de 30 réveils, personne deux fois.
+//     N_FILE=… pour une autre taille.
+{
+  const N = Number(process.env.N_FILE || 10000), t0 = PARIS('2026-10-01T17:00:30');
+  const lim = limitesDe({ BUDGET: '900', MAX_CHIFFREMENTS: '200' });
+  assert.deepEqual(lim, { budget: 900, maxChiffrements: 200, coutPush: COUT_PUSH });
+  assert.deepEqual(limitesDe({}), { budget: BUDGET, maxChiffrements: MAX_CHIFFREMENTS, coutPush: COUT_PUSH }, 'défauts = plan gratuit');
+  const init = donnees(N, t0);
+  const jour = '2026-10-01';
+  init.worker = { jobs: Object.fromEntries(['stats_badges', 'ambassadeurs', 'fins_coachs', 'attente', 'defis', 'acces', 'retour', 'relances',
+    'sante_rappel', 'accueil', 'parcours', 'duels', 'reactions', 'retention', 'wrapped', 'purge_paypal'].map((j) => [j, { jour, fini: true }])) };
+  const F = fausseBase(init);
+  let n0 = 0, horloge = t0, total = 0;
+  const f = (u, i) => { n0++; total++; return F.fetchImpl(u, i); };
+  const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: f });
+  // LA FAUSSE FILE : sendBatch (100 au plus, comme Cloudflare), et des lots
+  // de 20 avec ack/retry. Un message rejoué plus de 5 fois part en « ko ».
+  const file = { msgs: [], envois: 0, ko: [], async sendBatch(l) {
+    assert.ok(l.length <= 100, 'sendBatch : ' + l.length + ' messages (plafond 100)');
+    this.envois++; for (const m of l) this.msgs.push({ body: JSON.parse(JSON.stringify(m.body)), essais: 0 });
+  } };
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: f, maintenant: () => horloge, limites: lim, file });
+  M.coachsEtUsers = () => db.ref('users').shallow();
+  // 1 % des services de push répondent 503 au premier essai : rejoués, jamais perdus ni doublés.
+  const pannes = new Set();
+  F.pushStatut = (url) => { const i = Number(String(url).split('/').pop()); if (i % 100 === 7 && !pannes.has(i)) { pannes.add(i); return 503; } return 201; };
+  let reveils = 0, lots = 0, maxReveil = 0, maxLot = 0, rejoues = 0;
+  for (; reveils < 60; reveils++) {
+    n0 = 0;
+    const b = await minute({ db, M, compteur: () => n0, maintenant: () => horloge, budget: lim.budget });
+    maxReveil = Math.max(maxReveil, b.requetes);
+    assert.ok(b.requetes <= lim.budget, '(d) ' + b.requetes + ' requêtes au réveil ' + reveils);
+    // Le consommateur vide la file entre deux minutes (Cloudflare le fait en continu).
+    while (file.msgs.length) {
+      const pris = file.msgs.splice(0, 20);
+      const batch = { queue: 'repcore-push', messages: pris.map((m) => ({ body: m.body, ack() { m.fait = true; }, retry() { m.rejoue = true; } })) };
+      n0 = 0;
+      const r = await consommerLot(batch, { M, compteur: () => n0, maintenant: () => horloge, budget: lim.budget });
+      lots++; maxLot = Math.max(maxLot, r.requetes);
+      assert.ok(r.requetes <= 1000, '(d) lot : ' + r.requetes + ' sous-requêtes (plafond payant 1 000)');
+      for (const m of pris) {
+        if (m.fait) continue;
+        assert.ok(m.rejoue, '(d) un message ni acquitté ni rejoué');
+        rejoues++; m.rejoue = false;
+        if (++m.essais > 5) file.ko.push(m); else file.msgs.push(m);
+      }
+    }
+    if (F.lire('worker/jobs/serie/fini') && !file.msgs.length) { reveils++; break; }
+    horloge += 60e3;
+  }
+  const servis = servisDe(F);
+  assert.equal(servis.size, N, '(d) ' + servis.size + '/' + N + ' servis');
+  assert.ok(reveils < 30, '(d) ' + reveils + ' réveils');
+  assert.equal(file.ko.length, 0, '(d) rien dans la file des échecs');
+  assert.ok(rejoues >= pannes.size, '(d) les 503 sont rejoués');
+  // Personne deux fois : chaque appareil a reçu UN push réussi (les 503 sont des essais refusés, pas des pushs livrés).
+  const livres = new Map();
+  for (const r of F.recus) livres.set(r.endpoint, (livres.get(r.endpoint) || 0) + 1);
+  for (const [ep, k] of livres) assert.ok(k === 1 || (k === 2 && pannes.has(Number(ep.split('/').pop()))), '(d) ' + ep + ' reçu ' + k + ' fois');
+  assert.equal(F.lire('evenements'), null, '(d) /evenements reste vide : tout passe par la file');
+  epreuves.push('(d) mode file, ' + N + ' abonnés, série du jeudi : ' + servis.size + '/' + N + ' servis en ' + reveils + ' réveils, '
+    + lots + ' lots de 20, ' + file.envois + ' sendBatch, ' + rejoues + ' rejoués (503), au plus ' + maxReveil + ' requêtes par réveil et '
+    + maxLot + ' par lot, ' + total + ' en tout ; personne deux fois');
   console.log('ok   ' + epreuves[epreuves.length - 1]);
 }
 
