@@ -65,6 +65,17 @@ const DEF = (mesure, objectif, collectif) => ({ id: "m1", type: "defi", titre: "
   assert(D.valeurDefi(FIXTURE, DEF("serie", 4)) === 1, "série : 1 semaine validée (quota 2)");
   // Squat 100 → 112 (+12 %), rowing 64 → 70 (+9,375 %) : moyenne 10,7 %.
   assert(D.valeurDefi(FIXTURE, DEF("progressionPct", 5)) === 10.7, "progression : +10,7 %");
+  // UNE SÉANCE QUI NE COMPTE PAS (01/10/2026) — MÊMES FIXTURES dans app/tests.js :
+  // le mardi 6 abandonné à 0 série validée, une séance à 0 série de l'ancienne
+  // forme, et une séance importée sans data mais avec 3 séries (elle compte).
+  const FIX_VIDES = Object.assign({}, FIXTURE, { sessions: FIXTURE.sessions.concat([
+    { date: T("2026-10-06T17:00:00Z"), volume: 0, data: { "Squat": { sets: [{ weight: "200", reps: "5", done: false }] } } },
+    { date: T("2026-10-08T17:00:00Z"), sets: 0 },
+    { date: T("2026-10-20T17:00:00Z"), sets: 3, volume: 2000 }]) });
+  assert(D.seanceComptee(FIX_VIDES.sessions[6]) === false && D.seanceComptee(FIX_VIDES.sessions[7]) === false && D.seanceComptee(FIX_VIDES.sessions[8]) === true,
+    "seanceComptee : 0 série validée non, ancienne forme sets > 0 oui");
+  assert(D.valeurDefi(FIX_VIDES, DEF("seances", 12)) === 5, "séances : les vides ne comptent pas, l'importée oui (5)");
+  assert(D.valeurDefi(FIX_VIDES, DEF("serie", 4)) === 1, "série : une semaine à 2 réelles + 2 vides reste 1 semaine validée");
   assert(D.metriqueClassement(DEF("tonnage", 1), FIXTURE).unite === "séances", "tonnage : classé à la régularité, jamais aux kilos");
   assert(D.partEquipe(DEF("seances", 20, true), [4, 6]) === 0.5 && D.partEquipe(DEF("serie", 4, true), [4, 2]) === 0.75,
     "équipe : somme pour les séances, moyenne des parts pour la série");
@@ -95,7 +106,7 @@ const DEF = (mesure, objectif, collectif) => ({ id: "m1", type: "defi", titre: "
   };
   const seance = async (uid, iso) => {
     const s = get("users/" + uid + "/sessions") || [];
-    set("users/" + uid + "/sessions", s.concat([{ date: T(iso), volume: 3000 }]));
+    set("users/" + uid + "/sessions", s.concat([{ date: T(iso), volume: 3000, data: { Squat: { sets: [{ weight: "100", reps: "5", done: true }] } } }]));
     await F.defiApresSeance({ params: { uid }, data: {} });
   };
   a("2026-10-02T12:00:00Z");

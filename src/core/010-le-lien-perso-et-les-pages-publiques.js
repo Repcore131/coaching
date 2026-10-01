@@ -2251,12 +2251,15 @@ function defiValeur(u,d){
   const ses=_dfListe(u&&u.sessions).filter(s=>Number(s.date)>0);
   const dans=t=>t>=Number(d.debut)&&t<=Number(d.fin);
   const dedans=ses.filter(s=>dans(Number(s.date)));
+  // Séances et série : seules celles qui COMPTENT (seanceComptee), comme le
+  // serveur (functions/defis-calcul.js, valeurDefi).
+  const comptees=dedans.filter(seanceComptee);
   switch(d.mesure){
-    case 'seances': return dedans.length;
+    case 'seances': return comptees.length;
     case 'tonnage': return dedans.reduce((a,s)=>a+defiTonnageSeance(s),0);
     case 'serie':{
       const q=Math.max(1,_dfListe(u&&u.sessions_config).filter(s=>s&&s.active).length), n={};
-      for(const s of dedans){ const l=localISODate(_lundiDe(Number(s.date))); n[l]=(n[l]||0)+1; }
+      for(const s of comptees){ const l=localISODate(_lundiDe(Number(s.date))); n[l]=(n[l]||0)+1; }
       return Object.keys(n).filter(l=>n[l]>=q).length;
     }
     case 'progressionPct':{

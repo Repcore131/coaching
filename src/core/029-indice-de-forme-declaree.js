@@ -1379,6 +1379,36 @@ function savePostSession(versBilan){
 function _creneauxPrevus(u){
   return ((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length;
 }
+// ══ UNE SÉANCE QUI COMPTE (01/10/2026) ══════════════════════════════════
+// PURE. Au moins une série VALIDÉE (done === true) dans s.data, ou dans
+// s.exercises (la plus ancienne forme, celle que lisent _bdgExos et _dfExos) ;
+// pour une séance importée sans détail, s.sets > 0. « Abandonner »
+// tout de suite pousse une séance à 0 série : elle reste dans l'historique,
+// mais ne compte ni pour la série, ni pour ASSIDU, ni pour le parcours, ni pour
+// un défi. La même règle vit dans functions/defis-calcul.js (seanceComptee) et
+// dans le Worker (cloudflare/src/xp.js, seriesValidees > 0).
+function seanceComptee(s){
+  if(!s||typeof s!=='object') return false;
+  const d=s.data;
+  if(d&&typeof d==='object'&&Object.keys(d).length){
+    for(const k of Object.keys(d)){
+      const sets=(d[k]||{}).sets;
+      const l=Array.isArray(sets)?sets:(sets&&typeof sets==='object'?Object.values(sets):[]);
+      for(const st of l) if(st&&st.done===true) return true;
+    }
+    return false;
+  }
+  const ex=Array.isArray(s.exercises)?s.exercises:(s.exercises&&typeof s.exercises==='object'?Object.values(s.exercises):[]);
+  if(ex.length){
+    for(const e of ex){
+      const sets=e&&e.sets;
+      const l=Array.isArray(sets)?sets:(sets&&typeof sets==='object'?Object.values(sets):[]);
+      for(const st of l) if(st&&st.done===true) return true;
+    }
+    if(!(Number(s.sets)>0)) return false;
+  }
+  return Number(s.sets)>0;
+}
 function seancesPrevuesParSemaine(u){
   return Math.max(1,_creneauxPrevus(u));
 }

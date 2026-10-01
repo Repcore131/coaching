@@ -22873,12 +22873,15 @@ function defiValeur(u,d){
   const ses=_dfListe(u&&u.sessions).filter(s=>Number(s.date)>0);
   const dans=t=>t>=Number(d.debut)&&t<=Number(d.fin);
   const dedans=ses.filter(s=>dans(Number(s.date)));
+  // Séances et série : seules celles qui COMPTENT (seanceComptee), comme le
+  // serveur (functions/defis-calcul.js, valeurDefi).
+  const comptees=dedans.filter(seanceComptee);
   switch(d.mesure){
-    case 'seances': return dedans.length;
+    case 'seances': return comptees.length;
     case 'tonnage': return dedans.reduce((a,s)=>a+defiTonnageSeance(s),0);
     case 'serie':{
       const q=Math.max(1,_dfListe(u&&u.sessions_config).filter(s=>s&&s.active).length), n={};
-      for(const s of dedans){ const l=localISODate(_lundiDe(Number(s.date))); n[l]=(n[l]||0)+1; }
+      for(const s of comptees){ const l=localISODate(_lundiDe(Number(s.date))); n[l]=(n[l]||0)+1; }
       return Object.keys(n).filter(l=>n[l]>=q).length;
     }
     case 'progressionPct':{
@@ -67585,6 +67588,36 @@ function savePostSession(versBilan){
 function _creneauxPrevus(u){
   return ((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length;
 }
+// ══ UNE SÉANCE QUI COMPTE (01/10/2026) ══════════════════════════════════
+// PURE. Au moins une série VALIDÉE (done === true) dans s.data, ou dans
+// s.exercises (la plus ancienne forme, celle que lisent _bdgExos et _dfExos) ;
+// pour une séance importée sans détail, s.sets > 0. « Abandonner »
+// tout de suite pousse une séance à 0 série : elle reste dans l'historique,
+// mais ne compte ni pour la série, ni pour ASSIDU, ni pour le parcours, ni pour
+// un défi. La même règle vit dans functions/defis-calcul.js (seanceComptee) et
+// dans le Worker (cloudflare/src/xp.js, seriesValidees > 0).
+function seanceComptee(s){
+  if(!s||typeof s!=='object') return false;
+  const d=s.data;
+  if(d&&typeof d==='object'&&Object.keys(d).length){
+    for(const k of Object.keys(d)){
+      const sets=(d[k]||{}).sets;
+      const l=Array.isArray(sets)?sets:(sets&&typeof sets==='object'?Object.values(sets):[]);
+      for(const st of l) if(st&&st.done===true) return true;
+    }
+    return false;
+  }
+  const ex=Array.isArray(s.exercises)?s.exercises:(s.exercises&&typeof s.exercises==='object'?Object.values(s.exercises):[]);
+  if(ex.length){
+    for(const e of ex){
+      const sets=e&&e.sets;
+      const l=Array.isArray(sets)?sets:(sets&&typeof sets==='object'?Object.values(sets):[]);
+      for(const st of l) if(st&&st.done===true) return true;
+    }
+    if(!(Number(s.sets)>0)) return false;
+  }
+  return Number(s.sets)>0;
+}
 function seancesPrevuesParSemaine(u){
   return Math.max(1,_creneauxPrevus(u));
 }
@@ -70115,8 +70148,14 @@ function updateStreak(){
     currentUser.streakJokersUtilises=0;
   }
   const quota=seancesPrevuesParSemaine(currentUser);
-  const depuis=now-7*864e5;
-  const faites=(currentUser.sessions||[]).filter(s=>s&&s.date>depuis).length;
+  // LA SEMAINE CALENDAIRE (01/10/2026), et non plus les sept derniers jours
+  // glissants : la même que les badges, les volts « semaine », les duels et
+  // les défis. Seules les séances qui COMPTENT (seanceComptee : au moins une
+  // série validée) ; une séance est rangée dans la semaine de sa date de FIN
+  // (s.date), même à cheval sur minuit dimanche.
+  // Pas de recalcul rétroactif : streak et streakWeek gardent leur passé.
+  const lundi=_lundiDe(now).getTime();
+  const faites=(currentUser.sessions||[]).filter(s=>s&&Number(s.date)>0&&seanceComptee(s)&&_lundiDe(Number(s.date)).getTime()===lundi).length;
   // streakWeek : lundi de la dernière semaine créditée, pour ne compter
   // qu'une fois même si l'athlète dépasse son quota.
   const cle=localISODate(_lundiDe(now));
@@ -81516,7 +81555,9 @@ function _badgesFaits(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
   let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
-  const f={seances:ses.map(s=>s.date),records:[],semaines:[],sansFaute:[],
+  // f.seances : les séances qui COMPTENT (seanceComptee) — ASSIDU et le
+  // parcours ne comptent pas un « Abandonner » à 0 série.
+  const f={seances:ses.filter(seanceComptee).map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
     palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
@@ -81567,7 +81608,8 @@ function _badgesFaits(u,maintenant){
     tonnages.push([volCumul,s.date]);
     let cle=0; try{ cle=_lundiDe(s.date).getTime(); }catch(e){ continue; }
     const w=semaine[cle]||(semaine[cle]={n:0,completes:true,series:0,derniere:0,validee:0});
-    w.n++; w.derniere=s.date;
+    if(seanceComptee(s)) w.n++;
+    w.derniere=s.date;
     w.series+=Number(s.sets)>0?Number(s.sets):nSeries;
     if(s.complete===false||(Number(s.setsPlanned)>0&&Number(s.sets)<Number(s.setsPlanned))) w.completes=false;
     if(!w.validee&&w.n>=quota) w.validee=s.date;
@@ -82494,7 +82536,7 @@ function calculerWrapped(u,debut,fin,maintenant){
   const toutes=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
   const dans=s=>s.date>=debut&&s.date<fin;
   const ses=toutes.filter(dans);
-  const w={seances:ses.length,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
+  const w={seances:ses.filter(seanceComptee).length,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
     jourPrefere:null,heureMoyenne:null,serieMax:0,badgesGagnes:[],profil:null,records:0};
   // LES RECORDS se jugent contre TOUT ce qui précède, période ou non : le
   // premier record de septembre bat peut-être une charge d'avril.

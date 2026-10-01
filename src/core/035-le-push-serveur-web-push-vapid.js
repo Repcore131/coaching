@@ -1113,7 +1113,9 @@ function _badgesFaits(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
   let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
-  const f={seances:ses.map(s=>s.date),records:[],semaines:[],sansFaute:[],
+  // f.seances : les séances qui COMPTENT (seanceComptee) — ASSIDU et le
+  // parcours ne comptent pas un « Abandonner » à 0 série.
+  const f={seances:ses.filter(seanceComptee).map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
     palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
@@ -1164,7 +1166,8 @@ function _badgesFaits(u,maintenant){
     tonnages.push([volCumul,s.date]);
     let cle=0; try{ cle=_lundiDe(s.date).getTime(); }catch(e){ continue; }
     const w=semaine[cle]||(semaine[cle]={n:0,completes:true,series:0,derniere:0,validee:0});
-    w.n++; w.derniere=s.date;
+    if(seanceComptee(s)) w.n++;
+    w.derniere=s.date;
     w.series+=Number(s.sets)>0?Number(s.sets):nSeries;
     if(s.complete===false||(Number(s.setsPlanned)>0&&Number(s.sets)<Number(s.setsPlanned))) w.completes=false;
     if(!w.validee&&w.n>=quota) w.validee=s.date;
@@ -2091,7 +2094,7 @@ function calculerWrapped(u,debut,fin,maintenant){
   const toutes=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
   const dans=s=>s.date>=debut&&s.date<fin;
   const ses=toutes.filter(dans);
-  const w={seances:ses.length,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
+  const w={seances:ses.filter(seanceComptee).length,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
     jourPrefere:null,heureMoyenne:null,serieMax:0,badgesGagnes:[],profil:null,records:0};
   // LES RECORDS se jugent contre TOUT ce qui précède, période ou non : le
   // premier record de septembre bat peut-être une charge d'avril.

@@ -1594,8 +1594,14 @@ function updateStreak(){
     currentUser.streakJokersUtilises=0;
   }
   const quota=seancesPrevuesParSemaine(currentUser);
-  const depuis=now-7*864e5;
-  const faites=(currentUser.sessions||[]).filter(s=>s&&s.date>depuis).length;
+  // LA SEMAINE CALENDAIRE (01/10/2026), et non plus les sept derniers jours
+  // glissants : la même que les badges, les volts « semaine », les duels et
+  // les défis. Seules les séances qui COMPTENT (seanceComptee : au moins une
+  // série validée) ; une séance est rangée dans la semaine de sa date de FIN
+  // (s.date), même à cheval sur minuit dimanche.
+  // Pas de recalcul rétroactif : streak et streakWeek gardent leur passé.
+  const lundi=_lundiDe(now).getTime();
+  const faites=(currentUser.sessions||[]).filter(s=>s&&Number(s.date)>0&&seanceComptee(s)&&_lundiDe(Number(s.date)).getTime()===lundi).length;
   // streakWeek : lundi de la dernière semaine créditée, pour ne compter
   // qu'une fois même si l'athlète dépasse son quota.
   const cle=localISODate(_lundiDe(now));

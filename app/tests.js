@@ -28766,49 +28766,97 @@ async function testExercices(){
       if(_brutU==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',_brutU);
     }
   }
+  // LA SEMAINE CALENDAIRE ET LES SÉANCES QUI COMPTENT (01/10/2026) :
+  // updateStreak crédite une semaine quand le quota est atteint DANS la semaine
+  // calendaire (lundi-dimanche) — plus sur sept jours glissants —, et ne compte
+  // que les séances à au moins une série validée (seanceComptee). Horloge fixe :
+  // le résultat ne dépend plus du jour où tourne la suite.
+  const _SC=(t,n)=>({id:'s'+t,date:t,data:{SQUAT:{sets:Array.from({length:n},()=>({weight:'60',reps:'8',done:true}))}}});
+  const _SV=t=>({id:'v'+t,date:t,data:{SQUAT:{sets:[{weight:'60',reps:'8',done:false}]}}});   // « Abandonner » : 0 série validée
+  const _JL=(m,j,h,mi)=>new Date(2026,m-1,j,h==null?18:h,mi||0,0).getTime();          // heure LOCALE
+  const _cfgN=n=>Array.from({length:n},()=>({active:true,exercises:[]}));
+  const _ath=(n,x)=>Object.assign({id:'st',email:'st@t',role:'athlete',streak:0,streakWeek:null,lastSession:0,bilans:[],
+    nutrition:{},exAlias:{},exMuscles:{},programs:{},sessions_config:_cfgN(n),sessions:[]},x||{});
+  // Pousse une séance À SON HEURE, puis updateStreak à cette même heure (finishWorkout).
+  const _seance=(s)=>{ const sv=Date.now; Date.now=()=>s.date; try{ currentUser.sessions.push(s); updateStreak(); } finally { Date.now=sv; } };
+  ok('seanceComptee : une série validée dans data, ou sets > 0 sans data (séance importée)',(()=>{
+    const cas=[[_SC(1,1),true],[_SV(1),false],[{date:1,sets:3},true],[{date:1,sets:0},false],[{date:1},false],
+      [{date:1,sets:9,data:{A:{sets:[{done:false}]}}},false],[{date:1,data:{A:{sets:{0:{done:true}}}}},true],[{date:1,exercises:[{name:'A',sets:[{done:true}]}]},true],[{date:1,exercises:[]},false],[null,false]];
+    const ko=cas.filter(([x,a])=>seanceComptee(x)!==a);
+    return ko.length?_echec(JSON.stringify(ko[0][0])):true;})());
   ok('Une semaine au quota crédite UN point, et un seul',(()=>{
     const _sv=currentUser, _ss=window.saveUser;
     try{
       window.saveUser=()=>true;
-      const J=n=>Date.now()-n*864e5;
-      const cfg=[{day:'Lundi',active:true,exercises:[]},{day:'Mardi',active:false,exercises:[]},
-        {day:'Mercredi',active:true,exercises:[]},{day:'Jeudi',active:false,exercises:[]},
-        {day:'Vendredi',active:true,exercises:[]},{day:'Samedi',active:false,exercises:[]},
-        {day:'Dimanche',active:false,exercises:[]}];
-      currentUser={id:'st',email:'st@t',role:'athlete',streak:0,streakWeek:null,
-        lastSession:J(1),bilans:[],nutrition:{},exAlias:{},exMuscles:{},programs:{},
-        sessions_config:JSON.parse(JSON.stringify(cfg)),
-        sessions:[{id:'a',date:J(5)},{id:'b',date:J(3)},{id:'c',date:J(1)}]};
-      if(seancesPrevuesParSemaine(currentUser)!==3)
-        return _echec('quota : '+seancesPrevuesParSemaine(currentUser));
-      updateStreak();
+      currentUser=_ath(3);
+      for(const t of [_JL(10,5),_JL(10,7),_JL(10,9)]) _seance(_SC(t,4));    // lundi, mercredi, vendredi
       if(currentUser.streak!==1) return _echec('après une semaine : '+currentUser.streak);
-      // LE POINT QUI COMPTE : rappeler updateStreak dans la MEME semaine ne
-      // recredite pas. Sans la garde streakWeek, trois seances donneraient
-      // trois points et le compteur cesserait de compter des semaines.
-      updateStreak(); updateStreak();
+      // Rappeler updateStreak dans la MÊME semaine ne recrédite pas (streakWeek).
+      _seance(_SC(_JL(10,10),4)); _seance(_SC(_JL(10,11),4));
       if(currentUser.streak!==1) return _echec('recrédité dans la même semaine : '+currentUser.streak);
-      // Et le compteur AFFICHE suit la valeur stockee.
-      return streakSemaines(currentUser)===1
-        ?true:_echec('affiché : '+streakSemaines(currentUser));
+      return currentUser.streakWeek===localISODate(_lundiDe(_JL(10,9)))?true:_echec('streakWeek : '+currentUser.streakWeek);
     } finally { currentUser=_sv; window.saveUser=_ss; }})());
-  ok('Sous le quota, rien n\'est crédité',(()=>{
+  ok('Sous le quota, rien n\'est crédité ; la troisième séance de la semaine suffit',(()=>{
     const _sv=currentUser, _ss=window.saveUser;
     try{
       window.saveUser=()=>true;
-      const J=n=>Date.now()-n*864e5;
-      currentUser={id:'st2',email:'st2@t',role:'athlete',streak:0,streakWeek:null,
-        lastSession:J(1),bilans:[],nutrition:{},exAlias:{},exMuscles:{},programs:{},
-        sessions_config:[{active:true,exercises:[]},{active:true,exercises:[]},
-                         {active:true,exercises:[]}],
-        sessions:[{id:'a',date:J(3)},{id:'b',date:J(1)}]};   // deux sur trois
-      updateStreak();
+      currentUser=_ath(3);
+      _seance(_SC(_JL(10,5),4)); _seance(_SC(_JL(10,7),4));
       if(currentUser.streak!==0) return _echec('crédité à 2 séances sur 3');
-      // La troisieme suffit a declencher le credit.
-      currentUser.sessions.push({id:'c',date:Date.now()-3600e3});
-      updateStreak();
+      _seance(_SC(_JL(10,8),4));
       return currentUser.streak===1?true:_echec('non crédité au quota atteint');
     } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('(a) vendredi, samedi, dimanche, puis un lundi « Abandonner » à 0 série : la série ne monte que d’UN',(()=>{
+    const _sv=currentUser, _ss=window.saveUser;
+    try{
+      window.saveUser=()=>true;
+      currentUser=_ath(3);
+      for(const t of [_JL(10,9),_JL(10,10),_JL(10,11)]) _seance(_SC(t,4));
+      if(currentUser.streak!==1) return _echec('ven/sam/dim : '+currentUser.streak);
+      // L'ancienne fenêtre de 7 jours glissants comptait ven/sam/dim + lundi = 4 et
+      // créditait la semaine du lundi dès sa première (et vide) séance.
+      _seance(_SV(_JL(10,12,7)));
+      return currentUser.streak===1?true:_echec('lundi abandonné : '+currentUser.streak);
+    } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('(b) vendredi, samedi, dimanche, puis un vrai lundi : la semaine du lundi attend SES trois séances',(()=>{
+    const _sv=currentUser, _ss=window.saveUser;
+    try{
+      window.saveUser=()=>true;
+      currentUser=_ath(3);
+      for(const t of [_JL(10,9),_JL(10,10),_JL(10,11)]) _seance(_SC(t,4));
+      _seance(_SC(_JL(10,12),4));
+      if(currentUser.streak!==1) return _echec('lundi : '+currentUser.streak);
+      // Une séance importée (sans data, 4 séries) compte comme une vraie.
+      _seance({id:'imp',date:_JL(10,13),sets:4});
+      if(currentUser.streak!==1) return _echec('mardi : '+currentUser.streak);
+      _seance(_SC(_JL(10,14),4));
+      return currentUser.streak===2?true:_echec('mercredi, troisième séance de la semaine : '+currentUser.streak);
+    } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('Quota 1 : une séance finie lundi à 0 h 20, commencée dimanche, compte pour la semaine du LUNDI',(()=>{
+    const _sv=currentUser, _ss=window.saveUser;
+    try{
+      window.saveUser=()=>true;
+      currentUser=_ath(1);
+      _seance(Object.assign(_SC(_JL(10,12,0,20),4),{duration:60}));
+      if(currentUser.streak!==1) return _echec('streak '+currentUser.streak);
+      return currentUser.streakWeek===localISODate(_lundiDe(_JL(10,12)))?true:_echec('semaine : '+currentUser.streakWeek);
+    } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('(c) ASSIDU I ne compte pas les séances vides ; le parcours non plus',(()=>{
+    const t0=_JL(9,1);
+    const vraies=Array.from({length:7},(_,i)=>_SC(t0+i*2*864e5,3)), vides=[_SV(t0+864e5),_SV(t0+3*864e5),_SV(t0+5*864e5)];
+    const u={sessions_config:_cfgN(3),sessions:vraies.concat(vides)};
+    const f=_badgesFaits(u,_JL(10,1));
+    if(f.seances.length!==7) return _echec('f.seances : '+f.seances.length);
+    const assidu=BADGES_ACQUIS.find(b=>b.id==='assidu_1');
+    if(assidu.test(f)) return _echec('ASSIDU I à 7 vraies + 3 vides');
+    const u2={sessions_config:_cfgN(3),sessions:vraies.concat([_SC(t0+20*864e5,3),_SC(t0+21*864e5,3),_SC(t0+22*864e5,3)])};
+    if(!assidu.test(_badgesFaits(u2,_JL(10,1)))) return _echec('ASSIDU I à 10 vraies');
+    // Le parcours : « Termine ta 1re séance » ne se coche pas sur un abandon.
+    const f0=_badgesFaits({sessions_config:_cfgN(3),sessions:[_SV(t0)]},_JL(10,1));
+    const p1=PARCOURS_DEMARRAGE.find(x=>x.cle==='premiere_seance');
+    if(p1.test({},f0)) return _echec('première séance cochée sur un abandon');
+    // Le Wrapped ne compte pas les séances vides.
+    return calculerWrapped(u,t0-864e5,_JL(10,1),_JL(10,1)).seances===7?true:_echec('wrapped');})());
   ok('Un jour de repos planifié ne déclenche AUCUNE relance',(()=>{
     // Lundi / Mercredi / Vendredi : mardi et jeudi sont a deux jours de la
     // derniere seance. L'ancienne relance parlait des le premier jour, ce qui
@@ -50328,7 +50376,7 @@ async function testExercices(){
       const sv=currentUser;
       try{
         const base=()=>({id:'b1',email:'b@t.fr',role:'athlete',
-          sessions:[{date:Date.now()-3600e3,exercises:[]}],bilans:[],
+          sessions:[{date:Date.now()-3600e3,exercises:[{name:'SQUAT',sets:[{weight:60,reps:8,done:true}]}]}],bilans:[],
           sessions_config:[{active:true}]});
         // Temoin : sans drapeau, le badge tombe. Sans ce temoin, les deux cas
         // suivants passeraient meme si majBadges ne faisait plus rien du tout.
@@ -50368,7 +50416,7 @@ async function testExercices(){
         // UNE DATE FIXE, un mardi à midi : « il y a une heure » tombait la nuit
         // quand la suite tournait tôt le matin, et AUBE ou NUIT s'ajoutaient.
         currentUser={id:'b2',email:'b2@t.fr',role:'athlete',
-          sessions:[{date:new Date(2026,2,10,12,0).getTime(),duration:60,exercises:[]}],bilans:[],
+          sessions:[{date:new Date(2026,2,10,12,0).getTime(),duration:60,exercises:[{name:'SQUAT',sets:[{weight:60,reps:8,done:true}]}]}],bilans:[],
           sessions_config:[{active:true},{active:true},{active:true}]};
         const un=majBadges();
         const quand=currentUser.badges['premiere-seance'].at;
@@ -50481,7 +50529,7 @@ async function testExercices(){
       try{
         _celebrerBadges=(ids,recap)=>{ vues.push([ids,recap]); };
         currentUser={id:'b3',email:'b3@t.fr',role:'athlete',
-          sessions:[{date:new Date(2026,2,10,12).getTime(),duration:60,exercises:[]}],
+          sessions:[{date:new Date(2026,2,10,12).getTime(),duration:60,exercises:[{name:'SQUAT',sets:[{weight:60,reps:8,done:true}]}]}],
           bilans:[{date:Date.now()}],sessions_config:[{active:true}]};
         const n=majBadges();
         if(n.length<2) return _echec('le cas a plusieurs badges ne se produit pas : '+n.join(','));
@@ -50553,8 +50601,10 @@ async function testExercices(){
     const _B=(()=>{
       const J=864e5;
       // Une séance au format de finishWorkout : `data` nom → séries.
+      // Sans exercice précisé : une série validée, toujours la même charge (aucun
+      // record) — une séance sans série ne compte plus (seanceComptee, 01/10/2026).
       const sc=(t,exos,o)=>Object.assign({date:t,duration:60,data:Object.fromEntries(
-        Object.entries(exos||{}).map(([nm,[w,r]])=>[nm,{sets:[{weight:w,reps:r,repsDone:r,rir:1,done:true}]}]))},o||{});
+        Object.entries(exos&&Object.keys(exos).length?exos:{_SC_:[0,1]}).map(([nm,[w,r]])=>[nm,{sets:[{weight:w,reps:r,repsDone:r,rir:1,done:true}]}]))},o||{});
       const u=o=>Object.assign({role:'athlete',sessions:[],bilans:[],sessions_config:[{active:true}]},o||{});
       const at=(user,id,t)=>{ const x=badgesMeritesDates(user,t||new Date(2027,0,1).getTime()).find(y=>y.id===id); return x?x.at:0; };
       // Un mardi à midi, loin de toute fête et de tout vendredi 13.
@@ -50733,7 +50783,9 @@ async function testExercices(){
       const deb=new Date(2026,8,1).getTime(), fin=new Date(2026,9,1).getTime(), apres=new Date(2026,9,3).getTime();
       const sc=(j,h,exos,o)=>Object.assign({date:new Date(2026,8,j,h,0).getTime(),duration:60,
         data:Object.fromEntries(Object.entries(exos||{}).map(([nm,[w,r,n]])=>[nm,{sets:Array.from({length:n||1},
-          ()=>({weight:w,reps:r,repsDone:r,rir:1,done:true}))}]))},o||{});
+          ()=>({weight:w,reps:r,repsDone:r,rir:1,done:true}))}]))},
+        // Sans exercice : une séance importée (sets>0), comptée par seanceComptee.
+        Object.keys(exos||{}).length?{}:{sets:1},o||{});
       return {deb,fin,apres,sc};
     })();
     ok('Wrapped · mois vide : des zéros, aucun profil, rien d’inventé',(()=>{
@@ -51288,7 +51340,8 @@ async function testExercices(){
       try{
         _celebrerSerie=n=>vus.push(n);
         const now=Date.now(), J=864e5;
-        const ses=[{date:now-3*36e5},{date:now-J},{date:now-2*J}];
+        // Trois séances de la semaine CIVILE en cours (lundi 1 h, 2 h, 3 h), comptées (sets>0).
+        const L0=_lundiDe(now).getTime(), ses=[1,2,3].map(h=>({date:L0+h*36e5,sets:3}));
         const u=_JK({streak:3,streakWeek:_jkCle(1),lastSession:now-2*J,sessions:ses,streakJokers:0});
         currentUser=u; updateStreak();
         if(u.streak!==4||u.streakJokers!==1) return _echec('4 semaines → '+u.streak+' / '+u.streakJokers+' joker(s)');
@@ -53884,6 +53937,15 @@ async function testExercices(){
     ok('Défis : la valeur perso compte comme le serveur (séances, tonnage, série, %)',(()=>{
       const r=[defiValeur(_DFIX,_DD('seances',12)),defiValeur(_DFIX,_DD('tonnage',1)),defiValeur(_DFIX,_DD('serie',4)),defiValeur(_DFIX,_DD('progressionPct',5))];
       return r.join()==='4,13400,1,10.7'?true:_echec(r.join());})());
+    // UNE SÉANCE QUI NE COMPTE PAS — MÊMES FIXTURES que functions/test/defis.test.js.
+    ok('Défis : une séance à 0 série validée ne compte pas, une séance importée avec des séries oui (mêmes fixtures que le serveur)',(()=>{
+      const fx=Object.assign({},_DFIX,{sessions:_DFIX.sessions.concat([
+        {date:_DT('2026-10-06T17:00:00Z'),volume:0,data:{'Squat':{sets:[{weight:'200',reps:'5',done:false}]}}},
+        {date:_DT('2026-10-08T17:00:00Z'),sets:0},
+        {date:_DT('2026-10-20T17:00:00Z'),sets:3,volume:2000}])});
+      if(seanceComptee(fx.sessions[6])||seanceComptee(fx.sessions[7])||!seanceComptee(fx.sessions[8])) return _echec('seanceComptee');
+      const r=[defiValeur(fx,_DD('seances',12)),defiValeur(fx,_DD('serie',4))];
+      return r.join()==='5,1'?true:_echec(r.join());})());
     ok('Défis : les trois modèles retombent sur leur titre',(()=>{
       const t=_DT('2026-10-10T10:00:00Z');
       const fm=new Date(2026,9,31,23,59,59).getTime();
@@ -55337,7 +55399,7 @@ async function testExercices(){
       if(!r||r.jours!==12||r.eligible) return _echec(JSON.stringify(r));
       if(retourAuCombat({sessions:[{date:d-9*_CJ},{date:d}]},{date:d})!==null) return _echec('9 jours');
       if(retourAuCombat({sessions:[{date:d}]},{date:d})!==null) return _echec('première séance');
-      const p=retourAuCombat({sessions:[{date:d-40*_CJ},{date:d}],sessions_config:[{active:true}]},{date:d});
+      const p=retourAuCombat({sessions:[{date:d-40*_CJ,sets:3},{date:d,sets:3}],sessions_config:[{active:true}]},{date:d,sets:3});
       if(!p||!p.eligible||p.faites!==1||p.reste!==3) return _echec('éligible : '+JSON.stringify(p));
       if(textePhenixNoir(p)!=='PHÉNIX NOIR : encore 3 semaines à valider.') return _echec(textePhenixNoir(p));
       if(!/après 30 jours d’arrêt/.test(textePhenixNoir(r))) return _echec(textePhenixNoir(r));
