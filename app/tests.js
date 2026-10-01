@@ -50411,8 +50411,9 @@ async function testExercices(){
         if(CORPS_ZONES_ORDRE.indexOf(m)<0) return _echec(m+' absent de CORPS_ZONES_ORDRE');
       return true;})());
     ok('Carte musculaire : fin de séance et onglet Volume (semaine / 4 semaines)',(()=>{
-      if(!document.getElementById('wd-muscles')) return _echec('pas de #wd-muscles sur l’écran de fin');
-      if(String(finishWorkout).indexOf('rendreMusclesFinSeance')<0) return _echec('fin de séance non branchée');
+      // La fin de séance ne porte plus la carte (Kevin, 01/10/2026).
+      if(document.getElementById('wd-muscles')) return _echec('la carte musculaire est revenue sur l’écran de fin');
+      if(/rendreMusclesFinSeance|htmlCarteMuscles/.test(String(finishWorkout))) return _echec('la fin de séance dessine encore la carte');
       if(String(renderVolume).indexOf('rendreMusclesEvolution')<0||String(renderVolume).indexOf('prog-muscles')<0)
         return _echec('onglet Volume non branché');
       const h=htmlCarteMuscles('t',{titre:'X',periode:'p',chiffres:[{v:'1',l:'a'},{v:'2',l:'b'},{v:'3',l:'c'}],groupes:{}},{});
@@ -54055,12 +54056,12 @@ async function testExercices(){
       const r=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
       if(!/class="rcf-rk-barre" aria-hidden="true" style="--avant:95%"/.test(r)) return _echec('la barre du record : '+r);
       return /<button/.test(r)?_echec('un bouton est revenu dans les records'):true;})());
-    ok('Fin de séance (28/09/2026) : la carte musculaire se lit, sans rien à télécharger',(()=>{
+    ok('Carte musculaire : l’option sansPartage retire le partage, les autres écrans le gardent',(()=>{
       const d={titre:'T',periode:'cette séance',chiffres:[],groupes:{},series:{}};
       const avec=htmlCarteMuscles('t1',d,{}), sans=htmlCarteMuscles('t2',d,{sansPartage:true});
       if(!/musc-actions/.test(avec)) return _echec('les autres écrans perdent leur partage');
       if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
-      return /sansPartage:true/.test(String(rendreMusclesFinSeance))?true:_echec('la fin de séance ne demande pas la carte sans partage');})());
+      return true;})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
     okA('Accueil /i : « Julie t’invite », son rang et « Julie t’offre ton premier mois » avant le bouton, le défi d’abord quand il y en a un ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
