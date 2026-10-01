@@ -45,7 +45,8 @@ const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
 const droitsAppel = (nom) => (req, ctx) => creerAppelsDroits(ctx)[nom](req);
 const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin,
   redeemCode: droitsAppel('redeemCode'), ouvrirEssai: droitsAppel('ouvrirEssai'),
-  devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode') };
+  devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
+  emailVerifie: droitsAppel('emailVerifie') };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {

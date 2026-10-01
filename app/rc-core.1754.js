@@ -4329,6 +4329,29 @@ const CLOUD={
     this._idToken=null;this._refreshToken=null;this._tokenExpiry=0;
     try{localStorage.removeItem('rc_fb_auth');}catch{}
   },
+  // ══ L'ADRESSE E-MAIL VERIFIEE (01/10/2026) ════════════════════════════════
+  // Un filleul ne compte pour son parrain qu'avec une adresse VERIFIEE : le
+  // Worker le lit dans le jeton (email_verified). A l'inscription, on envoie
+  // le lien de verification ; ensuite, un rappel discret tant que ce n'est pas
+  // fait (_majRappelVerification).
+  async envoyerVerificationEmail(){
+    const token=await this._getToken().catch(()=>null);
+    if(!token||!this._fbKey) return false;
+    try{
+      const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key='+this._fbKey,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({requestType:'VERIFY_EMAIL',idToken:token})});
+      return r.ok;
+    }catch(e){ return false; }
+  },
+  // true / false selon le jeton courant ; null quand il n'y en a pas.
+  emailVerifieDuJeton(){
+    try{
+      if(!this._idToken) return null;
+      const p=JSON.parse(atob(String(this._idToken).split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      return p.email_verified===true;
+    }catch(e){ return null; }
+  },
   _resetErr:null,
   async resetPassword(email){
     this._resetErr=null;
@@ -7727,6 +7750,50 @@ window.addEventListener('offline',()=>{
 // l'athlete que ses donnees attendaient. Une pastille discrete, seulement
 // quand la file n'est pas vide, et seulement cote athlete (le coach a ses
 // badges). Elle se met a jour a chaque ecriture de la file.
+// ══ LE RAPPEL « VÉRIFIE TON ADRESSE » (01/10/2026) ══════════════════════════
+// Discret, cote athlete, tant que le jeton dit email_verified:false. Le jeton
+// ne change qu'a son renouvellement : « C'est fait » le force. Des que
+// l'adresse est verifiee, le Worker en est prevenu UNE fois (emailVerifie) :
+// c'est lui, et lui seul, qui note la verification pour le parrainage.
+const RAPPEL_VERIF_CLE='rc_verif_envoye';
+const VERIF_SIGNALEE_CLE='rc_verif_signalee';
+function _majRappelVerification(){
+  let z=document.getElementById('rc-verif');
+  const u=(typeof currentUser==='object'&&currentUser)||null;
+  const athlete=!!(u&&u.email&&u.role!=='coach');
+  const v=(athlete&&CLOUD.emailVerifieDuJeton)?CLOUD.emailVerifieDuJeton():null;
+  if(v===true){
+    try{
+      const deja=localStorage.getItem(VERIF_SIGNALEE_CLE)||'';
+      if(deja!==String(u.email).toLowerCase())
+        CLOUD._callFn('emailVerifie',{}).then(()=>{ try{ localStorage.setItem(VERIF_SIGNALEE_CLE,String(u.email).toLowerCase()); }catch(e){} }).catch(()=>{});
+    }catch(e){}
+  }
+  if(v!==false){ if(z) z.hidden=true; return false; }
+  if(!z){
+    z=document.createElement('div');
+    z.id='rc-verif'; z.className='rc-verif'; z.setAttribute('role','status');
+    z.innerHTML='<span>✉ Vérifie ton adresse e-mail</span>'
+      +'<button type="button" data-v="fait">C’est fait</button><button type="button" data-v="renvoyer">Renvoyer</button>';
+    z.addEventListener('click',async e=>{
+      const b=e.target&&e.target.closest?e.target.closest('button[data-v]'):null;
+      if(!b) return;
+      if(b.dataset.v==='renvoyer'){
+        const ok=await CLOUD.envoyerVerificationEmail();
+        toast(ok?'Lien renvoyé : regarde ta boîte mail (et les indésirables).':'Envoi impossible pour le moment : réessaie plus tard.',ok?'var(--green)':'var(--orange)');
+      } else {
+        CLOUD._tokenExpiry=0;
+        try{ await CLOUD._getToken(); }catch(err){}
+        if(CLOUD.emailVerifieDuJeton()!==true) toast('Pas encore vérifiée : ouvre le lien reçu par e-mail.','var(--orange)');
+        _majRappelVerification();
+      }
+    });
+    document.body.appendChild(z);
+  }
+  z.hidden=false;
+  return true;
+}
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ try{ _majRappelVerification(); }catch(e){} } });
 function _majIndicAttente(){
   let n=0; try{ n=CLOUD.enAttenteDeSync(); }catch(e){ n=0; }
   let z=document.getElementById('rc-attente');
@@ -12273,6 +12340,11 @@ async function doRegister(){
     // sur l'appareil (email deja pris chez Firebase, mauvais mot de passe, hors ligne...)
     // et il bloque ensuite la vraie connexion.
     const authOk=await CLOUD.signIn(em,pw);
+    // UN COMPTE NEUF : le lien de verification part tout de suite, sans
+    // retenir l'inscription (voir CLOUD.envoyerVerificationEmail).
+    if(authOk&&CLOUD._compteCree){
+      try{ CLOUD.envoyerVerificationEmail().then(ok=>{ if(ok) try{ localStorage.setItem(RAPPEL_VERIF_CLE,String(Date.now())); }catch(e){} }).catch(()=>{}); }catch(e){}
+    }
     if(!authOk){
       // L'ADRESSE EST PRISE CÔTÉ SERVEUR — le compte peut très bien ne pas être
       // sur CET appareil : c'est le cas du coach qui s'inscrit en athlète depuis
@@ -22190,7 +22262,7 @@ function filleulStatut(x){
   if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
   return 'inscrit';
 }
-const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','4 séances ✓'],['payant','Abonné']]);
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','Qualifié ✓'],['payant','Abonné']]);
 // PURE. La ligne d'un filleul : son prénom, et ses trois marches.
 function htmlFilleul(x){
   const st=filleulStatut(x);
@@ -22253,7 +22325,7 @@ function htmlParrainage(u){
     const part=Math.min(1,actifs/x.n);
     const reste=x.n-actifs;
     return '<div class="pr-palier'+(actifs>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
-      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' à quatre séances')+'</span></div>'
+      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' abonné'+(reste>1?'s':''))+'</span></div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
@@ -22262,7 +22334,10 @@ function htmlParrainage(u){
   // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
     +'<p>Tu offres <b>son premier mois</b> à ton ami. Toi, tu gagnes <b>1 mois</b> quand il s’y met vraiment.</p>'
-    +'<p class="pr-regle">Ton mois arrive quand ton pote a fait ses quatre premières séances.</p></div>'
+    // ⚠ LA REGLE DU SERVEUR (01/10/2026) : le mois part au premier paiement de
+    //   l'ami, s'il est QUALIFIE (functions/parrainage-calcul.js,
+    //   filleulQualifie), et au plus PARRAIN_MOIS_MAX_AN fois sur douze mois.
+    +'<p class="pr-regle">Ton mois arrive quand ton pote s’abonne, après quatre jours d’entraînement sur au moins dix jours, adresse e-mail vérifiée.</p></div>'
     +'<div class="pr-carte-inv">'
     +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
       +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
@@ -22276,11 +22351,11 @@ function htmlParrainage(u){
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
     +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
-    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,'à 4 séances')
+    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,actifs>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
     +(liste?'<div class="pr-liste"><div class="pr-sous">Tes filleuls</div>'+liste+'</div>':'')
-    +'<p class="pr-note">Le mois offert s’ajoute à la fin de ta période en cours : à l’essai, ton essai dure un mois de plus ; abonné, ton abonnement n’est pas modifié et le mois t’attend en réserve. Un seul mois par ami.</p>';
+    +'<p class="pr-note">Le mois offert s’ajoute à la fin de ta période en cours : à l’essai, ton essai dure un mois de plus ; abonné, ton abonnement n’est pas modifié et le mois t’attend en réserve. Un seul mois par ami, et jusqu’à 6 mois offerts par an.</p>';
 }
 async function ouvrirParrainage(){
   if(!PARRAINAGE_ACTIF||!currentUser) return false;
@@ -44068,6 +44143,7 @@ function _repeindreSiJourChange(){
   return false;
 }
 function loadClientHome(){
+  try{ _majRappelVerification(); }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par

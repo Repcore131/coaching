@@ -269,10 +269,13 @@ await test('coach qui repaie : son palier payé revient (coachPlan et coachSubAc
   assert.notEqual(w.F.lire('users/co@t,fr/status'), 'AUTONOMIE_PREMIUM', 'un coach ne devient pas abonné athlète');
 });
 
+// Un filleul QUALIFIÉ (01/10/2026) : quatre séances validées sur quatre jours
+// étalés sur douze, et l'adresse vérifiée vue par le serveur.
+const seancesQualif = (t) => [12, 8, 4, 1].map((k) => ({ date: t - k * 864e5, data: { Squat: { sets: [{ done: true }] } } }));
 await test('premier paiement d’un filleul : compté seulement si plan, montant et devise sont ceux des OFFRES', async () => {
-  const base = () => ({ users: Object.assign(LEA({ status: 'FREE', fname: 'Julie' }), { 'kev@t,fr': { role: 'athlete', status: 'FREE' } }),
+  const base = () => ({ users: Object.assign(LEA({ status: 'FREE', fname: 'Julie', sessions: seancesQualif(T0) }), { 'kev@t,fr': { role: 'athlete', status: 'FREE' } }),
     paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' },
-    parrainage: { liens: { 'lea@t,fr': { parrain: 'kev@t,fr', id: 'f1' } }, comptes: { 'kev@t,fr': { filleuls: { f1: { statut: 'inscrit', prenom: 'Julie' } } } } } });
+    parrainage: { verifies: { 'lea@t,fr': 1 }, liens: { 'lea@t,fr': { parrain: 'kev@t,fr', id: 'f1' } }, comptes: { 'kev@t,fr': { filleuls: { f1: { statut: 'inscrit', prenom: 'Julie' } } } } } });
   // Mauvais montant, puis mauvaise devise : payé, mais pas « premier paiement ».
   let w = monde(base(), { abonnements: { 'I-ABC12345678': abo({ plan_id: ULT }) } });
   assert.equal((await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-ABC12345678', '0.01')))).texte, 'paiement');

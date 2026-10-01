@@ -199,9 +199,10 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   const telP = appareil('https://push.test/p');
   const t = PARIS('2026-09-28T12:00:00');
   const w = monde({
-    users: { [P1]: { fname: 'Kev' }, [F1]: { fname: 'Julie', createdAt: t - 864e5 } },
+    users: { [P1]: { fname: 'Kev' }, [F1]: { fname: 'Julie', createdAt: t - 864e5,
+      sessions: [12, 8, 4, 1].map((k) => ({ date: t - k * 864e5, data: { Squat: { sets: [{ done: true }] } } })) } },
     push: { [P1]: { a1b2c3: telP.abonnement } },
-    parrainage: { codes: { KEVIN7X9: P1 }, demandes: { [F1]: { code: 'KEVIN7X9', le: t, appareil: 'abc123' } } },
+    parrainage: { verifies: { [F1]: 1 }, codes: { KEVIN7X9: P1 }, demandes: { [F1]: { code: 'KEVIN7X9', le: t, appareil: 'abc123' } } },
     evenements: { e1: { type: 'parrainage_demande', par: F1, at: t } } }, t);
   await w.minute();
   assert.equal(w.F.lire('parrainage/demandes/' + F1 + '/etat'), 'accepte');
@@ -222,6 +223,57 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   assert.equal(await w.M.parrainagePaiement(F1, 'test'), null, 'idempotent');
 });
 
+// ══ 01/10/2026 — FILLEUL QUALIFIÉ, AU PAIEMENT, ET PLAFOND DU PARRAIN ══════
+const qualifiees = (t) => [12, 8, 4, 1].map((k) => ({ date: t - k * 864e5, data: { Squat: { sets: [{ done: true }] } } }));
+const CREA = 'guellec,coachingpro@gmail,com';
+await test('au paiement : séances qualifiées seules → rien ; le webhook de premier paiement → le mois', async () => {
+  const P1 = 'parrain@t,fr', F1 = 'filleul@t,fr', t = PARIS('2026-10-01T12:00:00');
+  const w = monde({ users: { [P1]: { fname: 'Kev' }, [F1]: { fname: 'Julie', sessions: qualifiees(t) } },
+    parrainage: { verifies: { [F1]: t - 864e5 }, liens: { [F1]: { parrain: P1, id: 'f1' } },
+      comptes: { [P1]: { filleuls: { f1: { statut: 'inscrit', prenom: 'Julie' } } } } } }, t);
+  assert.equal(await w.M.parrainageSeuil(F1, t), 'attente_paiement', 'qualifié, pas encore payé');
+  assert.ok(!w.F.lire('parrainage/comptes/' + P1 + '/moisGagnes'));
+  assert.equal(w.F.lire('droits/' + P1), null);
+  const r = await w.M.parrainagePaiement(F1, 'webhook');
+  assert.equal(r.credit, true);
+  assert.equal(w.F.lire('parrainage/comptes/' + P1 + '/moisGagnes'), 1);
+  assert.equal(w.F.lire('droits/' + P1 + '/palier'), 'essentielle');
+});
+await test('plafond : 6 mois déjà offerts sur 12 mois → pas de 7e ; journal parrainage_plafond écrit, créateur prévenu', async () => {
+  const P1 = 'parrain@t,fr', F1 = 'filleul@t,fr', t = PARIS('2026-10-01T12:00:00');
+  const telC = appareil('https://push.test/createur');
+  const six = Object.fromEntries([1, 2, 3, 4, 5, 6].map((i) => ['g' + i, { statut: 'payant', creditE: true, creditLe: t - i * 30 * 864e5 }]));
+  const w = monde({ users: { [P1]: { fname: 'Kev' }, [F1]: { fname: 'Julie', sessions: qualifiees(t) } },
+    push: { [CREA]: { c0: telC.abonnement } },
+    parrainage: { verifies: { [F1]: t - 864e5 }, liens: { [F1]: { parrain: P1, id: 'f1' } },
+      comptes: { [P1]: { moisGagnes: 6, filleuls: Object.assign({ f1: { statut: 'inscrit', prenom: 'Julie' } }, six) } } } }, t);
+  const r = await w.M.parrainagePaiement(F1, 'webhook');
+  assert.equal(r.credit, false); assert.equal(r.plafond, true);
+  assert.equal(w.F.lire('parrainage/comptes/' + P1 + '/moisGagnes'), 6, 'aucun mois de plus');
+  assert.equal(w.F.lire('droits/' + P1), null, 'rien d’ouvert');
+  assert.equal(w.F.lire('parrainage/credits/' + F1), null);
+  const j = Object.values(w.F.lire('parrainage_plafond/' + P1) || {});
+  assert.equal(j.length, 1); assert.equal(j[0].filleul, 'f1'); assert.equal(j[0].max, 6);
+  const alerte = w.F.recus.find((x) => /createur/.test(x.endpoint));
+  assert.ok(alerte, 'le créateur est prévenu');
+  const m = telC.lire(alerte.init.body);
+  assert.match(m.title, /plafond/i);
+  assert.ok(!/@|,fr/.test(m.body), 'aucune adresse dans le message');
+  // Rejoué (séances suivantes) : ni second journal, ni second push.
+  const n = w.F.recus.length;
+  assert.notEqual(await w.M.parrainageSeuil(F1, t + 864e5), 'credite');
+  assert.equal(Object.keys(w.F.lire('parrainage_plafond/' + P1) || {}).length, 1);
+  assert.equal(w.F.recus.length, n);
+  // Des mois plus anciens que 12 mois glissants ne comptent plus : ici trois
+  // des six sont dans l'année (320, 340, 360 jours), le 7e passe.
+  const w2 = monde({ users: { [P1]: { fname: 'Kev' }, [F1]: { fname: 'Julie', sessions: qualifiees(t) } },
+    parrainage: { verifies: { [F1]: 1 }, liens: { [F1]: { parrain: P1, id: 'f1' } },
+      comptes: { [P1]: { filleuls: Object.assign({ f1: { statut: 'inscrit' } },
+        Object.fromEntries([1, 2, 3, 4, 5, 6].map((i) => ['g' + i, { creditE: true, creditLe: t - (300 + i * 20) * 864e5 }]))) } } } }, t);
+  const r2 = await w2.M.parrainagePaiement(F1, 'webhook');
+  assert.equal(r2.plafond, false);
+  assert.equal(r2.credit, true);
+});
 await test('première séance d’un filleul : son parrain est prévenu une fois, après relecture', async () => {
   const P1 = 'parrain@t,fr', F1 = 'julie@t,fr', t = PARIS('2026-09-28T12:00:00');
   const telP = appareil('https://push.test/p');

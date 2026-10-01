@@ -38,6 +38,8 @@ import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+// La clé du créateur, destinataire des alertes (plafond de parrainage).
+const CLE_CREATEUR_PUSH = CREATOR_EMAIL.replace(/\./g, ',');
 // 'message' : un athlète a écrit à son coach (messagerie, lot M2). Vers l'athlète,
 // un message du coach part en type 'coach'.
 export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect', 'message'];
@@ -560,17 +562,38 @@ export function creerMetier(deps) {
   //   échéance, voir majDroits) ; l'essai, c'est l'app qui le donne à
   //   l'inscription (essaiOuvrir, bonusJours). Rien à faire ici.
   async function bonusEssai() { return null; }
+  // ══ LE FILLEUL QUALIFIÉ (01/10/2026) — voir P.filleulQualifie ══════════
+  // L'adresse vérifiée : le Worker l'a vue LUI-MÊME dans un jeton Firebase
+  // (appel emailVerifie, droits-appels.js) et l'a notée dans
+  // parrainage/verifies/<clé>, que personne d'autre n'écrit. Les séances : le
+  // dossier, relu ici.
+  async function qualificationFilleul(k, t) {
+    const [seances, verifie] = await Promise.all([_lire(k, 'sessions'), _val('parrainage/verifies/' + k)]);
+    return P.filleulQualifie(seances, Number(verifie) > 0, t);
+  }
+  const optsParrainage = (qualifie) => ({ qualifie, auPaiement: P.PARRAINAGE_AU_PAIEMENT, plafond: P.PARRAIN_MOIS_MAX_AN });
+  // AU-DELÀ DU PLAFOND : rien n'est crédité, c'est journalisé, et le créateur
+  // est prévenu (son prénom de parrain seulement, jamais d'adresse).
+  async function plafondParrain(parrain, idFilleul, t, source) {
+    await db.ref('parrainage_plafond/' + parrain).push().set({ filleul: idFilleul, le: t, source: String(source || ''),
+      max: P.PARRAIN_MOIS_MAX_AN });
+    const prenom = String((await _lire(parrain, 'fname')) || 'Un parrain').slice(0, 24);
+    await envoyerPush(CLE_CREATEUR_PUSH, { type: 'admin', url: './?paiements=1', tag: 'parrainage-plafond-' + idFilleul,
+      title: 'Parrainage : plafond atteint',
+      body: prenom + ' a déjà reçu ' + P.PARRAIN_MOIS_MAX_AN + ' mois offerts sur 12 mois. Ce filleul ne lui en donne pas.' },
+      { urgent: true }).catch(() => null);
+  }
   // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain, s'il ne l'a pas
   // déjà eu par les quatre séances du filleul (P.premierPaiement). Idempotent.
   async function parrainagePaiement(cle, source) {
     const lien = await _val('parrainage/liens/' + cle);
     if (!lien || !lien.parrain || !lien.id) return null;
     const t = now();
-    const prenom = await _lire(cle, 'fname');
+    const [prenom, qualifie] = await Promise.all([_lire(cle, 'fname'), qualificationFilleul(cle, t)]);
     let res = null;
     const tx = await db.ref('parrainage/comptes/' + lien.parrain).transaction((compte) => {
       const c = compte || {};
-      const p = P.premierPaiement(c, lien.id, t);
+      const p = P.premierPaiement(c, lien.id, t, optsParrainage(qualifie));
       if (!p) return undefined;
       res = p;
       const f = Object.assign({}, (c.filleuls || {})[lien.id], p.filleul);
@@ -582,7 +605,9 @@ export function creerMetier(deps) {
     });
     if (!tx.committed || !res) return null;
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
-    // Le mois est déjà venu des quatre séances : un merci, rien de plus.
+    if (res.plafond) await plafondParrain(lien.parrain, lien.id, t, 'paiement');
+    // Pas de mois : déjà venu, filleul pas encore qualifié (il viendra avec la
+    // qualification), ou plafond. Un merci, rien de plus.
     if (!res.credit) {
       await db.ref('parrainage/evenements/' + lien.parrain).push().set({ type: 'abonne', at: t, prenom: res.prenom, mois: 0, source: String(source || '') });
       const txt = P.textePaiement(res);
@@ -614,14 +639,20 @@ export function creerMetier(deps) {
   // avant ses quatre séances a déjà donné son mois : rien de plus.
   // ⚠ Ce mois-là ne se reprend pas au remboursement d'un paiement : il ne
   //   vient pas d'un paiement (pas de trace dans parrainage/credits/).
+  // ⚠ DEPUIS LE 01/10/2026 : seulement un filleul QUALIFIÉ, et — au paiement
+  //   (P.PARRAINAGE_AU_PAIEMENT) — seulement s'il a déjà payé. Rend
+  //   'non_qualifie' ou 'attente_paiement' quand il faudra repasser.
   async function parrainageSeuil(k, t) {
     const lien = await _val('parrainage/liens/' + k);
     if (!lien || !lien.parrain || !lien.id) return 'sans_parrain';
-    const prenom = await _lire(k, 'fname');
-    let res = null;
+    const [prenom, qualifie] = await Promise.all([_lire(k, 'fname'), qualificationFilleul(k, t)]);
+    if (!qualifie) return 'non_qualifie';
+    let res = null, attente = false;
     const tx = await db.ref('parrainage/comptes/' + lien.parrain).transaction((compte) => {
       const c = compte || {};
-      const p = P.seuilSeances(c, lien.id, t);
+      const p = P.seuilSeances(c, lien.id, t, optsParrainage(true));
+      const f0 = (c.filleuls || {})[lien.id];
+      attente = !p && !!f0 && !f0.creditE && !f0.plafondLe && P.PARRAINAGE_AU_PAIEMENT && f0.statut !== 'payant';
       if (!p) return undefined;
       res = p;
       const f = Object.assign({}, (c.filleuls || {})[lien.id], p.filleul);
@@ -631,11 +662,15 @@ export function creerMetier(deps) {
       if (p.mentor) out.mentorLe = t;
       return out;
     });
-    if (!tx.committed || !res) return 'deja';
+    if (!tx.committed || !res) return attente ? 'attente_paiement' : 'deja';
+    if (res.plafond) { await plafondParrain(lien.parrain, lien.id, t, 'seances'); return 'plafond'; }
     if (!res.credit) return 'deja_paye';
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
     const mode = await crediterMoisOffert(lien.parrain, t);
-    await db.ref('parrainage/credits_seances/' + k).set({ parrain: lien.parrain, id: lien.id, mode, le: t });
+    // AU PAIEMENT, ce mois-là vient d'un filleul PAYANT : il se reprend si
+    // ce paiement est remboursé, comme celui de parrainagePaiement.
+    await db.ref((P.PARRAINAGE_AU_PAIEMENT ? 'parrainage/credits/' : 'parrainage/credits_seances/') + k)
+      .set({ parrain: lien.parrain, id: lien.id, mode, le: t });
     await db.ref('parrainage/evenements/' + lien.parrain).push().set({
       type: res.mentor ? 'mentor' : 'seances', at: t, prenom: res.prenom, mois: 1 });
     const txt = P.texteSeuil(res, mode);
@@ -1331,8 +1366,11 @@ export function creerMetier(deps) {
     // sans parrain et trop vieux pour en avoir un, réglé aussi.
     if ((Number(etat.faites) || 0) >= P.SEUIL_SEANCES && !etat0.parr) {
       const r = await parrainageSeuil(k, t);
-      if (r !== 'sans_parrain' || !(Number(cree) > 0) || t - Number(cree) > P.DELAI_RATTACHEMENT_MS)
-        await db.ref('xp_etat/' + k + '/parr').set(t);
+      // Pas encore qualifié, ou qualifié mais pas encore payé : on repassera
+      // à la prochaine séance (la marque parr n'est pas posée).
+      const repasser = r === 'non_qualifie' || r === 'attente_paiement'
+        || (r === 'sans_parrain' && Number(cree) > 0 && t - Number(cree) <= P.DELAI_RATTACHEMENT_MS);
+      if (!repasser) await db.ref('xp_etat/' + k + '/parr').set(t);
     }
     // Un lot plein : la suite en sous-tâche.
     if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }

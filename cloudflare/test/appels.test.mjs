@@ -267,6 +267,19 @@ await test('prolongerCode : le coach du code repousse l’accès de l’athlète
   assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 12 * MMS);
 });
 
+await test('emailVerifie : le serveur ne croit que le jeton ; il note la date une fois', async () => {
+  const w = mondeDroits({});
+  const j = await verifierJeton(jeton({ email_verified: true }), PROJET, { cles: CLES });
+  assert.equal(j.emailVerifie, true);
+  assert.equal((await verifierJeton(jeton({}), PROJET, { cles: CLES })).emailVerifie, false);
+  await assert.rejects(() => w.A.emailVerifie({ auth: { email: 'lea@t.fr', emailVerifie: false }, data: { verifie: true } }), refusA(400));
+  assert.equal(w.F.lire('parrainage/verifies/lea@t,fr'), null);
+  await w.A.emailVerifie({ auth: { email: 'lea@t.fr', emailVerifie: true }, data: {} });
+  assert.equal(w.F.lire('parrainage/verifies/lea@t,fr'), T0);
+  w.t += JMS;
+  await w.A.emailVerifie({ auth: { email: 'lea@t.fr', emailVerifie: true }, data: {} });
+  assert.equal(w.F.lire('parrainage/verifies/lea@t,fr'), T0, 'la première date reste');
+});
 await test('remplir-droits : registre des coachs réels, suivi des athlètes au code consommé, rien pour un code forgé', async () => {
   const U = (x) => Object.assign({ role: 'athlete' }, x);
   const F = fausseBase({

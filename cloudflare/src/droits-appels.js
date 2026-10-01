@@ -201,5 +201,20 @@ export function creerAppelsDroits(ctx) {
     return { ok: true, applique: !!droits, echeance: fin };
   }
 
-  return { redeemCode, ouvrirEssai, devenirCoach, prolongerCode, poserSuivi };
+  // ── emailVerifie ──────────────────────────────────────────────────────
+  // L'app l'appelle une fois l'adresse vérifiée. Le serveur NE CROIT QUE LE
+  // JETON (email_verified, signé par Google) et note la date dans
+  // parrainage/verifies/<clé>, que personne d'autre n'écrit : c'est ce que
+  // lit la qualification d'un filleul. Puis il rejuge le parrainage (un
+  // filleul payé en attente peut être qualifié dès maintenant).
+  async function emailVerifie({ auth }) {
+    if (!auth.emailVerifie) throw new ErreurAppel(400, 'Adresse e-mail pas encore vérifiée.');
+    const cle = cleDe(auth.email), t = now();
+    await db.ref('parrainage/verifies/' + cle).transaction((cur) => (cur ? undefined : t));
+    let parrainage = null;
+    try { if (M.parrainageSeuil) parrainage = await M.parrainageSeuil(cle, t); } catch (e) { parrainage = null; }
+    return { ok: true, parrainage };
+  }
+
+  return { redeemCode, ouvrirEssai, devenirCoach, prolongerCode, emailVerifie, poserSuivi };
 }

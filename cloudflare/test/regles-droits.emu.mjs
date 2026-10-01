@@ -95,4 +95,9 @@ await test('le créateur peut tout écrire : ses champs gelés, droits/, un code
   assert.equal((await appel(CREA, 'PATCH', 'droits/' + K(LEA), { palier: 'ultime', echeance: 0, source: 'main' })).statut, 200);
   assert.equal((await appel(CREA, 'PUT', 'rc_codes/RC-CREA-TEUR', code({ coachEmailKey: K(CREA), type: 'coach' }))).statut, 200);
 });
+await test('parrainage : un compte ne se déclare pas « adresse vérifiée », n’écrit pas le journal du plafond', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'parrainage/verifies/' + K(LEA), Date.now())).statut, 401);
+  assert.equal((await appel(LEA, 'GET', 'parrainage/verifies/' + K(LEA))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'parrainage_plafond/' + K(LEA) + '/x', { le: 1 })).statut, 401);
+});
 console.log(ok + ' tests passés');

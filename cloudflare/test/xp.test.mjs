@@ -226,41 +226,67 @@ function mondeFilleul(extra) {
   };
   return w;
 }
-test('parrainage : quatre séances faites donnent un mois au parrain, une fois ; trois, ou des séances vides, rien', async () => {
+// ⚠ DEPUIS LE 01/10/2026 : le mois part au PREMIER PAIEMENT du filleul
+//   (PARRAINAGE_AU_PAIEMENT), et seulement s'il est QUALIFIÉ — adresse
+//   vérifiée vue par le serveur, quatre séances validées sur quatre jours
+//   distincts, étalées sur au moins dix jours.
+const verifier = (w) => w.F.ecrire('parrainage/verifies/' + LEA, T);
+// Quatre séances, une tous les quatre jours : douze jours d'étalement.
+const quatreEtalees = async (w, o) => { for (let k = 0; k < 4; k++) { await w.faire(o); w.avance(3 * J); } };
+test('parrainage : quatre séances qualifiées SANS paiement ne donnent rien ; le premier paiement donne le mois, une fois', async () => {
   const w = mondeFilleul();
-  for (let k = 0; k < 3; k++) await w.faire();
-  await w.faire({ n: 0 });               // une séance sans série validée ne compte pas
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), null, 'trois séances : rien');
-  assert.equal(w.F.lire('droits/' + KEV), null);
-  await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/creditE'), true);
-  assert.equal(w.F.lire('droits/' + KEV + '/palier'), 'essentielle', 'le mois s’applique');
-  assert.equal(w.F.lire('parrainage/credits_seances/' + LEA).mode, 'mois_ouvert');
-  // Rejoué, et même sans la marque du compteur : la marque creditE tient.
-  await w.faire();
-  w.F.ecrire('xp_etat/' + LEA + '/parr', null);
-  await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1, 'jamais deux fois');
-  // Son premier paiement ensuite : pas de second mois.
+  verifier(w);
+  await quatreEtalees(w);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 'pas de mois sans paiement');
+  assert.equal(w.F.lire('xp_etat/' + LEA + '/parr'), null, 'on repassera');
   const r = await w.M.parrainagePaiement(LEA, 'test');
-  assert.equal(r.credit, false);
+  assert.equal(r.credit, true);
   assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/statut'), 'payant');
-  assert.equal(w.F.lire('parrainage/credits/' + LEA), null, 'rien à reprendre au remboursement');
+  assert.equal(w.F.lire('droits/' + KEV + '/palier'), 'essentielle', 'le mois s’applique');
+  assert.ok(w.F.lire('parrainage/credits/' + LEA), 'repris au remboursement');
+  await w.faire();
+  assert.equal(await w.M.parrainagePaiement(LEA, 'test'), null);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1, 'jamais deux fois');
 });
-test('parrainage : payé avant ses quatre séances, le filleul a donné son mois au paiement ; les séances n’en redonnent pas', async () => {
+test('parrainage : 4 séances le même jour, sur moins de 10 jours, vides, ou adresse non vérifiée → pas qualifié, pas de mois', async () => {
+  // Même jour.
+  let w = mondeFilleul(); verifier(w);
+  for (let k = 0; k < 4; k++) { w.F.ecrire('users/' + LEA + '/sessions/' + k, S(w.t - 60e3 - k * 3600e3)); }
+  await w.seanceFin(LEA);
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/enAttente'), true);
+  // Quatre jours de suite (trois jours d'étalement).
+  w = mondeFilleul(); verifier(w);
+  for (let k = 0; k < 4; k++) await w.faire();
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  // Bien étalées, mais l'adresse n'est pas vérifiée.
+  w = mondeFilleul();
+  await quatreEtalees(w);
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'));
+  assert.equal(w.F.lire('droits/' + KEV), null);
+});
+test('parrainage : payé AVANT d’être qualifié → en attente ; la qualification (séances, adresse) donne alors le mois', async () => {
   const w = mondeFilleul();
   await w.faire();
-  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, true);
+  const r = await w.M.parrainagePaiement(LEA, 'test');
+  assert.equal(r.credit, false); assert.equal(r.enAttente, true);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'));
+  w.avance(3 * J);
+  for (let k = 0; k < 3; k++) { await w.faire(); w.avance(3 * J); }
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 'adresse pas encore vérifiée');
+  verifier(w);
+  await w.faire();
   assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  for (let k = 0; k < 4; k++) await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+  assert.ok(w.F.lire('parrainage/credits/' + LEA), 'payant : le mois se reprend au remboursement');
+  assert.ok(w.F.lire('xp_etat/' + LEA + '/parr'), 'réglé');
 });
 test('parrainage : un parrain encore à l’essai voit sa fin d’essai reculer d’un mois', async () => {
-  const fin = T + 25 * J;
+  const fin = T + 45 * J;
   const w = mondeFilleul((b) => ({ users: Object.assign(b.users, { [KEV]: { fname: 'Kev', essai: { ouvertLe: T - 5 * J, finit: fin } } }) }));
-  for (let k = 0; k < 4; k++) await w.faire();
+  verifier(w);
+  await quatreEtalees(w);
+  await w.M.parrainagePaiement(LEA, 'test');
   const d = w.F.lire('droits/' + KEV);
   assert.equal(d.palier, 'ultime');
   assert.equal(d.source, 'essai');

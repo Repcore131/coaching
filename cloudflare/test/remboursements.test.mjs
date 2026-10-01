@@ -59,10 +59,11 @@ const litige = (id, o) => Object.assign({ dispute_id: 'PP-D-1', reason: 'MERCHAN
 function base(parrain) {
   const kev = Object.assign({ role: 'athlete' }, parrain || { status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active' });
   return {
-    users: { 'lea@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', origine: { src: 'partage' } },
+    users: { 'lea@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', origine: { src: 'partage' },
+      sessions: [12, 8, 4, 1].map((k) => ({ date: T0 - k * 864e5, data: { Squat: { sets: [{ done: true }] } } })) },
       'kev@t,fr': kev },
     paypal_abonnes: { [ABO]: 'lea@t,fr' },
-    parrainage: { liens: { 'lea@t,fr': { parrain: 'kev@t,fr', id: 'f1' } }, comptes: { 'kev@t,fr': { filleuls: { f1: { statut: 'inscrit', prenom: 'Léa' } } } } },
+    parrainage: { verifies: { 'lea@t,fr': 1 }, liens: { 'lea@t,fr': { parrain: 'kev@t,fr', id: 'f1' } }, comptes: { 'kev@t,fr': { filleuls: { f1: { statut: 'inscrit', prenom: 'Léa' } } } } },
     ambassadeurs: { LEAFIT: { nom: 'Léa Fit', actif: true, commissionPct: 20, secret: 'a'.repeat(24), filleuls: { fx: { inscritLe: 1 } } } },
     ambassadeurs_liens: { 'lea@t,fr': { code: 'LEAFIT', id: 'fx', le: 1 } },
     push: { [KEV]: { x: null } },

@@ -24243,6 +24243,36 @@ async function testExercices(){
             return _echec('une fonction du lecteur sort sur le réseau');
         return true;})());
 
+      // ══ 01/10/2026 — PARRAINAGE : L'ADRESSE VÉRIFIÉE ═══════════════════════
+      okA('PARRAINAGE — rappel « vérifie ton adresse » tant que le jeton dit email_verified:false ; vérifiée, le Worker est prévenu une fois',async()=>{
+        const svI=CLOUD._idToken, svU=currentUser, svC=CLOUD._callFn, svS=localStorage.getItem(VERIF_SIGNALEE_CLE);
+        const b64=o=>btoa(JSON.stringify(o)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+        const jeton=v=>b64({alg:'RS256'})+'.'+b64({email:'verif@t.fr',email_verified:v})+'.sig';
+        const appels=[];
+        try{
+          currentUser={email:'verif@t.fr',role:'athlete'};
+          CLOUD._callFn=async(n)=>{ appels.push(n); return {ok:true}; };
+          localStorage.removeItem(VERIF_SIGNALEE_CLE);
+          CLOUD._idToken=jeton(false);
+          if(_majRappelVerification()!==true) return _echec('pas de rappel avec une adresse non vérifiée');
+          const z=document.getElementById('rc-verif');
+          if(!z||z.hidden||!/Vérifie ton adresse/.test(z.textContent)) return _echec('rappel absent');
+          if(appels.length) return _echec('le Worker est prévenu sans vérification');
+          CLOUD._idToken=jeton(true);
+          _majRappelVerification(); await new Promise(r=>setTimeout(r,20));
+          if(!z.hidden) return _echec('le rappel reste après vérification');
+          if(appels.join()!=='emailVerifie') return _echec('appels : '+appels.join());
+          _majRappelVerification(); await new Promise(r=>setTimeout(r,20));
+          if(appels.length!==1) return _echec('prévenu deux fois');
+          currentUser={email:'c@t.fr',role:'coach'}; CLOUD._idToken=jeton(false);
+          _majRappelVerification();
+          return z.hidden?true:_echec('rappel chez un coach');
+        } finally {
+          CLOUD._idToken=svI; currentUser=svU; CLOUD._callFn=svC;
+          if(svS==null) localStorage.removeItem(VERIF_SIGNALEE_CLE); else localStorage.setItem(VERIF_SIGNALEE_CLE,svS);
+          const z=document.getElementById('rc-verif'); if(z) z.hidden=true;
+        }
+      });
       // ══ 01/10/2026 — LA FICHE PUBLIQUE NE PORTE PLUS LE CONTENU VENDU ══════
       okA('BOUTIQUE — publier écrit la fiche SANS séances dans boutique/, le contenu dans boutique_contenu/ ; la lecture fusionne',async()=>{
         const svF=window.fetch, svT=CLOUD._getToken, svB=localStorage.getItem(RC_BOUTIQUE_CLE), svC=localStorage.getItem(RC_BOUTIQUE_CONTENU_CLE), svP=_boutiquePubliee;
@@ -53365,8 +53395,10 @@ async function testExercices(){
       d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:5,payants:2,moisGagnes:2,prenoms:[{prenom:'Tom',statut:'payant'}]}});
       const t=d.textContent;
       // Les paliers comptent les amis à quatre séances (lot C, 29/09/2026), et disent ce qu'il reste.
-      if(!/JULIE7K2/.test(t)||!/2 \/ 3 · encore 1 ami à quatre séances/.test(t)||!/2 \/ 10 · encore 8 amis à quatre séances/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
-      if(!/Ton mois arrive quand ton pote a fait ses quatre premières séances\./.test(t)) return _echec('la règle en une phrase');
+      if(!/JULIE7K2/.test(t)||!/2 \/ 3 · encore 1 ami abonné/.test(t)||!/2 \/ 10 · encore 8 amis abonnés/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
+      // LA REGLE DU SERVEUR (01/10/2026) : au paiement, filleul qualifié, plafond annuel.
+      if(!/Ton mois arrive quand ton pote s’abonne, après quatre jours d’entraînement sur au moins dix jours, adresse e-mail vérifiée\./.test(t)) return _echec('la règle en une phrase');
+      if(!/jusqu’à 6 mois offerts par an/.test(t)) return _echec('le plafond n’est pas dit');
       if(/premier paiement|essai gratuit/i.test(t)) return _echec('l’ancienne règle');
       if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
       const b=[...d.querySelectorAll('button.btn')];
@@ -55626,7 +55658,7 @@ async function testExercices(){
       const d=document.createElement('div');
       d.innerHTML=htmlParrainage(u);
       const l=[...d.querySelectorAll('.pr-f')].map(x=>x.querySelector('.pr-f-nom').textContent+'='+x.querySelector('b').textContent+'/'+x.querySelectorAll('.pr-f-etapes i.on').length);
-      if(l.join()!=='Tom=Abonné ✓/4,Max=4 séances ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
+      if(l.join()!=='Tom=Abonné ✓/4,Max=Qualifié ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
       // Un miroir déjà écrit avec « seance » se relit tel quel.
       return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
     // ══ 28/09/2026 — LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ══

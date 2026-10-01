@@ -58,7 +58,9 @@ export async function verifierJeton(jeton, projet, o) {
   if (!(corps.iat <= s + 300)) throw new Error('jeton du futur');
   if (!corps.sub) throw new Error('jeton sans sujet');
   if (!corps.email) throw new Error('jeton sans adresse');
-  return { email: String(corps.email).toLowerCase(), uid: corps.sub };
+  // email_verified : le serveur le lit LUI-MÊME dans un jeton signé par Google
+  // (parrainage : un filleul n'est qualifié qu'avec une adresse vérifiée).
+  return { email: String(corps.email).toLowerCase(), uid: corps.sub, emailVerifie: corps.email_verified === true };
 }
 
 // Une erreur « à la Firebase » : le client lit error.message.
