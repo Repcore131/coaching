@@ -51,6 +51,11 @@
     ],
     "headers": [
       {
+        "//": "CONTENT-SECURITY-POLICY DE L'APP (30/09/2026). Une donnee de dossier injectee dans un ecran du coach ne doit plus pouvoir exfiltrer quoi que ce soit : img-src, media-src et connect-src sont bornes aux domaines que l'app utilise vraiment (Firebase, Cloudinary, le Worker, PayPal, Open Food Facts), si bien qu'un fetch ou une image vers un domaine tiers est refuse par le navigateur. object-src 'none', base-uri 'self'. ATTENTION : script-src GARDE 'unsafe-inline' A COURT TERME, l'app porte des centaines de onclick en ligne qu'aucun nonce ne couvre ; la migration vers des gestionnaires delegues (addEventListener, data-*) est la tache qui permettra de le retirer. 'wasm-unsafe-eval' : Tesseract, zxing et MediaPipe compilent du WebAssembly. Pas de 'unsafe-eval' : pdf.js et Tesseract s'en passent (repli). Le meme en-tete sous /app : les en-tetes suivent le chemin DEMANDE (voir Cache-Control plus bas). Verifie par scripts/verif/csp.mjs.",
+        "source": "/app/**",
+        "headers": [{ "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com; style-src 'self' 'unsafe-inline' https://*.paypal.com; img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com https://*.paypal.com https://*.paypalobjects.com; media-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com; font-src 'self' data:; connect-src 'self' data: blob: https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.cloudinary.com https://res.cloudinary.com https://firebasestorage.googleapis.com https://repcore-serveur.repcore.workers.dev https://*.paypal.com https://world.openfoodfacts.org https://search.openfoodfacts.org https://europe-west1-repcore-sync.cloudfunctions.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.paypal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" }]
+      },
+      {
         "//": "L'APK Android (MiseAJour.kt) lit ce fichier a chaque ouverture : jamais de cache, sinon la notification de mise a jour arrive des heures en retard.",
         "source": "/app/apk-version.json",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
@@ -72,6 +77,10 @@
           {
             "key": "Cache-Control",
             "value": "no-cache"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.paypal.com https://*.paypal.com https://*.paypalobjects.com; style-src 'self' 'unsafe-inline' https://*.paypal.com; img-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com https://*.paypal.com https://*.paypalobjects.com; media-src 'self' data: blob: https://res.cloudinary.com https://firebasestorage.googleapis.com; font-src 'self' data:; connect-src 'self' data: blob: https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.cloudinary.com https://res.cloudinary.com https://firebasestorage.googleapis.com https://repcore-serveur.repcore.workers.dev https://*.paypal.com https://world.openfoodfacts.org https://search.openfoodfacts.org https://europe-west1-repcore-sync.cloudfunctions.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.paypal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
           }
         ]
       },

@@ -3788,6 +3788,33 @@ function _alignerChampsGeles(safe,d){
   }
   return safe;
 }
+// ══ LES LIENS DE VIDEO, CONFORMES A LA REGLE (30/09/2026) ═══════════════════
+// database.rules.json n'admet videos[].url que sur Cloudinary, Firebase
+// Storage, https://youtu.be/ et https://www.youtube.com/, en moins de 600
+// caracteres. Un seul lien hors liste, et c'est le PUT ENTIER du dossier qui
+// serait rejete — seances comprises. Avant chaque envoi : un lien YouTube
+// d'une autre forme devient https://youtu.be/<id> ; tout autre lien quitte
+// `url` pour `lienRefuse`, que rien n'affiche comme lien mais qui garde la
+// trace. PURE sur ses arguments : modifie `doc` en place et le rend.
+const VIDEO_URL_PREFIXES=Object.freeze(['https://res.cloudinary.com/','https://firebasestorage.googleapis.com/','https://youtu.be/','https://www.youtube.com/']);
+function _videoUrlConforme(u){
+  return typeof u==='string'&&u.length<600&&VIDEO_URL_PREFIXES.some(p=>u.indexOf(p)===0);
+}
+function _videosConformes(doc){
+  if(!doc||typeof doc!=='object'||!doc.videos||typeof doc.videos!=='object') return doc;
+  const liste=Array.isArray(doc.videos)?doc.videos:Object.values(doc.videos);
+  for(const v of liste){
+    if(!v||typeof v!=='object'||v.url==null) continue;
+    if(_videoUrlConforme(v.url)) continue;
+    const n=normaliserUrlVideo(v.url);
+    const yt=String(n||'').match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if(yt){ v.url='https://youtu.be/'+yt[1]; continue; }
+    if(_videoUrlConforme(n)){ v.url=n; continue; }
+    v.lienRefuse=String(v.url).slice(0,300);
+    delete v.url;
+  }
+  return doc;
+}
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -4745,6 +4772,8 @@ const CLOUD={
         // _alignerChampsGeles. Un seul different, et Firebase rejetterait le
         // dossier ENTIER — seances comprises.
         if(!_parLeCreateur) safe=_alignerChampsGeles(safe,d);
+        // LES LIENS DE VIDEO, conformes a la regle : voir _videosConformes.
+        _videosConformes(safe);
       };
       // ⚠ LA FUSION A TROIS VOIES, AVANT D'ECRIRE QUOI QUE CE SOIT. C'est le
       //   coeur du correctif du 21/09/2026 : sans elle, ce PUT ecrasait le
@@ -33380,7 +33409,7 @@ function openClientDetail(cid,_refresh,_force){
         <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
       </div>`:''}
-      <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','${c.id}')" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
+      <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('',${jsArg(c.id)})" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
       ${blocDisclaimerSante()}
     </div>`;
   }
@@ -33456,8 +33485,8 @@ function openClientDetail(cid,_refresh,_force){
         <div class="cvv-n">${escapeHtml(v.name)}</div>
         <div class="cvv-d">${new Date(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
       </div>
-      <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection('${c.email}','${v.id}')">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
-      ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses('${escapeHtml(c.email)}','${escapeHtml(String(v.id))}')">Comparer avec…</button>`:''}
+      <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection(${jsArg(c.email)},${jsArg(v.id)})">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
+      ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses(${jsArg(c.email)},${jsArg(v.id)})">Comparer avec…</button>`:''}
     </div>`).join('')}`);
 
   _majDemandesVideo();
@@ -34269,7 +34298,7 @@ function renderBilanEvolution(c){
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
               style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
-              <img src="${img||''}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
+              <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
               <div style="padding:6px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
@@ -42817,7 +42846,7 @@ function renderProgEx(){
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
             <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
-            ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
+            ${ex.image?`<img src="${srcImageAttr(ex.image)}" style="width:60px;height:60px;border-radius:var(--r-2);object-fit:cover">`:
             `<div style="width:60px;height:60px;border-radius:var(--r-2);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);border:2px dashed var(--border)"></div>`}
           </label>
           <div style="flex:1">
@@ -45872,7 +45901,7 @@ function _renderSessionManager(){
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:32px;height:32px;background:${s.active?'var(--red)':' var(--surface-2)'};border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;letter-spacing:.5px;flex-shrink:0">${DAY_ICONS[i]}</div>
           <div>
-            <div style="font-weight:800;font-size:var(--fs-lg)">${s.day}</div>
+            <div style="font-weight:800;font-size:var(--fs-lg)">${escapeHtml(s.day)}</div>
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px" id="sm-sub-${i}">${s.active?escapeHtml(s.name||'Séance sans nom'):' Jour de repos'}</div>
           </div>
         </div>
@@ -45890,7 +45919,7 @@ function _renderSessionManager(){
         <!-- Nom de la séance -->
         <div style="margin-bottom:12px">
           <label style="margin-top:0">Nom de la séance</label>
-          <input value="${s.name||''}" placeholder="Ex: DOS & ABDOS" onchange="renameSession(${i},this.value)" style="margin-top:4px">
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & ABDOS" onchange="renameSession(${i},this.value)" style="margin-top:4px">
         </div>
 
         <!-- L APERCU DE LA SEANCE, A LA PLACE DE LA PHOTO DE FICHE.
@@ -46883,7 +46912,7 @@ function openSessionPicker(){
     return `<div class="sp-ligne${isToday?' sp-auj':''}" style="--i:${rang}"
       onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
       role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      ${s.photo?`<img class="sp-photo" src="${s.photo}" alt="">`:`<div class="sp-jour">${DAY_ICONS[i]}</div>`}
+      ${s.photo?`<img class="sp-photo" src="${srcImageAttr(s.photo)}" alt="">`:`<div class="sp-jour">${DAY_ICONS[i]}</div>`}
       <div class="sp-txt">
         <div class="sp-jourlib">${s.day||DAYS[i]}${isToday?' · Aujourd\'hui':''}</div>
         <div class="sp-nom">${escapeHtml(_nomSeance(s,i))}${badgeExemple}</div>
@@ -51169,7 +51198,7 @@ function renderWoEx(){
   // Photo programme en haut si disponible
   const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:var(--r-3);overflow:hidden;border:1px solid var(--border)">
     <div style="font-size:var(--fs-xs);color:var(--sub);padding:6px 10px;background:var(--surface-2)"> Ta fiche programme (référence)</div>
-    <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <img src="${srcImageAttr(woState.sessionPhoto)}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
   </div>`:'';
 
   const blocs=groupe.map(i=>_blocExo(i,estSS));
@@ -67535,8 +67564,8 @@ function htmlRapport(r){
     else{
       const d=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'});
       h+=`<div style="display:flex;gap:12px;align-items:flex-start">
-        <figure style="flex:1;min-width:0;margin:0"><img src="${r.photos.avant.src}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
-        <figure style="flex:1;min-width:0;margin:0"><img src="${r.photos.apres.src}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.avant.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.avant.date)}</figcaption></figure>
+        <figure style="flex:1;min-width:0;margin:0"><img src="${srcImageSure(r.photos.apres.src)}" alt="" style="width:100%;border-radius:6px;display:block"><figcaption class="rap-note">${d(r.photos.apres.date)}</figcaption></figure>
       </div>`;
     }
     h+=`</section>`;
@@ -88890,7 +88919,7 @@ function showProgressTab(tab,btn,sansMemo){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
                     :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
@@ -109452,12 +109481,29 @@ async function _retirerVideoAbsente(email,id){
   await deleteVideo(email,id);
   return true;
 }
+// ══ UNE URL DE VIDEO VIENT DU DOSSIER DE L'ATHLETE (30/09/2026) ═══════════════
+// Elle etait posee telle quelle dans src et href, sur l'ecran du coach : un
+// guillemet, et la suite devenait du HTML (onerror…), avec le jeton de
+// rafraichissement du coach a portee dans localStorage. Seuls passent
+// Cloudinary, Firebase Storage et YouTube ; le reste rend un texte.
+const VIDEO_HOTES_SURS=Object.freeze(['res.cloudinary.com','firebasestorage.googleapis.com']);
+const VIDEO_HOTES_YT=Object.freeze(['youtu.be','youtube.com','www.youtube.com','m.youtube.com']);
+function urlVideoSure(url){
+  const u=normaliserUrlVideo(url);
+  if(!u) return '';
+  let x=null; try{ x=new URL(u); }catch(e){ return ''; }
+  if(x.protocol!=='https:'||x.username||x.password) return '';
+  const h=x.hostname.toLowerCase();
+  return (VIDEO_HOTES_SURS.indexOf(h)>=0||VIDEO_HOTES_YT.indexOf(h)>=0)?u:'';
+}
 function _videoEmbed(url,vidId='vc-video'){
   if(!url) return '';
+  url=urlVideoSure(url);
+  if(!url) return `<div style="margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm)">Lien vidéo invalide</div>`;
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) return `<iframe src="https://www.youtube.com/embed/${ytM[1]}" frameborder="0" allowfullscreen style="width:100%;height:190px;border-radius:var(--r-2);margin-top:8px"></iframe>`;
-  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" playsinline webkit-playsinline onerror="_videoIndisponible(this)" style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
-  return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--red-text);font-size:var(--fs-sm);font-weight:700;text-decoration:none">Voir la vidéo</a>`;
+  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${escapeHtml(vidId)}" src="${escapeHtml(url)}" controls preload="none" playsinline webkit-playsinline onerror="_videoIndisponible(this)" style="width:100%;border-radius:var(--r-2);margin-top:8px;max-height:220px;background:#000"></video>`;
+  return `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:var(--r-2);color:var(--red-text);font-size:var(--fs-sm);font-weight:700;text-decoration:none">Voir la vidéo</a>`;
 }
 
 // Carte de fin de séance. Elle ne dépose rien : elle renvoie vers l'écran
@@ -109617,7 +109663,7 @@ function _buildVideoCard(v){
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
@@ -110004,6 +110050,9 @@ function addVideoLink(){
   const url=(inp?.value||'').trim();
   if(!url) return toast('Colle un lien vidéo','var(--orange)');
   if(!/^https?:\/\//i.test(url)) return toast('Le lien doit commencer par https://','var(--orange)');
+  // LA MEME LISTE QUE L'AFFICHAGE ET LA REGLE (30/09/2026) : YouTube, ou un
+  // fichier depose dans l'app. Un autre lien serait refuse par le serveur.
+  if(!urlVideoSure(url)) return toast('Lien non accepté : colle un lien YouTube, ou dépose la vidéo directement dans l’app.','var(--orange)');
   const _saisi=((document.getElementById('vid-name-input')||{}).value||'').trim();
   let name='Vidéo';
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
@@ -110012,7 +110061,9 @@ function addVideoLink(){
   else{const seg=url.split('/').pop().split('?')[0];if(seg) name=decodeURIComponent(seg).replace(/\.(mp4|mov|webm|mkv)$/i,'');}
   if(_saisi) name=_saisi;
   if(!currentUser.videos) currentUser.videos=[];
-  currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:'-',feedback:null});
+  // La forme que la regle admet : https://youtu.be/<id> pour tout lien YouTube.
+  const _urlOk=ytM?'https://youtu.be/'+ytM[1]:url;
+  currentUser.videos.push({id:'v_'+Date.now(),name,url:_urlOk,date:Date.now(),size:'-',feedback:null});
   // Une vidéo portant le nom de l'exercice éteint la demande du coach. Rien
   // n'est notifié : la demande disparaît, c'est tout.
   consommerDemandeVideo(name,currentUser);
@@ -112616,8 +112667,24 @@ function rcInitLecteur(vidId){
   rcVitesse(vidId,1);
   return true;
 }
+// ══ LES REPERES DE LA CORRECTION (30/09/2026) ════════════════════════════════
+// Ils vivent dans videos[].feedbackTimestamps, donc dans le dossier de
+// l'athlete, qui peut les reecrire. `ts` etait colle DANS un onclick
+// (tsToSecs('…')) : un apostrophe, et le reste s'executait chez le coach. Le
+// saut passe desormais par data-sec et un gestionnaire delegue, sans aucune
+// donnee dans le code ; l'audio n'est lu que depuis Cloudinary.
+function srcAudioSure(u){
+  const v=String(u==null?'':u).trim();
+  return /^https:\/\/res\.cloudinary\.com\//i.test(v)?escapeHtml(v):'';
+}
+document.addEventListener('click',e=>{
+  const el=e.target&&e.target.closest?e.target.closest('.ts-saut'):null;
+  if(!el) return;
+  const v=document.getElementById(el.dataset.vid||'vc-video');
+  if(v) v.currentTime=Number(el.dataset.sec)||0;
+});
 function tsToSecs(ts){
-  const p=ts.split(':').map(Number);
+  const p=String(ts==null?'':ts).split(':').map(Number);
   return p.length===3?p[0]*3600+p[1]*60+p[2]:p[0]*60+(p[1]||0);
 }
 function _renderTsAnnotations(annotations,opts={}){
@@ -112631,9 +112698,9 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
+          <span class="ts-saut" data-vid="${escapeHtml(videoId)}" data-sec="${Number(_tsSec(t))||0}" style="font-family:var(--pile-titre);font-size:var(--fs-md);color:var(--red-text);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="${escapeHtml(t.ts)}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${escapeHtml(t.ts)}</span>
           ${isAudio
-            ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
+            ?`<div style="flex:1"><audio src="${srcAudioSure(t.audioUrl)}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:var(--fs-sm)">${escapeHtml(t.note)}</span>`}
           ${readonly?'':`<button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
         </div>`;
@@ -121442,6 +121509,37 @@ function safeUrl(u){
   const s=safeUrlRaw(u);
   return s==='#' ? '#' : escapeHtml(s);
 }
+// ══ LES SOURCES D'IMAGE VENUES D'UN DOSSIER (30/09/2026) ═════════════════════
+// Une photo de bilan, une photo de programme : l'athlete les ecrit dans SON
+// dossier, et le coach les affiche. Posees telles quelles dans src="…", un
+// guillemet suffisait a sortir de l'attribut et a poser un onerror sur l'ecran
+// du coach. srcImageSureRaw n'admet que ce que l'app produit elle-meme :
+// une image en base64 (jpeg, png, webp), Cloudinary, ou un blob: local.
+// Rend '' sinon. srcImageSure l'echappe pour l'attribut.
+function srcImageSureRaw(s){
+  const v=String(s==null?'':s).trim();
+  if(/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+\/=\s]*$/i.test(v)) return v;
+  if(/^https:\/\/res\.cloudinary\.com\//i.test(v)) return v;
+  if(/^blob:/i.test(v)) return v;
+  return '';
+}
+function srcImageSure(s){ return escapeHtml(srcImageSureRaw(s)); }
+// Plus large, pour les images d'un programme (fiche d'exercice, photo de
+// seance) : celles de l'app vivent aussi sous ./img/… et sur d'autres hotes
+// https. Un chemin relatif ou https, une image base64, un blob: — echappe.
+function srcImageAttr(s){
+  const v=String(s==null?'':s).trim();
+  if(srcImageSureRaw(v)) return escapeHtml(v);
+  if(/^https:\/\//i.test(v)) return escapeHtml(v);
+  if(v&&!/^[a-z][a-z0-9+.-]*:/i.test(v)&&!/^\/\//.test(v)) return escapeHtml(v);
+  return '';
+}
+// Une valeur passee en ARGUMENT dans un gestionnaire en ligne (onclick="f(…)").
+// escapeHtml seul n'y protege de rien — l'attribut est decode avant que le JS
+// ne soit lu, voir escapeHtml. JSON.stringify en fait un litteral JS sur, puis
+// escapeHtml le rend inoffensif dans l'attribut. S'ecrit SANS guillemets
+// autour : onclick="f(${jsArg(x)})".
+function jsArg(v){ return escapeHtml(JSON.stringify(String(v==null?'':v))); }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 // Retourne true si la donnée est réellement sur l'appareil, false si le quota
 // localStorage a débordé. Les appelants qui annoncent un succès à l'utilisateur
@@ -123026,7 +123124,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
     <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
     <span style="color:var(--text);font-weight:700">Étape 2 : </span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
     <span style="color:var(--text);font-weight:700">Étape 3 : </span> Sélectionne le fichier téléchargé ↓</p>
-    <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
+    <a href="${safeUrl(openUrl)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
        Ouvrir sur Google Drive
     </a>
     <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:var(--red);border:none;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase">

@@ -167,6 +167,13 @@ jobs:
       - name: Verifier la synchronisation (banc a deux appareils)
         run: node scripts/verif/banc-sync.mjs
 
+      # LA CONTENT-SECURITY-POLICY de /app (firebase.json) : presente, bornee
+      # (ni *, ni https: en connect-src / img-src / media-src), object-src
+      # 'none', et tout domaine que l'app appelle admis — sinon la fonction
+      # casse en production, et seulement la.
+      - name: Verifier la CSP de l'app
+        run: node scripts/verif/csp.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

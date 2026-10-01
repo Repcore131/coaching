@@ -24243,8 +24243,133 @@ async function testExercices(){
             return _echec('une fonction du lecteur sort sur le réseau');
         return true;})());
 
+      // ══ 30/09/2026 — LES DONNÉES DE L'ATHLÈTE NE S'EXÉCUTENT PAS CHEZ LE COACH ══
+      // Une URL de vidéo, une photo de bilan, un nom de séance ou un repère de
+      // correction viennent du dossier de l'athlète, qu'il écrit à volonté.
+      // Parsés dans un <template> (inerte : un <div> détaché, lui, charge les
+      // images et déclenche onerror), puis on cherche ce qu'une charge aurait
+      // posé : un élément injecté, un gestionnaire on* hors de ceux de l'app, du
+      // code hors chaîne dans un gestionnaire. window._xssTouche signale en plus
+      // toute exécution réelle (rendus montés dans le vrai DOM).
+      const _XP='x"\'><img src=x onerror=window._xssTouche=1><svg onload=window._xssTouche=1>';
+      const _xssFautes=(html)=>{
+        const t=document.createElement('template'); t.innerHTML=String(html||'');
+        const z=t.content, f=[];
+        if(z.querySelector('img[src="x"]')) f.push('<img src=x> injecté');
+        if(z.querySelector('svg[onload]')) f.push('<svg onload> injecté');
+        const permis=['_videoIndisponible(this)','this.remove()'];
+        for(const el of z.querySelectorAll('*')) for(const a of [...el.attributes]){
+          if(!/^on/i.test(a.name)) continue;
+          if(/^on(error|load)$/i.test(a.name)&&permis.indexOf(a.value)<0) f.push(el.tagName.toLowerCase()+'['+a.name+'="'+a.value.slice(0,40)+'"]');
+          const code=a.value.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g,'""');
+          if(/_xssTouche|alert\(/.test(code)) f.push('code hors chaîne dans '+el.tagName.toLowerCase()+'['+a.name+']');
+        }
+        return f;
+      };
+      ok('XSS — _videoEmbed : une URL piégée ne produit ni <img> ni onerror, javascript: est refusé',(()=>{
+        const h=_videoEmbed('https://x/a.mp4?"><img src=x onerror=alert(1)>');
+        if(h.indexOf('<img')>=0||h.indexOf('onerror')>=0) return _echec('charge rendue : '+h.slice(0,160));
+        if(!/Lien vidéo invalide/.test(h)) return _echec('hôte hors liste non refusé : '+h.slice(0,120));
+        const j=_videoEmbed('javascript:alert(1)');
+        if(j.indexOf('javascript:')>=0) return _echec('javascript: rendu');
+        // Sur un hôte admis, la charge reste DANS l'attribut.
+        const c=_videoEmbed('https://res.cloudinary.com/x/a.mp4?"><img src=x onerror=alert(1)>');
+        const f=_xssFautes(c);
+        if(f.length) return _echec('Cloudinary piégé : '+f.join(' · '));
+        if(!/<video/.test(c)) return _echec('une vraie vidéo Cloudinary n’est plus un lecteur');
+        // Les formes admises passent toujours.
+        if(!/youtube\.com\/embed\/aaaaaaaaaaa/.test(_videoEmbed('youtu.be/aaaaaaaaaaa'))) return _echec('YouTube court refusé');
+        if(!/<a href="https:\/\/firebasestorage/.test(_videoEmbed('https://firebasestorage.googleapis.com/v0/b/x/o/a'))) return _echec('Firebase Storage refusé');
+        return /Lien vidéo invalide/.test(_videoEmbed('https://drive.google.com/file/d/abc/view'))?true:_echec('un hôte hors liste passe');})());
+      ok('XSS — renderBilanEvolution : une photo « "><svg onload=1> » ne produit aucun svg ni [onerror]/[onload]',(()=>{
+        const el=document.getElementById('evo-content');
+        if(!el) return _echec('#evo-content absent');
+        const sv=el.innerHTML;
+        try{
+          const mk=(ph)=>({id:'xb',email:'xb@t.fr',fname:'Zoé',gender:'F',bilans:[
+            {date:Date.now()-20*864e5,type:'depart','deb-photo-face':ph,'deb-weight':70},
+            {date:Date.now(),type:'bilan','bil-photo-face':ph,'bil-photo-back':'"><svg onload=1>','bil-weight':69}]});
+          const compte=(ph)=>{ renderBilanEvolution(mk(ph));
+            const t=document.createElement('template'); t.innerHTML=el.innerHTML;
+            return {svg:t.content.querySelectorAll('svg').length,on:t.content.querySelectorAll('[onerror],[onload]').length,html:el.innerHTML}; };
+          const ref=compte('data:image/jpeg;base64,AAAA');
+          const pi=compte('"><svg onload=1>');
+          if(pi.svg!==ref.svg) return _echec(pi.svg+' svg au lieu de '+ref.svg+' : la photo a produit un élément');
+          if(pi.on!==ref.on) return _echec('attribut onerror/onload en plus');
+          const f=_xssFautes(pi.html);
+          return f.length?_echec(f.join(' · ')):true;
+        } finally { el.innerHTML=sv; }})());
+      okA('XSS — balayage : chaque rendu coach, dossier piégé dans chaque champ texte → aucun attribut on* injecté, rien d’exécuté',async()=>{
+        const sU=currentUser, svUsers=localStorage.getItem('rc_users'), svVc=[window._vcEmail,window._vcVideoId,window._tsAnnotations];
+        const evo=document.getElementById('evo-content'), svEvo=evo&&evo.innerHTML;
+        const slots=document.getElementById('session-slots'), svSlots=slots&&slots.innerHTML;
+        window._xssTouche=undefined;
+        const fautes=[];
+        const P=_XP;
+        const ath={id:'XA'+P,email:'xa@t.fr',role:'athlete',coachId:'XC',fname:P,lname:P,gender:'F',
+          videos:[{id:'v1'+P,name:P,url:'https://res.cloudinary.com/x/a.mp4?'+P,date:Date.now(),feedback:P,
+                   feedbackTimestamps:[{ts:"0:05');window._xssTouche=1;('",note:P,sec:'5'+P},{ts:P,note:P,audioUrl:'https://x.test/a.mp3"><img src=x onerror=window._xssTouche=1>'}]},
+                  {id:'v2'+P,name:P,url:'javascript:window._xssTouche=1',date:Date.now()}],
+          bilans:[{date:Date.now()-9*864e5,type:'depart','deb-photo-face':P,'deb-weight':70,note:P},
+                  {date:Date.now(),type:'bilan','bil-photo-face':P,'bil-photo-side':'javascript:x','bil-weight':69,note:P}],
+          sessions_config:[{day:P,name:P,active:true,photo:P,exercises:[{name:P,image:P,series:3,reps:P}]}]};
+        try{
+          currentUser={id:'XC',email:'xc@t.fr',role:'coach',fname:'K',logo:P};
+          DB.set('users',{'xa@t.fr':ath,'xc@t.fr':currentUser});
+          const rendus=[
+            ['_videoEmbed',()=>_videoEmbed(ath.videos[0].url)+_videoEmbed(ath.videos[1].url)],
+            ['_vignetteVideoHtml',()=>_vignetteVideoHtml(ath.videos[0].url)],
+            ['_vcCorpsHtml',()=>_vcCorpsHtml('xa@t.fr',ath.videos[0].id)],
+            ['_renderTsAnnotations',()=>_renderTsAnnotations(ath.videos[0].feedbackTimestamps,{readonly:true})],
+            ['renderBilanEvolution',()=>{ renderBilanEvolution(ath); return evo.innerHTML; }],
+            ['htmlRapport',()=>{ const r=rapportPeriode(ath,Date.now()-30*864e5,Date.now(),{now:Date.now()});
+              r.athlete.prenom=P; r.photos={present:true,avant:{src:P,date:Date.now()-9*864e5},apres:{src:'javascript:x',date:Date.now()}};
+              return htmlRapport(r); }],
+            ['_renderSessionManager',()=>{ const u0=currentUser; currentUser=ath; try{ _renderSessionManager(); } finally{ currentUser=u0; } return slots?slots.innerHTML:''; }],
+          ];
+          for(const [n,f] of rendus){
+            let h=''; try{ h=f(); }catch(e){ fautes.push(n+' lève : '+e.message); continue; }
+            const x=_xssFautes(h); if(x.length) fautes.push(n+' : '+x.join(' · '));
+          }
+          // L'ÉCRAN « CORRIGER LA VIDÉO », OUVERT POUR DE VRAI sur l'athlète piégé.
+          try{
+            openVideoCorrection('xa@t.fr',ath.videos[0].id);
+            await new Promise(r=>setTimeout(r,400));
+            const m=document.getElementById('modal-overlay')||document.body;
+            const x=_xssFautes(m.innerHTML); if(x.length) fautes.push('écran Corriger la vidéo : '+x.join(' · '));
+            // Le repère se clique : il saute au temps, et n'exécute rien.
+            const saut=document.querySelector('#vc-ts-list .ts-saut'); if(saut) saut.click();
+          }catch(e){ fautes.push('openVideoCorrection lève : '+e.message); }
+          finally{ try{ closeModal(); }catch(e){} }
+          await new Promise(r=>setTimeout(r,200));
+          if(window._xssTouche) fautes.push('une charge S’EST EXÉCUTÉE (window._xssTouche)');
+          return fautes.length?_echec(fautes.join(' | ')):true;
+        } finally {
+          currentUser=sU; if(svUsers==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',svUsers);
+          [window._vcEmail,window._vcVideoId,window._tsAnnotations]=svVc;
+          if(evo) evo.innerHTML=svEvo; if(slots) slots.innerHTML=svSlots;
+          window._xssTouche=undefined;
+        }
+      });
+      ok('XSS — _videosConformes : le PUT ne porte qu’un lien admis par la règle (youtu.be, www.youtube.com, Cloudinary, Firebase Storage)',(()=>{
+        const d={videos:[{url:'https://res.cloudinary.com/a.mp4'},{url:'https://youtube.com/watch?v=aaaaaaaaaaa'},
+          {url:'https://m.youtube.com/shorts/bbbbbbbbbbb'},{url:'https://drive.google.com/x'},{url:'javascript:alert(1)'},{name:'sans lien'}]};
+        _videosConformes(d);
+        const u=d.videos.map(v=>v.url||null);
+        if(u[0]!=='https://res.cloudinary.com/a.mp4') return _echec('Cloudinary touché');
+        if(u[1]!=='https://youtu.be/aaaaaaaaaaa'||u[2]!=='https://youtu.be/bbbbbbbbbbb') return _echec('YouTube non normalisé : '+u[1]+' / '+u[2]);
+        if(u[3]!==null||u[4]!==null) return _echec('un lien hors liste part encore');
+        if(d.videos[3].lienRefuse!=='https://drive.google.com/x') return _echec('le lien refusé n’est pas gardé en trace');
+        if(!/_videosConformes\(safe\)/.test(String(CLOUD._doPushOne))) return _echec('_doPushOne ne l’appelle pas');
+        return d.videos[5].name==='sans lien'?true:_echec('une vidéo sans lien est touchée');})());
+      ok('XSS — srcImageSure : base64 jpeg/png/webp, Cloudinary, blob: ; le reste rend vide, et tout sort échappé',(()=>{
+        for(const ok2 of ['data:image/jpeg;base64,AAAA','data:image/png;base64,iVBOR','data:image/webp;base64,UklG','https://res.cloudinary.com/x/y.jpg','blob:https://a/b'])
+          if(srcImageSureRaw(ok2)!==ok2) return _echec('refusé à tort : '+ok2);
+        for(const ko of ['"><svg onload=1>','javascript:alert(1)','data:text/html;base64,PHN2Zz4=','data:image/svg+xml;base64,PHN2Zz4=','https://evil.test/x.png','data:image/png;base64,AA"><x'])
+          if(srcImageSureRaw(ko)!=='') return _echec('admis à tort : '+ko);
+        return srcImageSure('https://res.cloudinary.com/a"b')==='https://res.cloudinary.com/a&quot;b'?true:_echec('pas échappé');})());
       ok('playsinline est posé : sans lui, iOS reprend les contrôles',(()=>{
-        const h=_videoEmbed('https://x.test/a.mp4');
+        const h=_videoEmbed('https://res.cloudinary.com/x/video/upload/a.mp4');
         if(h.indexOf('playsinline')<0) return _echec('playsinline absent');
         return h.indexOf('webkit-playsinline')>=0
           ?true:_echec('le repli des anciens iOS manque');})());
@@ -24276,7 +24401,7 @@ async function testExercices(){
         try{
           currentUser={id:'VXC',email:'vxc@t.fr',role:'coach'};
           DB.set('users',{'vxa@t.fr':{id:'VXA',email:'vxa@t.fr',role:'athlete',coachId:'VXC',fname:'Zoé',
-            videos:[{id:'vv1',name:'Tirage',url:'https://x.test/a.mp4',date:Date.now()},
+            videos:[{id:'vv1',name:'Tirage',url:'https://res.cloudinary.com/x/video/upload/a.mp4',date:Date.now()},
                     {id:'vv2',name:'Squat',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',date:Date.now()}]}});
           const corps=_vcCorpsHtml('vxa@t.fr','vv1'), lien=_vcCorpsHtml('vxa@t.fr','vv2');
           const z=document.createElement('div'); z.innerHTML=corps;

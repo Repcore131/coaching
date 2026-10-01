@@ -142,6 +142,17 @@
         // La longueur est celle de NOTE_TEXTE_MAX cote client. Les etiquettes
         // sont la liste fermee de NOTE_TAGS ; null est accepte, c est l absence
         // d etiquette.
+        // LES LIENS DE VIDEO (30/09/2026). Ecrits par l athlete, affiches chez
+        // son coach : Cloudinary, Firebase Storage et YouTube, rien d autre. Une
+        // URL hors liste ferait rejeter le PUT ENTIER du dossier : _doPushOne la
+        // met en conformite avant d envoyer (_videosConformes), et
+        // scripts/mesure_urls_videos.py dit, sur un export, ce qui ne passerait pas.
+        "videos": {
+          "$i": {
+            "url": { ".validate": "newData.isString() && newData.val().length < 600 && (newData.val().beginsWith('https://res.cloudinary.com/') || newData.val().beginsWith('https://firebasestorage.googleapis.com/') || newData.val().beginsWith('https://youtu.be/') || newData.val().beginsWith('https://www.youtube.com/'))" }
+          }
+        },
+
         "coachNotes": {
           "$athleteId": {
             "$i": {
