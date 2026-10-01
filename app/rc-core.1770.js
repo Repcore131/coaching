@@ -42327,7 +42327,10 @@ function _techniqueLecture(ex,i,m,cardio){
 }
 // Le sélecteur est désactivé sur un exercice cardio : aucune de ces méthodes
 // n'a de sens sur du vélo, et proposer un choix inopérant est pire que rien.
-function _selecteurTechnique(ex,i){
+// `partie` (01/10/2026) : la carte du coach pose le CHOIX sur la ligne de la
+// charge et du RIR cibles, et la SUITE (description, séries visées, règle,
+// avertissement) dessous, sur toute la largeur. Sans `partie`, tout d'un bloc.
+function _selecteurTechnique(ex,i,partie){
   const cardio=(()=>{ try{ return isCardio(ex); }catch(e){ return false; } })();
   const m=methodeDe(ex);
   if(!peutChoisirTechnique()) return _techniqueLecture(ex,i,m,cardio);
@@ -42345,12 +42348,13 @@ function _selecteurTechnique(ex,i){
   const opts=ligne('','Aucune','série normale')
     +cles.map(k=>ligne(k,TECHNIQUES[k].nom,techniqueCourt(k))).join('');
   const courant=sel?[TECHNIQUES[sel].nom,techniqueCourt(sel)]:['Aucune','série normale'];
-  return `<div style="margin-bottom:10px">
+  const choix=`
     <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
     <details class="tq"${cardio?' data-inactif="1"':''}>
       <summary class="tq-s"${cardio?' tabindex="-1" aria-disabled="true"':''}><b>${escapeHtml(courant[0])}</b>${courant[1]?`<span> : ${escapeHtml(courant[1])}</span>`:''}<i aria-hidden="true">▾</i></summary>
       ${cardio?'':`<div class="tq-l" role="listbox" aria-label="Technique d’intensification">${opts}</div>`}
-    </details>
+    </details>`;
+  const suite=`
     ${m?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(m.desc)}
       ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
     <!-- SUR QUELLE(S) SÉRIE(S). Une méthode se pose rarement sur les quatre :
@@ -42364,8 +42368,10 @@ function _selecteurTechnique(ex,i){
         placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
     ${_blocRegleMethode(ex,i)}
-    ${_avertissementTechnique(ex,i)}
-  </div>`;
+    ${_avertissementTechnique(ex,i)}`;
+  if(partie==='choix') return `<div class="px-tq">${choix}</div>`;
+  if(partie==='suite') return `<div style="margin-bottom:10px">${suite}</div>`;
+  return `<div style="margin-bottom:10px">${choix}${suite}</div>`;
 }
 // L'EVALUATION TELLE QUE L'EDITEUR LA POSE. Elle porte le contexte que les
 // fonctions pures ne peuvent pas deviner : sur QUEL athlete on prescrit, et
@@ -42663,6 +42669,8 @@ function renderProgEx(){
   // Lu UNE FOIS pour tout le rendu : peutConsulterBanque relit currentUser a
   // chaque appel, et une carte de dix exercices l'appellerait dix fois.
   const _bqDispo=(()=>{ try{ return !!peutConsulterBanque(); }catch(e){ return false; } })();
+  // Le menu de technique (coach) partage la ligne de la charge et du RIR cibles.
+  const _tqMenu=(()=>{ try{ return !!peutChoisirTechnique(); }catch(e){ return false; } })();
   // Le bouton n'apparait qu'a qui a le catalogue (un coach, ou Ultime).
   const _bq=document.getElementById('prog-banque');
   if(_bq) _bq.style.display=_bqDispo?'block':'none';
@@ -42769,14 +42777,17 @@ function renderProgEx(){
              les trois formes reconnues passent en infobulle. Les écrire toutes
              dans le placeholder les aurait fait tronquer : trente et un
              caractères dans un champ de 106 px. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <!-- 01/10/2026 (Kevin) : LES TROIS CASES VONT JUSQU'AU BORD. « Repos » était
+             borné à 220 px (.px-court) et laissait un vide à droite ; .px-l1 lève
+             la borne, et le champ est centré comme ses deux voisins. -->
+        <div class="px-l1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
           <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
             <label style="margin-top:0">Répétition</label>
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label style="margin-top:0">Repos</label><input class="px-court" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}" class="f-c f-sm"></div>
+          <div><label style="margin-top:0">Repos</label><input class="px-court f-c" value="${escapeHtml(ex.repos||REPOS_DEFAUT)}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="${REPOS_DEFAUT}"></div>
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours,              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
              deux colonnes de la fiche imprimable, et ÉCRITS nulle part.
@@ -42790,7 +42801,12 @@ function renderProgEx(){
 
              Placés avec les séries, les reps et le tempo plutôt qu’avec le
              matériel : c’est la prescription du travail, pas de l’engin. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <!-- 01/10/2026 (Kevin) : TECHNIQUE, CHARGE CIBLE, RIR CIBLE SUR UNE LIGNE,
+             la technique en premier et plus longue que les deux autres, le RIR
+             réduit. Pour le coach seulement : l'athlète n'a pas de menu de
+             technique, sa ligne reste Charge + RIR. -->
+        <div ${_tqMenu?'class="px-l2"':'style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"'}>
+          ${_tqMenu?_selecteurTechnique(ex,i,'choix'):''}
           <div>
             <label>Charge cible</label>
             <input class="px-court f-c" value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg ou 75 %">
@@ -42820,7 +42836,7 @@ function renderProgEx(){
              _selecteurTechnique s'en charge, et c'est la regle posee par Kevin
              le 25/08/2026, l'athlete qui veut une technique la tape dans la
              description. -->
-        ${_selecteurTechnique(ex,i)}
+        ${_tqMenu?_selecteurTechnique(ex,i,'suite'):_selecteurTechnique(ex,i)}
         ${_bqDispo?_htmlBoutonProgEx(ex,i):''}
         ${_bqDispo?_htmlAlternativesEx(ex,i):''}
         <div class="px-grp">EXÉCUTION</div>

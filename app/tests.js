@@ -40757,6 +40757,17 @@ async function testExercices(){
           currentUser={id:'U',email:'u@t.fr',role:'coach'};
           renderProgEx();
           const carte=document.querySelector('#prog-exercises [data-px-idx="0"]');
+          // 01/10/2026 (Kevin) : Séries / Répétition / Repos vont jusqu'au bord de la
+          // ligne, et dessous viennent, dans cet ordre, Technique, Charge cible, RIR cible.
+          const l1=carte.querySelector('.px-l1'), l2=carte.querySelector('.px-l2');
+          if(!l1||!l2) return _echec('les deux lignes de prescription ont disparu');
+          const bord=(l,e)=>Math.abs(l.getBoundingClientRect().right-e.getBoundingClientRect().right);
+          const ch1=[...l1.querySelectorAll('input')];
+          if(ch1.length!==3||bord(l1,ch1[2])>2) return _echec('« Repos » ne va pas au bord de la ligne : '+bord(l1,ch1[2])+' px');
+          const lib=[...l2.children].map(d=>((d.querySelector('label')||{}).textContent||'').trim().split(/ +/).slice(0,2).join(' '));
+          if(lib.length!==3||!/^Technique/.test(lib[0])||lib[1]!=='Charge cible'||lib[2]!=='RIR cible') return _echec('ordre de la 2e ligne : '+lib.join(' | '));
+          if(bord(l2,l2.querySelector('select'))>2) return _echec('« RIR cible » ne va pas au bord de la ligne');
+          if(bord(l2.children[1],l2.querySelector('input'))>2) return _echec('« Charge cible » ne remplit pas sa case');
           const grp=[...carte.querySelectorAll('.px-grp')];
           const iExec=grp.findIndex(g=>/EXÉCUTION/.test(g.textContent));
           const lab=[...carte.querySelectorAll('label')].find(l=>/^Technique/.test(l.textContent.trim()));

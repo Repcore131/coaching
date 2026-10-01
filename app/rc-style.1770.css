@@ -5553,6 +5553,30 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .tq-o[aria-selected="true"] b{color:var(--red-text)}
 .tq-s span,.tq-o span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:pre;
   font-size:10px;font-weight:300;color:var(--sub);letter-spacing:.1px}
+/* ══ LES DEUX LIGNES DE PRESCRIPTION DE LA CARTE DU COACH (01/10/2026) ═════
+   Ligne 1 : Séries, Répétition, Repos, trois cases égales jusqu'au bord.
+   Ligne 2 : Technique (la plus longue), Charge cible, RIR cible (réduit).
+   La borne .px-court (220 px) est levée DANS ces deux lignes : une case de
+   grille a déjà sa largeur, la borner y laissait un vide à droite. */
+.px-l1 .px-court,.px-l2 .px-court{max-width:none!important;width:100%}
+.px-l2{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr) minmax(0,.8fr);gap:8px;margin-bottom:8px;align-items:start;container-type:inline-size}
+.px-l2>div{min-width:0}
+.px-tq{position:relative}
+/* La liste s'ouvre PAR-DESSUS la carte : dans une case de grille, la pousser
+   ferait descendre la charge et le RIR d'un écran. Elle déborde sa case pour
+   que « Nom : ce qu'elle fait » garde sa ligne. */
+.px-tq .tq{overflow:visible}
+/* Les trois cases à la même hauteur : 48 px, bordure comprise. */
+.px-tq .tq-s{border-radius:var(--r-2);min-height:46px;align-items:center}
+.px-l2 input,.px-l2 select{height:48px;box-sizing:border-box}
+.px-tq .tq-l{position:absolute;left:0;top:calc(100% + 4px);z-index:40;width:max(100%,min(620px,100cqw));
+  background:var(--surface-2);border:1px solid rgba(224,32,32,.5);border-radius:var(--r-2);box-shadow:0 14px 34px rgba(0,0,0,.6)}
+/* Téléphone : trois cases ne tiennent pas, la technique prend sa ligne. */
+@media (max-width:640px){
+  .px-l2{grid-template-columns:1fr 1fr}
+  .px-l2>.px-tq{grid-column:1/-1}
+  .px-tq .tq-l{width:100%}
+}
 /* ══ LA GRILLE DES MUSCLES DE LA BANQUE D'EXERCICES (01/10/2026) ═══════════
    Un carré par muscle : l'illustration du volume, le nom dessous. Cinq par
    ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,
@@ -13417,6 +13441,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .tq-s b,:root[data-theme="clair"] .tq-o b{color:var(--text-strong)}
 :root[data-theme="clair"] .tq-o[aria-selected="true"] b{color:var(--red-text)}
 :root[data-theme="clair"] .tq-s span,:root[data-theme="clair"] .tq-o span{color:var(--sub)}
+:root[data-theme="clair"] .px-tq .tq-l{background:var(--surface-2);border:1px solid rgba(224,32,32,.5);box-shadow:0 14px 34px rgba(0,0,0,0.21)}
 :root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:#f0f0f0}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}
