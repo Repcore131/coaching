@@ -43243,9 +43243,20 @@ function renderProgEx(){
              Sur un téléphone la rangée se replie : le nom garde la première
              ligne, les boutons passent dessous. -->
         <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();_pxMajMuscles(${i})" placeholder="NOM DE L'EXERCICE" class="f-inline px-nom" style="font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1 1 150px;min-width:0;box-sizing:border-box">
-        ${_bqDispo?`<span class="px-cmd px-cmd-bq">
+        ${_bqDispo?`<span class="px-cmd-bq">
+          <span class="px-cmd">
           <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'remplacer')">Remplacer</button>
           <button type="button" class="px-b-blanc" onclick="remplacerDepuisBanque(${i},'maj')">Mettre à jour</button>
+          </span>
+          <!-- L'EXPLICATION, SOUS LES DEUX BOUTONS QU'ELLE EXPLIQUE (Kevin,
+               01/10/2026) : elle était au-dessus de « Séries », un rang plus
+               bas que les boutons. Toujours repliée (B2.10 : quarante mots
+               répétés dans chaque carte reculaient la prescription), toujours
+               à un clic, et le texte n'est ni raccourci ni réécrit. -->
+          <details class="px-diff">
+            <summary>Remplacer ou mettre à jour : quelle différence ?</summary>
+            <div><b>Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b>Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
+          </details>
         </span>`:''}
         <span class="px-cmd px-cmd-ed">
           <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
@@ -43265,23 +43276,6 @@ function renderProgEx(){
              liens video et son execution.
              RESERVE AUX COACHS : la banque leur est fermee cote athlete, et le
              bouton n'apparait donc pas dans SON editeur de seance. -->
-        ${_bqDispo?`
-        <!-- B2.10, L'EXPLICATION NE S'IMPOSE PLUS DANS CHAQUE CARTE.
-             Ces quarante mots etaient rendus par renderProgEx dans CHAQUE
-             exercice : sur une seance de huit, le coach faisait defiler huit
-             fois le meme paragraphe, et la prescription, la seule chose
-             qu'il vient ecrire, reculait d'autant.
-             LE TEXTE N'EST NI RACCOURCI NI REECRIT : c'est sa repetition
-             qui posait probleme, pas son contenu. La distinction entre
-             remplacer et mettre a jour n'est pas devinable, elle reste donc
-             a portee, d'un clic, depuis n'importe quelle carte.
-             <details> ET NON UN PANNEAU : natif, refermable, sans une ligne
-             de JS, et il garde son etat ouvert tant que le coach ne le
-             referme pas. -->
-        <details style="margin-bottom:8px">
-          <summary style="font-size:var(--fs-2xs);color:var(--text-faint);cursor:pointer;list-style:none">Remplacer ou mettre à jour : quelle différence ?</summary>
-          <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;padding:6px 0 0"><b style="color:var(--sub)">Remplacer</b> : un autre mouvement, l'historique repart de zéro. <b style="color:var(--sub)">Mettre à jour</b> : le même, qui gagne la photo et les vidéos du guide et garde ses suggestions de charge. Ou tape son nom au-dessus.</div>
-        </details>`:''}
         <!-- SÉRIES / RÉPÉTITIONS / REPOS, TROIS CASES DE MÊME LARGEUR.
              LE TITRE « PRESCRIPTION » EST PARTI (Kevin, 15/09/2026) : il nommait
              un groupe dont le contenu se nomme déjà lui-même, et il coûtait un
@@ -68251,12 +68245,11 @@ window.ppImprimer=rapImprimer;
 //   programme. Aucune bibliothèque, aucun appel réseau, aucune Cloud Function :
 //   le plan Firebase reste Spark.
 //
-// LE FOND RESTE NOIR À L'IMPRESSION, contrairement aux deux autres fiches qui
-// se blanchissent. C'est une demande explicite : ces planches SONT le support
-// de marque du coach, et les siennes sont noires. `print-color-adjust:exact`
-// l'impose au navigateur, qui aplatit les fonds par défaut. Sur une imprimante
-// à jet d'encre, une page noire coûte cher — c'est pourquoi le bouton dit
-// « Imprimer / Enregistrer en PDF » : le PDF est la sortie attendue.
+// LA FEUILLE EST BLANCHE ET LES LIGNES AUSSI (30/09/2026) : blanc et blanc
+// cassé une ligne sur deux, la couleur ne reste que dans les en-têtes de repas
+// et de tableaux. `print-color-adjust:exact` impose ces en-têtes au navigateur,
+// qui aplatit les fonds par défaut. Le bouton dit « Imprimer / Enregistrer en
+// PDF » : le PDF est la sortie attendue.
 const FA_LIB_MOMENT=Object.freeze({
   petit_dej:'HEURE LIBRE', collation1:'MATIN', midi:'MIDI',
   avant:'ENTRAÎNEMENT', pendant:'ENTRAÎNEMENT', apres:'ENTRAÎNEMENT',
@@ -68378,15 +68371,19 @@ function htmlFicheAlim(user,chercher){
   const marque=d.marque
     ? `<img class="fa-logo-img" src="${E(d.marque)}" alt="">`
     : `<div class="fa-logo-txt">REP<span>CORE</span></div>`;
+  // LE LOGO DU COACH PREND LA PLACE DU RAIL GAUCHE, A COTE DU TITRE (retour
+  // de Kevin le 30/09/2026) : en tete de page, il poussait tout le bandeau
+  // vers le bas et restait petit. Sans logo, rien ne change.
   const tete=(titre1,titre2,sous)=>`<header class="fa-tete">
-      <div class="fa-tete-g">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>
+      <div class="fa-tete-g">${d.marque?'':`${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div>`}</div>
       <div class="fa-tete-d">
         ${d.coachNom?`<div class="fa-tete-coach"><span class="fa-tiret"></span>${E(d.coachNom.toUpperCase())}</div>`:''}
         <div class="fa-tete-sous">NUTRITION | PERFORMANCE | RÉSULTATS</div>
       </div>
     </header>
     <div class="fa-bandeau">
-      <div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>
+      ${d.marque?`<div class="fa-rail-logo">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>`
+        :`<div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>`}
       <div class="fa-titre-bloc">
         <h1 class="fa-h1">${E(titre1)} <em>${E(titre2)}</em></h1>
         ${sous?`<div class="fa-h1-sous">${sous}</div>`:''}
@@ -68394,7 +68391,7 @@ function htmlFicheAlim(user,chercher){
       <div class="fa-rail fa-rail-d">DISCIPLINE<br>AUJOURD'HUI<br><b>RÉSULTATS</b><br>DEMAIN.</div>
     </div>`;
   const pied=`<footer class="fa-pied">
-      <div class="fa-pied-g">${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div>
+      <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
       <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
@@ -68428,7 +68425,8 @@ function htmlFicheAlim(user,chercher){
 
   // ── PLANCHE 2 : LES TABLEAUX ────────────────────────────────────────────
   const tbl4=(lignes)=>lignes.length
-    ? `<table class="fa-t4"><thead><tr><th>Aliment</th><th>Quantité</th>
+    ? `<table class="fa-t4"><colgroup><col class="fa-col-nom"><col><col><col class="fa-col-jour"></colgroup>`
+      +`<thead><tr><th>Aliment</th><th>Quantité</th>
         <th>Pour 100 g</th><th>Pour ${d.nRepasColonne} repas</th></tr></thead><tbody>`
       +lignes.map(l=>`<tr><td class="fa-t4-n">${E(l.nom)}</td>
         <td${l.alerte?' class="fa-alerte"':''}>${l.q==null?'-':E(l.q+' g')}</td>
@@ -68436,7 +68434,16 @@ function htmlFicheAlim(user,chercher){
         <td>${l.jour==null?'-':E(l.jour+' g')}</td></tr>`).join('')
       +'</tbody></table>'
     : `<div class="fa-vide-t">Aucune source posée par le coach.</div>`;
-  const tblFruits=`<table class="fa-t2"><thead><tr><th>Aliment</th><th>Quantité</th></tr></thead><tbody>`
+  // LA LISTE DES GLUCIDES PASSE SUR DEUX COLONNES au-dela de douze lignes.
+  // Sur une seule, ses trente lignes rendaient la seconde planche trop haute :
+  // pour la faire tenir sur la feuille, il fallait la reduire, et elle
+  // laissait deux bandes blanches sur les cotes.
+  const FA_DEUX_COL=12;
+  const tblGluc=d.glucides.length>FA_DEUX_COL
+    ? `<div class="fa-2col">${tbl4(d.glucides.slice(0,Math.ceil(d.glucides.length/2)))}`
+      +`${tbl4(d.glucides.slice(Math.ceil(d.glucides.length/2)))}</div>`
+    : tbl4(d.glucides);
+  const tblFruits=`<table class="fa-t2"><colgroup><col class="fa-col-fruit"><col></colgroup><thead><tr><th>Aliment</th><th>Quantité</th></tr></thead><tbody>`
     +d.fruits.map(f=>`<tr><td class="fa-t4-n">${E(f.n)}</td><td>${E(f.q)}</td></tr>`).join('')
     +'</tbody></table>';
 
@@ -68463,7 +68470,7 @@ function htmlFicheAlim(user,chercher){
     </div>
     <section class="fa-carte fa-c-gluc">
       <div class="fa-carte-t">SOURCES DE GLUCIDES</div>
-      ${tbl4(d.glucides)}
+      ${tblGluc}
     </section>
     <div class="fa-motto">${E(FA_MOTTO)}</div>
     ${pied}
@@ -68513,10 +68520,12 @@ function faEchelle(){
   if(!z) return null;
   const pages=[...z.querySelectorAll('.fa-page')];
   if(!pages.length) return null;
-  const k=Math.min(1,(z.clientWidth||1024)/1024);
   const zoomOk=(typeof CSS!=='undefined'&&CSS.supports&&CSS.supports('zoom','0.5'));
+  let k=1;
   for(const p of pages){
     p.style.zoom=''; p.style.transform=''; p.style.height='';
+    // CHAQUE PLANCHE A SA LARGEUR : 1 024 px, 1 120 pour la seconde.
+    k=Math.min(1,(z.clientWidth||1024)/(p.offsetWidth||1024));
     if(k>=1) continue;
     if(zoomOk){ p.style.zoom=String(k); continue; }
     const h=p.getBoundingClientRect().height;
@@ -68535,8 +68544,8 @@ function faEchelle(){
  *
  * On garde donc la mise en page EXACTE de l'ecran — meme largeur, mêmes
  * colonnes, mêmes retours a la ligne — et on met la planche entiere a
- * l'echelle pour qu'elle entre dans la surface utile : 182 mm sur 267 mm,
- * c'est-a-dire une A4 moins les marges de 14 mm de @page.
+ * l'echelle pour qu'elle entre dans la surface utile : 198 mm sur 285 mm,
+ * c'est-a-dire une A4 moins les marges de 6 mm de la page nommee « fa ».
  *
  * ⚠ LA HAUTEUR SE MESURE A ZOOM 1. `getBoundingClientRect` rend la hauteur
  *   DEJA mise a l'echelle par le zoom d'ecran : mesurer sans le remettre a
@@ -68544,11 +68553,17 @@ function faEchelle(){
  */
 function faImprimer(){
   const pages=[...document.querySelectorAll('#fa-corps .fa-page')];
-  const L=687.9, H=1009;                  // 182 mm et 267 mm, en pixels CSS
+  // 198 mm et 285 mm, en pixels CSS : une A4 moins les marges de 6 mm de la
+  // page nommee « fa » (rc-style, @page fa). Elles etaient de 14 mm, et la
+  // planche flottait au milieu de la feuille (retour de Kevin le 30/09/2026).
+  const L=748.3, H=1077.2;
   for(const p of pages){
     const garde=p.style.zoom;
     p.style.zoom='1';
     const h=p.getBoundingClientRect().height||1;
+    // LA LARGEUR SE MESURE AUSSI : la seconde planche est plus large que la
+    // premiere (voir .fa-p2 dans rc-style), pour qu'elle remplisse la feuille.
+    const w=p.getBoundingClientRect().width||1024;
     p.style.zoom=garde;
     // ⚠ SEPT POUR CENT DE MARGE, ET UN ARRONDI VERS LE BAS. La hauteur se
     //   mesure en media ECRAN, et la planche est un peu plus haute en media
@@ -68557,7 +68572,7 @@ function faImprimer(){
     //   attendus, soit 4,5 % de plus — et le PDF sortait en trois pages pour
     //   deux planches. Sept pour cent couvrent cet ecart sans qu'on ait a
     //   deviner d'ou vient chaque pixel.
-    const k=Math.min(L/1024,(H*0.93)/h);
+    const k=Math.min(L/w,(H*0.93)/h);
     p.style.setProperty('--fa-k-print',String(Math.floor(k*1000)/1000));
   }
   return rapImprimer();

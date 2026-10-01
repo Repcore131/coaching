@@ -14988,33 +14988,29 @@ async function testExercices(){
           const trouve=[...t].filter(c=>{const n=c.codePointAt(0);
             return (n>=0x1F300&&n<=0x1FAFF)||(n>=0x2600&&n<=0x27BF);});
           return trouve.length?_echec('emoji present : '+trouve.join(' ')):true;})());
-        ok('LE TITRE EST ROUGE, halo compris',(()=>{
-          // Demande de Kevin, 25/08/2026. Le halo est le piege : les crans
-          // --halo-1/2/3 sont definis sur :root, ou leur var(--halo-c) s est
-          // deja resolu — au BLANC par defaut. Poser --halo-c dans une regle
-          // laisse donc un titre rouge cercle de blanc : ca ne se voit qu a
-          // l oeil, et pas du tout dans le code. On lit les deux.
-          const t=document.querySelector('.pr-titre');
+        ok('LA BANNIÈRE EST ROUGE, le titre blanc et sans néon, les deux commandes blanches',(()=>{
+          // 25/08/2026 : Kevin voulait le titre en ROUGE, avec son halo, et ce test
+          // le figeait. 01/10/2026 : il demande une bannière rouge, le titre en blanc
+          // « sans néon », et les deux boutons en blanc. C'est la consigne la plus
+          // récente qui est vérifiée ici.
+          const t=document.querySelector('.pr-tete .pr-titre');
           if(!t) return _echec('le titre a disparu');
           const s=getComputedStyle(t);
-          // N5.13 — LE JETON A CHANGE DE VALEUR, PAS DE ROLE. --red-text est
-          // passe de #E02020 a #FF5A4A pour atteindre AA sur du petit texte :
-          // ce titre reste rouge, et c'est le JETON qu'on verifie, pas un
-          // nombre en dur. Un nombre en dur aurait fait tomber cette sonde a
-          // chaque reglage de lisibilite, sans que rien ne soit casse.
-          const _jeton=getComputedStyle(document.documentElement)
-            .getPropertyValue('--red-text').trim();
-          const _norm=v=>{ const d=document.createElement('div');
-            d.style.color=v; document.body.appendChild(d);
-            const c=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return c; };
-          if(s.color.replace(/\s/g,'')!==_norm(_jeton))
-            return _echec('le titre n est pas rouge : '+s.color);
-          if(!/224,\s*32,\s*32/.test(s.textShadow))
-            return _echec('le halo n est pas rouge : '+s.textShadow);
-          // Et pas un flou de 30 px : sur un mot de 17 px, le cran 2 se lit
-          // comme un rectangle de surlignage, pas comme une lueur.
-          const flou=parseFloat((s.textShadow.match(/(\d+(?:\.\d+)?)px\s*$/)||[0,99])[1]);
-          return flou<=12?true:_echec('halo trop large : '+flou+' px');})());
+          if(s.color.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('le titre n est pas blanc : '+s.color);
+          if(s.textShadow&&s.textShadow!=='none') return _echec('le titre porte encore un halo : '+s.textShadow);
+          const b=getComputedStyle(document.querySelector('.pr-tete'));
+          if(!/226,\s*20,\s*20|141,\s*0,\s*0/.test(b.backgroundImage+b.backgroundColor)) return _echec('la bannière n est pas rouge');
+          for(const x of document.querySelectorAll('.pr-tete .pr-cmd')){
+            const cs=getComputedStyle(x);
+            if(cs.backgroundColor.replace(/\s/g,'')!=='rgb(255,255,255)') return _echec('une commande n est pas blanche : '+cs.backgroundColor);
+            if(cs.color.replace(/\s/g,'')!=='rgb(20,20,20)') return _echec('son texte ne se lit pas sur le blanc : '+cs.color);
+          }
+          // Les deux titres de phase, « Échauffement » et « Étirements / retour au calme », sont en rouge.
+          const _rouge=(()=>{ const d=document.createElement('div'); d.style.color=getComputedStyle(document.documentElement).getPropertyValue('--red-text').trim();
+            document.body.appendChild(d); const v=getComputedStyle(d).color.replace(/\s/g,''); d.remove(); return v; })();
+          const lbl=[...document.querySelectorAll('.pr-bloc .pr-sect .pr-lbl')];
+          if(lbl.length!==2||lbl.some(x=>getComputedStyle(x).color.replace(/\s/g,'')!==_rouge)) return _echec('les titres de phase ne sont pas rouges');
+          return document.querySelectorAll('.pr-tete .pr-cmd').length===2?true:_echec('deux commandes attendues dans la bannière');})());
         ok('Les quatre pictogrammes sont des SVG du jeu d\'icones',(()=>{
           const b=document.querySelector('.pr-bloc');
           if(!b) return _echec('le bloc a disparu');
@@ -39020,11 +39016,12 @@ async function testExercices(){
             faImprimer();
             const k1=Number(p[0].style.getPropertyValue('--fa-k-print'));
             const k2=Number(p[1].style.getPropertyValue('--fa-k-print'));
-            if(!(k1>0&&k1<=0.672)) return _echec('facteur hors bornes : '+k1);
+            if(!(k1>0&&k1<=0.731)) return _echec('facteur hors bornes : '+k1);
             // La haute planche est bornée par sa HAUTEUR, la courte par sa
-            // largeur : 1 009 × 0,93 / 1 600 = 0,586 ; 687,9 / 1 024 = 0,671.
-            if(Math.abs(k1-0.586)>0.01) return _echec('facteur de la planche haute : '+k1);
-            if(Math.abs(k2-0.671)>0.01) return _echec('facteur de la planche courte : '+k2);
+            // largeur, sur la page « fa » à marges de 6 mm (198 × 285 mm) :
+            // 1 077,2 × 0,93 / 1 600 = 0,626 ; 748,3 / 1 024 = 0,730.
+            if(Math.abs(k1-0.626)>0.01) return _echec('facteur de la planche haute : '+k1);
+            if(Math.abs(k2-0.730)>0.01) return _echec('facteur de la planche courte : '+k2);
             // DEUX APPELS DE SUITE DONNENT LE MÊME FACTEUR : c'est ce qui
             // prouve que la mesure ne s'empile pas sur elle-même.
             faImprimer();
@@ -41233,6 +41230,11 @@ async function testExercices(){
           if(/Changer l'exercice/.test(c.textContent)) return _echec('le titre « Changer l’exercice » reste dans le corps');
           // La différence entre les deux gestes reste expliquée, et les muscles et la silhouette restent.
           if(c.textContent.indexOf('quelle différence')<0) return _echec('l’explication a disparu');
+          // Elle est SOUS les deux boutons, dans la bannière, et plus au-dessus de « Séries » ; la silhouette n'a pas de fond.
+          const dif=[...c.querySelectorAll('details')].filter(x=>x.textContent.indexOf('quelle différence')>=0);
+          if(dif.length!==1||!dif[0].closest('.px-cmd-bq')||!dif[0].closest('.px-tete')) return _echec('l’explication n’est pas sous les boutons de la bannière');
+          if(dif[0].open) return _echec('l’explication s’impose dépliée');
+          if(getComputedStyle(c.querySelector('.px-ava')).backgroundColor.replace(/\s/g,'')!=='rgba(0,0,0,0)') return _echec('la silhouette a encore un fond');
           return (c.querySelector('.px-mus')&&c.querySelector('.px-ava img')&&l1.querySelector('[onclick^="_dupliquerExUI"]')&&l1.querySelector('[onclick^="_supprimerEx"]'))
             ?true:_echec('muscles, silhouette, copie ou suppression manquent');
         } finally {

@@ -457,7 +457,18 @@ def vif(valeur):
     return False
 
 
+# CE QUI VIT SUR UNE BANNIERE ROUGE NE S'INVERSE PAS (01/10/2026). La regle
+# « du blanc sur un fond vif reste blanc » ne voit que le fond de la MEME
+# regle : le nom d'un exercice, le titre « Protocoles de séance » et leurs
+# boutons blancs sont des ENFANTS de la banniere, et passaient au noir sur
+# rouge en theme clair (bouton « blanc » devenu noir compris). Ces selecteurs
+# ne recoivent aucune copie claire : la regle sombre vaut dans les deux themes.
+SUR_BANNIERE = re.compile(r'\.(px-(tete|num|nom|b-blanc|mus|diff|cmd|ava)|pr-(tete|titre|cmd))(?![\w])')
+
+
 def regle_claire(sel, corps):
+    if SUR_BANNIERE.search(sel):
+        return None
     decl = declarations(corps)
     coul = [(p, v) for p, v in decl if PROPS_COULEUR.match(p) and a_couleur(v)]
     if not coul:
@@ -584,6 +595,9 @@ def lire_jetons(css):
                     JETONS_SOMBRES[p] = v.strip()
 
 
+RE_FICHE = re.compile(r'(^|[\s,>+~(])\.fa-|#s-fiche-alim')
+
+
 def generer_css(css):
     out = []
     for tete, corps in blocs(css):
@@ -598,6 +612,12 @@ def generer_css(css):
                 inner = generer_css(corps)
                 if inner:
                     out.append(tete + '{' + inner + '}')
+            continue
+        # LA FICHE ALIMENTAIRE NE SUIT PAS LE THEME (30/09/2026). C'est un
+        # document a imprimer, blanc avec des en-tetes de marque, et il doit
+        # sortir identique quel que soit le reglage de l'ecran. Inverse, il
+        # redevenait noir en theme clair.
+        if RE_FICHE.search(tete):
             continue
         r = regle_claire(tete, corps)
         if r:
