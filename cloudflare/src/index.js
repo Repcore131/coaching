@@ -139,6 +139,16 @@ async function santePublique(url, env, ctx) {
   return r;
 }
 
+// LE BUDGET D'UNE REQUÊTE (01/10/2026) : 50 sous-requêtes par exécution sur
+// le plan gratuit. Comme la minute (planif.js), /paypal, /fn/* et /prospect
+// comptent les leurs (outils : base, PayPal, push) et s'arrêtent à 44 : les
+// push différables partent à la minute suivante (M.pousser1), et une étape
+// d'écriture qui ne tiendrait plus lève AVANT d'écrire (paypal.js).
+export const BUDGET_REQUETE = 44;
+function budgetRequete(o) {
+  o.M.fixerBudget(() => BUDGET_REQUETE - o.compteur());
+}
+
 // CE QUI EST POSÉ, pour l'administrateur seul (/sante?cles=1).
 // `acces` : « compte_service » est l'état voulu ; « secret_historique » dit
 // que l'ancien code secret sert encore et qu'il reste à le retirer.
@@ -209,6 +219,7 @@ async function servir(req, env, ctx) {
     // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
     if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
       const o = outils(env);
+      budgetRequete(o);
       return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
     }
     // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
@@ -241,7 +252,9 @@ async function servir(req, env, ctx) {
     // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
     if (url.pathname === '/paypal' && req.method === 'POST') {
       const o = outils(env);
-      return await recevoirWebhook(req, { db: o.db, M: o.M, env });
+      budgetRequete(o);
+      // fetchImpl : la signature et les lectures chez PayPal comptent aussi.
+      return await recevoirWebhook(req, { db: o.db, M: o.M, env, fetchImpl: o.fetchCompte });
     }
     // L'app vient de déposer un événement : on le traite tout de suite,
     // sans attendre le réveil de la minute. Aucune donnée n'est lue ici.
@@ -279,6 +292,7 @@ async function servir(req, env, ctx) {
       let corps = null;
       try { corps = await req.json(); } catch (e) { corps = null; }
       if (!corps || typeof corps !== 'object') return reponse(JSON.stringify({ ok: false, raison: 'corps' }), 400);
+      budgetRequete(o);
       const r = await o.M.prospectRecevoir(corps, Date.now());
       return reponse(JSON.stringify(r), r.ok ? 200 : 400);
     }

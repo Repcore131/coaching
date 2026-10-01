@@ -7,6 +7,9 @@ import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL } from '../src/paypal.js';
 import { fausseBase } from './fausse-base.mjs';
+import { BUDGET_REQUETE } from '../src/index.js';
+import { minute, travaux } from '../src/planif.js';
+import { paris } from '../src/metier.js';
 
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
@@ -23,8 +26,10 @@ const iso = (t) => new Date(t).toISOString();
 function monde(initial, o) {
   const F = fausseBase(initial);
   const opt = o || {};
-  const w = { F, verifs: [], oauth: 0, panne: 0, abos: opt.abonnements || {}, commandes: opt.commandes || {}, t: T0 };
+  const w = { F, verifs: [], oauth: 0, panne: 0, abos: opt.abonnements || {}, commandes: opt.commandes || {}, t: T0, req: 0, max: 0 };
+  // CHAQUE sous-requête compte (base, PayPal, push) : c'est ce que Cloudflare plafonne à 50.
   const fetchImpl = async (url, init) => {
+    w.req++;
     const u = String(url);
     if (u.endsWith('/v1/oauth2/token')) { w.oauth++; return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 32400 }) }; }
     if (u.endsWith('/v1/notifications/verify-webhook-signature')) {
@@ -45,10 +50,36 @@ function monde(initial, o) {
   w.M = M;
   w.ctx = { db, M, env, fetchImpl, maintenant: () => w.t };
   w.PP = creerPaypal(w.ctx);
-  w.envoyer = async (e) => { const r = await recevoirWebhook(post(e), w.ctx); return { status: r.status, texte: await r.text() }; };
+  M.paypal = w.PP;
+  // Une minute du Worker (planif.js), avec SON compteur : elle rejoue ce que
+  // les webhooks ont différé. Les travaux du jour sont marqués faits.
+  w.minute = async () => {
+    const p = paris(w.t);
+    F.ecrire('worker/jobs', Object.fromEntries(travaux({ planifies: {}, abonnes: () => [] })
+      .map((x) => [x.nom, { jour: x.heure ? p.jour + 'h' + p.heure : p.jour, fini: true }])));
+    w.req = 0;
+    const b = await minute({ db, M, compteur: () => w.req, maintenant: () => w.t });
+    M.fixerBudget();
+    assert.ok(b.requetes <= 50, 'minute : ' + b.requetes + ' sous-requêtes');
+    return b;
+  };
+  // COMME index.js : un compteur par webhook, et le budget fixé à 44 (BUDGET_REQUETE).
+  // AUCUN appel ne doit dépasser 46 sous-requêtes (plafond Cloudflare : 50).
+  w.envoyer = async (e) => {
+    w.req = 0;
+    M.fixerBudget(() => BUDGET_REQUETE - w.req);
+    try {
+      const r = await recevoirWebhook(post(e), w.ctx);
+      const sortie = { status: r.status, texte: await r.text() };
+      w.max = Math.max(w.max, w.req); MAX_WEBHOOK = Math.max(MAX_WEBHOOK, w.req);
+      assert.ok(w.req <= 46, e.event_type + ' : ' + w.req + ' sous-requêtes dans un seul webhook');
+      return sortie;
+    } finally { M.fixerBudget(); }
+  };
   return w;
 }
 let n = 0;
+let MAX_WEBHOOK = 0;   // le plus gros webhook de tout le fichier
 const evt = (type, ress, id) => ({ id: id || ('WH-' + (++n)), event_type: type, resource: ress, create_time: iso(T0 + n * 1000) });
 const post = (e) => new Request('https://s.t/paypal', { method: 'POST', headers: { 'paypal-transmission-id': 't1' }, body: JSON.stringify(e) });
 const vente = (abo, montant, id) => ({ id: id || 'S' + (++n), billing_agreement_id: abo, amount: { total: montant, currency: 'EUR' } });
@@ -485,4 +516,88 @@ await test('aucune écriture serveur dans users/<clé> sans updatedAt (source)',
   assert.deepEqual(fautes, []);
 });
 
-console.log(ok + ' tests passés');
+await test('trois orphelins puis le lien : le webhook du lien reste sous 46, la suite part en sous-tâches, rejouée dans l’ordre en 2 minutes', async () => {
+  const ABO = 'I-ABC12345678';
+  const lea = LEA({ status: 'FREE', fname: 'Julie', sessions: seancesQualif(T0) })['lea@t,fr'];
+  // Le dossier de Léa n'est pas encore sur le serveur : tout est rangé.
+  const w = monde({ users: { 'kev@t,fr': { role: 'athlete', status: 'FREE' } },
+    parrainage: { verifies: { 'lea@t,fr': 1 }, liens: { 'lea@t,fr': { parrain: 'kev@t,fr', id: 'f1' } },
+      comptes: { 'kev@t,fr': { filleuls: { f1: { statut: 'inscrit', prenom: 'Julie' } } } } } },
+    { abonnements: { [ABO]: abo({ custom_id: 'lea@t,fr' }) } });
+  const e1 = evt('BILLING.SUBSCRIPTION.ACTIVATED', abo({ id: ABO, custom_id: 'lea@t,fr' }));
+  const e2 = evt('PAYMENT.SALE.COMPLETED', vente(ABO, '9.50', 'S-UN'));
+  const e3 = evt('PAYMENT.SALE.COMPLETED', vente(ABO, '9.50', 'S-DEUX'));
+  for (const e of [e1, e2, e3]) assert.equal((await w.envoyer(e)).texte, 'orphelin');
+  assert.equal(Object.keys(w.F.lire('paypal_orphelins/' + ABO)).length, 3);
+  // Le dossier arrive ; le quatrième événement fait le lien par custom_id.
+  w.F.ecrire('users/lea@t,fr', lea);
+  w.max = 0;
+  const r = await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente(ABO, '9.50', 'S-TROIS')));
+  assert.equal(r.status, 200);
+  assert.equal(r.texte, 'apres_orphelins', 'l’événement du lien passe après les orphelins plus anciens');
+  assert.ok(w.max <= 46, w.max + ' sous-requêtes');
+  assert.equal(w.F.lire('paypal_abonnes/' + ABO), 'lea@t,fr');
+  // Le plus ancien (l'activation) est rejoué tout de suite ; les deux autres
+  // orphelins, et l'événement du lien après eux, sont en sous-tâches.
+  const file = Object.values(w.F.lire('evenements') || {});
+  assert.deepEqual(file.map((x) => x.quoi), ['orphelin_paypal', 'orphelin_paypal', 'orphelin_paypal']);
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'ACTIVE', 'l’activation, rejouée dans le webhook');
+  assert.equal(w.F.lire('paypal_premiers/lea@t,fr'), null, 'le premier paiement attend son tour');
+  // Deux minutes : tous les orphelins sont rejoués, DANS L'ORDRE de PayPal.
+  await w.minute();
+  await w.minute();
+  assert.equal(w.F.lire('paypal_orphelins'), null, 'plus aucun orphelin');
+  assert.ok(!Object.values(w.F.lire('evenements') || {}).some((x) => x.quoi === 'orphelin_paypal'), 'plus aucun orphelin en file');
+  assert.equal(w.F.lire('paypal_premiers/lea@t,fr/vente'), 'S-UN', 'le premier paiement est le plus ancien, posé une seule fois');
+  assert.equal(w.F.lire('paypal_transactions/S-UN/premier'), true);
+  assert.equal(w.F.lire('paypal_transactions/S-DEUX/premier'), false);
+  assert.equal(w.F.lire('paypal_transactions/S-TROIS/premier'), false);
+  assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/filleuls/f1/statut'), 'payant');
+  assert.equal(w.F.lire('users/kev@t,fr/accessExpiry'), T0 + MOIS, 'le parrain crédité une seule fois');
+  assert.equal(w.F.lire('droits/kev@t,fr/echeance'), T0 + MOIS);
+  // Ce qui reste en file (ambassadeur, attribution, push différés) part aux
+  // minutes suivantes, et ne recompte rien.
+  for (let i = 0; i < 5 && w.F.lire('evenements'); i++) await w.minute();
+  assert.equal(w.F.lire('evenements'), null, 'la file est vide');
+  assert.equal(w.F.lire('evenements_ko'), null, 'aucun échec');
+  assert.equal(w.F.lire('users/kev@t,fr/accessExpiry'), T0 + MOIS, 'toujours un seul mois');
+  assert.equal(w.F.lire('paypal_premiers/lea@t,fr/vente'), 'S-UN');
+});
+
+await test('à court de budget avant une écriture : 503, rien d’écrit, l’état reste « en_cours » ; le renvoi passe', async () => {
+  const w = monde({ users: LEA(), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } }, { abonnements: { 'I-ABC12345678': abo() } });
+  const e = evt('BILLING.SUBSCRIPTION.CANCELLED', { id: 'I-ABC12345678' }, 'WH-BUDGET');
+  // Un webhook dont il ne reste presque rien (comme après un long chemin).
+  w.req = 0;
+  w.M.fixerBudget(() => 12 - w.req);
+  const r = await recevoirWebhook(post(e), w.ctx);
+  w.M.fixerBudget();
+  assert.equal(r.status, 503);
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/finAccesPaypal'), null, 'rien d’écrit à moitié');
+  assert.equal(w.F.lire('paypal_evenements/WH-BUDGET/etat'), 'en_cours');
+  w.t = T0 + 11 * 60e3;                          // PayPal renvoie plus tard
+  assert.deepEqual(await w.envoyer(e), { status: 200, texte: 'fin_posee' });
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/finAccesPaypal'), T0 + 10 * J);
+});
+
+await test('un orphelin rejoué dans le webhook qui manque de budget en route part en sous-tâche : le lien n’est jamais posé sans ses orphelins', async () => {
+  const ABO = 'I-ABC12345678';
+  const w = monde({ users: LEA({ status: 'FREE' }) }, { abonnements: { [ABO]: abo({ custom_id: 'lea@t,fr' }) } });
+  w.F.ecrire('paypal_orphelins/' + ABO, { 'WH-A': { evt: evt('PAYMENT.SALE.COMPLETED', vente(ABO, '9.50', 'S-A')), at: 1 },
+    'WH-B': { evt: evt('BILLING.SUBSCRIPTION.CANCELLED', { id: ABO }), at: 2 } });
+  // Le lien vient d'être posé (lier l'écrit AVANT de rejouer) ; il reste
+  // assez pour tenter le rejeu (seuil forcé), pas pour le mener au bout.
+  w.F.ecrire('paypal_abonnes/' + ABO, 'lea@t,fr');
+  w.req = 0;
+  w.M.fixerBudget(() => 12 - w.req);
+  assert.equal(await w.PP.rejouerOrphelins(ABO, { enLigne: 1 }), 0, 'aucun rejoué jusqu’au bout');
+  w.M.fixerBudget();
+  assert.deepEqual(Object.values(w.F.lire('evenements')).map((x) => x.k), ['WH-A', 'WH-B'], 'les deux en sous-tâches, dans l’ordre');
+  assert.ok(w.F.lire('paypal_orphelins/' + ABO + '/WH-A'), 'toujours rangé tant qu’il n’est pas rejoué');
+  for (let i = 0; i < 4 && w.F.lire('evenements'); i++) await w.minute();
+  assert.equal(w.F.lire('paypal_orphelins'), null);
+  assert.ok(w.F.lire('paypal_premiers/lea@t,fr'), 'le paiement est passé');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'CANCELLED', 'puis l’annulation, dans l’ordre');
+});
+
+console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');

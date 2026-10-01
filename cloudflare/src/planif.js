@@ -57,6 +57,13 @@ const COUT_RELANCE = 24;
 // La fin de séance recalcule les volts ET rafraîchit le profil de relance
 // (sept champs, une écriture) : elle attend d'avoir de quoi faire les deux.
 const COUT_SEANCE = 22;
+// Un orphelin PayPal rejoué : un paiement peut ouvrir l'accès et créditer un
+// parrain. S'il manque de budget en route, paypal.js lève AVANT d'écrire, et
+// il reste en file (voir la boucle ci-dessous).
+const COUT_ORPHELIN = 16;
+// La reprise d'un premier paiement annulé (mois offert, attribution, accès,
+// journal) : mesurée ~26 requêtes.
+const COUT_REPRISE = 30;
 // L'alerte d'un événement en échec : la garde horaire (transaction : 2) et
 // un push urgent (abonnements, un envoi par appareil).
 const COUT_ALERTE_KO = 8;
@@ -122,6 +129,11 @@ async function traiter(db, M, e) {
   if (!e || typeof e !== 'object') return 'vide';
   if (e.type === 'tache') {
     if (e.quoi === 'fin_paypal') return M.paypal ? M.paypal.finTache(String(e.cle || '')) : 'sans_paypal';
+    // Un événement PayPal arrivé avant le lien de son abonnement, rejoué dans
+    // l'ordre de PayPal (paypal.js, rejouerOrphelins).
+    if (e.quoi === 'orphelin_paypal') return M.paypal ? M.paypal.rejouerUnOrphelin(String(e.abo || ''), String(e.k || '')) : 'sans_paypal';
+    // La reprise d'un premier paiement remboursé ou contesté (paypal.js, annuler).
+    if (e.quoi === 'annulation_suite') return M.paypal && e.suite ? M.paypal.annulationSuite(e.suite) : 'sans_paypal';
     return M.tache(e);
   }
   if (e.type === 'parrainage_demande') {
@@ -278,10 +290,15 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     let fini = true;
     for (const id of ids) {
       const e = lot[id];
-      const cout = (e && e.type === 'tache' && e.quoi === 'relance') ? COUT_RELANCE : (e && e.type === 'seance_fin') ? COUT_SEANCE : 12;
+      const cout = (e && e.type === 'tache' && e.quoi === 'relance') ? COUT_RELANCE : (e && e.type === 'seance_fin') ? COUT_SEANCE
+        : (e && e.type === 'tache' && e.quoi === 'annulation_suite') ? COUT_REPRISE
+        : (e && e.type === 'tache' && (e.quoi === 'orphelin_paypal' || e.quoi === 'paiement_suite')) ? COUT_ORPHELIN : 12;
       if (reste() < cout) { fini = false; break; }
       let ok = true;
       try { await traiter(db, M, e); } catch (err) {
+        // À COURT DE BUDGET (paypal.js lève AVANT d'écrire) : il reste en tête
+        // de file, sans compter un essai, pour la minute suivante.
+        if (err && err.budget) { fini = false; break; }
         ok = false;
         bilan.echecs++;
         bilan.erreur = texteErreur(err);

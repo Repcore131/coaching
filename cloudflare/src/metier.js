@@ -194,8 +194,15 @@ export function creerMetier(deps) {
     if (Object.keys(maj).length) await db.ref().update(maj);
     return taches.length;
   }
-  const tachePush = (uid, message, o) => Object.assign({ quoi: 'push', uid, message }, o && o.attendre === false ? { attendre: false } : {});
+  // `urgent` voyage avec la sous-tâche : un push d'administrateur différé (un
+  // litige PayPal) garde sa priorité à la minute suivante.
+  const tachePush = (uid, message, o) => Object.assign({ quoi: 'push', uid, message }, o && o.attendre === false ? { attendre: false } : {},
+    o && o.urgent ? { urgent: true } : {});
   // [{uid, message}] : envoyés tant que le budget le permet, le reste différé.
+  // UN SEUL DESTINATAIRE : pousser1. C'est ainsi que partent les push du
+  // chemin PayPal (parrain, filleul, plafond, litige) : un webhook à court de
+  // requêtes dépose le push pour la minute suivante au lieu de tomber.
+  const pousser1 = (uid, message, o) => pousserA([{ uid, message }], o);
   async function pousserA(liste, o) {
     let envoyes = 0;
     for (let i = 0; i < liste.length; i++) {
@@ -641,7 +648,7 @@ export function creerMetier(deps) {
       [dem + '/etat']: 'accepte', [dem + '/traiteLe']: t });
     await bonusEssai(uid, droits);
     // Le parrain est prévenu (ex-déclencheur pushFilleulInscrit).
-    await envoyerPush(parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-' + id,
+    await pousser1(parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-' + id,
       title: (nom ? nom + ' vient' : 'Ton filleul vient') + ' de s’inscrire avec ton code',
       body: 'Ses quatre premières séances t’offriront 1 mois de RepCore.' });
     return { ok: true };
@@ -669,7 +676,7 @@ export function creerMetier(deps) {
     await db.ref('parrainage_plafond/' + parrain).push().set({ filleul: idFilleul, le: t, source: String(source || ''),
       max: P.PARRAIN_MOIS_MAX_AN });
     const prenom = String((await _lire(parrain, 'fname')) || 'Un parrain').slice(0, 24);
-    await envoyerPush(CLE_CREATEUR_PUSH, { type: 'admin', url: './?paiements=1', tag: 'parrainage-plafond-' + idFilleul,
+    await pousser1(CLE_CREATEUR_PUSH, { type: 'admin', url: './?paiements=1', tag: 'parrainage-plafond-' + idFilleul,
       title: 'Parrainage : plafond atteint',
       body: prenom + ' a déjà reçu ' + P.PARRAIN_MOIS_MAX_AN + ' mois offerts sur 12 mois. Ce filleul ne lui en donne pas.' },
       { urgent: true }).catch(() => null);
@@ -702,7 +709,7 @@ export function creerMetier(deps) {
     if (!res.credit) {
       await db.ref('parrainage/evenements/' + lien.parrain).push().set({ type: 'abonne', at: t, prenom: res.prenom, mois: 0, source: String(source || '') });
       const txt = P.textePaiement(res);
-      await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
+      await pousser1(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
       return res;
     }
     // LE MOIS OFFERT, CRÉDITÉ DANS LE DOSSIER (jamais dans droits/, voir
@@ -721,7 +728,7 @@ export function creerMetier(deps) {
     await db.ref('parrainage/evenements/' + lien.parrain).push().set({
       type: res.mentor ? 'mentor' : 'paiement', at: t, prenom: res.prenom, mois: 1, source: String(source || '') });
     const txt = P.textePaiement(res);
-    await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
+    await pousser1(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
     return res;
   }
 
@@ -765,7 +772,7 @@ export function creerMetier(deps) {
     await db.ref('parrainage/evenements/' + lien.parrain).push().set({
       type: res.mentor ? 'mentor' : 'seances', at: t, prenom: res.prenom, mois: 1 });
     const txt = P.texteSeuil(res, mode);
-    await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seuil-' + lien.id, title: txt.title, body: txt.body });
+    await pousser1(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seuil-' + lien.id, title: txt.title, body: txt.body });
     return 'credite';
   }
 
@@ -1749,13 +1756,25 @@ export function creerMetier(deps) {
   async function tache(e) {
     const quoi = String((e && e.quoi) || '');
     if (quoi === 'push') {
-      const r = await envoyerPush(String(e.uid || ''), e.message || {}, e.attendre === false ? { attendre: false } : undefined);
+      const o = Object.assign({}, e.attendre === false ? { attendre: false } : {}, e.urgent ? { urgent: true } : {});
+      const r = await envoyerPush(String(e.uid || ''), e.message || {}, Object.keys(o).length ? o : undefined);
       return r.envoye ? 'envoye' : (r.raison || 'rien');
     }
     if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
     if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
     if (quoi === 'xp') return xpRecalculer(String(e.cle || ''), now());
     if (quoi === 'relance') return relanceAthlete(e);
+    // LES SUITES D'UN PREMIER PAIEMENT PayPal, différées par un webhook à court
+    // de budget (paypal.js, premierPaiement). Chacune est gardée par sa
+    // transaction : la rejouer ne compte rien deux fois.
+    if (quoi === 'paiement_suite') {
+      const cle = String(e.cle || '');
+      if (!cle) return 'incomplet';
+      if (e.etape === 'parrainage') return (await parrainagePaiement(cle, 'paypal')) ? 'parrainage' : 'rien';
+      if (e.etape === 'ambassadeur') return (await ambassadeurPaiement(cle, e.p || {})) ? 'ambassadeur' : 'rien';
+      if (e.etape === 'attribution') return (await attributionPaiement(cle)) ? 'attribution' : 'rien';
+      return 'etape_inconnue';
+    }
     return 'tache_inconnue';
   }
 
@@ -1764,6 +1783,6 @@ export function creerMetier(deps) {
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
-    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache,
     duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

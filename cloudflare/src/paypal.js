@@ -72,6 +72,42 @@ function montantValide(plan, montant, devise, role) {
 export const GARDE_EVENEMENTS_MS = 90 * 864e5;
 const LOT_PURGE = 200;
 
+// ══ LE BUDGET D'UN WEBHOOK (01/10/2026) ═══════════════════════════════════
+// Une exécution de Worker n'a droit qu'à 50 sous-requêtes ; index.js fixe le
+// budget du webhook à 44 (M.fixerBudget). Mesuré : jusqu'à 45 dans un seul
+// webhook de test, donc au bord. Trois règles :
+//   · AVANT UNE ÉCRITURE, il reste au moins BUDGET_ETAPE requêtes, sinon on
+//     lève ErreurBudget AVANT d'écrire : l'événement reste « en_cours », la
+//     réponse est 503, et PayPal le renverra ;
+//   · une étape qui pose d'abord une GARDE (annuler : annuleLe ; premier
+//     paiement : paypal_premiers) exige le budget de l'étape ENTIÈRE avant
+//     la garde — sinon le renvoi trouverait la garde posée et ne referait
+//     jamais le reste (commission, mois offert, accès) ;
+//   · un seul orphelin rejoué par webhook ; les suivants, et l'événement
+//     courant après eux, partent en sous-tâches (planif.js), dans l'ordre.
+// Les push du chemin PayPal passent par M.pousser1 : à court de budget, ils
+// partent à la minute suivante au lieu de faire tomber le webhook.
+export const BUDGET_ETAPE = 8;
+// Le premier paiement : sa garde (transaction : 2) et, au pire, l'écriture qui
+// diffère ses suites (1). Les suites (parrain, ambassadeur, attribution) ne
+// partent dans le webhook que si leur coût y tient (COUT_SUITE), sinon en
+// sous-tâches `paiement_suite` : mesuré le 01/10/2026, un premier paiement
+// complet coûtait 72 sous-requêtes d'un bloc.
+export const BUDGET_PREMIER = 6;
+// Mesurés le 01/10/2026, une marge par-dessus. Le push du parrain n'est pas
+// compté : à court de budget, M.pousser1 le diffère à son tour.
+export const COUT_SUITE = Object.freeze({ parrainage: 12, ambassadeur: 14, attribution: 10 });
+// L'annulation : sa garde (2), la commission (~12) et, au pire, l'écriture qui
+// diffère la reprise du premier paiement (1), plus la marge. La reprise du
+// premier paiement (mois offert ~8, attribution ~8, accès ~8, journal) en
+// coûte COUT_REPRISE_PREMIER : mesuré le 01/10/2026, l'annulation entière
+// en demandait ~40 d'un bloc.
+export const BUDGET_ANNULER = 16;
+export const COUT_REPRISE_PREMIER = 28;
+export class ErreurBudget extends Error {
+  constructor(etape, reste) { super('budget : ' + etape + ' (reste ' + reste + ')'); this.budget = true; }
+}
+
 let _jeton = null;          // { cle, valeur, expire }
 let _jetonEnVol = null;     // { cle, promesse } : deux appels simultanés, une requête
 export function oublierJetonPaypal() { _jeton = null; _jetonEnVol = null; }
@@ -144,6 +180,15 @@ export function creerPaypal(ctx) {
   // LE PAIEMENT DIRECT AU COACH : ses commandes portent un custom_id à TROIS
   // segments (« <coach>|<athlète>|<formule> ») et suivent leur propre chemin.
   const PC = creerPaiementsCoach(ctx);
+  // LE BUDGET (voir l'en-tête de ErreurBudget). Hors d'un réveil ou d'un
+  // webhook (tests, outils), M.reste n'est pas borné : rien ne lève.
+  const resteB = () => (M && typeof M.reste === 'function' ? M.reste() : Infinity);
+  const exigerBudget = (etape, n) => { const r = resteB(); if (r < (n || BUDGET_ETAPE)) throw new ErreurBudget(etape, r); };
+  // Les push du chemin PayPal : envoyés si le budget le permet, sinon différés.
+  const pousser = (uid, message, o) => (M.pousser1 ? M.pousser1(uid, message, o) : M.envoyerPush(uid, message, o));
+  // Les abonnements dont des orphelins attendent en sous-tâches, dans CETTE
+  // exécution : l'événement courant passe après eux (voir traiter).
+  const differesPour = new Set();
 
   // ── À QUI EST CET ABONNEMENT ? ─────────────────────────────────────────
   // L'index paypal_abonnes d'abord. Sinon, l'abonnement lui-même, lu chez
@@ -165,6 +210,9 @@ export function creerPaypal(ctx) {
   // RELIER, UNE SEULE FOIS, PUIS REJOUER CE QUI ATTENDAIT. Rendu faux si
   // l'abonnement appartient déjà à un autre compte.
   async function lier(abo, cle) {
+    // Le lien posé, ses orphelins DOIVENT pouvoir être relus et différés
+    // (transaction 2, lecture 1, sous-tâches 1) : sinon on ne le pose pas.
+    exigerBudget('lier', 4);
     let autre = null;
     const tx = await db.ref('paypal_abonnes/' + abo).transaction((v) => { if (v) { autre = v; return undefined; } return cle; });
     if (!tx.committed && autre !== cle) return false;
@@ -180,19 +228,56 @@ export function creerPaypal(ctx) {
   async function ranger(abo, evt) {
     const lot = abo || 'sans_abonnement';
     const id = net(evt.id) || ('x' + now());
+    exigerBudget('ranger');
     await db.ref('paypal_orphelins/' + lot + '/' + id).set({ evt, at: now() });
+    return id;
   }
-  async function rejouerOrphelins(abo) {
-    const tout = (await lire('paypal_orphelins/' + abo)) || {};
-    const liste = Object.keys(tout).map((k) => ({ k, o: tout[k] })).filter((x) => x.o && x.o.evt)
-      .sort((a, b) => (Date.parse(a.o.evt.create_time || '') || a.o.at || 0) - (Date.parse(b.o.evt.create_time || '') || b.o.at || 0));
+  // UN SEUL REJOUÉ ICI (opts.enLigne, 1 par défaut) : chaque orphelin peut
+  // coûter un premier paiement entier. Les suivants partent en sous-tâches
+  // `orphelin_paypal`, en UNE écriture, dans l'ordre de PayPal (create_time) ;
+  // planif.js les rejoue un par un (rejouerUnOrphelin).
+  const triOrphelins = (tout) => Object.keys(tout || {}).map((k) => ({ k, o: tout[k] })).filter((x) => x.o && x.o.evt)
+    .sort((a, b) => (Date.parse(a.o.evt.create_time || '') || a.o.at || 0) - (Date.parse(b.o.evt.create_time || '') || b.o.at || 0));
+  async function rejouerOrphelins(abo, opts) {
+    // Rejouer ici, seulement si le budget couvre un rejeu ENTIER : le lien est
+    // déjà posé, et un orphelin coupé en route ne serait plus jamais repris.
+    const enLigne = opts && opts.enLigne != null ? opts.enLigne : (resteB() >= BUDGET_PREMIER + BUDGET_ETAPE ? 1 : 0);
+    const liste = triOrphelins(await lire('paypal_orphelins/' + abo));
     let n = 0;
-    for (const { k, o } of liste) {
-      await traiter(o.evt);               // une erreur remonte : le reste attend le prochain passage
-      await db.ref('paypal_orphelins/' + abo + '/' + k).remove();
+    for (const { k, o } of liste.slice(0, enLigne)) {
+      let r;
+      try {
+        r = await traiter(o.evt, { rejeu: true });   // une autre erreur remonte : le reste attend le prochain passage
+      } catch (e) {
+        // À COURT DE BUDGET EN ROUTE : il part en sous-tâche avec les suivants.
+        // Le lien est déjà posé : remonter l'erreur le laisserait orphelin pour
+        // toujours (le renvoi trouverait l'index, et ne rejouerait plus rien).
+        if (!(e && e.budget)) throw e;
+        break;
+      }
+      // Encore sans compte : traiter l'a rangé à la même place ; on le garde.
+      if (r !== 'orphelin') await db.ref('paypal_orphelins/' + abo + '/' + k).remove();
       n++;
     }
+    const reste = liste.slice(n);
+    if (reste.length) {
+      exigerBudget('differer_orphelins', 1);
+      await M.differer(reste.map(({ k }) => ({ quoi: 'orphelin_paypal', abo, k })));
+      differesPour.add(abo);
+    }
     return n;
+  }
+  // UNE SOUS-TÂCHE : l'orphelin <k> de l'abonnement <abo>. Déjà rejoué (ou
+  // retiré) : rien. Rejoué, il quitte paypal_orphelins.
+  async function rejouerUnOrphelin(abo, k) {
+    const a = net(abo), id = net(k);
+    if (!a || !id) return 'incomplet';
+    const o = await lire('paypal_orphelins/' + a + '/' + id);
+    if (!o || !o.evt) return 'deja_rejoue';
+    const r = await traiter(o.evt, { rejeu: true });
+    // Encore sans compte : traiter l'a rangé à la même place ; on le garde.
+    if (r !== 'orphelin') await db.ref('paypal_orphelins/' + a + '/' + id).remove();
+    return r;
   }
 
   // ── droits/<compte>, CE QUE L'APP LIT D'ABORD (27/09/2026) ──────────────
@@ -246,6 +331,7 @@ export function creerPaypal(ctx) {
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
     // Le coach garde son plan jusqu'à la fin payée : le registre le dit.
     if (role === 'coach') { maj['coachs_registre/' + cle + '/actifJusqu'] = fin; maj['coachs_registre/' + cle + '/maj'] = t; }
+    exigerBudget('fin');
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
     return { fin, reserve: reserveComptee };
@@ -286,6 +372,7 @@ export function creerPaypal(ctx) {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
         maj[b + 'abonnement/formule'] = plan.formule;
       }
+      exigerBudget('paiement');
       await db.ref().update(maj);
       if (role !== 'coach') await droitsOuverts(cle, abo, plan);
       // Les mois offerts ajoutés à une fin qui disparaît retournent en réserve.
@@ -297,6 +384,7 @@ export function creerPaypal(ctx) {
     const premier = valide ? await premierPaiement(cle, abo, ress) : false;
     await noterTransaction(ress.id, { cle, abo, type: 'abonnement', premier,
       montant: centimes(ress.amount && (ress.amount.total || ress.amount.value)), devise: String((ress.amount && ress.amount.currency) || '') });
+    await lancerSuites();
     return premier ? 'premier_paiement' : (ouvrir ? 'paiement' : 'paiement_sans_ouverture');
   }
 
@@ -327,6 +415,7 @@ export function creerPaypal(ctx) {
     // l'abonnement (ultimeJusqu), sans le remplacer.
     if (valide) {
       const t = now();
+      exigerBudget('achat');
       await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
         ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
       // LA TRACE DE L'ACHAT DANS LE DOSSIER, écrite ICI depuis le 30/09/2026 :
@@ -339,6 +428,7 @@ export function creerPaypal(ctx) {
     }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
+    await lancerSuites();
     if (!valide) return 'achat_non_compte';
     return premier ? 'premier_paiement' : 'paiement';
   }
@@ -350,23 +440,48 @@ export function creerPaypal(ctx) {
   async function noterTransaction(id, rec) {
     const k = net(id);
     if (!k) return;
+    exigerBudget('transaction');
     await db.ref('paypal_transactions/' + k).update(Object.assign({ le: now() }, rec));
   }
 
   // LE PREMIER PAIEMENT, TOUS ACHATS CONFONDUS : un nœud du serveur seul,
   // pris en transaction — deux événements simultanés ne récompensent pas deux fois.
+  const suitesEnAttente = [];
+  async function lancerSuites() {
+    const differes = [];
+    for (const lot of suitesEnAttente.splice(0)) {
+      for (const { etape, fn, extra, cle } of lot) {
+        if (M.differer && resteB() < COUT_SUITE[etape] + BUDGET_ETAPE) { differes.push(Object.assign({ quoi: 'paiement_suite', etape, cle }, extra)); continue; }
+        await fn().catch(() => null);
+      }
+    }
+    if (differes.length) await M.differer(differes);
+  }
   async function premierPaiement(cle, abo, ress) {
     const t = now();
+    // La garde (paypal_premiers) puis parrain, ambassadeur, attribution : le
+    // budget de TOUTE l'étape, avant la garde.
+    exigerBudget('premier_paiement', BUDGET_PREMIER);
     const tx = await db.ref('paypal_premiers/' + cle).transaction((v) => (v ? undefined : { le: t, abo: abo || null, vente: net(ress.id) || null }));
     if (!tx.committed) return false;
     const montant = ress.amount && (ress.amount.total || ress.amount.value);
-    await M.parrainagePaiement(cle, 'paypal').catch(() => null);
-    await M.ambassadeurPaiement(cle, { montant, le: Date.parse(ress.create_time || '') || t, abonnement: abo, venteId: ress.id }).catch(() => null);
-    await M.attributionPaiement(cle).catch(() => null);
+    const ap = { montant, le: Date.parse(ress.create_time || '') || t, abonnement: abo || null, venteId: ress.id || null };
+    // LES SUITES : chacune est gardée par sa propre transaction (rejouable sans
+    // double compte). Ici si le budget du webhook le permet, sinon à la minute
+    // suivante — et là, une erreur est réessayée au lieu d'être perdue.
+    // Elles partent APRÈS le registre de la transaction (lancerSuites, appelé
+    // par paiementAbonnement et achat) : c'est lui que relit un remboursement.
+    suitesEnAttente.push([['parrainage', () => M.parrainagePaiement(cle, 'paypal'), {}],
+      ['ambassadeur', () => M.ambassadeurPaiement(cle, ap), { p: ap }],
+      ['attribution', () => M.attributionPaiement(cle), {}]].map(([etape, fn, extra]) => ({ etape, fn, extra, cle })));
     return true;
   }
 
-  async function traiter(evt) {
+  // `o.rejeu` : un orphelin qu'on rejoue (dans le webhook du lien, ou en
+  // sous-tâche) ; il est lui-même dans l'ordre, et ne se re-diffère jamais.
+  async function traiter(evt, o) {
+    exigerBudget('debut');
+    const rejeu = !!(o && o.rejeu);
     const type = String(evt.event_type || '');
     const ress = evt.resource || {};
     if (type === 'PAYMENT.SALE.REFUNDED' || type === 'PAYMENT.CAPTURE.REFUNDED') return rembourse(evt);
@@ -380,9 +495,18 @@ export function creerPaypal(ctx) {
     if (connus.indexOf(type) < 0) return 'ignore';
     const { cle, sub } = await compteDe(abo);
     if (!cle) { await ranger(abo, evt); return 'orphelin'; }
+    // DES ORPHELINS PLUS ANCIENS ATTENDENT EN SOUS-TÂCHES (le lien vient
+    // d'être fait) : celui-ci passe APRÈS eux, comme PayPal les a envoyés.
+    // Une résiliation ne doit pas être appliquée avant le paiement qui la précède.
+    if (!rejeu && differesPour.has(abo)) {
+      const k = await ranger(abo, evt);
+      await M.differer([{ quoi: 'orphelin_paypal', abo, k }]);
+      return 'apres_orphelins';
+    }
     if (type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
       const courant = await lire('users/' + cle + '/paypalSubscriptionId');
       if (!estCourant(courant, abo, sub || ress, cle)) return 'ancien_abonnement';
+      exigerBudget('activation');
       await db.ref().update({ ['users/' + cle + '/abonnement/statutPaypal']: 'ACTIVE', ['users/' + cle + '/updatedAt']: now() });
       // L'ACCÈS S'OUVRE DÈS L'ACTIVATION, sans attendre le paiement qui suit :
       // l'app ne donne plus l'abonnement sur la foi du dossier.
@@ -480,11 +604,30 @@ export function creerPaypal(ctx) {
   // L'ANNULATION D'UNE TRANSACTION (total, rétrofacturation, litige perdu).
   async function annuler(rec, quoi, pourquoi, extra) {
     const t = now();
+    // La garde (annuleLe) PUIS la commission, ici. Le budget est vérifié pour
+    // les deux AVANT la garde : posée, elle répond « deja_annule » au renvoi.
+    // La reprise du premier paiement suit : ici si elle tient dans le budget,
+    // sinon en UNE sous-tâche `annulation_suite` (rejouable : le mois offert
+    // est gardé par retireLe), qui écrit aussi le journal.
+    exigerBudget('annuler', BUDGET_ANNULER);
     const garde = await db.ref('paypal_transactions/' + rec.id + '/annuleLe').transaction((v) => (v ? undefined : t));
     if (!garde.committed) return 'deja_annule';
     const actions = [];
     const c = await M.commissionVente(rec.id, 'annuler');
     if (c) actions.push('commission ' + c.code + ' annulée (' + euros(Math.round(c.avant * 100)) + ')' + (c.dejaPayee ? ' — déjà versée, à reprendre' : ''));
+    const suite = { rec: { id: rec.id, cle: rec.cle, premier: !!rec.premier, montant: rec.montant, type: rec.type || null, prog: rec.prog || null, abo: rec.abo || null },
+      quoi, pourquoi: String(pourquoi || '').slice(0, 300), extra: extra || {}, actions, t };
+    if (rec.premier && M.differer && resteB() < COUT_REPRISE_PREMIER + BUDGET_ETAPE) {
+      await M.differer([Object.assign({ quoi: 'annulation_suite' }, { suite })]);
+      return quoi;
+    }
+    return annulationSuite(suite);
+  }
+  // LA REPRISE DU PREMIER PAIEMENT, et le journal de l'annulation. Appelée
+  // par annuler, ou par planif.js (sous-tâche `annulation_suite`).
+  async function annulationSuite(s) {
+    const { rec, quoi, pourquoi, extra, t } = s;
+    const actions = Array.isArray(s.actions) ? s.actions.slice() : [];
     if (rec.premier) {
       const m = await M.retirerMoisOffert(rec.cle, t);
       if (m) actions.push({ reserve_retiree: 'mois offert retiré de la réserve de ', mois_retire: 'mois offert retiré de l’accès de ',
@@ -516,6 +659,7 @@ export function creerPaypal(ctx) {
     if (!rec) { await journal({ quoi: 'remboursement_inconnu', transaction: net(id), montant: euros(montant), pourquoi, actions: ['transaction introuvable : rien de repris'] }); return 'remboursement_inconnu'; }
     // Le cumul des remboursements de cette transaction décide total ou partiel.
     const ref = net(ress.id) || ('r' + now());
+    exigerBudget('remboursement');
     await db.ref('paypal_transactions/' + rec.id + '/rembourses/' + ref).set(montant);
     const deja = (await lire('paypal_transactions/' + rec.id + '/rembourses')) || {};
     const cumul = Object.values(deja).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -550,8 +694,8 @@ export function creerPaypal(ctx) {
 
   const transactionsDuLitige = (ress) => (Array.isArray(ress.disputed_transactions) ? ress.disputed_transactions : [])
     .map((x) => net(x && (x.seller_transaction_id || x.transaction_id))).filter(Boolean);
-  const pousserAdmin = (titre, corps, id) => M.envoyerPush(CREATEUR, { type: 'admin', url: './?paiements=1', tag: 'litige-' + id,
-    title: titre, body: corps }, { urgent: true }).catch(() => null);
+  const pousserAdmin = (titre, corps, id) => Promise.resolve(pousser(CREATEUR, { type: 'admin', url: './?paiements=1', tag: 'litige-' + id,
+    title: titre, body: corps }, { urgent: true })).catch(() => null);
 
   async function litigeOuvert(evt) {
     const ress = evt.resource || {};
@@ -560,6 +704,7 @@ export function creerPaypal(ctx) {
     const pourquoi = String(ress.reason || '').replace(/_/g, ' ').toLowerCase();
     const actions = [], gens = [];
     for (const id of transactionsDuLitige(ress)) {
+      exigerBudget('litige');
       const rec = await origine(id);
       if (rec) gens.push(qui(rec.cle));
       const c = await M.commissionVente(id, 'suspendre');
@@ -579,6 +724,7 @@ export function creerPaypal(ctx) {
     const pourquoi = issue.replace(/_/g, ' ').toLowerCase() || 'clos';
     const gens = [], resultats = [];
     for (const id of transactionsDuLitige(ress)) {
+      exigerBudget('litige');
       const rec = await origine(id);
       if (rec) gens.push(qui(rec.cle));
       if (!perdu) {
@@ -679,7 +825,7 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements };
+  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════
@@ -718,6 +864,10 @@ export async function recevoirWebhook(req, ctx) {
   try {
     res = await creerPaypal(ctx).traiter(evt);
   } catch (e) {
+    // À COURT DE BUDGET, avant toute écriture de l'étape : RIEN n'est écrit
+    // (plus une requête de trop), l'état reste « en_cours », et PayPal
+    // renverra — repris après EN_COURS_MAX_MS au plus tard.
+    if (e && e.budget) return new Response('budget', { status: 503 });
     if (ref) await ref.set({ etat: 'erreur', at: now(), type, erreur: String((e && e.message) || e).slice(0, 200) }).catch(() => {});
     return new Response('erreur', { status: 500 });
   }

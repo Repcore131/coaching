@@ -283,6 +283,17 @@ Ce qu'il faut en retenir :
   sous-requêtes par exécution), ou étaler la série sur le mercredi soir.
 
 - **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
+  - **Dans le plafond des 50 sous-requêtes** (01/10/2026). Un webhook a un budget de 44 (`BUDGET_REQUETE`,
+    `index.js`) ; mesuré avant ce lot, un premier paiement complet en coûtait 72 d'un bloc.
+    - Ce qui peut attendre la minute suivante part en sous-tâches : les suites d'un premier paiement
+      (parrain, ambassadeur, attribution) ; la reprise d'un premier paiement remboursé ou contesté ;
+      les push (parrain, filleul, litige) ; les orphelins au-delà du premier, et l'événement du lien
+      après eux, dans l'ordre de PayPal. Chaque sous-tâche est gardée par sa transaction : la rejouer
+      ne compte rien deux fois.
+    - Avant chaque écriture, il reste au moins 8 requêtes, sinon `ErreurBudget` est levée **avant
+      d'écrire** : réponse 503, l'événement reste `en_cours`, et PayPal le renvoie.
+    - Les tests (`paypal.test.mjs`, `remboursements.test.mjs`) comptent chaque sous-requête de chaque
+      webhook : au plus 40 aujourd'hui, 46 exigés.
   - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
     après son succès seulement. Un renvoi d'un événement `fait` : 200. Pendant un `en_cours` de moins
     de 10 min : 503 (PayPal renverra). Plus vieux : repris. Une erreur : état `erreur`, réponse 500.

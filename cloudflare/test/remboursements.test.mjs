@@ -4,8 +4,11 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { recevoirWebhook } from '../src/paypal.js';
+import { recevoirWebhook, creerPaypal } from '../src/paypal.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
+import { BUDGET_REQUETE } from '../src/index.js';
+import { minute, travaux } from '../src/planif.js';
+import { paris } from '../src/metier.js';
 import ATT from '../../functions/attribution-calcul.js';
 
 let ok = 0;
@@ -25,7 +28,10 @@ function monde(initial, o) {
   const F = fausseBase(initial);
   const w = { F, t: T0, abos: opt.abonnements || { [ABO]: { status: 'ACTIVE', plan_id: ESS, billing_info: { next_billing_time: iso(T0 + 20 * J) } } },
     ventes: opt.ventes || {}, captures: opt.captures || {}, commandes: opt.commandes || {} };
+  w.req = 0; w.max = 0;
+  // CHAQUE sous-requête compte (base, PayPal, push) : c'est ce que Cloudflare plafonne à 50.
   const fetchImpl = async (url, init) => {
+    w.req++;
     const u = String(url);
     if (u.endsWith('/v1/oauth2/token')) return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 32400 }) };
     if (u.endsWith('/v1/notifications/verify-webhook-signature')) return { ok: true, status: 200, json: async () => ({ verification_status: 'SUCCESS' }) };
@@ -39,16 +45,41 @@ function monde(initial, o) {
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl });
   w.M = creerMetier({ db, vapid: VAPID, fetchImpl, maintenant: () => w.t });
   w.ctx = { db, M: w.M, env: { PAYPAL_CLIENT_ID: 'id', PAYPAL_CLIENT_SECRET: 'sec', PAYPAL_WEBHOOK_ID: 'wh' }, fetchImpl, maintenant: () => w.t };
+  // COMME index.js : un compteur par webhook, le budget fixé à 44 ; jamais plus de 46.
   w.envoyer = async (type, ress) => {
     const e = { id: 'WH-' + (++n), event_type: type, resource: ress, create_time: iso(w.t) };
-    const r = await recevoirWebhook(new Request('https://s.t/paypal', { method: 'POST', body: JSON.stringify(e) }), w.ctx);
-    return { status: r.status, texte: await r.text() };
+    w.req = 0;
+    w.M.fixerBudget(() => BUDGET_REQUETE - w.req);
+    try {
+      const r = await recevoirWebhook(new Request('https://s.t/paypal', { method: 'POST', body: JSON.stringify(e) }), w.ctx);
+      const sortie = { status: r.status, texte: await r.text() };
+      w.max = Math.max(w.max, w.req); MAX_WEBHOOK = Math.max(MAX_WEBHOOK, w.req);
+      assert.ok(w.req <= 46, type + ' : ' + w.req + ' sous-requêtes dans un seul webhook');
+      // PUIS les minutes qui rejouent ce que le webhook a différé (à la même
+      // heure : les dates attendues ne bougent pas). Chacune a son propre plafond.
+      w.M.fixerBudget();
+      await w.vider();
+      return sortie;
+    } finally { w.M.fixerBudget(); }
   };
+  w.M.paypal = creerPaypal(w.ctx);
+  // Une minute du Worker, avec SON compteur (plafond Cloudflare : 50).
+  w.minute = async () => {
+    w.F.ecrire('worker/jobs', jobsFaits(w.t));
+    w.req = 0;
+    const b = await minute({ db, M: w.M, compteur: () => w.req, maintenant: () => w.t });
+    assert.ok(b.requetes <= 50, 'minute : ' + b.requetes + ' sous-requêtes');
+    w.M.fixerBudget();
+    return b;
+  };
+  // Vider la file : ce que les minutes suivantes rejoueraient.
+  w.vider = async () => { for (let i = 0; i < 10 && w.F.lire('evenements'); i++) await w.minute(); };
   w.journal = () => Object.values(w.F.lire('paypal_journal') || {});
   w.com = () => Object.values((w.F.lire('ambassadeurs/LEAFIT/commissions') || {})[Object.keys(w.F.lire('ambassadeurs/LEAFIT/commissions') || {})[0]] || {})[0];
   return w;
 }
 let n = 0;
+let MAX_WEBHOOK = 0;   // le plus gros webhook de tout le fichier
 const vente = (id, montant) => ({ id, billing_agreement_id: ABO, amount: { total: montant || '9.50', currency: 'EUR' }, create_time: iso(T0) });
 const rembourse = (id, montant, rid) => ({ id: rid || ('R' + (++n) + 'XXXXXXX'), sale_id: id, amount: { total: montant || '9.50', currency: 'EUR' }, reason: 'geste commercial' });
 const litige = (id, o) => Object.assign({ dispute_id: 'PP-D-1', reason: 'MERCHANDISE_OR_SERVICE_NOT_RECEIVED',
@@ -73,6 +104,14 @@ async function premierPaiement(w, id) {
   const r = await w.envoyer('PAYMENT.SALE.COMPLETED', vente(id || 'SALE0000001'));
   assert.equal(r.texte, 'premier_paiement');
 }
+// LA MINUTE SUIVANTE (planif.js) : elle rejoue ce qu'un webhook à court de
+// budget a différé (suites d'un premier paiement, orphelins, push). Les
+// travaux du jour sont marqués faits : seule la file compte ici.
+function jobsFaits(t) {
+  const p = paris(t);
+  return Object.fromEntries(travaux({ planifies: {}, abonnes: () => [] }).map((x) => [x.nom, { jour: x.heure ? p.jour + 'h' + p.heure : p.jour, fini: true }]));
+}
+
 
 await test('remboursement total d’un premier paiement : tout est repris, et le journal le dit', async () => {
   const w = monde(base());
@@ -280,4 +319,4 @@ await test('achat d’un programme remboursé : le programme se ferme à la date
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 0);
 });
 
-console.log(ok + ' tests passés');
+console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');
