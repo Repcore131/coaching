@@ -5615,6 +5615,28 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
   .px-l3 .px-duo>.px-tempo{flex-basis:150px}
   .px-l3 .px-duo>div{flex-basis:120px}
 }
+/* ══ MÉDIA DE LA CARTE : L'IMAGE, PUIS LES DEUX LIENS CÔTE À CÔTE (01/10/2026) ══ */
+.px-media{display:flex;align-items:flex-start;gap:12px;margin-top:4px}
+.px-media-img{flex:0 0 auto;display:block;margin:0;cursor:pointer}
+.px-media-img img,.px-media-vide{display:block;width:74px;height:74px;border-radius:var(--r-2);box-sizing:border-box}
+.px-media-img img{object-fit:cover;background:#fff;border:1px solid var(--border)}
+.px-media-vide{background:var(--surface-2);border:2px dashed var(--border)}
+.px-media-liens{flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;align-items:start}
+.px-media-lien{min-width:0}
+.px-media-champ{display:flex;gap:6px}
+.px-media-champ input{flex:1;min-width:0;height:48px;box-sizing:border-box}
+.px-media-lire{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:44px;border-radius:var(--r-1);
+  background:var(--surface-2);border:1px solid var(--border);color:var(--red-text);font-size:var(--fs-sm);text-decoration:none}
+/* Carte étroite (téléphone, tablette) : deux liens côte à côte ne se liraient
+   plus, ils s'empilent. C'est la largeur de la CARTE qui décide, pas celle de
+   l'écran : le menu de gauche en prend une part. */
+.px-media{container-type:inline-size}
+@container (max-width:600px){
+  .px-media-liens{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  .px-media-img img,.px-media-vide{width:60px;height:60px}
+}
 /* ══ LA GRILLE DES MUSCLES DE LA BANQUE D'EXERCICES (01/10/2026) ═══════════
    Un carré par muscle : l'illustration du volume, le nom dessous. Cinq par
    ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,
@@ -13483,6 +13505,9 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .px-sous{color:var(--text-faint)}
 :root[data-theme="clair"] .px-musc-c{background:#f0f0f0;border:1px solid var(--border)}
 :root[data-theme="clair"] .px-musc:focus-visible .px-musc-c{border-color:var(--red-text)}
+:root[data-theme="clair"] .px-media-img img{background:#090909;border:1px solid var(--border)}
+:root[data-theme="clair"] .px-media-vide{background:var(--surface-2);border:2px dashed var(--border)}
+:root[data-theme="clair"] .px-media-lire{background:var(--surface-2);border:1px solid var(--border);color:var(--red-text)}
 :root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:#f0f0f0}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}

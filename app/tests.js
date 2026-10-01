@@ -40789,6 +40789,17 @@ async function testExercices(){
           if(!mq||mq.parentElement!==l3) return _echec('les muscles ne sont pas dans la ligne');
           if(Math.abs(mq.getBoundingClientRect().right-l3.getBoundingClientRect().right)>2) return _echec('les muscles ne vont pas au bord de la ligne');
           if(_materielMajuscule('barre')!=='Barre'||_materielMajuscule(' haltères, banc ')!=='Haltères, banc'||_materielMajuscule('')!==''||_materielMajuscule(null)!=='') return _echec('majuscule du matériel');
+          // 01/10/2026 (Kevin) : MÉDIA. Deux liens côte à côte, nommés par leur rôle ; l'image de
+          // la carte est celle de l'exercice (photo du coach, sinon illustration du guide).
+          const lv=[...carte.querySelectorAll('.px-media-lien label')].map(l=>l.textContent.trim());
+          if(lv.length!==2||lv[0]!=='Vidéo d’exécution du mouvement'||lv[1]!=='Vidéo de la technique d’intensification') return _echec('libellés des vidéos : '+lv.join(' | '));
+          if(/facultatif/i.test(carte.querySelector('.px-media').textContent)) return _echec('« facultatif » est encore écrit');
+          const chv=[...carte.querySelectorAll('.px-media-lien input')];
+          if(!/progEx\[0\]\.videoUrl=/.test(chv[0].getAttribute('onchange'))||!/progEx\[0\]\.videoUrl2=/.test(chv[1].getAttribute('onchange'))) return _echec('un champ vidéo n’écrit plus sa clef');
+          if(_imgCarte({image:'data:x',name:'Z'})!=='data:x') return _echec('la photo du coach ne passe plus devant');
+          if(_imgCarte({name:'BENCH COMP'})!==(illustrationExo({name:'BENCH COMP'})||'')) return _echec('l’image de la carte n’est pas l’illustration du guide');
+          if(_aideVideoMethode({videoUrl2:'https://youtu.be/abcdefghijk'})!=='') return _echec('aide affichée alors que le lien est posé');
+          if(!/technique est posée/.test(_aideVideoMethode({}))) return _echec('aide sans technique');
           const grp=[...carte.querySelectorAll('.px-grp')];
           // 01/10/2026 (Kevin) : les titres de groupe et leur trait sont rouges, et le bouton de la programmation aussi.
           const _rg=(()=>{ const d=document.createElement('div'); d.style.color=getComputedStyle(document.documentElement).getPropertyValue('--red-text').trim();
