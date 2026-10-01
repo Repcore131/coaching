@@ -264,15 +264,16 @@ function finishWorkout(incomplete=false){
   // Le rappel de séance du service worker relit ses « records à portée ».
   try{ if(currentUser._woReminderEnabled) scheduleWoNotif(); }catch(e){}
   saveUser();
-  // Les défis du Canal : ma progression, écrite par moi (serveur léger).
-  try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
-  // Les duels : chacun écrit sa valeur, ou démarre le duel (1re séance de l'invité).
+  // Les défis du Canal : plus rien à écrire (01/10/2026) — le Worker tire la
+  // progression de la séance (« seance_fin », ci-dessous) et recalcule le
+  // classement. Les duels : l'événement de chacun (démarrage, index du joueur).
   try{ setTimeout(()=>{ duelsApresSeance().catch(()=>{}); },3500); }catch(e){}
   // LES VOLTS DU SERVEUR : l'événement « seance_fin », après l'envoi du dossier
   // (le serveur relève et réessaie s'il arrive avant).
   try{ setTimeout(()=>{ deposerEvenement({type:'seance_fin'}).catch(()=>{}); },4500); }catch(e){}
-  // L'événement saisonnier : la valeur de l'athlète, pour le compteur collectif.
-  try{ setTimeout(()=>{ saisonsPublierProgression().catch(()=>{}); },4000); }catch(e){}
+  // L'événement saisonnier : la valeur calculée par le Worker, relue une minute
+  // après (le temps que « seance_fin » soit traité).
+  try{ setTimeout(()=>{ saisonsLireProgression().catch(()=>{}); },70000); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la

@@ -137,6 +137,7 @@ await test('duel : créé par son créateur, en attente, sans invité ni score ;
   assert.equal((await creerDuel(LEA, DID)).statut, 200);
   assert.equal((await creerDuel(LEA, 'dtest7654321', { statut: 'en_cours' })).statut, 401, 'statut imposé');
   assert.equal((await creerDuel(LEA, 'dtest7654322', { scores: { createur: 9 } })).statut, 401, 'scores par le client');
+  assert.equal((await creerDuel(LEA, 'dtest7654323', { progres: { [K(LEA)]: { valeur: 999, maj: Date.now() } } })).statut, 401, 'progression glissée à la création');
   assert.equal((await creerDuel(LEA, 'dtest7654323', { invite: K(TOMD) })).statut, 401, 'invité imposé');
   assert.equal((await creerDuel(LEA, 'dtest7654324', { duree: 30 })).statut, 401, 'durée hors liste');
   assert.equal((await appel(KEV, 'PATCH', '', { ['duels/dtest7654325']: { createur: K(LEA), createurNom: 'x', mesure: 'seances', duree: 14, creeLe: 1, statut: 'attente' } })).statut, 401, 'pour quelqu’un d’autre');
@@ -162,14 +163,27 @@ await test('duel : le créateur ne se défie pas lui-même ; statut, scores et d
     assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/' + c, v)).statut, 401, c);
   }
 });
-await test('duel : chacun écrit SA progression, seulement pendant le duel', async () => {
-  const prog = { valeur: 3, maj: Date.now() };
-  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 401, 'pas encore commencé');
+// LA PROGRESSION EST ÉCRITE PAR LE WORKER SEUL (01/10/2026) : tirée des
+// séances (xp_etat), elle ne s'écrit plus depuis une console — 999 compris.
+await test('duel : personne n’écrit sa progression, pas même pendant le duel ; le Worker si', async () => {
+  const prog = { valeur: 999, maj: Date.now() };
   await appel('owner', 'PUT', 'duels/' + DID + '/statut', 'en_cours');
-  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 200);
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 401, 'la sienne : 999 refusé');
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: 3, maj: Date.now() })).statut, 401, 'même une valeur plausible');
+  assert.equal((await appel(TOMD, 'PATCH', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: 3 })).statut, 401);
   assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(LEA), prog)).statut, 401, 'celle de l’autre');
   assert.equal((await appel(ZOE, 'PUT', 'duels/' + DID + '/progres/' + K(ZOE), prog)).statut, 401, 'hors duel');
-  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: -1, maj: 1 })).statut, 401);
+  assert.equal((await appel('owner', 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: 3, maj: Date.now(), srv: true })).statut, 200, 'le Worker');
+});
+await test('défi du Canal : l’athlète s’inscrit, mais n’écrit ni sa valeur ni sa métrique', async () => {
+  await appel('owner', 'PUT', 'users/' + K(LEA) + '/coachEmailKey', K(KEV));
+  await appel('owner', 'PUT', 'canaux/' + K(KEV) + '/messages/m1', { type: 'defi', titre: 'Octobre', mesure: 'seances', objectif: 12, debut: 1, fin: Date.now() + 864e5, at: 1 });
+  const p = 'canaux/' + K(KEV) + '/defis/m1/participants/' + K(LEA);
+  assert.equal((await appel(LEA, 'PUT', p + '/inscription', { le: Date.now(), classement: true })).statut, 200, 'l’inscription reste à lui');
+  assert.equal((await appel(LEA, 'PUT', p + '/valeur', 999)).statut, 401, 'valeur : 999 refusé');
+  assert.equal((await appel(LEA, 'PUT', p + '/metrique', 999)).statut, 401, 'métrique');
+  assert.equal((await appel(LEA, 'PUT', p + '/maj', Date.now())).statut, 401);
+  assert.equal((await appel('owner', 'PUT', p + '/valeur', 4)).statut, 200, 'le Worker');
 });
 await test('duel : les événements duel_rejoint / duel_maj, par un participant seulement', async () => {
   assert.equal((await deposer(TOMD, { type: 'duel_maj', cible: DID })).statut, 200);
@@ -197,14 +211,15 @@ await test('saisons : créées par Kevin seul, champs vérifiés, lues par tout 
   assert.equal((await appel(LEA, 'GET', 'saisons/hiver-2026')).statut, 200);
   assert.equal((await fetch(BASE + '/saisons.json?ns=' + NS)).status, 401, 'pas sans compte');
 });
-await test('saisons : chacun écrit SA progression, pendant la saison seulement', async () => {
+await test('saisons : la progression est écrite par le Worker seul (01/10/2026)', async () => {
   const p = { valeur: 4, maj: Date.now() };
-  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), p)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), p)).statut, 401, 'la sienne : refusée');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), { valeur: 999, maj: Date.now() })).statut, 401, '999 refusé');
   assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(KEV), p)).statut, 401, 'celle d’un autre');
   assert.equal((await appel(LEA, 'PUT', 'saisons_progres/inconnue/' + K(LEA), p)).statut, 401, 'saison inconnue');
-  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), { valeur: -1, maj: 1 })).statut, 401);
-  await appel(KEVIN, 'PUT', 'saisons/finie-2025', saison({ debut: Date.now() - 30 * 864e5, fin: Date.now() - 3 * 864e5 }));
-  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/finie-2025/' + K(LEA), p)).statut, 401, 'saison finie');
+  assert.equal((await appel('owner', 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), Object.assign({ srv: true }, p))).statut, 200, 'le Worker');
+  assert.equal((await appel(LEA, 'GET', 'saisons_progres/hiver-2026/' + K(LEA))).statut, 200, 'la sienne se relit');
+  assert.equal((await appel(LEA, 'GET', 'saisons_progres/hiver-2026/' + K(KEV))).statut, 401, 'pas celle d’un autre');
   assert.equal((await appel(LEA, 'GET', 'saisons_progres/hiver-2026')).statut, 401, 'les valeurs des autres ne se lisent pas');
 });
 await test('saisons : les résultats, lus par leur titulaire, écrits par le Worker seul ; le compteur se lit sans compte', async () => {

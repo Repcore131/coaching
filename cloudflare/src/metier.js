@@ -768,9 +768,21 @@ export function creerMetier(deps) {
     return out;
   }
   const defiChemin = (coach, id, sous) => 'canaux/' + coach + '/defis/' + id + (sous ? '/' + sous : '');
-  // ⚠ LA VALEUR N'EST PAS RECALCULÉE ICI : l'app de l'athlète l'écrit (valeur,
-  //   metrique) après chaque séance et à l'inscription. Le prénom vient de
-  //   l'inscription (prenom, ou pseudo) : aucune lecture de dossier.
+  // Le classement d'un défi recalculé : l'événement de l'app (inscription) ou
+  // la sous-tâche que pose progresEcrire après une séance.
+  async function defiMaj(coach, id0, t) {
+    const id = String(id0 || '').replace(/[^A-Za-z0-9_-]/g, '');
+    const m = id ? await _val('canaux/' + coach + '/messages/' + id) : null;
+    if (!m || m.type !== 'defi') return 'pas_un_defi';
+    const etat = (await _val(defiChemin(coach, id, 'etat'))) || {};
+    if (etat.clos) return 'clos';
+    await recalculerDefi(coach, Object.assign({}, m, { id }), t);
+    return 'recalcule';
+  }
+  // ⚠ LA VALEUR N'EST PAS RECALCULÉE ICI : le Worker l'écrit après chaque
+  //   séance (progresEcrire, depuis xp_etat) — plus l'app depuis le
+  //   01/10/2026. Le prénom vient de l'inscription (prenom, ou pseudo) :
+  //   aucune lecture de dossier.
   async function participants(coach, defi) {
     const brut = (await _val(defiChemin(coach, defi.id, 'participants'))) || {};
     return Object.keys(brut).filter((k) => brut[k] && brut[k].inscription).map((k) => {
@@ -1431,14 +1443,13 @@ export function creerMetier(deps) {
       const r = await pousserA(annuaire.map((uid) => ({ uid, message })));
       return r.differes ? 'differe' : 'envoye';
     }
+    // defi_maj DÉPOSÉ PAR UN ATHLÈTE (son inscription) : sa valeur se calcule
+    // d'abord (les séances déjà faites depuis le début comptent), en sous-
+    // tâche — elle reposera elle-même un defi_maj ; le classement suit.
     if (type === 'defi_maj') {
-      const coach = String(e.coach || ''), id = String(e.id || '').replace(/[^A-Za-z0-9_-]/g, '');
-      const m = id ? await _val('canaux/' + coach + '/messages/' + id) : null;
-      if (!m || m.type !== 'defi') return 'pas_un_defi';
-      const etat = (await _val(defiChemin(coach, id, 'etat'))) || {};
-      if (etat.clos) return 'clos';
-      await recalculerDefi(coach, Object.assign({}, m, { id }), t);
-      return 'recalcule';
+      const par = String(e.par || ''), coach = String(e.coach || ''), id = String(e.id || '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (par && par !== 'worker' && coach && id) await differer([{ quoi: 'progres', cle: par, cibles: [{ g: 'defi', id, coach }] }]);
+      return defiMaj(coach, id, t);
     }
     // LA PREMIÈRE SÉANCE D'UN FILLEUL : son parrain est prévenu, une fois.
     // L'événement ne dit rien que le Worker croie : le lien de parrainage et
@@ -1504,6 +1515,7 @@ export function creerMetier(deps) {
       await db.ref().update({ ['duels/' + id + '/invite']: invite, ['duels/' + id + '/inviteNom']: nom,
         ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
         ['duels_actifs/' + id]: { fin: 0, depuis: t },
+        ['duels_joueur/' + d.createur + '/' + id]: true, ['duels_joueur/' + invite + '/' + id]: true,
         ['duels_recus/' + invite + '/' + id]: { le: t, de: String(d.createurNom || '').slice(0, 24) || null } });
       Object.assign(d, { invite, inviteNom: nom });
       await pousserA([{ uid: invite, message: DU.pushRevanche(d) }], { attendre: false });
@@ -1512,8 +1524,11 @@ export function creerMetier(deps) {
     if (par !== d.createur && par !== d.invite) return 'pas_participant';
     if (e.type === 'duel_rejoint') {
       if (d.statut !== 'attente' || par !== d.invite) return 'deja_' + d.statut;
+      // duels_joueur/<k>/<id> : l'index que relit xpRecalculer pour écrire
+      // la progression de chacun après ses séances.
       await db.ref().update({ ['duels/' + id + '/statut']: 'accepte', ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
-        ['duels_actifs/' + id]: { fin: 0, depuis: t } });
+        ['duels_actifs/' + id]: { fin: 0, depuis: t },
+        ['duels_joueur/' + d.createur + '/' + id]: true, ['duels_joueur/' + d.invite + '/' + id]: true });
       await pousserA([{ uid: d.createur, message: DU.pushRejoint(d) }], { attendre: false });
       return 'accepte';
     }
@@ -1524,15 +1539,27 @@ export function creerMetier(deps) {
       // La progression d'avant le début ne compte pas : elle est effacée.
       await db.ref().update({ ['duels/' + id + '/statut']: 'en_cours', ['duels/' + id + '/debut']: debut,
         ['duels/' + id + '/fin']: fin, ['duels/' + id + '/scores']: { createur: 0, invite: 0 },
-        ['duels/' + id + '/progres']: null, ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: { fin } });
+        ['duels/' + id + '/progres']: null, ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: { fin },
+        ['duels_joueur/' + d.createur + '/' + id]: true, ['duels_joueur/' + d.invite + '/' + id]: true });
       Object.assign(d, { statut: 'en_cours', debut, fin, scores: { createur: 0, invite: 0 } });
+      // LA SÉANCE QUI LANCE LE DUEL COMPTE : sa progression (et celle du
+      // créateur) se calcule depuis xp_etat dès le démarrage, que la séance
+      // ait été recalculée avant ou après cet événement. Le duel compte à
+      // partir de `debut` (un jour : les bornes de valeurServeur sont des jours).
+      await differer([d.createur, d.invite].map((cle) => ({ quoi: 'progres', cle, cibles: [{ g: 'duel', id, coach: null }] })));
       await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushDebut(d, uid) })), { attendre: false });
       return 'demarre';
     }
     if (d.statut !== 'en_cours') return 'clos';
     if (t > Number(d.fin)) return duelCloturer(d, t);
+    // Les scores relus de la progression (écrite par le Worker), et l'index du
+    // joueur posé s'il manque (un duel commencé avant l'index).
     const scores = DU.scoresDe(d);
-    await db.ref('duels/' + id).update({ scores, maj: t });
+    await db.ref().update({ ['duels/' + id + '/scores']: scores, ['duels/' + id + '/maj']: t, ['duels_joueur/' + par + '/' + id]: true });
+    // Une valeur que le Worker n'a jamais écrite (un duel d'avant l'index,
+    // donc pas relu par la séance) : elle l'est maintenant, en sous-tâche.
+    const p = d.progres && d.progres[par];
+    if (!(p && p.srv === true)) await differer([{ quoi: 'progres', cle: par, cibles: [{ g: 'duel', id, coach: null }] }]);
     return 'scores';
   }
   async function duelCloturer(d, t) {
@@ -1542,6 +1569,7 @@ export function creerMetier(deps) {
     const maj = { ['duels/' + d.id + '/statut']: 'termine', ['duels/' + d.id + '/scores']: scores,
       ['duels/' + d.id + '/gagnant']: gagnant, ['duels/' + d.id + '/termineLe']: t, ['duels/' + d.id + '/maj']: t,
       ['duels_actifs/' + d.id]: null };
+    for (const cle of [d.createur, d.invite]) if (cle) maj['duels_joueur/' + cle + '/' + d.id] = null;
     // Les deux reçoivent leur résultat ; le gagnant, le badge CHAMPION (l'app le lit ici).
     for (const cle of [d.createur, d.invite]) if (cle) maj['defis_resultats/' + cle + '/' + d.id] = DU.resultatPour(d, cle, gagnant, t);
     await db.ref().update(maj);
@@ -1556,7 +1584,9 @@ export function creerMetier(deps) {
     if (suite === 'oublier') { await db.ref('duels_actifs/' + id).remove(); return 'oublie'; }
     if (suite === 'cloturer') return duelCloturer(d, t);
     if (suite === 'annuler') {
-      await db.ref().update({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: null });
+      const oubli = {};
+      for (const cle of [d.createur, d.invite]) if (cle) oubli['duels_joueur/' + cle + '/' + id] = null;
+      await db.ref().update(Object.assign({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: null }, oubli));
       return 'annule';
     }
     // LE J-2 : duels/<id>/rappel n'est posé qu'une fois CHACUN servi — envoi
@@ -1740,9 +1770,117 @@ export function creerMetier(deps) {
         || (r === 'sans_parrain' && Number(cree) > 0 && t - Number(cree) <= P.DELAI_RATTACHEMENT_MS);
       if (!repasser) await db.ref('xp_etat/' + k + '/parr').set(t);
     }
+    // LES SCORES DES DÉFIS, DES DUELS ET DES SAISONS, tirés du journal que
+    // l'on vient d'écrire (voir progresApresSeance, ci-dessous).
+    if (nouvelles.length) await progresApresSeance(k, etat0, etat, t);
     // Un lot plein : la suite en sous-tâche.
     if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
     return 'recalcule';
+  }
+
+  // ══ LES SCORES ÉCRITS PAR LE SERVEUR (01/10/2026) ═══════════════════════
+  // Les valeurs des défis du Canal (participants/<k>/valeur, metrique), des
+  // duels (duels/<id>/progres/<k>) et des saisons (saisons_progres/<id>/<k>)
+  // étaient écrites par l'app — et donc par n'importe quelle console. Les
+  // règles les ferment au client ; le Worker les tire de xp_etat (le journal
+  // e.jr, XPS.valeurServeur) après chaque séance recalculée.
+  // AU PLUS PROGRES_MAX écritures par recalcul (une seule écriture multi-
+  // chemins) : au-delà, une sous-tâche « progres » reprend la suite.
+  const PROGRES_MAX = 4;
+  const refId = (c) => c.g === 'defi' ? 'f_' + c.id : (c.g === 'duel' ? 'd_' + c.id : 's_' + c.id);
+  // Les cibles d'un joueur : ses duels en cours (index duels_joueur/<k>), la
+  // saison suivie, les défis en cours du canal de son coach où il est inscrit.
+  // Chacune porte sa définition (mesure, debut, fin).
+  async function progresCibles(k, t) {
+    const [duels, saisons, coach] = await Promise.all([db.ref('duels_joueur/' + k).shallow(), _val('saisons'), _lire(k, 'coachEmailKey')]);
+    const out = [];
+    const oublis = {};
+    for (const id of duels.filter((x) => DU.DUEL_ID_RE.test(x))) {
+      const d = await _val('duels/' + id);
+      if (!d || d.statut === 'termine' || d.statut === 'annule' || (d.createur !== k && d.invite !== k)) { oublis['duels_joueur/' + k + '/' + id] = null; continue; }
+      if (d.statut !== 'en_cours') continue;
+      out.push({ g: 'duel', id, mesure: d.mesure, debut: Number(d.debut), fin: Number(d.fin), d });
+    }
+    if (Object.keys(oublis).length) await db.ref().update(oublis);
+    for (const id of Object.keys(saisons || {})) {
+      const x = saisons[id];
+      if (SA.saisonSuivie(x, t) && t <= Number(x.fin) + 864e5) out.push({ g: 'saison', id, mesure: x.mesure, debut: Number(x.debut), fin: Number(x.fin) });
+    }
+    if (coach && typeof coach === 'string') {
+      for (const m of await defisDuCoach(coach)) {
+        if (!(t >= Number(m.debut) && t <= Number(m.fin))) continue;
+        const ins = await _val(defiChemin(coach, m.id, 'participants/' + k + '/inscription'));
+        if (ins) out.push({ g: 'defi', id: m.id, coach, mesure: m.mesure, debut: Number(m.debut), fin: Number(m.fin) });
+      }
+    }
+    return out;
+  }
+  // Le quota de la mesure « serie » : les créneaux actifs du planning.
+  async function progresQuota(k) {
+    const c = await _lire(k, 'sessions_config');
+    const l = Array.isArray(c) ? c : (c && typeof c === 'object' ? Object.values(c) : []);
+    return Math.max(1, l.filter((x) => x && x.active).length);
+  }
+  // Écrit les valeurs de `cibles` (PROGRES_MAX au plus), en une écriture.
+  // `etatAvant` : l'état d'avant les séances de ce recalcul (l'instantané
+  // « avant » d'une progression en % se fige dessus).
+  async function progresEcrire(k, etatAvant, etat0, cibles, t) {
+    const lot = cibles.slice(0, PROGRES_MAX), reste = cibles.slice(PROGRES_MAX);
+    const quota = lot.some((c) => c.mesure === 'serie') ? await progresQuota(k) : 1;
+    let etat = etat0;
+    const maj = {}, defis = [];
+    for (const c of lot) {
+      const rid = refId(c);
+      if (c.mesure === 'progressionPct' && !(etat.ref && etat.ref[rid])) {
+        etat = XPS.figerRef(etatAvant, etat, rid, t);
+        maj['xp_etat/' + k + '/ref'] = etat.ref;
+      }
+      const v = Math.max(0, Number(XPS.valeurServeur(etat, c.mesure, c.debut, c.fin, quota, rid)) || 0);
+      if (c.g === 'duel') {
+        maj['duels/' + c.id + '/progres/' + k] = { valeur: v, maj: t, srv: true };
+        // Les scores suivent dans la même écriture (la valeur de l'autre est celle qu'il a déjà).
+        const p = Object.assign({}, (c.d && c.d.progres) || {}, { [k]: { valeur: v } });
+        maj['duels/' + c.id + '/scores'] = DU.scoresDe(Object.assign({}, c.d, { progres: p }));
+        maj['duels/' + c.id + '/maj'] = t;
+      } else if (c.g === 'saison') {
+        maj['saisons_progres/' + c.id + '/' + k] = { valeur: v, maj: t, srv: true };
+      } else {
+        const base = defiChemin(c.coach, c.id, 'participants/' + k);
+        maj[base + '/valeur'] = v;
+        maj[base + '/metrique'] = Math.max(0, Number(XPS.metriqueServeur(etat, c.mesure, c.debut, c.fin, quota, rid)) || 0);
+        maj[base + '/maj'] = t;
+        maj[base + '/srv'] = true;
+        defis.push({ quoi: 'defi_maj', coach: c.coach, id: c.id });
+      }
+    }
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    // Le classement, les paliers et les annonces d'un défi : en sous-tâche
+    // (ils relisent tous les participants), comme l'événement de l'app.
+    const suite = defis.slice();
+    if (reste.length) suite.push({ quoi: 'progres', cle: k, cibles: reste.map((c) => ({ g: c.g, id: c.id, coach: c.coach || null })) });
+    if (suite.length) await differer(suite);
+    return lot.length;
+  }
+  async function progresApresSeance(k, etatAvant, etat, t) {
+    // À court de budget : tout part en sous-tâche (l'instantané « avant »
+    // se fige alors sur l'état courant).
+    if (_reste() < 16) { await differer([{ quoi: 'progres', cle: k }]); return 'differe'; }
+    const cibles = await progresCibles(k, t);
+    if (!cibles.length) return 0;
+    return progresEcrire(k, etatAvant, etat, cibles, t);
+  }
+  // La sous-tâche : toutes les cibles, ou celles qu'un recalcul a laissées.
+  async function progresTache(e) {
+    const k = String(e.cle || ''), t = now();
+    if (!/^[^/.#$\[\]]{3,200}$/.test(k)) return 'cle';
+    const etat = (await _val('xp_etat/' + k)) || XPS.etatVide();
+    let cibles;
+    if (Array.isArray(e.cibles)) {
+      const toutes = await progresCibles(k, t);
+      const voulu = new Set(e.cibles.map((c) => c.g + '|' + c.id));
+      cibles = toutes.filter((c) => voulu.has(c.g + '|' + c.id));
+    } else cibles = await progresCibles(k, t);
+    return cibles.length ? progresEcrire(k, etat, etat, cibles, t) : 0;
   }
 
   // ══ LA RELANCE DES INACTIFS (J+7, J+14, J+30) — 11 h, une personne à la fois ══
@@ -2027,6 +2165,8 @@ export function creerMetier(deps) {
     if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
     if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
     if (quoi === 'xp') return xpRecalculer(String(e.cle || ''), now());
+    if (quoi === 'progres') return progresTache(e);
+    if (quoi === 'defi_maj') return defiMaj(String(e.coach || ''), String(e.id || ''), now());
     if (quoi === 'relance') return relanceAthlete(e);
     // LES SUITES D'UN PREMIER PAIEMENT PayPal, différées par un webhook à court
     // de budget (paypal.js, premierPaiement). Chacune est gardée par sa

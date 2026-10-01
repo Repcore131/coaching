@@ -55699,27 +55699,43 @@ async function testExercices(){
       const b=htmlBanniereSaison(s,u,null,_SAT);
       if(!/Bouclé (⚡|<svg)/.test(b)||!/partagerCarteSaison\('hiver-2026'/.test(b)) return _echec('bouclé');
       return htmlBanniereSaison(s,{role:'coach'},null,_SAT)===''?true:_echec('coach');})());
-    okA('Saisons : l’athlète écrit SA valeur (une fois par valeur), pour le compteur collectif',async()=>{
+    // LE WORKER ÉCRIT LA VALEUR (01/10/2026) : l'app la relit, n'écrit rien.
+    okA('Saisons : l’athlète relit la valeur calculée par le serveur, sans rien écrire ; la jauge la montre dès qu’elle couvre la dernière séance',async()=>{
       const sv={u:currentUser,ok:CLOUD.ok,tk:CLOUD._getToken,f:window.fetch,su:window.saveUser,sa:_saisons};
-      const puts=[];
+      const appels=[];
       try{
         CLOUD.ok=()=>true; CLOUD._getToken=async()=>'jeton'; window.saveUser=()=>{};
         const now=Date.now();
         _saisons={'test-saison':_SAS({debut:now-5*864e5,fin:now+5*864e5})};
         try{ localStorage.setItem(SAISONS_CACHE,JSON.stringify({t:now,l:_saisons})); }catch(e){}
-        window.fetch=async(u,o)=>{ puts.push({u:String(u),o}); return {ok:true,json:async()=>null}; };
-        currentUser={role:'athlete',email:'lea@t.fr',sessions:[{date:now-864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}}]};
-        if(await saisonsPublierProgression()!==1) return _echec('rien d’écrit');
-        const p=puts.find(x=>/saisons_progres\/test-saison\/lea@t,fr\.json/.test(x.u));
-        if(!p||p.o.method!=='PUT'||JSON.parse(p.o.body).valeur!==1) return _echec(JSON.stringify(puts.map(x=>x.u)));
-        if(await saisonsPublierProgression()!==0) return _echec('réécrit la même valeur');
+        window.fetch=async(u,o)=>{ appels.push({u:String(u),o}); return {ok:true,json:async()=>({valeur:7,maj:now,srv:true})}; };
+        currentUser={role:'athlete',email:'lea@t.fr',lastSession:now-864e5,sessions:[{date:now-864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}}]};
+        if(await saisonsLireProgression()!==1) return _echec('rien de relu');
+        if(appels.some(x=>x.o&&x.o.method&&x.o.method!=='GET')) return _echec('une écriture : '+appels.map(x=>x.o&&x.o.method).join());
+        if(!appels.some(x=>/saisons_progres\/test-saison\/lea@t,fr\.json/.test(x.u))) return _echec(JSON.stringify(appels.map(x=>x.u)));
+        const s0=saisonActive();
+        if(saisonValeurVue(currentUser,s0)!==7) return _echec('la valeur du serveur n’est pas montrée : '+saisonValeurVue(currentUser,s0));
+        // Une séance plus récente que la valeur du serveur : la jauge optimiste.
+        currentUser.lastSession=now+60e3;
+        if(saisonValeurVue(currentUser,s0)!==saisonValeur(currentUser,s0)) return _echec('la valeur locale n’est pas montrée en attendant');
         currentUser.role='coach';
-        if(await saisonsPublierProgression()!==0) return _echec('un coach écrit');
+        if(await saisonsLireProgression()!==0) return _echec('un coach relit');
+        if(typeof saisonsPublierProgression!=='undefined') return _echec('l’écriture existe encore');
       }finally{
         currentUser=sv.u; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.fetch=sv.f; window.saveUser=sv.su; _saisons=sv.sa;
         try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
       }
       return true;});
+    ok('valeurVue : la valeur du serveur dès qu’elle couvre la dernière séance, la locale avant ; la carte du défi la montre',(()=>{
+      const u={lastSession:1000};
+      if(valeurVue(3,{valeur:5,maj:1000,srv:true},u)!==5) return _echec('serveur à jour');
+      if(valeurVue(3,{valeur:5,maj:999,srv:true},u)!==3) return _echec('serveur en retard : la locale');
+      if(valeurVue(3,{valeur:999,maj:2000},u)!==3) return _echec('une valeur sans srv n’est pas crue');
+      if(valeurVue(3,null,u)!==3) return _echec('rien du serveur');
+      const t=Date.now();
+      const m={id:'m1',type:'defi',titre:'Octobre',mesure:'seances',objectif:10,debut:t-5*864e5,fin:t+5*864e5};
+      const h=htmlCarteDefi(m,{pub:{n:1},moi:{inscription:{le:1},valeur:6,maj:t,srv:true}},{lastSession:t-864e5,sessions:[]},{},false,t);
+      return /6 séances/.test(h.replace(/<[^>]+>/g,' '))?true:_echec('la carte ne montre pas la valeur du serveur');})());
     ok('Saisons : la famille « Éditions » — l’année, et « Plus jamais disponible » après la fin',(()=>{
       const u={};
       const n=saisonsFusionnerResultats(u,{'hiver-2026':{nom:'Hiver de fer',annee:'2026',badgeCle:'hiver',couleur:'#3aa0ff',termineLe:_SAT,fin:1},'<x>':{nom:'x'}});
@@ -55835,7 +55851,7 @@ async function testExercices(){
         duelOublierInvite();
       }
       return true;});
-    okA('Duels : après une séance, chacun écrit SA valeur (règle des défis du Canal) ; la 1re séance de l’invité démarre le duel',async()=>{
+    okA('Duels : après une séance, l’app n’écrit AUCUNE valeur (le Worker la tire des séances) ; elle dépose l’événement de chaque duel, la 1re séance de l’invité démarre le duel',async()=>{
       const sv={u:currentUser,ok:CLOUD.ok,tk:CLOUD._getToken,f:window.fetch,dl:window._duelLire,de:window.deposerEvenement,su:window.saveUser,sl:SERVEUR_LEGER};
       const puts=[], evs=[];
       const t=Date.now();
@@ -55852,9 +55868,7 @@ async function testExercices(){
         currentUser={role:'athlete',email:'lea@t.fr',sessions:[S(1),S(2),S(8)],
           duels:{dencours12345:{role:'createur',le:1},daccepte12345:{role:'invite',le:1},dtermine12345:{role:'createur',le:1}}};
         await duelsApresSeance();
-        const p=puts.find(x=>/duels\/dencours12345\/progres\/lea@t,fr\.json/.test(x.u));
-        if(!p||p.o.method!=='PUT'||JSON.parse(p.o.body).valeur!==2) return _echec('progression : '+(p&&p.o.body));
-        if(puts.some(x=>/daccepte|dtermine/.test(x.u))) return _echec('une valeur écrite hors duel en cours');
+        if(puts.some(x=>/progres/.test(x.u)||(x.o&&x.o.method&&x.o.method!=='GET'))) return _echec('une écriture : '+puts.map(x=>x.u).join());
         const ids=evs.filter(e=>e.type==='duel_maj').map(e=>e.id).sort().join();
         if(ids!=='daccepte12345,dencours12345') return _echec('événements : '+ids);
         if(!currentUser.duels.dtermine12345.fini) return _echec('le duel fini n’est pas marqué');

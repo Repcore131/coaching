@@ -877,12 +877,13 @@
                   "prenom":     { ".validate": "newData.isString() && newData.val().length <= 24" },
                   "$autre":     { ".validate": false }
                 },
-                // SA PROGRESSION, ECRITE PAR L ATHLETE LUI-MEME (serveur leger,
-                // 27/09/2026) : le Worker Cloudflare ne relit pas les seances.
-                // Memes conditions que l inscription ; des nombres bornes.
-                "valeur":   { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
-                "metrique": { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
-                "maj":      { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() > 0" }
+                // SA PROGRESSION, ECRITE PAR LE WORKER SEUL (01/10/2026) : elle
+                // se tire de ses seances (xp_etat), plus de ce que l app ecrit.
+                // Aucune ecriture client : une console ne s y donne plus 999.
+                "valeur":   { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "metrique": { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "maj":      { ".validate": "newData.isNumber()" },
+                "srv":      { ".validate": "newData.isBoolean()" }
               }
             }
           }
@@ -1693,12 +1694,17 @@
           ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
           ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && (root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',') || (newData.parent().child('statut').val() === 'accepte' && newData.parent().child('createur').val() === auth.token.email.replace('.', ',') && root.child('pseudos').child(newData.val()).exists()))"
         },
+        // LA PROGRESSION DE CHACUN, ECRITE PAR LE WORKER SEUL (01/10/2026) :
+        // tiree de ses seances (xp_etat, valeurServeur). Plus d ecriture client.
+        // ".validate": false : pas meme glissee dans le duel a sa creation (la
+        // regle de duels/$id ouvre la creation au createur).
         "progres": {
+          ".validate": false,
           "$k": {
-            ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours'",
             ".validate": "newData.hasChildren(['valeur', 'maj'])",
             "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
             "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "srv":    { ".validate": "newData.isBoolean()" },
             "$autre": { ".validate": false }
           }
         },
@@ -1723,9 +1729,9 @@
     },
     // ── LES EVENEMENTS SAISONNIERS (28/09/2026) ──────────────────────────
     // (« /evenements » est la file du Worker : ils vivent dans /saisons.)
-    // Crees par Kevin (ecran admin), lus par tout compte connecte. Chacun
-    // ecrit SA progression pendant la saison (saisons_progres/<id>/<lui>,
-    // la regle des defis du Canal) ; le Worker en tire, chaque heure, le
+    // Crees par Kevin (ecran admin), lus par tout compte connecte. Le Worker
+    // ecrit la progression de chacun (saisons_progres/<id>/<lui>, tiree de
+    // ses seances depuis le 01/10/2026) ; il en tire, chaque heure, le
     // compteur collectif (/stats/saisons/<id>, lecture publique avec /stats)
     // et le badge Edition de qui a boucle (saisons_resultats/<lui>/<id>).
     "saisons": {
@@ -1747,11 +1753,14 @@
     },
     "saisons_progres": {
       "$id": {
+        // ECRIT PAR LE WORKER SEUL depuis le 01/10/2026 (comme les duels) ;
+        // lu par son titulaire (la jauge montre la valeur du serveur).
         "$k": {
-          ".write": "auth != null && $k === auth.token.email.replace('.', ',') && root.child('saisons').child($id).exists() && now >= root.child('saisons').child($id).child('debut').val() && now <= root.child('saisons').child($id).child('fin').val() + 86400000",
+          ".read": "auth != null && $k === auth.token.email.replace('.', ',')",
           ".validate": "newData.hasChildren(['valeur', 'maj'])",
           "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
           "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "srv":    { ".validate": "newData.isBoolean()" },
           "$autre": { ".validate": false }
         }
       }

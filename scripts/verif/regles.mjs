@@ -545,6 +545,54 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
   console.log('droits geles : 11 champs de users/ figes, coachs_registre ferme, rc_codes reserve aux coachs enregistres');
 }
 
+// ══ LES SCORES : ÉCRITS PAR LE WORKER SEUL (01/10/2026) ═══════════════════
+// Les valeurs des défis du Canal, des duels et des saisons se tirent des
+// séances, côté Worker (cloudflare/src/xp.js, valeurServeur). Une écriture
+// client rouverte ici rendrait à n'importe quelle console le pouvoir de
+// s'inscrire 999 — et l'app, qui ne les écrit plus, ne s'en plaindrait pas.
+{
+  const arbre=JSON.parse(regles.replace(/^\s*\/\/.*$/gm,''));
+  const chemins=[
+    ['duels','$id','progres','$k'],
+    ['saisons_progres','$id','$k'],
+    ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','valeur'],
+    ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','metrique'],
+    ['canaux','$coachKey','defis','$msgId','participants','$athleteKey','maj'],
+  ];
+  const fautes=[];
+  for(const c of chemins){
+    let n=arbre.rules;
+    for(const k of c){ n=n&&n[k]; }
+    if(!n){ fautes.push(c.join('/')+' : absent des regles'); continue; }
+    // Ni sur le noeud, ni sur l'un de ses ancetres (Firebase accorde des qu'un ancetre accorde).
+    // Un ancetre ouvert (la creation d'un duel par son createur) n'est admis
+    // que si un noeud plus bas, jusqu'a la cible, refuse tout : ".validate": false.
+    const noeuds=[]; { let a=arbre.rules; for(const k of c){ a=a&&a[k]; noeuds.push(a); } }
+    for(let i=0;i<noeuds.length;i++){
+      const w=noeuds[i]&&noeuds[i]['.write'];
+      if(w===undefined||w===false) continue;
+      const barre=noeuds.slice(i+1).some((x)=>x&&(x['.validate']===false||x['.validate']==='false'));
+      if(!barre){ fautes.push(c.slice(0,i+1).join('/')+' : .write client ('+String(w).slice(0,60)+')'); break; }
+    }
+    // Rien en dessous non plus.
+    const sous=JSON.stringify(n);
+    if(/"\.write"\s*:\s*(?!false)/.test(sous)) fautes.push(c.join('/')+' : une sous-cle accorde .write');
+  }
+  // L'APP N'ECRIT PLUS CES CHEMINS : la jauge reste calculee localement
+  // (defiValeur), l'ecriture a disparu.
+  if(/duels\/'\+id\+'\/progres\//.test(source)) fautes.push("l'app ecrit encore duels/<id>/progres");
+  // La relecture de sa valeur de saison (GET) reste permise ; une ecriture non.
+  for(const m of source.matchAll(/saisons_progres\/'\+/g)){
+    if(/method:\s*'(PUT|PATCH|POST)'/.test(source.slice(m.index,m.index+260))) fautes.push("l'app ecrit encore saisons_progres");
+  }
+  if(/participants\/'\+moi,\s*\{valeur/.test(source)) fautes.push("l'app ecrit encore participants/<moi>/valeur");
+  if(fautes.length){
+    console.error('\nSCORES ECRITS PAR UN CLIENT :\n  '+fautes.join('\n  '));
+    process.exit(1);
+  }
+  console.log('scores (defis du Canal, duels, saisons) : aucune ecriture client ; le Worker seul');
+}
+
 // ══ LE FUSEAU : UN MOTIF, TROIS COPIES (01/10/2026) ═══════════════════════
 // users/$emailKey/tz est validé par la règle ; l'app (TZ_RE, rc-core) ne
 // l'écrit que s'il passe le même motif, et le Worker (metier.js) le relit

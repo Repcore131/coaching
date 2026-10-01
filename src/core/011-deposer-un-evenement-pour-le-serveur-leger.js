@@ -44,18 +44,26 @@ function defiMetriqueClassement(u,d){
   if(d.mesure==='progressionPct'||d.mesure==='serie') return defiValeur(u,d);
   return defiValeur(u,Object.assign({},d,{mesure:'seances'}));
 }
-// ── LA PROGRESSION, ÉCRITE PAR L'ATHLÈTE ────────────────────────────────
-// Le serveur léger ne relit JAMAIS les séances d'un athlète (dix
-// millisecondes de calcul par exécution) : c'est l'app, qui calcule déjà la
-// jauge perso, qui écrit sa valeur dans chaque défi où il est inscrit, après
-// une séance et à l'inscription. Le serveur en tire l'équipe, le classement,
-// les paliers et le podium.
+// ── LA PROGRESSION, CALCULÉE PAR LE SERVEUR (01/10/2026) ────────────────
+// L'app l'écrivait elle-même (valeur, metrique) : une console pouvait s'y
+// donner 999. Le Worker la tire maintenant de ses séances (xp_etat, après
+// chaque « seance_fin ») et les règles refusent l'écriture au client.
+// defiValeur reste, pour la jauge OPTIMISTE (elle bouge dès la fin de la
+// séance) ; valeurVue montre la valeur du serveur dès qu'elle est arrivée.
+// À L'INSCRIPTION, l'événement « defi_maj » suffit : le Worker calcule la
+// valeur de l'inscrit (les séances déjà faites depuis le début comptent),
+// puis le classement.
+// PURE. La valeur à montrer : celle du serveur (srv, tirée des séances) dès
+// qu'elle couvre la dernière séance ; avant, la valeur locale.
+function valeurVue(locale,srv,u){
+  if(srv&&srv.srv===true&&Number(srv.maj)>=(Number(u&&u.lastSession)||0)) return Math.max(0,Number(srv.valeur)||0);
+  return locale;
+}
 async function defisPublierProgression(ids){
   if(!SERVEUR_LEGER||!currentUser||currentUser.role==='coach') return 0;
   if(!canalAccessible(currentUser)||!CLOUD.ok()) return 0;
   const cle=canalCle(currentUser);
   if(!cle) return 0;
-  const moi=(currentUser.email||'').replace(/\./g,',');
   const cibles=Array.isArray(ids)?ids:Object.keys(_dfInscrits());
   if(!cibles.length) return 0;
   let tous={};
@@ -67,8 +75,6 @@ async function defisPublierProgression(ids){
     if(!m||m.type!=='defi'||!defiActif(m,t)) continue;
     const d=Object.assign({},m,{id});
     try{
-      await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi,
-        {valeur:defiValeur(currentUser,d),metrique:defiMetriqueClassement(currentUser,d),maj:t},'PATCH');
       await deposerEvenement({type:'defi_maj',coach:cle,id});
       n++;
     }catch(e){ /* le prochain passage rattrapera */ }
@@ -215,7 +221,7 @@ function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
   const e=etat||{}, pub=e.pub||{}, moi=e.moi||null;
   const inscrit=!!(moi&&moi.inscription);
   const n=Math.max(1,Number(pub.n)||0);
-  const v=defiValeur(u,m);
+  const v=valeurVue(defiValeur(u,m),moi,u);
   const actif=t<=Number(m.fin);
   const res=e.resultat||null;
   const fini=!!(res||(moi&&moi.termine)||(inscrit&&!m.collectif&&v>=Number(m.objectif)));
@@ -544,10 +550,11 @@ async function rejoindreDuel(id,btn){
   _rendreDuelsAccueil();
   return true;
 }
-// ── Après une séance : chacun écrit SA valeur ────────────────────────────
-// En cours : la valeur (defiValeur, la règle des défis du Canal) dans
-// progres/<moi>, puis l'événement. Accepté et invité : l'événement seul (c'est
-// la première séance, le Worker démarre le duel).
+// ── Après une séance : l'événement de chaque duel ────────────────────────
+// LA VALEUR N'EST PLUS ÉCRITE PAR L'APP (01/10/2026) : le Worker la tire des
+// séances (progres/<moi>, et les scores). En cours : l'événement seul (il
+// rattache le duel à l'index du joueur s'il ne l'était pas). Accepté et
+// invité : l'événement aussi (c'est la première séance, le Worker démarre le duel).
 async function duelsApresSeance(){
   const u=currentUser;
   if(!SERVEUR_LEGER||!u||u.role==='coach'||!CLOUD.ok()) return 0;
@@ -562,12 +569,7 @@ async function duelsApresSeance(){
     if(d.statut==='termine'||d.statut==='annule'){ x.fini=true; continue; }
     if(d.statut==='accepte'&&d.invite===moi){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; continue; }
     if(d.statut!=='en_cours') continue;
-    const v=defiValeur(u,{mesure:d.mesure,debut:Number(d.debut),fin:Number(d.fin)});
-    const token=await CLOUD._getToken();
-    if(!token) continue;
-    const r=await fetch(CLOUD._fbUrl.replace('users.json','duels/'+id+'/progres/'+moi+'.json')+'?auth='+token,
-      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:Math.max(0,Number(v)||0),maj:Date.now()})}).catch(()=>null);
-    if(r&&r.ok){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; }
+    if(await deposerEvenement({type:'duel_maj',id}).catch(()=>false)) n++;
   }
   try{ saveUser(); }catch(e){}
   return n;
@@ -1570,9 +1572,10 @@ async function enregistrerDefiMois(btn){
 //   · une BANNIÈRE sur l'accueil : compte à rebours, jauge perso, compteur
 //     collectif (/stats/saisons/<id>, recalculé chaque heure par le Worker) ;
 //   · un fond « Édition » pour tous les visuels ;
-//   · l'app écrit SA valeur après chaque séance (saisons_progres/<id>/<moi>,
-//     la règle des défis du Canal) : le Worker en tire le collectif et le
-//     badge de qui a bouclé (/saisons_resultats/<moi>/<id>) ;
+//   · le Worker écrit la valeur de chacun après chaque séance
+//     (saisons_progres/<id>/<moi>, tirée des séances depuis le 01/10/2026 ;
+//     l'app la relit) et en tire le collectif et le badge de qui a bouclé
+//     (/saisons_resultats/<moi>/<id>) ;
 //   · les push (lancement, mi-parcours, J-2, fin) partent du Worker.
 // LA FAMILLE « ÉDITIONS » : un badge par édition bouclée, avec l'année. Une
 // édition finie qu'on n'a pas bouclée reste visible : « Plus jamais
@@ -1625,24 +1628,25 @@ function saisonReste(s,maintenant){
   return m+' min';
 }
 function saisonValeur(u,s){ return defiValeur(u,{mesure:s.mesure,debut:Number(s.debut),fin:Number(s.fin)}); }
-// ── Écrire sa valeur (après une séance, et à l'accueil) ───────────────────
-async function saisonsPublierProgression(){
+// La valeur MONTRÉE : celle du Worker dès qu'elle couvre la dernière séance.
+const _saisonsSrv={};                   // {id: {valeur, maj, srv}}, lu dans saisons_progres/<id>/<moi>
+function saisonValeurVue(u,s){ return valeurVue(saisonValeur(u,s),s&&_saisonsSrv[s.id],u); }
+// ── Relire sa valeur (après une séance, et à l'accueil) ───────────────────
+// LE WORKER L'ÉCRIT (01/10/2026) : l'app ne fait que la relire.
+async function saisonsLireProgression(){
   const u=currentUser;
   if(!u||u.role==='coach'||!CLOUD.ok()) return 0;
   await chargerSaisons();
   const s=saisonActive();
   if(!s) return 0;
-  const v=Math.max(0,Number(saisonValeur(u,s))||0);
-  const deja=(u.saisonsVal&&u.saisonsVal[s.id]);
-  if(deja===v) return 0;
   const token=await CLOUD._getToken();
   if(!token) return 0;
   const moi=String(u.email||'').replace(/\./g,',');
-  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons_progres/'+s.id+'/'+moi+'.json')+'?auth='+token,
-    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:v,maj:Date.now()})}).catch(()=>null);
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons_progres/'+s.id+'/'+moi+'.json')+'?auth='+token).catch(()=>null);
   if(!r||!r.ok) return 0;
-  u.saisonsVal=Object.assign({},u.saisonsVal||{},{[s.id]:v});
-  try{ saveUser(); }catch(e){}
+  const v=await r.json().catch(()=>null);
+  if(!v||typeof v!=='object') return 0;
+  _saisonsSrv[s.id]={valeur:Number(v.valeur)||0,maj:Number(v.maj)||0,srv:v.srv===true};
   return 1;
 }
 // ── Le compteur collectif (/stats/saisons/<id>, lecture publique) ─────────
@@ -1660,7 +1664,7 @@ async function _saisonStatsLire(id){
 function htmlBanniereSaison(s,u,stats,maintenant){
   if(!s||!u||u.role==='coach') return '';
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const v=saisonValeur(u,s), obj=Number(s.objectifPerso)||1;
+  const v=saisonValeurVue(u,s), obj=Number(s.objectifPerso)||1;
   const part=Math.max(0,Math.min(1,v/obj));
   const fait=v>=obj||!!(u.saisonsReleves&&u.saisonsReleves[s.id]);
   const col=Number(s.objectifCollectif)||0;
@@ -1700,7 +1704,7 @@ async function renderSaisonAccueil(){
     if(!r||!r.isConnected){ clearInterval(_saisonMinuteur); _saisonMinuteur=null; return; }
     r.textContent=saisonReste({fin:Number(r.dataset.fin)},Date.now());
   },60e3);
-  saisonsPublierProgression().catch(()=>{});
+  saisonsLireProgression().catch(()=>{});
   return true;
 }
 // ── La famille « Éditions » ──────────────────────────────────────────────

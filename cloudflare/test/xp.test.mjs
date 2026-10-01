@@ -352,3 +352,43 @@ test('réactions : l’événement note sans pousser ; le soir, UNE poussée gro
   assert.doesNotMatch(m.title + m.body, /kg|squat|série/i, 'rien de ce qu’il y avait dans la séance');
   assert.equal(await w.M.reactionsPushUn(TOM, w.t), 'rien', 'une fois');
 });
+
+// ══ LES SCORES CALCULÉS PAR LE SERVEUR (valeurServeur, 01/10/2026) ═══════
+// LES MÊMES FIXTURES que functions/test/defis.test.js (et que la suite du
+// client) : deux séances en septembre, avant le défi ; quatre en octobre,
+// dont deux la semaine du 5 ; deux créneaux actifs. Mêmes résultats attendus.
+const TZ = (iso) => Date.parse(iso);
+const DEBUT_D = TZ('2026-09-30T22:00:00Z'), FIN_D = TZ('2026-10-31T22:59:59Z');
+const SD = (iso, squat, rowing, volume) => ({ date: TZ(iso), volume,
+  data: { 'Squat': { sets: [{ weight: String(squat), reps: '5', done: true }] }, 'Rowing barre': { sets: [{ weight: String(rowing), reps: '8', done: true }] } } });
+const SEPT = [SD('2026-09-20T17:00:00Z', 100, 60, 3000), SD('2026-09-25T17:00:00Z', 100, 64, 3100)];
+const OCT = [SD('2026-10-05T17:00:00Z', 105, 64, 3200), SD('2026-10-07T17:00:00Z', 110, 66, 3300),
+  SD('2026-10-14T17:00:00Z', 110, 68, 3400), SD('2026-10-28T17:00:00Z', 112, 70, 3500)];
+const QUOTA = 2;   // sessions_config : deux créneaux actifs sur trois
+const FUTUR = TZ('2027-01-01T00:00:00Z');
+
+test('valeurServeur : séances 4, tonnage 13 400, série 1, progression +10,7 % (les fixtures des défis du Canal)', () => {
+  const e0 = X.avancer(X.etatVide(), SEPT, null, FUTUR);
+  // Le défi s'ouvre : l'instantané « avant » est figé sur l'état d'avant les séances d'octobre.
+  let e = X.avancer(e0, OCT, null, FUTUR);
+  e = X.figerRef(e0, e, 'm1', DEBUT_D + 3600e3);
+  assert.equal(X.valeurServeur(e, 'seances', DEBUT_D, FIN_D, QUOTA), 4);
+  assert.equal(X.valeurServeur(e, 'tonnage', DEBUT_D, FIN_D, QUOTA), 13400);
+  assert.equal(X.valeurServeur(e, 'serie', DEBUT_D, FIN_D, QUOTA), 1);
+  // Squat 100 → 112 (+12 %), rowing 64 → 70 (+9,375 %) : moyenne 10,7 %.
+  assert.equal(X.valeurServeur(e, 'progressionPct', DEBUT_D, FIN_D, QUOTA, 'm1'), 10.7);
+  // Le classement : jamais aux kilos.
+  assert.equal(X.metriqueServeur(e, 'tonnage', DEBUT_D, FIN_D, QUOTA), 4);
+  // Un instantané déjà pris ne se refige pas.
+  assert.deepEqual(X.figerRef(e, e, 'm1', FIN_D).ref.m1, e.ref.m1);
+});
+
+test('valeurServeur : une séance à 0 série ne compte jamais ; le journal ne garde que 40 jours', () => {
+  const vide = { date: TZ('2026-10-06T17:00:00Z'), volume: 999, data: { Squat: { sets: [{ weight: '200', reps: '5', done: false }] } } };
+  const e = X.avancer(X.etatVide(), [OCT[0], vide], null, FUTUR);
+  assert.equal(X.valeurServeur(e, 'seances', DEBUT_D, FIN_D, 1), 1);
+  assert.equal(X.valeurServeur(e, 'tonnage', DEBUT_D, FIN_D, 1), 3200, 'les 999 kg d’une séance sans série validée ne comptent pas');
+  const loin = X.avancer(e, [SD('2026-12-20T17:00:00Z', 100, 60, 1000)], null, FUTUR);
+  assert.deepEqual(Object.keys(loin.jr), ['2026-12-20'], 'plus de 40 jours : purgé');
+  assert.equal(X.tonnageSeance({ data: { A: { sets: [{ weight: '50', reps: '10', done: true }, { weight: '50', reps: '10', done: false }] } } }), 500);
+});

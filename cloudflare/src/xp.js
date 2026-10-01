@@ -154,11 +154,13 @@ export function avancer(etat0, seances, alias, tRecu) {
     if (!s || !(d > 0)) continue;
     // Une date dans le futur du serveur n'est pas une séance faite : ignorée.
     if (d > tRecu + 10 * 60e3) continue;
-    if (seriesValidees(s) > 0) e.faites++;
+    const sv = seriesValidees(s);
+    if (sv > 0) e.faites++;
     if (d > (Number(e.derniere) || 0)) e.derniere = d;
     const j = heureLocale(d, s.tz).jour;
     let nRec = 0;
     const data = s.data && typeof s.data === 'object' ? s.data : {};
+    const prJour = {};
     for (const nm of Object.keys(data)) {
       let cur = 0;
       for (const st of ((data[nm] || {}).sets || [])) {
@@ -168,9 +170,22 @@ export function avancer(etat0, seances, alias, tRecu) {
       }
       if (!cur) continue;
       const k = cleExo(nm, alias);
+      if (cur > (prJour[k] || 0)) prJour[k] = cur;
       const h = Number(e.meilleurs[k]) || 0;
       if (h > 0 && cur > h) nRec++;
       if (cur > h) e.meilleurs[k] = cur;
+    }
+    // LE JOURNAL DES QUARANTE DERNIERS JOURS (01/10/2026) : ce que valeurServeur
+    // relit pour les défis, les duels et les saisons, sans relire une séance.
+    // Une séance sans série validée ne compte JAMAIS (ni séance, ni kilos, ni charge).
+    if (sv > 0) {
+      e.jr = e.jr || {};
+      const r = e.jr[j] || { n: 0, ton: 0, pr: {} };
+      r.n = (Number(r.n) || 0) + 1;
+      r.ton = (Number(r.ton) || 0) + tonnageSeance(s);
+      r.pr = Object.assign({}, r.pr || {});
+      for (const k of Object.keys(prJour)) if (prJour[k] > (Number(r.pr[k]) || 0)) r.pr[k] = prJour[k];
+      e.jr[j] = r;
     }
     let reste = XP_PLAFOND_JOUR - (Number(e.jours[j]) || 0);
     let gagnes = 0;
@@ -192,7 +207,97 @@ export function avancer(etat0, seances, alias, tRecu) {
   const derniers = Object.keys(e.jours).sort().slice(-4);
   e.jours = Object.fromEntries(derniers.map((k) => [k, e.jours[k]]));
   if (e.sem) e.sem = Object.fromEntries(Object.keys(e.sem).sort().slice(-SEMAINES_GARDEES).map((k) => [k, e.sem[k]]));
+  if (e.jr) {
+    const ks = Object.keys(e.jr).sort();
+    const limite = ks.length ? decalerJour(ks[ks.length - 1], -JOURS_GARDES) : '';
+    e.jr = Object.fromEntries(ks.filter((k) => k >= limite).map((k) => [k, e.jr[k]]));
+  }
   return e;
+}
+
+// ══ LES SCORES DES DÉFIS, DES DUELS ET DES SAISONS, CALCULÉS ICI (01/10/2026) ══
+// Ils étaient écrits par l'app (defiValeur) et seulement COMPARÉS par le
+// Worker : n'importe qui pouvait écrire 999 depuis la console. Ils se tirent
+// maintenant du journal e.jr, que seul le Worker écrit. La règle est celle de
+// functions/defis-calcul.js (valeurDefi), aux deux nuances près que le
+// journal impose : les bornes sont des JOURS (heure locale de la séance), et
+// une séance sans série validée ne compte pas.
+export const JOURS_GARDES = 40;
+const decalerJour = (j, n) => {
+  const [a, m, d] = String(j).split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d) + n * J).toISOString().slice(0, 10);
+};
+// Les exercices d'une séance : `data` (nom → {sets}) ou `exercises` (ancienne forme).
+function _liste(x) {
+  if (Array.isArray(x)) return x.filter(Boolean);
+  if (x && typeof x === 'object') return Object.keys(x).map((k) => x[k]).filter(Boolean);
+  return [];
+}
+function _exos(s) {
+  if (s && s.data && typeof s.data === 'object' && Object.keys(s.data).length)
+    return Object.keys(s.data).map((nm) => ({ nom: nm, sets: _liste((s.data[nm] || {}).sets) }));
+  return _liste(s && s.exercises).filter((e) => e && (e.name || e.nm)).map((e) => ({ nom: e.name || e.nm, sets: _liste(e.sets) }));
+}
+/** Les kilos d'une séance : la règle de functions/defis-calcul.js (tonnageSeance). */
+export function tonnageSeance(s) {
+  if (Number(s && s.volume) > 0) return Math.round(Number(s.volume));
+  let v = 0;
+  for (const e of _exos(s)) for (const st of e.sets) {
+    if (!st || st.done === false) continue;
+    v += (parseFloat(st.weight) || 0) * (parseFloat(st.repsDone != null ? st.repsDone : st.reps) || 0);
+  }
+  return Math.round(v);
+}
+/**
+ * L'INSTANTANÉ « AVANT » d'une progression : les meilleures charges telles
+ * qu'elles étaient AVANT les séances de ce recalcul (etatAvant), figées au
+ * premier calcul du défi `id`. Rend le nouvel état (copie) ; ne touche à rien
+ * si l'instantané existe. Les instantanés de plus de 120 jours sont oubliés.
+ */
+export function figerRef(etatAvant, etat, id, t) {
+  const e = Object.assign({}, etat, { ref: Object.assign({}, (etat && etat.ref) || {}) });
+  for (const k of Object.keys(e.ref)) if (!(Number(e.ref[k] && e.ref[k].at) > t - 120 * J)) delete e.ref[k];
+  if (!e.ref[id]) e.ref[id] = { at: t, m: Object.assign({}, (etatAvant && etatAvant.meilleurs) || {}) };
+  return e;
+}
+/**
+ * PURE. La valeur d'un athlète pour une mesure, entre debut et fin (instants) :
+ *   seances         Σ n des jours de la fenêtre ;
+ *   tonnage         Σ ton ;
+ *   serie           les semaines (lundiDuJour) où Σ n atteint le quota ;
+ *   progressionPct  la moyenne des (max pendant / meilleur avant − 1) × 100,
+ *                   « avant » étant l'instantané `ref` (ou etat.ref[ref]).
+ */
+export function valeurServeur(etat, mesure, debut, fin, quota, ref) {
+  const jr = (etat && etat.jr) || {};
+  const j0 = heureLocale(Number(debut), null).jour, j1 = heureLocale(Number(fin), null).jour;
+  const jours = Object.keys(jr).filter((j) => j >= j0 && j <= j1);
+  if (mesure === 'seances') return jours.reduce((a, j) => a + (Number(jr[j].n) || 0), 0);
+  if (mesure === 'tonnage') return jours.reduce((a, j) => a + (Number(jr[j].ton) || 0), 0);
+  if (mesure === 'serie') {
+    const q = Math.max(1, Number(quota) || 1), sem = {};
+    for (const j of jours) { const l = lundiDuJour(j); sem[l] = (sem[l] || 0) + (Number(jr[j].n) || 0); }
+    return Object.keys(sem).filter((l) => sem[l] >= q).length;
+  }
+  if (mesure === 'progressionPct') {
+    const r = typeof ref === 'string' ? (etat && etat.ref && etat.ref[ref] && etat.ref[ref].m) : ref;
+    const avant = r || {};
+    const pendant = {};
+    for (const j of jours) for (const k of Object.keys(jr[j].pr || {})) {
+      const w = Number(jr[j].pr[k]) || 0;
+      if (w > (pendant[k] || 0)) pendant[k] = w;
+    }
+    const pcts = Object.keys(pendant).filter((k) => Number(avant[k]) > 0).map((k) => (pendant[k] / Number(avant[k]) - 1) * 100);
+    if (!pcts.length) return 0;
+    return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length * 10) / 10;
+  }
+  return 0;
+}
+/** Le classement d'un défi (functions/defis-calcul.js, metriqueClassement) :
+ *  la progression en %, les semaines, sinon les séances — jamais les kilos. */
+export function metriqueServeur(etat, mesure, debut, fin, quota, ref) {
+  if (mesure === 'progressionPct' || mesure === 'serie') return valeurServeur(etat, mesure, debut, fin, quota, ref);
+  return valeurServeur(etat, 'seances', debut, fin, quota, ref);
 }
 // Les séances lues par /users/<k>/sessions?orderBy="$key"&startAt=... : un
 // tableau (à trous) ou un objet {index: séance}. Rend la liste dans l'ordre.

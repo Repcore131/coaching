@@ -3,6 +3,7 @@
 //   node --test cloudflare/test/duels.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import test from 'node:test';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
@@ -277,4 +278,94 @@ test('(d) le J-2 refusé en heures calmes : duels/<id>/rappel reste absent, et i
     duels: { [ID]: Object.assign({}, d, { fin: t + 10 * 3600e3 }) }, duels_actifs: { [ID]: { fin: t + 10 * 3600e3 } } }, t);
   assert.equal(await w2.M.duelQuotidienUn(ID, t), 'rappel_a_reprendre');
   assert.equal(w2.F.lire('duels/' + ID + '/rappel'), true);
+});
+
+// ══ LES SCORES CALCULÉS PAR LE WORKER (01/10/2026) ═══════════════════════
+// L'app n'écrit plus duels/<id>/progres : les règles le refusent au client, et
+// le Worker l'écrit depuis xp_etat après chaque séance.
+const seance = (date, n, kg) => ({ date, duration: 40, sets: n, setsPlanned: n, tz: -120,
+  data: { Squat: { sets: Array.from({ length: n }, () => ({ weight: String(kg), reps: '5', done: true })) } } });
+
+test('un client qui écrit 999 est refusé par les règles ; le score suit les séances, calculé par le Worker', async () => {
+  // 1. Les règles : plus aucune écriture client sur duels/$id/progres/$k.
+  const regles = JSON.parse(fs.readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8')
+    .replace(/^\s*\/\/.*$/gm, ''));
+  const progres = regles.rules.duels.$id.progres.$k;
+  assert.equal(progres['.write'], undefined, 'progres/$k : écrit par le Worker seul');
+  assert.equal(regles.rules.saisons_progres.$id.$k['.write'], undefined, 'saisons_progres : idem');
+  const parts = regles.rules.canaux.$coachKey.defis.$msgId.participants.$athleteKey;
+  assert.equal(parts.valeur['.write'], undefined); assert.equal(parts.metrique['.write'], undefined);
+  // 2. Le Worker : la progression vient des séances, pas de ce qu'a écrit le client.
+  const t = PARIS('2026-10-07T12:00:00');
+  const d = duel({ invite: TOM, inviteNom: 'Tom', statut: 'en_cours', debut: t - 2 * J, fin: t + 12 * J,
+    progres: { [TOM]: { valeur: 999, maj: t - J } } });         // écrit avant la fermeture des règles
+  const w = monde({ duels: { [ID]: d }, duels_actifs: { [ID]: { fin: d.fin } },
+    duels_joueur: { [LEA]: { [ID]: true }, [TOM]: { [ID]: true } },
+    users: { [LEA]: { sessions: [seance(t - 3 * J, 4, 80), seance(t - J, 4, 80), seance(t - 3600e3, 0, 80)] },
+      [TOM]: { sessions: [seance(t - 2 * 3600e3, 5, 90)] } } }, t);
+  const fin = async (par) => {
+    w.F.ecrire('evenements/e' + (1000000000 + ne++).toString(36), { type: 'seance_fin', par, at: w.t, cible: '-' });
+    for (let i = 0; i < 8 && w.F.lire('evenements'); i++) { await w.minute(); w.avance(60e3); }
+    assert.equal(w.F.lire('evenements'), null, 'la file s’est vidée');
+  };
+  await fin(LEA);
+  // Léa : la séance d'avant le début ne compte pas, celle à 0 série non plus.
+  assert.deepEqual(w.F.lire('duels/' + ID + '/progres/' + LEA), { valeur: 1, maj: w.F.lire('duels/' + ID + '/progres/' + LEA).maj, srv: true });
+  await fin(TOM);
+  assert.equal(w.F.lire('duels/' + ID + '/progres/' + TOM).valeur, 1, 'les 999 du client sont remplacés par la valeur des séances');
+  assert.deepEqual(w.F.lire('duels/' + ID + '/scores'), { createur: 1, invite: 1 });
+  // Une séance de plus pour Léa : le score suit.
+  w.F.ecrire('users/' + LEA + '/sessions/3', seance(w.t, 6, 85));
+  await fin(LEA);
+  assert.deepEqual(w.F.lire('duels/' + ID + '/scores'), { createur: 2, invite: 1 });
+  // Le duel clos, l'index du joueur est oublié.
+  w.avance(13 * J);
+  await w.M.duelQuotidienUn(ID, w.t);
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'termine');
+  assert.equal(w.F.lire('duels/' + ID + '/gagnant'), 'createur');
+  assert.equal(w.F.lire('duels_joueur/' + LEA), null);
+});
+
+test('le démarrage : la séance qui lance le duel compte, quel que soit l’ordre des événements', async () => {
+  const t = PARIS('2026-10-07T12:00:00');
+  const d = duel({ invite: TOM, inviteNom: 'Tom', statut: 'accepte', rejointLe: t - 3600e3 });
+  const w = monde({ push: pushs, duels: { [ID]: d }, duels_actifs: { [ID]: { fin: 0 } },
+    users: { [TOM]: { sessions: [seance(t - 10 * 60e3, 5, 90)] } } }, t);
+  // La séance est recalculée AVANT l'événement du duel.
+  w.F.ecrire('evenements/e' + (1000000000 + ne++).toString(36), { type: 'seance_fin', par: TOM, at: t, cible: '-' });
+  w.F.ecrire('evenements/e' + (1000000000 + ne++).toString(36), { type: 'duel_maj', par: TOM, cible: ID, at: t });
+  for (let i = 0; i < 8 && w.F.lire('evenements'); i++) { await w.minute(); w.avance(60e3); }
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'en_cours');
+  assert.equal(w.F.lire('duels/' + ID + '/progres/' + TOM).valeur, 1, 'la séance de démarrage est comptée');
+  assert.equal(w.F.lire('duels_joueur/' + TOM + '/' + ID), true);
+});
+
+test('saison, défi du Canal et trois duels : 4 écritures au plus par recalcul, la suite en sous-tâche ; le classement du défi suit', async () => {
+  const t = PARIS('2026-10-07T12:00:00');
+  const KEV = 'kev@t,fr';
+  const ids = ['daaa000000001', 'dbbb000000002', 'dccc000000003'];
+  const duels = {}, actifs = {}, index = {};
+  for (const id of ids) {
+    duels[id] = duel({ invite: TOM, inviteNom: 'Tom', statut: 'en_cours', debut: t - 2 * J, fin: t + 12 * J });
+    actifs[id] = { fin: t + 12 * J }; index[id] = true;
+  }
+  const w = monde({ duels, duels_actifs: actifs, duels_joueur: { [LEA]: index },
+    saisons: { 'hiver-2026': { nom: 'Hiver', debut: t - 5 * J, fin: t + 20 * J, mesure: 'tonnage', objectifPerso: 5000 } },
+    canaux: { [KEV]: { messages: { m1: { type: 'defi', titre: 'Octobre', mesure: 'serie', objectif: 2, collectif: false, debut: t - 5 * J, fin: t + 20 * J } },
+      defis: { m1: { participants: { [LEA]: { inscription: { le: 1, prenom: 'Léa', classement: true } } } } } } },
+    users: { [LEA]: { coachEmailKey: KEV, sessions_config: [{ active: true }, { active: true }],
+      sessions: [seance(t - J, 4, 80), seance(t - 3600e3, 3, 100)] } } }, t);
+  w.F.ecrire('evenements/e' + (1000000000 + ne++).toString(36), { type: 'seance_fin', par: LEA, at: t, cible: '-' });
+  await w.minute();
+  const ecrits = () => ids.filter((id) => w.F.lire('duels/' + id + '/progres/' + LEA)).length
+    + (w.F.lire('saisons_progres/hiver-2026/' + LEA) ? 1 : 0) + (w.F.lire('canaux/' + KEV + '/defis/m1/participants/' + LEA + '/valeur') != null ? 1 : 0);
+  assert.equal(ecrits(), 4, 'quatre écritures dans le recalcul');
+  assert.ok(Object.values(w.F.lire('evenements') || {}).some((e) => e.quoi === 'progres'), 'la cinquième en sous-tâche');
+  for (let i = 0; i < 6 && w.F.lire('evenements'); i++) { w.avance(60e3); await w.minute(); }
+  assert.equal(ecrits(), 5);
+  // Tonnage : 4×80×5 + 3×100×5 = 3 100 kg ; série : deux séances la même semaine (quota 2) = 1.
+  assert.equal(w.F.lire('saisons_progres/hiver-2026/' + LEA).valeur, 3100);
+  const p = w.F.lire('canaux/' + KEV + '/defis/m1/participants/' + LEA);
+  assert.equal(p.valeur, 1); assert.equal(p.metrique, 1); assert.equal(p.srv, true);
+  assert.equal(w.F.lire('canaux/' + KEV + '/defis/m1/public/n'), 1, 'le classement est recalculé (sous-tâche defi_maj)');
 });
