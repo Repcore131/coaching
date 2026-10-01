@@ -9464,7 +9464,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    grand cadran (#rep-arc, #rep-num, #rep-lbl, #rep-son restent) : c'est la
    feuille qui change, pas le DOM. Un toucher sur le décompte rend le grand
    cadran (basculerCadranRepos). */
-.rep-carte.rep-compact{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px}
+.rep-carte.rep-compact{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 10px}
 .rep-compact .rep-entete{display:none}
 .rep-compact .rep-corps{order:1;flex:1 1 auto;min-width:0;margin-top:0;gap:8px}
 .rep-compact .rep-scene{flex:0 0 auto;cursor:pointer}
