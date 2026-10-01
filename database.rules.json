@@ -454,6 +454,10 @@
       // « Rouvrir » le rend tel quel, abonnement PayPal compris.
       "avantEcheance": { ".validate": "newData.isNumber() && newData.val() >= 0" },
       "avantSource": { ".validate": "newData.isString() && newData.val().length < 30" },
+      // Les programmes de la boutique ACHETES (01/10/2026) : <id> = date de
+      // l achat. Pose par le Worker quand PayPal confirme ; c est lui qui ouvre
+      // boutique_contenu/<id>.
+      "programmes": { "$progId": { ".validate": "newData.isNumber() && newData.val() > 0" } },
       "$autre": { ".validate": false }
     }
   },
@@ -490,15 +494,35 @@
       // image non redimensionnee remplirait le quota a elle seule, et elle est
       // relue par CHAQUE athlete qui ouvre la boutique.
       "image": { ".validate": "newData.isString() && newData.val().length < 420000" },
-      // ⚠ LES SEANCES SONT UNE CHAINE JSON, ET C EST DELIBERE. Valider sept
-      // jours d exercices champ par champ demanderait ici une transcription de
-      // tout le modele de donnees, qui divergerait du code au premier ajout.
-      // Une chaine bornee protege ce qui compte a cet etage : la taille.
-      "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
+      // ⚠ LES SEANCES NE SONT PLUS ICI (01/10/2026). Ce noeud est lu par
+      // TOUT compte connecte : y laisser le contenu vendu, c etait le donner.
+      // Elles vivent dans boutique_contenu/<id>, ouvert a l acheteur seul.
+      // La fiche dit seulement qu il y a un contenu (aContenu).
+      "aContenu": { ".validate": "newData.isBoolean()" },
+      "semaines": { ".validate": "(newData.isNumber() && newData.val() > 0 && newData.val() < 200) || (newData.isString() && newData.val().length < 40)" },
+      "seancesSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 15" },
+      "niveau": { ".validate": "newData.isString() && newData.val().length < 40" },
       "maj": { ".validate": "newData.isNumber()" },
       // Retire de la vente sans etre supprime : un programme deja achete doit
       // rester lisible par ceux qui l ont paye.
       "masque": { ".validate": "newData.isBoolean()" },
+      "$autre": { ".validate": false }
+    }
+  },
+
+  // LE CONTENU VENDU (01/10/2026) : les seances d un programme de la
+  // boutique, en chaine JSON bornee (meme raison qu avant : valider sept jours
+  // d exercices champ par champ transcrirait tout le modele). Lu par
+  // l ACHETEUR — droits/<sa cle>/programmes/<id>, pose par le Worker quand
+  // PayPal confirme le paiement, et que personne d autre n ecrit — et par le
+  // createur, adresse VERIFIEE. Ecrit par le createur seul.
+  "boutique_contenu": {
+    "$progId": {
+      ".read": "auth != null && (root.child('droits').child(auth.token.email.replace('.', ',')).child('programmes').child($progId).exists() || (auth.token.email === 'guellec.coachingpro@gmail.com' && auth.token.email_verified === true))",
+      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      ".validate": "$progId.length < 60",
+      "seances": { ".validate": "newData.isString() && newData.val().length < 240000" },
+      "maj": { ".validate": "newData.isNumber()" },
       "$autre": { ".validate": false }
     }
   },
@@ -2209,8 +2233,13 @@
       "$autre": { ".validate": false }
     },
 
+    // LE CATALOGUE D EXERCICES (01/10/2026) : un coach AU REGISTRE
+    // (coachs_registre/<cle>, ecrit par le Worker ou le createur), ou un palier
+    // Ultime dans droits/ (ecrit par le serveur). Plus jamais users/<cle>/role,
+    // que son titulaire ecrivait : un role « coach » pose avant le gel n ouvre
+    // plus rien.
     "exercices": {
-      ".read": "auth != null && (\n  root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() ||\n  (root.child('reglages_publics').child('droitsServeur').child('v').val() !== 2 &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach') ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
+      ".read": "auth != null && (\n  root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }

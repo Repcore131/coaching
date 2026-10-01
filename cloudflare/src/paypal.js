@@ -331,8 +331,11 @@ export function creerPaypal(ctx) {
         ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
       // LA TRACE DE L'ACHAT DANS LE DOSSIER, écrite ICI depuis le 30/09/2026 :
       // programmesAchetes est gelé par les règles, l'app ne peut plus l'y poser.
+      // ET LA PREUVE D'ACHAT, dans droits/ (01/10/2026) : c'est elle, et elle
+      // seule, qui ouvre boutique_contenu/<prog> — le contenu vendu.
       await db.ref().update({ ['users/' + cle + '/programmesAchetes/' + prog]: { le: t, prixCts: Number(prixCts),
-        ordre: net(idCommande).slice(0, 64), ouvertJusqu: t + PROGRAMME_MS }, ['users/' + cle + '/updatedAt']: t });
+        ordre: net(idCommande).slice(0, 64), ouvertJusqu: t + PROGRAMME_MS }, ['users/' + cle + '/updatedAt']: t,
+        ['droits/' + cle + '/programmes/' + prog]: t });
     }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
@@ -455,6 +458,8 @@ export function creerPaypal(ctx) {
       if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
         await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t, [b + 'updatedAt']: t });
       }
+      // Remboursé : le contenu se referme.
+      if (rec.prog) await db.ref().update({ ['droits/' + rec.cle + '/programmes/' + rec.prog]: null });
       const d = await M.majDroits(rec.cle, (x) => (x && Number(x.ultimeJusqu) > t ? { ultimeJusqu: t } : null));
       return (d || rec.prog) ? 'programme fermé au ' + dateFr(t) : null;
     }

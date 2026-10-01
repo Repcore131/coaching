@@ -80,6 +80,11 @@ export async function planifierMigration({ db, env, fetchImpl, maintenant, journ
       const aLui = custom === cle + '|' + prog || ((custom === prog || !custom) && payeur === cle);
       if (!cmd || cmd.status !== 'COMPLETED' || !aLui) { rapport.refuses.push(cle + ' programme ' + prog + ' : commande ' + ordre + ' non vérifiée'); continue; }
       if (!premier) { premier = { le: Number(a.le) || t, abo: null, source: 'migration' }; maj['paypal_premiers/' + cle] = premier; rapport.premiers++; }
+      // LA PREUVE D'ACHAT qui ouvre boutique_contenu/<prog> (01/10/2026).
+      if (role !== 'coach' && !(droits && droits.programmes && droits.programmes[prog])) {
+        d = Object.assign({ palier: 'aucun', echeance: 0, source: 'paypal', maj: t }, d || {});
+        d.programmes = Object.assign({}, (droits && droits.programmes) || {}, d.programmes || {}, { [prog]: Number(a.le) || t });
+      }
       const fin = Math.min(Number(a.ouvertJusqu) || 0, (Number(a.le) || t) + 3 * MOIS_MS);
       if (fin > t && role !== 'coach' && !(droits && Number(droits.ultimeJusqu) >= fin)) {
         d = Object.assign({ palier: 'aucun', echeance: 0, source: 'paypal', maj: t }, d || {}, { ultimeJusqu: Math.max(fin, Number(d && d.ultimeJusqu) || 0) });

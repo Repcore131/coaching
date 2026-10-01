@@ -24243,6 +24243,40 @@ async function testExercices(){
             return _echec('une fonction du lecteur sort sur le réseau');
         return true;})());
 
+      // ══ 01/10/2026 — LA FICHE PUBLIQUE NE PORTE PLUS LE CONTENU VENDU ══════
+      okA('BOUTIQUE — publier écrit la fiche SANS séances dans boutique/, le contenu dans boutique_contenu/ ; la lecture fusionne',async()=>{
+        const svF=window.fetch, svT=CLOUD._getToken, svB=localStorage.getItem(RC_BOUTIQUE_CLE), svC=localStorage.getItem(RC_BOUTIQUE_CONTENU_CLE), svP=_boutiquePubliee;
+        const vus=[];
+        try{
+          CLOUD._getToken=async()=>'J';
+          window.fetch=async(u,o)=>{ vus.push({u:String(u),m:(o&&o.method)||'GET',b:o&&o.body?JSON.parse(o.body):null}); return new Response('{}',{status:200}); };
+          const S=JSON.stringify({H:[{name:'Push',exercises:[{name:'Squat'}]}]});
+          const ok2=await CLOUD.ecrireProgrammeBoutique('px',{nom:'PX',prixCts:990,maj:7,seances:S});
+          if(!ok2) return _echec('publication refusée');
+          const c=vus.find(v=>/\/boutique_contenu\/px\.json/.test(v.u)), f=vus.find(v=>/\/boutique\/px\.json/.test(v.u));
+          if(!c||c.m!=='PUT'||c.b.seances!==S) return _echec('contenu non écrit dans boutique_contenu');
+          if(!f||('seances' in f.b)) return _echec('la fiche publique porte encore les séances : '+JSON.stringify(f&&f.b).slice(0,120));
+          if(f.b.aContenu!==true) return _echec('la fiche ne signale pas son contenu');
+          if(vus.indexOf(c)>vus.indexOf(f)) return _echec('la fiche part avant le contenu');
+          // Mise à jour des séances : contenu, puis la date de la fiche.
+          vus.length=0;
+          await CLOUD.majSeancesProgrammeBoutique('px',S);
+          if(!vus.some(v=>/boutique_contenu\/px/.test(v.u)&&v.m==='PUT')) return _echec('la mise à jour ne passe pas par le contenu');
+          if(vus.some(v=>/\/boutique\/px\.json/.test(v.u)&&v.b&&('seances' in v.b))) return _echec('la mise à jour remet des séances dans la fiche');
+          // Lecture : la fiche du cache + le contenu du cache = un programme complet.
+          _poserBoutiqueLocale({px:{nom:'PX',prixCts:990,aContenu:true,maj:7}});
+          _poserContenuLocal('px',{seances:S,maj:7});
+          const p=programmeDuCatalogue('px');
+          if(!p||!Array.isArray(p.seances('H'))||p.seances('H')[0].name!=='Push') return _echec('le contenu n’est pas relu');
+          _poserContenuLocal('px',null);
+          const p2=programmeDuCatalogue('px');
+          return (p2&&p2.seances('H')===null)?true:_echec('sans contenu local, des séances apparaissent');
+        } finally {
+          window.fetch=svF; CLOUD._getToken=svT; _boutiquePubliee=svP;
+          if(svB==null) localStorage.removeItem(RC_BOUTIQUE_CLE); else localStorage.setItem(RC_BOUTIQUE_CLE,svB);
+          if(svC==null) localStorage.removeItem(RC_BOUTIQUE_CONTENU_CLE); else localStorage.setItem(RC_BOUTIQUE_CONTENU_CLE,svC);
+        }
+      });
       // ══ 30/09/2026 — LES DONNÉES DE L'ATHLÈTE NE S'EXÉCUTENT PAS CHEZ LE COACH ══
       // Une URL de vidéo, une photo de bilan, un nom de séance ou un repère de
       // correction viennent du dossier de l'athlète, qu'il écrit à volonté.

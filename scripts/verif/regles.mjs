@@ -232,8 +232,18 @@ if(mLit[1].indexOf('auth != null')<0){
 }
 // Les bornes de taille, des deux cotes. Une borne cote client plus large que
 // celle du serveur donnerait un echec de publication muet.
-for(const [champ,att] of [['image',420000],['seances',240000]]){
-  const m=mBoutique[1].match(new RegExp('"'+champ+'"\\s*:\\s*\\{[^}]*length\\s*<\\s*(\\d+)'));
+// ⚠ LES SEANCES VIVENT DANS boutique_contenu DEPUIS LE 01/10/2026 : la fiche
+//   publique ne doit plus les porter, et le contenu doit rester ferme a qui
+//   n'a pas achete (droits/<cle>/programmes/<id>) — sinon la boutique donne
+//   ce qu'elle vend a tout compte connecte.
+const mContenu=regles.match(/"boutique_contenu"\s*:\s*\{([\s\S]*?)\n  \}/);
+if(!mContenu){ console.error('\nle noeud boutique_contenu est absent : les seances vendues n\'ont plus de place fermee'); process.exit(1); }
+if(/"seances"\s*:/.test(mBoutique[1])){ console.error('\nLA FICHE PUBLIQUE (boutique) ACCEPTE ENCORE DES SEANCES : tout compte connecte les lirait.'); process.exit(1); }
+const mLitC=mContenu[1].match(/"\.read"\s*:\s*"([^"]+)"/), mEcC=mContenu[1].match(/"\.write"\s*:\s*"([^"]+)"/);
+if(!mLitC||mLitC[1].indexOf("child('programmes').child($progId).exists()")<0){ console.error('\nboutique_contenu ne se lit plus sur la preuve d\'achat (droits/<cle>/programmes/<id>)'); process.exit(1); }
+if(!mEcC||mEcC[1].indexOf(mCreateur[1])<0){ console.error('\nboutique_contenu s\'ecrit par un autre que le createur'); process.exit(1); }
+for(const [champ,att,bloc] of [['image',420000,mBoutique[1]],['seances',240000,mContenu[1]]]){
+  const m=bloc.match(new RegExp('"'+champ+'"\\s*:\\s*\\{[^}]*length\\s*<\\s*(\\d+)'));
   if(!m){ console.error('\nle champ '+champ+' n\'est pas borne dans les regles'); process.exit(1); }
   if(Number(m[1])!==att){
     console.error('\nBORNE INCOHERENTE sur '+champ+' : regles '+m[1]+', code '+att);
@@ -245,7 +255,7 @@ for(const [champ,att] of [['image',420000],['seances',240000]]){
     process.exit(1);
   }
 }
-console.log('boutique : un seul vendeur, lecture ouverte, bornes concordantes');
+console.log('boutique : un seul vendeur, fiche ouverte sans seances, contenu a l\'acheteur, bornes concordantes');
 
 // ══ LE LANGAGE DES REGLES N'EST PAS DU JAVASCRIPT ═════════════════════════
 //

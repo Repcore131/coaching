@@ -94,11 +94,13 @@ await test('programme acheté : Ultime trois mois par-dessus l’abonnement (ult
     { commandes: { ORD00000001: { status: 'COMPLETED', purchase_units: [{ custom_id: 'lea@t,fr|p1', amount: { currency_code: 'EUR', value: '14.90' } }] } } });
   await w.envoyer('PAYMENT.CAPTURE.COMPLETED', { id: 'CAP00000001', amount: { value: '14.90', currency_code: 'EUR' },
     supplementary_data: { related_ids: { order_id: 'ORD00000001' } } });
-  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + 3 * MOIS });
+  // La preuve d'achat qui ouvre boutique_contenu/p1 (01/10/2026).
+  assert.deepEqual(w.droits(), { palier: 'aucun', echeance: 0, source: 'paypal', ultimeJusqu: T0 + 3 * MOIS, programmes: { p1: T0 } });
   w.t = T0 + J;
   await w.envoyer('PAYMENT.CAPTURE.REFUNDED', { id: 'RC000000001', amount: { value: '14.90', currency_code: 'EUR' },
     links: [{ rel: 'up', href: 'https://x/v2/payments/captures/CAP00000001' }] });
   assert.equal(w.droits().ultimeJusqu, T0 + J);
+  assert.equal(w.droits().programmes, undefined, 'remboursé : le contenu se referme');
 });
 
 await test('un accès posé à la main par le créateur n’est pas réécrit par PayPal', async () => {

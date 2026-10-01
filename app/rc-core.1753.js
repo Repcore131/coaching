@@ -277,6 +277,47 @@ function _poserBoutiqueLocale(d){
   try{ localStorage.setItem(RC_BOUTIQUE_CLE,JSON.stringify(_boutiquePubliee)); }catch(e){}
   return _boutiquePubliee;
 }
+// ══ LA FICHE ET LE CONTENU, SEPARES (01/10/2026) ═══════════════════════════
+// boutique/<id> est lu par tout compte connecte : il ne porte plus que la
+// FICHE (titre, prix, accroche, image…). Les seances — ce qui est vendu —
+// vivent dans boutique_contenu/<id>, que les regles n'ouvrent qu'a
+// l'acheteur (droits/<cle>/programmes/<id>, pose par le Worker a l'achat) et
+// au createur. Elles se gardent ici, par programme, avec leur date.
+const RC_BOUTIQUE_CONTENU_CLE='rc_boutique_contenu';
+function _contenusLocaux(){
+  try{ const o=JSON.parse(localStorage.getItem(RC_BOUTIQUE_CONTENU_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+function _poserContenuLocal(id,c){
+  try{
+    const o=_contenusLocaux();
+    if(c&&typeof c.seances==='string') o[id]={seances:c.seances,maj:Number(c.maj)||0};
+    else delete o[id];
+    localStorage.setItem(RC_BOUTIQUE_CONTENU_CLE,JSON.stringify(o));
+  }catch(e){}
+}
+// Le contenu d'UN programme, lu au serveur et garde. true s'il est la.
+async function chargerContenuBoutique(id){
+  if(!id||!CLOUD.ok()) return false;
+  const r=await CLOUD.lireContenuBoutique(id).catch(()=>null);
+  if(!r||!r.ok) return false;
+  _poserContenuLocal(id,r.contenu);
+  return !!(r.contenu&&r.contenu.seances);
+}
+// Les contenus que ce compte peut lire : tous pour le createur, ceux qu'il a
+// achetes pour un athlete. Relus seulement s'ils manquent ou si la fiche est
+// plus recente que la copie.
+async function _rafraichirContenus(fiches){
+  const loc=_contenusLocaux();
+  const a=(typeof currentUser==='object'&&currentUser&&currentUser.programmesAchetes)||{};
+  const ids=Object.keys(fiches||{}).filter(id=>{
+    const f=fiches[id]; if(!f||typeof f!=='object'||!f.aContenu) return false;
+    if(!estVendeur()&&!Object.prototype.hasOwnProperty.call(a,id)) return false;
+    return !loc[id]||Number(loc[id].maj||0)<Number(f.maj||0);
+  });
+  for(const id of ids){ try{ await chargerContenuBoutique(id); }catch(e){} }
+  return ids.length;
+}
 // Rapatrie le noeud public. Silencieuse : hors ligne, on garde le cache.
 async function rafraichirBoutique(){
   try{
@@ -284,6 +325,7 @@ async function rafraichirBoutique(){
     const d=await CLOUD.lireBoutique();
     if(d===null) return null;          // echec reseau : on ne vide pas le cache
     _poserBoutiqueLocale(d);
+    try{ await _rafraichirContenus(d); }catch(e){}
     try{ _rendreBoutique(); }catch(e){}
     return d;
   }catch(e){ return null; }
@@ -295,7 +337,11 @@ function _programmePublie(id){
   const b=_boutiqueLocale()||{};
   if(typeof id!=='string'||!Object.prototype.hasOwnProperty.call(b,id)) return null;
   const p=b[id];
-  return (p&&typeof p==='object')?p:null;
+  if(!p||typeof p!=='object') return null;
+  // LE CONTENU, s'il est sur cet appareil (achete, ou createur). Une fiche
+  // d'avant la separation peut encore porter ses seances : elles servent.
+  const c=_contenusLocaux()[id];
+  return (c&&typeof c.seances==='string')?Object.assign({},p,{seances:c.seances}):p;
 }
 function _seancesPubliees(p,genre){
   try{
@@ -349,7 +395,7 @@ function programmeDuCatalogue(id){
     niveau:f('niveau',base&&base.niveau),
     // UN EMPLACEMENT VIDE S'OUVRE DES QUE LE COACH Y PUBLIE DES SEANCES : la
     // publication est l'autre chemin pour le remplir, et elle vaut la main.
-    aCompleter:(base&&base.aCompleter)?!pub.seances:false,
+    aCompleter:(base&&base.aCompleter)?!(pub.seances||pub.aContenu):false,
     seances:seances
   });
 }
@@ -5572,18 +5618,49 @@ const CLOUD={
   },
   // UN PROGRAMME A LA FOIS, par PUT : ecrire tout le noeud d'un coup
   // effacerait ce qu'un autre appareil vient d'y poser.
+  // ⚠ DEUX ECRITURES (01/10/2026) : la FICHE dans boutique/<id> (lue par
+  //   tous), les SEANCES dans boutique_contenu/<id> (acheteurs et createur).
+  //   Le contenu d'abord : une fiche qui annonce aContenu sans contenu
+  //   livrerait un programme vide.
+  _urlContenuBoutique(id){ return this._fbUrl.replace('users.json','boutique_contenu/'+encodeURIComponent(id)+'.json'); },
   async ecrireProgrammeBoutique(id,obj){
     if(!id||!obj) return false;
     const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),12000);
     try{
       const token=await this._getToken();
       if(!token) return false;
-      const corps=JSON.stringify(obj);
+      const fiche=Object.assign({},obj); delete fiche.seances;
+      if(typeof obj.seances==='string'&&obj.seances){
+        const c=JSON.stringify({seances:obj.seances,maj:Number(obj.maj)||Date.now()});
+        try{ _quotaCompter('out',c.length); }catch(e){}
+        const rc=await fetch(this._urlContenuBoutique(id)+'?auth='+token,{method:'PUT',body:c,signal:ctrl.signal});
+        if(!rc.ok) return false;
+        fiche.aContenu=true;
+        try{ _poserContenuLocal(id,{seances:obj.seances,maj:Number(obj.maj)||Date.now()}); }catch(e){}
+      }
+      const corps=JSON.stringify(fiche);
       try{ _quotaCompter('out',corps.length); }catch(e){}
       const r=await fetch(this._urlBoutique(id)+'?auth='+token,
         {method:'PUT',body:corps,signal:ctrl.signal});
       return r.ok;
     }catch(e){ return false; }
+  },
+  // Le contenu d'un programme : {ok:true, contenu|null} quand le serveur a
+  // repondu (un 401 = pas achete : contenu null, refuse true), {ok:false} sinon.
+  async lireContenuBoutique(id){
+    if(!id) return {ok:false};
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),10000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false};
+      const r=await fetch(this._urlContenuBoutique(id)+'?auth='+token,{signal:ctrl.signal});
+      if(r.status===401||r.status===403) return {ok:true,contenu:null,refuse:true};
+      if(!r.ok) return {ok:false};
+      const t=await r.text();
+      try{ _quotaCompter('in',t.length); }catch(e){}
+      const d=JSON.parse(t||'null');
+      return {ok:true,contenu:(d&&typeof d==='object')?d:null};
+    }catch(e){ return {ok:false}; }
   },
   // LES SEANCES SEULES, par PATCH. Un modele retouche met a jour ce qu'il
   // livre sans toucher au titre, au prix ni au visuel : un PUT reecrirait la
@@ -5595,10 +5672,15 @@ const CLOUD={
     try{
       const token=await this._getToken();
       if(!token) return false;
-      const corps=JSON.stringify({seances:seances,maj:Date.now()});
+      const maj=Date.now();
+      const corps=JSON.stringify({seances:seances,maj});
       try{ _quotaCompter('out',corps.length); }catch(e){}
+      const rc=await fetch(this._urlContenuBoutique(id)+'?auth='+token,
+        {method:'PUT',body:corps,signal:ctrl.signal});
+      if(!rc.ok) return false;
+      // La fiche suit : sa date dit aux acheteurs de relire le contenu.
       const r=await fetch(this._urlBoutique(id)+'?auth='+token,
-        {method:'PATCH',body:corps,signal:ctrl.signal});
+        {method:'PATCH',body:JSON.stringify({maj,aContenu:true}),signal:ctrl.signal});
       return r.ok;
     }catch(e){ return false; }
   },
@@ -5610,6 +5692,9 @@ const CLOUD={
       if(!token) return false;
       const r=await fetch(this._urlBoutique(id)+'?auth='+token,
         {method:'DELETE',signal:ctrl.signal});
+      // Le contenu part avec la fiche.
+      try{ await fetch(this._urlContenuBoutique(id)+'?auth='+token,{method:'DELETE',signal:ctrl.signal}); }catch(e){}
+      try{ _poserContenuLocal(id,null); }catch(e){}
       return r.ok;
     }catch(e){ return false; }
   },
@@ -36807,10 +36892,7 @@ async function _majSeancesBoutique(p){
   }
   if(ok){
     // Le cache suit, sans attendre la prochaine relecture du noeud.
-    const b=_boutiqueLocale()||{};
-    if(b[p.boutiqueId]&&typeof b[p.boutiqueId]==='object'){
-      b[p.boutiqueId].seances=s; _poserBoutiqueLocale(b);
-    }
+    _poserContenuLocal(p.boutiqueId,{seances:s,maj:Date.now()});
     return true;
   }
   const e=new Error(!s
@@ -45597,9 +45679,24 @@ async function appliquerProgramme(id){
     g=(await rcConfirm('Quelle version de « '+(p.nom||'ce programme')+' » ?',
       null,'Homme','Femme'))?'H':'F';
   }
-  const seances=(typeof p.seances==='function')?p.seances(g):null;
+  // LE CONTENU N'EST PLUS DANS LA FICHE (01/10/2026) : on le lit s'il manque.
+  // Juste apres un achat, il n'est lisible qu'une fois le paiement confirme
+  // par PayPal au serveur : on reessaie quelques secondes.
+  let pc=p;
+  const _fiche=_programmePublie(id);
+  if(_fiche&&_fiche.aContenu&&!_fiche.seances){
+    for(let k=0;k<20;k++){
+      if(await chargerContenuBoutique(id)) break;
+      if(k===0) toast('Paiement reçu, installation du programme…','var(--info)');
+      await new Promise(r=>setTimeout(r,3000));
+    }
+    pc=programmeDuCatalogue(id)||p;
+  }
+  const seances=(typeof pc.seances==='function')?pc.seances(g):null;
   if(!Array.isArray(seances)||!seances.length){
-    toast('Ce programme n\'a aucune séance.','var(--orange)'); return false;
+    toast((_fiche&&_fiche.aContenu)
+      ?'Le programme s’installera dès que ton paiement sera confirmé : retrouve-le dans la boutique dans un instant.'
+      :'Ce programme n\'a aucune séance.','var(--orange)'); return false;
   }
   const sc=currentUser.sessions_config;
   const porte=Array.isArray(sc)&&sc.some(x=>x&&x.active&&((x.exercises||[]).length||String(x.name||'').trim()));
