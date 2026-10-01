@@ -40470,6 +40470,36 @@ async function testExercices(){
         return /\(_photo\|\|_nv\)\?'var\(--green\)':'var\(--orange\)'/.test(s)
           ?true:_echec('un exercice sans média reçoit quand même un ✓ vert');})());
 
+      ok('Banque d’exercices : les muscles en grille de vignettes (image + nom), plus de rangée à faire glisser',(()=>{
+        // Kevin, 01/10/2026 : « un carré, un muscle, cinq par ligne, la petite image comme pour le volume ».
+        const z=document.getElementById('bq-filtres');
+        if(!z) return _echec('#bq-filtres absent');
+        if(!z.closest('.scroll-area')) return _echec('les filtres ne défilent pas avec la liste');
+        const sv={f:_bqFiltres,o:_bqMusclesOuvert,h:z.innerHTML};
+        try{
+          _bqFiltres={}; _bqMusclesOuvert=false; _bqRendreFiltres();
+          const g=z.querySelector('.bq-mus-grille');
+          if(!g) return _echec('pas de grille');
+          const t=[...g.querySelectorAll('.bq-mus')];
+          if(t.length!==Object.keys(MUSCLES).length) return _echec(t.length+' vignettes pour '+Object.keys(MUSCLES).length+' muscles');
+          const sans=t.filter(x=>!x.querySelector('img')||!x.querySelector('span').textContent.trim()).map(x=>x.dataset.muscle);
+          if(sans.length) return _echec('sans image ou sans nom : '+sans.join(', '));
+          if((t[0].querySelector('img').getAttribute('src')||'').indexOf('img/muscles/')<0) return _echec('ce n’est pas l’illustration du volume');
+          if(getComputedStyle(g).display!=='grid'||/auto|scroll/.test(getComputedStyle(g).overflowX)) return _echec('la grille défile encore');
+          // Plus aucune puce de muscle dans une rangée à faire glisser.
+          if([...z.querySelectorAll('.pf-chip')].some(b=>(b.getAttribute('onclick')||'').indexOf("'muscle'")>=0)) return _echec('des puces de muscle restent');
+          // Un muscle choisi : la grille se replie sur lui, avec de quoi en changer ou tout rouvrir.
+          _bqFiltres={muscle:'DORSAUX'}; _bqRendreFiltres();
+          if(z.querySelector('.bq-mus-grille')) return _echec('la grille ne se replie pas');
+          const c=z.querySelector('.bq-mus-choisi .bq-mus.on');
+          if(!c||c.dataset.muscle!=='DORSAUX'||c.getAttribute('aria-pressed')!=='true') return _echec('le muscle choisi n’est pas montré');
+          if(z.querySelectorAll('.bq-mus-cmd .pf-chip').length!==2) return _echec('« Changer » ou « Tous les muscles » manque');
+          // « Changer de muscle » rouvre la grille, le choisi marqué.
+          _bqMusclesOuvert=true; _bqRendreFiltres();
+          const on=[...z.querySelectorAll('.bq-mus-grille .bq-mus.on')];
+          return (on.length===1&&on[0].dataset.muscle==='DORSAUX')?true:_echec('grille rouverte : '+on.length+' vignette(s) marquée(s)');
+        } finally { _bqFiltres=sv.f; _bqMusclesOuvert=sv.o; z.innerHTML=sv.h; }})());
+
       ok('Volume prescrit (coach) : les cartes de l’athlète, illustration du muscle, barre et statut',(()=>{
         // Kevin, 01/10/2026 : « fais cette partie comme celle de l'athlète avec les images ».
         const z=document.getElementById('csm-volume');
