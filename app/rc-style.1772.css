@@ -4337,9 +4337,11 @@ html{scroll-behavior:smooth}
   background:linear-gradient(90deg,color-mix(in srgb,var(--text) 30%,transparent),transparent 55%);
   opacity:0;animation:ccVise 480ms var(--c-out) both}
 @keyframes ccVise{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
+/* EN ROUGE (Kevin, 01/10/2026) : les titres de groupe de la carte (Programmation,
+   Exécution…) et le trait qui les suit. --red-text se lit sur fond sombre comme clair. */
 .px-grp{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:var(--fs-xs);
-  font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)}
-.px-grp::after{content:'';flex:1;height:1px;background:var(--border)}
+  font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text)}
+.px-grp::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 75%,transparent),color-mix(in srgb,var(--red) 18%,transparent))}
 .px-grp:first-child{margin-top:0}
 .bq-l{transition:border-color var(--t-1),background var(--t-1),transform var(--t-1)}
 .bq-l:hover{border-color:color-mix(in srgb,var(--red) 55%,transparent);background:var(--surface-2)}

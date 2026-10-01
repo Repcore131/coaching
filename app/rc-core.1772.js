@@ -43675,7 +43675,8 @@ function _htmlBoutonProgEx(ex,i){
   }
   return `<div class="px-grp">Programmation</div>
     <div style="margin-bottom:8px">
-      <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)"
+      <!-- EN ROUGE (Kevin, 01/10/2026) : c'est le geste de ce groupe. -->
+      <button type="button" class="btn btn-red btn-sm px-b-prog" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs)"
         onclick="ouvrirProgEx(${i})">${p?'Modifier la programmation':'Mettre en place une programmation'}</button>
       ${resume}
     </div>`;

@@ -795,8 +795,8 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .ccd-b4:hover,:root[data-theme="clair"] .ccd-b4:focus-visible{background:var(--surface-2)}
 :root[data-theme="clair"] .ccd-b4-agit{color:var(--red-texte-clair);text-shadow:0 0 8px color-mix(in srgb,var(--red) 45%,transparent);border-left-color:var(--red)}
 :root[data-theme="clair"] .cc-sect-t.cc-vise::before{background:linear-gradient(90deg,color-mix(in srgb,var(--text) 30%,transparent),transparent 55%)}
-:root[data-theme="clair"] .px-grp{color:var(--sub)}
-:root[data-theme="clair"] .px-grp::after{background:var(--border)}
+:root[data-theme="clair"] .px-grp{color:var(--red-text)}
+:root[data-theme="clair"] .px-grp::after{background:linear-gradient(90deg,color-mix(in srgb,var(--red) 75%,transparent),color-mix(in srgb,var(--red) 18%,transparent))}
 :root[data-theme="clair"] .bq-l:hover{border-color:color-mix(in srgb,var(--red) 55%,transparent);background:var(--surface-2)}
 :root[data-theme="clair"] .bq-l:active{border-color:var(--red)}
 :root[data-theme="clair"] #ch-clients-list .client-row.cr-neuve::after{background:linear-gradient(90deg,color-mix(in srgb,var(--red) 30%,transparent),color-mix(in srgb,var(--red) 6%,transparent) 62%,transparent)}
