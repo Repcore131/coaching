@@ -11,13 +11,50 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
 | Rappel de bilan | samedi 10 h |
 | Ton mois en chiffres (Wrapped) | le 1er du mois, 10 h |
 | Badge à portée | dimanche 17 h |
-| Messages tombés la nuit (21 h – 8 h) | 8 h 05 |
+| Messages tombés la nuit (21 h – 8 h, heure de l'athlète) | dès 8 h chez l'athlète (vérifié chaque heure) |
 | Rareté des badges | chaque nuit, 3 h 17 |
 | Parrainage et codes ambassadeur : jugés, rattachés, parrain prévenu | dans la minute |
 | Clic sur un lien partagé (écran « Viralité ») | à l'arrivée |
 
-Règles d'envoi : **une notification par jour et par personne au plus**, rien entre 21 h et 8 h
-(heure de Paris), chaque type se coupe dans l'app (Réglages → Notifications).
+## Règles d'envoi
+
+- **Une notification par jour et par personne au plus.** Le jour est celui de l'athlète, dans son
+  fuseau : un changement d'heure ne le décale pas.
+- **Rien entre 21 h et 8 h, heure de l'athlète.**
+  - Le fuseau, c'est `users/<clé>/tz` : le nom IANA du fuseau de l'appareil (`America/Montreal`),
+    écrit par l'app à chaque démarrage s'il a changé.
+  - Un fuseau absent ou mal formé vaut `Europe/Paris`. L'app, le Worker et la règle de la base
+    partagent le même motif ; `scripts/verif/regles.mjs` vérifie qu'ils restent identiques.
+  - Les travaux planifiés (série, bilan, badge, Wrapped, accès, retour) se déclenchent toujours à
+    l'heure de **Paris**. Ils n'envoient que si l'heure **locale** de l'athlète est entre 8 h et 21 h.
+  - Sinon, le message est **déposé** pour son matin, et compté comme parti : il n'est pas redéposé le
+    lendemain.
+- **La nuit, un seul message attend : le plus important.**
+  - `push_attente/<clé>` = `{message, at, prio, cumul, tz}`.
+  - Un nouveau message ne remplace l'attendu que si sa priorité est **au moins égale** :
+
+    | priorité | types |
+    |---|---|
+    | 5 | coach, message |
+    | 4 | acces, prospect |
+    | 3 | filleul |
+    | 2 | defi, relance, serie, bilan |
+    | 1 | wrapped, badge, retour, sante |
+
+    Le mot du coach survit donc au défi de l'équipe.
+  - `cumul` compte les messages fusionnés. Au-delà d'un, l'envoi du matin ajoute « + N autres
+    nouvelles » au texte.
+  - Le travail `attente` passe **chaque heure** : chaque message part quand l'athlète est sorti de
+    *ses* heures calmes. 8 h à Montréal, c'est 14 h à Paris. Un message de plus de 14 h est retiré.
+- **Une panne passagère ne perd rien.**
+  - 429 ou 5xx sur **tous** les appareils : le jour n'est pas consommé.
+  - Dans la file (événement, sous-tâche), l'envoi lève `push_transitoire`. `planif.js` le remet en
+    fin de file (`essais` + 1 ; au cinquième échec, `evenements_ko`).
+  - 404 ou 410 : l'abonnement est mort, il est supprimé.
+- **Chaque type se coupe** dans l'app (Réglages → Notifications).
+- **Le coût** : le fuseau et les préférences se lisent en **une** requête (la surface du dossier,
+  `?shallow=true`). Les rappels planifiés lisent le fuseau dans le profil (`worker/profils`), sans
+  requête de plus.
 
 ## Ce que coûte le plan gratuit
 

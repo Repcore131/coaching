@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, paris, serieDuJour } from '../src/metier.js';
+import { creerMetier, paris, serieDuJour, heureLocale, heuresCalmes, pushAutorise, fuseauValide } from '../src/metier.js';
 import { minute, BUDGET } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -378,6 +378,66 @@ await test('l’événement « abonnement » va à PayPal (indexer), pas au mét
   await w.minute();
   assert.deepEqual(vus, [[A1, 'I-ABC123']]);
   assert.equal(w.F.lire('evenements'), null);
+});
+
+// ══ LE FUSEAU DE L'ATHLÈTE (01/10/2026) ═══════════════════════════════════
+await test('fuseau : Réunion à 19 h Paris = heures calmes ; Montréal à 14 h Paris = 8 h locales, envoi autorisé', async () => {
+  const t19 = PARIS('2026-10-01T19:00:00'), t14 = PARIS('2026-10-01T14:00:00');
+  assert.equal(heureLocale(t19, 'Indian/Reunion').heure, 21);
+  assert.equal(heuresCalmes(t19, 'Indian/Reunion'), true);
+  assert.equal(heuresCalmes(t19), false, 'à Paris, 19 h n’est pas calme');
+  assert.equal(pushAutorise('coach', null, null, t19, 'Indian/Reunion').raison, 'calme');
+  assert.equal(heureLocale(t14, 'America/Montreal').heure, 8);
+  assert.deepEqual(pushAutorise('coach', null, null, t14, 'America/Montreal'), { ok: true, raison: null });
+  assert.equal(pushAutorise('coach', null, null, PARIS('2026-10-01T13:59:00'), 'America/Montreal').raison, 'calme', '7 h 59 à Montréal');
+  // Un fuseau mal formé, ou inconnu d'Intl : Paris.
+  for (const x of ['Mars/Olympus', '../etc', 'europe/paris', '', null, 42, 'A'.repeat(70)]) assert.equal(fuseauValide(x), 'Europe/Paris', String(x));
+  assert.equal(fuseauValide('America/Argentina/Salta'), 'America/Argentina/Salta');
+});
+
+await test('le changement d’heure du 25/10/2026 ne décale pas le jour du plafond', async () => {
+  // 00 h 30 et 23 h 30 à Paris le 25 : le même jour, alors que l'écart à UTC passe de 2 h à 1 h.
+  const matin = Date.parse('2026-10-24T22:30:00Z'), soir = Date.parse('2026-10-25T22:30:00Z');
+  assert.equal(paris(matin).jour, '2026-10-25'); assert.equal(paris(matin).heure, 0);
+  assert.equal(paris(soir).jour, '2026-10-25'); assert.equal(paris(soir).heure, 23);
+  const log = { jour: paris(matin).jour };
+  assert.equal(pushAutorise('coach', null, log, soir).raison, 'calme');
+  assert.equal(pushAutorise('coach', null, log, Date.parse('2026-10-25T18:00:00Z')).raison, 'plafond', '19 h, même jour : plafond');
+  assert.deepEqual(pushAutorise('coach', null, log, Date.parse('2026-10-26T08:00:00Z')), { ok: true, raison: null }, 'le lendemain : libre');
+  // Bout à bout : un push le 25 au matin, un autre le 25 au soir (après le changement d'heure).
+  const w = monde({ users: { [A1]: { tz: 'Europe/Paris' } }, push: { [A1]: { a1b2c3: tel.abonnement } } }, Date.parse('2026-10-25T07:30:00Z'));
+  assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'a' })).envoye, 1);
+  assert.equal(w.F.lire('push_log/' + A1 + '/jour'), '2026-10-25');
+  w.avance(11 * 3600e3);                         // 19 h 30 à Paris, heure d'hiver
+  assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'b' })).raison, 'plafond');
+});
+
+await test('fuseau, bout à bout : à la Réunion, le message du soir attend SON 8 h (6 h à Paris), pas celui de Paris', async () => {
+  const B = 'reunion@t,fr', tel2 = appareil('https://push.test/reunion');
+  const w = monde({ users: { [A1]: {}, [B]: { tz: 'Indian/Reunion' } }, push: { [A1]: { a1b2c3: tel.abonnement }, [B]: { x: tel2.abonnement } } },
+    PARIS('2026-10-01T19:30:00'));
+  // 19 h 30 à Paris : Léa reçoit, la Réunionnaise (21 h 30) attend.
+  assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'a' })).envoye, 1);
+  const r = await w.M.envoyerPush(B, { type: 'coach', title: 'b' });
+  assert.equal(r.raison, 'calme');
+  assert.equal(w.F.lire('push_attente/' + B + '/tz'), 'Indian/Reunion');
+  // 6 h 05 à Paris = 8 h 05 à la Réunion : le travail horaire la libère.
+  w.avance(10 * 3600e3 + 35 * 60e3);
+  await w.minute(); await w.minute();
+  assert.equal(w.F.recus.filter((x) => x.endpoint === tel2.abonnement.endpoint).length, 1);
+  assert.equal(w.F.lire('push_attente/' + B), null);
+});
+
+await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : déposé pour son matin, compté une fois, pas renvoyé le lendemain', async () => {
+  const B = 'reunion@t,fr', t = PARIS('2026-10-01T19:00:00');
+  const w = monde({ users: { [B]: { tz: 'Indian/Reunion', status: 'COACHING_SUIVI', accessExpiry: t + 2 * 864e5, fname: 'Zoé' } },
+    push: { [B]: { x: appareil('https://push.test/r').abonnement } } }, t);
+  await w.M.planifies.acces(B, t);
+  assert.equal(w.F.recus.length, 0, 'rien à 21 h à la Réunion');
+  assert.equal(w.F.lire('push_attente/' + B + '/message/type'), 'acces');
+  assert.equal(w.F.lire('worker/relances_acces/' + B), t + 2 * 864e5, 'compté comme parti');
+  await w.M.planifies.acces(B, t + 864e5);
+  assert.equal(w.F.lire('push_attente/' + B + '/cumul'), 1, 'pas redéposé le lendemain');
 });
 
 console.log(ok + ' tests passés — budget par réveil : ' + BUDGET + ' requêtes');

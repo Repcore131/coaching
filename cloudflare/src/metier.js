@@ -46,16 +46,41 @@ export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'fille
 const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
-// ── LE TEMPS, À PARIS ─────────────────────────────────────────────────────
-export function paris(t) {
-  const f = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit',
-    day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false });
+// ── LE TEMPS : À PARIS POUR LES TRAVAUX, CHEZ L'ATHLÈTE POUR LES ENVOIS ──
+// Les travaux planifiés se déclenchent à l'heure de Paris (planif.js). Mais
+// les heures calmes, et le jour du plafond d'un push par jour, sont ceux de
+// l'ATHLÈTE : son fuseau (users/<clé>/tz, posé par l'app au démarrage) ; à
+// défaut, ou mal formé, Europe/Paris.
+// UN FORMATEUR PAR FUSEAU, GARDÉ : en construire un à chaque appel coûtait
+// ~0,07 ms, des milliers de fois par réveil. Un fuseau refusé par Intl n'est
+// pas gardé (il retombe sur Paris).
+export const TZ_DEFAUT = 'Europe/Paris';
+// Un nom IANA : « UTC », ou « Zone/Ville » (« America/Argentina/Salta »).
+export const TZ_RE = /^(?:UTC|[A-Z][A-Za-z_+-]*(?:\/[A-Za-z0-9_+-]+){1,2})$/;
+const _formateurs = new Map();
+function formateur(tz) {
+  let f = _formateurs.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hour12: false });
+    _formateurs.set(tz, f);
+  }
+  return f;
+}
+// Le fuseau à utiliser : celui donné s'il est bien formé ET connu d'Intl, sinon Paris.
+export function fuseauValide(tz) {
+  if (typeof tz !== 'string' || tz.length > 64 || !TZ_RE.test(tz)) return TZ_DEFAUT;
+  try { formateur(tz); return tz; } catch (e) { return TZ_DEFAUT; }
+}
+export function heureLocale(t, tz) {
+  const f = formateur(fuseauValide(tz));
   const p = {};
   for (const x of f.formatToParts(new Date(t))) p[x.type] = x.value;
   const annee = Number(p.year), mois = Number(p.month), date = Number(p.day);
   return { jour: p.year + '-' + p.month + '-' + p.day, heure: Number(p.hour) % 24, minute: Number(p.minute),
     annee, mois, date, joursem: new Date(Date.UTC(annee, mois - 1, date)).getUTCDay() };
 }
+export function paris(t) { return heureLocale(t, TZ_DEFAUT); }
 // PURE. Le push du 21e jour d'essai, parcours « Mise sous tension » pas fini.
 export function messageParcoursJ21(n, jour) {
   const k = Math.max(1, Math.min(7, Math.round(Number(n)) || 1));
@@ -76,19 +101,56 @@ export function semaineAmbassadeur(jours) {
   }
   return o;
 }
-export function heuresCalmes(t) { const h = paris(t).heure; return h >= 21 || h < 8; }
+// Les heures calmes DE L'ATHLÈTE (21 h – 8 h dans son fuseau).
+export function heuresCalmes(t, tz) { const h = heureLocale(t, tz).heure; return h >= 21 || h < 8; }
 export function lundiParis(t) {
   const p = paris(t);
   const d = new Date(Date.UTC(p.annee, p.mois - 1, p.date));
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
-export function pushAutorise(type, prefs, log, t) {
+// `tz` : le fuseau de l'athlète. Le plafond compte SON jour (push_log.jour
+// est écrit dans ce fuseau) : un changement d'heure ne le décale pas.
+export function pushAutorise(type, prefs, log, t, tz) {
   if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: 'type' };
   if (prefs && prefs[type] === false) return { ok: false, raison: 'coupe' };
-  if (heuresCalmes(t)) return { ok: false, raison: 'calme' };
-  if (log && log.jour === paris(t).jour) return { ok: false, raison: 'plafond' };
+  if (heuresCalmes(t, tz)) return { ok: false, raison: 'calme' };
+  if (log && log.jour === heureLocale(t, tz).jour) return { ok: false, raison: 'plafond' };
   return { ok: true, raison: null };
+}
+
+// ── LA NUIT, UN SEUL MESSAGE ATTEND : LE PLUS IMPORTANT ─────────────────────
+// push_attente/<clé> = {message, at, prio, cumul, tz}. Un nouveau message ne
+// remplace l'attendu que si sa priorité est AU MOINS égale : le mot du coach
+// survit au défi de l'équipe. `cumul` compte les messages fusionnés ; au-delà
+// d'un, l'envoi du matin ajoute « + N autres nouvelles ».
+export const ATTENTE_MAX_MS = 14 * 3600e3;
+export const PRIO_PUSH = Object.freeze({ coach: 5, message: 5, acces: 4, prospect: 4, filleul: 3, defi: 2, relance: 2, serie: 2,
+  bilan: 2, wrapped: 1, badge: 1, retour: 1, sante: 1 });
+export const prioPush = (type) => PRIO_PUSH[String(type || '')] || 1;
+// PURE. L'entrée d'attente après l'arrivée de `message` (cur : l'actuelle).
+// L'ancien format (le message à plat, avec `at`) est relu tel quel.
+export function fusionAttente(cur, message, t, tz) {
+  const prio = prioPush(message && message.type);
+  const actuelle = normaliserAttente(cur);
+  if (!actuelle) return { message, at: t, prio, cumul: 1, tz: fuseauValide(tz) };
+  const cumul = (Number(actuelle.cumul) || 1) + 1;
+  if (prio >= actuelle.prio) return { message, at: t, prio, cumul, tz: fuseauValide(tz) };
+  return Object.assign({}, actuelle, { cumul });
+}
+export function normaliserAttente(m) {
+  if (!m || typeof m !== 'object') return null;
+  if (m.message && typeof m.message === 'object') return { message: m.message, at: Number(m.at) || 0,
+    prio: Number(m.prio) || prioPush(m.message.type), cumul: Math.max(1, Number(m.cumul) || 1), tz: fuseauValide(m.tz) };
+  const message = Object.assign({}, m); delete message.at;
+  return { message, at: Number(m.at) || 0, prio: prioPush(message.type), cumul: 1, tz: TZ_DEFAUT };
+}
+// PURE. Le message du matin : « + N autres nouvelles » s'il en a absorbé.
+export function messageDuMatin(e) {
+  const m = Object.assign({}, e.message);
+  const n = (Number(e.cumul) || 1) - 1;
+  if (n > 0) m.body = (m.body ? m.body + ' ' : '') + '+ ' + n + ' autre' + (n > 1 ? 's' : '') + ' nouvelle' + (n > 1 ? 's' : '');
+  return m;
 }
 function prolonger(echeanceActuelle, ms, t) {
   return Math.max(Number(echeanceActuelle) || 0, t || Date.now()) + (Number(ms) || 0);
@@ -148,7 +210,7 @@ export function serieDuJour(u, t) {
 // reste (lecture, JSON) ; au-delà, la suite part en sous-tâches.
 export const COUT_PUSH = 8;
 // Le profil de relance (worker/profils/<uid>) : ses champs, et sa durée de vie.
-export const PROFIL_CHAMPS = ['streak', 'streakWeek', 'lastSession', 'fname', 'accessExpiry', 'status', 'suspension'];
+export const PROFIL_CHAMPS = ['streak', 'streakWeek', 'lastSession', 'fname', 'accessExpiry', 'status', 'suspension', 'tz'];
 export const PROFIL_VALIDITE_MS = 7 * 864e5;
 export const MAX_CHIFFREMENTS = 5;
 const MARGE = 2;
@@ -276,45 +338,68 @@ export function creerMetier(deps) {
   // `o.urgent` : un message pour l'ADMINISTRATEUR (un litige PayPal). Ni
   // heures calmes, ni plafond d'un par jour, ni préférences : chaque litige
   // doit arriver, à l'heure où il arrive. Réservé au code du serveur.
+  // `o.tz` : le fuseau de l'athlète déjà lu (profil) ; sinon relu ici.
+  // `o.attendre === false` : un message qui n'a de sens que maintenant ; en
+  // heures calmes, il est abandonné au lieu d'attendre le matin.
+  // PANNE PASSAGÈRE (429 ou 5xx sur TOUS les appareils, ou réseau) : le jour
+  // n'est pas consommé, et — dans la file (tâche, événement : enFile) ou sur
+  // demande (o.leverTransitoire) — on LÈVE « push_transitoire » : planif.js
+  // le remet en file (essais + 1). Ailleurs : { raison: 'transitoire' }.
   async function envoyerPush(uid, message, o) {
     const t = now();
     const type = String((message && message.type) || '');
     const urgent = !!(o && o.urgent);
-    // `o.log` : le journal du jour déjà lu (par pages, planif.js) — on ne le
-    // relit pas ; la transaction ci-dessous le revérifie de toute façon.
     const logDonne = !!o && o.log !== undefined;
-    const [prefs, log] = urgent ? [null, null] : await Promise.all([_lire(uid, 'pushPrefs'), logDonne ? o.log : _val('push_log/' + uid)]);
-    const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t);
+    const tzDonne = !!o && o.tz !== undefined;
+    // UNE lecture pour le fuseau ET les préférences : la surface du dossier
+    // (tz y est en clair ; pushPrefs, objet, n'y vaut que « true » — relu
+    // seulement s'il existe, c'est-à-dire si l'athlète a réglé quelque chose).
+    const [surf, log] = urgent ? [null, null] : await Promise.all([_surface(uid), logDonne ? o.log : _val('push_log/' + uid)]);
+    const prefs = surf ? await _objet(uid, surf, 'pushPrefs') : null;
+    const tz0 = tzDonne ? o.tz : (surf ? surf.tz : null);
+    const tz = fuseauValide(tz0);
+    const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t, tz);
     if (!ok.ok) {
-      if (ok.raison === 'calme' && (!o || o.attendre !== false))
-        await db.ref('push_attente/' + uid).set(Object.assign({}, message, { at: t }));
+      if (ok.raison === 'calme' && (!o || o.attendre !== false)) {
+        await db.ref('push_attente/' + uid).transaction((cur) => fusionAttente(cur, message, t, tz));
+        return { envoye: 0, raison: 'calme', differe: true };
+      }
       return { envoye: 0, raison: ok.raison };
     }
     const subs = (await _val('push/' + uid)) || {};
     const ids = Object.keys(subs);
     if (!ids.length) return { envoye: 0, raison: 'aucun_abonnement' };
-    const jour = paris(t).jour;
+    const jour = heureLocale(t, tz).jour;
     if (!urgent) {
       const tx = await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
       if (!tx.committed) return { envoye: 0, raison: 'plafond' };
     }
     const charge = JSON.stringify({ title: message.title, body: message.body || '',
       url: message.url || './', tag: message.tag || ('rc-' + type), type });
-    let envoye = 0;
+    let envoye = 0, tentes = 0, passagers = 0;
     await Promise.all(ids.map(async (id) => {
       const s = subs[id];
       if (!s || !s.endpoint || !s.keys) return;
       _chiffres++;
+      tentes++;
       try {
         const r = await envoyerA(s, charge, { publique: deps.vapid.publique, privee: deps.vapid.privee,
           contact: 'mailto:' + CREATOR_EMAIL, fetchImpl: deps.fetchImpl });
         if (r.statut >= 200 && r.statut < 300) envoye++;
         else if (r.statut === 404 || r.statut === 410) await db.ref('push/' + uid + '/' + id).remove();
-      } catch (e) { /* un appareil injoignable n'arrête pas les autres */ }
+        else if (r.statut === 429 || r.statut >= 500) passagers++;
+      } catch (e) { passagers++; /* un appareil injoignable n'arrête pas les autres */ }
     }));
     if (!envoye && !urgent) await db.ref('push_log/' + uid).remove();
+    if (!envoye && tentes > 0 && passagers === tentes) {
+      if (_enFile || (o && o.leverTransitoire)) throw new Error('push_transitoire');
+      return { envoye: 0, raison: 'transitoire' };
+    }
     return { envoye, raison: envoye ? null : 'echec' };
   }
+  // planif.js le pose pendant qu'il traite un événement ou une sous-tâche.
+  let _enFile = false;
+  const enFile = (v) => { _enFile = !!v; };
   // LES ABONNÉS, UNE LECTURE PAR RÉVEIL : serie, acces, retour, bilan… la
   // demandaient chacun, à chaque minute. fixerBudget (début de réveil) l'oublie.
   let _abonnes = null;
@@ -381,8 +466,11 @@ export function creerMetier(deps) {
     return (await db.ref('push_log').orderByKey().startAt(String(debut)).limitToFirst(n).get()).val() || {};
   }
   // `log` : undefined (pas lu par pages), null (rien aujourd'hui) ou le journal.
-  const dejaNotifie = (log, t) => !!log && log.jour === paris(t).jour;
-  const optLog = (log, o) => Object.assign({}, o || {}, log === undefined ? {} : { log: log || null });
+  // Le jour du plafond est celui de l'athlète (son fuseau, porté par le profil).
+  const dejaNotifie = (log, t, tz) => !!log && log.jour === heureLocale(t, tz).jour;
+  // `pr` : le profil lu (porte tz) — envoyerPush n'a alors pas à relire le fuseau.
+  const optLog = (log, o, pr) => Object.assign({}, o || {}, log === undefined ? {} : { log: log || null },
+    pr ? { tz: pr.tz || null } : {});
 
   // ── LES RAPPELS PLANIFIÉS — UNE PERSONNE À LA FOIS ─────────────────────
   // Chacun rend la même chose : il traite UNE clé. Le découpage en lots et le
@@ -393,7 +481,7 @@ export function creerMetier(deps) {
     // si la dernière séance date de plus de 14 jours. Deux temps : trois
     // champs d'abord, qui écartent la plupart des dossiers ; le reste ensuite.
     async serie(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t)) return 'plafond';
+      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
       const lundi = lundiParis(t);
       const pr = await profilUtile(uid, profil, t);
       const [streak, semaine, der] = pr ? [pr.streak, pr.streakWeek, pr.lastSession]
@@ -415,11 +503,11 @@ export function creerMetier(deps) {
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
         body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
-          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') }, optLog(log, { attendre: false }));
+          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') }, optLog(log, {}, pr));
     },
     // Wrapped prêt : le 1er du mois, 10 h — pour qui s'est entraîné le mois écoulé.
     async wrapped(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t)) return 'plafond';
+      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
       const p = paris(t);
       const moisPrec = p.mois === 1 ? 12 : p.mois - 1, anPrec = p.mois === 1 ? p.annee - 1 : p.annee;
       const debut = Date.UTC(anPrec, moisPrec - 1, 1) - 2 * 3600e3;
@@ -429,7 +517,7 @@ export function creerMetier(deps) {
       const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
       if (der < debut) return;
       await envoyerPush(uid, { type: 'wrapped', url: './?wrapped=' + cle, tag: 'wrapped-' + cle,
-        title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' }, optLog(log));
+        title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' }, optLog(log, {}, pr));
     },
     // Rappel de bilan : samedi 10 h, dernier bilan vieux de 13 jours ou plus.
     // SEULEMENT POUR QUI A UN COACH ET A DÉJÀ FAIT UN BILAN : le bilan est
@@ -450,7 +538,7 @@ export function creerMetier(deps) {
     // UNE fois par échéance. C'était le bandeau de l'accueil, qu'on ne voit
     // qu'en ouvrant l'app : la notification le dit à qui ne l'ouvre plus.
     async acces(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t)) return 'plafond';
+      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
       // Le profil ÉCARTE (pas d'échéance dans les trois jours) ; retenu, le
       // dossier est relu avant d'envoyer quoi que ce soit.
       const pr = await profilUtile(uid, profil, t);
@@ -468,8 +556,10 @@ export function creerMetier(deps) {
       else if (statut === 'AUTONOMIE_PREMIUM')
         m = { title: 'Ton abonnement prend fin ' + quand, body: fin ? 'Tu as résilié : ton accès reste ouvert jusqu’au ' + date + '.' : 'Ton accès prend fin le ' + date + '.' };
       if (!m) return;
-      const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), optLog(log, { attendre: false }));
-      if (r.envoye) await db.ref('worker/relances_acces/' + uid).set(e);
+      // Heures calmes CHEZ L'ATHLÈTE : il attend son matin (push_attente), et
+      // compte comme parti — sinon le rappel serait redéposé chaque jour.
+      const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), optLog(log, {}, pr));
+      if (r.envoye || r.differe) await db.ref('worker/relances_acces/' + uid).set(e);
     },
     // Badge proche : dimanche 17 h — ASSIDU à deux séances ou moins.
     async badge(uid) {
@@ -483,18 +573,22 @@ export function creerMetier(deps) {
         body: 'Le badge est à portée de main cette semaine.' });
     },
   };
-  // Les messages mis de côté pendant la nuit : 8 h 05. TOUS passent en
-  // sous-tâches, dans la même écriture qui les retire de push_attente : un
-  // par athlète, envoyés au rythme du budget, et rien ne se perd en route.
+  // Les messages mis de côté pendant la nuit, CHAQUE HEURE (planif.js) : ceux
+  // dont l'athlète est sorti de SES heures calmes (son fuseau, gardé avec le
+  // message) passent en sous-tâches, dans la même écriture qui les retire de
+  // push_attente ; les autres attendent l'heure suivante. Un par athlète,
+  // envoyés au rythme du budget, et rien ne se perd en route. Au-delà de
+  // ATTENTE_MAX_MS (une nuit et plus), le message est trop vieux : retiré.
   async function apresHeuresCalmes() {
+    const t = now();
     const tout = (await _val('push_attente')) || {};
     const maj = {}, taches = [];
     for (const uid of Object.keys(tout)) {
-      const m = tout[uid];
+      const e = normaliserAttente(tout[uid]);
+      if (!e || t - e.at > ATTENTE_MAX_MS) { maj['push_attente/' + uid] = null; continue; }
+      if (heuresCalmes(t, e.tz)) continue;
       maj['push_attente/' + uid] = null;
-      if (!m || now() - (Number(m.at) || 0) > 12 * 3600e3) continue;
-      const message = Object.assign({}, m); delete message.at;
-      taches.push(tachePush(uid, message, { attendre: false }));
+      taches.push(tachePush(uid, messageDuMatin(e), { attendre: false }));
     }
     if (Object.keys(maj).length) await differer(taches, maj);
     return taches.length;
@@ -1487,7 +1581,7 @@ export function creerMetier(deps) {
   // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
   // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
   async function retourUn(uid, t, profil, log) {
-    if (dejaNotifie(log, t)) return 'plafond';
+    if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
     const pr = await profilUtile(uid, profil, t);
     const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
     const palier = RE.palierDuJour(der, t);
@@ -1497,8 +1591,9 @@ export function creerMetier(deps) {
     const ok = RE.retourAutorise({ palier, etat, suspension: susp, logPush, t });
     if (!ok.ok) return ok.raison;
     const [fname, xpRang, streak, tonnageTotal] = await Promise.all(['fname', 'xpRang', 'streak', 'tonnageTotal'].map((c) => _lire(uid, c)));
-    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), optLog(log, { attendre: false }));
-    if (!r.envoye) return r.raison || 'echec';
+    // Heures calmes chez l'athlète : déposé pour son matin, et compté comme parti.
+    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), optLog(log, {}, pr));
+    if (!r.envoye && !r.differe) return r.raison || 'echec';
     etat.paliers[palier] = t;
     await db.ref('retour_etat/' + uid).set(etat);
     return 'envoye';
@@ -1778,7 +1873,7 @@ export function creerMetier(deps) {
     return 'tache_inconnue';
   }
 
-  return { envoyerPush, alerteKo, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
+  return { envoyerPush, enFile, alerteKo, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,

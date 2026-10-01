@@ -38433,6 +38433,23 @@ async function testExercices(){
               return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
             }finally{ window.fetch=f0; }});
 
+          ok('1758 — LE FUSEAU DE L’APPAREIL S’ÉCRIT DANS LE DOSSIER, ET UNE VALEUR INVALIDE RETOMBE SUR PARIS',(()=>{
+            const u={tz:'Europe/Paris'};
+            if(fuseauAssurer(u,'Europe/Paris')) return _echec('inchangé : rien à enregistrer');
+            if(!fuseauAssurer(u,'America/Montreal')||u.tz!=='America/Montreal') return _echec('changé : '+u.tz);
+            for(const ko of ['../etc','europe/paris','Paris','',null,42,'A'.repeat(70)+'/B']){
+              const v={tz:'America/Montreal'};
+              fuseauAssurer(v,ko);
+              if(v.tz!=='Europe/Paris') return _echec('valeur invalide '+String(ko)+' : '+v.tz);
+            }
+            const n={};
+            if(!fuseauAssurer(n,'Indian/Reunion')||n.tz!=='Indian/Reunion') return _echec('dossier neuf');
+            // Sans valeur donnée : celle de l’appareil (Intl), valide.
+            const d=fuseauDeLAppareil();
+            if(!TZ_RE.test(d)) return _echec('appareil : '+d);
+            // Et routeUser l’appelle au démarrage.
+            return /fuseauAssurer\(currentUser\)\) saveUser\(\)/.test(_prodSrc())?true:_echec('pas appelé au démarrage');})());
+
           ok('1756 — UN src INCONNU DEVIENT « autre », UN src CONNU RESTE LUI-MÊME',(()=>{
             if(attribSrc('Seance')!=='seance') return _echec('seance : '+attribSrc('Seance'));
             if(attribSrc('zzz-inconnu')!=='autre') return _echec('inconnu : '+attribSrc('zzz-inconnu'));

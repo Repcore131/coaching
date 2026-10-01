@@ -5,6 +5,10 @@
 import nodeCrypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { chiffrer, jetonVapid, b64uVersOctets, octetsVersB64u, envoyerA } from '../src/push.js';
+import { creerBase } from '../src/base.js';
+import { creerMetier, fusionAttente, messageDuMatin, PRIO_PUSH } from '../src/metier.js';
+import { minute, ESSAIS_MAX } from '../src/planif.js';
+import { fausseBase, appareil } from './fausse-base.mjs';
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 let ok = 0;
@@ -77,6 +81,77 @@ await test('l’envoi pose les bons en-têtes et rend le statut du service', asy
   assert.equal(vu.init.headers['Content-Encoding'], 'aes128gcm');
   assert.match(vu.init.headers.Authorization, /^vapid t=[^.]+\.[^.]+\.[^,]+, k=/);
   assert.equal(dechiffrer(vu.init.body).texte, '{"title":"x"}');
+});
+
+// ══ LES RÈGLES D'ENVOI DU SERVEUR (01/10/2026) ════════════════════════════
+const cleVapid = nodeCrypto.createECDH('prime256v1'); cleVapid.generateKeys();
+const VAPID = { publique: cleVapid.getPublicKey().toString('base64url'), privee: cleVapid.getPrivateKey().toString('base64url') };
+const PARIS = (iso) => Date.parse(iso + '+02:00');
+function monde(initial, t) {
+  const F = fausseBase(initial);
+  let n = 0, horloge = t;
+  const f = (u, i) => { n++; return F.fetchImpl(u, i); };
+  const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: f });
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: f, maintenant: () => horloge });
+  M.coachsEtUsers = () => db.ref('users').shallow();
+  return { F, db, M, avance: (ms) => { horloge += ms; }, get t() { return horloge; },
+    minute: () => { n = 0; return minute({ db, M, compteur: () => n, maintenant: () => horloge }); } };
+}
+const LEA = 'lea@t,fr', tel = appareil('https://push.test/lea');
+
+await test('deux messages de nuit : le mot du coach survit au défi, et l’envoi du matin dit « + 1 autre nouvelle »', async () => {
+  const w = monde({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } } }, PARIS('2026-09-28T23:10:00'));
+  const r1 = await w.M.envoyerPush(LEA, { type: 'coach', title: 'Ton coach a répondu', body: 'Belle séance.' });
+  assert.equal(r1.raison, 'calme'); assert.equal(r1.differe, true);
+  w.avance(20 * 60e3);
+  await w.M.envoyerPush(LEA, { type: 'defi', title: 'Nouveau défi', body: '12 séances.' });
+  const e = w.F.lire('push_attente/' + LEA);
+  assert.equal(e.message.type, 'coach', 'le défi (2) ne remplace pas le coach (5)');
+  assert.equal(e.prio, PRIO_PUSH.coach); assert.equal(e.cumul, 2);
+  // Et l'inverse : un message d'égale ou de plus haute priorité remplace.
+  assert.equal(fusionAttente({ message: { type: 'defi' }, at: 1, prio: 2, cumul: 1 }, { type: 'coach' }, 2).message.type, 'coach');
+  assert.equal(fusionAttente({ message: { type: 'defi' }, at: 1, prio: 2, cumul: 1 }, { type: 'serie' }, 2).message.type, 'serie', 'égale : la plus récente');
+  // L'ancien format (le message à plat) est relu.
+  assert.equal(fusionAttente({ type: 'coach', title: 'x', at: 1 }, { type: 'defi' }, 2).message.type, 'coach');
+  // Le matin : il part, et dit ce qu'il a absorbé.
+  w.avance(9 * 3600e3);                            // 8 h 30 le lendemain
+  await w.minute();
+  await w.minute();
+  assert.equal(w.F.recus.length, 1, 'un seul push le matin');
+  const m = tel.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Ton coach a répondu');
+  assert.equal(m.body, 'Belle séance. + 1 autre nouvelle');
+  assert.equal(w.F.lire('push_attente/' + LEA), null);
+  assert.equal(messageDuMatin({ message: { body: 'a' }, cumul: 4 }).body, 'a + 3 autres nouvelles');
+});
+
+await test('503 de l’unique appareil : la tâche repart en file avec essais = 1, et le jour n’est pas consommé', async () => {
+  const w = monde({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } },
+    evenements: { e0000000001: { type: 'tache', quoi: 'push', uid: LEA, par: 'worker', at: 1, message: { type: 'coach', title: 'Bravo' } } } },
+    PARIS('2026-09-28T12:00:00'));
+  w.F.pushStatut = 503;
+  const b = await w.minute();
+  assert.equal(b.echecs, 1);
+  const file = Object.values(w.F.lire('evenements') || {});
+  assert.equal(file.length, 1, 'remise en file');
+  assert.equal(file[0].essais, 1);
+  assert.equal(file[0].erreur, 'push_transitoire');
+  assert.equal(w.F.lire('push_log/' + LEA), null, 'push_log non consommé');
+  // Le service revient : elle part, une fois.
+  w.F.pushStatut = 201;
+  w.avance(60e3);
+  await w.minute();
+  assert.equal(w.F.lire('evenements'), null);
+  assert.equal(w.F.recus.filter((r) => r.endpoint === tel.abonnement.endpoint).length, 2, 'une tentative refusée, puis l’envoi');
+  assert.ok(w.F.lire('push_log/' + LEA));
+  // 429 compte aussi comme passager ; 410 reste « abonnement supprimé », sans retour en file.
+  const w2 = monde({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } } }, PARIS('2026-09-28T12:00:00'));
+  w2.F.pushStatut = 429;
+  assert.equal((await w2.M.envoyerPush(LEA, { type: 'coach', title: 'x' })).raison, 'transitoire');
+  w2.F.pushStatut = 410;
+  assert.equal((await w2.M.envoyerPush(LEA, { type: 'coach', title: 'x' })).raison, 'echec');
+  assert.equal(w2.F.lire('push/' + LEA), null);
+  assert.ok(ESSAIS_MAX >= 2);
 });
 
 console.log(ok + ' tests passés');

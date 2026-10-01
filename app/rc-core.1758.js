@@ -7164,6 +7164,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
+  // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert
+  // pour n'envoyer de notification qu'entre 8 h et 21 h CHEZ l'athlete. Un
+  // reglage, pas une mesure.
+  'tz',
   // `essai` compte des seances pour decider d'un paywall : c'est de la
   // facturation, pas de la sante. Il ne porte ni mesure, ni ressenti, ni
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
@@ -8559,6 +8563,9 @@ function routeUser(){
   try{ comptesEnregistrer(currentUser); }catch(e){}
   // Un actif de plus cette semaine (le dénominateur du coefficient viral).
   try{ attribActifSemaine(currentUser); }catch(e){}
+  // LE FUSEAU DE L'APPAREIL, pour le serveur léger : ses heures calmes et le
+  // jour du plafond d'un push sont ceux de l'athlète. Écrit seulement s'il a changé.
+  try{ if(fuseauAssurer(currentUser)) saveUser(); }catch(e){}
   // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
   // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
@@ -34823,6 +34830,29 @@ const VOL_CONCENTRATION_PART=0.70;
 //
 // PURE. Rend true si elle a change quelque chose, pour que l'appelant sache
 // s'il doit sauver.
+// ══ LE FUSEAU DE L'ATHLÈTE (01/10/2026) ══════════════════════════════════
+// users/<clé>/tz : le nom IANA du fuseau de l'appareil (« America/Montreal »).
+// Le serveur léger s'en sert pour les heures calmes (21 h – 8 h LOCALES) et le
+// jour du plafond d'un push. Un nom absent ou mal formé vaut Europe/Paris.
+// ⚠ LE MÊME MOTIF que TZ_RE (cloudflare/src/metier.js) et que la règle de
+//   users/$emailKey/tz (database.rules.json) : une valeur que la règle
+//   refuserait ferait rejeter le dossier ENTIER à l'envoi.
+const TZ_DEFAUT='Europe/Paris';
+const TZ_RE=/^(?:UTC|[A-Z][A-Za-z_+-]*(?:\/[A-Za-z0-9_+-]+){1,2})$/;
+// PURE. `brut` : ce que l'appareil annonce (Intl), ou une valeur donnée (tests).
+function fuseauDeLAppareil(brut){
+  let tz=brut;
+  if(tz===undefined){ try{ tz=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ tz=null; } }
+  return (typeof tz==='string'&&tz.length<=64&&TZ_RE.test(tz))?tz:TZ_DEFAUT;
+}
+// Pose u.tz s'il a changé. Rend vrai s'il faut enregistrer.
+function fuseauAssurer(u,brut){
+  if(!u||typeof u!=='object') return false;
+  const tz=fuseauDeLAppareil(brut);
+  if(u.tz===tz) return false;
+  u.tz=tz;
+  return true;
+}
 function migrerTrapezes(user){
   const u=_dossier(user);
   if(!u) return false;

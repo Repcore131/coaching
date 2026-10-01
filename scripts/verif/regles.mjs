@@ -545,6 +545,22 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
   console.log('droits geles : 11 champs de users/ figes, coachs_registre ferme, rc_codes reserve aux coachs enregistres');
 }
 
+// ══ LE FUSEAU : UN MOTIF, TROIS COPIES (01/10/2026) ═══════════════════════
+// users/$emailKey/tz est validé par la règle ; l'app (TZ_RE, rc-core) ne
+// l'écrit que s'il passe le même motif, et le Worker (metier.js) le relit
+// avec lui. Une règle plus stricte que l'app ferait rejeter le dossier ENTIER.
+{
+  const norm=(x)=>String(x||'').replace(/\\\//g,'/').replace(/\(\?:/g,'(');
+  const app=(source.match(/const TZ_RE=\/(.*)\/;/)||[])[1];
+  const w=(readFileSync('cloudflare/src/metier.js','utf8').match(/export const TZ_RE = \/(.*)\/;/)||[])[1];
+  const r=(regles.match(/"tz":\s*\{[^}]*matches\(\/(.*?)\/\)/)||[])[1];
+  if(!app||!w||!r){ console.error('\nfuseau : motif introuvable (app '+!!app+', Worker '+!!w+', regles '+!!r+')'); process.exit(1); }
+  if(norm(app)!==norm(w)||norm(app)!==norm(r.replace(/\\\\/g,'\\'))){
+    console.error('\nFUSEAU : les motifs divergent\n  app    : '+app+'\n  Worker : '+w+'\n  regles : '+r); process.exit(1);
+  }
+  console.log('fuseau : le meme motif dans l\'app, le Worker et les regles');
+}
+
 // ══ AUCUNE REGLE D'ADMINISTRATION FONDEE SUR L'ADRESSE SEULE (01/10/2026) ══
 //
 // Une adresse e-mail n'est pas une identite : un compte Google, Apple ou lie

@@ -296,12 +296,13 @@ await test('la série en danger : jeudi de 17 h à 21 h ; les travaux qui envoie
 });
 
 // ══ LE POULS ET L'ALERTE DES ÉCHECS (01/10/2026) ═══════════════════════════
-const tousFinis = (jour) => Object.fromEntries(travaux({ planifies: {}, abonnes: () => [] }).map((x) => [x.nom, { jour, fini: true }]));
+// Tous les travaux faits pour la période : le jour, ou l'heure pour les travaux horaires.
+const tousFinis = (jour, heure) => Object.fromEntries(travaux({ planifies: {}, abonnes: () => [] })
+  .map((x) => [x.nom, { jour: x.heure && heure != null ? jour + 'h' + heure : jour, fini: true }]));
 await test('le pouls est écrit dans worker/verrou SANS requête de plus : une minute à vide en coûte toujours 5', async () => {
   const t = PARIS('2026-09-29T15:00:20');   // un mardi : aucun travail horaire neuf à 15 h 00 (déjà marqués)
   const p = paris(t);
-  const jobs = tousFinis(p.jour);
-  for (const n of ['canal_programmes', 'prospects', 'saisons']) jobs[n] = { jour: p.jour + 'h' + p.heure, fini: true };
+  const jobs = tousFinis(p.jour, p.heure);
   const w = monde({ worker: { jobs } }, t);
   const b = await w.minute();
   assert.equal(b.requetes, 5, 'verrou (2), file (1), travaux (1), écriture finale (1)');
@@ -318,8 +319,7 @@ await test('le pouls est écrit dans worker/verrou SANS requête de plus : une m
 await test('un réveil trop long rend le bail par transaction, et y écrit aussi le pouls', async () => {
   const t = PARIS('2026-09-29T15:00:20');
   const p = paris(t);
-  const jobs = tousFinis(p.jour);
-  for (const n of ['canal_programmes', 'prospects', 'saisons']) jobs[n] = { jour: p.jour + 'h' + p.heure, fini: true };
+  const jobs = tousFinis(p.jour, p.heure);
   const w = monde({ worker: { jobs } }, t);
   let appels = 0;
   // La première lecture de l'horloge vaut t, les suivantes t + 45 s.

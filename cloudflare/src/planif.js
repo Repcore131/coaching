@@ -78,9 +78,10 @@ export function travaux(M) {
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
     { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true, profils: true },
-    // Pas en heures calmes : ce serait relire les messages mis de côté pour la
-    // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
-    { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
+    // Les messages mis de côté pour la nuit : CHAQUE HEURE (01/10/2026), car
+    // le matin est celui de l'athlète, dans son fuseau (8 h à Montréal, c'est
+    // 14 h à Paris). Chacun part quand SES heures calmes sont finies.
+    { nom: 'attente', heure: true, quand: () => true, une: M.apresHeuresCalmes },
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
     // Série en danger : jeudi DÈS 17 H (18 h jusqu'au 01/10/2026) — trois
     // heures de fenêtre et non plus deux : voir README, « Charge ».
@@ -295,6 +296,9 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         : (e && e.type === 'tache' && (e.quoi === 'orphelin_paypal' || e.quoi === 'paiement_suite')) ? COUT_ORPHELIN : 12;
       if (reste() < cout) { fini = false; break; }
       let ok = true;
+      // DANS LA FILE : un push en panne passagère (429, 5xx) y lève
+      // « push_transitoire », et l'événement repart en fin de file (echec).
+      if (M.enFile) M.enFile(true);
       try { await traiter(db, M, e); } catch (err) {
         // À COURT DE BUDGET (paypal.js lève AVANT d'écrire) : il reste en tête
         // de file, sans compter un essai, pour la minute suivante.
@@ -302,8 +306,9 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         ok = false;
         bilan.echecs++;
         bilan.erreur = texteErreur(err);
+        if (M.enFile) M.enFile(false);
         try { await echec(db, id, e, err, t, M, reste); } catch (e2) { /* il reste en tête : réessayé au réveil suivant */ }
-      }
+      } finally { if (M.enFile) M.enFile(false); }
       if (ok) await db.ref('evenements/' + id).remove();
       bilan.evenements++;
     }

@@ -98,4 +98,11 @@ await test('users : le dossier entier, comme l’app l’envoie, passe toujours'
   assert.equal((await appel(LEA, 'PUT', U, doc)).statut, 200);
 });
 
+await test('users : le fuseau (tz) — un nom IANA passe, le reste est refusé', async () => {
+  for (const ok of ['Europe/Paris', 'America/Montreal', 'Indian/Reunion', 'America/Argentina/Salta', 'UTC', 'Etc/GMT+5'])
+    assert.equal((await appel(LEA, 'PUT', U + '/tz', ok)).statut, 200, ok);
+  for (const ko of ['../etc', 'europe/paris', 'Paris', 'A'.repeat(70) + '/B', 12, 'Europe/Paris/x/y'])
+    assert.equal((await appel(LEA, 'PUT', U + '/tz', ko)).statut, 401, String(ko));
+});
+
 console.log(ok + ' tests passés');

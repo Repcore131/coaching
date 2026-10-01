@@ -197,6 +197,11 @@
         // RepCore, pas le nombre d utilisateurs.
         //
         // La longueur est celle de MOT_COACH_MAX cote client.
+        // LE FUSEAU DE L'APPAREIL (01/10/2026) : un nom IANA, ou rien. Le serveur
+        // léger en tire les heures calmes et le jour du plafond d'un push. Même
+        // motif que TZ_RE (app et Worker) ; l'app retombe sur Europe/Paris.
+        "tz": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^(UTC|[A-Z][A-Za-z_+-]*(\\/[A-Za-z0-9_+-]+){1,2})$/)" },
+
         "motCoach": {
           "texte": { ".validate": "newData.isString() && newData.val().length <= 600" },
           "maj":   { ".validate": "newData.isNumber() && newData.val() > 0" },
