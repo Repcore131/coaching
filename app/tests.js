@@ -13628,7 +13628,7 @@ async function testExercices(){
             }
             return true;
           } finally { currentUser=sauve; z.innerHTML=''; }})());
-        ok('Le dépassement de quota DIT qu\'il ne bloque rien',(()=>{
+        ok('Le dépassement de quota DIT ce qui arrive aux athlètes (option B, 02/10/2026)',(()=>{
           const z=document.getElementById('coach-abo');
           const sauve=currentUser;
           try{
@@ -13639,8 +13639,9 @@ async function testExercices(){
             _renderAbonnementCoach(m);
             const h=z.innerHTML;
             if(!/3 \/ 1 athlètes actifs/.test(h)) return _echec('le compte réel n\'est pas dit');
-            return /Rien n'est bloqué/.test(h)
-              ?true:_echec('le dépassement ne rassure pas sur l\'accès des athlètes');
+            // L'OPTION B : le quota s'applique après trois mois ; l'écran le dit.
+            return /Après trois mois d'affilée au-dessus, les athlètes hors de ta formule perdent leur accès suivi gratuit/.test(h)
+              ?true:_echec('le dépassement ne dit pas ce qui arrive aux athlètes');
           } finally { currentUser=sauve; z.innerHTML=''; }})());
         ok('Aucune promesse de durée : ni « essai », ni « 14 jours »',(()=>{
           // La promesse est le PREMIER CLIENT, sans durée. « Essai 14 jours »
@@ -15319,11 +15320,89 @@ async function testExercices(){
           if(!/39[ \u00a0]€\/mois/.test(a.texte)) return _echec('prix absent : '+a.texte);
           // LE POINT QUI COMPTE : le palier n'a pas bougé, et le texte le dit.
           if(u.coachPlan!==avant) return _echec('le palier a changé tout seul : '+u.coachPlan);
-          if(!/Rien ne change tant que tu ne le choisis pas/.test(a.texte))
-            return _echec('le texte ne promet pas l\'inaction');
-          // Les athlètes gardent leur accès : c'est dit, et rien ne bloque.
-          return /gardent tout leur accès/.test(a.texte)
-            ?true:_echec('le sort des athlètes n\'est pas dit');})());
+          // L'OPTION B (02/10/2026) : le texte dit l'ÉCHÉANCE et le NOMBRE, au
+          // lieu de promettre que rien ne change. Sans mois connu, la règle.
+          if(!/Après trois mois d’affilée au-dessus de ta formule, 1 athlète perdra son accès suivi/.test(a.texte))
+            return _echec('le sort des athlètes n\'est pas dit : '+a.texte);
+          return a.horsQuota===1?true:_echec('horsQuota : '+a.horsQuota);})());
+        // ══ 02/10/2026 — LE QUOTA APPLIQUÉ (OPTION B) ═══════════════════════
+        const _coachQ=(plan,cycles,extra)=>Object.assign({id:'c1',email:'c@t',role:'coach',coachPlan:plan,coachSubActive:plan!=='libre',
+          clients:['a2','a0','a1'],paliers:{dernierAvertissement:new Date().toISOString(),cyclesAuDessus:cycles}},extra||{});
+        const _cacheQ=(n,rattache)=>{ const m={'c@t':{id:'c1',email:'c@t',role:'coach'}};
+          for(let k=0;k<n;k++){ const a=_athP('a'+k,3); if(rattache&&rattache[k]!=null) a.rattacheLe=rattache[k]; m['a'+k+'@t']=a; }
+          return m; };
+        ok('Quota appliqué : coach Libre, 3 athlètes — tous couverts pendant la grâce ; après, seul le premier rattaché',(()=>{
+          const cache=_cacheQ(3,[300,100,null]);          // a1 rattaché d'abord, puis a0, a2 sans date
+          const ath=k=>cache['a'+k+'@t'];
+          // Pendant la grâce (2 mois au-dessus) : personne n'est coupé.
+          const g=_coachQ('libre',2);
+          for(const k of [0,1,2]) if(!athleteCouvertParCoach(ath(k),g,cache)) return _echec('grâce : a'+k+' coupé');
+          // Après (3 mois) : une place, au premier rattaché.
+          const c=_coachQ('libre',3);
+          const couv=[0,1,2].map(k=>athleteCouvertParCoach(ath(k),c,cache));
+          if(JSON.stringify(couv)!=='[false,true,false]') return _echec('places : '+JSON.stringify(couv));
+          if(athletesHorsQuota(c,cache).map(u=>u.id).join()!=='a0,a2') return _echec('hors quota : '+athletesHorsQuota(c,cache).map(u=>u.id));
+          // Un inactif ne prend pas de place, et reste couvert.
+          cache['z@t']={id:'z',email:'z@t',role:'athlete',coachId:'c1',sessions:[{date:Date.now()-90*86400000}],rattacheLe:1};
+          if(!athleteCouvertParCoach(cache['z@t'],c,cache)||!athleteCouvertParCoach(ath(1),c,cache)) return _echec('un inactif a pris la place');
+          // Sans aucune date : l'ordre de coach.clients (a2 d'abord).
+          const sans=_cacheQ(3,null);
+          if(!athleteCouvertParCoach(sans['a2@t'],c,sans)||athleteCouvertParCoach(sans['a0@t'],c,sans)) return _echec('repli sur coach.clients');
+          // LE CRITÈRE : 20 athlètes depuis plus de 3 mois → un seul couvert.
+          const vingt=_cacheQ(20,null);
+          const n=Object.values(vingt).filter(u=>u.role==='athlete'&&athleteCouvertParCoach(u,_coachQ('libre',4,{clients:[]}),vingt)).length;
+          return n===1?true:_echec(n+' couverts sur 20');})());
+        ok('Quota appliqué : un coach Pro, le créateur et un cache vide ne coupent personne',(()=>{
+          const vingt=_cacheQ(20,null);
+          const tous=(coach,cache)=>Object.values(cache).filter(u=>u&&u.role==='athlete').every(u=>athleteCouvertParCoach(u,coach,cache));
+          if(!tous(_coachQ('pro',12),vingt)) return _echec('un coach Pro coupe');
+          if(!tous(_coachQ('libre',12,{email:CREATOR_EMAIL}),vingt)) return _echec('le créateur est soumis au quota');
+          // Cache vide (appareil neuf) : on ne sait pas compter, on ne coupe pas.
+          if(!athleteCouvertParCoach({id:'a5',email:'a5@t'},_coachQ('libre',12),{})) return _echec('un cache vide coupe');
+          if(athletesHorsQuota(_coachQ('libre',12),{}).length) return _echec('hors quota sur un cache vide');
+          // Redescendu à son quota : tout le monde, tout de suite.
+          return tous(_coachQ('libre',12),_cacheQ(1,null))?true:_echec('sous le quota, quelqu’un reste coupé');})());
+        ok('Quota appliqué : palierDe retire le suivi d’un CODE hors quota (droits/), jamais un palier payé ; l’écran d’accès dit pourquoi et quoi faire',(()=>{
+          const u={id:'q1',email:'quota-test@t',role:'athlete',status:'COACHING_SUIVI',coachName:'Max Coach',coachId:'c1'};
+          let avant=null; try{ avant=localStorage.getItem(DROITS_CLE); }catch(e){}
+          const svU=currentUser;
+          try{
+            const passe=Date.now()-1000, futur=Date.now()+86400000;
+            _droitsPoser(u.email,{palier:'suivi',source:'code_coach',echeance:0,couvertParCoach:{jusqu:futur}});
+            if(palierDe(u)!=='suivi') return _echec('couvert : '+palierDe(u));
+            _droitsPoser(u.email,{palier:'suivi',source:'code_coach',echeance:0,couvertParCoach:{jusqu:passe}});
+            if(palierDe(u)!=='aucun') return _echec('hors quota : '+palierDe(u));
+            // Un abonnement personnel garde son palier payé.
+            _droitsPoser(u.email,{palier:'essentielle',source:'paypal',echeance:0,suiviJusqu:0,couvertParCoach:{jusqu:passe}});
+            if(palierDe(u)!=='essentielle') return _echec('abonné : '+palierDe(u));
+            // Un accès posé à la main non plus.
+            _droitsPoser(u.email,{palier:'suivi',source:'main',echeance:0,couvertParCoach:{jusqu:passe}});
+            if(palierDe(u)!=='suivi') return _echec('accès à la main : '+palierDe(u));
+            // Jamais dit (couvertParCoach absent) : rien ne se ferme.
+            _droitsPoser(u.email,{palier:'suivi',source:'code_coach',echeance:0});
+            if(palierDe(u)!=='suivi') return _echec('silence : '+palierDe(u));
+            // L'écran d'accès.
+            _droitsPoser(u.email,{palier:'suivi',source:'code_coach',echeance:0,couvertParCoach:{jusqu:passe}});
+            currentUser=u; loadAccessGate();
+            const t=(document.getElementById('ag-title')||{}).textContent||'', b=(document.getElementById('ag-status-block')||{}).textContent||'';
+            if(t!=='Ton suivi gratuit est en pause') return _echec('titre : '+t);
+            if(!/Max Coach suit plus d’athlètes que sa formule n’en couvre/.test(b)||!/Essentielle/.test(b)||!/formule supérieure/.test(b)) return _echec('texte : '+b);
+            return true;
+          } finally {
+            currentUser=svU;
+            try{ if(avant===null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,avant); }catch(e){}
+          }})());
+        ok('Quota appliqué : l’alerte du coach dit l’échéance réelle — « Au-delà du <date>, N athlètes perdront leur accès suivi »',(()=>{
+          const c2=_coachP(0,{paliers:{dernierAvertissement:new Date().toISOString(),cyclesAuDessus:2}});
+          const a=alertePalier(c2,_cacheP(18,3));
+          if(!a||a.type!=='montee') return _echec('pas de montée');
+          const fin=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+          if(a.texte.indexOf('Au-delà du '+fin+', 3 athlètes perdront leur accès suivi.')!==0) return _echec(a.texte);
+          if(/Rien ne change/.test(a.texte)) return _echec('la promesse d’inaction est restée');
+          // Coupure passée : « Depuis le … ».
+          const c3=_coachP(0,{paliers:{dernierAvertissement:new Date().toISOString(),cyclesAuDessus:3}});
+          const b=alertePalier(c3,_cacheP(16,3));
+          return (b&&/^Depuis le 1 \S+, 1 athlète n’a plus son accès suivi/.test(b.texte))?true:_echec(b&&b.texte);})());
         ok('« Consécutifs » veut dire consécutifs : retomber remet à zéro',(()=>{
           const u=_coachP(0,{paliers:{dernierAvertissement:_moisPrecedent(),cyclesAuDessus:1}});
           // Retombé à 12 sur un quota de 15 : le compteur repart de zéro.

@@ -370,6 +370,9 @@ export function creerPaypal(ctx) {
           maj['coachs_registre/' + cle + '/plan'] = plan.coachPlan;
           maj['coachs_registre/' + cle + '/actifJusqu'] = Math.max(Number(prochain) || 0, t + MOIS_MS) + 7 * 86400000;
           maj['coachs_registre/' + cle + '/maj'] = t;
+          // LE QUOTA (02/10/2026) : la couverture de ses athlètes est recalculée
+          // dès le réveil suivant (metier.js couvertureCoach), pas demain.
+          maj['worker/jobs/couverture_coachs'] = null;
         }
       } else if (plan && plan.formule && statut !== 'COACHING_SUIVI') {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
@@ -654,6 +657,7 @@ export function creerPaypal(ctx) {
       maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false;
       maj['coachs_registre/' + rec.cle + '/plan'] = 'libre'; maj['coachs_registre/' + rec.cle + '/actifJusqu'] = t;
       maj['coachs_registre/' + rec.cle + '/maj'] = t;
+      maj['worker/jobs/couverture_coachs'] = null;    // le quota se recalcule au réveil suivant
     }
     else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
     await db.ref().update(maj);
@@ -840,7 +844,8 @@ export function creerPaypal(ctx) {
     if (role === 'coach') {
       await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
         ['users/' + cle + '/updatedAt']: t, ['coachs_registre/' + cle + '/plan']: 'libre',
-        ['coachs_registre/' + cle + '/actifJusqu']: t, ['coachs_registre/' + cle + '/maj']: t });
+        ['coachs_registre/' + cle + '/actifJusqu']: t, ['coachs_registre/' + cle + '/maj']: t,
+        ['worker/jobs/couverture_coachs']: null });    // le quota se recalcule au réveil suivant
     } else if (Number(f.reserve) > 0) {
       const r = Number(f.reserve);
       await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));

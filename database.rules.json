@@ -506,6 +506,11 @@
       // l achat. Pose par le Worker quand PayPal confirme ; c est lui qui ouvre
       // boutique_contenu/<id>.
       "programmes": { "$progId": { ".validate": "newData.isNumber() && newData.val() > 0" } },
+      // LE QUOTA DU COACH (02/10/2026), ecrit par le serveur leger seul : jusqu a
+      // quand l athlete est couvert par la formule de son coach, et son rang
+      // de rattachement (que le client ne doit pas pouvoir antidater).
+      "couvertParCoach": { "jusqu": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "$autre": { ".validate": false } },
+      "rattache": { "coach": { ".validate": "newData.isString() && newData.val().length < 200" }, "le": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "$autre": { ".validate": false } },
       "$autre": { ".validate": false }
     }
   },

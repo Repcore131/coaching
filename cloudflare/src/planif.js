@@ -88,6 +88,10 @@ export function travaux(M) {
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
+    // LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) : après fins_coachs, qui remet
+    // en Libre un coach dont l'abonnement est fini. Voir metier.js couvertureCoach.
+    { nom: 'couverture_coachs', quand: (p) => apres(p, 6, 30), cles: () => (M.couvertureCles ? M.couvertureCles() : []),
+      un: (k, t, acc) => (M.couvertureUn ? M.couvertureUn(k, t, acc) : null), fin: (acc, t) => (M.couvertureFin ? M.couvertureFin(acc, t) : null), cout: 7 },
     // « Ton accès se termine dans N jours », une fois par échéance.
     { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true, profils: true, parAthlete: true },
     // Les messages mis de côté pour la nuit : CHAQUE HEURE (01/10/2026), car

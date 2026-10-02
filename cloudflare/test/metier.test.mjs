@@ -440,4 +440,109 @@ await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : dépos
   assert.equal(w.F.lire('push_attente/' + B + '/cumul'), 1, 'pas redéposé le lendemain');
 });
 
+// ══ LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) ════════════════════════════
+{
+  const { readFileSync } = await import('node:fs');
+  const QC = await import('../src/quota-coach.js');
+  const CO = 'max@t,fr', AA = 'ana@t,fr', BB = 'bob@t,fr', CC = 'cyd@t,fr', DD = 'dan@t,fr';
+  const t = PARIS('2026-10-15T06:31:00');
+  const jr = { '2026-10-10': { n: 1 } };
+  const droitsCode = { palier: 'suivi', source: 'code_coach', echeance: 0, maj: 1 };
+  const base = (cycles, plan, extra) => Object.assign({
+    coachs_registre: { [CO]: { plan: plan || 'libre', le: 1, actifJusqu: plan && plan !== 'libre' ? t + 30 * 864e5 : 0, quota: { cycles, mois: '2026-09' } } },
+    annuaire_coach: { [CO]: { [AA]: { email: 'ana@t.fr', maj: 1 }, [BB]: { email: 'bob@t.fr', maj: 1 }, [CC]: { email: 'cyd@t.fr', maj: 1 }, [DD]: { email: 'dan@t.fr', maj: 1 } } },
+    users: { [CO]: { role: 'coach', clients: ['b', 'a', 'c'] },
+      [AA]: { id: 'a', coachEmailKey: CO, rattacheLe: 200 }, [BB]: { id: 'b', coachEmailKey: CO, rattacheLe: 100 },
+      [CC]: { id: 'c', coachEmailKey: CO },                 // sans droits/ : rien ne s'y écrit
+      [DD]: { id: 'd', coachEmailKey: 'autre@t,fr' } },    // parti chez un autre coach
+    droits: { [AA]: droitsCode, [BB]: droitsCode, [DD]: droitsCode },
+    xp_etat: { [AA]: { jr }, [BB]: { jr }, [CC]: { jr }, [DD]: { jr } } }, extra || {});
+
+  await test('quota coach : pendant la grâce (2e mois au-dessus), tout le monde reste couvert', async () => {
+    const w = monde(base(1), t);
+    const r = await w.M.couvertureCoach(CO, t);
+    assert.equal(r.enGrace, true);
+    for (const a of [AA, BB]) assert.equal(w.F.lire('droits/' + a + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS, a);
+    assert.equal(w.F.lire('droits/' + CC), null, 'aucun droits/ créé');
+    assert.equal(w.F.lire('droits/' + DD + '/couvertParCoach'), null, 'l’ancien athlète n’est pas touché');
+    assert.deepEqual(w.F.lire('coachs_registre/' + CO + '/quota/cycles'), 2);
+  });
+
+  await test('quota coach : après la grâce (3e mois), une place au premier rattaché ; recopie dans droits/, coupure stable', async () => {
+    const w = monde(base(2), t);
+    const r = await w.M.couvertureCoach(CO, t);
+    assert.equal(r.enGrace, false);
+    assert.deepEqual(r.horsQuota.sort(), [AA, CC].sort());
+    assert.equal(w.F.lire('droits/' + BB + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS, 'Bob, rattaché le premier, est couvert');
+    assert.equal(w.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), t, 'Ana est hors quota depuis maintenant');
+    assert.deepEqual(w.F.lire('droits/' + AA + '/rattache'), { coach: CO, le: 200 });
+    assert.deepEqual(w.F.lire('droits/' + BB + '/rattache'), { coach: CO, le: 100 });
+    assert.equal(w.F.lire('droits/' + AA + '/palier'), 'suivi', 'le palier n’est pas réécrit : l’app décide');
+    const q = w.F.lire('coachs_registre/' + CO + '/quota');
+    assert.equal(q.cycles, 3); assert.equal(q.mois, '2026-10'); assert.equal(q.n, 3); assert.equal(q.horsQuota, 2); assert.equal(q.quota, 1);
+    // Le lendemain : la date de coupure ne bouge pas, et Ana ne peut pas s'antidater.
+    await w.db.ref('users/' + AA + '/rattacheLe').set(1);
+    w.avance(864e5);
+    await w.M.couvertureCoach(CO, w.t);
+    assert.equal(w.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), t, 'coupure inchangée');
+    assert.deepEqual(w.F.lire('droits/' + AA + '/rattache'), { coach: CO, le: 200 }, 'le rang du serveur fait foi : pas d’antidate');
+    assert.equal(w.F.lire('droits/' + BB + '/couvertParCoach/jusqu'), w.t + QC.COUVERT_MARGE_MS);
+  });
+
+  await test('quota coach : redescendu sous son quota (ou passé Pro), il rend l’accès au passage suivant', async () => {
+    const w = monde(base(5), t);
+    await w.M.couvertureCoach(CO, t);
+    assert.equal(w.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), t);
+    const w2 = monde(base(5, 'pro'), t);
+    const r = await w2.M.couvertureCoach(CO, t);
+    assert.equal(r.horsQuota.length, 0);
+    assert.equal(w2.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS);
+    assert.equal(w2.F.lire('coachs_registre/' + CO + '/quota/cycles'), 0, 'le compteur repart de zéro');
+    // Ana et Cyd inactifs depuis 60 jours : Bob seul reste, sous le quota.
+    const w3 = monde(base(5, 'libre', { xp_etat: { [BB]: { jr }, [AA]: { jr: { '2026-07-01': { n: 1 } } } } }), t);
+    const r3 = await w3.M.couvertureCoach(CO, t);
+    assert.equal(r3.n, 1); assert.equal(r3.horsQuota.length, 0);
+    assert.equal(w3.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS, 'un inactif reste couvert');
+  });
+
+  await test('quota coach : le créateur n’a pas de quota ; un coach hors registre n’est pas touché', async () => {
+    const CR = 'guellec,coachingpro@gmail,com';
+    const b = base(9);
+    b.annuaire_coach = { [CR]: b.annuaire_coach[CO] };
+    for (const a of [AA, BB, CC]) b.users[a].coachEmailKey = CR;
+    delete b.coachs_registre;
+    const w = monde(b, t);
+    const r = await w.M.couvertureCoach(CR, t);
+    assert.equal(r.horsQuota.length, 0);
+    for (const a of [AA, BB]) assert.equal(w.F.lire('droits/' + a + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS);
+    assert.equal(w.F.lire('coachs_registre/' + CR), null, 'pas de compteur pour le créateur');
+    const w2 = monde(Object.assign(base(9), { coachs_registre: null }), t);
+    assert.equal(await w2.M.couvertureCoach(CO, t), null);
+    assert.equal(w2.F.lire('droits/' + AA + '/couvertParCoach'), null);
+  });
+
+  await test('quota coach : le travail du jour (6 h 30), athlète par athlète, dans le budget', async () => {
+    const w = monde(base(2), t);
+    for (let i = 0; i < 6; i++) await w.minute();
+    assert.equal(w.F.lire('worker/jobs/couverture_coachs/fini'), true);
+    assert.equal(w.F.lire('droits/' + AA + '/couvertParCoach/jusqu') > 0, true);
+    assert.equal(w.F.lire('droits/' + BB + '/couvertParCoach/jusqu') > w.F.lire('droits/' + AA + '/couvertParCoach/jusqu'), true);
+  });
+
+  await test('quota coach : les miroirs — quotas et grâce comme l’app, relance après un changement de formule PayPal', () => {
+    const app = readFileSync(new URL('../../src/core/001-debut.js', import.meta.url), 'utf8');
+    for (const [cle, q] of [['libre', '1'], ['coach', '15'], ['pro', 'Infinity']])
+      assert.match(app, new RegExp("cle:'" + cle + "'[^\\n]*quota:" + q + ','), cle);
+    assert.equal(QC.QUOTAS.libre, 1); assert.equal(QC.QUOTAS.coach, 15); assert.equal(QC.QUOTAS.pro, Infinity);
+    const a2 = readFileSync(new URL('../../src/core/002-l-essai-athlete-symetrique-de-la-promesse-coach.js', import.meta.url), 'utf8');
+    assert.equal(QC.CYCLES_GRACE, Number(/const PALIERS_CYCLES_AVANT_PROPOSITION=(\d+);/.exec(a2)[1]) + 1);
+    assert.match(app, new RegExp('const QUOTA_CYCLES_GRACE=' + QC.CYCLES_GRACE + ';'));
+    const pp = readFileSync(new URL('../src/paypal.js', import.meta.url), 'utf8');
+    assert.equal((pp.match(/worker\/jobs\/couverture_coachs/g) || []).length, 3, 'les trois changements de formule relancent le calcul');
+    assert.deepEqual(QC.cyclesSuivants({ cycles: 2, mois: '2026-09' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
+    assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
+    assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, false, '2026-10'), { cycles: 0, mois: '2026-10' });
+  });
+}
+
 console.log(ok + ' tests passés — budget par réveil : ' + BUDGET + ' requêtes');

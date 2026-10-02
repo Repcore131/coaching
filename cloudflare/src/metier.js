@@ -38,6 +38,7 @@ import * as RT from './retention.js';
 import * as L from './ligues.js';
 import * as RA from './rappels.js';
 import * as CS from './calendrier-saisons.js';
+import * as QC from './quota-coach.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -914,6 +915,104 @@ export function creerMetier(deps) {
   }
   const coachsAvecCanal = () => db.ref('canaux').shallow();
   const coachsAvecAthletes = () => db.ref('annuaire_coach').shallow();
+
+  // ══ LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) ══════════════════════════
+  // Le travail « couverture_coachs » (planif.js, chaque jour à 6 h 30, et de
+  // nouveau dès qu'une formule coach change chez PayPal) : pour chaque athlète
+  // de l'annuaire d'un coach, droits/<athlète>/couvertParCoach = {jusqu} —
+  // couvert : maintenant + 36 h ; hors quota après la grâce : l'instant de la
+  // coupure (l'app retire alors le « suivi » d'un code de coach, voir palierDe).
+  // Le rang de rattachement est gardé dans droits/<athlète>/rattache =
+  // {coach, le} : le client ne peut pas l'écrire, donc pas s'antidater. Le
+  // compteur de mois au-dessus du quota vit dans coachs_registre/<coach>/quota,
+  // pour la même raison (users/<coach>/paliers s'écrit depuis le navigateur).
+  // Voir quota-coach.js pour la règle.
+  //
+  // PAR ATHLÈTE, PAS PAR COACH : 38 requêtes par réveil, et un coach de vingt
+  // athlètes en demande plus de soixante. Les clés sont « coach|athlète »
+  // (l'annuaire, lu en une fois), chacune lit trois ou cinq petits nœuds et
+  // range ce qu'elle a vu dans `acc` ; la fin calcule les places et écrit
+  // tout en UNE mise à jour.
+  // ⚠ On n'écrit QUE dans un droits/<athlète> qui existe : créer le nœud pour y
+  //   poser couvertParCoach fermerait l'accès d'un athlète dont le dossier
+  //   décide encore (avant la bascule).
+  const CLE_CREATEUR_Q = CREATOR_EMAIL.replace(/\./g, ',');
+  async function couvertureCles() {
+    const an = (await _val('annuaire_coach')) || {};
+    const out = [];
+    for (const c of Object.keys(an)) for (const a of Object.keys(an[c] || {})) out.push(c + '|' + a);
+    return out.sort();
+  }
+  async function couvertureUn(paire, t0, acc) {
+    const t = Number(t0) || now();
+    const [coach, a] = String(paire).split('|');
+    if (!coach || !a) return;
+    acc.c = acc.c || {};
+    if (!acc.c[coach]) {
+      const [registre, clients] = await Promise.all([_val('coachs_registre/' + coach), _val('users/' + coach + '/clients')]);
+      const r = registre && typeof registre === 'object' ? registre : null;
+      acc.c[coach] = { registre: r ? { plan: r.plan || 'libre', actifJusqu: Number(r.actifJusqu) || 0, le: Number(r.le) || 0, quota: r.quota || null } : null,
+        clients: Array.isArray(clients) ? clients : Object.values(clients || {}), a: {} };
+    }
+    const C = acc.c[coach];
+    if (!C.registre && coach !== CLE_CREATEUR_Q) return;          // pas (encore) un coach au registre
+    const [droits, lien, jours] = await Promise.all([_val('droits/' + a), _val('users/' + a + '/coachEmailKey'), db.ref('xp_etat/' + a + '/jr').shallow()]);
+    if (lien !== coach) return;                                   // l'annuaire garde parfois un ancien coach
+    const ra = droits && droits.rattache;
+    let le = (ra && ra.coach === coach && Number(ra.le) > 0) ? Number(ra.le) : 0, ordre = -1;
+    if (!le) {
+      // LA PREMIÈRE FOIS : la date du dossier (jamais avant l'entrée du coach au
+      // registre, jamais dans le futur), ou maintenant ; et le rang dans clients.
+      const [id, rattacheLe] = await Promise.all([_val('users/' + a + '/id'), _val('users/' + a + '/rattacheLe')]);
+      const rl = Number(rattacheLe);
+      le = Math.max(rl > 0 && rl <= t ? rl : t, Number(C.registre && C.registre.le) || 0);
+      ordre = id != null ? C.clients.indexOf(id) : -1;
+    }
+    C.a[a] = { actif: QC.estActif(jours, paris(t).jour), le, ordre, existe: !!droits,
+      couvAvant: Number(droits && droits.couvertParCoach && droits.couvertParCoach.jusqu) || 0,
+      raCoach: (ra && ra.coach) || '', raLe: Number(ra && ra.le) || 0 };
+  }
+  async function couvertureFin(acc, t0) {
+    const t = Number(t0) || now();
+    const maj = {};
+    const bilan = {};
+    for (const coach of Object.keys((acc && acc.c) || {})) {
+      const C = acc.c[coach];
+      const createur = coach === CLE_CREATEUR_Q;
+      if (!C.registre && !createur) continue;
+      const athletes = Object.keys(C.a || {}).map((cle) => Object.assign({ cle }, C.a[cle]));
+      const plan = QC.planEffectif(C.registre, t);
+      const quota = createur ? Infinity : QC.QUOTAS[plan];
+      const nActifs = athletes.filter((x) => x.actif).length;
+      const etat = QC.cyclesSuivants((C.registre && C.registre.quota) || {}, nActifs > quota, QC.moisParis(t));
+      const r = QC.placesCoach({ plan, createur, cycles: etat.cycles, athletes });
+      for (const x of athletes) {
+        if (!x.existe) continue;
+        const couvert = r.couverts.has(x.cle);
+        // Hors quota depuis un passage précédent : la date de la coupure ne bouge plus.
+        if (couvert || !(x.couvAvant > 0 && x.couvAvant <= t)) maj['droits/' + x.cle + '/couvertParCoach'] = { jusqu: couvert ? t + QC.COUVERT_MARGE_MS : t };
+        if (x.raCoach !== coach || x.raLe !== x.le) maj['droits/' + x.cle + '/rattache'] = { coach, le: x.le };
+      }
+      if (!createur) maj['coachs_registre/' + coach + '/quota'] = { cycles: etat.cycles, mois: etat.mois, n: r.n,
+        horsQuota: r.horsQuota.length, quota: r.quota === Infinity ? -1 : r.quota, maj: t };
+      bilan[coach] = { n: r.n, quota: r.quota, enGrace: r.enGrace, horsQuota: r.horsQuota, cycles: etat.cycles };
+    }
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    return bilan;
+  }
+  // Un coach d'un seul tenant (tests, et l'écran d'administration au besoin).
+  async function couvertureCoach(coach, t0) {
+    const t = Number(t0) || now();
+    const an = await db.ref('annuaire_coach/' + coach).shallow();
+    const acc = {};
+    for (const a of an || []) await couvertureUn(coach + '|' + a, t, acc);
+    if (!acc.c) acc.c = {};
+    if (!acc.c[coach]) await couvertureUn(coach + '|', t, acc);
+    return (await couvertureFin(acc, t))[coach] || null;
+  }
+  // Un changement de formule coach (paypal.js) : le travail du jour repasse dès
+  // le réveil suivant, au lieu d'attendre demain 6 h 30.
+  async function couvertureRelancer() { await db.ref('worker/jobs/couverture_coachs').remove(); }
 
   // ══ LE PARRAINAGE ══════════════════════════════════════════════════════
   async function parrainageDemande(uid, d) {
@@ -2411,7 +2510,7 @@ export function creerMetier(deps) {
   }
 
   return { envoyerPush, enFile, alerteKo, abonnes, planifies, serieReservee, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
-    defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
+    defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, couvertureCoach, couvertureCles, couvertureUn, couvertureFin, couvertureRelancer, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits, dejaPaye,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,

@@ -70,7 +70,17 @@ function droitsDe(u){
     avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
     // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
     // d'un code ambassadeur (écrite par le serveur léger).
-    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':''};
+    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':'',
+    // LE QUOTA DU COACH (02/10/2026, serveur léger) : jusqu'à quand la formule du
+    // coach couvre cet athlète. 0 : jamais dit (rien ne se ferme sur un silence).
+    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0};
+}
+// PURE. Hors du quota de son coach, d'après le serveur : le « suivi » d'un
+// CODE de coach ne s'ouvre plus. Un palier payé, un essai, un accès posé à la
+// main ne sont pas concernés (voir palierDe).
+function horsQuotaCoach(d,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return !!(d&&d.etat==='serveur'&&d.couvertJusqu>0&&t>=d.couvertJusqu);
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -104,7 +114,12 @@ function palierDe(u){
   if(estCoachReconnu(u)) return 'suivi';
   const d=droitsDe(u);
   if(d.etat==='serveur'){
-    const p=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
+    // LE QUOTA DU COACH (02/10/2026) : hors quota, le « suivi » ouvert par un
+    // code de coach se ferme ; l'essai en cours (checkAccess) et un abonnement
+    // payé (le palier, ou suiviJusqu par-dessus) restent.
+    const hq=horsQuotaCoach(d);
+    const p0=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
+    const p=(hq&&p0==='suivi'&&d.source==='code_coach')?'aucun':p0;
     // LE MOIS D'ULTIME DU PARRAINAGE s'ajoute PAR-DESSUS le palier payé, sans
     // le remplacer : un renouvellement Essentielle pendant ce mois ne le
     // referme pas, et il retombe seul à sa date.
@@ -117,7 +132,8 @@ function palierDe(u){
     // dossier. Apres, redeemCode l'ecrit dans droits/ (suiviJusqu).
     if(droitsV2Actif()) return p2;
     const auto=(d.source==='paypal'||d.source==='parrainage');
-    const h=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
+    const h0=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
+    const h=(hq&&h0==='suivi')?'aucun':h0;
     return PALIERS_ORDRE.indexOf(h)>PALIERS_ORDRE.indexOf(p2)?h:p2;
   }
   if(droitsV2Actif()){
@@ -229,7 +245,11 @@ function registreCoachDe(u){
   if(!o||typeof o!=='object') return {etat:'inconnu'};
   if(o.vide||!o.d) return {etat:'absent',lu:o.lu};
   const d=o.d;
-  return {etat:'serveur',plan:String(d.plan||'libre'),actifJusqu:Number(d.actifJusqu)||0,le:Number(d.le)||0,lu:o.lu};
+  // `quota` (02/10/2026) : le compteur de mois au-dessus du quota, tenu par le
+  // serveur (metier.js couvertureCoach) — c'est lui qui décide de la grâce.
+  const q=(d.quota&&typeof d.quota==='object')?{cycles:Math.max(0,Number(d.quota.cycles)||0),mois:String(d.quota.mois||''),
+    n:Number(d.quota.n)||0,horsQuota:Number(d.quota.horsQuota)||0}:null;
+  return {etat:'serveur',plan:String(d.plan||'libre'),actifJusqu:Number(d.actifJusqu)||0,le:Number(d.le)||0,quota:q,lu:o.lu};
 }
 // PURE. Ce compte est-il un coach ? Le registre d'abord ; tant que la bascule
 // n'est pas faite, ou que le registre n'a jamais ete lu, le role du dossier
@@ -820,6 +840,26 @@ function loadAccessGate(){
       ?'La période réglée est terminée.<br><br>Tu la reprends quand tu veux, et tout revient au même endroit.'
       :'En attente du règlement de ce mois.<br><br>Ton accès se rouvre dès qu’il est passé, et tout revient au même endroit.')
       +'</div>';
+    if(_renM) _renM.style.display='';
+  } else if((()=>{ try{ const d=droitsDe(u); return horsQuotaCoach(d)&&d.palier==='suivi'&&d.source==='code_coach'; }catch(e){ return false; } })()){
+    // ══ HORS DU QUOTA DE SON COACH (02/10/2026) ═══════════════════════════
+    // Le coach suit plus d'athlètes que sa formule n'en couvre, depuis plus de
+    // trois mois. L'athlète n'y est pour rien : on le dit, on dit que rien
+    // n'est perdu, et on donne les deux issues — s'abonner lui-même, ou
+    // demander à son coach de passer à la formule supérieure.
+    const nom=String(u.coachName||'').trim();
+    title.textContent='Ton suivi gratuit est en pause';
+    sub.textContent='Rien n’est effacé. Tes séances, ton programme et ton historique t’attendent.';
+    const href=(()=>{ try{ return _coachContactHref(u.coachId,'Bonjour'+(nom?' '+nom:'')
+      +', RepCore m’indique que ta formule ne couvre plus mon suivi. Peux-tu passer à la formule supérieure ? Mon accès reviendra aussitôt.'); }catch(e){ return ''; } })();
+    block.innerHTML=L
+      +(nom?escapeHtml(nom):'Ton coach')+' suit plus d’athlètes que sa formule n’en couvre : ta place n’est plus prise en charge.<br><br>'
+      +'Deux façons de continuer :<br>'
+      +'• prendre l’abonnement <strong style="color:var(--text-strong)">Essentielle</strong> à '+escapeHtml(prixAutonomie())+', et garder ton coach ;<br>'
+      +'• demander à '+(nom?escapeHtml(nom):'ton coach')+' de passer à la formule supérieure : ton accès revient aussitôt.</div>'
+      +(href?'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" class="btn btn-outline" '
+        +'style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none">'
+        +'Prévenir '+(nom?escapeHtml(nom):'mon coach')+'</a>':'');
     if(_renM) _renM.style.display='';
   } else if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
     const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');

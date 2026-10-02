@@ -366,15 +366,32 @@ function alertePalier(coach,users){
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
   // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
+  // L'OPTION B (02/10/2026) : le quota s'applique. Après trois mois d'affilée
+  // au-dessus, les athlètes hors quota perdent le suivi gratuit (voir
+  // athleteCouvertParCoach). L'alerte le dit avec la DATE et le NOMBRE, au
+  // lieu de promettre que rien ne change.
   if(suivant&&n>quota){
-    const c=paliersDe(u).cyclesAuDessus;
+    const e=quotaEtatDe(u);
+    const c=Math.max(e.cycles,paliersDe(u).cyclesAuDessus);
     if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
-    return {type:'montee',palier:suivant.cle,
+    const k=n-quota, s=k>1?'s':'';
+    const coupure=quotaDateCoupure(e.cycles,e.mois);
+    const jour=d=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+    const offre='La formule '+suivant.titre+' est à '+suivant.prix+'\u00a0€/mois : elle les couvre tous.';
+    let texte;
+    if(coupure&&coupure.getTime()<=Date.now()){
+      texte='Depuis le '+jour(coupure)+', '+k+' athlète'+s+' n’'+(k>1?'ont':'a')+' plus '+(k>1?'leur':'son')
+        +' accès suivi : '+(k>1?'ils voient':'il voit')+' une proposition d’abonnement. '+offre+' L’accès revient aussitôt.';
+    } else if(coupure){
+      texte='Au-delà du '+jour(new Date(coupure.getTime()-86400000))+', '+k+' athlète'+s+' perdr'+(k>1?'ont leur':'a son')
+        +' accès suivi. '+offre;
+    } else {
+      texte='Après trois mois d’affilée au-dessus de ta formule, '+k+' athlète'+s+' perdr'+(k>1?'ont leur':'a son')+' accès suivi. '+offre;
+    }
+    return {type:'montee',palier:suivant.cle,horsQuota:k,coupure:coupure?coupure.getTime():0,
       titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
-      texte:'La formule '+suivant.titre+' est à '+suivant.prix+' €/mois. '
-        +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
-        +'tout leur accès, et ton prix actuel reste le tien.'};
+      texte};
   }
   // ── Descente : il paie pour plus qu'il n'utilise ──────────────────────
   const inf=COACH_PALIERS.filter(x=>x.quota>=n&&x.prix<(COACH_PALIERS.find(y=>y.cle===cle)||{}).prix);
@@ -537,7 +554,7 @@ function _renderAbonnementCoach(users){
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
-      Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
+      Après trois mois d'affilée au-dessus, les athlètes hors de ta formule perdent leur accès suivi gratuit.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>

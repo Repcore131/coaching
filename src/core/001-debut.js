@@ -1644,6 +1644,93 @@ function coachPalierRequis(n){
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
 }
+// ══ LE QUOTA APPLIQUÉ (02/10/2026) : L'OPTION B ══════════════════════════
+// Le coach paie, l'athlète rattaché est gratuit — dans la limite de sa
+// formule. Les places vont aux athlètes ACTIFS dans l'ordre de RATTACHEMENT
+// (rattacheLe, posé par linkToCoach et à la consommation d'un code ; repli sur
+// l'ordre de coach.clients, puis l'identifiant). Un athlète inactif ne prend
+// pas de place et reste couvert. Après TROIS mois d'affilée au-dessus du quota
+// (la grâce : PALIERS_CYCLES_AVANT_PROPOSITION + 1), les athlètes hors quota
+// perdent le « suivi » gratuit — sauf essai en cours ou abonnement personnel.
+//
+// ⚠ CE QUI COUPE VRAIMENT est écrit par le serveur léger dans droits/<athlète>/
+//   couvertParCoach (metier.js couvertureCoach, même règle, quota-coach.js) :
+//   le coach ne peut pas écrire droits/, et l'athlète ne lit pas le dossier
+//   de son coach. Cette fonction-ci sert l'écran du coach et les tests ; elle
+//   ne ferme rien.
+const QUOTA_CYCLES_GRACE=3;   // = PALIERS_CYCLES_AVANT_PROPOSITION (2) + 1, figé ici : 001 se lit avant 002
+// Les mois d'affilée au-dessus du quota : ceux du serveur s'il les a dits
+// (coachs_registre/<coach>/quota, lu avec le registre), sinon le compteur de
+// l'app (paliersDe).
+function quotaCyclesDe(coach){
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  if(r.etat==='serveur'&&r.quota&&typeof r.quota.cycles==='number') return Math.max(0,r.quota.cycles);
+  return paliersDe(coach).cyclesAuDessus;
+}
+function coachEnGraceQuota(coach){ return quotaCyclesDe(coach)<QUOTA_CYCLES_GRACE; }
+// Les athlètes actifs du coach, dans l'ordre où ils prennent les places.
+function _athletesActifsOrdonnes(coach,users){
+  const id=(coach||{}).id;
+  const tous=users||DB.get('users')||{};
+  const limite=Date.now()-COACH_ACTIF_JOURS*86400000;
+  const clients=Array.isArray(coach&&coach.clients)?coach.clients:[];
+  const rang=u=>{ const i=clients.indexOf(u.id); return i<0?Infinity:i; };
+  return Object.values(tous).filter(u=>{
+    if(!u||u.role==='coach'||u.coachId!==id) return false;
+    let vues=0;
+    for(const s of (u.sessions||[])) if(s&&s.date>=limite&&++vues>=COACH_ACTIF_SEANCES_MIN) break;
+    return vues>=COACH_ACTIF_SEANCES_MIN;
+  }).sort((a,b)=>{
+    const la=Number(a.rattacheLe)>0?Number(a.rattacheLe):Infinity, lb=Number(b.rattacheLe)>0?Number(b.rattacheLe):Infinity;
+    if(la!==lb) return la-lb;
+    const ra=rang(a), rb=rang(b);
+    if(ra!==rb) return ra-rb;
+    return String(a.id)<String(b.id)?-1:1;
+  });
+}
+/**
+ * PURE (le cache est passé). L'athlète occupe-t-il une place couverte par le
+ * quota de son coach ? Toujours vrai pour le créateur, une formule sans
+ * limite, un cache qu'on ne sait pas compter (appareil neuf : on ne coupe
+ * jamais sur un silence), pendant la grâce, et pour un athlète inactif.
+ */
+function athleteCouvertParCoach(athlete,coach,users){
+  if(!athlete||!coach) return true;
+  if(String(coach.email||'').toLowerCase()===String(CREATOR_EMAIL).toLowerCase()) return true;
+  if(!countActiveAthletesFiable(coach,users)) return true;
+  const quota=getCoachQuota(coachPlanDe(coach));
+  if(quota===Infinity) return true;
+  const actifs=_athletesActifsOrdonnes(coach,users);
+  if(actifs.length<=quota||coachEnGraceQuota(coach)) return true;
+  const i=actifs.findIndex(u=>(athlete.id&&u.id===athlete.id)||(athlete.email&&u.email===athlete.email));
+  return i<0||i<quota;
+}
+// Les athlètes hors quota, aujourd'hui ou à la fin de la grâce (écran du coach).
+function athletesHorsQuota(coach,users){
+  if(!coach||String(coach.email||'').toLowerCase()===String(CREATOR_EMAIL).toLowerCase()) return [];
+  if(!countActiveAthletesFiable(coach,users)) return [];
+  const quota=getCoachQuota(coachPlanDe(coach));
+  if(quota===Infinity) return [];
+  return _athletesActifsOrdonnes(coach,users).slice(quota);
+}
+// PURE. Le jour où les athlètes hors quota perdent le suivi : le 1er du mois où
+// le compteur atteint la grâce (le serveur compte au premier passage du mois).
+// `mois` : 'AAAA-MM' du dernier mois compté. Passé ou à venir. Rend un Date, ou null.
+function quotaDateCoupure(cycles,mois){
+  const c=Math.max(0,Number(cycles)||0);
+  const m=/^(\d{4})-(\d{2})$/.exec(String(mois||''));
+  if(!m) return null;
+  return new Date(Number(m[1]),Number(m[2])-1+(QUOTA_CYCLES_GRACE-c),1);
+}
+// L'état de la grâce, tel que l'app le connaît : {cycles, mois}.
+function quotaEtatDe(coach){
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  if(r.etat==='serveur'&&r.quota&&typeof r.quota.cycles==='number') return {cycles:r.quota.cycles,mois:String(r.quota.mois||'')};
+  const p=paliersDe(coach);
+  return {cycles:p.cyclesAuDessus,mois:p.dernierAvertissement?_cyclePalier(new Date(p.dernierAvertissement)):''};
+}
 
 // ── Plafond de comptes Libres ────────────────────────────────────────────
 // 200 comptes gratuits, c'est ce que le plan Spark peut porter sans que le

@@ -1644,6 +1644,93 @@ function coachPalierRequis(n){
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
 }
+// ══ LE QUOTA APPLIQUÉ (02/10/2026) : L'OPTION B ══════════════════════════
+// Le coach paie, l'athlète rattaché est gratuit — dans la limite de sa
+// formule. Les places vont aux athlètes ACTIFS dans l'ordre de RATTACHEMENT
+// (rattacheLe, posé par linkToCoach et à la consommation d'un code ; repli sur
+// l'ordre de coach.clients, puis l'identifiant). Un athlète inactif ne prend
+// pas de place et reste couvert. Après TROIS mois d'affilée au-dessus du quota
+// (la grâce : PALIERS_CYCLES_AVANT_PROPOSITION + 1), les athlètes hors quota
+// perdent le « suivi » gratuit — sauf essai en cours ou abonnement personnel.
+//
+// ⚠ CE QUI COUPE VRAIMENT est écrit par le serveur léger dans droits/<athlète>/
+//   couvertParCoach (metier.js couvertureCoach, même règle, quota-coach.js) :
+//   le coach ne peut pas écrire droits/, et l'athlète ne lit pas le dossier
+//   de son coach. Cette fonction-ci sert l'écran du coach et les tests ; elle
+//   ne ferme rien.
+const QUOTA_CYCLES_GRACE=3;   // = PALIERS_CYCLES_AVANT_PROPOSITION (2) + 1, figé ici : 001 se lit avant 002
+// Les mois d'affilée au-dessus du quota : ceux du serveur s'il les a dits
+// (coachs_registre/<coach>/quota, lu avec le registre), sinon le compteur de
+// l'app (paliersDe).
+function quotaCyclesDe(coach){
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  if(r.etat==='serveur'&&r.quota&&typeof r.quota.cycles==='number') return Math.max(0,r.quota.cycles);
+  return paliersDe(coach).cyclesAuDessus;
+}
+function coachEnGraceQuota(coach){ return quotaCyclesDe(coach)<QUOTA_CYCLES_GRACE; }
+// Les athlètes actifs du coach, dans l'ordre où ils prennent les places.
+function _athletesActifsOrdonnes(coach,users){
+  const id=(coach||{}).id;
+  const tous=users||DB.get('users')||{};
+  const limite=Date.now()-COACH_ACTIF_JOURS*86400000;
+  const clients=Array.isArray(coach&&coach.clients)?coach.clients:[];
+  const rang=u=>{ const i=clients.indexOf(u.id); return i<0?Infinity:i; };
+  return Object.values(tous).filter(u=>{
+    if(!u||u.role==='coach'||u.coachId!==id) return false;
+    let vues=0;
+    for(const s of (u.sessions||[])) if(s&&s.date>=limite&&++vues>=COACH_ACTIF_SEANCES_MIN) break;
+    return vues>=COACH_ACTIF_SEANCES_MIN;
+  }).sort((a,b)=>{
+    const la=Number(a.rattacheLe)>0?Number(a.rattacheLe):Infinity, lb=Number(b.rattacheLe)>0?Number(b.rattacheLe):Infinity;
+    if(la!==lb) return la-lb;
+    const ra=rang(a), rb=rang(b);
+    if(ra!==rb) return ra-rb;
+    return String(a.id)<String(b.id)?-1:1;
+  });
+}
+/**
+ * PURE (le cache est passé). L'athlète occupe-t-il une place couverte par le
+ * quota de son coach ? Toujours vrai pour le créateur, une formule sans
+ * limite, un cache qu'on ne sait pas compter (appareil neuf : on ne coupe
+ * jamais sur un silence), pendant la grâce, et pour un athlète inactif.
+ */
+function athleteCouvertParCoach(athlete,coach,users){
+  if(!athlete||!coach) return true;
+  if(String(coach.email||'').toLowerCase()===String(CREATOR_EMAIL).toLowerCase()) return true;
+  if(!countActiveAthletesFiable(coach,users)) return true;
+  const quota=getCoachQuota(coachPlanDe(coach));
+  if(quota===Infinity) return true;
+  const actifs=_athletesActifsOrdonnes(coach,users);
+  if(actifs.length<=quota||coachEnGraceQuota(coach)) return true;
+  const i=actifs.findIndex(u=>(athlete.id&&u.id===athlete.id)||(athlete.email&&u.email===athlete.email));
+  return i<0||i<quota;
+}
+// Les athlètes hors quota, aujourd'hui ou à la fin de la grâce (écran du coach).
+function athletesHorsQuota(coach,users){
+  if(!coach||String(coach.email||'').toLowerCase()===String(CREATOR_EMAIL).toLowerCase()) return [];
+  if(!countActiveAthletesFiable(coach,users)) return [];
+  const quota=getCoachQuota(coachPlanDe(coach));
+  if(quota===Infinity) return [];
+  return _athletesActifsOrdonnes(coach,users).slice(quota);
+}
+// PURE. Le jour où les athlètes hors quota perdent le suivi : le 1er du mois où
+// le compteur atteint la grâce (le serveur compte au premier passage du mois).
+// `mois` : 'AAAA-MM' du dernier mois compté. Passé ou à venir. Rend un Date, ou null.
+function quotaDateCoupure(cycles,mois){
+  const c=Math.max(0,Number(cycles)||0);
+  const m=/^(\d{4})-(\d{2})$/.exec(String(mois||''));
+  if(!m) return null;
+  return new Date(Number(m[1]),Number(m[2])-1+(QUOTA_CYCLES_GRACE-c),1);
+}
+// L'état de la grâce, tel que l'app le connaît : {cycles, mois}.
+function quotaEtatDe(coach){
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  if(r.etat==='serveur'&&r.quota&&typeof r.quota.cycles==='number') return {cycles:r.quota.cycles,mois:String(r.quota.mois||'')};
+  const p=paliersDe(coach);
+  return {cycles:p.cyclesAuDessus,mois:p.dernierAvertissement?_cyclePalier(new Date(p.dernierAvertissement)):''};
+}
 
 // ── Plafond de comptes Libres ────────────────────────────────────────────
 // 200 comptes gratuits, c'est ce que le plan Spark peut porter sans que le
@@ -2035,15 +2122,32 @@ function alertePalier(coach,users){
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
   // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
+  // L'OPTION B (02/10/2026) : le quota s'applique. Après trois mois d'affilée
+  // au-dessus, les athlètes hors quota perdent le suivi gratuit (voir
+  // athleteCouvertParCoach). L'alerte le dit avec la DATE et le NOMBRE, au
+  // lieu de promettre que rien ne change.
   if(suivant&&n>quota){
-    const c=paliersDe(u).cyclesAuDessus;
+    const e=quotaEtatDe(u);
+    const c=Math.max(e.cycles,paliersDe(u).cyclesAuDessus);
     if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
-    return {type:'montee',palier:suivant.cle,
+    const k=n-quota, s=k>1?'s':'';
+    const coupure=quotaDateCoupure(e.cycles,e.mois);
+    const jour=d=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+    const offre='La formule '+suivant.titre+' est à '+suivant.prix+'\u00a0€/mois : elle les couvre tous.';
+    let texte;
+    if(coupure&&coupure.getTime()<=Date.now()){
+      texte='Depuis le '+jour(coupure)+', '+k+' athlète'+s+' n’'+(k>1?'ont':'a')+' plus '+(k>1?'leur':'son')
+        +' accès suivi : '+(k>1?'ils voient':'il voit')+' une proposition d’abonnement. '+offre+' L’accès revient aussitôt.';
+    } else if(coupure){
+      texte='Au-delà du '+jour(new Date(coupure.getTime()-86400000))+', '+k+' athlète'+s+' perdr'+(k>1?'ont leur':'a son')
+        +' accès suivi. '+offre;
+    } else {
+      texte='Après trois mois d’affilée au-dessus de ta formule, '+k+' athlète'+s+' perdr'+(k>1?'ont leur':'a son')+' accès suivi. '+offre;
+    }
+    return {type:'montee',palier:suivant.cle,horsQuota:k,coupure:coupure?coupure.getTime():0,
       titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
-      texte:'La formule '+suivant.titre+' est à '+suivant.prix+' €/mois. '
-        +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
-        +'tout leur accès, et ton prix actuel reste le tien.'};
+      texte};
   }
   // ── Descente : il paie pour plus qu'il n'utilise ──────────────────────
   const inf=COACH_PALIERS.filter(x=>x.quota>=n&&x.prix<(COACH_PALIERS.find(y=>y.cle===cle)||{}).prix);
@@ -2206,7 +2310,7 @@ function _renderAbonnementCoach(users){
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
-      Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
+      Après trois mois d'affilée au-dessus, les athlètes hors de ta formule perdent leur accès suivi gratuit.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>
@@ -7350,6 +7454,9 @@ const CHAMPS_SANTE=Object.freeze([
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
+  // La date du rattachement à son coach (02/10/2026) : le rang dans le quota
+  // de la formule du coach (athleteCouvertParCoach). Une date, pas une mesure.
+  'rattacheLe',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert
@@ -8938,7 +9045,17 @@ function droitsDe(u){
     avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
     // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
     // d'un code ambassadeur (écrite par le serveur léger).
-    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':''};
+    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':'',
+    // LE QUOTA DU COACH (02/10/2026, serveur léger) : jusqu'à quand la formule du
+    // coach couvre cet athlète. 0 : jamais dit (rien ne se ferme sur un silence).
+    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0};
+}
+// PURE. Hors du quota de son coach, d'après le serveur : le « suivi » d'un
+// CODE de coach ne s'ouvre plus. Un palier payé, un essai, un accès posé à la
+// main ne sont pas concernés (voir palierDe).
+function horsQuotaCoach(d,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return !!(d&&d.etat==='serveur'&&d.couvertJusqu>0&&t>=d.couvertJusqu);
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -8972,7 +9089,12 @@ function palierDe(u){
   if(estCoachReconnu(u)) return 'suivi';
   const d=droitsDe(u);
   if(d.etat==='serveur'){
-    const p=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
+    // LE QUOTA DU COACH (02/10/2026) : hors quota, le « suivi » ouvert par un
+    // code de coach se ferme ; l'essai en cours (checkAccess) et un abonnement
+    // payé (le palier, ou suiviJusqu par-dessus) restent.
+    const hq=horsQuotaCoach(d);
+    const p0=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
+    const p=(hq&&p0==='suivi'&&d.source==='code_coach')?'aucun':p0;
     // LE MOIS D'ULTIME DU PARRAINAGE s'ajoute PAR-DESSUS le palier payé, sans
     // le remplacer : un renouvellement Essentielle pendant ce mois ne le
     // referme pas, et il retombe seul à sa date.
@@ -8985,7 +9107,8 @@ function palierDe(u){
     // dossier. Apres, redeemCode l'ecrit dans droits/ (suiviJusqu).
     if(droitsV2Actif()) return p2;
     const auto=(d.source==='paypal'||d.source==='parrainage');
-    const h=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
+    const h0=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
+    const h=(hq&&h0==='suivi')?'aucun':h0;
     return PALIERS_ORDRE.indexOf(h)>PALIERS_ORDRE.indexOf(p2)?h:p2;
   }
   if(droitsV2Actif()){
@@ -9097,7 +9220,11 @@ function registreCoachDe(u){
   if(!o||typeof o!=='object') return {etat:'inconnu'};
   if(o.vide||!o.d) return {etat:'absent',lu:o.lu};
   const d=o.d;
-  return {etat:'serveur',plan:String(d.plan||'libre'),actifJusqu:Number(d.actifJusqu)||0,le:Number(d.le)||0,lu:o.lu};
+  // `quota` (02/10/2026) : le compteur de mois au-dessus du quota, tenu par le
+  // serveur (metier.js couvertureCoach) — c'est lui qui décide de la grâce.
+  const q=(d.quota&&typeof d.quota==='object')?{cycles:Math.max(0,Number(d.quota.cycles)||0),mois:String(d.quota.mois||''),
+    n:Number(d.quota.n)||0,horsQuota:Number(d.quota.horsQuota)||0}:null;
+  return {etat:'serveur',plan:String(d.plan||'libre'),actifJusqu:Number(d.actifJusqu)||0,le:Number(d.le)||0,quota:q,lu:o.lu};
 }
 // PURE. Ce compte est-il un coach ? Le registre d'abord ; tant que la bascule
 // n'est pas faite, ou que le registre n'a jamais ete lu, le role du dossier
@@ -9688,6 +9815,26 @@ function loadAccessGate(){
       ?'La période réglée est terminée.<br><br>Tu la reprends quand tu veux, et tout revient au même endroit.'
       :'En attente du règlement de ce mois.<br><br>Ton accès se rouvre dès qu’il est passé, et tout revient au même endroit.')
       +'</div>';
+    if(_renM) _renM.style.display='';
+  } else if((()=>{ try{ const d=droitsDe(u); return horsQuotaCoach(d)&&d.palier==='suivi'&&d.source==='code_coach'; }catch(e){ return false; } })()){
+    // ══ HORS DU QUOTA DE SON COACH (02/10/2026) ═══════════════════════════
+    // Le coach suit plus d'athlètes que sa formule n'en couvre, depuis plus de
+    // trois mois. L'athlète n'y est pour rien : on le dit, on dit que rien
+    // n'est perdu, et on donne les deux issues — s'abonner lui-même, ou
+    // demander à son coach de passer à la formule supérieure.
+    const nom=String(u.coachName||'').trim();
+    title.textContent='Ton suivi gratuit est en pause';
+    sub.textContent='Rien n’est effacé. Tes séances, ton programme et ton historique t’attendent.';
+    const href=(()=>{ try{ return _coachContactHref(u.coachId,'Bonjour'+(nom?' '+nom:'')
+      +', RepCore m’indique que ta formule ne couvre plus mon suivi. Peux-tu passer à la formule supérieure ? Mon accès reviendra aussitôt.'); }catch(e){ return ''; } })();
+    block.innerHTML=L
+      +(nom?escapeHtml(nom):'Ton coach')+' suit plus d’athlètes que sa formule n’en couvre : ta place n’est plus prise en charge.<br><br>'
+      +'Deux façons de continuer :<br>'
+      +'• prendre l’abonnement <strong style="color:var(--text-strong)">Essentielle</strong> à '+escapeHtml(prixAutonomie())+', et garder ton coach ;<br>'
+      +'• demander à '+(nom?escapeHtml(nom):'ton coach')+' de passer à la formule supérieure : ton accès revient aussitôt.</div>'
+      +(href?'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" class="btn btn-outline" '
+        +'style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none">'
+        +'Prévenir '+(nom?escapeHtml(nom):'mon coach')+'</a>':'');
     if(_renM) _renM.style.display='';
   } else if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
     const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');
@@ -13398,6 +13545,9 @@ async function doAthleteCode(){
 function linkToCoach(coach){
   // Helper: link currentUser to a coach object and save
   const users=DB.get('users')||{};
+  // LE RANG DE RATTACHEMENT (02/10/2026) : les places du quota d'un coach vont
+  // dans cet ordre (athleteCouvertParCoach). Posé à chaque NOUVEAU coach.
+  if(currentUser.coachId!==coach.id||!(Number(currentUser.rattacheLe)>0)) currentUser.rattacheLe=Date.now();
   currentUser.coachId=coach.id;
   currentUser.coachName=coach.fname+' '+coach.lname;
   currentUser.coachCode=coach.code;
@@ -13452,6 +13602,9 @@ function _appliquerPayloadCode(payload){
   const _octroi=payload.creatorFree||(payload.type||'athlete')==='athlete';
   if(_octroi){
     // Accès accordé immédiatement
+    // LE RANG DE RATTACHEMENT (02/10/2026), comme dans linkToCoach : le serveur
+    // pose le sien dans droits/ (redeemCode), qui fait foi.
+    if(currentUser.coachId!==payload.coachId||!(Number(currentUser.rattacheLe)>0)) currentUser.rattacheLe=Date.now();
     currentUser.coachId=payload.coachId;
     currentUser.coachName=payload.coachName||'Coach';
     // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la

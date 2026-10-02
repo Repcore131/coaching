@@ -763,6 +763,9 @@ const CHAMPS_SANTE=Object.freeze([
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
+  // La date du rattachement à son coach (02/10/2026) : le rang dans le quota
+  // de la formule du coach (athleteCouvertParCoach). Une date, pas une mesure.
+  'rattacheLe',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert

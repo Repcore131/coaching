@@ -186,21 +186,32 @@ de Kevin, ou un produit ?
 
 ## 6. Décision
 
-> **Option retenue :** AUCUNE — statu quo.
+> **Option retenue :** **B — abonnement coach, accès athlète gratuit, quota appliqué.**
 >
-> **Date :** 27/07/2026
+> **Date :** 02/10/2026 (build 1792, lot 44 de la PR « Sécurité, charge… »).
 >
-> **Formulation exacte de Kevin, consultee le 27/07/2026 :** « laisse comme
-> c'etait ». Ni A ni B n'est retenue ; le modele actuel est maintenu tel quel,
-> et aucune modification de code n'a ete appliquee.
+> **Ce qui est appliqué :**
+> - le coach paie ; l'athlète rattaché ne paie rien **dans la limite de la formule du coach** :
+>   Libre 1 athlète actif, Coach 15, Pro sans limite (`COACH_PALIERS`, prix dans `tarifs.json`).
+>   Un athlète actif a fait au moins une séance dans les 60 derniers jours ;
+> - les places vont aux athlètes actifs **dans l'ordre de rattachement** (`rattacheLe`, et
+>   `droits/<athlète>/rattache` posé par le serveur, que le client ne peut pas antidater) ;
+> - **trois mois de grâce** : tant que le coach n'a pas passé trois mois d'affilée au-dessus de son
+>   quota, tout le monde reste couvert. Au-delà, un athlète hors quota perd le « suivi » gratuit, sauf
+>   essai en cours ou abonnement personnel. Il voit un écran qui lui propose Essentielle et l'invite à
+>   demander à son coach de passer à la formule supérieure ;
+> - le serveur léger recalcule chaque jour (6 h 30), et dès qu'une formule coach change chez PayPal,
+>   `droits/<athlète>/couvertParCoach` ; l'app ne ferme rien d'elle-même, et un cache vide ne coupe
+>   personne ;
+> - le créateur n'est jamais soumis au quota ;
+> - l'alerte du coach dit l'échéance réelle : « Au-delà du <date>, N athlètes perdront leur accès suivi ».
 >
-> **CE QUI RESTE DONC VRAI, ET DOIT ETRE SU :** les trois textes de reversement
-> (`app/index.html` l. 716, 1093, 1127) sont TOUJOURS AFFICHES. Un coach tiers
-> qui s'inscrit lit encore que les paiements de ses athletes sont centralises
-> sur le compte du createur. L'exposition decrite en §1 n'est pas levee.
+> **Historique :** le 27/07/2026, Kevin avait retenu le statu quo (« laisse comme c'etait ») : ni A
+> ni B, et le dépassement de quota n'était qu'une alerte. Un coach Libre pouvait donc suivre un nombre
+> illimité d'athlètes, tous gratuits.
 >
-> Cette note reste ouverte : elle pourra etre reprise sans travail
-> supplementaire le jour ou l'arbitrage sera fait.
+> **Les textes de reversement cités en §1** (« les paiements de tes athlètes sont centralisés sur le
+> compte du créateur ») ne figurent plus dans `app/index.html` (recherche faite le 02/10/2026).
 
 ---
 

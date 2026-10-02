@@ -188,6 +188,9 @@ async function doAthleteCode(){
 function linkToCoach(coach){
   // Helper: link currentUser to a coach object and save
   const users=DB.get('users')||{};
+  // LE RANG DE RATTACHEMENT (02/10/2026) : les places du quota d'un coach vont
+  // dans cet ordre (athleteCouvertParCoach). Posé à chaque NOUVEAU coach.
+  if(currentUser.coachId!==coach.id||!(Number(currentUser.rattacheLe)>0)) currentUser.rattacheLe=Date.now();
   currentUser.coachId=coach.id;
   currentUser.coachName=coach.fname+' '+coach.lname;
   currentUser.coachCode=coach.code;
@@ -242,6 +245,9 @@ function _appliquerPayloadCode(payload){
   const _octroi=payload.creatorFree||(payload.type||'athlete')==='athlete';
   if(_octroi){
     // Accès accordé immédiatement
+    // LE RANG DE RATTACHEMENT (02/10/2026), comme dans linkToCoach : le serveur
+    // pose le sien dans droits/ (redeemCode), qui fait foi.
+    if(currentUser.coachId!==payload.coachId||!(Number(currentUser.rattacheLe)>0)) currentUser.rattacheLe=Date.now();
     currentUser.coachId=payload.coachId;
     currentUser.coachName=payload.coachName||'Coach';
     // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la

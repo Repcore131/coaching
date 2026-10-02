@@ -123,7 +123,11 @@ export function creerAppelsDroits(ctx) {
     const droits = r === 'deja' ? await lire('droits/' + cle) : await poserSuivi(cle, fin);
     if (r === 'consomme') {
       const b = 'users/' + cle + '/';
-      const maj = { [b + 'coachEmailKey']: coach, [b + 'status']: 'COACHING_SUIVI', [b + 'updatedAt']: t };
+      // LE RANG DE RATTACHEMENT (02/10/2026) : les places du quota du coach vont
+      // dans cet ordre (metier.js couvertureCoach). droits/ ne s'écrit pas
+      // depuis le client : c'est lui qui fait foi, le dossier n'en est qu'un miroir.
+      const maj = { [b + 'coachEmailKey']: coach, [b + 'status']: 'COACHING_SUIVI', [b + 'updatedAt']: t, [b + 'rattacheLe']: t };
+      if (droits) maj['droits/' + cle + '/rattache'] = { coach, le: t };
       if (d.coachId) maj[b + 'coachId'] = String(d.coachId);
       if (d.coachName) maj[b + 'coachName'] = String(d.coachName).slice(0, 120);
       await db.ref().update(maj);
