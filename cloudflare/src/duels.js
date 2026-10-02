@@ -78,6 +78,8 @@ const jourFr = (t) => new Date(Number(t)).toLocaleDateString('fr-FR', { timeZone
 
 // ── Les messages ─────────────────────────────────────────────────────────
 // `cle` : à qui l'on écrit. Un titre court, un corps qui dit quoi faire.
+// `prio` (metier.js, PUSH_PRIORITE) : le J-2 (80) et le résultat (90) passent
+// en second push du jour ; les autres messages de duel gardent celle du type.
 export function pushRejoint(d) {
   return { type: 'defi', url: './?duels=1', tag: 'duel-rejoint-' + d.id,
     title: String(d.inviteNom || 'Ton pote').slice(0, 24) + ' relève ton duel ⚡',
@@ -110,7 +112,7 @@ export function pushRappel(d, cle) {
   const s = scoresDe(d);
   const moi = cle === d.createur ? s.createur : s.invite, lui = cle === d.createur ? s.invite : s.createur;
   const etat = moi > lui ? 'Tu mènes' : (moi < lui ? 'Tu es mené' : 'Égalité');
-  return { type: 'defi', url: './?duels=1', tag: 'duel-j2-' + d.id,
+  return { type: 'defi', prio: 'duel_j2', url: './?duels=1', tag: 'duel-j2-' + d.id,
     title: 'Plus que 2 jours contre ' + autreNom(d, cle).slice(0, 24),
     body: etat + ' : ' + texteScore(d.mesure, moi) + ' contre ' + texteScore(d.mesure, lui) + '. Une séance peut tout changer.' };
 }
@@ -119,11 +121,11 @@ export function pushResultat(d, cle, gagnant) {
   const moi = cle === d.createur ? s.createur : s.invite, lui = cle === d.createur ? s.invite : s.createur;
   const score = texteScore(d.mesure, moi) + ' contre ' + texteScore(d.mesure, lui);
   const role = cle === d.createur ? 'createur' : 'invite';
-  if (gagnant === 'egalite') return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  if (gagnant === 'egalite') return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: 'Égalité contre ' + autreNom(d, cle).slice(0, 24), body: score + '. Revanche ?' };
-  if (gagnant === role) return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  if (gagnant === role) return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: 'Tu as gagné ton duel ⚡', body: score + ' contre ' + autreNom(d, cle).slice(0, 24) + '. Badge CHAMPION débloqué.' };
-  return { type: 'defi', url: './?duels=1', tag: 'duel-fin-' + d.id,
+  return { type: 'defi', prio: 'duel_fin', url: './?duels=1', tag: 'duel-fin-' + d.id,
     title: autreNom(d, cle).slice(0, 24) + ' remporte le duel', body: score + '. Revanche ?' };
 }
 // Ce que la clôture écrit dans /defis_resultats/<cle>/<id> : la même forme

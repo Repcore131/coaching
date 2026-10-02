@@ -19,16 +19,22 @@ const ws = new WebSocket(t.webSocketDebuggerUrl);
 let n = 0; const att = new Map();
 const cmd = (m, p={}) => new Promise((res, rej) => { const id = ++n; att.set(id, res);
   ws.send(JSON.stringify({ id, method: m, params: p }));
-  setTimeout(() => { if (att.has(id)) { att.delete(id); rej(new Error('timeout ' + m)); } }, 300000); });
+  setTimeout(() => { if (att.has(id)) { att.delete(id); rej(new Error('timeout ' + m)); } }, 1200000); });
 ws.onmessage = e => { const m = JSON.parse(e.data);
   if (m.id && att.has(m.id)) { att.get(m.id)(m.result); att.delete(m.id); } };
 await new Promise(r => ws.onopen = r);
 await cmd('Network.enable');
 await cmd('Network.setCacheDisabled', { cacheDisabled: true });
+// LES MEMES CONDITIONS QUE suite.mjs (02/10/2026) : fuseau de Paris, fenetre
+// 412x4000 mobile, Ciqual, illustrations et regles charges. Sans elles, la
+// premiere passe comptait des echecs que suite.mjs n'a pas, et un fantome ne
+// se distinguait plus d'un echec d'environnement.
+await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
+await cmd('Emulation.setDeviceMetricsOverride', { width: 412, height: 4000, deviceScaleFactor: 1, mobile: true });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
-    { expression: x, returnByValue: true, awaitPromise: true, timeout: 290000 });
+    { expression: x, returnByValue: true, awaitPromise: true, timeout: 1190000 });
   if (r.exceptionDetails) return { erreur: r.exceptionDetails.text };
   return r.result.value;
 };
@@ -40,11 +46,16 @@ console.log('nettoyage :', await ev(`(async()=>{ try{
   return 'vide'; }catch(e){ return 'echec '+e.message; } })()`));
 await cmd('Page.enable'); await cmd('Page.reload', { ignoreCache: true });
 await new Promise(r => setTimeout(r, 6000));
+console.log('ciqual :', await ev(`(async()=>{ try{ await _loadCiqual(); return 'chargee'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+console.log('illustrations :', await ev(`(async()=>{ try{ const s=await chargerIndexIllustrations(); return s.size+' fiches'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+console.log('regles :', await ev(`(async()=>{ try{ const r=await fetch('../database.rules.json',{cache:'no-store'});
+  if(!r.ok) return 'NON SERVIES (HTTP '+r.status+')'; window._RC_RULES=await r.text(); return 'chargees'; }catch(e){ return 'NON SERVIES'; } })()`));
 const rap = await ev(`(async()=>{ try{
   const a=await chargerTests();
   const na=a.detail.filter(x=>!x.ok).map(x=>x.n);
   const b=await chargerTests();
   const nb=b.detail.filter(x=>!x.ok).map(x=>x.n);
+  const db=b.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''));
   const c=await chargerTests();
   const nc=c.detail.filter(x=>!x.ok).map(x=>x.n);
   const setA=new Set(na);
@@ -53,8 +64,17 @@ const rap = await ev(`(async()=>{ try{
           passe3:{total:c.total,echecs:c.echecs},
           fantomes2:nb.filter(x=>!setA.has(x)),
           fantomes3:nc.filter(x=>!setA.has(x)),
-          gueris:na.filter(x=>!nc.includes(x))}; }
+          gueris:na.filter(x=>!nc.includes(x)),
+          // LE MESSAGE ET LA LIGNE de chaque fantome de la passe 2 : le nom
+          // seul obligeait a rejouer pour savoir ce qui avait change.
+          detail2:db.filter(x=>!setA.has(x.split(' → ')[0].split('  [')[0]))}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
-console.log(JSON.stringify(rap, null, 1).slice(0, 4000));
+console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
-process.exit(0);
+// Sortie 0 seulement si les trois passes rendent le meme total et le meme
+// nombre d'echecs, sans fantome ni gueri.
+const stable = rap && !rap.erreur && rap.passe1.total === rap.passe2.total && rap.passe2.total === rap.passe3.total
+  && rap.passe1.echecs === rap.passe2.echecs && rap.passe2.echecs === rap.passe3.echecs
+  && !rap.fantomes2.length && !rap.fantomes3.length && !rap.gueris.length;
+console.log('\nIDEMPOTENCE : ' + (stable ? 'STABLE' : 'INSTABLE'));
+process.exit(stable ? 0 : 1);

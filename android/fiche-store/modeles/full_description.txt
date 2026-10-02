@@ -1,0 +1,31 @@
+RepCore, c'est l'application de musculation créée par un coach diplômé d'État. Ta séance, ta nutrition, ton sommeil et ta progression, enfin dans une seule application. RepCore se souvient de ce que tu as soulevé la dernière fois et te propose la suite.
+
+★ 4 EN 1
+Entraînement, nutrition, sommeil et progression : tout se parle, au même endroit. Plus de programme dans un PDF, de repas dans une autre appli et de charges dans tes notes.
+
+★ LA BONNE CHARGE, À CHAQUE SÉRIE
+• Une charge proposée pour chaque série, d'après ta séance précédente du même jour, modifiable à tout moment
+• Séries, répétitions, RIR et gêne notés en deux gestes
+• Échauffement calculé, minuteur de repos intégré
+• Fonctionne au sous-sol de ta salle : tout se synchronise au retour du réseau
+
+★ PLUS DE 400 EXERCICES FILMÉS ET EXPLIQUÉS
+Chaque mouvement a sa vidéo, tournée en salle, et sa vraie explication : placement, trajet de la charge, amplitude, tempo, respiration, et les erreurs à éviter. Méthodes d'intensification (dropset, rest-pause, myo-reps, cluster) et échauffements tout faits.
+
+★ NUTRITION, MÊME HORS LIGNE
+• Scanne le code-barres d'un produit, ses valeurs arrivent seules
+• Cherche dans les bases d'aliments, même sans réseau
+• Prends l'étiquette en photo : l'application lit les valeurs nutritionnelles
+• Diète flexible (tes macros) ou stricte (ton plan repas), compléments compris
+• Tes besoins calculés étape par étape, jours d'entraînement et jours de repos
+
+★ TA PROGRESSION, SEMAINE APRÈS SEMAINE
+Courbe de poids lissée sur sept jours, masse grasse estimée à chaque bilan, mensurations posées sur ta silhouette, maximum estimé et records exercice par exercice. Pas, sommeil et fréquence cardiaque arrivent de Health Connect (Garmin, Samsung Health…).
+
+★ POUR LES COACHS
+Tes athlètes saisissent leurs séances, toi tu coaches : programmes, bilans, correction vidéo image par image avec angles et trajectoires tracés, et un tableau de bord qui repère qui décroche. Gratuit pour ton premier client, sans carte bancaire. Ensuite, la formule Coach ({{tarif:coach.coach}} par mois, jusqu'à quinze athlètes actifs) ou Pro ({{tarif:coach.pro}} par mois, sans limite), au mois, sans engagement. Tes athlètes ne paient rien avec ton code.
+
+★ ESSAI ET TARIFS
+{{nb:essai.mois}} mois d'essai, toute l'app ouverte, sans carte bancaire : rien n'est prélevé à la fin, tu choisis ta formule ou tu t'arrêtes. Essentielle à {{tarif:essentielle.mois}} par mois, Ultime à {{tarif:ultime.mois}} par mois, avec un engagement de {{nb:engagementMois}} mois, à régler chaque mois ou en une fois avec une remise : {{tarif:essentielle.an}} et {{tarif:ultime.an}} l'année.
+
+Le suivi du cycle est désactivé tant que tu ne l'actives pas. Tes données restent à toi : si tu es coaché, ton coach y accède parce que tu as saisi son code, et ce lien se rompt depuis ton profil.

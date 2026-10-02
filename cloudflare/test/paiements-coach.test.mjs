@@ -52,7 +52,7 @@ function monde(initial, o) {
   const env = { PAYPAL_CLIENT_ID: 'id', PAYPAL_CLIENT_SECRET: 'sec', PAYPAL_WEBHOOK_ID: 'wh', PAIEMENTS_COACH: opt.ferme ? '' : 'oui' };
   w.ctx = { db, M, env, fetchImpl, maintenant: () => w.t };
   w.P = PC.creerPaiementsCoach(w.ctx);
-  w.appel = (email, data) => w.P.appel({ auth: { email }, data });
+  w.appel = (email, data, verifie = true) => w.P.appel({ auth: { email, emailVerifie: verifie }, data });
   return w;
 }
 const BASE = () => ({
@@ -108,6 +108,12 @@ test('relier : format, palier, puis PayPal lui-même ; fermé tant que PAIEMENTS
   const w3 = monde(BASE(), { ferme: true });
   await assert.rejects(w3.appel('kev@t.fr', { action: 'relier', marchand: MARCHAND }), /pas encore ouvert/);
   await assert.rejects(w3.appel('lea@t.fr', { coach: 'kevin-guellec', formuleId: 'coaching_essentiel' }), /pas encore ouvert/);
+});
+
+test('relier est une route sensible : une adresse non vérifiée ne relie rien', async () => {
+  const w = monde(BASE());
+  await assert.rejects(w.appel('kev@t.fr', { action: 'relier', marchand: MARCHAND }, false), /Vérifie d’abord ton adresse/);
+  assert.equal(w.F.lire('coach_paiement/' + COACH), null);
 });
 
 // ── COMMANDER, PAYER ──────────────────────────────────────────────────────

@@ -1,0 +1,109 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LA VEILLE DU SERVEUR LÉGER, TOUTES LES 15 MINUTES
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  CE QU'ELLE GUETTE. /sante du Worker répond 503 quand le pouls (écrit par
+#  chaque minute du Worker dans worker/verrou/pouls) a plus de 5 minutes —
+#  cron arrêté, Worker cassé — ou quand la base ne répond pas (secret faux,
+#  base en panne). Elle donne aussi `ko` : les événements rangés en échec.
+#
+#  CE QU'ELLE FAIT. Un courriel à Kevin si /sante échoue, ou si `ko` a monté
+#  depuis le dernier courriel ; UN PAR HEURE AU PLUS. Et le travail échoue
+#  (croix rouge) tant que le serveur est en panne : GitHub l'envoie aussi par
+#  courriel, selon les réglages de notification du compte.
+#
+#  LE DÉLAI. Pouls déclaré vieux à 5 min, cache de /sante de 30 s, un passage
+#  toutes les 15 min : une panne est vue en 20 min au pire — PLUS le retard
+#  des travaux programmés de GitHub, qui démarrent parfois quelques minutes
+#  après l'heure dite (davantage aux heures pleines). Pour descendre, passer
+#  le cron à '*/10'.
+#
+#  ── LES SECRETS ── les mêmes que rapport-payeur.yml :
+#    MAIL_MOT_DE_PASSE      mot de passe d'APPLICATION Google (obligatoire)
+#    (MAIL_UTILISATEUR)     facultatif : guellec.coachingpro@gmail.com par défaut
+#    (MAIL_DESTINATAIRE)    facultatif : la même adresse par défaut
+#
+#  L'ÉTAT ENTRE DEUX PASSAGES (dernier ko signalé, heure du dernier courriel)
+#  vit dans le cache d'Actions : une entrée par passage (une clé de cache ne
+#  se réécrit pas), la plus récente relue ; GitHub efface les vieilles seul.
+#
+#  ⚠ GITHUB ENDORT LES TRAVAUX PROGRAMMÉS après soixante jours sans activité
+#    sur le dépôt : l'onglet Actions le dit et les réactive d'un bouton.
+# ══════════════════════════════════════════════════════════════════════════
+name: Veille du serveur
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  # À LA DEMANDE : onglet Actions > Veille du serveur > Run workflow.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veille-serveur
+  cancel-in-progress: false
+
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: L'état du passage précédent
+        uses: actions/cache/restore@v4
+        with:
+          path: veille
+          key: veille-serveur-${{ github.run_id }}
+          restore-keys: veille-serveur-
+
+      # --fail-with-body : comme -f (code 22 sur un 503), mais le corps est
+      # gardé — il dit POURQUOI (pouls_ancien, base_injoignable).
+      - name: Interroger /sante
+        id: sante
+        run: |
+          mkdir -p veille
+          set +e
+          curl -sS --fail-with-body --max-time 20 --retry 2 --retry-delay 5 \
+            https://repcore-serveur.repcore.workers.dev/sante -o veille/sante.json
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat veille/sante.json 2>/dev/null; echo
+
+      - name: Décider
+        id: decision
+        run: |
+          node scripts/veille_serveur.mjs "${{ steps.sante.outputs.code }}" \
+            veille/sante.json veille/etat.json veille/message.md
+
+      - name: Écrire à Kevin
+        if: steps.decision.outputs.envoyer == 'true'
+        env:
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com' }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
+        run: |
+          if [ -z "$MAIL_MOT_DE_PASSE" ]; then
+            echo "::error::MAIL_MOT_DE_PASSE absent : le courriel d'alerte ne peut pas partir (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          node scripts/envoyer_mail.mjs veille/message.md "$(cat veille/message.md.objet)"
+
+      - name: Garder l'état pour le passage suivant
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: veille
+          key: veille-serveur-${{ github.run_id }}
+
+      # EN DERNIER : la croix rouge tant que le serveur est en panne.
+      - name: Le serveur est-il sain
+        if: steps.decision.outputs.panne == 'true'
+        run: |
+          echo "::error::/sante échoue (voir l'étape « Interroger /sante ») : serveur léger en panne ou base injoignable."
+          exit 1

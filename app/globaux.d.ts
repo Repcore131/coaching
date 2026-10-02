@@ -103,3 +103,9 @@ interface Window {
   /** Le moteur de pose, posé par son propre script une fois chargé. */
   Pose?: any;
 }
+
+// Le tempo prescrit et la cle d'exercice (rc-core) : lus par la comparaison
+// de tempo du laboratoire (lot Motion Lab T3, build 1682). Absents d'ici, ils
+// faisaient echouer le typage depuis ce build.
+declare function tempoLu(txt: string): any;
+declare function exKey(nom: string): string;

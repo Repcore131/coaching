@@ -78,12 +78,16 @@ export function annonceSaison(s, etat, t) {
   return null;
 }
 // À qui l'annonce s'adresse : parmi les abonnés aux push.
-export function destinataires(quoi, s, abonnes, vals) {
+// `inscrits` (saisons_inscrits/<id>, le « Je participe » de l'app, 02/10/2026) :
+// quand il est donné, mi-parcours et J-2 ne vont qu'aux INSCRITS et à ceux qui
+// ont déjà avancé — plus à tout abonné resté à zéro sans rien demander.
+export function destinataires(quoi, s, abonnes, vals, inscrits) {
   const obj = Number(s.objectifPerso) || 1;
   const v = (k) => Number(vals[k]) || 0;
+  const engage = (k) => !inscrits || !!inscrits[k] || v(k) > 0;
   if (quoi === 'lancement') return abonnes.slice();
-  if (quoi === 'mi') return abonnes.filter((k) => v(k) < obj / 2);
-  if (quoi === 'j2') return abonnes.filter((k) => v(k) < obj);
+  if (quoi === 'mi') return abonnes.filter((k) => engage(k) && v(k) < obj / 2);
+  if (quoi === 'j2') return abonnes.filter((k) => engage(k) && v(k) < obj);
   if (quoi === 'fin') return abonnes.filter((k) => k in vals);
   return [];
 }

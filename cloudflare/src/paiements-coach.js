@@ -29,6 +29,7 @@
 
 import T from '../../tarifs.json' with { type: 'json' };
 import { ErreurAppel } from './appels.js';
+import { estCreateur } from './createur.js';
 
 export const API_LIVE = 'https://api-m.paypal.com';
 export const API_SANDBOX = 'https://api-m.sandbox.paypal.com';
@@ -139,8 +140,11 @@ export function creerPaiementsCoach(ctx) {
     let j = null; try { j = await r.json(); } catch (e) { j = null; }
     return { statut: r.status, j };
   }
-  async function palierCoach(coach) {
-    if (coach === CREATEUR) return true;
+  // `appelant` (le jeton, pour relier) : le créateur n'est reconnu que par son
+  // UID et une adresse vérifiée (createur.js). Sans appelant (un athlète paie
+  // un coach), `coach` est une donnée, et la clé du créateur suffit.
+  async function palierCoach(coach, appelant) {
+    if (coach === CREATEUR && (appelant === undefined || estCreateur(appelant))) return true;
     const [role, plan] = await Promise.all([lire('users/' + coach + '/role'), lire('users/' + coach + '/coachPlan')]);
     return role === 'coach' && PALIERS_COACH.indexOf(String(plan)) >= 0;
   }
@@ -148,9 +152,12 @@ export function creerPaiementsCoach(ctx) {
   // RELIER. Le format d'abord, puis PayPal lui-même : une commande d'essai
   // (jamais approuvée, elle expire seule) dont le bénéficiaire est ce compte.
   // PayPal la refuse si le compte n'existe pas ou ne peut pas recevoir.
-  async function relier(coach, brut) {
+  async function relier(coach, brut, auth) {
     if (!ouvert()) throw new ErreurAppel(403, 'Le paiement direct n’est pas encore ouvert.');
-    if (!(await palierCoach(coach))) throw new ErreurAppel(403, 'Réservé aux paliers Coach et Pro.');
+    // ROUTE SENSIBLE (01/10/2026) : elle décide où part l'argent des athlètes.
+    // L'adresse doit être prouvée, lue dans le jeton signé par Google.
+    if (auth && auth.emailVerifie !== true) throw new ErreurAppel(403, 'Vérifie d’abord ton adresse e-mail (lien reçu à l’inscription).');
+    if (!(await palierCoach(coach, auth))) throw new ErreurAppel(403, 'Réservé aux paliers Coach et Pro.');
     const m = marchandNet(brut);
     if (!m) {
       await db.ref('coach_paiement/' + coach).set({ statut: 'refuse', raison: 'format', le: now() });
@@ -290,7 +297,7 @@ export function creerPaiementsCoach(ctx) {
       return { ouvert: ouvert(), statut: (l && l.statut) || 'non_relie', raison: (l && l.raison) || null,
         marchand: l && l.marchand ? String(l.marchand).replace(/^(.{2}).*(.{2})$/, '$1…$2') : null };
     }
-    if (a === 'relier') return relier(moi, data && data.marchand);
+    if (a === 'relier') return relier(moi, data && data.marchand, auth);
     if (a === 'capturer') return capturer(moi, data);
     return commande(moi, data);
   }

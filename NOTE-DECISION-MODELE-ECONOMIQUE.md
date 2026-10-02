@@ -3,6 +3,11 @@
 **Rédigée le 27/07/2026** · Décision attendue de Kevin Guellec
 **Statut : EN ATTENTE D'ARBITRAGE** — à dater et signer ci-dessous.
 
+> **Note du 02/10/2026.** Les montants des §1 à §5 (9,95 €/mois, 99 €/an) sont
+> ceux de juillet 2026 et ne sont plus en vigueur. Les tarifs actuels, et la
+> façon dont le revenu se mesure désormais, sont au §7. La seule source des
+> prix est `tarifs.json`.
+
 ---
 
 ## 1. Le problème, en une phrase
@@ -186,24 +191,59 @@ de Kevin, ou un produit ?
 
 ## 6. Décision
 
-> **Option retenue :** AUCUNE — statu quo.
+> **Option retenue :** **B — abonnement coach, accès athlète gratuit, quota appliqué.**
 >
-> **Date :** 27/07/2026
+> **Date :** 02/10/2026 (build 1792, lot 44 de la PR « Sécurité, charge… »).
 >
-> **Formulation exacte de Kevin, consultee le 27/07/2026 :** « laisse comme
-> c'etait ». Ni A ni B n'est retenue ; le modele actuel est maintenu tel quel,
-> et aucune modification de code n'a ete appliquee.
+> **Ce qui est appliqué :**
+> - le coach paie ; l'athlète rattaché ne paie rien **dans la limite de la formule du coach** :
+>   Libre 1 athlète actif, Coach 15, Pro sans limite (`COACH_PALIERS`, prix dans `tarifs.json`).
+>   Un athlète actif a fait au moins une séance dans les 60 derniers jours ;
+> - les places vont aux athlètes actifs **dans l'ordre de rattachement** (`rattacheLe`, et
+>   `droits/<athlète>/rattache` posé par le serveur, que le client ne peut pas antidater) ;
+> - **trois mois de grâce** : tant que le coach n'a pas passé trois mois d'affilée au-dessus de son
+>   quota, tout le monde reste couvert. Au-delà, un athlète hors quota perd le « suivi » gratuit, sauf
+>   essai en cours ou abonnement personnel. Il voit un écran qui lui propose Essentielle et l'invite à
+>   demander à son coach de passer à la formule supérieure ;
+> - le serveur léger recalcule chaque jour (6 h 30), et dès qu'une formule coach change chez PayPal,
+>   `droits/<athlète>/couvertParCoach` ; l'app ne ferme rien d'elle-même, et un cache vide ne coupe
+>   personne ;
+> - le créateur n'est jamais soumis au quota ;
+> - l'alerte du coach dit l'échéance réelle : « Au-delà du <date>, N athlètes perdront leur accès suivi ».
 >
-> **CE QUI RESTE DONC VRAI, ET DOIT ETRE SU :** les trois textes de reversement
-> (`app/index.html` l. 716, 1093, 1127) sont TOUJOURS AFFICHES. Un coach tiers
-> qui s'inscrit lit encore que les paiements de ses athletes sont centralises
-> sur le compte du createur. L'exposition decrite en §1 n'est pas levee.
+> **Historique :** le 27/07/2026, Kevin avait retenu le statu quo (« laisse comme c'etait ») : ni A
+> ni B, et le dépassement de quota n'était qu'une alerte. Un coach Libre pouvait donc suivre un nombre
+> illimité d'athlètes, tous gratuits.
 >
-> Cette note reste ouverte : elle pourra etre reprise sans travail
-> supplementaire le jour ou l'arbitrage sera fait.
+> **Les textes de reversement cités en §1** (« les paiements de tes athlètes sont centralisés sur le
+> compte du créateur ») ne figurent plus dans `app/index.html` (recherche faite le 02/10/2026).
 
 ---
 
 *Références : `app/index.html` l. 716, 1093, 1127 (textes de reversement) ;
 `RepCore-AUDIT-2026-07-25/05-marketing-business.md` §3.1 (prix vérifiés par URL,
 consultés le 25/07/2026).*
+
+---
+
+## 7. Tarifs en vigueur et mesure du revenu (02/10/2026)
+
+**Les prix** vivent dans `tarifs.json`, et nulle part ailleurs : `scripts/tarifs.mjs` les recopie dans l'app, les pages publiques et la fiche Play Store, et `scripts/verif/tarifs.mjs` refuse tout écart.
+
+| Formule | Au mois | À l'année |
+|---|---|---|
+| Essentielle | 9,50 € | 95 € (−17 %) |
+| Ultime | 24,90 € | 249 € (−17 %) |
+| Coach (15 athlètes actifs) | 19 € | — |
+| Pro (sans limite) | 39 € | — |
+| Libre (1 athlète) | 0 € | — |
+
+Engagement de 12 mois pour l'athlète (résiliation à son terme, arrêtée par RepCore chez PayPal) ; formules coach au mois, sans engagement. Les abonnés annuels d'avant le 02/10/2026 gardent leur prix (114 € et 298,80 €).
+
+**Le revenu se mesure côté serveur.** Le serveur léger calcule chaque matin `indicateurs/<AAAA-MM-JJ>` (`cloudflare/src/metier.js`, fonction `indicateurs`), que le créateur seul peut lire, et que l'onglet monétisation affiche :
+
+- **MRR TTC** : pour chaque abonnement actif, le montant **réellement prélevé** à la dernière échéance (un ancien tarif compte à son prix, le plan « demi » pour 12,45 € le premier mois), un annuel pour un douzième ; plus les formules coach payantes. **Les résiliés en cours en sont exclus**, même si leur accès court encore ;
+- la ventilation par formule, les résiliés en cours, le churn du mois, la conversion de l'essai, la part en annuel, le revenu moyen par coach et les remboursements du mois ;
+- la courbe du MRR sur douze mois.
+
+L'app ne recalcule plus rien depuis son cache : un abonné à un ancien tarif, un annuel ou un résilié y étaient mal comptés.

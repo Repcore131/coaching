@@ -7,7 +7,7 @@
 // avec lui-même.
 //
 // CE QUE CE CONTRÔLE REFUSE :
-//   1. un tarifs.json incohérent (annuel ≠ 12 mensualités, demi-tarif faux…) ;
+//   1. un tarifs.json incohérent (annuel plus cher que 12 mensualités, demi-tarif faux…) ;
 //   2. une copie en retard : le bloc TARIFS de rc-core, un montant lié
 //      (data-tarif, data-nb, data-tarif-m/a) de index.html, terms.html ou
 //      aide-apk.html qui ne vaut plus ce que dit tarifs.json ;
@@ -15,13 +15,20 @@
 //      (sauf data-hors-tarif : un prix du marché, pas le nôtre) ;
 //   4. OFFRES et COACH_PALIERS, évalués tels quels, qui ne rendent pas les
 //      prix de tarifs.json ;
-//   5. « sans engagement » sur la page de vente ; un « N mois d'essai » qui
-//      n'est ni l'essai ni l'essai parrainé.
+//   5. « sans engagement » sur la page de vente ou l'accueil /i ; un « N mois
+//      d'essai » qui n'est ni l'essai ni l'essai parrainé ;
+//   7. (02/10/2026) un "price" du JSON-LD (blocs analysés) qui ne vaut aucun
+//      montant de tarifs.json ;
+//   6. (02/10/2026) « ton premier mois » à côté d'« ami » ou d'« invit » dans
+//      index.html ou i/index.html, alors que l'essai parrainé ajoute des mois
+//      (moisEnPlus > 0) : l'invité a essai.moisParraine mois, pas un ; et le
+//      FAQ « Un ami m'a invité » qui ne dirait pas le même nombre dans sa
+//      version visible et dans son JSON-LD, ou « double » à tort.
 // Et il se prouve : un prix faussé exprès, un prix ajouté en dur, doivent
 // être vus.
 //   node scripts/verif/tarifs.mjs
 import { readFileSync } from 'node:fs';
-import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences } from '../tarifs.mjs';
+import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, RE_FAQ_AMI, RE_JSONLD_PRIX } from '../tarifs.mjs';
 
 const T = lireTarifs();
 const erreurs = [];
@@ -46,11 +53,71 @@ function montantsLibres(html) {
   }
   return trouves;
 }
+// « ton premier mois » (offert, gratuit…) à moins de 160 caractères d'« ami »,
+// d'« invit », de « parrain » ou de « ref » (le code parrain, dans le script de
+// /p) : la phrase d'avant l'essai parrainé de deux mois.
+function premierMoisAmi(html) {
+  const out = [];
+  const re = /ton premier mois/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const autour = html.slice(Math.max(0, m.index - 160), m.index + m[0].length + 160);
+    if (/\bami(?:e|s)?\b|invit|parrain|\bref\b/i.test(autour))
+      out.push('« ton premier mois » pour un invité (vers la ligne ' + html.slice(0, m.index).split('\n').length + ') — l’essai parrainé dure ' + valeur(T, 'essai.moisParraine') + ' mois');
+  }
+  return out;
+}
 const texteVisible = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ');
+// LES PRIX DU JSON-LD, LUS COMME GOOGLE LES LIT (02/10/2026) : chaque bloc
+// <script type="application/ld+json"> est analysé, et chaque "price" doit
+// valoir un montant de tarifs.json. index.html y a annoncé 9.95 € pendant
+// que la grille disait 9,50 € : le texte n'était lié à rien.
+const PRIX_CONNUS = (() => {
+  const v = new Set();
+  const visiter = (o) => { for (const x of Object.values(o || {})) { if (typeof x === 'number') v.add(Math.round(x * 100)); else if (x && typeof x === 'object') visiter(x); } };
+  visiter(T);
+  v.add(Math.round(valeur(T, 'coaching.coaching_evolution.parMois') * 100));
+  return v;
+})();
+function prixJsonLdInconnus(html) {
+  const out = [];
+  const blocs = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+  blocs.forEach((m, i) => {
+    let j;
+    try { j = JSON.parse(m[1]); } catch (x) { out.push('JSON-LD n°' + (i + 1) + ' illisible (' + x.message + ')'); return; }
+    const visiter = (o) => {
+      if (Array.isArray(o)) return o.forEach(visiter);
+      if (!o || typeof o !== 'object') return;
+      for (const [k, x] of Object.entries(o)) {
+        if (k === 'price') {
+          const n = Number(String(x).replace(',', '.'));
+          if (!Number.isFinite(n) || !PRIX_CONNUS.has(Math.round(n * 100))) out.push('JSON-LD n°' + (i + 1) + ' : "price": "' + x + '" ne vaut aucun montant de tarifs.json');
+        } else visiter(x);
+      }
+    };
+    visiter(j);
+  });
+  return out;
+}
+// L'ANNUEL REMISÉ (02/10/2026) : une page qui dit encore « le même total »
+// ou « aucune remise » contredit le prix qu'elle affiche.
+const REMISE = ['essentielle', 'ultime'].some((k) => T[k].an < T[k].mois * 12);
 function controlerPage(nom, html) {
   const err = [];
+  if (REMISE) for (const m of String(html).matchAll(/même total|aucune remise/gi)) err.push(nom + ' : « ' + m[0] + ' » — l’annuel est remisé (tarifs.json)');
+  for (const x of prixJsonLdInconnus(html)) err.push(nom + ' : ' + x);
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
+  if (nom === 'index.html' || nom === 'i/index.html' || nom === 'p/index.html') {
+    if (T.essai_parrainage.moisEnPlus > 0) for (const x of premierMoisAmi(html)) err.push(nom + ' : ' + x);
+    if (nom === 'i/index.html' && /sans engagement/i.test(html)) err.push('i/index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
+  }
+  if (nom === 'index.html') {
+    const faq = [...html.matchAll(RE_FAQ_AMI)];
+    const vis = html.match(/Son lien double ton essai(?:&nbsp;|\s| )*:\s*<span data-nb="essai\.moisParraine">/);
+    if (faq.length !== 1 || !vis) err.push('index.html : le FAQ « Un ami m’a invité » ne dit plus « Son lien double ton essai : N mois » (JSON-LD et version visible liée à essai.moisParraine)');
+    if (valeur(T, 'essai.moisParraine') !== 2 * T.essai.mois) err.push('index.html : le FAQ dit que le lien « double » l’essai, or ' + T.essai.mois + ' + ' + T.essai_parrainage.moisEnPlus + ' mois ne fait pas le double');
+  }
   if (nom === 'index.html') {
     if (/sans engagement/i.test(html)) err.push('index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
     const permis = [T.essai.mois, valeur(T, 'essai.moisParraine')];
@@ -70,6 +137,23 @@ for (const p of PAGES) {
   let html;
   try { html = readFileSync(RACINE + p, 'utf8'); } catch (x) { e(p + ' illisible'); continue; }
   erreurs.push(...controlerPage(p, html));
+}
+// LA PAGE COACH (02/10/2026) : ses trois formules liées à tarifs.json, dans
+// la grille (data-tarif) ET dans le JSON-LD (identifier), et aucune offre du
+// JSON-LD d'une page sans identifiant (un prix qui ne suivrait rien).
+{
+  const html = readFileSync(RACINE + 'coachs.html', 'utf8');
+  for (const cle of ['coach.libre', 'coach.coach', 'coach.pro']) {
+    if (!html.includes('data-tarif="' + cle + '"')) e('coachs.html : la grille ne montre plus ' + cle);
+    if (!html.includes('"identifier": "tarifs:' + cle + '"')) e('coachs.html : le JSON-LD ne lie plus ' + cle);
+  }
+  for (const p of ['index.html', 'coachs.html']) {
+    const h = readFileSync(RACINE + p, 'utf8');
+    const offres = (h.match(/"@type": "Offer"/g) || []).length, liees = (h.match(RE_JSONLD_PRIX) || []).length;
+    if (offres !== liees) e(p + ' : ' + (offres - liees) + ' offre(s) JSON-LD sans "identifier": "tarifs:<clé>" juste avant "price"');
+  }
+  const faux = html.replace(/("identifier": "tarifs:coach\.coach", "price": ")[^"]*/, (_t, a) => a + '9.99');
+  if (faux === html || !controlerPage('coachs.html', faux).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : un prix JSON-LD faussé n’est pas vu');
 }
 // Les deux montants de la grille, et l'annuel, y sont bien.
 {
@@ -91,6 +175,19 @@ for (const p of PAGES) {
   if (!controlerPage('index.html', enDur2).some((x) => /49 €/.test(x))) e('auto-contrôle : un prix écrit en dur n’est pas vu');
   if (!controlerPage('index.html', html.replace('</body>', '<p>sans engagement</p></body>')).some((x) => /sans engagement/.test(x)))
     e('auto-contrôle : « sans engagement » n’est pas vu');
+  if (T.essai_parrainage.moisEnPlus > 0) {
+    if (!controlerPage('index.html', html.replace('</body>', '<p>Ton ami t’offre ton premier mois.</p></body>')).some((x) => /ton premier mois/.test(x)))
+      e('auto-contrôle : « ton premier mois » d’un invité n’est pas vu dans index.html');
+    const i = readFileSync(RACINE + 'i/index.html', 'utf8');
+    if (!controlerPage('i/index.html', i.replace('</body>', '<script>var t=nom+" t\u2019invite : ton premier mois offert";</script></body>')).some((x) => /ton premier mois/.test(x)))
+      e('auto-contrôle : « ton premier mois » d’un invité n’est pas vu dans i/index.html');
+  }
+  // Le prix d'Essentielle remis à 9.95 dans le JSON-LD : il doit être vu par la lecture du JSON-LD.
+  const neuf95 = html.replace(/("identifier": "tarifs:essentielle\.mois", "price": ")[^"]*/, (_t, a) => a + '9.95');
+  if (neuf95 === html || !controlerPage('index.html', neuf95).some((x) => /JSON-LD n°\d+ : "price": "9\.95"/.test(x))) e('auto-contrôle : un prix JSON-LD à 9.95 n’est pas vu');
+  if (!controlerPage('index.html', html.replace('"price": "24.90"', '"price": "24.9O"')).some((x) => /24\.9O/.test(x))) e('auto-contrôle : un prix JSON-LD illisible n’est pas vu');
+  const faux = html.replace(RE_FAQ_AMI, (_t, a, _n, b) => a + '7' + b);
+  if (faux === html || !controlerPage('index.html', faux).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : le nombre du FAQ JSON-LD faussé n’est pas vu');
 }
 
 // ── 2 et 4. L'app ─────────────────────────────────────────────────────────
@@ -135,9 +232,51 @@ for (const p of PAGES) {
   }
 }
 
+if (REMISE) {
+  const html = readFileSync(RACINE + 'index.html', 'utf8');
+  if (!controlerPage('index.html', html + '<p>pour le même total</p>').some((x) => /même total/.test(x))) e('auto-contrôle : « même total » n’est pas vu alors que l’annuel est remisé');
+}
+
+// ══ LA RÉSILIATION DITE PARTOUT PAREIL (02/10/2026) ═══════════════════════
+// Engagement tenu (variante B) : la landing (FAQ visible et JSON-LD), les CGV
+// §5 et l'écran de résiliation disent tous que RepCore arrête lui-même les
+// prélèvements chez PayPal à la date d'effet — ce que fait le Worker
+// (paypal.js, resilier et resiliationsDues). Aucun texte ne dit plus « RepCore
+// ne peut pas annuler » ni n'envoie la personne couper elle-même chez PayPal.
+export function controlerResiliation({ index, cgv, app, worker }) {
+  const r = [];
+  const sansBalises = (h) => String(h || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  const idx = sansBalises(index);
+  if ((idx.match(/RepCore arrête lui-même les prélèvements chez PayPal à cette date/g) || []).length !== 2)
+    r.push('index.html : le FAQ « Puis-je annuler ? » (visible ET JSON-LD) ne dit plus que RepCore arrête lui-même les prélèvements chez PayPal');
+  const c = sansBalises(cgv);
+  if (!/RepCore annule lui-même l'abonnement chez PayPal/.test(c)) r.push('terms.html §5 : l’arrêt des prélèvements par RepCore n’est plus écrit');
+  if (!/Pendant l'engagement, aucune annulation n'intervient avant son terme/.test(c)) r.push('terms.html §5 : « aucune annulation avant le terme » manque');
+  if (!/ne met pas fin à l'engagement/.test(c)) r.push('terms.html §5 : l’annulation directe chez PayPal n’est plus décrite');
+  if (/depuis le compte PayPal, au terme/.test(c)) r.push('terms.html §5 : renvoie encore la personne couper elle-même chez PayPal');
+  const moyens = (String(app || '').match(/const RESIL_MOYENS=[\s\S]*?;\n/) || [''])[0];
+  if (!/RepCore arrête lui-même ton abonnement/.test(moyens)) r.push('app : RESIL_MOYENS ne dit plus que RepCore arrête l’abonnement');
+  if (/ne peut pas annuler/.test(String(app || '').replace(/^\s*\/\/.*$/gm, ''))) r.push('app : « ne peut pas annuler » subsiste hors commentaire');
+  if (/RESIL_PAYPAL/.test(String(app || ''))) r.push('app : les étapes d’annulation chez PayPal (RESIL_PAYPAL) sont revenues');
+  if (!/export const RESIL_AVANCE_MS = 3 \* 864e5/.test(worker) || !/async function resiliationsDues/.test(worker))
+    r.push('cloudflare/src/paypal.js : l’annulation serveur à la date d’effet manque');
+  return r;
+}
+{
+  const lire = (f) => { try { return readFileSync(RACINE + f, 'utf8'); } catch (x) { return ''; } };
+  const textes = { index: lire('index.html'), cgv: lire('terms.html'),
+    app: lire('src/core/002-l-essai-athlete-symetrique-de-la-promesse-coach.js'), worker: lire('cloudflare/src/paypal.js') };
+  erreurs.push(...controlerResiliation(textes));
+  // Le contrôle se prouve : une CGV qui renvoie couper chez PayPal, un écran qui « ne peut pas annuler ».
+  const faux = controlerResiliation(Object.assign({}, textes, {
+    cgv: textes.cgv.replace('RepCore annule lui-même', 'Vous annulez vous-même') + ' depuis le compte PayPal, au terme',
+    app: textes.app + "\nconst x='RepCore ne peut pas annuler';" }));
+  if (faux.length < 3) e('auto-contrôle : une CGV ou un écran de résiliation faussés ne sont pas vus');
+}
+
 if (erreurs.length) {
   console.error('PRIX INCOHÉRENTS (' + erreurs.length + ') :\n  ' + erreurs.join('\n  '));
   process.exit(1);
 }
 console.log('Prix : l’app, ' + PAGES.join(', ') + ' suivent tarifs.json (Essentielle ' + T.essentielle.mois + ' / ' + T.essentielle.an
-  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Le contrôle voit un prix faussé et un prix en dur.');
+  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Le contrôle voit un prix faussé et un prix en dur. Résiliation : la landing, les CGV, l’écran et le Worker disent la même chose.');

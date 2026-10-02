@@ -48,6 +48,24 @@ function lundiParis(t) {
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
+// UNE SÉANCE QUI COMPTE : au moins une série validée (done === true) dans
+// `data` ou `exercises` (l'ancienne forme) ; sans détail, sets > 0. La même règle que
+// seanceComptee côté client (app/rc-core.*.js) : un « Abandonner » à 0 série
+// ne compte ni en séances ni en semaines validées.
+function seanceComptee(s) {
+  if (!s || typeof s !== "object") return false;
+  const d = s.data;
+  if (d && typeof d === "object" && Object.keys(d).length) {
+    for (const k of Object.keys(d)) for (const st of _liste((d[k] || {}).sets)) if (st && st.done === true) return true;
+    return false;
+  }
+  const ex = _liste(s.exercises);
+  if (ex.length) {
+    for (const e of ex) for (const st of _liste(e && e.sets)) if (st && st.done === true) return true;
+    if (!(Number(s.sets) > 0)) return false;
+  }
+  return Number(s.sets) > 0;
+}
 function quota(u) { return Math.max(1, _liste(u && u.sessions_config).filter((s) => s && s.active).length); }
 function _dans(defi, t) { return t >= Number(defi.debut) && t <= Number(defi.fin); }
 
@@ -61,12 +79,13 @@ function _dans(defi, t) { return t >= Number(defi.debut) && t <= Number(defi.fin
 function valeurDefi(u, defi) {
   const ses = _liste(u && u.sessions).filter((s) => Number(s.date) > 0);
   const dedans = ses.filter((s) => _dans(defi, Number(s.date)));
+  const comptees = dedans.filter(seanceComptee);
   switch (defi && defi.mesure) {
-    case "seances": return dedans.length;
+    case "seances": return comptees.length;
     case "tonnage": return dedans.reduce((a, s) => a + tonnageSeance(s), 0);
     case "serie": {
       const q = quota(u), n = {};
-      for (const s of dedans) { const l = lundiParis(Number(s.date)); n[l] = (n[l] || 0) + 1; }
+      for (const s of comptees) { const l = lundiParis(Number(s.date)); n[l] = (n[l] || 0) + 1; }
       return Object.keys(n).filter((l) => n[l] >= q).length;
     }
     case "progressionPct": {
@@ -244,6 +263,6 @@ function texteObjectif(defi) {
 
 module.exports = {
   texteObjectif,
-  MESURES, PALIERS_EQUIPE, J, tonnageSeance, lundiParis, quota, valeurDefi, partEquipe, partPerso,
+  MESURES, PALIERS_EQUIPE, J, tonnageSeance, seanceComptee, lundiParis, quota, valeurDefi, partEquipe, partPerso,
   aTermine, metriqueClassement, initiales, resumePublic, places, gagnant, annonceSuivante, textePodium
 };

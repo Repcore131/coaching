@@ -126,9 +126,15 @@ const eur = n => (Math.round(Number(n) * 100) / 100).toFixed(2);
 // dans config/plans (RTDB) pour que la Cloud Function sache quoi ouvrir.
 const PRODUIT_NOM = 'RepCore';
 const PLANS = [
+  // ⚠ LES ANNUELS PORTENT LEUR PRIX DANS LEUR NOM (02/10/2026). Un plan se
+  //   retrouve par son nom (planExistant) : sous l'ancien nom « RepCore
+  //   Essentielle, annuel », le script aurait REPRIS l'ancien plan à 114 € au
+  //   lieu d'en créer un à 95 €. Un nouveau prix annuel = un nouveau plan ; les
+  //   abonnés de l'ancien gardent le leur (et --tarifs n'y touche pas : ses
+  //   constantes ne sont plus ici, voir PAYPAL_PLAN_ID_ANNUEL_ANCIEN).
   {
     constante: 'PAYPAL_PLAN_ID_ANNUEL',
-    nom: 'RepCore Essentielle, annuel',
+    nom: 'RepCore Essentielle, annuel ' + eur(OFFRES.essentielle.prixAn) + ' EUR',
     description: 'Acces Essentielle a RepCore, facture une fois par an.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.essentielle.prixAn) }],
     config: { palier: 'essentielle', mois: 12 },
@@ -142,7 +148,7 @@ const PLANS = [
   },
   {
     constante: 'PAYPAL_PLAN_ID_ULTIME_ANNUEL',
-    nom: 'RepCore Ultime, annuel',
+    nom: 'RepCore Ultime, annuel ' + eur(OFFRES.ultime.prixAn) + ' EUR',
     description: 'Acces Ultime a RepCore, facture une fois par an.',
     cycles: [{ type: 'REGULAR', unite: 'YEAR', prix: eur(OFFRES.ultime.prixAn) }],
     config: { palier: 'ultime', mois: 12 },
@@ -525,24 +531,39 @@ async function principal() {
     console.log('    a ete payee, et le dossier retombe sur Essentielle.\n');
   }
 
+  // ⚠ --ecrire ECRIT DANS LES SOURCES (02/10/2026) : src/core/001-debut.js,
+  //   que scripts/assembler_core.mjs recopie dans rc-core (ecrire dans
+  //   app/rc-core.*.js aurait ete ecrase au prochain assemblage), et
+  //   OFFRES_PAYPAL du Worker (cloudflare/src/paypal.js) : un plan que le
+  //   serveur ne connait pas n'ouvre aucun acces.
   if (ECRIRE) {
-    let s = readFileSync(CHEMIN, 'utf8');
-    let n = 0;
+    const RACINE = fileURLToPath(new URL('../', import.meta.url));
+    const SRC = RACINE + 'src/core/001-debut.js', WORKER = RACINE + 'cloudflare/src/paypal.js';
+    let s = readFileSync(SRC, 'utf8'), w = readFileSync(WORKER, 'utf8');
+    let n = 0, m = 0;
     for (const f of faits) {
       const vide = "const " + f.constante + "='';";
       if (s.includes(vide)) {
         s = s.replace(vide, "const " + f.constante + "='" + f.id + "';");
         n++;
-      } else {
+      } else if (!s.includes("const " + f.constante + "='" + f.id + "';")) {
         console.log('  ⚠ ' + f.constante + ' n\'etait pas vide : laissee telle quelle.');
       }
+      if (!w.includes("'" + f.id + "'")) {
+        const reg = f.cycles.find(c => c.type === 'REGULAR') || f.cycles[0];
+        const quoi = f.config ? "formule: '" + f.config.palier + "'" : "coachPlan: '" + (f.constante === 'PAYPAL_PLAN_ID_PRO' ? 'pro' : 'coach') + "'";
+        const ligne = "  '" + f.id + "': { " + quoi + ", montants: ['" + reg.prix + "'], periode: '" + (reg.unite === 'YEAR' ? 'an' : 'mois') + "' },   // " + f.nom + "\n";
+        const fin = w.indexOf('\n});', w.indexOf('export const OFFRES_PAYPAL = Object.freeze({'));
+        if (fin > 0) { w = w.slice(0, fin + 1) + ligne + w.slice(fin + 1); m++; }
+      }
     }
-    if (n) {
-      writeFileSync(CHEMIN, s);
-      console.log('  ' + n + ' constante(s) ecrite(s) dans ' + fichierCore + '.');
-      console.log('  ⚠ Il reste a monter RC_BUILD et CACHE, puis :');
-      console.log('      python scripts/versionner_actifs.py');
-      console.log('      node scripts/verif/syntaxe.mjs\n');
+    if (n) { writeFileSync(SRC, s); console.log('  ' + n + ' constante(s) ecrite(s) dans src/core/001-debut.js.'); }
+    if (m) { writeFileSync(WORKER, w); console.log('  ' + m + ' plan(s) ajoute(s) a OFFRES_PAYPAL (cloudflare/src/paypal.js).'); }
+    if (n || m) {
+      console.log('  ⚠ Il reste a assembler, monter le build, puis verifier :');
+      console.log('      node scripts/assembler_core.mjs');
+      console.log('      node cloudflare/test/paypal.test.mjs');
+      console.log('      node scripts/verif/tarifs.mjs\n');
     }
   }
 }

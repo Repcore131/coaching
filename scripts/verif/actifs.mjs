@@ -36,9 +36,16 @@ const cache = (sw.match(/const CACHE = 'repcore-v(\d+)'/) || [])[1];
 if (cache !== build) ko.push('sw.js annonce repcore-v' + cache + ' et la page RC_BUILD=' + build);
 
 // ── CE QUE LA PAGE DEMANDE ────────────────────────────────────────────────
-const demandes = [...html.matchAll(/(?:src|href)="\.\/(rc-(?:core|style)\.\d+\.(?:js|css))"/g)].map(m => m[1]);
-if (demandes.length !== 2)
-  ko.push(demandes.length + ' actif(s) versionne(s) demande(s) par la page au lieu de 2 : ' + demandes.join(', '));
+// TROIS depuis le 01/10/2026 : le code, la feuille, et le theme clair
+// (rc-theme, sorti de rc-style par scripts/extraire_theme_clair.py).
+const demandes = [...html.matchAll(/(?:src|href)="\.\/(rc-(?:core|style|theme)\.\d+\.(?:js|css))"/g)].map(m => m[1]);
+if (demandes.length !== 3)
+  ko.push(demandes.length + ' actif(s) versionne(s) demande(s) par la page au lieu de 3 : ' + demandes.join(', '));
+// LE THEME APRES LA FEUILLE : sinon ses regles claires perdraient la cascade.
+{ const iS = html.search(/href="\.\/rc-style\.\d+\.css"/), iT = html.search(/href="\.\/rc-theme\.\d+\.css"/);
+  if (iS >= 0 && iT >= 0 && iT < iS) ko.push('rc-theme est lie AVANT rc-style : ses regles perdraient la cascade');
+  if (iT >= 0 && !/<link rel="stylesheet" id="rc-theme-clair" href="\.\/rc-theme\.\d+\.css" media="not all">/.test(html))
+    ko.push('rc-theme doit etre lie avec id="rc-theme-clair" et media="not all" (applique en clair seulement)'); }
 for (const n of demandes) {
   if (!existsSync(join(APP, n))) ko.push(n + ' est demande par la page et ABSENT du depot');
   const v = n.match(/\.(\d+)\./)[1];
@@ -50,7 +57,7 @@ for (const n of demandes)
   if (sw.indexOf("'./" + n + "'") < 0) ko.push(n + ' manque a ASSETS du worker : il ne serait pas hors ligne');
 
 // ── CE QUI TRAINE ─────────────────────────────────────────────────────────
-const presents = readdirSync(APP).filter(n => /^rc-(core|style)\.\d+\.(js|css)$/.test(n));
+const presents = readdirSync(APP).filter(n => /^rc-(core|style|theme)\.\d+\.(js|css)$/.test(n));
 for (const n of presents)
   if (!demandes.includes(n))
     ko.push(n + ' traine dans le depot (' + Math.round(statSync(join(APP, n)).size / 1024) + ' Ko) : plus aucune page ne le demande');
@@ -66,4 +73,4 @@ const o = n => Math.round(statSync(join(APP, n)).size / 1024) + ' Ko';
 console.log('build ' + build + ' — index.html ' + o('index.html')
   + ', ' + demandes.map(n => n + ' ' + o(n)).join(', '));
 if (ko.length) { console.error('\nDEFAUTS :\n  ' + ko.join('\n  ')); process.exit(1); }
-console.log('La page demande deux actifs, ils existent, ils portent le build, et rien ne traine.');
+console.log('La page demande trois actifs (code, feuille, theme clair), ils existent, ils portent le build, et rien ne traine.');

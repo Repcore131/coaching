@@ -1,9 +1,9 @@
 {
-  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : python3 scripts/tarifs.py (recopie dans l'app, index.html et terms.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
+  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : node scripts/tarifs.mjs (recopie dans l'app, les pages publiques et la fiche Play Store), puis node scripts/verif/tarifs.mjs. L'annuel peut être remisé (an < 12 × mois), jamais plus cher que douze mensualités. Un prix PayPal se change à part : un NOUVEAU prix annuel demande de NOUVEAUX plans (node scripts/paypal_plans.mjs --ecrire), pour que les abonnés en cours gardent le leur ; node scripts/paypal_plans.mjs --tarifs ne remet au prix que les plans existants.",
   "devise": "EUR",
   "engagementMois": 12,
-  "essentielle": { "mois": 9.5, "an": 114 },
-  "ultime": { "mois": 24.9, "an": 298.8 },
+  "essentielle": { "mois": 9.5, "an": 95 },
+  "ultime": { "mois": 24.9, "an": 249 },
   "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
   "essai": { "mois": 1, "jours": 30, "carte": false },
   "essai_parrainage": { "moisEnPlus": 1 },

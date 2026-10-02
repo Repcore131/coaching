@@ -1,0 +1,4 @@
+Première version sur Google Play.
+• Ta séance avec une charge proposée à chaque série, hors ligne en salle.
+• Nutrition : scan, recherche et photo d'étiquette.
+• Pas, sommeil et fréquence cardiaque depuis Health Connect.

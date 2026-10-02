@@ -1,0 +1,169 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LA SAUVEGARDE DE LA BASE — chaque nuit les nœuds critiques, chaque
+#  dimanche la base entière
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI. Le plan Spark de Firebase ne sauvegarde rien. Ce travail exporte
+#  la base (scripts/sauvegarde_base.mjs), la CHIFFRE (openssl, AES-256, clé
+#  SAUVEGARDE_CLE), vérifie qu'elle se déchiffre, et la garde :
+#    · en ARTEFACT du travail, 35 jours (critiques et complet) ;
+#    · le complet, aussi en RELEASE BROUILLON « sauvegarde-AAAA-MM-JJ » —
+#      un brouillon n'est visible que des comptes qui ont l'écriture sur le
+#      dépôt —, les 8 dernières seulement.
+#  Rien n'est jamais téléversé en clair. Procédure de restauration :
+#  docs/sauvegarde.md.
+#
+#  ── LES SECRETS ── Settings > Secrets and variables > Actions :
+#    FIREBASE_SERVICE_ACCOUNT  déjà posé (firebase.yml) : le JSON du compte de service
+#    SAUVEGARDE_CLE            NOUVEAU : une longue phrase de passe au hasard.
+#                              ⚠ EN GARDER UNE COPIE HORS DE GITHUB (gestionnaire
+#                              de mots de passe) : GitHub ne la rend jamais, et
+#                              sans elle aucune archive ne se relit.
+#    MAIL_MOT_DE_PASSE (+ MAIL_UTILISATEUR, MAIL_DESTINATAIRE facultatifs) :
+#                              les mêmes que rapport-payeur.yml, pour le courriel d'échec.
+#
+#  LE QUOTA : chaque export compte dans les 10 Go téléchargés par mois du
+#  plan Spark. Le résumé du travail affiche ce qui a été lu et ce que ce
+#  rythme coûte par mois.
+# ══════════════════════════════════════════════════════════════════════════
+name: Sauvegarde de la base
+
+on:
+  schedule:
+    # 02:17 UTC chaque nuit : les nœuds critiques (argent, droits, serveur).
+    - cron: '17 2 * * *'
+    # 02:37 UTC le dimanche : la base entière.
+    - cron: '37 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Quoi sauvegarder'
+        type: choice
+        options: [critiques, complet]
+        default: critiques
+
+# contents: write, pour les releases brouillon du complet.
+permissions:
+  contents: write
+
+concurrency:
+  group: sauvegarde
+  cancel-in-progress: false
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Le mode
+        id: mode
+        env:
+          EVENEMENT: ${{ github.event_name }}
+          DEMANDE: ${{ inputs.mode }}
+          PROGRAMME: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENEMENT" = "workflow_dispatch" ]; then M="${DEMANDE:-critiques}"
+          elif [ "$PROGRAMME" = "37 2 * * 0" ]; then M=complet
+          else M=critiques; fi
+          J=$(date -u +%F)
+          echo "mode=$M" >> "$GITHUB_OUTPUT"
+          echo "jour=$J" >> "$GITHUB_OUTPUT"
+          echo "nom=sauvegarde-$J-$M" >> "$GITHUB_OUTPUT"
+          echo "Mode : $M"
+
+      # ⚠ PAR COMPARAISON, jamais la table des secrets (voir rapport-payeur.yml).
+      - name: Les secrets sont-ils posés
+        env:
+          VU_COMPTE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+          VU_CLE: ${{ secrets.SAUVEGARDE_CLE != '' }}
+        run: |
+          M=0
+          [ "$VU_COMPTE" = "true" ] || { echo "::error::FIREBASE_SERVICE_ACCOUNT absent."; M=1; }
+          [ "$VU_CLE" = "true" ] || { echo "::error::SAUVEGARDE_CLE absent : sans clé, on ne téléverse rien (pas d'archive en clair)."; M=1; }
+          exit $M
+
+      # L'export et la restauration, éprouvés sur la base en mémoire AVANT de
+      # toucher à la vraie : un script cassé ne lit rien et ne garde rien.
+      - name: Éprouver les scripts
+        run: node scripts/verif/sauvegarde.test.mjs
+
+      - name: Exporter
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          NOM: ${{ steps.mode.outputs.nom }}
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: node scripts/sauvegarde_base.mjs "--$MODE" --dossier "$NOM"
+
+      # CHIFFRER, PUIS VÉRIFIER QU'ON SAIT DÉCHIFFRER (même empreinte), PUIS
+      # EFFACER LE CLAIR. Les parts sont déjà en gzip : le tar ne recompresse pas.
+      - name: Chiffrer
+        env:
+          SAUVEGARDE_CLE: ${{ secrets.SAUVEGARDE_CLE }}
+          NOM: ${{ steps.mode.outputs.nom }}
+        run: |
+          set -euo pipefail
+          tar -cf "$NOM.tar" "$NOM"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$NOM.tar" -out "$NOM.tar.enc" -pass env:SAUVEGARDE_CLE
+          A=$(sha256sum "$NOM.tar" | cut -d' ' -f1)
+          B=$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$NOM.tar.enc" -pass env:SAUVEGARDE_CLE | sha256sum | cut -d' ' -f1)
+          [ "$A" = "$B" ] || { echo "::error::L'archive chiffrée ne se déchiffre pas à l'identique."; exit 1; }
+          rm -rf "$NOM" "$NOM.tar"
+          T=$(stat -c %s "$NOM.tar.enc")
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Archive chiffrée : \`$NOM.tar.enc\`, $(numfmt --to=iec --suffix=o "$T"), déchiffrement vérifié (sha256 identique)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Garder en artefact (35 jours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.mode.outputs.nom }}
+          path: ${{ steps.mode.outputs.nom }}.tar.enc
+          retention-days: 35
+          if-no-files-found: error
+
+      # LE COMPLET, AUSSI EN RELEASE BROUILLON, les 8 dernières. Un brouillon
+      # n'a pas encore d'étiquette git ; on retire quand même celle qui
+      # traînerait.
+      - name: Garder en release brouillon (complet, 8 dernières)
+        if: steps.mode.outputs.mode == 'complet'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOM: ${{ steps.mode.outputs.nom }}
+          JOUR: ${{ steps.mode.outputs.jour }}
+        run: |
+          set -euo pipefail
+          TAG="sauvegarde-$JOUR"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" "$NOM.tar.enc" --draft --title "Sauvegarde complète du $JOUR" \
+            --notes "Archive chiffrée (openssl aes-256-cbc, pbkdf2, 200000 itérations). Restauration : docs/sauvegarde.md."
+          gh release list --limit 200 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("sauvegarde-"))] | sort_by(.createdAt) | reverse | .[8:] | .[].tagName' |
+          while read -r VIEUX; do
+            echo "Retrait de $VIEUX"
+            gh release delete "$VIEUX" --yes
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$VIEUX" 2>/dev/null || true
+          done
+
+      - name: Prévenir Kevin en cas d'échec
+        if: failure()
+        env:
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com' }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          LIEN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "# La sauvegarde ${MODE:-?} de la base a échoué"
+            echo
+            echo "Le travail : $LIEN"
+            echo
+            echo "Aucune archive n'a été gardée pour cette exécution. La précédente reste disponible (artefacts : 35 jours ; complètes : releases brouillon)."
+            echo "Causes fréquentes : un secret absent ou expiré (FIREBASE_SERVICE_ACCOUNT, SAUVEGARDE_CLE), la base injoignable, le quota de 10 Go du mois dépassé."
+          } > echec.md
+          node scripts/envoyer_mail.mjs echec.md "RepCore : la sauvegarde ${MODE:-} de la base a échoué"

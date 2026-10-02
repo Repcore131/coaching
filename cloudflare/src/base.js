@@ -124,6 +124,13 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
         const v = await lireJson(await appel('GET', c, undefined, { shallow: 'true' }), c);
         return v && typeof v === 'object' ? Object.keys(v) : [];
       },
+      // LA SURFACE d'un nœud, en UNE requête (?shallow=true) : chaque enfant
+      // simple avec SA VALEUR (nombre, texte, booléen), chaque enfant objet
+      // réduit à `true`. Rend {} si le nœud est absent.
+      async surface() {
+        const v = await lireJson(await appel('GET', c, undefined, { shallow: 'true' }), c);
+        return v && typeof v === 'object' ? v : {};
+      },
       async set(v) {
         if (v === null || v === undefined) return R.remove();
         await lireJson(await appel('PUT', c, v), c);

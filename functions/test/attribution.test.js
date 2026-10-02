@@ -44,7 +44,8 @@ const assert = (c, m) => { if (!c) { console.log("ECHEC:", m); process.exitCode 
 const T = (iso) => Date.parse(iso);
 (async () => {
   assert(ATT.srcArrivee({ src: "Seance" }) === "seance" && ATT.srcArrivee({ amb: "leafit" }) === "amb" && ATT.srcArrivee({ ref: "JULIE7K2" }) === "parrainage"
-    && ATT.srcArrivee({}) === "direct" && ATT.srcArrivee({ src: "<script>" }) === "script", "src : normalisé, sinon amb, parrainage, direct");
+    && ATT.srcArrivee({}) === "direct" && ATT.srcArrivee({ src: "<script>" }) === "autre"
+    && ATT.srcArrivee({ src: "zzz" }) === "autre", "src : normalisé, inconnu = autre, sinon amb, parrainage, direct");
   const ch = ATT.cheminsArrivee({ src: "rang", ref: "JULIE7K2", amb: "LEAFIT" }, T("2026-10-05T22:30:00Z"));
   assert(ch.join() === "attribution/jours/2026-10-06/src/rang/clic,attribution/jours/2026-10-06/amb/LEAFIT/clic", "jour de Paris ; le code parrain n'est jamais enregistré");
   const RealNow = Date.now; Date.now = () => T("2026-10-06T10:00:00Z");

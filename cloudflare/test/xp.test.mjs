@@ -205,11 +205,14 @@ test('les constantes du serveur sont celles de l’app (rc-core)', async () => {
   assert.equal(X.XP.seance, 100);
   // Lot N2 : la cible tenue, 40 V par jour, bornée par le nombre de jours.
   assert.equal(X.XP.cible, 40);
-  assert.equal(X.totalServeur(X.etatVide(), { cible: 400 }, { debut: Date.now() - 2 * 864e5 }, Date.now()).cat.cible, 120);
+  // UN SEUL instant : deux Date.now() à une milliseconde d'écart donnaient
+  // 2 jours + 1 ms, arrondis à 3, donc 4 jours (160) — échec au hasard.
+  const t0 = Date.now();
+  assert.equal(X.totalServeur(X.etatVide(), { cible: 400 }, { debut: t0 - 2 * 864e5 }, t0).cat.cible, 120);
   // Lot N4 : la semaine d'assiette, 75 V, une par semaine au plus (comme la semaine d'entraînement).
   assert.equal(X.XP.semaineAssiette, 75);
   assert.match(src, /\bsemaineAssiette:75\b/);
-  assert.equal(X.totalServeur(X.etatVide(), { semaineAssiette: 75 * 9 }, { debut: Date.now() - 10 * 864e5 }, Date.now()).cat.semaineAssiette, 150);
+  assert.equal(X.totalServeur(X.etatVide(), { semaineAssiette: 75 * 9 }, { debut: t0 - 10 * 864e5 }, t0).cat.semaineAssiette, 150);
 });
 
 // ══ LE MOIS DU PARRAIN : LES QUATRE PREMIÈRES SÉANCES DU FILLEUL (lot C) ══
@@ -226,41 +229,67 @@ function mondeFilleul(extra) {
   };
   return w;
 }
-test('parrainage : quatre séances faites donnent un mois au parrain, une fois ; trois, ou des séances vides, rien', async () => {
+// ⚠ DEPUIS LE 01/10/2026 : le mois part au PREMIER PAIEMENT du filleul
+//   (PARRAINAGE_AU_PAIEMENT), et seulement s'il est QUALIFIÉ — adresse
+//   vérifiée vue par le serveur, quatre séances validées sur quatre jours
+//   distincts, étalées sur au moins dix jours.
+const verifier = (w) => w.F.ecrire('parrainage/verifies/' + LEA, T);
+// Quatre séances, une tous les quatre jours : douze jours d'étalement.
+const quatreEtalees = async (w, o) => { for (let k = 0; k < 4; k++) { await w.faire(o); w.avance(3 * J); } };
+test('parrainage : quatre séances qualifiées SANS paiement ne donnent rien ; le premier paiement donne le mois, une fois', async () => {
   const w = mondeFilleul();
-  for (let k = 0; k < 3; k++) await w.faire();
-  await w.faire({ n: 0 });               // une séance sans série validée ne compte pas
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), null, 'trois séances : rien');
-  assert.equal(w.F.lire('droits/' + KEV), null);
-  await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/creditE'), true);
-  assert.equal(w.F.lire('droits/' + KEV + '/palier'), 'essentielle', 'le mois s’applique');
-  assert.equal(w.F.lire('parrainage/credits_seances/' + LEA).mode, 'mois_ouvert');
-  // Rejoué, et même sans la marque du compteur : la marque creditE tient.
-  await w.faire();
-  w.F.ecrire('xp_etat/' + LEA + '/parr', null);
-  await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1, 'jamais deux fois');
-  // Son premier paiement ensuite : pas de second mois.
+  verifier(w);
+  await quatreEtalees(w);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 'pas de mois sans paiement');
+  assert.equal(w.F.lire('xp_etat/' + LEA + '/parr'), null, 'on repassera');
   const r = await w.M.parrainagePaiement(LEA, 'test');
-  assert.equal(r.credit, false);
+  assert.equal(r.credit, true);
   assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/statut'), 'payant');
-  assert.equal(w.F.lire('parrainage/credits/' + LEA), null, 'rien à reprendre au remboursement');
+  assert.equal(w.F.lire('droits/' + KEV + '/palier'), 'essentielle', 'le mois s’applique');
+  assert.ok(w.F.lire('parrainage/credits/' + LEA), 'repris au remboursement');
+  await w.faire();
+  assert.equal(await w.M.parrainagePaiement(LEA, 'test'), null);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1, 'jamais deux fois');
 });
-test('parrainage : payé avant ses quatre séances, le filleul a donné son mois au paiement ; les séances n’en redonnent pas', async () => {
+test('parrainage : 4 séances le même jour, sur moins de 10 jours, vides, ou adresse non vérifiée → pas qualifié, pas de mois', async () => {
+  // Même jour.
+  let w = mondeFilleul(); verifier(w);
+  for (let k = 0; k < 4; k++) { w.F.ecrire('users/' + LEA + '/sessions/' + k, S(w.t - 60e3 - k * 3600e3)); }
+  await w.seanceFin(LEA);
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/enAttente'), true);
+  // Quatre jours de suite (trois jours d'étalement).
+  w = mondeFilleul(); verifier(w);
+  for (let k = 0; k < 4; k++) await w.faire();
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  // Bien étalées, mais l'adresse n'est pas vérifiée.
+  w = mondeFilleul();
+  await quatreEtalees(w);
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, false);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'));
+  assert.equal(w.F.lire('droits/' + KEV), null);
+});
+test('parrainage : payé AVANT d’être qualifié → en attente ; la qualification (séances, adresse) donne alors le mois', async () => {
   const w = mondeFilleul();
   await w.faire();
-  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, true);
+  const r = await w.M.parrainagePaiement(LEA, 'test');
+  assert.equal(r.credit, false); assert.equal(r.enAttente, true);
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'));
+  w.avance(3 * J);
+  for (let k = 0; k < 3; k++) { await w.faire(); w.avance(3 * J); }
+  assert.ok(!w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 'adresse pas encore vérifiée');
+  verifier(w);
+  await w.faire();
   assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
-  for (let k = 0; k < 4; k++) await w.faire();
-  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+  assert.ok(w.F.lire('parrainage/credits/' + LEA), 'payant : le mois se reprend au remboursement');
+  assert.ok(w.F.lire('xp_etat/' + LEA + '/parr'), 'réglé');
 });
 test('parrainage : un parrain encore à l’essai voit sa fin d’essai reculer d’un mois', async () => {
-  const fin = T + 25 * J;
+  const fin = T + 45 * J;
   const w = mondeFilleul((b) => ({ users: Object.assign(b.users, { [KEV]: { fname: 'Kev', essai: { ouvertLe: T - 5 * J, finit: fin } } }) }));
-  for (let k = 0; k < 4; k++) await w.faire();
+  verifier(w);
+  await quatreEtalees(w);
+  await w.M.parrainagePaiement(LEA, 'test');
   const d = w.F.lire('droits/' + KEV);
   assert.equal(d.palier, 'ultime');
   assert.equal(d.source, 'essai');
@@ -322,4 +351,110 @@ test('réactions : l’événement note sans pousser ; le soir, UNE poussée gro
   assert.match(m.title, /^(Léa|Max) et 1 autre ont réagi à ta séance$/);
   assert.doesNotMatch(m.title + m.body, /kg|squat|série/i, 'rien de ce qu’il y avait dans la séance');
   assert.equal(await w.M.reactionsPushUn(TOM, w.t), 'rien', 'une fois');
+});
+
+// ══ LES SCORES CALCULÉS PAR LE SERVEUR (valeurServeur, 01/10/2026) ═══════
+// LES MÊMES FIXTURES que functions/test/defis.test.js (et que la suite du
+// client) : deux séances en septembre, avant le défi ; quatre en octobre,
+// dont deux la semaine du 5 ; deux créneaux actifs. Mêmes résultats attendus.
+const TZ = (iso) => Date.parse(iso);
+const DEBUT_D = TZ('2026-09-30T22:00:00Z'), FIN_D = TZ('2026-10-31T22:59:59Z');
+const SD = (iso, squat, rowing, volume) => ({ date: TZ(iso), volume,
+  data: { 'Squat': { sets: [{ weight: String(squat), reps: '5', done: true }] }, 'Rowing barre': { sets: [{ weight: String(rowing), reps: '8', done: true }] } } });
+const SEPT = [SD('2026-09-20T17:00:00Z', 100, 60, 3000), SD('2026-09-25T17:00:00Z', 100, 64, 3100)];
+const OCT = [SD('2026-10-05T17:00:00Z', 105, 64, 3200), SD('2026-10-07T17:00:00Z', 110, 66, 3300),
+  SD('2026-10-14T17:00:00Z', 110, 68, 3400), SD('2026-10-28T17:00:00Z', 112, 70, 3500)];
+const QUOTA = 2;   // sessions_config : deux créneaux actifs sur trois
+const FUTUR = TZ('2027-01-01T00:00:00Z');
+
+test('valeurServeur : séances 4, tonnage 13 400, série 1, progression +10,7 % (les fixtures des défis du Canal)', () => {
+  const e0 = X.avancer(X.etatVide(), SEPT, null, FUTUR);
+  // Le défi s'ouvre : l'instantané « avant » est figé sur l'état d'avant les séances d'octobre.
+  let e = X.avancer(e0, OCT, null, FUTUR);
+  e = X.figerRef(e0, e, 'm1', DEBUT_D + 3600e3);
+  assert.equal(X.valeurServeur(e, 'seances', DEBUT_D, FIN_D, QUOTA), 4);
+  assert.equal(X.valeurServeur(e, 'tonnage', DEBUT_D, FIN_D, QUOTA), 13400);
+  assert.equal(X.valeurServeur(e, 'serie', DEBUT_D, FIN_D, QUOTA), 1);
+  // Squat 100 → 112 (+12 %), rowing 64 → 70 (+9,375 %) : moyenne 10,7 %.
+  assert.equal(X.valeurServeur(e, 'progressionPct', DEBUT_D, FIN_D, QUOTA, 'm1'), 10.7);
+  // Le classement : jamais aux kilos.
+  assert.equal(X.metriqueServeur(e, 'tonnage', DEBUT_D, FIN_D, QUOTA), 4);
+  // Un instantané déjà pris ne se refige pas.
+  assert.deepEqual(X.figerRef(e, e, 'm1', FIN_D).ref.m1, e.ref.m1);
+});
+
+test('valeurServeur : une séance à 0 série ne compte jamais ; le journal ne garde que 40 jours', () => {
+  const vide = { date: TZ('2026-10-06T17:00:00Z'), volume: 999, data: { Squat: { sets: [{ weight: '200', reps: '5', done: false }] } } };
+  const e = X.avancer(X.etatVide(), [OCT[0], vide], null, FUTUR);
+  assert.equal(X.valeurServeur(e, 'seances', DEBUT_D, FIN_D, 1), 1);
+  assert.equal(X.valeurServeur(e, 'tonnage', DEBUT_D, FIN_D, 1), 3200, 'les 999 kg d’une séance sans série validée ne comptent pas');
+  const loin = X.avancer(e, [SD('2026-12-20T17:00:00Z', 100, 60, 1000)], null, FUTUR);
+  assert.deepEqual(Object.keys(loin.jr), ['2026-12-20'], 'plus de 40 jours : purgé');
+  assert.equal(X.tonnageSeance({ data: { A: { sets: [{ weight: '50', reps: '10', done: true }, { weight: '50', reps: '10', done: false }] } } }), 500);
+});
+
+// ══ LA MISSION DU JOUR : LE COFFRE BORNÉ, LE JOKER DATÉ (01/10/2026) ═══════
+test('mission du jour : cat.mission bornée à jours × 50, le joker accepté seulement s’il est daté', async () => {
+  const t0 = PARIS('2026-10-10T12:00:00');
+  assert.equal(X.XP.mission, 50);
+  // Trois jours de compte : 150 V au plus, quoi que dise l'app.
+  assert.equal(X.totalServeur(X.etatVide(), { mission: 5000 }, { debut: t0 - 2 * J }, t0).cat.mission, 150);
+  assert.equal(X.totalServeur(X.etatVide(), { mission: 70 }, { debut: t0 - 2 * J }, t0).cat.mission, 70);
+  assert.equal(X.totalServeur(X.etatVide(), { mission: -9 }, { debut: t0 - 2 * J }, t0).cat.mission, 0);
+  // La constante de l'app (MISSION_VOLTS_MAX) est celle du serveur.
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, new RegExp('const MISSION_VOLTS_MAX=' + X.XP.mission + ';'));
+  assert.match(src, new RegExp('const STREAK_JOKERS_MAX=' + X.JOKERS_MAX + ', STREAK_JOKER_TOUS=' + X.JOKER_TOUS + ';'));
+  // LE JOKER : une série de 2 semaines n'en explique aucun.
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1 }), 0, 'joker sans coffre daté : refusé');
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1, missions: { '2026-10-08': { coffre: { gain: 'joker', at: t0 - 2 * J } } } }), 1);
+  // Un coffre de volts, ou un joker sans date, n'explique rien.
+  assert.equal(X.jokersAdmis({ streak: 2, streakJokers: 1, missions: { '2026-10-08': { coffre: { gain: 50, at: t0 } }, '2026-10-09': { coffre: { gain: 'joker' } } } }), 0);
+  // Quatre semaines validées en expliquent un ; le coffre le second ; jamais plus de 2.
+  assert.equal(X.jokersAdmis({ streak: 4, streakJokers: 2 }), 1);
+  assert.equal(X.jokersAdmis({ streak: 4, streakJokers: 2, missions: { '2026-10-08': { coffre: { gain: 'joker', at: t0 } } } }), 2);
+  assert.equal(X.jokersAdmis({ streak: 40, streakJokers: 9 }), 2);
+  assert.equal(X.jokersAdmis({ streak: 0, streakJokers: 0 }), 0);
+});
+
+// ══ LA PART HORS ENTRAÎNEMENT BORNÉE, LES RANGS LISSÉS (01/10/2026) ═════════
+test('la part hors entraînement : 40 % de l’entraînement + 150 V par semaine du compte, comme l’app ; rangs et prestige en miroir', async () => {
+  const t0 = PARIS('2026-10-10T12:00:00');
+  // Trois semaines, aucune séance : 3 × 150 V au plus, rabotés dans l'ordre de l'app.
+  const r = X.totalServeur(X.etatVide(), { nutrition: 300, cible: 600, sommeil: 100, checkin: 200, semaineAssiette: 150 }, { debut: t0 - 20 * J }, t0);
+  const hors = X.HORS.reduce((a, k) => a + r.cat[k], 0);
+  assert.equal(hors, 450);
+  assert.equal(r.cat.semaineAssiette, 0, 'la semaine d’assiette part la première');
+  assert.equal(r.cat.sommeil, 100, 'la nuit, la dernière');
+  // Avec de l'entraînement recalculé par le serveur : 40 % de plus.
+  const e = X.avancer(null, Array.from({ length: 9 }, (_, i) => S(t0 - (18 - 2 * i) * J)), null, t0);
+  const entr = e.s.seance + e.s.complete + e.s.record;
+  const r2 = X.totalServeur(e, { nutrition: 300, cible: 600, sommeil: 100, checkin: 200 }, { debut: t0 - 20 * J }, t0);
+  assert.equal(X.HORS.reduce((a, k) => a + r2.cat[k], 0), Math.min(1200, Math.floor(0.4 * entr + 450)));
+  // Sous la borne : rien ne bouge.
+  assert.equal(X.totalServeur(X.etatVide(), { nutrition: 45, checkin: 30 }, { debut: t0 - 6 * J }, t0).cat.nutrition, 45);
+  // Les constantes de l'app.
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, new RegExp('const XP_HORS_PART=' + X.HORS_PART + ', XP_HORS_PLANCHER=' + X.HORS_PLANCHER + ', XP_HORS_FENETRE=7;'));
+  assert.match(src, new RegExp('const PRESTIGE_TRANCHE=' + X.PRESTIGE_TRANCHE + ';'));
+  assert.match(src, new RegExp("const XP_HORS=Object\\.freeze\\(\\[" + X.HORS.map((k) => "'" + k + "'").join(',') + '\\]\\);'));
+  // Des écarts croissants entre les rangs.
+  for (let i = 2; i < X.RANGS.length; i++) assert.ok(X.RANGS[i].seuil - X.RANGS[i - 1].seuil > X.RANGS[i - 1].seuil - X.RANGS[i - 2].seuil, X.RANGS[i].nom);
+});
+
+test('le retour (02/10/2026) : 50 V, au plus un par tranche de 14 jours du compte, comme l’app', async () => {
+  const t0 = PARIS('2026-10-20T12:00:00');
+  assert.equal(X.XP.retour, 50);
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 500 }, { debut: t0 - 10 * J }, t0).cat.retour, 0, 'moins de 14 jours : aucun retour possible');
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 500 }, { debut: t0 - 30 * J }, t0).cat.retour, 100);
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 50 }, { debut: t0 - 30 * J }, t0).cat.retour, 50);
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, /\bretour:50\b/);
+  assert.match(src, new RegExp('const RETOUR_COMBAT_J=' + X.RETOUR_JOURS + ','));
 });

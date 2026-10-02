@@ -36,32 +36,50 @@ jobs:
   deployer:
     runs-on: ubuntu-latest
     steps:
+      # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
+      # assembler_site.sh) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
+      # rc-core EST ASSEMBLE DE src/core/ (01/10/2026, src/core/LISEZMOI.md).
+      # On le regenere, puis on exige que le fichier committe soit IDENTIQUE :
+      # une modification faite dans un seul des deux (src/core/ sans
+      # reassembler, ou rc-core a la main) echoue ici.
+      - name: Assembler rc-core depuis src/core et comparer au fichier committe
+        run: |
+          node scripts/assembler_core.mjs --forcer
+          if [ -n "$(git status --porcelain -- app/)" ]; then
+            git status --short -- app/
+            git diff --stat -- app/
+            echo "::error::app/rc-core.<build>.js differe de l'assemblage de src/core/ : lancer node scripts/assembler_core.mjs et committer les deux."
+            exit 1
+          fi
+          node scripts/assembler_core.mjs --verifier
+
+      # LA LISTE DE CE QUI EST PUBLIC vit dans scripts/assembler_site.sh,
+      # partagée avec deploie.sh et pages.yml (deux copies divergeaient).
       - name: Assembler _site
         run: |
-          set -e
-          rm -rf _site && mkdir -p _site
-          # maj/ : la page de deblocage, DEHORS de /app/ et donc hors de
-          # portee du service worker de l'app. Elle doit etre deployee,
-          # sinon elle n'existe que sur le disque.
-          # p/, c/, a/ : les pages publiques /@pseudo, /coach/slug et la page
-          # secrete d'un ambassadeur ; firebase.json y reecrit /@* et /coach/*.
-          cp -a app blog i maj p c a _site/
-          cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html _site/
-          cp -a logo.png og-image.png robots.txt sitemap.xml _site/
-          # LOT C6 : le tableau des offres, que la vitrine d'un coach lit pour ses formules.
-          cp -a tarifs.json _site/
-          # well-known/ (sans point dans le depot) -> _site/.well-known/.
-          # Absent, Firebase sert un assetlinks.json VIDE (« [] ») et la TWA
-          # Android s'ouvre avec la barre d'adresse (constate le 28/09/2026).
-          mkdir -p _site/.well-known && cp -a well-known/. _site/.well-known/
-          if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
-          echo "Fichiers assembles : $(find _site -type f | wc -l)"
+          bash scripts/assembler_site.sh _site
+          # LA SUITE DE TESTS NE PART JAMAIS (5,3 Mo). assembler_site.sh la retire
+          # deja ; on la retire ICI aussi, au plus pres de l'envoi, pour qu'une
+          # modification de la liste partagee ne la republie pas en silence.
+          # En ligne, chargerTests() dit « suite non disponible ici ».
+          rm -f _site/app/tests.js
+
+      # LA COPIE PUBLIEE EST MINIFIEE, LE DEPOT JAMAIS (01/10/2026) : tests.js
+      # et assertNoCycleRuleAltersSeries lisent le SOURCE des fonctions
+      # (String(fn)). esbuild sans --minify-identifiers (les noms globaux sont
+      # appeles depuis des onclick="..."). Avant/apres en brut, gzip, brotli ;
+      # le script echoue si un fichier minifie ne se parse plus.
+      - name: Minifier _site
+        run: node scripts/minifier_site.mjs _site
 
       # GARDE-FOU. Un deploiement remplace TOUT le site : si l'assemblage a
       # rate, on prefere ne rien envoyer plutot que de vider sync.web.app.
@@ -69,6 +87,7 @@ jobs:
         run: |
           set -e
           test -f _site/index.html
+          test -f _site/coachs.html
           test -f _site/app/index.html
           test -f _site/i/index.html
           test -f _site/maj/index.html
@@ -91,6 +110,8 @@ jobs:
           grep -q 'rel="canonical"' _site/index.html
           # Le service worker de l'app, lui, doit bien etre la.
           test -f _site/app/sw.js
+          # La suite de tests ne part pas (5,5 Mo publics, utiles en local seulement).
+          test ! -f _site/app/tests.js
           n=$(find _site -type f | wc -l)
           if [ "$n" -lt 400 ]; then
             echo "Seulement $n fichiers : assemblage suspect, on n'envoie rien."
@@ -104,7 +125,20 @@ jobs:
       # le JavaScript qui suit de tourner. L'app s'affiche, et plus rien ne
       # repond. Depuis que le code est servi a part, ce controle le lit aussi.
       - name: Verifier que le code se parse
-        run: node scripts/verif/syntaxe.mjs
+        run: |
+          set -e
+          node scripts/verif/syntaxe.mjs
+          # Et la version MINIFIEE, celle qui part.
+          node scripts/verif/syntaxe.mjs _site/app/index.html
+
+      # LE LINT (01/10/2026), BLOQUANT. Tous les scripts de la page partagent la
+      # meme portee globale : une fonction appelee et jamais definie, ou deux
+      # fonctions du meme nom dont la seconde ecrase la premiere, ne se voient
+      # pas a la lecture et un try/catch les avale a l'execution. ESLint 9
+      # (no-undef, no-redeclare, no-dupe-keys) sur la page concatenee, chaque
+      # erreur ramenee a fichier:ligne. Voir scripts/verif/lint.mjs.
+      - name: Lint
+        run: node scripts/verif/lint.mjs
 
       # LES ACTIFS VERSIONNES. Depuis le build 1417, index.html ne porte plus le
       # code : il le DEMANDE, sous un nom qui contient le numero de build, et
@@ -158,6 +192,9 @@ jobs:
       # 9,95 EUR « sans engagement » pendant que PayPal encaissait 9,50 sur 12 mois.
       - name: Verifier les prix
         run: node scripts/verif/tarifs.mjs
+      # LA FICHE PLAY STORE (02/10/2026) : longueurs, prix liés, images acceptées.
+      - name: Fiche Play Store
+        run: node scripts/verif/fiche-store.mjs
 
       # LA SYNCHRONISATION A DEUX APPAREILS. Le banc lit les fonctions de fusion
       # dans rc-core, rejoue 2000 entrelacements d'envois et de descentes sur
@@ -166,6 +203,48 @@ jobs:
       # fusionner avant d'ecrire. Moins de 5 s.
       - name: Verifier la synchronisation (banc a deux appareils)
         run: node scripts/verif/banc-sync.mjs
+
+      # LA CONTENT-SECURITY-POLICY de /app (firebase.json) : presente, bornee
+      # (ni *, ni https: en connect-src / img-src / media-src), object-src
+      # 'none', et tout domaine que l'app appelle admis — sinon la fonction
+      # casse en production, et seulement la.
+      - name: Verifier la CSP de l'app
+        run: node scripts/verif/csp.mjs
+
+      # ── LA LIVRAISON ECHOUE SI UN TEST ECHOUE (lot 51, 02/10/2026) ──────────
+      # Jusqu'ici la suite navigateur tournait dans un job a part, qui ne
+      # retenait pas le deploiement : un test rouge laissait partir le site.
+      # Les trois etapes ci-dessous sont AVANT « Deployer » : la moindre
+      # assertion fausse (Worker, fonctions, app) et rien n'est envoye.
+      - name: Tests du serveur léger
+        working-directory: cloudflare
+        run: node --test "test/*.test.mjs"
+
+      # ⚠ Le motif, et non le dossier : `node --test functions/test/` prend le
+      #   dossier pour un module sous Node 22 et echoue sans jouer un test.
+      - name: Tests des fonctions
+        run: node --test "functions/test/*.test.js"
+
+      # La RACINE du depot est servie, et non app/ : la suite lit
+      # ../database.rules.json. suite.mjs fixe lui-meme la fenetre (412x4000,
+      # mobile) et sort en 1 au premier echec, sur une suite interrompue ou sur
+      # moins de 1000 tests joues ; --tolere=N admet N echecs connus.
+      - name: Suite intégrée
+        env:
+          SUITE_ATTENDUS: scripts/verif/echecs-attendus.json
+        run: |
+          set -e
+          python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &
+          google-chrome --headless=new --no-sandbox --disable-gpu --no-first-run \
+            --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >"$RUNNER_TEMP/chrome.log" 2>&1 &
+          pret=non
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9223/json/version >/dev/null; then pret=oui; break; fi
+            sleep 1
+          done
+          if [ "$pret" != oui ]; then cat "$RUNNER_TEMP/chrome.log"; echo "::error::Chrome ne repond pas sur 9223."; exit 1; fi
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/app/index.html >/dev/null && break; sleep 0.5; done
+          timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223
 
       - name: Deployer
         env:
@@ -196,41 +275,14 @@ jobs:
           else
             echo "::warning::REGLES NON DEPLOYEES. droits/ reste inaccessible et l application retombe sur l ancien modele : bash deploie.sh depuis un poste autorise."
           fi
-          # LES FONCTIONS demandent le plan Blaze. Tant que le projet est en
-          # Spark, ce deploiement echoue : on le tente, on le DIT, et on ne fait
-          # pas tomber la livraison du site pour autant.
-          if firebase deploy --only functions --project repcore-sync --non-interactive; then
-            echo "Fonctions deployees."
-          else
-            echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
-          fi
+          # LES FONCTIONS NE PARTENT PAS D'ICI (01/10/2026), et c'est décidé une
+          # fois pour toutes : le serveur léger (Cloudflare Worker) fait leur
+          # travail sur le plan Spark — paiements PayPal, droits/, push — et
+          # les deux ensemble traiteraient chaque paiement deux fois
+          # (firebase.json, « //pages » : « jamais avec »). Leur déploiement est
+          # MANUEL : functions/README.md, « Déploiement manuel ». Le Worker, lui,
+          # part par .github/workflows/cloudflare.yml.
           rm -f "$RUNNER_TEMP/cle.json"
 
-  # LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) dans le Chrome du
-  # runner. UN JOB A PART, qui ne retient PAS le deploiement : elle dure
-  # plusieurs minutes, et le site ne doit pas attendre. Rouge, elle se voit
-  # dans l'onglet Actions ; la corriger reste la priorite.
-  suite-navigateur:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Banc de synchronisation
-        run: node scripts/verif/banc-sync.mjs
-      - name: Suite navigateur (Chrome headless)
-        run: |
-          set -e
-          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
-          if [ -z "$CHROME" ]; then
-            echo "::warning::Pas de Chrome sur ce runner : suite navigateur non jouee."
-            exit 0
-          fi
-          # La RACINE du depot, et non app/ : la suite lit ../database.rules.json.
-          python3 -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
-          "$CHROME" --headless=new --no-sandbox --disable-gpu --no-first-run \
-            --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >/dev/null 2>&1 &
-          for i in $(seq 1 30); do curl -s http://127.0.0.1:9223/json/version >/dev/null && break; sleep 1; done
-          VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223
+  # L'ANCIEN JOB « suite-navigateur », NON BLOQUANT, EST RETIRE (lot 51) : la
+  # suite joue desormais dans « deployer », avant « Deployer », et l'arrete.

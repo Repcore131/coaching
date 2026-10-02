@@ -35,35 +35,32 @@
   on la laisse lire. Le prenom lu est garde (rc_parrain_invite) : l'app, sur
   le meme domaine, le reprend a l'inscription.
 -->
+<link rel="stylesheet" href="/charte.css">
 <style>
-:root{--fond:#080808;--carte:#141414;--bord:#2a2a2a;--txt:#f2f2f2;--gris:#a8a8a8;--vif:#c9f24d}
+/* LA CHARTE (/charte.css, 01/10/2026) : polices, jetons, .cta, .cta-sec,
+   .carte, titres. Ici, seulement ce qui est propre a cette page. */
 *{box-sizing:border-box}
-body{margin:0;background:var(--fond);color:var(--txt);
-  font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
-  padding:24px 16px;display:flex;justify-content:center}
+body{margin:0;font-size:16px;line-height:1.5;padding:24px 16px;display:flex;justify-content:center}
 .boite{width:100%;max-width:520px}
 .logo{width:64px;height:64px;border-radius:16px;display:block;margin:8px auto 20px}
-h1{font-size:22px;margin:0 0 8px;text-align:center}
-p{margin:0 0 14px;color:var(--gris)}
-.carte{background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:16px;margin:16px 0}
-.bouton{display:block;width:100%;text-align:center;text-decoration:none;
-  background:var(--vif);color:#0a0a0a;font-weight:700;font-size:17px;
-  padding:15px 18px;border-radius:12px;border:0;cursor:pointer;margin:6px 0}
-.bouton.sec{background:transparent;color:var(--txt);border:1px solid var(--bord);font-weight:600;font-size:15px}
+h1{font-size:38px;margin:0 0 10px;text-align:center}
+p{margin:0 0 14px;color:var(--sub)}
+.carte{margin:16px 0}
+.cta,.cta-sec{margin:8px 0}
 ol{margin:0;padding-left:20px}li{margin:8px 0}
-code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 6px;
+code{background:#000;border:1px solid var(--border);border-radius:var(--r-1);padding:2px 6px;
   font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;word-break:break-all}
-.petit{font-size:13px;color:var(--gris);text-align:center;margin-top:18px}
+.petit{font-size:13px;color:var(--sub);text-align:center;margin-top:18px}
 .embleme{width:112px;height:112px;display:block;margin:4px auto 10px;filter:drop-shadow(0 6px 22px rgba(224,32,32,.35))}
-.promesse{text-align:center;color:var(--txt);font-size:17px;margin:4px 0 18px}
-.promesse strong{color:var(--vif)}
-.invite-nom{color:var(--txt);font-weight:700;text-align:center;margin:0 0 12px}
-.tuto h2{font-size:17px;margin:0 0 10px;text-align:center;text-wrap:balance}
-.tuto video{display:block;width:100%;aspect-ratio:16/9;border-radius:12px;background:#000;border:1px solid var(--bord)}
+.promesse{text-align:center;color:var(--text);font-size:17px;margin:4px 0 18px}
+.promesse strong{color:var(--red-text)}
+.invite-nom{color:var(--text);font-weight:700;text-align:center;margin:0 0 12px}
+.tuto h2{font-size:26px;margin:0 0 10px;text-align:center;text-wrap:balance}
+.tuto video{display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-3);background:#000;border:1px solid var(--border)}
 .chapitres{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0 0}
-.chapitres button{background:transparent;color:var(--txt);border:1px solid var(--bord);border-radius:999px;
+.chapitres button{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:var(--r-2);
   padding:6px 11px;font:600 13px/1.2 inherit;font-family:inherit;cursor:pointer}
-.chapitres button span{color:var(--gris);font-weight:400;margin-left:4px}
+.chapitres button span{color:var(--sub);font-weight:400;margin-left:4px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -97,15 +94,15 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
     <p class="promesse" id="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">2</span> mois d'accès complet</strong>, dont un offert par ton ami, sans carte bancaire.</p>
     <!-- L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : elle
          remplace le mois d'essai en plus (un seul avantage). -->
-    <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, sans engagement.</p>
-    <a class="bouton" id="commencer" href="../app/">Commencer</a>
+    <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, engagement de <span data-nb="engagementMois">12</span>&nbsp;mois.</p>
+    <a class="cta" id="commencer" href="../app/">Commencer</a>
     <p class="petit" style="margin-top:10px">L'app s'ouvre et te propose de l'installer sur ton écran d'accueil.</p>
   </div>
 
   <!-- Navigateur normal : on ouvre l'app. -->
   <div id="ok" hidden>
     <p style="text-align:center" id="ouverture">Ouverture de l'application…</p>
-    <a class="bouton" id="go" href="../app/">Ouvrir RepCore</a>
+    <a class="cta" id="go" href="../app/">Ouvrir RepCore</a>
     <!-- Sans invitation : rien sur un code de coach que la personne n'a pas. -->
     <div class="carte" id="etapes-generique" hidden>
       <ol>
@@ -127,7 +124,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <div id="interne" hidden>
     <p class="invite-nom" id="interne-invite" hidden></p>
     <div class="carte">
-      <p style="color:var(--txt);margin-bottom:10px"><strong>Tu es dans le navigateur d'Instagram.</strong>
+      <p style="color:var(--text);margin-bottom:10px"><strong>Tu es dans le navigateur d'Instagram.</strong>
       L'application ne peut pas s'installer depuis ici.</p>
       <ol>
         <li>Touche le menu <strong>⋯</strong> (iPhone : <strong>Aa</strong> ou <strong>⋯</strong>) en haut de l'écran.</li>
@@ -135,12 +132,12 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
       </ol>
       <p style="margin:12px 0 6px">Sinon, copie ce lien et colle-le dans Safari ou Chrome :</p>
       <p><code id="lien"></code></p>
-      <button class="bouton" id="copier" type="button">Copier le lien</button>
-      <a class="bouton sec" id="quand-meme" href="../app/">Continuer ici quand même</a>
+      <button class="cta" id="copier" type="button">Copier le lien</button>
+      <a class="cta-sec" id="quand-meme" href="../app/">Continuer ici quand même</a>
     </div>
   </div>
 
-  <p class="petit">RepCore : <a href="../" style="color:var(--gris)">en savoir plus</a></p>
+  <p class="petit">RepCore : <a href="../" style="color:var(--sub)">en savoir plus</a></p>
 </div>
 <script>
 // L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
@@ -149,6 +146,8 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
 // IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
 // (plan Spark), rien ne casse.
 (function(){try{var p=new URLSearchParams(location.search);
+// vu=1 : la page d'avant (/@pseudo, /coach/<slug>) a déjà compté cette arrivée.
+if(p.get('vu')==='1') return;
 var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
@@ -169,6 +168,8 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
   if(c&&!p.get('inv')) p.set('inv',c);
   p.delete('c');p.delete('code');
+  // vu=1 ne sert qu'à /arrivee (ci-dessus) : il ne part pas vers l'app.
+  p.delete('vu');
   // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=).
   var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(amb) p.set('amb',amb);
@@ -199,16 +200,25 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // textContent partout : un prénom ne devient jamais du HTML.
   // LE MOIS OFFERT, PAR LA PERSONNE QUI INVITE (Kevin, 28/09/2026) : on dit
   // « grâce à Julie », jamais « au lieu de ».
-  // L'AMI (lot C, 29/09/2026) : « Julie t'offre ton premier mois », avant le
-  // bouton. Arrivé par un duel, le défi reste le titre (la raison de venir) et
-  // le cadeau vient dessous.
+  // L'AMI (lot C, 29/09/2026) : « Julie t'offre un mois : 2 mois d'essai »,
+  // avant le bouton. Arrivé par un duel, le défi reste le titre (la raison de
+  // venir) et le cadeau vient dessous.
+  // LA DURÉE (02/10/2026) : jamais en dur. Le « 2 » est lu dans #mois-ami
+  // (data-nb="essai.moisParraine", posé par scripts/tarifs.mjs) et le « 1 »
+  // dans data-nb="essai.mois", AVANT que poserNom ne réécrive la promesse qui
+  // les porte : l'app donne essai.mois + essai_parrainage.moisEnPlus.
+  function nbLu(e){ var n=e?parseInt(e.textContent,10):NaN; return n>0?n:0; }
+  var MOIS_AMI=nbLu(el('mois-ami'));
+  var MOIS_BASE=0; try{ MOIS_BASE=nbLu(document.querySelector('[data-nb="essai.mois"]')); }catch(e){}
+  function moisEssai(){ return MOIS_AMI?MOIS_AMI+'\u00a0mois d\u2019essai':'un essai prolong\u00e9'; }
+  function moisOfferts(){ var k=MOIS_AMI&&MOIS_BASE?MOIS_AMI-MOIS_BASE:1; return k>1?k+'\u00a0mois':'un mois'; }
   function poserNom(nom,rang,demi,ami){
     if(!nom) return;
     var t=el('titre'); if(t&&!duel) t.textContent=nom+' t\u2019invite sur RepCore';
     // L'offre de lancement (ultime_demi) remplace le mois offert.
     var offre=demi?'Grâce à '+nom+', ton 1er mois d\u2019Ultime est à moitié prix.'
-      :ami?nom+' t\u2019offre ton premier mois\u00a0: toute l\u2019app ouverte, sans carte bancaire.'
-      :'Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
+      :ami?nom+' t\u2019offre '+moisOfferts()+'\u00a0: '+moisEssai()+', toute l\u2019app ouverte, sans carte bancaire.'
+      :'Grâce à '+nom+', '+moisOfferts()+(/^un /.test(moisOfferts())?' offert':' offerts')+'\u00a0: '+moisEssai()+', toute l\u2019app ouverte, sans carte bancaire.';
     var pr=el('promesse'); if(pr) pr.textContent=offre;
     var ii=el('interne-invite');
     if(ii){ ii.textContent=offre; ii.hidden=false; }
@@ -332,7 +342,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 })();
 </script>
 <noscript>
-  <p style="text-align:center"><a class="bouton" href="../app/">Ouvrir RepCore</a></p>
+  <p style="text-align:center"><a class="cta" href="../app/">Ouvrir RepCore</a></p>
 </noscript>
 </body>
 </html>
