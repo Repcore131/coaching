@@ -2185,6 +2185,9 @@
     // effet, annulerLe, annuleLe}. Ecrites par le serveur leger seul (route
     // /resiliation), qui annule l abonnement chez PayPal a la date d effet.
     "resiliations":         { ".read": false, ".write": false },
+    // Le dernier renouvellement rembourse en totalite, par abonnement : la
+    // periode qu il couvrait et la date de fermeture (serveur leger seul).
+    "paypal_rembourses":    { ".read": false, ".write": false },
     // Le journal des remboursements, retrofacturations et litiges : qui, quoi,
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).

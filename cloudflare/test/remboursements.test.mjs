@@ -271,7 +271,9 @@ await test('litige perdu pour une partie : la commission au prorata, une seule f
   assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), null);
 });
 
-await test('remboursement total d’un paiement qui n’était pas le premier : ni accès, ni parrain, ni attribution', async () => {
+// ⚠ DEPUIS LE 02/10/2026, L'ACCÈS SE FERME : la période que ce renouvellement
+//   couvrait court encore. Le parrain et l'attribution, eux, ne bougent pas.
+await test('remboursement total d’un paiement qui n’était pas le premier : accès fermé, ni parrain, ni attribution', async () => {
   const w = monde(base());
   await premierPaiement(w);
   w.t = T0 + 31 * J;
@@ -281,8 +283,8 @@ await test('remboursement total d’un paiement qui n’était pas le premier : 
   // Le serveur léger ne commissionne que le premier paiement : celui-ci n'a
   // pas de commission, et celle du premier reste intacte.
   assert.deepEqual(coms.map((c) => c.statut || 'ok'), ['ok']);
-  assert.deepEqual(w.journal()[0].actions, ['rien à reprendre']);
-  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), null);
+  assert.deepEqual(w.journal()[0].actions, ['accès fermé au 5 novembre 2026']);
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 31 * J);
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 1);
   assert.equal(w.journal()[0].premier, false);
 });
@@ -317,6 +319,77 @@ await test('achat d’un programme remboursé : le programme se ferme à la date
   assert.equal(w.F.lire('users/lea@t,fr/programmesAchetes/p1/ouvertJusqu'), T0 + 2 * J);
   assert.equal(w.F.lire('users/lea@t,fr/abonnement'), null, 'l’abonnement n’est pas touché');
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 0);
+});
+
+// ══ UN RENOUVELLEMENT REMBOURSÉ EN TOTALITÉ (02/10/2026) ══════════════════
+const ESS_AN = 'P-92T09491KF550281RNK2LZWY';
+
+await test('renouvellement mensuel remboursé en totalité : l’accès se ferme, et le journal le dit', async () => {
+  const w = monde(base());
+  await premierPaiement(w);
+  w.t = T0 + 30 * J;
+  assert.equal((await w.envoyer('PAYMENT.SALE.COMPLETED', vente('SALE0000002'))).texte, 'paiement');
+  w.t = T0 + 33 * J;                                   // remboursé trois jours après
+  assert.equal((await w.envoyer('PAYMENT.SALE.REFUNDED', rembourse('SALE0000002'))).texte, 'remboursement');
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 33 * J);
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'REMBOURSE');
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 33 * J);
+  const j = w.journal();
+  assert.equal(j.length, 1);
+  assert.equal(j[0].premier, false);
+  assert.deepEqual(j[0].actions, ['accès fermé au 7 novembre 2026']);
+  assert.deepEqual(w.F.lire('paypal_rembourses/' + ABO), { vente: 'SALE0000002', debut: T0 + 30 * J, fin: Date.parse('2026-12-04T10:00:00Z'), le: T0 + 33 * J });
+  // Le parrain et l'attribution ne bougent pas : ce n'était pas le premier paiement.
+  assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 1);
+});
+
+await test('renouvellement annuel remboursé, puis CANCELLED : la fin est la date du remboursement, pas un an plus tard', async () => {
+  const w = monde(base(), { abonnements: { [ABO]: { status: 'ACTIVE', plan_id: ESS_AN, billing_info: { next_billing_time: iso(T0 + 20 * J) } } } });
+  await w.envoyer('PAYMENT.SALE.COMPLETED', vente('SALE0000001', '114.00'));
+  w.t = T0 + 20 * J;
+  w.abos[ABO].billing_info.next_billing_time = iso(T0 + 385 * J);   // l'annuel suivant : dans un an
+  assert.equal((await w.envoyer('PAYMENT.SALE.COMPLETED', { id: 'SALE0000002', billing_agreement_id: ABO, amount: { total: '114.00', currency: 'EUR' } })).texte, 'paiement');
+  w.t = T0 + 22 * J;
+  await w.envoyer('PAYMENT.SALE.REFUNDED', rembourse('SALE0000002', '114.00'));
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 22 * J);
+  assert.match(w.journal()[0].actions.join(' '), /accès fermé au 27 octobre 2026/);
+  assert.equal(w.F.lire('paypal_rembourses/' + ABO + '/fin'), Date.parse('2027-10-25T10:00:00Z'), 'la période couverte : un an');
+  // Kevin annule l'abonnement chez PayPal : sa prochaine échéance est dans un an.
+  w.t = T0 + 23 * J;
+  w.abos[ABO].status = 'CANCELLED';
+  assert.equal((await w.envoyer('BILLING.SUBSCRIPTION.CANCELLED', { id: ABO })).texte, 'fin_posee');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/finAccesPaypal'), T0 + 22 * J, 'la date du remboursement');
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 22 * J, 'pas un an d’accès offert');
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 22 * J);
+  assert.ok(!w.journal().some((x) => x.quoi === 'rupture_engagement'), 'un remboursement n’est pas une rupture');
+});
+
+await test('ancien renouvellement remboursé longtemps après : sa période est passée, rien ne change', async () => {
+  const w = monde(base());
+  await premierPaiement(w);
+  w.t = T0 + 30 * J;
+  await w.envoyer('PAYMENT.SALE.COMPLETED', vente('SALE0000002'));
+  w.t = T0 + 60 * J;
+  await w.envoyer('PAYMENT.SALE.COMPLETED', vente('SALE0000003'));
+  w.t = T0 + 75 * J;                                   // le mois du 2e paiement est fini depuis deux semaines
+  await w.envoyer('PAYMENT.SALE.REFUNDED', rembourse('SALE0000002'));
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), null, 'accès intact');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'ACTIVE');
+  assert.equal(w.F.lire('paypal_rembourses'), null);
+  assert.match(w.journal()[0].actions.join(' '), /période couverte déjà écoulée .*accès inchangé/);
+});
+
+await test('renouvellement remboursé en partie (geste commercial) : l’accès reste ouvert', async () => {
+  const w = monde(base());
+  await premierPaiement(w);
+  w.t = T0 + 30 * J;
+  await w.envoyer('PAYMENT.SALE.COMPLETED', vente('SALE0000002'));
+  w.t = T0 + 31 * J;
+  assert.equal((await w.envoyer('PAYMENT.SALE.REFUNDED', rembourse('SALE0000002', '4.75'))).texte, 'remboursement_partiel');
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), null);
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'ACTIVE');
+  assert.equal(w.F.lire('paypal_rembourses'), null);
+  assert.ok(w.journal()[0].actions.includes('accès et parrainage inchangés'));
 });
 
 console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');

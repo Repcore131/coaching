@@ -49,16 +49,17 @@ const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.
 //   abonnés à l'ancien tarif (9,95 puis 9,50 ; 99 puis 114 ; 249 puis 298,80),
 //   et le plan « demi » facture 12,45 le premier mois puis 24,90.
 export const OFFRES_PAYPAL = Object.freeze({
-  'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'] },
-  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'] },
-  'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'] },
-  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'] },
+  // `periode` : ce que couvre UN paiement du plan (un mois, ou un an).
+  'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'], periode: 'mois' },
+  'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'], periode: 'an' },
+  'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'], periode: 'mois' },
+  'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'], periode: 'an' },
   // `demi` : le 1er mois d'Ultime à moitié prix — UNE fois par compte
   // (droits.demiPackUtilise, posé à l'ouverture), sortie de pack ou code
   // ambassadeur « ultime_demi ».
-  'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true },
-  'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'] },
-  'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'] },
+  'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true, periode: 'mois' },
+  'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'], periode: 'mois' },
+  'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'], periode: 'mois' },
 });
 function montantValide(plan, montant, devise, role) {
   if (!plan || String(devise || '').toUpperCase() !== 'EUR') return false;
@@ -145,6 +146,15 @@ export const COUT_SUITE = Object.freeze({ parrainage: 12, ambassadeur: 14, attri
 // en demandait ~40 d'un bloc.
 export const BUDGET_ANNULER = 16;
 export const COUT_REPRISE_PREMIER = 28;
+// Un RENOUVELLEMENT remboursé en totalité : l'abonnement relu (plan inconnu
+// du registre), le dossier, l'accès fermé, le repère pour fermerALaFin.
+export const COUT_FERMER_RENOUVELLEMENT = 12;
+// PURE. LA PÉRIODE QU'UN PAIEMENT D'ABONNEMENT COUVRE : de son encaissement
+// à un mois (ou un an, pour un plan annuel) plus tard.
+export function periodeCouverte(le, planId) {
+  const p = OFFRES_PAYPAL[planId];
+  return { debut: Number(le) || 0, fin: moisApres(Number(le) || 0, p && p.periode === 'an' ? 12 : 1) };
+}
 // L'achat d'un programme, de la garde au registre (voir achat) : 2 + 6 + 8 + 8, arrondi.
 export const BUDGET_ACHAT = 16;
 export class ErreurBudget extends Error {
@@ -364,7 +374,16 @@ export function creerPaypal(ctx) {
     const dernier = sub && sub.billing_info && sub.billing_info.last_payment && Date.parse(sub.billing_info.last_payment.time || '');
     // La fin payée : la prochaine échéance si PayPal la donne, sinon un mois
     // après le dernier paiement, sinon maintenant (impayé sans historique).
-    const payee = Number(prochain) > t ? Number(prochain) : (Number(dernier) > 0 ? Number(dernier) + MOIS_MS : t);
+    let payee = Number(prochain) > t ? Number(prochain) : (Number(dernier) > 0 ? Number(dernier) + MOIS_MS : t);
+    // ⚠ LE PAIEMENT QUI COUVRAIT CETTE ÉCHÉANCE A ÉTÉ REMBOURSÉ (02/10/2026) :
+    //   la fin est la date du remboursement, pas la prochaine échéance (un an
+    //   plus tard pour un annuel). Relu seulement après un remboursement
+    //   (statutPaypal REMBOURSE, posé par fermerAcces) : une requête de plus,
+    //   là seulement.
+    if (abo && a && a.statutPaypal === 'REMBOURSE') {
+      const r = await lire('paypal_rembourses/' + abo);
+      if (r && Number(r.debut) < payee && payee <= Number(r.fin) + 2 * 864e5) payee = Math.min(payee, Number(r.le) || t);
+    }
     const reserve = role === 'coach' ? 0 : Math.max(0, Number(compte && compte.moisEnReserve) || 0);
     const finAvant = Math.max(Number(a && a.finAccesPaypal) || 0, Number(finNotee && finNotee.fin) || 0);
     const calculee = payee + reserve * MOIS_MS;
@@ -386,7 +405,9 @@ export function creerPaypal(ctx) {
       ? termeEngagement({ role, engagementJusqu: a && a.engagementJusqu, debut: sub && sub.start_time }) : 0;
     // La résiliation demandée n'est relue que si la fin tombe avant le terme :
     // une requête de plus, seulement là où une rupture est possible.
-    const rupture = !!(terme && terme - fin > RUPTURE_MARGE_MS && !(await lire('resiliations/' + cle)));
+    // Un abonnement dont un paiement vient d'être remboursé (statutPaypal
+    // REMBOURSE) n'est pas une rupture : c'est RepCore qui a rendu l'argent.
+    const rupture = !!(terme && terme - fin > RUPTURE_MARGE_MS && !(a && a.statutPaypal === 'REMBOURSE') && !(await lire('resiliations/' + cle)));
     exigerBudget('fin', rupture ? BUDGET_ETAPE + 2 : BUDGET_ETAPE);
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
@@ -456,7 +477,7 @@ export function creerPaypal(ctx) {
     const valide = montantValide(plan, ress.amount && (ress.amount.total || ress.amount.value),
       ress.amount && (ress.amount.currency || ress.amount.currency_code), role);
     const premier = valide ? await premierPaiement(cle, abo, ress) : false;
-    await noterTransaction(ress.id, { cle, abo, type: 'abonnement', premier,
+    await noterTransaction(ress.id, { cle, abo, type: 'abonnement', premier, plan: (sub && sub.plan_id) || null,
       montant: centimes(ress.amount && (ress.amount.total || ress.amount.value)), devise: String((ress.amount && ress.amount.currency) || '') });
     await lancerSuites();
     return premier ? 'premier_paiement' : (ouvrir ? 'paiement' : 'paiement_sans_ouverture');
@@ -753,7 +774,7 @@ export function creerPaypal(ctx) {
   const RANG = { essentielle: 1, ultime: 2, coach: 1, pro: 2 };
   const rangPlan = (p) => (p ? RANG[p.coachPlan || p.formule] || 0 : 0);
   // Les plans annuels de l'athlète : abonnement/palier suit le plan facturé.
-  const ANNUELS = ['P-92T09491KF550281RNK2LZWY', 'P-16Y44630WF304553UNK2LZXI'];
+  const ANNUELS = Object.keys(OFFRES_PAYPAL).filter((k) => OFFRES_PAYPAL[k].periode === 'an');
   const estA = async (cle, abo, sub) => {
     const k = await lire('paypal_abonnes/' + abo);
     if (k) return k === cle;
@@ -985,6 +1006,29 @@ export function creerPaypal(ctx) {
     return (role === 'coach' ? 'palier coach refermé' : 'accès fermé') + ' au ' + dateFr(t);
   }
 
+  // ── UN RENOUVELLEMENT ANNULÉ EN TOTALITÉ (02/10/2026) ────────────────────
+  // Remboursé, rétrofacturé ou perdu en litige, un paiement qui n'est pas le
+  // premier ne fermait rien : l'accès courait jusqu'à la prochaine échéance,
+  // un an pour un annuel. Si la période qu'il couvrait contient maintenant ou
+  // le futur, l'accès se ferme à max(encaissement, maintenant). Une période
+  // déjà écoulée (un vieux renouvellement remboursé tard) ne change rien.
+  // Ce n'est vrai que de l'abonnement COURANT du dossier.
+  // Le repère paypal_rembourses/<abonnement> est relu par fermerALaFin : un
+  // avis CANCELLED qui suivrait ne rouvre pas jusqu'à la prochaine échéance.
+  async function fermerRenouvellement(rec, t) {
+    if (!rec.abo) return null;
+    let plan = rec.plan;
+    if (!plan) { const sub = await abonnement(rec.abo); plan = (sub && sub.plan_id) || null; }
+    const per = periodeCouverte(rec.le, plan);
+    if (!(per.fin > t)) return 'période couverte déjà écoulée (jusqu’au ' + dateFr(per.fin) + ') : accès inchangé';
+    const courant = await lire('users/' + rec.cle + '/paypalSubscriptionId');
+    if (courant && courant !== rec.abo) return 'ancien abonnement : accès inchangé';
+    const fin = Math.max(per.debut, t);
+    exigerBudget('fermer_renouvellement');
+    await db.ref('paypal_rembourses/' + rec.abo).set({ vente: rec.id, debut: per.debut, fin: per.fin, le: fin });
+    return fermerAcces(rec, fin);
+  }
+
   // L'ANNULATION D'UNE TRANSACTION (total, rétrofacturation, litige perdu).
   async function annuler(rec, quoi, pourquoi, extra) {
     const t = now();
@@ -999,9 +1043,11 @@ export function creerPaypal(ctx) {
     const actions = [];
     const c = await M.commissionVente(rec.id, 'annuler');
     if (c) actions.push('commission ' + c.code + ' annulée (' + euros(Math.round(c.avant * 100)) + ')' + (c.dejaPayee ? ' — déjà versée, à reprendre' : ''));
-    const suite = { rec: { id: rec.id, cle: rec.cle, premier: !!rec.premier, montant: rec.montant, type: rec.type || null, prog: rec.prog || null, abo: rec.abo || null },
+    const suite = { rec: { id: rec.id, cle: rec.cle, premier: !!rec.premier, montant: rec.montant, type: rec.type || null, prog: rec.prog || null, abo: rec.abo || null,
+      le: Number(rec.le) || 0, plan: rec.plan || null },
       quoi, pourquoi: String(pourquoi || '').slice(0, 300), extra: extra || {}, actions, t };
-    if (rec.premier && M.differer && resteB() < COUT_REPRISE_PREMIER + BUDGET_ETAPE) {
+    const cout = rec.premier ? COUT_REPRISE_PREMIER : (rec.type === 'abonnement' ? COUT_FERMER_RENOUVELLEMENT : 0);
+    if (cout && M.differer && resteB() < cout + BUDGET_ETAPE) {
       await M.differer([Object.assign({ quoi: 'annulation_suite' }, { suite })]);
       return quoi;
     }
@@ -1020,6 +1066,9 @@ export function creerPaypal(ctx) {
       const a = await fermerAcces(rec, t);
       if (a) actions.push(a);
       await db.ref('paypal_premiers/' + rec.cle).remove();
+    } else if (rec.type === 'abonnement') {
+      const a = await fermerRenouvellement(rec, t);
+      if (a) actions.push(a);
     }
     if (!actions.length) actions.push('rien à reprendre');
     await journal(Object.assign({ quoi, qui: qui(rec.cle), transaction: rec.id, montant: euros(rec.montant), premier: !!rec.premier,
