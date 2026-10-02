@@ -13013,6 +13013,54 @@ async function testExercices(){
           return (String(_ouvrirResiliation).match(/Confirmer la résiliation/g)||[]).length===1
             ?true:_echec('plusieurs confirmations');})());
 
+        // ── LOT 46 : la demande part au serveur, la date d'effet est dite ──
+        ok('LOT 46 — demanderResiliation envoie la demande au serveur, qui arrêtera PayPal ; l’écran dit la date d’effet réelle',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_ok=CLOUD.ok,_pu=CLOUD.pushOne,_cf=CLOUD._callFn;
+          const appels=[];
+          try{
+            window.saveUser=()=>true; CLOUD.ok=()=>true;
+            CLOUD.pushOne=()=>Promise.resolve();
+            CLOUD._callFn=(n,d)=>{ appels.push([n,d]); return Promise.resolve({effet:Date.parse('2027-03-18T10:00:00Z'),annule:false}); };
+            localStorage.removeItem(RESIL_FILE);
+            const t=Date.now(), eng=t+170*864e5;
+            currentUser=_ath({abonnement:{formule:'essentielle',engagementJusqu:eng}});
+            // AVANT la confirmation : la date d'effet réelle (le terme de l'engagement).
+            const avant=texteEffetResiliation(currentUser,t);
+            const jour=new Date(eng).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+            if(avant.indexOf('prendra effet le '+jour)<0) return _echec('la date d’effet n’est pas le terme : '+avant);
+            if(!/échéances restantes sont dues/.test(avant)) return _echec('les échéances dues ne sont pas dites');
+            if(!/RepCore arrête lui-même les prélèvements chez PayPal/.test(avant)) return _echec('l’arrêt par RepCore n’est pas dit');
+            if(String(_ouvrirResiliation).indexOf('texteEffetResiliation(currentUser,Date.now())')<0) return _echec('l’écran de confirmation ne montre pas la date d’effet');
+            // Après l'engagement : la fin de la période en cours.
+            const apres=texteEffetResiliation(_ath({abonnement:{engagementJusqu:t-864e5}}),t);
+            if(!/à la fin de la période déjà payée/.test(apres)) return _echec('après l’engagement : '+apres);
+            // La demande : enregistrée en local, puis envoyée au serveur (après le dossier).
+            if(demanderResiliation('Trop cher')!==true) return _echec('la demande échoue');
+            if(SERVEUR_LEGER){
+              const src=String(_rejouerResiliation);
+              if(src.indexOf("CLOUD._callFn('/resiliation'")<0) return _echec('la demande ne part pas au serveur');
+              if(src.indexOf('CLOUD.pushOne')>src.indexOf("_callFn('/resiliation'")) return _echec('le serveur est appelé avant l’envoi du dossier');
+            }
+            // Le commentaire faux est retiré.
+            if(/pas de serveur pour appeler leur API/.test(String(demanderResiliation)+String(_rejouerResiliation)+(typeof RESIL_MOYENS==='string'?RESIL_MOYENS:'')))
+              return _echec('« pas de serveur pour appeler leur API » subsiste');
+            return true;
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.ok=_ok; CLOUD.pushOne=_pu; CLOUD._callFn=_cf;
+            try{ localStorage.removeItem(RESIL_FILE); localStorage.removeItem(RESIL_EFFET); }catch(e){} }})());
+        ok('LOT 46 — la réponse du serveur est gardée et l’écran « Mon abonnement » montre sa date d’effet',(()=>{
+          const sauve=currentUser;
+          try{
+            localStorage.removeItem(RESIL_EFFET);
+            const effet=Date.parse('2027-03-18T10:00:00Z');
+            _resilEffetNoter('ab@t',{effet});
+            if(_resilEffetLu('ab@t')!==effet) return _echec('date du serveur non gardée');
+            if(_resilEffetLu('autre@t')!==0) return _echec('la date d’un autre compte est lue');
+            currentUser=_ath({abonnement:{engagementJusqu:effet-5*864e5,resiliationDemandee:{ts:Date.now(),motif:''}}});
+            const txt=texteEffetResiliation(currentUser,Date.now(),_resilEffetLu('ab@t'));
+            return txt.indexOf('18 mars 2027')>=0?true:_echec('la date du serveur n’est pas montrée : '+txt);
+          } finally { currentUser=sauve; try{ localStorage.removeItem(RESIL_EFFET); }catch(e){} }})());
+
         // ── La file hors ligne rejoue EXACTEMENT une fois ────────────────
         ok('La file hors ligne rejoue exactement une fois',(()=>{
           const sauve=currentUser;
@@ -20480,16 +20528,20 @@ async function testExercices(){
           } finally { if(sauve) selectRole(sauve); }})());
 
         // ── Aucun texte n'affirme l'effectivité chez PayPal ──────────────
-        ok('Le texte est en obligation de MOYENS, pas de résultat',(()=>{
-          if(!/ne peut pas annuler/.test(RESIL_MOYENS))
-            return _echec('le texte laisse croire à une annulation automatique');
+        // ⚠ DEPUIS LE LOT 46 (02/10/2026), LE SERVEUR ARRÊTE L'ABONNEMENT CHEZ
+        //   PAYPAL à la date d'effet : le texte le dit, et ne renvoie plus la
+        //   personne couper elle-même (ce qui romprait l'engagement).
+        ok('Le texte dit que RepCore arrête lui-même l’abonnement, et rien d’autre',(()=>{
+          if(/ne peut pas annuler/.test(RESIL_MOYENS))
+            return _echec('le texte dit encore que RepCore ne peut pas annuler');
+          if(!/RepCore arrête lui-même ton abonnement/.test(RESIL_MOYENS))
+            return _echec('le texte ne dit pas qui arrête les prélèvements');
+          if(!/ne met pas fin à l'engagement/.test(RESIL_MOYENS))
+            return _echec('l’annulation directe chez PayPal n’est pas dite');
           if(!/rembours/.test(RESIL_MOYENS))
             return _echec('aucun engagement de remboursement');
-          if(!/CGV/.test(RESIL_MOYENS)) return _echec('la clause n\'est pas citée');
-          // Les étapes PayPal sont données EN COMPLÉMENT, pas en remplacement.
-          if(RESIL_PAYPAL.length!==3) return _echec(RESIL_PAYPAL.length+' étapes');
-          return /paypal\.com/i.test(RESIL_PAYPAL.join(' '))
-            ?true:_echec('les étapes ne nomment pas PayPal');})());
+          if(typeof RESIL_PAYPAL!=='undefined') return _echec('les étapes d’annulation chez PayPal sont toujours là');
+          return /CGV/.test(RESIL_MOYENS)?true:_echec('la clause n\'est pas citée');})());
 
         // ── Trois clics depuis l'accueil ─────────────────────────────────
         ok('Trois clics depuis l\'accueil : Réglages, Résilier, Confirmer',(()=>{

@@ -2340,12 +2340,12 @@ function souscrireCoach(cle){
 // aucune remise de dernière minute, aucun « êtes-vous vraiment sûr » répété :
 // la friction volontaire est exactement ce que la loi interdit.
 //
-// CE QUE REPCORE NE PEUT PAS FAIRE, et qu'aucun texte ne prétendra : annuler
-// l'abonnement CHEZ PAYPAL. Le paiement est 100 % côté client, il n'y a pas
-// de serveur pour appeler leur API. On enregistre la demande, on donne les
-// étapes PayPal EN COMPLÉMENT — jamais en remplacement — et on s'engage à
-// rembourser tout prélèvement postérieur (CGV §7). Obligation de moyens,
-// dite comme telle.
+// L'ARRÊT CHEZ PAYPAL EST FAIT PAR LE SERVEUR (02/10/2026). La demande est
+// envoyée au serveur léger (POST /resiliation), qui l'enregistre et annule
+// l'abonnement chez PayPal trois jours avant la date d'effet : le terme de
+// l'engagement (CGV §5), ou, après les douze mois, la fin de la période en
+// cours. Pendant l'engagement, rien n'est annulé chez PayPal : les échéances
+// restantes sont dues. La personne n'a aucune démarche à faire chez PayPal.
 //
 // L'ABSENCE DES DEUX CHAMPS EST UN ÉTAT VALIDE. Aucune migration : les
 // accesseurs rendent un objet vide, partout.
@@ -2508,9 +2508,52 @@ async function _rejouerResiliation(){
   if(!CLOUD.ok||!CLOUD.ok()) return false;
   try{
     await CLOUD.pushOne(currentUser.email,currentUser);
+    // PUIS LE SERVEUR, qui arrêtera l'abonnement chez PayPal à la date
+    // d'effet. Une réponse définitive (4xx : pas d'abonnement PayPal sur ce
+    // compte) vide aussi la file ; une panne la garde pour le prochain essai.
+    if(SERVEUR_LEGER&&CLOUD._callFn){
+      const r=resiliationDemandee(currentUser);
+      try{
+        const rep=await CLOUD._callFn('/resiliation',{motif:(r&&r.motif)||'',ts:(r&&r.ts)||f.ts});
+        _resilEffetNoter(currentUser.email,rep);
+      }catch(e){ if(!(e&&e.statut>=400&&e.statut<500)) return false; }
+    }
     _fileResilVider();   // exactement une fois
     return true;
   }catch(e){ return false; }
+}
+// LA DATE D'EFFET RENDUE PAR LE SERVEUR, gardée sur l'appareil pour l'écran
+// « Mon abonnement » (le dossier ne la porte pas : resiliations/ est au serveur).
+const RESIL_EFFET='rc_resil_effet';
+function _resilEffetNoter(email,rep){
+  if(!rep||!(Number(rep.effet)>0)) return;
+  try{ localStorage.setItem(RESIL_EFFET,JSON.stringify({email:String(email||''),effet:Number(rep.effet)})); }catch(e){}
+}
+function _resilEffetLu(email){
+  try{ const x=JSON.parse(localStorage.getItem(RESIL_EFFET)||'null');
+    return (x&&x.email===email&&Number(x.effet)>0)?Number(x.effet):0; }catch(e){ return 0; }
+}
+// PURE. LA DATE D'EFFET D'UNE RÉSILIATION, la même règle que le serveur
+// (paypal.js, effetResiliation) : pendant l'engagement, son terme ; après,
+// la fin de la période en cours. {date, engagement} ; date 0 : inconnue
+// (« à la fin du mois en cours »).
+function dateEffetResiliation(user,t){
+  const n=Number(t)||Date.now();
+  const a=abonnementDe(user);
+  const eng=Number(a.engagementJusqu)||0;
+  if(eng>n) return {date:eng,engagement:true};
+  const p=Number(a.prochaineEcheance)||Number((user||{}).accessExpiry)||0;
+  return {date:p>n?p:0,engagement:false};
+}
+// PURE. La phrase de la date d'effet, montrée AVANT la confirmation et après.
+function texteEffetResiliation(user,t,effetServeur){
+  const e=dateEffetResiliation(user,t);
+  const d=Number(effetServeur)>0?Number(effetServeur):e.date;
+  const jour=d?new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+  if(e.engagement) return 'Ta résiliation prendra effet le '+jour+', au terme de ton engagement. '
+    +'Ton accès reste ouvert jusque-là et les échéances restantes sont dues ; RepCore arrête lui-même les prélèvements chez PayPal à cette date.';
+  return 'Ta résiliation prendra effet '+(jour?'le '+jour:'à la fin du mois en cours')+', à la fin de la période déjà payée. '
+    +'RepCore arrête lui-même les prélèvements chez PayPal : aucun autre prélèvement.';
 }
 // Le motif est FACULTATIF, toujours. Il n'est jamais bloquant, et une chaîne
 // vide est un motif parfaitement acceptable.
@@ -2571,13 +2614,6 @@ function _majBoutonPaypal(){
 const RENONC_TEXTE='Je demande expressément que l\'accès soit ouvert '
   +'immédiatement et je reconnais perdre mon droit de rétractation de 14 jours '
   +'une fois le service pleinement fourni (art. L221-28 13°).';
-// Les étapes PayPal, EN COMPLÉMENT de la demande enregistrée. RepCore ne peut
-// pas vérifier qu'elles ont été faites, et ne prétend pas le contraire.
-const RESIL_PAYPAL=Object.freeze([
-  'Ouvre paypal.com et connecte-toi.',
-  'Va dans Réglages, puis Paiements, puis Gérer les paiements automatiques.',
-  'Sélectionne RepCore, puis Annuler.'
-]);
 // ══ L'APPARENCE ET L'AIDE ═══════════════════════════════════════════════════
 //
 // UN BLOC, DEUX PLACES : les réglages de l'athlète (#cr-prefs) et l'onglet
@@ -3108,9 +3144,8 @@ function _renderAbonnement(){
           changé, le mot si. */''}
     ${fin?l(r?'Accès jusqu\'au':'Engagement jusqu\'au',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
-        <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
+        <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px" id="resil-effet">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. ${escapeHtml(texteEffetResiliation(u,r.ts,_resilEffetLu(u.email)))}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
-        <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 20px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
       :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
         <div id="cr-resil" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px"></div>`}
@@ -3124,7 +3159,8 @@ function _ouvrirResiliation(){
   const z=document.getElementById('cr-resil');
   if(!z) return false;
   z.style.display='block';
-  z.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi : c'est facultatif, et ça ne change rien à ta résiliation.</div>
+  z.innerHTML=`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:10px" id="resil-effet-avant">${escapeHtml(texteEffetResiliation(currentUser,Date.now()))}</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi : c'est facultatif, et ça ne change rien à ta résiliation.</div>
     <select id="resil-motif" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);margin-bottom:8px">
       <option value="">Sans réponse</option>
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
@@ -3148,11 +3184,15 @@ function _confirmerResiliation(){
 //   resilie, aurait coute soit de l'argent, soit la confiance. Ce qui reste
 //   vrai, et qui est dit : l'acces court jusqu'au terme, rien ne se reconduit
 //   ensuite, et un prelevement APRES le terme se rembourse.
-const RESIL_MOYENS='Ta demande est enregistrée. Ton abonnement va jusqu\'au terme '
-  +'des douze mois : les prélèvements continuent jusque-là, et rien ne se '
-  +'reconduit ensuite. Au terme, coupe le paiement automatique chez PayPal : '
-  +'RepCore ne peut pas annuler l\'abonnement à ta place, le paiement est géré '
-  +'directement entre toi et eux. Un prélèvement postérieur au terme te serait '
+//
+// ⚠ ET IL DISAIT « RepCore ne peut pas annuler l'abonnement à ta place »
+//   (corrigé le 02/10/2026) : le serveur léger l'annule lui-même chez PayPal
+//   à la date d'effet. Demander à la personne de couper elle-même pendant
+//   l'engagement l'aurait poussée à rompre son contrat.
+const RESIL_MOYENS='Ta demande est enregistrée. Tu n\'as rien à faire chez PayPal : '
+  +'RepCore arrête lui-même ton abonnement à la date d\'effet, et rien ne se '
+  +'reconduit ensuite. Annuler directement chez PayPal avant le terme ne met pas fin '
+  +'à l\'engagement. Un prélèvement postérieur à la date d\'effet te serait '
   +'remboursé (CGV §5).';
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
@@ -8947,7 +8987,15 @@ function routeUser(){
   // Une résiliation demandée hors ligne attend dans la file : on la rejoue
   // dès qu'un dossier est chargé. Exactement une fois — la file se vide au
   // premier envoi qui aboutit.
-  setTimeout(()=>{ try{ _rejouerResiliation(); }catch(e){} },1500);
+  // ET UNE RÉSILIATION DEMANDÉE AVANT LE 02/10/2026, que le serveur n'a
+  // jamais reçue (elle n'était écrite que dans le dossier) : remise en file
+  // une fois, pour que le serveur arrête l'abonnement à sa date d'effet. Le
+  // serveur ne l'enregistre qu'une fois, quel que soit le nombre d'envois.
+  setTimeout(()=>{ try{
+    const _r=resiliationDemandee(currentUser);
+    if(_r&&currentUser.paypalSubscriptionId&&!_resilEffetLu(currentUser.email)&&!_fileResilLire()) _fileResilPoser(currentUser.email,_r.ts);
+    _rejouerResiliation();
+  }catch(e){} },1500);
   // Relevés de santé : union locale ↔ nœud privé. Différée, pour ne pas
   // retarder l'écran d'arrivée d'un aller-retour réseau. Idempotente : la
   // rejouer à chaque démarrage ne crée aucun doublon.
@@ -22377,7 +22425,8 @@ const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'
   remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
   retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
   litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie',
-  double_abonnement:'Deux abonnements actifs',ancien_annule:'Ancien abonnement annulé (remplacé)'};
+  double_abonnement:'Deux abonnements actifs',ancien_annule:'Ancien abonnement annulé (remplacé)',
+  rupture_engagement:'Rupture d’engagement (annulé chez PayPal)'};
 // PURE. Le journal PayPal, du plus récent au plus ancien : qui, quoi,
 // pourquoi, et ce que le serveur a repris. null : illisible.
 function htmlJournalPaypal(j){
@@ -22388,10 +22437,10 @@ function htmlJournalPaypal(j){
   if(!lignes.length) return h+'<p class="sub amb-note">Aucun remboursement ni litige.</p></div>';
   for(const x of lignes){
     const d=Number(x.le)?new Date(Number(x.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'';
-    const litige=/^(litige_(ouvert|perdu)|double_abonnement)/.test(x.quoi);
+    const litige=/^(litige_(ouvert|perdu)|double_abonnement|rupture_engagement)/.test(x.quoi);
     h+='<div class="amb-jl'+(litige?' amb-jl-alerte':'')+'">'
       +'<div class="amb-jl-tete"><b>'+escapeHtml(_JOURNAL_QUOI[x.quoi]||x.quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
-      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':'',x.abo,x.courant?'courant : '+x.courant:''].filter(Boolean).join(' · '))+'</div>'
+      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':'',x.abo,x.courant?'courant : '+x.courant:'',x.mois_restants?x.mois_restants+' mois restants':''].filter(Boolean).join(' · '))+'</div>'
       +(x.pourquoi?'<div class="sub">Motif : '+escapeHtml(x.pourquoi)+'</div>':'')
       +(Array.isArray(x.actions)&&x.actions.length?'<ul class="amb-jl-actions">'+x.actions.map(a=>'<li>'+escapeHtml(a)+'</li>').join('')+'</ul>':'')
       +'</div>';

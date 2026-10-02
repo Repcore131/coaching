@@ -28,6 +28,7 @@
 //
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
+import T from '../../tarifs.json' with { type: 'json' };
 import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
 import { ErreurAppel } from './appels.js';
 
@@ -89,6 +90,45 @@ const LOT_PURGE = 200;
 // Les push du chemin PayPal passent par M.pousser1 : à court de budget, ils
 // partent à la minute suivante au lieu de faire tomber le webhook.
 export const BUDGET_ETAPE = 8;
+// LA RÉSILIATION (02/10/2026) : l'annulation part chez PayPal trois jours
+// avant la date d'effet, pour qu'aucune échéance ne tombe entre les deux.
+export const RESIL_AVANCE_MS = 3 * 864e5;
+// Au-delà de cette marge, une fin payée qui tombe avant le terme de
+// l'engagement est une rupture (les échéances PayPal et le terme calculé
+// peuvent différer de quelques heures).
+export const RUPTURE_MARGE_MS = 3 * 864e5;
+// PURE. n mois après t, au même quantième (borné au dernier jour du mois),
+// comme moisApres dans l'app.
+export function moisApres(t, n) {
+  const d = new Date(Number(t));
+  const jour = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + (Number(n) || 0));
+  const dernier = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(jour, dernier));
+  return d.getTime();
+}
+// PURE. LE TERME DE L'ENGAGEMENT, tel que le serveur le retient : le plus
+// tardif entre celui du dossier (posé par l'app à la souscription) et celui
+// que PayPal atteste (début de l'abonnement + engagementMois). Le dossier est
+// écrit par son titulaire : il ne peut pas raccourcir son propre engagement.
+// 0 : pas d'engagement (coach, ou rien de connu).
+export function termeEngagement({ role, engagementJusqu, debut }) {
+  if (role === 'coach') return 0;
+  const d = Date.parse(debut || '') || 0;
+  const parPaypal = d > 0 && Number(T.engagementMois) > 0 ? moisApres(d, T.engagementMois) : 0;
+  return Math.max(Number(engagementJusqu) || 0, parPaypal);
+}
+// PURE. La date d'effet d'une résiliation demandée à `t`, et le jour où
+// l'annulation part chez PayPal. Pendant l'engagement : son terme. Après : la
+// fin de la période en cours (la prochaine échéance), et l'annulation part
+// tout de suite — PayPal arrête les prélèvements, l'accès court jusqu'à la
+// fin payée (fermerALaFin).
+export function effetResiliation({ t, terme, prochaine }) {
+  if (terme > t) return { effet: terme, annulerLe: Math.max(t, terme - RESIL_AVANCE_MS), pendantEngagement: true };
+  const p = Number(prochaine) || 0;
+  return { effet: p > t ? p : t, annulerLe: t, pendantEngagement: false };
+}
 // Le premier paiement : sa garde (transaction : 2) et, au pire, l'écriture qui
 // diffère ses suites (1). Les suites (parrain, ambassadeur, attribution) ne
 // partent dans le webhook que si leur coût y tient (COUT_SUITE), sinon en
@@ -336,9 +376,28 @@ export function creerPaypal(ctx) {
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
     // Le coach garde son plan jusqu'à la fin payée : le registre le dit.
     if (role === 'coach') { maj['coachs_registre/' + cle + '/actifJusqu'] = fin; maj['coachs_registre/' + cle + '/maj'] = t; }
-    exigerBudget('fin');
+    // ── LA RUPTURE D'ENGAGEMENT (02/10/2026) ───────────────────────────────
+    // Annulé DIRECTEMENT chez PayPal pendant l'engagement, sans résiliation
+    // demandée dans l'app (resiliations/<clé>, que seul ce serveur écrit) :
+    // les échéances restantes sont dues (CGV §5). L'accès N'EST PAS prolongé
+    // jusqu'au terme : il court jusqu'à la fin payée, comme toute fin. Kevin
+    // décide du recouvrement : une ligne au journal, un push.
+    const terme = type === 'CANCELLED' && role !== 'coach'
+      ? termeEngagement({ role, engagementJusqu: a && a.engagementJusqu, debut: sub && sub.start_time }) : 0;
+    // La résiliation demandée n'est relue que si la fin tombe avant le terme :
+    // une requête de plus, seulement là où une rupture est possible.
+    const rupture = !!(terme && terme - fin > RUPTURE_MARGE_MS && !(await lire('resiliations/' + cle)));
+    exigerBudget('fin', rupture ? BUDGET_ETAPE + 2 : BUDGET_ETAPE);
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
+    if (rupture) {
+      const moisRestants = Math.ceil((terme - fin) / MOIS_MS);
+      await journal({ quoi: 'rupture_engagement', qui: qui(cle), abo: abo || null, mois_restants: moisRestants,
+        pourquoi: 'abonnement annulé chez PayPal le ' + dateFr(t) + ', engagement jusqu’au ' + dateFr(terme),
+        actions: ['accès jusqu’à la fin payée (' + dateFr(fin) + '), pas au-delà', moisRestants + ' échéance(s) restante(s) : recouvrement à décider'] });
+      await pousserAdmin('Rupture d’engagement', qui(cle) + ' a annulé chez PayPal : ' + moisRestants + ' mois restants sur l’engagement', 'rupture-' + cle);
+      return { fin, reserve: reserveComptee, rupture: moisRestants };
+    }
     return { fin, reserve: reserveComptee };
   }
 
@@ -593,7 +652,86 @@ export function creerPaypal(ctx) {
     if (type === 'PAYMENT.SALE.COMPLETED') return paiementAbonnement(cle, abo, ress, sub);
     if (type === 'BILLING.SUBSCRIPTION.PAYMENT.FAILED') return 'echec_note';   // PayPal réessaie ; SUSPENDED suivra s'il faut
     const r = await fermerALaFin(cle, abo, type.split('.').pop());
-    return r.ignore || 'fin_posee';
+    return r.ignore || (r.rupture ? 'rupture_engagement' : 'fin_posee');
+  }
+
+  // ══ LA RÉSILIATION, TENUE PAR LE SERVEUR (02/10/2026) ═══════════════════
+  //
+  // L'app disait : « RepCore ne peut pas annuler l'abonnement à ta place ».
+  // C'était vrai sans serveur. Désormais :
+  //   · POST /resiliation (resilier) enregistre la demande dans
+  //     resiliations/<clé> = {ts, motif, abo, effet, annulerLe} : la date
+  //     d'effet est le terme de l'engagement (CGV §5), ou, après les douze
+  //     mois, la fin de la période en cours ;
+  //   · PENDANT L'ENGAGEMENT, RIEN N'EST ANNULÉ CHEZ PAYPAL : les échéances
+  //     restantes sont dues. Le travail quotidien (resiliationsDues) annule
+  //     l'abonnement chez PayPal trois jours avant la date d'effet ;
+  //   · après l'engagement, l'annulation part tout de suite.
+  // Un abonnement résilié dans l'app n'est donc plus jamais prélevé après sa
+  // date d'effet, sans que la personne ait à passer par PayPal.
+  async function resilier(cle, motifBrut, tsBrut) {
+    const t = now();
+    const deja = await lire('resiliations/' + cle);
+    if (deja && deja.effet) return { effet: Number(deja.effet), annulerLe: Number(deja.annulerLe) || 0, annule: !!deja.annuleLe, deja: true };
+    const [abo, role, a] = await Promise.all([lire('users/' + cle + '/paypalSubscriptionId'), lire('users/' + cle + '/role'), lire('users/' + cle + '/abonnement')]);
+    if (!/^I-[A-Z0-9]{8,}$/.test(String(abo || ''))) throw new ErreurAppel(404, 'Aucun abonnement PayPal sur ce compte.');
+    const sub = await abonnement(abo);
+    if (!sub) throw new ErreurAppel(404, 'Abonnement introuvable chez PayPal.');
+    // La date de la demande : celle de l'appareil (une demande faite hors
+    // ligne compte du jour où elle a été faite), bornée aux 30 derniers jours.
+    const tsC = Number(tsBrut);
+    const ts = tsC > 0 && tsC <= t && t - tsC < 30 * 864e5 ? tsC : t;
+    const terme = termeEngagement({ role, engagementJusqu: a && a.engagementJusqu, debut: sub.start_time });
+    const prochaine = Date.parse((sub.billing_info && sub.billing_info.next_billing_time) || '') || 0;
+    const fini = sub.status === 'CANCELLED' || sub.status === 'EXPIRED';
+    const e = fini ? { effet: Math.max(prochaine, ts), annulerLe: ts, pendantEngagement: false } : effetResiliation({ t: ts, terme, prochaine });
+    const rec = { ts, motif: String(motifBrut || '').slice(0, 300), abo, effet: e.effet, annulerLe: e.annulerLe, le: t };
+    if (fini) rec.annuleLe = t;          // déjà fait chez PayPal : rien à envoyer
+    exigerBudget('resiliation', 2);
+    await db.ref('resiliations/' + cle).set(rec);
+    // Hors engagement : l'annulation part maintenant (une échéance pourrait
+    // tomber avant le prochain passage du travail quotidien).
+    let annule = fini;
+    if (!fini && e.annulerLe <= t) annule = (await annulerResiliation(cle, rec, t)) === 'annule';
+    return { effet: e.effet, annulerLe: e.annulerLe, annule, pendantEngagement: e.pendantEngagement };
+  }
+  // L'ANNULATION CHEZ PAYPAL d'une résiliation arrivée à date. Seulement si
+  // l'abonnement résilié est encore celui du dossier : remplacé depuis (une
+  // nouvelle souscription), il n'y a plus rien à arrêter.
+  async function annulerResiliation(cle, r, t) {
+    const courant = await lire('users/' + cle + '/paypalSubscriptionId');
+    if (courant && courant !== r.abo) {
+      await db.ref('resiliations/' + cle).update({ annuleLe: t, etat: 'remplace' });
+      return 'remplace';
+    }
+    const rep = await ecrirePaypal('/v1/billing/subscriptions/' + r.abo + '/cancel', { reason: 'Résiliation demandée dans RepCore' });
+    // 204 : annulé. 422 : déjà annulé ou inactif chez PayPal.
+    if (!rep.ok && rep.status !== 422) throw new Error('PayPal ' + rep.status + ' sur l’annulation de ' + r.abo);
+    await db.ref('resiliations/' + cle).update({ annuleLe: t, etat: 'annule' });
+    return 'annule';
+  }
+  // LE TRAVAIL QUOTIDIEN : chaque résiliation dont le jour d'annulation est
+  // venu. ~3 requêtes chacune ; au-delà du budget, les suivantes partent en
+  // sous-tâches (une par compte). Le jour d'annulation précède la date
+  // d'effet de trois jours : un passage manqué se rattrape le lendemain.
+  async function resiliationsDues(tBrut) {
+    const t = tBrut || now();
+    const tout = (await lire('resiliations')) || {};
+    const dues = Object.keys(tout).filter((k) => tout[k] && !tout[k].annuleLe && Number(tout[k].annulerLe) <= t && tout[k].abo);
+    for (let i = 0; i < dues.length; i++) {
+      if (resteB() < BUDGET_ETAPE && M && M.differer) {
+        await M.differer(dues.slice(i).map((cle) => ({ quoi: 'resiliation_paypal', cle })));
+        return 'differe';
+      }
+      await annulerResiliation(dues[i], tout[dues[i]], t);
+    }
+    return dues.length;
+  }
+  async function resiliationTache(cleBrut) {
+    const cle = String(cleBrut || '');
+    const r = cle ? await lire('resiliations/' + cle) : null;
+    if (!r || r.annuleLe || !(Number(r.annulerLe) <= now())) return 'plus_due';
+    return annulerResiliation(cle, r, now());
   }
 
   // ══ CHANGER DE FORMULE SANS DEUXIÈME ABONNEMENT (02/10/2026) ════════════
@@ -1075,7 +1213,7 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, verifierAchat, changerFormule, remplacer, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
+  return { traiter, verifierAchat, changerFormule, remplacer, resilier, resiliationsDues, resiliationTache, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════

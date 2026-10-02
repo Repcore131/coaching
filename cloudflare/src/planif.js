@@ -87,6 +87,9 @@ export function travaux(M) {
     { nom: 'purge_paypal', quand: (p) => p.date === 1 && apres(p, 4, 10), une: (t) => (M.paypal ? M.paypal.purgerEvenements(t) : null) },
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
+    // LES RÉSILIATIONS ARRIVÉES À DATE (02/10/2026) : l'abonnement est annulé
+    // chez PayPal trois jours avant la date d'effet (paypal.js, resiliationsDues).
+    { nom: 'resiliations', quand: (p) => apres(p, 5, 45), une: (t) => (M.paypal ? M.paypal.resiliationsDues(t) : null) },
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) : après fins_coachs, qui remet
     // en Libre un coach dont l'abonnement est fini. Voir metier.js couvertureCoach.
@@ -165,6 +168,7 @@ async function traiter(db, M, e) {
   if (!e || typeof e !== 'object') return 'vide';
   if (e.type === 'tache') {
     if (e.quoi === 'fin_paypal') return M.paypal ? M.paypal.finTache(String(e.cle || '')) : 'sans_paypal';
+    if (e.quoi === 'resiliation_paypal') return M.paypal ? M.paypal.resiliationTache(String(e.cle || '')) : 'sans_paypal';
     // Un événement PayPal arrivé avant le lien de son abonnement, rejoué dans
     // l'ordre de PayPal (paypal.js, rejouerOrphelins).
     if (e.quoi === 'orphelin_paypal') return M.paypal ? M.paypal.rejouerUnOrphelin(String(e.abo || ''), String(e.k || '')) : 'sans_paypal';

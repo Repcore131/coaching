@@ -60,6 +60,10 @@ const verifierAchatProgramme = ({ auth, data }, ctx) =>
 // RÉVISÉ chez PayPal, jamais doublé. Servi sur POST /abonnement/changer.
 const changerAbonnement = ({ auth, data }, ctx) =>
   ctx.M.paypal.changerFormule(cleDe(auth.email), data && data.plan_id);
+// Résilier (paypal.js, resilier) : la demande est enregistrée, et
+// l'abonnement annulé chez PayPal à sa date d'effet. Servi sur POST /resiliation.
+const resiliation = ({ auth, data }, ctx) =>
+  ctx.M.paypal.resilier(cleDe(auth.email), data && data.motif, data && data.ts);
 const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin,
   ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
@@ -246,6 +250,12 @@ async function servir(req, env, ctx) {
       const o = outils(env);
       budgetRequete(o);
       return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
+    }
+    // RÉSILIER : même protocole et même jeton Firebase que /fn/<nom>.
+    if (url.pathname === '/resiliation' && req.method === 'POST') {
+      const o = outils(env);
+      budgetRequete(o);
+      return await repondreAppel(req, { resiliation }, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req, nom: 'resiliation' });
     }
     // CHANGER DE FORMULE : même protocole et même jeton Firebase que /fn/<nom>.
     if (url.pathname === '/abonnement/changer' && req.method === 'POST') {

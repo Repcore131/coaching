@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL } from '../src/paypal.js';
+import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, moisApres, RESIL_AVANCE_MS } from '../src/paypal.js';
+import { spawnSync } from 'node:child_process';
 import { fausseBase } from './fausse-base.mjs';
 import { BUDGET_REQUETE } from '../src/index.js';
 import { minute, travaux } from '../src/planif.js';
@@ -762,6 +763,113 @@ await test('remplacement par l’événement de l’app : planif passe `remplace
   assert.match(regles, /"paypal_remplacements": \{ "\.read": false, "\.write": false \}/);
   const index = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
   assert.match(index, /url\.pathname === '\/abonnement\/changer' && req\.method === 'POST'/);
+});
+
+// ══ LA RÉSILIATION, TENUE PAR LE SERVEUR (02/10/2026) ═══════════════════
+const DEBUT = T0 - 165 * J;                      // souscrit il y a 165 jours
+const TERME = moisApres(DEBUT, 12);              // le terme que PayPal atteste
+const annulations = (w) => w.paypalEcrits.filter((x) => x.quoi === 'cancel');
+
+await test('résiliation demandée pendant l’engagement : rien n’est annulé avant, l’annulation part chez PayPal trois jours avant le terme, une seule fois', async () => {
+  const w = monde({ users: LEA({ abonnement: { formule: 'essentielle', engagementJusqu: TERME } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr', start_time: iso(DEBUT) }) } });
+  const r = await w.PP.resilier('lea@t,fr', 'Trop cher', T0 - 60e3);
+  assert.equal(r.effet, TERME, 'la date d’effet est le terme de l’engagement');
+  assert.equal(r.annulerLe, TERME - RESIL_AVANCE_MS);
+  assert.equal(r.annule, false); assert.equal(r.pendantEngagement, true);
+  assert.deepEqual(w.F.lire('resiliations/lea@t,fr'), { ts: T0 - 60e3, motif: 'Trop cher', abo: 'I-ABC12345678', effet: TERME, annulerLe: TERME - RESIL_AVANCE_MS, le: T0 });
+  assert.equal(annulations(w).length, 0, 'pendant l’engagement, rien n’est annulé chez PayPal');
+  // Une seconde demande ne change rien.
+  assert.equal((await w.PP.resilier('lea@t,fr', 'Autre')).deja, true);
+  assert.equal(w.F.lire('resiliations/lea@t,fr/motif'), 'Trop cher');
+  // Le travail quotidien : rien la veille du jour d'annulation…
+  w.t = TERME - RESIL_AVANCE_MS - J;
+  assert.equal(await w.PP.resiliationsDues(w.t), 0);
+  assert.equal(annulations(w).length, 0);
+  // … l'annulation le jour venu, trois jours avant le terme…
+  w.t = TERME - RESIL_AVANCE_MS + 6 * 3600e3;
+  assert.equal(await w.PP.resiliationsDues(w.t), 1);
+  assert.deepEqual(annulations(w).map((x) => [x.abo, x.corps.reason]), [['I-ABC12345678', 'Résiliation demandée dans RepCore']]);
+  assert.equal(w.F.lire('resiliations/lea@t,fr/annuleLe'), w.t);
+  // … et plus jamais ensuite.
+  w.t += J;
+  assert.equal(await w.PP.resiliationsDues(w.t), 0);
+  assert.equal(annulations(w).length, 1);
+  // L'avis CANCELLED qui suit : l'accès court jusqu'à la fin payée (le terme), sans rupture.
+  w.abos['I-ABC12345678'].billing_info.next_billing_time = iso(TERME);
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.CANCELLED', { id: 'I-ABC12345678' }))).texte, 'fin_posee');
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), TERME);
+  assert.equal(w.F.lire('paypal_journal'), null);
+});
+
+await test('le dossier ne raccourcit pas l’engagement : un engagementJusqu réécrit dans le passé n’avance pas l’annulation', async () => {
+  const w = monde({ users: LEA({ abonnement: { engagementJusqu: T0 - 10 * J } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr', start_time: iso(DEBUT) }) } });
+  const r = await w.PP.resilier('lea@t,fr', '');
+  assert.equal(r.effet, TERME, 'le terme attesté par PayPal (début + 12 mois)');
+  assert.equal(annulations(w).length, 0);
+});
+
+await test('résiliation après l’engagement : effet à la fin de la période en cours, annulation chez PayPal tout de suite', async () => {
+  const debut = moisApres(T0, -14);
+  const w = monde({ users: LEA({ abonnement: { engagementJusqu: moisApres(debut, 12) } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr', start_time: iso(debut) }) } });
+  const r = await w.PP.resilier('lea@t,fr', '');
+  assert.equal(r.effet, T0 + 10 * J, 'la prochaine échéance');
+  assert.equal(r.annule, true); assert.equal(r.pendantEngagement, false);
+  assert.equal(annulations(w).length, 1);
+  assert.equal(await w.PP.resiliationsDues(T0 + J), 0, 'rien de plus le lendemain');
+});
+
+await test('coach (sans engagement) : annulé tout de suite ; abonnement déjà annulé : rien n’est envoyé ; remplacé depuis : rien n’est arrêté', async () => {
+  const w = monde({ users: Object.assign(LEA({ paypalSubscriptionId: 'I-NOUVEAU00001' }), { 'kev@t,fr': { role: 'coach', paypalSubscriptionId: 'I-COACH0000001' } }),
+    paypal_abonnes: { 'I-COACH0000001': 'kev@t,fr', 'I-NOUVEAU00001': 'lea@t,fr' } },
+    { abonnements: { 'I-COACH0000001': abo({ plan_id: PRO, custom_id: 'kev@t,fr', start_time: iso(T0 - 20 * J) }),
+      'I-NOUVEAU00001': abo({ status: 'CANCELLED', custom_id: 'lea@t,fr', start_time: iso(DEBUT) }) } });
+  assert.equal((await w.PP.resilier('kev@t,fr', '')).annule, true);
+  assert.equal(annulations(w).length, 1);
+  const r = await w.PP.resilier('lea@t,fr', '');
+  assert.equal(r.annule, true); assert.equal(annulations(w).length, 1, 'déjà annulé chez PayPal : rien n’est envoyé');
+  // Une résiliation dont l'abonnement a été remplacé depuis (nouvelle souscription) n'arrête pas le nouveau.
+  w.F.ecrire('resiliations/zoe@t,fr', { ts: T0, abo: 'I-VIEUX0000001', effet: T0 + 3 * J, annulerLe: T0 });
+  w.F.ecrire('users/zoe@t,fr', { role: 'athlete', paypalSubscriptionId: 'I-NEUF00000001' });
+  assert.equal(await w.PP.resiliationsDues(T0 + 60e3), 1);
+  assert.equal(annulations(w).length, 1);
+  assert.equal(w.F.lire('resiliations/zoe@t,fr/etat'), 'remplace');
+});
+
+await test('annulation directe chez PayPal pendant l’engagement : l’accès n’est pas prolongé, ligne « rupture_engagement » et push à l’administrateur', async () => {
+  const w = monde({ users: LEA({ abonnement: { formule: 'essentielle', engagementJusqu: TERME } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ status: 'CANCELLED', custom_id: 'lea@t,fr', start_time: iso(DEBUT) }) } });
+  const admin = espionAdmin(w);
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.CANCELLED', { id: 'I-ABC12345678' }))).texte, 'rupture_engagement');
+  assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 10 * J, 'la fin payée, pas le terme de l’engagement');
+  const j = Object.values(w.F.lire('paypal_journal'));
+  assert.equal(j.length, 1);
+  assert.equal(j[0].quoi, 'rupture_engagement');
+  assert.equal(j[0].qui, 'lea@t.fr');
+  assert.equal(j[0].mois_restants, Math.ceil((TERME - (T0 + 10 * J)) / MOIS));
+  assert.equal(admin.length, 1);
+  assert.match(admin[0].m.body, /lea@t\.fr a annulé chez PayPal : \d+ mois restants sur l’engagement/);
+  // Avec une résiliation demandée dans l'app, la même annulation n'est pas une rupture.
+  const w2 = monde({ users: LEA({ abonnement: { engagementJusqu: TERME } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' },
+    resiliations: { 'lea@t,fr': { ts: T0 - J, abo: 'I-ABC12345678', effet: TERME, annulerLe: TERME - RESIL_AVANCE_MS } } },
+    { abonnements: { 'I-ABC12345678': abo({ status: 'CANCELLED', custom_id: 'lea@t,fr', start_time: iso(DEBUT) }) } });
+  assert.equal((await w2.envoyer(evt('BILLING.SUBSCRIPTION.CANCELLED', { id: 'I-ABC12345678' }))).texte, 'fin_posee');
+  assert.equal(w2.F.lire('paypal_journal'), null);
+});
+
+await test('la landing, les CGV, l’écran de résiliation et le Worker disent la même chose (scripts/verif/tarifs.mjs)', async () => {
+  const r = spawnSync(process.execPath, [new URL('../../scripts/verif/tarifs.mjs', import.meta.url).pathname], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Résiliation : la landing, les CGV, l’écran et le Worker disent la même chose/);
+  const src = readFileSync(new URL('../src/planif.js', import.meta.url), 'utf8');
+  assert.match(src, /nom: 'resiliations', quand: \(p\) => apres\(p, 5, 45\), une: \(t\) => \(M\.paypal \? M\.paypal\.resiliationsDues\(t\) : null\)/);
+  assert.match(src, /e\.quoi === 'resiliation_paypal'/);
+  const index = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+  assert.match(index, /url\.pathname === '\/resiliation' && req\.method === 'POST'/);
+  const regles = readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
+  assert.match(regles, /"resiliations":\s+\{ "\.read": false, "\.write": false \}/);
 });
 
 console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');

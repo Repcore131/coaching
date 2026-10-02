@@ -2181,6 +2181,10 @@
     // activation du nouveau. Serveur leger seul.
     "paypal_revisions":     { ".read": false, ".write": false },
     "paypal_remplacements": { ".read": false, ".write": false },
+    // Les resiliations demandees dans l app (02/10/2026) : {ts, motif, abo,
+    // effet, annulerLe, annuleLe}. Ecrites par le serveur leger seul (route
+    // /resiliation), qui annule l abonnement chez PayPal a la date d effet.
+    "resiliations":         { ".read": false, ".write": false },
     // Le journal des remboursements, retrofacturations et litiges : qui, quoi,
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).

@@ -228,9 +228,46 @@ for (const p of PAGES) {
   }
 }
 
+// ══ LA RÉSILIATION DITE PARTOUT PAREIL (02/10/2026) ═══════════════════════
+// Engagement tenu (variante B) : la landing (FAQ visible et JSON-LD), les CGV
+// §5 et l'écran de résiliation disent tous que RepCore arrête lui-même les
+// prélèvements chez PayPal à la date d'effet — ce que fait le Worker
+// (paypal.js, resilier et resiliationsDues). Aucun texte ne dit plus « RepCore
+// ne peut pas annuler » ni n'envoie la personne couper elle-même chez PayPal.
+export function controlerResiliation({ index, cgv, app, worker }) {
+  const r = [];
+  const sansBalises = (h) => String(h || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  const idx = sansBalises(index);
+  if ((idx.match(/RepCore arrête lui-même les prélèvements chez PayPal à cette date/g) || []).length !== 2)
+    r.push('index.html : le FAQ « Puis-je annuler ? » (visible ET JSON-LD) ne dit plus que RepCore arrête lui-même les prélèvements chez PayPal');
+  const c = sansBalises(cgv);
+  if (!/RepCore annule lui-même l'abonnement chez PayPal/.test(c)) r.push('terms.html §5 : l’arrêt des prélèvements par RepCore n’est plus écrit');
+  if (!/Pendant l'engagement, aucune annulation n'intervient avant son terme/.test(c)) r.push('terms.html §5 : « aucune annulation avant le terme » manque');
+  if (!/ne met pas fin à l'engagement/.test(c)) r.push('terms.html §5 : l’annulation directe chez PayPal n’est plus décrite');
+  if (/depuis le compte PayPal, au terme/.test(c)) r.push('terms.html §5 : renvoie encore la personne couper elle-même chez PayPal');
+  const moyens = (String(app || '').match(/const RESIL_MOYENS=[\s\S]*?;\n/) || [''])[0];
+  if (!/RepCore arrête lui-même ton abonnement/.test(moyens)) r.push('app : RESIL_MOYENS ne dit plus que RepCore arrête l’abonnement');
+  if (/ne peut pas annuler/.test(String(app || '').replace(/^\s*\/\/.*$/gm, ''))) r.push('app : « ne peut pas annuler » subsiste hors commentaire');
+  if (/RESIL_PAYPAL/.test(String(app || ''))) r.push('app : les étapes d’annulation chez PayPal (RESIL_PAYPAL) sont revenues');
+  if (!/export const RESIL_AVANCE_MS = 3 \* 864e5/.test(worker) || !/async function resiliationsDues/.test(worker))
+    r.push('cloudflare/src/paypal.js : l’annulation serveur à la date d’effet manque');
+  return r;
+}
+{
+  const lire = (f) => { try { return readFileSync(RACINE + f, 'utf8'); } catch (x) { return ''; } };
+  const textes = { index: lire('index.html'), cgv: lire('terms.html'),
+    app: lire('src/core/002-l-essai-athlete-symetrique-de-la-promesse-coach.js'), worker: lire('cloudflare/src/paypal.js') };
+  erreurs.push(...controlerResiliation(textes));
+  // Le contrôle se prouve : une CGV qui renvoie couper chez PayPal, un écran qui « ne peut pas annuler ».
+  const faux = controlerResiliation(Object.assign({}, textes, {
+    cgv: textes.cgv.replace('RepCore annule lui-même', 'Vous annulez vous-même') + ' depuis le compte PayPal, au terme',
+    app: textes.app + "\nconst x='RepCore ne peut pas annuler';" }));
+  if (faux.length < 3) e('auto-contrôle : une CGV ou un écran de résiliation faussés ne sont pas vus');
+}
+
 if (erreurs.length) {
   console.error('PRIX INCOHÉRENTS (' + erreurs.length + ') :\n  ' + erreurs.join('\n  '));
   process.exit(1);
 }
 console.log('Prix : l’app, ' + PAGES.join(', ') + ' suivent tarifs.json (Essentielle ' + T.essentielle.mois + ' / ' + T.essentielle.an
-  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Le contrôle voit un prix faussé et un prix en dur.');
+  + ', Ultime ' + T.ultime.mois + ' / ' + T.ultime.an + ', essai ' + T.essai.mois + ' mois, parrainé ' + valeur(T, 'essai.moisParraine') + '). Le contrôle voit un prix faussé et un prix en dur. Résiliation : la landing, les CGV, l’écran et le Worker disent la même chose.');

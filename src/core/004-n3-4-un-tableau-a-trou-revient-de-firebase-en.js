@@ -2158,7 +2158,15 @@ function routeUser(){
   // Une résiliation demandée hors ligne attend dans la file : on la rejoue
   // dès qu'un dossier est chargé. Exactement une fois — la file se vide au
   // premier envoi qui aboutit.
-  setTimeout(()=>{ try{ _rejouerResiliation(); }catch(e){} },1500);
+  // ET UNE RÉSILIATION DEMANDÉE AVANT LE 02/10/2026, que le serveur n'a
+  // jamais reçue (elle n'était écrite que dans le dossier) : remise en file
+  // une fois, pour que le serveur arrête l'abonnement à sa date d'effet. Le
+  // serveur ne l'enregistre qu'une fois, quel que soit le nombre d'envois.
+  setTimeout(()=>{ try{
+    const _r=resiliationDemandee(currentUser);
+    if(_r&&currentUser.paypalSubscriptionId&&!_resilEffetLu(currentUser.email)&&!_fileResilLire()) _fileResilPoser(currentUser.email,_r.ts);
+    _rejouerResiliation();
+  }catch(e){} },1500);
   // Relevés de santé : union locale ↔ nœud privé. Différée, pour ne pas
   // retarder l'écran d'arrivée d'un aller-retour réseau. Idempotente : la
   // rejouer à chaque démarrage ne crée aucun doublon.
