@@ -2142,6 +2142,10 @@ const RCM_TUNNEL=[
   // pour le coach. Une seule étape, détaillée : l'entrée du tunnel reste le
   // total des deux, et le détail dit d'où vient le coach qui crée son espace.
   {cles:['landing_view','coach_landing_view'],lib:'Page de vente vue',detail:['landing_view','athlète','coach_landing_view','coach']},
+  // LE CLIC SUR UN BOUTON VERS L'APP (02/10/2026), une fois par session, depuis
+  // index.html : entre « vue » et « application ouverte », la page a-t-elle
+  // convaincu ? Les deux compteurs de vue sont dédupliqués par session aussi.
+  {cles:['landing_cta_click'],lib:'Bouton vers l\'app cliqué'},
   // LE BLOG (02/10/2026) : une porte d'entrée à côté, pas une étape — on lit
   // un article sans passer par la page de vente, et l'inverse.
   {cles:['blog_view'],lib:'Article du blog lu',horsTunnel:true,neutre:true},

@@ -14,8 +14,8 @@ const SRC_RE = /^[a-z0-9_-]{1,20}$/;
 // verifie que les trois disent la meme chose.
 const SRC_CONNUS = Object.freeze(["amb", "amis", "autre", "avant", "badge", "bilan", "bio", "blog", "blog-cycle", "blog-fiche", "carte",
   "champion", "charge", "coachs", "commissions", "cycle", "defi", "diete", "direct", "dossier", "duel", "email",
-  "envois", "facebook", "fond", "instagram", "invitation", "journal", "kit", "logo", "mes", "muscles",
-  "parrainage", "pesees", "photos", "profil", "pub", "qr", "rang", "record", "records", "saison", "seance",
+  "envois", "facebook", "fond", "ig", "instagram", "invitation", "journal", "kit", "logo", "mes", "muscles",
+  "parrainage", "pesees", "photos", "profil", "pub", "qr", "rang", "record", "records", "saison", "seance", "seo",
   "seances", "serie", "site", "story", "team", "tiktok", "victoire", "visuel", "vitrine", "whatsapp", "wrapped", "youtube"]);
 const AMB_RE = /^[A-Z0-9]{3,16}$/;
 const REF_RE = /^[A-Z]{4,6}[A-Z2-9]{3}$/;

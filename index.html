@@ -232,21 +232,33 @@
    résume à « +1 sur landing_view aujourd'hui ». Les règles de la base refusent
    toute clé hors liste et toute valeur qui ne serait pas un nombre.
    Volontairement dupliqué depuis app/index.html plutôt que factorisé : la page
-   de vente doit rester un fichier autonome, sans dépendance à charger. */
-(function(){
+   de vente doit rester un fichier autonome, sans dépendance à charger.
+   (02/10/2026) UNE FOIS PAR SESSION (sessionStorage 'rcm_vu_landing_view',
+   comme rcmVue dans l'app : trois rechargements = une vue), et RIEN en mode
+   installé : l'icône repart aussitôt vers app/ (bloc ci-dessus), ce n'est
+   pas une visite de la page de vente.
+   rcmLanding(nom) sert aussi au clic sur un bouton vers l'app
+   (landing_cta_click, plus bas), avec la même déduplication. */
+function rcmLanding(nom){
   try{
     var h=location.hostname;
-    if(h==='localhost'||h==='127.0.0.1'||h==='') return;
+    if(h==='localhost'||h==='127.0.0.1'||h==='') return false;
+    var installe=(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || window.navigator.standalone === true || document.referrer.indexOf('android-app://') === 0;
+    if(installe) return false;
+    try{ if(sessionStorage.getItem('rcm_vu_'+nom)) return false; sessionStorage.setItem('rcm_vu_'+nom,'1'); }catch(e){}
     var d=new Date();
     var jour=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    fetch('https://repcore-sync-default-rtdb.firebaseio.com/metrics/'+jour+'/landing_view.json',{
+    fetch('https://repcore-sync-default-rtdb.firebaseio.com/metrics/'+jour+'/'+nom+'.json',{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({'.sv':{'increment':1}}),
       keepalive:true
     }).catch(function(){});
-  }catch(e){}
-})();
+    return true;
+  }catch(e){ return false; }
+}
+rcmLanding('landing_view');
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1033,6 +1045,35 @@ function accueilInvite(ref,amb){
 }
 </script>
 <script>
+// LA SOURCE PAR DÉFAUT (02/10/2026). Sans ?src=, une arrivée depuis un moteur
+// (google., bing., duckduckgo., qwant., ecosia.) vaut src=seo, depuis
+// Instagram (instagram.com, l.instagram.com) src=ig : le trafic organique
+// n'est plus rangé dans « direct ». Un src présent n'est jamais écrasé.
+// Sert au relais vers app/ et à /arrivee.
+function rcSrcDefaut(ref){
+  var hote='';
+  try{ hote=new URL(String(ref||'')).hostname.toLowerCase(); }catch(e){ return ''; }
+  if(/(^|\.)(google|bing|duckduckgo|qwant|ecosia)\.[a-z.]+$/.test(hote)) return 'seo';
+  if(/(^|\.)instagram\.com$/.test(hote)) return 'ig';
+  return '';
+}
+function rcSrcLanding(){
+  var s='';
+  try{ s=new URLSearchParams(location.search).get('src')||''; }catch(e){}
+  return s||rcSrcDefaut(document.referrer);
+}
+// LE CLIC VERS L'APP (landing_cta_click) : le premier clic de la session sur
+// un bouton .cta qui mène à app/, par délégation (les boutons réécrits par le
+// relais comptent aussi). rcmLanding le déduplique et part en keepalive : la
+// page peut se fermer, l'envoi part quand même.
+document.addEventListener('click',function(e){
+  try{
+    var a=e.target&&e.target.closest?e.target.closest('a.cta'):null;
+    if(a&&/^app\//.test(a.getAttribute('href')||'')) rcmLanding('landing_cta_click');
+  }catch(x){}
+},true);
+</script>
+<script>
 // LES CODES D'INVITATION VOYAGENT JUSQU'A L'APP. <domaine>/?amb=CODE (un
 // ambassadeur), ?ref= (un parrain), ?src= : sans ce relais, la page de vente
 // les perdait au premier clic sur « Essayer ». Le clic d'un lien ambassadeur
@@ -1041,6 +1082,7 @@ function accueilInvite(ref,amb){
   try{
     var p=new URLSearchParams(location.search), g=new URLSearchParams();
     ['amb','ref','src','coach'].forEach(function(k){ var v=p.get(k); if(v) g.set(k,v.slice(0,40)); });
+    if(!g.get('src')){ var sd=rcSrcLanding(); if(sd) g.set('src',sd); }
     // Arrivé par un ami (ref) ou un ambassadeur (amb) : son essai est doublé,
     // la page le met en avant.
     if(g.get('ref')||g.get('amb')) document.body.classList.add('invite');
@@ -1061,7 +1103,7 @@ function accueilInvite(ref,amb){
 // IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
 // (plan Spark), rien ne casse.
 (function(){try{var p=new URLSearchParams(location.search);
-var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var src=(p.get('src')||rcSrcLanding()||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
 var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');

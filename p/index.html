@@ -8,7 +8,6 @@
      Autonome et legere : /profils_publics/<pseudo> et /volts_publics/<pseudo>
      (lecture publique), puis le rendu. Les balises og: entre les marqueurs
      sont l'apercu par defaut ; le Worker (cloudflare/src/pages.js) les remplace. -->
-<!-- Un profil se partage, il ne se cherche pas (vie privée) : jamais indexé. -->
 <meta name="robots" content="noindex">
 <!--og:debut-->
 <meta property="og:type" content="profile">
@@ -131,7 +130,7 @@ main .cta{margin:26px 0 10px;min-height:52px}
   if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
-  // Le point d'un pseudo est « __ » en base. Le rang du serveur prime (/volts_publics) : voir ficheAvecServeur (cloudflare/src/pages.js).
+  // Pseudo : le point devient « __ » en base. Rang du serveur prioritaire (pages.js).
   function lire(n){ return fetch(DB+'/'+n+'/'+encodeURIComponent(pseudo.replace(/\./g,'__'))+'.json',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
   function vals(o){ return o?(Array.isArray(o)?o:Object.keys(o).map(function(k){return o[k];})):[]; }
   Promise.all([lire('profils_publics'),lire('volts_publics')]).then(function(l){
@@ -201,11 +200,11 @@ main .cta{margin:26px 0 10px;min-height:52px}
         return '<div class="rec"><div><b>'+esc(x.exo)+'</b><span>'+nb(x.kg)+' kg</span></div><u data-w="'+Math.round((Number(x.kg)||0)/(max||1)*100)+'%"></u></div>';}).join('')+'</div>';
       // LE CODE PARRAIN : celui du lien suivi s'il y en a un, sinon celui du profil.
       var ref=(q.get('ref')||p.ref||'').toUpperCase();
-      var src=(q.get('src')||'page').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
+      var src=(q.get('src')||'profil').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
       var duel=(q.get('duel')||'').toLowerCase();
-      var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src+(/^d[a-z0-9]{10,24}$/.test(duel)?'&duel='+duel:'');
+      var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src+(/^d[a-z0-9]{10,24}$/.test(duel)?'&duel='+duel:'')+(window.rcArriveeVue?'&vu=1':'');
       h+='<a class="cta r" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
-      if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Grâce à '+prenom+', ton premier mois est offert.</div>';
+      if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Grâce à '+prenom+', ton essai est doublé.</div>';
       h+='<button type="button" class="cta-sec part r" id="part">Partager cette page</button>';
       h+='<div class="pied"><a href="'+racine+'?src=profil">RepCore</a> · l’app d’entraînement qui te suit séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
@@ -245,11 +244,12 @@ main .cta{margin:26px 0 10px;min-height:52px}
 // L'ARRIVEE (attribution) : src, amb, ref=1 (jamais le code). Une fois par jour
 // et par lien (localStorage) ; ni cookie, ni IP, ni identifiant.
 (function(){try{var p=new URLSearchParams(location.search);
-var src=(p.get('src')||'page').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var src=(p.get('src')||'profil').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
 var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
-if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+// Comptée : le bouton vers /i porte vu=1, /i ne la recompte pas.
+if(localStorage.getItem(k)){ window.rcArriveeVue=true; return; } localStorage.setItem(k,'1'); window.rcArriveeVue=true;
 fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
 }catch(e){}})();
 </script>

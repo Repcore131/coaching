@@ -55070,6 +55070,77 @@ async function testExercices(){
       if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
       return true;
     });
+    // ══ 02/10/2026 — LE TUNNEL SANS DOUBLE COMPTAGE ═════════════════════════
+    ok('Tunnel : landing_cta_click — dans RCM_EVENEMENTS, et dans RCM_TUNNEL juste après « Page de vente vue »',(()=>{
+      if(RCM_EVENEMENTS.indexOf('landing_cta_click')<0) return _echec('absent de RCM_EVENEMENTS');
+      const i=RCM_TUNNEL.findIndex(e=>e.cles.indexOf('landing_view')>=0);
+      if(i<0) return _echec('« Page de vente vue » introuvable');
+      const e=RCM_TUNNEL[i+1];
+      if(!e||e.cles.join()!=='landing_cta_click'||e.horsTunnel) return _echec('après la vue : '+JSON.stringify(e));
+      return RCM_TUNNEL[i+2]&&RCM_TUNNEL.slice(i+2).some(x=>x.cles.indexOf('welcome_view')>=0)?true:_echec('« Application ouverte » ne suit plus');})());
+    const _lire=(u)=>{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.responseText; };
+    const _arrivee=(h)=>((/<script>\s*(\/\/ L'ARRIVEE[\s\S]*?)<\/script>/.exec(h)||[])[1]||'');
+    // Joue un bloc d'arrivée : rend [appels /arrivee] et le window simulé.
+    const _jouerArrivee=(code,search,stock)=>{
+      const vus=[], win={};
+      new Function('location','localStorage','fetch','window',code)({search},
+        {getItem:k=>stock[k]||null,setItem:(k,v)=>{ stock[k]=v; }},(u)=>{ vus.push(String(u)); return Promise.resolve(); },win);
+      return {vus,win};
+    };
+    ok('Accueil /i : vu=1 — la page d’avant a compté l’arrivée : /i ne la recompte pas, et vu ne part pas vers l’app',(()=>{
+      let h=''; try{ h=_lire('../i/index.html'); }catch(e){ return _echec('lecture de /i'); }
+      const a=_arrivee(h);
+      if(!a) return _echec('bloc d’arrivée introuvable');
+      if(_jouerArrivee(a,'?src=profil&ref=JULIE7K2&vu=1',{}).vus.length) return _echec('vu=1 : /arrivee appelée');
+      const r=_jouerArrivee(a,'?src=profil&ref=JULIE7K2',{});
+      if(r.vus.length!==1||!/\/arrivee\?src=profil&ref=1$/.test(r.vus[0])) return _echec('sans vu : '+r.vus.join());
+      // Le script principal : vu ne part pas vers l'app.
+      const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
+      if(!m) return _echec('script de /i introuvable');
+      const el={}; ['go','quand-meme','lien','interne','copier','ok','accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach','mois-ami','promesse']
+        .forEach(k=>el[k]={hidden:true,textContent:'',addEventListener(){}});
+      const loc={search:'?src=profil&ref=JULIE7K2&vu=1',hash:'',href:'https://repcore-sync.web.app/i/',replace(){}};
+      new Function('location','document','navigator','setTimeout','fetch','localStorage',m[1])(loc,{getElementById:k=>el[k],querySelector:()=>null},{userAgent:'Safari'},()=>{},
+        ()=>Promise.resolve({ok:false,json:async()=>null}),{getItem:()=>null,setItem(){}});
+      if(/vu=/.test(el.go.href)||!/ref=JULIE7K2/.test(el.go.href)||!/src=profil/.test(el.go.href)) return _echec('lien vers l’app : '+el.go.href);
+      return true;})());
+    ok('/@pseudo et /coach : l’arrivée comptée (maintenant ou plus tôt dans la journée) ajoute vu=1 au bouton vers /i',(()=>{
+      for(const [f,def] of [['../p/index.html','profil'],['../c/index.html','vitrine']]){
+        let h=''; try{ h=_lire(f); }catch(e){ return _echec('lecture de '+f); }
+        const a=_arrivee(h);
+        const stock={};
+        const r1=_jouerArrivee(a,'',stock);
+        if(r1.vus.length!==1||!r1.win.rcArriveeVue||r1.vus[0].indexOf('src='+def)<0) return _echec(f+' : première arrivée '+r1.vus.join());
+        const r2=_jouerArrivee(a,'',stock);
+        if(r2.vus.length||!r2.win.rcArriveeVue) return _echec(f+' : déjà comptée aujourd’hui');
+        if(h.indexOf("(window.rcArriveeVue?'&vu=1':'')")<0) return _echec(f+' : le bouton vers /i ne porte pas vu=1');
+      }
+      return true;})());
+    ok('Landing : src par défaut d’après le referrer (seo, ig), jamais par-dessus un src ; landing_view une fois par session, rien en mode installé',(()=>{
+      let h=''; try{ h=_lire('../index.html'); }catch(e){ return _echec('lecture de la landing'); }
+      const fs=(/function rcSrcDefaut\(ref\)\{[\s\S]*?\n\}/.exec(h)||[''])[0], fl=(/function rcmLanding\(nom\)\{[\s\S]*?\n\}/.exec(h)||[''])[0];
+      if(!fs||!fl) return _echec('fonctions introuvables');
+      const sd=new Function(fs+'; return rcSrcDefaut;')();
+      const cas={'https://www.google.fr/':'seo','https://www.bing.com/search?q=x':'seo','https://duckduckgo.com/':'seo','https://www.qwant.com/':'seo',
+        'https://www.ecosia.org/search':'seo','https://l.instagram.com/?u=x':'ig','https://instagram.com/kevin':'ig','https://www.instagram.com/':'ig',
+        'https://notgoogle.example/':'','https://googlex.com.evil/':'','https://exemple.fr/':'','':''};
+      for(const k in cas) if(sd(k)!==cas[k]) return _echec(k+' → '+sd(k));
+      // Un src présent n'est jamais écrasé (rcSrcLanding lit d'abord ?src=).
+      if(!/s=new URLSearchParams\(location\.search\)\.get\('src'\)\|\|''[\s\S]{0,40}return s\|\|rcSrcDefaut\(document\.referrer\)/.test(h)) return _echec('rcSrcLanding');
+      if(!/if\(!g\.get\('src'\)\)\{ var sd=rcSrcLanding\(\)/.test(h)) return _echec('le relais vers app/ ne prend pas la source par défaut');
+      const jouer=(installe)=>{
+        const ss={}, vus=[];
+        const f=new Function('location','window','document','sessionStorage','fetch',fl+'; return rcmLanding;')(
+          {hostname:'repcore131.github.io'},{matchMedia:()=>({matches:installe}),navigator:{}},{referrer:''},
+          {getItem:k=>ss[k]||null,setItem:(k,v)=>{ ss[k]=v; }},(u)=>{ vus.push(String(u)); return Promise.resolve(); });
+        for(let i=0;i<3;i++) f('landing_view');
+        f('landing_cta_click'); f('landing_cta_click');
+        return vus;
+      };
+      const v=jouer(false);
+      if(v.length!==2||!/\/landing_view\.json$/.test(v[0])||!/\/landing_cta_click\.json$/.test(v[1])) return _echec('trois rechargements, deux clics : '+v.join());
+      if(jouer(true).length) return _echec('mode installé : envoyé quand même');
+      return /closest\('a\.cta'\)[\s\S]{0,120}\^app\\\//.test(h)?true:_echec('la délégation du clic');})());
     // ══ 29/09/2026 — LE TUTO VIDÉO SUR /i, POUR L'INVITÉ D'UN COACH ════════
     okA('Accueil /i : le tuto vidéo à la première visite d’un invité de coach, sans ouverture automatique ; ensuite l’app s’ouvre comme avant ; jamais pour un ami',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }

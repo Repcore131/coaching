@@ -931,11 +931,12 @@ const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
 // scripts/verif/regles.mjs verifie que les trois disent la meme chose.
 // Les quatre portes du coach (02/10/2026) : blog, coachs (coachs.html), profil
 // (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c) ; et
-// les articles du blog (blog-cycle, blog-fiche : 20 caractères au plus).
+// les articles du blog (blog-cycle, blog-fiche : 20 caractères au plus) ;
+// seo et ig : la landing sans src, d'après le referrer (moteur, Instagram).
 const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','blog-cycle','blog-fiche','carte',
   'champion','charge','coachs','commissions','cycle','defi','diete','direct','dossier','duel','email',
-  'envois','facebook','fond','instagram','invitation','journal','kit','logo','mes','muscles',
-  'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance',
+  'envois','facebook','fond','ig','instagram','invitation','journal','kit','logo','mes','muscles',
+  'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance','seo',
   'seances','serie','site','story','team','tiktok','victoire','visuel','vitrine','whatsapp','wrapped','youtube']);
 const ATTR_ORIGINE_CLE='rc_origine';
 const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';
@@ -1210,7 +1211,8 @@ function htmlViralite(v){
       +' d’un partage ÷ '+v.actifs+' actifs par semaine en moyenne. Au-dessus de 1, chaque utilisateur en amène plus d’un.</span></div></div>';
   h+='<div class="vir-t">Par source (src)</div>';
   if(!v.src.length) h+='<p class="sub">Rien sur la période.</p>';
-  else h+='<div class="vir-tab"><table><tr><th>src</th><th title="partages résolus + téléchargements + liens copiés">Partages</th><th>Clics</th><th>Inscr.</th><th>Payants</th></tr>'
+  else h+='<p class="sub vir-aide">Clics = arrivées dédupliquées par appareil et par jour.</p>'
+    +'<div class="vir-tab"><table><tr><th>src</th><th title="partages résolus + téléchargements + liens copiés">Partages</th><th title="arrivées dédupliquées par appareil et par jour">Clics</th><th>Inscr.</th><th>Payants</th></tr>'
     +v.src.map(x=>'<tr><td>'+escapeHtml(x.cle)+'</td><td title="'+x.partage+' partages · '+x.telechargement+' téléch. · '+x.copie+' copies">'+x.partages+'</td>'
       +'<td>'+x.clic+'</td><td>'+x.inscription+'<small>'+pct(x.inscription,x.clic)+'</small></td><td>'+x.payant+'<small>'+pct(x.payant,x.inscription)+'</small></td></tr>').join('')
     +'<tr class="vir-tot"><td>Total</td><td>'+v.totaux.partages+'</td><td>'+v.totaux.clics+'</td><td>'+v.totaux.inscriptions+'</td><td>'+v.totaux.payants+'</td></tr></table></div>';

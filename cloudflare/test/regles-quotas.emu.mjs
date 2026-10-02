@@ -60,12 +60,16 @@ await test('/metrics : coach_landing_view (coachs.html, 02/10/2026) passe à +1,
   assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/coach_landing_view', INC(5))).statut, 401);
   assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/coach_landing_viewx', INC(1))).statut, 401, 'clé voisine refusée');
 });
+await test('/metrics : landing_cta_click (clic vers l’app depuis la landing, 02/10/2026) passe à +1', async () => {
+  assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/landing_cta_click', INC(1))).statut, 200);
+  assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/landing_cta_click', INC(2))).statut, 401);
+});
 await test('/metrics : blog_view (articles du blog, 02/10/2026) passe à +1', async () => {
   assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/blog_view', INC(1))).statut, 200);
   assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/blog_view', INC(3))).statut, 401);
 });
 await test('/attribution : les portes du coach (blog, coachs, profil, vitrine) sont des src connus', async () => {
-  for (const s of ['blog', 'blog-cycle', 'blog-fiche', 'coachs', 'profil', 'vitrine'])
+  for (const s of ['blog', 'blog-cycle', 'blog-fiche', 'coachs', 'profil', 'vitrine', 'seo', 'ig'])
     assert.equal((await appel(null, 'PUT', 'attribution/jours/' + JOUR + '/src/' + s + '/clic', INC(1))).statut, 200, s);
 });
 

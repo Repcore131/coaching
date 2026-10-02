@@ -146,6 +146,8 @@ code{background:#000;border:1px solid var(--border);border-radius:var(--r-1);pad
 // IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
 // (plan Spark), rien ne casse.
 (function(){try{var p=new URLSearchParams(location.search);
+// vu=1 : la page d'avant (/@pseudo, /coach/<slug>) a déjà compté cette arrivée.
+if(p.get('vu')==='1') return;
 var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
@@ -166,6 +168,8 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
   if(c&&!p.get('inv')) p.set('inv',c);
   p.delete('c');p.delete('code');
+  // vu=1 ne sert qu'à /arrivee (ci-dessus) : il ne part pas vers l'app.
+  p.delete('vu');
   // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=).
   var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(amb) p.set('amb',amb);

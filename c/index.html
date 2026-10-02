@@ -185,7 +185,7 @@ main .cta{margin:28px 0 10px;min-height:52px}
       var src=(q.get('src')||'vitrine').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
       var ref=(q.get('ref')||'').toUpperCase();
       h+='<a class="cta" href="'+racine+'i/?coach='+encodeURIComponent(slug)+'&src='+src
-        +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+'">Commencer avec '+prenom+'</a>';
+        +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+(window.rcArriveeVue?'&vu=1':'')+'">Commencer avec '+prenom+'</a>';
       // LA PORTE DU COACH QUI VISITE (02/10/2026) : une vitrine est vue par
       // d'autres coachs ; src=vitrine dit d'où il vient dans l'écran tunnel.
       h+='<div class="pied"><a href="'+racine+'">RepCore</a> · Tu es coach ? <a href="'+racine+'coachs.html?src=vitrine">Crée ta vitrine</a></div>';
@@ -206,7 +206,9 @@ var src=(p.get('src')||'vitrine').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
 var ref=p.get('ref')?1:0;
 var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
-if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+// COMPTÉE (aujourd'hui, ici ou à l'instant) : le bouton vers /i porte vu=1, et /i
+// ne la recompte pas (02/10/2026 : /@pseudo → /i faisait deux clics).
+if(localStorage.getItem(k)){ window.rcArriveeVue=true; return; } localStorage.setItem(k,'1'); window.rcArriveeVue=true;
 fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
 }catch(e){}})();
 </script>

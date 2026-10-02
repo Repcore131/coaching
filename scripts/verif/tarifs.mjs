@@ -53,15 +53,16 @@ function montantsLibres(html) {
   }
   return trouves;
 }
-// « ton premier mois » (offert, gratuit…) à moins de 160 caractères d'« ami »
-// ou d'« invit » : la phrase d'avant l'essai parrainé de deux mois.
+// « ton premier mois » (offert, gratuit…) à moins de 160 caractères d'« ami »,
+// d'« invit », de « parrain » ou de « ref » (le code parrain, dans le script de
+// /p) : la phrase d'avant l'essai parrainé de deux mois.
 function premierMoisAmi(html) {
   const out = [];
   const re = /ton premier mois/gi;
   let m;
   while ((m = re.exec(html))) {
     const autour = html.slice(Math.max(0, m.index - 160), m.index + m[0].length + 160);
-    if (/\bami(?:e|s)?\b|invit/i.test(autour))
+    if (/\bami(?:e|s)?\b|invit|parrain|\bref\b/i.test(autour))
       out.push('« ton premier mois » pour un invité (vers la ligne ' + html.slice(0, m.index).split('\n').length + ') — l’essai parrainé dure ' + valeur(T, 'essai.moisParraine') + ' mois');
   }
   return out;
@@ -103,7 +104,7 @@ function controlerPage(nom, html) {
   for (const x of prixJsonLdInconnus(html)) err.push(nom + ' : ' + x);
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
-  if (nom === 'index.html' || nom === 'i/index.html') {
+  if (nom === 'index.html' || nom === 'i/index.html' || nom === 'p/index.html') {
     if (T.essai_parrainage.moisEnPlus > 0) for (const x of premierMoisAmi(html)) err.push(nom + ' : ' + x);
     if (nom === 'i/index.html' && /sans engagement/i.test(html)) err.push('i/index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
   }
