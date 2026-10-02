@@ -5,6 +5,7 @@
 // avec un annuel à 99 € et 249 € « −2 mois », pendant que l'app et PayPal
 // encaissaient 9,50 € et 24,90 € sur douze mois, et 114 € / 298,80 € en une
 // fois. Trois fichiers, trois vérités : celle qu'on ne relit pas finit fausse.
+// (02/10/2026 : l'annuel est de nouveau remisé, 95 € et 249 € — toujours ici.)
 //
 // CE QUE FAIT CE SCRIPT (idempotent) :
 //   • app/rc-core.<build>.js — recopie tarifs.json entre /* TARIFS:DEBUT */ et
@@ -39,6 +40,11 @@ export function lireTarifs() { return JSON.parse(readFileSync(RACINE + 'tarifs.j
 const DERIVES = {
   'essai.moisParraine': (T) => T.essai.mois + T.essai_parrainage.moisEnPlus,
   'coaching.coaching_evolution.parMois': (T) => T.coaching.coaching_evolution.prix / T.coaching.coaching_evolution.mois,
+  // L'annuel ramené au mois, et sa remise sur douze mensualités (en %, arrondie).
+  'essentielle.anMois': (T) => Math.round(T.essentielle.an / 12 * 100) / 100,
+  'ultime.anMois': (T) => Math.round(T.ultime.an / 12 * 100) / 100,
+  'essentielle.remisePct': (T) => Math.round((1 - T.essentielle.an / (T.essentielle.mois * 12)) * 100),
+  'ultime.remisePct': (T) => Math.round((1 - T.ultime.an / (T.ultime.mois * 12)) * 100),
 };
 export function valeur(T, cle) {
   if (DERIVES[cle]) return DERIVES[cle](T);
@@ -123,9 +129,14 @@ export function appliquerApp(code, T) {
 export function incoherences(T) {
   const e = [];
   const c2 = (n) => Math.round(n * 100) / 100;
-  for (const k of ['essentielle', 'ultime'])
-    if (c2(T[k].mois * T.engagementMois) !== c2(T[k].an))
-      e.push(k + ' : l’annuel (' + T[k].an + ') n’est plus douze mensualités (' + c2(T[k].mois * T.engagementMois) + ') — les pages disent « même total »');
+  // L'ANNUEL PEUT ÊTRE REMISÉ (02/10/2026), JAMAIS PLUS CHER : payer d'avance
+  // plus que douze mensualités serait une pénalité. Les pages disent la remise
+  // (essentielle.remisePct, ultime.remisePct), calculée ici.
+  for (const k of ['essentielle', 'ultime']) {
+    if (c2(T[k].an) > c2(T[k].mois * T.engagementMois))
+      e.push(k + ' : l’annuel (' + T[k].an + ') coûte plus que douze mensualités (' + c2(T[k].mois * T.engagementMois) + ')');
+    if (!(T[k].an > 0)) e.push(k + ' : prix annuel absent');
+  }
   if (c2(T.ultime.mois * T.ultime_demi.part) !== T.ultime_demi.premierMois)
     e.push('ultime_demi.premierMois (' + T.ultime_demi.premierMois + ') n’est pas ' + T.ultime_demi.part + ' × ' + T.ultime.mois);
   if (T.essai.jours !== T.essai.mois * 30) e.push('essai : ' + T.essai.jours + ' jours pour ' + T.essai.mois + ' mois');
@@ -139,7 +150,12 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const inc = incoherences(T);
   if (inc.length) { console.error('tarifs.json incohérent :\n  ' + inc.join('\n  ')); process.exit(1); }
   const enRetard = [];
-  for (const [chemin, f] of [[fichierCore(), appliquerApp], ...PAGES.map((p) => [RACINE + p, appliquerPage])]) {
+  // LA SOURCE D'ABORD (02/10/2026) : depuis le lot 22, rc-core s'assemble
+  // depuis src/core/ ; n'écrire que dans app/rc-core.*.js laissait la source en
+  // retard, et `assembler_core.mjs --verifier` échouait au premier prix changé.
+  const sources = readdirSync(RACINE + 'src/core').filter((x) => /\.js$/.test(x))
+    .map((x) => RACINE + 'src/core/' + x).filter((x) => readFileSync(x, 'utf8').includes('/* TARIFS:DEBUT */'));
+  for (const [chemin, f] of [...sources.map((x) => [x, appliquerApp]), [fichierCore(), appliquerApp], ...PAGES.map((p) => [RACINE + p, appliquerPage])]) {
     const avant = readFileSync(chemin, 'utf8');
     const apres = f(avant, T);
     if (apres === avant) continue;

@@ -816,9 +816,10 @@ function _planIdChoisi(){
 function formuleDuPlan(planId){
   const id=String(planId||'');
   if(!id) return '';
+  // Les anciens plans annuels (02/10/2026) : plus vendus, leurs abonnés y restent.
   if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
-     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
-  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN) return 'ultime';
+  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL||id===PAYPAL_PLAN_ID_ANNUEL_ANCIEN) return 'essentielle';
   // ET LES DEUX FORMULES DU COACH (24/09/2026). Elles n'ouvrent aucun palier
   // d'acces — un coach a le sien par son role — mais le dossier doit dire ce
   // qui a ete facture. Sans ces deux lignes, subOffreChoisie prenait le relais

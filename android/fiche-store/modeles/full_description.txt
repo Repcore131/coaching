@@ -26,6 +26,6 @@ Courbe de poids lissée sur sept jours, masse grasse estimée à chaque bilan, m
 Tes athlètes saisissent leurs séances, toi tu coaches : programmes, bilans, correction vidéo image par image avec angles et trajectoires tracés, et un tableau de bord qui repère qui décroche. Gratuit pour ton premier client, sans carte bancaire. Ensuite, la formule Coach ({{tarif:coach.coach}} par mois, jusqu'à quinze athlètes actifs) ou Pro ({{tarif:coach.pro}} par mois, sans limite), au mois, sans engagement. Tes athlètes ne paient rien avec ton code.
 
 ★ ESSAI ET TARIFS
-{{nb:essai.mois}} mois d'essai, toute l'app ouverte, sans carte bancaire : rien n'est prélevé à la fin, tu choisis ta formule ou tu t'arrêtes. Essentielle à {{tarif:essentielle.mois}} par mois, Ultime à {{tarif:ultime.mois}} par mois, avec un engagement de {{nb:engagementMois}} mois, à régler chaque mois ou en une fois pour le même total.
+{{nb:essai.mois}} mois d'essai, toute l'app ouverte, sans carte bancaire : rien n'est prélevé à la fin, tu choisis ta formule ou tu t'arrêtes. Essentielle à {{tarif:essentielle.mois}} par mois, Ultime à {{tarif:ultime.mois}} par mois, avec un engagement de {{nb:engagementMois}} mois, à régler chaque mois ou en une fois avec une remise : {{tarif:essentielle.an}} et {{tarif:ultime.an}} l'année.
 
 Le suivi du cycle est désactivé tant que tu ne l'actives pas. Tes données restent à toi : si tu es coaché, ton coach y accède parce que tu as saisi son code, et ce lien se rompt depuis ton profil.

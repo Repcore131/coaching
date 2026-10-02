@@ -1078,24 +1078,24 @@ const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,'')
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
-// Palier annuel — 99 EUR/an, soit 17 % de moins que 12 × 9,95.
-// VIDE TANT QUE LE PLAN N'EST PAS CRÉÉ SUR PAYPAL. Un identifiant ne s'invente
-// pas : tant que cette constante est vide, l'offre annuelle n'est PAS proposée
-// du tout, et l'écran retombe sur le seul mensuel. Mieux vaut une offre de
-// moins qu'un bouton qui échoue au moment de payer.
-// Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
-// « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
-// Rien d'autre à modifier : l'écran s'adapte tout seul.
-const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
-// ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
-//   le tableau de bord PayPal — Billing Plans — puis leur identifiant se colle
-//   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
-//   du tout : mieux vaut une offre de moins qu'un bouton qui echoue au moment
-//   de payer.
-//     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
-//     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
+// ══ LES PLANS ANNUELS (02/10/2026) : L'ANNUEL REMISÉ, DE NOUVEAUX PLANS ════
+// L'annuel valait douze mensualités ; il est de nouveau remisé (tarifs.json). Les plans PayPal d'avant NE CHANGENT PAS DE PRIX : les
+// abonnés annuels en cours gardent le leur. Les nouveaux prix demandent de
+// NOUVEAUX plans, créés par `node scripts/paypal_plans.mjs --ecrire`, qui
+// colle leurs identifiants ici (et dans OFFRES_PAYPAL du Worker).
+// VIDES TANT QU'ILS NE SONT PAS CRÉÉS : l'offre annuelle n'est alors PAS
+// proposée (l'écran retombe sur le mensuel). Jamais un prix annoncé et un
+// autre prélevé par l'ancien plan.
+const PAYPAL_PLAN_ID_ANNUEL='';
+// LES ANCIENS PLANS ANNUELS : plus vendus, mais leurs abonnés en cours y
+// restent. formuleDuPlan les reconnaît ; le Worker les garde dans OFFRES_PAYPAL.
+// (Essentielle annuel d'avant, puis Ultime annuel d'avant : leurs montants sont
+// dans OFFRES_PAYPAL, cloudflare/src/paypal.js.)
+const PAYPAL_PLAN_ID_ANNUEL_ANCIEN='P-92T09491KF550281RNK2LZWY';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN='P-16Y44630WF304553UNK2LZXI';
 const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
-const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
+// Le nouvel annuel d'Ultime : vide tant que son plan n'est pas créé, voir plus haut.
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
@@ -1125,7 +1125,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":95},"ultime":{"mois":24.9,"an":249},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -1154,13 +1154,10 @@ const OFFRES=Object.freeze({
   coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:_TC.coaching_evolution.prix, palier:'suivi',  mois:_TC.coaching_evolution.mois, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
   // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
-  //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
-  //   une fois au lieu de douze. 9,50 × 12 = 114, 24,90 × 12 = 298,80.
-  //
-  //   Ce qui suit de ce choix, et qui n'est pas ici : les écrans ne promettent
-  //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
-  //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
-  //   sous douze mensualités, sans qu'une ligne bouge.
+  //   Kevin). L'annuel a valu douze mensualités ; depuis le 02/10/2026 il est
+  //   de nouveau REMISÉ (95 € et 249 €, tarifs.json). La remise (− x %) se
+  //   calcule (_economie) : elle s'affiche d'elle-même, et disparaîtrait si
+  //   `prixAn` remontait à douze mensualités.
   essentielle:        Object.freeze({lib:'Essentielle', prix:TARIFS.essentielle.mois, prixAn:TARIFS.essentielle.an, palier:'essentielle', mois:0, type:'abonnement'}),
   ultime:             Object.freeze({lib:'Ultime',      prix:TARIFS.ultime.mois,      prixAn:TARIFS.ultime.an,      palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
@@ -1331,10 +1328,18 @@ function rcVerrouBloc(capacite){
   // LES CHIFFRES VENDENT, et ils viennent d'OFFRES : aucun prix n'est ecrit
   // ici. Seule la voie « ultime » en porte un ; le coaching se chiffre sur la
   // page des formules, qui est a jour la-bas et nulle part ailleurs.
+  // ⚠ « X PAR MOIS EN ANNUEL » SEULEMENT S'IL Y A UNE ÉCONOMIE (02/10/2026),
+  //   et si l'annuel se paie : quand l'année valait douze mensualités, le
+  //   bloc disait « 24,90 € par mois en annuel, ou 24,90 € au mois » — deux
+  //   fois le même montant, comme si payer d'avance changeait quelque chose.
   let prix='';
   if(v.vers==='ultime'){
-    try{ prix='<div class="vrr-p">Ultime : '+prixMoisAnnuel('ultime')+' par mois en annuel, ou '
-      +prixOffre('ultime')+' au mois.</div>'; }catch(e){ prix=''; }
+    try{
+      const an=_economie('ultime').texte&&planIdOffre('ultime',true);
+      prix='<div class="vrr-p">'+(an
+        ?'Ultime : '+prixMoisAnnuel('ultime')+' par mois en annuel, ou '+prixOffre('ultime')+' au mois.'
+        :'Ultime : '+prixOffre('ultime')+' par mois.')+'</div>';
+    }catch(e){ prix=''; }
   }
   const action=(v.vers==='coaching')
     ?'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'

@@ -7,7 +7,7 @@
 // avec lui-même.
 //
 // CE QUE CE CONTRÔLE REFUSE :
-//   1. un tarifs.json incohérent (annuel ≠ 12 mensualités, demi-tarif faux…) ;
+//   1. un tarifs.json incohérent (annuel plus cher que 12 mensualités, demi-tarif faux…) ;
 //   2. une copie en retard : le bloc TARIFS de rc-core, un montant lié
 //      (data-tarif, data-nb, data-tarif-m/a) de index.html, terms.html ou
 //      aide-apk.html qui ne vaut plus ce que dit tarifs.json ;
@@ -99,8 +99,12 @@ function prixJsonLdInconnus(html) {
   });
   return out;
 }
+// L'ANNUEL REMISÉ (02/10/2026) : une page qui dit encore « le même total »
+// ou « aucune remise » contredit le prix qu'elle affiche.
+const REMISE = ['essentielle', 'ultime'].some((k) => T[k].an < T[k].mois * 12);
 function controlerPage(nom, html) {
   const err = [];
+  if (REMISE) for (const m of String(html).matchAll(/même total|aucune remise/gi)) err.push(nom + ' : « ' + m[0] + ' » — l’annuel est remisé (tarifs.json)');
   for (const x of prixJsonLdInconnus(html)) err.push(nom + ' : ' + x);
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
@@ -226,6 +230,11 @@ for (const p of PAGES) {
     if (/\bprix(An)?:\s*[1-9][0-9.]*/.test(offres)) e(nom + ' : un prix écrit en dur dans OFFRES — il doit venir de TARIFS');
     if (/moisApres\(Date\.now\(\),\s*12\)/.test(code)) e(nom + ' : la fin d’engagement est écrite en dur (12) au lieu de TARIFS.engagementMois');
   }
+}
+
+if (REMISE) {
+  const html = readFileSync(RACINE + 'index.html', 'utf8');
+  if (!controlerPage('index.html', html + '<p>pour le même total</p>').some((x) => /même total/.test(x))) e('auto-contrôle : « même total » n’est pas vu alors que l’annuel est remisé');
 }
 
 // ══ LA RÉSILIATION DITE PARTOUT PAREIL (02/10/2026) ═══════════════════════

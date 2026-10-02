@@ -36257,6 +36257,33 @@ async function testExercices(){
         return /programmeRecu/.test(sm)
           ?true:_echec('la porte ne demande pas le suivi');})());
 
+      // ══ LOT 48 — L'ANNUEL REMISÉ, ET LE VERROU QUI NE SE RÉPÈTE PAS ══════
+      ok('LOT 48 — rcVerrouBloc(\'volume\') ne contient jamais deux fois le même montant ; l’annuel affiché est une vraie économie',(()=>{
+        const d=document.createElement('div'); d.innerHTML=rcVerrouBloc('volume');
+        const txt=d.textContent;
+        const montants=(txt.match(/\d+(?:,\d+)?\s?€/g)||[]).map(x=>x.replace(/\s/g,''));
+        if(!montants.length) return _echec('le verrou d’Ultime ne dit aucun prix : '+txt);
+        if(new Set(montants).size!==montants.length) return _echec('le même montant deux fois : '+txt);
+        if(txt.indexOf(prixOffre('ultime').replace(/\s/g,' '))<0&&txt.replace(/\s/g,'').indexOf(prixOffre('ultime').replace(/\s/g,''))<0)
+          return _echec('le prix mensuel d’Ultime manque : '+txt);
+        // L'ANNUEL N'EST ANNONCÉ QUE S'IL ÉCONOMISE ET SE PAIE.
+        const an=!!(_economie('ultime').texte&&planIdOffre('ultime',true));
+        if(an!==/en annuel/.test(txt)) return _echec('« en annuel » '+(an?'manque':'est annoncé sans plan ou sans économie')+' : '+txt);
+        if(!an&&txt.replace(/\s/g,' ').indexOf('Ultime : '+prixOffre('ultime').replace(/\s/g,' ')+' par mois.')<0) return _echec('sans annuel : '+txt);
+        // L'ÉCONOMIE EST RÉELLE (tarifs.json : 95 € et 249 €) : l'écran d'abonnement la dit.
+        for(const k of ['essentielle','ultime']){
+          const e=_economie(k);
+          if(!e.texte||!/^Économise /.test(e.texte)||!/^−\d+ %$/.test(e.pourcent)) return _echec(k+' : aucune économie en annuel ('+JSON.stringify(e)+')');
+          if(!(TARIFS[k].an<TARIFS[k].mois*12)) return _echec(k+' : l’annuel n’est pas remisé');
+        }
+        const pa=subPaliersDe('ultime').find(p=>p.cle==='annuel');
+        if(!pa||!pa.econ||!pa.remise) return _echec('la carte annuelle d’Ultime ne dit pas son économie');
+        if(SUB_PALIERS[0].cle!=='annuel'||!SUB_PALIERS[0].econ) return _echec('la carte annuelle d’Essentielle ne dit pas son économie');
+        // LES ANCIENS PLANS ANNUELS RESTENT RECONNUS (leurs abonnés y sont encore).
+        if(formuleDuPlan(PAYPAL_PLAN_ID_ANNUEL_ANCIEN)!=='essentielle'||formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN)!=='ultime')
+          return _echec('un ancien plan annuel n’est plus reconnu');
+        return true;})());
+
       // ══ LOT 4 — LE VERROU, ET SA PHRASE QUI VEND ═══════════════════════
       ok('LOT 4 — CHAQUE VERROU DIT CE QUI EST FERMÉ ET CE QUI RESTE POSSIBLE',(()=>{
         const cles=Object.keys(VERROUS);
@@ -36291,7 +36318,9 @@ async function testExercices(){
               return _echec(c+' ne mène pas à Ultime');
             // LES CHIFFRES VENDENT, et ils viennent de la table des offres.
             const p=(d.querySelector('.vrr-p')||{}).textContent||'';
-            if(p.indexOf(prixMoisAnnuel('ultime'))<0||p.indexOf(prixOffre('ultime'))<0)
+            // Le mensuel toujours ; l'annuel au mois seulement s'il économise et se paie (lot 48).
+            const _an=!!(_economie('ultime').texte&&planIdOffre('ultime',true));
+            if(p.indexOf(prixOffre('ultime'))<0||(_an&&p.indexOf(prixMoisAnnuel('ultime'))<0))
               return _echec(c+' : le prix d’Ultime ne se lit pas');
           }
           // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
@@ -37059,7 +37088,9 @@ async function testExercices(){
           // ET LA FORMULE SE LIT SUR LE PLAN FACTURE, pas sur ce qu’on a
           // choisi à l’écran : entre les deux, on a pu changer d’avis.
           if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME)!=='ultime') return _echec('le plan Ultime mensuel n’est pas reconnu');
-          if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('le plan Ultime annuel n’est pas reconnu');
+          // L'annuel d'Ultime : le nouveau plan (249 €) s'il est créé, et l'ancien, dont les abonnés restent (lot 48).
+          if(PAYPAL_PLAN_ID_ULTIME_ANNUEL&&formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('le plan Ultime annuel n’est pas reconnu');
+          if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN)!=='ultime') return _echec('l’ancien plan Ultime annuel n’est pas reconnu');
           if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_DEMI)!=='ultime') return _echec('le premier mois n’ouvre pas Ultime');
           if(formuleDuPlan(PAYPAL_PLAN_ID)!=='essentielle') return _echec('le mensuel d’Essentielle n’est pas reconnu');
           if(formuleDuPlan(PAYPAL_PLAN_ID_COACH)!=='coach') return _echec('le plan Coach n’est pas reconnu');
@@ -37475,32 +37506,33 @@ async function testExercices(){
           if(o.palier!==a[1]) return _echec(k+' ouvre '+o.palier+' au lieu de '+a[1]);
           if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
         }
-        // LES DEUX TARIFS ANNUELS, et les deux seuls.
-        if(OFFRES.essentielle.prixAn!==114||OFFRES.ultime.prixAn!==298.80)
-          return _echec('les tarifs annuels ont changé');
-        // ⚠ ET L'ANNEE VAUT EXACTEMENT DOUZE MENSUALITES. C'est le coeur du
-        //   choix du 24/09/2026 : payer d'avance ne coute ni plus ni moins.
-        //   En centimes entiers — 24,90 × 12 vaut 298,80000000000005 en
-        //   virgule flottante, et la comparaison directe echouerait.
+        // LES DEUX TARIFS ANNUELS : ceux de tarifs.json (95 € et 249 € depuis le
+        // 02/10/2026, décision de Kevin).
+        if(OFFRES.essentielle.prixAn!==TARIFS.essentielle.an||OFFRES.ultime.prixAn!==TARIFS.ultime.an)
+          return _echec('les tarifs annuels ne suivent pas tarifs.json');
+        // ⚠ L'ANNÉE EST REMISÉE, JAMAIS PLUS CHÈRE QUE DOUZE MENSUALITÉS. Le
+        //   24/09/2026 elle valait exactement douze mensualités ; le 02/10/2026,
+        //   Kevin la remise. En centimes entiers (24,90 × 12 en virgule
+        //   flottante vaut 298,80000000000005).
         for(const k of ['essentielle','ultime']){
           const o=OFFRES[k];
-          if(Math.round(o.prixAn*100)!==Math.round(o.prix*100)*12)
-            return _echec(k+' : l’année ('+o.prixAn+') ne fait pas douze fois '+o.prix);
+          if(!(Math.round(o.prixAn*100)<Math.round(o.prix*100)*12))
+            return _echec(k+' : l’année ('+o.prixAn+') n’est pas moins chère que douze fois '+o.prix);
         }
-        // DONC AUCUNE REMISE A ANNONCER, et rien ne doit en annoncer une.
-        if(_economie('essentielle').texte||_economie('ultime').texte)
-          return _echec('une économie est annoncée alors que l’année vaut douze mois');
+        // DONC UNE ÉCONOMIE S'ANNONCE, calculée.
+        if(!_economie('essentielle').texte||!_economie('ultime').texte)
+          return _echec('aucune économie annoncée alors que l’année est remisée');
         // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
         // espace insecable avant le symbole.
         const nbsp=String.fromCharCode(160);
         if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
         if(prixOffre('essentielle')!=='9,50'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
         if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
-        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE EST LE MEME QUE LE MENSUEL,
-        // maintenant qu'il n'y a plus de remise. Les deux lignes le verifient
-        // plutot que de recopier un chiffre qui redeviendrait faux.
-        if(prixMoisAnnuel('ultime')!==prixOffre('ultime')) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
-        if(prixMoisAnnuel('essentielle')!==prixOffre('essentielle')) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // LE MOIS D'UNE ANNÉE PAYÉE D'AVANCE est moins cher que le mensuel.
+        for(const k of ['essentielle','ultime']){
+          const pm=Number(prixMoisAnnuel(k).replace(/[^\d,]/g,'').replace(',','.')), m=Number(prixOffre(k).replace(/[^\d,]/g,'').replace(',','.'));
+          if(!(pm>0&&pm<m)) return _echec(k+' annuel au mois : '+prixMoisAnnuel(k)+' pour '+prixOffre(k)+' au mois');
+        }
         // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
         // l'offre, il ne doit pas survivre dans un identifiant oublie.
         const src=_prodSrc();

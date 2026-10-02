@@ -421,9 +421,24 @@ await test('la table OFFRES du serveur suit les plans et les prix de l’app', a
   const a = (id) => OFFRES_PAYPAL[id].montants.map(Number);
   const id = (nom) => plans.find((p) => p[1] === nom)[2];
   assert.ok(a(id('PAYPAL_PLAN_ID')).includes(prix('essentielle', 'prix')), 'Essentielle mensuel');
-  assert.ok(a(id('PAYPAL_PLAN_ID_ANNUEL')).includes(prix('essentielle', 'prixAn')), 'Essentielle annuel');
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME')).includes(prix('ultime', 'prix')), 'Ultime mensuel');
-  assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_ANNUEL')).includes(prix('ultime', 'prixAn')), 'Ultime annuel');
+  // LES ANNUELS (02/10/2026) : un NOUVEAU plan par nouveau prix. Tant qu'il
+  // n'est pas créé, sa constante est VIDE et l'app ne vend pas l'annuel
+  // (jamais 95 € annoncés et 114 € prélevés par l'ancien plan) ; créé, il
+  // facture le prix de tarifs.json. Les anciens restent connus du serveur,
+  // à leurs anciens montants, pour leurs abonnés.
+  for (const [cst, cle, ancien, vieux] of [['PAYPAL_PLAN_ID_ANNUEL', 'essentielle', 'PAYPAL_PLAN_ID_ANNUEL_ANCIEN', 114],
+    ['PAYPAL_PLAN_ID_ULTIME_ANNUEL', 'ultime', 'PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN', 298.8]]) {
+    const v = (code.match(new RegExp('const ' + cst + "='([^']*)'")) || [])[1];
+    assert.ok(v !== undefined, cst + ' absente de l’app');
+    if (v) {
+      assert.ok(OFFRES_PAYPAL[v], cst + ' (' + v + ') absent de OFFRES_PAYPAL');
+      assert.ok(a(v).includes(prix(cle, 'prixAn')), cst + ' : le plan ne facture pas ' + prix(cle, 'prixAn'));
+      assert.equal(OFFRES_PAYPAL[v].periode, 'an');
+    }
+    assert.ok(a(id(ancien)).includes(vieux), ancien + ' : ses abonnés gardent ' + vieux);
+    assert.equal(OFFRES_PAYPAL[id(ancien)].periode, 'an');
+  }
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_DEMI')).includes(tarifs.ultime_demi.premierMois), 'Ultime demi');
   assert.ok(a(id('PAYPAL_PLAN_ID_COACH')).includes(tarifs.coach.coach), 'Coach');
   assert.ok(a(id('PAYPAL_PLAN_ID_PRO')).includes(tarifs.coach.pro), 'Pro');

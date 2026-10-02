@@ -796,8 +796,8 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="offre">
         <h3>Essentielle</h3>
         <p class="pour">Tu t'entraînes seul et tu veux un carnet sérieux.</p>
-        <div class="montant" data-tarif-m="essentielle.mois" data-m="9,50&nbsp;€" data-tarif-a="essentielle.an" data-a="114&nbsp;€"><span data-tarif="essentielle.mois">9,50&nbsp;€</span><small> /mois</small></div>
-        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
+        <div class="montant" data-tarif-m="essentielle.mois" data-m="9,50&nbsp;€" data-tarif-a="essentielle.an" data-a="95&nbsp;€"><span data-tarif="essentielle.mois">9,50&nbsp;€</span><small> /mois</small></div>
+        <p class="facture"><span class="f-m">engagement 12&nbsp;mois</span><span class="f-a" hidden>en une fois, soit <b data-tarif="essentielle.anMois">7,92&nbsp;€</b> par mois&nbsp;: −<span data-nb="essentielle.remisePct">17</span>&nbsp;%</span></p>
         <ul class="coches" style="text-align:left">
           <li>Tu composes tes séances et tu les enchaînes</li>
           <li>Charges proposées, séries, minuteur</li>
@@ -810,8 +810,8 @@ footer a{color:var(--dim);margin:0 8px}
         <span class="ruban">Tout inclus</span>
         <h3>Ultime</h3>
         <p class="pour">Tu veux tout ce qu'un coach utilise, sans le coach.</p>
-        <div class="montant" data-tarif-m="ultime.mois" data-m="24,90&nbsp;€" data-tarif-a="ultime.an" data-a="298,80&nbsp;€"><span data-tarif="ultime.mois">24,90&nbsp;€</span><small> /mois</small></div>
-        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
+        <div class="montant" data-tarif-m="ultime.mois" data-m="24,90&nbsp;€" data-tarif-a="ultime.an" data-a="249&nbsp;€"><span data-tarif="ultime.mois">24,90&nbsp;€</span><small> /mois</small></div>
+        <p class="facture"><span class="f-m">engagement 12&nbsp;mois</span><span class="f-a" hidden>en une fois, soit <b data-tarif="ultime.anMois">20,75&nbsp;€</b> par mois&nbsp;: −<span data-nb="ultime.remisePct">17</span>&nbsp;%</span></p>
         <ul class="coches" style="text-align:left">
           <li><strong>Tout Essentielle</strong>, plus&nbsp;:</li>
           <li>Plus de 400 exercices filmés, avec les erreurs à éviter</li>
@@ -822,7 +822,7 @@ footer a{color:var(--dim);margin:0 8px}
         <a class="cta" href="app/#install">Essayer 1&nbsp;mois gratuit</a>
       </div>
     </div>
-    <p class="essai"><strong>Engagement de <span data-nb="engagementMois">12</span>&nbsp;mois</strong>&nbsp;: tu règles chaque mois ou en une fois, pour le même total, et si tu résilies en cours de route, ton accès reste ouvert jusqu'au bout des <span data-nb="engagementMois">12</span>&nbsp;mois, sans reconduction pour une nouvelle année.<br>Paiement sécurisé par PayPal.</p>
+    <p class="essai"><strong>Engagement de <span data-nb="engagementMois">12</span>&nbsp;mois</strong>&nbsp;: tu règles chaque mois, ou en une fois avec une remise (−<span data-nb="essentielle.remisePct">17</span>&nbsp;% sur Essentielle, −<span data-nb="ultime.remisePct">17</span>&nbsp;% sur Ultime), et si tu résilies en cours de route, ton accès reste ouvert jusqu'au bout des <span data-nb="engagementMois">12</span>&nbsp;mois, sans reconduction pour une nouvelle année.<br>Paiement sécurisé par PayPal.</p>
   </div>
 </section>
 
@@ -970,8 +970,9 @@ try{ rcBadgePlay(RC_PLAY_URL,navigator.userAgent,document); }catch(e){}
 <script>
 /* Bascule « chaque mois » / « en une fois ». Les deux prix sont ECRITS dans la
    page (data-m, data-a, recopies de tarifs.json par scripts/tarifs.mjs) : sans
-   script, le visiteur voit le mensuel, qui est vrai. Il n'y a pas de remise :
-   en une fois, c'est le meme total, et la page ne dit pas autre chose. */
+   script, le visiteur voit le mensuel, qui est vrai. En une fois, la ligne
+   sous le prix dit ce que vaut l'annee ramenee au mois, et sa remise
+   (.f-a, liee a tarifs.json elle aussi). */
 (function(){
   try{
     var bs=document.querySelectorAll('.bascule button');
@@ -980,8 +981,10 @@ try{ rcBadgePlay(RC_PLAY_URL,navigator.userAgent,document); }catch(e){}
       document.querySelectorAll('.montant[data-m]').forEach(function(e){
         e.innerHTML=(p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m'))+(p==='an'?'<small> pour 12&nbsp;mois</small>':'<small> /mois</small>');
       });
-      document.querySelectorAll('.facture[data-m]').forEach(function(e){
-        e.innerHTML=p==='an'?'réglé en une fois, le même total que 12 mensualités':e.getAttribute('data-m');
+      document.querySelectorAll('.facture').forEach(function(e){
+        var m=e.querySelector('.f-m'), a=e.querySelector('.f-a');
+        if(m) m.hidden=(p==='an');
+        if(a) a.hidden=(p!=='an');
       });
     }
     bs.forEach(function(b){ b.addEventListener('click',function(){ poser(b.getAttribute('data-periode')); }); });

@@ -51,6 +51,9 @@ const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.
 export const OFFRES_PAYPAL = Object.freeze({
   // `periode` : ce que couvre UN paiement du plan (un mois, ou un an).
   'P-95N51603RD882780YNJKS2QA': { formule: 'essentielle', montants: ['9.50', '9.95'], periode: 'mois' },
+  // Les ANCIENS annuels (114 € et 298,80 €) : plus vendus depuis le 02/10/2026,
+  // gardés pour leurs abonnés. Les nouveaux (95 € et 249 €) sont ajoutés en
+  // fin de table par `node scripts/paypal_plans.mjs --ecrire`, qui les crée.
   'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'], periode: 'an' },
   'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'], periode: 'mois' },
   'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'], periode: 'an' },
