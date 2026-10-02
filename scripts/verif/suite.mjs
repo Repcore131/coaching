@@ -32,8 +32,11 @@ await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
 // « menu de gene ») ferme son menu quand la case sort de l'ecran, si bien que
 // le resultat dependait de la taille par defaut de la fenetre — 800x600 en
 // local, autre chose sur un runner. VW / VH restent possibles pour une mesure.
-await cmd('Emulation.setDeviceMetricsOverride', { width: +(process.env.VW || 412),
-  height: +(process.env.VH || 4000), deviceScaleFactor: 1, mobile: !(process.env.VW || process.env.VH) });
+// --fenetre-par-defaut : aucune emulation, la taille de la fenetre de Chrome
+// (800x600 en headless) — pour verifier que le total n'en depend pas.
+if (!args.includes('--fenetre-par-defaut'))
+  await cmd('Emulation.setDeviceMetricsOverride', { width: +(process.env.VW || 412),
+    height: +(process.env.VH || 4000), deviceScaleFactor: 1, mobile: !(process.env.VW || process.env.VH) });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
