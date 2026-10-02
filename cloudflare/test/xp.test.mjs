@@ -445,3 +445,16 @@ test('la part hors entraînement : 40 % de l’entraînement + 150 V par semaine
   // Des écarts croissants entre les rangs.
   for (let i = 2; i < X.RANGS.length; i++) assert.ok(X.RANGS[i].seuil - X.RANGS[i - 1].seuil > X.RANGS[i - 1].seuil - X.RANGS[i - 2].seuil, X.RANGS[i].nom);
 });
+
+test('le retour (02/10/2026) : 50 V, au plus un par tranche de 14 jours du compte, comme l’app', async () => {
+  const t0 = PARIS('2026-10-20T12:00:00');
+  assert.equal(X.XP.retour, 50);
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 500 }, { debut: t0 - 10 * J }, t0).cat.retour, 0, 'moins de 14 jours : aucun retour possible');
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 500 }, { debut: t0 - 30 * J }, t0).cat.retour, 100);
+  assert.equal(X.totalServeur(X.etatVide(), { retour: 50 }, { debut: t0 - 30 * J }, t0).cat.retour, 50);
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, /\bretour:50\b/);
+  assert.match(src, new RegExp('const RETOUR_COMBAT_J=' + X.RETOUR_JOURS + ','));
+});

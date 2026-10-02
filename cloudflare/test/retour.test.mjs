@@ -82,13 +82,16 @@ test('les textes portent les vraies données : rang et série, tonnage et équiv
   assert.equal(c.url, './?reprise=1');
 });
 
-test('les règles : suspension, un par palier, trois au plus, pas juste après la série', () => {
+test('les règles : suspension, un par palier, quatre au plus, pas juste après la série', () => {
   const t = MARDI;
   const e = RE.etatPeriode(null, der(7));
   assert.deepEqual(RE.retourAutorise({ palier: 7, etat: e, t }), { ok: true, raison: null });
   assert.equal(RE.retourAutorise({ palier: 7, etat: e, suspension: { actif: true }, t }).raison, 'suspension');
   assert.equal(RE.retourAutorise({ palier: 7, etat: { depuis: 1, paliers: { 7: 1 } }, t }).raison, 'deja');
-  assert.equal(RE.retourAutorise({ palier: 30, etat: { depuis: 1, paliers: { 7: 1, 14: 1, 99: 1 } }, t }).raison, 'max');
+  // Quatre au plus depuis le palier précoce (02/10/2026) : trois envoyés laissent passer le quatrième.
+  assert.equal(RE.RETOUR_MAX, 4);
+  assert.equal(RE.retourAutorise({ palier: 30, etat: { depuis: 1, paliers: { 4: 1, 7: 1, 14: 1 } }, t }).ok, true);
+  assert.equal(RE.retourAutorise({ palier: 30, etat: { depuis: 1, paliers: { 4: 1, 7: 1, 14: 1, 99: 1 } }, t }).raison, 'max');
   assert.equal(RE.retourAutorise({ palier: 7, etat: e, logPush: { type: 'serie', at: t - 2 * J }, t }).raison, 'serie');
   assert.equal(RE.retourAutorise({ palier: 7, etat: e, logPush: { type: 'serie', at: t - 5 * J }, t }).ok, true);
   assert.equal(RE.retourAutorise({ palier: 7, etat: e, logPush: { type: 'bilan', at: t - J }, t }).ok, true);
@@ -181,4 +184,70 @@ test('le type « retour » se coupe dans les réglages (pushPrefs)', async () =>
   await w.jusqua('retour');
   assert.equal(recus(w, k).length, 0);
   assert.equal(w.F.lire('retour_etat/' + k), null, 'rien de noté : le palier n’est pas parti');
+});
+
+
+// ══ LE PALIER PRÉCOCE (02/10/2026) ════════════════════════════════════════
+test('palier précoce : l’écart normal + 1 jour selon les créneaux (4 jours à 3 séances), jamais après J+7', () => {
+  assert.equal(RE.palierPrecoce(3), 4);
+  assert.equal(RE.palierPrecoce(2), 5);
+  assert.equal(RE.palierPrecoce(4), 3);
+  assert.equal(RE.palierPrecoce(7), 2);
+  assert.equal(RE.palierPrecoce(1), 0, '1 créneau : il tomberait après J+7');
+  assert.equal(RE.palierPrecoce(0), 0, 'sans créneau, pas de précoce');
+  assert.equal(RE.creneauxActifs([{ active: true }, { active: false }, null, { active: true }, { active: true }]), 3);
+  assert.equal(RE.creneauxActifs({ 0: { active: true }, 3: { active: true } }), 2);
+  assert.equal(RE.palierDuJour(der(4), MARDI, 3), 4);
+  assert.equal(RE.palierDuJour(der(4), MARDI, 2), 0);
+  assert.equal(RE.palierDuJour(der(5), MARDI, 2), 5);
+  assert.equal(RE.palierDuJour(der(4), MARDI), 0, 'sans le nombre de créneaux : seulement 7, 14, 30');
+  assert.equal(RE.palierDuJour(der(7), MARDI, 3), 7);
+  const a = RE.messageRetour(4, { fname: 'Léa', streak: 6 });
+  assert.equal(a.title, 'Léa, ta semaine se joue maintenant');
+  assert.equal(a.body, 'Ta série de 6 semaines tient si tu fais ta séance d’ici dimanche.');
+  assert.equal(a.tag, 'retour-4');
+  assert.equal(RE.messageRetour(5, {}).title, 'Ta semaine se joue maintenant');
+  assert.equal(RE.messageRetour(5, {}).body, 'Ta prochaine séance t’attend, elle prend 45 min.');
+});
+
+test('11 h : le palier précoce part au 4e jour pour 3 créneaux, au 5e pour 2 ; puis J+7 ; quatre au plus', async () => {
+  const trois = [{ active: true }, { active: true }, { active: true }], deux = [{ active: true }, { active: true }];
+  const users = {
+    'q3@t,fr': { lastSession: der(4), fname: 'Léa', streak: 2, sessions_config: trois },
+    'q2a@t,fr': { lastSession: der(4), sessions_config: deux },
+    'q2b@t,fr': { lastSession: der(5), sessions_config: deux },
+    'q1@t,fr': { lastSession: der(4), sessions_config: [{ active: true }] },
+  };
+  const { push, recus } = abonnes(users);
+  const w = monde({ users, push }, MARDI);
+  await w.jusqua('retour');
+  assert.deepEqual(recus(w, 'q3@t,fr').map((m) => m.title), ['Léa, ta semaine se joue maintenant']);
+  assert.equal(recus(w, 'q3@t,fr')[0].body, 'Ta série de 2 semaines tient si tu fais ta séance d’ici dimanche.');
+  assert.equal(recus(w, 'q2a@t,fr').length, 0, '2 créneaux : pas au 4e jour');
+  assert.deepEqual(recus(w, 'q2b@t,fr').map((m) => m.tag), ['retour-5']);
+  assert.equal(recus(w, 'q1@t,fr').length, 0);
+  assert.ok(w.F.lire('retour_etat/q3@t,fr').paliers[4] > 0);
+  // Trois jours plus tard, J+7 : le deuxième de la période.
+  w.avance(3 * J);
+  await w.jusqua('retour');
+  assert.deepEqual(recus(w, 'q3@t,fr').map((m) => m.tag), ['retour-4', 'retour-7']);
+});
+
+test('pas de doublon : le précoce se tait après la série, la série se tait après le précoce', async () => {
+  // Série en danger partie jeudi : le précoce du samedi (4e jour) se tait.
+  const k = 'tom@t,fr';
+  const samedi = PARIS('2026-10-03T11:05:00');
+  const users = { [k]: { lastSession: samedi - 4 * J, streak: 4, sessions_config: [{ active: true }, { active: true }, { active: true }] } };
+  const { push } = abonnes(users);
+  const w = monde({ users, push, push_log: { [k]: { jour: '2026-10-01', at: samedi - 2 * J, type: 'serie' } } }, samedi);
+  assert.equal(await w.M.retourUn(k, w.t), 'serie');
+  // Le précoce parti lundi : la série du jeudi se tait.
+  const JEUDI = PARIS('2026-10-01T18:01:00');
+  const z = 'zoe@t,fr';
+  const u2 = { [z]: { streak: 5, streakWeek: '2026-09-21', lastSession: JEUDI - 5 * J, sessions_config: [{ active: true }, { active: true }, { active: true }] } };
+  const a2 = abonnes(u2);
+  const w2 = monde({ users: u2, push: a2.push, retour_etat: { [z]: { depuis: JEUDI - 5 * J, paliers: { 4: JEUDI - J } } },
+    worker: { jobs: { wrapped: { jour: '2026-10-01', fini: true }, retour: { jour: '2026-10-01', fini: true } } } }, JEUDI);
+  await w2.jusqua('serie');
+  assert.equal(a2.recus(w2, z).length, 0, 'le précoce vient de partir');
 });

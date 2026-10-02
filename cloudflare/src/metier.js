@@ -36,6 +36,7 @@ import * as PR from './prospects.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
 import * as L from './ligues.js';
+import * as RA from './rappels.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -124,6 +125,7 @@ export const PUSH_PRIORITE = Object.freeze({
   ligue: 65,                      // les ligues (01/10/2026) : la zone de bascule du samedi, le résultat du lundi
   retour: 60, parcours: 60, accueil: 60,
   wrapped: 55, badge: 50, filleul: 50, coach: 50, message: 50,
+  veille: 50,                     // la veille d'un créneau, 19 h 30 (type serie, 02/10/2026)
   reactions: 45, bilan: 40, acces: 40, prospect: 40, relance: 30, sante: 20 });
 // Au-delà d'un push dans la journée, seul un message de cette priorité passe.
 export const PRIO_SECOND = 80;
@@ -721,16 +723,42 @@ export function creerMetier(deps) {
       const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), optLog(log, {}, pr));
       if (r.envoye || r.differe) await db.ref('worker/relances_acces/' + uid).set(e);
     },
-    // Badge proche : dimanche 17 h — ASSIDU à deux séances ou moins.
+    // BADGE PROCHE : dimanche 17 h — le plus proche d'ASSIDU (séances FAITES,
+    // xp_etat.faites : une séance vide ne compte pas, et plus de lecture de
+    // toutes les clés de séances), de BRISEUR DE RECORDS (xp_etat.s.record / 50)
+    // et d'un PALIER DE SÉRIE (streak + 1). Un seul push (rappels.js, badgeProche).
     async badge(uid) {
-      const n = (await db.ref('users/' + uid + '/sessions').shallow()).length;
-      const SEUILS = [10, 50, 100, 250];
-      const seuil = SEUILS.find((x) => x > n);
-      if (!seuil || seuil - n > 2) return;
-      const reste = seuil - n, palier = ['I', 'II', 'III', 'IV'][SEUILS.indexOf(seuil)];
-      await envoyerPush(uid, { type: 'badge', url: './', tag: 'badge-assidu-' + palier,
-        title: 'Encore ' + reste + ' séance' + (reste > 1 ? 's' : '') + ' pour ASSIDU ' + palier,
-        body: 'Le badge est à portée de main cette semaine.' });
+      const [faites, rec, streak] = await Promise.all([_val('xp_etat/' + uid + '/faites'), _val('xp_etat/' + uid + '/s/record'), _lire(uid, 'streak')]);
+      const b = RA.badgeProche({ faites, records: Math.floor((Number(rec) || 0) / XPS.XP.record), streak });
+      if (!b) return 'loin';
+      const r = await envoyerPush(uid, { type: 'badge', url: './', tag: b.tag, title: b.title, body: b.body });
+      return r && r.envoye ? b.cle : ((r && r.raison) || 'echec');
+    },
+    // LA VEILLE (02/10/2026) : 19 h 30, la veille d'un créneau actif, à qui ne
+    // s'est pas entraîné aujourd'hui (son jour à lui). Deux par semaine au
+    // plus (worker/veille/<k> : les dates). Type serie, priorité 50 : dans le
+    // plafond de deux push par jour, sans passer devant un second push.
+    async veille(uid, t, acc, profil, log) {
+      if (dejaNotifie(log, t, profil && profil.tz, 'veille')) return 'plafond';
+      const pr = await profilUtile(uid, profil, t);
+      const s = (await _surface(uid)) || {};
+      if (s.role === 'coach') return 'coach';
+      const tz = pr ? pr.tz : s.tz, loc = heureLocale(t, tz);
+      const der = Number(pr ? pr.lastSession : s.lastSession) || 0;
+      if (der > 0 && heureLocale(der, tz).jour === loc.jour) return 'seance_du_jour';
+      const c = RA.creneauDemain(await _objet(uid, s, 'sessions_config'), loc.joursem);
+      if (!c) return 'repos';
+      const susp = pr ? pr.suspension : await _objet(uid, s, 'suspension');
+      if (susp && susp.actif) return 'suspension';
+      const dates = (await _val('worker/veille/' + uid)) || [];
+      if (RA.veillesDeLaSemaine(dates, lundiParis(t)) >= RA.VEILLE_PAR_SEMAINE) return 'deux_cette_semaine';
+      const exos = RA.exercicesDu(c);
+      const [meilleurs, jr] = exos.length ? await Promise.all([_val('xp_etat/' + uid + '/meilleurs'), _val('xp_etat/' + uid + '/jr')]) : [null, null];
+      const m = Object.assign({ tag: 'veille-' + loc.jour }, RA.messageVeille(c, RA.recordAPortee(exos, meilleurs, jr)));
+      const r = await envoyerPush(uid, m, optLog(log, {}, pr));
+      if (!r.envoye && !r.differe) return r.raison || 'echec';
+      await db.ref('worker/veille/' + uid).set((Array.isArray(dates) ? dates : Object.values(dates)).concat([loc.jour]).slice(-4));
+      return 'envoye';
     },
   };
   // Les messages mis de côté pendant la nuit, CHAQUE HEURE (planif.js) : ceux
@@ -2061,7 +2089,13 @@ export function creerMetier(deps) {
     if (dejaNotifie(log, t, profil && profil.tz, 'retour')) return 'plafond';
     const pr = await profilUtile(uid, profil, t);
     const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
-    const palier = RE.palierDuJour(der, t);
+    let palier = RE.palierDuJour(der, t);
+    // LE PALIER PRÉCOCE dépend des créneaux : relus seulement les jours où il
+    // peut tomber (2 à 6 jours d'absence).
+    if (!palier && der > 0) {
+      const n = RE.joursDepuis(der, t);
+      if (n >= 2 && n < RE.RETOUR_PALIERS[0]) palier = RE.palierDuJour(der, t, RE.creneauxActifs(await _lire(uid, 'sessions_config')));
+    }
     if (!palier) return 'rien';
     const [susp, etat0, logPush] = await Promise.all([_lire(uid, 'suspension'), _val('retour_etat/' + uid), log !== undefined ? (log || null) : _val('push_log/' + uid)]);
     const etat = RE.etatPeriode(etat0, der);

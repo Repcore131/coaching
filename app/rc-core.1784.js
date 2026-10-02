@@ -84400,7 +84400,10 @@ const XP_ACTIONS=Object.freeze({
   // cinq jours ont déjà rapporté 5 × 40 V, et l'application reste d'abord un
   // outil d'entraînement (une semaine d'assiette parfaite : 5 × 40 + 75 = 275 V,
   // une semaine de trois séances complètes : 3 × 130 + 150 = 540 V).
-  semaineAssiette:75
+  semaineAssiette:75,
+  // LE RETOUR (02/10/2026) : la 1re séance après 14 jours ou plus sans séance
+  // (RETOUR_COMBAT_J), une fois par période d'absence. Un jalon, hors plafond.
+  retour:50
 });
 const XP_NUTRITION_MIN=3;
 // ══ LOT N2 : LA CIBLE TENUE ═══════════════════════════════════════════════
@@ -85233,13 +85236,22 @@ function _xpBornerHors(parJour){
   }
   return ecrete;
 }
+/** PURE. Les dates des séances de RETOUR : comptées, et 14 jours ou plus
+ *  (jours civils) après la séance comptée précédente. */
+function xpRetours(ses){
+  const l=(ses||[]).filter(s=>s&&Number(s.date)>0&&seanceComptee(s)).map(s=>Number(s.date)).sort((a,b)=>a-b);
+  const midi=t=>{ const x=new Date(t); x.setHours(12,0,0,0); return x.getTime(); };
+  const out=[];
+  for(let i=1;i<l.length;i++) if(Math.round((midi(l[i])-midi(l[i-1]))/864e5)>=RETOUR_COMBAT_J) out.push(l[i]);
+  return out;
+}
 // PURE. LE CALCUL. Rend {total, cat:{seance, complete, record, bilan,
 // nutrition, sommeil, semaine, badge, archive}, ecrete} — `ecrete`, ce que le
 // plafond a retenu. Les catégories du jour passent dans l'ordre ci-dessous
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,mission:0,semaine:0,semaineAssiette:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,mission:0,semaine:0,semaineAssiette:0,retour:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -85298,6 +85310,9 @@ function xpCalcul(u,maintenant){
   // Les jalons, hors plafond du jour, rangés à leur date.
   for(const d of f.semaines) if(d<=t) ajoute(_xpJour(d),'semaine',XP_ACTIONS.semaine);
   for(const d of ((f.assiette&&f.assiette.semaines)||[])) if(d<=t) ajoute(_xpJour(d),'semaineAssiette',XP_ACTIONS.semaineAssiette);
+  // LE RETOUR : +50 V à la 1re séance comptée après RETOUR_COMBAT_J jours ou
+  // plus, une fois par période (chaque retour la referme).
+  for(const d of xpRetours(ses)) ajoute(_xpJour(d),'retour',XP_ACTIONS.retour);
   // LA PART HORS ENTRAÎNEMENT, sur 7 jours glissants (voir XP_HORS_PART).
   ecrete+=_xpBornerHors(parJour);
   for(const j of Object.keys(parJour)) for(const c of Object.keys(parJour[j])) cat[c]+=parJour[j][c];
@@ -85338,6 +85353,7 @@ function xpGainsSeance(u,sess,maintenant){
   if(d('badge')>0) lignes.push({lib:'Badge débloqué',v:d('badge')});
   if(d('parcours')>0) lignes.push({lib:'Mise sous tension',v:d('parcours')});
   if(d('mission')>0) lignes.push({lib:'Volts doublés (coffre)',v:d('mission')});
+  if(d('retour')>0) lignes.push({lib:'Retour au combat',v:d('retour')});
   const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
   if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
   return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,
@@ -89576,11 +89592,14 @@ function ouvrirRepriseDouce(){
   return true;
 }
 
-// ══ RETOUR AU COMBAT (1re séance après 10 jours ou plus) ════════════════
+// ══ RETOUR AU COMBAT (1re séance après 14 jours ou plus) ════════════════
+// 10 jours jusqu'au 02/10/2026 ; 14 désormais, la même période que le bonus
+// de volts « retour » (+50 V, xpCalcul, cat.retour : une fois par période,
+// recalculé depuis l'historique, borné par le serveur).
 // Un écran plein dans la file des célébrations (le médaillon RETURN), avec
 // la quête de PHÉNIX NOIR : revenir après 30 jours d'arrêt, puis valider 4
 // semaines d'affilée à partir de la semaine du retour (_badgesFaits).
-const RETOUR_COMBAT_J=10, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
+const RETOUR_COMBAT_J=14, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
 /** PURE. Le retour que marque la séance `sess`, ou null. */
 function retourAuCombat(u,sess){
   const d=Number(sess&&sess.date);
@@ -89621,6 +89640,7 @@ function _retourEcran(r,reste){
     +'<div class="bdg-ecran-img" id="rc-retour-img"><img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt=""></div>'
     +'<div class="bdg-ecran-nom">RETOUR AU COMBAT</div>'
     +'<p class="bdg-ecran-cond">Tu es revenu. C’est la séance la plus difficile, et elle est faite.</p>'
+    +'<p class="bdg-ecran-cond rc-retour-v"><b>+'+XP_ACTIONS.retour+' V</b> · retour</p>'
     +'<div class="rc-phenix"><div class="rc-phenix-cases" aria-hidden="true">'
       +Array.from({length:PHENIX_SEMAINES},(_,i)=>'<i'+(i<r.faites?' class="on"':'')+'></i>').join('')+'</div>'
       +'<div class="rc-phenix-txt">'+escapeHtml(textePhenixNoir(r))+'</div></div>'

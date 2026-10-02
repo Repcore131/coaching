@@ -156,7 +156,7 @@ const epreuves = [];
   // Les autres travaux du jour sont faits : seule la série reste.
   const jour = '2026-10-01';
   init.worker = { jobs: Object.fromEntries(['stats_badges', 'ambassadeurs', 'fins_coachs', 'attente', 'defis', 'acces', 'retour', 'relances',
-    'sante_rappel', 'accueil', 'parcours', 'duels', 'reactions', 'retention', 'wrapped', 'purge_paypal'].map((j) => [j, { jour, fini: true }])) };
+    'sante_rappel', 'accueil', 'parcours', 'duels', 'reactions', 'retention', 'wrapped', 'purge_paypal', 'veille'].map((j) => [j, { jour, fini: true }])) };
   const w = monde(init, t0);
   for (let m = 0; m < 30; m++) { const b = await w.minute(); assert.ok(b.requetes <= 50, '(b) ' + b.requetes); w.avance(); }
   const job = w.F.lire('worker/jobs/serie');
@@ -211,7 +211,7 @@ const epreuves = [];
   const init = donnees(N, t0);
   const jour = '2026-10-01';
   init.worker = { jobs: Object.fromEntries(['stats_badges', 'ambassadeurs', 'fins_coachs', 'attente', 'defis', 'acces', 'retour', 'relances',
-    'sante_rappel', 'accueil', 'parcours', 'duels', 'reactions', 'retention', 'wrapped', 'purge_paypal'].map((j) => [j, { jour, fini: true }])) };
+    'sante_rappel', 'accueil', 'parcours', 'duels', 'reactions', 'retention', 'wrapped', 'purge_paypal', 'veille'].map((j) => [j, { jour, fini: true }])) };
   const F = fausseBase(init);
   let n0 = 0, horloge = t0, total = 0;
   const f = (u, i) => { n0++; total++; return F.fetchImpl(u, i); };

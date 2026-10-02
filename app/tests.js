@@ -55713,12 +55713,12 @@ async function testExercices(){
       // Le montage de séance la lit, sans cumuler avec la décote de reprise.
       return (/repriseDouceActive\(currentUser\)/.test(String(launchWorkout))
         &&/_decote=Math\.min\(_decote,REPRISE_DOUCE_FACTEUR\)/.test(String(renderWoEx)+String(_blocExo)))?true:_echec('montage de séance');})());
-    ok('Retour au combat : après 10 jours ou plus, et la quête de PHÉNIX NOIR',(()=>{
+    ok('Retour au combat : après 14 jours ou plus, et la quête de PHÉNIX NOIR',(()=>{
       const d=new Date(2026,9,5,18).getTime();
-      const u={sessions:[{date:d-12*_CJ},{date:d}],sessions_config:[{active:true}]};
+      const u={sessions:[{date:d-14*_CJ},{date:d}],sessions_config:[{active:true}]};
       const r=retourAuCombat(u,u.sessions[1]);
-      if(!r||r.jours!==12||r.eligible) return _echec(JSON.stringify(r));
-      if(retourAuCombat({sessions:[{date:d-9*_CJ},{date:d}]},{date:d})!==null) return _echec('9 jours');
+      if(RETOUR_COMBAT_J!==14||!r||r.jours!==14||r.eligible) return _echec(JSON.stringify(r));
+      if(retourAuCombat({sessions:[{date:d-13*_CJ},{date:d}]},{date:d})!==null) return _echec('13 jours');
       if(retourAuCombat({sessions:[{date:d}]},{date:d})!==null) return _echec('première séance');
       const p=retourAuCombat({sessions:[{date:d-40*_CJ,sets:3},{date:d,sets:3}],sessions_config:[{active:true}]},{date:d,sets:3});
       if(!p||!p.eligible||p.faites!==1||p.reste!==3) return _echec('éligible : '+JSON.stringify(p));
@@ -55729,6 +55729,36 @@ async function testExercices(){
       if(bdgRarete({retour:r})!==90||bdgRepartir([{serie:8},{retour:r}],'completes',0).ecrans[0].retour!==r) return _echec('file');
       if(tropheeVignette({retour:r}).nom!=='Retour au combat') return _echec('vignette');
       return /_celebrerRetour\(_rt\)/.test(_prodSrc()+String(finishWorkout))?true:_echec('fin de séance');})());
+    ok('Retour au combat : +50 V « retour », une fois par période d’absence de 14 jours, et la carte le dit',(()=>{
+      const S=(j)=>({date:new Date(2026,8,1+j,18).getTime(),duration:60,
+        data:{Squat:{sets:Array.from({length:6},()=>({weight:'100',reps:'8',done:true}))}}});
+      const U=ses=>({role:'athlete',email:'rt@t.fr',sessions:ses});
+      const T=new Date(2026,11,1).getTime();
+      if(XP_ACTIONS.retour!==50) return _echec('barème');
+      // 0, puis 20 jours d'absence : un retour.
+      const a=xpCalcul(U([S(0),S(20)]),T);
+      if(a.cat.retour!==50) return _echec('20 jours : '+a.cat.retour);
+      // 13 jours : rien ; la première séance n'est pas un retour.
+      if(xpCalcul(U([S(0),S(13)]),T).cat.retour!==0) return _echec('13 jours');
+      if(xpCalcul(U([S(0)]),T).cat.retour!==0) return _echec('première séance');
+      // Deux absences, deux retours ; des séances rapprochées ensuite n'ajoutent rien.
+      if(xpCalcul(U([S(0),S(20),S(22),S(24),S(45),S(47)]),T).cat.retour!==100) return _echec('deux périodes');
+      // Une séance vide (0 série) ne compte ni comme retour, ni comme fin d'absence.
+      const vide={date:new Date(2026,8,11,18).getTime(),duration:5,data:{Squat:{sets:[{weight:'100',reps:'8',done:false}]}}};
+      if(xpCalcul(U([S(0),vide,S(20)]),T).cat.retour!==50) return _echec('séance vide');
+      // Le gain de la séance le détaille.
+      const u=U([S(0),S(20)]);
+      const g=xpGainsSeance(u,u.sessions[1],T);
+      if(!g.lignes.some(l=>l.lib==='Retour au combat'&&l.v===50)) return _echec('gain : '+JSON.stringify(g.lignes));
+      // La carte « Retour au combat » (médaillon RETURN) affiche le bonus.
+      const sv={f:_bdgFile,r:_bdgRecap};
+      try{
+        const z=_retourEcran({jours:20,eligible:false,faites:0,reste:4},0);
+        const t=z.textContent; z.remove();
+        if(!/RETOUR AU COMBAT/.test(t)||!/\+50 V · retour/.test(t)) return _echec('carte : '+t.slice(0,200));
+        if(!/return\.png$/.test(_badgeFichier('RETURN'))) return _echec('médaillon');
+      } finally { _bdgFile=sv.f; _bdgRecap=sv.r; document.querySelectorAll('#bdg-ecran').forEach(x=>x.remove()); }
+      return true;})());
     ok('Relance : le type « retour » se règle, dans la case « Mes séances » ; le tonnage cumulé est tenu pour le serveur',(()=>{
       if(!PUSH_TYPES.some(t=>t.cle==='retour')) return _echec('type');
       if(NOTIF_GROUPES.find(g=>g.cle==='seances').types.indexOf('retour')<0) return _echec('case');

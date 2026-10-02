@@ -1152,11 +1152,14 @@ function ouvrirRepriseDouce(){
   return true;
 }
 
-// ══ RETOUR AU COMBAT (1re séance après 10 jours ou plus) ════════════════
+// ══ RETOUR AU COMBAT (1re séance après 14 jours ou plus) ════════════════
+// 10 jours jusqu'au 02/10/2026 ; 14 désormais, la même période que le bonus
+// de volts « retour » (+50 V, xpCalcul, cat.retour : une fois par période,
+// recalculé depuis l'historique, borné par le serveur).
 // Un écran plein dans la file des célébrations (le médaillon RETURN), avec
 // la quête de PHÉNIX NOIR : revenir après 30 jours d'arrêt, puis valider 4
 // semaines d'affilée à partir de la semaine du retour (_badgesFaits).
-const RETOUR_COMBAT_J=10, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
+const RETOUR_COMBAT_J=14, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
 /** PURE. Le retour que marque la séance `sess`, ou null. */
 function retourAuCombat(u,sess){
   const d=Number(sess&&sess.date);
@@ -1197,6 +1200,7 @@ function _retourEcran(r,reste){
     +'<div class="bdg-ecran-img" id="rc-retour-img"><img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt=""></div>'
     +'<div class="bdg-ecran-nom">RETOUR AU COMBAT</div>'
     +'<p class="bdg-ecran-cond">Tu es revenu. C’est la séance la plus difficile, et elle est faite.</p>'
+    +'<p class="bdg-ecran-cond rc-retour-v"><b>+'+XP_ACTIONS.retour+' V</b> · retour</p>'
     +'<div class="rc-phenix"><div class="rc-phenix-cases" aria-hidden="true">'
       +Array.from({length:PHENIX_SEMAINES},(_,i)=>'<i'+(i<r.faites?' class="on"':'')+'></i>').join('')+'</div>'
       +'<div class="rc-phenix-txt">'+escapeHtml(textePhenixNoir(r))+'</div></div>'

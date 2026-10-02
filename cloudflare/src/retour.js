@@ -5,11 +5,15 @@
 // rendent. Le Worker ne relit jamais les séances : le rang (xpRang), la série
 // (streak) et le tonnage cumulé (tonnageTotal) sont écrits par l'app.
 //
-// TROIS PALIERS, comptés en jours de Paris depuis la dernière séance :
+// QUATRE PALIERS, comptés en jours de Paris depuis la dernière séance :
+//   PRÉCOCE (02/10/2026) : l'écart normal entre deux séances, plus un jour
+//         — ceil(7 / créneaux actifs) + 1 : 4 jours pour 3 séances par
+//         semaine, 5 pour 2, rien pour 1 (il tomberait après J+7). « Ta
+//         semaine se joue maintenant » — avant que l'absence s'installe ;
 //   J+7   « Ta semaine t'attend » — le rang et la série ;
 //   J+14  « Tu as soulevé 84 t avec nous » — le tonnage et son équivalent ;
 //   J+30  « Reprise en douceur » — la baisse de 10 % proposée (./?reprise=1).
-// Puis silence. Un message par palier, TROIS au plus par période
+// Puis silence. Un message par palier, QUATRE au plus par période
 // d'inactivité (la période = la date de la dernière séance : une séance la
 // referme, la suivante repart de zéro). Rien pendant une suspension.
 //
@@ -20,7 +24,7 @@
 import { RANGS, PRESTIGE_TRANCHE } from './xp.js';
 
 export const RETOUR_PALIERS = [7, 14, 30];
-export const RETOUR_MAX = 3;
+export const RETOUR_MAX = 4;
 export const RETOUR_ECART_J = 4;
 const J = 864e5;
 
@@ -79,11 +83,25 @@ export function joursDepuis(der, t) {
   const a = Date.parse(jourParis(der) + 'T00:00:00Z'), b = Date.parse(jourParis(t) + 'T00:00:00Z');
   return Math.round((b - a) / J);
 }
-// Le palier du jour (7, 14 ou 30), ou 0.
-export function palierDuJour(der, t) {
+// Le palier PRÉCOCE d'un athlète à `creneaux` créneaux actifs : l'écart
+// normal (ceil(7 / créneaux)) plus un jour, ou 0 s'il ne tombe pas avant J+7.
+export function palierPrecoce(creneaux) {
+  const c = Math.round(Number(creneaux) || 0);
+  if (c < 1) return 0;
+  const p = Math.ceil(7 / Math.min(7, c)) + 1;
+  return p < RETOUR_PALIERS[0] ? p : 0;
+}
+// Le nombre de créneaux actifs de sessions_config (tableau ou objet).
+export function creneauxActifs(cfg) {
+  return (Array.isArray(cfg) ? cfg : Object.values(cfg || {})).filter((x) => x && x.active).length;
+}
+// Le palier du jour (le précoce, 7, 14 ou 30), ou 0.
+export function palierDuJour(der, t, creneaux) {
   if (!(Number(der) > 0) || !(t > der)) return 0;
   const n = joursDepuis(Number(der), t);
-  return RETOUR_PALIERS.indexOf(n) >= 0 ? n : 0;
+  if (RETOUR_PALIERS.indexOf(n) >= 0) return n;
+  const p = palierPrecoce(creneaux);
+  return p && n === p ? p : 0;
 }
 // L'état de la période : repart à zéro quand la dernière séance change.
 export function etatPeriode(etat, der) {
@@ -110,6 +128,13 @@ export function messageRetour(palier, d, t) {
   const x = d || {};
   const pr = String(x.fname || '').trim().slice(0, 30);
   const base = { type: 'retour', tag: 'retour-' + palier };
+  if (palier < RETOUR_PALIERS[0]) {
+    // LE PRÉCOCE : la semaine n'est pas perdue, elle se joue.
+    const s = Math.max(0, Math.round(Number(x.streak) || 0));
+    return Object.assign(base, { url: './?wo=1', title: (pr ? pr + ', ta' : 'Ta') + ' semaine se joue maintenant',
+      body: s > 0 ? 'Ta série de ' + s + ' semaine' + (s > 1 ? 's' : '') + ' tient si tu fais ta séance d’ici dimanche.'
+        : 'Ta prochaine séance t’attend, elle prend 45 min.' });
+  }
   if (palier === 7) {
     // POUR AVANCER, pas « pour garder » : un rang fêté ne se perd jamais
     // (01/10/2026). Le total du serveur (xp_serveur/<k>.total) dit ce qu'il reste.

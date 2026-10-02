@@ -28,7 +28,11 @@
 export const XP = { seance: 100, complete: 30, record: 50, bilan: 80, badge: 40, badgePalier4: 200,
   nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, semaineAssiette: 75, parcours: 300,
   // La mission du jour (01/10/2026) : le coffre vaut 50 V au plus, une fois par jour.
-  mission: 50 };
+  mission: 50,
+  // Le retour (02/10/2026) : +50 V à la 1re séance après 14 jours sans séance.
+  retour: 50 };
+// Le retour de l'app (RETOUR_COMBAT_J) : une absence de 14 jours au moins.
+export const RETOUR_JOURS = 14;
 export const XP_PLAFOND_JOUR = 400;
 export const SEANCE_MIN_MIN = 15, SEANCE_MIN_SERIES = 6, VOLTS_PAR_SERIE = 10;
 export const RANGS = [
@@ -353,6 +357,8 @@ export function totalServeur(etat, client, dossier, t) {
     parcours: borne('parcours', XP.parcours),
     // La mission du jour : un coffre par jour au plus, à 50 V.
     mission: borne('mission', jours * XP.mission),
+    // Un retour demande 14 jours d'absence : au plus un par tranche de 14 jours du compte.
+    retour: borne('retour', Math.floor(jours / RETOUR_JOURS) * XP.retour),
     archive: borne('archive', jours * XP.sommeil),
   });
   // La part hors entraînement, rabotée dans l'ordre de l'app (XP_HORS_RABOT).
