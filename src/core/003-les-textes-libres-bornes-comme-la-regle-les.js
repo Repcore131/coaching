@@ -2334,6 +2334,17 @@ const CLOUD={
     if(!r.ok) throw new Error('Journal : '+r.status);
     return (await r.json())||{};
   },
+  // Réservé au créateur (règles) : les indicateurs écrits chaque jour par le
+  // serveur léger, indicateurs/<AAAA-MM-JJ>. Les 400 derniers jours : le
+  // dernier, et de quoi tracer douze mois.
+  async indicateurs(){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','indicateurs.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&limitToLast=400');
+    if(!r.ok) throw new Error('Indicateurs : '+r.status);
+    return (await r.json())||{};
+  },
   // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
   // (règles : `par` est la clé du compte connecté). true ou false, sans lever.
   // ⚠ AVEC SON VERROU, DANS LA MÊME REQUÊTE : evenements_attente/<par>/<type>/

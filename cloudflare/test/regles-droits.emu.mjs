@@ -105,4 +105,16 @@ await test('parrainage : un compte ne se déclare pas « adresse vérifiée », 
   assert.equal((await appel(LEA, 'GET', 'parrainage/verifies/' + K(LEA))).statut, 401);
   assert.equal((await appel(LEA, 'PUT', 'parrainage_plafond/' + K(LEA) + '/x', { le: 1 })).statut, 401);
 });
+await test('indicateurs/ : lus par le créateur seul (UID et adresse vérifiée), écrits par personne', async () => {
+  await appel('owner', 'PUT', 'indicateurs/2026-10-15', { mrrTTC: 135.55, abonnesActifs: 7, maj: 1 });
+  const r = await appel(CREA, 'GET', 'indicateurs/2026-10-15');
+  assert.equal(r.statut, 200, r.corps);
+  assert.equal(JSON.parse(r.corps).mrrTTC, 135.55);
+  assert.equal((await appel(KEV, 'GET', 'indicateurs')).statut, 401, 'un coach tiers ne lit pas les chiffres');
+  assert.equal((await appel(LEA, 'GET', 'indicateurs/2026-10-15')).statut, 401);
+  UID_FORCE.set(CREA, 'autre-uid');
+  assert.equal((await appel(CREA, 'GET', 'indicateurs')).statut, 401, 'l’adresse du créateur sous un autre UID');
+  UID_FORCE.delete(CREA);
+  assert.equal((await appel(CREA, 'PUT', 'indicateurs/2026-10-16', { mrrTTC: 1 })).statut, 401, 'même le créateur ne les écrit pas');
+});
 console.log(ok + ' tests passés');

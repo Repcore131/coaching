@@ -36257,6 +36257,44 @@ async function testExercices(){
         return /programmeRecu/.test(sm)
           ?true:_echec('la porte ne demande pas le suivi');})());
 
+      // ══ LOT 50 — LES CHIFFRES DU CRÉATEUR VIENNENT DU SERVEUR ═══════════
+      ok('LOT 50 — l’onglet monétisation affiche le MRR du serveur au centime près (135,55 €), résiliés à part, sans calcul local',(()=>{
+        const ids=['pp-total-subs','pp-mrr','pp-cancelled','pp-indicateurs'];
+        const els=ids.map(i=>document.getElementById(i));
+        if(els.some(e=>!e)) return _echec('un emplacement manque : '+ids.filter((i,k)=>!els[k]).join(', '));
+        const avant=els.map(e=>e.innerHTML);
+        try{
+          // Le jeu de test du serveur (cloudflare/test/metier.test.mjs) : 135,55 € calculés à la main.
+          const jour={mrrTTC:135.55,mrrParFormule:{essentielle:19.45,ultime:58.1,coach:19,pro:39},abonnesActifs:7,resiliesEnCours:1,
+            churnMois:12.5,conversionEssai:75,partAnnuel:20,revenuParCoach:29,remboursesMois:9.5,maj:1};
+          const tous={'2026-10-15':jour,'2026-10-01':Object.assign({},jour,{mrrTTC:120}),'2026-09-30':Object.assign({},jour,{mrrTTC:100})};
+          for(let m=1;m<=14;m++){ const k='2025-'+String(((m-1)%12)+1).padStart(2,'0')+'-28'; if(m<=12) tous[k]=Object.assign({},jour,{mrrTTC:m*5}); }
+          const pts=rendreIndicateurs(tous);
+          const nb=String.fromCharCode(160);
+          if(els[1].textContent!=='135,55'+nb+'€') return _echec('MRR affiché : « '+els[1].textContent+' »');
+          if(els[0].textContent!=='7') return _echec('abonnés : '+els[0].textContent);
+          if(els[2].textContent!=='1') return _echec('résiliés en cours : '+els[2].textContent);
+          const txt=els[3].textContent;
+          for(const x of ['19,45','58,10','12,5 %','75 %','20 %','29'+nb+'€','9,50']) if(txt.indexOf(x)<0) return _echec('« '+x+' » manque : '+txt.slice(0,200));
+          if(pts.courbe.length!==12) return _echec('la courbe a '+pts.courbe.length+' points');
+          if(pts.courbe[11].mois!=='2026-10'||pts.courbe[11].mrr!==135.55) return _echec('le dernier point n’est pas le dernier jour : '+JSON.stringify(pts.courbe[11]));
+          if(pts.courbe[10].mrr!==100) return _echec('septembre : '+JSON.stringify(pts.courbe[10]));
+          if(!els[3].querySelector('svg polyline')) return _echec('pas de courbe');
+          // PLUS DE CALCUL LOCAL : ni prix lu dans la table, ni somme des abonnés du cache.
+          const src=String(loadMonetisationTab);
+          if(/offre\(f\)|\.reduce\(\(s,x\)/.test(src)) return _echec('le revenu se recalcule encore dans l’app');
+          if(src.indexOf('_chargerIndicateurs()')<0) return _echec('l’onglet ne lit pas indicateurs/');
+          if(String(CLOUD.indicateurs).indexOf("indicateurs.json")<0) return _echec('CLOUD.indicateurs ne lit pas indicateurs/');
+          // RIEN À MONTRER : on le dit, sans inventer de chiffre.
+          rendreIndicateurs({});
+          if(els[1].textContent!=='–') return _echec('sans indicateurs, un MRR est inventé : '+els[1].textContent);
+          // UN COACH TIERS : sa formule et son quota, et rien d'autre.
+          const h=htmlFormuleCoach({id:'c50',email:'c50@t.fr',role:'coach',coachPlan:'coach'},{});
+          if(!/Ta formule : <b>Coach<\/b>/.test(h)) return _echec('formule du coach : '+h);
+          if(/MRR|€/.test(h)) return _echec('un coach tiers voit des chiffres de l’entreprise : '+h);
+          return true;
+        } finally { els.forEach((e,k)=>{ e.innerHTML=avant[k]; }); }})());
+
       // ══ LOT 49 — UN ACHAT PAYÉ N'EST JAMAIS UN CADENAS MUET ══════════════
       ok('LOT 49 — un achat récent ouvre Ultime 72 h ; au-delà, sans droits/, la boutique dit « Achat en cours de vérification »',(()=>{
         const _su=currentUser, _dr=localStorage.getItem(DROITS_CLE), _pr=localStorage.getItem(PAIEMENT_RECENT_CLE);

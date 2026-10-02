@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, paris, serieDuJour, heureLocale, heuresCalmes, pushAutorise, fuseauValide } from '../src/metier.js';
+import { creerMetier, indicateurs, paris, serieDuJour, heureLocale, heuresCalmes, pushAutorise, fuseauValide } from '../src/metier.js';
 import { minute, BUDGET } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -543,6 +543,93 @@ await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : dépos
     assert.deepEqual(QC.cyclesSuivants({ cycles: 2, mois: '2026-09' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
     assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
     assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, false, '2026-10'), { cycles: 0, mois: '2026-10' });
+  });
+}
+
+// ══ LES INDICATEURS DU CRÉATEUR (02/10/2026) ═══════════════════════════════
+// Un jeu inventé, et les valeurs attendues calculées À LA MAIN :
+//   mensuels actifs : ess1 9,50 + ult1 24,90 + ess2 9,95 (ancien tarif, réellement prélevé)  = 44,35
+//   annuel actif    : ann1 Ultime 249 € / 12                                                  = 20,75
+//   demi actif      : demi1, premier mois réellement prélevé                                  = 12,45
+//   coachs          : Coach 19 + Pro 39                                                       = 58,00
+//   résilié en cours (echeance future), remboursé (echeance passée) : exclus
+//   MRR = 44,35 + 20,75 + 12,45 + 58 = 135,55
+{
+  const T = PARIS('2026-10-15T07:00:00'), J = 864e5;
+  const ESS = 'P-95N51603RD882780YNJKS2QA', ULT = 'P-2W777608239063532NK2LZXA', ULT_AN = 'P-4R440392FL765935VNK732WI', DEMI = 'P-57P40267XP026613FNK2LZXQ';
+  const droits = {
+    'ess1': { palier: 'essentielle', echeance: 0, source: 'paypal', abo: 'I-ESS1', essaiOuvertLe: T - 60 * J },
+    'ult1': { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-ULT1', essaiOuvertLe: T - 50 * J },
+    'ess2': { palier: 'essentielle', echeance: 0, source: 'paypal', abo: 'I-ESS2' },
+    'ann1': { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-ANN1' },
+    'demi1': { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-DEMI1' },
+    'res1': { palier: 'essentielle', echeance: T + 20 * J, source: 'paypal', abo: 'I-RES1', essaiOuvertLe: T - 90 * J },
+    'remb1': { palier: 'essentielle', echeance: T - 2 * J, source: 'paypal', abo: 'I-REMB1' },
+    'eva': { palier: 'aucun', echeance: 0, source: 'essai', essaiOuvertLe: T - 10 * J },
+    'suivi1': { palier: 'suivi', echeance: 0, source: 'code_coach' },
+  };
+  const v = (cle, abo, cts, plan, le, o) => Object.assign({ cle, abo, type: 'abonnement', montant: cts, plan, le, premier: false }, o || {});
+  const transactions = {
+    S1: v('ess1', 'I-ESS1', 950, ESS, T - 30 * J), S1b: v('ess1', 'I-ESS1', 950, ESS, T - 5 * J),
+    S2: v('ult1', 'I-ULT1', 2490, ULT, T - 3 * J),
+    S3: v('ess2', 'I-ESS2', 995, null, T - 8 * J),             // vente d'avant le plan noté : 9,95 au mois
+    S4: v('ann1', 'I-ANN1', 24900, ULT_AN, T - 100 * J),
+    S5: v('demi1', 'I-DEMI1', 1245, DEMI, T - 6 * J),
+    S6: v('res1', 'I-RES1', 950, ESS, T - 10 * J),
+    S7: v('remb1', 'I-REMB1', 950, ESS, T - 2 * J, { annuleLe: T - 2 * J, rembourses: { R1: 950 } }),
+    P1: { cle: 'eva', type: 'programme', montant: 1490, le: T - 4 * J },
+  };
+  const users = { 'kev,coach': { coachPlan: 'coach', coachSubActive: true }, 'lou,pro': { coachPlan: 'pro', coachSubActive: true },
+    'max,libre': { coachPlan: 'libre', coachSubActive: false }, 'old,coach': { coachPlan: 'coach', coachSubActive: false } };
+  const fins = { res1: { fin: T + 20 * J, le: T - 1 * J, role: 'athlete' } };
+
+  await test('indicateurs : MRR au centime près sur le jeu de test (135,55 €), résiliés et remboursés exclus', async () => {
+    const r = indicateurs(droits, transactions, users, T, fins);
+    assert.equal(r.mrrTTC, 135.55);
+    assert.deepEqual(r.mrrParFormule, { essentielle: 19.45, ultime: 58.1, coach: 19, pro: 39 });
+    assert.equal(r.abonnesActifs, 7, '5 athlètes + 2 coachs');
+    assert.equal(r.resiliesEnCours, 1);
+    assert.equal(r.churnMois, 12.5, '1 résiliation ce mois / (7 + 1)');
+    assert.equal(r.conversionEssai, 75, 'ess1, ult1, res1 ont payé ; eva non : 3 / 4');
+    assert.equal(r.partAnnuel, 20, '1 annuel sur 5 athlètes');
+    assert.equal(r.revenuParCoach, 29, '(19 + 39) / 2');
+    assert.equal(r.remboursesMois, 9.5);
+  });
+
+  await test('indicateurs : un coach résilié (fin notée) sort du MRR ; un abonné sans vente connue compte au prix de la table', async () => {
+    const r = indicateurs(droits, transactions, users, T, Object.assign({}, fins, { 'lou,pro': { fin: T + 9 * J, le: T, role: 'coach' } }));
+    assert.equal(r.mrrTTC, 96.55);
+    assert.equal(r.resiliesEnCours, 2);
+    const r2 = indicateurs({ x: { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-X' } }, {}, {}, T, {});
+    assert.equal(r2.mrrTTC, 24.9);
+    assert.equal(r2.conversionEssai, null, 'pas d’essai : pas de taux inventé');
+  });
+
+  await test('indicateursJour : écrit indicateurs/<jour> depuis droits/, paypal_transactions, coachs_registre et paypal_fins ; travail planifié', async () => {
+    const w = monde({ droits, paypal_transactions: transactions, paypal_fins: fins,
+      coachs_registre: { 'kev,coach': { plan: 'coach', actifJusqu: T + 30 * J }, 'lou,pro': { plan: 'pro', actifJusqu: T + 30 * J }, 'old,coach': { plan: 'coach', actifJusqu: T - J } } }, T);
+    const r = await w.M.indicateursJour(T);
+    assert.equal(r.mrrTTC, 135.55);
+    const ecrit = w.F.lire('indicateurs/2026-10-15');
+    assert.equal(ecrit.mrrTTC, 135.55);
+    assert.equal(ecrit.maj, T);
+    assert.ok(w.compteur() <= 6, w.compteur() + ' requêtes');
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/planif.js', import.meta.url), 'utf8');
+    assert.match(src, /nom: 'indicateurs', quand: \(p\) => apres\(p, 6, 50\), une: \(t\) => \(M\.indicateursJour \? M\.indicateursJour\(t\) : null\)/);
+    const regles = readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
+    assert.match(regles, /"indicateurs": \{\n\s+"\.read": "auth != null && \(auth\.uid === '[^']+' && auth\.token\.email_verified === true\)",\n\s+"\.write": false\n\s+\}/);
+  });
+
+  await test('finUne : la fin d’un athlète atteinte écrit aussi paymentStatus = cancelled', async () => {
+    const { creerPaypal } = await import('../src/paypal.js');
+    const w = monde({ users: { 'lea,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active' } },
+      paypal_fins: { 'lea,fr': { fin: T - J, role: 'athlete', reserve: 0, le: T - 30 * J } } }, T);
+    const PP = creerPaypal({ db: w.db, M: w.M, env: {}, maintenant: () => T });
+    assert.equal(await PP.fins(), 1);
+    assert.equal(w.F.lire('users/lea,fr/paymentStatus'), 'cancelled');
+    assert.equal(w.F.lire('users/lea,fr/updatedAt'), T);
+    assert.equal(w.F.lire('paypal_fins/lea,fr'), null);
   });
 }
 

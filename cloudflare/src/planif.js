@@ -91,6 +91,9 @@ export function travaux(M) {
     // chez PayPal trois jours avant la date d'effet (paypal.js, resiliationsDues).
     { nom: 'resiliations', quand: (p) => apres(p, 5, 45), une: (t) => (M.paypal ? M.paypal.resiliationsDues(t) : null) },
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
+    // LES INDICATEURS DU CRÉATEUR (02/10/2026) : MRR, résiliés, churn… écrits
+    // chaque jour dans indicateurs/<AAAA-MM-JJ>, après les fins du jour.
+    { nom: 'indicateurs', quand: (p) => apres(p, 6, 50), une: (t) => (M.indicateursJour ? M.indicateursJour(t) : null) },
     // LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) : après fins_coachs, qui remet
     // en Libre un coach dont l'abonnement est fini. Voir metier.js couvertureCoach.
     { nom: 'couverture_coachs', quand: (p) => apres(p, 6, 30), cles: () => (M.couvertureCles ? M.couvertureCles() : []),

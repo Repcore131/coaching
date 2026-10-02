@@ -2191,6 +2191,13 @@
     // Le journal des remboursements, retrofacturations et litiges : qui, quoi,
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).
+    // Les indicateurs du createur (02/10/2026) : MRR, abonnes, resilies, churn,
+    // un par jour (indicateurs/<AAAA-MM-JJ>). Ecrits par le serveur leger seul,
+    // lus par le createur seul : ce sont les chiffres de son entreprise.
+    "indicateurs": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
     "paypal_journal": {
       ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false

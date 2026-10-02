@@ -1074,7 +1074,7 @@ const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,'')
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
-//   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
+//   PAYPAL_PLAN_ID : Essentielle au mois (son prix vit dans tarifs.json).
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
@@ -1132,8 +1132,8 @@ const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v===
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
 // auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
 // ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
-// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
-// encaissait 9,95.
+// arrive ici — PRIX_ATHLETE_MOIS annoncait un prix pendant que PayPal
+// en encaissait un autre.
 //
 // CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
 //   palier   le palier ouvert (voir PALIERS_ORDRE)
@@ -1175,7 +1175,7 @@ const OFFRES=Object.freeze({
   essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
-// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,50 » / « € » en fin de
 //   ligne est fautive en typographie francaise, et elle arrive sur telephone.
 function _euros(n){
   const v=Number(n)||0;

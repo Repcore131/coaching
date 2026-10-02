@@ -1240,9 +1240,15 @@ export function creerPaypal(ctx) {
         ['users/' + cle + '/updatedAt']: t, ['coachs_registre/' + cle + '/plan']: 'libre',
         ['coachs_registre/' + cle + '/actifJusqu']: t, ['coachs_registre/' + cle + '/maj']: t,
         ['worker/jobs/couverture_coachs']: null });    // le quota se recalcule au réveil suivant
-    } else if (Number(f.reserve) > 0) {
-      const r = Number(f.reserve);
-      await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));
+    } else {
+      // LA FIN EST ATTEINTE (02/10/2026) : le dossier le dit aussi. Les écrans
+      // qui lisent paymentStatus (liste des abonnés, onglet monétisation)
+      // comptaient encore « active » un abonné fini.
+      await db.ref().update({ ['users/' + cle + '/paymentStatus']: 'cancelled', ['users/' + cle + '/updatedAt']: t });
+      if (Number(f.reserve) > 0) {
+        const r = Number(f.reserve);
+        await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));
+      }
     }
     await db.ref('paypal_fins/' + cle).remove();
   }

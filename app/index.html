@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1797';
+window.RC_BUILD='1798';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-02';
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1797.css">
+<link rel="stylesheet" href="./rc-style.1798.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1797.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1798.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -2286,15 +2286,18 @@ const COACH_PHOTO='icons/coach.jpg';
              Rempli par _rendreAccesAthletes, appele par loadMonetisationTab. -->
         <div id="mon-acces-athletes" style="margin-bottom:28px"></div>
 
+        <div id="pp-coach"></div>
+        <div id="pp-bloc">
         <h2 style="margin-bottom:4px">Paiements</h2>
         <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px">Abonnements souscrits directement dans l'application, par les athlètes inscrits sans code de coach.</p>
 
         <!-- Stats -->
         <div class="metric-row-compacte" style="display:flex;gap:10px;margin-bottom:20px">
-          <div class="metric-box"><div class="metric-val" id="pp-total-subs" style="color:var(--green)">0</div><div class="metric-label">Abonnes actifs</div></div>
-          <div class="metric-box"><div class="metric-val" id="pp-mrr" style="color:var(--green)">0 EUR</div><div class="metric-label">MRR estime</div></div>
-          <div class="metric-box"><div class="metric-val" id="pp-cancelled">0</div><div class="metric-label">Annules</div></div>
+          <div class="metric-box"><div class="metric-val" id="pp-total-subs" style="color:var(--green)">–</div><div class="metric-label">Abonnés actifs</div></div>
+          <div class="metric-box"><div class="metric-val" id="pp-mrr" style="color:var(--green)">–</div><div class="metric-label">MRR TTC</div></div>
+          <div class="metric-box"><div class="metric-val" id="pp-cancelled">–</div><div class="metric-label">Résiliés en cours</div></div>
         </div>
+        <div id="pp-indicateurs"></div>
 
         <!-- Subscribers -->
         <div>
@@ -2308,6 +2311,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-md)">Aucun abonné pour l'instant.</div>
             </div>
           </div>
+        </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin:28px 0 14px">
           <div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>
@@ -6101,5 +6105,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1797.js"></script>
+<script src="./rc-core.1798.js"></script>
 </body></html>

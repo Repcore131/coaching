@@ -1074,7 +1074,7 @@ const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,'')
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
-//   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
+//   PAYPAL_PLAN_ID : Essentielle au mois (son prix vit dans tarifs.json).
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
@@ -1132,8 +1132,8 @@ const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v===
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
 // auraient diverge : un prix corrige d'un cote, oublie de l'autre, et deux
 // ecrans qui ne disent pas la meme chose a la meme personne. C'est deja
-// arrive ici — PRIX_ATHLETE_MOIS annoncait 9,50 pendant que PayPal
-// encaissait 9,95.
+// arrive ici — PRIX_ATHLETE_MOIS annoncait un prix pendant que PayPal
+// en encaissait un autre.
 //
 // CHAQUE OFFRE DIT CE QU'ELLE OUVRE, ET POUR COMBIEN DE TEMPS :
 //   palier   le palier ouvert (voir PALIERS_ORDRE)
@@ -1175,7 +1175,7 @@ const OFFRES=Object.freeze({
   essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
-// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
+// ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,50 » / « € » en fin de
 //   ligne est fautive en typographie francaise, et elle arrive sur telephone.
 function _euros(n){
   const v=Number(n)||0;
@@ -6515,6 +6515,17 @@ const CLOUD={
     const r=await fetch(this._fbUrl.replace('users.json','paypal_journal.json')+'?auth='+token
       +'&orderBy=%22%24key%22&limitToLast=50');
     if(!r.ok) throw new Error('Journal : '+r.status);
+    return (await r.json())||{};
+  },
+  // Réservé au créateur (règles) : les indicateurs écrits chaque jour par le
+  // serveur léger, indicateurs/<AAAA-MM-JJ>. Les 400 derniers jours : le
+  // dernier, et de quoi tracer douze mois.
+  async indicateurs(){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','indicateurs.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&limitToLast=400');
+    if(!r.ok) throw new Error('Indicateurs : '+r.status);
     return (await r.json())||{};
   },
   // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
@@ -128590,39 +128601,31 @@ function loadMonetisationTab(){
   setIf(cldPreset,u.cloudinaryPreset||'');suivre(cldPreset);
   const isCreator=u.email===CREATOR_EMAIL;
   const users=DB.get('users')||{};
-  // Créateur : voit tous les abonnés PayPal de l'application.
-  // Autre coach : voit uniquement ses propres élèves payants (à titre informatif).
-  const subs=isCreator
-    ? Object.values(users).filter(x=>x.status==='AUTONOMIE_PREMIUM')
-    : Object.values(users).filter(x=>x.status==='AUTONOMIE_PREMIUM'&&x.coachId===u.id);
-  const active=subs.filter(x=>x.paymentStatus==='active');
-  const cancelled=subs.filter(x=>x.paymentStatus==='cancelled');
-  document.getElementById('pp-total-subs').textContent=active.length;
-  // ⚠ LE SEUL PRIX ENCORE ECRIT EN DUR DANS TOUT LE FICHIER, trouve le
-  //   24/09/2026 : « active.length * 9.95 ». Il annoncait un revenu mensuel
-  //   calcule sur un tarif qui venait de changer, et sur le seul tarif
-  //   d'Essentielle — un abonne a Ultime comptait pour 9,95 €. Chacun compte
-  //   maintenant pour ce que SA formule vaut, lue dans la table.
-  document.getElementById('pp-mrr').textContent=_euros(Math.round(active.reduce((s,x)=>{
-    const f=String(((x.abonnement||{}).formule)||'essentielle');
-    return s+(Number((offre(f)||{}).prix)||0);
-  },0)*100)/100);
-  document.getElementById('pp-cancelled').textContent=cancelled.length;
+  // ══ LES CHIFFRES DU CRÉATEUR VIENNENT DU SERVEUR (02/10/2026) ══════════
+  // Ils étaient recalculés ici depuis le cache de l'appareil : un abonné à
+  // l'ancien tarif comptait au nouveau, un annuel pour un mois plein, un
+  // résilié tant que son dossier disait « active ». Le serveur léger les
+  // calcule chaque jour (metier.js, indicateurs) et les écrit dans
+  // indicateurs/<jour>, que le créateur seul peut lire. Plus aucun calcul ici.
+  // Un coach tiers ne voit que sa formule et son quota.
+  const _bloc=document.getElementById('pp-bloc'), _coach=document.getElementById('pp-coach');
+  if(_bloc) _bloc.style.display=isCreator?'':'none';
+  if(_coach) _coach.innerHTML=isCreator?'':htmlFormuleCoach(u,users);
+  if(isCreator) _chargerIndicateurs();
+  // LA LISTE (créateur seul) : les dossiers synchronisés sur cet appareil, à
+  // titre de liste. Les CHIFFRES, eux, sont ceux du serveur, juste au-dessus.
   const el=document.getElementById('pp-subs-list');
-  if(!subs.length){
-    // R13 — rien a faire d'ici : on dit qui agit (l'athlete, en souscrivant)
-    // et quand la liste se remplit.
-    const msg=isCreator
-      ?'Aucun abonné pour l\'instant. Ils apparaîtront ici dès leur premier paiement.'
-      :'Aucun de tes élèves n\'a encore souscrit. Ils apparaîtront ici dès leur premier paiement.';
-    el.innerHTML=emptyState('user',msg);return;
+  if(el&&isCreator){
+    const subs=Object.values(users).filter(x=>x&&x.status==='AUTONOMIE_PREMIUM');
+    el.innerHTML=!subs.length
+      ?emptyState('user','Aucun abonné sur cet appareil pour l\'instant. Ils apparaissent ici dès leur premier paiement.')
+      :subs.map(s=>{
+        const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+escapeHtml(s.paymentStatus||'Inactif')+'</span>';
+        const coachInfo=s.coachName?'<div class="sub" style="font-size:var(--fs-xs)">Coach : '+escapeHtml(s.coachName)+'</div>':'';
+        const _snm=((s.fname||'')+' '+(s.lname||'')).trim()||'';
+        return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+escapeHtml(_snm)+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+escapeHtml(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+escapeHtml(s.email)+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+      }).join('');
   }
-  el.innerHTML=subs.map(s=>{
-    const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+(s.paymentStatus||'Inactif')+'</span>';
-    const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:var(--fs-xs)">Coach : '+escapeHtml(s.coachName)+'</div>':'';
-    const _snm=((s.fname||'')+' '+(s.lname||'')).trim()||'';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
-  }).join('');
   // Section admin offboarding — visible créateur seulement
   // LE LIEN VERS L'ÉCRAN « Accès ». Créateur seulement : lui seul peut écrire
   // droits/, et un lien qui mène à un écran qui refuse ne vaut pas mieux que
@@ -128644,6 +128647,68 @@ function loadMonetisationTab(){
       adminSection.style.display='none';
     }
   }
+}
+
+// ══ LES INDICATEURS, LUS (créateur seul) ══════════════════════════════════
+let _indicateursCache=null;
+async function _chargerIndicateurs(){
+  const z=document.getElementById('pp-indicateurs');
+  if(_indicateursCache) rendreIndicateurs(_indicateursCache);
+  else if(z) z.innerHTML='<div class="sub" style="font-size:var(--fs-xs)">Chargement des indicateurs…</div>';
+  try{ _indicateursCache=await CLOUD.indicateurs(); }catch(e){ if(!_indicateursCache&&z) z.innerHTML='<div class="sub" style="font-size:var(--fs-xs)">Indicateurs illisibles pour l’instant.</div>'; return false; }
+  rendreIndicateurs(_indicateursCache);
+  return true;
+}
+// PURE. Le dernier jour, et la courbe : le dernier relevé de chacun des douze
+// derniers mois, du plus ancien au plus récent.
+function indicateursPoints(tous){
+  const jours=Object.keys(tous||{}).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&tous[k]&&typeof tous[k]==='object').sort();
+  if(!jours.length) return {dernier:null,jour:'',courbe:[]};
+  const parMois={};
+  for(const j of jours) parMois[j.slice(0,7)]=j;
+  const courbe=Object.keys(parMois).sort().slice(-12).map(m=>({mois:m,mrr:Number(tous[parMois[m]].mrrTTC)||0}));
+  const jour=jours[jours.length-1];
+  return {dernier:tous[jour],jour,courbe};
+}
+// PURE. Le bloc des indicateurs : la ventilation, les taux, la courbe.
+function htmlIndicateurs(pts){
+  if(!pts||!pts.dernier) return '<div class="sub" style="font-size:var(--fs-xs)">Pas encore d’indicateurs : le serveur les écrit chaque matin.</div>';
+  const d=pts.dernier, f=d.mrrParFormule||{};
+  const pc=(x)=>(x===null||x===undefined)?'–':String(x).replace('.',',')+' %';
+  const eu=(x)=>(x===null||x===undefined)?'–':_euros(Number(x)||0);
+  const l=(t,v)=>'<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">'
+    +'<span style="color:var(--sub)">'+escapeHtml(t)+'</span><span style="color:var(--text)">'+escapeHtml(v)+'</span></div>';
+  const max=Math.max(1,...pts.courbe.map(p=>p.mrr));
+  const W=300,H=60,n=pts.courbe.length;
+  const xy=pts.courbe.map((p,i)=>[(n>1?i*(W/(n-1)):W/2),H-4-(p.mrr/max)*(H-8)]);
+  const svg=n?'<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" role="img" aria-label="MRR sur douze mois" style="display:block;margin:8px 0">'
+    +'<polyline fill="none" stroke="var(--green)" stroke-width="2" points="'+xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')+'"/>'
+    +xy.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.5" fill="var(--green)"/>').join('')+'</svg>'
+    +'<div style="display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--sub)"><span>'+escapeHtml(pts.courbe[0].mois)+'</span><span>'+escapeHtml(pts.courbe[n-1].mois)+'</span></div>':'';
+  return '<div id="pp-ind" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px 16px;margin-bottom:20px">'
+    +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:6px">Au '+escapeHtml(pts.jour)+', calculé par le serveur</div>'
+    +l('Essentielle',eu(f.essentielle))+l('Ultime',eu(f.ultime))+l('Coach',eu(f.coach))+l('Pro',eu(f.pro))
+    +l('Churn du mois',pc(d.churnMois))+l('Conversion de l’essai',pc(d.conversionEssai))
+    +l('Part en annuel',pc(d.partAnnuel))+l('Revenu par coach',eu(d.revenuParCoach))+l('Remboursé ce mois',eu(d.remboursesMois))
+    +svg+'</div>';
+}
+function rendreIndicateurs(tous){
+  const pts=indicateursPoints(tous), d=pts.dernier;
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+  set('pp-total-subs',d?String(Number(d.abonnesActifs)||0):'–');
+  set('pp-mrr',d?_euros(Number(d.mrrTTC)||0):'–');
+  set('pp-cancelled',d?String(Number(d.resiliesEnCours)||0):'–');
+  const z=document.getElementById('pp-indicateurs');
+  if(z) z.innerHTML=htmlIndicateurs(pts);
+  return pts;
+}
+// PURE. Ce qu'un coach tiers voit à la place : sa formule et son quota.
+function htmlFormuleCoach(u,users){
+  const cle=coachPlanDe(u), pal=COACH_PALIERS.find(x=>x.cle===cle)||COACH_PALIERS[0];
+  const fiable=countActiveAthletesFiable(u,users);
+  const quota=getCoachQuota(cle);
+  return '<div id="pp-coach-formule" class="sub" style="font-size:var(--fs-sm);margin-bottom:20px">Ta formule : <b>'+escapeHtml(pal.titre)+'</b>, '
+    +escapeHtml(fiable?(countActiveAthletes(u,users)+' / '+_quotaTexte(quota)+' athlètes actifs'):'quota en cours de synchronisation')+'.</div>';
 }
 
 async function toggleSubStatus(email){

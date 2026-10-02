@@ -617,6 +617,25 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
   console.log('fuseau : le meme motif dans l\'app, le Worker et les regles');
 }
 
+// ══ LES INDICATEURS : LUS PAR LE CREATEUR SEUL, ECRITS PAR PERSONNE (02/10/2026) ══
+// Le MRR, les abonnes, le churn : les chiffres de l'entreprise. Le Worker les
+// ecrit (Admin, hors regles) ; une regle trop large les montrerait a tout
+// compte connecte.
+{
+  const m=regles.match(/"indicateurs"\s*:\s*\{([\s\S]*?)\n    \}/);
+  if(!m){ console.error('\nindicateurs/ n\'est pas declare dans database.rules.json'); process.exit(1); }
+  const lit=(m[1].match(/"\.read"\s*:\s*"([^"]+)"/)||[])[1]||'';
+  const ecrit=(m[1].match(/"\.write"\s*:\s*([^,\n]+)/)||[])[1]||'';
+  if(lit!=='auth != null && '+CONDITION_CREATEUR){ console.error('\nindicateurs/ : lecture « '+lit+' » — attendu : auth != null && '+CONDITION_CREATEUR); process.exit(1); }
+  if(ecrit.trim()!=='false'){ console.error('\nindicateurs/ : ecriture « '+ecrit.trim()+' » — attendu : false (le serveur ecrit en Admin)'); process.exit(1); }
+  if(/"\$[a-zA-Z]+"\s*:/.test(m[1])){ console.error('\nindicateurs/ : une sous-regle pourrait ouvrir un jour a un autre compte'); process.exit(1); }
+  // Le controle se prouve : une lecture ouverte a tous serait vue.
+  const faux=m[1].replace(/"\.read"\s*:\s*"[^"]+"/,'".read": "auth != null"');
+  const litFaux=(faux.match(/"\.read"\s*:\s*"([^"]+)"/)||[])[1]||'';
+  if(litFaux==='auth != null && '+CONDITION_CREATEUR){ console.error('\nauto-controle indicateurs : une lecture ouverte n\'est pas vue'); process.exit(1); }
+  console.log('indicateurs : lus par le createur seul, ecrits par le serveur seul');
+}
+
 // ══ AUCUNE REGLE D'ADMINISTRATION FONDEE SUR L'ADRESSE SEULE (01/10/2026) ══
 //
 // Une adresse e-mail n'est pas une identite : un compte Google, Apple ou lie

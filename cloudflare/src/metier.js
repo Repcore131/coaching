@@ -39,6 +39,8 @@ import * as L from './ligues.js';
 import * as RA from './rappels.js';
 import * as CS from './calendrier-saisons.js';
 import * as QC from './quota-coach.js';
+import { OFFRES_PAYPAL } from './paypal.js';
+import TARIFS from '../../tarifs.json' with { type: 'json' };
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -295,6 +297,90 @@ export function limitesDe(env) {
  * `file` : la file Cloudflare Queues des push (env.PUSHS, si FILE_PUSH='queue') ;
  * absente, tout passe par /evenements comme sur le plan gratuit.
  */
+// ══ LES INDICATEURS DU CRÉATEUR (02/10/2026) — PURE ═════════════════════════
+// L'onglet monétisation recalculait le revenu depuis le cache de l'app : les
+// dossiers que l'appareil avait sous la main, au prix de la table — un abonné
+// à l'ancien tarif comptait au nouveau, un annuel pour un mois plein, un
+// résilié tant que son dossier disait « active ». Ici, depuis ce que le
+// SERVEUR sait :
+//   · droits/<clé> (source paypal) : actif si sans échéance ; une échéance
+//     future = RÉSILIÉ EN COURS (fermerALaFin la pose), exclu du MRR ; passée = fini ;
+//   · le MONTANT RÉELLEMENT PRÉLEVÉ : la dernière vente de l'abonnement dans
+//     paypal_transactions (le plan demi compte 12,45 € le premier mois) ; un
+//     plan annuel (OFFRES_PAYPAL.periode) compte pour an / 12 ;
+//   · les coachs : coachPlan + coachSubActive (le registre, côté serveur) ;
+//     un coach dont la fin est notée (paypal_fins) est résilié, exclu du MRR.
+// Montants en EUROS TTC, arrondis au centime à la fin seulement.
+//   churnMois      résiliations notées ce mois ÷ (actifs + elles), en %
+//   conversionEssai part des comptes passés par l'essai qui ont payé, en %
+//   partAnnuel     part des athlètes abonnés actifs en annuel, en %
+//   revenuParCoach MRR des formules coach ÷ coachs payants, en €
+//   remboursesMois remboursements totaux (annuleLe) du mois, en €
+const euros2 = (cts) => Math.round(cts) / 100;
+const pct1 = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
+export function indicateurs(droits, transactions, users, maintenant, fins) {
+  const t = Number(maintenant) || Date.now();
+  const mois = paris(t).jour.slice(0, 7);
+  const duMois = (x) => Number(x) > 0 && paris(Number(x)).jour.slice(0, 7) === mois;
+  const D = droits || {}, X = transactions || {}, U = users || {}, F = fins || {};
+  // La dernière vente de chaque abonnement, et qui a déjà payé un abonnement.
+  const derniere = {}, payeurs = new Set();
+  let remboursesCts = 0;
+  for (const [id, x] of Object.entries(X)) {
+    if (!x || typeof x !== 'object') continue;
+    if (duMois(x.annuleLe)) {
+      const r = Object.values(x.rembourses || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+      remboursesCts += r > 0 ? r : (Number(x.montant) || 0);
+    }
+    if (x.type !== 'abonnement') continue;
+    if (x.cle) payeurs.add(String(x.cle));
+    if (!x.abo) continue;
+    const p = derniere[x.abo];
+    if (!p || (Number(x.le) || 0) > (Number(p.le) || 0)) derniere[x.abo] = Object.assign({ id }, x);
+  }
+  const par = { essentielle: 0, ultime: 0, coach: 0, pro: 0 };
+  let actifs = 0, resilies = 0, athletes = 0, annuels = 0, coachs = 0, essais = 0, convertis = 0;
+  for (const [cle, d] of Object.entries(D)) {
+    if (!d || typeof d !== 'object') continue;
+    if (Number(d.essaiOuvertLe) > 0) { essais++; if (payeurs.has(cle)) convertis++; }
+    const pal = String(d.palier || '');
+    if (d.source !== 'paypal' || (pal !== 'essentielle' && pal !== 'ultime')) continue;
+    const ech = Number(d.echeance) || 0;
+    if (ech > 0) { if (ech > t) resilies++; continue; }
+    const v = d.abo ? derniere[d.abo] : null;
+    let cts = Math.round(TARIFS[pal].mois * 100), an = false;
+    if (v && Number(v.montant) > 0) {
+      cts = Number(v.montant);
+      const pl = OFFRES_PAYPAL[v.plan];
+      // Sans plan noté (ventes d'avant le 02/10/2026) : un montant au-delà de
+      // six mensualités ne peut être qu'un annuel.
+      an = pl ? pl.periode === 'an' : cts > Math.round(TARIFS[pal].mois * 100) * 6;
+    }
+    par[pal] += an ? cts / 12 : cts;
+    actifs++; athletes++; if (an) annuels++;
+  }
+  for (const [cle, u] of Object.entries(U)) {
+    const p = u && u.coachPlan;
+    if ((p !== 'coach' && p !== 'pro') || u.coachSubActive !== true) continue;
+    if (F[cle]) { resilies++; continue; }
+    par[p] += Math.round(TARIFS.coach[p] * 100);
+    actifs++; coachs++;
+  }
+  const resMois = Object.values(F).filter((f) => f && duMois(f.le)).length;
+  const total = par.essentielle + par.ultime + par.coach + par.pro;
+  return {
+    mrrTTC: euros2(total),
+    mrrParFormule: { essentielle: euros2(par.essentielle), ultime: euros2(par.ultime), coach: euros2(par.coach), pro: euros2(par.pro) },
+    abonnesActifs: actifs,
+    resiliesEnCours: resilies,
+    churnMois: pct1(resMois, actifs + resMois),
+    conversionEssai: pct1(convertis, essais),
+    partAnnuel: pct1(annuels, athletes),
+    revenuParCoach: coachs ? euros2((par.coach + par.pro) / coachs) : null,
+    remboursesMois: euros2(remboursesCts),
+  };
+}
+
 export function creerMetier(deps) {
   const { db } = deps;
   const LIM = Object.assign({ maxChiffrements: MAX_CHIFFREMENTS, coutPush: COUT_PUSH }, deps.limites || {});
@@ -2438,6 +2524,21 @@ export function creerMetier(deps) {
     if (etape === 'programme') return Number(await _val('users/' + k + '/parcours/programmeLu')) > 0;
     return true;
   }
+  // LE TRAVAIL QUOTIDIEN (planif.js, « indicateurs ») : quatre lectures, une
+  // écriture, indicateurs/<AAAA-MM-JJ> (lu par le créateur seul).
+  async function indicateursJour(tBrut) {
+    const t = tBrut || Date.now();
+    const [droits, tx, registre, fins] = await Promise.all([_val('droits'), _val('paypal_transactions'), _val('coachs_registre'), _val('paypal_fins')]);
+    // Les coachs, du REGISTRE (le serveur l'écrit ; users/<clé>/coachPlan n'en est que le miroir).
+    const users = {};
+    for (const [cle, r] of Object.entries(registre || {})) {
+      if (r && typeof r === 'object') users[cle] = { coachPlan: String(r.plan || 'libre'), coachSubActive: Number(r.actifJusqu) > t };
+    }
+    const res = indicateurs(droits, tx, users, t, fins);
+    await db.ref('indicateurs/' + paris(t).jour).set(Object.assign({ maj: t }, res));
+    return res;
+  }
+
   async function accueilRelances(t) {
     const jour = paris(t).jour;
     const liste = (await _val('parcours_relances/' + jour)) || {};
@@ -2509,7 +2610,7 @@ export function creerMetier(deps) {
     return 'tache_inconnue';
   }
 
-  return { envoyerPush, enFile, alerteKo, abonnes, planifies, serieReservee, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
+  return { indicateursJour, envoyerPush, enFile, alerteKo, abonnes, planifies, serieReservee, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, couvertureCoach, couvertureCles, couvertureUn, couvertureFin, couvertureRelancer, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits, dejaPaye,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,

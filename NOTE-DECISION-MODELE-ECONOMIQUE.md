@@ -3,6 +3,11 @@
 **Rédigée le 27/07/2026** · Décision attendue de Kevin Guellec
 **Statut : EN ATTENTE D'ARBITRAGE** — à dater et signer ci-dessous.
 
+> **Note du 02/10/2026.** Les montants des §1 à §5 (9,95 €/mois, 99 €/an) sont
+> ceux de juillet 2026 et ne sont plus en vigueur. Les tarifs actuels, et la
+> façon dont le revenu se mesure désormais, sont au §7. La seule source des
+> prix est `tarifs.json`.
+
 ---
 
 ## 1. Le problème, en une phrase
@@ -218,3 +223,27 @@ de Kevin, ou un produit ?
 *Références : `app/index.html` l. 716, 1093, 1127 (textes de reversement) ;
 `RepCore-AUDIT-2026-07-25/05-marketing-business.md` §3.1 (prix vérifiés par URL,
 consultés le 25/07/2026).*
+
+---
+
+## 7. Tarifs en vigueur et mesure du revenu (02/10/2026)
+
+**Les prix** vivent dans `tarifs.json`, et nulle part ailleurs : `scripts/tarifs.mjs` les recopie dans l'app, les pages publiques et la fiche Play Store, et `scripts/verif/tarifs.mjs` refuse tout écart.
+
+| Formule | Au mois | À l'année |
+|---|---|---|
+| Essentielle | 9,50 € | 95 € (−17 %) |
+| Ultime | 24,90 € | 249 € (−17 %) |
+| Coach (15 athlètes actifs) | 19 € | — |
+| Pro (sans limite) | 39 € | — |
+| Libre (1 athlète) | 0 € | — |
+
+Engagement de 12 mois pour l'athlète (résiliation à son terme, arrêtée par RepCore chez PayPal) ; formules coach au mois, sans engagement. Les abonnés annuels d'avant le 02/10/2026 gardent leur prix (114 € et 298,80 €).
+
+**Le revenu se mesure côté serveur.** Le serveur léger calcule chaque matin `indicateurs/<AAAA-MM-JJ>` (`cloudflare/src/metier.js`, fonction `indicateurs`), que le créateur seul peut lire, et que l'onglet monétisation affiche :
+
+- **MRR TTC** : pour chaque abonnement actif, le montant **réellement prélevé** à la dernière échéance (un ancien tarif compte à son prix, le plan « demi » pour 12,45 € le premier mois), un annuel pour un douzième ; plus les formules coach payantes. **Les résiliés en cours en sont exclus**, même si leur accès court encore ;
+- la ventilation par formule, les résiliés en cours, le churn du mois, la conversion de l'essai, la part en annuel, le revenu moyen par coach et les remboursements du mois ;
+- la courbe du MRR sur douze mois.
+
+L'app ne recalcule plus rien depuis son cache : un abonné à un ancien tarif, un annuel ou un résilié y étaient mal comptés.
