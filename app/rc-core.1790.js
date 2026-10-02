@@ -50224,9 +50224,11 @@ function _dessinerBilanSeance(d,fond,format){
     while(larg()>LARG&&ts>22) ts-=1;
     g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+ts+'px '+BEBAS;
     ecrireEspace(t,cxm,y+30,esp,true);
+    _visuelAdresse(g,ecrireEspace,cxm,y+30,ts);
   } else {
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+BEBAS;
     ecrireEspace('REPCORE',cxm,y+30,5,true);
+    _visuelAdresse(g,ecrireEspace,cxm,y+30,34);
   }
   ombre(false);
   return cv;
@@ -50351,21 +50353,44 @@ function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
   g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke();
   g.restore();
 }
+// L'ADRESSE SOUS LA SIGNATURE (02/10/2026) : RC_ADRESSE_AFFICHEE, sans
+// https://, ≈ 60 % de la taille de la signature, blanc à 0,7, avec l'ombre en
+// cours (lisible sur le carbone, la photo et le rouge). En Montserrat : une
+// adresse se lit en minuscules, le Bebas n'a que des capitales. Pas de QR :
+// une story se regarde une seconde, une adresse courte se retient et se tape.
+// `adresse` : celle à écrire (tests), RC_ADRESSE_AFFICHEE sinon. Rend la
+// hauteur ajoutée sous la ligne de base de la signature (0 sans adresse : le
+// visuel est exactement celui d'avant).
+function _visuelAdresse(g,ecrireEspace,cx,y,ts,adresse){
+  const a=String(adresse===undefined?RC_ADRESSE_AFFICHEE:adresse).trim().replace(/^https?:\/\//i,'').replace(/\/+$/,'');
+  if(!a) return 0;
+  const taille=Math.max(14,Math.round(ts*0.6)), dy=Math.round(taille*1.45);
+  g.save();
+  g.fillStyle='rgba(255,255,255,.7)';
+  g.font='600 '+taille+"px Montserrat,'Segoe UI',sans-serif";
+  ecrireEspace(a,cx,y+dy,2,true);
+  g.restore();
+  return dy;
+}
 // La signature du bas, reprise du bilan : « <NOM> · REPCORE », ou le
-// mot-symbole seul quand l'athlète a choisi de ne rien montrer.
-function _recSignature(g,o,sig,y,LARG){
+// mot-symbole seul quand l'athlète a choisi de ne rien montrer ; l'adresse
+// dessous (_visuelAdresse). Rend {ts, dy} : la taille de la signature et la
+// hauteur ajoutée par l'adresse.
+function _recSignature(g,o,sig,y,LARG,adresse){
   const B=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const cx=g.canvas.width/2;
   o.ombre(true);
+  let ts=34;
   if(sig){
     const t=sig+' · REPCORE', esp=7;
-    const ts=o.ajusteEspace(t,'700',34,B,esp,LARG,22);
+    ts=o.ajusteEspace(t,'700',34,B,esp,LARG,22);
     g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+ts+'px '+B;
     o.ecrireEspace(t,cx,y,esp,true);
   }else{
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
+  return {ts,dy:_visuelAdresse(g,o.ecrireEspace,cx,y,ts,adresse)};
 }
 // PURE. Le sur-titre de la carte d'un record.
 function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
@@ -50689,7 +50714,7 @@ function _storyCopierLien(src){
     if(!l||!navigator.clipboard||!navigator.clipboard.writeText) return false;
     navigator.clipboard.writeText(String(l))
       .then(()=>{
-        toast('Lien copié · dans ta story : Sticker > Lien > coller','var(--green)',4000);
+        toast('Lien copié · colle-le avec le sticker Lien','var(--green)',4000);
         try{ attribCompter('copie',src||'visuel'); }catch(e){}
         // LA PREMIÈRE FOIS : les trois étapes du sticker Lien, en images fixes.
         try{ montrerTutoSticker(); }catch(e){}
@@ -50706,10 +50731,16 @@ function _storyCopierLien(src){
 // « #RepCore », le compte Instagram de RepCore quand il est renseigné, et
 // « Lien dans ma bio » si la page publique de la personne est en ligne.
 //
-// ⚠ À REMPLIR : le compte Instagram officiel, avec son @ (ex. '@repcore.app').
-//   Vide, il n'apparaît pas.
-const RC_COMPTE_INSTAGRAM='';
+// LE COMPTE INSTAGRAM OFFICIEL (Kevin, 02/10/2026), avec son @ : il ferme
+// chaque légende (après « Lien dans ma bio »), et la coupe d'une légende trop
+// longue raccourcit le texte, jamais lui. Vide, il n'apparaît pas.
+const RC_COMPTE_INSTAGRAM='@kevin.gllc';
+// L'ADRESSE ÉCRITE SOUS LA SIGNATURE DES VISUELS (02/10/2026), sans https:// :
+// celle qu'on peut taper après avoir vu une story. Vide : rien de plus, le
+// visuel est celui d'avant. Pas de QR (voir _visuelAdresse).
+const RC_ADRESSE_AFFICHEE='repcore-sync.web.app';
 const LEGENDE_MAX=220;
+const _moisInvite=()=>TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
 const _LEGENDES=Object.freeze({
   bilan:[d=>'Séance bouclée. Et toi, tu t’entraînes quand cette semaine ?',
     d=>'Une de plus au compteur ⚡ Et toi, tu en es où cette semaine ?',
@@ -50759,10 +50790,13 @@ const _LEGENDES=Object.freeze({
     d=>'Séances, records, tonnage : la team avance. Et toi ?'],
   // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
   // cliquer : il recopie). Sans code connu, on dit de le demander.
-  invitation:[d=>'Je t’offre ton premier mois sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
-    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' premier mois est offert, sans carte.',
-    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+'ton premier mois est offert.',
-    d=>'Toute l’app ouverte, sans carte bancaire, et ton premier mois est offert. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  // L'ESSAI PARRAINÉ (02/10/2026) : essai.mois + essai_parrainage.moisEnPlus
+  // (tarifs.json, 2 mois), comme invitationDonnees et les pages publiques — les
+  // légendes disaient « ton premier mois est offert ».
+  invitation:[d=>'Je double ton essai RepCore : '+_moisInvite()+' mois ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' essai passe à '+_moisInvite()+' mois, sans carte.',
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_moisInvite()+' mois d’essai pour toi au lieu de '+TARIFS.essai.mois+'.',
+    d=>'Toute l’app ouverte, sans carte bancaire, pendant '+_moisInvite()+' mois. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
   saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
     d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
     d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],
@@ -50811,7 +50845,9 @@ function legendePartage(type,donnees,o){
   corps=corps.replace(/⚡/g,()=>{ if(vu) return ''; vu=true; return '⚡'; }).replace(/\s+/g,' ').trim();
   const u=opt.u!==undefined?opt.u:((typeof currentUser!=='undefined')?currentUser:null);
   let bio=false; try{ bio=!!urlPagePerso(u); }catch(e){ bio=false; }
-  const fin=['#RepCore',String(RC_COMPTE_INSTAGRAM||'').trim()].filter(Boolean).join(' ')+(bio?' · Lien dans ma bio':'');
+  // LE COMPTE OFFICIEL EN DERNIER : « #RepCore · Lien dans ma bio · @compte ».
+  const compte=String((opt.compte!==undefined?opt.compte:RC_COMPTE_INSTAGRAM)||'').trim();
+  const fin='#RepCore'+(bio?' · Lien dans ma bio':'')+(compte?' · '+compte:'');
   // Une donnée trop longue (un titre de défi) raccourcit le corps, jamais la fin.
   const place=LEGENDE_MAX-1-fin.length-1;
   if(corps.length>place) corps=corps.slice(0,place-1).replace(/\s+\S*$/,'')+'…';
@@ -86390,6 +86426,7 @@ function _dessinerCarteAthlete(d,format,o){
   g.fillStyle='rgba(255,255,255,.85)';
   const ss=ou.ajusteEspace(t,'700',S(40),BEBAS,7,S(860),S(22));
   g.font='700 '+ss+'px '+BEBAS; ou.ecrireEspace(t,X(540),Y(1440),7,true);
+  _visuelAdresse(g,ou.ecrireEspace,X(540),Y(1440),ss);
   ou.ombre(false);
   return cv;
 }

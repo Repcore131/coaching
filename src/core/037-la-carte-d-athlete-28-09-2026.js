@@ -319,6 +319,7 @@ function _dessinerCarteAthlete(d,format,o){
   g.fillStyle='rgba(255,255,255,.85)';
   const ss=ou.ajusteEspace(t,'700',S(40),BEBAS,7,S(860),S(22));
   g.font='700 '+ss+'px '+BEBAS; ou.ecrireEspace(t,X(540),Y(1440),7,true);
+  _visuelAdresse(g,ou.ecrireEspace,X(540),Y(1440),ss);
   ou.ombre(false);
   return cv;
 }

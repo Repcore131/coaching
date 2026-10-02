@@ -54581,7 +54581,10 @@ async function testExercices(){
       // _storyCopierSelonFormat, qui copie le LIEN en story et la légende en post.
       if(a.indexOf('_storyCopierSelonFormat(nomFichier')<0||b.indexOf('_storyCopierSelonFormat(nomFichier')<0) return _echec('copie absente d’une sortie');
       if(String(_storyCopierSelonFormat).indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('la story ne copie plus le lien');
-      return /Sticker > Lien > coller/.test(String(_storyCopierLien))?true:_echec('toast');})());
+      // UN SEUL TOAST (02/10/2026) : « Lien copié » et où le coller.
+      const sc=String(_storyCopierLien);
+      if((sc.match(/toast\(/g)||[]).length!==1) return _echec('un seul toast attendu');
+      return /Lien copié · colle-le avec le sticker Lien/.test(sc)?true:_echec('toast');})());
     ok('Pages : le tuto du sticker Lien — trois étapes, images fixes, une seule fois',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlTutoSticker();
       if(d.querySelectorAll('.tsk-etape').length!==3) return _echec('étapes');
@@ -57290,6 +57293,74 @@ async function testExercices(){
         }
         if(!clair) return _echec(s.type+' : pas de flash de foudre');
       }
+      return true;})());
+    // ══ 02/10/2026 — L'ADRESSE SOUS LA SIGNATURE, LE COMPTE OFFICIEL ════════
+    // Dessine la signature commune sur un fond noir, avec ou sans adresse.
+    const _sigDessin=(adresse,sig)=>{
+      const cv=document.createElement('canvas'); cv.width=1080; cv.height=1920;
+      const g=cv.getContext('2d'); g.fillStyle='#000'; g.fillRect(0,0,1080,1920);
+      const o=_visuelOutils(g), vus=[];
+      const oe=o.ecrireEspace;
+      const espion=Object.assign({},o,{ecrireEspace:(t,x,y,esp,c)=>{ vus.push({t:String(t),y,font:g.font}); return oe(t,x,y,esp,c); }});
+      const r=_recSignature(g,espion,sig,1770,900,adresse);
+      return {cv,g,r,vus};
+    };
+    const _lignesClaires=(g,y0,y1)=>{ const d=g.getImageData(0,y0,1080,y1-y0).data; let n=0; for(let i=0;i<d.length;i+=4) if(d[i]>60) n++; return n; };
+    ok('Vidéo : l’adresse sous la signature — vide, le même dessin qu’avant ; renseignée, une ligne de plus, en petit',(()=>{
+      for(const sig of ['MAXIMILIEN-ALEXANDRE','']){
+        const a=_sigDessin('',sig), b=_sigDessin('https://repcore-sync.web.app/',sig);
+        if(a.vus.length!==1||a.r.dy!==0) return _echec('sans adresse : '+a.vus.length+' ligne(s), dy '+a.r.dy);
+        if(b.vus.length!==2||b.r.dy<=0) return _echec('avec adresse : '+b.vus.length+' ligne(s)');
+        if(b.vus[1].t!=='repcore-sync.web.app') return _echec('adresse écrite : '+b.vus[1].t+' (sans https:// ni /)');
+        if(b.vus[1].y!==1770+b.r.dy||b.vus[0].y!==1770) return _echec('placement : '+JSON.stringify(b.vus));
+        const tSig=b.r.ts, tAdr=Number((/(\d+)px/.exec(b.vus[1].font)||[])[1]);
+        if(Math.abs(tAdr/tSig-0.6)>0.05) return _echec('taille de l’adresse : '+tAdr+' pour '+tSig);
+        // Au-dessus de la ligne de base : pixel pour pixel le même dessin.
+        const ha=a.g.getImageData(0,1600,1080,168).data, hb=b.g.getImageData(0,1600,1080,168).data;
+        for(let i=0;i<ha.length;i++) if(ha[i]!==hb[i]) return _echec('la signature a bougé ('+sig+')');
+        // Dessous : rien sans adresse, une ligne avec.
+        if(_lignesClaires(a.g,1778,1830)!==0) return _echec('du dessin sous la signature sans adresse');
+        if(_lignesClaires(b.g,1778,1830)<200) return _echec('l’adresse ne se voit pas');
+      }
+      // La valeur par défaut est la constante.
+      if(_sigDessin(undefined,'X').vus.length!==(RC_ADRESSE_AFFICHEE?2:1)) return _echec('RC_ADRESSE_AFFICHEE n’est pas lue');
+      return true;})());
+    ok('Visuels : l’adresse dans le cadre, lisible sur les trois fonds, en story et en post — bilan, record et carte d’athlète l’écrivent',(()=>{
+      if(!RC_ADRESSE_AFFICHEE) return true;
+      for(const f of ['transparent','rouge','carbone']) for(const fmt of ['story','post']){
+        const cv=_dessinerCarteRecord({nm:'SQUAT',histMax:100,curMax:102.5,gain:2.5,date:Date.now(),signature:'JULIE'},f,fmt);
+        const H=cv.height, g=cv.getContext('2d');
+        const post=fmt==='post', ySig=H-(post?80:150);
+        const dy=Math.round(Math.max(14,Math.round(34*0.6))*1.45);
+        if(ySig+dy+8>H) return _echec(fmt+' : l’adresse sort du cadre');
+        // Des pixels clairs (texte blanc) sur la ligne de l'adresse, au centre.
+        const d=g.getImageData(340,ySig+dy-16,400,20).data; let clairs=0;
+        for(let i=0;i<d.length;i+=4) if(Math.min(d[i],d[i+1],d[i+2])>150&&d[i+3]>150) clairs++;
+        if(clairs<40) return _echec(f+'/'+fmt+' : adresse illisible ('+clairs+' px clairs)');
+      }
+      for(const fn of [String(_dessinerBilanSeance||''),String(_dessinerCarteAthlete||''),String(_recSignature)])
+        if(fn.indexOf('_visuelAdresse(')<0) return _echec('un dessin n’écrit pas l’adresse');
+      return true;})());
+    ok('Légendes : le compte officiel ferme chaque légende, jamais coupé, et aucune ne dépasse LEGENDE_MAX',(()=>{
+      const ext={exo:'X'.repeat(300),semaines:99999,nom:'N'.repeat(300),titre:'T '.repeat(300),seances:999999,code:'JULIE7K2',note:99};
+      const avecPage={role:'athlete',pagePublique:{active:true,pseudo:'maximilien_alexandre',montrer:{}}};
+      let sv={}; for(const k of Object.keys(_LEGENDES)) try{ sv[k]=localStorage.getItem('rc_legende_'+k); }catch(e){}
+      try{
+        for(const compte of [RC_COMPTE_INSTAGRAM,'@'+'compte_officiel_tres_long'.repeat(2),''])
+          for(const k of Object.keys(_LEGENDES)) for(let i=0;i<_LEGENDES[k].length;i++) for(const u of [null,avecPage]) for(const d of [{},ext]){
+            const t=legendePartage(k,d,{indice:i,u,compte});
+            if(t.length>LEGENDE_MAX) return _echec(k+'#'+i+' : '+t.length+' > '+LEGENDE_MAX);
+            if(compte&&!t.endsWith(' · '+compte)) return _echec(k+'#'+i+' ne finit pas par '+compte+' : …'+t.slice(-40));
+            if(!compte&&/ · @/.test(t)) return _echec('un compte sans compte');
+          }
+        if(!RC_COMPTE_INSTAGRAM||!/^@[a-z0-9._]{1,30}$/.test(RC_COMPTE_INSTAGRAM)) return _echec('RC_COMPTE_INSTAGRAM : '+RC_COMPTE_INSTAGRAM);
+        // Les invitations disent la durée que l'app ouvre (tarifs.json), plus « ton premier mois ».
+        const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+        for(let i=0;i<_LEGENDES.invitation.length;i++){
+          const t=legendePartage('invitation',{code:'JULIE7K2'},{indice:i,u:null});
+          if(/premier mois/.test(t)||t.indexOf(n+' mois')<0) return _echec('invitation #'+i+' : '+t);
+        }
+      }finally{ for(const k of Object.keys(sv)) try{ if(sv[k]===null) localStorage.removeItem('rc_legende_'+k); else localStorage.setItem('rc_legende_'+k,sv[k]); }catch(e){} }
       return true;})());
     ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans rang et Wrapped',(()=>{
       const sv=Object.getOwnPropertyDescriptor(window,'MediaRecorder');
