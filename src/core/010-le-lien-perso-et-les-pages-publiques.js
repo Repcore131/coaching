@@ -1435,7 +1435,8 @@ async function effacerEvenementKo(id,btn){
 const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'Remboursement partiel',
   remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
   retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
-  litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie'};
+  litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie',
+  double_abonnement:'Deux abonnements actifs',ancien_annule:'Ancien abonnement annulé (remplacé)'};
 // PURE. Le journal PayPal, du plus récent au plus ancien : qui, quoi,
 // pourquoi, et ce que le serveur a repris. null : illisible.
 function htmlJournalPaypal(j){
@@ -1446,10 +1447,10 @@ function htmlJournalPaypal(j){
   if(!lignes.length) return h+'<p class="sub amb-note">Aucun remboursement ni litige.</p></div>';
   for(const x of lignes){
     const d=Number(x.le)?new Date(Number(x.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'';
-    const litige=/^litige_(ouvert|perdu)/.test(x.quoi);
+    const litige=/^(litige_(ouvert|perdu)|double_abonnement)/.test(x.quoi);
     h+='<div class="amb-jl'+(litige?' amb-jl-alerte':'')+'">'
       +'<div class="amb-jl-tete"><b>'+escapeHtml(_JOURNAL_QUOI[x.quoi]||x.quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
-      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':''].filter(Boolean).join(' · '))+'</div>'
+      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':'',x.abo,x.courant?'courant : '+x.courant:''].filter(Boolean).join(' · '))+'</div>'
       +(x.pourquoi?'<div class="sub">Motif : '+escapeHtml(x.pourquoi)+'</div>':'')
       +(Array.isArray(x.actions)&&x.actions.length?'<ul class="amb-jl-actions">'+x.actions.map(a=>'<li>'+escapeHtml(a)+'</li>').join('')+'</ul>':'')
       +'</div>';

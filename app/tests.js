@@ -23407,7 +23407,8 @@ async function testExercices(){
       if(SERVEUR_LEGER&&CLOUD._functionsBase!==SERVEUR_LEGER_URL+'/fn') return _echec('les appels ne vont pas au serveur léger : '+CLOUD._functionsBase);
       if(!PUSH_TYPES.some(t=>t.cle==='acces')) return _echec('la notification de fin d’accès n’est pas réglable');
       if(typeof abonnementSignaler!=='function') return _echec('abonnementSignaler manque');
-      if(!/abonnementSignaler\(data\.subscriptionID,true\)/.test(String(renderPaypalButton))) return _echec('le paiement ne signale pas l’abonnement au serveur');
+      // Depuis le lot 45, avec l’abonnement qu’il remplace (s’il y en a un).
+      if(!/abonnementSignaler\(data\.subscriptionID,true(,_remplace)?\)/.test(String(renderPaypalButton))) return _echec('le paiement ne signale pas l’abonnement au serveur');
       // Le 503 « pas encore configurée » du serveur fait attendre la file, sans insister.
       if(!/pas encore configurée\|injoignable/.test(String(_cldDetruire))) return _echec('le 503 du serveur n’arrête pas les essais');
       return true;})());
@@ -36698,6 +36699,81 @@ async function testExercices(){
           return _echec('l’écran propose « Souscrire » sans tarif facturable');
         return l.indexOf('subPrendreEssentielle()')>=0
           ?true:_echec('aucune sortie vers ce qui se paie vraiment');})());
+
+      // ══ LOT 45 — UN SEUL ABONNEMENT À LA FOIS ════════════════════════
+      ok('LOT 45 — UN ABONNÉ ESSENTIELLE QUI CHOISIT ULTIME NE VOIT AUCUN BOUTON DE SOUSCRIPTION',(()=>{
+        // ⚠ LE DÉFAUT : accueilChoisir('ultime') montait les boutons PayPal de
+        //   souscription. L’abonné payait un SECOND abonnement, et l’ancien
+        //   continuait d’être prélevé.
+        const _su=currentUser, _go=window.go, _init=window.initPaypalSubscription, _sp=_subPalier;
+        const _sv=(()=>{ try{ return [sessionStorage.getItem('rc_offre_choisie'),sessionStorage.getItem('rc_offre_annuel'),sessionStorage.getItem('rc_palier_coach')]; }catch(e){ return [null,null,null]; } })();
+        const z=document.getElementById('paypal-btn-container');
+        const _html=z?z.innerHTML:'';
+        let inits=0;
+        try{
+          window.go=()=>{};
+          window.initPaypalSubscription=function(){ inits++; return _init.apply(this,arguments); };
+          try{ sessionStorage.removeItem('rc_palier_coach'); }catch(e){}
+          currentUser={id:'l45',email:'lea@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',
+            paypalSubscriptionId:'I-ABC12345678',abonnement:{formule:'essentielle',palier:'mensuel',statutPaypal:'ACTIVE',
+            renonciationRetractation:{accepte:true,ts:1}},exMuscles:{},exAlias:{},sessions:[]};
+          if(!abonnementEnCours(currentUser)) return _echec('l’abonnement en cours n’est pas reconnu');
+          if(!z) return _echec('le conteneur PayPal n’existe pas');
+          accueilChoisir('ultime');
+          if(inits) return _echec('accueilChoisir a lancé initPaypalSubscription');
+          if(z.querySelector('#paypal-loading-btn')||z.querySelector('#cgv-ok')||z.querySelector('#pp-abo'))
+            return _echec('un bouton de souscription est monté : '+z.innerHTML.slice(0,160));
+          const b=z.querySelector('#sub-changer');
+          if(!b||b.textContent.trim()!=='Changer de formule') return _echec('« Changer de formule » absent');
+          if(String(b.getAttribute('onclick')).indexOf('changerFormule(')<0) return _echec('le bouton n’appelle pas la route de changement');
+          if(!/Ultime s’ouvre dès que tu valides/.test(z.textContent)) return _echec('la hausse ne dit pas quand elle s’applique : '+z.textContent);
+          // MÊME UN APPEL DIRECT NE CHARGE PAS PAYPAL.
+          window.initPaypalSubscription=_init;
+          initPaypalSubscription();
+          if(z.querySelector('#paypal-loading-btn')||z.querySelector('#cgv-ok')) return _echec('initPaypalSubscription monte PayPal pour un abonné');
+          // ULTIME → ESSENTIELLE : la date d’effet.
+          currentUser.abonnement.formule='ultime';
+          try{ sessionStorage.setItem('rc_offre_choisie','essentielle'); }catch(e){}
+          loadSubscribePage();
+          if(!/prend effet à ta prochaine échéance, et tu gardes Ultime/.test(z.textContent)) return _echec('la baisse ne dit pas sa date d’effet : '+z.textContent);
+          const pret=htmlChangementPret({approve:'https://www.paypal.com/webapps/billing/subscriptions/update?ba_token=X',baisse:true,
+            effet:Date.parse('2026-11-14T12:00:00Z'),formule:'essentielle'},currentUser);
+          if(pret.indexOf('prendra effet le 14 novembre 2026')<0||pret.indexOf('tu gardes Ultime')<0) return _echec('la date d’effet manque : '+pret);
+          if(htmlChangementPret({approve:'https://pirate.example/x'},currentUser).indexOf('href')>=0) return _echec('un lien hors PayPal est montré');
+          // SA FORMULE ACTUELLE (Ultime au mois) : rien à changer.
+          try{ sessionStorage.setItem('rc_offre_choisie','ultime'); }catch(e){}
+          _subPalier='mensuel';
+          loadSubscribePage();
+          if(!z.querySelector('#sub-deja')||z.querySelector('#sub-changer')) return _echec('la formule actuelle est proposée en « changement »');
+          // UN COACH (Coach → Pro) : même règle.
+          currentUser={id:'k45',email:'kev@t.fr',role:'coach',coachPlan:'coach',paypalSubscriptionId:'I-COACH0000001',
+            abonnement:{statutPaypal:'ACTIVE',renonciationRetractation:{accepte:true,ts:1}},exMuscles:{},exAlias:{},sessions:[]};
+          if(!abonnementEnCours(currentUser)||!abonnementEnCours(currentUser).coach) return _echec('l’abonnement du coach n’est pas reconnu');
+          try{ sessionStorage.setItem('rc_palier_coach','pro'); }catch(e){}
+          _subPalier='pro';
+          loadSubscribePage();
+          if(z.querySelector('#paypal-loading-btn')||!z.querySelector('#sub-changer')) return _echec('le coach se voit proposer une seconde souscription');
+          // RÉSILIÉ CHEZ PAYPAL : la souscription redevient possible.
+          currentUser={id:'l45',email:'lea@t.fr',role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',
+            paypalSubscriptionId:'I-ABC12345678',abonnement:{formule:'essentielle',statutPaypal:'CANCELLED',
+            renonciationRetractation:{accepte:true,ts:1}},exMuscles:{},exAlias:{},sessions:[]};
+          try{ sessionStorage.removeItem('rc_palier_coach'); }catch(e){}
+          if(abonnementEnCours(currentUser)) return _echec('un abonnement résilié bloque encore la souscription');
+          loadSubscribePage();
+          if(!z.querySelector('#paypal-loading-btn')) return _echec('après résiliation, « Souscrire » ne revient pas');
+          // SANS PAYPAL (accès offert, parrainage) : rien à doubler.
+          if(abonnementEnCours({role:'athlete',status:'AUTONOMIE_PREMIUM',abonnement:{formule:'essentielle'}})) return _echec('un accès sans abonnement PayPal bloque la souscription');
+          // ET À L’APPROBATION : l’ancien est signalé, l’engagement ne repart pas à zéro.
+          const r=String(renderPaypalButton);
+          if(r.indexOf('abonnementSignaler(data.subscriptionID,true,_remplace)')<0) return _echec('onApprove ne signale pas l’ancien abonnement');
+          if(!/_remplace&&_engAvant>Date\.now\(\)\?_engAvant:/.test(r)) return _echec('onApprove remet l’engagement à zéro');
+          if(r.indexOf('if(abonnementEnCours(currentUser))')<0) return _echec('createSubscription ne refuse pas un second abonnement');
+          return true;
+        } finally {
+          currentUser=_su; window.go=_go; window.initPaypalSubscription=_init; _subPalier=_sp;
+          try{ ['rc_offre_choisie','rc_offre_annuel','rc_palier_coach'].forEach((k,i)=>{ if(_sv[i]===null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,_sv[i]); }); }catch(e){}
+          if(z) z.innerHTML=_html;
+        }})());
 
       ok('LOT 11 — L’ÉCRAN D’ABONNEMENT NOMME LA FORMULE QU’ON A CHOISIE',(()=>{
         const sv=(()=>{ try{ return sessionStorage.getItem('rc_offre_choisie'); }catch(e){ return null; } })();

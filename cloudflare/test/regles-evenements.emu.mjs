@@ -82,6 +82,11 @@ await test('parrainage, ambassadeur, abonnement : cible « - », un seul en atte
   assert.equal((await deposer(LEA, { type: 'abonnement', abo: 'I-ABCDEF12', cible: 'x' })).statut, 401);
   assert.equal((await deposer(LEA, { type: 'abonnement', abo: 'I-ABCDEF12', cible: '-' })).statut, 200);
 });
+await test('abonnement qui en remplace un autre (lot 45) : `remplace` admis pour « abonnement » seulement, au format PayPal', async () => {
+  assert.equal((await deposer('noa@t.fr', { type: 'abonnement', abo: 'I-NOUVEAU1', remplace: 'pas-un-id', cible: '-' })).statut, 401);
+  assert.equal((await deposer('noa@t.fr', { type: 'parrainage_demande', remplace: 'I-ANCIEN01', cible: '-' })).statut, 401);
+  assert.equal((await deposer('noa@t.fr', { type: 'abonnement', abo: 'I-NOUVEAU1', remplace: 'I-ANCIEN01', cible: '-' })).statut, 200);
+});
 await test('une sous-tâche du Worker (type « tache ») ne s’écrit pas depuis l’app ; l’ancien format (sans cible) non plus', async () => {
   assert.equal((await deposer(LEA, { type: 'tache', quoi: 'push', cible: '-' })).statut, 401);
   const id = nid();

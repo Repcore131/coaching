@@ -180,7 +180,7 @@ async function traiter(db, M, e) {
     const d = (await db.ref('ambassadeurs_demandes/' + e.par).get()).val();
     return d && !d.etat ? M.ambassadeurDemande(e.par, d) : 'deja_juge';
   }
-  if (e.type === 'abonnement') return M.paypal ? M.paypal.indexer(e.par, e.abo) : 'sans_paypal';
+  if (e.type === 'abonnement') return M.paypal ? M.paypal.indexer(e.par, e.abo, e.remplace) : 'sans_paypal';
   return M.evenement(e);
 }
 

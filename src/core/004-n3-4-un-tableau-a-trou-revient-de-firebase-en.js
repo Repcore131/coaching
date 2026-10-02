@@ -548,6 +548,8 @@ function rcRoleDepuisParams(params){
     // jusqu'à la connexion. ?paiement_coach=retour|annule&token=<commande> : le retour de PayPal.
     if(params.get('payer')){ try{ localStorage.setItem('rc_payer',JSON.stringify({brut:String(params.get('payer')).slice(0,90),at:Date.now()})); }catch(e){} }
     if(params.get('paiement_coach')) window._pendingPaiementCoach={etat:String(params.get('paiement_coach')),commande:String(params.get('token')||'')};
+    // ?formule=validee|annulee — le retour de PayPal après « Changer de formule ».
+    if(/^(validee|annulee)$/.test(String(params.get('formule')||''))) window._pendingFormule=String(params.get('formule'));
     // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
     // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
     //   pendant le chargement du script, AVANT que les constantes du module
@@ -2247,6 +2249,9 @@ function routeUser(){
   if(window._pendingPaiementCoach){ const _pc=window._pendingPaiementCoach; window._pendingPaiementCoach=false;
     setTimeout(()=>{ try{ pcRetourPaypal(_pc.etat,_pc.commande); }catch(e){} },1100);}
   else setTimeout(()=>{ try{ pcProposerPaiement(); }catch(e){} },1300);
+  if(window._pendingFormule){ const _f=window._pendingFormule; window._pendingFormule=false;
+    setTimeout(()=>{ try{ toast(_f==='validee'?'Changement validé chez PayPal : ta formule suit dès que PayPal le confirme.'
+      :'Changement de formule annulé : ton abonnement reste tel quel.',_f==='validee'?'var(--green)':'var(--orange)'); }catch(e){} },1200);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;

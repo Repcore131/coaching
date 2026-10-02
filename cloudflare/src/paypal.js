@@ -294,8 +294,10 @@ export function creerPaypal(ctx) {
   const palierPaye = (x, plan) => (x && x.palier === 'suivi') ? 'suivi'
     : (plan && plan.formule) || (x && PALIERS_OUVERTS.indexOf(String(x.palier)) >= 0 ? String(x.palier) : 'essentielle');
   const demi = (plan) => (plan && plan.demi ? { demiPackUtilise: true } : {});
-  async function droitsOuverts(cle, abo, plan) {
-    return M.majDroits(cle, (x) => Object.assign({ palier: palierPaye(x, plan), echeance: 0, source: 'paypal', abo: abo || (x && x.abo) || null }, demi(plan)));
+  // `plus(x)` : ce qu'un changement de formule ajoute (Ultime gardé jusqu'à
+  // l'échéance après une baisse, voir misAJour).
+  async function droitsOuverts(cle, abo, plan, plus) {
+    return M.majDroits(cle, (x) => Object.assign({ palier: palierPaye(x, plan), echeance: 0, source: 'paypal', abo: abo || (x && x.abo) || null }, demi(plan), plus ? plus(x) : {}));
   }
   async function droitsJusqua(cle, abo, plan, fin) {
     return M.majDroits(cle, (x) => Object.assign({ palier: palierPaye(x, plan), echeance: fin, source: 'paypal', abo: abo || (x && x.abo) || null }, demi(plan)));
@@ -351,6 +353,13 @@ export function creerPaypal(ctx) {
       lire('users/' + cle + '/paypalSubscriptionId'), lire('users/' + cle + '/abonnement'), lire('paypal_fins/' + cle)]);
     const plan = sub && OFFRES_PAYPAL[sub.plan_id];
     const ouvrir = !!(sub && sub.status === 'ACTIVE' && estCourant(courant, abo, sub, cle));
+    // ── DEUX ABONNEMENTS ACTIFS (02/10/2026) ──────────────────────────────
+    // Un paiement encaissé sur un abonnement ACTIVE qui n'est pas le courant
+    // du dossier : le client paie deux fois. L'app ne le permet plus (« Changer
+    // de formule », remplacement à l'approbation), mais un doublon d'avant
+    // existe peut-être. Rien n'est annulé d'office : l'administrateur est
+    // prévenu, une ligne au journal, un push à chaque prélèvement en double.
+    if (sub && sub.status === 'ACTIVE' && courant && courant !== abo) await doubleAbonnement(cle, abo, courant, ress);
     if (ouvrir) {
       const b = 'users/' + cle + '/';
       const maj = { [b + 'abonnement/dernierPaiementLe']: t, [b + 'abonnement/statutPaypal']: 'ACTIVE', [b + 'updatedAt']: t,
@@ -554,7 +563,8 @@ export function creerPaypal(ctx) {
     if (type === 'PAYMENT.CAPTURE.COMPLETED') return achat(evt);
     const abo = net(ress.billing_agreement_id || (String(ress.id || '').startsWith('I-') ? ress.id : ''));
     const connus = ['BILLING.SUBSCRIPTION.ACTIVATED', 'PAYMENT.SALE.COMPLETED', 'BILLING.SUBSCRIPTION.CANCELLED',
-      'BILLING.SUBSCRIPTION.EXPIRED', 'BILLING.SUBSCRIPTION.SUSPENDED', 'BILLING.SUBSCRIPTION.PAYMENT.FAILED'];
+      'BILLING.SUBSCRIPTION.EXPIRED', 'BILLING.SUBSCRIPTION.SUSPENDED', 'BILLING.SUBSCRIPTION.PAYMENT.FAILED',
+      'BILLING.SUBSCRIPTION.UPDATED'];
     if (connus.indexOf(type) < 0) return 'ignore';
     const { cle, sub } = await compteDe(abo);
     if (!cle) { await ranger(abo, evt); return 'orphelin'; }
@@ -575,12 +585,184 @@ export function creerPaypal(ctx) {
       // l'app ne donne plus l'abonnement sur la foi du dossier.
       const s2 = sub || ress;
       if (s2.status === 'ACTIVE' && (await lire('users/' + cle + '/role')) !== 'coach') await droitsOuverts(cle, abo, OFFRES_PAYPAL[s2.plan_id]);
+      // Relu chez PayPal (sub) avant d'annuler quoi que ce soit, jamais sur la foi de l'avis seul.
+      if (s2.status === 'ACTIVE') await remplacementEnAttente(abo, sub);
       return 'active';
     }
+    if (type === 'BILLING.SUBSCRIPTION.UPDATED') return misAJour(cle, abo);
     if (type === 'PAYMENT.SALE.COMPLETED') return paiementAbonnement(cle, abo, ress, sub);
     if (type === 'BILLING.SUBSCRIPTION.PAYMENT.FAILED') return 'echec_note';   // PayPal réessaie ; SUSPENDED suivra s'il faut
     const r = await fermerALaFin(cle, abo, type.split('.').pop());
     return r.ignore || 'fin_posee';
+  }
+
+  // ══ CHANGER DE FORMULE SANS DEUXIÈME ABONNEMENT (02/10/2026) ════════════
+  //
+  // Un abonné qui passait d'Essentielle à Ultime souscrivait un SECOND
+  // abonnement : l'ancien continuait d'être prélevé, et ce serveur l'ignorait
+  // (« ancien_abonnement », « paiement_sans_ouverture »). Trois chemins le
+  // ferment :
+  //   · changerFormule (POST /abonnement/changer) RÉVISE l'abonnement en
+  //     cours chez PayPal (/revise) : un seul abonnement, un autre plan. La
+  //     personne valide chez PayPal (lien rel=approve), puis PayPal envoie
+  //     BILLING.SUBSCRIPTION.UPDATED, traité par misAJour ;
+  //   · remplacer : un nouvel abonnement approuvé alors qu'un autre existait
+  //     (l'ancien était résilié, ou l'app d'avant) — l'ancien est annulé chez
+  //     PayPal, mais SEULEMENT quand le nouveau est ACTIVE ;
+  //   · doubleAbonnement : un doublon qui existe déjà est signalé.
+  // ⚠ L'ENGAGEMENT (abonnement/engagementJusqu) n'est jamais touché ici : un
+  //   changement de formule ne le fait pas repartir à zéro.
+  const RANG = { essentielle: 1, ultime: 2, coach: 1, pro: 2 };
+  const rangPlan = (p) => (p ? RANG[p.coachPlan || p.formule] || 0 : 0);
+  // Les plans annuels de l'athlète : abonnement/palier suit le plan facturé.
+  const ANNUELS = ['P-92T09491KF550281RNK2LZWY', 'P-16Y44630WF304553UNK2LZXI'];
+  const estA = async (cle, abo, sub) => {
+    const k = await lire('paypal_abonnes/' + abo);
+    if (k) return k === cle;
+    if (sub && sub.custom_id) return sub.custom_id === cle;
+    return !!(sub && cleEmail(sub.subscriber && sub.subscriber.email_address) === cle);
+  };
+  async function ecrirePaypal(chemin, corps) {
+    const jeton = await jetonPaypal(env, ctx.fetchImpl);
+    return (ctx.fetchImpl || fetch)(API + chemin, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jeton }, body: JSON.stringify(corps) });
+  }
+
+  // L'APPEL DE L'APP. Rend { approve, baisse, effet, formule } : le lien à
+  // ouvrir pour valider chez PayPal ; pour une baisse (Ultime → Essentielle,
+  // Pro → Coach), la date d'effet, qui est la prochaine échéance.
+  async function changerFormule(cle, planIdBrut) {
+    const planId = String(planIdBrut || '').trim();
+    const cible = Object.prototype.hasOwnProperty.call(OFFRES_PAYPAL, planId) ? OFFRES_PAYPAL[planId] : null;
+    if (!cible) throw new ErreurAppel(400, 'Formule inconnue.');
+    // Le premier mois à moitié prix accueille un NOUVEL abonné, une fois.
+    if (cible.demi) throw new ErreurAppel(400, 'Le premier mois à moitié prix ne s’applique pas à un changement de formule.');
+    const [abo, role] = await Promise.all([lire('users/' + cle + '/paypalSubscriptionId'), lire('users/' + cle + '/role')]);
+    if (!/^I-[A-Z0-9]{8,}$/.test(String(abo || ''))) throw new ErreurAppel(404, 'Aucun abonnement PayPal sur ce compte.');
+    const sub = await abonnement(abo);
+    if (!sub) throw new ErreurAppel(404, 'Abonnement introuvable chez PayPal.');
+    if (!(await estA(cle, abo, sub))) throw new ErreurAppel(403, 'Cet abonnement n’est pas le tien.');
+    // DÉJÀ ANNULÉ OU ÉCHU CHEZ PAYPAL, sans que le dossier le sache : rien
+    // à réviser, et rien n'empêche plus une nouvelle souscription. Le dossier
+    // l'apprend ici (statutPaypal), l'app remonte le bouton de souscription.
+    if (sub.status === 'CANCELLED' || sub.status === 'EXPIRED') {
+      exigerBudget('statut', 2);
+      await db.ref().update({ ['users/' + cle + '/abonnement/statutPaypal']: sub.status, ['users/' + cle + '/updatedAt']: now() });
+      return { fini: true, statut: sub.status };
+    }
+    if (sub.status !== 'ACTIVE') throw new ErreurAppel(409, 'Ton abonnement n’est pas actif chez PayPal (' + String(sub.status || 'inconnu') + ') : il ne peut pas changer de formule.');
+    if (sub.plan_id === planId) throw new ErreurAppel(409, 'C’est déjà ta formule.');
+    const actuel = OFFRES_PAYPAL[sub.plan_id] || null;
+    // Un coach reste coach, un athlète reste athlète.
+    if ((role === 'coach') !== !!cible.coachPlan || (actuel && !!actuel.coachPlan !== !!cible.coachPlan)) {
+      throw new ErreurAppel(400, 'Cette formule n’est pas proposée à ce compte.');
+    }
+    const APP = String(env.APP_URL || 'https://repcore-sync.web.app/app/').trim();
+    const r = await ecrirePaypal('/v1/billing/subscriptions/' + abo + '/revise', { plan_id: planId,
+      application_context: { brand_name: 'RepCore', locale: 'fr-FR', shipping_preference: 'NO_SHIPPING', user_action: 'CONTINUE',
+        return_url: APP + '?formule=validee', cancel_url: APP + '?formule=annulee' } });
+    if (!r.ok) throw new ErreurAppel(502, 'PayPal refuse le changement (' + r.status + ').');
+    const j = await r.json();
+    const lien = (Array.isArray(j && j.links) ? j.links : []).find((l) => l && l.rel === 'approve');
+    if (!lien || !lien.href) throw new ErreurAppel(502, 'PayPal n’a pas rendu de lien de validation.');
+    const baisse = rangPlan(cible) < rangPlan(actuel);
+    const prochain = Date.parse((sub.billing_info && sub.billing_info.next_billing_time) || '') || 0;
+    const effet = baisse ? prochain : 0;
+    // La demande, relue par misAJour : la date d'effet d'une baisse.
+    exigerBudget('revision', 2);
+    await db.ref('paypal_revisions/' + abo).set({ cle, de: String(sub.plan_id || ''), vers: planId, le: now(), effet });
+    return { approve: String(lien.href), baisse, effet, formule: cible.coachPlan || cible.formule };
+  }
+
+  // BILLING.SUBSCRIPTION.UPDATED : l'abonnement, RELU chez PayPal, porte un
+  // autre plan. Les droits suivent le plan facturé. Après une baisse,
+  // l'ancienne formule court jusqu'à la date d'effet (Ultime : ultimeJusqu).
+  async function misAJour(cle, abo) {
+    const t = now();
+    const [courant, role, statut, rev] = await Promise.all([lire('users/' + cle + '/paypalSubscriptionId'), lire('users/' + cle + '/role'),
+      lire('users/' + cle + '/status'), lire('paypal_revisions/' + abo)]);
+    const sub = await abonnement(abo);
+    if (!estCourant(courant, abo, sub, cle)) return 'ancien_abonnement';
+    if (!sub || sub.status !== 'ACTIVE') return 'maj_sans_effet';
+    const plan = OFFRES_PAYPAL[sub.plan_id];
+    if (!plan) return 'plan_inconnu';
+    const b = 'users/' + cle + '/';
+    const maj = { [b + 'abonnement/statutPaypal']: 'ACTIVE', [b + 'updatedAt']: t };
+    if (rev && rev.vers === sub.plan_id) maj['paypal_revisions/' + abo] = null;
+    if (role === 'coach') {
+      if (!plan.coachPlan) return 'plan_inconnu';
+      const prochain = Date.parse((sub.billing_info && sub.billing_info.next_billing_time) || '') || 0;
+      maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true;
+      maj['coachs_registre/' + cle + '/plan'] = plan.coachPlan;
+      maj['coachs_registre/' + cle + '/actifJusqu'] = Math.max(prochain, t + MOIS_MS) + 7 * 86400000;
+      maj['coachs_registre/' + cle + '/maj'] = t;
+      maj['worker/jobs/couverture_coachs'] = null;
+      exigerBudget('changement');
+      await db.ref().update(maj);
+      return 'formule_changee';
+    }
+    if (!plan.formule) return 'plan_inconnu';
+    maj[b + 'abonnement/formule'] = plan.formule;
+    maj[b + 'abonnement/palier'] = ANNUELS.indexOf(sub.plan_id) >= 0 ? 'annuel' : 'mensuel';
+    if (statut !== 'COACHING_SUIVI') maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
+    exigerBudget('changement');
+    await db.ref().update(maj);
+    // UNE BAISSE NE RETIRE RIEN AVANT L'ÉCHÉANCE DÉJÀ PAYÉE : Ultime court
+    // jusqu'à la date d'effet notée à la demande (sinon la prochaine échéance).
+    const prochain = Date.parse((sub.billing_info && sub.billing_info.next_billing_time) || '') || 0;
+    const effet = rev && rev.vers === sub.plan_id ? Number(rev.effet) || 0 : prochain;
+    await droitsOuverts(cle, abo, plan, (x) => (plan.formule === 'essentielle' && x && x.palier === 'ultime' && effet > t
+      ? { ultimeJusqu: Math.max(Number(x.ultimeJusqu) || 0, effet) } : {}));
+    return 'formule_changee';
+  }
+
+  // LE REMPLACEMENT : `nouveau` vient d'être approuvé, `ancien` était dans le
+  // dossier. L'ancien n'est annulé chez PayPal que si le nouveau est ACTIVE ;
+  // sinon la demande attend (paypal_remplacements), reprise à l'activation
+  // du nouveau (BILLING.SUBSCRIPTION.ACTIVATED, qui précède son premier
+  // paiement ; pas de lecture de plus dans le paiement, au budget serré). Déjà annulé ou échu : rien à faire.
+  async function remplacer(cle, nouveau, ancienBrut, subNouveau) {
+    const ancien = net(ancienBrut);
+    if (!/^I-[A-Z0-9]{8,}$/.test(ancien) || ancien === nouveau) return 'rien';
+    const vieux = await abonnement(ancien);
+    if (!vieux) { await db.ref('paypal_remplacements/' + nouveau).remove(); return 'ancien_introuvable'; }
+    if (!(await estA(cle, ancien, vieux))) return 'ancien_pas_a_toi';
+    if (vieux.status === 'CANCELLED' || vieux.status === 'EXPIRED') {
+      await db.ref('paypal_remplacements/' + nouveau).remove();
+      return 'ancien_deja_annule';
+    }
+    const nv = subNouveau && subNouveau.id === nouveau ? subNouveau : await abonnement(nouveau);
+    if (!nv || nv.status !== 'ACTIVE') {
+      exigerBudget('remplacement_attente', 2);
+      await db.ref('paypal_remplacements/' + nouveau).set({ cle, ancien, le: now() });
+      return 'en_attente_activation';
+    }
+    exigerBudget('remplacement');
+    const r = await ecrirePaypal('/v1/billing/subscriptions/' + ancien + '/cancel', { reason: 'remplacé' });
+    // 204 : annulé. 422 : PayPal le dit déjà annulé ou inactif.
+    if (!r.ok && r.status !== 422) throw new Error('PayPal ' + r.status + ' sur l’annulation de ' + ancien);
+    // Le dossier désigne le NOUVEAU (vérifié à moi) : l'avis d'annulation de
+    // l'ancien, qui va suivre, n'est plus « le courant » et ne ferme rien.
+    await db.ref().update({ ['paypal_remplacements/' + nouveau]: null, ['users/' + cle + '/paypalSubscriptionId']: nouveau,
+      ['users/' + cle + '/updatedAt']: now() });
+    await journal({ quoi: 'ancien_annule', qui: qui(cle), abo: ancien, nouveau, actions: ['ancien abonnement annulé chez PayPal (remplacé)'] });
+    return 'ancien_annule';
+  }
+  // À l'activation d'un abonnement : un remplacement l'attendait-il ?
+  async function remplacementEnAttente(abo, sub) {
+    const rp = await lire('paypal_remplacements/' + abo);
+    if (!rp || !rp.cle || !rp.ancien) return null;
+    return remplacer(rp.cle, abo, rp.ancien, sub);
+  }
+
+  // UN DOUBLON QUI EXISTE DÉJÀ : signalé, pas annulé d'office (lequel garder
+  // est une décision, et un remboursement est peut-être dû).
+  async function doubleAbonnement(cle, abo, courant, ress) {
+    const montant = centimes(ress && ress.amount && (ress.amount.total || ress.amount.value));
+    exigerBudget('double_abonnement');
+    await journal({ quoi: 'double_abonnement', qui: qui(cle), abo, courant, transaction: net(ress && ress.id) || null, montant: euros(montant),
+      actions: ['aucune : à annuler et rembourser à la main si le client n’a pas voulu deux abonnements'] });
+    await pousserAdmin('Deux abonnements actifs', qui(cle) + ' a deux abonnements actifs (' + abo + ' et ' + courant + ')', 'double-' + abo);
   }
 
   // ══ REMBOURSEMENTS, RÉTROFACTURATIONS, LITIGES ══════════════════════════
@@ -877,7 +1059,7 @@ export function creerPaypal(ctx) {
   // « abonnement »). Vérifié chez PayPal : l'abonnement doit avoir été CRÉÉ
   // pour ce compte (custom_id). Ceux d'avant le custom_id sont reliés si
   // l'adresse de l'abonné est celle du compte, et à cette seule condition.
-  async function indexer(cle, id) {
+  async function indexer(cle, id, remplace) {
     const abo = net(id);
     if (!/^I-[A-Z0-9]{8,}$/.test(abo)) return 'format';
     const deja = await lire('paypal_abonnes/' + abo);
@@ -887,10 +1069,13 @@ export function creerPaypal(ctx) {
     if (sub.custom_id) { if (sub.custom_id !== cle) return 'autre_compte'; }
     else if (cleEmail(sub.subscriber && sub.subscriber.email_address) !== cle) return 'non_verifie';
     if (!(await lier(abo, cle))) return 'deja_a_un_autre';
+    // UN NOUVEL ABONNEMENT QUI EN REMPLACE UN AUTRE (onApprove, l'app) :
+    // l'ancien s'annule chez PayPal dès que le nouveau est ACTIVE.
+    if (remplace) { const r = await remplacer(cle, abo, remplace, sub); return r === 'rien' ? 'indexe' : 'indexe_' + r; }
     return 'indexe';
   }
 
-  return { traiter, verifierAchat, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
+  return { traiter, verifierAchat, changerFormule, remplacer, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, rejouerUnOrphelin, annulationSuite, purgerEvenements };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════

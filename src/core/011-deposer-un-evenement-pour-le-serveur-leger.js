@@ -4,12 +4,17 @@
 // l'événement sur parole) ; ici on ne fait que le prévenir.
 // L'abonnement PayPal de ce compte, signalé au serveur une fois (et au
 // démarrage pour ceux d'avant 1603). Le serveur le vérifie chez PayPal.
-function abonnementSignaler(id,force){
+// `remplace` : l'abonnement que celui-ci remplace (onApprove) ; le serveur
+// l'annule chez PayPal dès que le nouveau est ACTIVE.
+function abonnementSignaler(id,force,remplace){
   const abo=String(id||'');
   if(!SERVEUR_LEGER||!/^I-[A-Z0-9]{6,30}$/.test(abo)) return;
   const cle='rc_abo_signale';
   try{ if(!force&&localStorage.getItem(cle)===abo) return; }catch(e){}
-  deposerEvenement({type:'abonnement',abo}).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
+  const ev={type:'abonnement',abo};
+  const r=String(remplace||'');
+  if(r!==abo&&/^I-[A-Z0-9]{6,30}$/.test(r)) ev.remplace=r;
+  deposerEvenement(ev).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
 }
 // PURE. Ce que l'événement vise, pour son verrou (voir evenementPoser) : les
 // règles exigent exactement cette valeur, type par type.

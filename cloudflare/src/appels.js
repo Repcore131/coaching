@@ -68,7 +68,8 @@ export class ErreurAppel extends Error {
   constructor(statut, message) { super(message); this.statut = statut; }
 }
 export async function repondreAppel(req, gestionnaires, contexte) {
-  const nom = new URL(req.url).pathname.replace(/^\/fn\//, '');
+  // `contexte.nom` : une route nommée (/abonnement/changer) qui parle le même protocole.
+  const nom = contexte.nom || new URL(req.url).pathname.replace(/^\/fn\//, '');
   const g = gestionnaires[nom];
   const envoyer = (statut, corps) => new Response(JSON.stringify(corps), { status: statut,
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*',

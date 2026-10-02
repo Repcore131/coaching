@@ -538,7 +538,8 @@ await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : dépos
     assert.equal(QC.CYCLES_GRACE, Number(/const PALIERS_CYCLES_AVANT_PROPOSITION=(\d+);/.exec(a2)[1]) + 1);
     assert.match(app, new RegExp('const QUOTA_CYCLES_GRACE=' + QC.CYCLES_GRACE + ';'));
     const pp = readFileSync(new URL('../src/paypal.js', import.meta.url), 'utf8');
-    assert.equal((pp.match(/worker\/jobs\/couverture_coachs/g) || []).length, 3, 'les trois changements de formule relancent le calcul');
+    // Paiement, remboursement, fin, et le changement de formule (Coach ↔ Pro, BILLING.SUBSCRIPTION.UPDATED).
+    assert.equal((pp.match(/worker\/jobs\/couverture_coachs/g) || []).length, 4, 'les quatre changements de formule relancent le calcul');
     assert.deepEqual(QC.cyclesSuivants({ cycles: 2, mois: '2026-09' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
     assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, true, '2026-10'), { cycles: 3, mois: '2026-10' });
     assert.deepEqual(QC.cyclesSuivants({ cycles: 3, mois: '2026-10' }, false, '2026-10'), { cycles: 0, mois: '2026-10' });

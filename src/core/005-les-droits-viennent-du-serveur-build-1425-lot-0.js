@@ -764,6 +764,9 @@ function accueilRendreTarifs(){
 function accueilChoisir(cle,annuel){
   try{ sessionStorage.setItem('rc_offre_choisie',String(cle||'')); }catch(e){}
   try{ sessionStorage.setItem('rc_offre_annuel',annuel?'1':''); }catch(e){}
+  // UN ABONNÉ NE SOUSCRIT PAS UNE SECONDE FOIS (02/10/2026) : l'écran
+  // d'abonnement lui propose « Changer de formule », sans bouton PayPal.
+  if(currentUser&&abonnementEnCours(currentUser)){ go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
   if(currentUser){ go('s-subscribe'); try{ initPaypalSubscription(); }catch(e){} return true; }
   go('s-register');
   try{ selectRole('athlete',true); }catch(e){}

@@ -624,6 +624,101 @@ function aUnAbonnement(user){
   // Un abonnement déjà résilié reste affichable : l'accès court jusqu'au terme.
   return !!resiliationDemandee(u)||!!u.paypalSubscriptionId;
 }
+// ══ UN SEUL ABONNEMENT À LA FOIS (02/10/2026) ═════════════════════════════
+// Un abonné Essentielle qui choisissait Ultime souscrivait un SECOND
+// abonnement : l'ancien continuait d'être prélevé. Désormais, tant qu'un
+// abonnement PayPal court, l'app ne monte AUCUN bouton de souscription :
+// elle propose « Changer de formule », qui RÉVISE l'abonnement en cours chez
+// PayPal (Worker, POST /abonnement/changer). Un coach (Coach → Pro) suit la
+// même règle.
+//
+// Ce que le serveur a écrit (statutPaypal) fait foi : résilié, échu ou
+// remboursé, l'abonnement ne court plus, et une nouvelle souscription est
+// permise (l'ancien est alors signalé au serveur, voir onApprove).
+const STATUTS_PAYPAL_FINIS=Object.freeze(['CANCELLED','EXPIRED','REMBOURSE']);
+// PURE. L'abonnement PayPal qu'une nouvelle souscription DOUBLERAIT :
+// {id, coach}, ou null. Sans identifiant PayPal (accès offert, parrainage,
+// accès posé à la main), il n'y a rien à doubler.
+function abonnementEnCours(user){
+  const u=user||{};
+  const id=String(u.paypalSubscriptionId||'');
+  if(!/^I-[A-Z0-9]{6,30}$/.test(id)) return null;
+  const st=String(abonnementDe(u).statutPaypal||'').toUpperCase();
+  if(STATUTS_PAYPAL_FINIS.indexOf(st)>=0) return null;
+  if(u.role==='coach') return {id:id,coach:true};
+  if(!aUnAbonnement(u)) return null;
+  return {id:id,coach:false};
+}
+const _NOM_FORMULE=Object.freeze({essentielle:'Essentielle',ultime:'Ultime',coach:'Coach',pro:'Pro'});
+const _RANG_FORMULE=Object.freeze({essentielle:1,ultime:2,coach:1,pro:2});
+// PURE. La formule que l'abonnement en cours facture : celle que le serveur a
+// écrite (abonnement.formule, coachPlan), jamais ce qu'on a choisi à l'écran.
+function formuleEnCours(user){
+  const u=user||{};
+  if(u.role==='coach'){ const cp=String(u.coachPlan||''); return ['coach','pro'].indexOf(cp)>=0?cp:''; }
+  const f=abonnementDe(u).formule;
+  return (f==='essentielle'||f==='ultime')?f:'';
+}
+// PURE. Le plan PayPal de l'abonnement en cours, d'après sa formule et sa période.
+function planIdEnCours(user){
+  const f=formuleEnCours(user);
+  if(f==='coach') return PAYPAL_PLAN_ID_COACH;
+  if(f==='pro') return PAYPAL_PLAN_ID_PRO;
+  if(!f) return '';
+  return planIdOffre(f,abonnementDe(user).palier==='annuel');
+}
+// PURE. Ce que l'écran d'abonnement montre à quelqu'un qui en a déjà un :
+// jamais un bouton de souscription, toujours « Changer de formule ».
+function htmlChangerFormule(user,planId){
+  const act=formuleEnCours(user), cib=formuleDuPlan(planId);
+  const nom=(f)=>_NOM_FORMULE[f]||'ta formule actuelle';
+  if(!planId||!cib) return '<div class="bq-note">Cette formule n’est pas encore ouverte au changement.</div>';
+  if(planId===planIdEnCours(user)) return '<div class="bq-note" id="sub-deja">C’est déjà ta formule : '+escapeHtml(nom(act))+'.</div>';
+  const baisse=!!act&&(_RANG_FORMULE[cib]||0)<(_RANG_FORMULE[act]||0);
+  return '<div class="bq-note" id="sub-changer-note">Tu as déjà un abonnement '+escapeHtml(nom(act))
+    +'. Il est modifié chez PayPal, jamais doublé : '
+    +(baisse?'le passage à '+escapeHtml(nom(cib))+' prend effet à ta prochaine échéance, et tu gardes '+escapeHtml(nom(act))+' jusque-là.'
+      :escapeHtml(nom(cib))+' s’ouvre dès que tu valides chez PayPal.')+'</div>'
+    +'<button class="btn btn-red" id="sub-changer" onclick="changerFormule(this)">Changer de formule</button>';
+}
+// PURE. Après la réponse du serveur : la date d'effet (baisse) et le lien de
+// validation chez PayPal. Un lien qui ne mène pas chez PayPal n'est pas montré.
+function htmlChangementPret(r,user){
+  const href=String((r&&r.approve)||'');
+  if(!/^https:\/\/(www\.)?(sandbox\.)?paypal\.com\//.test(href)) return '<div class="bq-note">PayPal n’a pas rendu de lien de validation. Réessaie dans un instant.</div>';
+  const nom=(f)=>_NOM_FORMULE[f]||'ta nouvelle formule';
+  const act=formuleEnCours(user);
+  const txt=(r.baisse&&Number(r.effet)>0)
+    ?'Ton passage à '+nom(r.formule)+' prendra effet le '+new Date(Number(r.effet)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+      +'. Jusque-là, tu gardes '+nom(act)+'. Ton engagement ne repart pas à zéro.'
+    :nom(r.formule)+' s’ouvre dès que tu valides chez PayPal. Ton engagement ne repart pas à zéro.';
+  return '<div class="bq-note" id="sub-effet">'+escapeHtml(txt)+'</div>'
+    +'<a class="btn btn-red" id="sub-valider-pp" href="'+escapeHtml(href)+'" rel="noopener">Valider chez PayPal</a>';
+}
+async function changerFormule(btn){
+  const z=document.getElementById('paypal-btn-container');
+  const planId=_planIdChoisi();
+  if(!currentUser||!planId) return false;
+  if(!SERVEUR_LEGER||!CLOUD||!CLOUD._callFn){ toast('Le changement de formule demande une connexion au serveur.','var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  let r=null;
+  try{ r=await CLOUD._callFn('/abonnement/changer',{plan_id:planId}); }
+  catch(e){
+    if(btn) btn.disabled=false;
+    toast((e&&e.message)||'Changement impossible pour le moment.','var(--orange)');
+    return false;
+  }
+  // L'ABONNEMENT ÉTAIT DÉJÀ ANNULÉ CHEZ PAYPAL (le serveur vient de l'écrire
+  // au dossier) : plus rien ne court, la souscription redevient possible.
+  if(r&&r.fini){
+    currentUser.abonnement=Object.assign({},currentUser.abonnement,{statutPaypal:String(r.statut||'CANCELLED')});
+    toast('Ton ancien abonnement est terminé chez PayPal : tu peux souscrire ta nouvelle formule.','var(--info)');
+    loadSubscribePage();
+    return true;
+  }
+  if(z) z.innerHTML=htmlChangementPret(r,currentUser);
+  return true;
+}
 // La date de fin d'accès. L'accès reste OUVERT jusqu'au terme de la période
 // réglée : on ne coupe rien à la confirmation.
 function finAccesAbonnement(user){

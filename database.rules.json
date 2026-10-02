@@ -2122,6 +2122,9 @@
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
+        // L abonnement que celui-ci remplace (onApprove, 02/10/2026) : le Worker
+        // verifie chez PayPal qu il est a ce compte avant de l annuler.
+        "remplace": { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/) && newData.parent().child('type').val() === 'abonnement'" },
         "jour":  { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
         "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || (newData.parent().child('type').val() === 'message' && newData.val() === newData.parent().child('i').val() && ((newData.parent().child('coach').val() === auth.token.email.replace('.', ',') && root.child('messages').child(auth.token.email.replace('.', ',')).child(newData.parent().child('dest').val()).child(newData.val()).child('de').val() === 'coach') || (newData.parent().child('dest').val() === newData.parent().child('coach').val() && root.child('messages').child(newData.parent().child('coach').val()).child(auth.token.email.replace('.', ',')).child(newData.val()).child('de').val() === 'athlete'))) || (newData.parent().child('type').val() === 'reaction' && newData.val().matches(/^[a-z0-9_]{3,40}$/) && root.child('amis').child(auth.token.email.replace('.', ',')).child(newData.val()).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
         "$autre": { ".validate": false }
@@ -2173,6 +2176,11 @@
     // Chaque encaissement : a qui, combien, premier paiement ou non. Relu par
     // le serveur leger quand un remboursement ou un litige arrive.
     "paypal_transactions": { ".read": false, ".write": false },
+    // Changer de formule (02/10/2026) : la revision demandee (sa date d effet)
+    // et le remplacement d un abonnement par un autre, en attente de l
+    // activation du nouveau. Serveur leger seul.
+    "paypal_revisions":     { ".read": false, ".write": false },
+    "paypal_remplacements": { ".read": false, ".write": false },
     // Le journal des remboursements, retrofacturations et litiges : qui, quoi,
     // pourquoi, et ce qui a ete repris. Ecrit par le serveur leger, lu par
     // l administrateur seul (ecran Ambassadeurs).

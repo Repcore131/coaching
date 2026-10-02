@@ -2380,6 +2380,101 @@ function aUnAbonnement(user){
   // Un abonnement déjà résilié reste affichable : l'accès court jusqu'au terme.
   return !!resiliationDemandee(u)||!!u.paypalSubscriptionId;
 }
+// ══ UN SEUL ABONNEMENT À LA FOIS (02/10/2026) ═════════════════════════════
+// Un abonné Essentielle qui choisissait Ultime souscrivait un SECOND
+// abonnement : l'ancien continuait d'être prélevé. Désormais, tant qu'un
+// abonnement PayPal court, l'app ne monte AUCUN bouton de souscription :
+// elle propose « Changer de formule », qui RÉVISE l'abonnement en cours chez
+// PayPal (Worker, POST /abonnement/changer). Un coach (Coach → Pro) suit la
+// même règle.
+//
+// Ce que le serveur a écrit (statutPaypal) fait foi : résilié, échu ou
+// remboursé, l'abonnement ne court plus, et une nouvelle souscription est
+// permise (l'ancien est alors signalé au serveur, voir onApprove).
+const STATUTS_PAYPAL_FINIS=Object.freeze(['CANCELLED','EXPIRED','REMBOURSE']);
+// PURE. L'abonnement PayPal qu'une nouvelle souscription DOUBLERAIT :
+// {id, coach}, ou null. Sans identifiant PayPal (accès offert, parrainage,
+// accès posé à la main), il n'y a rien à doubler.
+function abonnementEnCours(user){
+  const u=user||{};
+  const id=String(u.paypalSubscriptionId||'');
+  if(!/^I-[A-Z0-9]{6,30}$/.test(id)) return null;
+  const st=String(abonnementDe(u).statutPaypal||'').toUpperCase();
+  if(STATUTS_PAYPAL_FINIS.indexOf(st)>=0) return null;
+  if(u.role==='coach') return {id:id,coach:true};
+  if(!aUnAbonnement(u)) return null;
+  return {id:id,coach:false};
+}
+const _NOM_FORMULE=Object.freeze({essentielle:'Essentielle',ultime:'Ultime',coach:'Coach',pro:'Pro'});
+const _RANG_FORMULE=Object.freeze({essentielle:1,ultime:2,coach:1,pro:2});
+// PURE. La formule que l'abonnement en cours facture : celle que le serveur a
+// écrite (abonnement.formule, coachPlan), jamais ce qu'on a choisi à l'écran.
+function formuleEnCours(user){
+  const u=user||{};
+  if(u.role==='coach'){ const cp=String(u.coachPlan||''); return ['coach','pro'].indexOf(cp)>=0?cp:''; }
+  const f=abonnementDe(u).formule;
+  return (f==='essentielle'||f==='ultime')?f:'';
+}
+// PURE. Le plan PayPal de l'abonnement en cours, d'après sa formule et sa période.
+function planIdEnCours(user){
+  const f=formuleEnCours(user);
+  if(f==='coach') return PAYPAL_PLAN_ID_COACH;
+  if(f==='pro') return PAYPAL_PLAN_ID_PRO;
+  if(!f) return '';
+  return planIdOffre(f,abonnementDe(user).palier==='annuel');
+}
+// PURE. Ce que l'écran d'abonnement montre à quelqu'un qui en a déjà un :
+// jamais un bouton de souscription, toujours « Changer de formule ».
+function htmlChangerFormule(user,planId){
+  const act=formuleEnCours(user), cib=formuleDuPlan(planId);
+  const nom=(f)=>_NOM_FORMULE[f]||'ta formule actuelle';
+  if(!planId||!cib) return '<div class="bq-note">Cette formule n’est pas encore ouverte au changement.</div>';
+  if(planId===planIdEnCours(user)) return '<div class="bq-note" id="sub-deja">C’est déjà ta formule : '+escapeHtml(nom(act))+'.</div>';
+  const baisse=!!act&&(_RANG_FORMULE[cib]||0)<(_RANG_FORMULE[act]||0);
+  return '<div class="bq-note" id="sub-changer-note">Tu as déjà un abonnement '+escapeHtml(nom(act))
+    +'. Il est modifié chez PayPal, jamais doublé : '
+    +(baisse?'le passage à '+escapeHtml(nom(cib))+' prend effet à ta prochaine échéance, et tu gardes '+escapeHtml(nom(act))+' jusque-là.'
+      :escapeHtml(nom(cib))+' s’ouvre dès que tu valides chez PayPal.')+'</div>'
+    +'<button class="btn btn-red" id="sub-changer" onclick="changerFormule(this)">Changer de formule</button>';
+}
+// PURE. Après la réponse du serveur : la date d'effet (baisse) et le lien de
+// validation chez PayPal. Un lien qui ne mène pas chez PayPal n'est pas montré.
+function htmlChangementPret(r,user){
+  const href=String((r&&r.approve)||'');
+  if(!/^https:\/\/(www\.)?(sandbox\.)?paypal\.com\//.test(href)) return '<div class="bq-note">PayPal n’a pas rendu de lien de validation. Réessaie dans un instant.</div>';
+  const nom=(f)=>_NOM_FORMULE[f]||'ta nouvelle formule';
+  const act=formuleEnCours(user);
+  const txt=(r.baisse&&Number(r.effet)>0)
+    ?'Ton passage à '+nom(r.formule)+' prendra effet le '+new Date(Number(r.effet)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+      +'. Jusque-là, tu gardes '+nom(act)+'. Ton engagement ne repart pas à zéro.'
+    :nom(r.formule)+' s’ouvre dès que tu valides chez PayPal. Ton engagement ne repart pas à zéro.';
+  return '<div class="bq-note" id="sub-effet">'+escapeHtml(txt)+'</div>'
+    +'<a class="btn btn-red" id="sub-valider-pp" href="'+escapeHtml(href)+'" rel="noopener">Valider chez PayPal</a>';
+}
+async function changerFormule(btn){
+  const z=document.getElementById('paypal-btn-container');
+  const planId=_planIdChoisi();
+  if(!currentUser||!planId) return false;
+  if(!SERVEUR_LEGER||!CLOUD||!CLOUD._callFn){ toast('Le changement de formule demande une connexion au serveur.','var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  let r=null;
+  try{ r=await CLOUD._callFn('/abonnement/changer',{plan_id:planId}); }
+  catch(e){
+    if(btn) btn.disabled=false;
+    toast((e&&e.message)||'Changement impossible pour le moment.','var(--orange)');
+    return false;
+  }
+  // L'ABONNEMENT ÉTAIT DÉJÀ ANNULÉ CHEZ PAYPAL (le serveur vient de l'écrire
+  // au dossier) : plus rien ne court, la souscription redevient possible.
+  if(r&&r.fini){
+    currentUser.abonnement=Object.assign({},currentUser.abonnement,{statutPaypal:String(r.statut||'CANCELLED')});
+    toast('Ton ancien abonnement est terminé chez PayPal : tu peux souscrire ta nouvelle formule.','var(--info)');
+    loadSubscribePage();
+    return true;
+  }
+  if(z) z.innerHTML=htmlChangementPret(r,currentUser);
+  return true;
+}
 // La date de fin d'accès. L'accès reste OUVERT jusqu'au terme de la période
 // réglée : on ne coupe rien à la confirmation.
 function finAccesAbonnement(user){
@@ -4607,7 +4702,10 @@ const CLOUD={
     if(token) headers['Authorization']='Bearer '+token;
     let r;
     try{
-      r=await fetch(this._functionsBase+'/'+name,{method:'POST',headers,body:JSON.stringify({data})});
+      // Un nom qui commence par « / » est une route nommée du serveur léger
+      // (/abonnement/changer), même protocole que /fn/<nom>.
+      const url=String(name).charAt(0)==='/'?SERVEUR_LEGER_URL+name:this._functionsBase+'/'+name;
+      r=await fetch(url,{method:'POST',headers,body:JSON.stringify({data})});
     }catch(e){
       throw new Error('Impossible de joindre le serveur : vérifie ta connexion.');
     }
@@ -7239,6 +7337,8 @@ function rcRoleDepuisParams(params){
     // jusqu'à la connexion. ?paiement_coach=retour|annule&token=<commande> : le retour de PayPal.
     if(params.get('payer')){ try{ localStorage.setItem('rc_payer',JSON.stringify({brut:String(params.get('payer')).slice(0,90),at:Date.now()})); }catch(e){} }
     if(params.get('paiement_coach')) window._pendingPaiementCoach={etat:String(params.get('paiement_coach')),commande:String(params.get('token')||'')};
+    // ?formule=validee|annulee — le retour de PayPal après « Changer de formule ».
+    if(/^(validee|annulee)$/.test(String(params.get('formule')||''))) window._pendingFormule=String(params.get('formule'));
     // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
     // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
     //   pendant le chargement du script, AVANT que les constantes du module
@@ -8938,6 +9038,9 @@ function routeUser(){
   if(window._pendingPaiementCoach){ const _pc=window._pendingPaiementCoach; window._pendingPaiementCoach=false;
     setTimeout(()=>{ try{ pcRetourPaypal(_pc.etat,_pc.commande); }catch(e){} },1100);}
   else setTimeout(()=>{ try{ pcProposerPaiement(); }catch(e){} },1300);
+  if(window._pendingFormule){ const _f=window._pendingFormule; window._pendingFormule=false;
+    setTimeout(()=>{ try{ toast(_f==='validee'?'Changement validé chez PayPal : ta formule suit dès que PayPal le confirme.'
+      :'Changement de formule annulé : ton abonnement reste tel quel.',_f==='validee'?'var(--green)':'var(--orange)'); }catch(e){} },1200);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
@@ -9739,6 +9842,9 @@ function accueilRendreTarifs(){
 function accueilChoisir(cle,annuel){
   try{ sessionStorage.setItem('rc_offre_choisie',String(cle||'')); }catch(e){}
   try{ sessionStorage.setItem('rc_offre_annuel',annuel?'1':''); }catch(e){}
+  // UN ABONNÉ NE SOUSCRIT PAS UNE SECONDE FOIS (02/10/2026) : l'écran
+  // d'abonnement lui propose « Changer de formule », sans bouton PayPal.
+  if(currentUser&&abonnementEnCours(currentUser)){ go('s-subscribe'); try{ loadSubscribePage(); }catch(e){} return true; }
   if(currentUser){ go('s-subscribe'); try{ initPaypalSubscription(); }catch(e){} return true; }
   go('s-register');
   try{ selectRole('athlete',true); }catch(e){}
@@ -22270,7 +22376,8 @@ async function effacerEvenementKo(id,btn){
 const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'Remboursement partiel',
   remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
   retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
-  litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie'};
+  litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie',
+  double_abonnement:'Deux abonnements actifs',ancien_annule:'Ancien abonnement annulé (remplacé)'};
 // PURE. Le journal PayPal, du plus récent au plus ancien : qui, quoi,
 // pourquoi, et ce que le serveur a repris. null : illisible.
 function htmlJournalPaypal(j){
@@ -22281,10 +22388,10 @@ function htmlJournalPaypal(j){
   if(!lignes.length) return h+'<p class="sub amb-note">Aucun remboursement ni litige.</p></div>';
   for(const x of lignes){
     const d=Number(x.le)?new Date(Number(x.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'';
-    const litige=/^litige_(ouvert|perdu)/.test(x.quoi);
+    const litige=/^(litige_(ouvert|perdu)|double_abonnement)/.test(x.quoi);
     h+='<div class="amb-jl'+(litige?' amb-jl-alerte':'')+'">'
       +'<div class="amb-jl-tete"><b>'+escapeHtml(_JOURNAL_QUOI[x.quoi]||x.quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
-      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':''].filter(Boolean).join(' · '))+'</div>'
+      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':'',x.abo,x.courant?'courant : '+x.courant:''].filter(Boolean).join(' · '))+'</div>'
       +(x.pourquoi?'<div class="sub">Motif : '+escapeHtml(x.pourquoi)+'</div>':'')
       +(Array.isArray(x.actions)&&x.actions.length?'<ul class="amb-jl-actions">'+x.actions.map(a=>'<li>'+escapeHtml(a)+'</li>').join('')+'</ul>':'')
       +'</div>';
@@ -23182,12 +23289,17 @@ function _dfMemoInscrit(id,oui){
 // l'événement sur parole) ; ici on ne fait que le prévenir.
 // L'abonnement PayPal de ce compte, signalé au serveur une fois (et au
 // démarrage pour ceux d'avant 1603). Le serveur le vérifie chez PayPal.
-function abonnementSignaler(id,force){
+// `remplace` : l'abonnement que celui-ci remplace (onApprove) ; le serveur
+// l'annule chez PayPal dès que le nouveau est ACTIVE.
+function abonnementSignaler(id,force,remplace){
   const abo=String(id||'');
   if(!SERVEUR_LEGER||!/^I-[A-Z0-9]{6,30}$/.test(abo)) return;
   const cle='rc_abo_signale';
   try{ if(!force&&localStorage.getItem(cle)===abo) return; }catch(e){}
-  deposerEvenement({type:'abonnement',abo}).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
+  const ev={type:'abonnement',abo};
+  const r=String(remplace||'');
+  if(r!==abo&&/^I-[A-Z0-9]{6,30}$/.test(r)) ev.remplace=r;
+  deposerEvenement(ev).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
 }
 // PURE. Ce que l'événement vise, pour son verrou (voir evenementPoser) : les
 // règles exigent exactement cette valeur, type par type.
@@ -130064,7 +130176,12 @@ function loadSubscribePage(mode,payload){
   //   d'Essentielle faute de mieux : quelqu'un qui demande Ultime se serait
   //   fait debiter autre chose que ce qu'il a demande. A la place, la seule
   //   chose vraie : ce qui se paie aujourd'hui.
-  if(!_paliersDispo().length){
+  // ⚠ UN ABONNEMENT COURT DÉJÀ (02/10/2026) : aucun bouton de souscription,
+  //   « Changer de formule » à la place. Souscrire de nouveau faisait payer
+  //   deux abonnements, l'ancien continuant d'être prélevé.
+  if(abonnementEnCours(currentUser)){
+    _pp.innerHTML=htmlChangerFormule(currentUser,_planIdChoisi());
+  }else if(!_paliersDispo().length){
     _pp.innerHTML=(subOffreChoisie()==='ultime')
       ?'<button class="btn btn-outline" onclick="subPrendreEssentielle()">'
         +'Prendre Essentielle à '+escapeHtml(prixOffre('essentielle'))+' par mois</button>'
@@ -130107,6 +130224,9 @@ function initPaypalSubscription(){
   // ⚠ ET LE REPLI SUR PAYPAL_PLAN_ID A DISPARU (lot 11). Il facturait le
   //   mensuel d'Essentielle des que le plan choisi n'existait pas — donc a
   //   qui demandait Ultime. On ne devine pas ce que quelqu'un veut payer.
+  // DÉFENSE EN PROFONDEUR : un abonnement court déjà, ce chemin ne charge pas
+  // PayPal, quel que soit le bouton qui l'a appelé.
+  if(abonnementEnCours(currentUser)){ loadSubscribePage(); return; }
   const planId=_planIdChoisi();
   if(!planId){
     toast('Ce tarif n’est pas encore ouvert au paiement.','var(--orange)');
@@ -130167,6 +130287,11 @@ function renderPaypalButton(planId,coachId){
     createSubscription:function(data,actions){
       // Deuxieme verrou : masquer ne suffit pas, un clic programmatique
       // contournerait l'affichage.
+      // TROISIÈME VERROU : un abonnement court déjà (statut relu à l'instant).
+      if(abonnementEnCours(currentUser)){
+        toast('Tu as déjà un abonnement : change de formule plutôt que d’en prendre un second.','var(--orange)');
+        throw new Error('abonnement deja en cours');
+      }
       const ok=document.getElementById('cgv-ok');
       if(!ok||!ok.checked){
         toast('Accepte les conditions générales avant de payer','var(--orange)');
@@ -130195,6 +130320,12 @@ function renderPaypalButton(planId,coachId){
         // l'abonnement chez PayPal. L'app garde l'identifiant de l'abonnement
         // (le Worker s'en sert pour savoir a qui il est), la periode choisie,
         // puis ATTEND le serveur : voir _attendreActivation.
+        // L'ANCIEN ABONNEMENT, S'IL Y EN AVAIT UN : signalé au serveur, qui
+        // l'annule chez PayPal dès que le nouveau est ACTIVE (déjà annulé :
+        // rien). Son engagement court toujours : il n'est pas remis à zéro.
+        const _ancien=String(currentUser.paypalSubscriptionId||'');
+        const _remplace=(_ancien&&_ancien!==data.subscriptionID)?_ancien:'';
+        const _engAvant=Number(abonnementDe(currentUser).engagementJusqu)||0;
         currentUser.paypalSubscriptionId=data.subscriptionID;
         // Simple affichage : « paiement reçu, activation… » (paiementRecent).
         paiementRecentNoter(currentUser,'abonnement');
@@ -130220,11 +130351,11 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
+           engagementJusqu:(_estCoach?undefined:(_remplace&&_engAvant>Date.now()?_engAvant:moisApres(Date.now(),TARIFS.engagementMois)))});
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.
-        abonnementSignaler(data.subscriptionID,true);
+        abonnementSignaler(data.subscriptionID,true,_remplace);
         try{ attribPremierPaiement(currentUser); }catch(e){}
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;

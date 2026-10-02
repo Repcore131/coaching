@@ -564,7 +564,10 @@ const CLOUD={
     if(token) headers['Authorization']='Bearer '+token;
     let r;
     try{
-      r=await fetch(this._functionsBase+'/'+name,{method:'POST',headers,body:JSON.stringify({data})});
+      // Un nom qui commence par « / » est une route nommée du serveur léger
+      // (/abonnement/changer), même protocole que /fn/<nom>.
+      const url=String(name).charAt(0)==='/'?SERVEUR_LEGER_URL+name:this._functionsBase+'/'+name;
+      r=await fetch(url,{method:'POST',headers,body:JSON.stringify({data})});
     }catch(e){
       throw new Error('Impossible de joindre le serveur : vérifie ta connexion.');
     }

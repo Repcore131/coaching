@@ -900,7 +900,12 @@ function loadSubscribePage(mode,payload){
   //   d'Essentielle faute de mieux : quelqu'un qui demande Ultime se serait
   //   fait debiter autre chose que ce qu'il a demande. A la place, la seule
   //   chose vraie : ce qui se paie aujourd'hui.
-  if(!_paliersDispo().length){
+  // ⚠ UN ABONNEMENT COURT DÉJÀ (02/10/2026) : aucun bouton de souscription,
+  //   « Changer de formule » à la place. Souscrire de nouveau faisait payer
+  //   deux abonnements, l'ancien continuant d'être prélevé.
+  if(abonnementEnCours(currentUser)){
+    _pp.innerHTML=htmlChangerFormule(currentUser,_planIdChoisi());
+  }else if(!_paliersDispo().length){
     _pp.innerHTML=(subOffreChoisie()==='ultime')
       ?'<button class="btn btn-outline" onclick="subPrendreEssentielle()">'
         +'Prendre Essentielle à '+escapeHtml(prixOffre('essentielle'))+' par mois</button>'
@@ -943,6 +948,9 @@ function initPaypalSubscription(){
   // ⚠ ET LE REPLI SUR PAYPAL_PLAN_ID A DISPARU (lot 11). Il facturait le
   //   mensuel d'Essentielle des que le plan choisi n'existait pas — donc a
   //   qui demandait Ultime. On ne devine pas ce que quelqu'un veut payer.
+  // DÉFENSE EN PROFONDEUR : un abonnement court déjà, ce chemin ne charge pas
+  // PayPal, quel que soit le bouton qui l'a appelé.
+  if(abonnementEnCours(currentUser)){ loadSubscribePage(); return; }
   const planId=_planIdChoisi();
   if(!planId){
     toast('Ce tarif n’est pas encore ouvert au paiement.','var(--orange)');
@@ -1003,6 +1011,11 @@ function renderPaypalButton(planId,coachId){
     createSubscription:function(data,actions){
       // Deuxieme verrou : masquer ne suffit pas, un clic programmatique
       // contournerait l'affichage.
+      // TROISIÈME VERROU : un abonnement court déjà (statut relu à l'instant).
+      if(abonnementEnCours(currentUser)){
+        toast('Tu as déjà un abonnement : change de formule plutôt que d’en prendre un second.','var(--orange)');
+        throw new Error('abonnement deja en cours');
+      }
       const ok=document.getElementById('cgv-ok');
       if(!ok||!ok.checked){
         toast('Accepte les conditions générales avant de payer','var(--orange)');
@@ -1031,6 +1044,12 @@ function renderPaypalButton(planId,coachId){
         // l'abonnement chez PayPal. L'app garde l'identifiant de l'abonnement
         // (le Worker s'en sert pour savoir a qui il est), la periode choisie,
         // puis ATTEND le serveur : voir _attendreActivation.
+        // L'ANCIEN ABONNEMENT, S'IL Y EN AVAIT UN : signalé au serveur, qui
+        // l'annule chez PayPal dès que le nouveau est ACTIVE (déjà annulé :
+        // rien). Son engagement court toujours : il n'est pas remis à zéro.
+        const _ancien=String(currentUser.paypalSubscriptionId||'');
+        const _remplace=(_ancien&&_ancien!==data.subscriptionID)?_ancien:'';
+        const _engAvant=Number(abonnementDe(currentUser).engagementJusqu)||0;
         currentUser.paypalSubscriptionId=data.subscriptionID;
         // Simple affichage : « paiement reçu, activation… » (paiementRecent).
         paiementRecentNoter(currentUser,'abonnement');
@@ -1056,11 +1075,11 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
+           engagementJusqu:(_estCoach?undefined:(_remplace&&_engAvant>Date.now()?_engAvant:moisApres(Date.now(),TARIFS.engagementMois)))});
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.
-        abonnementSignaler(data.subscriptionID,true);
+        abonnementSignaler(data.subscriptionID,true,_remplace);
         try{ attribPremierPaiement(currentUser); }catch(e){}
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;

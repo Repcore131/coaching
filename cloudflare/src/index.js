@@ -56,6 +56,10 @@ const droitsAppel = (nom) => (req, ctx) => creerAppelsDroits(ctx)[nom](req);
 const ouvrirEssai = (req, ctx) => creerEssai(ctx).ouvrirEssai(req);
 const verifierAchatProgramme = ({ auth, data }, ctx) =>
   ctx.M.paypal.verifierAchat(cleDe(auth.email), data && data.orderId, data && data.programmeId);
+// Changer de formule (paypal.js, changerFormule) : l'abonnement en cours est
+// RÉVISÉ chez PayPal, jamais doublé. Servi sur POST /abonnement/changer.
+const changerAbonnement = ({ auth, data }, ctx) =>
+  ctx.M.paypal.changerFormule(cleDe(auth.email), data && data.plan_id);
 const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin,
   ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
@@ -242,6 +246,12 @@ async function servir(req, env, ctx) {
       const o = outils(env);
       budgetRequete(o);
       return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
+    }
+    // CHANGER DE FORMULE : même protocole et même jeton Firebase que /fn/<nom>.
+    if (url.pathname === '/abonnement/changer' && req.method === 'POST') {
+      const o = outils(env);
+      budgetRequete(o);
+      return await repondreAppel(req, { changerAbonnement }, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req, nom: 'changerAbonnement' });
     }
     // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
     // Le corps n'est jamais journalisé.

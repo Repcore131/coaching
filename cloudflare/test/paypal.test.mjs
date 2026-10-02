@@ -26,7 +26,7 @@ const iso = (t) => new Date(t).toISOString();
 function monde(initial, o) {
   const F = fausseBase(initial);
   const opt = o || {};
-  const w = { F, verifs: [], oauth: 0, panne: 0, abos: opt.abonnements || {}, commandes: opt.commandes || {}, t: T0, req: 0, max: 0 };
+  const w = { F, verifs: [], paypalEcrits: [], oauth: 0, panne: 0, abos: opt.abonnements || {}, commandes: opt.commandes || {}, t: T0, req: 0, max: 0 };
   // CHAQUE sous-requête compte (base, PayPal, push) : c'est ce que Cloudflare plafonne à 50.
   const fetchImpl = async (url, init) => {
     w.req++;
@@ -35,6 +35,21 @@ function monde(initial, o) {
     if (u.endsWith('/v1/notifications/verify-webhook-signature')) {
       w.verifs.push(init.body);
       return { ok: true, status: 200, json: async () => ({ verification_status: opt.signature === false ? 'FAILURE' : 'SUCCESS' }) };
+    }
+    // ÉCRIRE CHEZ PAYPAL : réviser (changer de plan) et annuler un abonnement.
+    const ecrit = u.match(/\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)\/(revise|cancel)$/);
+    if (ecrit) {
+      const corps = JSON.parse(init.body || '{}');
+      w.paypalEcrits.push({ abo: ecrit[1], quoi: ecrit[2], corps });
+      const s = w.abos[ecrit[1]];
+      if (!s) return { ok: false, status: 404, json: async () => ({}) };
+      if (ecrit[2] === 'cancel') {
+        if (s.status === 'CANCELLED') return { ok: false, status: 422, json: async () => ({}) };
+        s.status = 'CANCELLED';
+        return { ok: true, status: 204, json: async () => ({}) };
+      }
+      return { ok: true, status: 200, json: async () => ({ plan_id: corps.plan_id,
+        links: [{ rel: 'approve', href: 'https://www.paypal.com/webapps/billing/subscriptions/update?ba_token=BA-1' }, { rel: 'edit', href: 'x' }] }) };
     }
     const m = u.match(/\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)$/) || u.match(/\/v2\/checkout\/orders\/([A-Z0-9]+)$/);
     if (m) {
@@ -598,6 +613,155 @@ await test('un orphelin rejoué dans le webhook qui manque de budget en route pa
   assert.equal(w.F.lire('paypal_orphelins'), null);
   assert.ok(w.F.lire('paypal_premiers/lea@t,fr'), 'le paiement est passé');
   assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'CANCELLED', 'puis l’annulation, dans l’ordre');
+});
+
+// ══ CHANGER DE FORMULE SANS DEUXIÈME ABONNEMENT (02/10/2026) ════════════
+const ULT_AN = 'P-16Y44630WF304553UNK2LZXI', DEMI = 'P-57P40267XP026613FNK2LZXQ', COACH = 'P-9JD300001T4718058NK2RF5Q';
+const espionAdmin = (w) => { const l = []; w.M.pousser1 = async (uid, m) => { l.push({ uid, m }); return { envoye: 1 }; }; return l; };
+const ENG = T0 + 300 * J;
+
+await test('révision : Essentielle → Ultime révise l’abonnement en cours chez PayPal et rend le lien d’approbation', async () => {
+  const w = monde({ users: LEA({ abonnement: { formule: 'essentielle', engagementJusqu: ENG } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr' }) } });
+  const r = await w.PP.changerFormule('lea@t,fr', ULT);
+  assert.equal(r.approve, 'https://www.paypal.com/webapps/billing/subscriptions/update?ba_token=BA-1');
+  assert.equal(r.baisse, false); assert.equal(r.effet, 0); assert.equal(r.formule, 'ultime');
+  assert.deepEqual(w.paypalEcrits.map((x) => [x.abo, x.quoi, x.corps.plan_id]), [['I-ABC12345678', 'revise', ULT]]);
+  assert.match(w.paypalEcrits[0].corps.application_context.return_url, /\?formule=validee$/);
+  assert.equal(w.F.lire('paypal_revisions/I-ABC12345678/vers'), ULT);
+  // PayPal confirme : BILLING.SUBSCRIPTION.UPDATED, l'abonnement relu porte Ultime.
+  w.abos['I-ABC12345678'].plan_id = ULT;
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.UPDATED', { id: 'I-ABC12345678' }))).texte, 'formule_changee');
+  assert.equal(w.F.lire('droits/lea@t,fr/palier'), 'ultime');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/formule'), 'ultime');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/engagementJusqu'), ENG, 'l’engagement ne repart pas à zéro');
+  assert.equal(w.F.lire('paypal_revisions/I-ABC12345678'), null);
+  assert.equal(w.paypalEcrits.filter((x) => x.quoi === 'cancel').length, 0, 'un seul abonnement, rien à annuler');
+});
+
+await test('révision : Ultime → Essentielle (baisse) donne la date d’effet ; Ultime court jusque-là, puis Essentielle', async () => {
+  const w = monde({ users: LEA({ abonnement: { formule: 'ultime', engagementJusqu: ENG } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' },
+    droits: { 'lea@t,fr': { palier: 'ultime', echeance: 0, source: 'paypal' } } },
+    { abonnements: { 'I-ABC12345678': abo({ plan_id: ULT, custom_id: 'lea@t,fr' }) } });
+  const r = await w.PP.changerFormule('lea@t,fr', ESS);
+  assert.equal(r.baisse, true);
+  assert.equal(r.effet, T0 + 10 * J, 'la prochaine échéance');
+  w.abos['I-ABC12345678'].plan_id = ESS;
+  w.abos['I-ABC12345678'].billing_info.next_billing_time = iso(T0 + 40 * J);   // PayPal a déjà avancé : la date notée à la demande fait foi
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.UPDATED', { id: 'I-ABC12345678' }))).texte, 'formule_changee');
+  assert.equal(w.F.lire('droits/lea@t,fr/palier'), 'essentielle');
+  assert.equal(w.F.lire('droits/lea@t,fr/ultimeJusqu'), T0 + 10 * J, 'Ultime gardé jusqu’à la date d’effet');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/engagementJusqu'), ENG);
+});
+
+await test('révision refusée : plan demi, même formule, abonnement d’un autre, rôle croisé ; déjà annulé : le dossier l’apprend', async () => {
+  const w = monde({ users: Object.assign(LEA({ abonnement: { formule: 'essentielle' } }),
+    { 'kev@t,fr': { role: 'coach', paypalSubscriptionId: 'I-COACH0000001' } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr' }), 'I-COACH0000001': abo({ plan_id: COACH, custom_id: 'kev@t,fr' }) } });
+  const refus = async (cle, plan, re) => { await assert.rejects(() => w.PP.changerFormule(cle, plan), (e) => { assert.match(e.message, re); return true; }); };
+  await refus('lea@t,fr', DEMI, /moitié prix/);
+  await refus('lea@t,fr', ESS, /déjà ta formule/);
+  await refus('lea@t,fr', PRO, /pas proposée/);
+  await refus('lea@t,fr', 'P-INCONNU', /inconnue/);
+  await refus('kev@t,fr', ULT, /pas proposée/);
+  w.abos['I-COACH0000001'].custom_id = 'autre@t,fr';
+  await refus('kev@t,fr', PRO, /pas le tien/);
+  assert.equal(w.paypalEcrits.length, 0, 'rien n’est demandé à PayPal');
+  // Un abonnement déjà annulé chez PayPal : rien à réviser, et la souscription redevient possible.
+  w.abos['I-ABC12345678'].status = 'CANCELLED';
+  assert.deepEqual(await w.PP.changerFormule('lea@t,fr', ULT), { fini: true, statut: 'CANCELLED' });
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'CANCELLED');
+  w.abos['I-ABC12345678'].status = 'SUSPENDED';
+  await refus('lea@t,fr', ULT, /pas actif chez PayPal \(SUSPENDED\)/);
+});
+
+await test('coach : Coach → Pro par la même révision ; UPDATED ouvre le palier Pro au registre', async () => {
+  const w = monde({ users: { 'kev@t,fr': { role: 'coach', coachPlan: 'coach', paypalSubscriptionId: 'I-COACH0000001' } },
+    paypal_abonnes: { 'I-COACH0000001': 'kev@t,fr' }, coachs_registre: { 'kev@t,fr': { plan: 'coach', actifJusqu: T0 + 20 * J } } },
+    { abonnements: { 'I-COACH0000001': abo({ plan_id: COACH, custom_id: 'kev@t,fr' }) } });
+  const r = await w.PP.changerFormule('kev@t,fr', PRO);
+  assert.equal(r.formule, 'pro'); assert.equal(r.baisse, false);
+  w.abos['I-COACH0000001'].plan_id = PRO;
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.UPDATED', { id: 'I-COACH0000001' }))).texte, 'formule_changee');
+  assert.equal(w.F.lire('coachs_registre/kev@t,fr/plan'), 'pro');
+  assert.equal(w.F.lire('users/kev@t,fr/coachPlan'), 'pro');
+  assert.equal(w.F.lire('droits/kev@t,fr'), null, 'un coach n’a pas de droits/');
+});
+
+await test('UPDATED sur un ancien abonnement, ou un abonnement non actif : rien ne change', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: 'I-NOUVEAU00001' }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr', 'I-NOUVEAU00001': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ plan_id: ULT }), 'I-NOUVEAU00001': abo({ status: 'SUSPENDED' }) } });
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.UPDATED', { id: 'I-ABC12345678' }))).texte, 'ancien_abonnement');
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.UPDATED', { id: 'I-NOUVEAU00001' }))).texte, 'maj_sans_effet');
+  assert.equal(w.F.lire('droits/lea@t,fr'), null);
+});
+
+await test('double abonnement : un paiement sur un abonnement ACTIVE qui n’est pas le courant est journalisé et signalé à l’administrateur', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: 'I-NOUVEAU00001' }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr', 'I-NOUVEAU00001': 'lea@t,fr' },
+    paypal_premiers: { 'lea@t,fr': { le: T0 - 90 * J, abo: 'I-ABC12345678' } } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr' }), 'I-NOUVEAU00001': abo({ plan_id: ULT, custom_id: 'lea@t,fr' }) } });
+  const admin = espionAdmin(w);
+  assert.equal((await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-ABC12345678', '9.50', 'S-DOUBLE')))).texte, 'paiement_sans_ouverture');
+  const j = Object.values(w.F.lire('paypal_journal'));
+  assert.equal(j.length, 1);
+  assert.equal(j[0].quoi, 'double_abonnement');
+  assert.equal(j[0].qui, 'lea@t.fr'); assert.equal(j[0].abo, 'I-ABC12345678'); assert.equal(j[0].courant, 'I-NOUVEAU00001');
+  assert.equal(j[0].montant, '9,50 €');
+  assert.equal(admin.length, 1);
+  assert.equal(admin[0].uid, 'guellec,coachingpro@gmail,com');
+  assert.equal(admin[0].m.body, 'lea@t.fr a deux abonnements actifs (I-ABC12345678 et I-NOUVEAU00001)');
+  // Un paiement sur un ancien abonnement DÉJÀ annulé n'est pas un doublon.
+  w.abos['I-ABC12345678'].status = 'CANCELLED';
+  await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-ABC12345678', '9.50', 'S-TARDIF')));
+  assert.equal(Object.values(w.F.lire('paypal_journal')).length, 1);
+  assert.equal(admin.length, 1);
+  // Ni le paiement du courant.
+  await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-NOUVEAU00001', '24.90', 'S-COURANT')));
+  assert.equal(admin.length, 1);
+});
+
+await test('remplacement : l’ancien n’est annulé chez PayPal que quand le nouveau est ACTIVE', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: 'I-NOUVEAU00001', abonnement: { engagementJusqu: ENG } }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr' }), 'I-NOUVEAU00001': abo({ plan_id: ULT, status: 'APPROVAL_PENDING', custom_id: 'lea@t,fr' }) } });
+  // L'app signale le nouveau avec {remplace: ancien} : le nouveau n'est pas encore actif.
+  assert.equal(await w.PP.indexer('lea@t,fr', 'I-NOUVEAU00001', 'I-ABC12345678'), 'indexe_en_attente_activation');
+  assert.equal(w.paypalEcrits.length, 0, 'rien n’est annulé avant');
+  assert.equal(w.F.lire('paypal_remplacements/I-NOUVEAU00001/ancien'), 'I-ABC12345678');
+  // PayPal active le nouveau : l'ancien est annulé, « remplacé ».
+  w.abos['I-NOUVEAU00001'].status = 'ACTIVE';
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.ACTIVATED', { id: 'I-NOUVEAU00001', status: 'ACTIVE', plan_id: ULT }))).texte, 'active');
+  assert.deepEqual(w.paypalEcrits.map((x) => [x.abo, x.quoi, x.corps.reason]), [['I-ABC12345678', 'cancel', 'remplacé']]);
+  assert.equal(w.abos['I-ABC12345678'].status, 'CANCELLED');
+  assert.equal(w.F.lire('paypal_remplacements'), null);
+  assert.equal(Object.values(w.F.lire('paypal_journal'))[0].quoi, 'ancien_annule');
+  // L'avis d'annulation de l'ancien arrive : il ne ferme rien.
+  assert.equal((await w.envoyer(evt('BILLING.SUBSCRIPTION.CANCELLED', { id: 'I-ABC12345678' }))).texte, 'ancien_abonnement');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/finAccesPaypal'), null);
+  assert.equal(w.F.lire('droits/lea@t,fr/palier'), 'ultime');
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/engagementJusqu'), ENG);
+});
+
+await test('remplacement : nouveau déjà actif → annulé tout de suite ; ancien déjà CANCELLED → rien ; ancien d’un autre → jamais', async () => {
+  const w = monde({ users: LEA({ paypalSubscriptionId: 'I-NOUVEAU00001' }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr', 'I-AUTRUI000001': 'bob@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo({ custom_id: 'lea@t,fr' }), 'I-NOUVEAU00001': abo({ plan_id: ULT, custom_id: 'lea@t,fr' }),
+      'I-AUTRUI000001': abo({ custom_id: 'bob@t,fr' }) } });
+  assert.equal(await w.PP.indexer('lea@t,fr', 'I-NOUVEAU00001', 'I-AUTRUI000001'), 'indexe_ancien_pas_a_toi');
+  assert.equal(w.paypalEcrits.length, 0, 'l’abonnement d’un autre n’est jamais annulé');
+  assert.equal(await w.PP.indexer('lea@t,fr', 'I-NOUVEAU00001', 'I-ABC12345678'), 'indexe_ancien_annule');
+  assert.equal(w.paypalEcrits.length, 1);
+  assert.equal(await w.PP.indexer('lea@t,fr', 'I-NOUVEAU00001', 'I-ABC12345678'), 'indexe_ancien_deja_annule');
+  assert.equal(w.paypalEcrits.length, 1, 'déjà CANCELLED : pas de seconde annulation');
+});
+
+await test('remplacement par l’événement de l’app : planif passe `remplace` à indexer, les règles l’acceptent pour « abonnement » seulement', async () => {
+  const src = readFileSync(new URL('../src/planif.js', import.meta.url), 'utf8');
+  assert.match(src, /M\.paypal\.indexer\(e\.par, e\.abo, e\.remplace\)/);
+  const regles = readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
+  assert.match(regles, /"remplace": \{ "\.validate": "newData\.isString\(\) && newData\.val\(\)\.matches\(\/\^I-\[A-Z0-9\]\{6,30\}\$\/\) && newData\.parent\(\)\.child\('type'\)\.val\(\) === 'abonnement'" \}/);
+  assert.match(regles, /"paypal_revisions":\s+\{ "\.read": false, "\.write": false \}/);
+  assert.match(regles, /"paypal_remplacements": \{ "\.read": false, "\.write": false \}/);
+  const index = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+  assert.match(index, /url\.pathname === '\/abonnement\/changer' && req\.method === 'POST'/);
 });
 
 console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');
