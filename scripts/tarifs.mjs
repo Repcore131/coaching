@@ -89,6 +89,17 @@ export const RE_JSONLD_PRIX = /("identifier": "tarifs:([a-z_.]+)", "price": ")[^
 const prixJsonLd = (n) => (Math.round(n * 100) % 100 === 0 ? String(Math.round(n)) : Number(n).toFixed(2));
 export const RE_FAQ_AMI = /("text": "Son lien double ton essai : )(\d+)( mois)/g;
 
+// ── La fiche Play Store (02/10/2026) ─────────────────────────────────────
+// Du texte brut, collé tel quel dans la Play Console : pas de balise où poser
+// un data-tarif. Le MODÈLE porte {{tarif:<clé>}} (un prix) et {{nb:<clé>}} (un
+// nombre) ; ce script écrit la fiche (fr-FR/full_description.txt) avec les
+// valeurs de tarifs.json. scripts/verif/fiche-store.mjs vérifie longueurs et prix.
+export const FICHES = [['android/fiche-store/modeles/full_description.txt', 'android/fiche-store/fr-FR/full_description.txt']];
+export function rendreFiche(modele, T) {
+  return String(modele).replace(/\{\{(tarif|nb):([a-z_.]+)\}\}/gi, (_t, sorte, cle) =>
+    sorte === 'tarif' ? euros(valeur(T, cle)).replace('&nbsp;', '\u00a0') : nombre(valeur(T, cle)));
+}
+
 // ── L'app ─────────────────────────────────────────────────────────────────
 export function fichierCore() {
   const f = readdirSync(RACINE + 'app').filter((x) => /^rc-core\.\d+\.js$/.test(x))
@@ -134,6 +145,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (apres === avant) continue;
     enRetard.push(chemin.slice(RACINE.length));
     if (!verifier) writeFileSync(chemin, apres);
+  }
+  for (const [modele, fiche] of FICHES) {
+    const attendu = rendreFiche(readFileSync(RACINE + modele, 'utf8'), T);
+    let actuel = ''; try { actuel = readFileSync(RACINE + fiche, 'utf8'); } catch (e) { actuel = ''; }
+    if (actuel === attendu) continue;
+    enRetard.push(fiche);
+    if (!verifier) writeFileSync(RACINE + fiche, attendu);
   }
   if (verifier && enRetard.length) { console.error('En retard sur tarifs.json : ' + enRetard.join(', ') + ' — lance node scripts/tarifs.mjs'); process.exit(1); }
   console.log(enRetard.length ? (verifier ? '' : 'Mis à jour : ' + enRetard.join(', ')) : 'Tout suit tarifs.json.');

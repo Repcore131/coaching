@@ -932,11 +932,12 @@ const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
 // Les quatre portes du coach (02/10/2026) : blog, coachs (coachs.html), profil
 // (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c) ; et
 // les articles du blog (blog-cycle, blog-fiche : 20 caractères au plus) ;
-// seo et ig : la landing sans src, d'après le referrer (moteur, Instagram).
+// seo et ig : la landing sans src, d'après le referrer (moteur, Instagram) ;
+// play : l'app ouverte depuis le Play Store (TWA, startUrl ?src=play).
 const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','blog-cycle','blog-fiche','carte',
   'champion','charge','coachs','commissions','cycle','defi','diete','direct','dossier','duel','email',
   'envois','facebook','fond','ig','instagram','invitation','journal','kit','logo','mes','muscles',
-  'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance','seo',
+  'parrainage','pesees','photos','play','profil','pub','qr','rang','record','records','saison','seance','seo',
   'seances','serie','site','story','team','tiktok','victoire','visuel','vitrine','whatsapp','wrapped','youtube']);
 const ATTR_ORIGINE_CLE='rc_origine';
 const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';

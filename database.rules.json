@@ -2232,7 +2232,7 @@
             "$s": {
               // LISTE BLANCHE (01/10/2026), la meme que SRC_CONNUS (Worker) et
               // ATTR_SRC_CONNUS (app) : un src inconnu y arrive en 'autre'.
-              ".validate": "$s.matches(/^(amb|amis|autre|avant|badge|bilan|bio|blog|blog-cycle|blog-fiche|carte|champion|charge|coachs|commissions|cycle|defi|diete|direct|dossier|duel|email|envois|facebook|fond|ig|instagram|invitation|journal|kit|logo|mes|muscles|parrainage|pesees|photos|profil|pub|qr|rang|record|records|saison|seance|seo|seances|serie|site|story|team|tiktok|victoire|visuel|vitrine|whatsapp|wrapped|youtube)$/)",
+              ".validate": "$s.matches(/^(amb|amis|autre|avant|badge|bilan|bio|blog|blog-cycle|blog-fiche|carte|champion|charge|coachs|commissions|cycle|defi|diete|direct|dossier|duel|email|envois|facebook|fond|ig|instagram|invitation|journal|kit|logo|mes|muscles|parrainage|pesees|photos|play|profil|pub|qr|rang|record|records|saison|seance|seo|seances|serie|site|story|team|tiktok|victoire|visuel|vitrine|whatsapp|wrapped|youtube)$/)",
               "$m": {
                 ".write": true,
                 ".validate": "$m.matches(/^(partage|telechargement|copie|clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"

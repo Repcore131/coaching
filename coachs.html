@@ -398,6 +398,12 @@ details p{margin-top:12px;font-size:14px;color:#c8c8c8}
 .final h2{font-size:clamp(40px,7vw,72px)}
 .final .ctas{justify-content:center;margin-top:28px}
 .final .rassure{justify-content:center}
+.final .rassure{align-items:center}
+/* LE BADGE GOOGLE PLAY (02/10/2026) : caché tant que RC_PLAY_URL est vide, et
+   hors Android. [hidden] doit gagner sur le display de .cta. */
+.badge-play[hidden],.rassure-play[hidden]{display:none!important}
+.rassure-play{color:#d4d4d4;font-weight:700;text-decoration:none}
+.rassure-play::before{content:'✓';color:var(--ok);font-weight:800;margin-right:6px}
 /* ---------- pied ---------- */
 footer{padding:40px 0 110px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--dim)}
 footer a{color:var(--dim);margin:0 8px}
@@ -684,8 +690,9 @@ footer a{color:var(--dim);margin:0 8px}
     <div class="ctas">
       <a class="cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace coach</a>
       <a class="cta ghost" href="app/">J'ai déjà un compte</a>
+      <a class="cta ghost badge-play" href="#" rel="noopener" hidden>Disponible sur Google Play</a>
     </div>
-    <div class="rassure"><span>Android et iPhone</span><span>Marche hors ligne en salle</span><span>En français</span></div>
+    <div class="rassure"><span>Android et iPhone</span><span>Marche hors ligne en salle</span><span>En français</span><a class="rassure-play" href="#" rel="noopener" hidden>Sur Google Play</a></div>
   </div>
 </section>
 
@@ -703,6 +710,22 @@ footer a{color:var(--dim);margin:0 8px}
   <a class="cta" href="app/?role=coach&amp;src=coachs#install" tabindex="-1">Créer mon espace</a>
 </div>
 
+<script>
+// ══ LE BADGE GOOGLE PLAY (02/10/2026) ═════════════════════════════════════
+// RC_PLAY_URL : la fiche de l'app sur le Play Store, une fois publiée
+// (android/LISEZMOI.md). Vide : rien ne change. Renseignée : « Disponible sur
+// Google Play » à côté du bouton final et dans la ligne de réassurance, et
+// SEULEMENT sur Android (sur iPhone, la fiche ne mène à rien).
+var RC_PLAY_URL='';
+function rcBadgePlay(url,ua,doc){
+  var u=String(url||'').trim();
+  if(!/^https:\/\/play\.google\.com\//.test(u)||!/Android/i.test(String(ua||''))) return 0;
+  var l=doc.querySelectorAll('.badge-play,.rassure-play');
+  for(var i=0;i<l.length;i++){ l[i].setAttribute('href',u); l[i].hidden=false; }
+  return l.length;
+}
+try{ rcBadgePlay(RC_PLAY_URL,navigator.userAgent,document); }catch(e){}
+</script>
 <script>
 /* Les boucles vidéo ne tournent que visibles (comme index.html). */
 (function(){

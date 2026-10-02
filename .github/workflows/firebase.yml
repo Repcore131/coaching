@@ -192,6 +192,9 @@ jobs:
       # 9,95 EUR « sans engagement » pendant que PayPal encaissait 9,50 sur 12 mois.
       - name: Verifier les prix
         run: node scripts/verif/tarifs.mjs
+      # LA FICHE PLAY STORE (02/10/2026) : longueurs, prix liés, images acceptées.
+      - name: Fiche Play Store
+        run: node scripts/verif/fiche-store.mjs
 
       # LA SYNCHRONISATION A DEUX APPAREILS. Le banc lit les fonctions de fusion
       # dans rc-core, rejoue 2000 entrelacements d'envois et de descentes sur

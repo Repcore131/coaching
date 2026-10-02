@@ -60,6 +60,32 @@ public class LauncherActivity
                     .appendQueryParameter("apk", String.valueOf(BuildConfig.VERSION_CODE))
                     .build();
         }
+        // REPCORE : ?src=play (launchUrl) range l'ouverture dans « play ». Le
+        // même APK s'installe aussi hors store (release GitHub, aide-apk.html) :
+        // là, src=play serait faux, on le retire.
+        if (uri != null && "play".equals(uri.getQueryParameter("src")) && !installeParPlay()) {
+            Uri.Builder b = uri.buildUpon().clearQuery();
+            for (String cle : uri.getQueryParameterNames()) {
+                if ("src".equals(cle)) continue;
+                for (String v : uri.getQueryParameters(cle)) b.appendQueryParameter(cle, v);
+            }
+            uri = b.build();
+        }
         return uri;
+    }
+
+    // REPCORE : l'application a-t-elle été installée par le Play Store ?
+    private boolean installeParPlay() {
+        try {
+            String installeur;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                installeur = getPackageManager().getInstallSourceInfo(getPackageName()).getInstallingPackageName();
+            } else {
+                installeur = getPackageManager().getInstallerPackageName(getPackageName());
+            }
+            return "com.android.vending".equals(installeur);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

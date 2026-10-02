@@ -55119,6 +55119,28 @@ async function testExercices(){
         if(h.indexOf("(window.rcArriveeVue?'&vu=1':'')")<0) return _echec(f+' : le bouton vers /i ne porte pas vu=1');
       }
       return true;})());
+    ok('Play Store : attribSrc(\'play\') === \'play\' ; la TWA part avec ?src=play',(()=>{
+      if(attribSrc('play')!=='play') return _echec('attribSrc(play) = '+attribSrc('play'));
+      let t=''; try{ t=_lire('../android/twa-manifest.json'); }catch(e){}
+      if(t&&JSON.parse(t).startUrl!=='/app/index.html?src=play') return _echec('startUrl : '+JSON.parse(t).startUrl);
+      return true;})());
+    ok('Play Store : le badge « Disponible sur Google Play » — rien sans RC_PLAY_URL, rien hors Android, deux liens sinon',(()=>{
+      for(const f of ['../index.html','../coachs.html']){
+        let h=''; try{ h=_lire(f); }catch(e){ return _echec('lecture '+f); }
+        if(!/var RC_PLAY_URL='';/.test(h)) return _echec(f+' : RC_PLAY_URL absente ou déjà renseignée');
+        const src=(/function rcBadgePlay\(url,ua,doc\)\{[\s\S]*?\n\}/.exec(h)||[''])[0];
+        if(!src) return _echec(f+' : rcBadgePlay introuvable');
+        const fn=new Function(src+'; return rcBadgePlay;')();
+        const d=document.createElement('div');
+        d.innerHTML=(/<a class="cta ghost badge-play"[^>]*>[^<]*<\/a>/.exec(h)||[''])[0]+(/<a class="rassure-play"[^>]*>[^<]*<\/a>/.exec(h)||[''])[0];
+        if(d.querySelectorAll('[hidden]').length!==2) return _echec(f+' : les deux liens ne sont pas cachés par défaut');
+        const AND='Mozilla/5.0 (Linux; Android 14) Chrome/141 Mobile', IOS='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) Safari';
+        const URL_PLAY='https://play.google.com/store/apps/details?id=com.repcore.app';
+        if(fn('',AND,d)||fn(URL_PLAY,IOS,d)||fn('https://exemple.fr/',AND,d)||d.querySelectorAll('[hidden]').length!==2) return _echec(f+' : badge montré à tort');
+        if(fn(URL_PLAY,AND,d)!==2||d.querySelectorAll('[hidden]').length||d.querySelector('.badge-play').getAttribute('href')!==URL_PLAY) return _echec(f+' : badge absent sur Android');
+        if(!/\.badge-play\[hidden\],\.rassure-play\[hidden\]\{display:none!important\}/.test(h)) return _echec(f+' : [hidden] ne gagne pas sur .cta');
+      }
+      return true;})());
     ok('Landing : src par défaut d’après le referrer (seo, ig), jamais par-dessus un src ; landing_view une fois par session, rien en mode installé',(()=>{
       let h=''; try{ h=_lire('../index.html'); }catch(e){ return _echec('lecture de la landing'); }
       const fs=(/function rcSrcDefaut\(ref\)\{[\s\S]*?\n\}/.exec(h)||[''])[0], fl=(/function rcmLanding\(nom\)\{[\s\S]*?\n\}/.exec(h)||[''])[0];
