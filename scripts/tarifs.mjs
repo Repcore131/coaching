@@ -16,6 +16,8 @@
 //       <span data-nb="essai.moisParraine">…</span>      un nombre
 //       data-tarif-m="…" / data-tarif-a="…"             les attributs data-m / data-a
 //                                                       du même élément (bascule)
+//     et, dans le FAQ en JSON-LD d'index.html, « Son lien double ton essai :
+//     N mois » (RE_FAQ_AMI), qui n'a pas de balise où poser data-nb.
 //   Un montant en euros qui n'est lié à AUCUNE clé est refusé par
 //   scripts/verif/tarifs.mjs, sauf dans un élément marqué data-hors-tarif
 //   (un prix du marché, pas le nôtre).
@@ -69,8 +71,13 @@ export function appliquerPage(html, T) {
     }
     return b;
   });
+  // LE FAQ EN JSON-LD (index.html) est du texte, sans balise où poser un
+  // data-nb : sa phrase sur l'essai parrainé est réécrite ici, avec le même
+  // nombre que la version visible.
+  s = s.replace(RE_FAQ_AMI, (_t, avant, _n, apres) => avant + nombre(valeur(T, 'essai.moisParraine')) + apres);
   return s;
 }
+export const RE_FAQ_AMI = /("text": "Son lien double ton essai : )(\d+)( mois)/g;
 
 // ── L'app ─────────────────────────────────────────────────────────────────
 export function fichierCore() {

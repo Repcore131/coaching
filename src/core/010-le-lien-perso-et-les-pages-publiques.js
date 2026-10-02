@@ -1226,9 +1226,11 @@ function _viralRendre(){
 // ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
 //
 // Un code (/ambassadeurs/<CODE>) donné à un créateur de contenu : ceux qui
-// arrivent par lui voient leur mois d'essai présenté comme offert grâce à
-// lui (Kevin, 28/09/2026 : un mois, pas deux — le même que le parrainage,
-// TARIFS.essai_parrainage.moisEnPlus = 0), et il touche une commission sur ce qu'ils
+// arrivent par lui ont, comme le filleul d'un parrain, un essai de
+// TARIFS.essai.mois + TARIFS.essai_parrainage.moisEnPlus mois (1 + 1 = 2 :
+// le Worker l'ouvre, bonusEssai), présenté comme offert grâce à lui — sauf
+// un code « ultime_demi », qui donne à la place le 1er mois d'Ultime à
+// moitié prix — et il touche une commission sur ce qu'ils
 // paient — commissionPct (20 %), palierPct (25 %) au-delà de palierSeuil (50)
 // payants — pendant dureeMois (12) à partir de leur premier paiement. Une
 // commission n'est DUE que 30 jours après le paiement (remboursements).
@@ -1584,8 +1586,9 @@ function ambCopier(l,btn){
 }
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
-// LA RÉCOMPENSE : le filleul a son mois d'essai, présenté comme offert par
-// son parrain (un mois, pas deux : OFFRES.essai_parrainage vaut 0) ;
+// LA RÉCOMPENSE : le filleul a son essai plus un mois, présenté comme offert
+// par son parrain (OFFRES.essai_parrainage.mois = TARIFS.essai_parrainage.
+// moisEnPlus = 1 : 2 mois en tout, invitationDonnees et les pages publiques) ;
 // le parrain gagne 1 mois offert — ses droits prolongés — au PREMIER paiement
 // du filleul, et rien avant (anti-fraude). Au 10e filleul payant, 1 mois
 // d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).

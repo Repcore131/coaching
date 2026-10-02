@@ -54423,6 +54423,11 @@ async function testExercices(){
       if(Math.round((u.essai.finit-t)/864e5)!==60) return _echec('le filleul n’a pas 60 jours');
       const w={role:'athlete'}; essaiOuvrir(w,999);
       return (Math.round((w.essai.finit-t)/864e5)<=ESSAI_JOURS+60)?true:_echec('bonus non borné');})());
+    ok('Parrainage : la carte d’invitation dit la durée que l’app ouvre — essai + moisEnPlus (tarifs.json), comme les pages publiques',(()=>{
+      const d=invitationDonnees({fname:'Julie',parrainage:{code:'JULIE7K2'}});
+      if(d.mois!==TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus) return _echec('mois '+d.mois);
+      if(d.base!==TARIFS.essai.mois) return _echec('base '+d.base);
+      return (OFFRES.essai_parrainage.mois===TARIFS.essai_parrainage.moisEnPlus&&parrainageBonusJours()===TARIFS.essai_parrainage.moisEnPlus*30)?true:_echec('bonus '+parrainageBonusJours());})());
     ok('Parrainage : le miroir compte inscrits et abonnés, et date RECRUTEUR au 3e abonné',(()=>{
       const u={};
       const ch=parrainageFusionnerCompte(u,{code:'JULIE7K2',moisGagnes:3,filleuls:{
@@ -54972,7 +54977,7 @@ async function testExercices(){
       if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
       return true;})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
-    okA('Accueil /i : « Julie t’invite », son rang et « Julie t’offre ton premier mois » avant le bouton, le défi d’abord quand il y en a un ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+    okA('Accueil /i : « Julie t’invite », son rang et « Julie t’offre un mois : 2 mois d’essai » (lus dans #mois-ami) avant le bouton, le défi d’abord quand il y en a un ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
       if(!m) return _echec('script de /i introuvable');
@@ -54981,6 +54986,9 @@ async function testExercices(){
         if(!bloc(id)) return _echec('élément #'+id+' absent de la page');
       const moisAmi=(/id="mois-ami"[^>]*>(\d+)</.exec(h)||[])[1];
       if(moisAmi!==String(TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus)) return _echec('durée de l’essai parrainé : '+moisAmi);
+      // La durée vient de #mois-ami, jamais en dur (02/10/2026) : « ton premier mois » était faux à 2 mois.
+      const _cadeauAmi='Julie t’offre un mois\u00a0: '+moisAmi+'\u00a0mois d’essai, toute l’app ouverte';
+      if(/ton premier mois/.test(m[1])) return _echec('« ton premier mois » dans le script de /i');
       const run=async(search,ua,reponse)=>{
         const ids=['go','quand-meme','lien','interne','copier','ok','accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach','mois-ami','promesse'];
         const el={}; ids.forEach(k=>el[k]={hidden:k!=='titre'&&k!=='etapes-coach'&&k!=='mois-ami',textContent:k==='mois-ami'?moisAmi:'',addEventListener(){}});
@@ -55005,17 +55013,20 @@ async function testExercices(){
       if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
       r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
       if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
-        ||r.el['interne-invite'].textContent.indexOf('Julie t’offre ton premier mois')!==0)
+        ||r.el['interne-invite'].textContent.indexOf(_cadeauAmi)!==0)
         return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
       if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
       // Le lien d'un duel porte aussi le code : le défi en titre, le cadeau dessous, avant « Commencer ».
       r=await run('?ref=JULIE7K2&duel=dabcdefghijk',SF,{prenom:'Julie',rang:4,mesure:'seances',duree:14});
       if(r.el.titre.textContent!=='Julie te défie : 14 jours de régularité') return _echec('duel + code, titre : '+r.el.titre.textContent);
-      if(r.el.promesse.textContent.indexOf('Julie t’offre ton premier mois')!==0) return _echec('duel + code, cadeau : '+r.el.promesse.textContent);
+      if(r.el.promesse.textContent.indexOf(_cadeauAmi)!==0) return _echec('duel + code, cadeau : '+r.el.promesse.textContent);
       if(h.indexOf('id="promesse"')>h.indexOf('id="commencer"')) return _echec('le cadeau est dit après le bouton');
       if(/essai gratuit/i.test(h)) return _echec('« essai gratuit » sur /i');
       r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
       if(!/ambassadeurs_publics\/LEAFIT\.json$/.test(r.lus[0]||'')||r.el.titre.textContent!=='Léa Fit t’invite sur RepCore'||r.el.accueil.hidden) return _echec('ambassadeur : '+r.el.titre.textContent);
+      if(r.el.promesse.textContent.indexOf('Grâce à Léa Fit, un mois offert\u00a0: '+moisAmi+'\u00a0mois d’essai')!==0) return _echec('ambassadeur, cadeau : '+r.el.promesse.textContent);
+      r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true,avantage:'ultime_demi'});
+      if(r.el.promesse.textContent.indexOf('Grâce à Léa Fit, ton 1er mois d’Ultime est à moitié prix')!==0) return _echec('ambassadeur demi-prix : '+r.el.promesse.textContent);
       r=await run('?inv=RC-AAAA-BBBB',SF,null);
       if(r.lus.length||!r.el.accueil.hidden||r.el.ok.hidden||r.el['etapes-coach'].hidden||!r.parti) return _echec('invitation de coach : le texte de toujours');
       r=await run('',SF,null);

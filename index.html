@@ -83,7 +83,7 @@
    "name": "Un ami m'a invité : qu'est-ce que ça change ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Son lien t'offre ton premier mois, toute l'app comprise, sans carte bancaire. Et le jour de ton premier paiement, ton ami gagne un mois."
+    "text": "Son lien double ton essai : 2 mois, toute l'app comprise, sans carte bancaire. Et le jour de ton premier paiement, ton ami gagne un mois."
    }
   },
   {
@@ -445,6 +445,31 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .promesse{margin-top:14px;font-size:13px;color:#bdbdbd}
 .promesse b{color:#fff}
 .invite .promesse b.ami,.invite .cadeau.ami b{color:var(--red)}
+/* L'ARRIVÉE PAR UN AMI OU UN AMBASSADEUR (02/10/2026). body.invite : le
+   bandeau d'accueil ; body.invite-demi : le code porte « ultime_demi », l'essai
+   reste d'un mois et le bandeau dit la moitié prix ; body.invite-attente :
+   l'avantage d'un ambassadeur n'est pas encore lu, l'offre attend. Hors
+   demi-prix, partout où la page dit la durée de l'essai, elle dit la durée
+   parrainée (essai.moisParraine), celle que l'app ouvre. */
+.bandeau-invite{display:none;margin:0 0 18px;padding:14px 18px;border:1px solid var(--red);border-radius:14px;background:#170909;max-width:520px}
+.invite .bandeau-invite{display:block}
+.bandeau-invite p{margin:0}
+.bi-titre{font-family:'Bebas Neue',var(--pile-titre);font-size:26px;letter-spacing:1px;color:#fff;line-height:1.1}
+.bi-offre{margin-top:4px!important;font-size:15px;color:#bdbdbd}
+.bi-offre b{color:#fff}
+.bi-demi,.invite-demi .bi-mois{display:none}
+.invite-demi .bi-demi{display:block}
+.invite-attente .bi-offre{visibility:hidden}
+.promesse b.ami,.cadeau.ami{display:none}
+.invite:not(.invite-demi) .promesse b.ami{display:inline}
+.invite:not(.invite-demi) .promesse b.base,.invite:not(.invite-demi) .cadeau.base{display:none}
+.invite:not(.invite-demi) .cadeau.ami{display:block}
+.essai-ami{display:none}
+.invite:not(.invite-demi) .essai-ami{display:inline}
+.invite:not(.invite-demi) .essai-base{display:none}
+.barre span.ami{display:none}
+.invite:not(.invite-demi) .barre span.ami{display:inline}
+.invite:not(.invite-demi) .barre span.base{display:none}
 /* ---------- coaching humain ---------- */
 .ancre{display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center;
   background:linear-gradient(120deg,#170909,#0f0f0f 60%);border:1px solid rgba(224,32,32,.35);border-radius:20px;padding:40px}
@@ -542,6 +567,11 @@ footer a{color:var(--dim);margin:0 8px}
     <div class="hero">
       <div>
         <p class="eyebrow">Application de musculation · créée par un coach</p>
+        <div class="bandeau-invite" id="bandeau-invite" role="region" aria-label="Invitation">
+          <p class="bi-titre" id="bi-titre">On t'invite sur RepCore</p>
+          <p class="bi-offre bi-mois"><b><span data-nb="essai.moisParraine">2</span>&nbsp;mois d'essai</b> au lieu de <span data-nb="essai.mois">1</span>, toute l'app ouverte, sans carte bancaire</p>
+          <p class="bi-offre bi-demi">Avec ce code&nbsp;: <b>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></b>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, engagement de <span data-nb="engagementMois">12</span>&nbsp;mois</p>
+        </div>
         <h1>La bonne charge,<em>à chaque série.</em></h1>
         <p class="sub">Ta séance, ta nutrition, ton sommeil et ta progression, enfin dans une seule application.
           RepCore se souvient de ce que tu as soulevé la dernière fois et te propose la suite.
@@ -550,7 +580,7 @@ footer a{color:var(--dim);margin:0 8px}
           <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
           <a class="cta ghost" href="#tarifs">Voir les tarifs</a>
         </div>
-        <p class="promesse"><b><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b>, toute l'app ouverte, sans carte</p>
+        <p class="promesse"><b class="base"><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b><b class="ami"><span data-nb="essai.moisParraine">2</span>&nbsp;mois d'essai</b>, toute l'app ouverte, sans carte</p>
         <a class="auteur" href="#coaching"><img src="app/img/vente/kevin-96.webp" width="48" height="48" alt="">
           <span>Créée par <b>Kevin Guellec</b>, coach diplômé d'État</span></a>
       </div>
@@ -733,7 +763,8 @@ footer a{color:var(--dim);margin:0 8px}
     <p class="eyebrow">Tarifs</p>
     <h2>Commence gratuitement.<br><em>Choisis après.</em></h2>
     <div class="cadeaux">
-      <div class="cadeau"><b><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b><span>Toute l'app ouverte, Ultime compris. Sans carte bancaire.</span></div>
+      <div class="cadeau base"><b><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b><span>Toute l'app ouverte, Ultime compris. Sans carte bancaire.</span></div>
+      <div class="cadeau ami"><b><span data-nb="essai.moisParraine">2</span>&nbsp;mois si un ami t'invite</b><span>Ton essai doublé par son lien : toute l'app ouverte, Ultime compris. Sans carte bancaire.</span></div>
     </div>
     <p class="lead">À la fin de l'essai, tu choisis ta formule, ou tu t'arrêtes. Rien n'est prélevé sans ton accord.</p>
     <div class="bascule" role="group" aria-label="Façon de régler">
@@ -839,7 +870,7 @@ footer a{color:var(--dim);margin:0 8px}
       veux, à la fin du mois en cours.</p></details>
 
     <details><summary>Un ami m'a invité&nbsp;: qu'est-ce que ça change&nbsp;?</summary>
-      <p>Son lien t'offre ton premier mois, toute l'app comprise, sans carte bancaire. Et le jour
+      <p>Son lien double ton essai&nbsp;: <span data-nb="essai.moisParraine">2</span>&nbsp;mois, toute l'app comprise, sans carte bancaire. Et le jour
       de ton premier paiement, ton ami gagne un mois.</p></details>
 
     <details><summary>Faut-il installer quelque chose&nbsp;?</summary>
@@ -870,7 +901,7 @@ footer a{color:var(--dim);margin:0 8px}
 <section class="final">
   <div class="wrap center">
     <h2>Programme, charges, diète, bilans.<br><em>Dans une seule application.</em></h2>
-    <p class="lead">Un mois complet, offert, sans carte. Installe l'application en un geste.</p>
+    <p class="lead"><span class="essai-base">Un mois complet, offert, sans carte.</span><span class="essai-ami"><span data-nb="essai.moisParraine">2</span>&nbsp;mois complets, offerts, sans carte.</span> Installe l'application en un geste.</p>
     <div class="ctas">
       <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
       <a class="cta ghost" href="app/">Ouvrir dans le navigateur</a>
@@ -889,7 +920,7 @@ footer a{color:var(--dim);margin:0 8px}
 </footer>
 
 <div class="barre" id="barre" aria-hidden="true">
-  <span>1 mois<br>offert</span>
+  <span class="base">1 mois<br>offert</span><span class="ami"><span data-nb="essai.moisParraine">2</span> mois<br>d'essai</span>
   <a class="cta" href="app/#install" tabindex="-1">Commencer</a>
 </div>
 
@@ -953,6 +984,49 @@ footer a{color:var(--dim);margin:0 8px}
 })();
 </script>
 <script>
+// L'ACCUEIL D'UN INVITÉ (02/10/2026), comme /i : « Julie t'invite sur RepCore »
+// et la durée de l'essai qu'il aura vraiment. Le prénom d'un ami est lu dans
+// /parrainage/codesPublics/<CODE> (prenom), le nom d'un ambassadeur dans
+// /ambassadeurs_publics/<CODE> (nom, avantage, actif) : sans compte, code par
+// code. textContent seulement : un prénom ne devient jamais du HTML. Lecture
+// manquée : le bandeau reste, sans prénom.
+// LA DURÉE n'est jamais écrite ici : elle est dans les data-nb de la page,
+// posés par scripts/tarifs.mjs. Seuls les boutons « Essayer … 1 mois », qui
+// la portent en clair, sont réécrits avec le nombre lu.
+function accueilInvite(ref,amb){
+  var B=document.body, BASE='https://repcore-sync-default-rtdb.firebaseio.com/';
+  ref=String(ref||'').trim().toUpperCase(); if(!/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) ref='';
+  amb=String(amb||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+  // Un ambassadeur passe devant l'ami : un seul avantage, comme dans l'app.
+  var mode=amb?'amb':ref?'ami':''; if(!mode) return;
+  var titre=document.getElementById('bi-titre');
+  function nom(n){ if(titre) titre.textContent=(n?n:mode==='ami'?'Un ami':'On')+' t\u2019invite sur RepCore'; }
+  function ctas(){
+    var e=document.querySelector('.bi-mois [data-nb="essai.moisParraine"]');
+    var n=e?parseInt(e.textContent,10):0; if(!(n>0)) return;
+    document.querySelectorAll('a.cta').forEach(function(a){
+      a.textContent=a.textContent.replace(/(\d+)\u00a0mois( gratuit)?/,function(t,x,gr){ return n+'\u00a0mois'+(gr?(n>1?' gratuits':' gratuit'):''); });
+    });
+  }
+  nom('');
+  if(mode==='ami') ctas(); else B.classList.add('invite-attente');
+  try{
+    fetch(BASE+(mode==='ami'?'parrainage/codesPublics/'+ref:'ambassadeurs_publics/'+amb)+'.json')
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(d){
+        if(mode==='ami'){ if(d&&typeof d==='object') nom(String(d.prenom||'').trim().slice(0,24)); return; }
+        B.classList.remove('invite-attente');
+        if(d&&typeof d==='object'&&d.actif===false){ B.classList.remove('invite'); return; }   // code éteint : l'essai de base
+        if(d&&typeof d==='object'){
+          nom(String(d.nom||'').trim().slice(0,80));
+          if(d.avantage==='ultime_demi'){ B.classList.add('invite-demi'); return; }
+        }
+        ctas();
+      }).catch(function(){ if(mode==='amb'){ B.classList.remove('invite-attente'); ctas(); } });
+  }catch(e){ B.classList.remove('invite-attente'); }
+}
+</script>
+<script>
 // LES CODES D'INVITATION VOYAGENT JUSQU'A L'APP. <domaine>/?amb=CODE (un
 // ambassadeur), ?ref= (un parrain), ?src= : sans ce relais, la page de vente
 // les perdait au premier clic sur « Essayer ». Le clic d'un lien ambassadeur
@@ -964,6 +1038,7 @@ footer a{color:var(--dim);margin:0 8px}
     // Arrivé par un ami (ref) ou un ambassadeur (amb) : son essai est doublé,
     // la page le met en avant.
     if(g.get('ref')||g.get('amb')) document.body.classList.add('invite');
+    try{ accueilInvite(g.get('ref'),g.get('amb')); }catch(e){}
     var q=g.toString(); if(!q) return;
     document.querySelectorAll('a[href^="app/"]').forEach(function(a){
       var h=a.getAttribute('href'), i=h.indexOf('#');

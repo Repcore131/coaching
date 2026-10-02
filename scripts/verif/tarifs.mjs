@@ -15,13 +15,18 @@
 //      (sauf data-hors-tarif : un prix du marché, pas le nôtre) ;
 //   4. OFFRES et COACH_PALIERS, évalués tels quels, qui ne rendent pas les
 //      prix de tarifs.json ;
-//   5. « sans engagement » sur la page de vente ; un « N mois d'essai » qui
-//      n'est ni l'essai ni l'essai parrainé.
+//   5. « sans engagement » sur la page de vente ou l'accueil /i ; un « N mois
+//      d'essai » qui n'est ni l'essai ni l'essai parrainé ;
+//   6. (02/10/2026) « ton premier mois » à côté d'« ami » ou d'« invit » dans
+//      index.html ou i/index.html, alors que l'essai parrainé ajoute des mois
+//      (moisEnPlus > 0) : l'invité a essai.moisParraine mois, pas un ; et le
+//      FAQ « Un ami m'a invité » qui ne dirait pas le même nombre dans sa
+//      version visible et dans son JSON-LD, ou « double » à tort.
 // Et il se prouve : un prix faussé exprès, un prix ajouté en dur, doivent
 // être vus.
 //   node scripts/verif/tarifs.mjs
 import { readFileSync } from 'node:fs';
-import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences } from '../tarifs.mjs';
+import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, RE_FAQ_AMI } from '../tarifs.mjs';
 
 const T = lireTarifs();
 const erreurs = [];
@@ -46,11 +51,34 @@ function montantsLibres(html) {
   }
   return trouves;
 }
+// « ton premier mois » (offert, gratuit…) à moins de 160 caractères d'« ami »
+// ou d'« invit » : la phrase d'avant l'essai parrainé de deux mois.
+function premierMoisAmi(html) {
+  const out = [];
+  const re = /ton premier mois/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const autour = html.slice(Math.max(0, m.index - 160), m.index + m[0].length + 160);
+    if (/\bami(?:e|s)?\b|invit/i.test(autour))
+      out.push('« ton premier mois » pour un invité (vers la ligne ' + html.slice(0, m.index).split('\n').length + ') — l’essai parrainé dure ' + valeur(T, 'essai.moisParraine') + ' mois');
+  }
+  return out;
+}
 const texteVisible = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ');
 function controlerPage(nom, html) {
   const err = [];
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
+  if (nom === 'index.html' || nom === 'i/index.html') {
+    if (T.essai_parrainage.moisEnPlus > 0) for (const x of premierMoisAmi(html)) err.push(nom + ' : ' + x);
+    if (nom === 'i/index.html' && /sans engagement/i.test(html)) err.push('i/index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
+  }
+  if (nom === 'index.html') {
+    const faq = [...html.matchAll(RE_FAQ_AMI)];
+    const vis = html.match(/Son lien double ton essai(?:&nbsp;|\s| )*:\s*<span data-nb="essai\.moisParraine">/);
+    if (faq.length !== 1 || !vis) err.push('index.html : le FAQ « Un ami m’a invité » ne dit plus « Son lien double ton essai : N mois » (JSON-LD et version visible liée à essai.moisParraine)');
+    if (valeur(T, 'essai.moisParraine') !== 2 * T.essai.mois) err.push('index.html : le FAQ dit que le lien « double » l’essai, or ' + T.essai.mois + ' + ' + T.essai_parrainage.moisEnPlus + ' mois ne fait pas le double');
+  }
   if (nom === 'index.html') {
     if (/sans engagement/i.test(html)) err.push('index.html : « sans engagement » — l’abonnement engage pour ' + T.engagementMois + ' mois');
     const permis = [T.essai.mois, valeur(T, 'essai.moisParraine')];
@@ -91,6 +119,15 @@ for (const p of PAGES) {
   if (!controlerPage('index.html', enDur2).some((x) => /49 €/.test(x))) e('auto-contrôle : un prix écrit en dur n’est pas vu');
   if (!controlerPage('index.html', html.replace('</body>', '<p>sans engagement</p></body>')).some((x) => /sans engagement/.test(x)))
     e('auto-contrôle : « sans engagement » n’est pas vu');
+  if (T.essai_parrainage.moisEnPlus > 0) {
+    if (!controlerPage('index.html', html.replace('</body>', '<p>Ton ami t’offre ton premier mois.</p></body>')).some((x) => /ton premier mois/.test(x)))
+      e('auto-contrôle : « ton premier mois » d’un invité n’est pas vu dans index.html');
+    const i = readFileSync(RACINE + 'i/index.html', 'utf8');
+    if (!controlerPage('i/index.html', i.replace('</body>', '<script>var t=nom+" t\u2019invite : ton premier mois offert";</script></body>')).some((x) => /ton premier mois/.test(x)))
+      e('auto-contrôle : « ton premier mois » d’un invité n’est pas vu dans i/index.html');
+  }
+  const faux = html.replace(RE_FAQ_AMI, (_t, a, _n, b) => a + '7' + b);
+  if (faux === html || !controlerPage('index.html', faux).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : le nombre du FAQ JSON-LD faussé n’est pas vu');
 }
 
 // ── 2 et 4. L'app ─────────────────────────────────────────────────────────
