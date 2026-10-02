@@ -397,8 +397,8 @@ Ce qu'il faut en retenir :
    RepCore > **Webhooks > Add Webhook** :
    - URL : `https://repcore-serveur.repcore.workers.dev/paypal`
    - Événements : `BILLING.SUBSCRIPTION.ACTIVATED`, `.CANCELLED`, `.EXPIRED`, `.SUSPENDED`,
-     `.PAYMENT.FAILED`, `PAYMENT.SALE.COMPLETED`, `PAYMENT.SALE.REFUNDED`,
-     `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`.
+     `.PAYMENT.FAILED`, **`.UPDATED`** (changer de formule, lot 45), `PAYMENT.SALE.COMPLETED`,
+     `PAYMENT.SALE.REFUNDED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`.
    - Noter le **Webhook ID** affiché, et le **Secret** de l'application (même page).
 2. Cloudinary (https://console.cloudinary.com/settings/api-keys) : **API Key** et **API Secret**.
 3. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\secrets-paiements.ps1`
