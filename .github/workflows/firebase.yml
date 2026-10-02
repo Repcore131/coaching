@@ -82,6 +82,7 @@ jobs:
         run: |
           set -e
           test -f _site/index.html
+          test -f _site/coachs.html
           test -f _site/app/index.html
           test -f _site/i/index.html
           test -f _site/maj/index.html

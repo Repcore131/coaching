@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RepCore pour les coachs : tes athlètes saisissent, toi tu coaches</title>
+<meta name="description" content="L'application de coaching sportif en français : programmes, séances saisies par tes athlètes, bilans, nutrition et correction vidéo image par image. Gratuite pour ton premier client, sans carte bancaire.">
+<link rel="canonical" href="https://repcore131.github.io/coaching/coachs.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://repcore131.github.io/coaching/coachs.html">
+<meta property="og:title" content="RepCore pour les coachs : tes athlètes saisissent, toi tu coaches">
+<meta property="og:description" content="Programmes, séances, bilans, nutrition et correction vidéo dans une seule app, gratuite pour ton premier client.">
+<meta property="og:image" content="https://repcore131.github.io/coaching/app/img/vente/og-vente.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:site_name" content="RepCore">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RepCore pour les coachs">
+<meta name="twitter:description" content="Programmes, séances, bilans, nutrition et correction vidéo dans une seule app, gratuite pour ton premier client.">
+<meta name="twitter:image" content="https://repcore131.github.io/coaching/app/img/vente/og-vente.jpg">
+<meta name="theme-color" content="#080808">
+<!-- LES PRIX DU JSON-LD sont du texte : scripts/tarifs.mjs les réécrit d'après
+     « identifier » (tarifs:<clé>), comme les data-tarif de la page. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "RepCore pour les coachs",
+  "description": "Application de coaching sportif : programmes, séances saisies par les athlètes avec une charge proposée à chaque série, bilans, nutrition, correction vidéo image par image et tableau de bord qui repère les athlètes qui décrochent.",
+  "applicationCategory": "BusinessApplication",
+  "applicationSubCategory": "Coaching sportif",
+  "operatingSystem": "Web, Android, iOS",
+  "url": "https://repcore131.github.io/coaching/coachs.html",
+  "inLanguage": "fr",
+  "image": "https://repcore131.github.io/coaching/app/img/vente/og-vente.jpg",
+  "offers": [
+    {"@type": "Offer", "name": "Libre", "identifier": "tarifs:coach.libre", "price": "0", "priceCurrency": "EUR", "description": "Un athlète suivi, sans carte bancaire et sans durée.",
+     "url": "https://repcore131.github.io/coaching/coachs.html#tarifs", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "Coach", "identifier": "tarifs:coach.coach", "price": "19", "priceCurrency": "EUR", "category": "subscription", "description": "Jusqu'à quinze athlètes actifs, au mois, sans engagement.",
+     "url": "https://repcore131.github.io/coaching/coachs.html#tarifs", "availability": "https://schema.org/InStock"},
+    {"@type": "Offer", "name": "Pro", "identifier": "tarifs:coach.pro", "price": "39", "priceCurrency": "EUR", "category": "subscription", "description": "Sans limite d'athlètes, ton logo et ta couleur dans l'app, au mois, sans engagement.",
+     "url": "https://repcore131.github.io/coaching/coachs.html#tarifs", "availability": "https://schema.org/InStock"}
+  ],
+  "featureList": [
+    "Séances saisies par l'athlète, charge proposée à chaque série",
+    "Bilans avec poids, mensurations et photos",
+    "Correction vidéo image par image, avec angles et trajectoires tracés",
+    "Tableau de bord qui repère les athlètes en alerte",
+    "Fonctionne hors ligne en salle",
+    "Entièrement en français"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Mes programmes sont dans un tableur : faut-il tout ressaisir ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Non. Tu photographies la fiche ou le tableur imprimé : l'application en extrait les exercices, les séries, les répétitions et les temps de repos, et te les montre dans un écran de correction avant tout enregistrement. Commence par le programme en cours et les blocs que tu réutilises ; la méthode complète est dans notre article sur la numérisation d'une fiche de programme papier."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Que paient mes athlètes ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Rien, tant qu'ils utilisent un de tes codes. Chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, jusqu'à 12 mois. Sans code, ils peuvent aussi s'abonner seuls à RepCore."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Puis-je mettre mon logo ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Oui, avec la formule Pro : ton logo, ton nom et ta couleur coiffent l'app de tes athlètes, à l'accueil et dans le canal ; « Propulsé par RepCore » reste en petit dans les réglages. Avec toutes les formules, ton nom, ta photo et ta phrase apparaissent dans la bannière coach de tes athlètes."
+   }
+  }
+ ]
+}
+</script>
+<link rel="icon" href="app/icons/icon-192x192.png">
+<link rel="apple-touch-icon" href="app/icons/icon-192x192.png">
+<link rel="preload" href="app/fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="app/fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Polices AUTO-HEBERGEES. Avant ce lot, chaque visiteur transmettait son
+   adresse IP a Google — le service de polices distantes — AVANT
+   tout consentement, pour un benefice nul : les memes fichiers, servis depuis
+   notre propre domaine, arrivent plus vite et ne parlent a personne.
+
+   Montserrat est UNE police VARIABLE : les sept URL de graisses servies par
+   Google pointaient vers le meme fichier, meme empreinte MD5. 38 Ko couvrent
+   300 a 900 ; telecharger les sept en aurait pese 272.
+
+   Sous-ensemble LATIN de base uniquement : l application est en francais.
+
+   font-display: swap — le texte s affiche IMMEDIATEMENT dans la police de
+   repli, puis bascule. Un swap est un clignotement ; un block serait un ecran
+   vide, et c est bien pire. */
+@font-face{
+  font-family:'Montserrat';
+  font-style:normal;
+  font-weight:100 900;   /* variable : toute la plage en un fichier */
+  font-display:swap;
+  src:url('app/fonts/montserrat-var-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Bebas Neue';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('app/fonts/bebasneue-400-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+/* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
+:root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:Impact,'Arial Narrow Bold','Haettenschweiler','Franklin Gothic Bold',sans-serif}
+</style>
+<script>
+/* Mesure de tunnel — un compteur, rien d'autre, comme index.html (landing_view) :
+   « +1 sur coach_landing_view aujourd'hui ». Aucun outil tiers, aucun cookie,
+   aucun identifiant. La clé est dans la liste fermée de database.rules.json
+   et dans RCM_EVENEMENTS ; l'écran tunnel la montre dans « Page de vente vue »
+   (détail : athlète / coach). Dupliqué plutôt que factorisé : la page reste
+   un fichier autonome. */
+(function(){
+  try{
+    var h=location.hostname;
+    if(h==='localhost'||h==='127.0.0.1'||h==='') return;
+    var d=new Date();
+    var jour=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    fetch('https://repcore-sync-default-rtdb.firebaseio.com/metrics/'+jour+'/coach_landing_view.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({'.sv':{'increment':1}}),
+      keepalive:true
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#080808;--card:#111;--card2:#161616;--border:#1e1e1e;
+  --red:#E02020;--red-light:#e96363;--text:#efefef;--dim:#8a8a8a;--ok:#22c55e}
+html{background:var(--bg);scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:Montserrat,var(--pile-sans);
+  line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{color:var(--red-light)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+h1,h2,h3{font-family:'Bebas Neue',var(--pile-titre);letter-spacing:1.5px;line-height:1.02;
+  text-transform:uppercase;font-weight:400}
+h2{font-size:clamp(32px,5.4vw,52px);margin-bottom:12px}
+h2 em,h1 em{font-style:normal;color:var(--red)}
+.lead{color:#b5b5b5;font-size:16px;max-width:60ch}
+section{padding:88px 0;border-top:1px solid var(--border)}
+.eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#ff4d4d;
+  font-weight:800;margin-bottom:12px}
+.center{text-align:center}.center .lead{margin-left:auto;margin-right:auto}
+/* ---------- boutons ---------- */
+.cta{display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  min-height:54px;padding:0 30px;background:var(--red);color:#fff;text-decoration:none;
+  font-weight:800;letter-spacing:1.6px;text-transform:uppercase;font-size:14px;border-radius:6px;
+  box-shadow:0 8px 30px rgba(224,32,32,.38);transition:transform .15s,background .15s}
+.cta:hover{background:#c91a1a;transform:translateY(-1px)}
+.cta.ghost{background:transparent;color:var(--text);border:1px solid #333;box-shadow:none}
+.cta.ghost:hover{border-color:#555;background:#121212}
+.cta.plein{width:100%}
+.ctas{display:flex;gap:12px;flex-wrap:wrap}
+.rassure{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:18px;font-size:13px;color:#a9a9a9}
+.rassure span::before{content:'✓';color:var(--ok);font-weight:800;margin-right:6px}
+/* ---------- telephone ---------- */
+.tel{position:relative;width:min(300px,78vw);aspect-ratio:600/1299;border-radius:44px;
+  padding:9px;background:linear-gradient(145deg,#2a2a2a,#0e0e0e);
+  box-shadow:0 0 0 1px #333,0 40px 80px -20px rgba(0,0,0,.9),0 0 90px -10px rgba(224,32,32,.28)}
+.tel img,.tel video{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:36px;background:#0b0b0b;display:block}
+.tel::before{content:'';position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  width:32%;height:22px;border-radius:14px;background:#000;z-index:2}
+.bulle{position:absolute;z-index:3;background:#111;border:1px solid rgba(224,32,32,.55);
+  border-radius:12px;padding:10px 14px;font-size:12.5px;line-height:1.35;color:#ddd;max-width:210px;
+  box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.bulle b{display:block;color:#fff;font-size:15px;font-weight:800}
+.demo{font-size:11px;color:#8f8f8f;margin-top:14px;text-align:center}
+/* ---------- hero ---------- */
+header{padding:56px 0 72px;overflow:hidden;
+  background:radial-gradient(ellipse 70% 60% at 75% 30%,rgba(224,32,32,.17),transparent 70%),
+             radial-gradient(ellipse 60% 50% at 0 0,rgba(224,32,32,.07),transparent 70%)}
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:48px}
+.nav .marque{display:flex;align-items:center;gap:10px;font-family:'Bebas Neue',var(--pile-titre);
+  font-size:26px;letter-spacing:2px;color:#fff;text-decoration:none}
+.nav .marque img{width:36px;height:36px;border-radius:9px}
+.nav a.lien{color:#bbb;text-decoration:none;font-size:13px;font-weight:700;margin-left:20px}
+.nav a.lien:hover{color:#fff}
+.nav-cta{min-height:40px;padding:0 18px;font-size:12px;margin-left:20px;box-shadow:none}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.hero h1{font-size:clamp(46px,7.6vw,86px);margin-bottom:20px}
+.hero h1 em{display:block}
+.hero .sub{color:#bdbdbd;font-size:clamp(16px,2.2vw,19px);max-width:52ch;margin-bottom:30px}
+.hero .visuel{position:relative;display:flex;justify-content:center}
+.hero .b1{top:58%;left:-10%}
+.hero .b2{bottom:16%;right:-2%}
+.auteur{display:inline-flex;align-items:center;gap:12px;margin-top:30px;text-decoration:none;color:#bdbdbd;font-size:13.5px}
+.auteur img{width:48px;height:48px;border-radius:50%;border:2px solid var(--red)}
+.auteur b{color:#fff}
+/* ---------- preuves ---------- */
+.preuves{padding:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:#0c0c0c}
+.preuves .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
+.preuve{padding:26px 16px;text-align:center;border-left:1px solid var(--border)}
+.preuve:first-child{border-left:0}
+.preuve b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:32px;letter-spacing:1px;color:#fff;line-height:1}
+.preuve span{font-size:12px;color:var(--dim);letter-spacing:.5px}
+/* ---------- douleurs ---------- */
+.douleurs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
+.douleur{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px}
+.douleur q{display:block;font-size:17px;font-weight:700;color:#fff;quotes:none;margin-bottom:10px}
+.douleur p{font-size:14px;color:#b0b0b0}
+.douleur p strong{color:var(--red-light)}
+/* ---------- fonctions ---------- */
+.fonction{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;padding:40px 0}
+.fonction+.fonction{border-top:1px dashed #1c1c1c}
+.fonction.inverse .texte{order:2}
+.fonction .visuel{position:relative;display:flex;justify-content:center}
+.fonction h3{font-size:clamp(28px,4vw,42px);margin-bottom:14px}
+.fonction .texte p{color:#bdbdbd;font-size:15.5px;margin-bottom:8px;max-width:50ch}
+.badge{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;
+  color:var(--red-light);margin-bottom:10px}
+.badge.gris{color:#aaa}
+ul.coches{list-style:none;margin-top:16px}
+ul.coches li{position:relative;padding-left:28px;margin-bottom:10px;font-size:14.5px;color:#d4d4d4}
+ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;height:17px;border-radius:50%;
+  background:rgba(224,32,32,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e96363' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/11px no-repeat}
+.fonction .b4{bottom:22%;left:-6%}
+/* ---------- clip video ---------- */
+.clip{position:relative;width:min(340px,82vw);aspect-ratio:398/552;border-radius:22px;overflow:hidden;
+  border:1px solid #2a2a2a;box-shadow:0 40px 80px -20px rgba(0,0,0,.9),0 0 90px -10px rgba(224,32,32,.3);background:#0b0b0b}
+.clip video,.clip img{width:100%;height:100%;object-fit:cover;display:block}
+.clip .rec{position:absolute;top:12px;left:12px;font-size:10.5px;font-weight:800;letter-spacing:1.5px;color:#fff;
+  background:rgba(224,32,32,.9);padding:4px 9px;border-radius:6px}
+/* ---------- portrait ---------- */
+.portrait{display:flex;align-items:center;gap:18px;margin:22px 0 6px}
+.portrait img{width:112px;height:112px;border-radius:50%;border:3px solid var(--red);
+  box-shadow:0 0 30px rgba(224,32,32,.35);flex-shrink:0}
+.portrait q{color:#cfcfcf;font-size:15px;quotes:'« ' ' »';display:block}
+.portrait small{display:block;margin-top:6px;font-size:12px;color:var(--red-light);font-style:normal;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}
+/* ---------- eparpillement ---------- */
+.eparpille{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:34px auto 0;max-width:760px}
+.eparpille span{display:inline-flex;align-items:center;gap:8px;background:#121212;border:1px dashed #333;border-radius:6px;padding:9px 15px;font-size:13.5px;color:#aaa;
+  transform:rotate(var(--r,0deg));animation:derive 5s ease-in-out infinite alternate}
+.eparpille span:nth-child(odd){--r:-2deg;animation-delay:-1.5s}.eparpille span:nth-child(3n){--r:2.5deg;animation-delay:-3s}
+@keyframes derive{to{transform:rotate(calc(var(--r,0deg) * -1)) translateY(-4px)}}
+.eparpille svg{color:#777;flex-shrink:0}
+.fleche{font-size:28px;color:var(--red);margin:18px 0 12px}
+.reuni{display:inline-flex;align-items:center;gap:16px;text-align:left;background:linear-gradient(120deg,#1a0b0b,#111);
+  border:1px solid rgba(224,32,32,.55);border-radius:16px;padding:18px 22px;max-width:620px;box-shadow:0 20px 50px -20px rgba(224,32,32,.45)}
+.reuni img{width:44px;height:44px;border-radius:10px}
+.reuni b{display:block;color:#fff;font-size:17px}.reuni span{font-size:14px;color:#bdbdbd}
+/* ---------- nutrition : deux vrais ecrans ---------- */
+.nutri-scene{position:relative;padding:10px 30px}
+.nutri-duo{position:relative;display:flex;justify-content:center}
+.nutri-duo .tel{width:min(270px,46vw)}
+.nutri-duo .tel:last-child{width:min(250px,42vw);margin-left:-44px;margin-top:70px}
+.tel.defile-long .ecran img{animation:defile-long 30s ease-in-out infinite alternate}
+@keyframes defile-long{0%,8%{transform:translateY(0)}92%,100%{transform:translateY(-71.8%)}}
+
+/* ---------- ecran qui defile (vraie capture, plus haute que le telephone) ---------- */
+.tel.defile .ecran{position:absolute;inset:9px;border-radius:36px;overflow:hidden;background:#0b0b0b}
+.tel.defile .ecran img{width:100%;height:auto;border-radius:0;object-fit:initial;animation:defile 22s ease-in-out infinite alternate}
+.tel.defile:hover .ecran img{animation-play-state:paused}
+@keyframes defile{0%,10%{transform:translateY(0)}90%,100%{transform:translateY(-57.5%)}}
+/* ---------- tableur (bloc compact, sans ecran) ---------- */
+.tableur{display:grid;grid-template-columns:1fr 1fr;gap:12px 48px;align-items:center;margin:8px 0 12px;
+  background:linear-gradient(120deg,#140b0b,#0f0f0f 60%);border:1px solid #2a1414;border-radius:20px;padding:32px 36px}
+.tableur h3{font-size:clamp(26px,3.4vw,36px);margin-bottom:10px}
+.tableur p{color:#bdbdbd;font-size:15px}
+.tableur .coches{margin-top:0}
+/* ---------- vie : trois cartes compactes, une ligne ---------- */
+.vie{margin-top:44px}
+.vie-t{text-align:center;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#ff4d4d;font-weight:800;margin-bottom:14px}
+.vie-l{max-width:560px;margin:0 auto;border-top:1px solid var(--border)}
+.vie-c{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--border)}
+.vie-c b{font-family:'Bebas Neue',var(--pile-titre);font-weight:400;font-size:21px;letter-spacing:1px;color:#fff;line-height:1}
+.vie-c span:last-child{font-size:12.5px;color:#a9a9a9;line-height:1.4}
+@media(max-width:640px){
+  .tableur{grid-template-columns:1fr;padding:24px 20px}
+  .vie-c{padding:12px 10px}.vie-c b{font-size:18px}.vie-c span:last-child{font-size:11px}
+  .vie-i{width:30px;height:30px}
+}
+/* ---------- tuiles ---------- */
+.tuiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
+.tuile{background:linear-gradient(160deg,#141414,#0d0d0d);border:1px solid var(--border);border-radius:16px;padding:28px}
+.tuile .ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+  background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.35);margin-bottom:16px}
+.tuile h3{font-size:26px;color:#fff;margin-bottom:8px}
+.tuile p{font-size:14.5px;color:#b8b8b8}
+/* ---------- écrans par deux ou par trois ---------- */
+.duo{position:relative;display:flex;justify-content:center;gap:0}
+.duo .tel{width:min(250px,42vw)}
+.duo .tel:last-child{margin-left:-40px;margin-top:60px}
+/* Trois écrans en éventail : celui du milieu devant, les deux autres en retrait. */
+.trio{position:relative;display:flex;justify-content:center;align-items:flex-start}
+.trio .tel{width:min(200px,34vw);flex:none}
+.trio .tel:nth-child(1){margin-top:56px;z-index:1}
+.trio .tel:nth-child(2){margin-left:-18px;margin-right:-18px;z-index:2}
+.trio .tel:nth-child(3){margin-top:56px;z-index:1}
+/* ---------- tarifs ---------- */
+.bascule{display:inline-flex;background:#121212;border:1px solid #262626;border-radius:6px;padding:4px;margin-top:22px}
+.bascule button{font:inherit;font-size:13px;font-weight:800;letter-spacing:1px;color:#aaa;background:none;border:0;
+  border-radius:6px;padding:10px 18px;cursor:pointer;min-height:40px}
+.bascule button[aria-pressed="true"]{background:var(--red);color:#fff}
+.bascule .eco{font-size:10.5px;color:var(--ok);margin-left:6px}
+.bascule button[aria-pressed="true"] .eco{color:#fff}
+.prix{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:34px;align-items:stretch;max-width:780px;margin-left:auto;margin-right:auto}
+.offre{position:relative;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:30px 26px;
+  display:flex;flex-direction:column}
+.offre.vedette{border-color:var(--red);background:linear-gradient(180deg,#1a0b0b,#111 40%);
+  box-shadow:0 20px 60px -20px rgba(224,32,32,.45)}
+.offre .ruban{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;
+  font-size:10.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:5px 12px;border-radius:6px;white-space:nowrap}
+.offre h3{font-size:28px;color:#fff}
+.offre .pour{font-size:13px;color:var(--dim);margin-bottom:18px;min-height:40px}
+.montant{font-family:'Bebas Neue',var(--pile-titre);font-size:60px;letter-spacing:.5px;color:#fff;line-height:1}
+.montant small{font-family:Montserrat,var(--pile-sans);font-size:14px;color:var(--dim);letter-spacing:0}
+.facture{font-size:12.5px;color:#9a9a9a;min-height:20px;margin-top:6px}
+.offre ul.coches{flex:1;margin:22px 0 24px}
+.offre ul.coches li{font-size:14px}
+.offre .cta{width:100%}
+.essai{margin-top:26px;text-align:center;font-size:14px;color:#bdbdbd;max-width:640px;margin-left:auto;margin-right:auto;line-height:1.6}
+.essai strong{color:#fff}
+/* Les deux promesses de l'essai : ce qui fait passer le pas, donc en tête. */
+.cadeaux{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:22px auto 4px;max-width:640px}
+.cadeau{flex:1 1 240px;background:#121212;border:1px solid #262626;border-radius:14px;padding:14px 18px;text-align:left}
+.cadeau b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-weight:400;font-size:26px;letter-spacing:1px;color:#fff;line-height:1.05}
+.cadeau>span{font-size:13px;color:#bdbdbd}
+.cadeau.ami{border-color:var(--red)}
+.promesse{margin-top:14px;font-size:13px;color:#bdbdbd}
+.promesse b{color:#fff}
+.invite .promesse b.ami,.invite .cadeau.ami b{color:var(--red)}
+/* L'ARRIVÉE PAR UN AMI OU UN AMBASSADEUR (02/10/2026). body.invite : le
+   bandeau d'accueil ; body.invite-demi : le code porte « ultime_demi », l'essai
+   reste d'un mois et le bandeau dit la moitié prix ; body.invite-attente :
+   l'avantage d'un ambassadeur n'est pas encore lu, l'offre attend. Hors
+   demi-prix, partout où la page dit la durée de l'essai, elle dit la durée
+   parrainée (essai.moisParraine), celle que l'app ouvre. */
+.bandeau-invite{display:none;margin:0 0 18px;padding:14px 18px;border:1px solid var(--red);border-radius:14px;background:#170909;max-width:520px}
+.invite .bandeau-invite{display:block}
+.bandeau-invite p{margin:0}
+.bi-titre{font-family:'Bebas Neue',var(--pile-titre);font-size:26px;letter-spacing:1px;color:#fff;line-height:1.1}
+.bi-offre{margin-top:4px!important;font-size:15px;color:#bdbdbd}
+.bi-offre b{color:#fff}
+.bi-demi,.invite-demi .bi-mois{display:none}
+.invite-demi .bi-demi{display:block}
+.invite-attente .bi-offre{visibility:hidden}
+.promesse b.ami,.cadeau.ami{display:none}
+.invite:not(.invite-demi) .promesse b.ami{display:inline}
+.invite:not(.invite-demi) .promesse b.base,.invite:not(.invite-demi) .cadeau.base{display:none}
+.invite:not(.invite-demi) .cadeau.ami{display:block}
+.essai-ami{display:none}
+.invite:not(.invite-demi) .essai-ami{display:inline}
+.invite:not(.invite-demi) .essai-base{display:none}
+.barre span.ami{display:none}
+.invite:not(.invite-demi) .barre span.ami{display:inline}
+.invite:not(.invite-demi) .barre span.base{display:none}
+/* ---------- coaching humain ---------- */
+.ancre{display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center;
+  background:linear-gradient(120deg,#170909,#0f0f0f 60%);border:1px solid rgba(224,32,32,.35);border-radius:20px;padding:40px}
+.ancre h2{font-size:clamp(28px,4.4vw,44px)}
+.ancre .compare{background:#0b0b0b;border:1px solid #222;border-radius:14px;padding:20px}
+.ancre .ligne{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #1d1d1d;font-size:14px;color:#bbb}
+.ancre .ligne:last-child{border-bottom:0}
+.ancre .ligne b{color:#fff;white-space:nowrap}
+.ancre .ligne.moi b{color:var(--red-light)}
+/* ---------- galerie ---------- */
+.galerie{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-top:18px;align-items:stretch}
+.galerie figure{position:relative;margin:0;border-radius:18px;overflow:hidden;border:1px solid #222;min-height:320px;max-height:560px}
+.galerie img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
+.galerie figcaption{position:absolute;left:0;right:0;bottom:0;padding:40px 18px 16px;font-size:13px;color:#ccc;
+  background:linear-gradient(transparent,rgba(0,0,0,.85))}
+.galerie figcaption b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:24px;letter-spacing:1px;color:#fff;font-weight:400}
+@media(max-width:640px){.galerie{grid-template-columns:1fr}.galerie figure{max-height:440px}}
+/* ---------- faq ---------- */
+.faq{max-width:780px;margin:34px auto 0}
+details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:10px}
+details[open]{border-color:#2c2c2c;background:var(--card2)}
+summary{cursor:pointer;font-weight:700;font-size:15px;list-style:none;
+  display:flex;justify-content:space-between;gap:14px;align-items:center;min-height:32px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:'+';color:var(--red);font-size:22px;line-height:1;flex-shrink:0}
+details[open] summary::after{content:'−'}
+details p{margin-top:12px;font-size:14px;color:#c8c8c8}
+/* ---------- final ---------- */
+.final{padding:100px 0;background:radial-gradient(ellipse 60% 80% at 50% 100%,rgba(224,32,32,.18),transparent 70%)}
+.final h2{font-size:clamp(40px,7vw,72px)}
+.final .ctas{justify-content:center;margin-top:28px}
+.final .rassure{justify-content:center}
+/* ---------- pied ---------- */
+footer{padding:40px 0 110px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--dim)}
+footer a{color:var(--dim);margin:0 8px}
+/* ---------- barre mobile ---------- */
+.barre{position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;gap:10px;align-items:center;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:#080808;
+  border-top:1px solid #222;transform:translateY(110%);transition:transform .25s}
+.barre.vue{transform:none}
+.barre .cta{flex:1;min-height:48px;font-size:13px;padding:0 14px;white-space:nowrap;letter-spacing:1px}
+.barre span{font-size:11.5px;color:#aaa;line-height:1.3;max-width:120px}
+/* ---------- responsive ---------- */
+@media(max-width:900px){
+  .hero,.fonction,.ancre{grid-template-columns:1fr}
+  .hero{text-align:center}.hero .sub{margin-left:auto;margin-right:auto}
+  .hero .ctas,.hero .rassure{justify-content:center}
+  .auteur{justify-content:center}
+  .fonction.inverse .texte{order:0}
+  .fonction{gap:36px}
+  .prix{grid-template-columns:1fr;max-width:460px;margin-left:auto;margin-right:auto}
+  .offre.vedette{order:-1}
+  .douleurs,.tuiles{grid-template-columns:1fr}
+  .preuves .wrap{grid-template-columns:repeat(2,1fr)}
+  .preuve:nth-child(3){border-left:0}
+  .preuve:nth-child(n+3){border-top:1px solid var(--border)}
+  .ancre{padding:28px}
+}
+@media(max-width:640px){
+  section{padding:64px 0}
+  .nav a.lien{display:none}
+  .nav-cta{display:none}
+  .nav .lien.garde{display:inline}
+  .tuiles{grid-template-columns:1fr}
+  .bulle{font-size:11.5px;max-width:170px;padding:8px 11px}
+  .nutri-scene{padding:10px 6px}
+  .nutri-duo .tel:last-child{margin-left:-30px;margin-top:50px}
+  .bulle b{font-size:13.5px}
+  .hero .b1{left:0;top:auto;bottom:4%}.hero .b2,.fonction .bulle{display:none}
+  .duo .tel:last-child{margin-left:-28px;margin-top:44px}
+  .trio .tel{width:34vw}.trio .tel:nth-child(2){margin-left:-22px;margin-right:-22px}
+  .trio .tel:nth-child(1),.trio .tel:nth-child(3){margin-top:36px}
+  .barre{display:flex}
+  .portrait{gap:14px}.portrait img{width:76px;height:76px}.portrait q{font-size:14px}
+  .ancre .ligne{flex-direction:column;gap:2px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}
+  .nutri-scene *,.eparpille span,.tel.defile .ecran img{animation:none!important}}
+/* ══ coachs.html (02/10/2026) : ce qui est propre à la page coach ══════════ */
+.prix.trois{grid-template-columns:repeat(3,1fr);max-width:1020px}
+.offre .quota{font-size:13px;color:#d4d4d4;margin-top:10px;font-weight:700}
+.comparer{max-width:860px;margin:34px auto 0;border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.comparer table{width:100%;border-collapse:collapse;text-align:left}
+.comparer th{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-weight:800;padding:14px 18px;background:#0c0c0c;border-bottom:1px solid var(--border)}
+.comparer td{padding:16px 18px;border-bottom:1px solid var(--border);font-size:14.5px;color:#c8c8c8;vertical-align:top}
+.comparer tr:last-child td{border-bottom:0}
+.comparer td:first-child{color:#fff;font-weight:700;width:42%}
+.comparer td:first-child::before{content:'';display:inline-block;width:15px;height:15px;margin-right:10px;vertical-align:-2px;border-radius:50%;
+  background:rgba(224,32,32,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e96363' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/10px no-repeat}
+.comparer .note{font-size:12.5px;color:#9a9a9a;padding:14px 18px;border-top:1px solid var(--border);background:#0c0c0c}
+@media(max-width:900px){.prix.trois{grid-template-columns:1fr;max-width:460px}}
+@media(max-width:640px){.comparer td{display:block;width:auto!important;padding:10px 16px}.comparer td:first-child{padding-top:16px}.comparer td+td{padding-top:0;padding-bottom:16px}.comparer th{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav class="nav" aria-label="Navigation">
+      <a class="marque" href="#"><img src="app/img/vente/logo-72.webp" width="36" height="36" alt="">RepCore</a>
+      <div>
+        <a class="lien" href="#benefices">Fonctions</a>
+        <a class="lien" href="#comparer">Comparer</a>
+        <a class="lien" href="#tarifs">Tarifs</a>
+        <a class="lien" href="index.html">Tu es athlète&nbsp;?</a>
+        <a class="lien garde" href="app/">Se connecter</a>
+        <a class="cta nav-cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace</a>
+      </div>
+    </nav>
+    <div class="hero">
+      <div>
+        <p class="eyebrow">Pour les coachs · créée par un coach</p>
+        <h1>Tes athlètes saisissent.<em>Toi, tu coaches.</em></h1>
+        <p class="sub">Programmes, séances, bilans, nutrition et correction vidéo dans une seule app,
+          gratuite pour ton premier client.</p>
+        <div class="ctas">
+          <a class="cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace coach</a>
+          <a class="cta ghost" href="#tarifs">Voir les tarifs</a>
+        </div>
+        <p class="promesse"><b>Gratuit pour ton premier client</b>, sans limite de durée, sans carte bancaire</p>
+        <a class="auteur" href="index.html#coaching"><img src="app/img/vente/kevin-96.webp" width="48" height="48" alt="">
+          <span>Créée par <b>Kevin Guellec</b>, coach diplômé d'État, qui s'en sert avec ses athlètes</span></a>
+      </div>
+      <div class="visuel">
+        <div class="tel"><img src="app/img/vente/seance-charge.webp" srcset="app/img/vente/seance-charge-300.webp 300w, app/img/vente/seance-charge.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="1299" fetchpriority="high"
+          alt="Écran de séance RepCore, côté athlète : 48,75 kg proposés pour la première série, d'après la séance du lundi précédent"></div>
+        <div class="bulle b1"><b>Saisi par l'athlète</b>charge, répétitions, RIR : tu n'as rien à retaper</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="benefices">
+  <div class="wrap">
+
+    <div class="fonction" id="b-seance">
+      <div class="texte">
+        <span class="badge">Séances</span>
+        <h3>Ton athlète saisit sa séance.<br>Tu la lis.</h3>
+        <p>Tu poses le programme une fois. En salle, ton athlète ouvre sa séance, coche ses séries et note sa charge, ses répétitions et son RIR. Tu retrouves tout dans son dossier, sans fichier à t'envoyer.</p>
+        <ul class="coches">
+          <li>Une charge proposée à chaque série, d'après la même séance de la semaine précédente</li>
+          <li>Séries, répétitions, RIR et gêne notés en deux gestes</li>
+          <li>Hors ligne au sous-sol de la salle : tout se synchronise au retour du réseau</li>
+          <li>Des programmes-modèles à assigner en un geste</li>
+        </ul>
+      </div>
+      <div class="visuel">
+        <div class="tel"><img src="app/img/vente/seance-apercu.webp" srcset="app/img/vente/seance-apercu-300.webp 300w, app/img/vente/seance-apercu.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="1299" loading="lazy"
+          alt="Aperçu d'une séance PUSH côté athlète : cinq exercices, dix-sept séries, environ trente-cinq minutes"></div>
+      </div>
+    </div>
+
+    <div class="fonction inverse" id="b-bilans">
+      <div class="texte">
+        <span class="badge">Bilans</span>
+        <h3>Les bilans arrivent.<br>Tu réponds.</h3>
+        <p>Poids, mensurations, photos : ton athlète remplit son bilan dans l'app, et ses courbes se tracent seules. Tu lis l'évolution d'un coup d'œil et tu réponds à côté, par écrit ou à l'oral.</p>
+        <ul class="coches">
+          <li>Courbe de poids lissée sur sept jours : la tendance, pas le bruit d'une pesée</li>
+          <li>Mensurations posées sur la silhouette, centimètre par centimètre</li>
+          <li>Masse grasse estimée à chaque bilan</li>
+          <li>Ta réponse revient dans l'app de ton athlète</li>
+        </ul>
+      </div>
+      <div class="visuel duo">
+        <div class="tel"><img src="app/img/vente/evolution-mensurations.webp" srcset="app/img/vente/evolution-mensurations-300.webp 300w, app/img/vente/evolution-mensurations.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution, onglet Mensurations : silhouette avec l'écart de chaque mesure, biceps +1 cm, taille −4 cm"></div>
+        <div class="tel"><img src="app/img/vente/evolution-poids.webp" srcset="app/img/vente/evolution-poids-300.webp 300w, app/img/vente/evolution-poids.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution, onglet Poids : courbe des pesées et tendance sur sept jours, de 63,4 à 61,1 kg"></div>
+      </div>
+    </div>
+
+    <div class="fonction" id="b-video">
+      <div class="texte">
+        <span class="badge">Correction vidéo</span>
+        <h3>La technique corrigée,<br>image par image.</h3>
+        <p>Ton athlète filme sa série et l'envoie depuis sa séance. Tu la reprends image par image, tu figes, tu ralentis, et tu réponds avec des tracés : angles, trajectoire de la charge, amplitude mesurée.</p>
+        <ul class="coches">
+          <li>Angles articulaires et trajectoires dessinés sur la vidéo</li>
+          <li>Des mesures d'amplitude, pas des impressions</li>
+          <li>La correction revient dans l'app, à côté de l'exercice</li>
+          <li>Pas de vidéo à récupérer sur une autre messagerie</li>
+        </ul>
+      </div>
+      <div class="visuel">
+        <div class="clip">
+          <video data-auto muted loop playsinline preload="none" poster="app/img/vente/correction.webp"
+            aria-label="Vidéo d'une presse à cuisses annotée : angles du genou et de la hanche, trajectoire de la machine">
+            <source src="app/img/vente/correction.mp4" type="video/mp4">
+          </video>
+          <span class="rec">Analyse</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tableur" id="b-tableau">
+      <div class="tableur-t">
+        <span class="badge">Tableau de bord</span>
+        <h3>Il trie pour toi qui décroche.</h3>
+        <p>Tes athlètes saisissent, ton tableau de bord trie : tu vois qui avance, qui décroche, et ce qu'il te reste à traiter, sans relire chaque dossier.</p>
+      </div>
+      <ul class="coches">
+        <li>Les athlètes en alerte remontent en tête</li>
+        <li>Les nouveaux bilans à lire, rangés à part</li>
+        <li>Ta team, ta photo et ta phrase dans l'app de tes athlètes</li>
+        <li>Joignable sur WhatsApp depuis leur accueil</li>
+      </ul>
+    </div>
+    <p class="demo">Captures réelles de l'application (profil de démonstration). Vidéo tournée par Kevin.</p>
+    <div class="center" style="margin-top:44px">
+      <a class="cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace coach</a>
+    </div>
+  </div>
+</section>
+
+<section id="comparer">
+  <div class="wrap center">
+    <p class="eyebrow">Comparer</p>
+    <h2>Pourquoi pas Trainerize,<br><em>TrueCoach ou Everfit&nbsp;?</em></h2>
+    <p class="lead">Ce sont des outils sérieux. Voici ce que RepCore fait, que tu peux vérifier toi-même en dix minutes avec ton espace gratuit. Mets-le en face de ce que tu utilises aujourd'hui.</p>
+    <div class="comparer">
+      <table>
+        <thead><tr><th scope="col">Ce que RepCore fait</th><th scope="col">Ce que ça change pour toi</th></tr></thead>
+        <tbody>
+          <tr><td>Entièrement en français</td><td>L'app, les exercices et les messages : ton athlète n'a rien à traduire, toi non plus.</td></tr>
+          <tr><td>Hors ligne, en salle</td><td>La séance se saisit au sous-sol, sans réseau, et se synchronise au retour. Pas de série perdue.</td></tr>
+          <tr><td>Une charge proposée à chaque série</td><td>Calculée d'après la même séance de la semaine précédente : ton athlète sait quoi mettre sur la barre sans t'écrire.</td></tr>
+          <tr><td>L'athlète ne paie rien avec ton code</td><td>Ton code le rattache à ton suivi et lui ouvre l'accès, jusqu'à 12 mois. Tu vends ton coaching, pas un abonnement en plus.</td></tr>
+          <tr><td>Rien à installer depuis un store</td><td>Un lien suffit : l'app s'ouvre dans le navigateur, puis s'ajoute à l'écran d'accueil, sur Android comme sur iPhone.</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Nous ne décrivons ici que RepCore. Pour les autres outils, fie-toi à leur site et à leurs conditions du moment.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tarifs">
+  <div class="wrap center">
+    <p class="eyebrow">Tarifs coach</p>
+    <h2>Commence avec ton premier client.<br><em>Paie quand tu grandis.</em></h2>
+    <p class="lead">Ta formule suit le nombre d'athlètes que tu accompagnes. Au mois, sans engagement : la résiliation prend effet à la fin du mois payé.</p>
+    <div class="prix trois">
+      <div class="offre">
+        <h3>Libre</h3>
+        <p class="pour">Tu démarres, ou tu suis un seul athlète.</p>
+        <div class="montant"><span data-tarif="coach.libre">0&nbsp;€</span></div>
+        <p class="quota">1 athlète suivi</p>
+        <ul class="coches" style="text-align:left">
+          <li>Sans carte bancaire, sans limite de durée</li>
+          <li>Programmes, séances, bilans, correction vidéo</li>
+          <li>Ton athlète ne paie rien avec ton code</li>
+        </ul>
+        <a class="cta ghost" href="app/?role=coach&amp;src=coachs#install">Créer mon espace</a>
+      </div>
+      <div class="offre vedette">
+        <span class="ruban">Pour une clientèle</span>
+        <h3>Coach</h3>
+        <p class="pour">Tu suis une clientèle régulière.</p>
+        <div class="montant"><span data-tarif="coach.coach">19&nbsp;€</span><small> /mois</small></div>
+        <p class="quota">Jusqu'à 15 athlètes actifs</p>
+        <ul class="coches" style="text-align:left">
+          <li><strong>Tout Libre</strong>, pour quinze athlètes</li>
+          <li>Un athlète actif a fait au moins une séance dans les 60 derniers jours</li>
+          <li>Au mois, sans engagement</li>
+        </ul>
+        <a class="cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace</a>
+      </div>
+      <div class="offre">
+        <h3>Pro</h3>
+        <p class="pour">Tu as une équipe, ou ta propre marque.</p>
+        <div class="montant"><span data-tarif="coach.pro">39&nbsp;€</span><small> /mois</small></div>
+        <p class="quota">Sans limite d'athlètes</p>
+        <ul class="coches" style="text-align:left">
+          <li><strong>Tout Coach</strong>, sans plafond</li>
+          <li>Ton logo, ton nom et ta couleur dans l'app de tes athlètes</li>
+          <li>Au mois, sans engagement</li>
+        </ul>
+        <a class="cta ghost" href="app/?role=coach&amp;src=coachs#install">Créer mon espace</a>
+      </div>
+    </div>
+    <p class="essai">Prix TTC. Paiement sécurisé par PayPal. Les conditions complètes sont dans les <a href="terms.html">CGV</a>.</p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="center">
+      <p class="eyebrow">Questions</p>
+      <h2>Ce que les coachs nous demandent</h2>
+    </div>
+    <div class="faq">
+    <details open><summary>Mes programmes sont dans un tableur&nbsp;: faut-il tout ressaisir&nbsp;?</summary>
+      <p>Non. Tu photographies la fiche ou le tableur imprimé&nbsp;: l'application en extrait les exercices, les
+      séries, les répétitions et les temps de repos, et te les montre dans un écran de correction avant tout
+      enregistrement. Commence par le programme en cours et les blocs que tu réutilises&nbsp;; la méthode complète
+      est dans notre article <a href="blog/numeriser-fiche-programme-papier.html">Numériser une fiche de programme papier</a>.</p></details>
+
+    <details><summary>Que paient mes athlètes&nbsp;?</summary>
+      <p>Rien, tant qu'ils utilisent un de tes codes. Chaque code les rattache à ton suivi et leur ouvre l'accès
+      pour la durée que tu choisis, jusqu'à 12&nbsp;mois. Sans code, ils peuvent aussi s'abonner seuls à RepCore
+      (<a href="index.html#tarifs">tarifs athlète</a>).</p></details>
+
+    <details><summary>Puis-je mettre mon logo&nbsp;?</summary>
+      <p>Oui, avec la formule Pro&nbsp;: ton logo, ton nom et ta couleur coiffent l'app de tes athlètes, à
+      l'accueil et dans le canal&nbsp;; «&nbsp;Propulsé par RepCore&nbsp;» reste en petit dans les réglages. Avec
+      toutes les formules, ton nom, ta photo et ta phrase apparaissent dans la bannière coach de tes athlètes.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap center">
+    <h2>Tes athlètes saisissent.<br><em>Toi, tu coaches.</em></h2>
+    <p class="lead">Gratuit pour ton premier client, sans limite de durée, sans carte bancaire.</p>
+    <div class="ctas">
+      <a class="cta" href="app/?role=coach&amp;src=coachs#install">Créer mon espace coach</a>
+      <a class="cta ghost" href="app/">J'ai déjà un compte</a>
+    </div>
+    <div class="rassure"><span>Android et iPhone</span><span>Marche hors ligne en salle</span><span>En français</span></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>RepCore : Kevin Guellec, coach diplômé d'État</p>
+    <p style="margin-top:10px">
+      <a href="index.html">Tu es athlète&nbsp;?</a>·<a href="blog/suivi-athletes-sans-tableur.html">Suivre ses athlètes sans tableur</a>·<a href="terms.html">CGV</a>·<a href="privacy.html">Confidentialité</a>·<a href="legal.html">Mentions légales</a>
+    </p>
+  </div>
+</footer>
+
+<div class="barre" id="barre" aria-hidden="true">
+  <span>Gratuit pour ton<br>premier client</span>
+  <a class="cta" href="app/?role=coach&amp;src=coachs#install" tabindex="-1">Créer mon espace</a>
+</div>
+
+<script>
+/* Les boucles vidéo ne tournent que visibles (comme index.html). */
+(function(){
+  try{
+    if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var vs=document.querySelectorAll('video[data-auto]');
+    if(!('IntersectionObserver' in window)){ vs.forEach(function(v){ v.play().catch(function(){}); }); return; }
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.play().catch(function(){}); } else e.target.pause(); });
+    },{rootMargin:'200px 0px'});
+    vs.forEach(function(v){ io.observe(v); });
+  }catch(e){}
+})();
+/* La barre d'appel fixe sur mobile (comme index.html). */
+(function(){
+  try{
+    var barre=document.getElementById('barre');
+    var haut=document.querySelector('header .cta');
+    var fin=document.querySelector('.final');
+    if(!barre||!haut||!('IntersectionObserver' in window)) return;
+    var hautVu=true, finVue=false;
+    function maj(){
+      var v=!hautVu&&!finVue;
+      barre.classList.toggle('vue',v);
+      barre.setAttribute('aria-hidden',v?'false':'true');
+      var a=barre.querySelector('a'); if(a) a.tabIndex=v?0:-1;
+    }
+    new IntersectionObserver(function(e){ hautVu=e[0].isIntersecting; maj(); }).observe(haut);
+    if(fin) new IntersectionObserver(function(e){ finVue=e[0].isIntersecting; maj(); }).observe(fin);
+  }catch(e){}
+})();
+</script>
+<script>
+// LES CODES VOYAGENT JUSQU'A L'APP (recopié d'index.html) : ?amb=, ?ref=,
+// ?src=, ?coach=. Ici, les liens vers app/ portent déjà role=coach et
+// src=coachs : les paramètres d'arrivée les REMPLACENT clé par clé (un coach
+// venu du blog garde src=blog jusqu'à l'inscription), au lieu de s'ajouter
+// en double.
+(function(){
+  try{
+    var p=new URLSearchParams(location.search), g=new URLSearchParams();
+    ['amb','ref','src','coach'].forEach(function(k){ var v=p.get(k); if(v) g.set(k,v.slice(0,40)); });
+    if(!g.toString()) return;
+    document.querySelectorAll('a[href^="app/"]').forEach(function(a){
+      var h=a.getAttribute('href'), i=h.indexOf('#');
+      var avant=i<0?h:h.slice(0,i), ancre=i<0?'':h.slice(i);
+      var j=avant.indexOf('?'), base=j<0?avant:avant.slice(0,j);
+      var q=new URLSearchParams(j<0?'':avant.slice(j+1));
+      g.forEach(function(v,k){ q.set(k,v); });
+      a.setAttribute('href',base+'?'+q.toString()+ancre);
+    });
+  }catch(e){}
+})();
+</script>
+<script>
+// L'ARRIVEE (attribution), recopiée d'index.html : src, amb, et le seul fait
+// qu'un code parrain était là (ref=1). Sans src, l'arrivée compte en
+// « coachs » : c'est cette page qui l'a fait venir. Une fois par jour et par
+// lien sur cet appareil ; ni cookie, ni IP, ni identifiant.
+(function(){try{var p=new URLSearchParams(location.search);
+var src=(p.get('src')||'coachs').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+var ref=p.get('ref')?1:0;
+var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
+if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
+}catch(e){}})();
+</script>
+</body>
+</html>

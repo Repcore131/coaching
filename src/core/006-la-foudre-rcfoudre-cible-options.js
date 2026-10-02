@@ -1070,8 +1070,40 @@ let selRole='';
 //
 // LE SEPARATEUR PART AVEC LE BLOC : un trait horizontal seul, entre le genre
 // et la promesse, annoncerait une section qui n'existe plus.
+// ══ ?role=coach — LE COACH VENU DE coachs.html (02/10/2026) ══════════════
+// importFromURL garde l'intention (rc_role_voulu, 30 jours : l'icône
+// installée s'ouvre sans paramètre). Deux effets, et aucun sans elle :
+//   • rcRoleRoute : la PREMIÈRE fois qu'on irait à l'accueil (s-welcome, qui
+//     vend l'abonnement athlète) sans session, on va à l'Espace coach. Une
+//     fois par chargement : sa flèche de retour ramène bien à l'accueil ;
+//   • rcRolePreselection : à l'inscription, si personne n'a encore choisi,
+//     « Coach » est coché (le bloc reste visible : on peut changer).
+// Choisir « Athlète » efface l'intention.
+const RC_ROLE_VOULU_JOURS=30;
+let _rcRoleRouteFaite=false;
+function rcRoleVoulu(){
+  try{
+    const o=JSON.parse(localStorage.getItem('rc_role_voulu')||'null');
+    if(o&&o.role==='coach'&&Date.now()-Number(o.le)<RC_ROLE_VOULU_JOURS*864e5) return 'coach';
+  }catch(e){}
+  return '';
+}
+/** L'écran où aller : s-coach-entry au lieu de s-welcome, une fois. `o` (tests) : {connecte}. */
+function rcRoleRoute(id,o){
+  if(id!=='s-welcome'||_rcRoleRouteFaite||rcRoleVoulu()!=='coach') return id;
+  const connecte=(o&&'connecte' in o)?!!o.connecte:(typeof currentUser!=='undefined'&&!!currentUser);
+  if(connecte) return id;
+  _rcRoleRouteFaite=true;
+  return 's-coach-entry';
+}
+function rcRolePreselection(){
+  if(selRole||rcRoleVoulu()!=='coach') return false;
+  selectRole('coach');
+  return true;
+}
 function selectRole(r,implicite){
   selRole=r;
+  if(r==='athlete') try{ localStorage.removeItem('rc_role_voulu'); }catch(e){}
   try{
     const _b=document.getElementById('r-role-bloc');
     const _s=document.getElementById('r-role-sep');

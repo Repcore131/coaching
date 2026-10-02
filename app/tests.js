@@ -19652,6 +19652,41 @@ async function testExercices(){
             return true;
           } finally { try{ selectRole(_av||'athlete',true); }catch(e){} }})());
 
+        ok('?role=coach (coachs.html) : l’Espace coach au lieu de l’accueil athlète, une fois, et « Coach » coché d’avance ; rien sans le paramètre',(()=>{
+          const _av=selRole, _fait=_rcRoleRouteFaite;
+          let _int=null; try{ _int=localStorage.getItem('rc_role_voulu'); }catch(e){}
+          try{
+            // SANS LE PARAMÈTRE, RIEN NE CHANGE.
+            try{ localStorage.removeItem('rc_role_voulu'); }catch(e){}
+            _rcRoleRouteFaite=false; selRole='';
+            if(rcRoleDepuisParams(new URLSearchParams('?src=coachs'))||rcRoleDepuisParams(new URLSearchParams('?role=athlete'))) return _echec('une intention sans role=coach');
+            if(rcRoleRoute('s-welcome',{connecte:false})!=='s-welcome') return _echec('sans paramètre, l’accueil est détourné');
+            if(rcRolePreselection()||selRole) return _echec('sans paramètre, un rôle est coché');
+            // AVEC ?role=coach : l'intention est gardée, l'accueil devient l'Espace coach.
+            if(!rcRoleDepuisParams(new URLSearchParams('?role=coach&src=coachs'))||rcRoleVoulu()!=='coach') return _echec('l’intention n’est pas gardée');
+            if(rcRoleRoute('s-welcome',{connecte:true})!=='s-welcome') return _echec('un compte connecté est détourné');
+            if(rcRoleRoute('s-login',{connecte:false})!=='s-login') return _echec('un autre écran est détourné');
+            if(rcRoleRoute('s-welcome',{connecte:false})!=='s-coach-entry') return _echec('l’accueil athlète reste sur le chemin du coach');
+            // UNE FOIS : la flèche de l'Espace coach ramène bien à l'accueil.
+            if(rcRoleRoute('s-welcome',{connecte:false})!=='s-welcome') return _echec('la flèche de retour boucle sur l’Espace coach');
+            // L'ÉCRAN DE CHOIX : « Coach » coché, le bloc visible (on peut changer).
+            if(!rcRolePreselection()||selRole!=='coach') return _echec('le rôle coach n’est pas présélectionné');
+            if(!document.getElementById('role-coach').classList.contains('sel')||document.getElementById('role-athlete').classList.contains('sel')) return _echec('la carte Coach n’est pas cochée');
+            if(document.getElementById('r-role-bloc').style.display==='none') return _echec('le choix est masqué : on ne peut plus changer');
+            // Un rôle déjà choisi n'est jamais écrasé.
+            if(rcRolePreselection()) return _echec('la présélection écrase un choix');
+            // Choisir « Athlète » efface l'intention.
+            selectRole('athlete');
+            if(rcRoleVoulu()) return _echec('l’intention survit au choix « Athlète »');
+            // go() passe par rcRoleRoute (source).
+            return /id=rcRoleRoute\(id\)/.test(String(go))?true:_echec('go() ne consulte pas rcRoleRoute');
+          } finally {
+            _rcRoleRouteFaite=_fait;
+            try{ selectRole(_av||'athlete',true); }catch(e){}
+            if(!_av) selRole=_av;
+            try{ if(_int===null) localStorage.removeItem('rc_role_voulu'); else localStorage.setItem('rc_role_voulu',_int); }catch(e){}
+          }})());
+
         ok('Toutes les routes vers l\'inscription posent le rôle',(()=>{
           // C'EST CE QUI PERMET DE NE PLUS POSER LA QUESTION. Si une route
           // arrivait sans rôle, le formulaire devrait la reposer — et cette

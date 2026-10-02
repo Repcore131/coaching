@@ -186,7 +186,9 @@ main .cta{margin:28px 0 10px;min-height:52px}
       var ref=(q.get('ref')||'').toUpperCase();
       h+='<a class="cta" href="'+racine+'i/?coach='+encodeURIComponent(slug)+'&src='+src
         +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+'">Commencer avec '+prenom+'</a>';
-      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · le coaching, séance après séance.</div>';
+      // LA PORTE DU COACH QUI VISITE (02/10/2026) : une vitrine est vue par
+      // d'autres coachs ; src=vitrine dit d'où il vient dans l'écran tunnel.
+      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · Tu es coach ? <a href="'+racine+'coachs.html?src=vitrine">Crée ta vitrine</a></div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
       brancherFormules(v,prenom);
     })

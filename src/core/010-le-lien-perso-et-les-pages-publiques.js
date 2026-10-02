@@ -929,11 +929,13 @@ const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
 // refusee, jamais un noeud de plus. La meme liste vit dans le Worker
 // (functions/attribution-calcul.js, SRC_CONNUS) et dans database.rules.json ;
 // scripts/verif/regles.mjs verifie que les trois disent la meme chose.
-const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','carte',
-  'champion','charge','commissions','cycle','defi','diete','direct','dossier','duel','email',
+// Les quatre portes du coach (02/10/2026) : blog, coachs (coachs.html), profil
+// (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c).
+const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','carte',
+  'champion','charge','coachs','commissions','cycle','defi','diete','direct','dossier','duel','email',
   'envois','facebook','fond','instagram','invitation','journal','kit','logo','mes','muscles',
-  'parrainage','pesees','photos','pub','qr','rang','record','records','saison','seance',
-  'seances','serie','site','story','team','tiktok','victoire','visuel','whatsapp','wrapped','youtube']);
+  'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance',
+  'seances','serie','site','story','team','tiktok','victoire','visuel','vitrine','whatsapp','wrapped','youtube']);
 const ATTR_ORIGINE_CLE='rc_origine';
 const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';
 function attribSrc(s){

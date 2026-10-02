@@ -457,6 +457,13 @@ function _validateAthletePkg(o){
   };
 }
 // ── Import depuis URL (coachpkg ou athletepkg) ──
+// ?role=coach (02/10/2026) : l'intention du coach venu de coachs.html, gardée
+// pour rcRoleRoute et rcRolePreselection (006). Toute autre valeur : rien.
+function rcRoleDepuisParams(params){
+  if(!params||params.get('role')!=='coach') return false;
+  try{ localStorage.setItem('rc_role_voulu',JSON.stringify({role:'coach',le:Date.now()})); }catch(e){ return false; }
+  return true;
+}
 (function importFromURL(){
   // Le nettoyage de l'adresse est décidé AVANT tout décodage, et exécuté dans un
   // `finally` : un paquet malformé jetait auparavant avant d'atteindre le
@@ -471,7 +478,7 @@ function _validateAthletePkg(o){
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||params.get('ligue')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
       ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
-      ||!!params.get('garmin')||params.get('messages')==='1');
+      ||!!params.get('garmin')||params.get('messages')==='1'||!!params.get('role'));
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -570,6 +577,11 @@ function _validateAthletePkg(o){
       try{ localStorage.setItem('rc_origine',JSON.stringify({src:_osrc,amb:_amb,
         ref:String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12),le:Date.now()})); }catch(e){}
     }
+    // ?role=coach — arrivé par coachs.html (« Créer mon espace coach ») : gardé
+    // 30 jours (rc_role_voulu), car l'icône installée s'ouvre sans paramètre.
+    // rcRoleRoute l'envoie à l'Espace coach plutôt qu'à l'accueil athlète, et
+    // rcRolePreselection coche « Coach » à l'inscription. Sans lui, rien ne change.
+    rcRoleDepuisParams(params);
     // ?coach=<slug> — arrivé par la vitrine publique d'un coach (/coach/<slug>).
     const _vit=String(params.get('coach')||'').toLowerCase();
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}

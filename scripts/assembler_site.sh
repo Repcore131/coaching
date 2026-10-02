@@ -31,7 +31,7 @@ cp -a app blog i maj p c a "$DEST"/
 # qu'en local (scripts/verif/suite.mjs sert le dépôt, pas la production).
 # En ligne, chargerTests() dit alors « tests.js introuvable ».
 rm -f "$DEST/app/tests.js"
-cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html "$DEST"/
+cp -a index.html coachs.html legal.html privacy.html terms.html 404.html aide-apk.html "$DEST"/
 cp -a logo.png og-image.png robots.txt sitemap.xml "$DEST"/
 # LA CHARTE DES PAGES PUBLIQUES (01/10/2026) : i/, p/, c/ et 404.html la lient
 # en /charte.css. Ses polices sont lues dans app/fonts/, deja copie.

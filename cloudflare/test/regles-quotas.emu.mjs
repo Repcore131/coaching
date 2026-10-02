@@ -55,6 +55,16 @@ await test('/metrics : un compteur de capacité avance par paquet, d’un millio
   assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/cld_ko', INC(1000001))).statut, 401, 'ni à la création');
 });
 
+await test('/metrics : coach_landing_view (coachs.html, 02/10/2026) passe à +1, comme landing_view', async () => {
+  assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/coach_landing_view', INC(1))).statut, 200);
+  assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/coach_landing_view', INC(5))).statut, 401);
+  assert.equal((await appel(null, 'PUT', 'metrics/' + JOUR + '/coach_landing_viewx', INC(1))).statut, 401, 'clé voisine refusée');
+});
+await test('/attribution : les portes du coach (blog, coachs, profil, vitrine) sont des src connus', async () => {
+  for (const s of ['blog', 'coachs', 'profil', 'vitrine'])
+    assert.equal((await appel(null, 'PUT', 'attribution/jours/' + JOUR + '/src/' + s + '/clic', INC(1))).statut, 200, s);
+});
+
 // ── /attribution ──────────────────────────────────────────────────────────
 await test('/attribution : +1 sur un src connu passe ; +5 refusé ; src inconnu refusé', async () => {
   const c = 'attribution/jours/' + JOUR + '/src/';

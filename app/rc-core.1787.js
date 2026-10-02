@@ -512,7 +512,7 @@ function lienWhatsApp(texte){
 // Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
 // clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
 // créer de dimension imprévue.
-const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
+const RCM_EVENEMENTS=['landing_view','coach_landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   'first_workout_started','first_workout_completed','first_bilan_completed',
@@ -7044,6 +7044,13 @@ function _validateAthletePkg(o){
   };
 }
 // ── Import depuis URL (coachpkg ou athletepkg) ──
+// ?role=coach (02/10/2026) : l'intention du coach venu de coachs.html, gardée
+// pour rcRoleRoute et rcRolePreselection (006). Toute autre valeur : rien.
+function rcRoleDepuisParams(params){
+  if(!params||params.get('role')!=='coach') return false;
+  try{ localStorage.setItem('rc_role_voulu',JSON.stringify({role:'coach',le:Date.now()})); }catch(e){ return false; }
+  return true;
+}
 (function importFromURL(){
   // Le nettoyage de l'adresse est décidé AVANT tout décodage, et exécuté dans un
   // `finally` : un paquet malformé jetait auparavant avant d'atteindre le
@@ -7058,7 +7065,7 @@ function _validateAthletePkg(o){
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||params.get('ligue')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
       ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
-      ||!!params.get('garmin')||params.get('messages')==='1');
+      ||!!params.get('garmin')||params.get('messages')==='1'||!!params.get('role'));
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -7157,6 +7164,11 @@ function _validateAthletePkg(o){
       try{ localStorage.setItem('rc_origine',JSON.stringify({src:_osrc,amb:_amb,
         ref:String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12),le:Date.now()})); }catch(e){}
     }
+    // ?role=coach — arrivé par coachs.html (« Créer mon espace coach ») : gardé
+    // 30 jours (rc_role_voulu), car l'icône installée s'ouvre sans paramètre.
+    // rcRoleRoute l'envoie à l'Espace coach plutôt qu'à l'accueil athlète, et
+    // rcRolePreselection coche « Coach » à l'inscription. Sans lui, rien ne change.
+    rcRoleDepuisParams(params);
     // ?coach=<slug> — arrivé par la vitrine publique d'un coach (/coach/<slug>).
     const _vit=String(params.get('coach')||'').toLowerCase();
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
@@ -9827,6 +9839,10 @@ function _majTabbar(id){
   _majPastilleLifestyle();
 }
 function go(id){
+  // ?role=coach (02/10/2026) : le coach venu de coachs.html ne passe pas par
+  // l'accueil athlète, et le rôle est coché d'avance à l'inscription.
+  try{ id=rcRoleRoute(id); }catch(e){}
+  try{ if(id==='s-register') setTimeout(rcRolePreselection,80); }catch(e){}
   try{ lectureCacher(); }catch(e){}
   // La pastille « n envois en attente » suit le compte affiche (connexion,
   // deconnexion, changement de compte).
@@ -12081,8 +12097,40 @@ let selRole='';
 //
 // LE SEPARATEUR PART AVEC LE BLOC : un trait horizontal seul, entre le genre
 // et la promesse, annoncerait une section qui n'existe plus.
+// ══ ?role=coach — LE COACH VENU DE coachs.html (02/10/2026) ══════════════
+// importFromURL garde l'intention (rc_role_voulu, 30 jours : l'icône
+// installée s'ouvre sans paramètre). Deux effets, et aucun sans elle :
+//   • rcRoleRoute : la PREMIÈRE fois qu'on irait à l'accueil (s-welcome, qui
+//     vend l'abonnement athlète) sans session, on va à l'Espace coach. Une
+//     fois par chargement : sa flèche de retour ramène bien à l'accueil ;
+//   • rcRolePreselection : à l'inscription, si personne n'a encore choisi,
+//     « Coach » est coché (le bloc reste visible : on peut changer).
+// Choisir « Athlète » efface l'intention.
+const RC_ROLE_VOULU_JOURS=30;
+let _rcRoleRouteFaite=false;
+function rcRoleVoulu(){
+  try{
+    const o=JSON.parse(localStorage.getItem('rc_role_voulu')||'null');
+    if(o&&o.role==='coach'&&Date.now()-Number(o.le)<RC_ROLE_VOULU_JOURS*864e5) return 'coach';
+  }catch(e){}
+  return '';
+}
+/** L'écran où aller : s-coach-entry au lieu de s-welcome, une fois. `o` (tests) : {connecte}. */
+function rcRoleRoute(id,o){
+  if(id!=='s-welcome'||_rcRoleRouteFaite||rcRoleVoulu()!=='coach') return id;
+  const connecte=(o&&'connecte' in o)?!!o.connecte:(typeof currentUser!=='undefined'&&!!currentUser);
+  if(connecte) return id;
+  _rcRoleRouteFaite=true;
+  return 's-coach-entry';
+}
+function rcRolePreselection(){
+  if(selRole||rcRoleVoulu()!=='coach') return false;
+  selectRole('coach');
+  return true;
+}
 function selectRole(r,implicite){
   selRole=r;
+  if(r==='athlete') try{ localStorage.removeItem('rc_role_voulu'); }catch(e){}
   try{
     const _b=document.getElementById('r-role-bloc');
     const _s=document.getElementById('r-role-sep');
@@ -21563,11 +21611,13 @@ const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
 // refusee, jamais un noeud de plus. La meme liste vit dans le Worker
 // (functions/attribution-calcul.js, SRC_CONNUS) et dans database.rules.json ;
 // scripts/verif/regles.mjs verifie que les trois disent la meme chose.
-const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','carte',
-  'champion','charge','commissions','cycle','defi','diete','direct','dossier','duel','email',
+// Les quatre portes du coach (02/10/2026) : blog, coachs (coachs.html), profil
+// (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c).
+const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','carte',
+  'champion','charge','coachs','commissions','cycle','defi','diete','direct','dossier','duel','email',
   'envois','facebook','fond','instagram','invitation','journal','kit','logo','mes','muscles',
-  'parrainage','pesees','photos','pub','qr','rang','record','records','saison','seance',
-  'seances','serie','site','story','team','tiktok','victoire','visuel','whatsapp','wrapped','youtube']);
+  'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance',
+  'seances','serie','site','story','team','tiktok','victoire','visuel','vitrine','whatsapp','wrapped','youtube']);
 const ATTR_ORIGINE_CLE='rc_origine';
 const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';
 function attribSrc(s){
@@ -126117,7 +126167,10 @@ document.addEventListener('DOMContentLoaded',function(){
 // deja le `||{}` qu'il remplace.
 const _rcmObjet=v=>(v&&typeof v==='object'&&!Array.isArray(v))?v:{};
 const RCM_TUNNEL=[
-  {cles:['landing_view'],lib:'Page de vente vue'},
+  // DEUX PAGES DE VENTE (02/10/2026) : index.html pour l'athlète, coachs.html
+  // pour le coach. Une seule étape, détaillée : l'entrée du tunnel reste le
+  // total des deux, et le détail dit d'où vient le coach qui crée son espace.
+  {cles:['landing_view','coach_landing_view'],lib:'Page de vente vue',detail:['landing_view','athlète','coach_landing_view','coach']},
   // ── L'INSTALLATION, EN AMONT DE TOUT LE RESTE ───────────────────────
   // Dans l'ordre reel du parcours : on voit l'ecran, le navigateur propose,
   // on accepte, l'icone se pose. Trois lignes sortent de la chaine — voir

@@ -26,7 +26,7 @@
 // être vus.
 //   node scripts/verif/tarifs.mjs
 import { readFileSync } from 'node:fs';
-import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, RE_FAQ_AMI } from '../tarifs.mjs';
+import { RACINE, PAGES, lireTarifs, valeur, appliquerPage, appliquerApp, fichierCore, incoherences, RE_FAQ_AMI, RE_JSONLD_PRIX } from '../tarifs.mjs';
 
 const T = lireTarifs();
 const erreurs = [];
@@ -98,6 +98,23 @@ for (const p of PAGES) {
   let html;
   try { html = readFileSync(RACINE + p, 'utf8'); } catch (x) { e(p + ' illisible'); continue; }
   erreurs.push(...controlerPage(p, html));
+}
+// LA PAGE COACH (02/10/2026) : ses trois formules liées à tarifs.json, dans
+// la grille (data-tarif) ET dans le JSON-LD (identifier), et aucune offre du
+// JSON-LD d'une page sans identifiant (un prix qui ne suivrait rien).
+{
+  const html = readFileSync(RACINE + 'coachs.html', 'utf8');
+  for (const cle of ['coach.libre', 'coach.coach', 'coach.pro']) {
+    if (!html.includes('data-tarif="' + cle + '"')) e('coachs.html : la grille ne montre plus ' + cle);
+    if (!html.includes('"identifier": "tarifs:' + cle + '"')) e('coachs.html : le JSON-LD ne lie plus ' + cle);
+  }
+  for (const p of ['index.html', 'coachs.html']) {
+    const h = readFileSync(RACINE + p, 'utf8');
+    const offres = (h.match(/"@type": "Offer"/g) || []).length, liees = (h.match(RE_JSONLD_PRIX) || []).length;
+    if (offres !== liees) e(p + ' : ' + (offres - liees) + ' offre(s) JSON-LD sans "identifier": "tarifs:<clé>" juste avant "price"');
+  }
+  const faux = html.replace(/("identifier": "tarifs:coach\.coach", "price": ")[^"]*/, (_t, a) => a + '9.99');
+  if (faux === html || !controlerPage('coachs.html', faux).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : un prix JSON-LD faussé n’est pas vu');
 }
 // Les deux montants de la grille, et l'annuel, y sont bien.
 {

@@ -17,7 +17,9 @@
 //       data-tarif-m="…" / data-tarif-a="…"             les attributs data-m / data-a
 //                                                       du même élément (bascule)
 //     et, dans le FAQ en JSON-LD d'index.html, « Son lien double ton essai :
-//     N mois » (RE_FAQ_AMI), qui n'a pas de balise où poser data-nb.
+//     N mois » (RE_FAQ_AMI), qui n'a pas de balise où poser data-nb ;
+//     et les offres JSON-LD liées par « "identifier": "tarifs:<clé>" »
+//     (RE_JSONLD_PRIX), dans index.html et coachs.html.
 //   Un montant en euros qui n'est lié à AUCUNE clé est refusé par
 //   scripts/verif/tarifs.mjs, sauf dans un élément marqué data-hors-tarif
 //   (un prix du marché, pas le nôtre).
@@ -28,7 +30,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
-export const PAGES = ['index.html', 'terms.html', 'aide-apk.html', 'i/index.html', 'c/index.html'];
+export const PAGES = ['index.html', 'coachs.html', 'terms.html', 'aide-apk.html', 'i/index.html', 'c/index.html'];
 
 export function lireTarifs() { return JSON.parse(readFileSync(RACINE + 'tarifs.json', 'utf8')); }
 
@@ -75,8 +77,15 @@ export function appliquerPage(html, T) {
   // data-nb : sa phrase sur l'essai parrainé est réécrite ici, avec le même
   // nombre que la version visible.
   s = s.replace(RE_FAQ_AMI, (_t, avant, _n, apres) => avant + nombre(valeur(T, 'essai.moisParraine')) + apres);
+  // LES OFFRES DU JSON-LD (02/10/2026) : « "identifier": "tarifs:<clé>",
+  // "price": "…" » — le prix suit la clé, en notation JSON-LD (point décimal,
+  // deux décimales s'il y en a). index.html y annonçait 9.95 € pendant que
+  // la grille disait 9,50 € : rien ne les liait.
+  s = s.replace(RE_JSONLD_PRIX, (_t, avant, cle, apres) => avant + prixJsonLd(valeur(T, cle)) + apres);
   return s;
 }
+export const RE_JSONLD_PRIX = /("identifier": "tarifs:([a-z_.]+)", "price": ")[^"]*(")/g;
+const prixJsonLd = (n) => (Math.round(n * 100) % 100 === 0 ? String(Math.round(n)) : Number(n).toFixed(2));
 export const RE_FAQ_AMI = /("text": "Son lien double ton essai : )(\d+)( mois)/g;
 
 // ── L'app ─────────────────────────────────────────────────────────────────

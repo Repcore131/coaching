@@ -971,6 +971,10 @@ function _majTabbar(id){
   _majPastilleLifestyle();
 }
 function go(id){
+  // ?role=coach (02/10/2026) : le coach venu de coachs.html ne passe pas par
+  // l'accueil athlète, et le rôle est coché d'avance à l'inscription.
+  try{ id=rcRoleRoute(id); }catch(e){}
+  try{ if(id==='s-register') setTimeout(rcRolePreselection,80); }catch(e){}
   try{ lectureCacher(); }catch(e){}
   // La pastille « n envois en attente » suit le compte affiche (connexion,
   // deconnexion, changement de compte).

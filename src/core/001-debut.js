@@ -512,7 +512,7 @@ function lienWhatsApp(texte){
 // Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
 // clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
 // créer de dimension imprévue.
-const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
+const RCM_EVENEMENTS=['landing_view','coach_landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   'first_workout_started','first_workout_completed','first_bilan_completed',
