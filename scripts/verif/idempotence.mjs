@@ -55,6 +55,7 @@ const rap = await ev(`(async()=>{ try{
   const na=a.detail.filter(x=>!x.ok).map(x=>x.n);
   const b=await chargerTests();
   const nb=b.detail.filter(x=>!x.ok).map(x=>x.n);
+  const db=b.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:'')+(x.ou?'  ['+x.ou+']':''));
   const c=await chargerTests();
   const nc=c.detail.filter(x=>!x.ok).map(x=>x.n);
   const setA=new Set(na);
@@ -63,9 +64,12 @@ const rap = await ev(`(async()=>{ try{
           passe3:{total:c.total,echecs:c.echecs},
           fantomes2:nb.filter(x=>!setA.has(x)),
           fantomes3:nc.filter(x=>!setA.has(x)),
-          gueris:na.filter(x=>!nc.includes(x))}; }
+          gueris:na.filter(x=>!nc.includes(x)),
+          // LE MESSAGE ET LA LIGNE de chaque fantome de la passe 2 : le nom
+          // seul obligeait a rejouer pour savoir ce qui avait change.
+          detail2:db.filter(x=>!setA.has(x.split(' → ')[0].split('  [')[0]))}; }
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
-console.log(JSON.stringify(rap, null, 1).slice(0, 4000));
+console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
 // Sortie 0 seulement si les trois passes rendent le meme total et le meme
 // nombre d'echecs, sans fantome ni gueri.
