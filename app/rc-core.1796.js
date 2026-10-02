@@ -1083,10 +1083,10 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 // abonnés annuels en cours gardent le leur. Les nouveaux prix demandent de
 // NOUVEAUX plans, créés par `node scripts/paypal_plans.mjs --ecrire`, qui
 // colle leurs identifiants ici (et dans OFFRES_PAYPAL du Worker).
-// VIDES TANT QU'ILS NE SONT PAS CRÉÉS : l'offre annuelle n'est alors PAS
-// proposée (l'écran retombe sur le mensuel). Jamais un prix annoncé et un
-// autre prélevé par l'ancien plan.
-const PAYPAL_PLAN_ID_ANNUEL='';
+// Créés le 02/10/2026 par le travail « Plans PayPal » (GitHub Actions, run 15).
+// Une constante VIDE ferait disparaître l'offre annuelle (l'écran retombe sur
+// le mensuel) : jamais un prix annoncé et un autre prélevé par l'ancien plan.
+const PAYPAL_PLAN_ID_ANNUEL='P-142206031Y482520VNK732WI';
 // LES ANCIENS PLANS ANNUELS : plus vendus, mais leurs abonnés en cours y
 // restent. formuleDuPlan les reconnaît ; le Worker les garde dans OFFRES_PAYPAL.
 // (Essentielle annuel d'avant, puis Ultime annuel d'avant : leurs montants sont
@@ -1094,8 +1094,8 @@ const PAYPAL_PLAN_ID_ANNUEL='';
 const PAYPAL_PLAN_ID_ANNUEL_ANCIEN='P-92T09491KF550281RNK2LZWY';
 const PAYPAL_PLAN_ID_ULTIME_ANNUEL_ANCIEN='P-16Y44630WF304553UNK2LZXI';
 const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
-// Le nouvel annuel d'Ultime : vide tant que son plan n'est pas créé, voir plus haut.
-const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+// Le nouvel annuel d'Ultime (créé le 02/10/2026, voir plus haut).
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-4R440392FL765935VNK732WI';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.

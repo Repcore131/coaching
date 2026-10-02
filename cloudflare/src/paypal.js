@@ -63,6 +63,9 @@ export const OFFRES_PAYPAL = Object.freeze({
   'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true, periode: 'mois' },
   'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'], periode: 'mois' },
   'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'], periode: 'mois' },
+  // Les annuels remisés (02/10/2026), créés par scripts/paypal_plans.mjs.
+  'P-142206031Y482520VNK732WI': { formule: 'essentielle', montants: ['95.00'], periode: 'an' },   // RepCore Essentielle, annuel 95.00 EUR
+  'P-4R440392FL765935VNK732WI': { formule: 'ultime', montants: ['249.00'], periode: 'an' },       // RepCore Ultime, annuel 249.00 EUR
 });
 function montantValide(plan, montant, devise, role) {
   if (!plan || String(devise || '').toUpperCase() !== 'EUR') return false;
