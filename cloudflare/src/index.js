@@ -35,7 +35,7 @@ import { minute, consommerLot } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, cloudinarySigner, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
-import { servirPagePublique } from './pages.js';
+import { servirPagePublique, servirSitemapCoachs } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
@@ -344,6 +344,8 @@ async function servir(req, env, ctx) {
       } catch (e) { r.cloudinary = 'injoignable'; }
       return reponse(JSON.stringify(r));
     }
+    // LE PLAN DES VITRINES, cité par robots.txt (voir pages.js).
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/sitemap-coachs.xml') return await servirSitemapCoachs(req, { env, ctx });
     // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
     // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
     if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {

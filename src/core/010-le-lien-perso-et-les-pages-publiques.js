@@ -930,8 +930,9 @@ const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
 // (functions/attribution-calcul.js, SRC_CONNUS) et dans database.rules.json ;
 // scripts/verif/regles.mjs verifie que les trois disent la meme chose.
 // Les quatre portes du coach (02/10/2026) : blog, coachs (coachs.html), profil
-// (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c).
-const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','carte',
+// (le pied de /p), vitrine (le pied de /c, et le src par défaut de /c) ; et
+// les articles du blog (blog-cycle, blog-fiche : 20 caractères au plus).
+const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','blog','blog-cycle','blog-fiche','carte',
   'champion','charge','coachs','commissions','cycle','defi','diete','direct','dossier','duel','email',
   'envois','facebook','fond','instagram','invitation','journal','kit','logo','mes','muscles',
   'parrainage','pesees','photos','profil','pub','qr','rang','record','records','saison','seance',

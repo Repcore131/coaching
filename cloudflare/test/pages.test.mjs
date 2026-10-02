@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { analyserChemin, ogAthlete, ogCoach, injecterOg, servirPagePublique, _viderMemoire, ORIGINE, CACHE_S } from '../src/pages.js';
+import { analyserChemin, ogAthlete, ogCoach, injecterOg, servirPagePublique, servirSitemapCoachs, xmlSitemapCoachs, SITEMAP_COACHS_MAX, _viderMemoire, ORIGINE, CACHE_S } from '../src/pages.js';
 import worker from '../src/index.js';
 
 const racine = new URL('../../', import.meta.url);
@@ -246,4 +246,83 @@ test('marque : l’app et le Worker jugent une couleur exactement pareil', () =>
   for (const c of ['#E02020', '#000080', '#123', '#FFFFFF', '#1A1A1A', '#2E7D32', 'zz', '#7a1fa2', '#004d40'])
     for (const [fond, min] of [['#080808', 3], ['#f4f4f4', 4.5]])
       assert.deepEqual(ca(c, fond, min), couleurAccessible(c, fond, min), c + ' sur ' + fond);
+});
+
+// ══ LE RÉFÉRENCEMENT (02/10/2026) ═══════════════════════════════════════
+const canonical = (h) => { const m = /<link rel="canonical" href="([^"]*)">/.exec(h); return m ? m[1] : null; };
+const robots = (h) => { const m = /<meta name="robots" content="([^"]*)">/.exec(h); return m ? m[1] : null; };
+test('référencement : une vitrine publiée a son canonical, et reste indexable', async () => {
+  _viderMemoire();
+  const { f } = reseau({ vitrines: { 'kevin-guellec': { nom: 'Kévin Guellec' } } });
+  const h = await (await servirPagePublique(req('/coach/kevin-guellec?src=bio'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null })).text();
+  assert.equal(canonical(h), 'https://repcore-sync.web.app/coach/kevin-guellec', 'canonical sans paramètre');
+  assert.equal((h.match(/rel="canonical"/g) || []).length, 1);
+  assert.equal(robots(h), null, 'une vitrine ne porte pas noindex');
+  assert.ok(h.indexOf('rel="canonical"') < h.indexOf('</head>'), 'dans <head>');
+});
+test('référencement : un profil d’athlète est noindex (existant ou non), avec son canonical', async () => {
+  _viderMemoire();
+  const { f } = reseau({ profils_publics: { julie: JULIE } });
+  const h = await (await servirPagePublique(req('/@julie'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null })).text();
+  assert.equal(robots(h), 'noindex');
+  assert.equal((h.match(/name="robots"/g) || []).length, 1, 'une seule fois');
+  assert.equal(canonical(h), 'https://repcore-sync.web.app/@julie');
+  const v = await (await servirPagePublique(req('/@personne'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: reseau({}).f, cache: null })).text();
+  assert.equal(robots(v), 'noindex', 'profil inconnu : noindex aussi');
+  assert.equal(canonical(v), null, 'pas de canonical pour une page qui n’existe pas');
+  // La page statique de secours (p/?u=) le porte en dur ; la vitrine (c/), non.
+  assert.equal(robots(P), 'noindex');
+  assert.equal(robots(C), null);
+  // Sans la balise dans le gabarit, le Worker la pose quand même.
+  assert.equal(robots(injecterOg(P.replace(/<meta name="robots" content="noindex">\n?/, ''), null, 'athlete')), 'noindex');
+  assert.equal(robots(injecterOg(C, null, 'coach')), null);
+});
+// Un contrôle de forme XML sans dépendance : prologue, racine, balises
+// équilibrées et bien imbriquées, aucune esperluette nue.
+function xmlBienForme(x) {
+  if (!/^<\?xml version="1\.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/.test(x)) return 'prologue ou racine';
+  if (/&(?!(amp|lt|gt|quot|apos|#\d+);)/.test(x)) return 'esperluette nue';
+  const pile = [];
+  for (const m of x.replace(/^<\?xml[^>]*\?>/, '').matchAll(/<(\/?)([a-z]+)[^>]*>/g)) {
+    if (!m[1]) pile.push(m[2]); else if (pile.pop() !== m[2]) return 'balise ' + m[2] + ' mal fermée';
+  }
+  return pile.length ? 'non fermé : ' + pile.join() : '';
+}
+test('sitemap-coachs : les vitrines publiées, en XML valide, 500 au plus', async () => {
+  _viderMemoire();
+  const vus = [];
+  const vitrines = { 'kevin-guellec': { nom: 'Kévin Guellec', maj: Date.parse('2026-09-30T10:00:00Z') }, 'lea-fit': { nom: 'Léa & Co' },
+    'sans-nom': { phrase: 'brouillon' }, 'Majuscule': { nom: 'X' } };
+  const f = async (u) => { vus.push(String(u)); return new Response(JSON.stringify(vitrines), { status: 200 }); };
+  const r = await servirSitemapCoachs(req('/sitemap-coachs.xml'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('Content-Type'), /application\/xml/);
+  const x = await r.text();
+  assert.equal(xmlBienForme(x), '');
+  assert.deepEqual([...x.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]),
+    ['https://repcore-sync.web.app/coach/kevin-guellec', 'https://repcore-sync.web.app/coach/lea-fit']);
+  assert.match(x, /<lastmod>2026-09-30<\/lastmod>/);
+  assert.match(vus[0], /\/vitrines\.json\?orderBy=%22%24key%22&limitToFirst=500$/, 'lecture bornée à 500');
+  // Bornée aussi à l'écriture, et vide reste valide.
+  const beaucoup = {}; for (let i = 0; i < 620; i++) beaucoup['coach-' + String(i).padStart(4, '0')] = { nom: 'C' + i };
+  const xb = xmlSitemapCoachs(beaucoup);
+  assert.equal((xb.match(/<url>/g) || []).length, SITEMAP_COACHS_MAX);
+  assert.equal(xmlBienForme(xb), '');
+  assert.equal(xmlBienForme(xmlSitemapCoachs(null)), '');
+  // Base injoignable : 503 (le moteur repasse), jamais un plan vide.
+  _viderMemoire();
+  const p = await servirSitemapCoachs(req('/sitemap-coachs.xml'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: async () => { throw new Error('x'); }, cache: null });
+  assert.equal(p.status, 503);
+});
+test('sitemap-coachs : servi par le Worker, et cité par robots.txt', async () => {
+  _viderMemoire();
+  const sv = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ 'kevin-guellec': { nom: 'K' } }), { status: 200 });
+  try {
+    const r = await worker.fetch(req('/sitemap-coachs.xml'), { FIREBASE_DB_URL: BASE }, ctx());
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /<loc>https:\/\/repcore-sync\.web\.app\/coach\/kevin-guellec<\/loc>/);
+  } finally { globalThis.fetch = sv; }
+  const robotsTxt = readFileSync(new URL('robots.txt', racine), 'utf8');
+  assert.match(robotsTxt, /^Sitemap: https:\/\/repcore-serveur\.repcore\.workers\.dev\/sitemap-coachs\.xml$/m);
 });

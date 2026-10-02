@@ -23,6 +23,13 @@
 // *.workers.dev) et, toujours, une copie en mémoire de l'instance. La clé est
 // le CHEMIN seul : ?ref= et ?src= sont lus par la page, pas par le serveur.
 //
+// LE RÉFÉRENCEMENT (02/10/2026) : une vitrine de coach porte son canonical
+// (https://repcore-sync.web.app/coach/<slug>) et figure dans le plan des
+// vitrines (/sitemap-coachs.xml, cité par robots.txt) ; un profil d'athlète
+// porte son canonical ET <meta name="robots" content="noindex"> : il se
+// partage, il ne se cherche pas (vie privée). p/index.html le porte aussi en
+// dur, pour la page statique de secours.
+//
 // EN PANNE (base ou hébergement injoignables) : redirection vers la page
 // statique (p/?u=, c/?s=), qui marche sans aperçu. Jamais une erreur 500
 // devant quelqu'un qui a cliqué un lien.
@@ -113,6 +120,7 @@ export function balisesOg(o, type) {
     o.hauteur ? '<meta property="og:image:height" content="' + o.hauteur + '">' : '',
     '<meta property="og:image:alt" content="' + esc(o.imageAlt || o.titre) + '">',
     '<meta property="og:url" content="' + esc(o.url) + '">',
+    '<link rel="canonical" href="' + esc(o.url) + '">',
     '<meta name="twitter:card" content="summary_large_image">',
     '<meta name="twitter:title" content="' + esc(o.titre) + '">',
     '<meta name="twitter:image" content="' + esc(o.image) + '">',
@@ -130,6 +138,8 @@ export function injecterOg(html, o, type) {
     s = s.slice(0, a) + '<!--og:debut-->\n' + balisesOg(o, type) + '\n' + s.slice(b);
     s = s.replace(/<title>[^<]*<\/title>/, '<title>' + esc(o.titre) + '</title>');
   }
+  // UN PROFIL D'ATHLÈTE NE S'INDEXE PAS, qu'il existe ou non ; une vitrine, si.
+  if (type !== 'coach' && !/<meta\s+name="robots"/i.test(s)) s = s.replace(/<head>/i, '<head>\n<meta name="robots" content="noindex">');
   // Servie depuis le Worker, la page chercherait ses images ici : on la
   // rattache à l'hébergement. Une seule fois, juste après <head>.
   if (!/<base\s/i.test(s)) s = s.replace(/<head>/i, '<head>\n<base href="' + ORIGINE + '/">');
@@ -254,4 +264,51 @@ export async function servirPagePublique(req, o) {
       x.ctx.waitUntil(cache.put(new Request(cle), new Response(corps, { headers: entetes() })).catch(() => {}));
   } catch (e) { /* idem */ }
   return rendre(corps, 'neuf');
+}
+
+// ══ LE PLAN DES VITRINES (/sitemap-coachs.xml) ═══════════════════════════
+// Les vitrines publiées (/vitrines : lecture publique, une vitrine a un nom),
+// 500 au plus (les 500 premières par slug), avec leur date de mise à jour
+// (maj). Mis en cache 6 h comme les pages. Base injoignable : 503, pour que
+// le moteur repasse, plutôt qu'un plan vide qui ferait oublier les vitrines.
+export const SITEMAP_COACHS_MAX = 500;
+export function xmlSitemapCoachs(vitrines) {
+  const l = vitrines && typeof vitrines === 'object' ? vitrines : {};
+  const urls = Object.keys(l).filter((s) => SLUG_RE.test(s) && l[s] && typeof l[s] === 'object' && String(l[s].nom || '').trim())
+    .sort().slice(0, SITEMAP_COACHS_MAX).map((s) => {
+      const maj = Number(l[s].maj) > 0 ? new Date(Number(l[s].maj)).toISOString().slice(0, 10) : '';
+      return '  <url>\n    <loc>' + esc(ORIGINE + '/coach/' + s) + '</loc>\n' + (maj ? '    <lastmod>' + maj + '</lastmod>\n' : '') + '  </url>';
+    });
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    + urls.join('\n') + (urls.length ? '\n' : '') + '</urlset>\n';
+}
+/** Sert /sitemap-coachs.xml. `o` : {env, ctx, fetchImpl, cache, maintenant}. */
+export async function servirSitemapCoachs(req, o) {
+  const x = o || {};
+  const f = x.fetchImpl || fetch;
+  const t = typeof x.maintenant === 'function' ? x.maintenant() : Date.now();
+  const cache = x.cache !== undefined ? x.cache : (typeof caches !== 'undefined' ? caches.default : null);
+  const cle = new URL(req.url).origin + '/sitemap-coachs.xml';
+  const tete = req.method === 'HEAD';
+  const enTetes = { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=' + CACHE_S + ', s-maxage=' + CACHE_S, 'X-Content-Type-Options': 'nosniff' };
+  const rendre = (corps) => new Response(tete ? null : corps, { status: 200, headers: enTetes });
+  try { if (cache) { const r = await cache.match(new Request(cle)); if (r) return rendre(await r.text()); } } catch (e) { /* idem */ }
+  const m = _lireMemoire(cle, t);
+  if (m) return rendre(m);
+  const base = String((x.env && x.env.FIREBASE_DB_URL) || 'https://repcore-sync-default-rtdb.firebaseio.com').trim().replace(/\/$/, '');
+  let v;
+  try {
+    const r = await f(base + '/vitrines.json?orderBy=' + encodeURIComponent('"$key"') + '&limitToFirst=' + SITEMAP_COACHS_MAX);
+    if (!r || !r.ok) throw new Error('base ' + (r && r.status));
+    v = await r.json();
+  } catch (e) {
+    return new Response(tete ? null : 'Plan des vitrines indisponible, réessayer plus tard.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '3600', 'Cache-Control': 'no-store' } });
+  }
+  const corps = xmlSitemapCoachs(v);
+  _poserMemoire(cle, corps, t);
+  try {
+    if (cache && x.ctx && typeof x.ctx.waitUntil === 'function')
+      x.ctx.waitUntil(cache.put(new Request(cle), new Response(corps, { headers: enTetes })).catch(() => {}));
+  } catch (e) { /* idem */ }
+  return rendre(corps);
 }

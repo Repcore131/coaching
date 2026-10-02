@@ -38,7 +38,12 @@ jobs:
       url: ${{ steps.deploiement.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
+      # assembler_site.sh) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
       - uses: actions/configure-pages@v5
       - name: Assembler ce qui est public (et rien d'autre)
         run: |

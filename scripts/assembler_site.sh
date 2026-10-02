@@ -33,6 +33,9 @@ cp -a app blog i maj p c a "$DEST"/
 rm -f "$DEST/app/tests.js"
 cp -a index.html coachs.html legal.html privacy.html terms.html 404.html aide-apk.html "$DEST"/
 cp -a logo.png og-image.png robots.txt sitemap.xml "$DEST"/
+# LE PLAN DU SITE, régénéré sur la copie publiée : <lastmod> = dernier commit
+# de chaque page (scripts/sitemap.mjs). Sans node, la copie du dépôt reste.
+if command -v node >/dev/null 2>&1; then node scripts/sitemap.mjs "$DEST/sitemap.xml"; fi
 # LA CHARTE DES PAGES PUBLIQUES (01/10/2026) : i/, p/, c/ et 404.html la lient
 # en /charte.css. Ses polices sont lues dans app/fonts/, deja copie.
 cp -a charte.css "$DEST"/

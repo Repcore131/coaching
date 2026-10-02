@@ -12,7 +12,7 @@ const SRC_RE = /^[a-z0-9_-]{1,20}$/;
 // Un `src` bien forme mais inconnu devient 'autre'. La meme liste vit dans
 // l app (ATTR_SRC_CONNUS) et dans database.rules.json ; scripts/verif/regles.mjs
 // verifie que les trois disent la meme chose.
-const SRC_CONNUS = Object.freeze(["amb", "amis", "autre", "avant", "badge", "bilan", "bio", "blog", "carte",
+const SRC_CONNUS = Object.freeze(["amb", "amis", "autre", "avant", "badge", "bilan", "bio", "blog", "blog-cycle", "blog-fiche", "carte",
   "champion", "charge", "coachs", "commissions", "cycle", "defi", "diete", "direct", "dossier", "duel", "email",
   "envois", "facebook", "fond", "instagram", "invitation", "journal", "kit", "logo", "mes", "muscles",
   "parrainage", "pesees", "photos", "profil", "pub", "qr", "rang", "record", "records", "saison", "seance",

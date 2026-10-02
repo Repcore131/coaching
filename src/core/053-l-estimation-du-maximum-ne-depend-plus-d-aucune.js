@@ -2142,6 +2142,9 @@ const RCM_TUNNEL=[
   // pour le coach. Une seule étape, détaillée : l'entrée du tunnel reste le
   // total des deux, et le détail dit d'où vient le coach qui crée son espace.
   {cles:['landing_view','coach_landing_view'],lib:'Page de vente vue',detail:['landing_view','athlète','coach_landing_view','coach']},
+  // LE BLOG (02/10/2026) : une porte d'entrée à côté, pas une étape — on lit
+  // un article sans passer par la page de vente, et l'inverse.
+  {cles:['blog_view'],lib:'Article du blog lu',horsTunnel:true,neutre:true},
   // ── L'INSTALLATION, EN AMONT DE TOUT LE RESTE ───────────────────────
   // Dans l'ordre reel du parcours : on voit l'ecran, le navigateur propose,
   // on accepte, l'icone se pose. Trois lignes sortent de la chaine — voir

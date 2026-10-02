@@ -30,7 +30,8 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
-export const PAGES = ['index.html', 'coachs.html', 'terms.html', 'aide-apk.html', 'i/index.html', 'c/index.html'];
+export const PAGES = ['index.html', 'coachs.html', 'terms.html', 'aide-apk.html', 'i/index.html', 'c/index.html',
+  'blog/index.html', 'blog/cycle-menstruel-entrainement.html', 'blog/numeriser-fiche-programme-papier.html', 'blog/suivi-athletes-sans-tableur.html'];
 
 export function lireTarifs() { return JSON.parse(readFileSync(RACINE + 'tarifs.json', 'utf8')); }
 

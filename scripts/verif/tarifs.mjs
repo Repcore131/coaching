@@ -17,6 +17,8 @@
 //      prix de tarifs.json ;
 //   5. « sans engagement » sur la page de vente ou l'accueil /i ; un « N mois
 //      d'essai » qui n'est ni l'essai ni l'essai parrainé ;
+//   7. (02/10/2026) un "price" du JSON-LD (blocs analysés) qui ne vaut aucun
+//      montant de tarifs.json ;
 //   6. (02/10/2026) « ton premier mois » à côté d'« ami » ou d'« invit » dans
 //      index.html ou i/index.html, alors que l'essai parrainé ajoute des mois
 //      (moisEnPlus > 0) : l'invité a essai.moisParraine mois, pas un ; et le
@@ -65,8 +67,40 @@ function premierMoisAmi(html) {
   return out;
 }
 const texteVisible = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ');
+// LES PRIX DU JSON-LD, LUS COMME GOOGLE LES LIT (02/10/2026) : chaque bloc
+// <script type="application/ld+json"> est analysé, et chaque "price" doit
+// valoir un montant de tarifs.json. index.html y a annoncé 9.95 € pendant
+// que la grille disait 9,50 € : le texte n'était lié à rien.
+const PRIX_CONNUS = (() => {
+  const v = new Set();
+  const visiter = (o) => { for (const x of Object.values(o || {})) { if (typeof x === 'number') v.add(Math.round(x * 100)); else if (x && typeof x === 'object') visiter(x); } };
+  visiter(T);
+  v.add(Math.round(valeur(T, 'coaching.coaching_evolution.parMois') * 100));
+  return v;
+})();
+function prixJsonLdInconnus(html) {
+  const out = [];
+  const blocs = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+  blocs.forEach((m, i) => {
+    let j;
+    try { j = JSON.parse(m[1]); } catch (x) { out.push('JSON-LD n°' + (i + 1) + ' illisible (' + x.message + ')'); return; }
+    const visiter = (o) => {
+      if (Array.isArray(o)) return o.forEach(visiter);
+      if (!o || typeof o !== 'object') return;
+      for (const [k, x] of Object.entries(o)) {
+        if (k === 'price') {
+          const n = Number(String(x).replace(',', '.'));
+          if (!Number.isFinite(n) || !PRIX_CONNUS.has(Math.round(n * 100))) out.push('JSON-LD n°' + (i + 1) + ' : "price": "' + x + '" ne vaut aucun montant de tarifs.json');
+        } else visiter(x);
+      }
+    };
+    visiter(j);
+  });
+  return out;
+}
 function controlerPage(nom, html) {
   const err = [];
+  for (const x of prixJsonLdInconnus(html)) err.push(nom + ' : ' + x);
   if (appliquerPage(html, T) !== html) err.push(nom + ' : un montant lié ne vaut plus ce que dit tarifs.json — lance node scripts/tarifs.mjs');
   for (const x of montantsLibres(html)) err.push(nom + ' : prix écrit en dur, lié à aucune clé de tarifs.json : ' + x);
   if (nom === 'index.html' || nom === 'i/index.html') {
@@ -143,6 +177,10 @@ for (const p of PAGES) {
     if (!controlerPage('i/index.html', i.replace('</body>', '<script>var t=nom+" t\u2019invite : ton premier mois offert";</script></body>')).some((x) => /ton premier mois/.test(x)))
       e('auto-contrôle : « ton premier mois » d’un invité n’est pas vu dans i/index.html');
   }
+  // Le prix d'Essentielle remis à 9.95 dans le JSON-LD : il doit être vu par la lecture du JSON-LD.
+  const neuf95 = html.replace(/("identifier": "tarifs:essentielle\.mois", "price": ")[^"]*/, (_t, a) => a + '9.95');
+  if (neuf95 === html || !controlerPage('index.html', neuf95).some((x) => /JSON-LD n°\d+ : "price": "9\.95"/.test(x))) e('auto-contrôle : un prix JSON-LD à 9.95 n’est pas vu');
+  if (!controlerPage('index.html', html.replace('"price": "24.90"', '"price": "24.9O"')).some((x) => /24\.9O/.test(x))) e('auto-contrôle : un prix JSON-LD illisible n’est pas vu');
   const faux = html.replace(RE_FAQ_AMI, (_t, a, _n, b) => a + '7' + b);
   if (faux === html || !controlerPage('index.html', faux).some((x) => /ne vaut plus/.test(x))) e('auto-contrôle : le nombre du FAQ JSON-LD faussé n’est pas vu');
 }

@@ -36,7 +36,12 @@ jobs:
   deployer:
     runs-on: ubuntu-latest
     steps:
+      # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
+      # assembler_site.sh) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - uses: actions/setup-node@v4
         with:
