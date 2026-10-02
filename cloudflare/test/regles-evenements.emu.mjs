@@ -231,6 +231,18 @@ await test('saisons : les résultats, lus par leur titulaire, écrits par le Wor
   assert.equal((await appel(LEA, 'PUT', 'stats/saisons/hiver-2026', { total: 9999 })).statut, 401);
   assert.equal((await fetch(BASE + '/stats/saisons/hiver-2026.json?ns=' + NS)).status, 200);
 });
+await test('saisons_inscrits : « Je participe » — chacun s’inscrit lui-même, à une saison qui existe ; auto booléen (02/10/2026)', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'saisons_inscrits/hiver-2026/' + K(LEA), true)).statut, 200, 'soi-même');
+  assert.equal((await appel(LEA, 'GET', 'saisons_inscrits/hiver-2026/' + K(LEA))).statut, 200, 'se relit');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_inscrits/hiver-2026/' + K(KEV), true)).statut, 401, 'pas un autre');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_inscrits/hiver-2026/' + K(LEA), false)).statut, 401, 'false refusé');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_inscrits/hiver-2026/' + K(LEA), 'oui')).statut, 401, 'texte refusé');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_inscrits/inconnue-2026/' + K(LEA), true)).statut, 401, 'saison inconnue');
+  assert.equal((await appel(LEA, 'GET', 'saisons_inscrits/hiver-2026')).statut, 401, 'la liste ne se lit pas');
+  assert.equal((await appel(KEV, 'GET', 'saisons_inscrits/hiver-2026/' + K(LEA))).statut, 401, 'pas l’inscription d’un autre');
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/auto-2026', saison({ auto: true }))).statut, 200, 'auto: true');
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/auto2-2026', saison({ auto: 'oui' }))).statut, 401, 'auto non booléen');
+});
 await test('parcours_j21 : chacun écrit SES étapes restantes (1 à 7) sous un jour, personne ne lit', async () => {
   const j = 'parcours_j21/2026-10-19/';
   assert.equal((await appel(LEA, 'PUT', j + K(LEA), 2)).statut, 200);

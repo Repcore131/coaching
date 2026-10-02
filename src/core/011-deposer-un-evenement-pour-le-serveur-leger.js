@@ -1608,10 +1608,23 @@ function saisonValide(s){
   return !!(s&&typeof s==='object'&&s.nom&&Number(s.debut)>0&&Number(s.fin)>Number(s.debut)
     &&['seances','tonnage','serie','progressionPct'].indexOf(s.mesure)>=0&&Number(s.objectifPerso)>0);
 }
+/** PURE. Les saisons qui comptent : une saison AUTOMATIQUE (posée par le
+ *  serveur le 25, calendrier-saisons.js, `auto: true`) s'efface devant une
+ *  saison posée à la main par Kevin sur la même période. */
+function saisonsEffectives(liste){
+  const l=(liste&&typeof liste==='object')?liste:{}, out={};
+  for(const id of Object.keys(l)){
+    const s=l[id];
+    if(s&&s.auto===true&&Object.keys(l).some(k=>k!==id&&l[k]&&l[k].auto!==true&&saisonValide(l[k])
+      &&Number(l[k].debut)<=Number(s.fin)&&Number(l[k].fin)>=Number(s.debut))) continue;
+    out[id]=s;
+  }
+  return out;
+}
 /** PURE (liste donnée). La saison en cours à t : {id, …} ou null (la première qui a commencé). */
 function saisonActive(maintenant,liste){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const l=liste||_saisonsDuCache();
+  const l=saisonsEffectives(liste||_saisonsDuCache());
   const ids=Object.keys(l||{}).filter(id=>SAISON_ID_RE.test(id)&&saisonValide(l[id])&&t>=Number(l[id].debut)&&t<=Number(l[id].fin))
     .sort((a,b)=>Number(l[a].debut)-Number(l[b].debut));
   return ids.length?Object.assign({id:ids[0]},l[ids[0]]):null;
@@ -1688,6 +1701,53 @@ function htmlBanniereSaison(s,u,stats,maintenant){
     +(fait?'<button type="button" class="btn btn-sm sa-partager" onclick="partagerCarteSaison(\''+s.id+'\',this)">'+icon('share',14)+' <span>J’ai bouclé : partager ma carte</span></button>':'')
     +'</div>';
 }
+// ── LA SAISON QUI VIENT (02/10/2026) ─────────────────────────────────────
+// Du 25 au dernier jour du mois : « La saison Novembre de fer commence dans
+// 6 jours », et « Je participe ». S'inscrire, c'est s'abonner à ses
+// notifications : saisons_inscrits/<id>/<moi> (le Worker y choisit les
+// destinataires de mi-parcours et de J-2), et les notifications de l'appareil
+// demandées si elles ne sont pas encore permises.
+const SAISON_AVANT_JOUR=25;
+/** PURE. La saison du mois suivant, annoncée à partir du 25 : {id, …} ou null. */
+function saisonProchaine(maintenant,liste){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=new Date(t);
+  if(d.getDate()<SAISON_AVANT_JOUR) return null;
+  const debutMois=new Date(d.getFullYear(),d.getMonth()+1,1).getTime(), finMois=new Date(d.getFullYear(),d.getMonth()+2,1).getTime();
+  const l=saisonsEffectives(liste||_saisonsDuCache());
+  const ids=Object.keys(l).filter(id=>SAISON_ID_RE.test(id)&&saisonValide(l[id])&&Number(l[id].debut)>t
+    &&Number(l[id].debut)>=debutMois-864e5&&Number(l[id].debut)<finMois).sort((a,b)=>Number(l[a].debut)-Number(l[b].debut));
+  return ids.length?Object.assign({id:ids[0]},l[ids[0]]):null;
+}
+function _saisonInscriteCle(id){ return 'rc_saison_ins_'+id+'_'+String((currentUser&&currentUser.email)||''); }
+function saisonInscrite(id){ try{ return localStorage.getItem(_saisonInscriteCle(id))==='1'; }catch(e){ return false; } }
+/** PURE. Le bandeau « commence dans N jours ». */
+function htmlBandeauSaisonProchaine(s,inscrit,maintenant){
+  if(!s) return '';
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const n=Math.max(1,Math.ceil((Number(s.debut)-t)/864e5));
+  return '<div class="sa-banniere sa-prochaine" style="--sa-accent:'+saisonCouleur(s)+'" role="region" aria-label="'+escapeHtml(s.nom)+'">'
+    +'<div class="sa-tete"><span class="sa-edition">ÉDITION '+escapeHtml(saisonAnnee(s))+'</span><span class="sa-reste">J-'+n+'</span></div>'
+    +'<div class="sa-nom">La saison '+escapeHtml(s.nom)+' commence dans '+n+' jour'+(n>1?'s':'')+'</div>'
+    +(s.texteAccueil?'<p class="sa-texte">'+escapeHtml(s.texteAccueil)+'</p>':'')
+    +(inscrit?'<div class="sa-val">'+icon('coche',14)+' Tu participes : on te prévient au départ.</div>'
+      :'<button type="button" class="btn btn-red btn-sm sa-participer" onclick="saisonParticiper(\''+s.id+'\',this)">Je participe</button>')
+    +'</div>';
+}
+async function saisonParticiper(id,btn){
+  const u=currentUser;
+  if(!u||!SAISON_ID_RE.test(String(id||''))) return false;
+  if(btn) btn.disabled=true;
+  const moi=String(u.email||'').replace(/\./g,',');
+  const r=await _fbJson('saisons_inscrits/'+id+'/'+moi,'PUT',true);
+  if(!r.ok){ if(btn) btn.disabled=false; toast('Inscription non envoyée : réessaie une fois connecté.','var(--orange)'); return false; }
+  try{ localStorage.setItem(_saisonInscriteCle(id),'1'); }catch(e){}
+  // Les notifications de l'appareil : demandées si elles ne sont pas permises.
+  try{ if(typeof Notification!=='undefined'&&Notification.permission!=='granted') await pushActiverDepuisReglages(); }catch(e){}
+  toast(ICO.coche+' Inscrit : on te prévient au départ.','var(--green)');
+  try{ renderSaisonAccueil(); }catch(e){}
+  return true;
+}
 let _saisonMinuteur=null;
 async function renderSaisonAccueil(){
   const z=document.getElementById('clh-saison');
@@ -1696,7 +1756,12 @@ async function renderSaisonAccueil(){
   if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
   try{ await chargerSaisons(); }catch(e){}
   const s=saisonActive();
-  if(!s){ z.innerHTML=''; return false; }
+  if(!s){
+    // Rien en cours : la saison du mois suivant, à partir du 25.
+    const p=saisonProchaine();
+    z.innerHTML=p?htmlBandeauSaisonProchaine(p,saisonInscrite(p.id),Date.now()):'';
+    return !!p;
+  }
   let st=null; try{ st=await _saisonStatsLire(s.id); }catch(e){ st=null; }
   z.innerHTML=htmlBanniereSaison(s,u,st,Date.now());
   // LE COMPTE À REBOURS avance tant que l'accueil est affiché.

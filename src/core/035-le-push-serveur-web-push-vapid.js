@@ -2176,6 +2176,11 @@ function calculerWrapped(u,debut,fin,maintenant){
   const b=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
   w.badgesGagnes=(typeof BADGES_ACQUIS!=='undefined'?BADGES_ACQUIS.map(x=>x.id):Object.keys(b))
     .filter(id=>b[id]&&b[id].at>=debut&&b[id].at<fin);
+  // LES ÉDITIONS BOUCLÉES (02/10/2026) : saisons_resultats/<moi>/<id>, recopié
+  // dans u.saisonsReleves, dont la fin tombe dans la période.
+  const _rel=(u&&u.saisonsReleves&&typeof u.saisonsReleves==='object')?u.saisonsReleves:{};
+  w.editions=Object.keys(_rel).filter(id=>{ const x=_rel[id], f=Number(x&&x.fin)||Number(x&&x.termineLe)||0; return f>=debut&&f<fin; })
+    .sort((a,b)=>(Number(_rel[a].fin)||0)-(Number(_rel[b].fin)||0)).map(id=>String(_rel[id].nom||id).slice(0,60));
   // LE PROFIL. Les critères internes (préfixés _) servent aux règles puis
   // disparaissent : ils ne font pas partie de ce que la fonction promet.
   let nbSem=0;
@@ -2235,7 +2240,9 @@ function wrappedSlides(w,per){
        w.muscleTop?('Muscle n°1 : '+w.muscleTop.lib+' · '+w.muscleTop.series+' séries'):'']},
     {k:'records',sur:'RECORDS BATTUS',grand:w.records,dec:0,unite:w.records>1?'RECORDS':'RECORD',
      lignes:[r?(r.nom+' : '+_recKg(r.avant)+' → '+_recKg(r.apres)+' kg'):'Le prochain t’attend.',
-       nb?(nb+' badge'+(nb>1?'s':'')+' débloqué'+(nb>1?'s':'')):'']},
+       nb?(nb+' badge'+(nb>1?'s':'')+' débloqué'+(nb>1?'s':'')):'',
+       // L'édition du mois, bouclée (saisons_resultats) : « Édition Mars en fonte bouclée ».
+       (w.editions&&w.editions.length)?('Édition '+w.editions[0]+' bouclée'+(w.editions.length>1?' (+'+(w.editions.length-1)+')':'')):'']},
     {k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
      lignes:[w.jourPrefere?('Ton jour : le '+w.jourPrefere.lib):'',
        w.heureMoyenne?('Ton heure : '+w.heureMoyenne.lib):'']},

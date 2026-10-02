@@ -37,6 +37,7 @@ import * as XPS from './xp.js';
 import * as RT from './retention.js';
 import * as L from './ligues.js';
 import * as RA from './rappels.js';
+import * as CS from './calendrier-saisons.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -1702,7 +1703,9 @@ export function creerMetier(deps) {
   // des abonnés (1) et les push (pousserA diffère ce qui dépasse le budget).
   // Rend false quand le budget coupe : le travail reprend au réveil suivant.
   async function saisonsHeure(t) {
-    const toutes = (await _val('saisons')) || {};
+    // Une saison AUTOMATIQUE s'efface devant une saison posée à la main sur la
+    // même période (calendrier-saisons.js) : ni push, ni badge pour elle.
+    const toutes = CS.saisonsEffectives((await _val('saisons')) || {});
     const ids = Object.keys(toutes).filter((id) => SA.SAISON_ID_RE.test(id) && SA.saisonSuivie(toutes[id], t)).sort();
     for (const id of ids) {
       if (_reste() < 10) return false;
@@ -1723,11 +1726,30 @@ export function creerMetier(deps) {
       await db.ref().update(maj);
       if (quoi) {
         const abonnes = await db.ref('push').shallow();
-        const dest = SA.destinataires(quoi, s, abonnes, vals);
+        // Mi-parcours et J-2 : les inscrits (« Je participe ») et ceux qui ont avancé.
+        const inscrits = (quoi === 'mi' || quoi === 'j2') ? ((await _val('saisons_inscrits/' + id)) || {}) : undefined;
+        const dest = SA.destinataires(quoi, s, abonnes, vals, inscrits);
         await pousserA(dest.map((uid) => ({ uid, message: SA.messageSaison(quoi, id, s, uid, vals) })), { attendre: false });
       }
     }
     return true;
+  }
+
+  // ══ LA SAISON DU MOIS SUIVANT, LE 25 À 12 H (calendrier-saisons.js) ═════
+  // Si rien ne commence le mois prochain, la saison du modèle est posée,
+  // `auto: true`. L'objectif collectif suit les participants de la saison du
+  // mois en cours (stats/saisons/<id>.participants), 1 au moins.
+  async function saisonsAuto(t) {
+    const toutes = (await _val('saisons')) || {};
+    const p = paris(t);
+    const b = CS.bornesMois(p.mois, p.annee);
+    const enCours = CS.saisonsDuMois(toutes, b.debut, b.fin);
+    let participants = 0;
+    for (const id of enCours) participants += Number(await _val('stats/saisons/' + id + '/participants')) || 0;
+    const a = CS.saisonAuto(toutes, t, participants);
+    if (!a) return 'deja';
+    await db.ref('saisons/' + a.id).set(a.saison);
+    return a.id;
   }
 
   // ══ LA RÉTENTION (retention.js) — chaque nuit, par lots ════════════════
@@ -1999,8 +2021,9 @@ export function creerMetier(deps) {
       out.push({ g: 'duel', id, mesure: d.mesure, debut: Number(d.debut), fin: Number(d.fin), d });
     }
     if (Object.keys(oublis).length) await db.ref().update(oublis);
-    for (const id of Object.keys(saisons || {})) {
-      const x = saisons[id];
+    const _sEff = CS.saisonsEffectives(saisons || {});
+    for (const id of Object.keys(_sEff)) {
+      const x = _sEff[id];
       if (SA.saisonSuivie(x, t) && t <= Number(x.fin) + 864e5) out.push({ g: 'saison', id, mesure: x.mesure, debut: Number(x.debut), fin: Number(x.fin) });
     }
     if (coach && typeof coach === 'string') {
@@ -2393,6 +2416,6 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache, enfiler, enModeFile, abonnesPage,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes,
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, saisonsAuto, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes,
     lundiDe: (t, d) => L.lundiPlus(lundiParis(t), d || 0), liguesComptes, liguesUn, liguesFin, liguesEcritures, liguesApresSeance, liguesGroupes, liguesSamediUn, liguesLundiUn };
 }

@@ -1748,6 +1748,9 @@
         "badgeCle":          { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9-]{2,40}$/)" },
         "couleurAccent":     { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
         "texteAccueil":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+        // Posee par le Worker (calendrier-saisons.js, le 25 a 12 h) : une saison
+        // posee a la main par Kevin sur la meme periode l emporte toujours.
+        "auto":              { ".validate": "newData.isBoolean()" },
         "$autre":            { ".validate": false }
       }
     },
@@ -1775,6 +1778,18 @@
         "$k": {
           ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
           ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 1 && newData.val() <= 7 && newData.val() % 1 === 0"
+        }
+      }
+    },
+    // « JE PARTICIPE » (02/10/2026) : l inscription a une saison, par son
+    // titulaire, pour une saison qui existe. Elle choisit les destinataires de
+    // mi-parcours et de J-2 (le Worker la lit). Rien d autre : true, ou effacee.
+    "saisons_inscrits": {
+      "$id": {
+        "$k": {
+          ".read": "auth != null && $k === auth.token.email.replace('.', ',')",
+          ".write": "auth != null && $k === auth.token.email.replace('.', ',') && root.child('saisons/' + $id).exists()",
+          ".validate": "newData.isBoolean() && newData.val() === true"
         }
       }
     },

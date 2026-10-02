@@ -56094,6 +56094,68 @@ async function testExercices(){
       if(saisonReste(_SAS(),_SAT)!=='J-10') return _echec(saisonReste(_SAS(),_SAT));
       if(!/^J-1 · \d+ h$/.test(saisonReste({fin:_SAT+30*3600e3},_SAT))||saisonReste({fin:_SAT+90*60e3},_SAT)!=='1 h 30'||saisonReste({fin:_SAT-1},_SAT)!=='terminé') return _echec('rebours');
       return (saisonAnnee(_SAS())==='2026'&&saisonCouleur({couleurAccent:'bleu'})==='#E02020')?true:_echec('année, couleur');})());
+    // ══ 02/10/2026 — LE CALENDRIER DES SAISONS ═════════════════════════════
+    const _NOV=(x)=>Object.assign({nom:'Novembre de fer',debut:new Date(2026,10,1).getTime(),fin:new Date(2026,10,30,23,59).getTime(),mesure:'seances',
+      objectifPerso:10,objectifCollectif:96,badgeCle:'novembre-de-fer',couleurAccent:'#546E7A',texteAccueil:'Dix séances.',auto:true},x||{});
+    ok('Saisons : la saison du mois suivant s’annonce à partir du 25, la manuelle l’emporte',(()=>{
+      const l={'novembre-2026':_NOV()};
+      if(saisonProchaine(new Date(2026,9,24,20).getTime(),l)!==null) return _echec('annoncée le 24');
+      const p=saisonProchaine(new Date(2026,9,25,13).getTime(),l);
+      if(!p||p.id!=='novembre-2026') return _echec('le 25 : '+JSON.stringify(p));
+      if(saisonProchaine(new Date(2026,9,31,22).getTime(),l).id!=='novembre-2026') return _echec('le 31');
+      if(saisonProchaine(new Date(2026,9,25,13).getTime(),{'decembre-2026':_NOV({debut:new Date(2026,11,1).getTime(),fin:new Date(2026,11,31).getTime()})})!==null) return _echec('dans deux mois');
+      if(saisonProchaine(new Date(2026,11,26).getTime(),{'janvier-2027':_NOV({nom:'Résolution tenue',debut:new Date(2027,0,1).getTime(),fin:new Date(2027,0,31,23,59).getTime()})}).id!=='janvier-2027') return _echec('décembre → janvier');
+      // Kevin pose la sienne sur la même période : l'automatique s'efface.
+      const m={'novembre-2026':_NOV(),'fer-2026':_NOV({nom:'Le Fer de Kevin',auto:undefined,debut:new Date(2026,10,3).getTime()})};
+      const e=saisonsEffectives(m);
+      if(e['novembre-2026']||!e['fer-2026']) return _echec('effectives : '+Object.keys(e).join());
+      if(saisonProchaine(new Date(2026,9,26).getTime(),m).id!=='fer-2026') return _echec('prochaine manuelle');
+      if(saisonActive(new Date(2026,10,10).getTime(),m).id!=='fer-2026') return _echec('active manuelle');
+      // Sans manuelle, l'automatique compte comme une autre.
+      return saisonActive(new Date(2026,10,10).getTime(),{'novembre-2026':_NOV()}).id==='novembre-2026'?true:_echec('active auto');})());
+    ok('Saisons : le bandeau « commence dans N jours » et « Je participe »',(()=>{
+      const s=Object.assign({id:'novembre-2026'},_NOV());
+      const d=document.createElement('div');
+      d.innerHTML=htmlBandeauSaisonProchaine(s,false,new Date(2026,9,25,12).getTime());
+      const t=d.textContent;
+      if(!/La saison Novembre de fer commence dans 7 jours/.test(t)) return _echec(t);
+      const b=d.querySelector('button.sa-participer');
+      if(!b||b.textContent!=='Je participe'||!/saisonParticiper\('novembre-2026',this\)/.test(b.getAttribute('onclick'))) return _echec('bouton');
+      d.innerHTML=htmlBandeauSaisonProchaine(s,false,new Date(2026,9,31,23).getTime());
+      if(!/commence dans 1 jour$/.test(d.querySelector('.sa-nom').textContent)) return _echec('singulier : '+d.textContent);
+      d.innerHTML=htmlBandeauSaisonProchaine(s,true,new Date(2026,9,25,12).getTime());
+      if(d.querySelector('.sa-participer')||!/Tu participes/.test(d.textContent)) return _echec('inscrit');
+      return htmlBandeauSaisonProchaine(null)===''?true:_echec('sans saison');})());
+    okA('Saisons : « Je participe » écrit saisons_inscrits/<id>/<moi> = true, rien d’autre',async()=>{
+      const sv={f:window.fetch,ok:CLOUD.ok,tk:CLOUD._getToken,t:window.toast,p:window.pushActiverDepuisReglages,r:window.renderSaisonAccueil,u:currentUser};
+      const vus=[];
+      try{
+        currentUser={email:'zoe.l@t.fr',role:'athlete',sessions:[]};
+        window.toast=()=>{}; window.pushActiverDepuisReglages=async()=>true; window.renderSaisonAccueil=async()=>false;
+        CLOUD.ok=()=>true; CLOUD._getToken=async()=>'jeton';
+        window.fetch=async(url,i)=>{ vus.push({url:String(url),m:i&&i.method,corps:i&&i.body}); return {ok:true,status:200,json:async()=>true}; };
+        try{ localStorage.removeItem(_saisonInscriteCle('novembre-2026')); }catch(e){}
+        if(await saisonParticiper('Pas un id',null)!==false) return _echec('id invalide accepté');
+        if(!(await saisonParticiper('novembre-2026',null))) return _echec('refusé');
+        if(vus.length!==1||!/\/saisons_inscrits\/novembre-2026\/zoe,l@t,fr\.json\?auth=jeton$/.test(vus[0].url)||vus[0].m!=='PUT'||vus[0].corps!=='true') return _echec(JSON.stringify(vus));
+        return saisonInscrite('novembre-2026')?true:_echec('drapeau local');
+      }finally{
+        try{ localStorage.removeItem(_saisonInscriteCle('novembre-2026')); }catch(e){}
+        window.fetch=sv.f; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.toast=sv.t; window.pushActiverDepuisReglages=sv.p; window.renderSaisonAccueil=sv.r; currentUser=sv.u;
+      }
+    });
+    ok('Wrapped : « Édition <nom> bouclée » quand la saison du mois est relevée',(()=>{
+      const deb=new Date(2026,10,1).getTime(), fin=new Date(2026,11,1).getTime(), apres=new Date(2026,11,3).getTime();
+      const rel={'novembre-2026':{nom:'Novembre de fer',fin:new Date(2026,10,30,23,59).getTime(),termineLe:new Date(2026,10,20).getTime()},
+        'octobre-2026':{nom:'Octobre lourd',fin:new Date(2026,9,31,23,59).getTime()}};
+      const w=calculerWrapped({sessions:[],saisonsReleves:rel},deb,fin,apres);
+      if(JSON.stringify(w.editions)!=='["Novembre de fer"]') return _echec('éditions : '+JSON.stringify(w.editions));
+      const per={titre:'Novembre',cle:'2026-11',debut:deb,fin:fin};
+      const r=wrappedSlides(w,per).find(x=>x.k==='records');
+      if(!r||r.lignes.indexOf('Édition Novembre de fer bouclée')<0) return _echec(JSON.stringify(r&&r.lignes));
+      const v=calculerWrapped({sessions:[]},deb,fin,apres);
+      if(!Array.isArray(v.editions)||v.editions.length) return _echec('sans relevé');
+      return wrappedSlides(v,per).find(x=>x.k==='records').lignes.every(l=>!/Édition/.test(l))?true:_echec('ligne sans relevé');})());
     ok('Saisons : la bannière — compte à rebours, jauge perso, compteur collectif, « J’ai bouclé »',(()=>{
       const s=Object.assign({id:'hiver-2026'},_SAS());
       const S=j=>({date:_SAT-j*864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}});

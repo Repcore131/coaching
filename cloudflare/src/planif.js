@@ -137,6 +137,9 @@ export function travaux(M) {
     // Les prospects sans réponse depuis 48 h (lot C6) : CHAQUE HEURE, au coach.
     { nom: 'prospects', heure: true, quand: (p) => p.heure >= 8 && p.heure < 21, une: (t) => (M.prospectsRelanceHeure ? M.prospectsRelanceHeure(t) : null) },
     { nom: 'saisons', heure: true, quand: () => true, une: (t) => (M.saisonsHeure ? M.saisonsHeure(t) : null) },
+    // LA SAISON DU MOIS SUIVANT (02/10/2026) : le 25 à 12 h, depuis le
+    // calendrier des modèles, si Kevin n'en a pas posé une à la main.
+    { nom: 'saisons_auto', quand: (p) => p.date === 25 && apres(p, 12, 0), une: (t) => (M.saisonsAuto ? M.saisonsAuto(t) : null) },
     // LES LIGUES (01/10/2026) : le lundi 00 h 30, la clôture de la semaine et
     // les nouveaux groupes (un compte par pas, la répartition à la fin) ; le
     // samedi 11 h, la zone de bascule ; le lundi 9 h, le résultat. Les deux
