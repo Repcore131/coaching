@@ -9307,6 +9307,12 @@ function _palierHerite(u,etat){
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
+  // ⚠ UN PROGRAMME QUI VIENT D'ÊTRE ACHETÉ (02/10/2026) ouvre Ultime AVANT le
+  //   test du paiement cru, mais seulement PAIEMENT_RECENT_MS après l'achat :
+  //   le serveur relit la commande chez PayPal et écrit droits/ dans ce délai.
+  //   Au-delà, c'est droits/ qui décide, et l'écran boutique dit que l'achat
+  //   est en vérification (achatEnVerification) au lieu d'un cadenas muet.
+  if(programmeAchatRecent(u)) return 'ultime';
   const payeCru=(etat!=='absent')||!droitsServeurActif()||paiementRecent(u);
   if(!payeCru) return 'aucun';
   if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
@@ -9454,6 +9460,27 @@ function programmeOuvreUltime(u,maintenant){
     if(x&&Number(x.ouvertJusqu)>t) return true;
   }
   return false;
+}
+// PURE. Un programme acheté il y a moins de PAIEMENT_RECENT_MS, encore dans sa fenêtre.
+function programmeAchatRecent(u,maintenant){
+  const a=u&&u.programmesAchetes;
+  if(!a||typeof a!=='object') return false;
+  const t=Number(maintenant)||Date.now();
+  return Object.keys(a).some(k=>{ const x=a[k];
+    return !!(x&&Number(x.ouvertJusqu)>t&&t-Number(x.le)>=0&&t-Number(x.le)<PAIEMENT_RECENT_MS); });
+}
+// PURE. Un achat noté au dossier, que le serveur n'a pas (encore) ouvert :
+// passé PAIEMENT_RECENT_MS, droits/ lu et sans ultimeJusqu. C'est le cas d'un
+// paiement que le serveur n'a pas pu relire : l'écran le dit, avec qui écrire.
+function achatEnVerification(u,id,maintenant){
+  const a=u&&u.programmesAchetes;
+  const x=a&&typeof a==='object'?a[id]:null;
+  if(!x||!(Number(x.le)>0)) return false;
+  const t=Number(maintenant)||Date.now();
+  if(t-Number(x.le)<PAIEMENT_RECENT_MS) return false;
+  const d=droitsDe(u);
+  if(d.etat==='inconnu') return false;     // jamais lu : on ne dit rien sur un silence
+  return !(Number(d.ultimeJusqu)>0);
 }
 // PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
 function echeanceDe(u){
@@ -46545,7 +46572,15 @@ function _htmlActionProgramme(p){
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
-    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
+    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts){
+      // UN ACHAT QUE LE SERVEUR N'A PAS OUVERT (02/10/2026) : pas un cadenas
+      // muet, une phrase qui dit quoi faire.
+      h+=(()=>{ try{ return achatEnVerification(currentUser,p.id); }catch(e){ return false; } })()
+        ?'<div class="bq-note" data-verif="1">Achat en cours de vérification, écris à '
+          +'<a href="mailto:'+escapeHtml(CREATOR_EMAIL)+'?subject='+encodeURIComponent('Achat RepCore : '+(p.nom||p.id))+'">'
+          +escapeHtml(CREATOR_EMAIL)+'</a>.</div>'
+        :'<div class="bq-note">Programme acquis.</div>';
+    }
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
@@ -46744,7 +46779,9 @@ function _enregistrerAchat(id,ordre){
   //   est le repli tant que droits/ n'est pas relu, et elle vaut ce que
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  // LA DURÉE DE L'OFFRE (02/10/2026) : 3 mois pour un programme, 1 mois pour
+  // une révision — la même table que le serveur (PRIX_EMBARQUES).
+  const mois=(offre(p.service?'revision_prog':'boutique_prog')||{}).mois||(p.service?1:3);
   paiementRecentNoter(currentUser,'programme');
   currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
     ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};

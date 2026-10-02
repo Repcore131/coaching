@@ -176,6 +176,12 @@ function _palierHerite(u,etat){
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
+  // ⚠ UN PROGRAMME QUI VIENT D'ÊTRE ACHETÉ (02/10/2026) ouvre Ultime AVANT le
+  //   test du paiement cru, mais seulement PAIEMENT_RECENT_MS après l'achat :
+  //   le serveur relit la commande chez PayPal et écrit droits/ dans ce délai.
+  //   Au-delà, c'est droits/ qui décide, et l'écran boutique dit que l'achat
+  //   est en vérification (achatEnVerification) au lieu d'un cadenas muet.
+  if(programmeAchatRecent(u)) return 'ultime';
   const payeCru=(etat!=='absent')||!droitsServeurActif()||paiementRecent(u);
   if(!payeCru) return 'aucun';
   if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
@@ -323,6 +329,27 @@ function programmeOuvreUltime(u,maintenant){
     if(x&&Number(x.ouvertJusqu)>t) return true;
   }
   return false;
+}
+// PURE. Un programme acheté il y a moins de PAIEMENT_RECENT_MS, encore dans sa fenêtre.
+function programmeAchatRecent(u,maintenant){
+  const a=u&&u.programmesAchetes;
+  if(!a||typeof a!=='object') return false;
+  const t=Number(maintenant)||Date.now();
+  return Object.keys(a).some(k=>{ const x=a[k];
+    return !!(x&&Number(x.ouvertJusqu)>t&&t-Number(x.le)>=0&&t-Number(x.le)<PAIEMENT_RECENT_MS); });
+}
+// PURE. Un achat noté au dossier, que le serveur n'a pas (encore) ouvert :
+// passé PAIEMENT_RECENT_MS, droits/ lu et sans ultimeJusqu. C'est le cas d'un
+// paiement que le serveur n'a pas pu relire : l'écran le dit, avec qui écrire.
+function achatEnVerification(u,id,maintenant){
+  const a=u&&u.programmesAchetes;
+  const x=a&&typeof a==='object'?a[id]:null;
+  if(!x||!(Number(x.le)>0)) return false;
+  const t=Number(maintenant)||Date.now();
+  if(t-Number(x.le)<PAIEMENT_RECENT_MS) return false;
+  const d=droitsDe(u);
+  if(d.etat==='inconnu') return false;     // jamais lu : on ne dit rien sur un silence
+  return !(Number(d.ultimeJusqu)>0);
 }
 // PURE. L'echeance connue, pour l'affichage — 0 quand il n'y en a pas.
 function echeanceDe(u){

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { creerBase } from '../src/base.js';
 import { creerMetier } from '../src/metier.js';
-import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, moisApres, RESIL_AVANCE_MS } from '../src/paypal.js';
+import { creerPaypal, recevoirWebhook, jetonPaypal, oublierJetonPaypal, OFFRES_PAYPAL, moisApres, RESIL_AVANCE_MS, PRIX_EMBARQUES } from '../src/paypal.js';
 import { spawnSync } from 'node:child_process';
 import { fausseBase } from './fausse-base.mjs';
 import { BUDGET_REQUETE } from '../src/index.js';
@@ -885,6 +885,64 @@ await test('la landing, les CGV, l’écran de résiliation et le Worker disent 
   assert.match(index, /url\.pathname === '\/resiliation' && req\.method === 'POST'/);
   const regles = readFileSync(new URL('../../database.rules.json', import.meta.url), 'utf8');
   assert.match(regles, /"resiliations":\s+\{ "\.read": false, "\.write": false \}/);
+});
+
+// ══ LE CATALOGUE EMBARQUÉ : FONDATIONS ET LA RÉVISION (02/10/2026) ══════════
+const commandeProg = (custom, v) => ({ status: 'COMPLETED', purchase_units: [{ custom_id: custom, amount: { currency_code: 'EUR', value: v } }] });
+const captureProg = (cmd, v) => ({ id: 'C' + (++n), amount: { value: v, currency_code: 'EUR' }, supplementary_data: { related_ids: { order_id: cmd } } });
+
+await test('achat de Fondations SANS nœud boutique/ : validé au prix embarqué, ultimeJusqu = +3 mois', async () => {
+  const w = monde({ users: { 'jul@t,fr': { role: 'athlete' } } }, { commandes: { ORDFOND0001: commandeProg('jul@t,fr|fondations', '14.90') } });
+  assert.equal(w.F.lire('boutique'), null, 'aucun nœud boutique');
+  assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', captureProg('ORDFOND0001', '14.90')))).texte, 'premier_paiement');
+  assert.equal(w.F.lire('droits/jul@t,fr/ultimeJusqu'), T0 + 3 * MOIS);
+  assert.equal(w.F.lire('users/jul@t,fr/programmesAchetes/fondations/ouvertJusqu'), T0 + 3 * MOIS);
+  assert.equal(w.F.lire('users/jul@t,fr/programmesAchetes/fondations/prixCts'), 1490);
+  assert.equal(w.F.lire('droits/jul@t,fr/programmes/fondations'), T0);
+});
+
+await test('achat d’une révision de programme : validée à 40 €, ultimeJusqu = +1 mois ; par l’appel de l’app aussi', async () => {
+  const w = monde({ users: { 'jul@t,fr': { role: 'athlete' } } }, { commandes: { ORDREVI0001: commandeProg('jul@t,fr|revision-programme', '40.00') } });
+  // L'appel de l'app (verifierAchatProgramme), sans attendre le webhook.
+  const r = await w.PP.verifierAchat('jul@t,fr', 'ORDREVI0001', 'revision-programme').catch((e) => e);
+  // La commande du faux PayPal n'a pas de capture : on passe par le webhook, même chemin.
+  assert.ok(r instanceof Error && /pas encore encaissé/.test(r.message), String(r && r.message));
+  assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', captureProg('ORDREVI0001', '40.00')))).texte, 'premier_paiement');
+  assert.equal(w.F.lire('droits/jul@t,fr/ultimeJusqu'), T0 + 1 * MOIS);
+  assert.equal(w.F.lire('users/jul@t,fr/programmesAchetes/revision-programme/ouvertJusqu'), T0 + 1 * MOIS);
+});
+
+await test('mauvais montant pour un article embarqué : payé, refusé, rien d’ouvert ; un programme inconnu non plus', async () => {
+  let w = monde({ users: { 'jul@t,fr': { role: 'athlete' } } }, { commandes: { ORDFOND0002: commandeProg('jul@t,fr|fondations', '1.00') } });
+  assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', captureProg('ORDFOND0002', '1.00')))).texte, 'achat_non_compte');
+  assert.equal(w.F.lire('droits/jul@t,fr'), null);
+  assert.equal(w.F.lire('users/jul@t,fr/programmesAchetes'), null);
+  w = monde({ users: { 'jul@t,fr': { role: 'athlete' } } }, { commandes: { ORDINCO0001: commandeProg('jul@t,fr|inconnu', '14.90') } });
+  assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', captureProg('ORDINCO0001', '14.90')))).texte, 'achat_non_compte');
+  assert.equal(w.F.lire('droits/jul@t,fr'), null);
+  // Un nœud boutique/ garde la main sur le prix embarqué (le coach a changé le prix).
+  w = monde({ users: { 'jul@t,fr': { role: 'athlete' } }, boutique: { fondations: { prixCts: 1990 } } }, { commandes: { ORDFOND0003: commandeProg('jul@t,fr|fondations', '14.90') } });
+  assert.equal((await w.envoyer(evt('PAYMENT.CAPTURE.COMPLETED', captureProg('ORDFOND0003', '14.90')))).texte, 'achat_non_compte');
+});
+
+await test('PRIX_EMBARQUES suit le catalogue de l’app (RC_PROGRAMMES, offreRevision) et tarifs.json', async () => {
+  const idx = readFileSync(new URL('../../app/index.html', import.meta.url), 'utf8');
+  const code = readFileSync(new URL('../../app/' + idx.match(/rc-core\.\d+\.js/)[0], import.meta.url), 'utf8');
+  const tarifs = JSON.parse(readFileSync(new URL('../../tarifs.json', import.meta.url), 'utf8'));
+  // Fondations : son prix dans RC_PROGRAMMES.
+  const fond = code.slice(code.indexOf("id:'fondations'"), code.indexOf("id:'fondations'") + 4000);
+  const prix = Number((fond.match(/prixCts:(\d+)/) || [])[1]);
+  assert.equal(PRIX_EMBARQUES.fondations.prixCts, prix, 'Fondations : ' + prix + ' dans l’app');
+  assert.equal(PRIX_EMBARQUES.fondations.mois, tarifs.coaching.boutique_prog.mois);
+  // La révision : offreRevision lit revision_prog de tarifs.json, sous REVISION_ID.
+  assert.match(code, /const REVISION_ID='revision-programme';/);
+  assert.match(code, /function offreRevision\(\)\{\s*const o=offre\('revision_prog'\)/);
+  assert.equal(PRIX_EMBARQUES['revision-programme'].prixCts, Math.round(tarifs.coaching.revision_prog.prix * 100));
+  assert.equal(PRIX_EMBARQUES['revision-programme'].mois, tarifs.coaching.revision_prog.mois);
+  // Les autres articles du catalogue sont encore « à compléter » : aucun prix embarqué ne les ouvre.
+  for (const id of ['prise-de-masse', 'seche', 'force', 'reprise']) assert.ok(!PRIX_EMBARQUES[id], id);
+  // L'app note la même durée : la révision au mois de revision_prog.
+  assert.match(code, /offre\(p\.service\?'revision_prog':'boutique_prog'\)/);
 });
 
 console.log(ok + ' tests passés — au plus ' + MAX_WEBHOOK + ' sous-requêtes dans un webhook (plafond Cloudflare : 50, exigé : 46)');

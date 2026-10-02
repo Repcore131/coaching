@@ -35,7 +35,19 @@ import { ErreurAppel } from './appels.js';
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
 const EN_COURS_MAX_MS = 10 * 60 * 1000;
-const PROGRAMME_MS = 3 * MOIS_MS;          // OFFRES.boutique_prog.mois de l'app
+// ══ LES PRIX ET DURÉES EMBARQUÉS (02/10/2026) ═════════════════════════════
+// Fondations et la révision de programme sont vendus par le CATALOGUE DE
+// L'APP (RC_PROGRAMMES, offreRevision), pas par le nœud boutique/ : sans ce
+// nœud, achat() n'avait aucun prix à comparer, refusait l'achat, et le client
+// payait sans que droits/ s'ouvre. Ici, le même prix et la même durée que
+// l'app — un test (paypal.test.mjs) relit rc-core et refuse tout écart.
+// Un programme publié par le coach (boutique/<id>/prixCts) garde son prix ;
+// sa durée est celle d'un programme de la boutique.
+export const PRIX_EMBARQUES = Object.freeze({
+  fondations: Object.freeze({ prixCts: 1490, mois: T.coaching.boutique_prog.mois }),
+  'revision-programme': Object.freeze({ prixCts: Math.round(T.coaching.revision_prog.prix * 100), mois: T.coaching.revision_prog.mois }),
+});
+export const MOIS_BOUTIQUE = T.coaching.boutique_prog.mois;
 const cleEmail = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 const net = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
@@ -507,7 +519,12 @@ export function creerPaypal(ctx) {
       await ranger('commande_' + (net(idCommande) || 'inconnue'), evt);
       return 'orphelin';
     }
-    const prixCts = prog && !/[.#$\[\]\/]/.test(prog) ? await lire('boutique/' + prog + '/prixCts') : null;
+    const progSur = prog && !/[.#$\[\]\/]/.test(prog);
+    const prixBoutique = progSur ? await lire('boutique/' + prog + '/prixCts') : null;
+    // Sans nœud boutique/, le prix embarqué (Fondations, révision) : voir PRIX_EMBARQUES.
+    const embarque = progSur && Object.prototype.hasOwnProperty.call(PRIX_EMBARQUES, prog) ? PRIX_EMBARQUES[prog] : null;
+    const prixCts = prixBoutique != null ? prixBoutique : (embarque ? embarque.prixCts : null);
+    const mois = prixBoutique == null && embarque ? embarque.mois : MOIS_BOUTIQUE;
     const role = await lire('users/' + cle + '/role');
     const devise = (x) => String((x && x.currency_code) || '').toUpperCase();
     const valide = role !== 'coach' && Number.isFinite(Number(prixCts)) && Number(prixCts) > 0
@@ -528,16 +545,18 @@ export function creerPaypal(ctx) {
       if (!g.committed) return 'deja_ouvert';
     }
     try {
-      return await achatOuvrir(evt, { cle, prog, prixCts, valide, idCommande, ress });
+      return await achatOuvrir(evt, { cle, prog, prixCts, mois, valide, idCommande, ress });
     } catch (e) {
       if (garde) await garde.remove().catch(() => null);
       throw e;
     }
   }
-  async function achatOuvrir(evt, { cle, prog, prixCts, valide, idCommande, ress }) {
+  async function achatOuvrir(evt, { cle, prog, prixCts, mois, valide, idCommande, ress }) {
     const premier = valide ? await premierPaiement(cle, null, ress) : false;
-    // LE PROGRAMME OUVRE ULTIME TROIS MOIS, par-dessus le palier de
-    // l'abonnement (ultimeJusqu), sans le remplacer.
+    // LE PROGRAMME OUVRE ULTIME LE TEMPS DE SON OFFRE (boutique_prog.mois : 3,
+    // revision_prog.mois : 1), par-dessus le palier de l'abonnement
+    // (ultimeJusqu), sans le remplacer.
+    const PROGRAMME_MS = (Number(mois) > 0 ? Number(mois) : MOIS_BOUTIQUE) * MOIS_MS;
     if (valide) {
       const t = now();
       exigerBudget('achat');

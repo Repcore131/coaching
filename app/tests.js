@@ -36257,6 +36257,52 @@ async function testExercices(){
         return /programmeRecu/.test(sm)
           ?true:_echec('la porte ne demande pas le suivi');})());
 
+      // ══ LOT 49 — UN ACHAT PAYÉ N'EST JAMAIS UN CADENAS MUET ══════════════
+      ok('LOT 49 — un achat récent ouvre Ultime 72 h ; au-delà, sans droits/, la boutique dit « Achat en cours de vérification »',(()=>{
+        const _su=currentUser, _dr=localStorage.getItem(DROITS_CLE), _pr=localStorage.getItem(PAIEMENT_RECENT_CLE);
+        try{
+          localStorage.removeItem(PAIEMENT_RECENT_CLE);
+          const t=Date.now(), p=programmeDuCatalogue('fondations');
+          if(!p) return _echec('Fondations absent du catalogue');
+          const u=(le)=>({id:'a49',email:'a49@t.fr',role:'athlete',status:'FREE',exMuscles:{},exAlias:{},sessions:[],
+            programmesAchetes:{fondations:{le:le,prixCts:1490,ordre:'X',ouvertJusqu:le+90*864e5}}});
+          // DANS LES 72 H, même sans la trace locale du paiement (autre appareil) et droits/ lu vide : Ultime.
+          _droitsPoser('a49@t.fr',null,true);
+          if(_palierHerite(u(t-3600e3),'absent')!=='ultime') return _echec('un achat d’il y a une heure n’ouvre pas Ultime');
+          // AU-DELÀ : le serveur décide ; pas d'Ultime sur la foi du dossier.
+          if(_palierHerite(u(t-4*864e5),'absent')==='ultime'&&droitsServeurActif()) return _echec('un achat de quatre jours ouvre encore Ultime sans le serveur');
+          // LA BOUTIQUE : passé 72 h, droits/ lu sans ultimeJusqu → la phrase et l'adresse.
+          currentUser=u(t-4*864e5);
+          if(!achatEnVerification(currentUser,'fondations')) return _echec('l’achat non ouvert n’est pas reconnu');
+          let h=_htmlActionProgramme(p);
+          const d=document.createElement('div'); d.innerHTML=h;
+          if(d.textContent.indexOf('Achat en cours de vérification, écris à '+CREATOR_EMAIL)<0) return _echec('pas de message : '+d.textContent);
+          const a=d.querySelector('[data-verif] a[href^="mailto:"]');
+          if(!a||a.getAttribute('href').indexOf('mailto:'+CREATOR_EMAIL)!==0) return _echec('pas de lien vers '+CREATOR_EMAIL);
+          // DANS LES 72 H : « Programme acquis », pas d'alarme.
+          currentUser=u(t-3600e3);
+          if(achatEnVerification(currentUser,'fondations')) return _echec('l’alarme sonne avant 72 h');
+          // OUVERT PAR LE SERVEUR (ultimeJusqu) : « Programme acquis ».
+          currentUser=u(t-4*864e5);
+          _droitsPoser('a49@t.fr',{palier:'aucun',ultimeJusqu:t+80*864e5},false);
+          if(achatEnVerification(currentUser,'fondations')) return _echec('l’alarme sonne alors que droits/ est ouvert');
+          d.innerHTML=_htmlActionProgramme(p);
+          if(d.textContent.indexOf('Programme acquis.')<0) return _echec('ouvert : '+d.textContent);
+          // JAMAIS LU (droits inconnus) : on ne dit rien sur un silence.
+          localStorage.removeItem(DROITS_CLE);
+          if(achatEnVerification(currentUser,'fondations')) return _echec('l’alarme sonne sur un droits/ jamais lu');
+          // LA RÉVISION SE NOTE POUR UN MOIS, comme le serveur.
+          if(String(_enregistrerAchat).indexOf("offre(p.service?'revision_prog':'boutique_prog')")<0) return _echec('la révision dure trois mois dans l’app');
+          // LES QUATRE PROGRAMMES À COMPLÉTER RESTENT FERMÉS (aucun contenu fourni).
+          for(const id of ['prise-de-masse','seche','force','reprise'])
+            if(programmeVendable(programmeDuCatalogue(id))) return _echec(id+' est vendable sans contenu');
+          return true;
+        } finally {
+          currentUser=_su;
+          try{ if(_dr===null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,_dr); }catch(e){}
+          try{ if(_pr===null) localStorage.removeItem(PAIEMENT_RECENT_CLE); else localStorage.setItem(PAIEMENT_RECENT_CLE,_pr); }catch(e){}
+        }})());
+
       // ══ LOT 48 — L'ANNUEL REMISÉ, ET LE VERROU QUI NE SE RÉPÈTE PAS ══════
       ok('LOT 48 — rcVerrouBloc(\'volume\') ne contient jamais deux fois le même montant ; l’annuel affiché est une vraie économie',(()=>{
         const d=document.createElement('div'); d.innerHTML=rcVerrouBloc('volume');

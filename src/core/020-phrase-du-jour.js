@@ -1757,7 +1757,15 @@ function _htmlActionProgramme(p){
   if(acquis){
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
-    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
+    if(!RC_BOUTIQUE_GRATUITE&&p.prixCts){
+      // UN ACHAT QUE LE SERVEUR N'A PAS OUVERT (02/10/2026) : pas un cadenas
+      // muet, une phrase qui dit quoi faire.
+      h+=(()=>{ try{ return achatEnVerification(currentUser,p.id); }catch(e){ return false; } })()
+        ?'<div class="bq-note" data-verif="1">Achat en cours de vérification, écris à '
+          +'<a href="mailto:'+escapeHtml(CREATOR_EMAIL)+'?subject='+encodeURIComponent('Achat RepCore : '+(p.nom||p.id))+'">'
+          +escapeHtml(CREATOR_EMAIL)+'</a>.</div>'
+        :'<div class="bq-note">Programme acquis.</div>';
+    }
   } else {
     h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
@@ -1956,7 +1964,9 @@ function _enregistrerAchat(id,ordre){
   //   est le repli tant que droits/ n'est pas relu, et elle vaut ce que
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
-  const mois=(offre('boutique_prog')||{}).mois||3;
+  // LA DURÉE DE L'OFFRE (02/10/2026) : 3 mois pour un programme, 1 mois pour
+  // une révision — la même table que le serveur (PRIX_EMBARQUES).
+  const mois=(offre(p.service?'revision_prog':'boutique_prog')||{}).mois||(p.service?1:3);
   paiementRecentNoter(currentUser,'programme');
   currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
     ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};
