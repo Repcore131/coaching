@@ -115,6 +115,5 @@ jobs:
       - name: Suite navigateur
         env:
           SUITE_ATTENDUS: scripts/verif/echecs-attendus.json
-          VW: '1280'
-          VH: '2000'
+        # La fenetre (412x4000, mobile) est fixee par suite.mjs lui-meme (lot 51).
         run: timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223

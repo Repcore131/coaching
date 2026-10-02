@@ -211,6 +211,41 @@ jobs:
       - name: Verifier la CSP de l'app
         run: node scripts/verif/csp.mjs
 
+      # ── LA LIVRAISON ECHOUE SI UN TEST ECHOUE (lot 51, 02/10/2026) ──────────
+      # Jusqu'ici la suite navigateur tournait dans un job a part, qui ne
+      # retenait pas le deploiement : un test rouge laissait partir le site.
+      # Les trois etapes ci-dessous sont AVANT « Deployer » : la moindre
+      # assertion fausse (Worker, fonctions, app) et rien n'est envoye.
+      - name: Tests du serveur léger
+        working-directory: cloudflare
+        run: node --test "test/*.test.mjs"
+
+      # ⚠ Le motif, et non le dossier : `node --test functions/test/` prend le
+      #   dossier pour un module sous Node 22 et echoue sans jouer un test.
+      - name: Tests des fonctions
+        run: node --test "functions/test/*.test.js"
+
+      # La RACINE du depot est servie, et non app/ : la suite lit
+      # ../database.rules.json. suite.mjs fixe lui-meme la fenetre (412x4000,
+      # mobile) et sort en 1 au premier echec, sur une suite interrompue ou sur
+      # moins de 1000 tests joues ; --tolere=N admet N echecs connus.
+      - name: Suite intégrée
+        env:
+          SUITE_ATTENDUS: scripts/verif/echecs-attendus.json
+        run: |
+          set -e
+          python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &
+          google-chrome --headless=new --no-sandbox --disable-gpu --no-first-run \
+            --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >"$RUNNER_TEMP/chrome.log" 2>&1 &
+          pret=non
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9223/json/version >/dev/null; then pret=oui; break; fi
+            sleep 1
+          done
+          if [ "$pret" != oui ]; then cat "$RUNNER_TEMP/chrome.log"; echo "::error::Chrome ne repond pas sur 9223."; exit 1; fi
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/app/index.html >/dev/null && break; sleep 0.5; done
+          timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -249,31 +284,5 @@ jobs:
           # part par .github/workflows/cloudflare.yml.
           rm -f "$RUNNER_TEMP/cle.json"
 
-  # LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) dans le Chrome du
-  # runner. UN JOB A PART, qui ne retient PAS le deploiement : elle dure
-  # plusieurs minutes, et le site ne doit pas attendre. Rouge, elle se voit
-  # dans l'onglet Actions ; la corriger reste la priorite.
-  suite-navigateur:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Banc de synchronisation
-        run: node scripts/verif/banc-sync.mjs
-      - name: Suite navigateur (Chrome headless)
-        run: |
-          set -e
-          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
-          if [ -z "$CHROME" ]; then
-            echo "::warning::Pas de Chrome sur ce runner : suite navigateur non jouee."
-            exit 0
-          fi
-          # La RACINE du depot, et non app/ : la suite lit ../database.rules.json.
-          python3 -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
-          "$CHROME" --headless=new --no-sandbox --disable-gpu --no-first-run \
-            --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >/dev/null 2>&1 &
-          for i in $(seq 1 30); do curl -s http://127.0.0.1:9223/json/version >/dev/null && break; sleep 1; done
-          VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223
+  # L'ANCIEN JOB « suite-navigateur », NON BLOQUANT, EST RETIRE (lot 51) : la
+  # suite joue desormais dans « deployer », avant « Deployer », et l'arrete.
