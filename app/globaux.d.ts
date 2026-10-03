@@ -38,6 +38,12 @@ declare const DB: { get(cle: string): any; set(cle: string, valeur: any): boolea
 declare const CLOUD: { pushOne(cle: string, dossier: any): any; [k: string]: any };
 declare let currentUser: any;
 declare function saveUser(): any;
+// La clé d'un nom d'exercice : MAJUSCULES, sans accent, espaces simples.
+declare function exKey(nom: string): string;
+// Le tempo prescrit lu (lot T3), ou null. « X » n'existe que sur la montée.
+declare function tempoLu(txt: any):
+  ({ exc: number; bas: number; haut: number; canon: string }
+    & ({ conX: true; con: null } | { conX: false; con: number })) | null;
 declare function segmentsVideo(v: any): any[];
 declare function segBarreValide(b: any, debutMs: number, finMs: number): any;
 declare function segPoseValide(p: any, debutMs: number, finMs: number): any;
