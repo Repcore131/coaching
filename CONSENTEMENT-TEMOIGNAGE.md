@@ -57,7 +57,7 @@ photo interdit toute publication d'image.*
 
 ### 3. Où cela sera publié
 
-- La page d'accueil publique : https://repcore131.github.io/coaching/
+- La page d'accueil publique : https://repcore-sync.web.app/
 - L'écran d'abonnement à l'intérieur de l'application
 
 Ces pages sont **accessibles à tous et indexables par les moteurs de

@@ -8251,7 +8251,11 @@ async function testExercices(){
           // Les <meta> vivent APRÈS un premier <script> dans le head :
           // découper à partir de <script> ne les excluait pas. On les retire
           // explicitement — c est le seul cas légitime d URL absolue.
-          const js=prod.replace(/<meta[^>]*>/gi,'');
+          // LE RENVOI DE L'ANCIENNE ADRESSE (05/10/2026) nomme l'ancien hote pour
+          // le RECONNAITRE et en partir : ce n'est pas un lien construit en dur.
+          // Ce bloc-la, et lui seul, est retire avant le controle.
+          const js=prod.replace(/<meta[^>]*>/gi,'')
+            .replace(/<script>\(function\(\)\{try\{if\(location\.hostname!=='repcore131\.github\.io'\)return;[^<]*<\/script>/,'');
           if(js.length<100000) return _echec('production trop courte');
           if(/repcore131\.github\.io/i.test(js))
             return _echec('URL de dépôt codée en dur dans le JS');
@@ -20475,7 +20479,9 @@ async function testExercices(){
                                      // depuis l'arrivee et depuis les ecrans
                                      // fermes (lots 2 et 4). RepCore n'y envoie
                                      // rien : la ligne de la politique le dit.
-            'w3.org','repcore131.github.io'];
+            // repcore-sync.web.app est l'adresse de l'app elle-meme : le renvoi
+            // depuis l'ancienne adresse y mene (05/10/2026), rien n'y est envoye.
+            'w3.org','repcore131.github.io','repcore-sync.web.app'];
           // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
           //
           // Il cherchait dans le source BRUT. Une adresse citée en commentaire —
@@ -53758,7 +53764,8 @@ async function testExercices(){
       // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
       // La vitrine a grandi (formules et « Ça m'intéresse », lot C6, 29/09/2026) : 16 Ko,
       // toujours sans ressource externe ; le tableau des offres (tarifs.json) se lit en parallèle.
-      if(p.length>20000||c.length>16000) return _echec('pages trop lourdes');
+      // + 200 octets chacune le 05/10/2026 : le renvoi depuis l'ancienne adresse.
+      if(p.length>20200||c.length>16200) return _echec('pages trop lourdes');
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',

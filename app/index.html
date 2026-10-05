@@ -30,6 +30,11 @@
      PREMIER SCRIPT DU DOCUMENT, avant meme la capture de l'invitation : un
      document qu'on va remplacer ne merite pas qu'on analyse ses quatre
      megaoctets. -->
+<!-- L'ANCIENNE ADRESSE (05/10/2026). repcore-sync.web.app est l'adresse unique.
+     Sous l'ancienne (GitHub Pages) : sans compte ouvert, on renvoie tout de suite a
+     la meme page (le lien d'invitation garde ses parametres) ; avec un compte
+     ouvert, on ne renvoie pas d'office, l'app affiche un bandeau (rc-core). -->
+<script>(function(){try{if(location.hostname!=='repcore131.github.io')return;var d='https://repcore-sync.web.app'+location.pathname.replace(/^\/coaching/,'')+location.search+location.hash,s=null;try{s=localStorage.getItem('rc_session');}catch(e){}if(!s||s==='null'){location.replace(d);return;}window.RC_ANCIENNE_ADRESSE=d;}catch(e){}})();</script>
 <script>
 try{
   var _rcP=location.pathname;
@@ -42,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1785';
+window.RC_BUILD='1786';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-05';
@@ -181,10 +186,10 @@ try{
      reel du depot : c'est ainsi qu'on a trouve le 404 de icons/. -->
 <meta name="description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://repcore131.github.io/coaching/">
+<meta property="og:url" content="https://repcore-sync.web.app/">
 <meta property="og:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta property="og:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
-<meta property="og:image" content="https://repcore131.github.io/coaching/og-image.png">
+<meta property="og:image" content="https://repcore-sync.web.app/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="RepCore : Ton coach te suit à chaque séance">
@@ -193,7 +198,7 @@ try{
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta name="twitter:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
-<meta name="twitter:image" content="https://repcore131.github.io/coaching/og-image.png">
+<meta name="twitter:image" content="https://repcore-sync.web.app/og-image.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 <script>
@@ -457,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1785.css">
+<link rel="stylesheet" href="./rc-style.1786.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -6017,5 +6022,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1785.js"></script>
+<script src="./rc-core.1786.js"></script>
 </body></html>

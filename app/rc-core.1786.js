@@ -130106,3 +130106,33 @@ async function chargerTests(){
   }
   return testExercices();
 }
+
+// ══ L'ANCIENNE ADRESSE : LE BANDEAU DU COMPTE OUVERT (05/10/2026) ══════════
+//
+// repcore-sync.web.app devient l'adresse unique ; l'ancienne (GitHub Pages) va
+// s'arreter. Qui n'a pas de compte ouvert est renvoye des l'arrivee
+// (app/index.html). Qui en a un ne l'est pas : il arriverait deconnecte, et ce
+// que son appareil n'a pas encore envoye resterait derriere. On le lui dit, et
+// c'est lui qui passe, une fois sa synchronisation faite.
+(function(){
+  let dest=null;
+  try{ dest=window.RC_ANCIENNE_ADRESSE||null; }catch(e){ dest=null; }
+  if(!dest) return;
+  const poser=()=>{
+    try{
+      if(document.getElementById('rc-anc-adr')) return;
+      const d=document.createElement('div');
+      d.id='rc-anc-adr'; d.setAttribute('role','status');
+      d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#1a0000;border-bottom:1px solid #E02020;color:#fff;font:600 13px/1.45 Montserrat,sans-serif;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;text-align:center';
+      const t=document.createElement('span');
+      t.textContent='RepCore change d’adresse : celle-ci va s’arrêter. Ouvre la nouvelle, connecte-toi avec les mêmes identifiants et installe l’app, tes données te suivent. ';
+      const a=document.createElement('a');
+      a.href=dest.replace(/[?#].*$/,''); a.target='_blank'; a.rel='noopener';
+      a.textContent='Ouvrir repcore-sync.web.app';
+      a.style.cssText='color:#fff;text-decoration:underline;font-weight:800;white-space:nowrap';
+      d.appendChild(t); d.appendChild(a);
+      document.body.appendChild(d);
+    }catch(e){}
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',poser); else poser();
+})();
