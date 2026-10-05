@@ -125,6 +125,7 @@ PAGES.recap = {
         <div class="card col4"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Boutique</h3></div></div>${monthBars(months, [{ label: 'Boutique', color: 'var(--text)', values: H6.map(x => x.boutique) }], { fmt: v => fmtN(v) + ' €', width: 340 })}</div>
       </div>
 
+      ${recapRevenus(mk)}
       <div class="card" style="margin-top:18px"><div class="race-h"><div><div class="eyebrow">Par commercial · ${monthLabel(mk)} comparé à ${MOIS[Number(pm.slice(5)) - 1].toLowerCase()}</div><h3>L’équipe</h3></div></div>
         ${rows.length ? `<div class="rc-sales">${rows.map(r => `<div class="rc-sale"><span>${esc(fullName(r.u))}</span><div class="rc-bars"><i class="prev" style="width:${r.prev.contrats / salesMax * 100}%"></i><i class="cur" style="width:${r.cur.contrats / salesMax * 100}%"></i></div><b>${fmtN(r.cur.contrats)}</b><small>${delta(r.cur.contrats, r.prev.contrats)}</small></div>`).join('')}</div>
           <div class="legend" style="margin:6px 0 16px"><span><i style="background:var(--fp)"></i>Contrats ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><span><i style="background:var(--surface-2);border:1px solid var(--muted)"></i>${MOIS[Number(pm.slice(5)) - 1].toLowerCase()}</span></div>

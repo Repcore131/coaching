@@ -76,13 +76,15 @@ function funnelView(mk, userId) {
   return `<div class="g12">
     <div class="card col7"><div class="card-head"><h3>Cohorte de ${monthLabel(mk).toLowerCase()}</h3><span class="spacer"></span>${f.enCours ? '<span class="tag is-info">en cours</span>' : ''}</div>
       ${bars}<p class="small" style="margin:10px 0 0">Transformation à 60 jours : <b>${fmtTaux(f.taux)}</b>${f.delai != null ? ` · délai médian ${plur(Math.round(f.delai), 'jour', 'jours')}` : ''} · signés : <b>${fmtE(f.euros)}</b> sur 12 mois</p>
-      ${fuitePhrase(f, fc, who) ? `<p class="alert" style="margin-top:10px">${ico('alert')}<span>${fuitePhrase(f, fc, who)}</span></p>` : ''}</div>
+     ${fuitePhrase(f, fc, who) ? `<p class="alert" style="margin-top:10px">${ico('alert')}<span>${fuitePhrase(f, fc, who)}</span></p>` : ''}</div>
     <div class="card col5"><div class="card-head"><h3>Prospects chauds non convertis</h3><span class="spacer"></span><button class="btn sm" data-act="guestNew">${ico('plus')} Invité</button></div>
       ${hot.slice(0, 8).map(p => `<div class="row opp-mini"><div class="spacer"><b>${esc(pName(p))}</b><div class="muted small">créé le ${dm(p.creeLe)}${p.statut ? ' · ' + esc(p.statut) : ''}${p.commercialId && S.users[p.commercialId] ? ' · ' + esc(S.users[p.commercialId].first) : ''}</div></div>${p.phone ? `<a class="btn sm" href="tel:${esc(p.phone)}">${ico('phone')}</a>` : ''}<button class="btn sm ghost" data-act="prospectNote" data-id="${p.id}">Noter</button></div>`).join('') || '<p class="muted small">Aucun prospect chaud en attente.</p>'}</div>
     ${isManager() && !userId ? `<div class="card col7"><h3>Par commercial</h3><div class="table-wrap"><table class="t"><thead><tr><th>Commercial</th><th class="num">Créés</th><th class="num">Convertis</th><th class="num">Taux</th><th class="num">Délai médian</th><th class="num">Signés (12 mois)</th></tr></thead><tbody>
       ${byUser.map(x => `<tr><td>${esc(fullName(x.u))}</td><td class="num">${x.f.crees}</td><td class="num">${x.f.contrats}</td><td class="num">${fmtTaux(x.f.taux)}</td><td class="num">${x.f.delai == null ? 'n.d.' : plur(Math.round(x.f.delai), 'j', 'j')}</td><td class="num">${fmtE(x.f.euros)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aucun prospect attribué.</td></tr>'}</tbody></table></div></div>` : ''}
     <div class="card ${isManager() && !userId ? 'col5' : 'col12'}"><h3>Par provenance</h3>${flag.sansProvenance && !Object.keys(prov).some(Boolean) ? '<p class="muted small">Provenance non renseignée dans l’export.</p>' : `<div class="table-wrap"><table class="t"><thead><tr><th>Provenance</th><th class="num">Créés</th><th class="num">Convertis</th><th class="num">Taux</th><th class="num">Signés</th></tr></thead><tbody>
       ${Object.entries(prov).sort((a, b) => b[1].n - a[1].n).map(([k, o]) => `<tr><td>${esc(k || 'Non renseignée')}</td><td class="num">${o.n}</td><td class="num">${o.c}</td><td class="num">${fmtTaux(o.n ? o.c / o.n : null)}</td><td class="num">${fmtE(Math.round(o.e))}</td></tr>`).join('')}</tbody></table></div>`}</div>
+ 
+    <div class="col12">${shopCard(mk, userId)}</div>
   </div>`;
 }
 ACTIONS.prospectNote = el => {
@@ -258,4 +260,139 @@ function dunSpeed(mk) {
     <label class="row small" style="gap:8px">Minutes par appel <input class="input sm" style="width:70px" type="number" min="1" max="30" value="${mins}" data-change="minutesAppel" ${isManager() ? '' : 'disabled'}></label></div>`;
 }
 ACTIONS.minutesAppel = el => { const v = Math.max(1, Math.min(30, Number(el.value) || 4)); db.set(['clubs', CLUB.id, 'minutesAppel'], v); };
+ACTIONS.clubCfg = el => { const k = el.dataset.k; let v = el.value.trim(); if (k !== 'parrainReward') { const n = parseMontant(v); v = Number.isNaN(n) ? null : el.dataset.pct ? n / 100 : n; } db.set(['clubs', CLUB.id, k], v || null); toast('Enregistré'); };
 ACTIONS.dunSmsSet = el => { db.set(['clubs', CLUB.id, 'dunSms'], el.value.trim() || null); toast('Message enregistré'); };
+
+// ── Montée en gamme et anciens membres (onglets d'Action Rétention) ───────
+const REV_OUT = { propose: 'Montée proposée', accepte: 'Montée acceptée', appele: 'Appelé', offre: 'Offre de retour envoyée', revenu: 'Revenu au club', refus: 'Pas intéressé' };
+const lastRev = (cid, type) => Object.values(S.loyalty || {}).filter(a => a.clientId === cid && a.type === type).sort((a, b) => b.at - a.at)[0] || null;
+function upsellTargets(clubId) {
+  const up = prixGamme(clubId, 'premium'), ul = prixGamme(clubId, 'ultimate');
+  return activeClients(clubId).filter(c => !(Number(c.balance) > 0) && c.start && ageDays(c.start) >= 60 && ageDays(c.start) <= 400 && ['basic', 'premium'].includes(gammeOf(c.offer)))
+    .map(c => { const next = gammeOf(c.offer) === 'basic' ? ['Premium', up] : ['Ultimate', ul]; const gap = next[1] ? Math.round((next[1] - mensualite(c)) * 100) / 100 : 0; return { c, vers: next[0], gap, last: lastRev(c.id, 'upsell') }; })
+    .filter(x => x.gap > 0 && !(x.last && ['accepte', 'refus'].includes(x.last.outcome))).sort((a, b) => a.c.start.localeCompare(b.c.start));
+}
+function loyUpsell() {
+  const L = upsellTargets(CLUB.id);
+  return `<p class="muted small">Adhérents en Basic ou Premium depuis 60 à 400 jours, sans impayé, du plus ancien au plus récent. Gain affiché sur 12 mois.</p>
+    ${L.length ? `<div class="card">${L.slice(0, 60).map(x => `<div class="row wrap opp-mini"><span class="opp-ico">${ico('sparkle')}</span><div class="spacer"><b>${esc(x.c.name || '')}</b><div class="muted small">${esc(x.c.offer || '')} depuis le ${dmy(x.c.start)} · vers ${x.vers} : +${fmtE(x.gap)} par mois, ${fmtE(x.gap * 12)} sur 12 mois${x.last ? ' · ' + REV_OUT[x.last.outcome].toLowerCase() + ' ' + ago(x.last.at) : ''}</div></div>${clientPhone(x.c) ? `<a class="btn sm icon" href="tel:${esc(clientPhone(x.c))}">${ico('phone')}</a>` : ''}<button class="btn sm" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="propose">Proposé</button><button class="btn sm primary" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="accepte">Accepté</button><button class="btn sm ghost" data-act="revAct" data-c="${x.c.id}" data-t="upsell" data-o="refus">Pas intéressé</button></div>`).join('')}</div>`
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune cible de montée en gamme', text: 'Il faut des offres classées par gamme (Mes clubs > Réglages > Offres et prix) et l’export Vente d’abonnements.' })}</div>`}`;
+}
+const seasonWindow = (d = today()) => { const md = d.slice(5); return (md >= '12-20' || md <= '01-31') || (md >= '08-20' && md <= '09-30'); };
+function loyAnciens() {
+  const seg = UI.ancSeg || 'all'; const all = reactivables(CLUB.id); const L = all.filter(x => seg === 'all' || x.seg === seg);
+  const n = s => all.filter(x => x.seg === s).length;
+  return `${seasonWindow() ? `<div class="alert" style="margin-bottom:12px">${ico('flag')}<div><b>Fenêtre forte : campagne de retour conseillée</b>Fin décembre à fin janvier et fin août à fin septembre, les anciens reviennent plus facilement.</div></div>` : ''}
+    <div class="row wrap" style="margin-bottom:10px">${segm('ancSeg', [['all', `Tous ${all.length}`], ['3-6', `3 à 6 mois ${n('3-6')}`], ['6-12', `6 à 12 mois ${n('6-12')}`], ['12-24', `12 à 24 mois ${n('12-24')}`]], seg)}<span class="spacer"></span><button class="btn sm" data-act="ancCsv">${ico('download')} CSV du segment</button></div>
+    ${L.length ? `<div class="card">${L.slice(0, 80).map(x => { const last = lastRev(x.c.id, 'reactivation'); return `<div class="row wrap opp-mini"><span class="opp-ico">${ico('repeat')}</span><div class="spacer"><b>${esc(x.c.name || '')}</b><div class="muted small">${esc(x.c.offer || 'offre inconnue')} · ${fmtE(mensualite(x.c))} par mois · sorti le ${dmy(x.c.endDate)}${last ? ' · ' + REV_OUT[last.outcome].toLowerCase() + ' ' + ago(last.at) : ''}</div></div>${clientPhone(x.c) ? `<a class="btn sm icon" href="tel:${esc(clientPhone(x.c))}">${ico('phone')}</a>` : ''}${['appele', 'offre', 'revenu', 'refus'].map(o => `<button class="btn sm ${o === 'revenu' ? 'primary' : o === 'refus' ? 'ghost' : ''}" data-act="revAct" data-c="${x.c.id}" data-t="reactivation" data-o="${o}">${{ appele: 'Appelé', offre: 'Offre envoyée', revenu: 'Revenu', refus: 'Pas intéressé' }[o]}</button>`).join('')}</div>`; }).join('')}</div>`
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucun ancien membre à recontacter', text: 'Déposez l’export Évolution clients (detail-perte) : chaque sortant devient une fiche, à recontacter 3 à 24 mois après sa sortie.' })}</div>`}`;
+}
+const segm = (k, o, cur) => seg(k, o, cur);
+ACTIONS.revAct = el => {
+  const id = newId(); const c = S.clients[el.dataset.c]; const ops = [[['loyalty', id], { id, clientId: c.id, type: el.dataset.t, outcome: el.dataset.o, userId: ME.id, at: Date.now() }]];
+  if (el.dataset.o === 'refus' && el.dataset.t === 'reactivation') ops.push([['clients', c.id, 'noReactivation'], true]);
+  db.batch(ops); toast(REV_OUT[el.dataset.o]);
+  if (el.dataset.o === 'accepte' || el.dataset.o === 'revenu') celebrate(REV_OUT[el.dataset.o], c.name || '', { kind: 'win' });
+};
+ACTIONS.ancCsv = () => {
+  const seg0 = UI.ancSeg || 'all'; const L = reactivables(CLUB.id).filter(x => seg0 === 'all' || x.seg === seg0);
+  downloadFile(`fitpulse-anciens-${seg0}-${today()}-CONFIDENTIEL.csv`, toCsv(['Nom', 'Téléphone', 'E-mail', 'Ancienne offre', 'Date de sortie'], L.map(x => [x.c.name || '', clientPhone(x.c) || '', x.c.email || '', x.c.offer || '', x.c.endDate ? dmy(x.c.endDate) : ''])), 'text/csv;charset=utf-8');
+  db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export_csv', club: CLUB.id, type: 'anciens', lignes: L.length });
+};
+// Revenus des anciens : retour constaté (contrat importé) dans les 90 jours suivant la première action.
+function anciensRevenus(clubId, mk) {
+  return clubClients(clubId).filter(c => c.returnedAt && c.returnedAt.slice(0, 7) === mk).map(c => { const first = Object.values(S.loyalty || {}).filter(a => a.clientId === c.id && a.type === 'reactivation').sort((a, b) => a.at - b.at)[0]; return { c, suivi: !!first && dateOf(c.returnedAt) - first.at <= 90 * 864e5 }; });
+}
+
+// ── Boutique : attachement à la signature et à J+15 ───────────────────────
+function shopAttach(clubId, mk, userId = null) {
+  return memo(`shop|${clubId}|${mk}|${userId}`, () => {
+    const r = rangeOf('month', mk); const news = clubClients(clubId).filter(c => c.start && c.start >= r.from && c.start <= r.to && c.num && (!userId || c.sellerId === userId));
+    const buys = {}; Object.values(S.entries).forEach(e => { if (e.clientNum && e.clubId === clubId && ['nutrition', 'accessoires'].includes(e.kpiId) && entryCounts(e)) (buys[String(e.clientNum)] = buys[String(e.clientNum)] || []).push(e); });
+    const at = c => (buys[String(c.num)] || []); const inWin = (c, a, b) => at(c).some(e => e.date >= addDays(c.start, a) && e.date <= addDays(c.start, b));
+    const sig = news.filter(c => inWin(c, 0, 1)).length; const mature = news.filter(c => addDays(c.start, 30) <= today()); const j15 = mature.filter(c => inWin(c, 2, 30)).length;
+    const buyers = Object.values(buys).filter(L => L.some(e => e.date >= r.from && e.date <= r.to)); const spent = buyers.reduce((s, L) => s + L.filter(e => e.date >= r.from && e.date <= r.to).reduce((t, e) => t + Number(e.value), 0), 0);
+    return { n: news.length, sig: news.length ? sig / news.length : null, j15: mature.length ? j15 / mature.length : null, panier: buyers.length ? spent / buyers.length : null, parActif: activeClients(clubId).length ? spent / activeClients(clubId).length : null, sansNum: !!(deepGet(S, ['rsm', 'flags', clubId, 'factures']) || {}).sansNumClient && !Object.keys(buys).length };
+  });
+}
+function shopCard(mk, userId = null) {
+  const s = shopAttach(CLUB.id, mk, userId), c = userId ? shopAttach(CLUB.id, mk, null) : null;
+  if (s.sansNum) return `<div class="card"><h3>Boutique et nouveaux adhérents</h3><p class="muted small">Export sans numéro client : utilisez Factures & avoirs (gestion).</p></div>`;
+  const line = (l, v, ref) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">${l}</span><b>${v}</b>${ref != null ? `<span class="muted small" style="margin-left:8px">club ${ref}</span>` : ''}</div>`;
+  return `<div class="card"><h3>Boutique et nouveaux adhérents</h3><p class="muted small">${plur(s.n, 'nouvel adhérent', 'nouveaux adhérents')} ce mois-ci.</p>
+    ${line('Achat le jour de la signature', fmtTaux(s.sig), c ? fmtTaux(c.sig) : null)}${line('Achat entre J+2 et J+30', fmtTaux(s.j15), c ? fmtTaux(c.j15) : null)}${line('Panier moyen par acheteur', s.panier == null ? 'n.d.' : fmtE(s.panier), c && c.panier != null ? fmtE(c.panier) : null)}${userId ? '' : line('Boutique par adhérent actif', s.parActif == null ? 'n.d.' : fmtE(s.parActif), null)}</div>`;
+}
+
+// ── Parrainage ────────────────────────────────────────────────────────────
+function parrainageStats(clubId, mk) {
+  const r = rangeOf('month', mk); const news = clubClients(clubId).filter(c => c.start && c.start >= r.from && c.start <= r.to);
+  const par = news.filter(isParrainage); const y = addDays(today(), -365);
+  const tops = {}; clubClients(clubId).filter(c => c.start >= y).forEach(c => { const p = parrainOf(c); if (p) tops[p] = (tops[p] || 0) + 1; });
+  return { n: par.length, part: news.length ? par.length / news.length : null, valeur: Math.round(par.reduce((s, c) => s + mensualite(c) * dureeVieMois(clubId), 0)), tops: Object.entries(tops).filter(([, n]) => n >= 2).map(([id, n]) => ({ c: S.clients[id], n })).filter(x => x.c).sort((a, b) => b.n - a.n) };
+}
+
+// ── Bloc « Revenus » du récapitulatif ─────────────────────────────────────
+function recapRevenus(mk) {
+  const clubId = CLUB.id; const act = activeClients(clubId); const G = ['basic', 'premium', 'ultimate', 'autre'];
+  const mix = G.map(g => { const L = act.filter(c => gammeOf(c.offer) === g); return { g, n: L.length, mrr: L.reduce((s, c) => s + mensualite(c), 0) }; });
+  const nT = act.length || 1, mT = mix.reduce((s, x) => s + x.mrr, 0) || 1;
+  const signed = m => { const r = rangeOf('month', m); return clubClients(clubId).filter(c => c.start && c.start >= r.from && c.start <= r.to); };
+  const prem = m => { const L = signed(m); return L.length ? L.filter(c => ['premium', 'ultimate'].includes(gammeOf(c.offer))).length / L.length : null; };
+  const r = rangeOf('month', mk); const ups = Object.values(S.entries).filter(e => e.clubId === clubId && e.kpiId === 'upsell' && e.date >= r.from && e.date <= r.to && entryCounts(e));
+  const sellers = {}; signed(mk).forEach(c => { if (!c.sellerId) return; const o = sellers[c.sellerId] = sellers[c.sellerId] || { n: 0, p: 0 }; o.n++; if (['premium', 'ultimate'].includes(gammeOf(c.offer))) o.p++; });
+  const anc = anciensRevenus(clubId, mk); const par = parrainageStats(clubId, mk); const reward = (S.clubs[clubId] || {}).parrainReward;
+  const b2b = act.filter(c => c.company); const mrrB2b = b2b.reduce((s, c) => s + mensualite(c), 0);
+  return `<div class="g12" style="margin-top:18px">
+    <div class="card col6"><h3>Mix des abonnements</h3><div class="table-wrap"><table class="t"><thead><tr><th>Gamme</th><th class="num">Adhérents</th><th class="num">Part</th><th class="num">Revenu mensuel</th><th class="num">Part</th></tr></thead><tbody>
+      ${mix.map(x => `<tr><td>${{ basic: 'Basic', premium: 'Premium', ultimate: 'Ultimate', autre: 'Autre' }[x.g]}</td><td class="num">${fmtN(x.n)}</td><td class="num">${fmtP(x.n / nT)}</td><td class="num">${fmtE(x.mrr)}</td><td class="num">${fmtP(x.mrr / mT)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="small" style="margin:10px 0 0">Premium et plus dans les contrats signés : ${[2, 1, 0].map(i => `${MOIS_C[Number(addMonths(mk, -i).slice(5)) - 1]} <b>${fmtTaux(prem(addMonths(mk, -i)))}</b>`).join(' · ')}</p>
+      <p class="small" style="margin:6px 0 0">Montées en gamme : <b>${ups.filter(e => !e.down).length}</b> (${fmtE(ups.reduce((s, e) => s + Number(e.value), 0))} de revenu mensuel en plus) · descentes de gamme : <b>${ups.filter(e => e.down).length}</b></p>
+      ${Object.keys(sellers).length ? `<p class="muted small" style="margin:6px 0 0">Par commercial : ${Object.entries(sellers).map(([u, o]) => `${esc((S.users[u] || {}).first || '?')} ${fmtP(o.p / o.n)}`).join(' · ')}</p>` : ''}</div>
+    <div class="col6" style="display:grid;gap:18px">${shopCard(mk)}
+      <div class="card"><h3>Retours et parrainage</h3>
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Anciens revenus ce mois</span><b>${anc.length}</b><span class="muted small" style="margin-left:8px">${fmtE(Math.round(anc.reduce((s, x) => s + mensualite(x.c) * dureeVieMois(clubId), 0)))} de valeur vie</span></div>
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Contrats issus du parrainage</span><b>${par.n}</b><span class="muted small" style="margin-left:8px">${fmtTaux(par.part)} des contrats · ${fmtE(par.valeur)} de valeur vie</span></div>
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Revenu mensuel B2B</span><b>${fmtE(mrrB2b)}</b><span class="muted small" style="margin-left:8px">${plur(b2b.length, 'adhérent', 'adhérents')} d’entreprise</span></div>
+        ${par.tops.length ? `<p class="small" style="margin:8px 0 0"><b>Top parrains</b> (2 contrats ou plus sur 12 mois) : ${par.tops.map(x => `${esc(x.c.name || '')} (${x.n})`).join(', ')}${reward ? `. Récompense à remettre : ${esc(reward)}.` : '.'}</p>` : ''}</div></div>
+  </div>`;
+}
+
+// ── Entreprises (B2B) ─────────────────────────────────────────────────────
+const CO_STATUS = { a_contacter: 'À contacter', contacte: 'Contacté', rdv: 'Rendez-vous', proposition: 'Proposition', signe: 'Signé', perdu: 'Perdu' };
+const CO_WEIGHT = { rdv: 0.2, proposition: 0.4 };
+const companiesOf = clubId => Object.values(S.companies || {}).filter(c => c && c.clubId === clubId);
+function coPotentiel(co) { if (!(Number(co.effectif) > 0)) return null; const cfg = S.clubs[co.clubId] || {}; const taux = Number(cfg.b2bTaux) || 0.08; const prix = Number(cfg.b2bPrix) || prixMoyen(co.clubId); return Math.round(Number(co.effectif) * taux * prix * 12); }
+function coMrr(co) { const I = clientIndex(co.clubId); return Math.round((co.nums || []).map(n => I.byNum[String(n)]).filter(c => c && !CLIENT_INACTIF.test(norm(c.status || ''))).reduce((s, c) => s + mensualite(c), 0) * 100) / 100; }
+PAGES.b2b = {
+  title: 'Entreprises',
+  render() {
+    const L = companiesOf(CLUB.id); const pond = L.reduce((s, co) => s + (CO_WEIGHT[co.statut] && coPotentiel(co) ? coPotentiel(co) * CO_WEIGHT[co.statut] : 0), 0);
+    const clients = L.filter(co => co.statut === 'signe').sort((a, b) => coMrr(b) - coMrr(a));
+    const losing = clients.filter(co => { const h = co.hist || {}; const old = h[addMonths(curMonth(), -3)]; return old && (co.nums || []).length < old * 0.8; });
+    return `<div class="page-head"><div><h1>Entreprises</h1><p>Conventions d’entreprise : du premier contact à la signature.</p></div><span class="spacer"></span><button class="btn primary" data-act="coEdit">${ico('plus')} Entreprise</button></div>
+      <div class="stat-row"><div class="stat"><span>Pipeline pondéré</span><b>${fmtE(Math.round(pond))}</b><small>rendez-vous 20 %, proposition 40 %</small></div><div class="stat"><span>Entreprises clientes</span><b>${clients.length}</b><small>${fmtE(clients.reduce((s, co) => s + coMrr(co), 0))} de revenu mensuel</small></div><div class="stat"><span>En cours</span><b>${L.filter(co => !['signe', 'perdu'].includes(co.statut)).length}</b><small>à faire avancer</small></div></div>
+      ${losing.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>Adhérents en baisse</b>${losing.map(co => esc(co.nom)).join(', ')} : plus de 20 % d’adhérents perdus en 3 mois.</div></div>` : ''}
+      <div class="kanban">${Object.entries(CO_STATUS).map(([k, l]) => { const col = L.filter(co => (co.statut || 'a_contacter') === k); return `<div class="kb-col"><div class="kb-h"><b>${l}</b><span class="muted small">${col.length}</span></div>${col.map(co => { const p = coPotentiel(co); return `<button class="kb-card" data-act="coEdit" data-id="${co.id}"><b>${esc(co.nom)}</b><span class="small">${p == null ? 'Effectif inconnu' : `${fmtN(co.effectif)} salariés · potentiel ${fmtE(p)}`}</span>${co.statut === 'signe' ? `<span class="small">${plur((co.nums || []).length || co.adherents || 0, 'adhérent', 'adhérents')} · ${fmtE(coMrr(co))} par mois</span>` : ''}${co.prochaineAction ? `<span class="muted small">Prochaine action : ${dm(co.prochaineAction)}</span>` : ''}${co.ownerId && S.users[co.ownerId] ? `<span class="muted small">${esc(S.users[co.ownerId].first)}</span>` : ''}</button>`; }).join('')}</div>`; }).join('')}</div>
+      <p class="muted small">Potentiel = effectif × taux d’adhésion attendu (${fmtP(Number((S.clubs[CLUB.id] || {}).b2bTaux) || 0.08)}) × prix moyen × 12. Les entreprises signées sont créées automatiquement à l’import Factures & avoirs (Société du client).</p>`;
+  },
+};
+ACTIONS.coEdit = el => {
+  const co = (el.dataset.id && S.companies[el.dataset.id]) || { statut: 'a_contacter', ownerId: ME.id };
+  openModal({ title: co.id ? esc(co.nom) : 'Nouvelle entreprise', body: `<form id="cof" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="nom" value="${esc(co.nom || '')}" required></label>
+    <label class="field"><span>Secteur</span><input class="input" name="secteur" value="${esc(co.secteur || '')}"></label><label class="field"><span>Effectif</span><input class="input" name="effectif" inputmode="numeric" value="${co.effectif || ''}"></label>
+    <label class="field"><span>Contact</span><input class="input" name="contact" value="${esc(co.contact || '')}"></label><label class="field"><span>Téléphone</span><input class="input" name="tel" type="tel" value="${esc(co.tel || '')}"></label>
+    <label class="field"><span>Statut</span><select class="input" name="statut">${Object.entries(CO_STATUS).map(([k, l]) => `<option value="${k}" ${co.statut === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="field"><span>Responsable</span><select class="input" name="ownerId">${clubMembers(CLUB.id).map(u => `<option value="${u.id}" ${co.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
+    <label class="field"><span>Prochaine action</span><input class="input" type="date" name="prochaineAction" value="${co.prochaineAction || ''}"></label><label class="field"><span>Offre</span><input class="input" name="offre" value="${esc(co.offre || '')}"></label>
+    <label class="field full"><span>Notes</span><textarea class="input" name="notes" rows="3">${esc(co.notes || '')}</textarea></label></form>`,
+    foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="coSave" data-id="${co.id || ''}">Enregistrer</button>` });
+};
+ACTIONS.coSave = el => {
+  const f = formData($('#cof')); if (!f.nom.trim()) { toast('Indiquez le nom de l’entreprise.'); return; }
+  const id = el.dataset.id || 'co' + newId(); const old = S.companies[id] || {}; const eff = parseInt(f.effectif, 10);
+  const co = { ...old, id, clubId: CLUB.id, nom: f.nom.trim().slice(0, 100), secteur: f.secteur.trim(), effectif: eff > 0 ? eff : null, contact: f.contact.trim(), tel: phoneE164(f.tel) || f.tel.trim(), statut: f.statut, ownerId: f.ownerId || null, prochaineAction: f.prochaineAction || null, offre: f.offre.trim(), notes: f.notes.trim().slice(0, 2000), at: old.at || Date.now() };
+  const ops = [[['companies', id], co]];
+  // Une entreprise passée « Signé » dans le mois compte une fois dans le KPI Contrat B2B de son responsable.
+  if (f.statut === 'signe' && old.statut !== 'signe' && co.ownerId) { co.signeLe = today(); ops.push([['entries', 'b2b_' + id], { id: 'b2b_' + id, userId: co.ownerId, clubId: CLUB.id, kpiId: 'b2b', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]); }
+  db.batch(ops); closeModal(); toast(f.statut === 'signe' && old.statut !== 'signe' ? 'Entreprise signée' : 'Enregistré');
+};

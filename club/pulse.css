@@ -946,3 +946,11 @@ td.to-check { background: var(--warn-soft); }
 .res-val { margin-top: 8px; font-size: var(--t-13); }
 @media (max-width: 760px) { .age-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .table-wrap.sheet td:first-child { min-width: 170px; }
+/* Entreprises : pipeline */
+.kanban { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+.kb-col { background: var(--surface-2); border-radius: var(--radius); padding: 10px; display: grid; gap: 8px; align-content: start; min-height: 120px; }
+.kb-h { display: flex; justify-content: space-between; align-items: center; }
+.kb-card { display: grid; gap: 3px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; color: var(--text); cursor: pointer; }
+.kb-card:hover { border-color: var(--fp); }
+.opp-mini.wrap > .spacer { flex: 1 1 200px; }
+@media (max-width: 430px) { .topbar .countdown { display: none; } }

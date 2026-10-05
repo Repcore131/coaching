@@ -245,7 +245,7 @@ ACTIONS.rsmCommit = () => {
     // Entreprises clientes (Société du client) : créées ou mises à jour, statut signé.
     for (const co of Object.values(r.companies)) {
       const id = 'co' + hkey(club + '|' + norm(co.nom)); const old = (S.companies || {})[id] || {};
-      ops.push([['companies', id], { ...old, id, clubId: club, nom: old.nom || co.nom, statut: 'signe', signeLe: old.signeLe || r.from || today(), adherents: co.nums.length || old.adherents || 0, nums: co.nums.length ? co.nums : (old.nums || []), at: old.at || now }]);
+      ops.push([['companies', id], { ...old, id, clubId: club, nom: old.nom || co.nom, statut: 'signe', signeLe: old.signeLe || r.from || today(), adherents: co.nums.length || old.adherents || 0, nums: co.nums.length ? co.nums : (old.nums || []), hist: { ...(old.hist || {}), [(r.from || today()).slice(0, 7)]: co.nums.length }, at: old.at || now }]);
       co.nums.forEach(num => { const c0 = clientIdx['n:' + num]; if (c0) upClient(c0, { company: co.nom }); });
     }
     if (Object.keys(r.flags).length) ops.push([['rsm', 'flags', club, r.def.id], r.flags]);

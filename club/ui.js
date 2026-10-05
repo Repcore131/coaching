@@ -106,6 +106,7 @@ const NAV = [
   ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
   ['team', 'Pilotage équipe', 'users', true],
+  ['b2b', 'Entreprises', 'briefcase'],
   ['quality', 'Contrôle qualité', 'shield', true],
   ['sep'],
   ['resiliations', 'Résiliations', 'door', true],
