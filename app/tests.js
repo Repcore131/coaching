@@ -61859,11 +61859,14 @@ async function testExercices(){
         currentUser=_r36Ath();
         if(_rendreDemarrage()!==true) return _echec('le bloc ne paraît pas pour un compte neuf');
         const b=[...z.querySelectorAll('button.pd-ligne')].map(x=>x.getAttribute('onclick'));
-        if(b.join('|')!=='openBilan(\'depart\')|pdLancerSeance()|loadNutrition()') return _echec('actions : '+b.join('|'));
+        // 05/10/2026 : CET ATHLÈTE A UN COACH ET PAS ENCORE DE PROGRAMME — la ligne séance
+        // attend le coach (une ligne inerte, « En attente »), les deux autres restent des boutons.
+        if(b.join('|')!=='openBilan(\'depart\')|loadNutrition()') return _echec('actions : '+b.join('|'));
+        if(!z.querySelector('div.pd-attente')) return _echec('la ligne séance n’attend pas le coach');
         const titres=[...z.querySelectorAll('.pd-titre')].map(x=>x.textContent).join('|');
         if(titres!=='1 · Complète ton questionnaire|2 · Lance ta première séance|3 · Note ton premier repas') return _echec('titres : '+titres);
         const sous=[...z.querySelectorAll('.pd-sous')].map(x=>x.textContent).join('|');
-        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Crée ta séance, exercice par exercice|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
+        if(sous!=='~12 min · ton coach s’en sert pour écrire ton programme|Ton coach prépare ton programme : il apparaîtra ici|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
         if(/Pour démarrer/.test(z.textContent)===false||z.querySelector('.pd-compte').textContent!=='0 sur 3') return _echec('en-tête : '+z.textContent.slice(0,40));
         // CE QUI PEUT ATTENDRE SE TAIT ; la santé et l'accès, jamais.
         for(const id of MASQUES) if(!cache(id)) return _echec('#'+id+' reste affiché pendant la mise en route');
@@ -61902,7 +61905,13 @@ async function testExercices(){
       const essai=vierge.map((s,i)=>i?s:Object.assign({},s,{active:true,exercises:[{name:'SQUAT'}]}));
       const reel=essai.map(s=>{ const c=Object.assign({},s); delete c._essai; return c; });
       const r=[vierge,essai,reel].map(sc=>{ const x=_pdSeance(_r36Ath({sessions_config:sc})); return x.voie+':'+x.sous; }).join('|');
-      if(r!=='gerer:Crée ta séance, exercice par exercice|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
+      // 05/10/2026 : L'ATHLÈTE DE CE TEST A UN COACH. Sans programme publié (vierge, ou essai), la
+      // ligne ATTEND le coach ; le programme réel la rend au sélecteur.
+      if(r!=='attente:Ton coach prépare ton programme : il apparaîtra ici|attente:Ton coach prépare ton programme : il apparaîtra ici|selecteur:Ton programme t’attend') return _echec(r);
+      const sc=_pdSeance(_r36Ath({coachId:null,coachEmailKey:null,sessions_config:essai,sessions:[{date:1}]}));
+      if(sc.voie!=='selecteur'||sc.sous!=='Ton programme d’essai t’attend') return _echec('sans coach, l’essai : '+JSON.stringify(sc));
+      const gv=_pdSeance(_r36Ath({coachId:null,coachEmailKey:null,sessions_config:vierge,sessions:[{date:1}]}));
+      if(gv.voie!=='gerer') return _echec('sans coach, semaine vierge : '+gv.voie);
       const s=String(pdLancerSeance);
       if(s.indexOf('openSessionPicker')<0||s.indexOf('loadSessionManager')<0) return _echec('le routage a changé');
       // 05/10/2026 : SANS COACH, la voie « parcours » ouvre la première séance ;
@@ -62960,6 +62969,11 @@ async function testExercices(){
         if((currentUser.vus||{}).reposSonVus!==1) return _echec('vue non comptée : '+JSON.stringify(currentUser.vus));
         // ACTIVER : le son, la confirmation, rien d'autre.
         const echeance=woState.reposFin;
+        // CE QUE PRODUIT « ACTIVER », ET LUI SEUL : le compte part de zéro au clic. Un envoi
+        // réel laissé par un test synchrone antérieur (file par dossier de CLOUD, 60 s
+        // au plus, puis « Non authentifié » faute de jeton) pouvait tomber pendant les
+        // pauses de ce test et le faire échouer au hasard de la durée de la suite.
+        toasts.length=0;
         lien.click();
         if(currentUser.sonRepos!==true) return _echec('le son ne s’allume pas');
         if((document.querySelector('.screen.active')||{}).id!=='s-workout') return _echec('« Activer » fait quitter la séance');
@@ -83596,11 +83610,40 @@ vendredi 78 6h 44m
       const v=u=>_pdSeance(u).voie;
       const p=_pdSeance(_psA());
       if(p.voie!=='parcours'||p.sous!=='3 questions, ta séance est prête') return _echec('(c) sans coach : '+JSON.stringify(p));
-      if(v(_psA({coachId:'c1'}))!=='gerer') return _echec('coaché : '+v(_psA({coachId:'c1'})));
+      if(v(_psA({coachId:'c1'}))!=='attente') return _echec('coaché sans programme : '+v(_psA({coachId:'c1'})));
       if(v(_psA({sessions:[{date:1}]}))!=='gerer') return _echec('déjà entraîné : '+v(_psA({sessions:[{date:1}]})));
       const actif=_psA(); actif.sessions_config[0]=Object.assign({},actif.sessions_config[0],{active:true,exercises:[{name:'SQUAT'}]});
       if(v(actif)!=='selecteur') return _echec('séance active : '+v(actif));
       return true;});
+    // ══ 05/10/2026 — EN ATTENTE DU PROGRAMME DU COACH ═══════════════════════
+    ok('« Pour démarrer » : coaché sans programme réel → voie « attente » ; programme posé → « selecteur » ; coach quitté → voie normale',()=>{
+      const S={name:'Push',active:true,exercises:[{name:'SQUAT'}]};
+      const a=_pdSeance({coachId:'x',sessions_config:[]});
+      if(a.voie!=='attente'||a.sous!=='Ton coach prépare ton programme : il apparaîtra ici') return _echec(JSON.stringify(a));
+      if(_pdSeance({coachEmailKey:'k@t,fr',sessions_config:[]}).voie!=='attente') return _echec('coachEmailKey seul');
+      if(_pdSeance({coachId:'x',sessions_config:[Object.assign({},S,{_essai:true})]}).voie!=='attente') return _echec('un essai n’est pas le programme du coach');
+      // Le coach publie : le rendu suivant bascule.
+      if(_pdSeance({coachId:'x',sessions_config:[S]}).voie!=='selecteur') return _echec('programme réel : pas de sélecteur');
+      // Il quitte son coach : la voie normale revient.
+      const q=_pdSeance({coachId:null,coachEmailKey:null,sessions:[],sessions_config:[]}).voie;
+      if(q==='attente') return _echec('coach quitté : toujours en attente');
+      return /if\(v==='attente'\) return;/.test(String(pdLancerSeance))?true:_echec('pdLancerSeance ne s’arrête pas sur « attente »');});
+    ok('« Pour démarrer » en attente : ligne séance inerte « En attente », sans pdLancerSeance ; questionnaire en tête',()=>{
+      const u={role:'athlete',email:'w@t.fr',coachId:'x',sessions:[],bilans:[],nutrition:{},sessions_config:[]};
+      const h=_htmlDemarrage(u);
+      if(h.indexOf('pdLancerSeance')>=0) return _echec('la ligne séance reste cliquable');
+      const d=document.createElement('div'); d.innerHTML=h;
+      const lignes=[...d.querySelectorAll('.pd-ligne')];
+      const att=d.querySelector('.pd-attente');
+      if(!att||att.tagName!=='DIV'||!/En attente/.test(att.textContent)) return _echec('ligne « En attente » absente');
+      if(att.querySelector('.pd-case').innerHTML) return _echec('une coche sur la ligne en attente');
+      if(!/Lance ta première séance/.test(att.textContent)||!/Ton coach prépare ton programme/.test(att.textContent)) return _echec('libellés');
+      if(!/Complète ton questionnaire/.test(lignes[0].textContent)||!/~12 min · ton coach s’en sert pour écrire ton programme/.test(lignes[0].textContent))
+        return _echec('questionnaire : '+lignes[0].textContent);
+      if(!/0 sur 3/.test(d.textContent)) return _echec('le compte change');
+      // Le programme publié : la ligne redevient un bouton.
+      const p=_htmlDemarrage(Object.assign({},u,{sessions_config:[{name:'A',active:true,exercises:[{name:'SQUAT'}]}]}));
+      return /pdLancerSeance/.test(p)&&p.indexOf('pd-attente')<0?true:_echec('après publication, toujours en attente');});
     ok('Première séance : genererSeanceDepart rend une séance active, d’au moins 4 exercices, marquée _essai',()=>{
       const s=genererSeanceDepart({objectif:'muscle',freq:3,lieu:'salle'},0);
       if(!s.active) return _echec('séance inactive');

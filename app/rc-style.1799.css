@@ -5952,6 +5952,10 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 .pd-fait .pd-titre{color:var(--sub);text-decoration:line-through}
 .pd-etat{flex:none;font-size:var(--fs-xs);font-weight:800;color:var(--green)}
+/* En attente du programme du coach : inerte comme une ligne faite, mais ni coche, ni rature. */
+.pd-attente .pd-case{background:none;border-color:var(--border)}
+.pd-attente .pd-titre{color:var(--text);text-decoration:none}
+.pd-attente .pd-etat{color:var(--sub)}
 /* Pendant la mise en route, ce qui peut attendre se tait. !important : la carte
    du coach et ses bannières reçoivent un display en ligne à chaque rendu, y
    compris quand le profil du coach arrive du réseau après coup. */

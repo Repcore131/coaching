@@ -48309,6 +48309,12 @@ function _pdSeance(u){
   const sc=(u&&u.sessions_config)||[];
   let reel=false; try{ reel=_configReelle(sc); }catch(e){ reel=false; }
   if(reel) return {voie:'selecteur',sous:'Ton programme t’attend'};
+  // SUIVI PAR UN COACH, PROGRAMME PAS ENCORE PUBLIÉ (05/10/2026) : la séance
+  // n'est pas à l'athlète d'agir — ni essai, ni séance à créer soi-même. La
+  // ligne attend, et bascule seule sur 'selecteur' au rendu qui suit la
+  // publication (_rendreDemarrage repasse à chaque accueil). Un athlète qui
+  // quitte son coach (coachId et coachEmailKey vides) retrouve la voie normale.
+  if(u&&(u.coachId||u.coachEmailKey)) return {voie:'attente',sous:'Ton coach prépare ton programme : il apparaîtra ici'};
   if(sc.some(s=>s&&s.active&&s.exercises&&s.exercises.length))
     return {voie:'selecteur',sous:'Ton programme d’essai t’attend'};
   // SANS COACH ET JAMAIS ENTRAÎNÉ (05/10/2026) : trois questions, et la séance
@@ -48321,6 +48327,7 @@ function _pdSeance(u){
 function pdLancerSeance(){
   let v='gerer';
   try{ v=_pdSeance(currentUser).voie; }catch(e){}
+  if(v==='attente') return;   // rien à lancer : le coach n'a pas publié
   if(v==='selecteur') openSessionPicker();
   else if(v==='parcours') ouvrirPremiereSeance();
   else loadSessionManager();
@@ -48368,10 +48375,14 @@ function _htmlLigneMontre(plateforme){
 function _htmlDemarrage(u){
   const e=etapesDemarrage(u);
   const s=_pdSeance(u), r=_pdRepas(u);
+  const attente=s.voie==='attente';
+  // En attente du programme, le questionnaire est CE que l'athlète peut faire
+  // pour l'avoir : il reste en tête, et le dit.
   const lignes=[
     {fait:e.questionnaire,titre:'Complète ton questionnaire',action:'openBilan(\'depart\')',
-     sous:'~12 min · c’est ce qui permet '+((u&&u.coachId)?'à ton coach d’adapter tes charges':'de calculer tes besoins')},
-    {fait:e.seance,titre:'Lance ta première séance',action:'pdLancerSeance()',sous:s.sous},
+     sous:'~12 min · '+(attente?'ton coach s’en sert pour écrire ton programme'
+       :'c’est ce qui permet '+((u&&u.coachId)?'à ton coach d’adapter tes charges':'de calculer tes besoins'))},
+    {fait:e.seance,attente:attente&&!e.seance,titre:'Lance ta première séance',action:'pdLancerSeance()',sous:s.sous},
     {fait:e.repas,titre:r.titre,action:'loadNutrition()',sous:r.sous}];
   const faites=lignes.filter(l=>l.fait).length;
   return '<div class="pd-carte clh-in clh-in-2">'
@@ -48381,6 +48392,8 @@ function _htmlDemarrage(u){
       const corps='<span class="pd-case" aria-hidden="true">'+(l.fait?icon('coche',14):'')+'</span>'
         +'<span class="pd-txt"><span class="pd-titre">'+(i+1)+' · '+escapeHtml(l.titre)+'</span>'
         +'<span class="pd-sous">'+escapeHtml(l.sous)+'</span></span>';
+      // EN ATTENTE : une ligne inerte, comme une ligne faite, sans coche.
+      if(l.attente) return '<div class="pd-ligne pd-fait pd-attente">'+corps+'<span class="pd-etat">En attente</span></div>';
       return l.fait
         ?'<div class="pd-ligne pd-fait">'+corps+'<span class="pd-etat">Fait</span></div>'
         :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
