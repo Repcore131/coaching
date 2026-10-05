@@ -523,6 +523,25 @@ function phraseParrainPremiereSeance(u){
   if(!nom||(u.sessions||[]).length) return '';
   return nom+' sera prévenu quand tu feras ta première séance.';
 }
+// LA LIGNE FACULTATIVE « Connecte ta montre » (05/10/2026). Hors du compte
+// « x sur 3 » (etapesDemarrage reste à trois actes) : on démarre sans montre.
+// Visible seulement si rien n'est encore synchronisé ET que cette plateforme
+// a un chemin (cheminMontre) — jamais une ligne qui mène à une impasse.
+// `plateforme` est injectable pour la suite ; par défaut, celle de l'appareil.
+function _htmlLigneMontre(plateforme){
+  let actif=false; try{ actif=sanSyncActif(); }catch(e){ actif=false; }
+  if(actif) return '';
+  let p=plateforme; if(p===undefined){ try{ p=_ssPlateforme(); }catch(e){ p='autre'; } }
+  const c=cheminMontre(p);
+  if(!c) return '';
+  const action=c==='android'?'window.open(AIDE_APK_URL,\'_blank\',\'noopener\')':'sanSyncOuvrir()';
+  return '<button type="button" class="pd-ligne pd-option" onclick="'+action+'">'
+    +'<span class="pd-case" aria-hidden="true"></span>'
+    +'<span class="pd-txt"><span class="pd-titre">Connecte ta montre (1 min)</span>'
+    +'<span class="pd-sous">Facultatif · '+(c==='android'?'installe l’application Android, ':'')
+    +'tes pas et ton sommeil arrivent tout seuls</span></span>'
+    +'<span class="pd-go" aria-hidden="true">›</span></button>';
+}
 // PURE. Le bloc.
 function _htmlDemarrage(u){
   const e=etapesDemarrage(u);
@@ -545,6 +564,7 @@ function _htmlDemarrage(u){
         :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
           +'<span class="pd-go" aria-hidden="true">›</span></button>';
     }).join('')
+    +_htmlLigneMontre()
     +(phraseParrainPremiereSeance(u)?'<div class="pd-parrain" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:10px">'
       +escapeHtml(phraseParrainPremiereSeance(u))+'</div>':'')
     +'</div>';

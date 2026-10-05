@@ -1512,9 +1512,27 @@ function htmlAmbassadeurs(tous,t){
   }
   return h;
 }
+// LES RÉGLAGES QUI ATTENDENT KEVIN (05/10/2026) : ce que le code ne peut pas
+// poser lui-même, dit là où il le verra. Vide quand tout est posé.
+function reglagesAPoser(){
+  const l=[];
+  if(!raccourciSanteUrl()) l.push({cle:'RACCOURCI_SANTE_URL',
+    texte:(RACCOURCI_SANTE_URL?'Le lien du Raccourci iPhone est posé mais n’a pas la forme RACCOURCI_SANTE_FORME (lien iCloud de Raccourcis, 32 caractères à la fin).'
+      :'TODO : publier le Raccourci « RepCore Santé » et poser son lien iCloud.')
+      +' En attendant, les iPhone voient « Bientôt disponible » dans la synchronisation santé.'});
+  if(!RC_APK_URL) l.push({cle:'RC_APK_URL',texte:'TODO : poser l’adresse de l’APK Android (le lien d’installation reste caché).'});
+  return l;
+}
+function htmlReglagesAPoser(){
+  const l=reglagesAPoser();
+  if(!l.length) return '';
+  return '<div class="card amb-journal" id="reglages-a-poser"><div class="amb-t">Réglages à poser</div>'
+    +l.map(x=>'<p class="sub amb-note"><code>'+escapeHtml(x.cle)+'</code> · '+escapeHtml(x.texte)+'</p>').join('')
+    +'</div>';
+}
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlReglagesAPoser()+htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){

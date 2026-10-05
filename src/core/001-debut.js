@@ -1013,7 +1013,14 @@ const APP_BASE_URL=(()=>{
 //
 // Le fichier, lui, existe : 2,47 Mo, signe, empreinte verifiee contre
 // assetlinks.json.
-const RC_APK_URL='';
+//
+// L'HEBERGEUR EST TROUVE (05/10/2026) : les releases GitHub du depot, qui
+// servent un .apk sans compte de plus. La version 4 (Health Connect) est
+// publiee sous l'etiquette apk-4 par android/publier.sh.
+// ⚠ UNE SEULE ADRESSE : aide-apk.html porte la MEME dans #telecharger, et un
+//   test (tests.js) tombe si les deux divergent. Nouvelle version : changer
+//   les deux, dans le meme commit.
+const RC_APK_URL='https://github.com/Repcore131/coaching/releases/download/apk-4/RepCore-4.apk';
 
 // ══════════ LE LIEN COURT ══════════════════════════════════════════════
 //

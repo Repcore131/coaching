@@ -20873,6 +20873,9 @@ async function testExercices(){
                                      // depuis l'arrivee et depuis les ecrans
                                      // fermes (lots 2 et 4). RepCore n'y envoie
                                      // rien : la ligne de la politique le dit.
+            // github.com : le fichier APK (RC_APK_URL, 05/10/2026), un lien que
+            // l'utilisateur touche, comme beacons.ai. Ligne GitHub dans la politique.
+            'github.com',
             'w3.org','repcore131.github.io'];
           // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
           //
@@ -55915,6 +55918,65 @@ async function testExercices(){
       try{ if(sv===null) localStorage.removeItem('rc_parrain_invite'); else localStorage.setItem('rc_parrain_invite',sv); }catch(e){}
       if(!g||g.prenom!=='Julie'||g2) return _echec('prénom gardé : '+JSON.stringify(g)+' / '+JSON.stringify(g2));
       return true;});
+    // ══ 05/10/2026 — L'APK, LE RACCOURCI IPHONE, LA LIGNE « CONNECTE TA MONTRE » ══
+    okA('RC_APK_URL : posé, et identique au lien de aide-apk.html',async()=>{
+      if(!RC_APK_URL) return _echec('RC_APK_URL vide : le lien APK reste caché');
+      if(!/^https:\/\/github\.com\/Repcore131\/coaching\/releases\/download\/apk-\d+\/RepCore-\d+\.apk$/.test(RC_APK_URL)) return _echec('forme : '+RC_APK_URL);
+      const t=await (await fetch(new URL('../aide-apk.html',location.href),{cache:'no-store'})).text();
+      const a=new DOMParser().parseFromString(t,'text/html').getElementById('telecharger');
+      if(!a) return _echec('#telecharger absent de aide-apk.html');
+      return a.getAttribute('href')===RC_APK_URL?true:_echec('aide-apk.html : '+a.getAttribute('href')+' ≠ '+RC_APK_URL);});
+    ok('iPhone sans Raccourci publié : « Bientôt disponible », aucune étape sans bouton',()=>{
+      const sv={m:_sanSyncMeta,r:window.raccourciSanteUrl};
+      const ua=Object.getOwnPropertyDescriptor(navigator,'userAgent');
+      try{
+        Object.defineProperty(navigator,'userAgent',{get:()=>'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1',configurable:true});
+        _sanSyncMeta=null;
+        if(_ssPlateforme()!=='ios') return _echec('UA iPhone non reconnu');
+        const z=document.createElement('div');
+        if(!raccourciSanteUrl()){
+          z.innerHTML=_htmlSanSyncFeuille();
+          if(!/Bientôt disponible sur iPhone/.test(z.textContent)) return _echec('« Bientôt disponible » absent');
+          const muettes=[...z.querySelectorAll('.ss-etape')].filter(e=>!e.querySelector('a,button,input,.ss-etat'));
+          if(muettes.length) return _echec(muettes.length+' étape(s) sans bouton : '+muettes[0].textContent.slice(0,60));
+          if(/Le lien du Raccourci arrive/.test(z.textContent)) return _echec('l’ancienne étape sans bouton est encore là');
+        }
+        // Le lien posé : les étapes reviennent, avec « Obtenir le Raccourci ».
+        window.raccourciSanteUrl=()=>'https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef';
+        z.innerHTML=_htmlSanSyncFeuille();
+        if(/Bientôt disponible/.test(z.textContent)) return _echec('« Bientôt » reste avec un lien posé');
+        return z.querySelector('a[href^="https://www.icloud.com/shortcuts/"]')?true:_echec('pas de bouton « Obtenir le Raccourci »');
+      } finally {
+        if(ua) Object.defineProperty(navigator,'userAgent',ua); else delete navigator.userAgent;
+        _sanSyncMeta=sv.m; window.raccourciSanteUrl=sv.r;
+      }});
+    ok('RACCOURCI_SANTE_URL : vide ou à la forme RACCOURCI_SANTE_FORME ; la carte admin le rappelle tant qu’il manque',()=>{
+      if(RACCOURCI_SANTE_URL&&!RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)) return _echec('lien posé hors forme : '+RACCOURCI_SANTE_URL);
+      const h=htmlReglagesAPoser();
+      if(!raccourciSanteUrl()&&!(/RACCOURCI_SANTE_URL/.test(h)&&/TODO|forme/.test(h))) return _echec('pas de TODO visible dans la carte admin');
+      if(raccourciSanteUrl()&&/RACCOURCI_SANTE_URL/.test(h)) return _echec('TODO affiché alors que le lien est posé');
+      return /htmlReglagesAPoser\(\)\+htmlEvenementsKo/.test(String(_ambRendre))?true:_echec('la carte n’est pas dans l’espace créateur');});
+    ok('« Connecte ta montre » : seulement sans synchro active ET avec un chemin ; hors du « x sur 3 »',()=>{
+      const sv={m:_sanSyncMeta,p:window._ssPlateforme,r:window.raccourciSanteUrl};
+      const u={role:'athlete',email:'m@t',sessions:[],bilans:[]};
+      const avec=p=>{ window._ssPlateforme=()=>p; return _htmlDemarrage(u); };
+      const montre=h=>/Connecte ta montre \(1 min\)/.test(h);
+      try{
+        _sanSyncMeta=null;
+        if(!montre(avec('apk'))) return _echec('APK 4 : ligne absente');
+        if(!/sanSyncOuvrir\(\)/.test(avec('apk'))) return _echec('APK : la ligne n’ouvre pas la connexion');
+        const a=avec('android');
+        if(!montre(a)||!/AIDE_APK_URL/.test(a)) return _echec('Android hors APK : pas de chemin vers aide-apk.html');
+        if(montre(avec('autre'))) return _echec('ordinateur : ligne affichée sans chemin');
+        window.raccourciSanteUrl=()=>'';
+        if(montre(avec('ios'))) return _echec('iPhone sans Raccourci : ligne affichée');
+        window.raccourciSanteUrl=()=>'https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef';
+        if(!montre(avec('ios'))) return _echec('iPhone avec Raccourci : ligne absente');
+        if(!/0 sur 3/.test(avec('apk'))) return _echec('le compte n’est plus « sur 3 »');
+        if(Object.keys(etapesDemarrage(u)).length!==3) return _echec('etapesDemarrage n’a plus trois actes');
+        _sanSyncMeta={actif:true};
+        return !montre(avec('apk'))?true:_echec('synchro active : la ligne reste');
+      } finally { _sanSyncMeta=sv.m; window._ssPlateforme=sv.p; window.raccourciSanteUrl=sv.r; }});
     ok('Premier écran : « Julie sera prévenu… », et l’événement part à la première séance',()=>{
       const u={role:'athlete',sessions:[],parrainage:{parrainCode:'JULIE7K2',parrainPrenom:'Julie'}};
       if(phraseParrainPremiereSeance(u)!=='Julie sera prévenu quand tu feras ta première séance.') return _echec(phraseParrainPremiereSeance(u));
@@ -57749,8 +57811,10 @@ async function testExercices(){
         return /sanSyncActif\(\)/.test(String(_majPastilleLifestyle))?true:_echec('pastille');
       } finally { _sanSyncMeta=_m; }});
     ok('Sync santé (interface) : la feuille — iPhone en 5 étapes, APK avec « Autoriser », Android sans APK, Déconnecter discret',()=>{
-      const _p=window._ssPlateforme, _m=_sanSyncMeta;
+      const _p=window._ssPlateforme, _m=_sanSyncMeta, _r=window.raccourciSanteUrl;
       try{
+        // Le Raccourci PUBLIÉ (05/10/2026) : sans lien, l'iPhone voit « Bientôt disponible ».
+        window.raccourciSanteUrl=()=>'https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef';
         const d=document.createElement('div');
         window._ssPlateforme=()=>'ios'; _sanSyncMeta=null;
         d.innerHTML=_htmlSanSyncFeuille();
@@ -57771,7 +57835,7 @@ async function testExercices(){
         const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
         const css=lire('rc-style.'+window.RC_BUILD+'.css');
         return /\.ss-num\{width:28px;height:28px;background:#1a0000;border:1px solid #3a0000/.test(css)?true:_echec('carrés rouges');
-      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; }});
+      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; window.raccourciSanteUrl=_r; }});
     ok('Sync santé (interface) : chez le coach, la pastille « synchronisé » et la dernière réception',()=>{
       if(_htmlSyncCoach(null)!==''||_htmlSyncCoach({actif:false})!=='') return _echec('inactif');
       const d=document.createElement('div');
@@ -57815,8 +57879,10 @@ async function testExercices(){
       if(!RACCOURCI_SANTE_FORME.test('https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef')||RACCOURCI_SANTE_FORME.test('https://exemple.fr/shortcuts/x')) return _echec('forme');
       return true;});
     ok('iPhone : la feuille — « Envoyer maintenant » et « Tester maintenant » sont des liens qui notent l’envoi ; À RELANCER ouvre l’aide',()=>{
-      const _p=window._ssPlateforme, _m=_sanSyncMeta;
+      const _p=window._ssPlateforme, _m=_sanSyncMeta, _r=window.raccourciSanteUrl;
       try{
+        // Le Raccourci PUBLIÉ (05/10/2026) : sans lien, l'iPhone voit « Bientôt disponible ».
+        window.raccourciSanteUrl=()=>'https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef';
         window._ssPlateforme=()=>'ios';
         const d=document.createElement('div');
         _sanSyncMeta=null; d.innerHTML=_htmlSanSyncFeuille();
@@ -57833,7 +57899,7 @@ async function testExercices(){
         const l=[...d.querySelectorAll('.ss-aide li')].map(x=>x.textContent).join('|');
         if(!/verrouillé/.test(l)||!/Automatisation désactivée/.test(l)||!/Autorisations Santé/.test(l)) return _echec('aide '+l);
         return /À relancer/.test(d.querySelector('.ss-statut').textContent)?true:_echec('statut');
-      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; }});
+      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; window.raccourciSanteUrl=_r; }});
     ok('iPhone : plus de 48 h sans réception → « À relancer » (orange) sur la tuile ; Android, non',()=>{
       const t=Date.now();
       const a=sanSyncEtat({empreinte:'e',plateforme:'ios',derniereReception:t-49*3600e3},'pas',t);

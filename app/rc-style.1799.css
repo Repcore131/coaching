@@ -5947,6 +5947,8 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .pd-sous{font-size:var(--fs-xs);color:var(--sub);line-height:1.45}
 .pd-go{flex:none;font-size:var(--fs-lg);font-weight:800;color:var(--red-text)}
 .pd-fait{cursor:default}
+/* La ligne facultative « Connecte ta montre » : hors du compte, sa case est en pointillés. */
+.pd-option .pd-case{border-style:dashed}
 .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 .pd-fait .pd-titre{color:var(--sub);text-decoration:line-through}
 .pd-etat{flex:none;font-size:var(--fs-xs);font-weight:800;color:var(--green)}

@@ -884,6 +884,15 @@ try{
 const RACCOURCI_SANTE_URL='';
 const RACCOURCI_SANTE_FORME=/^https:\/\/www\.icloud\.com\/shortcuts\/[0-9a-f]{32}$/;
 function raccourciSanteUrl(){ return RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)?RACCOURCI_SANTE_URL:''; }
+// PURE. Le chemin « Connecte ta montre » de cette plateforme, ou '' s'il n'y
+// en a pas : 'apk' (APK >= SAN_SYNC_APK_MIN, la feuille de connexion),
+// 'android' (navigateur ou ancien APK : la page d'installation), 'ios'
+// (seulement si le Raccourci est publié). Ailleurs (ordinateur) : rien.
+function cheminMontre(plateforme){
+  if(plateforme==='apk'||plateforme==='android') return plateforme;
+  if(plateforme==='ios') return raccourciSanteUrl()?'ios':'';
+  return '';
+}
 // Plus de 48 h sans réception sur iPhone : la tuile passe à « À relancer ».
 const SAN_SYNC_RELANCER_MS=48*3600e3;
 let _sanEnvoiAt=0;   // l'heure où « Envoyer / Tester maintenant » a été touché
@@ -1049,7 +1058,14 @@ function _htmlSanSyncFeuille(){
   const p=_ssPlateforme();
   const m=_sanSyncMeta;
   let corps='';
-  if(p==='ios'){
+  if(p==='ios'&&!raccourciSanteUrl()&&!sanSyncActif()){
+    // LE RACCOURCI N'EST PAS ENCORE PUBLIÉ (RACCOURCI_SANTE_URL vide) : pas
+    // d'étapes qui mènent à un bouton absent. On le dit, et on dit quoi faire
+    // en attendant. La carte « Réglages à poser » du créateur le rappelle.
+    corps='<div class="ss-aide ss-bientot"><div class="ss-t">Bientôt disponible sur iPhone</div>'
+      +'<div class="ss-d">La synchronisation avec Apple Santé arrive avec le Raccourci <b>RepCore Santé</b>. '
+      +'En attendant, note tes pas et ton sommeil à la main : c’est cette saisie qui fait foi.</div></div>';
+  } else if(p==='ios'){
     corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
       +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
         raccourciSanteUrl()?'À l’ajout, colle ton adresse quand il la demande ; au premier lancement, autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',

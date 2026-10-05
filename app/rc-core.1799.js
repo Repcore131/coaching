@@ -1013,7 +1013,14 @@ const APP_BASE_URL=(()=>{
 //
 // Le fichier, lui, existe : 2,47 Mo, signe, empreinte verifiee contre
 // assetlinks.json.
-const RC_APK_URL='';
+//
+// L'HEBERGEUR EST TROUVE (05/10/2026) : les releases GitHub du depot, qui
+// servent un .apk sans compte de plus. La version 4 (Health Connect) est
+// publiee sous l'etiquette apk-4 par android/publier.sh.
+// ⚠ UNE SEULE ADRESSE : aide-apk.html porte la MEME dans #telecharger, et un
+//   test (tests.js) tombe si les deux divergent. Nouvelle version : changer
+//   les deux, dans le meme commit.
+const RC_APK_URL='https://github.com/Repcore131/coaching/releases/download/apk-4/RepCore-4.apk';
 
 // ══════════ LE LIEN COURT ══════════════════════════════════════════════
 //
@@ -22722,9 +22729,27 @@ function htmlAmbassadeurs(tous,t){
   }
   return h;
 }
+// LES RÉGLAGES QUI ATTENDENT KEVIN (05/10/2026) : ce que le code ne peut pas
+// poser lui-même, dit là où il le verra. Vide quand tout est posé.
+function reglagesAPoser(){
+  const l=[];
+  if(!raccourciSanteUrl()) l.push({cle:'RACCOURCI_SANTE_URL',
+    texte:(RACCOURCI_SANTE_URL?'Le lien du Raccourci iPhone est posé mais n’a pas la forme RACCOURCI_SANTE_FORME (lien iCloud de Raccourcis, 32 caractères à la fin).'
+      :'TODO : publier le Raccourci « RepCore Santé » et poser son lien iCloud.')
+      +' En attendant, les iPhone voient « Bientôt disponible » dans la synchronisation santé.'});
+  if(!RC_APK_URL) l.push({cle:'RC_APK_URL',texte:'TODO : poser l’adresse de l’APK Android (le lien d’installation reste caché).'});
+  return l;
+}
+function htmlReglagesAPoser(){
+  const l=reglagesAPoser();
+  if(!l.length) return '';
+  return '<div class="card amb-journal" id="reglages-a-poser"><div class="amb-t">Réglages à poser</div>'
+    +l.map(x=>'<p class="sub amb-note"><code>'+escapeHtml(x.cle)+'</code> · '+escapeHtml(x.texte)+'</p>').join('')
+    +'</div>';
+}
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlReglagesAPoser()+htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -48230,6 +48255,25 @@ function phraseParrainPremiereSeance(u){
   if(!nom||(u.sessions||[]).length) return '';
   return nom+' sera prévenu quand tu feras ta première séance.';
 }
+// LA LIGNE FACULTATIVE « Connecte ta montre » (05/10/2026). Hors du compte
+// « x sur 3 » (etapesDemarrage reste à trois actes) : on démarre sans montre.
+// Visible seulement si rien n'est encore synchronisé ET que cette plateforme
+// a un chemin (cheminMontre) — jamais une ligne qui mène à une impasse.
+// `plateforme` est injectable pour la suite ; par défaut, celle de l'appareil.
+function _htmlLigneMontre(plateforme){
+  let actif=false; try{ actif=sanSyncActif(); }catch(e){ actif=false; }
+  if(actif) return '';
+  let p=plateforme; if(p===undefined){ try{ p=_ssPlateforme(); }catch(e){ p='autre'; } }
+  const c=cheminMontre(p);
+  if(!c) return '';
+  const action=c==='android'?'window.open(AIDE_APK_URL,\'_blank\',\'noopener\')':'sanSyncOuvrir()';
+  return '<button type="button" class="pd-ligne pd-option" onclick="'+action+'">'
+    +'<span class="pd-case" aria-hidden="true"></span>'
+    +'<span class="pd-txt"><span class="pd-titre">Connecte ta montre (1 min)</span>'
+    +'<span class="pd-sous">Facultatif · '+(c==='android'?'installe l’application Android, ':'')
+    +'tes pas et ton sommeil arrivent tout seuls</span></span>'
+    +'<span class="pd-go" aria-hidden="true">›</span></button>';
+}
 // PURE. Le bloc.
 function _htmlDemarrage(u){
   const e=etapesDemarrage(u);
@@ -48252,6 +48296,7 @@ function _htmlDemarrage(u){
         :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
           +'<span class="pd-go" aria-hidden="true">›</span></button>';
     }).join('')
+    +_htmlLigneMontre()
     +(phraseParrainPremiereSeance(u)?'<div class="pd-parrain" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:10px">'
       +escapeHtml(phraseParrainPremiereSeance(u))+'</div>':'')
     +'</div>';
@@ -123451,6 +123496,15 @@ try{
 const RACCOURCI_SANTE_URL='';
 const RACCOURCI_SANTE_FORME=/^https:\/\/www\.icloud\.com\/shortcuts\/[0-9a-f]{32}$/;
 function raccourciSanteUrl(){ return RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)?RACCOURCI_SANTE_URL:''; }
+// PURE. Le chemin « Connecte ta montre » de cette plateforme, ou '' s'il n'y
+// en a pas : 'apk' (APK >= SAN_SYNC_APK_MIN, la feuille de connexion),
+// 'android' (navigateur ou ancien APK : la page d'installation), 'ios'
+// (seulement si le Raccourci est publié). Ailleurs (ordinateur) : rien.
+function cheminMontre(plateforme){
+  if(plateforme==='apk'||plateforme==='android') return plateforme;
+  if(plateforme==='ios') return raccourciSanteUrl()?'ios':'';
+  return '';
+}
 // Plus de 48 h sans réception sur iPhone : la tuile passe à « À relancer ».
 const SAN_SYNC_RELANCER_MS=48*3600e3;
 let _sanEnvoiAt=0;   // l'heure où « Envoyer / Tester maintenant » a été touché
@@ -123616,7 +123670,14 @@ function _htmlSanSyncFeuille(){
   const p=_ssPlateforme();
   const m=_sanSyncMeta;
   let corps='';
-  if(p==='ios'){
+  if(p==='ios'&&!raccourciSanteUrl()&&!sanSyncActif()){
+    // LE RACCOURCI N'EST PAS ENCORE PUBLIÉ (RACCOURCI_SANTE_URL vide) : pas
+    // d'étapes qui mènent à un bouton absent. On le dit, et on dit quoi faire
+    // en attendant. La carte « Réglages à poser » du créateur le rappelle.
+    corps='<div class="ss-aide ss-bientot"><div class="ss-t">Bientôt disponible sur iPhone</div>'
+      +'<div class="ss-d">La synchronisation avec Apple Santé arrive avec le Raccourci <b>RepCore Santé</b>. '
+      +'En attendant, note tes pas et ton sommeil à la main : c’est cette saisie qui fait foi.</div></div>';
+  } else if(p==='ios'){
     corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
       +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
         raccourciSanteUrl()?'À l’ajout, colle ton adresse quand il la demande ; au premier lancement, autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
