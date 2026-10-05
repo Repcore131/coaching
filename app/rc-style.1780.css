@@ -5637,6 +5637,16 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 @media (max-width:640px){
   .px-media-img img,.px-media-vide{width:60px;height:60px}
 }
+/* ══ LA CROIX DES CARTES DE L'ACCUEIL (05/10/2026) ═══════════════════════ */
+.acc-fermable,.ps-carte{position:relative}
+.acc-x{position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+  padding:0;margin:0;border-radius:var(--r-full);cursor:pointer;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:18px;font-weight:700;line-height:1}
+.acc-x:hover{background:rgba(255,255,255,.16)}
+.acc-x:focus-visible{outline:2px solid var(--red-text);outline-offset:2px}
+/* La carte du mois : la croix se pose dans le coin, « Voir » lui laisse la place. */
+.acc-fermable .acc-x{top:-8px;right:-6px;width:28px;height:28px;font-size:16px;background:var(--surface-2);border-color:var(--border)}
+.ps-carte .ps-tete{padding-right:36px}
 /* ══ L'HISTORIQUE DES BILANS (05/10/2026) ════════════════════════════════ */
 .hb-ouvrir{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:0 0 14px;padding:14px 16px;cursor:pointer;
   background:#fff;color:#141414;border:1px solid #fff;border-radius:var(--r-3);font-family:Montserrat,sans-serif;
@@ -13537,6 +13547,10 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .px-media-img img{background:#090909;border:1px solid var(--border)}
 :root[data-theme="clair"] .px-media-vide{background:var(--surface-2);border:2px dashed var(--border)}
 :root[data-theme="clair"] .px-media-lire{background:var(--surface-2);border:1px solid var(--border);color:var(--red-text)}
+:root[data-theme="clair"] .acc-x{background:rgba(9,9,9,0.08);border:1px solid rgba(9,9,9,0.16);color:var(--text)}
+:root[data-theme="clair"] .acc-x:hover{background:rgba(9,9,9,0.16)}
+:root[data-theme="clair"] .acc-x:focus-visible{outline:2px solid var(--red-text)}
+:root[data-theme="clair"] .acc-fermable .acc-x{background:var(--surface-2);border-color:var(--border)}
 :root[data-theme="clair"] .hb{background:var(--surface-2)}
 :root[data-theme="clair"] .hb-l{background:var(--surface-1);border:1px solid var(--border)}
 :root[data-theme="clair"] .hb-l-t b{color:var(--text-strong)}

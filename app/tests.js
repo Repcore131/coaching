@@ -40846,6 +40846,30 @@ async function testExercices(){
           if(sv.br==null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,sv.br);
           document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active')); ecrans.forEach(e=>e.classList.add('active'));
         }})());
+      ok('Accueil : la croix écarte « Ton point de la semaine » (six jours) et la carte du mois (pour de bon)',(()=>{
+        // 05/10/2026 (Kevin) : « mets une croix pour qu’on puisse supprimer ce type de notification ».
+        const sv=currentUser; const cles=[];
+        try{
+          currentUser={id:'CX',email:'cx@t.fr',role:'athlete'};
+          const kP=_accCle('point'), kW=_accCle('wrapped-2026-09'); cles.push(kP,kW);
+          localStorage.removeItem(kP); localStorage.removeItem(kW);
+          if(accCarteMasquee('point')||accCarteMasquee('wrapped-2026-09')) return _echec('masquée sans croix');
+          const croix=_htmlCroixAccueil('point','ton point de la semaine');
+          if(croix.indexOf("accMasquerCarte('point')")<0||croix.indexOf('aria-label="Masquer')<0) return _echec('la croix : '+croix);
+          const t=Date.now();
+          localStorage.setItem(kP,String(t+ACC_MASQUE_POINT_J*864e5));
+          if(!accCarteMasquee('point',t)||!accCarteMasquee('point',t+5*864e5)) return _echec('le point revient trop tôt');
+          if(accCarteMasquee('point',t+6*864e5+1000)) return _echec('le point ne revient pas au rendez-vous suivant');
+          localStorage.setItem(kW,'1');
+          if(!accCarteMasquee('wrapped-2026-09',t+400*864e5)) return _echec('le mois écarté revient');
+          if(accCarteMasquee('wrapped-2026-10')) return _echec('écarter septembre a écarté octobre');
+          // Par compte : un autre athlète sur le même appareil garde ses cartes.
+          currentUser={id:'CY',email:'cy@t.fr',role:'athlete'};
+          if(accCarteMasquee('point',t)||accCarteMasquee('wrapped-2026-09')) return _echec('le masquage déborde sur un autre compte');
+          // Les deux rendus portent la croix.
+          if(String(_rendrePointSemaine).indexOf("_htmlCroixAccueil('point'")<0||String(_rendreCarteWrapped).indexOf("_htmlCroixAccueil('wrapped-'+p.cle")<0) return _echec('une carte a perdu sa croix');
+          return true;
+        } finally { currentUser=sv; cles.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} }); }})());
       ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
         // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
         // choisit dans une liste, l'athlete qui veut une technique la tape
