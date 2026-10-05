@@ -1158,6 +1158,10 @@
         // ici : le noeud est en lecture publique.
         "prenom": { ".validate": "newData.isString() && newData.val().length < 60" },
         "nom":    { ".validate": "newData.isString() && newData.val().length < 60" },
+        // Le programme de depart choisi par le coach (invitations en lot,
+        // 05/10/2026) : l identifiant d un de SES modeles, rien d autre. C est
+        // le Worker (redeemCode) qui le lit et pose le programme.
+        "programmeModeleId": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)" },
 
         "coachEmailKey": { ".validate": "!data.exists() || data.val() === newData.val()" },
         "coachId":       { ".validate": "!data.exists() || data.val() === newData.val()" },

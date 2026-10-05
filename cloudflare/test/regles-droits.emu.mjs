@@ -88,6 +88,12 @@ await test('/rc_codes : un coach enregistré crée SES codes, pas ceux d’un au
   assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N002', code({ coachEmailKey: K(LEA) }))).statut, 401);
   assert.equal((await appel(KEV, 'PATCH', 'rc_codes/RC-KEVI-N001', { expiry: Date.now() + 2e10, months: 6 })).statut, 200, 'il prolonge le sien');
 });
+await test('/rc_codes : programmeModeleId — un identifiant de modèle, 64 caractères au plus', async () => {
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N003', code({ programmeModeleId: 'mg5x2k1a' }))).statut, 200);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N004', code({ programmeModeleId: 'x'.repeat(65) }))).statut, 401);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N005', code({ programmeModeleId: '../users' }))).statut, 401);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N006', code({ programmeModeleId: 42 }))).statut, 401);
+});
 await test('/rc_codes : un tiers ne passe plus redeemed à true (c’est le Worker qui consomme)', async () => {
   assert.equal((await appel(LEA, 'PATCH', 'rc_codes/RC-KEVI-N001', { redeemed: true, athleteEmail: LEA, etat: 'cree' })).statut, 401);
   assert.equal(JSON.parse((await appel('owner', 'GET', 'rc_codes/RC-KEVI-N001/redeemed')).corps), false);

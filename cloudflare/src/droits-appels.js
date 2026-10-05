@@ -46,6 +46,52 @@ export function finDuCode(code, cleCoach, t) {
   return exp > t ? Math.min(exp, plafond) : 0;
 }
 
+// ══ LE PROGRAMME DE DÉPART D'UNE INVITATION (05/10/2026) ═════════════════════
+// Un coach qui invite en lot peut choisir un modèle : le code porte alors
+// programmeModeleId. L'athlète, lui, NE PEUT PAS lire le modèle — il vit dans
+// users/<coach>/coachPrograms, que les règles ne lui ouvrent pas. C'est donc
+// ici, à la consommation du code, avec le compte de service, qu'il est posé :
+// au moment même où l'app attend la réponse, et non au passage suivant de la
+// file /evenements (l'athlète aurait vu « Programme en cours de création » à
+// sa première ouverture). Mêmes règles que _assignerModele dans l'app.
+const ID_MODELE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const listeDe = (x) => (Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : [])).filter(Boolean);
+// PURE. Les séances garnies d'une version (comme _cplSeancesPleines).
+const pleines = (p, g) => listeDe(p && p[g === 'F' ? 'sessions_F' : 'sessions_H'])
+  .filter((s) => s && s.active && Array.isArray(s.exercises) && s.exercises.length);
+// PURE. Une configuration RÉELLE (= _configReelle de l'app) : une séance
+// active, garnie, et qui n'est ni un essai ni la Fondation posée d'office.
+export function configReelle(sc) {
+  return listeDe(sc).some((s) => s.active && Array.isArray(s.exercises) && s.exercises.length && !s._essai && !s._foundation);
+}
+/**
+ * PURE. Le programme qu'un modèle du coach donne à un athlète, ou null.
+ * Le public du modèle tranche (progGenreServi) : un modèle « Pour les
+ * hommes » ne livre que sa version H, quel que soit le genre de l'athlète.
+ * @param {any} progs     users/<coach>/coachPrograms (tableau, ou objet Firebase)
+ * @param {string} id     programmeModeleId du code
+ * @param {string} genre  le genre de l'athlète ('F' ou autre)
+ * @param {number} t      l'heure
+ */
+export function programmeDuModele(progs, id, genre, t) {
+  if (!ID_MODELE_RE.test(String(id || ''))) return null;
+  const p = listeDe(progs).find((x) => String(x.id || '') === String(id));
+  if (!p) return null;
+  const v = p.publicVise;
+  const pub = (v === 'H' || v === 'F' || v === 'HF') ? v
+    : (pleines(p, 'H').length && !pleines(p, 'F').length) ? 'H'
+    : (pleines(p, 'F').length && !pleines(p, 'H').length) ? 'F' : 'HF';
+  const g = (pub === 'H' || pub === 'F') ? pub : (genre === 'F' ? 'F' : 'H');
+  // Copie profonde, et marquée publiée (_marquerCommePublie) : un essai ne
+  // se glisse pas dans le programme du coach.
+  const sc = JSON.parse(JSON.stringify(listeDe(p[g === 'F' ? 'sessions_F' : 'sessions_H'])));
+  sc.forEach((s) => { delete s._essai; delete s._foundation; });
+  if (!configReelle(sc)) return null;
+  return { sessions_config: sc, assignedProgramName: String(p.name || 'Programme').slice(0, 120),
+    assignedProgramAt: t, assignedProgramId: String(p.id), assignedProgramGenre: g,
+    assignedProgramVersion: Number(p.majAt) || Number(p.createdAt) || 0 };
+}
+
 export function creerAppelsDroits(ctx) {
   const { db, M } = ctx;
   const now = () => (ctx.maintenant || Date.now)();
@@ -132,8 +178,22 @@ export function creerAppelsDroits(ctx) {
       if (d.coachName) maj[b + 'coachName'] = String(d.coachName).slice(0, 120);
       await db.ref().update(maj);
     }
+    // Le programme de départ choisi par le coach, s'il y en a un, et SEULEMENT
+    // sur un athlète sans programme réel : un code ne remplace jamais un
+    // programme déjà en place. Rejouer (même compte) le repose s'il manque.
+    let programme = null;
+    if (d.programmeModeleId && ID_MODELE_RE.test(String(d.programmeModeleId))) {
+      const [progs, sc, genre] = await Promise.all([lire('users/' + coach + '/coachPrograms'),
+        lire('users/' + cle + '/sessions_config'), lire('users/' + cle + '/gender')]);
+      if (!configReelle(sc)) programme = programmeDuModele(progs, d.programmeModeleId, genre, t);
+      if (programme) {
+        const b = 'users/' + cle + '/', maj = { [b + 'updatedAt']: t };
+        for (const [k, v] of Object.entries(programme)) maj[b + k] = v;
+        await db.ref().update(maj);
+      }
+    }
     return { ok: true, deja: r === 'deja', echeance: fin, coachEmailKey: coach, coachId: d.coachId || null,
-      coachName: d.coachName || null, droits: droits || null };
+      coachName: d.coachName || null, droits: droits || null, programme };
   }
 
   // ── devenirCoach ──────────────────────────────────────────────────────

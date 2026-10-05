@@ -807,6 +807,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // La date du rattachement à son coach (02/10/2026) : le rang dans le quota
   // de la formule du coach (athleteCouvertParCoach). Une date, pas une mesure.
   'rattacheLe',
+  // Le modèle du coach posé comme programme (invitations en lot, 05/10/2026,
+  // _appliquerProgrammeDepart) : un nom et une version, pas une mesure.
+  'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert

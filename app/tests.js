@@ -15835,6 +15835,126 @@ async function testExercices(){
             if(!p||typeof p.then!=='function') return _echec('inviterAthlete ne rend pas une promesse');
             return true;
           } finally { currentUser=sauve; }});
+        // ══ INVITATIONS EN LOT (05/10/2026) ══════════════════════════════════
+        ok('parserListeInvites : vide, lignes vides, nom absent, séparateur ;',()=>{
+          if(parserListeInvites('').length!==0) return _echec('texte vide : '+JSON.stringify(parserListeInvites('')));
+          if(parserListeInvites('\n  \n\t\n').length!==0) return _echec('lignes blanches comptées');
+          const l=parserListeInvites('  Léa   Martin  \n\nTom ; tom@exemple.fr\nJean Paul Durand ; pas-un-mail\r\nZoé Petit;zoe@x.fr');
+          const attendu=[{prenom:'Léa',nom:'Martin'},{prenom:'Tom',nom:'',email:'tom@exemple.fr'},
+            {prenom:'Jean',nom:'Paul Durand'},{prenom:'Zoé',nom:'Petit',email:'zoe@x.fr'}];
+          return JSON.stringify(l)===JSON.stringify(attendu)?true:_echec(JSON.stringify(l));});
+        ok('parserListeInvites : doublons retirés (casse, accents, espaces), 51 lignes → 50',()=>{
+          const d=parserListeInvites('Léa Martin\nLEA MARTIN\nlea  martin ; lea@x.fr\nLéa Martine');
+          if(d.length!==2) return _echec('doublons : '+JSON.stringify(d));
+          const t=Array.from({length:51},(_,i)=>'Athlete'+i+' Nom'+i).join('\n');
+          const l=parserListeInvites(t);
+          if(l.length!==INV_LOT_MAX||INV_LOT_MAX!==50) return _echec(l.length+' gardées (max '+INV_LOT_MAX+')');
+          return l[49].prenom==='Athlete49'?true:_echec('la 50e est '+l[49].prenom);});
+        okA('inviterEnLot : en série, saute l’invitation en attente, programmeModeleId dans le code, l’e-mail jamais',async()=>{
+          const sv={u:currentUser,f:window.fetch,t:CLOUD._getToken,s:window.saveUser};
+          const puts=[]; let enVol=0, max=0;
+          try{
+            currentUser={id:'c_lot',email:'lot@t.fr',role:'coach',fname:'K',lname:'G',
+              studentCodes:[{token:'RC-DEJA-0001',prenom:'Tom',nom:'',active:true,redeemed:false,etat:'envoye',createdAt:Date.now()}]};
+            window.saveUser=()=>true; CLOUD._getToken=async()=>'jeton';
+            window.fetch=async(url,o)=>{
+              enVol++; max=Math.max(max,enVol);
+              await new Promise(r=>setTimeout(r,5));
+              enVol--;
+              if(o&&o.method==='PUT') puts.push(JSON.parse(o.body));
+              return new Response('{}',{status:200});
+            };
+            const r=await inviterEnLot(parserListeInvites('Léa Martin ; lea@x.fr\nTom\nZoé'),'m_abc');
+            if(max!==1) return _echec(max+' appels simultanés');
+            if(r.crees!==2||puts.length!==2) return _echec('créées '+r.crees+', PUT '+puts.length);
+            if(!/en attente/.test(r.resultats[1].raison||'')) return _echec('Tom : '+JSON.stringify(r.resultats[1]));
+            if(!puts.every(b=>b.programmeModeleId==='m_abc')) return _echec('programmeModeleId absent du code');
+            if(JSON.stringify(puts).indexOf('lea@x.fr')>=0) return _echec('l’e-mail est parti dans /rc_codes');
+            if(r.resultats[0].email!=='lea@x.fr'||!/inv=/.test(r.resultats[0].lien)) return _echec(JSON.stringify(r.resultats[0]));
+            const n=invitationsEnAttente(currentUser).length;
+            return n===3?true:_echec(n+' en attente au lieu de 3');
+          } finally { currentUser=sv.u; window.fetch=sv.f; CLOUD._getToken=sv.t; window.saveUser=sv.s; }});
+        okA('inviterEnLot : réseau coupé en route → arrêt propre, rapport partiel ; hors ligne → rien',async()=>{
+          const sv={u:currentUser,f:window.fetch,t:CLOUD._getToken,s:window.saveUser};
+          let n=0;
+          try{
+            currentUser={id:'c_lot2',email:'lot2@t.fr',role:'coach',fname:'K',lname:'G',studentCodes:[]};
+            window.saveUser=()=>true; CLOUD._getToken=async()=>'jeton';
+            window.fetch=async()=>{ if(++n>=2) throw new TypeError('Failed to fetch'); return new Response('{}',{status:200}); };
+            const r=await inviterEnLot(parserListeInvites('Ana A\nBen B\nCyd C\nDan D'),'');
+            if(r.crees!==1||!r.arret) return _echec('créées '+r.crees+', arrêt '+r.arret);
+            if(n!==2) return _echec(n+' appels : la suite aurait dû s’arrêter');
+            if(!r.resultats.slice(2).every(x=>/Non créée/.test(x.raison||''))) return _echec(JSON.stringify(r.resultats));
+            Object.defineProperty(navigator,'onLine',{get:()=>false,configurable:true});
+            n=0;
+            const h=await inviterEnLot(parserListeInvites('Eva E\nFlo F'),'');
+            if(h.crees!==0||n!==0||h.arret!=='hors ligne') return _echec('hors ligne : '+JSON.stringify(h));
+            return true;
+          } finally { try{ delete navigator.onLine; }catch(e){}
+            currentUser=sv.u; window.fetch=sv.f; CLOUD._getToken=sv.t; window.saveUser=sv.s; }});
+        ok('La modale « Inviter plusieurs athlètes » : les modèles garnis du coach, « Aucun », le compte',()=>{
+          const sv=currentUser;
+          try{
+            const S=(n)=>({name:n,active:true,exercises:[{name:'Squat'}]});
+            currentUser={id:'c_m',email:'m@t',role:'coach',studentCodes:[],coachPrograms:[
+              {id:'p1',name:'Force',sessions_H:[S('A')],sessions_F:[]},{id:'p2',name:'Vide',sessions_H:[],sessions_F:[]}]};
+            if(!ouvrirInvitationsLot()) return _echec('la modale ne s’ouvre pas');
+            const o=[...document.querySelectorAll('#lot-modele option')].map(x=>x.value+':'+x.textContent);
+            if(o.join('|')!==':Aucun|p1:Force') return _echec(o.join('|'));
+            document.getElementById('lot-texte').value='Léa\nTom\nLéa';
+            return _lotCompter()===2?true:_echec('compte : '+document.getElementById('lot-compte').textContent);
+          } finally { currentUser=sv; closeModal(); }});
+        ok('Le bouton « Inviter plusieurs athlètes » est sur l’écran d’invitation',()=>{
+          const b=[...document.querySelectorAll('#s-coach-code button')].find(x=>/plusieurs athlètes/.test(x.textContent));
+          return b&&/ouvrirInvitationsLot/.test(b.getAttribute('onclick')||'')?true:_echec('bouton absent');});
+        ok('texteLot : « Prénom : lien » par ligne, les refus exclus',()=>{
+          const t=texteLot([{prenom:'Léa',lien:'L1'},{prenom:'Tom',raison:'x'},{prenom:'Zoé',lien:'L3'}]);
+          return t==='Léa : L1\nZoé : L3'?true:_echec(JSON.stringify(t));});
+        ok('programmeModeleId appliqué à l’inscription : config posée, sans _essai, _configReelle vrai',()=>{
+          const S=(n,x)=>Object.assign({name:n,active:true,exercises:[{name:'Squat',series:3}]},x||{});
+          // 1. La réponse du Worker (redeemCode) fait foi.
+          const u={email:'a@t',sessions_config:initSessionsConfig()};
+          const src=_appliquerProgrammeDepart(u,{programmeModeleId:'p1',coachId:'cX',
+            serveur:{programme:{sessions_config:[S('A'),S('B',{_essai:true})],assignedProgramName:'Force',assignedProgramId:'p1'}}});
+          if(src!=='serveur') return _echec('source : '+src);
+          if(!_configReelle(u.sessions_config)) return _echec('_configReelle faux');
+          if(u.sessions_config.some(s=>s._essai||s._foundation)) return _echec('un _essai reste');
+          if(u.assignedProgramName!=='Force') return _echec('nom : '+u.assignedProgramName);
+          // 2. Pas de réponse serveur : le modèle lisible sur l'appareil.
+          const users=DB.get('users')||{}, svU=JSON.stringify(users);
+          try{
+            DB.set('users',Object.assign({},users,{'coachlot@t':{id:'cLot',role:'coach',email:'coachlot@t',
+              coachPrograms:[{id:'p9',name:'Mixte',majAt:5,sessions_H:[S('H1')],sessions_F:[S('F1')]}]}}));
+            const v={email:'b@t',gender:'F'};
+            if(_appliquerProgrammeDepart(v,{programmeModeleId:'p9',coachId:'cLot'})!=='local') return _echec('lecture locale');
+            if(v.sessions_config[0].name!=='F1'||v.assignedProgramGenre!=='F') return _echec('genre : '+v.sessions_config[0].name);
+            // 3. Un programme réel en place n'est pas remplacé ; sans id, rien.
+            const w={email:'c@t',sessions_config:[S('Mien')]};
+            if(_appliquerProgrammeDepart(w,{programmeModeleId:'p9',coachId:'cLot'})!==null||w.sessions_config[0].name!=='Mien')
+              return _echec('programme réel remplacé');
+            const x={email:'d@t'};
+            if(_appliquerProgrammeDepart(x,{coachId:'cLot'})!==null||x.sessions_config) return _echec('posé sans programmeModeleId');
+            // 4. Modèle illisible (autre appareil) et Worker muet : rien.
+            const y={email:'e@t'};
+            return _appliquerProgrammeDepart(y,{programmeModeleId:'p404',coachId:'cLot'})===null&&!y.sessions_config
+              ?true:_echec('posé sans modèle');
+          } finally { DB.set('users',JSON.parse(svU)); }});
+        ok('_appliquerPayloadCode pose le programme de départ du code (redeemCode)',()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement,_te=window.toastEcriture,_ov=window._oublierCodeVerifie;
+          const users=DB.get('users')||{}, svU=JSON.stringify(users);
+          try{
+            window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve();
+            window._apresRattachement=()=>{}; window.toastEcriture=()=>{}; window._oublierCodeVerifie=()=>{};
+            currentUser={id:'u_pd',email:'pd@t',role:'athlete',fname:'P',status:'FREE'};
+            _appliquerPayloadCode({coachId:'cZ',coachName:'Kev',coachEmailKey:'kev@t,fr',type:'athlete',months:3,
+              expiry:Date.now()+90*864e5,programmeModeleId:'p1',serveur:{programme:{assignedProgramName:'Force',
+              sessions_config:[{name:'A',active:true,exercises:[{name:'Squat'}]}]}}});
+            if(!_configReelle(currentUser.sessions_config)) return _echec('pas de programme posé');
+            const stocke=(DB.get('users')||{})['pd@t'];
+            return stocke&&_configReelle(stocke.sessions_config)?true:_echec('le dossier stocké n’a pas le programme');
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.pushOne=_cp; window._apresRattachement=_ar;
+            window.toastEcriture=_te; window._oublierCodeVerifie=_ov; DB.set('users',JSON.parse(svU)); }});
         ok('La relance est un GESTE du coach, jamais automatique',()=>{
           // Aucun minuteur, aucune tâche de fond ne doit relancer un athlète.
           const tout=_prodSrc();

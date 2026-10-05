@@ -238,6 +238,48 @@ function _apresRattachement(){
 // saisie manuelle de rattrapage produisent exactement le même état — deux
 // copies de cette logique auraient divergé au premier correctif porté sur une
 // seule (coachEmailKey, pushOne et accessExpiry sont trop faciles à oublier).
+// LE PROGRAMME DE DÉPART D'UNE INVITATION (05/10/2026). Le code porte
+// programmeModeleId quand le coach a choisi un modèle en invitant. Deux
+// sources, dans cet ordre :
+//   1. la réponse de redeemCode (payload.serveur.programme) : le Worker a lu
+//      le modèle — que l'athlète, lui, ne peut pas lire — et l'a déjà écrit
+//      dans son dossier ;
+//   2. le modèle LISIBLE sur cet appareil (coach et athlète sur le même
+//      téléphone, ou Worker pas encore à jour).
+// Sinon, rien : pas d'événement différé, le programme ne serait pas là à la
+// première ouverture (voir cloudflare/README.md). Un programme RÉEL déjà en
+// place n'est jamais remplacé. Rend 'serveur', 'local' ou null.
+function _appliquerProgrammeDepart(u,payload){
+  if(!u||!payload||!payload.programmeModeleId) return null;
+  if(_configReelle(u.sessions_config)) return null;
+  const srv=payload.serveur&&payload.serveur.programme;
+  let prog=null, source=null, g='H', base=null;
+  if(srv&&_configReelle(srv.sessions_config)){
+    base=srv.sessions_config; source='serveur';
+  } else {
+    const coach=Object.values(DB.get('users')||{}).find(x=>x&&x.id===payload.coachId);
+    prog=((coach&&coach.coachPrograms)||[]).find(p=>p&&String(p.id)===String(payload.programmeModeleId));
+    if(!prog) return null;
+    g=progGenreServi(prog,u.gender);
+    base=(g==='F'?prog.sessions_F:prog.sessions_H)||[];
+    source='local';
+  }
+  const sc=_marquerCommePublie(JSON.parse(JSON.stringify(Array.isArray(base)?base:Object.values(base))));
+  if(!_configReelle(sc)) return null;
+  u.sessions_config=sc;
+  if(srv&&source==='serveur'){
+    ['assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion']
+      .forEach(k=>{ if(srv[k]!=null) u[k]=srv[k]; });
+  } else {
+    u.assignedProgramName=prog.name||'Programme';
+    u.assignedProgramAt=Date.now();
+    u.assignedProgramId=prog.id||null;
+    u.assignedProgramGenre=g;
+    u.assignedProgramVersion=Number(prog.majAt)||Number(prog.createdAt)||0;
+  }
+  u.updatedAt=Date.now();
+  return source;
+}
 function _appliquerPayloadCode(payload){
   const users=DB.get('users')||{};
   const coach=Object.values(users).find(u=>u.id===payload.coachId);
@@ -275,6 +317,7 @@ function _appliquerPayloadCode(payload){
     // de coach ne doit jamais raccourcir un accès acheté.
     currentUser.accessExpiry=Math.max(Number(currentUser.accessExpiry)||0,
       Number(_exp)||0)||_exp;
+    try{ _appliquerProgrammeDepart(currentUser,payload); }catch(e){ rcErreurMuette('_appliquerProgrammeDepart',e); }
     users[currentUser.email]=currentUser;
     const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
     // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete

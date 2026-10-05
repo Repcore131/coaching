@@ -61,7 +61,11 @@ async function _marquerEtatInvitation(code,etat,champs){
   }catch(e){ return false; }
 }
 
-async function _genAccessCode(studentName,months,type){
+// `extra.programmeModeleId` (05/10/2026, invitations en lot) : le modèle du
+// coach que l'athlète recevra en s'inscrivant. C'est le Worker (redeemCode)
+// qui le pose — l'athlète ne peut pas lire coachPrograms.
+const RC_MODELE_ID_RE=/^[A-Za-z0-9_-]{1,64}$/;
+async function _genAccessCode(studentName,months,type,extra){
   const fbTok=await CLOUD._getToken();
   const expiry=Date.now()+months*_MONTH_MS;
   const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
@@ -98,6 +102,8 @@ async function _genAccessCode(studentName,months,type){
     creatorFree:isCreator,
     grantedBy:isCreator?'creator':'coach'
   };
+  const _mod=extra&&extra.programmeModeleId;
+  if(_mod&&RC_MODELE_ID_RE.test(String(_mod))) payload.programmeModeleId=String(_mod);
   // Hors ligne, la generation ne peut PAS aboutir : le code doit exister
   // cote serveur avant d'etre transmis, sinon l'athlete recevrait un lien
   // mort. On le dit franchement, et on ne met rien en file : une invitation

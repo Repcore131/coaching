@@ -7,7 +7,7 @@ import { cloudinaryDestroy, cloudinarySigner, signatureCloudinary, LIMITE_SIGNAT
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
 import { creerMetier } from '../src/metier.js';
-import { creerAppelsDroits } from '../src/droits-appels.js';
+import { creerAppelsDroits, programmeDuModele, configReelle } from '../src/droits-appels.js';
 import { creerEssai } from '../src/essai.js';
 import { ErreurAppel } from '../src/appels.js';
 import { planifierDroitsCoachs } from '../src/migration.js';
@@ -263,6 +263,46 @@ await test('redeemCode : double consommation refusée ; le même compte peut rej
   const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
   assert.equal(r.deja, true);
   assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 3 * MMS, 'rejouer ne rallonge pas');
+});
+// ══ LE PROGRAMME DE DÉPART D'UNE INVITATION EN LOT (05/10/2026) ═══════════
+const SEANCE = (nom, x) => Object.assign({ name: nom, active: true, exercises: [{ name: 'Squat', series: 3, reps: '8' }] }, x);
+const MODELES = [{ id: 'p_force', name: 'Force 3j', majAt: 7, sessions_H: [SEANCE('A'), SEANCE('B', { _essai: true })], sessions_F: [SEANCE('F1')] },
+  { id: 'p_homme', name: 'Hommes', publicVise: 'H', sessions_H: [SEANCE('H1')], sessions_F: [] }];
+await test('redeemCode : programmeModeleId pose le modèle du coach dans sessions_config, sans _essai, et le renvoie', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } }, users: { 'kev@t,fr': { coachPrograms: MODELES } },
+    rc_codes: { 'RC-PROG-AAAA': CODE({ programmeModeleId: 'p_force' }) } });
+  const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-PROG-AAAA' });
+  assert.equal(r.programme.assignedProgramId, 'p_force');
+  const sc = w.F.lire('users/lea@t,fr/sessions_config');
+  const l = Array.isArray(sc) ? sc : Object.values(sc);
+  assert.deepEqual(l.map((s) => s.name), ['A', 'B']);
+  assert.ok(l.every((s) => !s._essai && !s._foundation), 'aucun _essai');
+  assert.equal(configReelle(sc), true);
+  assert.equal(w.F.lire('users/lea@t,fr/assignedProgramName'), 'Force 3j');
+  assert.equal(w.F.lire('users/lea@t,fr/assignedProgramVersion'), 7);
+  assert.equal(w.F.lire('users/kev@t,fr/coachPrograms/0/sessions_H/1/_essai'), true, 'le modèle du coach n’est pas touché');
+});
+await test('redeemCode : programmeModeleId — genre, modèle absent, programme déjà réel', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } },
+    users: { 'kev@t,fr': { coachPrograms: MODELES }, 'zoe@t,fr': { gender: 'F' }, 'tom@t,fr': { sessions_config: [SEANCE('Mien')] } },
+    rc_codes: { 'RC-PROG-ZOEE': CODE({ programmeModeleId: 'p_force' }), 'RC-PROG-HOMM': CODE({ programmeModeleId: 'p_homme' }),
+      'RC-PROG-ABSE': CODE({ programmeModeleId: 'p_supprime' }), 'RC-PROG-TOMM': CODE({ programmeModeleId: 'p_force' }) } });
+  assert.equal((await w.appel('redeemCode', 'zoe@t.fr', { code: 'RC-PROG-ZOEE' })).programme.assignedProgramGenre, 'F');
+  assert.equal(w.F.lire('users/zoe@t,fr/sessions_config/0/name'), 'F1');
+  const h = await w.appel('redeemCode', 'ana@t.fr', { code: 'RC-PROG-HOMM' });
+  assert.equal(h.programme.assignedProgramGenre, 'H', 'un modèle « Pour les hommes » ne livre que sa version H');
+  const a = await w.appel('redeemCode', 'max@t.fr', { code: 'RC-PROG-ABSE' });
+  assert.equal(a.ok, true); assert.equal(a.programme, null, 'modèle supprimé : le code vaut quand même, sans programme');
+  assert.equal(w.F.lire('users/max@t,fr/sessions_config'), null);
+  const t = await w.appel('redeemCode', 'tom@t.fr', { code: 'RC-PROG-TOMM' });
+  assert.equal(t.programme, null, 'un programme réel déjà en place n’est pas remplacé');
+  assert.equal(w.F.lire('users/tom@t,fr/sessions_config/0/name'), 'Mien');
+});
+await test('programmeDuModele : identifiant invalide ou modèle vide → null (PURE)', () => {
+  assert.equal(programmeDuModele(MODELES, '../x', 'H', 1), null);
+  assert.equal(programmeDuModele(MODELES, 'x'.repeat(65), 'H', 1), null);
+  assert.equal(programmeDuModele([{ id: 'v', sessions_H: [], sessions_F: [] }], 'v', 'H', 1), null);
+  assert.equal(programmeDuModele({ a: MODELES[0] }, 'p_force', 'H', 1).assignedProgramName, 'Force 3j', 'objet Firebase lu comme un tableau');
 });
 await test('redeemCode : désactivé, expiré, invitation coach — refusés', async () => {
   const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } },

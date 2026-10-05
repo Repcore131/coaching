@@ -231,6 +231,34 @@ vérification à la main : `docs/apercu-liens.md`.
   5 minutes, puis lancer la veille à la main (Actions > Veille du serveur > Run workflow) : croix
   rouge et courriel. Remettre le déclencheur.
 
+## Le programme de départ d'une invitation (`redeemCode`, 05/10/2026)
+
+Un coach qui invite en lot (« Inviter plusieurs athlètes ») peut choisir un
+modèle : le code `/rc_codes/<code>` porte alors `programmeModeleId`
+(l'identifiant du modèle, ≤ 64 caractères, borné par les règles).
+
+**Pourquoi c'est le Worker qui pose le programme.** Le modèle vit dans
+`users/<coach>/coachPrograms`, que les règles n'ouvrent qu'au coach : depuis
+le compte de l'athlète, il est illisible. `redeemCode`, qui consomme déjà le
+code avec le compte de service, lit le modèle, choisit la version comme
+l'app (`publicVise`, sinon le genre de l'athlète), retire `_essai` et
+`_foundation`, écrit `sessions_config` et `assignedProgram*` dans le dossier
+de l'athlète, et **renvoie le programme dans sa réponse** : l'app le pose
+tout de suite, et l'athlète le voit à sa première ouverture.
+
+**Pourquoi pas un événement `/evenements` (`assigner_modele`).** C'était
+l'autre voie : l'app dépose l'événement, la file le traite au passage
+suivant de la planification. Entre-temps — la première ouverture —
+l'athlète aurait vu « Programme en cours de création ». `redeemCode` tourne
+déjà au bon moment et avec les bons droits : un appel de plus, pas une file
+de plus, et aucun type d'événement à ouvrir dans les règles.
+
+Garde-fous : un programme **réel** déjà en place n'est jamais remplacé ; un
+modèle supprimé entre-temps ne bloque pas le code (le compte est créé, sans
+programme) ; le modèle du coach n'est pas modifié. Tant que le Worker n'est
+pas redéployé, l'app ne pose le programme que si le modèle est lisible sur
+l'appareil (coach et athlète sur le même téléphone).
+
 ## Le créateur, reconnu par son UID
 
 Depuis le 01/10/2026, les règles de la base et le Worker ne reconnaissent plus le créateur à son

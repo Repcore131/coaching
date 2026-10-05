@@ -2317,7 +2317,7 @@ function invitationExistante(prenom,nom,user){
   return invitationsEnAttente(user).find(c=>_clePersonne(c.prenom,c.nom)===k
     ||exKey(c.studentName||'')===k)||null;
 }
-async function inviterAthlete(prenom,nom){
+async function inviterAthlete(prenom,nom,opts){
   const u=currentUser;
   if(!u||u.role!=='coach') return {ok:false,raison:'Réservé aux coachs.'};
   const pn=String(prenom||'').trim(), nm=String(nom||'').trim();
@@ -2327,7 +2327,8 @@ async function inviterAthlete(prenom,nom){
     +((deja.prenom||deja.studentName||'cette personne'))+'. Relance-la plutôt '
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
-  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT); }
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT,undefined,
+    {programmeModeleId:opts&&opts.programmeModeleId}); }
   catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
     createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,
@@ -2336,6 +2337,235 @@ async function inviterAthlete(prenom,nom){
   u.studentCodes.push(entree);
   try{ saveUser(); }catch(e){ rcErreurMuette('inviterAthlete',e); }
   return {ok:true,invitation:entree,lien:lienInvitation(gen.token,u)};
+}
+
+// ══════ INVITER PLUSIEURS ATHLÈTES D'UN COUP (05/10/2026) ══════
+// Un coach qui démarre arrive avec une liste : vingt prénoms dans ses notes,
+// pas vingt formulaires à remplir. Il colle la liste, choisit un programme de
+// départ s'il le veut, et repart avec un lien par personne.
+//
+// ⚠ L'E-MAIL NE QUITTE PAS L'APPAREIL. /rc_codes est en lecture publique : on
+//   n'y écrit que le prénom et le nom (voir _clePersonne). L'adresse, si le
+//   coach l'a collée, ne sert qu'à l'écran de résultat (« E-mail »).
+// ⚠ UN APPEL APRÈS L'AUTRE, JAMAIS EN PARALLÈLE. Cinquante PUT simultanés sur
+//   le plan Spark, c'est cinquante connexions ouvertes d'un coup ; en série,
+//   un échec réseau arrête tout proprement et le rapport dit où.
+const INV_LOT_MAX=50;
+const INV_LOT_EMAIL_RE=/^[^\s@;]+@[^\s@;]+\.[^\s@;]+$/;
+// PURE. Le texte collé → [{prenom,nom,email?}]. Une personne par ligne,
+// « Prénom Nom » ou « Prénom Nom ; e-mail ». Lignes vides ignorées, doublons
+// retirés (même clé que invitationExistante), INV_LOT_MAX personnes au plus.
+// Une ligne sans nom de famille reste valable : beaucoup de coachs ne
+// connaissent que le prénom.
+function parserListeInvites(texte){
+  const vus=new Set(), l=[];
+  for(const brut of String(texte||'').split(/\r?\n/)){
+    if(l.length>=INV_LOT_MAX) break;
+    const [nomComplet,mail]=brut.split(';');
+    const mots=String(nomComplet||'').trim().split(/\s+/).filter(Boolean);
+    if(!mots.length) continue;
+    const prenom=mots[0], nom=mots.slice(1).join(' ');
+    const k=_clePersonne(prenom,nom);
+    if(!k||vus.has(k)) continue;
+    vus.add(k);
+    const o={prenom,nom};
+    const e=String(mail||'').trim();
+    if(INV_LOT_EMAIL_RE.test(e)) o.email=e;
+    l.push(o);
+  }
+  return l;
+}
+// PURE. Les modèles du coach qu'on peut donner comme programme de départ :
+// la même source que l'assignation (coachPrograms), et seulement ceux qui ont
+// au moins une séance garnie — un modèle vide ne donnerait rien à l'athlète.
+function modelesDepartDe(user){
+  const u=_dossier(user);
+  return (((u&&u.coachPrograms)||[]).filter(p=>p&&p.id
+    &&(_cplSeancesPleines(p,'H').length||_cplSeancesPleines(p,'F').length)))
+    .map(p=>({id:String(p.id),name:String(p.name||'Programme')}));
+}
+// Le message d'arrêt : hors ligne, ou session refusée — inutile d'essayer les
+// lignes suivantes, elles échoueraient toutes pour la même raison.
+function _lotArretDe(raison){
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return 'hors ligne';
+  return /hors ligne|connexion|session/i.test(String(raison||''))?'connexion':'';
+}
+/**
+ * Émet une invitation par personne, en série. Rend
+ * {resultats:[{prenom,nom,email?,lien,token}|{prenom,nom,email?,raison}],crees,arret}.
+ * @param {{prenom:string,nom:string,email?:string}[]} liste  parserListeInvites
+ * @param {string} [modeleId]  le programme de départ (coachPrograms[].id)
+ * @param {(fait:number,total:number)=>void} [surProgres]
+ */
+async function inviterEnLot(liste,modeleId,surProgres){
+  const l=(liste||[]).slice(0,INV_LOT_MAX), resultats=[];
+  let crees=0, arret='';
+  for(let i=0;i<l.length;i++){
+    const p=l[i], base={prenom:p.prenom,nom:p.nom||''};
+    if(p.email) base.email=p.email;
+    if(arret){ resultats.push(Object.assign(base,{raison:'Non créée : '+arret+'.'})); continue; }
+    if(typeof navigator!=='undefined'&&navigator.onLine===false){
+      arret='hors ligne';
+      resultats.push(Object.assign(base,{raison:'Non créée : hors ligne.'}));
+      continue;
+    }
+    if(invitationExistante(p.prenom,p.nom,currentUser)){
+      resultats.push(Object.assign(base,{raison:'Déjà une invitation en attente : relance-la.'}));
+      continue;
+    }
+    const r=await inviterAthlete(p.prenom,p.nom,{programmeModeleId:modeleId||undefined});
+    if(r.ok){ crees++; resultats.push(Object.assign(base,{lien:r.lien,token:r.invitation.token})); }
+    else {
+      resultats.push(Object.assign(base,{raison:r.raison}));
+      arret=_lotArretDe(r.raison);
+    }
+    try{ if(surProgres) surProgres(i+1,l.length); }catch(e){}
+  }
+  return {resultats,crees,arret};
+}
+// L'avertissement de quota : la règle existante (coachQuotaDepasse), et ce
+// que le lot y ajoute. JAMAIS bloquant — le quota se lit sur les athlètes
+// ACTIFS, et une invitation n'en est pas encore un.
+function _lotAvertissementQuota(n){
+  const u=currentUser;
+  if(!u||u.role!=='coach') return '';
+  const users=DB.get('users')||{};
+  const q=getCoachQuota(coachPlanDe(u)), actifs=countActiveAthletes(u,users);
+  if(coachQuotaDepasse(u,users))
+    return 'Tu dépasses déjà le quota de ta formule ('+actifs+' / '+q+' athlètes actifs). '
+      +'Les invitations partent quand même.';
+  if(n&&actifs+n>q)
+    return 'Si tous deviennent actifs, tu dépasseras le quota de ta formule ('+q+' athlètes). '
+      +'Les invitations partent quand même.';
+  return '';
+}
+let _lotResultats=[], _lotPartages=0;
+const _lotChamp='width:100%;box-sizing:border-box;font-family:Montserrat,sans-serif;font-size:var(--fs-md);'
+  +'background:var(--surface-1);color:var(--text);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px';
+function ouvrirInvitationsLot(){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  try{ closeModal(); }catch(e){}
+  const mods=modelesDepartDe(currentUser);
+  const opts='<option value="">Aucun</option>'+mods.map(m=>'<option value="'+escapeHtml(m.id)+'">'
+    +escapeHtml(m.name)+'</option>').join('');
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div id="lot-feuille" role="dialog" aria-modal="true" aria-labelledby="lot-titre" onclick="event.stopPropagation()" '
+    +'style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;'
+    +'max-width:520px;max-height:88vh;overflow-y:auto;box-sizing:border-box;animation:fadeIn var(--t-3) var(--c-out)">'
+    +'<h2 id="lot-titre" style="margin:0 0 4px;font-size:var(--fs-lg)">Inviter plusieurs athlètes</h2>'
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.5;margin:0 0 12px">Une personne par ligne : '
+    +'« Prénom Nom », ou « Prénom Nom ; e-mail ». '+INV_LOT_MAX+' au plus. L’e-mail reste sur ton appareil.</p>'
+    +'<textarea id="lot-texte" rows="8" oninput="_lotCompter()" placeholder="Léa Martin\nTom Petit ; tom@exemple.fr" '
+    +'style="'+_lotChamp+';resize:vertical;min-height:140px"></textarea>'
+    +'<div id="lot-compte" style="font-size:var(--fs-xs);color:var(--sub);margin:6px 0 12px">0 personne</div>'
+    +'<label for="lot-modele" style="display:block;font-size:var(--fs-xs);color:var(--sub);font-weight:700;margin-bottom:6px">'
+    +'Programme de départ</label>'
+    +'<select id="lot-modele" style="'+_lotChamp+';margin-bottom:12px">'+opts+'</select>'
+    +'<div id="lot-quota" style="display:none;font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-bottom:12px"></div>'
+    +'<div id="lot-err" style="display:none;font-size:var(--fs-sm);color:var(--red-light);line-height:1.5;margin-bottom:8px"></div>'
+    +'<button type="button" id="lot-go" class="btn btn-red" style="width:100%;min-height:46px;margin-bottom:10px" onclick="_lotEnvoyer()">'
+    +'Créer les invitations</button>'
+    +'<button type="button" class="btn btn-outline" style="width:100%;min-height:44px" onclick="closeModal()">Annuler</button>'
+    +'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+  _lotCompter();
+  return true;
+}
+// Le compte sous la zone de texte, et ce qui sera ignoré au-delà du maximum.
+function _lotCompter(){
+  const t=(document.getElementById('lot-texte')||{}).value||'';
+  const n=parserListeInvites(t).length;
+  const lignes=t.split(/\r?\n/).filter(x=>x.trim()).length;
+  const z=document.getElementById('lot-compte');
+  if(z) z.textContent=n+' personne'+(n>1?'s':'')
+    +(lignes>INV_LOT_MAX?' · au-delà de '+INV_LOT_MAX+', les lignes sont ignorées':'');
+  const q=document.getElementById('lot-quota'), m=_lotAvertissementQuota(n);
+  if(q){ q.textContent=m; q.style.display=m?'block':'none'; }
+  return n;
+}
+async function _lotEnvoyer(){
+  const t=(document.getElementById('lot-texte')||{}).value||'';
+  const modele=(document.getElementById('lot-modele')||{}).value||'';
+  const liste=parserListeInvites(t);
+  const err=document.getElementById('lot-err'), go=document.getElementById('lot-go');
+  if(!liste.length){
+    if(err){ err.textContent='Colle au moins un prénom, une personne par ligne.'; err.style.display='block'; }
+    return false;
+  }
+  if(err) err.style.display='none';
+  if(go){ go.disabled=true; go.textContent='Création… 0 / '+liste.length; }
+  const r=await inviterEnLot(liste,modele,(f,n)=>{ if(go) go.textContent='Création… '+f+' / '+n; });
+  _lotResultats=r.resultats; _lotPartages=0;
+  _rendreResultatLot(r);
+  try{ _rendreInvitations(); }catch(e){}
+  return r;
+}
+// L'écran de résultat : une ligne par personne, son lien ou sa raison.
+function _rendreResultatLot(r){
+  const f=document.getElementById('lot-feuille');
+  if(!f) return false;
+  const lignes=r.resultats.map((x,i)=>{
+    const nom=escapeHtml((x.prenom+' '+(x.nom||'')).trim());
+    return '<div class="lot-l" style="display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:6px;'
+      +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text-strong)">'+nom+'</div>'
+      +(x.lien
+        ?'<div class="lot-lien" style="font-size:var(--fs-xs);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          +escapeHtml(x.lien)+'</div>'
+        :'<div class="lot-raison" style="font-size:var(--fs-xs);color:var(--orange);line-height:1.4">'+escapeHtml(x.raison||'')+'</div>')
+      +'</div>'
+      +(x.lien?'<button type="button" class="btn btn-blanc btn-sm" onclick="_lotCopier('+i+')">Copier</button>':'')
+      +(x.lien&&x.email?'<a class="btn btn-outline btn-sm" href="mailto:'+escapeHtml(encodeURIComponent(x.email))
+        +'?subject='+encodeURIComponent('Ton accès RepCore')+'&body='+encodeURIComponent(x.lien)+'">E-mail</a>':'')
+      +'</div>';
+  }).join('');
+  const titre=r.crees+' invitation'+(r.crees>1?'s':'')+' créée'+(r.crees>1?'s':'');
+  const avert=_lotAvertissementQuota(0);
+  f.innerHTML='<h2 id="lot-titre" style="margin:0 0 4px;font-size:var(--fs-lg)">'+titre+'</h2>'
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.5;margin:0 0 12px">'
+    +(r.arret?'Arrêt '+(r.arret==='hors ligne'?'hors ligne':'sur une erreur de connexion')
+      +' : les lignes suivantes n’ont pas été créées. Reconnecte-toi et colle-les à nouveau.'
+      :'Elles apparaissent dans « En attente ». Envoie à chacun son lien.')+'</p>'
+    +(avert?'<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-bottom:12px">'+escapeHtml(avert)+'</div>':'')
+    +'<div id="lot-liste">'+lignes+'</div>'
+    +(r.crees?'<div style="display:flex;gap:8px;margin:12px 0 10px">'
+      +'<button type="button" class="btn btn-red" style="flex:1;min-height:46px" onclick="_lotToutCopier()">Tout copier</button>'
+      +'<button type="button" id="lot-partager" class="btn btn-blanc" style="flex:1;min-height:46px" onclick="_lotPartager()">Partager</button>'
+      +'</div>':'')
+    +'<button type="button" class="btn btn-outline" style="width:100%;min-height:44px" onclick="closeModal()">Fermer</button>';
+  return true;
+}
+// PURE. « Prénom : lien », une ligne par invitation créée.
+function texteLot(resultats){
+  return (resultats||[]).filter(x=>x&&x.lien).map(x=>x.prenom+' : '+x.lien).join('\n');
+}
+async function _lotEcrire(t,quoi){
+  try{ await navigator.clipboard.writeText(t); toast(ICO.coche+' '+quoi,'var(--green)'); return true; }
+  catch(e){ toast('Copie impossible ici : appuie longuement sur le lien pour le copier.','var(--orange)'); return false; }
+}
+function _lotCopier(i){
+  const x=_lotResultats[i];
+  return x&&x.lien?_lotEcrire(x.lien,'Lien de '+x.prenom+' copié'):false;
+}
+function _lotToutCopier(){ return _lotEcrire(texteLot(_lotResultats),'Tous les liens copiés'); }
+// Partager UN PAR UN : le partage natif exige un geste par envoi, et chaque
+// athlète doit recevoir SON lien, pas la liste des autres.
+async function _lotPartager(){
+  const l=_lotResultats.filter(x=>x&&x.lien);
+  if(!l.length) return false;
+  if(!navigator.share) return _lotToutCopier();
+  const x=l[_lotPartages%l.length];
+  const c=((currentUser&&currentUser.studentCodes)||[]).find(y=>y&&y.token===x.token)||{prenom:x.prenom,token:x.token};
+  try{
+    await navigator.share({title:'Ton accès RepCore',text:messageRelance(c,currentUser)});
+    try{ attribCompter('partage','invitation'); }catch(e){}
+    _lotPartages++;
+  }catch(e){ return false; }   // annulé : on reste sur la même personne
+  const b=document.getElementById('lot-partager');
+  if(b) b.textContent=_lotPartages>=l.length?'Tout est partagé '+ICO.coche
+    :'Partager ('+(_lotPartages+1)+' / '+l.length+' : '+(l[_lotPartages%l.length].prenom)+')';
+  return true;
 }
 
 // ══════ OUVERTURE RÉELLE, PAS UN APERÇU ══════
