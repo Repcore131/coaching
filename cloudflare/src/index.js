@@ -18,6 +18,10 @@
 //   GARMIN_CLIENT_ID, GARMIN_CLIENT_SECRET, GARMIN_PUSH_SECRET, GARMIN_CLE
 //                        la Health API de Garmin (garmin.js). Un seul absent : fermé.
 //                        Absent : /sante?cles=1 est fermé.
+//   ANTHROPIC_API_KEY    la clé de l'API Claude (ia.js). Absente : /fn/ia répond
+//                        503 « L'assistant est en pause. », sans appel.
+//   IA_COUPEE            '1' coupe l'assistant pour tout le monde (503), sans
+//                        redéployer ; tout autre valeur, ou absent : ouvert.
 // LIMITES (wrangler.toml, [[ratelimits]]), par adresse IP. AUCUNE ROUTE
 // PUBLIQUE SANS LIMITE (01/10/2026) :
 //   LIMITE_ROUTES    toute requête (sauf la pré-vérification OPTIONS), 120/min ;
@@ -42,6 +46,7 @@ import { creerGarmin, garminOuvert } from './garmin.js';
 import { creerAppelsDroits, cleDe } from './droits-appels.js';
 import { creerEssai } from './essai.js';
 import { noter429, viderPouls, surveillerQuota } from './pouls.js';
+import { creerIA } from './ia.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
@@ -64,7 +69,13 @@ const changerAbonnement = ({ auth, data }, ctx) =>
 // l'abonnement annulé chez PayPal à sa date d'effet. Servi sur POST /resiliation.
 const resiliation = ({ auth, data }, ctx) =>
   ctx.M.paypal.resilier(cleDe(auth.email), data && data.motif, data && data.ts);
-const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin,
+// L'ASSISTANT IA (ia.js, 05/10/2026) : une proposition structurée, comptée
+// dans le quota du mois et notée au journal ; jamais écrite chez l'athlète.
+// iaRetour : ce que le coach en a fait (validée, modifiée, rejetée).
+const iaDe = (ctx) => creerIA({ env: ctx.env, db: ctx.db, fetchImpl: ctx.fetchImpl, maintenant: ctx.maintenant });
+const ia = (req, ctx) => iaDe(ctx).appeler(req);
+const iaRetour = (req, ctx) => iaDe(ctx).retour(req);
+const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin, ia, iaRetour,
   ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
   emailVerifie: droitsAppel('emailVerifie') };
@@ -92,6 +103,9 @@ function outils(env) {
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush, serieReservee: M.serieReservee });
+  // Le journal de l'assistant : la purge de la nuit, compte par compte (planif.js).
+  M.iaComptes = () => db.ref('ia_journal').shallow();
+  M.iaPurgerUn = (k, t) => creerIA({ env, db, fetchImpl: fetchCompte }).purgerUn(k, t);
   return { db, M, env, fetchCompte, compteur: () => n, budget: lim.budget };
 }
 

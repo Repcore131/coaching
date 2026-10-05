@@ -5,5 +5,8 @@
   "description": "Le serveur léger de RepCore (Cloudflare Worker). Voir README.md.",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0"
   }
 }

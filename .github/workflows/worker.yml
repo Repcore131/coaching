@@ -37,6 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: npm ci (@anthropic-ai/sdk, package-lock.json)
+        working-directory: cloudflare
+        run: npm ci
       - name: node --test
         working-directory: cloudflare
         run: node --test "test/*.test.mjs"

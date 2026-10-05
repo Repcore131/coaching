@@ -124,6 +124,10 @@ export function travaux(M) {
       un: (uid, t) => M.reactionsPushUn(uid, t), cout: 8, push: true },
     // La rétention (/stats/retention) : un résumé d'activité par compte, par lots,
     // la nuit (l'accumulateur est gardé entre deux minutes).
+    // LE JOURNAL DE L'ASSISTANT IA (ia.js) : au-delà de 90 jours, effacé —
+    // même règle que le journal des relances (journalAPurger).
+    { nom: 'ia_journal', quand: (p) => apres(p, 4, 40), cles: () => (M.iaComptes ? M.iaComptes() : []),
+      un: (k, t) => (M.iaPurgerUn ? M.iaPurgerUn(k, t) : null), cout: 2 },
     { nom: 'retention', quand: (p) => apres(p, 4, 30), cles: () => (M.activiteComptes ? M.activiteComptes() : []), un: (k, t, acc) => M.retentionUn(k, t, acc),
       fin: (acc) => M.retentionFin(acc), cout: 3 },
     // La relance des inactifs : J+7, J+14, J+30 après la dernière séance.

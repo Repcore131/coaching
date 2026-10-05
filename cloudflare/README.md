@@ -535,6 +535,40 @@ instructions du guide Garmin.
 `garmin-client-id` quand il est présent) qui les authentifie. Changer
 `GARMIN_PUSH_SECRET` impose de redéclarer l'adresse au portail.
 
+## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
+
+Le socle côté serveur existe ; **rien n'est encore branché dans l'app**. Deux appels (protocole
+onCall, jeton Firebase vérifié) :
+
+- `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
+  Tâches : `bilan`, `hebdo`, `import`, `programme`, `relance` (Claude Sonnet 5.5, réflexion
+  adaptative, effort `low` ou `medium`, repli côté serveur `fallbacks:'default'`) ; `repas`,
+  `relance_courte` (Claude Haiku 4.5). Réponse toujours structurée (schéma JSON par tâche) ; un
+  refus ou une réponse coupée rendent `{ok:false, raison}`, jamais un texte partiel. Un `athlete`
+  n'est accepté que si l'appelant en est le coach (même contrôle que la suppression des médias).
+  **Rien n'est écrit sous `users/`** : la proposition repart vers l'app, qui la fait relire.
+- `/fn/iaRetour` `{journalId, statut:'valide'|'modifie'|'rejete', distance}` : ce que le coach en a
+  fait, et l'écart (0 à 1) entre la proposition et le texte envoyé.
+
+**Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
+nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète
+Ultime 1 $ (`IA_PLAFONDS`). Au-delà : `429 « Quota IA du mois atteint. »`. Le coût de chaque appel
+(`PRIX`, $ par million de jetons : Sonnet 2 / 10 / 0,2 en cache, Haiku 1 / 5 / 0,1) est ajouté par
+transaction, et noté dans `ia_journal/<compte>/<id>` — effacé au-delà de 90 jours, la nuit
+(`planif.js`, travail `ia_journal`). Les deux nœuds sont lisibles par leur titulaire, écrits par le
+Worker seul (`database.rules.json`).
+
+**Mise en service** (Kevin, dans son terminal — la clé ne passe ni par le dépôt, ni par Claude) :
+
+```
+npx wrangler@4 secret put ANTHROPIC_API_KEY     # coller la clé à l'invite
+'0' | npx wrangler@4 secret put IA_COUPEE        # l'interrupteur : '0' ouvert
+```
+
+ou `secrets.ps1`, étape 3. **Couper l'assistant sans redéployer** : `'1' | npx wrangler@4 secret put
+IA_COUPEE` — toutes les demandes répondent alors `503 « L'assistant est en pause. »`, sans appel ni
+coût. Sans clé, c'est la même réponse.
+
 ## Pas encore branché
 
 - **Le mois de mentorat** de l'Ultime (il vivait dans `droits/` côté Cloud Functions ; pas encore porté dans le Worker).

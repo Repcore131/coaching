@@ -51,6 +51,9 @@ PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPU
 # et, pour les paiements et la suppression des vidéos (secrets-paiements.ps1) :
 #   PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 # et, facultatif (dntu57ml a défaut) : CLOUDINARY_CLOUD_NAME
+# et, pour l'assistant IA (ia.js ; secrets.ps1, étape 3) :
+#   ANTHROPIC_API_KEY   la clé de l'API Claude (absente : l'assistant répond « en pause »)
+#   IA_COUPEE           '1' pour couper l'assistant sans redéployer, '0' pour le rouvrir
 
 # ══ LE PLAN PAYANT (Workers Paid, 5 $/mois) : PRÉPARÉ, PAS ACTIVÉ ════════
 # Quand et comment basculer : docs/capacite.md. Tant que ce bloc reste en

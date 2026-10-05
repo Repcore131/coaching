@@ -1998,6 +1998,22 @@
         }
       }
     },
+    // L ASSISTANT IA (cloudflare/src/ia.js, 05/10/2026) : la consommation du
+    // mois (micro-dollars) et le journal des propositions. Lus par leur
+    // titulaire, ecrits par le Worker seul (compte de service) : le client ne
+    // peut ni remettre son compteur a zero, ni maquiller son journal.
+    "ia_quota": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
+    },
+    "ia_journal": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
+    },
     "relances_auto": {
       ".write": false,
       "$coachKey": {

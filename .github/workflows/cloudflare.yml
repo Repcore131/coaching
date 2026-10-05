@@ -76,6 +76,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # LA SEULE DÉPENDANCE (05/10/2026) : @anthropic-ai/sdk (ia.js), figée
+      # par package-lock.json. Sans elle, ni les tests ni la compilation.
+      - name: Les dépendances du Worker
+        working-directory: cloudflare
+        run: npm ci
       - name: Les tests du Worker
         working-directory: cloudflare
         run: npm test
@@ -115,6 +120,11 @@ jobs:
       - name: Le commit
         id: commit
         run: echo "court=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Les dépendances du Worker
+        if: steps.cle.outputs.ok == 'oui'
+        working-directory: cloudflare
+        run: npm ci
 
       - name: Déployer
         if: steps.cle.outputs.ok == 'oui'
