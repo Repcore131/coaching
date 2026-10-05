@@ -320,7 +320,7 @@ const firebaseBackend = {
   setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
   queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
   async signOut() { if (this.root) this.root.off(); this.root = null; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
-  write(path, value) { const up = { [path.join('/')]: value ?? null }; outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
+  write(path, value) { const up = fbClean([[path, value]]); outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
   replaceAll() { this.fb.database().ref('pulse').set(S); },
   wipe() { this.fb.database().ref('pulse').set(null); },
 };
@@ -341,7 +341,39 @@ const outboxSig = up => Object.keys(up).sort().join('|') + '#' + JSON.stringify(
 function outboxPush(up) { if (navigator.onLine) return; const L = outboxRead(); L.push({ sig: outboxSig(up), up, at: Date.now() }); safeLS.set(OUTBOX_KEY, JSON.stringify(L.slice(-500))); if (typeof renderOffline === 'function') renderOffline(); }
 function outboxDone(up) { const L = outboxRead(); if (!L.length) return; const sig = outboxSig(up); const i = L.findIndex(x => x.sig === sig); if (i >= 0) { L.splice(i, 1); safeLS.set(OUTBOX_KEY, JSON.stringify(L)); if (typeof renderOffline === 'function') renderOffline(); } }
 function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref('pulse').update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
-function writeFail(e) { toast('Écriture refusée : ' + ((e && e.message) || 'erreur inconnue')); if (typeof logError === 'function') logError('write', e); }
+function writeFail(e, path) {
+  WRITE_FAILS.n++; WRITE_FAILS.last = { msg: (e && e.message) || 'erreur inconnue', path: path || '', at: Date.now() };
+  clearTimeout(writeFail.t); writeFail.t = setTimeout(() => { toast(`Écriture refusée${WRITE_FAILS.n > 1 ? ' (' + WRITE_FAILS.n + ' valeurs)' : ''} : ${WRITE_FAILS.last.msg}`); if (typeof render === 'function') render(); }, 300);
+  if (typeof logError === 'function') logError('write', e);
+}
+const WRITE_FAILS = { n: 0, last: null };
+// Firebase refuse tout le lot pour une seule valeur undefined ou NaN, une clé
+// interdite, ou deux chemins dont l'un contient l'autre : on nettoie avant l'envoi.
+function fbVal(v) {
+  if (v === undefined || (typeof v === 'number' && !Number.isFinite(v))) return null;
+  if (Array.isArray(v)) return v.map(x => { const y = fbVal(x); return y === undefined ? null : y; });
+  if (v && typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) { const y = fbVal(x); if (y !== null && y !== undefined) o[String(k).replace(/[.#$/\[\]]/g, ',') || '_'] = y; } return Object.keys(o).length ? o : null; }
+  return v;
+}
+function fbClean(ops) {
+  const all = {};
+  for (const [p, v] of ops) { const k = p.map(s => String(s ?? '_').replace(/[.#$/\[\]]/g, ',') || '_').join('/'); delete all[k]; all[k] = fbVal(v); }
+  // chemin ancêtre d'un autre : l'enfant est fusionné dans la valeur du parent
+  const order = Object.keys(all); const pos = {}; order.forEach((k, i) => { pos[k] = i; });
+  const keys = order.slice().sort();
+  for (const k of keys) {
+    const parts = k.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const a = parts.slice(0, i).join('/'); if (!(a in all)) continue;
+      if (pos[k] < pos[a]) { delete all[k]; break; } // le parent, écrit après, remplace l'enfant
+      let o = all[a]; if (o === null || typeof o !== 'object') { all[a] = o = {}; }
+      const rest = parts.slice(i); for (let j = 0; j < rest.length - 1; j++) { if (!o[rest[j]] || typeof o[rest[j]] !== 'object') o[rest[j]] = {}; o = o[rest[j]]; }
+      if (all[k] === null) delete o[rest[rest.length - 1]]; else o[rest[rest.length - 1]] = all[k];
+      delete all[k]; break;
+    }
+  }
+  return all;
+}
 addEventListener('online', () => setTimeout(outboxReplay, 1500));
 
 const db = {
@@ -358,10 +390,13 @@ const db = {
     if (backend.mode === 'local') backend.write();
     else {
       // Lots de 500 chemins au plus, envoyés l'un après l'autre (un import de 50 000 lignes passe).
-      const keys = ops.map(([p]) => p.join('/')); const all = {}; ops.forEach(([p, v]) => { all[p.join('/')] = v ?? null; });
+      const all = fbClean(ops); const keys = Object.keys(all);
       const chunks = []; for (let i = 0; i < keys.length; i += 500) { const up = {}; keys.slice(i, i + 500).forEach(k => { up[k] = all[k]; }); chunks.push(up); }
       chunks.forEach(outboxPush);
-      chunks.reduce((pr, up) => pr.then(() => backend.fb.database().ref('pulse').update(up).then(() => outboxDone(up))), Promise.resolve()).catch(writeFail);
+      // Un lot refusé n'arrête plus les suivants ; il est rejoué par petits morceaux pour isoler la valeur fautive.
+      const send = up => backend.fb.database().ref('pulse').update(up).then(() => outboxDone(up));
+      const retry = (up, e) => { outboxDone(up); const ks = Object.keys(up); if (ks.length <= 1) { writeFail(e, ks[0]); return null; } const h = Math.ceil(ks.length / 2); return Promise.all([ks.slice(0, h), ks.slice(h)].map(part => { const u = {}; part.forEach(k => { u[k] = up[k]; }); return Promise.resolve().then(() => backend.fb.database().ref('pulse').update(u)).catch(e2 => retry(u, e2)); })); };
+      chunks.reduce((pr, up) => pr.then(() => Promise.resolve().then(() => send(up)).catch(e => retry(up, e))), Promise.resolve());
     }
     listeners.forEach(f => f());
   },

@@ -31,7 +31,8 @@ const ctrl = (clubId = CLUB.id) => deepGet(S, ['rsm', 'controls', clubId]) || {}
 function impRsm() {
   if (UI.rsmBusy) return `<div class="card empty"><div class="title">Lecture des fichiers…</div><p>Décompression et reconnaissance des exports Resamania.</p></div>`;
   if (UI.rsmBatch) return rsmReview();
-  const done = (UI.rsmDone ? rsmDoneCard() : '') + rsmPending();
+  const fail = WRITE_FAILS.n ? `<div class="alert" style="margin-bottom:14px">${ico('alert')}<div><b>${plur(WRITE_FAILS.n, 'écriture refusée', 'écritures refusées')} par la base partagée</b>${esc(WRITE_FAILS.last.msg)}${WRITE_FAILS.last.path ? ' (' + esc(WRITE_FAILS.last.path.split('/').slice(0, 2).join('/')) + ')' : ''}. Le reste de l’import est enregistré. Rechargez la page pour voir ce qui a été gardé.</div></div>` : '';
+  const done = fail + (UI.rsmDone ? rsmDoneCard() : '') + rsmPending();
   const routine = deepGet(S, ['rsm', 'routine', CLUB.id]) || {};
   const wk = dateOf(weekStart(today())).getTime(), mo = dateOf(curMonth() + '-01').getTime();
   const item = ([id, filt, file], since) => {
@@ -43,7 +44,7 @@ function impRsm() {
   return `${done}
     <div class="card" style="margin-bottom:14px"><div class="drop" id="rsm-drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposez vos exports Resamania</div>
       <div class="muted small">Plusieurs fichiers à la fois : CSV des listes, ZIP des exports de gestion (sans les décompresser), XLSX. Chaque fichier est reconnu par ses colonnes.</div></div>
-      <input type="file" id="rsm-file" multiple accept=".csv,.tsv,.txt,.zip,.xlsx" hidden></div>
+      <input type="file" id="rsm-file" multiple accept="${FILE_ACCEPT}" hidden></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(340px, 100%), 1fr));margin-bottom:14px">
       <div class="card"><div class="card-head">${ico('cal')}<h3>Chaque lundi</h3><span class="spacer"></span><span class="badge ${cnt(ROUTINE_WEEK, wk) === ROUTINE_WEEK.length ? 'ok' : 'warn'}">${cnt(ROUTINE_WEEK, wk)}/${ROUTINE_WEEK.length} cette semaine</span></div>
         <p class="muted small" style="margin-top:-6px">≈ 15 minutes. Lancez d’abord les exports de gestion (ils se préparent en fond, lien par e-mail), puis les listes.</p>${ROUTINE_WEEK.map(x => item(x, wk)).join('')}</div>
@@ -73,7 +74,7 @@ function mountRsm() {
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
   drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); rsmRead([...e.dataTransfer.files]); });
-  input.addEventListener('change', () => rsmRead([...input.files]));
+  input.addEventListener('change', () => { const f = [...input.files]; input.value = ''; rsmRead(f); });
 }
 async function rsmRead(files) {
   if (!files.length) return;
@@ -91,13 +92,21 @@ async function rsmRead(files) {
 }
 
 // ── Revue avant import ────────────────────────────────────────────────────
+function rsmWhy(t) {
+  if (!t || !t.headers) return '';
+  const near = closestDef(t); const sepName = { ';': 'point-virgule', ',': 'virgule', '\t': 'tabulation', '|': 'barre verticale' }[t.sep] || '';
+  return `<details style="margin-top:8px"><summary class="small">Pourquoi ?</summary><div class="small" style="padding-top:6px;display:grid;gap:4px">
+    <div><span class="muted">Colonnes lues${sepName ? ' (séparateur ' + sepName + ')' : ''} :</span> ${t.headers.slice(0, 25).map(h => `<code>${esc(h || '(vide)')}</code>`).join(' ')}${t.headers.length > 25 ? ' …' : ''}</div>
+    ${near && near.score >= 0.5 ? `<div><span class="muted">Ressemble à :</span> <b>${esc(near.def.label)}</b>. Colonne${near.missing.length > 1 ? 's' : ''} attendue${near.missing.length > 1 ? 's' : ''} absente${near.missing.length > 1 ? 's' : ''} : ${near.missing.map(m => `<code>${esc(m)}</code>`).join(' ')}. Refaites l’export depuis ${esc(near.def.path || 'Resamania')} sans masquer de colonne ni ouvrir le fichier dans Excel avant l’import.</div>` : t.headers.length <= 1 ? '<div>Une seule colonne lue : le fichier n’est sans doute pas un tableau (PDF, page web enregistrée) ou son séparateur est inhabituel.</div>' : '<div>Aucun export Resamania connu n’a ces colonnes. Utilisez « Ouvrir dans l’import libre » pour choisir les colonnes à la main.</div>'}</div></details>`;
+}
 function rsmReview() {
   const B = UI.rsmBatch;
   const unk = unknownSellers(B);
   const members = clubMembers(CLUB.id, { all: true });
   const card = (r, i) => {
     if (!r.def) return `<div class="card"><div class="row wrap">${ico('info')}<b class="spacer">${esc(r.name)}</b><span class="badge ${r.warnings.length ? '' : 'warn'}">${r.warnings.length ? 'Ignoré' : 'Non reconnu'}</span></div>
-      <p class="muted small" style="margin-bottom:0">${r.warnings.length ? esc(r.warnings.join(' ')) : `${r.rowsCount} lignes. Ce n’est pas un export Resamania connu : vous pouvez l’importer à la main.`}</p>
+      <p class="muted small" style="margin-bottom:0">${r.warnings.length ? esc(r.warnings.join(' ')) : `${plur(r.rowsCount, 'ligne lue', 'lignes lues')}${r.encoding ? ' · ' + esc(r.encoding) : ''}. Ce n’est pas un export Resamania connu : vous pouvez l’importer à la main.`}</p>
+      ${!r.warnings.length ? rsmWhy(UI.rsmTables && UI.rsmTables[i]) : ''}
       ${!r.warnings.length && r.rowsCount ? `<button class="btn sm" style="margin-top:8px" data-act="rsmFree" data-i="${i}">Ouvrir dans l’import libre</button>` : ''}</div>`;
     if (r.def.silent) return `<div class="card"><div class="row wrap">${ico('list')}<b class="spacer">${esc(r.name)}</b><span class="badge">Non utilisé</span></div><p class="muted small" style="margin-bottom:0">${esc(r.warnings.join(' '))}</p></div>`;
     const byK = {}; r.entries.forEach(e => { const k = byK[e.kpiId] = byK[e.kpiId] || { v: 0, n: 0 }; k.v += e.value; k.n++; });
@@ -116,7 +125,7 @@ function rsmReview() {
     return `<div class="card"><div class="row wrap">${ico('check')}<div class="spacer"><b>${esc(r.def.label)}</b><div class="muted small">${esc(r.name)} · ${plur(r.rowsCount, 'ligne', 'lignes')} · ${esc(r.encoding || '')}${r.from ? ` · ${dmy(r.from)} → ${dmy(r.to)}` : ''}</div></div><span class="badge ${r.def.family === 'liste' ? 'info' : 'fp'}">${r.def.family === 'liste' ? 'Liste' : 'Export de gestion'}</span></div>
       <div style="margin-top:10px;display:grid;gap:5px">${lines || '<span class="muted small">Rien à importer dans ce fichier.</span>'}</div>
       ${r.warnings.map(w => `<div class="alert" style="margin-top:8px;padding:8px 12px"><span class="small">${esc(w)}</span></div>`).join('')}
-      ${skipped.length ? `<details style="margin-top:8px"><summary class="muted small">${plur(skipped.reduce((s, [, n]) => s + n, 0), 'ligne écartée', 'lignes écartées')}</summary><div class="small muted" style="padding-top:6px">${skipped.map(([w, n]) => `${n} × ${esc(w)}`).join('<br>')}</div></details>` : ''}</div>`;
+      ${skipped.length ? `<details style="margin-top:8px" ${lines ? '' : 'open'}><summary class="muted small">${plur(skipped.reduce((s, [, n]) => s + n, 0), 'ligne écartée', 'lignes écartées')}</summary><div class="small muted" style="padding-top:6px">${skipped.map(([w, n]) => `${n} × ${esc(w)}`).join('<br>')}</div></details>` : ''}</div>`;
   };
   const opt = (k, cur) => `<option value="">Choisir…</option>${members.map(u => `<option value="${u.id}" ${cur === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}<option value="system" ${cur === 'system' ? 'selected' : ''}>Vente en ligne / système (personne)</option><option value="ignore" ${cur === 'ignore' ? 'selected' : ''}>Ignorer</option>`;
   const usable = B.filter(r => r.def && !r.def.silent).length;

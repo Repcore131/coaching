@@ -22,11 +22,23 @@ function loadLib(k) {
   if (!libLoaded[k]) libLoaded[k] = new Promise((ok, ko) => { const s = document.createElement('script'); s.src = LIBS[k]; s.onload = ok; s.onerror = () => ko(new Error('Bibliothèque indisponible : ' + k)); document.head.appendChild(s); });
   return libLoaded[k];
 }
-// UTF-8 d'abord ; si les octets n'en sont pas, ISO-8859-15 (le « € » y vaut 0xA4).
+// UTF-8 d'abord ; UTF-16 si l'en-tete l'annonce (Excel « Texte Unicode ») ;
+// sinon Windows-1252 si des octets 0x80-0x9F apparaissent (CSV enregistre par
+// Excel sous Windows : « € » = 0x80, « ’ » = 0x92), et ISO-8859-15 pour les
+// exports de gestion Resamania (le « € » y vaut 0xA4).
 function decodeBytes(buf) {
   const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (u8[0] === 0xff && u8[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(u8), encoding: 'UTF-16' };
+  if (u8[0] === 0xfe && u8[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(u8), encoding: 'UTF-16' };
+  // UTF-16 sans en-tete : un octet nul sur deux
+  const n = Math.min(u8.length, 400); let z0 = 0, z1 = 0; for (let i = 0; i < n; i++) if (!u8[i]) { if (i % 2) z1++; else z0++; }
+  if (n > 8 && z1 > n / 4 && z0 < n / 40) return { text: new TextDecoder('utf-16le').decode(u8), encoding: 'UTF-16' };
+  if (n > 8 && z0 > n / 4 && z1 < n / 40) return { text: new TextDecoder('utf-16be').decode(u8), encoding: 'UTF-16' };
   try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), encoding: 'UTF-8' }; }
-  catch (e) { return { text: new TextDecoder('iso-8859-15').decode(u8), encoding: 'ISO-8859-15' }; }
+  catch (e) {
+    for (let i = 0; i < u8.length; i++) if (u8[i] >= 0x80 && u8[i] <= 0x9f) return { text: new TextDecoder('windows-1252').decode(u8), encoding: 'Windows-1252' };
+    return { text: new TextDecoder('iso-8859-15').decode(u8), encoding: 'ISO-8859-15' };
+  }
 }
 // Lecture cellule par cellule : une date Excel devient AAAA-MM-JJ d'apres son
 // numero de serie (jamais le texte « m/d/yy » que SheetJS affiche, qui
@@ -62,12 +74,20 @@ function tableFromAoa(name, aoa, encoding) {
   const headers = rows[h] || [];
   return { name, encoding, headers, rows: rows.slice(h + 1).map(r => headers.map((_, i) => r[i] || '')) };
 }
+// Extensions ET types MIME : sur Android, un CSV venu de Gmail ou Drive est
+// souvent typé « text/comma-separated-values » ou « application/vnd.ms-excel »
+// et restait grisé dans le sélecteur quand seules les extensions étaient listées.
+const FILE_ACCEPT = '.csv,.tsv,.txt,.zip,.xlsx,.xls,.ods,text/csv,text/plain,text/tab-separated-values,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.oasis.opendocument.spreadsheet,application/zip,application/x-zip-compressed';
 const MAX_FICHIER = 20 * 1024 * 1024, MAX_DEZIP = 200 * 1024 * 1024;
+async function zipIsSheet(buf) { await loadLib('jszip'); const z = await JSZip.loadAsync(buf); return !!(z.file('[Content_Types].xml') || z.file('mimetype')); }
 async function readAnyFile(file) {
   if (file.size > MAX_FICHIER) return [{ name: file.name, skipped: 'Fichier trop lourd (plus de 20 Mo) : ignoré' }];
   const buf = new Uint8Array(await file.arrayBuffer());
   const lower = file.name.toLowerCase();
-  if (lower.endsWith('.zip') || (buf[0] === 0x50 && buf[1] === 0x4b && !lower.endsWith('.xlsx'))) {
+  const isZip = buf[0] === 0x50 && buf[1] === 0x4b, isOle = buf[0] === 0xd0 && buf[1] === 0xcf;
+  // Classeur Excel/LibreOffice reconnu à son contenu (un .csv renommé, un .xlsx sans extension)
+  if (/\.(xlsx|xlsm|xls|ods)$/.test(lower) || isOle || (isZip && !lower.endsWith('.zip') && await zipIsSheet(buf))) return readXlsx(file.name, buf);
+  if (lower.endsWith('.zip') || isZip) {
     await loadLib('jszip');
     const zip = await JSZip.loadAsync(buf);
     const out = []; let total = 0;
@@ -77,13 +97,12 @@ async function readAnyFile(file) {
       total += data.length;
       if (total > MAX_DEZIP) { out.push({ name: file.name, skipped: 'Archive trop volumineuse une fois décompressée : arrêtée' }); break; }
       const n = `${file.name} › ${entry.name.split('/').pop()}`;
-      if (/\.xlsx$/i.test(entry.name)) out.push(...await readXlsx(n, data));
+      if (/\.(xlsx|xls|ods)$/i.test(entry.name)) out.push(...await readXlsx(n, data));
       else if (/\.(csv|tsv|txt)$/i.test(entry.name)) { const d = decodeBytes(data); out.push({ name: n, encoding: d.encoding, ...parseCSV(d.text) }); }
       else out.push({ name: n, skipped: 'Fichier non tabulaire (PDF…) : ignoré' });
     }
     return out;
   }
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return readXlsx(file.name, buf);
   const d = decodeBytes(buf);
   return [{ name: file.name, encoding: d.encoding, ...parseCSV(d.text) }];
 }
@@ -422,6 +441,20 @@ function linesParse(c, avoir) {
 
 // Nom de contact sans civilité, parenthèses ni e-mail entre chevrons.
 const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
+// Fichier non reconnu : l'export connu le plus proche et les colonnes qui
+// manquent, pour corriger l'export (mauvais menu, colonnes masquées, fichier
+// retouché dans Excel) sans deviner.
+function closestDef(t) {
+  const H = (t.headers || []).map(norm); let best = null;
+  for (const d of RSM_DEFS) {
+    if (d.silent) continue;
+    const need = [...new Set([...d.sig.toString().matchAll(/has\('([^']+)'\)/g)].map(m => m[1]))]; if (!need.length) continue;
+    const ok = need.filter(p => { const n = norm(p); return H.some(h => h === n || h.includes(n)); });
+    const sc = ok.length / need.length;
+    if (ok.length && (!best || sc > best.score)) best = { def: d, score: sc, missing: need.filter(p => !ok.includes(p)) };
+  }
+  return best;
+}
 function detectDef(t) {
   const H = t.headers.map(norm);
   const has = p => { const n = norm(p); return H.some(h => h === n || h.includes(n)); };
@@ -461,7 +494,7 @@ function analyzeTable(t, { clubId, month }) {
   };
   def.parse(c);
   if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
-  if (t.encoding === 'ISO-8859-15') res.warnings.push('Encodage ISO-8859-15 (export de gestion) : accents et « € » corrigés automatiquement.');
+  if (t.encoding === 'ISO-8859-15' || t.encoding === 'Windows-1252') res.warnings.push(`Encodage ${t.encoding} : accents et « € » corrigés automatiquement.`);
   if (def.monthly) res.month = (t.name.match(/(\d{4})-(\d{2})(?!-\d)/) || [])[0] || month;
   return res;
 }

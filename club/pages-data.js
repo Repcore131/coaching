@@ -3,22 +3,45 @@
 
 // ── Lecture CSV / TSV ─────────────────────────────────────────────────────
 function parseCSV(text) {
-  text = text.replace(/^﻿/, '');
-  const first = text.split(/\r?\n/)[0] || '';
-  const sep = ['\t', ';', ','].map(s => [s, first.split(s).length]).sort((a, b) => b[1] - a[1])[0][0];
+  text = String(text || '').replace(/^\uFEFF/, '').replace(/\u0000/g, '');
+  let lines = text.split(/\r\n|\n|\r/);
+  // Excel ajoute parfois « sep=; » en premiere ligne
+  let sep = null; const m0 = (lines[0] || '').trim().match(/^"?sep=(.)"?$/i);
+  if (m0) { sep = m0[1]; text = text.slice(text.search(/\r\n|\n|\r/) + 1).replace(/^\n/, ''); lines = lines.slice(1); }
+  // Separateur : celui qui decoupe le plus regulierement les premieres lignes
+  // (une ligne de titre « Export du ... » ne fausse plus la detection).
+  if (!sep) {
+    const sample = lines.filter(l => l.trim()).slice(0, 15);
+    let best = ',', bestScore = -1;
+    for (const s of [';', '\t', ',', '|']) {
+      const counts = sample.map(l => l.split(s).length - 1).filter(n => n > 0); if (!counts.length) continue;
+      const freq = {}; counts.forEach(n => { freq[n] = (freq[n] || 0) + 1; });
+      const [mode, hits] = Object.entries(freq).sort((a, b) => b[1] - a[1] || b[0] - a[0])[0];
+      const score = hits * 100 + Number(mode);
+      if (score > bestScore) { bestScore = score; best = s; }
+    }
+    sep = best;
+  }
   const rows = []; let row = [], cell = '', q = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; continue; }
-    if (c === '"') q = true;
+    if (c === '"' && !cell.trim()) { q = true; cell = ''; }
     else if (c === sep) { row.push(cell); cell = ''; }
     else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
     else cell += c;
   }
   if (cell || row.length) { row.push(cell); rows.push(row); }
   const clean = rows.filter(r => r.some(x => x.trim()));
-  const headers = (clean.shift() || []).map(h => h.trim());
-  return { headers, rows: clean.map(r => headers.map((_, i) => (r[i] || '').trim())) };
+  // En-tete : premiere ligne qui a au moins deux cellules remplies et autant de
+  // colonnes que la suite (les lignes de titre au-dessus sont ignorees).
+  const width = clean.length ? Math.max(...clean.slice(0, 30).map(r => r.filter(x => x.trim()).length)) : 0;
+  let h = 0; while (h < clean.length - 1 && h < 20 && clean[h].filter(x => x.trim()).length < Math.min(2, width)) h++;
+  while (h < clean.length - 1 && h < 20 && clean[h].filter(x => x.trim()).length < width / 2 && clean[h + 1].filter(x => x.trim()).length >= width / 2) h++;
+  const headers = (clean[h] || []).map(x => x.trim());
+  // colonnes sans titre en fin de ligne (« ; » final) : ignorees
+  while (headers.length > 1 && !headers[headers.length - 1]) headers.pop();
+  return { headers, sep, rows: clean.slice(h + 1).map(r => headers.map((_, i) => (r[i] || '').trim())) };
 }
 
 // Exports Resamania reconnus par leurs en-tetes. Chaque profil propose le
@@ -57,17 +80,16 @@ PAGES.imports = {
     drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) readImport(e.dataTransfer.files[0]); });
-    input.addEventListener('change', () => { if (input.files[0]) readImport(input.files[0]); });
+    input.addEventListener('change', () => { const f = input.files[0]; input.value = ''; if (f) readImport(f); });
   },
 };
-function readImport(file) {
-  const fr = new FileReader();
-  fr.onload = () => {
-    let text = fr.result;
-    if (text.includes('\uFFFD')) { const fr2 = new FileReader(); fr2.onload = () => startWizard(file.name, fr2.result); fr2.readAsText(file, 'windows-1252'); return; }
-    startWizard(file.name, text);
-  };
-  fr.readAsText(file, 'utf-8');
+// Même lecteur que l'onglet Resamania : CSV (UTF-8, UTF-16, Windows-1252, ISO-8859-15), XLSX, XLS, ODS, ZIP.
+async function readImport(file) {
+  let tables;
+  try { tables = await readAnyFile(file); } catch (e) { toast('Lecture impossible : ' + e.message); return; }
+  const t = tables.find(x => !x.skipped && x.headers && x.headers.length && x.rows && x.rows.length);
+  if (!t) { toast((tables[0] && tables[0].skipped) || 'Fichier vide ou illisible.'); return; }
+  startWizardTable(t.name, { headers: t.headers, rows: t.rows });
 }
 function startWizard(name, text) { startWizardTable(name, parseCSV(text)); }
 function startWizardTable(name, p) {
@@ -85,7 +107,7 @@ function impNew() {
   const w = UI.wiz;
   const steps = s => `<div class="steps">${['Document', 'Matching', 'Validation'].map((l, i) => `<span class="${s >= i + 1 ? 'on' : ''}"><i>${i + 1}</i>${l}</span>`).join('')}</div>`;
   if (!w) {
-    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class="muted small">.csv ou .tsv (séparateur ; , ou tabulation), tel qu’exporté de Resamania</div></div><input type="file" id="file" accept=".csv,.tsv,.txt" hidden>
+    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class="muted small">.csv, .tsv, .xlsx, .xls (séparateur ; , ou tabulation), tel qu’exporté de Resamania ou enregistré par Excel</div></div><input type="file" id="file" accept="${FILE_ACCEPT}" hidden>
       <h3 style="margin:20px 0 8px">Les fichiers que vous pouvez importer</h3><p class="muted small" style="margin-top:0">Le type est reconnu automatiquement par le nom et les colonnes ; vous confirmez à l’étape suivante.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>Export Resamania</th><th>Alimente</th></tr></thead><tbody>${IMPORT_PROFILES.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.feeds)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
