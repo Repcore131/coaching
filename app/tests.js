@@ -21512,11 +21512,10 @@ async function testExercices(){
     // ── L'EAU : UN REPÈRE PLAUSIBLE POUR TOUS LES GABARITS, ET CE QUE L'ATHLÈTE BOIT ──
     const _eauU=(kg,cm,x)=>Object.assign({id:'EAU'+kg,email:'eau'+kg+'@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:cm?String(cm):undefined,weightLog:[{date:localISODate(new Date()),kg}],nutrition:{}},x||{});
-    ok('besoinEau : 120 kg / 175 cm un jour OFF ≤ 4,0 L (poids ajusté), 60 kg ≈ 2,1 L',(()=>{
+    ok('besoinEau : 120 kg / 175 cm un jour OFF = 4,0 L (le plafond), 60 kg ≈ 2,1 L',(()=>{
       const gros=besoinEau(_eauU(120,175),false);
-      if(!(gros<=4.0)) return _echec('120 kg : '+gros);
-      // Poids ajusté : 25 × 1,75² + 0,25 × (120 − 76,6) = 87,4 kg → 35 × 87,4 = 3,1 L.
-      if(gros!==3.1) return _echec('120 kg : '+gros+' au lieu de 3,1');
+      // 05/10/2026 : le poids du corps, sans poids « ajusté ». 120 × 35 = 4,2 L, ramené au plafond.
+      if(gros!==4.0) return _echec('120 kg : '+gros+' au lieu de 4,0');
       const v60=besoinEau(_eauU(60,175),false);
       if(Math.abs(v60-2.1)>0.05) return _echec('60 kg : '+v60);
       // Le jour ON ajoute 0,5 L.
@@ -21524,7 +21523,7 @@ async function testExercices(){
     ok('besoinEau : plancher 1,5 L, plafond 4,0 L (+0,5 L les jours ON)',(()=>{
       const petit=besoinEau(_eauU(35,150),false);
       if(petit!==1.5) return _echec('35 kg : '+petit);
-      // Sans taille, pas de poids ajusté : 140 kg × 35 = 4,9 L, ramené à 4,0 L.
+      // 140 kg × 35 = 4,9 L, ramené à 4,0 L.
       const lourd=besoinEau(_eauU(140,null),false), lourdOn=besoinEau(_eauU(140,null),true);
       if(lourd!==4.0||lourdOn!==4.5) return _echec('140 kg : '+lourd+' / '+lourdOn);
       if(besoinEau({nutrition:{}},false)!==null) return _echec('sans poids');
@@ -21706,20 +21705,25 @@ async function testExercices(){
       bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':String(kg),'deb-height':String(cm),'deb-age':'30','deb-gender':sexe==='F'?'Femme':'Homme'}],
       weightLog:[{date:localISODate(new Date()),kg}],phase:{type:'seche',debut:Date.now()-7*864e5},
       nutrition:{cycle:false,tableur:{protGkg:2.4}}},o||{});
-    ok('Poids de référence : H 120 kg / 175 cm, sèche à 2,4 → 170 ≤ p ≤ 230 g ; H 80 kg (IMC 24,7) → 192 g, inchangé',(()=>{
+    ok('Les macros se calculent sur le POIDS DU CORPS : 2,2 g/kg à 85 kg = 187 g, masse maigre ou IMC n’y changent rien',(()=>{
+      // 05/10/2026 (Kevin) : « 2,2 × 85, ça ne fait pas 147 ». Le dossier de sa capture : 85 kg,
+      // 196 cm, une masse maigre mesurée basse. Le 30/09 elle remplaçait le poids ; plus maintenant.
+      const cap=_PMa('H',85,196,{nutrition:{cycle:false,tableur:{protGkg:2.2,lipGkg:1}}});
+      // Tour de taille large, cou fin : un taux de gras estimé haut, donc une masse maigre basse.
+      cap.bilans[0]['deb-waist']='112'; cap.bilans[0]['deb-neck']='36';
+      if(poidsMacros(cap).kg!==85||poidsMacros(cap).type!=='total') return _echec('85 kg : '+JSON.stringify(poidsMacros(cap)));
+      const tc=cibleTableur(cap,{appliquerPlancher:false});
+      if(tc.p!==187||tc.l!==85) return _echec('85 kg à 2,2 et 1 g/kg : p = '+tc.p+', l = '+tc.l);
       const gros=_PMa('H',120,175);
-      const pm=poidsMacros(gros);
-      if(pm.type!=='ajuste') return _echec('type : '+pm.type);
+      if(poidsMacros(gros).kg!==120) return _echec('IMC 39 : '+poidsMacros(gros).kg+' kg au lieu de 120');
       const t=cibleTableur(gros,{appliquerPlancher:false});
-      if(!(t.p>=170&&t.p<=230)) return _echec('120 kg : p = '+t.p+' (réf. '+t.poidsRef+' kg)');
-      if(t.p>Math.round(2.4*t.poidsRef)+1) return _echec('au-dessus de 2,4 g/kg de référence');
+      if(t.p!==288) return _echec('120 kg à 2,4 : p = '+t.p);
       const b=besoinsProposes(gros,{appliquerPlancher:false});
-      if(!b.hypotheses.some(h=>/protéines et lipides calculés sur \d+ kg de poids ajusté/.test(h))) return _echec('hypothèse : '+b.hypotheses.join(' | '));
+      if(b.hypotheses.some(h=>/poids ajusté|poids sec|masse maigre ×/.test(h))) return _echec('une hypothèse parle encore d’un autre poids : '+b.hypotheses.join(' | '));
       const mince=_PMa('H',80,180);
       if(poidsMacros(mince).type!=='total') return _echec('80 kg : '+poidsMacros(mince).type);
       const t2=cibleTableur(mince,{appliquerPlancher:false});
       if(t2.p!==192) return _echec('80 kg : p = '+t2.p);
-      // Masse maigre connue et % de gras élevé : masse maigre × 1,15.
       if(Math.round(_repartition(2000,100,2,1,80).p)!==160) return _echec('_repartition sur le poids de référence');
       return true;})());
     ok('F 50 kg, lipides 1,5, coefficient 0,70 : le total dépassé et les glucides bas sont DITS (tableau du coach et carte de l’athlète)',(()=>{
