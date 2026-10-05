@@ -47496,7 +47496,7 @@ function genererSeanceDepart(rep,jourIdx){
     // dans le gestionnaire de seances, partout ou le coach ne l'a pas encore
     // remplacee.
     notes:'Séance de départ générée par RepCore, à partir de tes réponses. '
-      +'Elle est PROVISOIRE : ton coach la remplacera par ton programme.',
+      +'Elle est PROVISOIRE : un programme publié par ton coach ou acheté la remplacera.',
     _essai:true,
     exercises:noms.map(n=>{
       const v=videosPour(n);
@@ -47534,8 +47534,11 @@ function _htmlSeanceDepart(s){
     +'letter-spacing:1px">Séance provisoire</div></div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">'
     +'Elle est générée à partir de tes trois réponses, pas écrite pour toi. '
-    +'<strong style="color:var(--text-strong)">Ton coach la remplacera par ton programme.</strong> '
-    +'En attendant, elle te permet de commencer aujourd’hui.</div></div>'
+    +'<strong style="color:var(--text-strong)">'
+    +((typeof currentUser==='object'&&currentUser&&(currentUser.coachId||currentUser.coachEmailKey))
+      ?'Ton coach la remplacera par ton programme.'
+      :'Un programme complet, de la boutique ou d’un coach, la remplacera par ton programme.')
+    +'</strong> En attendant, elle te permet de commencer aujourd’hui.</div></div>'
     +'<h1 style="font-size:var(--fs-xl);line-height:1.25;font-weight:400;letter-spacing:.5px;'
     +'margin-bottom:4px">'+escapeHtml(s.name)+'</h1>'
     +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">'
@@ -47557,7 +47560,11 @@ function _htmlSeanceDepart(s){
     },{pad:'9px 0',gap:11})
     +'<div style="margin-top:24px">'
     +'<button class="btn btn-red" onclick="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
-    +'Démarrer ma première séance</button></div>'
+    +'Démarrer ma première séance</button>'
+    // LE LIEN SECONDAIRE (05/10/2026) : un lien, pas un second bouton — le
+    // geste attendu reste « Démarrer ».
+    +'<a href="#" onclick="ouvrirBoutique();return false" style="display:block;text-align:center;margin-top:14px;'
+    +'font-size:var(--fs-sm);color:var(--sub);text-decoration:underline">Voir le programme complet Fondations</a></div>'
     +'<div style="height:20px"></div>';
 }
 // Les deux accueils de nouvel inscrit, dans l'ordre ou ils se posent. Rend
@@ -47767,13 +47774,19 @@ function _pdSeance(u){
   if(reel) return {voie:'selecteur',sous:'Ton programme t’attend'};
   if(sc.some(s=>s&&s.active&&s.exercises&&s.exercises.length))
     return {voie:'selecteur',sous:'Ton programme d’essai t’attend'};
+  // SANS COACH ET JAMAIS ENTRAÎNÉ (05/10/2026) : trois questions, et la séance
+  // est prête — le parcours de première séance (PS_PARCOURS_ACTIF).
+  if(PS_PARCOURS_ACTIF&&u&&!u.coachId&&!u.coachEmailKey&&!((u.sessions||[]).length))
+    return {voie:'parcours',sous:'3 questions, ta séance est prête'};
   // SEMAINE VIERGE : l'athlete cree sa seance lui-meme (28/09/2026).
   return {voie:'gerer',sous:'Crée ta séance, exercice par exercice'};
 }
 function pdLancerSeance(){
   let v='gerer';
   try{ v=_pdSeance(currentUser).voie; }catch(e){}
-  if(v==='selecteur') openSessionPicker(); else loadSessionManager();
+  if(v==='selecteur') openSessionPicker();
+  else if(v==='parcours') ouvrirPremiereSeance();
+  else loadSessionManager();
 }
 // PURE. La troisieme ligne suit la diete. En stricte ouverte, il n'y a pas de
 // journal : l'acte est de dire si le plan du jour a ete suivi. Une stricte
@@ -47872,10 +47885,15 @@ function _placerHeroDemarrage(monter){
 //   desormais en boutique ou au coaching, et l'athlete construit les siennes
 //   au fur et a mesure dans « Gérer mes séances ». La fonction reste (routeUser
 //   l'interroge toujours) mais ne propose plus rien.
-const PS_PARCOURS_ACTIF=false;
+// ⚠ RÉACTIVÉ LE 05/10/2026, POUR L'ATHLÈTE SANS COACH SEULEMENT : un autonome
+//   en essai qui touchait « Lance ta première séance » tombait sur sept
+//   créneaux éteints et devait tout construire avant sa première série. Le
+//   coaché, lui, attend le programme de son coach : il ne voit pas le parcours.
+const PS_PARCOURS_ACTIF=true;
 function _doitProposerPremiereSeance(u,dejaVu){
   if(!PS_PARCOURS_ACTIF) return false;
   if(!u||!u.email||u.role==='coach') return false;
+  if(u.coachId||u.coachEmailKey) return false;
   if(dejaVu) return false;
   if((u.sessions||[]).length) return false;
   return !_configReelle(u.sessions_config);
@@ -47976,7 +47994,8 @@ function _psPoserSeance(){
 // moteur, aucun format particulier a reconnaitre.
 function psLancer(){
   try{ _psMarquer(currentUser); }catch(e){}
-  startWorkoutSession(_psIdx);
+  // L'écran final du parcours EST l'aperçu de la séance : on ne le remontre pas.
+  startWorkoutSession(_psIdx,{sansApercu:true});
 }
 // ⚠ « PASSER » N'ECRIT RIEN DANS LE DOSSIER. Ni seance, ni reponse : seul le
 // temoin local retient que le parcours a ete montre.
@@ -48262,13 +48281,20 @@ function openSessionPicker(){
 //
 // `sess` est passée quand l’appelant la tient déjà : c’est le cas de
 // startWorkoutSession, qui l’a lue en tête de fonction.
+// L'APERÇU DÉJÀ VU (05/10/2026) : le parcours de première séance montre la
+// séance sur son propre écran final ; le rouvrir demandait une touche de plus
+// avant la première série. Posé par startWorkoutSession(idx,{sansApercu:true}),
+// consommé ici — y compris après les questions de cycle (_cycleLancer).
+let _apercuSaute=false;
 function _apercuOuSeance(idx,sess){
-  if(ouvrirApercuSeance(idx)) return true;
+  const saute=_apercuSaute; _apercuSaute=false;
+  if(!saute&&ouvrirApercuSeance(idx)) return true;
   const cfg=currentUser.sessions_config||initSessionsConfig();
   demarrerSeance(sess||cfg[idx],idx);
   return false;
 }
-function startWorkoutSession(idx){
+function startWorkoutSession(idx,o){
+  _apercuSaute=!!(o&&o.sansApercu);
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const sess=cfg[idx];
   window._pendingWorkoutIdx=idx;

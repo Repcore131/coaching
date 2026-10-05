@@ -14840,7 +14840,9 @@ async function testExercices(){
           if(!(iAp<iLan)) return _echec('l\'aperçu vient après le lancement');
           // Et il court-circuite : sans le return, la séance démarrerait
           // DERRIÈRE l'aperçu.
-          if(!/if\(ouvrirApercuSeance\(idx\)\)returntrue;/.test(fin))
+          // 05/10/2026 : « !saute&& » — seul le parcours de première séance, qui
+          // vient de montrer la séance, saute l'aperçu (startWorkoutSession(idx,{sansApercu:true})).
+          if(!/if\((!saute&&)?ouvrirApercuSeance\(idx\)\)returntrue;/.test(fin))
             return _echec('l\'aperçu ne court-circuite pas le lancement');
           for(const f of [startWorkoutSession,_cycleLancer]){
             const s2=String(f).replace(/\s+/g,'');
@@ -45760,12 +45762,16 @@ async function testExercices(){
       if(!(iM>=0&&iR>iM)) return _echec('le bloc est rendu avant les chiffres qu’il masque');
       const iD=l.indexOf('renderDouleurAthlete');
       return (iD>iR)?true:_echec('le bloc est rendu apres les blocs de sante');});
-    ok('Le parcours qui génère une séance ne s’ouvre plus pour personne (28/09/2026)',()=>{
+    // 05/10/2026 : RÉACTIVÉ pour l'athlète SANS COACH (le coaché attend son programme).
+    ok('Le parcours de première séance s’ouvre à l’athlète sans coach, et à lui seul',()=>{
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[]},o);
       const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},{active:false},
                   {active:false},{active:false},{active:false},{active:false}];
       const cas=[
-        ['compte neuf',              A({}),                      false, false],
+        ['compte neuf sans coach',   A({}),                      false, true],
+        // LE COACHÉ ATTEND LE PROGRAMME DE SON COACH.
+        ['coaché (coachId)',         A({coachId:'c1'}),          false, false],
+        ['coaché (coachEmailKey)',   A({coachEmailKey:'k1'}),    false, false],
         ['deja vu',                  A({}),                      true,  false],
         // Quelqu'un qui s'est deja entraine a trouve sa premiere marche tout
         // seul : la lui proposer serait insultant.
@@ -45774,7 +45780,8 @@ async function testExercices(){
         // distingue un programme publie d'un repli generique. Le reecrire
         // aurait fait diverger deux definitions du meme mot.
         ['a un vrai programme',      A({sessions_config:vrai}),  false, false],
-        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, false],
+        // Un repli générique (_essai) n'est pas un programme réel : proposé.
+        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, true],
         ['un coach',                 A({role:'coach'}),          false, false],
         ['sans dossier',             null,                       false, false]
       ];
@@ -45879,7 +45886,10 @@ async function testExercices(){
         if(iM<0) return _echec('le mot « provisoire » n’apparait pas');
         if(!(iE>iM)) return _echec('la mention arrive apres la liste');
         if(txt.indexOf('remplacera par ton programme')<0)
-          return _echec('rien ne dit que le coach la remplacera');
+          return _echec('rien ne dit qu’un programme la remplacera');
+        // LE LIEN SECONDAIRE, sous le bouton : Fondations, en boutique.
+        const lien=[...d.querySelectorAll('a')].find(a=>/Voir le programme complet Fondations/.test(a.textContent));
+        if(!lien||!/ouvrirBoutique\(\)/.test(lien.getAttribute('onclick')||'')) return _echec('pas de lien vers Fondations');
         // Le mot « personnalise » ne doit JAMAIS servir a la decrire.
         if(/personnalis/.test(txt)) return _echec('elle se dit personnalisee');
         // ET LA MENTION SUIT LA SEANCE : elle est aussi dans `notes`, donc
@@ -61476,7 +61486,9 @@ async function testExercices(){
       if(r!=='gerer:Crée ta séance, exercice par exercice|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
       const s=String(pdLancerSeance);
       if(s.indexOf('openSessionPicker')<0||s.indexOf('loadSessionManager')<0) return _echec('le routage a changé');
-      if(s.indexOf('ouvrirPremiereSeance')>=0) return _echec('« Lance ta première séance » génère encore une séance');
+      // 05/10/2026 : SANS COACH, la voie « parcours » ouvre la première séance ;
+      // le coaché (l'athlète de ce test a un coachId) garde « gerer ».
+      if(s.indexOf('ouvrirPremiereSeance')<0) return _echec('la voie « parcours » n’ouvre pas la première séance');
       // LA RAISON : sur sept créneaux éteints, le sélecteur n'a rien à montrer.
       if(String(openSessionPicker).indexOf('if(!active.length)')<0) return _echec('le sélecteur a changé : revoir la ligne 2');
       // Ce qui ne devait pas bouger n'a pas bougé.
@@ -83151,6 +83163,37 @@ vendredi 78 6h 44m
         if(carteCadreImage(cle)!==null) return _echec('le cadre en échec est redemandé');
         return _carteCadrePret(cle)===null?true:_echec('_carteCadrePret');
       } finally { _carteCadresEchec.delete(cle); delete _carteCadresImg[cle]; }});
+
+    // ══ 05/10/2026 — LA PREMIÈRE SÉANCE DE L'ATHLÈTE SANS COACH ══════════════
+    const _psA=o=>Object.assign({id:'ps',email:'ps@t.fr',role:'athlete',fname:'A',sessions:[],
+      sessions_config:_seancesViergesSemaine().map(s=>Object.assign(s,{_essai:true}))},o||{});
+    ok('Première séance : sans coach et sans séance, le parcours est proposé ; un coaché, non',()=>{
+      if(_doitProposerPremiereSeance(_psA(),false)!==true) return _echec('(a) sans coach, sans séance : non proposé');
+      if(_doitProposerPremiereSeance(_psA({coachId:'c1'}),false)!==false) return _echec('(b) coachId : proposé');
+      if(_doitProposerPremiereSeance(_psA({coachEmailKey:'k1'}),false)!==false) return _echec('(b) coachEmailKey : proposé');
+      if(_doitProposerPremiereSeance(_psA({sessions:[{date:1}]}),false)!==false) return _echec('un historique : proposé');
+      return true;});
+    ok('Première séance : « Lance ta première séance » prend la voie « parcours » sans coach, « gerer » ou « selecteur » sinon',()=>{
+      const v=u=>_pdSeance(u).voie;
+      const p=_pdSeance(_psA());
+      if(p.voie!=='parcours'||p.sous!=='3 questions, ta séance est prête') return _echec('(c) sans coach : '+JSON.stringify(p));
+      if(v(_psA({coachId:'c1'}))!=='gerer') return _echec('coaché : '+v(_psA({coachId:'c1'})));
+      if(v(_psA({sessions:[{date:1}]}))!=='gerer') return _echec('déjà entraîné : '+v(_psA({sessions:[{date:1}]})));
+      const actif=_psA(); actif.sessions_config[0]=Object.assign({},actif.sessions_config[0],{active:true,exercises:[{name:'SQUAT'}]});
+      if(v(actif)!=='selecteur') return _echec('séance active : '+v(actif));
+      return true;});
+    ok('Première séance : genererSeanceDepart rend une séance active, d’au moins 4 exercices, marquée _essai',()=>{
+      const s=genererSeanceDepart({objectif:'muscle',freq:3,lieu:'salle'},0);
+      if(!s.active) return _echec('séance inactive');
+      if(!(s.exercises.length>=4)) return _echec(s.exercises.length+' exercices');
+      if(s._essai!==true) return _echec('_essai absent');
+      return _configReelle([s])===false?true:_echec('elle passerait pour un programme publié');});
+    ok('Première séance : « Démarrer » mène à la première série sans repasser par l’aperçu (5 touches depuis l’accueil)',()=>{
+      if(!/startWorkoutSession\(_psIdx,\{sansApercu:true\}\)/.test(String(psLancer))) return _echec('psLancer rouvre l’aperçu');
+      const a=String(_apercuOuSeance);
+      if(a.indexOf('_apercuSaute=false')<0||!/!saute&&ouvrirApercuSeance/.test(a)) return _echec('le drapeau n’est pas consommé');
+      // Les autres lancements gardent leur aperçu.
+      return /_apercuSaute=!!\(o&&o\.sansApercu\)/.test(String(startWorkoutSession))?true:_echec('startWorkoutSession ne remet pas le drapeau à zéro');});
 
     // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
     //
