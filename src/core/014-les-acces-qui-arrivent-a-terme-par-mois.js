@@ -2144,7 +2144,7 @@ function _viserExercice(nom){
 }
 // `client` (facultatif) : le dossier de l'athlete, pour ses notes d'exercice.
 function _buildSessionCard(s,client){
-  const dt=new Date(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const dt=dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
     const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));

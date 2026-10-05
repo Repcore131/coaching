@@ -935,7 +935,7 @@ function _peindreVolumeCreneau(u){
   const l=_seancesDuCreneau(u,cur).slice(-8);
   if(!l.length) return;
   barChart('v-chart',
-    l.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),
+    l.map(s=>dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),
     l.map(s=>s.volume||0));
 }
 
@@ -2368,7 +2368,7 @@ function buildSessionComparison(vol,data){
   if(prevSame?.volume>0){
     const delta=Math.round(vol)-prevSame.volume;
     _bscDelta=delta;
-    _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
+    _bscJour=dateLocaleDeCle(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
     if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)

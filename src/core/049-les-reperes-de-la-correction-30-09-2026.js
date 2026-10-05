@@ -87,7 +87,7 @@ function _vcCorpsHtml(email,videoId){
   // les retrouvent tels quels.
   const fichier=/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'');
   const nSeg=fichier?segmentsVideo(v).length:0;
-  const quand=new Date(v.date).toLocaleDateString('fr-FR');
+  const quand=dateLocaleDeCle(v.date).toLocaleDateString('fr-FR');
   const S=_VCX_SVG, P=_VCX_P;
   // LE LOGO DU COACH, a droite de la devise. Kevin : « oui mets le logo ». C'est
   // celui de SON profil (le champ Logo, qui signe deja les images de seance et

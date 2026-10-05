@@ -1450,7 +1450,7 @@ function openClientDetail(cid,_refresh,_force){
         .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
         .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${dateLocaleDeCle(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
@@ -1482,7 +1482,7 @@ function openClientDetail(cid,_refresh,_force){
       ${_vignetteVideoHtml(v.url)}
       <div class="cvv-t">
         <div class="cvv-n">${escapeHtml(v.name)}</div>
-        <div class="cvv-d">${new Date(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
+        <div class="cvv-d">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
       </div>
       <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection(${jsArg(c.email)},${jsArg(v.id)})">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
       ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses(${jsArg(c.email)},${jsArg(v.id)})">Comparer avec…</button>`:''}
@@ -1566,7 +1566,7 @@ function _htmlDemandesVideo(c){
       <span class="dv-cours-t">${dem.length} en cours</span>
       ${dem.map((d,i)=>`<span class="cvv-puce">
         <span class="cvv-puce-n">${escapeHtml(d.exercice)}</span>
-        <span class="cvv-puce-d">${new Date(d.date).toLocaleDateString('fr-FR')}</span>
+        <span class="cvv-puce-d">${dateLocaleDeCle(d.date).toLocaleDateString('fr-FR')}</span>
         <button class="cvd-annul" data-i="${i}" title="Retirer la demande" aria-label="Retirer la demande de ${escapeHtml(d.exercice)}">×</button>
       </span>`).join('')}
     </div>`:'';
@@ -2284,7 +2284,7 @@ function renderBilanEvolution(c){
     if(!bilans.length)return'';
     const bilanPhotos=bilans.map((b,i)=>({
       b,i,
-      date:new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}),
+      date:dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}),
       photos:{face:getP(b,'face'),back:getP(b,'back'),side:getP(b,'side')}
     }));
 

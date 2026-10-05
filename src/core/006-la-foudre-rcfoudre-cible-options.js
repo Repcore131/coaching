@@ -2163,7 +2163,7 @@ function _ageRevolu(iso){
 function _initBirthdateMax(){
   const d=new Date();
   d.setFullYear(d.getFullYear()-AGE_MINIMUM);
-  const max=d.toISOString().slice(0,10);
+  const max=localISODate(d);
   // 'r-birthdate' a disparu avec le champ de l'inscription ; 'nai-birthdate'
   // prend sa place — c'est le meme champ, sur l'ecran qui le demande
   // desormais. Le plafond natif reste un confort : validerNaissanceGenre

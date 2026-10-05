@@ -22,6 +22,12 @@ function localISODate(d){
   const m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
   return d.getFullYear()+'-'+m+'-'+day;
 }
+// LA CLÉ « AAAA-MM-JJ » EST UN JOUR LOCAL, PAS UN INSTANT UTC (02/10/2026).
+// new Date('2026-09-29') lit minuit UTC : à la Martinique (UTC-4), c'est le
+// 28 à 20 h, et l'écran affichait la veille. La clé est posée à MIDI local,
+// loin des deux minuits et des changements d'heure. Toute autre valeur
+// (horodatage, date complète) passe telle quelle à new Date.
+function dateLocaleDeCle(s){ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||'')); return m?new Date(+m[1],+m[2]-1,+m[3],12):new Date(s); }
 function copyCoachInviteLink(){
   if(!currentUser||currentUser.role!=='coach') return;
   // Embed coach profile in URL so athlete's device can import it without a backend

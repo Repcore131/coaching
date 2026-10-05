@@ -1816,7 +1816,7 @@ function showProgressTab(tab,btn,sansMemo){
     // « change l'image 1 en 2 »). Chaque bilan a son bandeau rouge avec sa
     // date, l'anneau nomme ce qu'il chiffre (« masse grasse »), MG et MM sont
     // separes d'un filet, et un trait rouge en biais coupe les deux bilans.
-    const _dateBil=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
+    const _dateBil=b=>{ try{ return dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';

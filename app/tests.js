@@ -82946,6 +82946,54 @@ vendredi 78 6h 44m
       })();
     })();
 
+    // ══ 02/10/2026 — LES CLÉS « AAAA-MM-JJ » SONT DES JOURS LOCAUX ══════
+    //
+    // new Date('2026-09-29') lit minuit UTC : à la Martinique (UTC-4) c'est
+    // le 28 à 20 h, et l'écran affichait la veille. dateLocaleDeCle pose la
+    // clé à midi local. Ce bloc NE DÉPEND PAS DU FUSEAU du harnais : il doit
+    // rester vert à Paris, à la Martinique et à Tahiti
+    // (node scripts/verif/suite.mjs <url> --tz=America/Martinique).
+    ok('Clé AAAA-MM-JJ : dateLocaleDeCle rend le jour écrit, à midi local, quel que soit le fuseau',()=>{
+      for(const [k,a,m,j] of [['2026-09-29',2026,8,29],['2026-03-29',2026,2,29],['2026-10-25',2026,9,25],['2026-01-01',2026,0,1]]){
+        const d=dateLocaleDeCle(k);
+        if(d.getFullYear()!==a||d.getMonth()!==m||d.getDate()!==j||d.getHours()!==12)
+          return _echec(k+' → '+d.toString());
+        if(localISODate(d)!==k) return _echec('aller-retour '+k+' → '+localISODate(d));
+      }
+      // Un horodatage, une date complète : inchangés.
+      const t=Date.UTC(2026,8,29,22,30);
+      if(dateLocaleDeCle(t).getTime()!==t) return _echec('horodatage altéré');
+      if(dateLocaleDeCle('2026-09-29T22:30:00Z').getTime()!==t) return _echec('date complète altérée');
+      return isNaN(dateLocaleDeCle('n importe quoi').getTime())?true:_echec('une chaîne invalide devient une date');});
+    ok('Clé AAAA-MM-JJ : _fmtDateCourte(\'2026-09-29\') dit « 29 »',()=>{
+      const v=_fmtDateCourte('2026-09-29');
+      return /(^|\D)29(\D|$)/.test(v)?true:_echec('« '+v+' »');});
+    ok('Clé AAAA-MM-JJ : la compétition du 2026-10-03 est un samedi, à l’écran',()=>{
+      const sU=currentUser, sC=(typeof _echCible!=='undefined')?_echCible:null, sS=window.saveUser;
+      const z=document.getElementById('ech-contenu');
+      if(!z) return _echec('#ech-contenu absent');
+      const sv=z.innerHTML;
+      try{
+        window.saveUser=()=>true;
+        currentUser={id:'tz',email:'tz@t.fr',role:'athlete',sessions:[],bilans:[],
+          echeance:{date:'2026-10-03',type:'COMPETITION',fiches:{},journal:[],vueLe:1}};
+        _echCible=null;
+        const e=echeance(currentUser);
+        if(!e||new Date(e.date).getDate()!==3) return _echec('échéance lue : '+JSON.stringify(e));
+        if(_renderEcheance()!==true) return _echec('l’échéance ne se rend pas');
+        const t=z.textContent;
+        if(!/samedi/i.test(t)||!/03 octobre/.test(t)) return _echec('« '+t.replace(/\s+/g,' ').slice(0,160)+' »');
+        return true;
+      } finally { currentUser=sU; _echCible=sC; window.saveUser=sS; z.innerHTML=sv; }});
+    ok('Clé AAAA-MM-JJ : plus de toISOString pour dater un jour, ni de new Date(x.date) affiché',()=>{
+      const src=_prodSrc();
+      const n=(src.match(/toISOString\(\)\.slice\(0,10\)/g)||[]).length;
+      // Seul reste le nom du fichier d'export, daté en UTC de propos délibéré.
+      if(n!==1||src.indexOf("'repcore-mes-donnees-'+new Date().toISOString().slice(0,10)")<0)
+        return _echec(n+' toISOString().slice(0,10) dans le code');
+      const r=src.match(/new Date\([a-zA-Z_]+\.date\)\.toLocaleDateString/g);
+      return r?_echec(r.length+' new Date(x.date).toLocaleDateString'):true;});
+
     // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
     //
     // Ce qui est verifie ici n'est pas la justesse d'une somme : c'est que

@@ -188,7 +188,7 @@ function renderCoachAmplitudesSection(c){
     +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
     +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
     +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
-    +`test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
+    +`test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
   // CE QU'IL RESTERAIT À MESURER. Une sortie de première classe, et la
   // seule qui soit toujours actionnable : « il manque la hauteur de genou
   // pour savoir si ses jambes longues viennent du fémur ou du tibia ».
@@ -199,7 +199,7 @@ function renderCoachAmplitudesSection(c){
   el.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">`
     +`Quatre tests d’amplitude, chacun avec son protocole. Un relevé vaut ${MORPHO_PEREMPTION_J} jours`
     +` : une amplitude se travaille et se perd.</div>`
-    +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(new Date(_der.date).toLocaleDateString('fr-FR'))}`
+    +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(dateLocaleDeCle(_der.date).toLocaleDateString('fr-FR'))}`
       +(_der.rappel?` : il y a ${_der.semaines} semaines, c’est le moment de refaire les tests.`:'.')+`</div>`:'')
     +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
     +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
@@ -1890,13 +1890,13 @@ function _buildVideoCard(v){
   if(videoExpiree(v)){
     const _le=v.expireeLe?new Date(v.expireeLe).toLocaleDateString('fr-FR'):'';
     return `<div class="video-card" style="opacity:.82"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge" style="margin-left:8px;flex-shrink:0">Expirée</span></div>`
-      +`<div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_meta}`
+      +`<div class="sub" style="font-size:var(--fs-xs)">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}</div>${_meta}`
       +`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:6px">`
       +`Le fichier a été supprimé de l’hébergeur${_le?' le '+_le:''}, après ${VIDEO_RETENTION_J} jours. `
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien

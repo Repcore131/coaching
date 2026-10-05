@@ -26,7 +26,13 @@ await cmd('Network.setCacheDisabled', { cacheDisabled: true });
 // Toute assertion ecrite pour verifier qu'un calcul de jours resiste au passage
 // a l'heure d'ete passait donc au vert sans rien avoir traverse, y compris avec
 // une division brute de millisecondes. Le fuseau est celui des utilisateurs.
-await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
+// --tz=<IANA> (02/10/2026) : un autre fuseau, pour verifier qu'un affichage de
+// date ne depend pas de celui de la machine — America/Martinique (UTC-4, sans
+// heure d'ete), Pacific/Tahiti (UTC-10). Par defaut, Paris.
+const optTz = args.find((a) => a.startsWith('--tz='));
+const TZ = optTz ? optTz.slice(5) : 'Europe/Paris';
+await cmd('Emulation.setTimezoneOverride', { timezoneId: TZ });
+console.log('fuseau :', TZ);
 // LA FENETRE EST FIXEE ICI, ET PLUS PAR LA CI (02/10/2026). Un telephone,
 // 412 de large, et 4000 de haut : un test de la liste de gene (tests.js,
 // « menu de gene ») ferme son menu quand la case sort de l'ecran, si bien que

@@ -23,7 +23,7 @@ function bilansAvecReponseNonVue(u){
 }
 function _idBilan(b){ return b&&(b.id||('bil_'+b.date)); }
 function _dateBilanCourte(b){
-  return b&&b.date?new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
+  return b&&b.date?dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
 }
 // ══ LES TROUS SE VOIENT SANS OUVRIR L'ECRAN ═════════════════════════════
 //
@@ -718,7 +718,7 @@ function renderReponsesBilans(bilans,client){
           <div class="bn-g">${html}</div>
         </section>`;
     }).join('');
-    const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const d=dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
     const w=getBW(b);
     const id=_idBilan(b);
     // « BILAN D'INSCRIPTION » (Kevin, 27/09/2026), le mot qu'il emploie.

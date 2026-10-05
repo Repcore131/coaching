@@ -983,7 +983,7 @@ function _aaRendreEcran(){
   const {role,u,o}=_aa;
   const autorise=aaExportAutorise(role,u);
   const l=aaBilansAvecPhoto(u,o.vue);
-  const date=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
+  const date=b=>{ try{ return dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
   const opts=sel=>l.map(b=>'<option value="'+Number(b.date)+'"'+(Number(b.date)===sel?' selected':'')+'>'+escapeHtml(date(b))+'</option>').join('');
   const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
     +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="aaReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';

@@ -632,7 +632,7 @@ function morphoAxes(user,opts){
       a.dominances=dom; a.asymetries=asy;
       a.source=lu?'carnet':null; a.confiance=lu?MORPHO_CONF.carnet:0;
       a.position=(dom.length||asy.length)?'haut':(lu?'neutre':null);
-      a.dateISO=asy.length?new Date(asy[0].date).toISOString().slice(0,10):null;
+      a.dateISO=asy.length?localISODate(new Date(asy[0].date)):null;
       if(!dom.length&&!asy.length){
         a.manque=lu?'rien-a-signaler':'absente';
         if(!lu) a.aMesurer='assez de séances enregistrées pour que le compteur de volume parle';
@@ -663,7 +663,7 @@ function morphoAxes(user,opts){
         return a;
       }
       a.valeur=v; a.source='test'; a.confiance=MORPHO_CONF.test;
-      a.dateISO=new Date(t.date).toISOString().slice(0,10);
+      a.dateISO=localISODate(new Date(t.date));
       a.tolerance='1 cm'; a.perime=!!t.perime;
       a.position=v<10?'bas':'neutre';
       a.texte=Math.round(v)+' cm au mur '+_morphoAttribut('test',t.date,'1 cm')
@@ -678,7 +678,7 @@ function morphoAxes(user,opts){
     if(d.cle==='A8'){
       const f={};
       const th=parCle['hanche'], bh=brut['hanche']||{};
-      f.hanche={position:null,texte:th?th.texte:'',dateISO:th&&th.date?new Date(th.date).toISOString().slice(0,10):null,
+      f.hanche={position:null,texte:th?th.texte:'',dateISO:th&&th.date?localISODate(new Date(th.date)):null,
         perime:!!(th&&th.perime),butee:bh.butee||null};
       // ⚠ « BUTÉE NETTE » EST UN CONSTAT, pas une cause. Ce que cette butée
       //   est — os, capsule, muscle — demande une imagerie que personne n'ira
@@ -686,12 +686,12 @@ function morphoAxes(user,opts){
       if(th&&th.date&&(bh.butee==='nette'||bh.butee==='elastique'))
         f.hanche.position=bh.butee==='nette'?'haut':'neutre';
       const te=parCle['epaule'], be=brut['epaule']||{};
-      f.epaule={position:null,texte:te?te.texte:'',dateISO:te&&te.date?new Date(te.date).toISOString().slice(0,10):null,
+      f.epaule={position:null,texte:te?te.texte:'',dateISO:te&&te.date?localISODate(new Date(te.date)):null,
         perime:!!(te&&te.perime),mur:be.mur||null};
       if(te&&te.date&&(be.mur==='oui'||be.mur==='non'))
         f.epaule.position=be.mur==='non'?'bas':'neutre';
       const tp=parCle['posterieur'], bp=brut['posterieur']||{};
-      f.posterieur={position:null,texte:tp?tp.texte:'',dateISO:tp&&tp.date?new Date(tp.date).toISOString().slice(0,10):null,
+      f.posterieur={position:null,texte:tp?tp.texte:'',dateISO:tp&&tp.date?localISODate(new Date(tp.date)):null,
         perime:!!(tp&&tp.perime),niveau:bp.niveau||null};
       if(tp&&tp.date&&bp.niveau) f.posterieur.position=bp.niveau==='bas'?'bas':'neutre';
       a.facettes=f;
@@ -742,11 +742,11 @@ function morphoAxes(user,opts){
       const cp=cal[rp.cle];
       a.photo={cle:rp.cle,lib:rp.lib,valeur:rp.valeur,
         position:cp?_morphoPosition(rp.valeur,cp.ref,cp.marge):null,
-        dateISO:rp.date?new Date(rp.date).toISOString().slice(0,10):null};
+        dateISO:rp.date?localISODate(new Date(rp.date)):null};
     }
     if(r.epaulesCm!=null) a.epaulesCm=r.epaulesCm;
     if(r.bassinCm!=null) a.bassinCm=r.bassinCm;
-    if(r.date) a.dateISO=new Date(r.date).toISOString().slice(0,10);
+    if(r.date) a.dateISO=localISODate(new Date(r.date));
 
     // Le repère : celui du code pour A1 et A3, celui de l'étude pour A6 quand
     // sa condition est remplie, celui du coach partout ailleurs.
@@ -773,7 +773,7 @@ function morphoAxes(user,opts){
       } else if(c){
         a.repere=c.ref; a.marge=c.marge;
         a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
-          +new Date(c.date).toLocaleDateString('fr-FR')+'.';
+          +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
         a.position=_morphoPosition(a.valeur,a.repere,a.marge);
         tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
       } else {
@@ -800,7 +800,7 @@ function morphoAxes(user,opts){
       }
       a.repere=c.ref; a.marge=c.marge;
       a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
-        +new Date(c.date).toLocaleDateString('fr-FR')+'.';
+        +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
       tol=_morphoVirgule(Math.round(r.erreur*100)/100);
     }
@@ -2182,7 +2182,7 @@ function _htmlMorphoPhoto(){
   MORPHO_PHOTO_RAPPORTS.forEach(d=>{
     const r=_morphoRapportPhoto(c,d.axe);
     if(r) enr.push(d.lib+' : '+String(Math.round(r.valeur*100)/100).replace('.',',')
-      +(r.date?' (photo, '+new Date(r.date).toLocaleDateString('fr-FR')+')':' (photo)'));
+      +(r.date?' (photo, '+dateLocaleDeCle(r.date).toLocaleDateString('fr-FR')+')':' (photo)'));
   });
   const vue=(_morphoPhotoVue&&_morphoPhotoVue.email===_amp.email)?_morphoPhotoVue:null;
   const pr=vue&&vue.prise;
@@ -2339,7 +2339,7 @@ function _ampRendre(){
           +'Valeur hors des bornes attendues ('+d.min+' à '+d.max+' '+(d.unite||'')+') : à revérifier avant d’enregistrer.</p>':'')
         +(f&&f.date?'<p style="font-size:var(--fs-xs);color:'+(f.perime?'var(--orange)':'var(--text-faint)')
           +';line-height:1.5;margin-top:8px">Dernier relevé : '+escapeHtml(f.texte||'-')+' · '
-          +new Date(f.date).toLocaleDateString('fr-FR')+(f.perime?' · périmé, à refaire':'')+'</p>':'')
+          +dateLocaleDeCle(f.date).toLocaleDateString('fr-FR')+(f.perime?' · périmé, à refaire':'')+'</p>':'')
         +'</div>';
     }).join('')
     +htmlPhoto
@@ -2473,7 +2473,7 @@ function _htmlQuestionsMorpho(user){
   // « périmé », plutôt que de la faire disparaître sans un mot.
   const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
-    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
+    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Proportions</div>

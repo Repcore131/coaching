@@ -1292,7 +1292,7 @@ function loadSleep(containerId='sleep-content',user,opts){
   if(log.length){
     const sortedLog=[...log].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,21);
     const rows=renderDataList(sortedLog,e=>{
-      const lbl=new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+      const lbl=dateLocaleDeCle(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=sleepColor(e.duration);
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;

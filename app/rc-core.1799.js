@@ -13534,7 +13534,7 @@ function _ageRevolu(iso){
 function _initBirthdateMax(){
   const d=new Date();
   d.setFullYear(d.getFullYear()-AGE_MINIMUM);
-  const max=d.toISOString().slice(0,10);
+  const max=localISODate(d);
   // 'r-birthdate' a disparu avec le champ de l'inscription ; 'nai-birthdate'
   // prend sa place — c'est le meme champ, sur l'ecran qui le demande
   // desormais. Le plafond natif reste un confort : validerNaissanceGenre
@@ -13576,6 +13576,12 @@ function localISODate(d){
   const m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
   return d.getFullYear()+'-'+m+'-'+day;
 }
+// LA CLÉ « AAAA-MM-JJ » EST UN JOUR LOCAL, PAS UN INSTANT UTC (02/10/2026).
+// new Date('2026-09-29') lit minuit UTC : à la Martinique (UTC-4), c'est le
+// 28 à 20 h, et l'écran affichait la veille. La clé est posée à MIDI local,
+// loin des deux minuits et des changements d'heure. Toute autre valeur
+// (horodatage, date complète) passe telle quelle à new Date.
+function dateLocaleDeCle(s){ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||'')); return m?new Date(+m[1],+m[2]-1,+m[3],12):new Date(s); }
 function copyCoachInviteLink(){
   if(!currentUser||currentUser.role!=='coach') return;
   // Embed coach profile in URL so athlete's device can import it without a backend
@@ -16621,7 +16627,7 @@ function morphoAxes(user,opts){
       a.dominances=dom; a.asymetries=asy;
       a.source=lu?'carnet':null; a.confiance=lu?MORPHO_CONF.carnet:0;
       a.position=(dom.length||asy.length)?'haut':(lu?'neutre':null);
-      a.dateISO=asy.length?new Date(asy[0].date).toISOString().slice(0,10):null;
+      a.dateISO=asy.length?localISODate(new Date(asy[0].date)):null;
       if(!dom.length&&!asy.length){
         a.manque=lu?'rien-a-signaler':'absente';
         if(!lu) a.aMesurer='assez de séances enregistrées pour que le compteur de volume parle';
@@ -16652,7 +16658,7 @@ function morphoAxes(user,opts){
         return a;
       }
       a.valeur=v; a.source='test'; a.confiance=MORPHO_CONF.test;
-      a.dateISO=new Date(t.date).toISOString().slice(0,10);
+      a.dateISO=localISODate(new Date(t.date));
       a.tolerance='1 cm'; a.perime=!!t.perime;
       a.position=v<10?'bas':'neutre';
       a.texte=Math.round(v)+' cm au mur '+_morphoAttribut('test',t.date,'1 cm')
@@ -16667,7 +16673,7 @@ function morphoAxes(user,opts){
     if(d.cle==='A8'){
       const f={};
       const th=parCle['hanche'], bh=brut['hanche']||{};
-      f.hanche={position:null,texte:th?th.texte:'',dateISO:th&&th.date?new Date(th.date).toISOString().slice(0,10):null,
+      f.hanche={position:null,texte:th?th.texte:'',dateISO:th&&th.date?localISODate(new Date(th.date)):null,
         perime:!!(th&&th.perime),butee:bh.butee||null};
       // ⚠ « BUTÉE NETTE » EST UN CONSTAT, pas une cause. Ce que cette butée
       //   est — os, capsule, muscle — demande une imagerie que personne n'ira
@@ -16675,12 +16681,12 @@ function morphoAxes(user,opts){
       if(th&&th.date&&(bh.butee==='nette'||bh.butee==='elastique'))
         f.hanche.position=bh.butee==='nette'?'haut':'neutre';
       const te=parCle['epaule'], be=brut['epaule']||{};
-      f.epaule={position:null,texte:te?te.texte:'',dateISO:te&&te.date?new Date(te.date).toISOString().slice(0,10):null,
+      f.epaule={position:null,texte:te?te.texte:'',dateISO:te&&te.date?localISODate(new Date(te.date)):null,
         perime:!!(te&&te.perime),mur:be.mur||null};
       if(te&&te.date&&(be.mur==='oui'||be.mur==='non'))
         f.epaule.position=be.mur==='non'?'bas':'neutre';
       const tp=parCle['posterieur'], bp=brut['posterieur']||{};
-      f.posterieur={position:null,texte:tp?tp.texte:'',dateISO:tp&&tp.date?new Date(tp.date).toISOString().slice(0,10):null,
+      f.posterieur={position:null,texte:tp?tp.texte:'',dateISO:tp&&tp.date?localISODate(new Date(tp.date)):null,
         perime:!!(tp&&tp.perime),niveau:bp.niveau||null};
       if(tp&&tp.date&&bp.niveau) f.posterieur.position=bp.niveau==='bas'?'bas':'neutre';
       a.facettes=f;
@@ -16731,11 +16737,11 @@ function morphoAxes(user,opts){
       const cp=cal[rp.cle];
       a.photo={cle:rp.cle,lib:rp.lib,valeur:rp.valeur,
         position:cp?_morphoPosition(rp.valeur,cp.ref,cp.marge):null,
-        dateISO:rp.date?new Date(rp.date).toISOString().slice(0,10):null};
+        dateISO:rp.date?localISODate(new Date(rp.date)):null};
     }
     if(r.epaulesCm!=null) a.epaulesCm=r.epaulesCm;
     if(r.bassinCm!=null) a.bassinCm=r.bassinCm;
-    if(r.date) a.dateISO=new Date(r.date).toISOString().slice(0,10);
+    if(r.date) a.dateISO=localISODate(new Date(r.date));
 
     // Le repère : celui du code pour A1 et A3, celui de l'étude pour A6 quand
     // sa condition est remplie, celui du coach partout ailleurs.
@@ -16762,7 +16768,7 @@ function morphoAxes(user,opts){
       } else if(c){
         a.repere=c.ref; a.marge=c.marge;
         a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
-          +new Date(c.date).toLocaleDateString('fr-FR')+'.';
+          +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
         a.position=_morphoPosition(a.valeur,a.repere,a.marge);
         tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
       } else {
@@ -16789,7 +16795,7 @@ function morphoAxes(user,opts){
       }
       a.repere=c.ref; a.marge=c.marge;
       a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
-        +new Date(c.date).toLocaleDateString('fr-FR')+'.';
+        +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
       tol=_morphoVirgule(Math.round(r.erreur*100)/100);
     }
@@ -18171,7 +18177,7 @@ function _htmlMorphoPhoto(){
   MORPHO_PHOTO_RAPPORTS.forEach(d=>{
     const r=_morphoRapportPhoto(c,d.axe);
     if(r) enr.push(d.lib+' : '+String(Math.round(r.valeur*100)/100).replace('.',',')
-      +(r.date?' (photo, '+new Date(r.date).toLocaleDateString('fr-FR')+')':' (photo)'));
+      +(r.date?' (photo, '+dateLocaleDeCle(r.date).toLocaleDateString('fr-FR')+')':' (photo)'));
   });
   const vue=(_morphoPhotoVue&&_morphoPhotoVue.email===_amp.email)?_morphoPhotoVue:null;
   const pr=vue&&vue.prise;
@@ -18328,7 +18334,7 @@ function _ampRendre(){
           +'Valeur hors des bornes attendues ('+d.min+' à '+d.max+' '+(d.unite||'')+') : à revérifier avant d’enregistrer.</p>':'')
         +(f&&f.date?'<p style="font-size:var(--fs-xs);color:'+(f.perime?'var(--orange)':'var(--text-faint)')
           +';line-height:1.5;margin-top:8px">Dernier relevé : '+escapeHtml(f.texte||'-')+' · '
-          +new Date(f.date).toLocaleDateString('fr-FR')+(f.perime?' · périmé, à refaire':'')+'</p>':'')
+          +dateLocaleDeCle(f.date).toLocaleDateString('fr-FR')+(f.perime?' · périmé, à refaire':'')+'</p>':'')
         +'</div>';
     }).join('')
     +htmlPhoto
@@ -18462,7 +18468,7 @@ function _htmlQuestionsMorpho(user){
   // « périmé », plutôt que de la faire disparaître sans un mot.
   const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
-    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
+    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Proportions</div>
@@ -22381,7 +22387,7 @@ function ambResume(code,a,t){
 // « ; » et virgule décimale : Excel en français.
 function ambCsvDues(tous,mois,t){
   const l=[['code','ambassadeur','instagram','mois','paiement','date_paiement','montant_encaisse','taux_pct','commission','due_le'].join(';')];
-  const d=ms=>{ const x=new Date(Number(ms)); return isNaN(x.getTime())?'':x.toISOString().slice(0,10); };
+  const d=ms=>{ const x=new Date(Number(ms)); return isNaN(x.getTime())?'':localISODate(x); };
   const e=v=>String(v).replace('.',',');
   const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"';
   let total=0;
@@ -26343,7 +26349,7 @@ function _taIdRite(cycle){ return 'rr-texte_'+cycle; }
 function _htmlRiteCoach(c){
   const r=_riteSansReponse(c);
   if(!r) return '';
-  const d=r.date?new Date(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+  const d=r.date?dateLocaleDeCle(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
   let nom=''; try{ nom=riteNomPeriode(c,r.cycle); }catch(e){ nom=''; }
   const ta=_taIdRite(r.cycle);
   // La question est ÉCRITE PAR L'ATHLÈTE : elle est échappée, comme le prénom
@@ -32758,7 +32764,7 @@ function _viserExercice(nom){
 }
 // `client` (facultatif) : le dossier de l'athlete, pour ses notes d'exercice.
 function _buildSessionCard(s,client){
-  const dt=new Date(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const dt=dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
     const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));
@@ -34369,7 +34375,7 @@ function openClientDetail(cid,_refresh,_force){
         .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
         .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${dateLocaleDeCle(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
@@ -34401,7 +34407,7 @@ function openClientDetail(cid,_refresh,_force){
       ${_vignetteVideoHtml(v.url)}
       <div class="cvv-t">
         <div class="cvv-n">${escapeHtml(v.name)}</div>
-        <div class="cvv-d">${new Date(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
+        <div class="cvv-d">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
       </div>
       <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection(${jsArg(c.email)},${jsArg(v.id)})">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
       ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses(${jsArg(c.email)},${jsArg(v.id)})">Comparer avec…</button>`:''}
@@ -34485,7 +34491,7 @@ function _htmlDemandesVideo(c){
       <span class="dv-cours-t">${dem.length} en cours</span>
       ${dem.map((d,i)=>`<span class="cvv-puce">
         <span class="cvv-puce-n">${escapeHtml(d.exercice)}</span>
-        <span class="cvv-puce-d">${new Date(d.date).toLocaleDateString('fr-FR')}</span>
+        <span class="cvv-puce-d">${dateLocaleDeCle(d.date).toLocaleDateString('fr-FR')}</span>
         <button class="cvd-annul" data-i="${i}" title="Retirer la demande" aria-label="Retirer la demande de ${escapeHtml(d.exercice)}">×</button>
       </span>`).join('')}
     </div>`:'';
@@ -35203,7 +35209,7 @@ function renderBilanEvolution(c){
     if(!bilans.length)return'';
     const bilanPhotos=bilans.map((b,i)=>({
       b,i,
-      date:new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}),
+      date:dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}),
       photos:{face:getP(b,'face'),back:getP(b,'back'),side:getP(b,'side')}
     }));
 
@@ -65313,7 +65319,7 @@ function _peindreVolumeCreneau(u){
   const l=_seancesDuCreneau(u,cur).slice(-8);
   if(!l.length) return;
   barChart('v-chart',
-    l.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),
+    l.map(s=>dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),
     l.map(s=>s.volume||0));
 }
 
@@ -66746,7 +66752,7 @@ function buildSessionComparison(vol,data){
   if(prevSame?.volume>0){
     const delta=Math.round(vol)-prevSame.volume;
     _bscDelta=delta;
-    _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
+    _bscJour=dateLocaleDeCle(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
     if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
@@ -72702,7 +72708,7 @@ function _renderEcheance(){
     +'<span style="font-family:Bebas Neue,Montserrat,sans-serif;font-size:var(--fs-3xl);color:var(--red-text);line-height:1">'
     +(j?(j.j>=0?('J-'+j.j):('J+'+(-j.j))):'-')+'</span>'
     +'<span style="font-size:var(--fs-sm);color:var(--sub)">'
-    +new Date(e.date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})
+    +dateLocaleDeCle(e.date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})
     +'</span></div>';
   if(e.federation||e.categorie)
     h+='<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-bottom:12px">'
@@ -72868,7 +72874,9 @@ function echeance(user){
   const u=_dossier(user);
   const e=u&&u.echeance;
   if(!e||typeof e!=='object') return null;
-  const d=Number(e.date)||0;
+  // UNE CLÉ « AAAA-MM-JJ » EST ACCEPTÉE (02/10/2026), lue à midi LOCAL
+  // (dateLocaleDeCle) : la compétition du 3 octobre est un samedi partout.
+  const d=Number(e.date)||(/^\d{4}-\d{2}-\d{2}$/.test(String(e.date))?dateLocaleDeCle(e.date).getTime():0);
   if(!(d>0)) return null;
   return {date:d,type:ECH_TYPES.indexOf(e.type)>=0?e.type:'OBJECTIF',
     federation:e.federation||null,categorie:e.categorie||null,
@@ -77356,7 +77364,7 @@ function leverDrapeauRouge(u){
 // « anormalité », aucun score. La seule couleur du module est celle de l'encart
 // d'alerte de tension, qui ne dit rien d'autre que « va voir un médecin ».
 function _fmtDateCourte(iso){
-  const d=new Date(iso);
+  const d=dateLocaleDeCle(iso);
   return isNaN(d.getTime())?'':d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
 }
 function _htmlAlerteTension(user){
@@ -78362,7 +78370,7 @@ function htmlHistoriqueExo(user,nom){
   }
   if(!l.length) return h+'<div class="rci-d">Pas encore de série validée sur cet exercice.</div>';
   h+='<ol class="histo-l">'+l.map(e=>'<li><div class="histo-d">'
-    +escapeHtml(new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}))
+    +escapeHtml(dateLocaleDeCle(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}))
     +'</div><div class="histo-s">'+e.series.map(x=>escapeHtml(_texteSerieHisto(x,u))).join(' · ')+'</div></li>').join('')
     +'</ol>';
   return h;
@@ -78716,7 +78724,7 @@ function bilansAvecReponseNonVue(u){
 }
 function _idBilan(b){ return b&&(b.id||('bil_'+b.date)); }
 function _dateBilanCourte(b){
-  return b&&b.date?new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
+  return b&&b.date?dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
 }
 // ══ LES TROUS SE VOIENT SANS OUVRIR L'ECRAN ═════════════════════════════
 //
@@ -79411,7 +79419,7 @@ function renderReponsesBilans(bilans,client){
           <div class="bn-g">${html}</div>
         </section>`;
     }).join('');
-    const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const d=dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
     const w=getBW(b);
     const id=_idBilan(b);
     // « BILAN D'INSCRIPTION » (Kevin, 27/09/2026), le mot qu'il emploie.
@@ -84445,7 +84453,7 @@ function _aaRendreEcran(){
   const {role,u,o}=_aa;
   const autorise=aaExportAutorise(role,u);
   const l=aaBilansAvecPhoto(u,o.vue);
-  const date=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
+  const date=b=>{ try{ return dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
   const opts=sel=>l.map(b=>'<option value="'+Number(b.date)+'"'+(Number(b.date)===sel?' selected':'')+'>'+escapeHtml(date(b))+'</option>').join('');
   const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
     +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="aaReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
@@ -90789,7 +90797,7 @@ function showProgressTab(tab,btn,sansMemo){
     // « change l'image 1 en 2 »). Chaque bilan a son bandeau rouge avec sa
     // date, l'anneau nomme ce qu'il chiffre (« masse grasse »), MG et MM sont
     // separes d'un filet, et un trait rouge en biais coupe les deux bilans.
-    const _dateBil=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
+    const _dateBil=b=>{ try{ return dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
@@ -110050,7 +110058,7 @@ function renderCoachAmplitudesSection(c){
     +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
     +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
     +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
-    +`test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
+    +`test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
   // CE QU'IL RESTERAIT À MESURER. Une sortie de première classe, et la
   // seule qui soit toujours actionnable : « il manque la hauteur de genou
   // pour savoir si ses jambes longues viennent du fémur ou du tibia ».
@@ -110061,7 +110069,7 @@ function renderCoachAmplitudesSection(c){
   el.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">`
     +`Quatre tests d’amplitude, chacun avec son protocole. Un relevé vaut ${MORPHO_PEREMPTION_J} jours`
     +` : une amplitude se travaille et se perd.</div>`
-    +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(new Date(_der.date).toLocaleDateString('fr-FR'))}`
+    +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(dateLocaleDeCle(_der.date).toLocaleDateString('fr-FR'))}`
       +(_der.rappel?` : il y a ${_der.semaines} semaines, c’est le moment de refaire les tests.`:'.')+`</div>`:'')
     +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
     +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
@@ -111752,13 +111760,13 @@ function _buildVideoCard(v){
   if(videoExpiree(v)){
     const _le=v.expireeLe?new Date(v.expireeLe).toLocaleDateString('fr-FR'):'';
     return `<div class="video-card" style="opacity:.82"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge" style="margin-left:8px;flex-shrink:0">Expirée</span></div>`
-      +`<div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_meta}`
+      +`<div class="sub" style="font-size:var(--fs-xs)">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}</div>${_meta}`
       +`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:6px">`
       +`Le fichier a été supprimé de l’hébergeur${_le?' le '+_le:''}, après ${VIDEO_RETENTION_J} jours. `
       +`Ce qui reste est ici : la date, le nom${v.feedback?' et le retour de ton coach':''}.</div>`
       +`${fbBlock}</div>`;
   }
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${new Date(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:var(--fs-md);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?icon('coche',14)+' Corrigée':'En attente'}</span><button onclick="_demanderSuppressionVideo(${jsArg(currentUser.email)},${jsArg(v.id)})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:var(--fs-xl);line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:var(--fs-xs)">${dateLocaleDeCle(v.date).toLocaleDateString('fr-FR')}${_epi?' · <span style="color:var(--red-text);font-weight:800">gardée</span>':''}</div>${_meta}${_videoEmbed(v.url,'vc-video-'+v.id)}${_bandeau}${fbBlock}</div>`;
 }
 /**
  * LA PHRASE DU HAUT DE LISTE. Elle dit trois choses et rien d'autre : combien
@@ -114856,7 +114864,7 @@ function _vcCorpsHtml(email,videoId){
   // les retrouvent tels quels.
   const fichier=/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'');
   const nSeg=fichier?segmentsVideo(v).length:0;
-  const quand=new Date(v.date).toLocaleDateString('fr-FR');
+  const quand=dateLocaleDeCle(v.date).toLocaleDateString('fr-FR');
   const S=_VCX_SVG, P=_VCX_P;
   // LE LOGO DU COACH, a droite de la devise. Kevin : « oui mets le logo ». C'est
   // celui de SON profil (le champ Logo, qui signe deja les images de seance et
@@ -117207,7 +117215,7 @@ function _htmlDernierAjust(nut){
   if(!h) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Dernier ajustement proposé</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) : vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${dateLocaleDeCle(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) : vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
   </div>`;
 }
 function _htmlAjustement(user,lectureSeule){
@@ -123239,7 +123247,7 @@ function loadSleep(containerId='sleep-content',user,opts){
   if(log.length){
     const sortedLog=[...log].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,21);
     const rows=renderDataList(sortedLog,e=>{
-      const lbl=new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+      const lbl=dateLocaleDeCle(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=sleepColor(e.duration);
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;

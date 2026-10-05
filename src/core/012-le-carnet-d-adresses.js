@@ -332,7 +332,7 @@ function _taIdRite(cycle){ return 'rr-texte_'+cycle; }
 function _htmlRiteCoach(c){
   const r=_riteSansReponse(c);
   if(!r) return '';
-  const d=r.date?new Date(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+  const d=r.date?dateLocaleDeCle(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
   let nom=''; try{ nom=riteNomPeriode(c,r.cycle); }catch(e){ nom=''; }
   const ta=_taIdRite(r.cycle);
   // La question est ÉCRITE PAR L'ATHLÈTE : elle est échappée, comme le prénom

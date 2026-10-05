@@ -1349,7 +1349,7 @@ function ambResume(code,a,t){
 // « ; » et virgule décimale : Excel en français.
 function ambCsvDues(tous,mois,t){
   const l=[['code','ambassadeur','instagram','mois','paiement','date_paiement','montant_encaisse','taux_pct','commission','due_le'].join(';')];
-  const d=ms=>{ const x=new Date(Number(ms)); return isNaN(x.getTime())?'':x.toISOString().slice(0,10); };
+  const d=ms=>{ const x=new Date(Number(ms)); return isNaN(x.getTime())?'':localISODate(x); };
   const e=v=>String(v).replace('.',',');
   const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"';
   let total=0;

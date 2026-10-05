@@ -1180,7 +1180,7 @@ function _renderEcheance(){
     +'<span style="font-family:Bebas Neue,Montserrat,sans-serif;font-size:var(--fs-3xl);color:var(--red-text);line-height:1">'
     +(j?(j.j>=0?('J-'+j.j):('J+'+(-j.j))):'-')+'</span>'
     +'<span style="font-size:var(--fs-sm);color:var(--sub)">'
-    +new Date(e.date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})
+    +dateLocaleDeCle(e.date).toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long'})
     +'</span></div>';
   if(e.federation||e.categorie)
     h+='<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-bottom:12px">'
@@ -1346,7 +1346,9 @@ function echeance(user){
   const u=_dossier(user);
   const e=u&&u.echeance;
   if(!e||typeof e!=='object') return null;
-  const d=Number(e.date)||0;
+  // UNE CLÉ « AAAA-MM-JJ » EST ACCEPTÉE (02/10/2026), lue à midi LOCAL
+  // (dateLocaleDeCle) : la compétition du 3 octobre est un samedi partout.
+  const d=Number(e.date)||(/^\d{4}-\d{2}-\d{2}$/.test(String(e.date))?dateLocaleDeCle(e.date).getTime():0);
   if(!(d>0)) return null;
   return {date:d,type:ECH_TYPES.indexOf(e.type)>=0?e.type:'OBJECTIF',
     federation:e.federation||null,categorie:e.categorie||null,
