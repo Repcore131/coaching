@@ -102,6 +102,13 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
   return `<div class="bar"><i style="width:${w}%;background:${col}"></i>${ticks ? [25, 50, 75].map(t => `<span class="tick" style="left:${t}%"></span>`).join('') : ''}${pace != null ? `<span class="pace" style="left:${clamp(pace * 100, 0, 100)}%" title="Rythme attendu"></span>` : ''}</div>`;
 }
 
+// Logo Fit Pulse (image) ; à défaut, la marque en texte
+function brandBlock(big = false) {
+  const w = (window.PARKPULSE_ASSETS || {}).wordmark;
+  if (w) return `<div class="brand ${big ? 'big' : ''}"><img class="brand-logo" src="${w}" alt="Fit Pulse"><div class="brand-sub">${esc(APP.tagline)}</div></div>`;
+  return `<div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
+}
+
 // ── Coque ──────────────────────────────────────────────────────────────────
 const NAV = [
   ['home', 'Accueil', 'dashboard'],
@@ -141,7 +148,7 @@ function shell(route, inner) {
   const theme = curTheme();
   return `<div class="shell" id="shell">
     <aside class="side">
-      <div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>
+      ${brandBlock()}
       ${(window.PARKPULSE_ASSETS || {}).logo ? `<div class="club-logo"><img src="${window.PARKPULSE_ASSETS.logo}" alt="Fitness Park"></div>` : ''}
       <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : `<div class="club-name">${esc(CLUB.name)}</div>`}</div>
       <nav class="nav">${nav}</nav>
@@ -153,7 +160,7 @@ function shell(route, inner) {
       </div>
     </aside>
     <main class="main">
-      <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>
+      <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(window.PARKPULSE_ASSETS || {}).icon ? `<img class="top-icon" src="${window.PARKPULSE_ASSETS.icon}" alt="">` : ''}
         <b class="title" style="font-size:17px">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
         <div class="countdown" id="countdown"></div><button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
       <div class="page page-${route}">${inner}</div>

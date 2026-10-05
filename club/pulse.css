@@ -681,3 +681,11 @@ h3 { font-size: 20px; line-height: 1.05; }
   .card, .rc-tile { break-inside: avoid; box-shadow: none !important; }
   .g12 { grid-template-columns: repeat(12, 1fr); }
 }
+/* logo Fit Pulse */
+.brand:has(.brand-logo) { flex-direction: column; align-items: flex-start; gap: 4px; padding: 0 6px 14px; }
+.brand-logo { width: 168px; height: auto; display: block; }
+.brand.big .brand-logo { width: 240px; }
+.brand.big { padding: 0 0 18px; }
+.auth-card .brand.big { align-items: center; text-align: center; width: 100%; }
+.top-icon { display: none; width: 30px; height: 30px; border-radius: 8px; }
+@media (max-width: 860px) { .top-icon { display: block; } }

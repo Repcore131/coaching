@@ -6,7 +6,7 @@ PAGES.onboarding = {
   auth: false,
   render() {
     return `<div class="auth"><div class="auth-card">
-      <div class="brand" style="padding:0 0 18px"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>
+      ${brandBlock(true)}
       <h1 style="font-size:26px">Bienvenue</h1>
       <p class="muted">L’outil de pilotage commercial de <b style="color:#fff">nos</b> clubs Fitness Park : objectifs, classement, rétention, imports Resamania. Aucun autre club, aucun réseau : vos chiffres restent chez vous.</p>
       <form id="ob" class="grid" style="margin-top:16px">
@@ -42,7 +42,7 @@ ACTIONS.loadDemo = () => { db.replace(demoState()); const ops = bootstrapOps(); 
 PAGES.login = {
   auth: false,
   render() {
-    const head = `<div class="brand" style="padding:0 0 18px"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
+    const head = `${brandBlock(true)}`;
     if (backend.mode === 'firebase') {
       return `<div class="auth"><div class="auth-card">${head}<h1 style="font-size:26px">Connexion</h1>
         <form id="lg" class="grid" style="margin-top:14px"><label class="field"><span>E-mail</span><input class="input" type="email" name="email" required></label>

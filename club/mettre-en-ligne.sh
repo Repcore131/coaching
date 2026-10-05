@@ -25,7 +25,7 @@ fi
 
 echo "== assemblage"
 rm -rf _en_ligne && mkdir -p _en_ligne || exit 1
-cp -a index.html pulse.css manifest.webmanifest icon.svg icon-192.png icon-512.png apple-touch-icon.png assets ./*.js _en_ligne/ || exit 1
+cp -a index.html pulse.css manifest.webmanifest favicon.png icon-192.png icon-512.png apple-touch-icon.png assets ./*.js _en_ligne/ || exit 1
 
 echo "== envoi"
 firebase deploy --only hosting --project "$SITE" || exit 1
