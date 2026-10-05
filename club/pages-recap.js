@@ -95,6 +95,7 @@ PAGES.recap = {
       <div class="recap-head"><div><div class="eyebrow">${esc(CLUB.name)}</div><h1>Récapitulatif · ${monthLabel(mk)}</h1><p class="muted">Comparé à ${monthLabel(pm).toLowerCase()}${ongoing ? ' · mois en cours, chiffres provisoires' : ''}</p></div><span class="spacer"></span>
         <div class="row wrap no-print">${monthNav('recapMonth', mk)}<button class="btn" data-act="recapCsv">${ico('download')} CSV</button><button class="btn" data-act="recapMail">${ico('mail')} Envoyer au directeur</button><button class="btn primary" data-act="recapPrint">${ico('download')} Imprimer / PDF</button></div></div>
 
+      ${recapSynthese(mk)}
       <div class="rc-grid">
         ${tile('Ventes réelles (contrats)', fmtN(F.contrats), delta(F.contrats, P.contrats))}
         ${tile('Nouveaux entrants', fmtN(F.entrants), delta(F.entrants, P.entrants), F.entrantsSrc)}

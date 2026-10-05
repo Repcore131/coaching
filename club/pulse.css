@@ -1008,3 +1008,14 @@ td.to-check { background: var(--warn-soft); }
 /* Pas de décalage de mise en page quand la barre de défilement apparaît (un clic ne se perd plus). */
 html { scrollbar-gutter: stable; }
 body:has(#modal-root .overlay) { overflow: hidden; }
+.recap-syn { margin-bottom: 14px; } .recap-syn p { margin: 4px 0; }
+/* Impayés sur téléphone : une carte par dossier au lieu du tableau */
+@media (max-width: 860px) {
+  .table-wrap.sheet table, .table-wrap.sheet tbody, .table-wrap.sheet tr, .table-wrap.sheet td { display: block; width: 100%; }
+  .table-wrap.sheet thead { display: none; }
+  .table-wrap.sheet tr { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; background: var(--surface); }
+  .table-wrap.sheet td { border: 0; padding: 4px 0; text-align: left; }
+  .table-wrap.sheet td.num { text-align: left; }
+  .table-wrap.sheet td:first-child { min-width: 0; }
+  .table-wrap.sheet td:nth-child(2) b { font-size: var(--t-20); }
+}

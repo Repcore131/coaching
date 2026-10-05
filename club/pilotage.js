@@ -117,3 +117,16 @@ ACTIONS.bilanPdf = el => {
   document.body.appendChild(w); document.body.classList.add('printing-bilan');
   setTimeout(() => { window.print(); document.body.classList.remove('printing-bilan'); w.remove(); }, 100);
 };
+
+// Revue mensuelle : cinq phrases en tête du récapitulatif.
+function recapSynthese(mk) {
+  const F = monthFigures(CLUB.id, mk), P = monthFigures(CLUB.id, addMonths(mk, -1)); const r = rangeOf('month', mk); const L = [];
+  const v = (a, b) => (b ? `${a - b >= 0 ? 'en hausse' : 'en baisse'} de ${Math.abs(Math.round((a - b) / b * 100))} %` : 'sans comparaison');
+  L.push(`${fmtN(F.contrats)} contrats signés, ${v(F.contrats, P.contrats)} par rapport au mois précédent.`);
+  const rk = ranking(CLUB.id, r).filter(x => x.score != null); if (rk[0]) L.push(`${fullName(rk[0].u)} termine en tête avec un score de ${fmtP(rk[0].score)}.`);
+  const team = clubMembers(CLUB.id); const ups = team.map(u => ({ u, d: (statsFor(CLUB.id, u.id, r, { requiredOnly: true }).score || 0) - (statsFor(CLUB.id, u.id, rangeOf('month', addMonths(mk, -1)), { requiredOnly: true }).score || 0) })).sort((a, b) => b.d - a.d);
+  if (ups[0] && ups[0].d > 0) L.push(`Plus belle progression : ${fullName(ups[0].u)}, +${Math.round(ups[0].d * 100)} points de score.`);
+  L.push(`${plur(F.resiliees, 'résiliation effective', 'résiliations effectives')} et ${plur(F.sauvees, 'client sauvé', 'clients sauvés')} sur ${plur(F.demandes, 'demande', 'demandes')}.`);
+  L.push(`Impayés : ${fmtE(F.impayesEquipe)} récupérés par l’équipe${F.du != null ? `, ${fmtE(F.du)} encore dus en fin de mois` : ''}.`);
+  return `<div class="card recap-syn"><h3>En bref</h3>${L.slice(0, 5).map(s => `<p>${esc(s)}</p>`).join('')}</div>`;
+}
