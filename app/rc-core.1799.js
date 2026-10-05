@@ -69317,8 +69317,18 @@ function rapPoids(u,debut,fin){
   if(!dans.length) return {present:false,masque:false};
   const points=dans.map(e=>({date:e.date,kg:e.kg,
     mm7:(()=>{ try{ return mm7(serie,e.date,false); }catch(err){ return null; } })()}));
+  // CHAQUE CHIFFRE PORTE SUR LA PÉRIODE IMPRIMÉE : la vitesse est lue à la
+  // dernière pesée DE LA PÉRIODE, jamais à la dernière pesée du dossier.
+  const premier=dans[0].date, dernier=dans[dans.length-1].date;
+  const jusque=serie.filter(e=>e.date<=dernier);
   let v=null;
-  try{ v=vitesseHebdo(serie); }catch(e){ v=null; }
+  try{ v=vitesseHebdo(jusque,dernier)||vitesseHebdoEtendue(jusque,dernier); }catch(e){ v=null; }
+  // L'ÉCART : de moyenne sur sept jours à moyenne sur sept jours quand les
+  // deux bouts en ont une, sinon de pesée à pesée — et le libellé le dit.
+  let m0=null,m1=null;
+  try{ m0=mm7(serie,premier); m1=mm7(serie,dernier); }catch(e){ m0=m1=null; }
+  const tendance=m0!=null&&m1!=null;
+  const ecart=tendance?m1-m0:dans[dans.length-1].kg-dans[0].kg;
   // La FOURCHETTE de la phase, lue dans PHASES — jamais réécrite.
   let phase=null,bornes=null;
   try{
@@ -69327,8 +69337,9 @@ function rapPoids(u,debut,fin){
   }catch(e){}
   return {present:true,masque:false,points,
     debut:dans[0].kg,fin:dans[dans.length-1].kg,
-    delta:Math.round((dans[dans.length-1].kg-dans[0].kg)*10)/10,
-    vitesse:v,phase,bornes};
+    delta:Math.round(ecart*10)/10,deltaBase:tendance?'tendance':'pesees',
+    vitesse:v,regime:v?(v.regime==='etendu'?'mesure étendue':'mesure précise'):null,
+    phase,bornes};
 }
 // ── Bloc 6 : signaux ──────────────────────────────────────────────────────
 // LES SIGNAUX NE PORTENT PAS DE DATE. signauxEntrainement rend des booléens et
@@ -69697,16 +69708,16 @@ function htmlRapport(r){
         <div class="rap-grille">
           <div><div class="rap-lbl">Début</div>${nb(p.debut,'kg')}</div>
           <div><div class="rap-lbl">Fin</div>${nb(p.fin,'kg')}</div>
-          <div><div class="rap-lbl">Écart</div>${nb((p.delta>0?'+':'')+String(p.delta).replace('.',','),'kg')}</div>
+          <div><div class="rap-lbl">Écart ${p.deltaBase==='tendance'?'(moyennes 7 j)':'(pesées)'}</div>${nb((p.delta>0?'+':'')+String(p.delta).replace('.',','),'kg')}</div>
         </div>
         ${_rapCourbePoids(p.points)}
         <p class="rap-note">Trait rouge : pesées. Trait pâle : moyenne sur sept jours. Les jours sans pesée ne sont pas inventés.</p>`;
       if(p.vitesse&&p.vitesse.pctSem!=null){
         const v=p.vitesse;
-        h+=`<p class="rap-note">Vitesse : ${(v.kgSem>0?'+':'')+v.kgSem.toFixed(2)} kg/sem (${(v.pctSem>0?'+':'')+v.pctSem.toFixed(2)} %/sem)`
+        h+=`<p class="rap-note">Vitesse sur les deux dernières semaines de la période : ${(v.kgSem>0?'+':'')+v.kgSem.toFixed(2)} kg/sem (${(v.pctSem>0?'+':'')+v.pctSem.toFixed(2)} %/sem, ${escapeHtml(p.regime||'')})`
           +(p.bornes?`, fourchette habituelle en ${escapeHtml(String(p.phase).toLowerCase())} : ${String(p.bornes.min).replace('.',',')} à ${String(p.bornes.max).replace('.',',')} %/sem.`:'.')
           +`</p>`;
-      }
+      } else h+=`<p class="rap-note">Pas assez de pesées en fin de période pour une vitesse.</p>`;
       h+=`</section>`;
     }
     // Aucune pesée : le bloc est ABSENT. Pas de cadre vide, pas de zéro.
@@ -117777,7 +117788,11 @@ function segmentsWeight(serie){
 // Vitesse hebdomadaire, par moindres carrés sur la MOYENNE MOBILE et non sur les
 // points bruts : la pente est plus stable, et une pesée aberrante en fin de
 // fenêtre ne fait pas basculer le verdict.
-function vitesseHebdo(serie){
+// jourISO (facultatif) : la vitesse AU jour donné, la série tronquée à ce jour
+// avant d'être découpée — un rapport de mars ne lit pas les pesées de
+// septembre. Sans lui, la vitesse à la dernière pesée, comme avant.
+function vitesseHebdo(serie,jourISO){
+  if(jourISO) serie=(serie||[]).filter(e=>e.date<=jourISO);
   const segs=segmentsWeight(serie);
   const seg=segs.length?segs[segs.length-1]:null;
   if(!seg||!seg.length) return null;

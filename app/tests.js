@@ -31445,6 +31445,53 @@ async function testExercices(){
         }
         return true;});
 
+      // ── LE BLOC POIDS PORTE SUR LA PÉRIODE IMPRIMÉE (05/10/2026) ─────────
+      // Un rapport de mars lisait la vitesse à la DERNIÈRE pesée du dossier :
+      // celle de septembre. Série : −0,5 kg/sem en février-mars, plat
+      // d'avril à août, +0,4 kg/sem en septembre.
+      const _isoJ=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const _serieAn=()=>{ const l=[]; let kg=85;
+        for(let d=new Date(2026,1,1,12);d<=new Date(2026,8,30,12);d.setDate(d.getDate()+1)){
+          const m=d.getMonth();
+          kg+=m<=2?-0.5/7:(m===8?0.4/7:0);
+          l.push({date:_isoJ(d),kg:Math.round(kg*1000)/1000}); }
+        return l; };
+      const MARS=[new Date(2026,2,1).getTime(),new Date(2026,2,31,23,59,59).getTime()];
+      ok('Rapport de mars : la vitesse est celle de mars (≈ −0,5 kg/sem), pas celle de septembre',()=>{
+        const u=_ath({sessions:_s12,weightLog:_serieAn()});
+        const glob=vitesseHebdo(serieWeight(u));
+        if(!glob||glob.kgSem<0.3) return _echec('la série de test ne finit pas en hausse : '+JSON.stringify(glob));
+        const p=rapPoids(u,MARS[0],MARS[1]);
+        if(!p.vitesse) return _echec('aucune vitesse');
+        if(Math.abs(p.vitesse.kgSem+0.5)>0.02) return _echec('kgSem = '+p.vitesse.kgSem);
+        if(p.regime!=='mesure précise') return _echec('régime : '+p.regime);
+        if(p.deltaBase!=='tendance') return _echec('écart de base '+p.deltaBase);
+        if(Math.abs(p.delta+0.5*30/7)>0.15) return _echec('écart de tendance : '+p.delta);
+        const h=htmlRapport(rapportPeriode(u,MARS[0],MARS[1],{now:new Date(2026,3,2).getTime()}));
+        if(!/Vitesse sur les deux dernières semaines de la période : -0,50|Vitesse sur les deux dernières semaines de la période : −0,50|Vitesse sur les deux dernières semaines de la période : -0\.50/.test(h))
+          return _echec('rendu : '+(h.match(/Vitesse sur[^<]*/)||['(absent)'])[0]);
+        if(!/mesure précise/.test(h)) return _echec('le régime n’est pas dit');
+        return /Écart \(moyennes 7 j\)/.test(h)?true:_echec('le libellé de l’écart ne dit pas sa base');});
+      ok('Sans pesées suffisantes en fin de période : pas de vitesse, et on le dit',()=>{
+        // Pesées du 1er au 5 mars, puis une seule le 31 ; septembre derrière.
+        const l=[]; for(let j=1;j<=5;j++) l.push({date:_isoJ(new Date(2026,2,j)),kg:84-j*0.07});
+        l.push({date:'2026-03-31',kg:83});
+        for(let j=1;j<=30;j++) l.push({date:_isoJ(new Date(2026,8,j)),kg:80+j*0.4/7});
+        const u=_ath({sessions:_s12,weightLog:l});
+        if(!vitesseHebdo(serieWeight(u))) return _echec('la série de test n’a pas de vitesse globale');
+        const p=rapPoids(u,MARS[0],MARS[1]);
+        if(p.vitesse) return _echec('une vitesse sort : '+JSON.stringify(p.vitesse));
+        if(p.deltaBase!=='pesees'||p.delta!==Math.round((83-(84-0.07))*10)/10) return _echec('écart brut : '+p.delta+' '+p.deltaBase);
+        const h=htmlRapport(rapportPeriode(u,MARS[0],MARS[1],{now:new Date(2026,3,2).getTime()}));
+        if(/kg\/sem/.test(h)) return _echec('une vitesse est rendue');
+        if(!/Écart \(pesées\)/.test(h)) return _echec('le libellé de l’écart ne dit pas « pesées »');
+        return /Pas assez de pesées en fin de période pour une vitesse/.test(h)?true:_echec('le manque n’est pas dit');});
+      ok('vitesseHebdo sans 2e argument : inchangée (−0,50 kg/sem), et égale à la vitesse au dernier jour',()=>{
+        const s=[]; for(let i=0;i<=20;i++) s.push({date:_isoJ(new Date(2026,0,1+i)),kg:80-i/14});
+        const a=vitesseHebdo(s), b=vitesseHebdo(s,s[s.length-1].date);
+        if(!a||Math.abs(a.kgSem+0.5)>0.001) return _echec(JSON.stringify(a));
+        return JSON.stringify(a)===JSON.stringify(b)?true:_echec('le jour explicite change le résultat');});
+
       // Critère 4 : 3 séances ⇒ « données insuffisantes ».
       ok('Critère 4 : période de 3 séances ⇒ volume et progression insuffisants',()=>{
         const u=_ath({sessions:[_sess(2),_sess(9),_sess(16)]});

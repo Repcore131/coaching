@@ -2049,7 +2049,11 @@ function segmentsWeight(serie){
 // Vitesse hebdomadaire, par moindres carrés sur la MOYENNE MOBILE et non sur les
 // points bruts : la pente est plus stable, et une pesée aberrante en fin de
 // fenêtre ne fait pas basculer le verdict.
-function vitesseHebdo(serie){
+// jourISO (facultatif) : la vitesse AU jour donné, la série tronquée à ce jour
+// avant d'être découpée — un rapport de mars ne lit pas les pesées de
+// septembre. Sans lui, la vitesse à la dernière pesée, comme avant.
+function vitesseHebdo(serie,jourISO){
+  if(jourISO) serie=(serie||[]).filter(e=>e.date<=jourISO);
   const segs=segmentsWeight(serie);
   const seg=segs.length?segs[segs.length-1]:null;
   if(!seg||!seg.length) return null;
