@@ -104,7 +104,7 @@ function rsmReview() {
     const byC = {}; r.recov.forEach(x => { const k = byC[x.canal] = byC[x.canal] || { v: 0, n: 0 }; k.v += x.amount; k.n++; });
     const nClients = Object.keys(r.clients).length + r.clientsByName.length;
     const lines = [
-      ...Object.entries(byK).map(([k, x]) => `<div class="row small"><span>${S.kpis[k] ? (S.kpis[k].emoji || '') + ' ' + esc(S.kpis[k].label) : k}</span><span class="spacer"></span><b>${fmtV(x.v, S.kpis[k] ? S.kpis[k].unit : 'qty')}</b><span class="muted">${x.n} ligne(s)</span></div>`),
+      ...Object.entries(byK).map(([k, x]) => `<div class="row small"><span>${S.kpis[k] ? kpiIcon(S.kpis[k], 'ico ico-xs') + ' ' + esc(S.kpis[k].label) : esc(k)}</span><span class="spacer"></span><b>${fmtV(x.v, S.kpis[k] ? S.kpis[k].unit : 'qty')}</b><span class="muted">${x.n} ligne(s)</span></div>`),
       ...Object.entries(byC).map(([k, x]) => `<div class="row small"><span>💶 Récupéré · ${esc(k === 'annule' ? 'annulé / avoir (pas d’argent encaissé)' : RECOV_CHANNELS[k].label)}</span><span class="spacer"></span><b>${fmtE(x.v)}</b><span class="muted">${x.n}</span></div>`),
       nClients ? `<div class="row small"><span>👥 Fiches clients mises à jour</span><span class="spacer"></span><b>${nClients}</b></div>` : '',
       r.balances ? `<div class="row small"><span>⚠️ Impayés en cours (photo du jour)</span><span class="spacer"></span><b>${fmtE(r.balances.list.reduce((s, x) => s + x.amount, 0))}</b><span class="muted">${r.balances.list.length} client(s)</span></div>` : '',
@@ -151,16 +151,43 @@ ACTIONS.rsmCommit = () => {
     // KPI : identifiant derive de la cle de ligne -> reimport sans doublon
     for (const e of r.entries) {
       const uid = pick(e.seller); if (!uid) continue;
-      const id = 'r' + hkey(club + '|' + e.key);
+      let id = 'r' + hkey(club + '|' + e.key);
+      if (e.legacyKey && S.entries['r' + hkey(club + '|' + e.legacyKey)]) id = 'r' + hkey(club + '|' + e.legacyKey);
       if (S.entries[id] || written.has(id)) summary.updated++; else summary.entries++;
       written.add(id);
       summary.kpis[e.kpiId] = (summary.kpis[e.kpiId] || 0) + e.value;
-      ops.push([['entries', id], { id, userId: uid, clubId: club, kpiId: e.kpiId, date: e.date, value: e.value, source: 'import', importId: impId, rowKey: e.key, at: now }]);
+      // La saisie garde la liste de TOUS les imports qui la contiennent : annuler
+      // le dernier ne fait pas disparaitre une vente qu'un import precedent porte.
+      // Impaye deja saisi a la main (Recupere / Regle) pour le meme client et le
+      // meme montant a 7 jours pres : on garde la saisie, on ne recompte pas.
+      if (e.kpiId === 'impayes' && e.clientNum) {
+        const cl = Object.values(S.clients).find(x => x.clubId === club && String(x.num || '') === String(e.clientNum));
+        const lo = addDays(e.date, -7), hi = addDays(e.date, 7);
+        const man = cl && Object.values(S.entries).find(m => m.kpiId === 'impayes' && !isImported(m) && m.clientId === cl.id && m.date >= lo && m.date <= hi && Math.abs(Number(m.value) - Number(e.value)) <= 0.01);
+        if (man) { summary.matched = (summary.matched || 0) + 1; if (!man.matchedKey) ops.push([['entries', man.id, 'matchedKey'], e.key]); written.add(id); continue; }
+      }
+      const old = S.entries[id];
+      const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), [impId]: true };
+      ops.push([['entries', id], { id, userId: uid, clubId: club, kpiId: e.kpiId, date: e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now }]);
+    }
+    // Export de gestion qui couvre une periode complete : une vente deja importee
+    // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
+    // ne compte plus. Annuler ce nouvel import la fait revenir.
+    if (['ventes', 'factures', 'lignes-factures'].includes(r.def.id) && r.entries.length) {
+      const ds = r.entries.map(e => e.date).sort(); const from = ds[0], to = ds[ds.length - 1];
+      summary.removed = 0;
+      for (const e of Object.values(S.entries)) {
+        if (e.clubId !== club || e.source !== 'import' || written.has(e.id) || e.date < from || e.date > to || !entryCounts(e)) continue;
+        const ids = Object.keys(e.importIds || (e.importId ? { [e.importId]: 1 } : {}));
+        if (!ids.some(i => S.imports[i] && S.imports[i].defId === r.def.id)) continue;
+        ops.push([['entries', e.id, 'removedBy'], impId]); summary.removed++;
+      }
     }
     for (const x of r.recov) {
       let canal = x.canal, uid = null;
       if (canal === 'equipe') { uid = pick(x.seller); if (!uid) { const ch = choiceFor(x.seller, choices, unk); canal = ch === 'system' ? 'client' : ch === 'ignore' ? 'tiers' : 'equipe'; } }
-      const id = 'v' + hkey(club + '|' + x.key);
+      let id = 'v' + hkey(club + '|' + x.key);
+      if (x.legacyKey && (S.recov || {})['v' + hkey(club + '|' + x.legacyKey)]) id = 'v' + hkey(club + '|' + x.legacyKey);
       ops.push([['recov', id], { id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', importId: impId, at: now }]);
       summary.recov++;
     }
@@ -176,9 +203,13 @@ ACTIONS.rsmCommit = () => {
       const listed = new Set();
       r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
       // photo complete : un client absent du fichier n'a plus d'impaye
-      if (r.balances.src === 'clients-incident' || r.balances.list.length) Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
+      // Seule la photo complete « Clients en incident » solde les absents. Une
+      // liste Incidents partielle ne touche jamais aux autres clients. Sans
+      // regularisation correspondante, le dossier passe « à vérifier », pas
+      // « récupéré ».
+      if (r.balances.src === 'clients-incident') Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
         const rv = lastRecov(club, c.num, B);
-        upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: 'recupere', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
+        upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: rv ? 'recupere' : 'a_verifier', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
       });
     }
     if (r.balances) ops.push([['rsm', 'controls', club, 'du', today()], Math.round(r.balances.list.reduce((s2, b) => s2 + b.amount, 0) * 100) / 100]);

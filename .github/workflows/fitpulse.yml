@@ -35,7 +35,7 @@ jobs:
           set -e
           cd club
           rm -rf _en_ligne && mkdir -p _en_ligne
-          cp -a index.html pulse.css manifest.webmanifest favicon.png icon-192.png icon-512.png apple-touch-icon.png assets ./*.js _en_ligne/
+          cp -a index.html pulse.css fonts.css fonts vendor manifest.webmanifest favicon.png icon-192.png icon-512.png apple-touch-icon.png assets ./*.js _en_ligne/
           rm -f _en_ligne/assets/fitpulse-source.webp
           test -f _en_ligne/index.html && test -f _en_ligne/app.js
 

@@ -11,9 +11,11 @@
 // exports qui se recouvrent, ne cree jamais de doublon.
 
 // ── Lecture de fichiers : CSV, XLSX, ZIP ──────────────────────────────────
+// Bibliotheques hebergees sur le site (vendor/) : SheetJS 0.20.3 (corrige les
+// failles CVE-2023-30533 et CVE-2024-22363 de la 0.18.5), JSZip 3.10.1.
 const LIBS = {
-  jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  jszip: 'vendor/jszip.min.js',
+  xlsx: 'vendor/xlsx.full.min.js',
 };
 const libLoaded = {};
 function loadLib(k) {
@@ -26,11 +28,30 @@ function decodeBytes(buf) {
   try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), encoding: 'UTF-8' }; }
   catch (e) { return { text: new TextDecoder('iso-8859-15').decode(u8), encoding: 'ISO-8859-15' }; }
 }
+// Lecture cellule par cellule : une date Excel devient AAAA-MM-JJ d'apres son
+// numero de serie (jamais le texte « m/d/yy » que SheetJS affiche, qui
+// inversait jour et mois) ; un nombre garde sa valeur exacte, sans format.
 async function readXlsx(name, buf) {
   await loadLib('xlsx');
-  const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false, cellFormula: false, cellHTML: false, dense: false });
+  const p2 = n => String(n).padStart(2, '0');
   return wb.SheetNames.map(sn => {
-    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: false, defval: '' });
+    const ws = wb.Sheets[sn];
+    if (!ws['!ref']) return tableFromAoa(`${name} › ${sn}`, [], 'XLSX');
+    const R = XLSX.utils.decode_range(ws['!ref']); const aoa = [];
+    for (let r = R.s.r; r <= R.e.r; r++) {
+      const row = [];
+      for (let c = R.s.c; c <= R.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (!cell || cell.v == null) { row.push(''); continue; }
+        if (cell.t === 'd' && cell.v instanceof Date) row.push(`${cell.v.getFullYear()}-${p2(cell.v.getMonth() + 1)}-${p2(cell.v.getDate())}`);
+        else if (cell.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z)) { const d = XLSX.SSF.parse_date_code(cell.v); row.push(d ? `${d.y}-${p2(d.m)}-${p2(d.d)}` : String(cell.v)); }
+        else if (cell.t === 'n') row.push(String(cell.v).replace('.', ','));
+        else if (cell.t === 'b') row.push(cell.v ? 'VRAI' : 'FAUX');
+        else row.push(String(cell.v));
+      }
+      aoa.push(row);
+    }
     return tableFromAoa(`${name} › ${sn}`, aoa, 'XLSX');
   });
 }
@@ -41,16 +62,20 @@ function tableFromAoa(name, aoa, encoding) {
   const headers = rows[h] || [];
   return { name, encoding, headers, rows: rows.slice(h + 1).map(r => headers.map((_, i) => r[i] || '')) };
 }
+const MAX_FICHIER = 20 * 1024 * 1024, MAX_DEZIP = 200 * 1024 * 1024;
 async function readAnyFile(file) {
+  if (file.size > MAX_FICHIER) return [{ name: file.name, skipped: 'Fichier trop lourd (plus de 20 Mo) : ignoré' }];
   const buf = new Uint8Array(await file.arrayBuffer());
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.zip') || (buf[0] === 0x50 && buf[1] === 0x4b && !lower.endsWith('.xlsx'))) {
     await loadLib('jszip');
     const zip = await JSZip.loadAsync(buf);
-    const out = [];
+    const out = []; let total = 0;
     for (const entry of Object.values(zip.files)) {
       if (entry.dir || /(^|\/)(__MACOSX|\.)/.test(entry.name)) continue;
       const data = await entry.async('uint8array');
+      total += data.length;
+      if (total > MAX_DEZIP) { out.push({ name: file.name, skipped: 'Archive trop volumineuse une fois décompressée : arrêtée' }); break; }
       const n = `${file.name} › ${entry.name.split('/').pop()}`;
       if (/\.xlsx$/i.test(entry.name)) out.push(...await readXlsx(n, data));
       else if (/\.(csv|tsv|txt)$/i.test(entry.name)) { const d = decodeBytes(data); out.push({ name: n, encoding: d.encoding, ...parseCSV(d.text) }); }
@@ -64,15 +89,8 @@ async function readAnyFile(file) {
 }
 
 // ── Outils de lecture ─────────────────────────────────────────────────────
-function rsmDate(s) {
-  if (!s) return null; s = String(s).trim();
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})\b/); if (m) return `20${m[3]}-${pad(m[2])}-${pad(m[1])}`;
-  if (/^\d{5}(\.\d+)?$/.test(s)) { const d = new Date(Math.round((Number(s) - 25569) * 86400000)); return d.toISOString().slice(0, 10); } // date Excel
-  return null;
-}
-const rsmNum = s => toNum(String(s ?? '').replace(/[¤€\s]/g, ''));
+const rsmDate = s => parseDate(s);
+const rsmNum = s => toNum(s);
 // cle courte et stable a partir d'un texte (FNV-1a sur 2 x 32 bits)
 function hkey(str) {
   let a = 0x811c9dc5, b = 0x01000193 ^ 0x5bd1e995;
@@ -173,7 +191,7 @@ const RSM_DEFS = [
     path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', filters: 'Dates du mois, Entité = FPN GESTION, Club', file: 'RSM_factures-avoirs_AAAA-MM.zip',
     sig: has => has('nature') && has('code du produit') && has('famille de produit niveau 1'),
     parse(c) {
-      const iDate = c.col('date de creation de la facture'), iNum = c.col('numero de la facture'), iNat = c.col('nature'), iEtat = c.col('etat'), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iFam = c.col('famille de produit niveau 1'), iAut = c.col('auteur'), iSoc = c.col('societe du client');
+      const iDate = c.col('date de creation de la facture'), iNum = c.col('numero de la facture'), iNat = c.col('nature'), iEtat = c.col('etat'), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iFam = c.col('famille de produit niveau 1'), iAut = c.col('auteur'), iSoc = c.col('societe du client'), iCli = c.find(h => /num(ero)? (du )?client/.test(h));
       const ttc = c.H.map((h, i) => [h, i]).filter(([h]) => h.includes('ttc')).map(([, i]) => i);
       const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : (ttc[1] ?? ttc[0]);
       const iCI = c.find(h => h.includes('code') && h.includes('initial')), iNI = c.find(h => h.includes('nom') && h.includes('initial') && !h.includes('prenom')), iPI = c.find(h => h.includes('prenom') && h.includes('initial'));
@@ -183,15 +201,20 @@ const RSM_DEFS = [
         if (/annul/.test(norm(r[iEtat]))) { c.skip('pièce annulée'); continue; }
         if (/reconduction/.test(norm(r[iProd]))) { c.skip('reconduction mensuelle'); continue; }
         const avoir = /avoir/.test(norm(r[iNat]));
-        let v = rsmNum(r[iTtc]); if (avoir && v > 0) v = -v;
+        const vm = parseMontant(r[iTtc]); let v = Number.isNaN(vm) ? 0 : vm; if (avoir && v > 0) v = -v;
         const kpi = isNutrition(r[iFam], r[iCode], r[iProd]) ? 'nutrition' : isAccessory(r[iCode]) ? 'accessoires' : null;
+        if (kpi && Number.isNaN(vm)) { c.skip('montant illisible'); continue; }
         const base = `fl:${r[iNum]}:${String(r[iCode]).trim()}:${norm(r[iProd])}:${v}`; seen[base] = (seen[base] || 0) + 1;
         if (kpi && v) c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iAut]) });
         // B2B : une facture d'abonnement a une societe (hors boutique)
-        if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(r[iNum])) {
-          b2b.add(r[iNum]);
+        // Une fois par client (ou societe) et par produit, et seulement a la
+        // premiere facture : la facture mensuelle d'un abonnement d'entreprise
+        // ne recompte pas un contrat chaque mois.
+        const bk = `b2b:${norm(iCli >= 0 && r[iCli] ? r[iCli] : r[iSoc] || '')}:${norm(r[iProd] || '')}`;
+        if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(bk) && !Object.values(S.entries || {}).some(e => e.rowKey === bk && e.kpiId === 'b2b')) {
+          b2b.add(bk);
           const seller = (iCI >= 0 || iNI >= 0) ? resolveSeller(`${r[iPI] || ''} ${r[iNI] || ''}`.trim(), r[iCI]) : resolveSeller(r[iAut]);
-          c.entry({ key: `b2b:${r[iNum]}`, kpiId: 'b2b', date, value: 1, seller });
+          c.entry({ key: bk, kpiId: 'b2b', date, value: 1, seller });
         }
         if (!kpi) c.skip('ligne hors nutrition / accessoires');
       }
@@ -216,20 +239,26 @@ const RSM_DEFS = [
     sig: has => has('auteur de la regularisation') && has('date de regularisation'),
     parse(c) {
       const iDI = c.col('date de l incident'), iType = c.col('type d incident'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iNum = c.col('num client'), iMoy = c.col('moyen de paiement'), iNP = c.col('numero du paiement'), iMt = c.col('montant du paiement'), iSt = c.col('statut'), iDR = c.col('date de regularisation'), iAR = c.col('auteur de la regularisation');
-      const open = {};
+      const open = {}; const occ = {}; let weak = 0;
       for (const r of c.rows) {
         const st = norm(r[iSt]); const amount = Math.abs(rsmNum(r[iMt])); const client = `${r[iPre] || ''} ${r[iNom] || ''}`.trim();
-        const key = `inc:${r[iNP] || ''}:${rsmDate(r[iDI]) || r[iDI]}:${r[iNum]}`;
-        if (/annul|cancel/.test(st)) { c.recov({ key, date: rsmDate(r[iDR]) || rsmDate(r[iDI]), amount, canal: 'annule', type: r[iType], clientNum: r[iNum], author: r[iAR] }); continue; }
+        // Cle : paiement, date, client, montant, type, et rang d'occurrence (deux
+        // rejets le meme jour sans numero de paiement ne s'ecrasent plus).
+        const kb = `inc:${r[iNP] || ''}:${rsmDate(r[iDI]) || r[iDI]}:${r[iNum]}:${amount}:${norm(r[iType] || '')}`; occ[kb] = (occ[kb] || 0) + 1;
+        const key = occ[kb] > 1 ? `${kb}:${occ[kb]}` : kb;
+        const legacyKey = occ[kb] > 1 ? null : `inc:${r[iNP] || ''}:${rsmDate(r[iDI]) || r[iDI]}:${r[iNum]}`; // cle des imports d'avant : pas de doublon au reimport
+        if (!r[iNP]) weak++;
+        if (/annul|cancel/.test(st)) { c.recov({ key, legacyKey, date: rsmDate(r[iDR]) || rsmDate(r[iDI]), amount, canal: 'annule', type: r[iType], clientNum: r[iNum], author: r[iAR] }); continue; }
         const dr = rsmDate(r[iDR]);
         if (/closed|regularis|clos/.test(st) && dr) {
           const ch = recovChannel(r[iAR], client);
-          c.recov({ key, date: dr, amount, canal: ch.canal, type: r[iType], clientNum: r[iNum], author: r[iAR], seller: ch.seller || null, moyen: r[iMoy] });
-          if (ch.canal === 'equipe') c.entry({ key, kpiId: 'impayes', date: dr, value: amount, seller: ch.seller });
+          c.recov({ key, legacyKey, date: dr, amount, canal: ch.canal, type: r[iType], clientNum: r[iNum], author: r[iAR], seller: ch.seller || null, moyen: r[iMoy] });
+          if (ch.canal === 'equipe') c.entry({ key, legacyKey, kpiId: 'impayes', date: dr, value: amount, seller: ch.seller, clientNum: r[iNum] || '' });
           continue;
         }
         if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0 }; o.amount += amount; o.count++; }
       }
+      if (weak) c.warn(`${weak} incident(s) sans numéro de paiement : clé plus faible (montant et type ajoutés).`);
       const list = Object.values(open);
       if (list.length) { c.balances(list, 'incidents'); }
     },
@@ -359,7 +388,8 @@ function linesParse(c, avoir) {
     if (/reconduction/.test(norm(r[iProd]))) { c.skip('reconduction mensuelle'); continue; }
     const kpi = isNutrition('', r[iCode], r[iProd]) ? 'nutrition' : isAccessory(r[iCode]) ? 'accessoires' : null;
     if (!kpi) { c.skip('ligne hors nutrition / accessoires'); continue; }
-    let v = rsmNum(r[iTtc]); if (avoir && v > 0) v = -v; if (!v) continue;
+    const vm = parseMontant(r[iTtc]); if (Number.isNaN(vm)) { c.skip('montant illisible'); continue; }
+    let v = vm; if (avoir && v > 0) v = -v; if (!v) continue;
     const base = `fl:${r[iNum]}:${String(r[iCode]).trim()}:${norm(r[iProd])}:${v}`; seen[base] = (seen[base] || 0) + 1;
     c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iV]) });
   }

@@ -17,22 +17,53 @@
 const SCORE_CAP = 1.5;
 const TIERS = [0.25, 0.5, 0.75, 1];
 
+// ── Quelle saisie compte ───────────────────────────────────────────────────
+// - une saisie importee compte si AU MOINS UN des imports qui la portent est
+//   actif (annuler le dernier import ne retire pas une vente du precedent) ;
+// - retiree par un import de gestion plus recent (vente annulee) : non comptee,
+//   tant que cet import est actif ;
+// - pour un KPI alimente par Resamania (source 'import'), une saisie manuelle
+//   datee dans la periode deja couverte par l'import du mois est remplacee par
+//   l'import (pas de double comptage). Les corrections de manager (adjust)
+//   comptent toujours.
+const impActive = id => !id || !S.imports[id] || S.imports[id].active !== false;
+function entryCounts(e) {
+  if (!e || e.suppressed) return false;
+  if (e.removedBy && S.imports[e.removedBy] && impActive(e.removedBy)) return false;
+  const ids = e.importIds ? Object.keys(e.importIds) : [];
+  if (ids.length) return ids.some(impActive);
+  return impActive(e.importId);
+}
+const IMPORT_KPIS = ['contrats', 'nutrition', 'accessoires', 'b2b', 'prospects'];
+const kpiSource = k => (S.kpis[k] && S.kpis[k].source) || (IMPORT_KPIS.includes(k) ? 'import' : 'mixte');
+const isImported = e => e.source === 'import' || !!e.importId;
+// Saisie manuelle remplacee par un import (affichee « remplacée par l'import »).
+function replacedByImport(e, cover) {
+  if (isImported(e) || e.adjust || kpiSource(e.kpiId) !== 'import') return false;
+  const c = (cover || idx().cover).get(`${e.clubId}|${e.kpiId}|${e.date.slice(0, 7)}`);
+  return !!c && e.date <= c;
+}
+
 // ── Index des saisies, reconstruit a chaque changement ─────────────────────
+// Les valeurs sont additionnees en CENTIMES entiers (3 x 29,90 + 10,30 = 100 pile).
 let IDX = null, IDX_REV = -1;
 function idx() {
   if (IDX_REV === REV && IDX) return IDX;
-  const day = new Map(); // `${club}|${user}|${kpi}` -> Map(date -> somme) ; user '*' = tout le club
+  const day = new Map(); // `${club}|${user}|${kpi}` -> Map(date -> centimes) ; user '*' = tout le club
   const add = (key, date, v) => { let m = day.get(key); if (!m) day.set(key, m = new Map()); m.set(date, (m.get(date) || 0) + v); };
   const months = new Set();
-  for (const e of Object.values(S.entries)) {
-    if (e.importId && S.imports[e.importId] && S.imports[e.importId].active === false) continue;
-    const v = Number(e.value) || 0;
+  const live = Object.values(S.entries).filter(e => e && e.date && entryCounts(e));
+  const cover = new Map(); // `${club}|${kpi}|${mois}` -> derniere date couverte par un import
+  for (const e of live) if (isImported(e)) { const k = `${e.clubId}|${e.kpiId}|${e.date.slice(0, 7)}`; if (!cover.has(k) || cover.get(k) < e.date) cover.set(k, e.date); }
+  for (const e of live) {
+    if (replacedByImport(e, cover)) continue;
+    const v = Math.round((Number(e.value) || 0) * 100);
     add(`${e.clubId}|${e.userId || '_'}|${e.kpiId}`, e.date, v);
     add(`${e.clubId}|*|${e.kpiId}`, e.date, v);
     months.add(e.date.slice(0, 7));
   }
   Object.keys(S.targets).forEach(m => months.add(m));
-  IDX = { day, months: [...months].sort(), memo: new Map() };
+  IDX = { day, cover, months: [...months].sort(), memo: new Map() };
   IDX_REV = REV;
   return IDX;
 }
@@ -43,7 +74,7 @@ function sumRange(clubId, userId, kpiId, from, to) {
   if (!m) return 0;
   let s = 0;
   for (const [d, v] of m) if (d >= from && d <= to) s += v;
-  return s;
+  return s / 100;
 }
 
 // ── Periodes ───────────────────────────────────────────────────────────────
@@ -194,11 +225,11 @@ function allTrophies() {
       for (const mk of idx().months.filter(m => m < cm)) {
         const r = rangeOf('month', mk);
         const rk = ranking(c.id, r);
-        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: '🏆', label: `Meilleur·e commercial·e ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
+        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: 'trophy', label: `Meilleur·e commercial·e ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
         for (const k of kpiList()) {
           if (!k.points) continue;
           const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0);
-          if (kr[0] && kr[0].score >= 0.5) out.push({ userId: kr[0].u.id, kind: 'month', icon: k.emoji || '🎖️', label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
+          if (kr[0] && kr[0].score >= 0.5) out.push({ userId: kr[0].u.id, kind: 'month', icon: kpiIconName(k), label: `${k.label} ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
         }
       }
       // trimestres termines
@@ -207,21 +238,21 @@ function allTrophies() {
         const r = rangeOf('quarter', qf);
         if (r.to >= t) continue;
         const rk = ranking(c.id, r);
-        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'season', icon: '👑', label: `Champion·ne de la saison ${r.label}`, mk: r.to.slice(0, 7), clubId: c.id });
+        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'season', icon: 'crown', label: `Champion·ne de la saison ${r.label}`, mk: r.to.slice(0, 7), clubId: c.id });
       }
       // semaines terminees (12 dernieres)
       let w = weekStart(addDays(t, -7));
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const r = rangeOf('week', w);
         const rk = ranking(c.id, r).filter(x => x.score > 0);
-        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: ['🥇', '🥈', '🥉'][j], label: j ? `Podium semaine du ${dm(w)}` : `Champion·ne de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
+        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `Champion·ne de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
       }
     }
     // defis flash termines
     for (const ch of Object.values(S.challenges)) {
       if (ch.end > Date.now()) continue;
       const w = challengeRanking(ch)[0];
-      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: '⚡', label: `Défi flash : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
+      if (w && w.value > 0) out.push({ userId: w.u.id, kind: 'flash', icon: 'bolt', label: `Défi flash : ${ch.title}`, mk: isoOf(new Date(ch.end)).slice(0, 7), clubId: ch.clubId });
     }
     return out;
   });
@@ -253,7 +284,7 @@ function challengeRanking(ch) {
     let value = 0;
     for (const e of Object.values(S.entries)) {
       if (e.userId !== u.id || e.kpiId !== ch.kpiId || e.clubId !== ch.clubId) continue;
-      if (e.importId && S.imports[e.importId] && S.imports[e.importId].active === false) continue;
+      if (!entryCounts(e) || e.adjust || replacedByImport(e)) continue; // une correction de manager ne compte pas dans un defi
       const ts = e.source === 'manual' ? e.at : dateOf(e.date).getTime() + 12 * 3600000;
       if (ts >= ch.start && ts <= ch.end) value += Number(e.value) || 0;
     }
@@ -266,12 +297,14 @@ function challengeRanking(ch) {
 }
 
 // ── Retention : taches generees depuis la base clients ─────────────────────
+// Icone d'un trophee (nom d'icone controle, teinte or/argent/bronze pour le podium).
+const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}">${ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
 const LOYALTY_TYPES = {
-  suivi: { label: 'Appel de suivi', icon: '📞', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
-  renouvellement: { label: 'Renouvellement', icon: '🔁', hint: 'Fin de contrat dans les 30 jours' },
-  anniversaire: { label: 'Anniversaire', icon: '🎂', hint: 'Anniversaire dans les 7 jours' },
-  impaye: { label: 'Impayé', icon: '💶', hint: 'Solde débiteur' },
-  mandat: { label: 'Sans mandat', icon: '🏦', hint: 'Abonné sans mandat de prélèvement' },
+  suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
+  renouvellement: { label: 'Renouvellement', icon: 'repeat', hint: 'Fin de contrat dans les 30 jours' },
+  anniversaire: { label: 'Anniversaire', icon: 'cake', hint: 'Anniversaire dans les 7 jours' },
+  impaye: { label: 'Impayé', icon: 'coins', hint: 'Solde débiteur' },
+  mandat: { label: 'Sans mandat', icon: 'bank', hint: 'Abonné sans mandat de prélèvement' },
 };
 const OUTCOMES = {
   ok: { label: 'Joint — OK', cls: 'ok', done: true },

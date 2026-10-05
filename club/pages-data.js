@@ -20,13 +20,6 @@ function parseCSV(text) {
   const headers = (clean.shift() || []).map(h => h.trim());
   return { headers, rows: clean.map(r => headers.map((_, i) => (r[i] || '').trim())) };
 }
-const toNum = s => { if (s == null) return 0; const t = String(s).replace(/\s|€/g, '').replace(/ /g, ''); const n = parseFloat(t.includes(',') && !t.includes('.') ? t.replace(',', '.') : t.replace(/,(?=\d{3}\b)/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
-function toDate(s) {
-  if (!s) return null; s = String(s).trim();
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/); if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${pad(m[2])}-${pad(m[1])}`; }
-  return null;
-}
 
 // Exports Resamania reconnus par leurs en-tetes. Chaque profil propose le
 // type d'import et des colonnes par defaut, toutes modifiables a l'etape 2.
@@ -150,15 +143,18 @@ ACTIONS.wizNext = () => {
     // On compte les occurrences : deux ventes identiques dans le MEME fichier
     // sont deux ventes ; ce qui est en trop, c'est ce qu'un import actif a deja.
     const seen = new Map();
-    Object.values(S.entries).filter(e => e.importId && S.imports[e.importId] && S.imports[e.importId].active !== false)
+    Object.values(S.entries).filter(e => isImported(e) && entryCounts(e))
       .forEach(e => { const k = `${e.userId}|${e.kpiId}|${e.date}|${e.value}|${e.rowKey || ''}`; seen.set(k, (seen.get(k) || 0) + 1); });
+    const iPiece = (w.headers || []).findIndex(h => /facture|piece|n° ?contrat|numero de (vente|contrat)/i.test(h));
     const inFile = new Map();
     const entries = []; const sum = {}; let dups = 0; let from = '9999', to = '0000';
     w.rows.forEach(r => {
       const date = toDate(get(r, 'date')); const uid = w.userMap[get(r, 'user')]; const kpiId = w.kpi === '_cat' ? w.catMap[get(r, 'cat')] : w.kpi;
       const value = w.mode === 'sum' ? Math.round(toNum(get(r, 'amount')) * 100) / 100 : 1;
       if (!date || !uid || !kpiId || !value) { plan.skipped++; return; }
-      const rowKey = norm(r.join('|')).slice(0, 80);
+      // Cle metier, independante de l'ordre et du nombre de colonnes : date,
+      // vendeur, montant, categorie, et numero de piece si une colonne le porte.
+      const rowKey = norm([date, get(r, 'user'), value, get(r, 'cat'), iPiece >= 0 ? r[iPiece] : ''].join('|')).slice(0, 120);
       const key = `${uid}|${kpiId}|${date}|${value}|${rowKey}`;
       const n = (inFile.get(key) || 0) + 1; inFile.set(key, n);
       if (n <= (seen.get(key) || 0)) { dups++; return; }
@@ -239,7 +235,17 @@ ACTIONS.impCancel = async el => {
   if (i.type === 'resil') Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], true]));
   db.batch(ops); toast('Import annulé.');
 };
-ACTIONS.impRestore = el => { const i = S.imports[el.dataset.id]; const ops = [[['imports', i.id, 'active'], true]]; Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
+ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops = [[['imports', i.id, 'active'], true]];
+  // Les lignes deja comptees par un autre import actif (meme cle metier) ne sont
+  // pas reactivees : sinon annuler, reimporter puis retablir doublait tout.
+  const k = e => `${e.userId}|${e.kpiId}|${e.date}|${e.value}|${e.rowKey || ''}`;
+  const active = new Map(); Object.values(S.entries).filter(e => isImported(e) && entryCounts(e) && e.importId !== i.id).forEach(e => active.set(k(e), (active.get(k(e)) || 0) + 1));
+  const mine = Object.values(S.entries).filter(e => e.importId === i.id && !(e.importIds && Object.keys(e.importIds).length > 1));
+  const dup = []; mine.forEach(e => { const n = active.get(k(e)) || 0; if (n > 0) { dup.push(e); active.set(k(e), n - 1); } });
+  if (dup.length) {
+    if (!await confirmDlg(`${dup.length} ligne(s) de cet import sont déjà comptées par un autre import actif. Rétablir uniquement les ${mine.length - dup.length} ligne(s) nouvelles ?`, { ok: 'Rétablir sans doublon' })) return;
+    dup.forEach(e => ops.push([['entries', e.id, 'suppressed'], true]));
+  } Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
 ACTIONS.impDetail = el => {
   const i = S.imports[el.dataset.id];
   const rows = Object.values(S.entries).filter(e => e.importId === i.id).sort((a, b) => a.date.localeCompare(b.date));
@@ -294,10 +300,10 @@ function loyTasks(todo) {
   const prio = { impaye: 0, mandat: 1, renouvellement: 2, suivi: 3, anniversaire: 4 };
   list.sort((a, b) => sort === 'amount' ? (b.amount || 0) - (a.amount || 0) : sort === 'prio' ? prio[a.type] - prio[b.type] || a.due.localeCompare(b.due) : a.due.localeCompare(b.due));
   const cnt = t => todo.filter(x => t === 'all' || x.type === t).length;
-  return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.icon} ${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
+  return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
     <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
     <select class="input sm" style="width:auto" data-change="loySort"><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
-    ${list.length ? `<div class="grid">${list.map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span style="font-size:22px">${ty.icon}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.failed ? ` <span class="badge warn">${t.failed}/${MAX_ATTEMPTS} tentative(s)</span>` : ''}
+    ${list.length ? `<div class="grid">${list.map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.failed ? ` <span class="badge warn">${t.failed}/${MAX_ATTEMPTS} tentative(s)</span>` : ''}
       <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${t.client.incidents} incident(s)` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
       : '<div class="card empty"><div class="title">Aucune tâche</div><p>Rien à traiter sur cette vue pour le moment.</p></div>'}`;
@@ -308,8 +314,8 @@ ACTIONS.loyAct = el => {
   const { c, t, o } = el.dataset;
   const save = (note = '') => {
     const id = newId(); const ops = [[['loyalty', id], { id, clientId: c, type: t, outcome: o, userId: ME.id, note, at: Date.now() }]];
-    if (o === 'paid') { const amt = Number(S.clients[c].balance) || 0; ops.push([['clients', c, 'balance'], 0]); if (amt > 0) { const eid = newId(); ops.push([['entries', eid], { id: eid, userId: ME.id, clubId: CLUB.id, kpiId: 'impayes', date: today(), value: amt, source: 'manual', at: Date.now(), by: ME.id, from: 'retention' }]); } }
-    db.batch(ops); toast(o === 'paid' ? 'Réglé : ajouté à vos impayés récupérés 💶' : 'Action enregistrée');
+    if (o === 'paid') { const cl = S.clients[c]; ops.push(...markPaidOps(cl, Number(cl.balance) || 0, 'equipe', ME.id, 'retention')); }
+    db.batch(ops); toast(o === 'paid' ? 'Réglé : ajouté à vos impayés récupérés' : 'Action enregistrée');
   };
   if (o === 'lost' || o === 'rdv') {
     openModal({ title: OUTCOMES[o].label, body: `<label class="field"><span>Note (facultatif)</span><textarea class="input" id="ln" placeholder="${o === 'lost' ? 'Motif du refus…' : 'Date et heure du RDV…'}"></textarea></label>`,
@@ -328,7 +334,7 @@ function loyPerf() {
       : '<div class="card empty"><div class="title">Aucune action ce mois-ci</div><p>Le classement démarre au premier appel.</p></div>'}`;
 }
 function loyLost(list) {
-  return list.length ? `<div class="grid">${list.map(t => `<div class="card row wrap" style="padding:12px 14px"><span style="font-size:20px">${LOYALTY_TYPES[t.type].icon}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge bad">${LOYALTY_TYPES[t.type].label}</span><div class="muted small">${t.acts.length} tentative(s) · dernière : ${t.acts[0] ? esc(OUTCOMES[t.acts[0].outcome].label) + ' par ' + esc(fullName(S.users[t.acts[0].userId])) + ', ' + ago(t.acts[0].at) : '—'}${t.acts[0] && t.acts[0].note ? ' · « ' + esc(t.acts[0].note) + ' »' : ''}</div></div><button class="btn sm" data-act="loyRetry" data-c="${t.client.id}" data-t="${t.type}">Relancer</button></div>`).join('')}</div>`
+  return list.length ? `<div class="grid">${list.map(t => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(LOYALTY_TYPES[t.type].icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge bad">${LOYALTY_TYPES[t.type].label}</span><div class="muted small">${t.acts.length} tentative(s) · dernière : ${t.acts[0] ? esc(OUTCOMES[t.acts[0].outcome].label) + ' par ' + esc(fullName(S.users[t.acts[0].userId])) + ', ' + ago(t.acts[0].at) : '—'}${t.acts[0] && t.acts[0].note ? ' · « ' + esc(t.acts[0].note) + ' »' : ''}</div></div><button class="btn sm" data-act="loyRetry" data-c="${t.client.id}" data-t="${t.type}">Relancer</button></div>`).join('')}</div>`
     : '<div class="card empty"><div class="title">Aucun client perdu</div><p>Les relances épuisées (3 tentatives) ou abandonnées apparaîtront ici.</p></div>';
 }
 ACTIONS.loyRetry = el => { const id = newId(); db.set(['loyalty', id], { id, clientId: el.dataset.c, type: el.dataset.t, outcome: 'reopen', userId: ME.id, at: Date.now() }); toast('Remis dans les tâches'); };
@@ -394,17 +400,23 @@ function clubSettings() {
       <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label><button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button></div></div></div>`;
 }
 ACTIONS.kpiSet = el => { const k = el.dataset.k; const v = el.type === 'checkbox' ? el.checked : (k === 'points' || k === 'order') ? toNum(el.value) : el.value.trim(); db.set(['kpis', el.dataset.id, k], v); };
-ACTIONS.kpiNew = () => openModal({ title: 'Nouveau KPI', body: `<form id="kf" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="label" required></label><label class="field"><span>Unité</span><select class="input" name="unit"><option value="qty">Quantité</option><option value="eur">Euros</option></select></label><label class="field"><span>Points à 100 %</span><input class="input" type="number" name="points" value="300"></label><label class="field"><span>Emoji</span><input class="input" name="emoji" value="🎯"></label></form>`,
+const KPI_PICK = ['target', 'star', 'cup', 'pen', 'cap', 'coins', 'briefcase', 'ticket', 'lifebuoy', 'magnet', 'phone', 'trophy', 'flame', 'heart', 'users', 'bolt', 'flag', 'calcheck'];
+ACTIONS.kpiNew = () => openModal({ title: 'Nouveau KPI', body: `<form id="kf" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="label" required></label><label class="field"><span>Unité</span><select class="input" name="unit"><option value="qty">Quantité</option><option value="eur">Euros</option></select></label><label class="field"><span>Points à 100 %</span><input class="input" type="number" name="points" value="300"></label><div class="field full"><span>Icône</span><div class="ico-pick">${KPI_PICK.map((n, i) => `<label><input type="radio" name="icon" value="${n}" ${i === 0 ? 'checked' : ''}>${ico(n)}</label>`).join('')}</div></div></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="kpiCreate">Créer</button>' });
-ACTIONS.kpiCreate = () => { const f = formData($('#kf')); if (!f.label.trim()) return; const id = 'k' + newId(); db.set(['kpis', id], { id, label: f.label.trim(), unit: f.unit, points: toNum(f.points), required: false, enabled: true, order: Object.keys(S.kpis).length + 1, emoji: f.emoji }); closeModal(); };
+ACTIONS.kpiCreate = () => { const f = formData($('#kf')); if (!f.label.trim()) return; const id = 'k' + newId(); db.set(['kpis', id], { id, label: f.label.trim(), unit: f.unit, points: toNum(f.points), required: false, enabled: true, order: Object.keys(S.kpis).length + 1, icon: ICONS[f.icon] ? f.icon : 'target' }); closeModal(); };
 ACTIONS.exportAll = () => downloadFile(`fit-pulse-sauvegarde-${today()}.json`, JSON.stringify(S), 'application/json');
 ACTIONS.importAll = el => {
   const file = el.files[0]; if (!file) return;
   const fr = new FileReader();
   fr.onload = async () => {
     let data; try { data = JSON.parse(fr.result); } catch (e) { toast('Fichier invalide.'); return; }
-    if (!data.users || !data.clubs) { toast('Ce n’est pas une sauvegarde Fit Pulse.'); return; }
-    if (!await confirmDlg('Remplacer toutes les données actuelles par cette sauvegarde ?', { ok: 'Restaurer', danger: true })) return;
+    if (!data.users || !data.clubs || typeof data.users !== 'object' || typeof data.clubs !== 'object') { toast('Ce n’est pas une sauvegarde Fit Pulse.'); return; }
+    // Une sauvegarde ne peut pas creer de createur inconnu de la base actuelle.
+    const intrus = Object.values(data.users).filter(u => u && u.role === 'createur' && !(S.users[u.id] && S.users[u.id].role === 'createur'));
+    if (intrus.length) { toast('Sauvegarde refusée : elle ajoute un compte Créateur inconnu.'); return; }
+    if (!await confirmDlg('Remplacer toutes les données actuelles par cette sauvegarde ? Une copie de l’état actuel est d’abord téléchargée.', { ok: 'Restaurer', danger: true })) return;
+    const mot = prompt('Pour confirmer, tapez RESTAURER'); if ((mot || '').trim().toUpperCase() !== 'RESTAURER') { toast('Restauration annulée.'); return; }
+    downloadFile(`fit-pulse-avant-restauration-${today()}.json`, JSON.stringify(S), 'application/json');
     db.replace(data);
     // En ligne : les cles de connexion des membres actifs sont reposees, pour
     // que leurs codes marchent tout de suite (changement de base, de projet).

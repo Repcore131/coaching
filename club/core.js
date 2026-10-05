@@ -95,22 +95,50 @@ const ICONS = {
   map: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   euro: '<path d="M18 7a7 7 0 1 0 0 10"/><path d="M4 10h10M4 14h10"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
+  // Icones metier : remplacent les emojis (meme trait 2 px, bouts ronds).
+  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>',
+  cup: '<path d="M7 3h10l-1.5 18h-7z"/><path d="M6.4 8h11.2M12 3V1"/>',
+  pen: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4M14 20h6"/>',
+  cap: '<path d="M3 15c0-5 4-9 9-9s9 4 9 9"/><path d="M3 15h18l-1 2H8M12 6V4"/>',
+  coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.6-2.4-2.9-5.5-3"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  ticket: '<path d="M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a2 2 0 0 0 0 4v0a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4V12a2 2 0 0 0 0-4z"/><path d="M14 5v14" stroke-dasharray="2 2"/>',
+  lifebuoy: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/>',
+  magnet: '<path d="M5 3v8a7 7 0 0 0 14 0V3h-4v8a3 3 0 0 1-6 0V3z"/><path d="M5 7h4M15 7h4"/>',
+  crown: '<path d="m3 8 4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
+  medal: '<path d="M8 3h8l-2 6h-4z"/><circle cx="12" cy="15" r="6"/><path d="m12 12 1 2h2l-1.6 1.3.6 2.2-2-1.3-2 1.3.6-2.2L9 14h2z"/>',
+  cake: '<path d="M4 21V12h16v9M2 21h20M4 16c2 1.5 4 1.5 6 0s4-1.5 6 0 3 1 4 0M12 12V8M12 5.5v.5"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  bank: '<path d="m3 9 9-6 9 6M5 9v9M9.5 9v9M14.5 9v9M19 9v9M3 21h18"/>',
+  flame: '<path d="M12 22a7 7 0 0 0 7-7c0-4-3-6-4-9-1 2-2 3-3 3 0-2-1-4-3-6-.5 4-4 7-4 12a7 7 0 0 0 7 7z"/>',
+  sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  flag: '<path d="M5 21V4M5 4h12l-2 4 2 4H5"/>',
+  calcheck: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/>',
 };
+// Icone d'un KPI : par son id (KPI par defaut), sinon le nom d'icone choisi,
+// sinon une cible. Jamais de texte libre injecte dans la page.
+const KPI_ICON = { avis: 'star', nutrition: 'cup', contrats: 'pen', accessoires: 'cap', impayes: 'coins', b2b: 'briefcase', invites: 'ticket', sauvetage: 'lifebuoy', prospects: 'magnet' };
+const kpiIconName = k => (k && ICONS[k.icon]) ? k.icon : (k && KPI_ICON[k.id]) || 'target';
+const kpiIcon = (k, cls = 'ico') => ico(kpiIconName(k), cls);
+// Image du chat : uniquement une image encodee (data:), jamais un texte qui pourrait sortir de l'attribut.
+const safeImg = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
 
 // ── Referentiels par defaut ───────────────────────────────────────────────
 // points : ce que vaut le KPI a 100 % de l'objectif. Les points tombent par
 // paliers de 25 % (25/50/75/100) : a 60 % d'un KPI a 1 000 pts, on a 500 pts.
 const DEFAULT_KPIS = {
-  avis:        { id: 'avis',        label: 'Avis Google',            unit: 'qty', points: 100,  required: true,  enabled: true, order: 1, emoji: '⭐' },
-  nutrition:   { id: 'nutrition',   label: 'Nutrition',              unit: 'eur', points: 500,  required: true,  enabled: true, order: 2, emoji: '🥤' },
-  contrats:    { id: 'contrats',    label: 'Contrats signés',        unit: 'qty', points: 1000, required: true,  enabled: true, order: 3, emoji: '✍️' },
-  accessoires: { id: 'accessoires', label: 'Accessoires',            unit: 'eur', points: 500,  required: true,  enabled: true, order: 4, emoji: '🧢' },
-  impayes:     { id: 'impayes',     label: 'Impayés récupérés',      unit: 'eur', points: 750,  required: true,  enabled: true, order: 5, emoji: '💶' },
-  b2b:         { id: 'b2b',         label: 'Contrat B2B',            unit: 'qty', points: 100,  required: false, enabled: true, order: 6, emoji: '🏢' },
-  invites:     { id: 'invites',     label: 'Invités > Contrats',     unit: 'qty', points: 300,  required: false, enabled: true, order: 7, emoji: '🎟️' },
-  sauvetage:   { id: 'sauvetage',   label: 'Sauvetage résiliations', unit: 'qty', points: 300,  required: false, enabled: true, order: 8, emoji: '🛟' },
-  prospects:   { id: 'prospects',   label: 'Prospects',              unit: 'qty', points: 0,    required: false, enabled: true, order: 9, emoji: '🧲' },
+  avis:        { id: 'avis',        label: 'Avis Google',            unit: 'qty', points: 100,  required: true,  enabled: true, order: 1, icon: 'star' },
+  nutrition:   { id: 'nutrition',   label: 'Nutrition',              unit: 'eur', points: 500,  required: true,  enabled: true, order: 2, icon: 'cup' },
+  contrats:    { id: 'contrats',    label: 'Contrats signés',        unit: 'qty', points: 1000, required: true,  enabled: true, order: 3, icon: 'pen' },
+  accessoires: { id: 'accessoires', label: 'Accessoires',            unit: 'eur', points: 500,  required: true,  enabled: true, order: 4, icon: 'cap' },
+  impayes:     { id: 'impayes',     label: 'Impayés récupérés',      unit: 'eur', points: 750,  required: true,  enabled: true, order: 5, icon: 'coins' },
+  b2b:         { id: 'b2b',         label: 'Contrat B2B',            unit: 'qty', points: 100,  required: false, enabled: true, order: 6, icon: 'briefcase' },
+  invites:     { id: 'invites',     label: 'Invités > Contrats',     unit: 'qty', points: 300,  required: false, enabled: true, order: 7, icon: 'ticket' },
+  sauvetage:   { id: 'sauvetage',   label: 'Sauvetage résiliations', unit: 'qty', points: 300,  required: false, enabled: true, order: 8, icon: 'lifebuoy' },
+  prospects:   { id: 'prospects',   label: 'Prospects',              unit: 'qty', points: 0,    required: false, enabled: true, order: 9, icon: 'magnet' },
 };
 
 const DEFAULT_TASKS = [
@@ -200,7 +228,7 @@ const firebaseBackend = {
   async loadSdk() {
     const v = '10.12.2';
     for (const f of ['firebase-app-compat', 'firebase-auth-compat', 'firebase-database-compat']) {
-      await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `https://www.gstatic.com/firebasejs/${v}/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
+      await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `vendor/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }
     this.fb = window.firebase; this.fb.initializeApp(window.PARKPULSE_FIREBASE);
   },
@@ -308,6 +336,8 @@ const db = {
 
 // Complete les collections absentes (Firebase n'enregistre pas les objets vides).
 function normalizeState(st) {
+  // Anciens KPI : le champ emoji (texte libre) devient un nom d'icone controle.
+  if (st.kpis) for (const k of Object.values(st.kpis)) if (k && k.emoji !== undefined) { if (!k.icon) k.icon = KPI_ICON[k.id] || 'target'; delete k.emoji; }
   const base = emptyState();
   for (const k of Object.keys(base)) if (st[k] == null) st[k] = base[k];
   if (!st.tasks.library) st.tasks.library = defaultLibrary();
@@ -327,7 +357,7 @@ function detectLive(before, after) {
     const e = after.entries[id];
     if (e.source !== 'manual' || e.userId === ME.id || Date.now() - e.at > 60000) continue;
     const u = after.users[e.userId], k = after.kpis[e.kpiId], c = after.clubs[e.clubId];
-    if (u && k) toast(`${k.emoji || '🔥'} ${fullName(u)} — ${fmtV(e.value, k.unit)} ${k.label}${c ? ' — ' + c.name : ''}`);
+    if (u && k) toast(`${fullName(u)} : +${fmtV(e.value, k.unit)} ${k.label}${c ? ', ' + c.name : ''}`);
   }
 }
 

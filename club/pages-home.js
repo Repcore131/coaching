@@ -32,7 +32,7 @@ function palierBlock(clubId, mk, kpiId, big) {
   const left = s.next ? Number(s.next.target) - s.real : 0;
   const daysLeft = Math.max(1, daysIn(mk) - Number(today().slice(8)) + 1);
   return `<div class="palier ${big ? 'big' : ''}">
-    <div class="row"><span class="palier-k">${k.emoji || ''} ${esc(k.label)}</span><span class="spacer"></span><b class="palier-n">${fmtN(s.real)}</b></div>
+    <div class="row"><span class="palier-k">${kpiIcon(k)} ${esc(k.label)}</span><span class="spacer"></span><b class="palier-n">${fmtN(s.real)}</b></div>
     <div class="palier-track"><i style="width:${clamp(s.real / scale * 100, 0, 100)}%"></i>${s.tiers.map((t, i) => `<span class="palier-mark ${s.real >= t.target ? 'got' : ''}" style="left:${t.target / scale * 100}%"><em>P${i + 1}</em></span>`).join('')}<span class="palier-pace" style="left:${clamp(s.expected * s.max / scale * 100, 0, 100)}%" title="Rythme attendu pour le dernier palier"></span></div>
     <div class="palier-tiers">${s.tiers.map((t, i) => `<span class="${s.real >= t.target ? 'got' : ''}">P${i + 1} · ${fmtN(t.target)}${s.real >= t.target ? ' ✓' : ''}</span>`).join('')}</div>
     <div class="palier-msg">${s.next ? `Encore <b>${fmtN(Math.ceil(left))}</b> pour le <b>Palier ${s.reached + 1}</b>${s.next.reward ? ` · ${esc(s.next.reward)}` : ''} <span class="muted">· ${(left / daysLeft).toFixed(1).replace('.', ',')} par jour</span>` : `<b>Tous les paliers sont atteints</b> 🎉`}</div></div>`;
@@ -103,12 +103,12 @@ function myToDo() {
 function todoList(limit = 6) {
   const { res, dun, loy } = myToDo();
   const rows = [
-    ...res.map(r => ({ icon: '🚪', title: r.client, sub: `Résiliation · ${r.effective ? (daysTo(r.effective) <= 0 ? 'effective' : 'J-' + daysTo(r.effective)) : 'sans date'}`, hot: resUrgent(r), act: `data-act="resCall" data-id="${r.id}"`, cta: 'Noter un appel' })),
-    ...dun.map(c => ({ icon: '💶', title: c.name, sub: `Impayé · ${fmtE(Number(c.balance))}${dunOf(c).next ? ' · relance ' + dm(dunOf(c).next) : ''}`, hot: dunDue(c), act: `data-act="dunPaid" data-id="${c.id}"`, cta: 'Récupéré' })),
+    ...res.map(r => ({ icon: 'door', title: r.client, sub: `Résiliation · ${r.effective ? (daysTo(r.effective) <= 0 ? 'effective' : 'J-' + daysTo(r.effective)) : 'sans date'}`, hot: resUrgent(r), act: `data-act="resCall" data-id="${r.id}"`, cta: 'Noter un appel' })),
+    ...dun.map(c => ({ icon: 'coins', title: c.name, sub: `Impayé · ${fmtE(Number(c.balance))}${dunOf(c).next ? ' · relance ' + dm(dunOf(c).next) : ''}`, hot: dunDue(c), act: `data-act="dunPaid" data-id="${c.id}"`, cta: 'Récupéré' })),
     ...loy.slice(0, 4).map(t => ({ icon: LOYALTY_TYPES[t.type].icon, title: t.client.name, sub: `${LOYALTY_TYPES[t.type].label}${t.client.phone ? ' · ' + t.client.phone : ''}`, hot: false, act: `data-act="go" data-href="#/loyalty"`, cta: 'Ouvrir' })),
   ];
   if (!rows.length) return '<div class="empty small" style="padding:18px">Rien d’assigné pour l’instant. Prenez un dossier dans Résiliations ou Impayés avec « Je m’en occupe ».</div>';
-  return rows.slice(0, limit).map(x => `<div class="todo ${x.hot ? 'hot' : ''}"><span class="todo-i">${x.icon}</span><div class="spacer"><b>${esc(x.title)}</b><div class="muted small">${esc(x.sub)}</div></div><button class="btn sm" ${x.act}>${x.cta}</button></div>`).join('') + (rows.length > limit ? `<a class="btn ghost sm" href="#/relances" style="margin-top:6px">Voir les ${rows.length} relances ${ico('chevR')}</a>` : '');
+  return rows.slice(0, limit).map(x => `<div class="todo ${x.hot ? 'hot' : ''}"><span class="todo-i">${ico(x.icon)}</span><div class="spacer"><b>${esc(x.title)}</b><div class="muted small">${esc(x.sub)}</div></div><button class="btn sm" ${x.act}>${x.cta}</button></div>`).join('') + (rows.length > limit ? `<a class="btn ghost sm" href="#/relances" style="margin-top:6px">Voir les ${rows.length} relances ${ico('chevR')}</a>` : '');
 }
 
 // ── Accueil ───────────────────────────────────────────────────────────────

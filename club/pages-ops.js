@@ -35,7 +35,7 @@ PAGES.resiliations = {
     // sauvé = date du sauvetage ; résilié = date effective (à défaut, date de la demande)
     const saved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).length;
     const lost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).length;
-    const handledTimes = month.map(r => { const a = (r.actions || []).find(x => x.label !== 'Demande enregistrée'); return a && r.at ? (a.at - r.at) / 86400000 : null; }).filter(x => x != null && x >= 0);
+    const handledTimes = month.map(r => { const a = resActions(r).find(x => x.label !== 'Demande enregistrée'); return a && r.at ? (a.at - r.at) / 86400000 : null; }).filter(x => x != null && x >= 0);
     const reasons = {}; month.forEach(r => { const k = r.reason || 'Non renseigné'; reasons[k] = (reasons[k] || 0) + 1; });
     const noOwner = open.filter(r => !r.ownerId).length, urgent = open.filter(resUrgent).length;
     const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · chaque demande a un responsable, une échéance et une issue.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
@@ -55,7 +55,7 @@ PAGES.resiliations = {
   },
 };
 function resCard(r) {
-  const n = daysTo(r.effective); const st = resStatus(r); const last = (r.actions || []).slice(-1)[0];
+  const n = daysTo(r.effective); const st = resStatus(r); const last = resActions(r).slice(-1)[0];
   const mine = r.ownerId === ME.id;
   return `<div class="card dossier ${resUrgent(r) ? 'urgent' : ''}">
     <div class="row wrap"><div class="spacer" style="min-width:180px"><b style="font-size:15px">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
@@ -69,8 +69,12 @@ function resCard(r) {
       <button class="btn sm" data-act="resLose" data-id="${r.id}">Résiliée</button>
       <button class="btn ghost icon sm" data-act="resOpen" data-id="${r.id}" title="Détail">${ico('chevR')}</button></div></div>`;
 }
-function resLog(r, label, extra = {}) { return [...(r.actions || []), { at: Date.now(), by: ME.id, label, ...extra }]; }
-ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'actions'], resLog(r, 'Prise en charge')]]); toast('Dossier ajouté à vos relances'); };
+// Historique en ajout seul : chaque action est une cle a part (log/<id>), deux
+// commerciaux qui notent en meme temps ne s'ecrasent plus. L'ancien tableau
+// « actions » reste lu.
+function resLogOp(r, label, extra = {}) { const id = newId(); return [['resiliations', r.id, 'log', id], { at: Date.now(), by: ME.id, label, ...extra }]; }
+const resActions = r => [...(r.actions || []), ...Object.values(r.log || {})].sort((a, b) => (a.at || 0) - (b.at || 0));
+ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
 ACTIONS.resCall = el => {
   const r = S.resiliations[el.dataset.id];
   openModal({ title: `Appel · ${r.client}`, body: `<form id="rcf" class="grid">
@@ -82,19 +86,19 @@ ACTIONS.resCall = el => {
 ACTIONS.resCallSave = () => {
   const r = S.resiliations[$('.modal').dataset.id]; const f = formData($('#rcf'));
   const out = $('#rcf input[name=out]:checked').value;
-  db.batch([[['resiliations', r.id, 'actions'], resLog(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim() })], [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
+  db.batch([resLogOp(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim() }), [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
   closeModal(); toast('Appel noté');
 };
 ACTIONS.resSaveIt = el => {
   const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
-  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], [['resiliations', r.id, 'actions'], resLog(r, 'Client sauvé 🛟')],
+  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé 🛟'),
     [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
   celebrate('CLIENT SAUVÉ', `${r.client} reste au club`);
 };
 ACTIONS.resLose = async el => {
   const r = S.resiliations[el.dataset.id];
   if (!await confirmDlg(`Confirmer la résiliation de ${esc(r.client)} ?`, { ok: 'Confirmer', danger: true })) return;
-  db.batch([[['resiliations', r.id, 'status'], 'resiliee'], [['resiliations', r.id, 'saved'], false], [['resiliations', r.id, 'actions'], resLog(r, 'Résiliation confirmée')], [['entries', 'sv_' + r.id], null]]);
+  db.batch([[['resiliations', r.id, 'status'], 'resiliee'], [['resiliations', r.id, 'saved'], false], resLogOp(r, 'Résiliation confirmée'), [['entries', 'sv_' + r.id], null]]);
 };
 ACTIONS.resOpen = el => {
   const r = S.resiliations[el.dataset.id]; const members = clubMembers(CLUB.id);
@@ -105,12 +109,15 @@ ACTIONS.resOpen = el => {
     <label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${r.effective || ''}"></label>
     <label class="field full"><span>Motif</span><select class="input" name="reason">${[...new Set([...(r.reason ? [r.reason] : []), ...RES_REASONS])].map(o => `<option ${o === r.reason ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label></div>
     <button class="btn primary" type="button" data-act="resDetailSave" data-id="${r.id}">Enregistrer</button></form>
-    <h3 style="margin:20px 0 8px">Historique</h3>${(r.actions || []).slice().reverse().map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)" class="small"><b>${esc(a.label)}</b>${a.note ? ' — « ' + esc(a.note) + ' »' : ''}<div class="muted">${esc(fullName(S.users[a.by]))} · ${dmy(isoOf(new Date(a.at)))} ${timeOf(a.at)}</div></div>`).join('') || '<p class="muted small">Aucune action pour l’instant.</p>'}
+    <h3 style="margin:20px 0 8px">Historique</h3>${resActions(r).slice().reverse().map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)" class="small"><b>${esc(a.label)}</b>${a.note ? ' — « ' + esc(a.note) + ' »' : ''}<div class="muted">${esc(fullName(S.users[a.by]))} · ${dmy(isoOf(new Date(a.at)))} ${timeOf(a.at)}</div></div>`).join('') || '<p class="muted small">Aucune action pour l’instant.</p>'}
     ${isManager() ? `<button class="btn sm danger" style="margin-top:16px" data-act="resDel" data-id="${r.id}">Supprimer la demande</button>` : ''}` });
 };
 ACTIONS.resDetailSave = el => {
   const r = S.resiliations[el.dataset.id]; const f = formData($('#rdf'));
-  const ops = [[['resiliations', r.id], { ...r, status: f.status, saved: f.status === 'sauvee', ownerId: f.owner || null, userId: f.owner || null, date: f.date || r.date, effective: f.effective || null, reason: f.reason, actions: f.status !== resStatus(r) ? resLog(r, 'Statut : ' + RES_STATUS[f.status].label) : r.actions || [] }]];
+  // Champ par champ (jamais l'objet entier) : l'historique d'un collegue n'est pas ecrase.
+  const P = k => ['resiliations', r.id, k];
+  const ops = [[P('status'), f.status], [P('saved'), f.status === 'sauvee'], [P('ownerId'), f.owner || null], [P('userId'), f.owner || null], [P('date'), f.date || r.date], [P('effective'), f.effective || null], [P('reason'), f.reason]];
+  if (f.status !== resStatus(r)) ops.push(resLogOp(r, 'Statut : ' + RES_STATUS[f.status].label));
   if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]);
   if (f.status !== 'sauvee') ops.push([['entries', 'sv_' + r.id], null]);
   db.batch(ops); closeModal(); toast('Dossier enregistré');
@@ -126,7 +133,7 @@ ACTIONS.resCreate = () => {
 ACTIONS.resDel = async el => { if (await confirmDlg('Supprimer définitivement cette demande ?', { ok: 'Supprimer', danger: true })) { db.batch([[['resiliations', el.dataset.id], null], [['entries', 'sv_' + el.dataset.id], null]]); closeModal(); } };
 ACTIONS.resExport = () => {
   const list = resList(CLUB.id).sort((a, b) => a.date.localeCompare(b.date));
-  const csv = ['Demande;Effective;Client;Motif;Statut;Responsable;Dernière action', ...list.map(r => [dmy(r.date), r.effective ? dmy(r.effective) : '', r.client, r.reason || '', RES_STATUS[resStatus(r)].label, r.ownerId ? fullName(S.users[r.ownerId]) : '', ((r.actions || []).slice(-1)[0] || {}).label || ''].map(x => `"${String(x).replace(/"/g, '""')}"`).join(';'))].join('\n');
+  const csv = ['Demande;Effective;Client;Motif;Statut;Responsable;Dernière action', ...list.map(r => [dmy(r.date), r.effective ? dmy(r.effective) : '', r.client, r.reason || '', RES_STATUS[resStatus(r)].label, r.ownerId ? fullName(S.users[r.ownerId]) : '', (resActions(r).slice(-1)[0] || {}).label || ''].map(x => `"${String(x).replace(/"/g, '""')}"`).join(';'))].join('\n');
   downloadFile(`resiliations-${norm(CLUB.name).replace(/ /g, '-')}.csv`, '﻿' + csv, 'text/csv');
 };
 
@@ -136,12 +143,13 @@ const DUN_STATUS = {
   relance: { label: 'Relancé', cls: 'info' },
   promesse: { label: 'Promesse de paiement', cls: 'info' },
   recupere: { label: 'Récupéré', cls: 'ok' },
+  a_verifier: { label: 'Soldé, à vérifier', cls: 'warn' },
   perdu: { label: 'Huissier / perdu', cls: 'bad' },
 };
 const dunOf = c => c.dunning || {};
-const dunStatus = c => Number(c.balance) > 0 ? (dunOf(c).status && dunOf(c).status !== 'recupere' ? dunOf(c).status : 'arelancer') : (dunOf(c).status === 'recupere' ? 'recupere' : null);
+const dunStatus = c => Number(c.balance) > 0 ? (dunOf(c).status && !['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : 'arelancer') : (['recupere', 'a_verifier'].includes(dunOf(c).status) ? dunOf(c).status : null);
 function dunRows(clubId) {
-  return Object.values(S.clients).filter(c => c.clubId === clubId && (Number(c.balance) > 0 || dunOf(c).status === 'recupere'));
+  return Object.values(S.clients).filter(c => c.clubId === clubId && (Number(c.balance) > 0 || ['recupere', 'a_verifier'].includes(dunOf(c).status)));
 }
 function dunDue(c) { const n = dunOf(c).next; return Number(c.balance) > 0 && (!n || n <= today()); }
 
@@ -168,7 +176,7 @@ function dunTable() {
     mine: c => Number(c.balance) > 0 && dunOf(c).ownerId === ME.id,
     nobody: c => Number(c.balance) > 0 && !dunOf(c).ownerId,
     promesse: c => dunStatus(c) === 'promesse',
-    recupere: c => dunOf(c).status === 'recupere' && (dunOf(c).recoveredAt || '').slice(0, 7) === mk,
+    recupere: c => ['recupere', 'a_verifier'].includes(dunOf(c).status) && (dunOf(c).recoveredAt || '').slice(0, 7) === mk,
     perdu: c => dunStatus(c) === 'perdu',
   };
   const q = norm(UI.dunQ || '');
@@ -219,11 +227,18 @@ ACTIONS.dunPaid = el => {
 };
 ACTIONS.dunPaidSave = () => {
   const c = S.clients[$('.modal').dataset.id]; const f = formData($('#dpf')); const canal = $('#dpf input[name=canal]:checked').value;
-  const amount = Math.round(toNum(f.amount) * 100) / 100; const by = dunOf(c).ownerId || ME.id;
-  const ops = [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: today(), amount, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(amount)})`)];
-  if (canal === 'equipe' && amount > 0) { const id = 'dn_' + c.id + '_' + today(); ops.push([['entries', id], { id, userId: by, clubId: CLUB.id, kpiId: 'impayes', date: today(), value: amount, source: 'manual', at: Date.now(), by: ME.id, from: 'impayes' }]); }
-  db.batch(ops); closeModal(); celebrate('IMPAYÉ RÉCUPÉRÉ', `${fmtE(amount)} · ${c.name}`);
+  const amount = Math.round(toNum(f.amount) * 100) / 100;
+  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); celebrate('IMPAYÉ RÉCUPÉRÉ', `${fmtE(amount)} · ${c.name}`);
 };
+// Un seul chemin pour « payé » (Impayés, Rétention) : dossier en Récupéré, solde
+// a 0, et UNE saisie d'id fixe dn_<client>_<jour> (deux clics = une saisie).
+// La saisie porte clientId et clientNum : l'import Incidents la reconnait et ne
+// recompte pas le meme paiement.
+function markPaidOps(c, amount, canal, by, from) {
+  const ops = [[['clients', c.id, 'balance'], 0], dunPatch(c, { status: 'recupere', recoveredAt: today(), amount, canal, by: canal === 'equipe' ? by : null }, `Récupéré (${fmtE(amount)})`)];
+  if (canal === 'equipe' && amount > 0) { const id = 'dn_' + c.id + '_' + today(); ops.push([['entries', id], { id, userId: by, clubId: c.clubId || CLUB.id, kpiId: 'impayes', date: today(), value: amount, source: 'manual', at: Date.now(), by: ME.id, from, clientId: c.id, clientNum: c.num || '', ...(from === 'retention' ? { needsCheck: true } : {}) }]); }
+  return ops;
+}
 ACTIONS.dunNew = () => openModal({ title: 'Ajouter un impayé', body: `<form id="dnf" class="form-grid"><label class="field full"><span>Client (prénom et nom)</span><input class="input" name="name" required></label><label class="field"><span>N° client Resamania</span><input class="input" name="num"></label><label class="field"><span>Montant dû (€)</span><input class="input" type="number" step="0.01" name="amount" required></label><label class="field full"><span>Téléphone</span><input class="input" name="phone"></label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="dunCreate">Ajouter</button>' });
 ACTIONS.dunCreate = () => {

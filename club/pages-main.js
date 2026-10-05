@@ -205,7 +205,7 @@ function kpiCard(x, exp) {
   const { k, real, target, pct, earned, status } = x;
   const hl = healthOf(pct != null && exp ? pct / exp : null);
   return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
-    <div class="row"><span style="font-size:18px">${k.emoji || ''}</span><b>${esc(k.label)}</b>${k.required ? '<span class="badge" title="KPI obligatoire du classement">👑</span>' : ''}<span class="spacer"></span><span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span></div>
+    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span><span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span></div>
     <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls}" style="font-size:18px">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>
@@ -290,13 +290,13 @@ ACTIONS.dayRecap = el => {
   const who = el.dataset.who || null;
   let d = today();
   const draw = () => {
-    const list = Object.values(S.entries).filter(e => e.date === d && e.clubId === CLUB.id && (!who || e.userId === who) && !(e.importId && S.imports[e.importId] && S.imports[e.importId].active === false));
+    const list = Object.values(S.entries).filter(e => e.date === d && e.clubId === CLUB.id && (!who || e.userId === who) && entryCounts(e));
     const r = rangeOf('month', d.slice(0, 7)); const st = statsFor(CLUB.id, who, r);
     const byK = {}; list.forEach(e => { byK[e.kpiId] = (byK[e.kpiId] || 0) + Number(e.value); });
     const title = !list.length ? 'Journée sans saisie' : Object.keys(byK).length >= 3 ? 'Mission accomplie 💪' : 'Belle journée';
     return `<div class="row" style="justify-content:center;gap:6px;margin-bottom:12px"><button class="btn icon sm" data-d="-1">${ico('chevL')}</button><b style="min-width:200px;text-align:center">${dayLabel(d)}</b><button class="btn icon sm" data-d="1" ${d >= today() ? 'disabled' : ''}>${ico('chevR')}</button></div>
       <div style="text-align:center"><div class="title" style="font-size:28px">${title}</div></div>
-      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span style="font-size:20px">${S.kpis[kid] ? S.kpis[kid].emoji || '' : ''}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title" style="font-size:20px">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
+      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title" style="font-size:20px">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
       <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
   };
   const m = openModal({ title: 'Récap du jour', body: `<div id="dr">${draw()}</div>` });
@@ -315,7 +315,7 @@ ACTIONS.openSaisies = () => {
           <label class="field"><span>Commercial</span><select class="input" name="userId">${members.map(u => `<option value="${u.id}" ${u.id === ME.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
           <label class="field"><span>Date</span><input class="input" type="date" name="date" value="${today()}" max="${today()}"></label>
         </div>
-        ${kpiList().map(k => `<label class="row card" style="padding:9px 12px"><span style="font-size:18px">${k.emoji || ''}</span><span class="spacer"><b>${esc(k.label)}</b><br><span class="muted small">${k.unit === 'eur' ? 'Montant TTC en €' : 'Quantité'}</span></span><input class="input sm" style="width:110px;text-align:right" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" name="k_${k.id}" placeholder="0"></label>`).join('')}
+        ${kpiList().map(k => `<label class="row card" style="padding:9px 12px"><span class="kpi-ico">${kpiIcon(k)}</span><span class="spacer"><b>${esc(k.label)}</b><br><span class="muted small">${k.unit === 'eur' ? 'Montant TTC en €' : 'Quantité'}</span></span><input class="input sm" style="width:110px;text-align:right" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" name="k_${k.id}" placeholder="0"></label>`).join('')}
         <button class="btn primary" type="submit">Enregistrer</button>
       </form>
       <h3 style="margin:20px 0 8px">Mes dernières saisies</h3>
@@ -384,7 +384,7 @@ PAGES.leaderboard = {
         <div class="tabs" style="margin-top:-4px">${[['', 'Global'], ...kpiList().filter(x => x.points > 0).map(x => [x.id, x.label])].map(([v, l]) => `<button data-act="ui" data-key="lbKpi" data-val="${v}" class="${kpi === v ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
         ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}">${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>
         ${meRow ? `<div class="banner-me">Vous êtes #${meRow.rank} ${period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois-ci'} — ${val(meRow)}</div>` : ''}
-        ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${t.icon}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts"><i class="hdot ${healthOf(x.score != null && x.st.expected ? (k ? x.score : x.score) / Math.max(x.st.expected, 0.01) : null).cls}"></i> ${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
+        ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts"><i class="hdot ${healthOf(x.score != null && x.st.expected ? (k ? x.score : x.score) / Math.max(x.st.expected, 0.01) : null).cls}"></i> ${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
         <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires 👑.'}</p></div>`;
     }
     const atMode = UI.atMode || 'score';
@@ -417,7 +417,7 @@ PAGES.feed = {
       lastDay = day;
       const rx = S.reactions[e.id] || {};
       return sep + `<div class="card act"><div class="stripe"></div><div>
-        <div class="row"><span class="muted small">${k ? (k.emoji || '') + ' ' + esc(k.label) : ''}</span><span class="spacer"></span><span class="muted small">${ago(e.at)}</span></div>
+        <div class="row"><span class="muted small">${k ? kpiIcon(k, 'ico ico-xs') + ' ' + esc(k.label) : ''}</span><span class="spacer"></span><span class="muted small">${ago(e.at)}</span></div>
         <div class="amount">+${fmtV(e.value, k ? k.unit : 'qty')}</div>
         <div class="row small" style="margin-top:4px">${avatar(u, 'xs')}<b>${esc(fullName(u))}</b>${c ? `<span class="muted">· ${ico('map')} ${esc(c.name)}</span>` : ''}</div>
         <div class="reacts">${['🔥', '💪', '👏'].map(em => { const who = rx[em] ? Object.keys(rx[em]) : []; return `<button data-act="react" data-id="${e.id}" data-em="${em}" class="${who.includes(ME.id) ? 'on' : ''}" title="${esc(who.map(id => fullName(S.users[id])).join(', '))}">${em} ${who.length || ''}</button>`; }).join('')}</div>
@@ -444,7 +444,7 @@ PAGES.chat = {
       const u = S.users[m.userId]; const rx = m.reactions || {};
       return `<div class="msg ${m.userId === ME.id ? 'mine' : ''}">${avatar(u)}<div>
         <div class="meta"><b>${esc(fullName(u))}</b>${u && u.role === 'manager' ? ' <span class="badge fp">MANAGER</span>' : ''} · ${timeOf(m.at)}</div>
-        ${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ''}${m.image ? `<img class="att" src="${m.image}" alt="Image jointe">` : ''}
+        ${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ''}${safeImg(m.image) ? `<img class="att" src="${m.image}" alt="Image jointe">` : ''}
         <div class="tools">${Object.entries(rx).filter(([, w]) => Object.keys(w).length).map(([em, w]) => `<a data-act="chatReact" data-id="${m.id}" data-em="${em}" title="${esc(Object.keys(w).map(id => fullName(S.users[id])).join(', '))}">${em} ${Object.keys(w).length}</a>`).join('')}
           <a data-act="chatReact" data-id="${m.id}" data-em="👍">👍</a><a data-act="chatReact" data-id="${m.id}" data-em="🔥">🔥</a>
           ${!m.parentId ? `<a data-act="chatReply" data-id="${m.id}">Répondre</a>` : ''}

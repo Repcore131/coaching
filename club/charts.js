@@ -68,7 +68,7 @@ function stackRows(rows, series, fmt = fmtE) {
 // Entonnoir des résiliations du mois : demandes → prises en charge → sauvées
 function resFunnel(clubId, mk) {
   const L = resList(clubId).filter(r => r.date.slice(0, 7) === mk);
-  const taken = L.filter(r => r.ownerId || (r.actions || []).length > 1).length;
+  const taken = L.filter(r => r.ownerId || resActions(r).length > 1).length;
   const saved = L.filter(r => resStatus(r) === 'sauvee').length;
   const steps = [['Demandes', L.length, 'var(--text)'], ['Prises en charge', taken, 'var(--fp)'], ['Sauvées', saved, 'var(--ok)']];
   const max = Math.max(1, L.length);
