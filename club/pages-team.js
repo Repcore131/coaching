@@ -9,7 +9,8 @@ PAGES.members = {
     const all = clubMembers(CLUB.id, { all: true });
     const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases, paliers: memPaliers }[tab]();
+    T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal']);
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${all.filter(u => u.role === 'manager' && u.status === 'active').length} manager(s), ${all.filter(u => u.role === 'membre' && u.status === 'active').length} membre(s) actif(s), ${all.filter(u => u.status === 'pending').length} invitation(s) en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
       ${tabs('memTab', T, tab)}${body}`;
   },
@@ -199,15 +200,20 @@ ACTIONS.histUser = el => { UI.histUser = el.dataset.id; UI.histMode = 'day'; ren
 ACTIONS.histUserSel = el => { UI.histUser = el.value; render(); };
 // Corriger le total d'un jour : on ajoute une saisie d'ajustement (manuelle)
 // egale a l'ecart, sans toucher aux saisies importees.
+// Correction d'une case : on ne supprime plus les saisies d'origine (elles
+// gardent leur heure, utile aux defis flash). Une seule saisie d'ajustement par
+// case, d'id fixe : une seconde correction remplace la premiere, deux managers
+// en meme temps ne s'additionnent pas. Datee a midi du jour corrige.
 ACTIONS.histCell = el => {
   const { u, k, d } = el.dataset;
-  const want = parseFloat(String(el.value).replace(',', '.')) || 0;
-  const manual = Object.values(S.entries).filter(e => e.userId === u && e.kpiId === k && e.date === d && e.clubId === CLUB.id && !e.importId);
-  const imported = sumRange(CLUB.id, u, k, d, d) - manual.reduce((s, e) => s + Number(e.value), 0);
-  const need = Math.round((want - imported) * 100) / 100;
-  const ops = manual.map(e => [['entries', e.id], null]);
-  if (need !== 0) { const id = newId(); ops.push([['entries', id], { id, userId: u, clubId: CLUB.id, kpiId: k, date: d, value: need, source: 'manual', at: Date.now(), by: ME.id, adjust: true }]); }
-  db.batch(ops); toast('Enregistré');
+  const v = parseMontant(el.value); const want = Number.isNaN(v) ? 0 : v;
+  const adjId = `adj_${CLUB.id}_${u}_${k}_${d}`;
+  const old = S.entries[adjId];
+  const base = Math.round((sumRange(CLUB.id, u, k, d, d) - (old && entryCounts(old) ? Number(old.value) || 0 : 0)) * 100) / 100;
+  const need = Math.round((want - base) * 100) / 100;
+  const ops = [[['entries', adjId], need === 0 ? null : { id: adjId, userId: u, clubId: CLUB.id, kpiId: k, date: d, value: need, source: 'manual', at: dateOf(d).getTime() + 12 * 3600000, effectiveAt: Date.now(), by: ME.id, adjust: true }]];
+  ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'adjust', club: CLUB.id, userId: u, kpiId: k, date: d, before: base + (old ? Number(old.value) || 0 : 0), after: want }]);
+  db.batch(ops); toast('Correction enregistrée');
 };
 
 // Objectifs du mois : tableau editable, total = membres actifs uniquement.
@@ -429,3 +435,32 @@ ACTIONS.changeMyCode = async () => {
   }
   showCode(S.users[ME.id], c.code);
 };
+
+// ── Presences : conges, maladie, formation (le rythme attendu en tient compte) ──
+const ABS = { conge: { l: 'Congé', c: 'C' }, maladie: { l: 'Maladie', c: 'M' }, formation: { l: 'Formation', c: 'F' } };
+const ABS_CYCLE = [null, 'conge', 'maladie', 'formation'];
+function memPresences() {
+  const mk = UI.presMonth || curMonth(); const n = daysIn(mk); const days = Array.from({ length: n }, (_, i) => `${mk}-${pad(i + 1)}`);
+  const members = clubMembers(CLUB.id);
+  return `<div class="card"><div class="card-head"><h3>Présences · ${monthLabel(mk)}</h3><span class="spacer"></span>${monthNav('presMonth', mk)}</div>
+    <p class="muted small">Un clic fait tourner la case : vide, Congé, Maladie, Formation. Les jours fermés du club sont grisés. Le rythme attendu de chacun ne compte que ses jours travaillés.</p>
+    <div class="table-wrap"><table class="t pres"><thead><tr><th>Membre</th>${days.map(d => `<th class="${openDaysOf(CLUB.id).includes(dateOf(d).getDay()) ? '' : 'closed'}">${Number(d.slice(8))}</th>`).join('')}<th class="num">Jours travaillés</th></tr></thead><tbody>
+    ${members.map(u => `<tr><td class="nowrap">${esc(fullName(u))}</td>${days.map(d => { const a = deepGet(S, ['absences', u.id, d]); const open = openDaysOf(CLUB.id).includes(dateOf(d).getDay()); return `<td class="${open ? '' : 'closed'}">${open ? `<button class="pres-c ${a || ''}" data-act="presCycle" data-u="${u.id}" data-d="${d}" title="${a ? ABS[a].l : 'Présent'}" aria-label="${esc(fullName(u))}, ${dm(d)} : ${a ? ABS[a].l : 'présent'}">${a ? ABS[a].c : ''}</button>` : ''}</td>`; }).join('')}<td class="num"><b>${workdays(u.id, CLUB.id, mk + '-01', `${mk}-${n}`)}</b></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+ACTIONS.presCycle = el => { const p = ['absences', el.dataset.u, el.dataset.d]; const cur = deepGet(S, p) || null; db.set(p, ABS_CYCLE[(ABS_CYCLE.indexOf(cur) + 1) % ABS_CYCLE.length]); };
+
+// ── Journal : saisies pour autrui, corrections, suppressions ──────────────
+function memJournal() {
+  const f = UI.jrnType || 'all';
+  const list = Object.entries(S.audit || {}).map(([id, a]) => ({ id, ...a })).filter(a => a.club === CLUB.id && (f === 'all' || a.action === f)).sort((a, b) => b.at - a.at).slice(0, 300);
+  const L = { adjust: 'Correction', delete: 'Suppression', proxy: 'Saisie pour un collègue', export_csv: 'Export', restore: 'Restauration' };
+  const who = id => S.users[id] ? esc(fullName(S.users[id])) : 'inconnu';
+  const kl = id => S.kpis[id] ? esc(S.kpis[id].label) : esc(id || '');
+  return `<div class="card"><div class="card-head"><h3>Journal des corrections</h3><span class="spacer"></span>${seg('jrnType', [['all', 'Tout'], ['adjust', 'Corrections'], ['delete', 'Suppressions'], ['proxy', 'Pour autrui']], f)}</div>
+    ${list.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Quand</th><th>Par</th><th>Action</th><th>Détail</th></tr></thead><tbody>${list.map(a => `<tr><td class="nowrap">${dmy(isoOf(new Date(a.at)))} ${new Date(a.at).toTimeString().slice(0, 5)}</td><td>${who(a.by)}</td><td>${L[a.action] || esc(a.action)}</td><td class="small">${
+      a.action === 'adjust' ? `${who(a.userId)} · ${kl(a.kpiId)} du ${dm(a.date)} : ${fmtN(a.before)} → ${fmtN(a.after)}` :
+      a.action === 'delete' && a.entry ? `${who(a.entry.userId)} · ${kl(a.entry.kpiId)} du ${dm(a.entry.date)} : ${fmtN(a.entry.value)}` :
+      a.action === 'proxy' ? `pour ${who(a.userId)} · ${plur(a.count || 1, 'saisie', 'saisies')}` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucune correction enregistrée.</p>'}
+    <p class="muted small" style="margin-bottom:0">Chaque correction, suppression ou saisie faite pour un collègue laisse une trace ici.</p></div>`;
+}

@@ -843,3 +843,19 @@ img, svg, video, canvas { max-width: 100%; }
 .ico-pick label { width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 8px; display: grid; place-items: center; cursor: pointer; }
 .ico-pick input { position: absolute; opacity: 0; pointer-events: none; }
 .ico-pick label:has(input:checked) { border-color: var(--fp); background: var(--fp-soft, rgba(255,214,0,.14)); }
+.t.pres th, .t.pres td { padding: 2px; text-align: center; min-width: 26px; }
+.t.pres td:first-child, .t.pres th:first-child { text-align: left; padding: 4px 8px; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.t.pres .closed { background: var(--surface-2); }
+.pres-c { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text); font-weight: 800; font-size: 11px; cursor: pointer; }
+.pres-c.conge { background: rgba(59,130,246,.18); border-color: #3B82F6; }
+.pres-c.maladie { background: rgba(239,68,68,.15); border-color: #EF4444; }
+.pres-c.formation { background: rgba(245,158,11,.16); border-color: #F59E0B; }
+/* Tag unique (statuts) */
+.tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 8px; font: 700 11px/1 var(--font, Montserrat, sans-serif); letter-spacing: .02em; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.tag.is-ok { background: rgba(34,197,94,.14); color: var(--ok, #22C55E); }
+.tag.is-warn { background: rgba(245,158,11,.16); color: var(--warn, #F59E0B); }
+.tag.is-bad { background: rgba(239,68,68,.15); color: var(--bad, #EF4444); }
+.tag.is-info { background: rgba(59,130,246,.14); color: #3B82F6; }
+.tag.is-brand { background: var(--fp); color: #0A0A0A; }
+.q-alert { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.q-alert:last-child { border-bottom: 0; }

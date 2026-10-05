@@ -31,6 +31,8 @@ const curMonth = () => today().slice(0, 7);
 const dateOf = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d || 1); };
 const daysIn = mk => { const [y, m] = mk.split('-').map(Number); return new Date(y, m, 0).getDate(); };
 const addMonths = (mk, n) => { const [y, m] = mk.split('-').map(Number); return isoOf(new Date(y, m - 1 + n, 1)).slice(0, 7); };
+// Accord : plur(3, 'saisie', 'saisies') -> « 3 saisies » (fin des « saisie(s) »).
+const plur = (n, one, many, show = true) => `${show ? (typeof fmtN === 'function' ? fmtN(n) : n) + ' ' : ''}${Math.abs(n) >= 2 ? many : one}`;
 const addDays = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return isoOf(d); };
 const monthLabel = mk => { const [y, m] = mk.split('-').map(Number); return MOIS[m - 1] + ' ' + y; };
 const weekStart = s => { const d = dateOf(s); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return isoOf(d); };
@@ -167,7 +169,7 @@ function emptyState() {
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
     recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
-    prefs: {}, team: {},
+    prefs: {}, team: {}, audit: {}, absences: {}, offers: {}, coaching: {}, alertAcks: {}, wrapNotes: {}, targetPlans: {},
   };
 }
 function defaultLibrary() {

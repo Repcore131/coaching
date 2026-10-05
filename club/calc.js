@@ -98,15 +98,39 @@ function shiftRange(r, n) {
   if (r.period === 'quarter') return rangeOf('quarter', addMonths(r.from.slice(0, 7), 3 * n));
   return rangeOf('month', addMonths(r.from.slice(0, 7), n));
 }
-// part de la periode deja ecoulee (aujourd'hui compte comme un jour entame)
-function elapsed(r) {
+// ── Rythme : jours ouvres du club, absences, journee entamee ──────────────
+// Jours ouverts du club (0 = dimanche) : du lundi au samedi par defaut.
+// Absences : S.absences[userId][date] = 'conge' | 'maladie' | 'formation'.
+// Les jours sont comptes en iterant les dates AAAA-MM-JJ (jamais par
+// difference de millisecondes : le changement d'heure ne fausse rien).
+const openDaysOf = clubId => { const c = S.clubs && S.clubs[clubId]; return (c && Array.isArray(c.openDays) && c.openDays.length) ? c.openDays : [1, 2, 3, 4, 5, 6]; };
+const isWorkday = (d, clubId, userId) => openDaysOf(clubId).includes(dateOf(d).getDay()) && !(userId && deepGet(S, ['absences', userId, d]));
+function workdays(userId, clubId, from, to) { let n = 0; for (let d = from; d <= to; d = addDays(d, 1)) if (isWorkday(d, clubId, userId)) n++; return n; }
+function workdaysLeft(userId, clubId, mk) { const t = today(), from = t > mk + '-01' ? t : mk + '-01', to = `${mk}-${daysIn(mk)}`; return from > to ? 0 : workdays(userId, clubId, from, to); }
+// Part de la periode ecoulee. Sans club : jours calendaires (ancien calcul).
+// Aujourd'hui compte au prorata de l'heure (ouverture 9 h, fermeture 21 h).
+function elapsed(r, clubId = null, userId = null) {
   const t = today();
   if (t < r.from) return 0;
   if (t > r.to) return 1;
-  const total = (dateOf(r.to) - dateOf(r.from)) / 86400000 + 1;
-  const done = (dateOf(t) - dateOf(r.from)) / 86400000 + 1;
-  return done / total;
+  const h = new Date(); const frac = Math.max(0, Math.min(1, (h.getHours() + h.getMinutes() / 60 - 9) / 12));
+  if (!clubId) {
+    const total = (dateOf(r.to) - dateOf(r.from)) / 86400000 + 1;
+    const done = (dateOf(t) - dateOf(r.from)) / 86400000 + 1;
+    return done / total;
+  }
+  const total = workdays(userId, clubId, r.from, r.to);
+  if (!total) return 1;
+  const before = t > r.from ? workdays(userId, clubId, r.from, addDays(t, -1)) : 0;
+  return Math.min(1, (before + (isWorkday(t, clubId, userId) ? frac : 0)) / total);
 }
+// Mois clos : a partir du jour lockDay (5 par defaut) du mois M, le mois M-1
+// est fige. Un membre saisit pour aujourd'hui et la veille seulement ; un
+// manager peut corriger un mois clos, avec un motif.
+function lockStart(clubId) { const c = (S.clubs || {})[clubId] || {}; const day = Number(c.lockDay) || 5; const t = today(); const cm = t.slice(0, 7); return Number(t.slice(8)) >= day ? cm + '-01' : addMonths(cm, -1) + '-01'; }
+function minEntryDate(clubId) { if (isManager()) return null; const y = addDays(today(), -1); const l = lockStart(clubId); return y > l ? y : l; }
+// Objectif atteint, avec tolerance d'arrondi (99,999999 % = 100 %).
+const isReached = p => p != null && p >= 1 - 1e-9;
 
 // ── Objectifs ──────────────────────────────────────────────────────────────
 const isActive = u => u && u.status === 'active';
@@ -116,7 +140,15 @@ function clubMembers(clubId, { all = false } = {}) {
   return Object.values(S.users).filter(u => u.role !== 'createur' && inClub(u, clubId) && (all || isActive(u))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
 }
 function monthTarget(mk, userId, kpiId) { return Number(deepGet(S.targets, [mk, userId, kpiId])) || 0; }
-function clubMonthTarget(mk, clubId, kpiId) { return clubMembers(clubId).reduce((s, u) => s + monthTarget(mk, u.id, kpiId), 0); }
+// Perimetre d'un club sur une periode : membres actifs, plus ceux archives
+// pendant la periode (leurs saisies du mois comptent, leur objectif aussi).
+// Le meme perimetre sert au total club, a l'objectif club et au classement.
+function perimeterMembers(clubId, from, to) {
+  return Object.values(S.users).filter(u => u.role !== 'createur' && inClub(u, clubId) && (isActive(u) || (u.status === 'archived' && u.archivedAt && u.archivedAt >= from))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
+}
+function clubMonthTarget(mk, clubId, kpiId) { return perimeterMembers(clubId, mk + '-01', `${mk}-${daysIn(mk)}`).reduce((s, u) => s + monthTarget(mk, u.id, kpiId), 0); }
+// Saisies du club hors perimetre (createur, membre d'un autre club, archive avant).
+function unassigned(clubId, kpiId, from, to) { const inP = perimeterMembers(clubId, from, to).reduce((s, u) => s + sumRange(clubId, u.id, kpiId, from, to), 0); return Math.round((sumRange(clubId, null, kpiId, from, to) - inP) * 100) / 100; }
 function targetRange(r, clubId, userId, kpiId) {
   const tg = mk => userId ? monthTarget(mk, userId, kpiId) : clubMonthTarget(mk, clubId, kpiId);
   if (r.period === 'week') {
@@ -130,13 +162,15 @@ const kpiList = (onlyEnabled = true) => Object.values(S.kpis).filter(k => !onlyE
 const tierOf = p => { let t = 0; for (const x of TIERS) if (p >= x - 1e-9) t = x; return t; };
 
 function statsFor(clubId, userId, r, { kpiIds = null, requiredOnly = false } = {}) {
-  return memo(`st|${clubId}|${userId}|${r.from}|${r.to}|${r.period}|${kpiIds}|${requiredOnly}`, () => {
-    const exp = elapsed(r);
+  return memo(`st|${clubId}|${userId}|${r.from}|${r.to}|${r.period}|${kpiIds}|${requiredOnly}|${new Date().getHours()}`, () => {
+    const exp = elapsed(r, clubId, userId);
+    const members = userId ? null : perimeterMembers(clubId, r.from, r.to);
     const rows = [];
     for (const k of kpiList()) {
       if (kpiIds && !kpiIds.includes(k.id)) continue;
       if (requiredOnly && !k.required) continue;
-      const real = sumRange(clubId, userId, k.id, r.from, r.to);
+      // Vue club : la somme des membres du perimetre (= somme du classement).
+      const real = userId ? sumRange(clubId, userId, k.id, r.from, r.to) : Math.round(members.reduce((s, u) => s + sumRange(clubId, u.id, k.id, r.from, r.to), 0) * 100) / 100;
       const target = targetRange(r, clubId, userId, k.id);
       const pct = target > 0 ? real / target : null;
       const earned = pct == null ? 0 : tierOf(pct) * k.points;
@@ -147,13 +181,15 @@ function statsFor(clubId, userId, r, { kpiIds = null, requiredOnly = false } = {
     const score = wsum ? scored.reduce((s, x) => s + Math.min(x.pct, SCORE_CAP) * x.k.points, 0) / wsum : null;
     const earned = rows.reduce((s, x) => s + x.earned, 0);
     const max = rows.reduce((s, x) => s + x.max, 0);
-    return { rows, score, earned, max, expected: exp, reached: scored.filter(x => x.pct >= 1).length, count: scored.length };
+    // progress : avancement continu (sans les marches de 25 %), seul comparable au rythme.
+    const progress = wsum ? scored.reduce((s, x) => s + Math.min(x.pct, 1) * x.k.points, 0) / wsum : null;
+    return { rows, score, progress, earned, max, expected: exp, reached: scored.filter(x => isReached(x.pct)).length, count: scored.length };
   });
 }
 
 function statusOf(pct, exp) {
   if (pct == null) return { key: 'none', label: 'Sans objectif', cls: '' };
-  if (pct >= 1) return { key: 'done', label: 'Objectif atteint', cls: 'status-ok' };
+  if (isReached(pct)) return { key: 'done', label: 'Objectif atteint', cls: 'status-ok' };
   if (exp <= 0) return { key: 'wait', label: 'Pas commencé', cls: '' };
   const ratio = pct / exp;
   if (ratio >= 1.05) return { key: 'ahead', label: 'En avance', cls: 'status-ok' };
@@ -166,7 +202,7 @@ function statusOf(pct, exp) {
 function paceMessage(row, exp) {
   const { k, real, target, pct } = row;
   if (!target) return 'Pas d’objectif ce mois-ci';
-  if (pct >= 1) return `Objectif atteint, +${fmtV(real - target, k.unit)} au-delà 🎉`;
+  if (isReached(pct)) return real - target > 0.004 ? `Objectif atteint, ${fmtV(real - target, k.unit)} au-delà` : 'Objectif atteint';
   const due = target * exp - real;
   if (due > 0.0001) return `Plus que ${fmtV(k.unit === 'qty' ? Math.ceil(due) : due, k.unit)} pour être dans le temps`;
   const next = TIERS.find(t => pct < t);
@@ -177,7 +213,7 @@ function paceMessage(row, exp) {
 // ── Classements ────────────────────────────────────────────────────────────
 function ranking(clubId, r, kpiId = null) {
   return memo(`rk|${clubId}|${r.from}|${r.to}|${kpiId}`, () => {
-    const list = clubMembers(clubId).map(u => {
+    const list = perimeterMembers(clubId, r.from, r.to).map(u => {
       const st = statsFor(clubId, u.id, r, kpiId ? { kpiIds: [kpiId] } : { requiredOnly: true });
       const row = kpiId ? st.rows[0] : null;
       return { u, st, score: kpiId ? (row && row.pct) : st.score, earned: st.earned, real: row ? row.real : null };
@@ -351,7 +387,10 @@ function loyaltyTasks(clubId) {
   });
 }
 
-// CA d'un mois : somme des KPI en euros saisis/importes (base de la courbe).
+// CA boutique d'un mois : les KPI qui sont du chiffre d'affaires (nutrition,
+// accessoires, ou k.revenue). Un impaye recupere n'est pas un nouveau CA.
+const REVENUE_KPIS = ['nutrition', 'accessoires'];
+const isRevenue = k => k.revenue === true || (k.revenue !== false && REVENUE_KPIS.includes(k.id));
 function caMonth(clubId, mk, userId = null) {
-  return kpiList().filter(k => k.unit === 'eur').reduce((s, k) => s + sumRange(clubId, userId, k.id, mk + '-01', `${mk}-${daysIn(mk)}`), 0);
+  return kpiList().filter(k => k.unit === 'eur' && isRevenue(k)).reduce((s, k) => s + sumRange(clubId, userId, k.id, mk + '-01', `${mk}-${daysIn(mk)}`), 0);
 }

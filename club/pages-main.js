@@ -151,7 +151,7 @@ ACTIONS.dashUser = el => { UI.dashUser = el.value; render(); };
 
 function moodOf(st) {
   if (st.score == null) return 'ok';
-  const ratio = st.max ? (st.earned / st.max) / Math.max(st.expected, 0.03) : 1;
+  const ratio = st.progress != null ? st.progress / Math.max(st.expected, 0.03) : 1;
   return ratio >= 1 ? 'happy' : ratio >= 0.7 ? 'ok' : 'tired';
 }
 function dashObjectives(st, r, subject, who) {
@@ -161,8 +161,10 @@ function dashObjectives(st, r, subject, who) {
       ${isManager() ? '<a class="btn primary" href="#/members" data-act="go" data-href="#/members">Fixer les objectifs</a>' : ''}</div>`;
   }
   const exp = st.expected;
-  const pctPts = st.max ? st.earned / st.max : 0;
-  const lag = Math.round(st.max * exp - st.earned);
+  // Avancement continu compare au rythme (les points en marches de 25 % ne le
+  // sont jamais : 49 % de tout au jour 10 n'est pas « en retard »).
+  const pctPts = st.progress || 0;
+  const lag = Math.round(st.max * (exp - pctPts));
   const status = statusOf(pctPts, exp);
   const conv = (() => {
     // Resamania (Taux de transformation par commerciaux) prime quand il est importe
@@ -277,7 +279,7 @@ function dashAnalyses(r, who) {
       }).join('') || '<p class="muted">Aucun objectif ce mois-ci.</p>'}
     </div>
     <div class="card">
-      <div class="card-head"><h3>Évolution du CA ${who ? 'personnel' : 'du club'}</h3><span class="spacer"></span>${seg('caPeriod', [['3', '3M'], ['6', '6M'], ['12', '12M'], ['24', '24M'], ['ytd', 'YTD']], period)}</div>
+      <div class="card-head"><h3>Ventes boutique ${who ? 'personnelles' : 'du club'} (nutrition, accessoires)</h3><span class="spacer"></span>${seg('caPeriod', [['3', '3M'], ['6', '6M'], ['12', '12M'], ['24', '24M'], ['ytd', 'YTD']], period)}</div>
       <p class="muted small" style="margin-top:-4px">Somme des KPI en euros (nutrition, accessoires, impayés récupérés…) : <b>${fmtE(caTot)}</b> sur la période.</p>
       ${lineChart({ labels: caLabels, values: caVals, fmt: v => fmtN(v) + ' €' })}
     </div></div>`;
@@ -297,7 +299,7 @@ ACTIONS.dayRecap = el => {
     return `<div class="row" style="justify-content:center;gap:6px;margin-bottom:12px"><button class="btn icon sm" data-d="-1">${ico('chevL')}</button><b style="min-width:200px;text-align:center">${dayLabel(d)}</b><button class="btn icon sm" data-d="1" ${d >= today() ? 'disabled' : ''}>${ico('chevR')}</button></div>
       <div style="text-align:center"><div class="title" style="font-size:28px">${title}</div></div>
       ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title" style="font-size:20px">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
-      <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
+      <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.progress || 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
   };
   const m = openModal({ title: 'Récap du jour', body: `<div id="dr">${draw()}</div>` });
   m.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b || b.disabled) return; d = addDays(d, Number(b.dataset.d)); $('#dr', m).innerHTML = draw(); });
@@ -313,7 +315,7 @@ ACTIONS.openSaisies = () => {
       <form id="sf" class="grid">
         <div class="form-grid">
           <label class="field"><span>Commercial</span><select class="input" name="userId">${members.map(u => `<option value="${u.id}" ${u.id === ME.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
-          <label class="field"><span>Date</span><input class="input" type="date" name="date" value="${today()}" max="${today()}"></label>
+          <label class="field"><span>Date</span><input class="input" type="date" name="date" value="${today()}" max="${today()}" ${minEntryDate(CLUB.id) ? `min="${minEntryDate(CLUB.id)}"` : ''}></label>
         </div>
         ${kpiList().map(k => `<label class="row card" style="padding:9px 12px"><span class="kpi-ico">${kpiIcon(k)}</span><span class="spacer"><b>${esc(k.label)}</b><br><span class="muted small">${k.unit === 'eur' ? 'Montant TTC en €' : 'Quantité'}</span></span><input class="input sm" style="width:110px;text-align:right" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" name="k_${k.id}" placeholder="0"></label>`).join('')}
         <button class="btn primary" type="submit">Enregistrer</button>
@@ -328,23 +330,35 @@ ACTIONS.openSaisies = () => {
   m.addEventListener('click', async e => {
     const t = e.target.closest('[data-t]'); if (t) { tab = t.dataset.t; draw(m); return; }
     const del = e.target.closest('[data-delentry]');
-    if (del && await confirmDlg('Supprimer cette saisie ?', { ok: 'Supprimer', danger: true })) { db.set(['entries', del.dataset.delentry], null); ACTIONS.openSaisies(); return; }
+    if (del) {
+      const en = S.entries[del.dataset.delentry]; const mn = minEntryDate(CLUB.id);
+      if (en && mn && en.date < mn) { toast('Cette saisie est dans une période close : demandez à votre manager.'); return; }
+      if (await confirmDlg('Supprimer cette saisie ?', { ok: 'Supprimer', danger: true })) { db.batch([[['entries', del.dataset.delentry], null], [['audit', newId()], { at: Date.now(), by: ME.id, action: 'delete', club: CLUB.id, entry: en || null }]]); ACTIONS.openSaisies(); }
+      return;
+    }
     const cb = e.target.closest('[data-task]');
-    if (cb) { const p = ['tasks', 'done', today(), ME.id, cb.dataset.task]; db.set(p, deepGet(S, p) ? null : Date.now()); draw(m); }
+    if (cb) { const p = ['tasks', 'done', today(), ME.id, cb.dataset.task]; const pl = deepGet(S, ['tasks', 'plan', CLUB.id, cb.dataset.task]) || {}; db.set(p, deepGet(S, p) ? null : { at: Date.now(), taskId: pl.taskId || null, hour: pl.hour || null }); draw(m); }
   });
   m.addEventListener('submit', e => {
     e.preventDefault();
     const f = formData(e.target);
+    const date = f.date || today(); const mn = minEntryDate(CLUB.id);
+    if (!isManager() && f.userId !== ME.id) { toast('Vous ne saisissez que pour vous-même.'); return; }
+    if (date > today()) { toast('Pas de saisie dans le futur.'); return; }
+    if (mn && date < mn) { toast(`Saisie possible à partir du ${dm(mn)} : période close.`); return; }
+    let reason = null;
+    if (isManager() && date < lockStart(CLUB.id)) { reason = prompt('Mois clos : motif de la correction (obligatoire)'); if (!reason || !reason.trim()) { toast('Motif obligatoire pour un mois clos.'); return; } reason = reason.trim().slice(0, 200); }
     const ops = [];
     for (const k of kpiList()) {
-      const v = parseFloat(String(f['k_' + k.id] || '').replace(',', '.'));
-      if (!v || v < 0) continue;
+      const v = parseMontant(f['k_' + k.id]);
+      if (Number.isNaN(v) || !v || v < 0) continue;
       const id = newId();
-      ops.push([['entries', id], { id, userId: f.userId, clubId: CLUB.id, kpiId: k.id, date: f.date || today(), value: k.unit === 'qty' ? Math.round(v) : Math.round(v * 100) / 100, source: 'manual', at: Date.now(), by: ME.id }]);
+      ops.push([['entries', id], { id, userId: f.userId, clubId: CLUB.id, kpiId: k.id, date, value: k.unit === 'qty' ? Math.round(v) : Math.round(v * 100) / 100, source: 'manual', at: date === today() ? Date.now() : dateOf(date).getTime() + 12 * 3600000, by: ME.id, ...(reason ? { reason } : {}) }]);
     }
     if (!ops.length) { toast('Rien à enregistrer.'); return; }
+    if (f.userId !== ME.id) ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'proxy', club: CLUB.id, userId: f.userId, count: ops.length }]);
     db.batch(ops);
-    toast(`${ops.length} saisie(s) enregistrée(s) 🔥`);
+    toast(plur(ops.filter(o => o[0][0] === 'entries').length, 'saisie enregistrée', 'saisies enregistrées'));
     draw(m);
   });
 };

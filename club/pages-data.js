@@ -354,7 +354,7 @@ PAGES.clubs = {
   render() {
     const tab = UI.clubTab || 'clubs';
     return `<div class="page-head"><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
-      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(isCreator() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, settings: isCreator() ? clubSettings : clubList }[tab]()}`;
+      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(isManager() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, settings: isManager() ? clubSettings : clubList }[tab]()}`;
   },
 };
 function clubList() {
@@ -362,20 +362,21 @@ function clubList() {
   return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(300px, 100%), 1fr))">${clubs.map(c => {
     const r = rangeOf('month', curMonth()); const st = statsFor(c.id, null, r);
     return `<div class="card"><div class="card-head">${ico('building')}<div class="spacer"><h3>${esc(c.name)}</h3><div class="muted small">${esc([c.address, c.city].filter(Boolean).join(', ') || 'Adresse non renseignée')}</div></div>${isCreator() ? `<button class="btn ghost icon sm" data-act="clubForm" data-id="${c.id}">${ico('edit')}</button>` : ''}</div>
-      <div class="row small"><span>${clubMembers(c.id).length} membre(s) actif(s)</span><span class="spacer"></span><b>${fmtP(st.max ? st.earned / st.max : null)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}
+      <div class="row small"><span>${clubMembers(c.id).length} membre(s) actif(s)</span><span class="spacer"></span><b>${fmtP(st.progress)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}
       ${c.address || c.city ? `<a class="btn sm" style="margin-top:12px" target="_blank" rel="noopener" href="https://www.openstreetmap.org/search?query=${encodeURIComponent([c.address, c.city].join(' '))}">${ico('map')} Voir sur la carte</a>` : ''}</div>`;
   }).join('')}</div>`;
 }
 ACTIONS.clubForm = el => {
   const c = el.dataset.id ? S.clubs[el.dataset.id] : null;
-  openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : 'Fitness Park ')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label></form>`,
+  openModal({ title: c ? 'Modifier le club' : 'Ajouter un club', body: `<form id="clf" class="grid"><label class="field"><span>Nom</span><input class="input" name="name" value="${esc(c ? c.name : 'Fitness Park ')}" required></label><label class="field"><span>Adresse</span><input class="input" name="address" value="${esc(c ? c.address : '')}"></label><label class="field"><span>Code postal et ville</span><input class="input" name="city" value="${esc(c ? c.city : '')}"></label><div class="field"><span>Jours d’ouverture (rythme des objectifs)</span><div class="chips">${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((d, n) => `<label class="chip-radio"><input type="checkbox" name="od_${n}" ${(c && Array.isArray(c.openDays) ? c.openDays : [1, 2, 3, 4, 5, 6]).includes(n) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div></div>
+<div class="form-grid"><label class="field"><span>Mois clos le</span><input class="input" type="number" min="1" max="28" name="lockDay" value="${c && c.lockDay ? c.lockDay : 5}"></label><label class="field"><span>E-mail du directeur</span><input class="input" type="email" name="directorEmail" value="${esc(c && c.directorEmail || '')}"></label></div></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="clubSave" data-id="${c ? c.id : ''}">Enregistrer</button>` });
 };
 ACTIONS.clubSave = el => {
   const f = formData($('#clf')); if (!f.name.trim()) return;
   let id = el.dataset.id;
   if (!id) { id = norm(f.name).replace(/ /g, '-').slice(0, 30) || newId(); if (S.clubs[id]) id += '-' + newId().slice(-4); }
-  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim() }]];
+  const ops = [[['clubs', id], { ...(S.clubs[id] || { id, createdAt: Date.now() }), name: f.name.trim(), address: f.address.trim(), city: f.city.trim(), openDays: [0, 1, 2, 3, 4, 5, 6].filter(n => f['od_' + n]), lockDay: Math.max(1, Math.min(28, Number(f.lockDay) || 5)), directorEmail: (f.directorEmail || '').trim() }]];
   if (!el.dataset.id) ops.push([['users', ME.id, 'clubs'], [...(ME.clubs || []), id]]);
   db.batch(ops); closeModal(); toast('Club enregistré.');
 };
@@ -391,13 +392,14 @@ function clubBase() {
 ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k], el.value === '' ? null : toNum(el.value)); toast('Enregistré'); };
 function clubSettings() {
   return `<div class="grid">
+    ${offersCard()}
     <div class="card"><h3>KPI suivis</h3><p class="muted small">Points = valeur du KPI à 100 % de l’objectif. 👑 Obligatoire = compte dans le classement global.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>Actif</th><th>KPI</th><th>Unité</th><th class="num">Points</th><th>👑 Obligatoire</th><th>Ordre</th></tr></thead><tbody>
       ${Object.values(S.kpis).sort((a, b) => a.order - b.order).map(k => `<tr><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="enabled" ${k.enabled ? 'checked' : ''}></td><td><input class="input sm" style="width:200px" value="${esc(k.label)}" data-change="kpiSet" data-id="${k.id}" data-k="label"></td><td>${k.unit === 'eur' ? '€' : 'Quantité'}</td><td class="num"><input class="cell" type="number" min="0" step="50" value="${k.points}" data-change="kpiSet" data-id="${k.id}" data-k="points"></td><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="required" ${k.required ? 'checked' : ''}></td><td><input class="cell" style="width:50px" type="number" value="${k.order}" data-change="kpiSet" data-id="${k.id}" data-k="order"></td></tr>`).join('')}</tbody></table></div>
       <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>
     <div class="card"><h3>Confidentialité</h3><p class="small">Fit Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En ligne, seuls les membres munis d’un code valide peuvent lire la base de l’équipe (règles Firebase) ; changer ou retirer un code coupe l’accès aussitôt.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>
-    <div class="card"><h3>Sauvegarde</h3><p class="muted small">Exportez toutes les données (clubs, équipe, saisies, imports, clients) dans un fichier, pour les archiver ou les déplacer sur un autre appareil.</p>
-      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label><button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button></div></div></div>`;
+    ${isCreator() ? `<div class="card"><h3>Sauvegarde</h3><p class="muted small">Exportez toutes les données (clubs, équipe, saisies, imports, clients) dans un fichier, pour les archiver ou les déplacer sur un autre appareil.</p>
+      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label>${backend.mode === 'local' ? '<button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button>' : ''}</div></div>` : ''}</div>`;
 }
 ACTIONS.kpiSet = el => { const k = el.dataset.k; const v = el.type === 'checkbox' ? el.checked : (k === 'points' || k === 'order') ? toNum(el.value) : el.value.trim(); db.set(['kpis', el.dataset.id, k], v); };
 const KPI_PICK = ['target', 'star', 'cup', 'pen', 'cap', 'coins', 'briefcase', 'ticket', 'lifebuoy', 'magnet', 'phone', 'trophy', 'flame', 'heart', 'users', 'bolt', 'flag', 'calcheck'];

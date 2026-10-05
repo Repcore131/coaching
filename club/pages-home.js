@@ -23,7 +23,7 @@ function palierState(clubId, mk, kpiId) {
   const next = tiers.at(reached) || null;
   const max = Number(tiers.at(-1).target);
   const r = rangeOf('month', mk);
-  return { kpiId, tiers, real, reached, next, max, expected: elapsed(r) };
+  return { kpiId, tiers, real, reached, next, max, expected: elapsed(r, clubId) };
 }
 function palierBlock(clubId, mk, kpiId, big) {
   const s = palierState(clubId, mk, kpiId); if (!s) return '';
@@ -136,8 +136,11 @@ PAGES.home = {
     });
     const palierKeys = Object.keys(paliersFor(CLUB.id, mk));
     const weather = clubWeather(mk);
-    const myPct = st.max ? st.earned / st.max : null;
-    const myHealth = healthOf(myPct != null && st.expected ? myPct / st.expected : null);
+    // Un seul chiffre « où j'en suis » : le score du mois (celui du classement).
+    // La couleur compare l'avancement continu au rythme attendu.
+    const stR = statsFor(CLUB.id, ME.id, r, { requiredOnly: true });
+    const myPct = stR.score;
+    const myHealth = healthOf(stR.progress != null && stR.expected ? stR.progress / stR.expected : null);
     const banner = ASSET('banner');
     const bigKpis = palierKeys.slice(0, 2).map(k => { const s = palierState(CLUB.id, mk, k); if (!s) return ''; return `<div class="bk"><span>${esc(S.kpis[k].label)} · équipe</span><b>${fmtN(s.real)}</b><small>${s.next ? `P${s.reached + 1} à ${fmtN(s.next.target)} · encore ${fmtN(Math.ceil(s.next.target - s.real))}` : 'tous les paliers atteints'}</small></div>`; }).join('');
     const top5 = rk.filter(x => x.score != null).slice(0, 5);
@@ -157,7 +160,7 @@ PAGES.home = {
         <div class="card col4 paliers"><div class="race-h"><div><div class="eyebrow light">Prime d’équipe</div><h3>Paliers du mois</h3></div><span class="spacer"></span>${manager ? '<a class="btn ghost sm light" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>${palierKeys.map(k => palierBlock(CLUB.id, mk, k, false)).join('') || '<p class="muted">Aucun palier collectif.</p>'}</div>
         <div class="card col5"><div class="race-h"><div><div class="eyebrow">Un toucher = enregistré</div><h3>Saisir</h3></div></div>${quickPad()}</div>
         <div class="card col3"><div class="race-h"><div><div class="eyebrow">Mes objectifs</div><h3>Ma progression</h3></div></div>
-          <div class="center">${ring(myPct, { label: fmtP(myPct), sub: 'des points', color: myHealth.color })}${healthChip(myHealth)}</div>
+          <div class="center">${ring(myPct == null ? null : Math.min(myPct, 1), { label: fmtP(myPct), sub: 'score du mois', color: myHealth.color })}${healthChip(myHealth)}</div>
           ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? '✓' : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus 👏</p>'}</div>
         <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Top 5</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
           ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><i class="hdot ${h.cls}" title="${h.label}"></i><b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>

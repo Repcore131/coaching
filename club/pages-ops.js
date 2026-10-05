@@ -133,8 +133,9 @@ ACTIONS.resCreate = () => {
 ACTIONS.resDel = async el => { if (await confirmDlg('Supprimer définitivement cette demande ?', { ok: 'Supprimer', danger: true })) { db.batch([[['resiliations', el.dataset.id], null], [['entries', 'sv_' + el.dataset.id], null]]); closeModal(); } };
 ACTIONS.resExport = () => {
   const list = resList(CLUB.id).sort((a, b) => a.date.localeCompare(b.date));
-  const csv = ['Demande;Effective;Client;Motif;Statut;Responsable;Dernière action', ...list.map(r => [dmy(r.date), r.effective ? dmy(r.effective) : '', r.client, r.reason || '', RES_STATUS[resStatus(r)].label, r.ownerId ? fullName(S.users[r.ownerId]) : '', (resActions(r).slice(-1)[0] || {}).label || ''].map(x => `"${String(x).replace(/"/g, '""')}"`).join(';'))].join('\n');
-  downloadFile(`resiliations-${norm(CLUB.name).replace(/ /g, '-')}.csv`, '﻿' + csv, 'text/csv');
+  const csv = ['Demande;Effective;Client;Motif;Statut;Responsable;Dernière action', ...list.map(r => [dmy(r.date), r.effective ? dmy(r.effective) : '', r.client, r.reason || '', RES_STATUS[resStatus(r)].label, r.ownerId ? fullName(S.users[r.ownerId]) : '', (resActions(r).slice(-1)[0] || {}).label || ''])];
+  downloadFile(`resiliations-${norm(CLUB.name).replace(/ /g, '-')}-CONFIDENTIEL.csv`, toCsv(csv[0].split(';'), csv.slice(1)), 'text/csv;charset=utf-8');
+  db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export_csv', club: CLUB.id, type: 'resiliations', lignes: list.length });
 };
 
 // ── Impayés : le tableur de suivi ─────────────────────────────────────────
@@ -251,6 +252,7 @@ ACTIONS.dunCreate = () => {
 ACTIONS.dunExport = () => {
   const rows = dunRows(CLUB.id);
   const csv = ['Client;N° client;Téléphone;Montant;Depuis;Statut;Responsable;Prochaine relance;Note;Récupéré le;Canal', ...rows.map(c => { const d = dunOf(c); const st = dunStatus(c);
-    return [c.name, c.num || '', c.phone || '', String(st === 'recupere' ? d.amount || 0 : c.balance).replace('.', ','), c.balanceAt ? dmy(c.balanceAt) : '', st ? DUN_STATUS[st].label : '', d.ownerId ? fullName(S.users[d.ownerId]) : '', d.next ? dmy(d.next) : '', d.note || '', d.recoveredAt ? dmy(d.recoveredAt) : '', d.canal && RECOV_CHANNELS[d.canal] ? RECOV_CHANNELS[d.canal].label : ''].map(x => `"${String(x).replace(/"/g, '""')}"`).join(';'); })].join('\n');
-  downloadFile(`impayes-${norm(CLUB.name).replace(/ /g, '-')}-${today()}.csv`, '﻿' + csv, 'text/csv');
+    return [c.name, c.num || '', c.phone || '', String(st === 'recupere' ? d.amount || 0 : c.balance).replace('.', ','), c.balanceAt ? dmy(c.balanceAt) : '', st ? DUN_STATUS[st].label : '', d.ownerId ? fullName(S.users[d.ownerId]) : '', d.next ? dmy(d.next) : '', d.note || '', d.recoveredAt ? dmy(d.recoveredAt) : '', d.canal && RECOV_CHANNELS[d.canal] ? RECOV_CHANNELS[d.canal].label : '']; })];
+  downloadFile(`impayes-${norm(CLUB.name).replace(/ /g, '-')}-${today()}-CONFIDENTIEL.csv`, toCsv(csv[0].split(';'), csv.slice(1)), 'text/csv;charset=utf-8');
+  db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export_csv', club: CLUB.id, type: 'impayes', lignes: rows.length });
 };

@@ -115,6 +115,7 @@ const NAV = [
   ['dashboard', 'Mes objectifs', 'target'],
   ['leaderboard', 'Classement', 'trophy'],
   ['recap', 'Récap du mois', 'chart', true],
+  ['quality', 'Contrôle qualité', 'shield', true],
   ['sep'],
   ['resiliations', 'Résiliations', 'door'],
   ['impayes', 'Impayés', 'euro'],
@@ -249,6 +250,15 @@ function monthNav(key, mk) {
 function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (!location.hash) location.hash = '#/home'; render(); }
 async function logout() { ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') { await backend.signOut(); S = null; } render(); }
 
+// CSV pour Excel : point-virgule, BOM UTF-8, et neutralisation des cellules qui
+// commencent par = + - @ (une formule cachee dans un nom ne s'execute pas).
+function csvCell(x) {
+  let v = x == null ? '' : String(x);
+  if (/^[=+\-@\t\r]/.test(v) && !/^-?\d+([,.]\d+)?$/.test(v)) v = "'" + v;
+  return `"${v.replace(/"/g, '""')}"`;
+}
+const toCsv = (headers, rows) => '\uFEFF' + [headers, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n');
+const csvNum = n => n == null || n === '' ? '' : String(Math.round(Number(n) * 100) / 100).replace('.', ',');
 // Telechargement d'un fichier genere
 function downloadFile(name, content, type = 'text/plain') {
   const blob = content instanceof Blob ? content : new Blob([content], { type });

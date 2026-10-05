@@ -37,6 +37,9 @@ function monthFigures(clubId, mk) {
     du: duAt(clubId, mk),
     recupere: rec.reduce((s, x) => s + x.amount, 0),
     recEquipe: recBy.equipe || 0, recBy,
+    // Impayes recuperes PAR L'EQUIPE : la meme valeur que le KPI du tableau de bord
+    // et du classement (saisies + import canal equipe, sans double compte).
+    impayesEquipe: sum('impayes'),
     avis: sum('avis'),
     nutrition: sum('nutrition'), accessoires: sum('accessoires'),
     boutique: sum('nutrition') + sum('accessoires'),
@@ -98,9 +101,16 @@ PAGES.recap = {
         ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${F.demandes} demande(s) · ${F.sauvees} sauvée(s)`)}
         ${tile('Taux de résiliation', F.tauxResil == null ? '—' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %', delta(F.tauxResil, P.tauxResil, { up: false, pct: true }), F.actifs ? `sur ${fmtN(F.actifs)} adhérents actifs` : 'base adhérents à renseigner')}
         ${tile('Impayés en cours', F.du == null ? '—' : fmtE(F.du), delta(F.du, P.du, { up: false, unit: 'eur' }), 'total dû en fin de mois')}
-        ${tile('Impayés récupérés', fmtE(F.recupere), delta(F.recupere, P.recupere, { unit: 'eur' }), `dont équipe ${fmtE(F.recEquipe)}`)}
+        ${tile('Impayés récupérés par l’équipe', fmtE(F.impayesEquipe), delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
         ${tile('Avis Google', fmtN(F.avis), delta(F.avis, P.avis))}
         ${tile('Ventes boutique', fmtE(F.boutique), delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
+      </div>
+      <div class="rc-grid rc-value">
+        ${(() => { const enc = encaisseMois(CLUB.id, mk), encP = encaisseMois(CLUB.id, pm), ch = churnEuros(CLUB.id, mk), chP = churnEuros(CLUB.id, pm); return `
+        ${tile('Revenu récurrent mensuel', fmtE(mrrClub(CLUB.id)), '', 'abonnés actifs × prix de leur offre (aujourd’hui)')}
+        ${tile('Encaissé réel', enc == null ? 'non importé' : fmtE(enc), enc == null ? '' : delta(enc, encP, { unit: 'eur' }), enc == null ? 'export Paiements à déposer' : 'source : export Paiements')}
+        ${tile('Churn en euros', ch == null ? '—' : fmtE(ch), ch == null ? '' : delta(ch, chP, { up: false, unit: 'eur' }), 'mensualités perdues par les résiliations du mois')}
+        ${tile('Valeur d’un adhérent', fmtE(Math.round(prixMoyen(CLUB.id) * dureeVieMois(CLUB.id))), '', `${plur(dureeVieMois(CLUB.id), 'mois', 'mois')} de durée de vie moyenne`)}`; })()}
       </div>
 
       <div class="g12">
