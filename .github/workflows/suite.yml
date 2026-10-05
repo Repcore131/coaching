@@ -127,6 +127,12 @@ jobs:
       - name: Géométrie de la bannière
         run: timeout 300 node scripts/verif/banniere-geometrie.mjs "http://127.0.0.1:8799/app/index.html" 9223
 
+      # firebase-tools exige Java 21 ; le Java du runner est plus ancien.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Règles (émulateur)
         run: |
           npm install -g firebase-tools

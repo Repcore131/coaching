@@ -271,6 +271,12 @@ jobs:
       # trois scripts écrivent pour de vrai contre la Realtime Database émulée
       # (projet demo-, aucun accès à la production, aucun secret). Ils lisent
       # EMU, http://127.0.0.1:9000 par défaut, le port de l'émulateur database.
+      # firebase-tools exige Java 21 ; le Java du runner est plus ancien.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Règles (émulateur)
         run: |
           npm install -g firebase-tools
