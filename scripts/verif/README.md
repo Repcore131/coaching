@@ -41,6 +41,14 @@ fantôme dit qu'elle ne restaure pas.
 
 Mesure du 02/09/2026 : 4 142 / 18 aux trois passes, aucun fantôme.
 
+Mesure du 05/10/2026 (build 1799) : **6 044 / 0 aux trois passes, aucun
+fantôme**, dans les conditions de `suite.mjs` (fuseau de Paris, 412×4000,
+Ciqual, illustrations et règles chargées). `detail2` donne le message et la
+ligne de chaque fantôme. Les restes qui en faisaient — chronomètre de séance,
+feuille du laboratoire (`#ml-style`), célébrations en file (`#bdg-ecran`),
+légende préparée, contenu de la boutique — sont rendus par le `finally` du
+test qui les crée (`_woTimerZero`, `_mlStyleRendre`/`_mlGarde`, `_bdgRendre`).
+
 ## Captures
 
 `capture.mjs` prend une page qui contient des blocs `.banc`, chacun de

@@ -183,6 +183,9 @@ async function testExercices(){
   //    charte, les états vides et « le cyan au repos » lisent ensuite.
   const _woTimerZero=()=>{ try{ const tm=document.getElementById('wo-timer'); if(tm) tm.textContent=fmtDureeSeance(0); }catch(e){} };
   const _mlStyleRendre=avant=>{ try{ const st=document.getElementById('ml-style'); if(st&&!avant) st.remove(); }catch(e){} };
+  // Pour un test du laboratoire qui ouvre l'éditeur ou l'export : la garde note
+  // la feuille à l'entrée et la rend dans son propre finally.
+  const _mlGarde=f=>async()=>{ const avant=!!document.getElementById('ml-style'); try{ return await f(); } finally { _mlStyleRendre(avant); } };
   //  · les célébrations qu'une séance met en file : _bdgPlanifier ouvre
   //    #bdg-ecran 900 ms plus tard, au milieu d'un autre test, et l'écran
   //    reste ; la passe suivante trouve CET écran-là avant le sien.
@@ -65428,7 +65431,7 @@ async function testExercices(){
       return msg?_echec(msg):true;
     });
 
-    okA('MLX — le suivi automatique se range en images clés, et l’export a sa taille et son format',async()=>{
+    okA('MLX — le suivi automatique se range en images clés, et l’export a sa taille et son format',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // UN MOUVEMENT RECTILIGNE À VITESSE CONSTANTE : deux clés suffisent.
       const T=[], P=[];
@@ -65465,9 +65468,9 @@ async function testExercices(){
       if(!document.getElementById('mle-son').disabled) return _echec('le son reste proposé au ralenti');
       mlFermerExport();
       if(document.getElementById('mle')) return _echec('la fenêtre reste ouverte');
-      return true;});
+      return true;}));
 
-    okA('MLX — un angle suivi va jusqu’au bout de la vidéo, et un point caché se retrouve',async()=>{
+    okA('MLX — un angle suivi va jusqu’au bout de la vidéo, et un point caché se retrouve',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // Kevin, 22/09/2026, sur une vidéo de 25 s : « l'angle arrête de bouger à
       // un certain temps, le suivi s'annule ». Quatre causes se cumulaient — la
@@ -65609,9 +65612,9 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
 
-    okA('MLX — les suivis coupés à 20 s se prolongent seuls à l’ouverture, sans nouvelle pastille',async()=>{
+    okA('MLX — les suivis coupés à 20 s se prolongent seuls à l’ouverture, sans nouvelle pastille',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // Kevin, 22/09/2026, après le 1390 : « met en place ». Les angles suivis
       // avant le 1390 restaient coupés à 20 s ; le laboratoire les prolonge
@@ -65737,9 +65740,9 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
 
-    okA('MLX — tracer au clic puis au clic, pendant la lecture, en tirets ou en pointillé',async()=>{
+    okA('MLX — tracer au clic puis au clic, pendant la lecture, en tirets ou en pointillé',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LA DONNÉE : le style se garde, l'inconnu tombe, un texte n'en a pas.
       const dv=annotValide({v:1,majLe:0,leg:{},a:[
@@ -65852,8 +65855,8 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
-    okA('MLX — l’étiquette et la légende se déplacent au double-clic, et gardent leur place',async()=>{
+    }));
+    okA('MLX — l’étiquette et la légende se déplacent au double-clic, et gardent leur place',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LA DONNÉE : le décalage se garde, le nul et le hors-borne tombent, un
       // texte n'en a pas ; la légende garde son coin libre, les deux ou aucun.
@@ -66000,7 +66003,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
     okA('MLX — la trajectoire suivie garde son horaire, et se trace avec le mouvement',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LA PART PARCOURUE : le départ seul avant, la tête interpolée pendant, tout après.
@@ -66037,7 +66040,7 @@ async function testExercices(){
       if(mlTrajArreter()!==false) return _echec('« Arrêter » répond sans suivi en cours');
       return true;
     });
-    okA('MLX — après une trajectoire, la vidéo s’arrête : ni le champ du nom ni un toucher ne la retiennent',async()=>{
+    okA('MLX — après une trajectoire, la vidéo s’arrête : ni le champ du nom ni un toucher ne la retiennent',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
@@ -66108,7 +66111,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
     okA('MLX — un segment de membre ne s’allonge pas : le point qui décroche est repris',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // LES SEGMENTS RIGIDES : les deux branches d'un angle, les maillons d'une
@@ -66219,7 +66222,7 @@ async function testExercices(){
       if('ech' in v({ech:{mm:450,src:'iwf|20 kg'}})||'ech' in v({ech:{p:'500,200',mm:450,src:'iwf|20 kg'}})) return _echec('une échelle sans ses deux points reste');
       return true;
     });
-    okA('MLX — l’échelle se pose, prend son disque et mesure ; la mesure se déplace ; le double-clic reprend les étiquettes',async()=>{
+    okA('MLX — l’échelle se pose, prend son disque et mesure ; la mesure se déplace ; le double-clic reprend les étiquettes',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
@@ -66357,7 +66360,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
 
     okA('MLX — le bord du disque se trouve seul : un toucher au centre, le diamètre au pixel près',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
@@ -66420,7 +66423,7 @@ async function testExercices(){
       if(doc('610.95,593 609,843')||doc('1000.5,0 0,1')) return _echec('une échelle mal écrite passe');
       return true;
     });
-    okA('MLX — l’échelle automatique : un toucher au centre pose le diamètre, un glisser la pose à la main',async()=>{
+    okA('MLX — l’échelle automatique : un toucher au centre pose le diamètre, un glisser la pose à la main',_mlGarde(async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
@@ -66501,7 +66504,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       return msg?_echec(msg):true;
-    });
+    }));
 
     // ⚠ LA REGLE A CHANGE LE 01/10/2026. motion-lab.js?v=<build> etait ecarte
     // du report en bloc ; il suit desormais la garde des actifs rc-* : la
