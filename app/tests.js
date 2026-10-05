@@ -15005,6 +15005,64 @@ async function testExercices(){
           const c=controlerImportIA({seances:[{nom:'A',exercices:[{nomLu:'x',nomBanque:'Y',series:0,confiance:7}]}]},['Z']);
           const x=c.seances[0].exercices[0];
           return x.nomBanque===null&&x.series===null&&x.confiance===1&&x.reps===null?true:_echec(JSON.stringify(x));});
+        // ══ LA PHOTO DU REPAS (05/10/2026) ══
+        ok('Photo du repas — repasPhotoOuvert : faux pour un profil TCA, faux pour un autonome Essentielle, vrai pour Ultime, vrai chez un coach Coach ou Pro',()=>{
+          const fut=Date.now()+864e5, mk=(e,o)=>Object.assign({email:e,role:'athlete'},o||{});
+          const ult=mk('rp-ult@t.fr'), ess=mk('rp-ess@t.fr'), tca=mk('rp-tca@t.fr',{tcaRisque:true}), sv=mk('rp-sv@t.fr',{coachEmailKey:'co@t,fr'}),
+            lib=mk('rp-lib@t.fr',{coachEmailKey:'co@t,fr'});
+          try{
+            _droitsPoser(ult.email,{palier:'ultime',source:'paypal',echeance:0});
+            _droitsPoser(ess.email,{palier:'essentielle',source:'paypal',echeance:0});
+            _droitsPoser(tca.email,{palier:'ultime',source:'paypal',echeance:0});
+            _droitsPoser(sv.email,{palier:'suivi',source:'code_coach',echeance:0,couvertParCoach:{jusqu:fut,plan:'pro'}});
+            _droitsPoser(lib.email,{palier:'suivi',source:'code_coach',echeance:0,couvertParCoach:{jusqu:fut,plan:'libre'}});
+            if(repasPhotoOuvert(tca)) return _echec('ouvert pour un profil TCA');
+            if(!estAutonome(ess)||repasPhotoOuvert(ess)) return _echec('ouvert pour un autonome Essentielle');
+            if(!repasPhotoOuvert(ult)) return _echec('fermé pour Ultime');
+            if(!repasPhotoOuvert(sv)) return _echec('fermé chez un coach Pro');
+            if(repasPhotoOuvert(lib)) return _echec('ouvert chez un coach Libre');
+            return repasPhotoOuvert({email:'c@t.fr',role:'coach'})?_echec('ouvert pour un coach'):true;
+          } finally { for(const u of [ult,ess,tca,sv,lib]) _droitsPoser(u.email,null,true); }});
+        ok('Photo du repas — {nom:"riz blanc cuit", grammes:150} donne une entrée CIQUAL de 150 g, source photo ; un aliment introuvable reste « à choisir » et n’est pas enregistré',()=>{
+          if(!Array.isArray(_ciqualDB)||!_ciqualDB.length) return _echec('table Ciqual non chargée');
+          const l=lignesRepasPhoto({aliments:[{nom:'riz blanc cuit',grammes:150,confiance:0.9},{nom:'zzqx introuvable',grammes:80,confiance:0.4}],remarque:null},_ciqualDB,{});
+          if(l.length!==2) return _echec(l.length+' lignes');
+          if(!l[0].f||!/^Riz blanc/.test(l[0].f.n)) return _echec('riz : '+(l[0].f&&l[0].f.n));
+          if(l[1].f!==null) return _echec('l’introuvable a reçu '+(l[1].f&&l[1].f.n));
+          const es=entreesRepasPhoto(l,'dejeuner');
+          if(es.length!==1) return _echec(es.length+' entrées : la ligne « à choisir » est enregistrée');
+          const e=es[0], ref=_eqConstruireEntree(l[0].f,150,'dejeuner',e.id);
+          if(e.qty!==150||e.alim_id!==l[0].f.id||e.source!=='photo') return _echec(JSON.stringify(e));
+          if(e.kcal!==ref.kcal||e.p!==ref.p) return _echec('calories hors Ciqual');
+          return true;});
+        okA('Photo du repas — aucune écriture tant que l’athlète n’a pas confirmé, puis « Ajouter ces aliments » écrit les lignes choisies',async()=>{
+          const sv=CLOUD._callFn, svU=currentUser, svD=_fjDate, svS=saveUser;
+          const j='2026-10-05';
+          try{
+            if(!Array.isArray(_ciqualDB)||!_ciqualDB.length) await _loadCiqual();
+            currentUser={email:'rp-j@t.fr',role:'athlete',nutrition:{log:{}}};
+            _fjDate=j;
+            let ecrit=0; saveUser=()=>{ ecrit++; return true; };
+            let recu=null;
+            CLOUD._callFn=async(nom,data)=>{ recu={nom,data};
+              return {ok:true,journalId:'j',proposition:{aliments:[{nom:'riz blanc cuit',grammes:150,confiance:0.9},{nom:'zzqx introuvable',grammes:80,confiance:0.3}],remarque:null}}; };
+            const ok=await analyserPhotoRepas({media_type:'image/jpeg',data:'AAAA'});
+            if(!ok||!_photoRepas) return _echec('pas de liste');
+            if(recu.nom!=='ia'||recu.data.tache!=='repas'||recu.data.charge.image.data!=='AAAA') return _echec('appel : '+JSON.stringify(recu.data).slice(0,120));
+            if(ecrit||Object.keys(currentUser.nutrition.log).length) return _echec('écrit avant confirmation');
+            const z=document.getElementById('prp-corps');
+            if(!z||!/À choisir/.test(z.textContent)) return _echec('la ligne « à choisir » ne se voit pas');
+            if(document.getElementById('prp-g-0').value!=='150') return _echec('grammage non éditable');
+            photoRepasGrammes(0,'180');
+            if(!ajouterPhotoRepas()) return _echec('ajout refusé');
+            const es=((currentUser.nutrition.log[j]||{}).entries)||[];
+            if(es.length!==1||es[0].qty!==180||es[0].source!=='photo') return _echec(JSON.stringify(es));
+            return ecrit>0?true:_echec('rien n’a été enregistré');
+          } finally { CLOUD._callFn=sv; currentUser=svU; _fjDate=svD; saveUser=svS; _photoRepas=null; try{ closeModal(); }catch(e){} }});
+        ok('Photo du repas — la photo ne passe ni par Cloudinary ni par la base : le parcours n’en appelle aucun chemin',()=>{
+          const src=[ouvrirPhotoRepas,_reduirePhotoRepas,_photoRepasFichier,analyserPhotoRepas,ajouterPhotoRepas].map(String).join('\n');
+          if(/cloudinary|uploadImage|_televerser|pushOne|DB\.set/i.test(src)) return _echec('un chemin de téléversement ou d’écriture');
+          return /capture/.test(String(ouvrirPhotoRepas))&&REPAS_PHOTO_PX===1024&&REPAS_PHOTO_QUALITE===0.8?true:_echec('capture ou réduction');});
         // ══ LE PREMIER PROGRAMME PROPOSÉ PAR L'ASSISTANT (05/10/2026) ══
         const _PPB=[{nom:'SQUAT',materiel:'Barre'},{nom:'DÉVELOPPÉ MILITAIRE',materiel:'Barre'},{nom:'DÉVELOPPÉ HALTÈRES ASSIS',materiel:'Haltères'},
           {nom:'ROWING BARRE',materiel:'Barre'},{nom:'TIRAGE VERTICAL',materiel:'Poulie'},{nom:'FENTES',materiel:''}];

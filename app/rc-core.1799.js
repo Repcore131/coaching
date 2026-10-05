@@ -9345,7 +9345,10 @@ function droitsDe(u){
     demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':'',
     // LE QUOTA DU COACH (02/10/2026, serveur léger) : jusqu'à quand la formule du
     // coach couvre cet athlète. 0 : jamais dit (rien ne se ferme sur un silence).
-    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0};
+    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0,
+    // L'offre de ce coach, posée avec la couverture (05/10/2026) : l'athlète ne
+    // peut pas lire coachs_registre. Sert à ouvrir la photo du repas.
+    planCoach:['libre','coach','pro'].indexOf(String(d.couvertParCoach&&d.couvertParCoach.plan))>=0?String(d.couvertParCoach.plan):''};
 }
 // PURE. Hors du quota de son coach, d'après le serveur : le « suivi » d'un
 // CODE de coach ne s'ouvre plus. Un palier payé, un essai, un accès posé à la
@@ -101567,7 +101570,10 @@ function _renderFjActions(){
     +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'prep\')">Meal prep</button>'
     // LOT R1 : « Recettes » ouvre la bibliothèque. Le calcul d'une part d'un
     // tout reste dans l'onglet « Recette » de l'écran Meal prep.
-    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirRecettes()">Recettes</button></div>';
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirRecettes()">Recettes</button></div>'
+    // LA PHOTO DU REPAS : seulement en ligne, et seulement si l'offre l'ouvre.
+    +((typeof navigator!=='undefined'&&navigator.onLine===false)||!repasPhotoOuvert(currentUser)?''
+      :'<button type="button" class="btn btn-outline btn-sm" id="fj-photo-repas" style="'+st+';width:100%;margin-top:8px" onclick="ouvrirPhotoRepas()">Photo du repas</button>');
 }
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
@@ -102900,6 +102906,177 @@ function updateFjaCalc(){
   </div>`;
 }
 
+
+
+// ══ LA PHOTO DU REPAS (05/10/2026) ══════════════════════════════════════════
+// Dans l'ajout d'aliment : une photo de l'assiette, et l'assistant (ia.js,
+// tâche 'repas', Haiku 4.5) propose une liste d'aliments et de grammes.
+// ⚠ LES CALORIES VIENNENT DE CIQUAL, JAMAIS DE L'ASSISTANT. Chaque nom proposé
+//   passe par la recherche locale (_classerAliments) : le premier résultat de
+//   la table est retenu, sinon la ligne reste « à choisir » et ne s'enregistre pas.
+// ⚠ RIEN N'EST ÉCRIT AVANT « Ajouter ces aliments ». Ensuite, les entrées sont
+//   celles d'une saisie manuelle (_eqConstruireEntree), avec source:'photo'.
+// ⚠ LA PHOTO NE FAIT QUE PASSER : réduite sur l'appareil (1 024 px, JPEG 0,8),
+//   envoyée au serveur, oubliée. Ni Cloudinary, ni la base, ni le dossier.
+// ⚠ JAMAIS POUR UN PROFIL TCA, et seulement avec Ultime, ou chez un coach dont
+//   l'offre est Coach ou Pro (le serveur refait le même contrôle).
+const REPAS_PHOTO_PX=1024, REPAS_PHOTO_QUALITE=0.8;
+const REPAS_MOTS_VIDES=Object.freeze(['de','du','des','la','le','les','au','aux','en','et','un','une','a']);
+/** PURE (le cache local des droits). La photo du repas est-elle proposée ? */
+function repasPhotoOuvert(u){
+  if(!u||u.role==='coach') return false;
+  try{ if(aTCA(u)) return false; }catch(e){ return false; }
+  let p='aucun'; try{ p=palierDe(u); }catch(e){ p='aucun'; }
+  if(p==='ultime') return true;
+  if(estAutonome(u)) return false;
+  let d=null; try{ d=droitsDe(u); }catch(e){ d=null; }
+  return !!(d&&d.couvertJusqu>Date.now()&&(d.planCoach==='coach'||d.planCoach==='pro'));
+}
+/** PURE. Le premier aliment CIQUAL pour un nom proposé, ou null. Les mots vides
+ *  (« de », « au »…) sont retirés si la requête entière ne trouve rien. */
+function alimentPourNomRepas(nom,db,user){
+  const l=Array.isArray(db)?db:[];
+  const chercher=words=>{
+    if(!words.length) return null;
+    const res=l.filter(f=>_fjContientTous(f.s||_fjNorm(f.n),words));
+    if(!res.length) return null;
+    const cl=_classerAliments(res,words.join(' '),words).map(x=>x.f);
+    let tr=null; try{ tr=evictionTrier(user,cl); }catch(e){ tr=null; }
+    return (tr&&tr.liste&&tr.liste[0])||cl[0]||null;
+  };
+  const words=_fjNorm(String(nom||'')).split(/[\s,']+/).filter(w=>w.length>1);
+  return chercher(words)||chercher(words.filter(w=>REPAS_MOTS_VIDES.indexOf(w)<0));
+}
+/** PURE. Les lignes à confirmer : {nomLu, grammes, confiance, f} — f null : « à choisir ». */
+function lignesRepasPhoto(proposition,db,user){
+  const al=(proposition&&Array.isArray(proposition.aliments))?proposition.aliments:[];
+  return al.slice(0,8).filter(a=>a&&a.nom).map(a=>({nomLu:String(a.nom),grammes:Math.max(0,Math.round(Number(a.grammes)||0)),
+    confiance:Math.max(0,Math.min(1,Number(a.confiance)||0)),f:alimentPourNomRepas(a.nom,db,user)}));
+}
+/** PURE. Les entrées de journal des lignes CHOISIES et pesées ; les autres sont laissées. */
+function entreesRepasPhoto(lignes,repas){
+  const t=Date.now();
+  return (lignes||[]).filter(l=>l&&l.f&&Number(l.grammes)>0&&Number(l.grammes)<=9999)
+    .map((l,i)=>Object.assign(_eqConstruireEntree(l.f,Number(l.grammes),repas,t+i),{source:'photo'}));
+}
+let _photoRepas=null;
+function ouvrirPhotoRepas(){
+  if(!repasPhotoOuvert(currentUser)) return false;
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.setAttribute('capture','environment'); inp.style.display='none';
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; inp.remove(); if(f) _photoRepasFichier(f); };
+  document.body.appendChild(inp);
+  inp.click();
+  return true;
+}
+// La réduction, sur l'appareil : compressImage (canvas), rien d'autre.
+function _reduirePhotoRepas(file){
+  return new Promise((res,rej)=>compressImage(file,REPAS_PHOTO_PX,REPAS_PHOTO_QUALITE,res,()=>rej(new Error('photo illisible'))));
+}
+async function _photoRepasFichier(file){
+  const b=document.getElementById('fj-photo-repas');
+  if(b&&b.getAttribute('aria-busy')==='true') return false;
+  let url='';
+  try{ url=await _reduirePhotoRepas(file); }catch(e){ toast('Photo illisible : réessaie.','var(--orange)'); return false; }
+  const m=/^data:image\/jpeg;base64,(.+)$/.exec(String(url));
+  if(!m){ toast('Photo illisible : réessaie.','var(--orange)'); return false; }
+  if(b){ b.setAttribute('aria-busy','true'); b.disabled=true; b.textContent='Lecture de la photo…'; }
+  try{ return await analyserPhotoRepas({media_type:'image/jpeg',data:m[1]}); }
+  finally{ try{ _renderFjActions(); }catch(e){} }
+}
+async function analyserPhotoRepas(image){
+  if(!CLOUD||!CLOUD._callFn){ toast('L’assistant n’est pas joignable pour le moment.','var(--orange)'); return false; }
+  let r=null, statut=0;
+  try{ r=await CLOUD._callFn('ia',{tache:'repas',charge:{image}}); }
+  catch(e){ r=null; statut=(e&&e.statut)||0; }
+  if(!r||!r.ok||!r.proposition){
+    toast(statut===429?'Plus de photos de repas ce mois-ci : la saisie reste ouverte.'
+      :statut===503?'L’assistant est en pause : saisis ton repas à la main.'
+      :'La photo n’a pas pu être lue : saisis ton repas à la main.','var(--orange)');
+    return false;
+  }
+  if(!_ciqualDB||!_ciqualDB.length) await _loadCiqual();
+  const lignes=lignesRepasPhoto(r.proposition,_ciqualDB,currentUser);
+  if(!lignes.length){ toast('Aucun aliment reconnu sur cette photo.','var(--orange)'); return false; }
+  _photoRepas={lignes,remarque:typeof r.proposition.remarque==='string'?r.proposition.remarque:null,cherche:-1};
+  _rendrePhotoRepas(true);
+  return true;
+}
+function _htmlPhotoRepas(x){
+  const E=escapeHtml;
+  const lignes=x.lignes.map((l,i)=>{
+    if(!l) return '';
+    const choix=l.f?'<div class="prp-nom">'+E(l.f.n)+'</div><div class="prp-lu">Vu : '+E(l.nomLu)+'</div>'
+      :'<div class="prp-nom prp-a-choisir">À choisir</div><div class="prp-lu">Vu : '+E(l.nomLu)+' — introuvable dans la table</div>';
+    const rech=x.cherche===i?'<input type="search" class="prp-rech" id="prp-rech" placeholder="Chercher un aliment" aria-label="Chercher un aliment" oninput="photoRepasChercher(this.value)">'
+      +'<div id="prp-res"></div>':'';
+    return '<div class="prp-l" id="prp-l-'+i+'"><div class="prp-c">'+choix+rech+'</div>'
+      +'<label class="prp-g">Grammes<input type="number" min="1" max="9999" inputmode="numeric" id="prp-g-'+i+'" value="'+(l.grammes||'')+'" oninput="photoRepasGrammes('+i+',this.value)"></label>'
+      +'<div class="prp-act"><button type="button" class="rb-lien" onclick="photoRepasRemplacer('+i+')">'+(l.f?'Remplacer':'Choisir')+'</button>'
+      +'<button type="button" class="rb-lien" onclick="photoRepasRetirer('+i+')">Retirer</button></div></div>';
+  }).join('');
+  const n=x.lignes.filter(l=>l&&l.f&&l.grammes>0).length;
+  return lignes+(x.remarque?'<div class="prp-rq">'+E(x.remarque)+'</div>':'')
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin:10px 0 0">Les quantités sont estimées sur la photo : corrige-les. Les calories viennent de la table Ciqual. Une ligne « à choisir » n’est pas ajoutée.</p>'
+    +'<button class="btn btn-red" style="margin-top:14px;width:100%" onclick="ajouterPhotoRepas()"'+(n?'':' disabled')+'>Ajouter ces aliments'+(n?' ('+n+')':'')+'</button>'
+    +'<button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="fermerPhotoRepas()">Annuler</button>';
+}
+function _rendrePhotoRepas(ouvrir){
+  const x=_photoRepas; if(!x) return false;
+  if(ouvrir){
+    document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="fermerPhotoRepas()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Ton repas en photo</h2>
+    <div id="prp-corps"></div>
+  </div></div>`);
+  }
+  const z=document.getElementById('prp-corps');
+  if(z) z.innerHTML=_htmlPhotoRepas(x);
+  return true;
+}
+function photoRepasGrammes(i,v){
+  const l=_photoRepas&&_photoRepas.lignes[i]; if(!l) return;
+  l.grammes=Math.max(0,Math.round(Number(v)||0));
+  const n=_photoRepas.lignes.filter(x=>x&&x.f&&x.grammes>0).length;
+  const b=document.querySelector('#prp-corps .btn-red');
+  if(b){ b.disabled=!n; b.textContent='Ajouter ces aliments'+(n?' ('+n+')':''); }
+}
+function photoRepasRetirer(i){ if(!_photoRepas) return; _photoRepas.lignes[i]=null; _photoRepas.cherche=-1; _rendrePhotoRepas(false); }
+function photoRepasRemplacer(i){
+  if(!_photoRepas) return;
+  _photoRepas.cherche=_photoRepas.cherche===i?-1:i;
+  _rendrePhotoRepas(false);
+  const r=document.getElementById('prp-rech'); if(r) r.focus();
+}
+function photoRepasChercher(q){
+  const z=document.getElementById('prp-res'); if(!z||!_photoRepas) return;
+  const words=_fjNorm(String(q||'')).split(/\s+/).filter(w=>w.length>1);
+  if(!words.length){ z.innerHTML=''; return; }
+  const res=(_ciqualDB||[]).filter(f=>_fjContientTous(f.s||_fjNorm(f.n),words));
+  _photoRepas.res=_classerAliments(res,words.join(' '),words).slice(0,6).map(x=>x.f);
+  z.innerHTML=_photoRepas.res.map((f,k)=>'<button type="button" class="prp-r" onclick="photoRepasPrendre('+k+')">'+escapeHtml(f.n)+'</button>').join('')
+    ||'<div class="prp-lu">Aucun résultat.</div>';
+}
+function photoRepasPrendre(k){
+  const x=_photoRepas; if(!x||x.cherche<0) return;
+  const f=(x.res||[])[k], l=x.lignes[x.cherche];
+  if(!f||!l) return;
+  l.f=f; x.cherche=-1; x.res=null;
+  _rendrePhotoRepas(false);
+}
+function fermerPhotoRepas(){ _photoRepas=null; closeModal(); return true; }
+function ajouterPhotoRepas(){
+  const x=_photoRepas; if(!x) return false;
+  const date=_fjDate||localISODate(new Date());
+  const repas=(typeof _fjRepas!=='undefined'&&_fjRepas)||'matin';
+  const es=entreesRepasPhoto(x.lignes,repas);
+  if(!es.length){ toast('Choisis au moins un aliment, avec sa quantité.','var(--orange)'); return false; }
+  const ok=_fjAjouter(_fjCopier(es,date,repas),date,'Photo du repas');
+  _photoRepas=null;
+  closeModal();
+  if(ok) toast(es.length+' aliment'+(es.length>1?'s':'')+' ajouté'+(es.length>1?'s':'')+' à ton journal','var(--green)');
+  return ok;
+}
 // ══ ALIMENTS PERSO ════════════════════════════════════════════════════════
 // Ranges dans le dossier de l athlete, sous son propre noeud. Aucune donnee
 // Ciqual ni OFF n y est recopiee : ce sont ses valeurs, saisies par lui.

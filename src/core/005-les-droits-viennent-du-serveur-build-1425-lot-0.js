@@ -73,7 +73,10 @@ function droitsDe(u){
     demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':'',
     // LE QUOTA DU COACH (02/10/2026, serveur léger) : jusqu'à quand la formule du
     // coach couvre cet athlète. 0 : jamais dit (rien ne se ferme sur un silence).
-    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0};
+    couvertJusqu:Number(d.couvertParCoach&&d.couvertParCoach.jusqu)||0,
+    // L'offre de ce coach, posée avec la couverture (05/10/2026) : l'athlète ne
+    // peut pas lire coachs_registre. Sert à ouvrir la photo du repas.
+    planCoach:['libre','coach','pro'].indexOf(String(d.couvertParCoach&&d.couvertParCoach.plan))>=0?String(d.couvertParCoach.plan):''};
 }
 // PURE. Hors du quota de son coach, d'après le serveur : le « suivi » d'un
 // CODE de coach ne s'ouvre plus. Un palier payé, un essai, un accès posé à la

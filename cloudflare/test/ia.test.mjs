@@ -3,7 +3,7 @@
 //   node cloudflare/test/ia.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport, SCHEMA_PROGRAMME, controlerProgramme } from '../src/ia.js';
+import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport, SCHEMA_PROGRAMME, controlerProgramme, SCHEMA_REPAS, controlerRepas, REPAS_APPELS_MOIS } from '../src/ia.js';
 import { repondreAppel, ErreurAppel } from '../src/appels.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -105,8 +105,9 @@ await test('le quota : au plafond → 429 ; un coach Libre (0) et un athlète sa
     (e) => e.statut === 429 && e.message === 'Quota IA du mois atteint.');
   const libre = monde({ base: { coachs_registre: { [COACH]: { plan: 'libre' } } } });
   assert.equal(await statutDe(libre.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'relance', charge: 'x' } })), 429);
+  // Tom : ni Ultime, ni un coach au registre — la photo du repas reste fermée.
   const ath = monde();
-  assert.equal(await statutDe(ath.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: 'pâtes' } })), 429);
+  assert.equal(await statutDe(ath.IA.appeler({ auth: auth('tom@t.fr'), data: { tache: 'repas', charge: { image: { media_type: 'image/jpeg', data: 'AAAA' } } } })), 429);
   assert.equal(w.appels.length + libre.appels.length + ath.appels.length, 0);
   // Les offres : un abonnement coach échu vaut Libre ; Ultime ouvre 1 $.
   assert.equal(offreIA({ plan: 'pro', actifJusqu: T - 1 }, null, T), 'libre');
@@ -155,9 +156,9 @@ await test('un appel servi : la requête (schéma, effort, réflexion, repli), l
 await test('Haiku : ni effort, ni réflexion, ni bêta ; schéma du repas', async () => {
   const w = monde({ base: { droits: { [ATH]: { palier: 'ultime', echeance: 0 } } },
     reponse: (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: 'end_turn',
-      content: [{ type: 'text', text: '{"aliments":[{"nom":"pâtes","grammes":120}],"kcal":430}' }],
+      content: [{ type: 'text', text: '{"aliments":[{"nom":"pâtes cuites","grammes":120,"confiance":0.8}],"remarque":null}' }],
       usage: { input_tokens: 300, output_tokens: 40 } }) });
-  const r = await w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: 'Une assiette de pâtes' } });
+  const r = await w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: { image: { media_type: 'image/jpeg', data: 'AAAA' } } } });
   const { corps, beta } = w.appels[0];
   assert.equal(corps.model, 'claude-haiku-4-5');
   assert.equal(corps.output_config.effort, undefined);
@@ -166,7 +167,7 @@ await test('Haiku : ni effort, ni réflexion, ni bêta ; schéma du repas', asyn
   assert.equal(beta, '');
   assert.equal(r.plafond, IA_PLAFONDS.ultime);
   assert.equal(r.coutMois, 300 * 1 + 40 * 5);
-  assert.equal(r.proposition.kcal, 430);
+  assert.deepEqual(r.proposition, { aliments: [{ nom: 'pâtes cuites', grammes: 120, confiance: 0.8 }], remarque: null });
 });
 
 await test('stop_reason refusal ou max_tokens : ok:false, jamais de texte, aucun journal « propose », coût compté', async () => {
@@ -404,6 +405,67 @@ await test('programme : sortie invalide (modèle hors liste, objet illisible) �
     { modeles: Array.from({ length: 13 }, (_, i) => ({ id: 'm' + i })), banque: [] }])
     assert.equal(await statutDe(v.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'programme', athlete: ATH, charge } })), 400);
   assert.equal(v.appels.length, 0);
+});
+
+// ══ LA PHOTO DU REPAS (tâche 'repas', Haiku 4.5) ══════════════════════════════
+const PHOTO = { image: { media_type: 'image/jpeg', data: Buffer.from('fausse photo').toString('base64') } };
+const repRepas = (sortie) => (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: 'end_turn',
+  content: [{ type: 'text', text: JSON.stringify(sortie) }], usage: { input_tokens: 1500, output_tokens: 80 } });
+
+await test('repas : schéma strict sans calories ; la photo part en bloc image ; sortie bornée (8 aliments, grammes entiers, remarque sur le poids retirée)', async () => {
+  assert.equal(SCHEMA_REPAS.additionalProperties, false);
+  assert.deepEqual(SCHEMA_REPAS.required, ['aliments', 'remarque']);
+  const al = SCHEMA_REPAS.properties.aliments.items;
+  assert.deepEqual(al.required, ['nom', 'grammes', 'confiance']);
+  assert.deepEqual(al.properties.grammes, { type: 'integer' });
+  assert.equal(JSON.stringify(SCHEMA_REPAS).indexOf('kcal'), -1);
+  const neuf = Array.from({ length: 10 }, (_, i) => ({ nom: 'aliment ' + i, grammes: 50, confiance: 2 }));
+  const w = monde({ base: { droits: { [ATH]: { palier: 'ultime', echeance: 0 } } }, reponse: repRepas({ aliments: neuf, remarque: 'Peu de calories, bon pour ton poids.' }) });
+  const r = await w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } });
+  const { corps } = w.appels[0];
+  assert.equal(corps.model, 'claude-haiku-4-5');
+  assert.deepEqual(corps.output_config.format.schema, SCHEMA_REPAS);
+  assert.deepEqual(corps.messages[0].content[0], { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: PHOTO.image.data } });
+  assert.match(corps.system[0].text, /JAMAIS de calories/);
+  assert.match(corps.system[0].text, /Huit aliments au plus/);
+  assert.equal(r.proposition.aliments.length, 8);
+  assert.equal(r.proposition.aliments[0].confiance, 1);
+  assert.equal(r.proposition.remarque, null);
+  assert.deepEqual(controlerRepas({ aliments: [{ nom: 'riz', grammes: 150.5 }, { nom: '', grammes: 10 }, { nom: 'pain', grammes: 40, confiance: 0.5 }], remarque: 'Une sauce est peut-être cachée.' }),
+    { aliments: [{ nom: 'pain', grammes: 40, confiance: 0.5 }], remarque: 'Une sauce est peut-être cachée.' });
+  // La photo ne laisse aucune trace : ni dans le journal, ni ailleurs dans la base.
+  assert.equal(JSON.stringify(w.F.lire('')).indexOf(PHOTO.image.data), -1);
+  // Sans photo, ou dans un autre format : 400, sans appel.
+  const v = monde({ base: { droits: { [ATH]: { palier: 'ultime', echeance: 0 } } } });
+  for (const charge of ['pâtes', { image: { media_type: 'image/gif', data: 'AAAA' } }, { image: { media_type: 'image/jpeg', data: '@@' } }])
+    assert.equal(await statutDe(v.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge } })), 400);
+  assert.equal(v.appels.length, 0);
+});
+
+await test('repas : 60 appels par mois et par compte, en plus du plafond ; le compteur avance à chaque appel servi', async () => {
+  assert.equal(REPAS_APPELS_MOIS, 60);
+  const w = monde({ base: { droits: { [ATH]: { palier: 'ultime', echeance: 0 } }, ia_appels: { [ATH]: { [MOIS]: { repas: 59 } } } },
+    reponse: repRepas({ aliments: [], remarque: null }) });
+  await w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } });
+  assert.equal(w.F.lire('ia_appels/' + ATH + '/' + MOIS + '/repas'), 60);
+  await assert.rejects(w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } }), (e) => e.statut === 429);
+  assert.equal(w.appels.length, 1);
+});
+
+await test('repas : un athlète sans Ultime, suivi par un coach Coach ou Pro, passe sur l’offre du coach (qui paie) ; coach Libre ou hors quota → 429', async () => {
+  const w = monde({ reponse: repRepas({ aliments: [{ nom: 'riz blanc cuit', grammes: 150, confiance: 0.9 }], remarque: null }) });
+  const r = await w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } });
+  assert.equal(r.ok, true);
+  assert.equal(r.plafond, IA_PLAFONDS.coach);
+  assert.equal(w.F.lire('ia_quota/' + COACH + '/' + MOIS), 1500 + 80 * 5);
+  assert.equal(w.F.lire('ia_quota/' + ATH), null);
+  assert.equal(w.F.lire('ia_journal/' + COACH + '/' + r.journalId).athlete, ATH);
+  assert.equal(w.F.lire('ia_appels/' + ATH + '/' + MOIS + '/repas'), 1);
+  const libre = monde({ base: { coachs_registre: { [COACH]: { plan: 'libre' } } } });
+  assert.equal(await statutDe(libre.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } })), 429);
+  const hq = monde({ base: { droits: { [ATH]: { palier: 'suivi', couvertParCoach: { jusqu: T - 1 } } } } });
+  assert.equal(await statutDe(hq.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'repas', charge: PHOTO } })), 429);
+  assert.equal(libre.appels.length + hq.appels.length, 0);
 });
 
 console.log(ok + ' tests IA');

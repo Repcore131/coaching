@@ -538,7 +538,7 @@ instructions du guide Garmin.
 ## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
 
 Le socle côté serveur ; l'app s'en sert pour le brouillon C2, le point de la semaine, l'import
-de séance et le premier programme. Deux appels (protocole
+de séance, le premier programme et la photo du repas. Deux appels (protocole
 onCall, jeton Firebase vérifié) :
 
 - `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
@@ -561,6 +561,16 @@ ajustements:[{type, seance, exercice, par, pourquoi}], alertes}` (types `jour`, 
 de la liste → `{ok:false, raison:'sortie_invalide'}` ; un remplacement par un nom hors banque est
 retiré. L'app rejoue les ajustements elle-même (`appliquerAjustementsIA`), écarte ceux qui ne
 valident pas, montre un récapitulatif à cocher, et n'écrit qu'un **brouillon**.
+
+**La photo du repas (`repas`, Haiku 4.5, 05/10/2026).** L'app envoie UNE image réduite sur
+l'appareil (1 024 px, JPEG 0,8, `charge.image`) ; elle n'est ni stockée, ni journalisée, ni envoyée
+à Cloudinary. Claude rend `{aliments:[{nom, grammes, confiance}], remarque}` — jamais de calories
+(elles viennent de CIQUAL, dans l'app), 8 aliments au plus (`controlerRepas`). Ouverte à un athlète
+Ultime, ou à un athlète suivi par un coach dont l'offre est Coach ou Pro : c'est alors **le coach
+qui paie** (son `ia_quota`, son journal, `athlete` noté). **60 appels par mois et par compte**
+(`ia_appels/<compte>/<AAAA-MM>/repas`, lu par son titulaire, écrit par le Worker), en plus du
+plafond en dollars. L'offre du coach est posée chaque jour dans `droits/<athlète>/couvertParCoach/plan`
+(travail `couverture_coachs`) : l'app de l'athlète ne peut pas lire `coachs_registre`.
 
 **Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
 nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète

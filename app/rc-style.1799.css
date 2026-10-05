@@ -12941,6 +12941,18 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pp-ia .btn{margin:0;align-self:flex-start}
 .pp-ia-raison{font-size:var(--fs-xs);line-height:1.55;color:var(--sub)}
 .c4-op em.pp-ia-pq{color:var(--sub)}
+/* La photo du repas (ouvrirPhotoRepas) : la liste à confirmer. */
+.prp-l{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:10px 0;border-top:1px solid var(--border)}
+.prp-c{min-width:0}
+.prp-nom{font-size:var(--fs-sm);font-weight:700;color:var(--text);line-height:1.4}
+.prp-a-choisir{color:var(--orange)}
+.prp-lu{font-size:var(--fs-2xs);color:var(--sub);line-height:1.5}
+.prp-g{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-2xs);color:var(--sub);margin:0}
+.prp-g input{width:84px}
+.prp-act{grid-column:1/-1;display:flex;gap:16px}
+.prp-rech{margin-top:6px;width:100%}
+.prp-r{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--border);padding:8px 0;min-height:36px;font:inherit;font-size:var(--fs-xs);color:var(--text);cursor:pointer}
+.prp-rq{margin-top:10px;font-size:var(--fs-xs);line-height:1.55;color:var(--sub)}
 /* LOT C5 : la proposition de la semaine et les messages programmés du canal */
 .cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .cp{border-left:3px solid var(--red)}

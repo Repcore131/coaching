@@ -1076,7 +1076,10 @@ export function creerMetier(deps) {
         if (!x.existe) continue;
         const couvert = r.couverts.has(x.cle);
         // Hors quota depuis un passage précédent : la date de la coupure ne bouge plus.
-        if (couvert || !(x.couvAvant > 0 && x.couvAvant <= t)) maj['droits/' + x.cle + '/couvertParCoach'] = { jusqu: couvert ? t + QC.COUVERT_MARGE_MS : t };
+        if (couvert || !(x.couvAvant > 0 && x.couvAvant <= t)) maj['droits/' + x.cle + '/couvertParCoach'] = couvert
+          // L'OFFRE DU COACH, avec la couverture (05/10/2026) : l'app de l'athlète
+          // ne peut pas lire coachs_registre, et c'est elle qui ouvre la photo du repas.
+          ? { jusqu: t + QC.COUVERT_MARGE_MS, plan: createur ? 'pro' : plan } : { jusqu: t };
         if (x.raCoach !== coach || x.raLe !== x.le) maj['droits/' + x.cle + '/rattache'] = { coach, le: x.le };
       }
       if (!createur) maj['coachs_registre/' + coach + '/quota'] = { cycles: etat.cycles, mois: etat.mois, n: r.n,

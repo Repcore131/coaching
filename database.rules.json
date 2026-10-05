@@ -523,7 +523,7 @@
       // LE QUOTA DU COACH (02/10/2026), ecrit par le serveur leger seul : jusqu a
       // quand l athlete est couvert par la formule de son coach, et son rang
       // de rattachement (que le client ne doit pas pouvoir antidater).
-      "couvertParCoach": { "jusqu": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "$autre": { ".validate": false } },
+      "couvertParCoach": { "jusqu": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "plan": { ".validate": "newData.isString() && (newData.val() === 'libre' || newData.val() === 'coach' || newData.val() === 'pro')" }, "$autre": { ".validate": false } },
       "rattache": { "coach": { ".validate": "newData.isString() && newData.val().length < 200" }, "le": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "$autre": { ".validate": false } },
       "$autre": { ".validate": false }
     }
@@ -2031,6 +2031,14 @@
     "hebdo_batch": {
       ".read": false,
       ".write": false
+    },
+    // LA PHOTO DU REPAS (05/10/2026) : le nombre d appels du mois, par
+    // compte (60 au plus). Lu par son titulaire, ecrit par le Worker seul.
+    "ia_appels": {
+      ".write": false,
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
+      }
     },
     "ia_journal": {
       ".write": false,

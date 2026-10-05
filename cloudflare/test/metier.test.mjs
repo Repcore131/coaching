@@ -463,6 +463,8 @@ await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : dépos
     const r = await w.M.couvertureCoach(CO, t);
     assert.equal(r.enGrace, true);
     for (const a of [AA, BB]) assert.equal(w.F.lire('droits/' + a + '/couvertParCoach/jusqu'), t + QC.COUVERT_MARGE_MS, a);
+    // L'offre du coach voyage avec la couverture : l'app de l'athlète l'y lit (photo du repas).
+    for (const a of [AA, BB]) assert.equal(w.F.lire('droits/' + a + '/couvertParCoach/plan'), 'libre', a);
     assert.equal(w.F.lire('droits/' + CC), null, 'aucun droits/ créé');
     assert.equal(w.F.lire('droits/' + DD + '/couvertParCoach'), null, 'l’ancien athlète n’est pas touché');
     assert.deepEqual(w.F.lire('coachs_registre/' + CO + '/quota/cycles'), 2);
