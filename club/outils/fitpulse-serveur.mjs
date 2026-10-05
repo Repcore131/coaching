@@ -95,6 +95,7 @@ export const REGLE = `${DEBUT}
       "guests": { ".write": ${j(MEMBRE)} },
       "companies": { ".write": ${j(MEMBRE)} },
       "opps": { ".write": ${j(MEMBRE)} },
+      "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
       "$autre": { ".write": ${j(MGR)} }
     },

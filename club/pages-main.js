@@ -396,11 +396,12 @@ PAGES.leaderboard = {
       const top = rk.slice(0, 3);
       const k = kpi ? S.kpis[kpi] : null;
       const val = x => k ? `${fmtV(x.real, k.unit)} · ${fmtP(x.score)}` : `${fmtP(x.score)} · ${fmtN(x.earned)} pts`;
-      main = `<div class="card">
+      main = (UI.lbView || 'rang') === 'progression' && !k ? lbProgression(r) : `<div class="card">
         <div class="tabs" style="margin-top:-4px">${[['', 'Global'], ...kpiList().filter(x => x.points > 0).map(x => [x.id, x.label])].map(([v, l]) => `<button data-act="ui" data-key="lbKpi" data-val="${v}" class="${kpi === v ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
-        ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}"><div class="pod-medal">${trophyArt({ icon: 'medal', tone: ['silver', 'gold', 'bronze'][i], label: ['2e', '1er', '3e'][i] }, 44)}</div>${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>
-        ${meRow ? `<div class="banner-me">Vous êtes #${meRow.rank} ${period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois-ci'} : ${val(meRow)}</div>` : ''}
-        ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts"><i class="hdot ${healthOf(x.score != null && x.st.expected ? (k ? x.score : x.score) / Math.max(x.st.expected, 0.01) : null).cls}"></i> ${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
+        ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}"><div class="pod-medal">${trophyArt({ icon: 'medal', tone: ['silver', 'gold', 'bronze'][i], label: ['2e', '1er', '3e'][i] }, 44)}</div>${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>` : ''}
+        ${rk.length ? kudosRow(top) : ''}
+        ${meRow ? lbBanner(meRow, rk, r, period, k) : ''}
+        ${lbList(rk, r, k, val)}
         <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires.'}</p></div>`;
     }
     const atMode = UI.atMode || 'score';
@@ -408,9 +409,9 @@ PAGES.leaderboard = {
     all.sort((a, b) => atMode === 'score' ? b.pts - a.pts : b.tr - a.tr);
     const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div>
       ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : plur(x.tr, 'trophée', 'trophées')}</b></div>`).join('')}
-      <p class="muted small">Points cumulés de tous les mois (paliers atteints) + 200 pts par défi flash gagné.</p></div>`;
+      <p class="muted small">Points cumulés : étapes atteintes chaque mois, bonus de dépassement, points d’action des relances et 200 pts par défi flash gagné.</p></div>`;
     return `<div class="page-head"><div><h1>Classement</h1><p>${esc(scope === 'clubs' ? 'Nos clubs' : CLUB.name)} · ${r.label}</p></div></div>
-      <div class="row wrap" style="margin-bottom:14px">${seg('lbPeriod', [['week', 'Hebdomadaire'], ['month', 'Mensuel'], ['quarter', 'Trimestriel']], period)}${multi ? seg('lbScope', [['members', 'Membres'], ['clubs', 'Nos clubs']], scope) : ''}<span class="spacer"></span>${nav}</div>
+      <div class="row wrap" style="margin-bottom:14px">${seg('lbPeriod', [['week', 'Hebdomadaire'], ['month', 'Mensuel'], ['quarter', 'Trimestriel']], period)}${scope === 'members' ? seg('lbView', [['rang', 'Rang'], ['progression', 'Progression']], UI.lbView || 'rang') : ''}<button class="btn ghost sm" data-act="lbHelp">${ico('info')} Comment gagner des points</button>${multi ? seg('lbScope', [['members', 'Membres'], ['clubs', 'Nos clubs']], scope) : ''}<span class="spacer"></span>${nav}</div>
       <div class="lb-layout">${main}${side}</div>`;
   },
 };
@@ -516,11 +517,14 @@ PAGES.challenges = {
     const live = list.filter(c => c.end > Date.now());
     const past = list.filter(c => c.end <= Date.now());
     const card = (ch, isLive) => {
-      const k = S.kpis[ch.kpiId]; const rk = challengeRanking(ch);
+      const k = ch.kpiId === '_actions' ? { label: 'Points d’action des relances', unit: 'qty' } : S.kpis[ch.kpiId]; const rk = challengeRanking(ch);
+      const team = ch.goal ? rk.reduce((s, x) => s + x.value, 0) : null;
       const left = Math.max(0, ch.end - Date.now()); const h = Math.floor(left / 3600000), m = Math.floor(left % 3600000 / 60000);
       return `<div class="card"><div class="card-head">${ico('bolt')}<div><h3>${esc(ch.title)}</h3><div class="muted small">${k ? esc(k.label) : ''} · ${Math.round((ch.end - ch.start) / 3600000)} h · lancé par ${esc(fullName(S.users[ch.by]))}</div></div><span class="spacer"></span>${isLive ? `<span class="badge fp">${h} h ${pad(m)} restantes</span>` : `<span class="badge">Terminé le ${dmy(isoOf(new Date(ch.end)))}</span>`}</div>
-        ${ch.desc ? `<p class="muted" style="margin-top:0">${esc(ch.desc)}</p>` : ''}
-        ${rk.slice(0, isLive ? 10 : 3).map((x, i) => `<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:24px">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><span class="muted small">${fmtV(x.value, k ? k.unit : 'qty')}</span><b style="width:70px;text-align:right">${fmtP(x.norm)}</b></div>`).join('')}
+        ${ch.desc ? `<p class="muted" style="margin-top:0">${esc(ch.desc)}</p>` : ''}${ch.reward ? `<p class="chal-reward">${ico('cup')} À gagner : <b>${esc(ch.reward)}</b></p>` : ''}
+        ${ch.goal ? `<div class="chal-team"><div class="row"><b>Objectif d’équipe : ${fmtV(team, k ? k.unit : 'qty')} sur ${fmtV(ch.goal, k ? k.unit : 'qty')}</b><span class="spacer"></span>${team >= ch.goal ? '<span class="badge ok">Réussi</span>' : ''}</div>${progressBar(Math.min(1, team / ch.goal), { ticks: false })}</div>` : ''}
+        ${rk.slice(0, isLive ? 10 : 3).map((x, i) => `<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:24px">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><b>${ch.kpiId === '_actions' ? fmtN(x.value) + ' pts' : fmtV(x.value, k ? k.unit : 'qty') + (k && k.unit === 'qty' ? ' ' + esc(k.label.toLowerCase()) : '')}</b>${ch.kpiId === '_actions' ? '' : `<span class="muted small" style="width:96px;text-align:right" title="Réalisé rapporté à votre objectif sur la durée du défi">rythme ${fmtP(x.norm)}</span>`}</div>`).join('')}
+        ${ch.kpiId === '_actions' ? '' : '<p class="muted small" style="margin:8px 0 0">Rythme : ce que vous avez fait, rapporté à votre objectif du mois ramené à la durée du défi. 100 % = exactement dans votre rythme.</p>'}
         ${isLive && isManager() ? `<div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn sm danger" data-act="endChallenge" data-id="${ch.id}">Arrêter le défi</button></div>` : ''}</div>`;
     };
     return `<div class="page-head"><div><h1>Défis flash</h1><p>Un mini-défi de 6 à 72 h sur un KPI. Classement rapporté à l’objectif mensuel de chacun : équitable entre profils.</p></div><span class="spacer"></span>${isManager() ? `<button class="btn primary" data-act="newChallenge">${ico('plus')} Lancer un défi</button>` : ''}</div>
@@ -533,8 +537,10 @@ ACTIONS.newChallenge = () => {
   openModal({ title: 'Lancer un défi flash', body: `<p class="muted" style="margin-top:0">Choisissez un KPI et une durée. Le défi démarre dès la confirmation, pour l’équipe de ${esc(CLUB.name)}.</p>
     <form id="chf" class="grid"><label class="field"><span>Titre</span><input class="input" name="title" required placeholder="Sprint final du mois"></label>
     <label class="field"><span>Description (facultatif)</span><textarea class="input" name="desc"></textarea></label>
-    <div class="form-grid"><label class="field"><span>KPI ciblé</span><select class="input" name="kpi">${kpiList().map(k => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select></label>
-    <label class="field"><span>Durée</span><select class="input" name="dur">${[6, 12, 24, 48, 72].map(h => `<option value="${h}" ${h === 24 ? 'selected' : ''}>${h} h</option>`).join('')}</select></label></div></form>`,
+    <label class="field"><span>Récompense (facultatif)</span><input class="input" name="reward" maxlength="80" placeholder="Petit-déjeuner offert, place de parking…"></label>
+    <div class="form-grid"><label class="field"><span>KPI ciblé</span><select class="input" name="kpi">${kpiList().map(k => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}<option value="_actions">Relances (points d’action)</option></select></label>
+    <label class="field"><span>Durée</span><select class="input" name="dur">${[6, 12, 24, 48, 72].map(h => `<option value="${h}" ${h === 24 ? 'selected' : ''}>${h} h</option>`).join('')}</select></label></div>
+    <label class="field"><span>Défi d’équipe : objectif collectif (facultatif)</span><input class="input" name="goal" inputmode="decimal" placeholder="Laissez vide pour un défi individuel"></label></form>`,
     foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="createChallenge">Lancer le défi</button>' });
 };
 ACTIONS.createChallenge = async () => {
@@ -542,7 +548,7 @@ ACTIONS.createChallenge = async () => {
   if (!f.title.trim()) { toast('Donnez un titre au défi.'); return; }
   if (!await confirmDlg(`Lancer « ${esc(f.title)} » pour ${f.dur} h ? Toute l’équipe le verra immédiatement.`, { ok: 'Lancer' })) return;
   const id = newId(); const now = Date.now();
-  db.set(['challenges', id], { id, clubId: CLUB.id, title: f.title.trim(), desc: f.desc.trim(), kpiId: f.kpi, start: now, end: now + Number(f.dur) * 3600000, by: ME.id });
+  const goal = parseMontant(f.goal || ''); db.set(['challenges', id], { id, clubId: CLUB.id, title: f.title.trim(), desc: f.desc.trim(), reward: (f.reward || '').trim() || null, goal: goal > 0 ? goal : null, kpiId: f.kpi, start: now, end: now + Number(f.dur) * 3600000, by: ME.id });
   closeModal(); toast('Défi lancé');
 };
 ACTIONS.endChallenge = async el => { if (await confirmDlg('Arrêter ce défi maintenant ? Le classement actuel devient définitif.', { ok: 'Arrêter', danger: true })) db.set(['challenges', el.dataset.id, 'end'], Date.now()); };

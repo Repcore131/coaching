@@ -956,3 +956,7 @@ td.to-check { background: var(--warn-soft); }
 @media (max-width: 430px) { .topbar .countdown { display: none; } }
 .palier-act { margin-top: 8px; font-size: var(--t-12); color: inherit; opacity: .9; }
 .palier-act a { color: var(--fp); font-weight: 700; }
+.kudos { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+.lb-gap { text-align: center; color: var(--muted); padding: 2px 0; }
+.chal-reward { margin: 0 0 8px; font-size: var(--t-13); display: flex; gap: 6px; align-items: center; }
+.chal-team { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 6px; }

@@ -333,7 +333,7 @@ PAGES.profile = {
 function profPerf() {
   const acc = accomplishments(ME.id);
   const tr = trophies(ME.id);
-  const groups = [['season', 'Saisons'], ['month', 'Mois'], ['week', 'Semaines'], ['flash', 'Défis flash']];
+  const groups = [['season', 'Saisons'], ['month', 'Mois'], ['perso', 'Records et régularité'], ['week', 'Semaines'], ['flash', 'Défis flash']];
   const months = pastMonths().filter(m => m < curMonth()).reverse();
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">

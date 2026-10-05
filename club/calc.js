@@ -174,7 +174,7 @@ function statsFor(clubId, userId, r, { kpiIds = null, requiredOnly = false } = {
     const rows = [];
     for (const k of kpiList()) {
       if (kpiIds && !kpiIds.includes(k.id)) continue;
-      if (requiredOnly && !k.required) continue;
+      if (requiredOnly && !k.required && !(k.id === 'sauvetage' && (S.clubs[clubId] || {}).sauvRank !== false)) continue;
       // Vue club : la somme des membres du perimetre (= somme du classement).
       const real = userId ? sumRange(clubId, userId, k.id, r.from, r.to) : Math.round(members.reduce((s, u) => s + sumRange(clubId, u.id, k.id, r.from, r.to), 0) * 100) / 100;
       const target = targetRange(r, clubId, userId, k.id);
@@ -250,13 +250,39 @@ function allTime(userId) {
   return memo(`at|${userId}`, () => {
     const u = S.users[userId]; if (!u) return 0;
     let pts = 0;
-    for (const mk of pastMonths()) for (const c of u.clubs || []) pts += statsFor(c, userId, rangeOf('month', mk)).earned;
+    for (const mk of pastMonths()) for (const c of u.clubs || []) { const st = statsFor(c, userId, rangeOf('month', mk)); pts += st.earned + overBonus(st); }
     pts += trophies(userId).filter(t => t.kind === 'flash').length * 200;
+    pts += actionPoints(userId, '2000-01-01', today());
     return Math.round(pts);
   });
 }
 // Rythme de points par semaine (mois en cours, a defaut le mois dernier) : estimation du temps avant le niveau suivant.
 function weeklyPace(uid) { const u = S.users[uid]; if (!u) return 0; const cm = curMonth(); const d = Number(today().slice(8)); const pts = mk => (u.clubs || []).reduce((s, c) => s + statsFor(c, uid, rangeOf('month', mk)).earned, 0); const cur = pts(cm); if (d >= 7 && cur > 0) return cur / (d / 7); const pm = addMonths(cm, -1); return pts(pm) / (daysIn(pm) / 7); }
+// Bonus de dépassement (niveaux seulement) : +10 % des points du KPI par tranche de 10 % au-delà de 100 %, plafonné à 150 %.
+const overBonus = st => st.rows.reduce((s, x) => s + (x.pct > 1 && x.k.points > 0 ? Math.floor((Math.min(x.pct, 1.5) - 1) * 10 + 1e-9) * 0.1 * x.k.points : 0), 0);
+// Points d'action : relances notées via les boutons d'issue. Une fiche rapporte une fois par jour, 300 points par semaine au plus.
+const ACT_PTS = { ok: 10, rdv: 10, paid: 20, noanswer: 2, message: 2, propose: 10, accepte: 20, appele: 2, offre: 10, revenu: 20 };
+function actionEvents(userId) {
+  return memo(`actev|${userId}`, () => {
+    const ev = [];
+    Object.values(S.loyalty || {}).forEach(a => { if (a.userId === userId && ACT_PTS[a.outcome]) ev.push({ at: a.at, key: 'c' + a.clientId, pts: ACT_PTS[a.outcome], good: (OUTCOMES[a.outcome] || {}).done && !(OUTCOMES[a.outcome] || {}).lost }); });
+    Object.values(S.resiliations || {}).forEach(r => Object.values(r.log || {}).forEach(a => { if (a.by === userId && (a.out || /^(Pas de réponse|Message laissé|RDV pris|Offre proposée|Refus)/.test(a.label || ''))) ev.push({ at: a.at, key: 'r' + r.id, pts: /Pas de réponse|Message laissé/.test(a.label || '') ? 2 : 10, good: /RDV|Offre/.test(a.label || '') }); }));
+    Object.values(S.touches || {}).forEach(t => { if (t.by === userId && t.channel !== 'note' && typeof TOUCH_OUTCOMES !== 'undefined' && TOUCH_OUTCOMES[t.outcome]) ev.push({ at: t.at, key: 't' + (t.clientId || t.prospectId || t.relKey || t.id), pts: TOUCH_OUTCOMES[t.outcome].reached ? 10 : 2, good: !!TOUCH_OUTCOMES[t.outcome].reached }); });
+    return ev.filter(e => e.at).sort((a, b) => a.at - b.at);
+  });
+}
+function actionPoints(userId, from, to) {
+  return memo(`actp|${userId}|${from}|${to}`, () => {
+    const seen = new Set(), week = {}; let tot = 0;
+    for (const e of actionEvents(userId)) {
+      const d = isoOf(new Date(e.at)); if (d < from || d > to) continue;
+      const k = e.key + '|' + d; if (seen.has(k)) continue; seen.add(k);
+      const w = weekStart(d); const room = 300 - (week[w] || 0); if (room <= 0) continue;
+      const p = Math.min(room, e.pts); week[w] = (week[w] || 0) + p; tot += p;
+    }
+    return tot;
+  });
+}
 function levelOf(pts) { let l = LEVELS[0]; for (const x of LEVELS) if (pts >= x.min) l = x; const next = LEVELS[LEVELS.indexOf(l) + 1]; return { ...l, next }; }
 
 function allTrophies() {
@@ -290,6 +316,27 @@ function allTrophies() {
         const r = rangeOf('week', w);
         const rk = ranking(c.id, r).filter(x => x.score > 0);
         rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
+      }
+    }
+    // trophees de comportement et trophees personnels
+    for (const c of Object.values(S.clubs)) {
+      const team = clubMembers(c.id, { all: true }).filter(u => u.status !== 'pending');
+      let w = weekStart(addDays(t, -7));
+      for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
+        const we = addDays(w, 6);
+        const sv = team.map(u => ({ u, n: sumRange(c.id, u.id, 'sauvetage', w, we) })).sort((a, b) => b.n - a.n)[0];
+        if (sv && sv.n >= 1) out.push({ userId: sv.u.id, kind: 'week', icon: 'lifebuoy', label: `Sauveur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+        const rl = team.map(u => ({ u, n: actionEvents(u.id).filter(e => e.good && isoOf(new Date(e.at)) >= w && isoOf(new Date(e.at)) <= we).length })).sort((a, b) => b.n - a.n)[0];
+        if (rl && rl.n >= 3) out.push({ userId: rl.u.id, kind: 'week', icon: 'phone', label: `Relanceur de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id });
+      }
+      const months = idx().months.filter(m => m < cm).sort();
+      const best = {}; let prevScores = null;
+      for (const mk of months) {
+        const sc = {}; team.forEach(u => { if ((u.clubs || []).includes(c.id)) sc[u.id] = statsFor(c.id, u.id, rangeOf('month', mk), { requiredOnly: true }).score; });
+        Object.entries(sc).forEach(([uid, s]) => { if (s == null) return; if (best[uid] != null && s > best[uid] + 1e-9) out.push({ userId: uid, kind: 'perso', icon: 'flag', label: `Record personnel ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); best[uid] = Math.max(best[uid] ?? -1, s); });
+        if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus belle progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
+        prevScores = sc;
+        team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = new Set(Object.values(S.entries).filter(e => e.userId === u.id && e.source === 'manual' && e.date.slice(0, 7) === mk).map(e => e.date)); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }
     // defis flash termines
@@ -326,6 +373,8 @@ function challengeRanking(ch) {
   const hours = (ch.end - ch.start) / 3600000;
   const list = clubMembers(ch.clubId).map(u => {
     let value = 0;
+    // Défi relances : points d'action gagnés pendant le défi (même plafond, même règle d'une fiche par jour).
+    if (ch.kpiId === '_actions') { const seen = new Set(); actionEvents(u.id).forEach(e => { if (e.at < ch.start || e.at > ch.end) return; const k = e.key + '|' + isoOf(new Date(e.at)); if (!seen.has(k)) { seen.add(k); value += e.pts; } }); return { u, value, norm: value / 100 }; }
     for (const e of Object.values(S.entries)) {
       if (e.userId !== u.id || e.kpiId !== ch.kpiId || e.clubId !== ch.clubId) continue;
       if (!entryCounts(e) || e.adjust || replacedByImport(e)) continue; // une correction de manager ne compte pas dans un defi
@@ -333,8 +382,11 @@ function challengeRanking(ch) {
       if (ts >= ch.start && ts <= ch.end) value += Number(e.value) || 0;
     }
     const mk = from.slice(0, 7);
-    const share = monthTarget(mk, u.id, ch.kpiId) / (daysIn(mk) * 24) * hours;
-    return { u, value, norm: share > 0 ? value / share : (value > 0 ? 1 : 0) };
+    // Sans objectif personnel sur ce KPI : la moyenne des objectifs de l'équipe sert de référence.
+    let tgt = monthTarget(mk, u.id, ch.kpiId);
+    if (!(tgt > 0)) { const L = clubMembers(ch.clubId).map(o => monthTarget(mk, o.id, ch.kpiId)).filter(x => x > 0); tgt = L.length ? L.reduce((s, x) => s + x, 0) / L.length : 0; }
+    const share = tgt / (daysIn(mk) * 24) * hours;
+    return { u, value, norm: share > 0 ? value / share : 0 };
   });
   list.sort((a, b) => b.norm - a.norm || b.value - a.value || fullName(a.u).localeCompare(fullName(b.u)));
   return list;

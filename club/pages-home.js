@@ -196,6 +196,7 @@ PAGES.home = {
       ${weekDigestCard()}
       ${challengeBanner()}
       ${manager ? saisonBanner() : ''}
+      ${wrapBanner()}
       ${manager ? '' : myPlanCard()}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
