@@ -74244,6 +74244,10 @@ function _bilDataSansPhotos(){
 // ferait reprendre le bilan quelques caractères en arrière. Le corps est
 // INCHANGE, y compris son try/catch et l’alerte unique de quota.
 function _bilEcrireDraft(){
+    // EN MODIFICATION D'UN BILAN DÉJÀ ENVOYÉ, AUCUN BROUILLON : la clef est
+    // unique, et l'écrire ici écraserait le bilan en cours de saisie, ou ferait
+    // proposer « reprendre mon bilan » sur les réponses d'un bilan ancien.
+    if(_bilEdition) return;
     try{
       // L ADRESSE DE CELUI QUI ÉCRIT. La clé est commune à l’appareil, le
       // contenu ne l’est pas : poids, mensurations, cycle et sommeil sont ceux
@@ -74298,6 +74302,7 @@ function _quitterEcranBilan(garder){
   // puis sortir aussitôt reremplissait `bilData` et reverrouillait la bascule.
   _bilGen++;
   bilData={}; bilStep=0;
+  _bilEdition=null;
 }
 // Retourne le brouillon s'il est exploitable, null sinon. Ne supprime rien :
 // c'est à l'appelant de décider, selon qu'il consulte ou qu'il repart à zéro.
@@ -74550,6 +74555,7 @@ function _renderBilanChoiceUI(){
     btn.style.color=active?'var(--text)':'var(--sub)';
     btn.style.border=active?'1px solid var(--red)':'1px solid var(--border)';
   });
+  _majBoutonHistoriqueBilans();
   _updateBilanCountdown();
   if(window._bilanCdInterval) clearInterval(window._bilanCdInterval);
   window._bilanCdInterval=setInterval(()=>{
@@ -74603,6 +74609,126 @@ function _updateBilanCountdown(){
 // Etapes REELLEMENT affichables. Une etape conditionnelle qui rend une
 // chaine vide — le bloc Traitement, hors semestre — ne doit ni occuper un
 // numero ni imposer un « Suivant » sur du vide.
+// ══ L'HISTORIQUE DES BILANS, ET LEUR MODIFICATION (Kevin, 05/10/2026) ════
+// « La personne n'a pas eu le temps de prendre les photos, ou s'est trompée
+// dans une mensuration » : jusqu'ici un bilan envoyé était figé. Un bouton
+// « Historique des bilans » sur l'écran Bilan liste tout ce qu'elle a envoyé ;
+// chaque ligne ouvre le RÉCAP (l'onglet Notes, déjà écrit) ou la MODIFICATION.
+//
+// MODIFIER ROUVRE LE MÊME QUESTIONNAIRE, PRÉ-REMPLI, et l'enregistrement
+// RÉÉCRIT LE BILAN EXISTANT : même date, même numéro, même réponse du coach.
+// Rien n'est créé, donc aucune courbe ne gagne un point, aucune série, aucun
+// badge ne bouge ; le coach lit les nouvelles valeurs à la synchronisation
+// suivante, sur le même bilan, marqué « modifié le … ».
+let _bilEdition=null;          // {id,nom} pendant une modification, sinon null
+const BIL_PREFIXES_REPONSES=/^(bil|deb|coach)-/;
+// PURE. Les bilans, du plus récent au plus ancien, avec leur nom d'usage.
+function historiqueBilans(u){
+  const l=((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  let rang=0;
+  return l.map(b=>{
+    const depart=b.type==='depart';
+    if(!depart) rang++;
+    return {id:_idBilan(b),b,depart,nom:depart?'Bilan d’inscription':'Bilan '+rang,
+      date:new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}),
+      poids:getBW(b)||null,
+      photos:['face','back','side'].filter(v=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } }).length};
+  }).reverse();
+}
+function _majBoutonHistoriqueBilans(){
+  const cd=document.getElementById('bilan-countdown'); if(!cd) return;
+  let z=document.getElementById('bilan-historique');
+  const n=historiqueBilans(currentUser).length;
+  if(!n){ if(z) z.remove(); return; }
+  if(!z){ z=document.createElement('button'); z.type='button'; z.id='bilan-historique'; z.className='hb-ouvrir';
+    z.onclick=()=>ouvrirHistoriqueBilans(); cd.insertAdjacentElement('afterend',z); }
+  z.innerHTML='<span>Historique des bilans</span><b>'+n+'</b>';
+}
+function ouvrirHistoriqueBilans(){
+  const l=historiqueBilans(currentUser);
+  const lignes=l.map(x=>`<div class="hb-l">
+      <div class="hb-l-t"><b>${escapeHtml(x.nom)}</b><span>${escapeHtml(x.date)}${x.b.modifieLe?' · modifié':''}</span>
+        <i>${x.poids?escapeHtml(String(x.poids).replace('.',','))+' kg · ':''}${x.photos?x.photos+' photo'+(x.photos>1?'s':''):'sans photo'}</i></div>
+      <div class="hb-l-b">
+        <button type="button" class="hb-b" onclick="closeModal();openBilanNotes('${escapeHtml(x.id)}')">Récap</button>
+        <button type="button" class="hb-b hb-b-r" onclick="modifierBilan('${escapeHtml(x.id)}')">Modifier</button>
+      </div></div>`).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+    <div class="hb" onclick="event.stopPropagation()" role="dialog" aria-label="Historique des bilans">
+      <h2>Historique des bilans</h2>
+      <p class="sub">Relis un bilan, ou corrige-le : une mesure fausse, des photos que tu n’avais pas eu le temps de prendre. Ton coach voit la correction sur le même bilan.</p>
+      <div class="hb-liste">${lignes||'<div class="hb-vide">Aucun bilan envoyé pour l’instant.</div>'}</div>
+      <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+    </div></div>`;
+  const old=document.getElementById('modal-overlay'); if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+// Rouvre le questionnaire sur un bilan déjà envoyé.
+function modifierBilan(id){
+  const x=historiqueBilans(currentUser).find(h=>h.id===id);
+  if(!x){ toast('Ce bilan est introuvable','var(--orange)'); return false; }
+  try{ closeModal(); }catch(e){}
+  clearTimeout(_bilDraftTimer); _bilDraftTimer=null;
+  _bilGen++;
+  _bilEdition={id:x.id,nom:x.nom};
+  bilType=x.depart?'depart':'coaching'; bilStep=0; _bilPhotoLoading=0; _bilReprises=null;
+  bilData={};
+  for(const k of Object.keys(x.b)){
+    if(!BIL_PREFIXES_REPONSES.test(k)) continue;
+    const v=x.b[k];
+    bilData[k]=Array.isArray(v)?v.slice():v;
+  }
+  renderBilStep(); go('s-bilan');
+  return true;
+}
+// PURE. Applique les réponses `d` au bilan `b`, sans toucher à ce qui n'est pas
+// une réponse (date, numéro, réponse du coach). Rend la liste des clefs changées.
+function appliquerModifBilan(b,d,maintenant){
+  const change=[];
+  const pareil=(x,y)=>JSON.stringify(x===undefined?null:x)===JSON.stringify(y===undefined?null:y);
+  for(const k of Object.keys(b)){
+    if(!BIL_PREFIXES_REPONSES.test(k)||(k in d)) continue;
+    delete b[k]; change.push(k);
+  }
+  for(const k of Object.keys(d)){
+    if(!BIL_PREFIXES_REPONSES.test(k)||/^deb-scoff-/.test(k)) continue;
+    if(pareil(b[k],d[k])) continue;
+    b[k]=d[k]; change.push(k);
+  }
+  // Une mensuration corrigée n'est plus un report du bilan d'avant.
+  if(Array.isArray(b.reprises)){
+    b.reprises=b.reprises.filter(k=>change.indexOf(k)<0);
+    if(!b.reprises.length) delete b.reprises;
+  }
+  if(change.length) b.modifieLe=maintenant||Date.now();
+  return change;
+}
+function _bilEnregistrerModif(){
+  const ed=_bilEdition;
+  const x=ed&&historiqueBilans(currentUser).find(h=>h.id===ed.id);
+  if(!x){ toast('Ce bilan est introuvable : rien n’a été modifié','var(--orange)'); _quitterEcranBilan(false); openBilanChoice(); return false; }
+  const change=appliquerModifBilan(x.b,bilData);
+  // Le profil suit le bilan LE PLUS RÉCENT, comme à l'envoi : corriger un bilan
+  // ancien ne doit pas ramener le poids du profil six semaines en arrière.
+  const dernier=historiqueBilans(currentUser)[0];
+  if(dernier&&dernier.id===x.id){
+    const w=x.b['bil-weight']||x.b['deb-weight']; if(w) currentUser.weight=w;
+    const h=parseFloat(x.b['deb-height']||x.b['bil-height']||0); if(h>100&&h<250) currentUser._evol_height=h;
+  }
+  try{ consommerDemandesMesure(x.b,currentUser); }catch(e){}
+  Object.keys(x.b).filter(k=>k.includes('photo')).forEach(k=>{ try{ localStorage.removeItem('rc_pendingphoto_'+k); }catch(e){} });
+  const enregistre=change.length?saveUser():true;
+  if(change.length) (async()=>{ try{
+    const r=await photosBilanMigrer(currentUser,{max:9});
+    if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
+  }catch(e){} })();
+  if(!change.length) toast('Aucun changement : '+x.nom+' est resté tel quel');
+  else if(enregistre) toast(x.nom+' mis à jour : ton coach verra la correction');
+  else toast('Stockage plein : la correction est envoyée au cloud, mais absente de cet appareil','var(--orange)');
+  _quitterEcranBilan(false);
+  openBilanChoice(); ouvrirHistoriqueBilans();
+  return true;
+}
 function _etapesUtiles(steps){
   return (steps||[]).filter(f=>{
     try{ return String(f()||'').trim().length>0; }
@@ -74650,6 +74776,7 @@ async function openBilan(type,forcerReprise){
       +' réponse'+(n>1?'s':'')+'.\n\nOuvrir un '+_bilNomType(type)+' l’effacera.\n\nContinuer ?',null,'Confirmer')) return false;
   }
   const brouillon=_bilLoadDraft(type);
+  _bilEdition=null;
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
   _bilReprises=null;
   if(brouillon&&_bilDraftRempli(brouillon)>0
@@ -74778,6 +74905,7 @@ function bilBack(){
   else{
     // AVANT la navigation : loadClientHome dessine la carte « Bilan commencé »
     // à partir du BROUILLON, et le débounce ne l’a peut-être pas encore écrit.
+    if(_bilEdition){ _quitterEcranBilan(false); openBilanChoice(); ouvrirHistoriqueBilans(); return; }
     _quitterEcranBilan(true);
     // R34 — comme avant R19 : le bilan coaching revient a l'ecran de choix,
     // par lequel on est toujours passe ; le questionnaire de depart, a
@@ -74839,14 +74967,14 @@ async function bilNext(){
 function renderBilStep(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   const total=steps.length;
-  document.getElementById('bil-title').textContent=bilType==='depart'?'Questionnaire de début':'Bilan Coaching';
+  document.getElementById('bil-title').textContent=_bilEdition?('Modifier · '+_bilEdition.nom):(bilType==='depart'?'Questionnaire de début':'Bilan Coaching');
   // LE NUMERO D ETAPE EST LA VALEUR, le total n est qu un reperage. Ils sont
   // ecrits par la meme phrase, mais seul le premier est peint en blanc.
   // Aucune des deux valeurs ne vient de l exterieur : bilStep est un entier
   // interne, total sort de _etapesUtiles — rien a echapper ici.
   document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:#8a8a8a;font-weight:700">/'+total+'</span>';
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
-  document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
+  document.getElementById('bil-next-btn').textContent=bilStep===total-1?(_bilEdition?'Enregistrer les modifications':'Valider '):'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
   // Le cadre de disponibilite se lit AVANT d ecrire, pas apres l envoi.
   const _bilZone=document.getElementById('bil-content');
@@ -74857,7 +74985,7 @@ function renderBilStep(){
   // interne empeche le rejeu si l'etape est re-rendue sans etre quittee.
   try{ requestAnimationFrame(()=>arcTracerSchema(_bilZone)); }catch(e){}
   const skipBtn=document.getElementById('bil-skip-depart');
-  if(skipBtn) skipBtn.style.display=(bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
+  if(skipBtn) skipBtn.style.display=(!_bilEdition&&bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
   _bilBrancherAutoSave();
   // Enregistre aussi le numéro d'étape : sans ça, une reprise ramènerait à la
   // dernière étape où l'athlète a tapé quelque chose, pas où il en était.
@@ -75588,7 +75716,7 @@ function loadBilPhoto(input,key){
     bilData[key]=data;
     if(ctl) bilData[key+'-ctl']=ctl.etat+'|'+ctl.codes.join(','); else delete bilData[key+'-ctl'];
     if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
-    _setPhotoLS('rc_pendingphoto_'+key,data);
+    if(!_bilEdition) _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   },()=>{
@@ -78128,8 +78256,9 @@ function renderReponsesBilans(bilans,client){
         <div class="bn-tete${depart?' bn-tete-dep':''}">
           <div class="bn-tete-g">
             <div class="bn-titre">${depart?'Bilan <em>d’inscription</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
-            <div class="bn-date">${d}</div>
+            <div class="bn-date">${d}${b.modifieLe?' · modifié le '+new Date(b.modifieLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):''}</div>
           </div>
+          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
         ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
@@ -78319,7 +78448,8 @@ const DEB_STEPS=[
     // booleen qu elles produisent l est.
     bLbl('Quelques questions de sécurité')+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-transform:none;letter-spacing:normal;font-weight:400">Elles servent à savoir si un objectif de poids est prudent pour toi en ce moment. Tes réponses ne sont pas enregistrées.</div>`+
-    SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join('')+
+    (_bilEdition?'<div class="hb-note">Les questions de sécurité ne sont pas reposées : leurs réponses ne sont pas conservées.</div>'
+      :SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join(''))+
     bLbl('Quel type de suivi nutritionnel préfères-tu ?')+
     // R35 — valeurs inchangees : les libelles viennent de BIL_CHOIX_LIBELLES.
     `<div>${bC('deb-nutrition-type',['Diet strict : Plan alimentaire détaillé avec quantités précises','Diet flexible : Conseils personnalisés + calcul via application'])}</div>`+
@@ -78355,6 +78485,7 @@ function saveBilanFinal(){
   // seuil : on ecrit la trace quoi qu il arrive, absence du coach comprise.
   // Elle remonte par la synchronisation, et l appareil du coach la relevera.
   try{ _dispoTracerSante('bilan'); }catch(e){}
+  if(_bilEdition) return _bilEnregistrerModif();
   // ⚠ L'ACCORD DE SANTE AVANT TOUT LE RESTE (26/09/2026). La porte etait posee
   //   plus bas, juste avant l'ecriture du bilan — mais APRES l'effacement du
   //   brouillon et apres les ecritures dans le dossier (questionnaire marque

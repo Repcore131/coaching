@@ -40797,6 +40797,55 @@ async function testExercices(){
         if((bq.parSlug.sp.tags||[]).indexOf('posing')<0) return _echec('SIDE TRICEPS n’est pas marquée comme pose');
         // Sans muscle ni texte, rien ne change : pas de score.
         return scoreBanque(src[0],'',[],null)===0?true:_echec('un score sans requête ni muscle');})());
+      ok('Historique des bilans : la liste, et une modification qui réécrit le bilan sans en créer un',(()=>{
+        // 05/10/2026 (Kevin) : relire un bilan envoyé, le corriger, et que ça se mette à jour.
+        const J=864e5, t0=Date.now()-40*J;
+        const u={id:'HB',email:'hb@t.fr',role:'athlete',bilans:[
+          {type:'depart',date:t0,num:1,'deb-weight':'80','deb-height':'180'},
+          {type:'coaching',date:t0+14*J,num:1,'bil-weight':'79','bil-waist':'82','bil-photo-face':{url:'https://x/y.webp'},reprises:['bil-waist'],reponseCoach:'Bien.'},
+          {type:'coaching',date:t0+28*J,num:2,'bil-weight':'78','bil-waist':'81'}]};
+        const h=historiqueBilans(u);
+        if(h.map(x=>x.nom).join('|')!=='Bilan 2|Bilan 1|Bilan d’inscription') return _echec('ordre et noms : '+h.map(x=>x.nom).join('|'));
+        if(h[1].photos!==1||h[0].photos!==0) return _echec('photos comptées : '+h.map(x=>x.photos).join(','));
+        // La modification, pure : une valeur corrigée, une retirée, une ajoutée.
+        const b=u.bilans[1];
+        const ch=appliquerModifBilan(b,{'bil-weight':'79','bil-waist':'84','bil-photo-face':b['bil-photo-face'],'bil-hips':'96','deb-scoff-a':'Oui'},12345);
+        if(ch.slice().sort().join()!=='bil-hips,bil-waist') return _echec('clefs changées : '+ch.join());
+        if(b['bil-waist']!=='84'||b['bil-hips']!=='96'||b['deb-scoff-a']!==undefined) return _echec('valeurs : '+JSON.stringify(b));
+        if(b.date!==t0+14*J||b.num!==1||b.reponseCoach!=='Bien.'||b.type!=='coaching') return _echec('la date, le numéro ou la réponse du coach ont bougé');
+        if(b.reprises!==undefined) return _echec('la mensuration corrigée est encore marquée comme reportée');
+        if(b.modifieLe!==12345) return _echec('modifieLe : '+b.modifieLe);
+        if(appliquerModifBilan(u.bilans[2],{'bil-weight':'78','bil-waist':'81'},1).length||u.bilans[2].modifieLe!==undefined) return _echec('un bilan inchangé est marqué modifié');
+        if(appliquerModifBilan(u.bilans[2],{'bil-weight':'78'},2).join()!=='bil-waist'||('bil-waist' in u.bilans[2])) return _echec('une réponse effacée reste dans le bilan');
+        // Le parcours : ouvrir la modification, enregistrer, rien de créé, aucun brouillon écrit.
+        const sv={u:currentUser,ty:bilType,st:bilStep,da:bilData,ed:_bilEdition,br:localStorage.getItem(BIL_DRAFT_KEY),save:saveUser,go:go};
+        const ecrans=[...document.querySelectorAll('.screen.active')];
+        let sauves=0;
+        try{
+          currentUser=u; saveUser=()=>{ sauves++; return true; }; go=()=>{};
+          localStorage.removeItem(BIL_DRAFT_KEY);
+          if(!modifierBilan(_idBilan(u.bilans[2]))) return _echec('la modification ne s’ouvre pas');
+          if(!_bilEdition||bilType!=='coaching'||bilData['bil-weight']!=='78') return _echec('le questionnaire n’est pas pré-rempli');
+          if(!/^Modifier · Bilan 2$/.test(document.getElementById('bil-title').textContent)) return _echec('titre : '+document.getElementById('bil-title').textContent);
+          _bilEcrireDraft();
+          if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('un brouillon a été écrit pendant la modification');
+          bilData['bil-weight']='77.5';
+          saveBilanFinal();
+          if(u.bilans.length!==3) return _echec('un bilan a été créé : '+u.bilans.length);
+          if(u.bilans[2]['bil-weight']!=='77.5'||u.weight!=='77.5'||!sauves) return _echec('la correction n’est pas enregistrée');
+          if(_bilEdition) return _echec('la modification n’est pas refermée');
+          if(!document.querySelector('#modal-overlay .hb')) return _echec('retour à l’historique attendu');
+          // Corriger un bilan ANCIEN ne ramène pas le poids du profil en arrière.
+          modifierBilan(_idBilan(u.bilans[1])); bilData['bil-weight']='90'; saveBilanFinal();
+          if(u.weight!=='77.5') return _echec('le poids du profil a suivi un bilan ancien : '+u.weight);
+          return true;
+        } finally {
+          try{ closeModal(); }catch(e){}
+          const o=document.getElementById('modal-overlay'); if(o) o.remove();
+          currentUser=sv.u; saveUser=sv.save; go=sv.go; bilType=sv.ty; bilStep=sv.st; bilData=sv.da; _bilEdition=sv.ed;
+          if(sv.br==null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,sv.br);
+          document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active')); ecrans.forEach(e=>e.classList.add('active'));
+        }})());
       ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
         // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
         // choisit dans une liste, l'athlete qui veut une technique la tape
