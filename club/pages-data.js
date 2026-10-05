@@ -70,7 +70,7 @@ function readImport(file) {
   const fr = new FileReader();
   fr.onload = () => {
     let text = fr.result;
-    if (text.includes('�')) { const fr2 = new FileReader(); fr2.onload = () => startWizard(file.name, fr2.result); fr2.readAsText(file, 'windows-1252'); return; }
+    if (text.includes('\uFFFD')) { const fr2 = new FileReader(); fr2.onload = () => startWizard(file.name, fr2.result); fr2.readAsText(file, 'windows-1252'); return; }
     startWizard(file.name, text);
   };
   fr.readAsText(file, 'utf-8');
