@@ -11478,6 +11478,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pc-bulle{position:absolute;right:-10px;transform:translateY(calc(-100% - 20px));display:flex;flex-direction:column;align-items:center;gap:2px;
   padding:8px 14px;border-radius:var(--r-3);background:var(--surface-0);border:1.5px solid #1f9d55;box-shadow:var(--e3);white-space:nowrap;pointer-events:none}
 /* L'objectif de poids (05/10/2026) : une ligne en tirets à son poids, son libellé à gauche. */
+.cap-rel{display:flex;flex-direction:column;gap:8px;margin-top:12px;max-height:50vh;overflow-y:auto;white-space:normal}
+.cap-rel-l{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px}
+.cap-rel-j{flex:0 0 96px;font-weight:700;color:var(--text);text-transform:capitalize}
+.cap-rel-c{flex:1 1 90px;min-height:44px;max-width:140px}
+.cap-rel-a,.cap-rel-g{font-size:var(--fs-xs);color:var(--text-dim)}
 .pc-obj{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--green);pointer-events:none}
 .pc-obj span{position:absolute;left:4px;bottom:2px;font-size:var(--fs-2xs);font-weight:700;color:var(--green)}
 .pc-bul-lib{font-style:normal;font-size:var(--fs-2xs);font-weight:600;color:var(--text-faint);text-transform:lowercase}

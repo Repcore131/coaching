@@ -122231,15 +122231,27 @@ function _capMoisVersNumero(mot){
   }
   return 0;
 }
-function _capEntiers(ligne){
-  // Les pourcentages partent AVANT la recherche : sinon « 5 août - 25% 3 003 »
-  // rendrait 25, qui est un pourcentage d'objectif, pas un nombre de pas.
-  const propre=String(ligne).replace(/\d+\s*%/g,' ');
-  // \s couvre déjà l'espace fine insécable et l'insécable, les deux séparateurs
-  // de milliers rencontrés sur les captures.
-  return [...propre.matchAll(/\d[\d\s]*\d|\d/g)]
-    .map(m=>parseInt(m[0].replace(/\s/g,''),10))
-    .filter(n=>Number.isFinite(n));
+// LES PAS D'UNE LIGNE (09/2026). Une vue « jour » d'application de montre
+// aligne plusieurs entiers : « 8 432 pas 6 120 m 320 kcal ». Le plus grand
+// n'est pas toujours le bon — la distance en mètres le dépasse vite. On
+// écarte donc tout entier suivi d'une unité (m, km, kcal, cal, min, bpm, %),
+// on préfère celui que suit « pas » ou « steps », et le maximum ne sert
+// qu'en dernier recours, entre des entiers nus.
+const _CAP_UNITES_HORS=['m','km','kcal','cal','min','bpm','%'];
+const _CAP_UNITES_PAS=['pas','steps'];
+function _capPasLigne(ligne){
+  const re=/(\d[\d\s]*\d|\d)\s*([A-Za-zÀ-ÿ%]*)/g;
+  const nus=[], pas=[];
+  let m;
+  while((m=re.exec(String(ligne)))){
+    const n=parseInt(m[1].replace(/\s/g,''),10);
+    if(!Number.isFinite(n)||n<100||n>99999) continue;
+    const u=_capSansAccent(m[2]).replace(/\.$/,'');
+    if(_CAP_UNITES_PAS.includes(u)) pas.push(n);
+    else if(!_CAP_UNITES_HORS.includes(u)) nus.push(n);
+  }
+  if(pas.length) return pas[0];
+  return nus.length?Math.max(...nus):null;
 }
 function _capDuree(ligne){
   const m=/(\d{1,2})\s*h\s*(\d{1,2})\s*m/i.exec(String(ligne));
@@ -122281,8 +122293,8 @@ function _analyserCaptureStats(texte,aujourdhui){
           const d2=_capDuree(l);
           if(d2!=null){ valeur=d2; break; }
         }else{
-          const cands=_capEntiers(l).filter(n=>n>=100&&n<=99999);
-          if(cands.length){ valeur=Math.max(...cands); break; }
+          const n=_capPasLigne(l);
+          if(n!=null){ valeur=n; break; }
         }
       }
       if(valeur==null){ ignorees++; continue; }
@@ -122292,30 +122304,105 @@ function _analyserCaptureStats(texte,aujourdhui){
   const jours=Object.keys(vus).sort().map(k=>({date:k,valeur:vus[k]}));
   return {type:jours.length?type:null, jours, ignorees};
 }
-// Écrit sans écran de validation — décision de Kevin, actée dans la spec. La
-// sûreté ne vient donc pas d'une relecture par l'athlète mais du REJET : les
-// valeurs impossibles sont refusées par _recordSteps / _recordSleep eux-mêmes,
-// et le nombre de journées remplacées ressort dans le toast pour qu'un
-// écrasement ne soit jamais muet.
-function _appliquerCaptureStats(analyse){
-  const res={ecrits:0,remplaces:0,du:null,au:null};
+// RÉVISION 09/2026 : la capture ne passe plus avant la synchronisation.
+// Une capture est la source la plus faible des trois — elle est lue par un
+// moteur de reconnaissance sur une image — et elle écrasait sans un mot les
+// jours reçus de Health Connect ou du Raccourci, ou une saisie que l'athlète
+// venait de corriger. La priorité est désormais celle de la synchro :
+// SYNCHRO > MANUEL RÉCENT > CAPTURE.
+//   · une entrée 'sync' n'est JAMAIS remplacée ;
+//   · une entrée 'manual' de moins de 24 h non plus — l'athlète vient de la
+//     poser, il sait mieux que l'image ;
+//   · le reste se remplace, et se compte.
+// Les jours conservés sont comptés dans `gardes` (dont `gardesSync`) et dits
+// dans le toast. La relecture (importerCaptureStats) précède toute écriture.
+const CAP_MANUEL_PROTEGE_MS=24*3600*1000;
+// PURE. Ce que la capture ferait de chaque jour, sans rien écrire :
+// {date, valeur, actuelle (la valeur au journal ou null), garde ('', 'sync'
+// ou 'manuel'), futur}.
+function _planCaptureStats(analyse,dossier,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const u=dossier||{};
+  const aujourd=localISODate(new Date(t));
+  const som=analyse&&analyse.type==='sommeil';
+  const log=som?(u.sleepLog||[]):(u.stepsLog||[]);
+  return ((analyse&&analyse.jours)||[]).map(j=>{
+    const e=log.find(x=>x&&x.date===j.date)||null;
+    const actuelle=e?(som?Number(e.duration):Number(e.count)):null;
+    let garde='';
+    if(e&&e.dataStatus==='sync') garde='sync';
+    else if(e&&e.dataStatus==='manual'&&Number(e.updatedAt)>0&&t-Number(e.updatedAt)<CAP_MANUEL_PROTEGE_MS) garde='manuel';
+    return {date:j.date,valeur:j.valeur,actuelle:(actuelle!=null&&isFinite(actuelle))?actuelle:null,
+      garde,futur:j.date>aujourd};
+  });
+}
+// Les valeurs impossibles restent refusées par _recordSteps / _recordSleep
+// eux-mêmes, et les journées remplacées ressortent dans le toast.
+function _appliquerCaptureStats(analyse,maintenant){
+  const res={ecrits:0,remplaces:0,gardes:0,gardesSync:0,du:null,au:null};
   if(!analyse||!analyse.jours||!analyse.jours.length) return res;
-  const aujourd=localISODate(new Date());
-  for(const j of analyse.jours){
-    if(j.date>aujourd) continue; // une capture ne renseigne jamais le futur
-    const avant=analyse.type==='sommeil'
-      ? (currentUser.sleepLog||[]).some(e=>e.date===j.date)
-      : (currentUser.stepsLog||[]).some(e=>e.date===j.date);
+  for(const j of _planCaptureStats(analyse,currentUser,maintenant)){
+    if(j.futur) continue; // une capture ne renseigne jamais le futur
+    if(j.garde){ res.gardes++; if(j.garde==='sync') res.gardesSync++; continue; }
     const pose=analyse.type==='sommeil'
       ? _recordSleep(j.date,{duration:j.valeur},{dataStatus:'capture'})
       : _recordSteps(j.date,j.valeur,{dataStatus:'capture'});
     if(!pose) continue;
     res.ecrits++;
-    if(avant) res.remplaces++;
+    if(j.actuelle!=null) res.remplaces++;
     if(!res.du||j.date<res.du) res.du=j.date;
     if(!res.au||j.date>res.au) res.au=j.date;
   }
   return res;
+}
+// PURE. La phrase des jours conservés : « 2 jours déjà synchronisés
+// conservés », « 1 saisie récente conservée », ou les deux.
+function _phraseGardesCapture(r){
+  const s=Number(r&&r.gardesSync)||0, m=(Number(r&&r.gardes)||0)-s;
+  const l=[];
+  if(s) l.push(s+' jour'+(s>1?'s':'')+' déjà synchronisé'+(s>1?'s':'')+' conservé'+(s>1?'s':''));
+  if(m) l.push(m+' saisie'+(m>1?'s':'')+' récente'+(m>1?'s':'')+' conservée'+(m>1?'s':''));
+  return l.join(', ');
+}
+// LA RELECTURE : une ligne par jour, un champ pré-rempli, la valeur actuelle
+// grisée, les jours protégés en lecture seule. Le panneau est celui de
+// rcConfirm (même calque, même fermeture) : on y glisse le formulaire après
+// l'ouverture. Rend les jours à écrire, ou null si l'athlète annule.
+function _htmlRelectureCapture(plan,type){
+  const som=type==='sommeil';
+  const fmtJ=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const fmtV=v=>som?(String(v).replace('.',',')+' h'):(Number(v).toLocaleString('fr-FR')+' pas');
+  return '<div class="cap-rel">'+plan.filter(l=>!l.futur).map(l=>
+    '<div class="cap-rel-l" data-date="'+escapeHtml(l.date)+'">'
+      +'<span class="cap-rel-j">'+escapeHtml(fmtJ(l.date))+'</span>'
+      +(l.garde
+        ?'<span class="cap-rel-g">'+escapeHtml(fmtV(l.actuelle))+' · '+(l.garde==='sync'?'synchronisé, conservé':'saisi il y a moins de 24 h, conservé')+'</span>'
+        :'<input type="number" inputmode="decimal" class="cap-rel-c" aria-label="'+escapeHtml((som?'Durée de la nuit du ':'Pas du ')+fmtJ(l.date))+'" '
+          +'step="'+(som?'0.1':'1')+'" min="0" max="'+(som?'18':'99999')+'" value="'+escapeHtml(String(l.valeur))+'">'
+          +(l.actuelle!=null?'<span class="cap-rel-a">actuel : '+escapeHtml(fmtV(l.actuelle))+'</span>':''))
+    +'</div>').join('')+'</div>';
+}
+async function _relireCaptureStats(analyse){
+  const plan=_planCaptureStats(analyse,currentUser);
+  const titre=analyse.type==='sommeil'?'Relis tes nuits':'Relis tes journées';
+  const p=rcConfirm(titre,'Corrige un chiffre mal lu avant d’enregistrer.','Enregistrer','Annuler');
+  const x=document.getElementById('rc-confirm-texte');
+  if(x) x.insertAdjacentHTML('beforeend',_htmlRelectureCapture(plan,analyse.type));
+  const ok=await p;
+  if(!ok) return null;
+  const jours=[];
+  for(const l of plan){
+    if(l.futur) continue;
+    let v=l.valeur;
+    const c=x&&x.querySelector('.cap-rel-l[data-date="'+l.date+'"] .cap-rel-c');
+    if(c){
+      const lu=parseFloat(String(c.value).replace(',','.'));
+      if(!isFinite(lu)) continue;       // un champ vidé n'écrit rien
+      v=analyse.type==='sommeil'?Math.round(lu*10)/10:Math.round(lu);
+    }
+    jours.push({date:l.date,valeur:v});
+  }
+  return {type:analyse.type,jours,ignorees:analyse.ignorees};
 }
 // Cadre commun aux deux pages. Le MÊME bloc accepte les deux types de capture :
 // la nature est déduite du contenu, pas de la page d'où il est ouvert. Un élève
@@ -122433,16 +122520,21 @@ async function importerCaptureStats(input){
     if(!analyse.jours.length){
       return toast('Je n\'ai rien pu lire sur cette image. Essaie la vue 7 jours de ton application de montre.','var(--orange)');
     }
-    const r=_appliquerCaptureStats(analyse);
-    if(!r.ecrits) return toast('Rien à enregistrer sur cette capture.','var(--orange)');
+    // LA RELECTURE PRÉCÈDE TOUTE ÉCRITURE (révision 09/2026). Annuler ne
+    // laisse rien au journal.
+    const relue=await _relireCaptureStats(analyse);
+    if(!relue) return toast('Import annulé : rien n’a été enregistré.');
+    const r=_appliquerCaptureStats(relue);
+    const gardes=_phraseGardesCapture(r);
+    if(!r.ecrits) return toast(gardes?('Rien à remplacer : '+gardes+'.'):'Rien à enregistrer sur cette capture.','var(--orange)');
     const quoi=analyse.type==='sommeil'?'nuit':'journée';
     const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
     const plage=r.du===r.au?fmt(r.du):fmt(r.du)+' → '+fmt(r.au);
-    // L'écrasement n'est jamais muet : sans écran de validation, ce compte est
-    // la seule chose qui dit à l'athlète qu'une saisie a été remplacée.
+    // L'écrasement n'est jamais muet : ce compte dit à l'athlète qu'une saisie
+    // a été remplacée, et les jours conservés se disent aussi.
     const remplacees=r.remplaces?', dont '+r.remplaces+' remplacée'+(r.remplaces>1?'s':''):'';
     toastEcriture(saveUser(),
-      r.ecrits+' '+quoi+(r.ecrits>1?'s':'')+' ('+plage+')'+remplacees,'tes stats sont');
+      r.ecrits+' '+quoi+(r.ecrits>1?'s':'')+' ('+plage+')'+remplacees+(gardes?' ; '+gardes:''),'tes stats sont');
     _rerenderLifestyle();
   }catch(err){
     toast(err&&err.message?err.message:'Lecture impossible','var(--orange)');

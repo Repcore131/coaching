@@ -2410,6 +2410,8 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .pc-pt.pc-pt-a{background:var(--red-bg-2);border:2.5px solid #ff3030;box-shadow:0 0 8px rgba(255,30,30,.75)}
 :root[data-theme="clair"] .pc-pt.pc-der{background:#090909;border:4px solid #ff2a2a;box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 28%,transparent),0 0 16px rgba(255,30,30,.85)}
 :root[data-theme="clair"] .pc-bulle{background:var(--surface-0);border:1.5px solid #1f9d55;box-shadow:var(--e3)}
+:root[data-theme="clair"] .cap-rel-j{color:var(--text)}
+:root[data-theme="clair"] .cap-rel-a,:root[data-theme="clair"] .cap-rel-g{color:var(--text-dim)}
 :root[data-theme="clair"] .pc-obj{border-top:2px dashed var(--green)}
 :root[data-theme="clair"] .pc-obj span{color:var(--green-text)}
 :root[data-theme="clair"] .pc-bul-lib{color:var(--text-faint)}

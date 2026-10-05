@@ -81560,6 +81560,69 @@ vendredi 78 6h 44m
            new Date('2026-08-06T12:00:00')));
          const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
          return n&&n.duration===8.3&&!n.bed&&!n.wake; });
+    // ── RÉVISION 09/2026 : LA CAPTURE PASSE APRÈS LA SYNCHRO ─────────────
+    ok('Capture sur un jour synchronisé : la valeur synchronisée est conservée',()=>{
+      const sv=currentUser.stepsLog;
+      try{
+        currentUser.stepsLog=[{date:'2026-08-05',count:9100,dataStatus:'sync',source:'healthconnect',updatedAt:Date.now()-5*864e5}];
+        const r=_appliquerCaptureStats({type:'pas',jours:[{date:'2026-08-05',valeur:3003},{date:'2026-08-04',valeur:2814}]});
+        const e=currentUser.stepsLog.find(x=>x.date==='2026-08-05');
+        if(e.count!==9100||e.dataStatus!=='sync') return _echec('la synchro est écrasée : '+JSON.stringify(e));
+        if(r.gardes!==1||r.gardesSync!==1||r.ecrits!==1) return _echec(JSON.stringify(r));
+        return _phraseGardesCapture(r)==='1 jour déjà synchronisé conservé'?true:_echec(_phraseGardesCapture(r));
+      } finally { currentUser.stepsLog=sv; }});
+    ok('Capture sur une saisie manuelle de moins de 24 h : conservée ; plus vieille : remplacée',()=>{
+      const sv=currentUser.sleepLog;
+      try{
+        const t=Date.now();
+        currentUser.sleepLog=[{date:'2026-08-04',duration:7.5,dataStatus:'manual',updatedAt:t-3*3600e3},
+          {date:'2026-08-03',duration:5,dataStatus:'manual',updatedAt:t-30*3600e3}];
+        const r=_appliquerCaptureStats({type:'sommeil',jours:[{date:'2026-08-04',valeur:8.3},{date:'2026-08-03',valeur:6.1}]},t);
+        const a=currentUser.sleepLog.find(x=>x.date==='2026-08-04'), b=currentUser.sleepLog.find(x=>x.date==='2026-08-03');
+        if(a.duration!==7.5) return _echec('la saisie récente est écrasée');
+        if(b.duration!==6.1||b.dataStatus!=='capture') return _echec('la saisie ancienne n’est pas remplacée');
+        if(r.gardes!==1||r.gardesSync!==0||r.remplaces!==1) return _echec(JSON.stringify(r));
+        const ph=_phraseGardesCapture({gardes:3,gardesSync:2});
+        return ph==='2 jours déjà synchronisés conservés, 1 saisie récente conservée'?true:_echec(ph);
+      } finally { currentUser.sleepLog=sv; }});
+    ok('Capture « 8 432 pas 6 120 m 320 kcal » → 8432 (unités écartées, « pas » préféré)',()=>{
+      const a=_analyserCaptureStats('8 432 pas 6 120 m 320 kcal\n6 août',new Date('2026-08-06T12:00:00'));
+      if(!a.jours.length||a.jours[0].valeur!==8432) return _echec(JSON.stringify(a.jours));
+      if(_capPasLigne('12 840 m 7 900 steps')!==7900) return _echec('steps');
+      if(_capPasLigne('5 août - 25% 3 003')!==3003) return _echec('pourcentage');
+      if(_capPasLigne('412 kcal 95 bpm 48 min')!==null) return _echec('que des unités');
+      return true;});
+    okA('La relecture précède toute écriture : Annuler n’écrit rien, Enregistrer prend la valeur corrigée',async()=>{
+      const sv=currentUser.stepsLog;
+      try{
+        currentUser.stepsLog=[{date:'2026-08-05',count:2000,dataStatus:'capture',updatedAt:1},
+          {date:'2026-08-04',count:9000,dataStatus:'sync',updatedAt:1}];
+        const an={type:'pas',jours:[{date:'2026-08-05',valeur:3003},{date:'2026-08-04',valeur:2814},{date:'2026-08-03',valeur:3096}]};
+        // L'ORDRE DANS LE CODE : relire, puis écrire.
+        const src=String(importerCaptureStats);
+        if(!(src.indexOf('_relireCaptureStats(')>0&&src.indexOf('_relireCaptureStats(')<src.indexOf('_appliquerCaptureStats('))) return _echec('l’écriture ne suit pas la relecture');
+        // ANNULER.
+        let p=_relireCaptureStats(an);
+        const lignes=document.querySelectorAll('#rc-confirm-texte .cap-rel-l');
+        if(lignes.length!==3) return _echec(lignes.length+' ligne(s) au lieu de 3');
+        if(document.querySelectorAll('#rc-confirm-texte .cap-rel-c').length!==2) return _echec('le jour synchronisé est modifiable');
+        if(!/actuel : 2/.test(document.getElementById('rc-confirm-texte').textContent)) return _echec('la valeur actuelle n’est pas montrée');
+        if(document.getElementById('rc-confirm-ok').textContent!=='Enregistrer') return _echec('bouton');
+        document.getElementById('rc-confirm-non').click();
+        if(await p!==null) return _echec('Annuler rend des jours');
+        if(currentUser.stepsLog.find(x=>x.date==='2026-08-05').count!==2000) return _echec('Annuler a écrit');
+        // ENREGISTRER, après correction d'un chiffre mal lu.
+        p=_relireCaptureStats(an);
+        const c=document.querySelector('#rc-confirm-texte .cap-rel-l[data-date="2026-08-05"] .cap-rel-c');
+        c.value='3 103'.replace(' ','');
+        document.getElementById('rc-confirm-ok').click();
+        const relue=await p;
+        const r=_appliquerCaptureStats(relue);
+        if(currentUser.stepsLog.find(x=>x.date==='2026-08-05').count!==3103) return _echec('la correction n’est pas prise');
+        if(currentUser.stepsLog.find(x=>x.date==='2026-08-04').count!==9000) return _echec('la synchro est écrasée');
+        return r.ecrits===2&&r.gardesSync===1?true:_echec(JSON.stringify(r));
+      } finally { currentUser.stepsLog=sv; try{ _feuilleFermer('rc-confirm',true); }catch(e){} }});
+
 
     // ══ REGULARITE DU COUCHER, DETTE DE SOMMEIL, SERIE DE PAS ══════════
     // ECRITS AVANT LE CODE, et pas par principe : la regularite se calcule sur
