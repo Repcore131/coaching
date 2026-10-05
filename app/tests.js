@@ -15005,6 +15005,78 @@ async function testExercices(){
           const c=controlerImportIA({seances:[{nom:'A',exercices:[{nomLu:'x',nomBanque:'Y',series:0,confiance:7}]}]},['Z']);
           const x=c.seances[0].exercices[0];
           return x.nomBanque===null&&x.series===null&&x.confiance===1&&x.reps===null?true:_echec(JSON.stringify(x));});
+        // ══ LE RISQUE D'ABANDON ET LA RELANCE PROPOSÉE (05/10/2026) ══
+        ok('Risque — risqueVariables rend, sur le résumé de risque.test.mjs, les valeurs du serveur',()=>{
+          const t=Date.parse('2026-10-05T10:00:00Z');
+          const v=risqueVariables({inscrit:'2026-07-01',jour:'2026-10-05',j30:'0000000000000000'+'11100110101101',lev:{checkin:true,coach:true}},t);
+          const att={a7:0.571,a14:0.643,a30:0.3,pente:0.643,dernier:0,checkin:1,notif:0,coach:1,anciennete:0.533};
+          return JSON.stringify(v)===JSON.stringify(att)?true:_echec(JSON.stringify(v));});
+        ok('Risque — la puce n’apparaît pas sous 0,6 ; au-dessus, elle dit les deux variables qui pèsent le plus, en mots',()=>{
+          if(htmlPuceRisque(0.59,['x'])!==''||htmlPuceRisque(null,[])!==''||htmlPuceRisque(undefined)!=='') return _echec('puce sous le seuil');
+          if(htmlPuceRisque(0.6,[]).indexOf('Risque')<0) return _echec('pas de puce à 0,6');
+          const svM=_risque.modele, svP=_risque.p;
+          const c={id:'rq1',email:'rq1@t.fr',role:'athlete',fname:'Léa',sessions:[],createdAt:Date.now()-90*864e5};
+          try{
+            _risque.modele={poids:{biais:-1,a7:3,a14:2,a30:1,pente:1,dernier:-3,checkin:0.5,notif:0.5,coach:0.5,anciennete:-0.4}};
+            _risque.p={'rq1@t,fr':{p:0.55,t:1}};
+            if(_htmlPuceRisqueDe(c)!=='') return _echec('puce à 0,55');
+            _risque.p={'rq1@t,fr':{p:0.82,t:1}};
+            const h=_htmlPuceRisqueDe(c);
+            if(!/Risque/.test(h)||!/aucune activité depuis 30 jours/.test(h)) return _echec('raisons : '+h);
+            const r=risqueRaisons({dernier:1,anciennete:0.5,a7:0},_risque.modele.poids);
+            return r.length===2&&/30 jours ou plus/.test(r[0])&&/inscrit depuis 90 jours/.test(r[1])?true:_echec(JSON.stringify(r));
+          } finally { _risque.modele=svM; _risque.p=svP; }});
+        ok('Risque — urgencyScore est inchangé sur les six cas de non-régression, risque connu ou non',()=>{
+          const sauveU=currentUser, svP=_risque.p;
+          const J=n=>Date.now()-n*864e5;
+          try{
+            if(/risque/i.test(String(urgencyScore))) return _echec('urgencyScore lit le risque');
+            currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+            const cas=[
+              [{id:'n1',email:'n1@t.fr',sessions:[],bilans:[],createdAt:J(10)},5,{}],
+              [{id:'n2',email:'n2@t.fr',sessions:[],bilans:[{type:'depart',date:J(1)}],createdAt:J(30)},5,{}],
+              [{id:'n3',email:'n3@t.fr',sessions:[],bilans:[{type:'depart',date:J(30),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:J(60)},4,{'n3@t.fr':Date.now()}],
+              [{id:'n4',email:'n4@t.fr',sessions:[],bilans:[{type:'depart',date:J(3),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:J(60),status:'COACHING_SUIVI',accessExpiry:Date.now()+5*864e5},3,{'n4@t.fr':Date.now()}],
+              [{id:'n5',email:'n5@t.fr',sessions:[],bilans:[{type:'depart',date:J(3),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:J(60)},2,{'n5@t.fr':Date.now()}],
+              [{id:'n6',email:'n6@t.fr',sessions:[],bilans:[{type:'depart',date:J(20),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:J(60),_fromCode:true},1,{'n6@t.fr':Date.now()}]];
+            for(const p of [{},Object.fromEntries(cas.map(x=>[_relCle(x[0]),{p:0.99,t:1}]))]){
+              _risque.p=p;
+              for(const [c,att,seen] of cas){
+                currentUser.seenBilans=seen;
+                if(urgencyScore(c)!==att) return _echec(c.id+' : '+urgencyScore(c)+' au lieu de '+att);
+              }
+            }
+            return true;
+          } finally { currentUser=sauveU; _risque.p=svP; }});
+        okA('Risque — « Proposer un message » n’envoie rien : seul le clic sur « Envoyer » appelle relanceIA, avec le texte relu',async()=>{
+          const sv=CLOUD._callFn, svP=_risque.p, svJ=_relJournal, svG=getClients, svU=currentUser;
+          const c={id:'rq2',email:'rq2@t.fr',role:'athlete',fname:'Tom',sessions:[{date:Date.now()-20*864e5,name:'Full A'}],createdAt:Date.now()-90*864e5};
+          const k=_relCle(c), appels=[];
+          try{
+            currentUser=Object.assign({},svU||{},{role:'coach',email:'co-rq@t.fr'});
+            getClients=()=>[c];
+            _risque.p={[k]:{p:0.9,t:1}};
+            _relJournal=[];
+            CLOUD._callFn=async(nom,data)=>{ appels.push({nom,data});
+              if(nom==='ia') return {ok:true,journalId:'jrq',proposition:{texte:'Salut Tom, comment se passe ta semaine ?'}};
+              return {ok:true,statut:'parti'}; };
+            if(risqueAProposer([c],[],Date.now()).length!==1) return _echec('l’athlète à risque n’est pas proposé');
+            if(risqueAProposer([c],[{cle:k,statut:'parti',at:Date.now()-2*864e5}],Date.now()).length) return _echec('proposé malgré une relance cette semaine');
+            if(!await proposerRelanceIA(k)) return _echec('pas de proposition');
+            const ia=appels.find(a=>a.nom==='ia');
+            if(!ia||ia.data.tache!=='relance_courte'||ia.data.athlete!==k||ia.data.charge.derniereSeance!=='Full A'||ia.data.charge.prenom!=='Tom') return _echec('charge : '+JSON.stringify(ia&&ia.data));
+            if(appels.some(a=>a.nom==='relanceIA')) return _echec('envoyé sans clic');
+            if(_relIA[k].texte!=='Salut Tom, comment se passe ta semaine ?') return _echec('texte non montré');
+            // Le coach réécrit, puis clique.
+            const _ta=document.getElementById('rq-txt-'+k); if(_ta) _ta.value='Salut Tom ! On se cale une séance cette semaine ?';
+            _relIA[k].texte='Salut Tom ! On se cale une séance cette semaine ?';
+            if(!await envoyerRelanceIA(k)) return _echec('envoi refusé');
+            const env=appels.filter(a=>a.nom==='relanceIA');
+            if(env.length!==1||env[0].data.texte!=='Salut Tom ! On se cale une séance cette semaine ?'||env[0].data.journalId!=='jrq') return _echec(JSON.stringify(env));
+            // Un seul chemin d'envoi dans tout le code : le bouton « Envoyer ».
+            const n=_prodSrc().split("'relance"+"IA'").length-1;
+            return n===1&&/envoyerRelanceIA/.test(String(_htmlRisqueRelances))?true:_echec(n+' appels de relanceIA en production');
+          } finally { CLOUD._callFn=sv; _risque.p=svP; _relJournal=svJ; getClients=svG; currentUser=svU; delete _relIA[k]; }});
         // ══ LA PHOTO DU REPAS (05/10/2026) ══
         ok('Photo du repas — repasPhotoOuvert : faux pour un profil TCA, faux pour un autonome Essentielle, vrai pour Ultime, vrai chez un coach Coach ou Pro',()=>{
           const fut=Date.now()+864e5, mk=(e,o)=>Object.assign({email:e,role:'athlete'},o||{});

@@ -963,6 +963,8 @@ function renderClientList(clients){
   // L'entree au defilement pour tout ce qui est sous le pli, a partir de la
   // septieme ligne : les six premieres ont deja la cascade.
   try{ arcEntreeAuDefilement(el,'.client-row',6); }catch(e){}
+  // LE RISQUE D'ABANDON : lu à part, repeint dans les emplacements de la ligne.
+  try{ _risqueApresListe(tous); }catch(e){}
   return vus.length;
 }
 
@@ -2366,7 +2368,8 @@ function _relLigneJournal(e,nom){
   const ok=e.statut==='parti';
   return '<div class="rel-j'+(ok?'':' rel-j-ko')+'"><span class="rel-j-d">'+escapeHtml(_relJour(e.at))+'</span>'
     +'<span class="rel-j-n">'+escapeHtml(nom||'Athlète')+'</span>'
-    +'<span class="rel-j-s">'+escapeHtml(RELANCE_LIB[e.signal]||e.signal||'')+' · '+escapeHtml(RELANCE_MOYENS[e.moyen]||'')
+    +'<span class="rel-j-s">'+escapeHtml(RELANCE_LIB[e.signal]||(e.signal==='risque'?'Risque d’abandon':e.signal)||'')+' · '
+    +escapeHtml(e.moyen==='ia_valide'?'proposé par l’assistant, '+(RELANCE_MOYENS[e.voie]||'').toLowerCase():(RELANCE_MOYENS[e.moyen]||''))
     +(ok?'':' · pas parti ('+escapeHtml(RELANCE_RAISONS[e.raison]||e.raison||'')+')')+'</span></div>';
 }
 function _relNom(cle){

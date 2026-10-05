@@ -2032,6 +2032,20 @@
       ".read": false,
       ".write": false
     },
+    // LE RISQUE D ABANDON (cloudflare/src/risque.js, 05/10/2026), ecrit par le
+    // Worker chaque nuit. risque_modele : des poids et des effectifs, aucune
+    // cle de compte — lu par tout compte connecte (l app explique la puce).
+    // risque/<athlete> : {p, t}, lu par SON coach seul (pas par l athlete).
+    "risque_modele": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "risque": {
+      ".write": false,
+      "$athleteKey": {
+        ".read": "auth != null && root.child('users').child($athleteKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',')"
+      }
+    },
     // LA PHOTO DU REPAS (05/10/2026) : le nombre d appels du mois, par
     // compte (60 au plus). Lu par son titulaire, ecrit par le Worker seul.
     "ia_appels": {

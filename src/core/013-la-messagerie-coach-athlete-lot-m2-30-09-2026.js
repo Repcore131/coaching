@@ -328,6 +328,8 @@ function ouvrirRelances(){
   go('s-coach-relances');
   renderRelancesCoach();
   _relChargerJournal(true).then(()=>{ try{ renderRelancesCoach(); }catch(e){} });
+  // Les athlètes à risque (risque.js) : la ligne « Proposer un message ».
+  try{ risqueCharger(getClients()).then(ch=>{ if(ch) renderRelancesCoach(); }).catch(()=>{}); }catch(e){}
 }
 
 // ── L'ÉCRAN ───────────────────────────────────────────────────────────────
@@ -342,6 +344,8 @@ function renderRelancesCoach(){
     +'<div class="rel-frein-l"><b>Je reprends la main</b><span>'
     +(pause?'Rien ne part. Tes règles sont gardées telles quelles.':'Coupe tout, tout de suite, y compris ce qui allait partir aujourd’hui.')+'</span></div>'
     +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
+  // LES ATHLÈTES À RISQUE, avant tout : un message proposé, jamais envoyé seul.
+  try{ h+=_htmlRisqueRelances(); }catch(e){}
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
   h+='<h2 class="rel-h">Cette semaine</h2>';
   if(!sem) h+=etatChargement(2);
@@ -417,7 +421,7 @@ const RELANCE_VUE_CLE='rc_relance_vue';
 function relanceAMontrer(journal,vueJusqua,t){
   const n=Number(t)||Date.now();
   const l=Object.keys((journal&&typeof journal==='object')?journal:{}).map(id=>journal[id])
-    .filter(e=>e&&e.statut==='parti'&&e.moyen==='canal'&&n-Number(e.at)<RELANCE_FENETRE_J*864e5&&Number(e.at)>(Number(vueJusqua)||0))
+    .filter(e=>e&&e.statut==='parti'&&(e.moyen==='canal'||(e.moyen==='ia_valide'&&e.voie==='canal'))&&n-Number(e.at)<RELANCE_FENETRE_J*864e5&&Number(e.at)>(Number(vueJusqua)||0))
     .sort((a,b)=>Number(b.at)-Number(a.at));
   return l[0]||null;
 }
@@ -1823,7 +1827,7 @@ function renderClientRow(c){
       title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
       style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">Ouvrir la fiche</span><span class="cr-fiche-c">Voir profil</span></button>
     ${_htmlCurseurSuivi(c)}
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}<span class="rq-z" data-rq="${escapeHtml(_relCle(c))}">${_htmlPuceRisqueDe(c)}</span></div>
   </div>`;
 }
 // ══════ ANNUAIRE : LES DEUX DÉCISIONS, SORTIES DU RÉSEAU ═══════════════════
@@ -2230,3 +2234,209 @@ function _dessinerCroissance(id,pts){
 // — `avec` et `sans` a cote de `nouveaux` — et les barres sont empilees, rouge
 // pour les suivis, blanc pour les autres. Cette ligne de totaux reste : elle
 // dit le portefeuille ENTIER, la ou les barres disent semaine par semaine.
+
+// ══ LE RISQUE D'ABANDON, ET LA RELANCE PROPOSÉE PAR L'ASSISTANT (05/10/2026) ═
+// Le Worker apprend chaque nuit (cloudflare/src/risque.js, travail
+// 'retention') : risque_modele = {poids, n, auc, t} (aucune clé de compte) et
+// risque/<athlète> = {p, t}, lu par son coach seul.
+// ⚠ UNE INFORMATION DE PLUS, PAS UN RANG. urgencyScore n'est pas touché : la
+//   puce « risque » s'ajoute sur la ligne et sur la fiche quand p ≥ 0,6, avec
+//   les deux variables qui pèsent le plus (poids × valeur), en mots.
+// ⚠ LA RELANCE N'EST JAMAIS ENVOYÉE SEULE. « Proposer un message » demande un
+//   texte à l'assistant (tâche 'relance_courte') et l'affiche, modifiable ;
+//   seul le bouton « Envoyer » appelle relanceIA, qui l'envoie (carte « Un mot
+//   de ton coach » ou notification) et l'écrit au journal, moyen:'ia_valide'.
+// ⚠ LES VARIABLES SONT CELLES DU SERVEUR (risqueVariables = variables de
+//   risque.js, à la date du jour), recalculées ici depuis activiteResume :
+//   même résumé, mêmes fenêtres, mêmes arrondis.
+const RISQUE_SEUIL=0.6, RISQUE_CACHE_MS=60*60e3, RISQUE_RELANCE_J=7, RELANCE_IA_MAX=280;
+const RISQUE_VARIABLES=Object.freeze(['a7','a14','a30','pente','dernier','checkin','notif','coach','anciennete']);
+/** PURE. Les variables du résumé r au jour de t (risque.js, variables(r, t, 0)). */
+function risqueVariables(r,t){
+  if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(String(r.inscrit||''))||!/^\d{4}-\d{2}-\d{2}$/.test(String(r.jour||''))||!/^[01]{1,40}$/.test(String(r.j30||''))) return null;
+  const J=864e5, ref=new Date(t).toLocaleDateString('fr-CA',{timeZone:'Europe/Paris'});
+  const jours=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/J);
+  const age=jours(r.inscrit,ref);
+  if(age<0) return null;
+  const etat=d=>{
+    const x=new Date(Date.parse(ref+'T00:00:00Z')-d*J);
+    // Le jour UTC de minuit UTC : la date du calendrier, sans fuseau (comme risque.js).
+    const jour=x.getUTCFullYear()+'-'+String(x.getUTCMonth()+1).padStart(2,'0')+'-'+String(x.getUTCDate()).padStart(2,'0');
+    if(jour<r.inscrit) return null;
+    const apres=jours(r.jour,jour);
+    if(apres>0) return 0;
+    const b=String(r.j30), i=b.length-1+apres;
+    return i<0?null:(b[i]==='1'?1:0);
+  };
+  const fen=(d0,n)=>{ let a=0,k=0; for(let d=d0;d<d0+n;d++){ const e=etat(d); if(e===null) continue; k++; a+=e; } return k?a*n/k:0; };
+  const r3=x=>Math.round(x*1000)/1000;
+  const a14=fen(0,14), avant=fen(14,14);
+  let dernier=30;
+  for(let d=0;d<30;d++){ const e=etat(d); if(e===null) break; if(e===1){ dernier=d; break; } }
+  const lev=(r.lev&&typeof r.lev==='object')?r.lev:{};
+  return {a7:r3(fen(0,7)/7),a14:r3(a14/14),a30:r3(fen(0,30)/30),pente:r3((a14-avant)/14),dernier:r3(dernier/30),
+    checkin:lev.checkin?1:0,notif:lev.notif?1:0,coach:lev.coach?1:0,anciennete:r3(Math.min(age,180)/180)};
+}
+// Une variable en mots, du côté où elle pousse vers l'abandon.
+function _risqueMot(k,v){
+  const n=(x,m)=>Math.round(x*m);
+  if(k==='dernier') return v>=1?'aucune activité depuis 30 jours ou plus':n(v,30)+' jours sans activité';
+  if(k==='a7') return n(v,7)+' jour'+(n(v,7)>1?'s':'')+' actif'+(n(v,7)>1?'s':'')+' sur 7';
+  if(k==='a14') return n(v,14)+' jour'+(n(v,14)>1?'s':'')+' actif'+(n(v,14)>1?'s':'')+' sur 14';
+  if(k==='a30') return n(v,30)+' jour'+(n(v,30)>1?'s':'')+' actif'+(n(v,30)>1?'s':'')+' sur 30';
+  if(k==='pente') return v<0?'activité en baisse sur deux semaines':'activité en hausse sur deux semaines';
+  if(k==='checkin') return v?'check-ins réguliers au départ':'peu de check-ins au départ';
+  if(k==='notif') return v?'notifications activées':'notifications coupées';
+  if(k==='coach') return 'suivi par un coach';
+  return 'inscrit depuis '+n(v,180)+' jours';
+}
+/**
+ * PURE. Les deux variables qui pèsent le plus vers l'abandon (poids × valeur),
+ * en mots. Le modèle prédit P(actif) : une contribution −w·x positive pousse
+ * vers l'abandon.
+ */
+function risqueRaisons(v,poids){
+  if(!v||!poids) return [];
+  return RISQUE_VARIABLES.map(k=>({k,c:-(Number(poids[k])||0)*(Number(v[k])||0)}))
+    .filter(x=>x.c>0).sort((a,b)=>b.c-a.c).slice(0,2).map(x=>_risqueMot(x.k,v[x.k]));
+}
+/** PURE. La puce, ou '' sous le seuil (ou sans risque connu). */
+function htmlPuceRisque(p,raisons){
+  const x=Number(p);
+  if(!(x>=RISQUE_SEUIL)) return '';
+  const r=(raisons||[]).filter(Boolean);
+  return '<span class="rq-puce" title="Risque d’abandon estimé : '+Math.round(x*100)+' %'+(r.length?' — '+escapeHtml(r.join(', ')):'')+'">'
+    +'Risque'+(r.length?'<span class="rq-pq"> · '+escapeHtml(r.join(', '))+'</span>':'')+'</span>';
+}
+// LA LECTURE, avec une heure de mémoire : le modèle, puis un nœud par athlète.
+const _risque={modele:null,lu:0,p:{}};
+function risqueDe(c){
+  const k=_relCle(c), e=k&&_risque.p[k];
+  return (e&&typeof e==='object'&&Number.isFinite(Number(e.p)))?Number(e.p):null;
+}
+function _htmlPuceRisqueDe(c){
+  const p=risqueDe(c);
+  if(!(p>=RISQUE_SEUIL)) return '';
+  let v=null; try{ v=risqueVariables(activiteResume(c),Date.now()); }catch(e){ v=null; }
+  return htmlPuceRisque(p,risqueRaisons(v,_risque.modele&&_risque.modele.poids));
+}
+async function risqueCharger(clients,force){
+  if(!currentUser||currentUser.role!=='coach'||!CLOUD||!CLOUD._getToken) return false;
+  const frais=!force&&Date.now()-_risque.lu<RISQUE_CACHE_MS;
+  const l=(clients||[]).filter(c=>c&&c.email&&!c._fromCode).map(_relCle).filter(k=>k&&(!frais||!(k in _risque.p)));
+  if(frais&&!l.length) return false;
+  if(!frais||!_risque.modele){ const m=await _fbJson('risque_modele'); if(m.ok&&m.v) _risque.modele=m.v; }
+  const res=await Promise.all(l.map(k=>_fbJson('risque/'+k).then(r=>[k,r]).catch(()=>[k,null])));
+  for(const [k,r] of res) _risque.p[k]=(r&&r.ok)?(r.v||null):(_risque.p[k]||null);
+  _risque.lu=Date.now();
+  return true;
+}
+// Les emplacements de la liste et de la fiche, repeints quand la lecture arrive.
+function risqueRepeindre(){
+  document.querySelectorAll('[data-rq]').forEach(z=>{
+    const c=(getClients()||[]).find(x=>_relCle(x)===z.dataset.rq);
+    z.innerHTML=c?_htmlPuceRisqueDe(c):'';
+  });
+  return true;
+}
+function _risqueApresListe(clients){
+  risqueCharger(clients).then(ch=>{ if(ch) risqueRepeindre(); }).catch(()=>{});
+}
+function renderRisqueFiche(c){
+  const z=document.getElementById('ccd-risque');
+  if(!z||!c) return false;
+  z.dataset.rq=_relCle(c);
+  z.innerHTML=_htmlPuceRisqueDe(c);
+  risqueCharger([c]).then(ch=>{ if(ch) z.innerHTML=_htmlPuceRisqueDe(c); }).catch(()=>{});
+  return true;
+}
+
+// ── « Proposer un message » (écran des relances) ─────────────────────────
+/** PURE. Les athlètes à proposer : p ≥ 0,6, et aucune relance partie depuis 7 jours. */
+function risqueAProposer(clients,journal,t){
+  const n=Number(t)||Date.now();
+  const recent=new Set((journal||[]).filter(e=>e&&e.statut==='parti'&&n-Number(e.at)<RISQUE_RELANCE_J*864e5).map(e=>e.cle));
+  return (clients||[]).filter(c=>c&&c.email&&!c._fromCode&&risqueDe(c)>=RISQUE_SEUIL&&!recent.has(_relCle(c)))
+    .sort((a,b)=>risqueDe(b)-risqueDe(a));
+}
+const _relIA={};   // cle → {texte, journalId, propose, attente}
+function _htmlRisqueRelances(){
+  if(!currentUser||currentUser.role!=='coach') return '';
+  let l=[]; try{ l=risqueAProposer(getClients(),_relJournal||[],Date.now()); }catch(e){ l=[]; }
+  if(!l.length) return '';
+  const E=escapeHtml;
+  return '<h2 class="rel-h">À risque de décrocher</h2>'
+    +'<p class="sub rel-p">Estimé chaque nuit sur leur activité. L’assistant propose un message court ; tu le relis, tu le modifies, et rien ne part sans ton clic.</p>'
+    +l.map(c=>{
+      const k=_relCle(c), x=_relIA[k]||{}, ka=_attrArg(k);
+      const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email;
+      let h='<div class="rel-l rq-l" id="rq-l-'+E(k)+'"><div class="rel-l-h"><div class="rel-l-t">'+E(nom)+' '+_htmlPuceRisqueDe(c)+'</div></div>';
+      if(x.texte==null) h+='<button type="button" class="btn btn-outline btn-sm" onclick="proposerRelanceIA('+ka+')"'+(x.attente?' disabled aria-busy="true"':'')+'>'
+        +(x.attente?'L’assistant écrit…':'Proposer un message')+'</button>';
+      else h+='<textarea class="rq-txt" id="rq-txt-'+E(k)+'" rows="4" maxlength="'+RELANCE_IA_MAX+'" aria-label="Message à '+E(nom)+'">'+E(x.texte)+'</textarea>'
+        +'<div class="rel-l-c"><label>Par <select id="rq-voie-'+E(k)+'"><option value="canal">Dans l’app</option><option value="push">'+E(RELANCE_MOYENS.push)+'</option></select></label></div>'
+        +'<div class="rq-b"><button type="button" class="btn btn-red btn-sm" onclick="envoyerRelanceIA('+ka+')"'+(x.attente?' disabled':'')+'>Envoyer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" onclick="laisserRelanceIA('+ka+')">Laisser</button></div>';
+      return h+'</div>';
+    }).join('');
+}
+// La charge : le prénom, les jours sans séance, la dernière séance (son nom),
+// les deux derniers messages du coach à cet athlète, ses formules.
+async function chargeRelanceIA(c){
+  let style=[];
+  try{
+    const p=await msgChargerPage(_msgCles(currentUser,_relCle(c)));
+    if(p&&p.ok) style=p.liste.filter(m=>m&&m.de==='coach'&&m.texte).slice(-2).map(m=>String(m.texte).slice(0,400));
+  }catch(e){ style=[]; }
+  const ses=(c.sessions||[]).filter(s=>s&&Number(s.date)>0).sort((a,b)=>Number(b.date)-Number(a.date))[0];
+  let j=-1; try{ j=joursSansSeance(c,Date.now()); }catch(e){ j=-1; }
+  let formules=null; try{ formules=formulesReponse(currentUser); }catch(e){ formules=null; }
+  return {prenom:String(c.fname||'').trim(),joursInactif:j,derniereSeance:ses?String(ses.name||'').slice(0,80):'',styleCoach:style,formules};
+}
+async function proposerRelanceIA(k){
+  const c=(getClients()||[]).find(x=>_relCle(x)===k);
+  if(!c||!CLOUD||!CLOUD._callFn) return false;
+  const x=_relIA[k]=Object.assign(_relIA[k]||{},{attente:true});
+  try{ renderRelancesCoach(); }catch(e){}
+  let r=null, st=0;
+  try{ r=await CLOUD._callFn('ia',{tache:'relance_courte',athlete:k,charge:await chargeRelanceIA(c)}); }
+  catch(e){ r=null; st=(e&&e.statut)||0; }
+  x.attente=false;
+  if(!r||!r.ok||!r.proposition||!String(r.proposition.texte||'').trim()){
+    toast(st===429?'Quota de l’assistant atteint ce mois-ci.':st===503?'L’assistant est en pause.':'L’assistant n’a rien proposé d’utilisable.','var(--orange)');
+    try{ renderRelancesCoach(); }catch(e){}
+    return false;
+  }
+  x.propose=String(r.proposition.texte).slice(0,RELANCE_IA_MAX);
+  x.texte=x.propose; x.journalId=r.journalId||null;
+  try{ renderRelancesCoach(); }catch(e){}
+  return true;
+}
+function laisserRelanceIA(k){
+  const x=_relIA[k];
+  if(x&&x.journalId&&CLOUD&&CLOUD._callFn) try{ Promise.resolve(CLOUD._callFn('iaRetour',{journalId:x.journalId,statut:'rejete',distance:1})).catch(()=>{}); }catch(e){}
+  delete _relIA[k];
+  try{ renderRelancesCoach(); }catch(e){}
+  return true;
+}
+// LE SEUL CHEMIN D'ENVOI : le bouton « Envoyer » du coach.
+async function envoyerRelanceIA(k){
+  const x=_relIA[k]; if(!x||x.texte==null||x.attente) return false;
+  const ta=document.getElementById('rq-txt-'+k), sel=document.getElementById('rq-voie-'+k);
+  const texte=String(ta?ta.value:x.texte).trim();
+  if(!texte||texte.length>RELANCE_IA_MAX){ toast('Message vide ou trop long (280 caractères au plus).','var(--orange)'); return false; }
+  x.texte=texte; x.attente=true;
+  let r=null, st=0;
+  try{ r=await CLOUD._callFn('relanceIA',{athlete:k,texte,voie:sel&&sel.value==='push'?'push':'canal',journalId:x.journalId||null}); }
+  catch(e){ r=null; st=(e&&e.statut)||0; }
+  x.attente=false;
+  if(!r){ toast(st===409?'Une relance lui est déjà partie cette semaine.':'Le message n’est pas parti, réessaie.','var(--orange)'); try{ renderRelancesCoach(); }catch(e){} return false; }
+  if(x.journalId) try{
+    const d=_distanceTexte(x.propose||'',texte);
+    Promise.resolve(CLOUD._callFn('iaRetour',{journalId:x.journalId,statut:d===0?'valide':'modifie',distance:d})).catch(()=>{});
+  }catch(e){}
+  delete _relIA[k];
+  toast(r.ok?'Message envoyé '+ICO.coche:'Pas parti : '+((RELANCE_RAISONS&&RELANCE_RAISONS[r.raison])||'notification impossible'),r.ok?'var(--green)':'var(--orange)');
+  _relChargerJournal(true).then(()=>{ try{ renderRelancesCoach(); }catch(e){} }).catch(()=>{});
+  return true;
+}

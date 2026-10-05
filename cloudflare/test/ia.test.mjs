@@ -468,4 +468,51 @@ await test('repas : un athlète sans Ultime, suivi par un coach Coach ou Pro, pa
   assert.equal(libre.appels.length + hq.appels.length, 0);
 });
 
+// ══ LA RELANCE D'UN ATHLÈTE À RISQUE (relance_courte, Haiku ; relanceIA) ══════
+await test('relance_courte : sortie {texte} ; plus de 280 caractères → rejetée ; consignes sans culpabilisation ni santé', async () => {
+  assert.deepEqual(SCHEMAS.relance_courte.required, ['texte']);
+  const rep = (texte) => (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: 'end_turn',
+    content: [{ type: 'text', text: JSON.stringify({ texte }) }], usage: { input_tokens: 400, output_tokens: 60 } });
+  const charge = { prenom: 'Léa', joursInactif: 12, derniereSeance: 'Full A', styleCoach: ['Salut Léa !'], formules: { ouverture: 'Salut {prénom}' } };
+  const w = monde({ reponse: rep('Salut Léa ! Comment se passe ta semaine ? Tu me dis si on cale une séance ?') });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'relance_courte', athlete: ATH, charge } });
+  assert.equal(r.ok, true);
+  assert.match(r.proposition.texte, /^Salut Léa/);
+  const sys = w.appels[0].corps.system[0].text;
+  assert.match(sys, /Aucune culpabilisation/);
+  assert.match(sys, /Aucune donnée de santé/);
+  assert.match(sys, /Une seule question/);
+  assert.equal(w.appels[0].corps.model, 'claude-haiku-4-5');
+  const long = monde({ reponse: rep('x'.repeat(281)) });
+  const r2 = await long.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'relance_courte', athlete: ATH, charge } });
+  assert.deepEqual([r2.ok, r2.raison], [false, 'trop_long']);
+});
+
+await test('relanceIA : le coach envoie (canal ou push), une ligne moyen:ia_valide au journal ; une semaine déjà prise → 409 ; un autre athlète → 403', async () => {
+  const pousses = [];
+  const push = async (k, msg) => { pousses.push({ k, msg }); return { envoye: true }; };
+  const w = monde();
+  const r = await w.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: ATH, texte: 'Salut Léa, tout va bien ?', voie: 'push', journalId: 'jx1' } }, push);
+  assert.deepEqual(r, { ok: true, statut: 'parti', raison: null });
+  assert.equal(pousses.length, 1);
+  assert.equal(pousses[0].msg.type, 'relance');
+  const j = Object.values(w.F.lire('relances_auto/' + COACH + '/' + ATH));
+  assert.equal(j.length, 1);
+  assert.equal(j[0].moyen, 'ia_valide');
+  assert.equal(j[0].voie, 'push');
+  assert.equal(j[0].texte, 'Salut Léa, tout va bien ?');
+  assert.equal(j[0].journalId, 'jx1');
+  // La semaine est prise : plus rien ne part, ni par cette voie ni par l'autre.
+  assert.equal(await statutDe(w.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: ATH, texte: 'Encore', voie: 'canal' } }, push)), 409);
+  assert.equal(pousses.length, 1);
+  // Par la carte « Un mot de ton coach » (canal) : aucune notification.
+  const c = monde();
+  await c.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: ATH, texte: 'Salut Léa', voie: 'canal' } }, push);
+  assert.equal(pousses.length, 1);
+  assert.equal(Object.values(c.F.lire('relances_auto/' + COACH + '/' + ATH))[0].voie, 'canal');
+  // L'athlète d'un autre coach ; un texte trop long.
+  assert.equal(await statutDe(c.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: AUTRE, texte: 'x' } }, push)), 403);
+  assert.equal(await statutDe(c.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: ATH, texte: 'x'.repeat(281) } }, push)), 400);
+});
+
 console.log(ok + ' tests IA');

@@ -92,6 +92,17 @@ test('la nuit : par lots dans le budget, /stats/retention publié, aucune donné
   assert.equal(s.entonnoir.total.inscrits, 120);
   const txt = JSON.stringify(s);
   assert.ok(!/athlete|exemple|@|,fr/.test(txt), 'aucune clé de compte dans les statistiques');
+  // LE RISQUE D'ABANDON (risque.js), dans le même travail : le modèle (120
+  // exemples : les poids par défaut), sans clé ; un risque par compte ;
+  // l'accumulateur vidé de ses listes une fois fini.
+  const m = F.lire('risque_modele');
+  assert.equal(m.defaut, true);
+  assert.ok(m.n > 0);
+  assert.ok(!/athlete|exemple|@|,fr/.test(JSON.stringify(m)), 'aucune clé de compte dans le modèle');
+  const r0 = F.lire('risque/athlete0@exemple,fr');
+  assert.ok(r0 && r0.p >= 0 && r0.p <= 1 && r0.t > 0, JSON.stringify(r0));
+  assert.equal(Object.keys(F.lire('risque')).length, 120);
+  assert.equal(F.lire('worker/jobs/retention/acc/rq'), null);
 });
 
 // ══ L'ACTIVATION PAR COHORTE (05/10/2026) ══════════════════════════════════

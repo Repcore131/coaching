@@ -12953,6 +12953,15 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .prp-rech{margin-top:6px;width:100%}
 .prp-r{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--border);padding:8px 0;min-height:36px;font:inherit;font-size:var(--fs-xs);color:var(--text);cursor:pointer}
 .prp-rq{margin-top:10px;font-size:var(--fs-xs);line-height:1.55;color:var(--sub)}
+/* Le risque d'abandon (risque.js) : une puce d'information, pas un rang. */
+.rq-puce{display:inline-flex;align-items:center;gap:2px;max-width:100%;padding:2px 8px;border-radius:var(--r-2);border:1px solid var(--warning-border);background:var(--warning-bg);color:var(--text);font-size:var(--fs-2xs);font-weight:700;line-height:1.4;white-space:normal}
+.rq-pq{font-weight:400;color:var(--sub)}
+.rq-z:empty{display:none}
+#ccd-risque:empty{display:none}
+#ccd-risque{margin-top:4px}
+.rq-txt{width:100%;margin-top:8px}
+.rq-b{display:flex;gap:8px;margin-top:8px}
+.rq-b .btn{margin:0}
 /* LOT C5 : la proposition de la semaine et les messages programmés du canal */
 .cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .cp{border-left:3px solid var(--red)}

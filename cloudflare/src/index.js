@@ -75,7 +75,9 @@ const resiliation = ({ auth, data }, ctx) =>
 const iaDe = (ctx) => creerIA({ env: ctx.env, db: ctx.db, fetchImpl: ctx.fetchImpl, maintenant: ctx.maintenant });
 const ia = (req, ctx) => iaDe(ctx).appeler(req);
 const iaRetour = (req, ctx) => iaDe(ctx).retour(req);
-const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin, ia, iaRetour,
+// relanceIA : le texte proposé par l'assistant, relu et ENVOYÉ PAR LE COACH.
+const relanceIA = (req, ctx) => iaDe(ctx).envoyerRelance(req, ctx.M && ctx.M.envoyerPush);
+const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin, ia, iaRetour, relanceIA,
   ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
   emailVerifie: droitsAppel('emailVerifie') };

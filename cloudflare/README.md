@@ -538,7 +538,7 @@ instructions du guide Garmin.
 ## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
 
 Le socle côté serveur ; l'app s'en sert pour le brouillon C2, le point de la semaine, l'import
-de séance, le premier programme et la photo du repas. Deux appels (protocole
+de séance, le premier programme, la photo du repas et la relance des athlètes à risque. Deux appels (protocole
 onCall, jeton Firebase vérifié) :
 
 - `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
@@ -571,6 +571,24 @@ qui paie** (son `ia_quota`, son journal, `athlete` noté). **60 appels par mois 
 (`ia_appels/<compte>/<AAAA-MM>/repas`, lu par son titulaire, écrit par le Worker), en plus du
 plafond en dollars. L'offre du coach est posée chaque jour dans `droits/<athlète>/couvertParCoach/plan`
 (travail `couverture_coachs`) : l'app de l'athlète ne peut pas lire `coachs_registre`.
+
+**Le risque d'abandon (`risque.js`, sans LLM, 05/10/2026).** Le travail `retention` (4 h 30)
+range, pour chaque résumé d'activité, un exemple (variables 14 jours avant aujourd'hui, cible :
+actif dans les 14 jours suivants — rien du futur dans les variables) et les variables du jour.
+À la fin : régression logistique (L2, 200 itérations, déterministe) si le jeu compte ≥ 200 exemples
+dont ≥ 30 de chaque classe, sinon les poids par défaut (`POIDS_DEFAUT`) ; AUC sur 20 % tenus à
+l'écart (tirés par hachage de la clé). Publie `risque_modele` = {poids, n, auc, t} — aucune clé de
+compte, lisible par tout compte connecté — et `risque/<compte>` = {p, t}, lisible par son coach seul.
+L'app montre une puce « risque » à partir de 0,6, avec les deux variables qui pèsent le plus ;
+`urgencyScore` n'est pas modifié.
+
+**La relance proposée (`relance_courte`, Haiku 4.5, puis `/fn/relanceIA`).** Dans l'écran des
+relances, pour un athlète à risque sans relance depuis 7 jours : l'assistant propose `{texte}`
+(280 caractères au plus, sans culpabilisation ni donnée de santé, une question). Le coach relit,
+modifie ; **seul son clic sur « Envoyer »** appelle `relanceIA` {athlete, texte, voie:'canal'|'push',
+journalId}, qui vérifie qu'il est le coach, refuse une deuxième relance dans la semaine (409),
+envoie (carte « Un mot de ton coach », ou notification de type `relance`) et écrit
+`relances_auto/<coach>/<athlète>` avec `moyen:'ia_valide'`.
 
 **Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
 nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète

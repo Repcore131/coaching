@@ -35,6 +35,7 @@ import * as RL from './relances.js';
 import * as PR from './prospects.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
+import * as RQ from './risque.js';
 import * as L from './ligues.js';
 import * as RA from './rappels.js';
 import * as CS from './calendrier-saisons.js';
@@ -1944,16 +1945,38 @@ export function creerMetier(deps) {
   // Un résumé d'activité par compte, une lecture chacun ; l'accumulateur vit
   // dans worker/jobs/retention/acc d'une minute à l'autre (planif.js), et la
   // fin publie /stats/retention — des agrégats seulement.
+  //
+  // LE RISQUE D'ABANDON (risque.js, 05/10/2026) : la même lecture sert aussi
+  // le modèle. acc.rq.x : les exemples (sans clé), acc.rq.v : les variables
+  // du jour par compte. La fin entraîne, publie risque_modele (aucune clé) et
+  // risque/<compte> = {p, t}, puis vide acc.rq : worker/jobs se relit chaque
+  // minute, il ne garde pas une liste de comptes toute la journée.
   async function retentionUn(k, t, acc) {
     const r = await _val('activite/' + k);
     const a = RT.accumuler(acc && acc.c ? acc : RT.accVide(), r, t);
     for (const x of Object.keys(a)) acc[x] = a[x];
+    const rq = acc.rq = (acc.rq && typeof acc.rq === 'object') ? acc.rq : {};
+    const ex = RQ.exemple(k, r, t);
+    if (ex) (rq.x = Array.isArray(rq.x) ? rq.x : Object.values(rq.x || {})).push(ex);
+    const v = RQ.variables(r, t, 0);
+    if (v) (rq.v = rq.v || {})[k] = RQ.VARIABLES.map((n) => v[n]);
     return RT.resumeValide(r) ? 'compte' : 'illisible';
   }
   const activiteComptes = () => db.ref('activite').shallow();
   async function retentionFin(acc) {
-    const v = RT.resultat(acc, now());
+    const t = now();
+    const v = RT.resultat(acc, t);
     await db.ref('stats/retention').set(v);
+    const rq = (acc && acc.rq) || {};
+    const lignes = Array.isArray(rq.x) ? rq.x : Object.values(rq.x || {});
+    const m = RQ.modele(lignes, t);
+    const maj = { risque_modele: { poids: m.poids, n: m.n, nTest: m.nTest, positifs: m.positifs, auc: m.auc, defaut: m.defaut, t } };
+    for (const k of Object.keys(rq.v || {})) {
+      const x = Object.fromEntries(RQ.VARIABLES.map((n, j) => [n, Number(rq.v[k][j]) || 0]));
+      maj['risque/' + k] = { p: RQ.risque(x, m.poids), t };
+    }
+    await db.ref().update(maj);
+    if (acc) delete acc.rq;
     return v;
   }
 
