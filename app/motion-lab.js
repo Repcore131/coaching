@@ -571,9 +571,11 @@ function mlReechantillonner(points){
  * @param {PointBarre[]} points
  * @param {number} mpp
  * @param {number} [theta]  l'aplomb du téléphone, en degrés
- * @returns {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}|null}
+ * @param {{exercice?:string, sensConc?:number}} [options]  le sens concentrique imposé, ou
+ *   l'exercice d'où le déduire (mlSensConcentrique)
+ * @returns {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number, sc:number}|null}
  */
-function mlMetriquesBarre(points,mpp,theta){
+function mlMetriquesBarre(points,mpp,theta,options){
   const r0=mlReechantillonner(points);
   if(!r0||!(mpp>0)) return null;
   // ⚠ REDRESSÉ AVANT TOUT LE RESTE. Un téléphone penché de cinq degrés fait
@@ -639,7 +641,13 @@ function mlMetriquesBarre(points,mpp,theta){
   // LOT 9 — LES TROIS VITESSES. La verticale reste celle d'avant, au
   // millième près : mlVitesses appelle mlDeriver avec les mêmes arguments.
   const VV=mlVitesses(X,Yb,dt,mlDemiFenetre(r.pas));
-  const TEMPO=mlTempo({t:r.t,v:VV.verticalite>=ML_VERTICALITE?VV.vv:VV.vp});
+  // LE SENS CONCENTRIQUE (05/10/2026) : donné (le coach a inversé), sinon
+  // déduit de l'exercice lié et du premier mouvement (mlSensConcentrique).
+  const vSigne=VV.verticalite>=ML_VERTICALITE?VV.vv:VV.vp;
+  const o=options||{};
+  const sc=(o.sensConc===-1||o.sensConc===1)?o.sensConc
+    :mlSensConcentrique(o.exercice||'',VV.verticalite>=ML_VERTICALITE?'vertical':'chemin',vSigne);
+  const TEMPO=mlTempo({t:r.t,v:sc===-1?vSigne.map(x=>-x):vSigne});
   return {
     serie:{t:r.t,px:r.x,py:r.y,X:Xl,Y,vy,conf:r.conf},
     m:{vMax:iV>=0?arrondi(vPic):0,tVMax:iV>=0?Math.round(r.t[iV]):0,hMax:iH>=0?arrondi(hMax):0,
@@ -647,7 +655,7 @@ function mlMetriquesBarre(points,mpp,theta){
       vert:Math.round(VV.verticalite*1000)/1000,
       vTanMax:arrondi(VV.vt.reduce((/** @type {number} */ q,/** @type {number} */ x)=>isFinite(x)&&x>q?x:q,0)),
       ...(TEMPO.complet?{tExc:TEMPO.excMs,tPau:TEMPO.pauseMs,tCon:TEMPO.conMs}:{})},
-    ph,pas:r.pas};
+    ph,pas:r.pas,sc};
 }
 
 /**
@@ -680,7 +688,7 @@ const ML_I16_TROU=-32768;
  * intervalles réguliers dans la série lissée ; x et y normés par la taille de
  * la vidéo, la vitesse en cm/s, la confiance sur 255.
  * @param {{debutMs:number, finMs:number}} seg
- * @param {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}} res
+ * @param {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number, sc?:number}} res
  * @param {{disqueM:number, sens:string, vw:number, vh:number, rayonPx:number, fps:number, alertes:string[],
  *   mpp?:number, theta?:number, aplombEstime?:boolean, etalon?:{cm:number, px:number, type:string}|null}} p
  * @returns {Object}
@@ -726,7 +734,9 @@ function mlCompacterBarre(seg,res,p){
     rayonPx:Math.round(p.rayonPx*10)/10,fps:Math.round(p.fps*100)/100,n,
     t0Ms:Math.round(S.t[0]),pasMs:Math.round(pasMs*1000)/1000,
     xy:mlB64(new Uint8Array(xy.buffer)),c:mlB64(c),vy:mlB64(new Uint8Array(vy.buffer)),
-    m:res.m,ph:res.ph.map(q=>[q[0],q[1],q[2]]),av:p.alertes.slice()};
+    m:res.m,ph:res.ph.map(q=>[q[0],q[1],q[2]]),av:p.alertes.slice(),
+    // LE SENS CONCENTRIQUE : absent = 1, comme toutes les analyses d'avant.
+    ...(res.sc===-1?{sc:-1}:{})};
 }
 /**
  * PURE. La trajectoire compactée, relue : temps, x et y normés (NaN pour un
@@ -1594,6 +1604,62 @@ function mlTempo(serie,seuil){
   return {excMs:Math.round(exc),pauseMs:Math.round(pau),conMs:Math.round(con),
     tutMs:Math.round(exc+pau+con),complet};
 }
+// ══ LE SENS CONCENTRIQUE (05/10/2026) ════════════════════════════════════════
+// mlTempo suppose « vitesse positive = concentrique ». C'est vrai d'une barre
+// qui monte (développé, squat) et d'un mouvement qui s'éloigne de son départ
+// (écarté) ; c'est FAUX d'une poignée de poulie haute, qui travaille en
+// descendant, et d'une presse découpée depuis le verrouillage, qui commence
+// par s'éloigner en excentrique. Le segment porte donc `sc` (1 ou -1) : la
+// vitesse signée est multipliée par lui avant tout découpage en phases.
+/** Les exercices dont le concentrique DESCEND (poignée suivie). */
+const ML_CONC_DESCEND=/tirage vertical|lat pull|pulldown|poulie haute|pushdown|extension.*poulie|crunch.*poulie/i;
+/** Les exercices qui commencent en position COURTE (verrouillés) : le premier
+ *  mouvement s'éloigne du départ, et c'est l'excentrique. */
+const ML_DEPART_COURT=/presse|leg press|hack|squat.*machine|machine.*squat/i;
+/**
+ * PURE. Le sens concentrique par défaut d'un exercice : -1 quand le
+ * concentrique descend, 1 sinon.
+ * @param {string} nomExercice
+ * @returns {1|-1}
+ */
+function mlSensConcentriqueDefaut(nomExercice){
+  return ML_CONC_DESCEND.test(String(nomExercice||''))?-1:1;
+}
+/**
+ * PURE. Le sens concentrique d'une analyse.
+ *  · vertical : la table (mlSensConcentriqueDefaut) — la vitesse est celle
+ *    qui MONTE ;
+ *  · chemin : la vitesse est positive en s'éloignant du départ, ce qui est le
+ *    concentrique… sauf pour un exercice qui commence en position courte
+ *    (presse, hack, squat machine) : si son PREMIER mouvement s'éloigne, c'est
+ *    l'excentrique, et le sens vaut -1.
+ * @param {string} nomExercice
+ * @param {string} mode  'vertical' | 'chemin'
+ * @param {number[]} v  vitesse signée de l'analyse
+ * @param {number} [seuil]  m/s, ML_TEMPO_ARRET par défaut
+ * @returns {1|-1}
+ */
+function mlSensConcentrique(nomExercice,mode,v,seuil){
+  if(mode!=='chemin') return mlSensConcentriqueDefaut(nomExercice);
+  if(!ML_DEPART_COURT.test(String(nomExercice||''))) return 1;
+  const s=Number(seuil)>0?Number(seuil):ML_TEMPO_ARRET;
+  const premier=(v||[]).find(x=>isFinite(x)&&Math.abs(x)>s);
+  return (premier!==undefined&&premier>0)?-1:1;
+}
+/**
+ * Le nom de l'exercice lié à la vidéo ouverte (lien de la série), ou ''.
+ * @returns {string}
+ */
+function _mlExerciceLie(){
+  try{
+    const ml=_ml;
+    if(!ml) return '';
+    const users=DB.get('users')||{}, c=users[ml.email];
+    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===ml.videoId);
+    const lien=v&&v.lien;
+    return lien?String(lien.exercice||lien.exerciceNom||lien.exerciceCle||''):'';
+  }catch(e){ return ''; }
+}
 // ══ LOT T3 : LE TEMPO PRESCRIT, COMPARÉ AU TEMPO MESURÉ (29/09/2026) ═════
 // Une phrase, sans note ni couleur : « Prescrit : 3 s de descente. Mesuré sur
 // cette série : 1,2 s. » On mesure, on montre, le coach décide.
@@ -1607,9 +1673,12 @@ const ML_TEMPO_FIABLE_MS=600;
  * PURE. La phrase de comparaison, ou ''.
  * @param {string} prescrit  le tempo prescrit (« 3-0-X-0 »…)
  * @param {any[]} lignes  mlTableauSerie
+ * @param {number} [sensConc]  -1 : le concentrique ne remonte pas (tirage
+ *   vertical, poulie haute…) — « descente » et « remontée » y seraient faux,
+ *   on dit « excentrique » et « concentrique ». Sans lui, le sens des lignes.
  * @returns {string}
  */
-function mlTempoComparaison(prescrit,lignes){
+function mlTempoComparaison(prescrit,lignes,sensConc){
   const lu=(typeof tempoLu==='function')?tempoLu(prescrit):null;
   if(!lu) return '';
   const ok=(lignes||[]).filter((/** @type {any} */ l)=>l&&l.tempo&&l.tempo.complet
@@ -1617,12 +1686,14 @@ function mlTempoComparaison(prescrit,lignes){
   if(!ok.length) return '';
   const moy=(/** @type {string} */ k)=>ok.reduce((/** @type {number} */ a,/** @type {any} */ l)=>a+Number(l.tempo[k]||0),0)/ok.length;
   const s=(/** @type {number} */ ms)=>(Math.round(ms/100)/10).toFixed(1).replace('.',',');
+  const inv=sensConc===-1||(sensConc==null&&ok.some((/** @type {any} */ l)=>l.sc===-1));
+  const libE=inv?'d’excentrique':'de descente', libC=inv?'de concentrique':'de remontée';
   /** @type {{p:string,m:string,lib:string}[]} */
   const it=[];
-  if(lu.exc>0) it.push({p:lu.exc+' s de descente',m:s(moy('excMs'))+' s',lib:'de descente'});
+  if(lu.exc>0) it.push({p:lu.exc+' s '+libE,m:s(moy('excMs'))+' s',lib:libE});
   const pause=(Number(lu.bas)||0)+(Number(lu.haut)||0);
   if(pause>0) it.push({p:pause+' s de pause',m:s(moy('pauseMs'))+' s',lib:'de pause'});
-  if(!lu.conX&&lu.con>0) it.push({p:lu.con+' s de remontée',m:s(moy('conMs'))+' s',lib:'de remontée'});
+  if(!lu.conX&&lu.con>0) it.push({p:lu.con+' s '+libC,m:s(moy('conMs'))+' s',lib:libC});
   if(!it.length) return '';
   return 'Prescrit : '+it.map(x=>x.p).join(', ')+'. Mesuré sur cette série : '
     +(it.length===1?it[0].m:it.map(x=>x.m+' '+x.lib).join(', '))+'.';
@@ -1782,7 +1853,7 @@ function mlSynthese(barre,pose,options){
  * @param {any} b  une trajectoire passée par segBarreValide
  * @returns {{t:number[], X:number[], Y:number[], px:number[], py:number[], conf:number[],
  *   mpp:number, pasMs:number, vx:number[], vv:number[], vt:number[], vp:number[],
- *   axe:{ux:number, uy:number}|null, verticalite:number, mode:string, v:number[]}|null}
+ *   axe:{ux:number, uy:number}|null, verticalite:number, mode:string, sc:number, v:number[]}|null}
  */
 function mlSerieRelue(b){
   if(!b||!(b.n>=2)) return null;
@@ -1803,12 +1874,17 @@ function mlSerieRelue(b){
   const X=r.X.map(v=>(v-x0)*mpp), Y=r.Y.map(v=>(y0-v)*mpp);
   const V=mlVitesses(X,Y,b.pasMs/1000,mlDemiFenetre(b.pasMs));
   const mode=V.verticalite>=ML_VERTICALITE?'vertical':'chemin';
+  // LE SENS CONCENTRIQUE rangé avec l'analyse ; absent, 1 — rien ne bouge
+  // pour les analyses d'avant (05/10/2026).
+  const sc=b.sc===-1?-1:1;
+  const vBrute=mode==='vertical'?V.vv:V.vp;
   return {t:d.t,X,Y,px:r.X,py:r.Y,conf:d.conf,mpp,pasMs:b.pasMs,
-    vx:V.vx,vv:V.vv,vt:V.vt,vp:V.vp,axe:V.axe,verticalite:V.verticalite,mode,
+    vx:V.vx,vv:V.vv,vt:V.vt,vp:V.vp,axe:V.axe,verticalite:V.verticalite,mode,sc,
     // LA VITESSE QUI PORTE LES PHASES ET LE TEMPO : la verticale pour une
     // charge verticale — donc pour toutes les analyses déjà enregistrées — et
-    // la projection sur l'axe du mouvement pour le reste.
-    v:mode==='vertical'?V.vv:V.vp};
+    // la projection sur l'axe du mouvement pour le reste ; positive en
+    // concentrique une fois multipliée par le sens.
+    v:sc===-1?vBrute.map(x=>-x):vBrute};
 }
 
 // ══ LOT 10 — LE LEVIER ET LE COUPLE ═════════════════════════════════════════
@@ -2045,6 +2121,7 @@ function mlTableauSerie(segments,options){
           if(isFinite(r.Y[i])){ if(r.Y[i]<yMin) yMin=r.Y[i]; if(r.Y[i]>yMax) yMax=r.Y[i]; }
         }
         if(iMx>=0){ l.vMax=Math.round(mx*1000)/1000; l.tPicMs=Math.round(r.t[iMx]); }
+        l.sc=r.sc;
         // L'AMPLITUDE EST CELLE DU CHEMIN, pas de la hauteur : sur un écarté,
         // la hauteur ne dit rien et le chemin dit tout.
         if(r.mode==='vertical'&&isFinite(yMin)&&isFinite(yMax)) l.amplitude=Math.round((yMax-yMin)*1000)/1000;
@@ -9365,7 +9442,7 @@ function _mlMajLecture(){
   const pertes=(function(){ try{ return mlPertesSerie(lignes); }catch(e){ return null; } })();
   const phrases=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
     tempo:L&&L.tempo,pertes,articulation:_mlArtLue,
-    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes); }catch(e){ return ''; } })()});
+    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes,_mlSensActif()); }catch(e){ return ''; } })()});
   const enCorrection=!!(_ml.dureeMs&&!_ml.rec);
   let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Ce que dit cette répétition</span></div>';
   h+='<div class="ml-phrases">'+phrases.map((/** @type {any} */ p,/** @type {number} */ i)=>
@@ -9390,6 +9467,14 @@ function _mlMajLecture(){
     +'<label class="ml-champ"><span>Charge externe</span><span class="ml-cm">'
     +'<input type="number" inputmode="decimal" min="1" max="999" step="0.5" value="'
     +(_mlChargeKg==null?'':_mlChargeKg)+'" onchange="mlChargeKg(this.value)"><i>kg</i></span></label>';
+  // LES PHASES (05/10/2026) : le sens concentrique de cette analyse, et le
+  // geste qui l'inverse quand la détection s'est trompée (poignée suivie,
+  // presse découpée depuis le verrouillage…).
+  const scA=/** @type {any} */(a).barre.sc===-1?-1:1;
+  h+='<div class="ml-champ"><span>Phases</span><span class="ml-choix">'
+    +'<span class="ml-traj-aide" style="margin:0">'+(scA===-1?'Concentrique en descendant':'Concentrique en montant')+'</span>'
+    +'<button type="button" class="ml-b" onclick="mlInverserPhases()">Inverser les phases</button>'
+    +'</span></div>';
   // LA LIGNE D'ACTION. Par défaut la gravité ; le passage en câble est un
   // geste explicite, parce que le deviner fausserait tous les bras de levier
   // d'un coup et dans le même sens.
@@ -9459,7 +9544,7 @@ function mlPhraseCarte(i){
     {articulation:_mlArtLue}); }catch(e){ return /** @type {any[]} */([]); } })();
   const p=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
     tempo:L&&L.tempo,pertes:mlPertesSerie(lignes),articulation:_mlArtLue,
-    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes); }catch(e){ return ''; } })()})[i];
+    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes,_mlSensActif()); }catch(e){ return ''; } })()})[i];
   if(!p||!p.mesurable) return false;
   return mlCarteTexte(p.texte);
 }
@@ -9468,6 +9553,41 @@ function mlComparerSerie(oui){
   if(!_ml) return false;
   /** @type {any} */(_ml).compare=!!oui;
   _mlDessinerCalque();
+  return true;
+}
+/**
+ * Le sens concentrique du segment actif (1 par défaut).
+ * @returns {number}
+ */
+function _mlSensActif(){
+  const a=_mlActif();
+  return (a&&/** @type {any} */(a).barre&&/** @type {any} */(a).barre.sc===-1)?-1:1;
+}
+/**
+ * PURE. Une trajectoire stockée, phases inversées : `sc` basculé (absent =
+ * 1), et le tempo rangé à l'analyse, s'il y est, échangé — excentrique et
+ * concentrique changent de place, la pause ne bouge pas.
+ * @param {any} b
+ * @returns {any}
+ */
+function mlBarreInversee(b){
+  if(!b||typeof b!=='object') return b;
+  const c=Object.assign({},b);
+  if(c.sc===-1) delete c.sc; else c.sc=-1;
+  const m=Object.assign({},b.m||{});
+  if(m.tExc!=null&&m.tCon!=null){ const x=m.tExc; m.tExc=m.tCon; m.tCon=x; }
+  c.m=m;
+  return c;
+}
+/** « Inverser les phases » : bascule le sens, recalcule et enregistre. */
+function mlInverserPhases(){
+  const a=_mlActif();
+  if(!_ml||!a||!(/** @type {any} */(a).barre)) return false;
+  const nb=mlBarreInversee(/** @type {any} */(a).barre);
+  _ml.segments=(_ml.segments||[]).map(s=>s.id===a.id?{...s,barre:nb}:s);
+  _ml.cacheBarre=null;
+  _mlLectures={};
+  _mlMajLecture(); _mlMajListe(); _mlMajEnregistrer();
   return true;
 }
 /** La charge est libre : c'est la gravité qui tire. */
@@ -9767,7 +9887,10 @@ async function mlAnalyser(relance){
     _mlMajTrajectoire();
     return false;
   }
-  const calc=mlMetriquesBarre(points,mpp,_ml.theta);
+  // Le sens concentrique : celui que le coach a déjà choisi sur ce segment
+  // (« Inverser les phases »), sinon celui de l'exercice lié.
+  const scAvant=(/** @type {any} */(seg).barre&&/** @type {any} */(seg).barre.sc===-1)?-1:undefined;
+  const calc=mlMetriquesBarre(points,mpp,_ml.theta,{exercice:_mlExerciceLie(),sensConc:scAvant});
   if(!calc){
     _ml.mode='graine';
     toast('Trop peu d’images suivies pour une trajectoire : pose le disque plus précisément.','var(--orange)');
