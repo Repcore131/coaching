@@ -116,7 +116,8 @@ ${ME ? fullName(ME) : ''}`,
 }
 async function sendInvite(u, code) {
   const st = $('#mail-state');
-  if (!window.PARKPULSE_MAIL_AUTO || backend.mode !== 'firebase' || !u.email) return;
+  const srv = (S && S.serveur) || {}; const auto = window.PARKPULSE_MAIL_AUTO || (srv.mail === true && Date.now() - (Number(srv.at) || 0) < 3600e3);
+  if (!auto || backend.mode !== 'firebase' || !u.email) return;
   if (st) st.innerHTML = '<span class="muted">Envoi automatique de l’invitation…</span>';
   try {
     await backend.queueMail({ email: u.email, first: (u.first || '').slice(0, 40) || 'Bonjour', code: normCode(code), role: u.role, club: (CLUB ? CLUB.name : '').slice(0, 60), by: fullName(ME).slice(0, 60) });

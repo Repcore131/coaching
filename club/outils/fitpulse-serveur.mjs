@@ -17,6 +17,7 @@ import crypto from 'node:crypto';
 import tls from 'node:tls';
 import { pathToFileURL } from 'node:url';
 import { writeFileSync, readFileSync } from 'node:fs';
+import { passagePush } from './fitpulse-push.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -107,6 +108,13 @@ export const REGLE = `${DEBUT}
         ".read": true,
         ".write": ${j(`${MEMBRE} && ((${MANAGER}) || newData.val() === ${SOI} || (!newData.exists() && data.val() === ${SOI}))`)},
         ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+      }
+    },
+    "pulse_push": {
+      "$uid": {
+        ".read": false,
+        ".write": ${j(`${MEMBRE} && $uid === ${SOI}`)},
+        "$h": { ".validate": "newData.hasChildren(['endpoint', 'keys', 'at']) && newData.child('endpoint').isString() && newData.child('endpoint').val().beginsWith('https://') && newData.child('endpoint').val().length < 1000" }
       }
     },
     "fitpulse_mail": {
@@ -277,10 +285,19 @@ async function main() {
   console.log('Règles Fit Pulse :', await assurerRegle(tk));
   console.log('Comptes de départ :', await assurerComptes(tk));
   if (process.argv[2] === 'regles') return;
+  // État du serveur publié pour l'appli : l'envoi automatique des invitations n'est proposé que si la messagerie est réglée.
+  await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
+  await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
+  // Notifications push (téléphone fermé).
+  try { const S = (await (await api(tk, 'pulse.json')).json()) || {}; console.log('Push :', JSON.stringify(await passagePush(api, tk, S))); } catch (e) { console.log('Push : échec,', e.message); }
   const boite = await (await api(tk, 'fitpulse_mail.json')).json() || {};
   const ids = Object.keys(boite).slice(0, MAX_PAR_PASSAGE);
   console.log(`${Object.keys(boite).length} demande(s) en attente`);
-  if (ids.length && !MDP && !DRY) throw new Error('MAIL_MOT_DE_PASSE absent : rien envoyé');
+  if (ids.length && !MDP && !DRY) {
+    // Sans mot de passe de messagerie : on ne garde pas un code dans la base plus de 24 h.
+    for (const id of ids) if (Date.now() - (Number(boite[id].at) || 0) > 864e5) await api(tk, `fitpulse_mail/${id}.json`, { method: 'DELETE' });
+    console.log('MAIL_MOT_DE_PASSE absent : invitations non envoyées (le manager garde le bouton Envoyer par e-mail).'); return;
+  }
   let envoyes = 0;
   for (const id of ids) {
     const d = boite[id];

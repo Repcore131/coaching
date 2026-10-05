@@ -118,7 +118,7 @@ function notifCard() {
   return `<div class="card notif-card"><h3>Notifications</h3>
     <div class="row wrap" style="gap:8px;margin:6px 0 12px"><span class="tag ${'Notification' in window && Notification.permission === 'granted' ? 'is-ok' : ''}">${st}</span>${'Notification' in window && Notification.permission === 'default' ? '<button class="btn sm primary" data-act="notifEnable">Activer les alertes sur cet appareil</button>' : ''}</div>
     ${isStandalone() ? '' : INSTALL_EVT ? '<button class="btn sm" data-act="installApp">Installer Fit Pulse</button>' : isIos() ? '<p class="small">Pour recevoir les alertes sur iPhone : touchez Partager, puis Sur l’écran d’accueil, puis ouvrez Fit Pulse depuis l’icône.</p>' : ''}
-    <p class="muted small">Les alertes s’affichent quand Fit Pulse est ouverte, même en arrière-plan. Elles ne contiennent jamais le nom d’un client.</p>
+    <p class="muted small">${deepGet(S, ['serveur', 'vapidPublic']) ? 'Une fois activées, les alertes arrivent même téléphone fermé (sur iPhone : appli installée sur l’écran d’accueil).' : 'Les alertes s’affichent quand Fit Pulse est ouverte, même en arrière-plan.'} Elles ne contiennent jamais le nom d’un client.</p>
     <div class="nt-rules">${Object.entries(NOTIF_RULES).filter(([, r]) => !r.manager || mgr).map(([id, r]) => `<label class="row"><input type="checkbox" data-change="notifRule" data-id="${id}" ${ruleOn(id) ? 'checked' : ''}><span class="spacer">${r.label}<small class="muted">${esc(r.ex)}</small></span></label>`).join('')}</div>
     <div class="form-grid" style="margin-top:10px"><label class="field"><span>Heures calmes : de</span><input class="input" type="time" value="${P.quiet.from}" data-change="notifQuiet" data-k="from"></label><label class="field"><span>à</span><input class="input" type="time" value="${P.quiet.to}" data-change="notifQuiet" data-k="to"></label></div>
     <label class="row small" style="margin-top:8px"><input type="checkbox" data-change="notifQuiet" data-k="sunday" ${P.quiet.sunday ? 'checked' : ''}> Silence le dimanche</label>
@@ -128,7 +128,7 @@ const saveNotif = P => setPref('notif', { rules: P.rules, quiet: P.quiet, max: P
 ACTIONS.notifRule = el => { const id = el.dataset.id; if (id === 'live') return setPref('liveBanner', el.checked); if (id === 'digest') return setPref('digest', el.checked); const P = notifPrefs(); P.rules[id] = el.checked; saveNotif(P); };
 ACTIONS.notifQuiet = el => { const P = notifPrefs(); P.quiet[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; saveNotif(P); };
 ACTIONS.notifMax = el => { const P = notifPrefs(); P.max = Number(el.value) || 6; saveNotif(P); };
-ACTIONS.notifEnable = async () => { try { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Alertes activées sur cet appareil.' : 'Alertes non autorisées.'); render(); } catch (_) { toast('Ce navigateur ne permet pas les alertes.'); } };
+ACTIONS.notifEnable = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') pushSubscribe().catch(() => null); toast(r === 'granted' ? 'Alertes activées sur cet appareil.' : 'Alertes non autorisées.'); render(); } catch (_) { toast('Ce navigateur ne permet pas les alertes.'); } };
 ACTIONS.installApp = async () => { if (!INSTALL_EVT) return; INSTALL_EVT.prompt(); await INSTALL_EVT.userChoice.catch(() => null); INSTALL_EVT = null; render(); };
 
 // Service worker : seulement en ligne (https), jamais en fichier local.
@@ -136,3 +136,20 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => null));
   navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'notif-click' && e.data.url) location.hash = e.data.url.replace(/^.*#/, '#'); });
 }
+
+// ── Abonnement push de cet appareil (alertes téléphone fermé) ────────────
+const b64uToBytes = s => { const p = '='.repeat((4 - s.length % 4) % 4); const b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function pushSubscribe() {
+  if (!ME || backend.mode !== 'firebase' || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return null;
+  const key = deepGet(S, ['serveur', 'vapidPublic']); if (!key) return null;
+  const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription();
+  if (sub && safeLS.get('fitpulse.pushKey') !== key) { await sub.unsubscribe().catch(() => null); sub = null; }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
+  const j = sub.toJSON(); const h = hkey(j.endpoint);
+  await backend.fb.database().ref(`pulse_push/${ME.id}/${h}`).set({ endpoint: j.endpoint, keys: j.keys, at: Date.now(), ua: navigator.userAgent.slice(0, 120) });
+  safeLS.set('fitpulse.pushKey', key); safeLS.set('fitpulse.pushId', `${ME.id}/${h}`);
+  return sub;
+}
+async function pushForget() { try { const id = safeLS.get('fitpulse.pushId'); if (id && backend.fb) await backend.fb.database().ref(`pulse_push/${id}`).remove(); safeLS.del('fitpulse.pushId'); const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (_) { /* rien */ } }
+// À chaque ouverture : abonnement remis à jour si les alertes sont autorisées.
+setTimeout(() => { pushSubscribe().catch(() => null); }, 6000);
