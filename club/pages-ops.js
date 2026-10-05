@@ -140,7 +140,9 @@ ACTIONS.resDetailSave = el => {
   const P = k => ['resiliations', r.id, k];
   const ops = [[P('status'), f.status], [P('saved'), f.status === 'sauvee'], [P('ownerId'), f.owner || null], [P('userId'), f.owner || null], [P('date'), f.date || r.date], [P('effective'), f.effective || null], [P('reason'), f.reason]];
   if (f.status !== resStatus(r)) ops.push(resLogOp(r, 'Statut : ' + RES_STATUS[f.status].label));
-  if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]);
+  // Déjà sauvé : le point garde sa date (corriger le motif ne déplace pas le sauvetage d'un mois à l'autre).
+  const svOld = S.entries['sv_' + r.id]; const keep = resStatus(r) === 'sauvee' && svOld;
+  if (f.status === 'sauvee' && (f.owner || ME.id)) ops.push([['entries', 'sv_' + r.id], { ...(keep ? svOld : {}), id: 'sv_' + r.id, userId: f.owner || ME.id, clubId: CLUB.id, kpiId: 'sauvetage', date: keep ? svOld.date : today(), value: 1, source: keep ? svOld.source || 'manual' : 'manual', at: keep ? svOld.at || Date.now() : Date.now(), by: ME.id }]);
   if (f.status !== 'sauvee') ops.push([['entries', 'sv_' + r.id], null]);
   db.batch(ops); closeModal(); toast('Dossier enregistré');
 };

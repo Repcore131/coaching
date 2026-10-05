@@ -225,7 +225,12 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const f = ACTIONS[el.dataset.act];
-  if (f) { e.preventDefault(); f(el, e); }
+  if (f) {
+    e.preventDefault(); f(el, e);
+    // Lien interne qui porte aussi une action : l'action d'abord, puis la page visée.
+    const href = el.tagName === 'A' ? el.getAttribute('href') || '' : '';
+    if (href.startsWith('#/')) { if (location.hash !== href) location.hash = href; else render(); }
+  }
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');

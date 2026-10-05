@@ -418,8 +418,8 @@ PAGES.wrap = {
       ${slides.map((s, i) => `<div class="wrap-slide ${i ? 'hidden' : ''}" data-slide="${i}" aria-live="polite">${s}</div>`).join('')}</div></div>`;
   },
   mount() {
-    UI.wrapIdx = 0; UI.wrapPaused = false; wrapShow(0);
-    const st = $('.wrap-stage'); if (!st) return; st.focus({ preventScroll: true });
+    const st = $('.wrap-stage'); if (!st) return;
+    UI.wrapIdx = 0; UI.wrapPaused = false; wrapShow(0); st.focus({ preventScroll: true });
     st.addEventListener('pointerdown', () => { UI.wrapPaused = true; clearTimeout(wrapTimer); });
     st.addEventListener('pointerup', () => { UI.wrapPaused = false; });
   },
@@ -431,6 +431,7 @@ document.addEventListener('keydown', e => {
 let wrapTimer = null;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function wrapShow(i) {
+  if (!UI.wrapData || !$('.wrap-stage')) { clearTimeout(wrapTimer); return; }
   const n = UI.wrapData.slides; i = clamp(i, 0, n - 1); UI.wrapIdx = i;
   $$('.wrap-slide').forEach(s => s.classList.toggle('hidden', Number(s.dataset.slide) !== i));
   $$('.wrap-bars i').forEach((b, j) => { b.className = j < i ? 'done' : j === i ? (reducedMotion() ? 'done' : 'cur') : ''; const x = $('b', b); x.style.animation = 'none'; void x.offsetWidth; x.style.animation = ''; });

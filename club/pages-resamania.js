@@ -145,7 +145,7 @@ ACTIONS.rsmCommit = () => {
   // 1. memoriser les correspondances choisies
   unk.forEach(u => { const ch = choices[u.key]; if (ch) u.keys.forEach(k => ops.push([['rsm', 'aliases', safeKey(k)], ch])); });
   const pick = s => { if (!s) return null; if (s.status === 'user') return s.userId; if (s.status === 'unknown') { const ch = choiceFor(s, choices, unk); return ch && ch !== 'system' && ch !== 'ignore' ? ch : null; } return null; };
-  const written = new Set();
+  const written = new Set(); const batchImp = {};
   const clientIdx = {}; Object.values(S.clients).filter(c => c.clubId === club).forEach(c => { if (c.num) clientIdx['n:' + c.num] = c; clientIdx['t:' + tokensKey(c.name || '')] = clientIdx['t:' + tokensKey(c.name || '')] || c; });
   const pendingClients = {};
   // Un telephone saisi a la main n'est jamais remplace par celui d'un import.
@@ -177,8 +177,11 @@ ACTIONS.rsmCommit = () => {
         if (man) { summary.matched = (summary.matched || 0) + 1; if (!man.matchedKey) ops.push([['entries', man.id, 'matchedKey'], e.key]); written.add(id); continue; }
       }
       const old = S.entries[id];
-      const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), [impId]: true };
-      ops.push([['entries', id], { id, userId: uid, clubId: club, kpiId: e.kpiId, date: e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}) }]);
+      // deux fichiers du même dépôt qui portent la même vente : les deux imports sont retenus
+      const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), ...(batchImp[id] || {}), [impId]: true }; batchImp[id] = importIds;
+      // B2B : l'entreprise reste comptée à sa première facture, chez le commercial d'origine.
+      const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
+      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}) }]);
     }
     // Export de gestion qui couvre une periode complete : une vente deja importee
     // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
@@ -198,7 +201,8 @@ ACTIONS.rsmCommit = () => {
       if (canal === 'equipe') { uid = pick(x.seller); if (!uid) { const ch = choiceFor(x.seller, choices, unk); canal = ch === 'system' ? 'client' : ch === 'ignore' ? 'tiers' : 'equipe'; } }
       let id = 'v' + hkey(club + '|' + x.key);
       if (x.legacyKey && (S.recov || {})['v' + hkey(club + '|' + x.legacyKey)]) id = 'v' + hkey(club + '|' + x.legacyKey);
-      ops.push([['recov', id], { id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now }]);
+      const rvOld = (S.recov || {})[id]; const rvImp = { ...((rvOld && rvOld.importIds) || (rvOld && rvOld.importId ? { [rvOld.importId]: true } : {})), [impId]: true };
+      ops.push([['recov', id], { importIds: rvImp, id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now }]);
       summary.recov++;
     }
     const wasErased = typeof erasedNums === 'function' ? erasedNums(club) : () => false; const back = Object.keys(r.clients).filter(wasErased);
@@ -233,7 +237,7 @@ ACTIONS.rsmCommit = () => {
     }
     if (r.balances) {
       const listed = new Set();
-      r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), ...(b.oldest ? { oldestIncident: b.oldest } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
+      r.balances.list.forEach(b0 => { const b = { ...b0, amount: Math.round(b0.amount * 100) / 100 }; const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), ...(b.oldest ? { oldestIncident: b.oldest } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: Math.abs(Number((pendingClients[c0.id] || c0).balance) - b.amount) < 0.005 ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
       // photo complete : un client absent du fichier n'a plus d'impaye
       // Seule la photo complete « Clients en incident » solde les absents. Une
       // liste Incidents partielle ne touche jamais aux autres clients. Sans
@@ -256,7 +260,9 @@ ACTIONS.rsmCommit = () => {
       const owner = old && old.ownerId ? old.ownerId : pick(x.seller);
       // le suivi fait dans Fit Pulse (statut, responsable, actions) n'est jamais ecrase
       const status = x.saved ? 'sauvee' : old && old.status ? old.status : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee';
-      ops.push([['resiliations', id], { ...(old || {}), id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
+      // Un dossier garde la liste de ses imports : annuler l'un ne cache pas ce qu'un autre porte, réimporter le fait réapparaître.
+      const { hidden: _h, ...prev } = old || {}; const resImp = { ...(prev.importIds || (prev.importId ? { [prev.importId]: true } : {})), [impId]: true };
+      ops.push([['resiliations', id], { ...prev, importIds: resImp, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
       if (status === 'sauvee' && owner && !S.entries['sv_' + id]) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now }]);
       summary.resil++;
     }
@@ -308,7 +314,7 @@ function rsmPending() {
   const P = Object.entries(deepGet(S, ['rsm', 'pendingMatches', CLUB.id]) || {}); if (!P.length) return '';
   return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('alert')}<h3>À rapprocher (${P.length})</h3></div><p class="muted small">Fins de contrat dont le nom correspond à plusieurs fiches, ou à aucune. Aucune date n’est écrite tant que vous n’avez pas choisi.</p>
     ${P.slice(0, 30).map(([k, x]) => `<div class="row wrap opp-mini"><div class="spacer"><b>${esc(x.name)}</b><div class="muted small">${esc(x.offer || 'offre inconnue')} · fin le ${x.end ? dmy(x.end) : 'n.d.'}</div></div>
-      <select class="input sm" style="width:auto" data-change="pmPick" data-k="${esc(k)}"><option value="">${x.candidates.length ? 'Choisir la fiche' : 'Aucune fiche à ce nom'}</option>${(x.candidates.length ? x.candidates : []).map(id => S.clients[id]).filter(Boolean).map(c => `<option value="${c.id}">${esc(c.name)}${c.num ? ' · n° ' + esc(c.num) : ''}${c.offer ? ' · ' + esc(c.offer) : ''}</option>`).join('')}</select>
+      <select class="input sm" style="width:auto" data-change="pmPick" data-k="${esc(k)}"><option value="">${(x.candidates || []).length ? 'Choisir la fiche' : 'Aucune fiche à ce nom'}</option>${((x.candidates || [])).map(id => S.clients[id]).filter(Boolean).map(c => `<option value="${c.id}">${esc(c.name)}${c.num ? ' · n° ' + esc(c.num) : ''}${c.offer ? ' · ' + esc(c.offer) : ''}</option>`).join('')}</select>
       <button class="btn sm ghost" data-act="pmIgnore" data-k="${esc(k)}">Ignorer</button></div>`).join('')}</div>`;
 }
 ACTIONS.pmPick = el => {
@@ -319,8 +325,9 @@ ACTIONS.pmPick = el => {
 ACTIONS.pmIgnore = el => db.set(['rsm', 'pendingMatches', CLUB.id, el.dataset.k], null);
 
 // ── Page Impayés : tous les canaux ────────────────────────────────────────
+const recovLive = x => { const ids = x.importIds ? Object.keys(x.importIds) : x.importId ? [x.importId] : []; return !ids.length || ids.some(impActive); };
 function recovList(clubId, from, to) {
-  return Object.values(S.recov || {}).filter(x => x.clubId === clubId && x.date >= from && x.date <= to && x.canal !== 'annule' && !(x.importId && S.imports[x.importId] && S.imports[x.importId].active === false));
+  return Object.values(S.recov || {}).filter(x => x.clubId === clubId && x.date >= from && x.date <= to && x.canal !== 'annule' && recovLive(x));
 }
 const impayesAnalyse = {
   render() {

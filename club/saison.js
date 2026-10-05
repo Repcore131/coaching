@@ -64,8 +64,8 @@ ACTIONS.yearSave = async el => {
 // Paliers proposés : 90 %, 100 % et 115 % de l'objectif du mois.
 ACTIONS.palPropose = async () => {
   const mk = UI.palMonth || curMonth(); const cur = paliersFor(CLUB.id, mk); const out = {};
-  Object.keys(cur).forEach(k => { const t = clubMonthTarget(mk, CLUB.id, k); if (!(t > 0)) { out[k] = cur[k]; return; } out[k] = [0.9, 1, 1.15].map((f, i) => ({ target: Math.round(t * f), reward: ((cur[k] || [])[i] || {}).reward || '' })); });
-  if (!await confirmDlg(`Paliers proposés pour ${monthLabel(mk).toLowerCase()} : ${Object.entries(out).map(([k, L]) => `${(S.kpis[k] || {}).label || k} ${L.map(t => fmtN(t.target)).join(' / ')}`).join(', ')}.`, { ok: 'Appliquer' })) return;
+  Object.keys(cur).forEach(k => { const t = clubMonthTarget(mk, CLUB.id, k); if (!(t > 0)) { out[k] = cur[k]; return; } out[k] = [0.9, 1, 1.15].map((f, i) => { const old = (cur[k] || [])[i] || {}; return { ...old, target: Math.round(t * f), reward: old.reward || '' }; }); });
+  if (!await confirmDlg(`Paliers proposés pour ${monthLabel(mk).toLowerCase()} : ${Object.entries(out).map(([k, L]) => `${esc((S.kpis[k] || {}).label || k)} ${L.map(t => fmtN(t.target)).join(' / ')}`).join(', ')}.`, { ok: 'Appliquer' })) return;
   db.set(['paliers', CLUB.id, mk], out); toast('Paliers proposés appliqués');
 };
 // Bandeau d'accueil trois semaines avant janvier et septembre.
@@ -74,7 +74,7 @@ function saisonBanner() {
   const peaks = [`${y}-09-01`, `${y + 1}-01-01`, `${y}-01-01`]; const p = peaks.map(d => [d, dayDiff(t, d)]).find(([, n]) => n > 0 && n <= 21);
   return p ? `<a class="recap-ready" href="#/dashboard" data-act="goFunnel">${ico('flag')}<div><b>Pic de saison dans ${plur(p[1], 'jour', 'jours')}</b><span>Préparez prospects et invités : ${p[0].slice(5, 7) === '01' ? 'janvier' : 'septembre'} pèse souvent 1,4 à 1,6 fois un mois moyen.</span></div>${ico('chevR')}</a>` : '';
 }
-ACTIONS.goFunnel = () => { UI.dashTab = 'entonnoir'; };
+ACTIONS.goFunnel = () => { UI.dashTab = 'entonnoir'; render(); };
 
 // ── Prévision de fin de mois ──────────────────────────────────────────────
 function dayVals(clubId, kpiId, mk, userId = null) { const n = daysIn(mk); return Array.from({ length: n }, (_, i) => sumRange(clubId, userId, kpiId, `${mk}-${pad(i + 1)}`, `${mk}-${pad(i + 1)}`)); }

@@ -115,8 +115,8 @@ function elapsed(r, clubId = null, userId = null) {
   if (t > r.to) return 1;
   const h = new Date(); const frac = Math.max(0, Math.min(1, (h.getHours() + h.getMinutes() / 60 - 9) / 12));
   if (!clubId) {
-    const total = (dateOf(r.to) - dateOf(r.from)) / 86400000 + 1;
-    const done = (dateOf(t) - dateOf(r.from)) / 86400000 + 1;
+    const total = Math.round((dateOf(r.to) - dateOf(r.from)) / 86400000) + 1;
+    const done = Math.round((dateOf(t) - dateOf(r.from)) / 86400000) + 1;
     return done / total;
   }
   const total = workdays(userId, clubId, r.from, r.to);
@@ -431,7 +431,7 @@ function loyaltyTasks(clubId) {
       // anciens clients, perdus, prospects : pas de relance de fidelisation
       if (c.status && /ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status))) continue;
       const cand = [];
-      if (c.start) { const age = (dateOf(t) - dateOf(c.start)) / 86400000; if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
+      if (c.start) { const age = Math.round((dateOf(t) - dateOf(c.start)) / 86400000); if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
       if (c.end && c.end >= t && c.end <= addDays(t, 45)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -45), amount: typeof mensualite === 'function' ? Math.round(mensualite(c) * dureeVieMois(clubId)) : 0 });
       if (c.birth) {
         const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(-5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(-5)}`;

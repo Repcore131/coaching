@@ -40,7 +40,7 @@ const dmy = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) 
 const dm = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) : '';
 const dayLabel = s => { const d = dateOf(s); return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()].toLowerCase(); };
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const initials = u => u ? ((u.first || '?')[0] + (u.last || '')[0] || '').toUpperCase() : '?';
+const initials = u => u ? (((u.first || '?')[0] || '?') + ((u.last || '')[0] || '')).toUpperCase() : '?';
 const fullName = u => u ? `${u.first || ''} ${u.last || ''}`.trim() : 'Inconnu';
 const ago = ts => {
   const s = Math.round((Date.now() - ts) / 1000);

@@ -336,7 +336,7 @@ ACTIONS.openSaisies = () => {
         <button class="btn primary" type="submit">Enregistrer</button>
       </form>
       <h3 style="margin:20px 0 8px">Mes dernières saisies</h3>
-      ${Object.values(S.entries).filter(e => e.source === 'manual' && e.clubId === CLUB.id && (e.userId === ME.id || e.by === ME.id)).sort((a, b) => b.at - a.at).slice(0, 8).map(e => `<div class="row small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${dm(e.date)}</span><b>${esc(S.kpis[e.kpiId] ? S.kpis[e.kpiId].label : '')}</b><span class="muted">${esc(fullName(S.users[e.userId]))}</span><span class="spacer"></span><b>+${fmtV(e.value, S.kpis[e.kpiId] ? S.kpis[e.kpiId].unit : 'qty')}</b><button class="btn ghost icon sm" data-delentry="${e.id}" title="Supprimer">${ico('trash')}</button></div>`).join('') || '<p class="muted small">Aucune saisie.</p>'}`
+      ${Object.values(S.entries).filter(e => e.source === 'manual' && e.clubId === CLUB.id && !e.adjust && !/^(sv|dn)_/.test(e.id) && (e.by === ME.id || (!e.by && e.userId === ME.id) || (isManager() && e.userId === ME.id))).sort((a, b) => b.at - a.at).slice(0, 8).map(e => `<div class="row small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${dm(e.date)}</span><b>${esc(S.kpis[e.kpiId] ? S.kpis[e.kpiId].label : '')}</b><span class="muted">${esc(fullName(S.users[e.userId]))}</span><span class="spacer"></span><b>${Number(e.value) < 0 ? '' : '+'}${fmtV(e.value, S.kpis[e.kpiId] ? S.kpis[e.kpiId].unit : 'qty')}</b><button class="btn ghost icon sm" data-delentry="${e.id}" title="Supprimer">${ico('trash')}</button></div>`).join('') || '<p class="muted small">Aucune saisie.</p>'}`
       : tasksToday();
     $('.modal-body', m).innerHTML = `<div class="tabs"><button data-t="saisie" class="${tab === 'saisie' ? 'on' : ''}">Mes saisies</button><button data-t="tasks" class="${tab === 'tasks' ? 'on' : ''}">Liste de tâches</button></div>${body}`;
   };
@@ -348,6 +348,7 @@ ACTIONS.openSaisies = () => {
     if (del) {
       const en = S.entries[del.dataset.delentry]; const mn = minEntryDate(CLUB.id);
       if (en && mn && en.date < mn) { toast('Cette saisie est dans une période close : demandez à votre manager.'); return; }
+      if (en && !isManager() && (en.adjust || (en.by && en.by !== ME.id))) { toast('Seul votre manager peut supprimer cette saisie.'); return; }
       if (await confirmDlg('Supprimer cette saisie ?', { ok: 'Supprimer', danger: true })) { db.batch([[['entries', del.dataset.delentry], null], [['audit', newId()], { at: Date.now(), by: ME.id, action: 'delete', club: CLUB.id, entry: en || null }]]); ACTIONS.openSaisies(); }
       return;
     }
@@ -506,10 +507,12 @@ PAGES.chat = {
   },
 };
 function sendChat(o) {
-  const chans = [...(ME.clubs || []), 'all'];
+  const chans = [...myClubs().map(c => c.id), 'all'];
   const ch = chans.includes(UI.chatCh) ? UI.chatCh : CLUB.id;
   const id = newId();
-  db.set(['chat', id], { id, channel: ch, userId: ME.id, at: Date.now(), ...o, ...(UI.chatReply ? { parentId: UI.chatReply } : {}) });
+  // une réponse reste dans le salon de son message d'origine
+  const par = UI.chatReply && S.chat && S.chat[UI.chatReply] && S.chat[UI.chatReply].channel === ch ? UI.chatReply : null;
+  db.set(['chat', id], { id, channel: ch, userId: ME.id, at: Date.now(), ...o, ...(par ? { parentId: par } : {}) });
   UI.chatReply = null;
 }
 function shrinkImage(file, max) {

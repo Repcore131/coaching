@@ -254,7 +254,8 @@ ACTIONS.impCancel = async el => {
   const extra = i.type === 'kpi' ? 'Ses saisies ne compteront plus dans les tableaux de bord ni le classement.' : i.type === 'resil' ? 'Les résiliations créées par cet import seront retirées.' : 'Les fiches clients restent en place (elles ont pu être complétées depuis).';
   if (!await confirmDlg(`Annuler l’import « ${esc(i.name)} » ? ${extra} Vous pourrez le rétablir.`, { ok: 'Annuler l’import', danger: true })) return;
   const ops = [[['imports', i.id, 'active'], false]];
-  if (i.type === 'resil') Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], true]));
+  const carries = r => (r.importIds ? !!r.importIds[i.id] : r.importId === i.id);
+  if (i.type === 'resil') Object.values(S.resiliations).filter(r => carries(r) && !Object.keys(r.importIds || {}).some(k => k !== i.id && impActive(k))).forEach(r => ops.push([['resiliations', r.id, 'hidden'], true]));
   db.batch(ops); toast('Import annulé.');
 };
 ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops = [[['imports', i.id, 'active'], true]];
@@ -267,7 +268,7 @@ ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops
   if (dup.length) {
     if (!await confirmDlg(`${plur(dup.length, 'ligne', 'lignes')} de cet import sont déjà comptées par un autre import actif. Rétablir uniquement les ${plur(mine.length - dup.length, 'ligne', 'lignes')} nouvelles ?`, { ok: 'Rétablir sans doublon' })) return;
     dup.forEach(e => ops.push([['entries', e.id, 'suppressed'], true]));
-  } Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
+  } Object.values(S.resiliations).filter(r => (r.importIds ? !!r.importIds[i.id] : r.importId === i.id)).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
 ACTIONS.impDetail = el => {
   const i = S.imports[el.dataset.id];
   const rows = Object.values(S.entries).filter(e => e.importId === i.id).sort((a, b) => a.date.localeCompare(b.date));

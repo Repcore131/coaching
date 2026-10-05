@@ -201,7 +201,7 @@ function contactLinks(rl, text = '') {
     tel: p ? `tel:${p}` : null,
     sms: p ? `sms:${p}?&body=${encodeURIComponent(text)}` : null,
     wa: p ? `https://wa.me/${p.replace('+', '')}?text=${encodeURIComponent(text)}` : null,
-    mail: e ? `mailto:${e}?subject=${encodeURIComponent('Fitness Park ' + (CLUB.name || ''))}&body=${encodeURIComponent(text)}` : null,
+    mail: e && /^[^\s@<>"']+@[^\s@<>"']+$/.test(e) ? `mailto:${encodeURIComponent(e).replace('%40', '@')}?subject=${encodeURIComponent('Fitness Park ' + (CLUB.name || ''))}&body=${encodeURIComponent(text)}` : null,
   };
 }
 
@@ -259,7 +259,7 @@ function relRow(r) {
       <div class="muted small">${r.list.map(x => esc(x.reason)).join(' · ')}</div>
       <div class="muted small">${owner ? 'Responsable : ' + esc(owner) : 'Non attribuée'}${rl.attempts ? ` · ${plur(rl.attempts, 'tentative', 'tentatives')}` : ''}${last ? ` · dernier contact ${ago(last.at)} : ${esc((TOUCH_OUTCOMES[last.outcome] || {}).label || last.outcome)}` : ''}${r.next > Date.now() ? ` · rappel à ${new Date(r.next).toTimeString().slice(0, 5)}` : ''}${lock ? ` · <b>en cours par ${esc((S.users[lock.claimedBy] || {}).first || 'un collègue')}</b>` : ''}</div></div>
     <div class="rel-acts">
-      ${r.phone ? `<a class="btn primary rel-call" href="${L.tel}" data-act="relCall" data-key="${rl.key}" aria-label="Appeler ${esc(r.name)}">${ico('phone')}<span>Appeler</span></a>` : rl.client ? `<button class="btn sm" data-act="relPhone" data-id="${rl.clientId}">${ico('plus')} Ajouter le numéro</button>` : ''}
+      ${r.phone ? `<a class="btn primary rel-call" href="${esc(L.tel)}" data-act="relCall" data-key="${rl.key}" aria-label="Appeler ${esc(r.name)}">${ico('phone')}<span>Appeler</span></a>` : rl.client ? `<button class="btn sm" data-act="relPhone" data-id="${rl.clientId}">${ico('plus')} Ajouter le numéro</button>` : ''}
       ${r.phone ? `<button class="btn icon" data-act="relMsg" data-key="${rl.key}" data-ch="sms" aria-label="SMS" ${rl.client.optOutSms ? 'disabled title="Opposé aux SMS"' : ''}>${ico('chat')}</button><button class="btn icon" data-act="relMsg" data-key="${rl.key}" data-ch="whatsapp" aria-label="WhatsApp" ${rl.client.optOutSms ? 'disabled' : ''}>${ico('send')}</button>` : ''}
       ${rl.client && rl.client.email ? `<button class="btn icon" data-act="relMsg" data-key="${rl.key}" data-ch="email" aria-label="E-mail">${ico('mail')}</button>` : ''}
       <button class="btn sm" data-act="relNote" data-key="${rl.key}">Noter</button>
@@ -395,7 +395,7 @@ function sessionNext() {
     <div class="row wrap" style="gap:6px">${[rl.kind].map(k => `<span class="tag is-warn">${REL_KINDS[k].label}</span>`).join('')}<span class="muted small">${esc(rl.reason)}</span></div>
     <div class="muted small">${c.offer ? 'Offre : ' + esc(c.offer) + ' · ' : ''}${c.end ? 'fin ' + dmy(c.end) + ' · ' : ''}${rl.touches[0] ? 'dernière note : ' + esc(rl.touches[0].note || (TOUCH_OUTCOMES[rl.touches[0].outcome] || {}).label || '') : 'premier contact'}</div>
     ${['Ouverture', 'Questions', 'Conclusion'].map((h, i) => sc[i] ? `<div class="script"><b>${h}</b><p>${esc(fillTemplate(sc[i], ctx).text)}</p></div>` : '').join('')}
-    <div class="row wrap" style="gap:8px;margin-top:10px">${L.tel ? `<a class="btn primary rel-call" href="${L.tel}" data-act="relCall" data-key="${rl.key}">${ico('phone')}<span>Appeler ${esc(phoneFmt(clientPhone(c)))}</span></a>` : '<span class="muted">Pas de numéro</span>'}<button class="btn" data-act="relNote" data-key="${rl.key}">Noter le résultat</button><button class="btn ghost" data-act="sessSkip">Passer</button><button class="btn ghost" data-act="sessStop">Terminer</button></div></div>` });
+    <div class="row wrap" style="gap:8px;margin-top:10px">${L.tel ? `<a class="btn primary rel-call" href="${esc(L.tel)}" data-act="relCall" data-key="${rl.key}">${ico('phone')}<span>Appeler ${esc(phoneFmt(clientPhone(c)))}</span></a>` : '<span class="muted">Pas de numéro</span>'}<button class="btn" data-act="relNote" data-key="${rl.key}">Noter le résultat</button><button class="btn ghost" data-act="sessSkip">Passer</button><button class="btn ghost" data-act="sessStop">Terminer</button></div></div>` });
 }
 ACTIONS.sessSkip = () => sessionNext();
 ACTIONS.sessStop = () => { UI.session = null; closeModal(); render(); };

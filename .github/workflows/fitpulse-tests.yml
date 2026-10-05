@@ -46,3 +46,7 @@ jobs:
           (cd club && python3 -m http.server 8765 >/dev/null 2>&1 &)
           sleep 2
           PW="$RUNNER_TEMP/pw/node_modules/playwright" node club/tests/e2e.mjs
+      - name: Robot (toutes les pages, rôles, écrans, dates, base vide, chiffres)
+        run: |
+          curl -sf http://localhost:8765/ >/dev/null || { (cd club && python3 -m http.server 8765 >/dev/null 2>&1 &); sleep 2; }
+          PW="$RUNNER_TEMP/pw/node_modules/playwright" node club/tests/robot.mjs

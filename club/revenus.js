@@ -92,7 +92,7 @@ ACTIONS.prospectNote = el => {
   openModal({ title: `Appel · ${pName(p)}`, body: `<form id="pnf" class="grid"><div class="chips">${[['ok', 'Joint'], ['noanswer', 'Pas de réponse'], ['rdv', 'RDV pris'], ['refus', 'Pas intéressé']].map(([v, l], i) => `<label class="chip-radio"><input type="radio" name="o" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</div><input class="input" name="note" maxlength="200" placeholder="Note (facultatif)"></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="prospectNoteSave" data-id="${p.id}">Enregistrer</button>` });
 };
-ACTIONS.prospectNoteSave = el => { const f = formData($('#pnf')); const id = newId(); db.set(['touches', id], { id, clubId: CLUB.id, prospectId: el.dataset.id, at: Date.now(), by: ME.id, channel: 'call', outcome: f.o === 'refus' ? 'refus' : f.o === 'noanswer' ? 'noanswer' : 'ok', note: (f.note || '').slice(0, 200) + (f.o === 'rdv' ? ' (RDV pris)' : '') }); closeModal(); toast('Appel noté'); };
+ACTIONS.prospectNoteSave = el => { const f = formData($('#pnf')); const id = newId(); db.set(['touches', id], { id, clubId: CLUB.id, prospectId: el.dataset.id, at: Date.now(), by: ME.id, channel: 'call', outcome: ({ ok: 'joint', noanswer: 'pasreponse', rdv: TOUCH_OUTCOMES.rdv ? 'rdv' : 'joint', refus: 'refus' })[f.o] || 'joint', note: (f.note || '').slice(0, 200) + (f.o === 'rdv' && !TOUCH_OUTCOMES.rdv ? ' (RDV pris)' : '') }); closeModal(); toast('Appel noté'); };
 
 // ── Invités (et parrainage) ───────────────────────────────────────────────
 const guestsOf = clubId => Object.values(S.guests || {}).filter(g => g && g.clubId === clubId);
@@ -170,7 +170,7 @@ function reactivables(clubId) {
       const mois = Math.round(ageDays(c.endDate) / 30.44);
       const again = (I.byName[tokensKey(c.name || '')] || []).some(o => o.id !== c.id && o.start && o.start > c.endDate && !/ancien|perdu/.test(norm(o.status || '')));
       return { c, mois, again, prio: mensualite(c) * (mois <= 6 ? 1 : mois <= 12 ? 0.6 : 0.3), seg: mois <= 6 ? '3-6' : mois <= 12 ? '6-12' : '12-24' };
-    }).filter(x => x.mois >= 3 && x.mois <= 24 && !x.again && !x.c.returnedAt).sort((a, b) => b.prio - a.prio);
+    }).filter(x => x.mois >= 3 && x.mois <= 24 && !x.again && !x.c.returnedAt && !x.c.noReactivation).sort((a, b) => b.prio - a.prio);
   });
 }
 // Adhérents à solliciter pour un parrainage : plus de 6 mois, sans impayé, 5 par jour au plus.
@@ -242,7 +242,7 @@ function oppHomeList(n = 5) {
 function palierManque() {
   const mk = curMonth(); const k = Object.keys(paliersFor(CLUB.id, mk))[0]; if (!k) return '';
   const s = palierState(CLUB.id, mk, k); if (!s || !s.next) return '';
-  return `<span>Il manque ${fmtV(Math.ceil(s.next.target - s.real), S.kpis[k].unit)} ${S.kpis[k].label.toLowerCase()} pour le palier ${s.reached + 1}.</span>`;
+  return `<span>Il manque ${fmtV(Math.ceil(s.next.target - s.real), S.kpis[k].unit)} ${esc(S.kpis[k].label.toLowerCase())} pour le palier ${s.reached + 1}.</span>`;
 }
 
 // ── Impayés : vitesse de récupération ─────────────────────────────────────

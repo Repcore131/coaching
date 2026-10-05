@@ -1019,3 +1019,6 @@ body:has(#modal-root .overlay) { overflow: hidden; }
   .table-wrap.sheet td:first-child { min-width: 0; }
   .table-wrap.sheet td:nth-child(2) b { font-size: var(--t-20); }
 }
+/* Un nom très long dans une liste déroulante ne fait plus déborder la page sur téléphone */
+select.input, .input { max-width: 100%; }
+select.input { text-overflow: ellipsis; }

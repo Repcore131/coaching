@@ -45,7 +45,7 @@ function decodeBytes(buf) {
 // inversait jour et mois) ; un nombre garde sa valeur exacte, sans format.
 async function readXlsx(name, buf) {
   await loadLib('xlsx');
-  const wb = XLSX.read(buf, { type: 'array', cellDates: false, cellFormula: false, cellHTML: false, dense: false });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false, cellNF: true, cellFormula: false, cellHTML: false, dense: false });
   const p2 = n => String(n).padStart(2, '0');
   return wb.SheetNames.map(sn => {
     const ws = wb.Sheets[sn];
@@ -240,14 +240,16 @@ const RSM_DEFS = [
         // B2B : une entreprise compte une fois, a sa premiere facture
         // d'abonnement (trois factures d'une meme societe = une entreprise).
         const bk = `b2b:${norm(r[iSoc] || '')}`;
-        if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(bk) && !Object.values(S.entries || {}).some(e => e.rowKey === bk && e.kpiId === 'b2b')) {
+        // L'entrée est toujours émise (id stable par club) : un réimport la garde, une annulation puis un réimport la rétablit.
+        if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(bk)) {
           b2b.add(bk);
           const seller = (iCI >= 0 || iNI >= 0) ? resolveSeller(`${r[iPI] || ''} ${r[iNI] || ''}`.trim(), r[iCI]) : resolveSeller(r[iAut]);
           c.entry({ key: bk, kpiId: 'b2b', date, value: 1, seller });
         }
         if (!kpi) c.skip('ligne hors nutrition / accessoires');
       }
-      if (b2b.size) c.warn(`${plur(b2b.size, 'nouvelle entreprise', 'nouvelles entreprises')} (« Société du client ») comptées en Contrat B2B : à vérifier.`);
+      const b2bNew = [...b2b].filter(k => !Object.values(S.entries || {}).some(e => e.rowKey === k && e.kpiId === 'b2b' && e.clubId === c.clubId && entryCounts(e))).length;
+      if (b2bNew) c.warn(`${plur(b2bNew, 'nouvelle entreprise', 'nouvelles entreprises')} (« Société du client ») comptées en Contrat B2B : à vérifier.`);
     },
   },
   {
@@ -285,6 +287,7 @@ const RSM_DEFS = [
           if (ch.canal === 'equipe') c.entry({ key, legacyKey, kpiId: 'impayes', date: dr, value: amount, seller: ch.seller, clientNum: r[iNum] || '' });
           continue;
         }
+        if ((/open|en cours/.test(st) || !dr) && !String(r[iNum] || '').trim()) { c.skip('incident en cours sans numéro client'); continue; }
         if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0, oldest: null }; o.amount += amount; o.count++; const di = rsmDate(r[iDI]); if (di && (!o.oldest || di < o.oldest)) o.oldest = di; }
       }
       if (weak) c.warn(`${plur(weak, 'incident', 'incidents')} sans numéro de paiement : clé plus faible (montant et type ajoutés).`);
@@ -475,7 +478,7 @@ function analyzeTable(t, { clubId, month }) {
     col: p => { const n = norm(p); const e = H.indexOf(n); return e >= 0 ? e : H.findIndex(h => h.includes(n)); },
     colExact: p => H.indexOf(norm(p)),
     // Coordonnees si l'export les porte (colonne Telephone / Portable / Mobile, E-mail).
-    contact: r => { if (c._ip === undefined) { c._ip = H.findIndex(h => /portable|mobile|telephone|^tel\b/.test(h)); c._ie = H.findIndex(h => /mail/.test(h)); } const o = {}; if (c._ip >= 0 && r[c._ip]) { const p = phoneE164(r[c._ip]); if (p) { o.phone = p; o.phoneSrc = 'rsm'; } } if (c._ie >= 0 && /@/.test(r[c._ie] || '')) o.email = String(r[c._ie]).trim().toLowerCase(); return o; },
+    contact: r => { if (c._ip === undefined) { c._ip = H.findIndex(h => /portable|mobile|telephone|^tel\b/.test(h)); c._ie = H.findIndex(h => /mail/.test(h)); } const o = {}; if (c._ip >= 0 && r[c._ip]) { const p = phoneE164(r[c._ip]); if (p) { o.phone = p; o.phoneSrc = 'rsm'; } } if (c._ie >= 0 && /^[^\s@<>"']+@[^\s@<>"']+$/.test(String(r[c._ie] || '').trim())) o.email = String(r[c._ie]).trim().toLowerCase(); return o; },
     colAt: (pos, p) => (norm(H[pos] || '') === norm(p) ? pos : H.indexOf(norm(p))),
     skip: why => { res.skipped[why] = (res.skipped[why] || 0) + 1; },
     warn: w => res.warnings.push(w),
