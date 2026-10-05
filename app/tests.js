@@ -82687,7 +82687,9 @@ vendredi 78 6h 44m
         const appels=(code.match(new RegExp('\\.'+'update\\(\\)','g'))||[]).length;
         if(appels!==1) return _echec(appels+' appel(s) à update() dans la page (attendu : 1, dans la sonde)');
         if(sonde.indexOf('g.'+'update()')<0) return _echec('update() n’est pas dans la sonde');
-        return /register\('\.\/sw\.js'\)\.then\(\(\)=>/.test(page)?true:_echec('l’inscription appelle encore reg.update()');});
+        // 05/10/2026 : .then(reg=>…) — reg sert à la garde « if(!reg) return », pas à update() :
+        // le compte d'appels ci-dessus suffit à le garantir.
+        return /register\('\.\/sw\.js'\)\.then\((\(\)|reg)=>/.test(page)?true:_echec('l’inscription appelle encore reg.update()');});
       ok('Le worker laisse version.json au réseau, et reporte motion-lab.js?v= comme les actifs rc-*',()=>{
         const sw=_lireSync('sw.js?t='+Date.now());
         if(sw==null) return _echec('sw.js illisible');
@@ -83115,6 +83117,40 @@ vendredi 78 6h 44m
         _rcDireDernier-=60000; saveUserOuDire('Ton check-in');
         return _miens().length===2?true:_echec('après une minute : '+_miens().length+' toasts');
       } finally { _seRanger(sv); }});
+
+    // ══ 05/10/2026 — UNE CONSOLE PROPRE AU CHARGEMENT ══════════════════════
+    ok('Une seule déclaration de _lundiDe dans le code servi',()=>{
+      const n=(_prodSrc().match(/function _lundiDe\(/g)||[]).length;
+      return n===1?true:_echec(n+' déclarations : la seconde écraserait la première sans un mot');});
+    ok('L’enregistrement du service worker a son .catch : un refus se dit, sans « Uncaught (in promise) »',()=>{
+      const s=_prodSrc(), i=s.indexOf("serviceWorker.register('./sw.js')");
+      if(i<0) return _echec('enregistrement introuvable');
+      const j=s.indexOf('.catch(',i);
+      if(j<0||j-i>800) return _echec('pas de .catch après serviceWorker.register');
+      return /\[RepCore\] service worker non enregistré/.test(s.slice(j,j+200))?true:_echec('le .catch ne dit rien');});
+    ok('Un visuel de badge tombé n’est plus redemandé : le repli d’emblée, sans onerror',()=>{
+      const id=BADGES_ACQUIS[0].id, vis=badgeVisuel(id), repli=badgeAcquisFichier(id);
+      const avait=_badgesEnEchec.has(vis);
+      try{
+        _badgesEnEchec.delete(vis);
+        const a=document.createElement('div'); a.innerHTML=_htmlBadgeImg(id);
+        const im=a.querySelector('img');
+        if(im.getAttribute('src')!==vis||!/_badgeEchec\(this,/.test(im.getAttribute('onerror')||'')) return _echec('premier rendu : '+a.innerHTML);
+        _badgeEchec(im,vis,repli);
+        if(!_badgesEnEchec.has(vis)||im.getAttribute('src')!==repli) return _echec('l’échec n’est pas retenu');
+        a.innerHTML=_htmlBadgeImg(id);
+        const im2=a.querySelector('img');
+        return (im2.getAttribute('src')===repli&&!im2.hasAttribute('onerror'))?true:_echec('second rendu : '+a.innerHTML);
+      } finally { if(!avait) _badgesEnEchec.delete(vis); }});
+    ok('Un cadre de carte en échec n’est plus redemandé',()=>{
+      const cle='cadre-absent-test';
+      try{
+        const im=carteCadreImage(cle);
+        if(!im||typeof im.onerror!=='function') return _echec('pas de garde sur l’erreur');
+        im.onerror();
+        if(carteCadreImage(cle)!==null) return _echec('le cadre en échec est redemandé');
+        return _carteCadrePret(cle)===null?true:_echec('_carteCadrePret');
+      } finally { _carteCadresEchec.delete(cle); delete _carteCadresImg[cle]; }});
 
     // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
     //

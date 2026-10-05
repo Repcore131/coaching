@@ -1100,12 +1100,24 @@ function badgeAcquisFichier(id){
 const BADGE_VERROU='img/badges/verrouille.webp';
 // Une balise <img> qui tente le visuel dessiné et retombe sur le médaillon :
 // la collection s'affiche complète même avant que les cinquante soient là.
+//
+// UN VISUEL TOMBÉ N'EST PLUS REDEMANDÉ (05/10/2026) : la collection repeint
+// ses cinquante médaillons à chaque ouverture, et chaque visuel dessiné encore
+// absent repartait en 404 — autant d'erreurs dans la console, à chaque fois.
+// Le premier échec est retenu (pour la session) ; ensuite, le repli d'emblée.
+const _badgesEnEchec=new Set();
+function _badgeEchec(img,vis,repli){
+  try{ _badgesEnEchec.add(String(vis)); }catch(e){}
+  img.onerror=null;
+  if(repli) img.src=repli;
+}
 function _htmlBadgeImg(id,o){
   o=o||{};
   const vis=o.verrou?BADGE_VERROU:badgeVisuel(id,o.grand);
   const repli=badgeAcquisFichier(id);
-  return '<img src="'+escapeHtml(vis)+'" alt="" loading="lazy"'+(o.id?' id="'+o.id+'"':'')
-    +' onerror="this.onerror=null;this.src=\''+escapeHtml(repli)+'\'">';
+  const echec=_badgesEnEchec.has(String(vis))&&!!repli;
+  return '<img src="'+escapeHtml(echec?repli:vis)+'" alt="" loading="lazy"'+(o.id?' id="'+o.id+'"':'')
+    +(echec?'':' onerror="_badgeEchec(this,'+jsArg(vis)+','+jsArg(repli)+')"')+'>';
 }
 function badgeAcquisDef(id){ return BADGES_ACQUIS.find(b=>b&&b.id===id)||null; }
 function _bdgNieme(l,n){ return (Array.isArray(l)&&l.length>=n)?(Number(l[n-1])||0):0; }

@@ -198,12 +198,17 @@ function majCarteAthlete(u,maintenant,o){
 // Posés par scripts/cartes_webp.py. Tant qu'un gabarit manque, le cadre est
 // DESSINÉ (le même esprit, sans l'image) : la carte ne dépend jamais d'un
 // fichier absent.
+// UN CADRE EN ÉCHEC N'EST PLUS REDEMANDÉ (05/10/2026) : il est noté, l'image
+// cassée lâchée, et la carte se dessine sans lui (null) pour la session.
 const _carteCadresImg={};
+const _carteCadresEchec=new Set();
 function carteCadreImage(cle){
+  if(_carteCadresEchec.has(cle)) return null;
   if(_carteCadresImg[cle]) return _carteCadresImg[cle];
   try{
     const im=new Image();
     im.decoding='async';
+    im.onerror=()=>{ _carteCadresEchec.add(cle); delete _carteCadresImg[cle]; };
     im.src='img/cartes/'+cle+'.webp';
     _carteCadresImg[cle]=im;
     return im;

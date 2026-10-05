@@ -428,12 +428,17 @@ if('serviceWorker' in navigator){
   }catch(e){}
   // PLUS DE reg.update() ICI (01/10/2026) : la sonde de version le fait,
   // seulement quand version.json annonce un build plus recent que RC_BUILD.
-  navigator.serviceWorker.register('./sw.js').then(()=>{
+  // ⚠ UN REFUS SE DIT (05/10/2026) : sans .catch, un enregistrement refusé
+  //   (navigation privée, HTTP, quota) partait en « Uncaught (in promise) »
+  //   dans la console, sans dire de quoi il s'agissait. Pas d'appel de mise
+  //   à jour ici : la sonde de version s'en charge (voir plus haut).
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    if(!reg) return;
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
       if(!_rcControleurInitial) return;
       _rcRechargerSiPossible();
     });
-  });
+  }).catch(e=>{ try{ console.warn('[RepCore] service worker non enregistré',e); }catch(_){} });
 }</script>
 <!-- Encodeur QR local : 10 Ko, et il remplace un appel reseau a chaque
      ouverture de la fenetre de synchronisation. EN DEFER (01/10/2026) : il ne
