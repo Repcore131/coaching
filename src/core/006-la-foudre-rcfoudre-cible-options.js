@@ -317,50 +317,121 @@ function _foudreTrembler(cont){
     return _animer(z,kf,{duration:280,easing:'linear',composite:'add'});
   }catch(e){ return null; }
 }
-// LE SON, SANS FICHIER. Un crépitement — bruit blanc passe-haut, enveloppe de
-// quelques dizaines de ms, haché pour craquer au lieu de souffler — puis un
-// grondement : un oscillateur à 50 Hz qui roule 400 ms.
+// LE SON, SANS FICHIER : UN VRAI COUP DE TONNERRE (Kevin, 05/10/2026).
+// L'ancien tenait en 0,4 s, un crépitement aigu puis une note à 50 Hz qu'un
+// haut-parleur de téléphone ne rend pas : « juste un vieux bruit ». Celui-ci
+// a les quatre temps d'un éclair tombé près :
+//   1. LE CLAQUEMENT : 140 ms de bruit large bande, attaque en 2 ms. C'est lui
+//      qui fait sursauter ;
+//   2. LE DÉCHIREMENT : du bruit haché, filtré de 2 400 à 300 Hz en 0,5 s,
+//      l'air qui se déchire le long du canal ;
+//   3. LE ROULEMENT : 2,6 s de bruit grave (sous 700 Hz) dont le volume
+//      ondule par vagues irrégulières, le tonnerre qui roule et s'éloigne ;
+//   4. LE CORPS : une note qui glisse de 70 à 34 Hz, pour qui a un casque ou
+//      une enceinte.
+// ET IL RÉSONNE : le tout passe dans une réverbération calculée (2,8 s de
+// queue), mêlée au son direct. Un compresseur en sortie tient le tout sans
+// saturer. L'essentiel de l'énergie est entre 150 et 900 Hz : c'est ce qu'un
+// téléphone sait jouer.
 // Il reprend le contexte audio du repos (_ctxSon), amorcé au geste : sur iOS
-// un contexte créé hors geste naîtrait suspendu. Il n'en ouvre un que s'il
-// n'y en a aucun, comme _bipRepos.
+// un contexte créé hors geste naîtrait suspendu. Les tampons de bruit sont
+// calculés UNE fois par contexte, puis rejoués.
+const FOUDRE_SON=Object.freeze({claque:0.14,dechire:0.55,roule:2.6,queue:2.8,volume:0.85});
+let _foudreTampons=null;
+function _foudreTamponsDe(ctx){
+  if(_foudreTampons&&_foudreTampons.ctx===ctx) return _foudreTampons;
+  const sr=ctx.sampleRate;
+  const tampon=(sec,canaux,fn)=>{
+    const b=ctx.createBuffer(canaux,Math.max(1,Math.floor(sr*sec)),sr);
+    for(let c=0;c<canaux;c++){ const d=b.getChannelData(c); fn(d,c); }
+    return b;
+  };
+  // Bruit blanc, pour le claquement.
+  const blanc=tampon(FOUDRE_SON.claque,1,d=>{ for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; });
+  // Bruit haché, pour le déchirement : une porte qui s'ouvre et se ferme
+  // toutes les ~3 ms. Sans elle c'est un souffle ; avec, ça craque.
+  const hache=tampon(FOUDRE_SON.dechire,1,d=>{
+    const pas=Math.max(1,Math.floor(sr*0.003)); let porte=1;
+    for(let i=0;i<d.length;i++){ if(i%pas===0) porte=Math.random()<0.6?1:0.12; d[i]=(Math.random()*2-1)*porte; }
+  });
+  // Bruit brun (intégré) pour le roulement, avec ses vagues écrites dans le
+  // tampon : cinq à sept coups sourds, de plus en plus faibles.
+  const roule=tampon(FOUDRE_SON.roule,1,d=>{
+    let v=0;
+    for(let i=0;i<d.length;i++){ v=(v+0.12*(Math.random()*2-1))/1.06; d[i]=v*2.6; }
+    const coups=[]; let t=0.05;
+    while(t<FOUDRE_SON.roule-0.2){ coups.push({t,f:0.55+Math.random()*0.45,l:0.10+Math.random()*0.16}); t+=0.22+Math.random()*0.34; }
+    for(let i=0;i<d.length;i++){
+      const s=i/sr; let m=0.32;
+      for(const c of coups){ const x=(s-c.t)/c.l; if(x>-1&&x<3) m+=c.f*Math.exp(-x*x*(x<0?6:0.9)); }
+      d[i]*=Math.min(1.6,m)*Math.pow(1-s/FOUDRE_SON.roule,1.25);
+    }
+  });
+  // La réponse de la salle : du bruit stéréo qui s'éteint, plus sombre vers la fin.
+  const salle=tampon(FOUDRE_SON.queue,2,d=>{
+    let g=0;
+    for(let i=0;i<d.length;i++){
+      const s=i/d.length, b=Math.random()*2-1;
+      g+=(b-g)*(0.75-0.6*s);                 // de plus en plus filtré
+      d[i]=g*Math.pow(1-s,2.6);
+    }
+  });
+  _foudreTampons={ctx,blanc,hache,roule,salle};
+  return _foudreTampons;
+}
 function _foudreSon(){
   try{
     const C=window.AudioContext||window.webkitAudioContext;
-    if(!C) return;
+    if(!C) return false;
     if(_ctxSon&&_ctxSon.state==='closed') _ctxSon=null;
     if(!_ctxSon) _ctxSon=new C();
     const ctx=_ctxSon;
     try{ ctx.resume(); }catch(e){}
-    const t=ctx.currentTime;
-    // Crépitement
-    const dur=0.16, sr=ctx.sampleRate;
-    const buf=ctx.createBuffer(1,Math.floor(sr*dur),sr);
-    const d=buf.getChannelData(0);
-    let porte=1;
-    for(let i=0;i<d.length;i++){
-      // Hachage : la « porte » se ferme et se rouvre au hasard, toutes les
-      // ~2 ms. Sans elle, c'est un souffle ; avec, ça craque.
-      if(i%Math.floor(sr*0.002)===0) porte=Math.random()<0.65?1:0.15;
-      d[i]=(Math.random()*2-1)*porte;
-    }
-    const src=ctx.createBufferSource(); src.buffer=buf;
-    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2500;
-    const g1=ctx.createGain();
-    g1.gain.setValueAtTime(0.0001,t);
-    g1.gain.exponentialRampToValueAtTime(0.5,t+0.004);
-    g1.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    src.connect(hp); hp.connect(g1); g1.connect(ctx.destination);
-    src.start(t); src.stop(t+dur);
-    // Grondement
-    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=50;
-    const g2=ctx.createGain();
-    const t2=t+0.06;
-    g2.gain.setValueAtTime(0.0001,t2);
-    g2.gain.exponentialRampToValueAtTime(0.45,t2+0.03);
-    g2.gain.exponentialRampToValueAtTime(0.0001,t2+0.4);
-    o.connect(g2); g2.connect(ctx.destination);
-    o.start(t2); o.stop(t2+0.41);
-  }catch(e){}
+    const T=_foudreTamponsDe(ctx);
+    const t=ctx.currentTime+0.01;
+    // La sortie : un compresseur, puis le volume général.
+    const comp=ctx.createDynamicsCompressor();
+    try{ comp.threshold.value=-8; comp.knee.value=8; comp.ratio.value=4; comp.attack.value=0.002; comp.release.value=0.25; }catch(e){}
+    const sortie=ctx.createGain(); sortie.gain.value=FOUDRE_SON.volume;
+    comp.connect(sortie); sortie.connect(ctx.destination);
+    // La résonance : direct + réverbération.
+    const direct=ctx.createGain(); direct.gain.value=0.9; direct.connect(comp);
+    let vers=direct;
+    try{
+      const rev=ctx.createConvolver(); rev.buffer=T.salle;
+      const mouille=ctx.createGain(); mouille.gain.value=0.55;
+      const bus=ctx.createGain();
+      bus.connect(direct); bus.connect(rev); rev.connect(mouille); mouille.connect(comp);
+      vers=bus;
+    }catch(e){ vers=direct; }
+    const jouer=(buf,quand,filtre,env)=>{
+      const src=ctx.createBufferSource(); src.buffer=buf;
+      const g=ctx.createGain(); env(g.gain);
+      if(filtre){ src.connect(filtre); filtre.connect(g); } else src.connect(g);
+      g.connect(vers); src.start(quand); src.stop(quand+buf.duration+0.02);
+      return src;
+    };
+    // 1. Le claquement.
+    const f1=ctx.createBiquadFilter(); f1.type='highpass'; f1.frequency.value=250;
+    jouer(T.blanc,t,f1,g=>{ g.setValueAtTime(0.0001,t); g.exponentialRampToValueAtTime(1.8,t+0.002); g.setValueAtTime(1.8,t+0.045); g.exponentialRampToValueAtTime(0.0001,t+FOUDRE_SON.claque); });
+    // 2. Le déchirement.
+    const f2=ctx.createBiquadFilter(); f2.type='bandpass'; f2.Q.value=0.7;
+    f2.frequency.setValueAtTime(2400,t+0.02); f2.frequency.exponentialRampToValueAtTime(300,t+0.02+FOUDRE_SON.dechire);
+    jouer(T.hache,t+0.02,f2,g=>{ g.setValueAtTime(0.0001,t+0.02); g.exponentialRampToValueAtTime(1.1,t+0.03); g.exponentialRampToValueAtTime(0.0001,t+0.02+FOUDRE_SON.dechire); });
+    // 3. Le roulement.
+    const f3=ctx.createBiquadFilter(); f3.type='lowpass'; f3.Q.value=0.5;
+    f3.frequency.setValueAtTime(1600,t+0.05); f3.frequency.exponentialRampToValueAtTime(700,t+0.6); f3.frequency.exponentialRampToValueAtTime(260,t+0.05+FOUDRE_SON.roule);
+    jouer(T.roule,t+0.05,f3,g=>{ g.setValueAtTime(0.0001,t+0.05); g.exponentialRampToValueAtTime(1.0,t+0.09); g.setValueAtTime(1.0,t+0.05+FOUDRE_SON.roule-0.3); g.exponentialRampToValueAtTime(0.0001,t+0.05+FOUDRE_SON.roule); });
+    // 4. Le corps.
+    const o=ctx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(70,t+0.03); o.frequency.exponentialRampToValueAtTime(34,t+1.4);
+    const g4=ctx.createGain();
+    g4.gain.setValueAtTime(0.0001,t+0.03); g4.gain.exponentialRampToValueAtTime(0.3,t+0.07); g4.gain.exponentialRampToValueAtTime(0.0001,t+1.6);
+    o.connect(g4); g4.connect(vers); o.start(t+0.03); o.stop(t+1.65);
+    // Tout se débranche une fois la queue éteinte.
+    setTimeout(()=>{ try{ sortie.disconnect(); comp.disconnect(); }catch(e){} },Math.ceil((FOUDRE_SON.roule+FOUDRE_SON.queue+0.5)*1000));
+    return true;
+  }catch(e){ return false; }
 }
 // EXPOSÉE sur window, explicitement : les badges (idée 05), les rangs (idée
 // 13) et les paliers de série l'appelleront depuis d'autres modules, et un nom
