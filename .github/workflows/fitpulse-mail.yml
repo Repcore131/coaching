@@ -1,0 +1,45 @@
+# FIT PULSE — e-mails d'invitation, notifications push, garde des regles d'acces
+#
+# Quand un manager cree ou regenere un code dans l'app, une demande est
+# deposee dans /fitpulse_mail. Ce passage, toutes les 5 minutes :
+#  - remet les regles Fit Pulse si un deploiement de RepCore les a retirees ;
+#  - envoie l'e-mail d'invitation (code + installation) depuis la messagerie
+#    MAIL_UTILISATEUR, puis efface la demande et le code qu'elle porte ;
+#  - envoie les notifications push (club/outils/fitpulse-push.mjs).
+# Le planning (cron) ne tourne que depuis la branche principale : ce fichier y
+# est copie, et il lit le code Fit Pulse sur la branche de travail.
+name: Fit Pulse envois
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'club/outils/fitpulse-serveur.mjs'
+      - 'club/outils/fitpulse-push.mjs'
+      - '.github/workflows/fitpulse-mail.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fitpulse-mail
+  cancel-in-progress: false
+
+jobs:
+  envoyer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/eloquent-lamport-0qxwdd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Envoyer les invitations en attente
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          FITPULSE_URL: https://fitpulse-niort.web.app
+        run: node club/outils/fitpulse-serveur.mjs
