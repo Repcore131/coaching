@@ -1166,6 +1166,7 @@ function saveBilanFinal(){
   // Le bilan vient d'être poussé dans l'historique : longueur 1 = c'était le
   // premier. Seul le compteur part — ni le type, ni la moindre réponse.
   if((currentUser.bilans||[]).length===1) rcm('first_bilan_completed');
+  try{ activationCompleter(currentUser,Date.now()); }catch(e){}
   // LE SECOND ET DERNIER POINT D'APPEL DES BADGES. Le bilan est le seul
   // critère des cinq qui ne passe pas par la fin d'une séance : sans cette
   // ligne, « Premier bilan » ne tomberait qu'à la séance suivante.

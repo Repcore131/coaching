@@ -1087,7 +1087,7 @@ function activiteResume(u,maintenant){
   const p=u.parcours||{};
   let notif=false; try{ notif=typeof Notification!=='undefined'&&Notification.permission==='granted'&&!!_pushMemo(); }catch(e){ notif=false; }
   const src=String((u.origine&&u.origine.src)||(u.ambassadeur?'amb':(u.parrainage&&u.parrainage.parrainCode?'parrainage':'direct'))).slice(0,20);
-  return {v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
+  const r={v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
     seance1:ses.length>0,
     parcours:!!(p.fini&&!p.existant),
     finEssai:Number(u.essai&&u.essai.finit)||0,
@@ -1096,7 +1096,25 @@ function activiteResume(u,maintenant){
       duel:Object.keys(u.duels||{}).length>0,
       defi:Object.keys(u.defisReleves||{}).length>0||Object.keys(u.saisonsReleves||{}).length>0,
       coach:!!(u.coachEmailKey||u.coachId),
-      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')}};
+      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')},
+    // Le palier du moment, pour la part payante à J30 (activationCohortes).
+    // Borné à PALIERS_ORDRE : une valeur hors liste ferait rejeter le résumé entier.
+    pal:(()=>{ try{ const p=palierDe(u); return PALIERS_ORDRE.indexOf(p)>=0?p:'aucun'; }catch(e){ return 'aucun'; } })()};
+  // L'ACTIVATION (05/10/2026) : des dates et un canal, rien d'autre. Absente
+  // d'un compte antérieur, et alors absente du résumé.
+  const act=_actResume(u.activation);
+  if(act) r.act=act;
+  return r;
+}
+// PURE. Ce que le résumé porte de l'activation : seulement des nombres et un
+// canal de la liste fermée, sinon rien (les règles de /activite le bornent).
+function _actResume(a){
+  if(!a||typeof a!=='object'||!(Number(a.inscrit)>0)) return null;
+  const o={i:Math.round(Number(a.inscrit)),c:ACTIVATION_CANAUX.indexOf(a.canal)>=0?a.canal:'autonome'};
+  if(Number(a.premiereSeance)>0) o.s=Math.round(Number(a.premiereSeance));
+  if(Number(a.premierBilan)>0) o.b=Math.round(Number(a.premierBilan));
+  if(Number(a.premierRepas)>0) o.r=Math.round(Number(a.premierRepas));
+  return o;
 }
 // Une fois par jour au plus, et seulement s'il a changé.
 async function activitePublier(u){

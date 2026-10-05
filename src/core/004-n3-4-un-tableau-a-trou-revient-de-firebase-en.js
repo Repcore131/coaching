@@ -810,6 +810,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Le modèle du coach posé comme programme (invitations en lot, 05/10/2026,
   // _appliquerProgrammeDepart) : un nom et une version, pas une mesure.
   'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion',
+  // L'activation (05/10/2026) : quatre dates d'usage et un canal, pas une mesure.
+  'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert

@@ -1749,6 +1749,10 @@ function saveUserOuDire(perdu){
 // localement. La donnée part quand même au cloud dans les deux cas.
 function saveUser(){
   currentUser.updatedAt=Date.now();
+  // L'ACTIVATION SE COMPLÈTE ICI : première séance, premier bilan de départ,
+  // premier repas — quel que soit l'écran qui les a écrits. Ne remplit que
+  // ce qui manque (activationCompleter), jamais au-delà.
+  try{ activationCompleter(currentUser,Date.now()); }catch(e){ rcErreurMuette('saveUser · activation',e); }
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
   // ⚠ rc_users ILLISIBLE (05/10/2026) : la clé est là mais ne se lit plus
   //   (JSON corrompu). `DB.get('users')||{}` partait d'une carte VIDE et la

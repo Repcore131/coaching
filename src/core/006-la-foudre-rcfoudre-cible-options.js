@@ -1665,6 +1665,15 @@ async function doRegister(){
     // athletePhoto, et non `photo` : c'est le champ que la fiche, la grille de
     // vignettes et le carnet d'adresses lisent deja.
     if(_inscriptionPhotoB64) user.athletePhoto=_inscriptionPhotoB64;
+    // L'ACTIVATION (05/10/2026) : la date d'inscription et le canal, ici et
+    // nulle part ailleurs. Un coach n'en a pas : il est hors des cohortes.
+    if(selRole!=='coach'){
+      let _codeCoach=false, _codes=[];
+      try{ _codeCoach=!!((_codeVerifieEnAttente()||{}).code||localStorage.getItem('pendingCode')||window._invitationCode); }catch(e){}
+      try{ _codes=codesInscription((document.getElementById('r-parrain')||{}).value,ambEnAttente(),
+        (typeof parrainageRefEnAttente==='function')?parrainageRefEnAttente():''); }catch(e){}
+      user.activation=activationNeuve(user.createdAt,canalInscription({codeCoach:_codeCoach,codes:_codes}));
+    }
     if(selRole==='coach'){
       user.code=genCode();user.clients=[];
       // Écrit À LA CRÉATION, pas rétro-écrit sur les dossiers existants : deux

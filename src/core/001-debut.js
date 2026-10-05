@@ -540,6 +540,12 @@ const RCM_EVENEMENTS=['landing_view','landing_cta_click','coach_landing_view','b
   // session, comme les vues d'ecran.
   'install_ecran_vu','install_invite_montree','install_accepte','install_refuse',
   'install_guide_ios','install_fait','lancement_autonome',
+  // « Continuer sans installer » (rcInstallPasser, 05/10/2026) : le refus
+  // explicite, à côté de install_refuse qui est celui de l'invite du système.
+  'install_passe',
+  // La première séance JOUABLE à l'écran (fin du parcours de première séance) :
+  // l'étape entre « inscrit » et first_workout_started.
+  'premiere_seance_prete',
   // LE NAVIGATEUR QUI INSTALLE MAL. Distinct des iab_* : ceux-la ne peuvent
   // pas installer du tout, celui-ci installe quelque chose qu'Android refuse.
   'nav_samsung',
@@ -970,6 +976,61 @@ const RCM_RETENTION_CLE='rcm_retention_';
 // l'increment est arrive (la requete est deliberement sans reponse lue), et
 // entre risquer de perdre un comptage et risquer d'en compter six pour un
 // seul demarrage, c'est le second qui fausse le chiffre.
+// ══ L'ACTIVATION, PAR COMPTE (05/10/2026) ═══════════════════════════════
+// rcm compte des étapes POUR TOUS, par jour ; rien ne disait QUAND chaque
+// compte avait franchi la sienne. u.activation garde quatre dates et le canal
+// d'arrivée — de quoi mesurer, par semaine d'inscription et par canal, le
+// délai jusqu'à la première séance (cloudflare/src/retention.js,
+// activationCohortes). Des dates d'usage, aucune mesure de santé.
+//
+// ⚠ POSÉE À L'INSCRIPTION SEULEMENT (doRegister) : un compte antérieur n'en a
+//   pas, et n'en reçoit pas — pas de rétro-calcul, il est exclu des cohortes.
+// ⚠ CHAQUE DATE SE POSE UNE FOIS : activationCompleter ne remplit que ce qui
+//   manque, et ne touche jamais une valeur posée.
+// ⚠ L'HORLOGE DU TÉLÉPHONE PEUT MENTIR : une date antérieure à l'inscription
+//   est ramenée à l'inscription (le serveur borne aussi).
+const ACTIVATION_CANAUX=Object.freeze(['autonome','coach','ami','ambassadeur']);
+// PURE. Le canal d'arrivée, d'après ce que l'inscription sait.
+//   codeCoach : un code d'accès de coach en attente (pendingCode, code vérifié) ;
+//   codes     : codesInscription(…) — {type:'amb'|'ref'}.
+// Ordre : le coach (il ouvre l'accès), puis l'ambassadeur (un seul avantage,
+// ambassadeur > parrain), puis l'ami.
+function canalInscription(o){
+  const x=o||{}, l=Array.isArray(x.codes)?x.codes:[];
+  if(x.codeCoach) return 'coach';
+  if(l.some(c=>c&&c.type==='amb')) return 'ambassadeur';
+  if(l.some(c=>c&&c.type==='ref')) return 'ami';
+  return 'autonome';
+}
+// PURE. L'activation d'un compte neuf.
+function activationNeuve(inscrit,canal){
+  return {inscrit:Number(inscrit)||Date.now(),canal:ACTIVATION_CANAUX.indexOf(canal)>=0?canal:'autonome',
+    premiereSeance:null,premierBilan:null,premierRepas:null};
+}
+// Complète ce qui manque, d'après le dossier. Rend true si un champ a été posé.
+// Sans activation (compte antérieur) ou sur un coach : rien.
+function activationCompleter(u,maintenant){
+  const a=u&&u.activation;
+  if(!a||typeof a!=='object'||u.role==='coach') return false;
+  const ins=Number(a.inscrit)||0;
+  if(!ins) return false;
+  const t=Number(maintenant)||Date.now();
+  const borne=v=>Math.max(ins,Number(v)||t);
+  let pose=false;
+  if(!a.premiereSeance){
+    const d=((u.sessions)||[]).map(s=>Number(s&&s.date)).filter(x=>x>0);
+    if(d.length){ a.premiereSeance=borne(Math.min(...d)); pose=true; }
+  }
+  if(!a.premierBilan){
+    const b=((u.bilans)||[]).filter(x=>x&&x.type==='depart').map(x=>Number(x.date)).filter(x=>x>0);
+    if(b.length){ a.premierBilan=borne(Math.min(...b)); pose=true; }
+  }
+  if(!a.premierRepas){
+    let r=false; try{ r=_pdRepasNote(u); }catch(e){ r=false; }
+    if(r){ a.premierRepas=borne(t); pose=true; }
+  }
+  return pose;
+}
 function rcmRetention(user){
   try{
     if(!user||!user.email) return;

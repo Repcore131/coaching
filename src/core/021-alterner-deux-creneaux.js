@@ -693,6 +693,7 @@ function _psRendre(){
     return;
   }
   z.innerHTML=_htmlSeanceDepart(_psSeance);
+  if(_psSeance) rcm('premiere_seance_prete');
 }
 // Chaque reponse avance d'une etape. A la troisieme, la seance est generee et
 // ECRITE dans sessions_config : c'est ce qui permet au moteur de seance de la

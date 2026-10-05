@@ -79,6 +79,20 @@
           "dernierExport": { ".validate": "newData.isNumber()" },
           "$autre": { ".validate": false }
         },
+        // L ACTIVATION (05/10/2026) : la date d inscription, le canal d arrivee
+        // (liste fermee) et trois premieres fois — seance, bilan de depart,
+        // repas —, en millisecondes. Une date absente vaut « pas encore » (un
+        // null ne s ecrit pas). Seul le TYPE est verifie : imposer « jamais
+        // reecrit » ici ferait rejeter le dossier entier au premier envoi d un
+        // appareil en retard ; c est l app qui ne reecrit pas (activationCompleter).
+        "activation": {
+          "inscrit":        { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "canal":          { ".validate": "newData.isString() && newData.val().matches(/^(autonome|coach|ami|ambassadeur)$/)" },
+          "premiereSeance": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "premierBilan":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "premierRepas":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        },
 
         // ── Abonnement : liste blanche, meme patron que sante_privee ───────
         // Le coach n a AUCUN besoin de lire ces champs — il ne decide ni du
@@ -1269,7 +1283,7 @@
           //   Les quatre compteurs de capacite arrivent par paquets (rcqVider) :
           //   ils avancent d au plus RCQ_PAS_MAX = 1 000 000 par ecriture.
           //   AVANT : un seul PUT anonyme pouvait poser 9 999 999 d un coup.
-          ".validate": "newData.isNumber() && newData.val() < 10000000 && (($evenement.matches(/^(landing_view|landing_cta_click|coach_landing_view|blog_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto)$/) && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))) || ($evenement.matches(/^(oct_in_ko|oct_out_ko|cld_envois|cld_ko)$/) && ((!data.exists() && newData.val() > 0 && newData.val() <= 1000000) || (data.exists() && newData.val() > data.val() && newData.val() - data.val() <= 1000000))))"
+          ".validate": "newData.isNumber() && newData.val() < 10000000 && (($evenement.matches(/^(landing_view|landing_cta_click|coach_landing_view|blog_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|install_passe|premiere_seance_prete|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto)$/) && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))) || ($evenement.matches(/^(oct_in_ko|oct_out_ko|cld_envois|cld_ko)$/) && ((!data.exists() && newData.val() > 0 && newData.val() <= 1000000) || (data.exists() && newData.val() > data.val() && newData.val() - data.val() <= 1000000))))"
         }
       }
     },
@@ -2241,6 +2255,18 @@
         "finEssai": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "payant":   { ".validate": "newData.isBoolean()" },
         "lev":      { "$l": { ".validate": "$l.matches(/^(parcours|checkin|notif|duel|defi|coach|invite)$/) && newData.isBoolean()" } },
+        // L ACTIVATION (05/10/2026, activationCohortes) : l inscription, le
+        // canal (liste fermee) et trois premieres fois, en millisecondes. Le
+        // palier du moment, pour la part payante a J30.
+        "act": {
+          "i": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "c": { ".validate": "newData.isString() && newData.val().matches(/^(autonome|coach|ami|ambassadeur)$/)" },
+          "s": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "b": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "r": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        },
+        "pal":      { ".validate": "newData.isString() && newData.val().matches(/^(aucun|essentielle|ultime|suivi)$/)" },
         "$autre":   { ".validate": false }
       }
     },

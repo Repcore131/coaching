@@ -412,6 +412,7 @@ function finishWorkout(incomplete=false){
   // qui décide, pas un drapeau d'appareil.
   if((currentUser.sessions||[]).length===1){
     rcm('first_workout_completed');
+    try{ activationCompleter(currentUser,Date.now()); }catch(e){}
     // LE PARRAIN EST PRÉVENU (serveur léger, push « filleul ») : la promesse
     // de l'accueil. Le serveur relit le lien et la séance avant d'envoyer.
     try{ if(currentUser.parrainage&&currentUser.parrainage.parrainCode) deposerEvenement({type:'filleul_seance'}).catch(()=>{}); }catch(e){}

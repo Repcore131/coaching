@@ -94,6 +94,19 @@ await test('/rc_codes : programmeModeleId — un identifiant de modèle, 64 cara
   assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N005', code({ programmeModeleId: '../users' }))).statut, 401);
   assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N006', code({ programmeModeleId: 42 }))).statut, 401);
 });
+await test('users/$u/activation et activite/$k/act : des nombres, un canal de la liste fermée', async () => {
+  const b = 'users/' + K(LEA) + '/activation';
+  assert.equal((await appel(LEA, 'PUT', b, { inscrit: 1, canal: 'ami', premiereSeance: 2 })).statut, 200);
+  assert.equal((await appel(LEA, 'PATCH', b, { premierBilan: 3, premierRepas: 4 })).statut, 200);
+  assert.equal((await appel(LEA, 'PATCH', b, { canal: 'pirate' })).statut, 401, 'canal hors liste');
+  assert.equal((await appel(LEA, 'PATCH', b, { premiereSeance: 'hier' })).statut, 401, 'une date en texte');
+  assert.equal((await appel(LEA, 'PATCH', b, { autre: 1 })).statut, 401, 'champ inconnu');
+  const r = { inscrit: '2026-10-05', sem: '2026-10-05', src: 'direct', jour: '2026-10-05', j30: '0'.repeat(30) };
+  const a = 'activite/' + K(LEA);
+  assert.equal((await appel(LEA, 'PUT', a, Object.assign({}, r, { act: { i: 1, c: 'coach', s: 2 }, pal: 'suivi' }))).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', a, Object.assign({}, r, { act: { i: 1, c: 'x' } }))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', a, Object.assign({}, r, { pal: 'or' }))).statut, 401);
+});
 await test('/rc_codes : un tiers ne passe plus redeemed à true (c’est le Worker qui consomme)', async () => {
   assert.equal((await appel(LEA, 'PATCH', 'rc_codes/RC-KEVI-N001', { redeemed: true, athleteEmail: LEA, etat: 'cree' })).statut, 401);
   assert.equal(JSON.parse((await appel('owner', 'GET', 'rc_codes/RC-KEVI-N001/redeemed')).corps), false);

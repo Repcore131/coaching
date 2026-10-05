@@ -540,6 +540,12 @@ const RCM_EVENEMENTS=['landing_view','landing_cta_click','coach_landing_view','b
   // session, comme les vues d'ecran.
   'install_ecran_vu','install_invite_montree','install_accepte','install_refuse',
   'install_guide_ios','install_fait','lancement_autonome',
+  // « Continuer sans installer » (rcInstallPasser, 05/10/2026) : le refus
+  // explicite, à côté de install_refuse qui est celui de l'invite du système.
+  'install_passe',
+  // La première séance JOUABLE à l'écran (fin du parcours de première séance) :
+  // l'étape entre « inscrit » et first_workout_started.
+  'premiere_seance_prete',
   // LE NAVIGATEUR QUI INSTALLE MAL. Distinct des iab_* : ceux-la ne peuvent
   // pas installer du tout, celui-ci installe quelque chose qu'Android refuse.
   'nav_samsung',
@@ -970,6 +976,61 @@ const RCM_RETENTION_CLE='rcm_retention_';
 // l'increment est arrive (la requete est deliberement sans reponse lue), et
 // entre risquer de perdre un comptage et risquer d'en compter six pour un
 // seul demarrage, c'est le second qui fausse le chiffre.
+// ══ L'ACTIVATION, PAR COMPTE (05/10/2026) ═══════════════════════════════
+// rcm compte des étapes POUR TOUS, par jour ; rien ne disait QUAND chaque
+// compte avait franchi la sienne. u.activation garde quatre dates et le canal
+// d'arrivée — de quoi mesurer, par semaine d'inscription et par canal, le
+// délai jusqu'à la première séance (cloudflare/src/retention.js,
+// activationCohortes). Des dates d'usage, aucune mesure de santé.
+//
+// ⚠ POSÉE À L'INSCRIPTION SEULEMENT (doRegister) : un compte antérieur n'en a
+//   pas, et n'en reçoit pas — pas de rétro-calcul, il est exclu des cohortes.
+// ⚠ CHAQUE DATE SE POSE UNE FOIS : activationCompleter ne remplit que ce qui
+//   manque, et ne touche jamais une valeur posée.
+// ⚠ L'HORLOGE DU TÉLÉPHONE PEUT MENTIR : une date antérieure à l'inscription
+//   est ramenée à l'inscription (le serveur borne aussi).
+const ACTIVATION_CANAUX=Object.freeze(['autonome','coach','ami','ambassadeur']);
+// PURE. Le canal d'arrivée, d'après ce que l'inscription sait.
+//   codeCoach : un code d'accès de coach en attente (pendingCode, code vérifié) ;
+//   codes     : codesInscription(…) — {type:'amb'|'ref'}.
+// Ordre : le coach (il ouvre l'accès), puis l'ambassadeur (un seul avantage,
+// ambassadeur > parrain), puis l'ami.
+function canalInscription(o){
+  const x=o||{}, l=Array.isArray(x.codes)?x.codes:[];
+  if(x.codeCoach) return 'coach';
+  if(l.some(c=>c&&c.type==='amb')) return 'ambassadeur';
+  if(l.some(c=>c&&c.type==='ref')) return 'ami';
+  return 'autonome';
+}
+// PURE. L'activation d'un compte neuf.
+function activationNeuve(inscrit,canal){
+  return {inscrit:Number(inscrit)||Date.now(),canal:ACTIVATION_CANAUX.indexOf(canal)>=0?canal:'autonome',
+    premiereSeance:null,premierBilan:null,premierRepas:null};
+}
+// Complète ce qui manque, d'après le dossier. Rend true si un champ a été posé.
+// Sans activation (compte antérieur) ou sur un coach : rien.
+function activationCompleter(u,maintenant){
+  const a=u&&u.activation;
+  if(!a||typeof a!=='object'||u.role==='coach') return false;
+  const ins=Number(a.inscrit)||0;
+  if(!ins) return false;
+  const t=Number(maintenant)||Date.now();
+  const borne=v=>Math.max(ins,Number(v)||t);
+  let pose=false;
+  if(!a.premiereSeance){
+    const d=((u.sessions)||[]).map(s=>Number(s&&s.date)).filter(x=>x>0);
+    if(d.length){ a.premiereSeance=borne(Math.min(...d)); pose=true; }
+  }
+  if(!a.premierBilan){
+    const b=((u.bilans)||[]).filter(x=>x&&x.type==='depart').map(x=>Number(x.date)).filter(x=>x>0);
+    if(b.length){ a.premierBilan=borne(Math.min(...b)); pose=true; }
+  }
+  if(!a.premierRepas){
+    let r=false; try{ r=_pdRepasNote(u); }catch(e){ r=false; }
+    if(r){ a.premierRepas=borne(t); pose=true; }
+  }
+  return pose;
+}
 function rcmRetention(user){
   try{
     if(!user||!user.email) return;
@@ -7662,6 +7723,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Le modèle du coach posé comme programme (invitations en lot, 05/10/2026,
   // _appliquerProgrammeDepart) : un nom et une version, pas une mesure.
   'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion',
+  // L'activation (05/10/2026) : quatre dates d'usage et un canal, pas une mesure.
+  'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert
@@ -13093,6 +13156,15 @@ async function doRegister(){
     // athletePhoto, et non `photo` : c'est le champ que la fiche, la grille de
     // vignettes et le carnet d'adresses lisent deja.
     if(_inscriptionPhotoB64) user.athletePhoto=_inscriptionPhotoB64;
+    // L'ACTIVATION (05/10/2026) : la date d'inscription et le canal, ici et
+    // nulle part ailleurs. Un coach n'en a pas : il est hors des cohortes.
+    if(selRole!=='coach'){
+      let _codeCoach=false, _codes=[];
+      try{ _codeCoach=!!((_codeVerifieEnAttente()||{}).code||localStorage.getItem('pendingCode')||window._invitationCode); }catch(e){}
+      try{ _codes=codesInscription((document.getElementById('r-parrain')||{}).value,ambEnAttente(),
+        (typeof parrainageRefEnAttente==='function')?parrainageRefEnAttente():''); }catch(e){}
+      user.activation=activationNeuve(user.createdAt,canalInscription({codeCoach:_codeCoach,codes:_codes}));
+    }
     if(selRole==='coach'){
       user.code=genCode();user.clients=[];
       // Écrit À LA CRÉATION, pas rétro-écrit sur les dossiers existants : deux
@@ -22304,7 +22376,7 @@ function activiteResume(u,maintenant){
   const p=u.parcours||{};
   let notif=false; try{ notif=typeof Notification!=='undefined'&&Notification.permission==='granted'&&!!_pushMemo(); }catch(e){ notif=false; }
   const src=String((u.origine&&u.origine.src)||(u.ambassadeur?'amb':(u.parrainage&&u.parrainage.parrainCode?'parrainage':'direct'))).slice(0,20);
-  return {v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
+  const r={v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
     seance1:ses.length>0,
     parcours:!!(p.fini&&!p.existant),
     finEssai:Number(u.essai&&u.essai.finit)||0,
@@ -22313,7 +22385,25 @@ function activiteResume(u,maintenant){
       duel:Object.keys(u.duels||{}).length>0,
       defi:Object.keys(u.defisReleves||{}).length>0||Object.keys(u.saisonsReleves||{}).length>0,
       coach:!!(u.coachEmailKey||u.coachId),
-      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')}};
+      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')},
+    // Le palier du moment, pour la part payante à J30 (activationCohortes).
+    // Borné à PALIERS_ORDRE : une valeur hors liste ferait rejeter le résumé entier.
+    pal:(()=>{ try{ const p=palierDe(u); return PALIERS_ORDRE.indexOf(p)>=0?p:'aucun'; }catch(e){ return 'aucun'; } })()};
+  // L'ACTIVATION (05/10/2026) : des dates et un canal, rien d'autre. Absente
+  // d'un compte antérieur, et alors absente du résumé.
+  const act=_actResume(u.activation);
+  if(act) r.act=act;
+  return r;
+}
+// PURE. Ce que le résumé porte de l'activation : seulement des nombres et un
+// canal de la liste fermée, sinon rien (les règles de /activite le bornent).
+function _actResume(a){
+  if(!a||typeof a!=='object'||!(Number(a.inscrit)>0)) return null;
+  const o={i:Math.round(Number(a.inscrit)),c:ACTIVATION_CANAUX.indexOf(a.canal)>=0?a.canal:'autonome'};
+  if(Number(a.premiereSeance)>0) o.s=Math.round(Number(a.premiereSeance));
+  if(Number(a.premierBilan)>0) o.b=Math.round(Number(a.premierBilan));
+  if(Number(a.premierRepas)>0) o.r=Math.round(Number(a.premierRepas));
+  return o;
 }
 // Une fois par jour au plus, et seulement s'il a changé.
 async function activitePublier(u){
@@ -48425,6 +48515,7 @@ function _psRendre(){
     return;
   }
   z.innerHTML=_htmlSeanceDepart(_psSeance);
+  if(_psSeance) rcm('premiere_seance_prete');
 }
 // Chaque reponse avance d'une etape. A la troisieme, la seance est generee et
 // ECRITE dans sessions_config : c'est ce qui permet au moteur de seance de la
@@ -55520,6 +55611,7 @@ function finishWorkout(incomplete=false){
   // qui décide, pas un drapeau d'appareil.
   if((currentUser.sessions||[]).length===1){
     rcm('first_workout_completed');
+    try{ activationCompleter(currentUser,Date.now()); }catch(e){}
     // LE PARRAIN EST PRÉVENU (serveur léger, push « filleul ») : la promesse
     // de l'accueil. Le serveur relit le lien et la séance avant d'envoyer.
     try{ if(currentUser.parrainage&&currentUser.parrainage.parrainCode) deposerEvenement({type:'filleul_seance'}).catch(()=>{}); }catch(e){}
@@ -80488,6 +80580,7 @@ function saveBilanFinal(){
   // Le bilan vient d'être poussé dans l'historique : longueur 1 = c'était le
   // premier. Seul le compteur part — ni le type, ni la moindre réponse.
   if((currentUser.bilans||[]).length===1) rcm('first_bilan_completed');
+  try{ activationCompleter(currentUser,Date.now()); }catch(e){}
   // LE SECOND ET DERNIER POINT D'APPEL DES BADGES. Le bilan est le seul
   // critère des cinq qui ne passe pas par la fin d'une séance : sans cette
   // ligne, « Premier bilan » ne tomberait qu'à la séance suivante.
@@ -124361,6 +124454,10 @@ function saveUserOuDire(perdu){
 // localement. La donnée part quand même au cloud dans les deux cas.
 function saveUser(){
   currentUser.updatedAt=Date.now();
+  // L'ACTIVATION SE COMPLÈTE ICI : première séance, premier bilan de départ,
+  // premier repas — quel que soit l'écran qui les a écrits. Ne remplit que
+  // ce qui manque (activationCompleter), jamais au-delà.
+  try{ activationCompleter(currentUser,Date.now()); }catch(e){ rcErreurMuette('saveUser · activation',e); }
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
   // ⚠ rc_users ILLISIBLE (05/10/2026) : la clé est là mais ne se lit plus
   //   (JSON corrompu). `DB.get('users')||{}` partait d'une carte VIDE et la
@@ -126887,6 +126984,7 @@ function rcInstallPasser(){
     const n=(parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1;
     localStorage.setItem(RC_INST_REFUS,String(n));
   }catch(e){}
+  rcm('install_passe');
   go('s-welcome');
   return true;
 }

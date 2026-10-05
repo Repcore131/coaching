@@ -15941,10 +15941,14 @@ async function testExercices(){
           } finally { DB.set('users',JSON.parse(svU)); }});
         ok('_appliquerPayloadCode pose le programme de départ du code (redeemCode)',()=>{
           const sauve=currentUser;
-          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement,_te=window.toastEcriture,_ov=window._oublierCodeVerifie;
+          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement,_te=window.toastEcriture,_ov=window._oublierCodeVerifie,_rd=window.rafraichirDroits;
           const users=DB.get('users')||{}, svU=JSON.stringify(users);
           try{
             window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve();
+            // ⚠ PAS DE SUITE RÉSEAU APRÈS LE TEST : rafraichirDroits(…).then(_planifierRepeint)
+            //   finissait plus tard, et son envoi sans jeton déposait un toast dans un test asynchrone
+            //   en cours (R30, « un toast en plus »), au gré de la latence réseau.
+            window.rafraichirDroits=()=>Promise.resolve(null);
             window._apresRattachement=()=>{}; window.toastEcriture=()=>{}; window._oublierCodeVerifie=()=>{};
             currentUser={id:'u_pd',email:'pd@t',role:'athlete',fname:'P',status:'FREE'};
             _appliquerPayloadCode({coachId:'cZ',coachName:'Kev',coachEmailKey:'kev@t,fr',type:'athlete',months:3,
@@ -15954,7 +15958,7 @@ async function testExercices(){
             const stocke=(DB.get('users')||{})['pd@t'];
             return stocke&&_configReelle(stocke.sessions_config)?true:_echec('le dossier stocké n’a pas le programme');
           } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.pushOne=_cp; window._apresRattachement=_ar;
-            window.toastEcriture=_te; window._oublierCodeVerifie=_ov; DB.set('users',JSON.parse(svU)); }});
+            window.toastEcriture=_te; window._oublierCodeVerifie=_ov; window.rafraichirDroits=_rd; DB.set('users',JSON.parse(svU)); }});
         ok('La relance est un GESTE du coach, jamais automatique',()=>{
           // Aucun minuteur, aucune tâche de fond ne doit relancer un athlète.
           const tout=_prodSrc();
@@ -55977,6 +55981,66 @@ async function testExercices(){
         _sanSyncMeta={actif:true};
         return !montre(avec('apk'))?true:_echec('synchro active : la ligne reste');
       } finally { _sanSyncMeta=sv.m; window._ssPlateforme=sv.p; window.raccourciSanteUrl=sv.r; }});
+    // ══ 05/10/2026 — L'ACTIVATION PAR COMPTE ══════════════════════════════
+    ok('Activation : canal d’inscription (coach > ambassadeur > ami > autonome)',()=>{
+      const c=[canalInscription({codeCoach:true,codes:[{type:'amb'}]}),canalInscription({codes:[{type:'ref'},{type:'amb'}]}),
+        canalInscription({codes:[{type:'ref'}]}),canalInscription({}),canalInscription(null)].join(',');
+      if(c!=='coach,ambassadeur,ami,autonome,autonome') return _echec(c);
+      const a=activationNeuve(1000,'pirate');
+      if(a.canal!=='autonome'||a.inscrit!==1000||a.premiereSeance!==null) return _echec(JSON.stringify(a));
+      const src=String(doRegister);
+      if(!/user\.activation=activationNeuve\(user\.createdAt,canalInscription\(/.test(src)) return _echec('doRegister ne pose pas l’activation');
+      return /if\(selRole!=='coach'\)\{[^]*?user\.activation=/.test(src)?true:_echec('un coach recevrait une activation');});
+    ok('Activation : chaque date se pose UNE fois, jamais écrasée par un saveUser ultérieur',()=>{
+      const sv=currentUser, users=JSON.stringify(DB.get('users')||{}), sess=JSON.stringify(DB.get('session'));
+      const svPush=CLOUD.push, svOne=CLOUD.pushOne;
+      try{
+        CLOUD.push=()=>{}; CLOUD.pushOne=()=>Promise.resolve();
+        const t0=Date.now()-3*864e5;
+        currentUser={id:'u_act',email:'act@t.fr',role:'athlete',createdAt:t0,sessions:[],bilans:[],nutrition:{},
+          consent:{cgu:true,health:true,policyVersion:POLICY_VERSION},activation:activationNeuve(t0,'ami')};
+        saveUser();
+        const a=currentUser.activation;
+        if(a.premiereSeance||a.premierBilan||a.premierRepas) return _echec('posé sans rien : '+JSON.stringify(a));
+        currentUser.sessions.push({date:t0+5*3600e3,exercises:[]});
+        saveUser();
+        const s1=currentUser.activation.premiereSeance;
+        if(s1!==t0+5*3600e3) return _echec('première séance : '+s1);
+        // Une séance plus ANCIENNE arrive ensuite (autre appareil) : la date posée ne bouge pas.
+        currentUser.sessions.unshift({date:t0+3600e3,exercises:[]});
+        saveUser(); saveUser();
+        if(currentUser.activation.premiereSeance!==s1) return _echec('premiereSeance réécrite');
+        currentUser.bilans.push({type:'depart',date:t0-864e5});      // horloge en retard
+        saveUser();
+        if(currentUser.activation.premierBilan!==t0) return _echec('bilan non borné à l’inscription : '+currentUser.activation.premierBilan);
+        const stocke=(DB.get('users')||{})['act@t.fr'];
+        if(!stocke||!stocke.activation||stocke.activation.premiereSeance!==s1) return _echec('le dossier stocké n’a pas l’activation');
+        // Un compte antérieur, sans activation : rien n'est rétro-calculé.
+        const vieux={role:'athlete',sessions:[{date:1}],bilans:[]};
+        if(activationCompleter(vieux,Date.now())||vieux.activation) return _echec('rétro-calcul sur un compte antérieur');
+        const coach={role:'coach',activation:activationNeuve(1,'coach'),sessions:[{date:5}]};
+        return !activationCompleter(coach,Date.now())?true:_echec('activation complétée sur un coach');
+      } finally { currentUser=sv; CLOUD.push=svPush; CLOUD.pushOne=svOne;
+        DB.set('users',JSON.parse(users)); DB.set('session',JSON.parse(sess)); }});
+    ok('Activation : premier repas quand _pdRepasNote devient vrai ; le résumé d’activité la porte',()=>{
+      const t0=Date.now()-864e5;
+      const u={role:'athlete',createdAt:t0,sessions:[],bilans:[],nutrition:{log:{}},activation:activationNeuve(t0,'autonome')};
+      activationCompleter(u,t0+3600e3);
+      if(u.activation.premierRepas) return _echec('repas posé sans repas');
+      u.nutrition.log[localISODate(new Date())]={entries:[{nom:'Riz',kcal:200}]};
+      if(!_pdRepasNote(u)) return _echec('_pdRepasNote ne voit pas le repas');
+      activationCompleter(u,t0+7200e3);
+      if(u.activation.premierRepas!==t0+7200e3) return _echec('premierRepas : '+u.activation.premierRepas);
+      activationCompleter(u,t0+9999e3);
+      if(u.activation.premierRepas!==t0+7200e3) return _echec('premierRepas réécrit');
+      const r=activiteResume(Object.assign({email:'x@t'},u),Date.now());
+      if(!r||!r.act||r.act.c!=='autonome'||r.act.i!==t0||r.act.r!==t0+7200e3||'s' in r.act) return _echec('act : '+JSON.stringify(r&&r.act));
+      if(!/^(aucun|essentielle|ultime|suivi)$/.test(r.pal)) return _echec('pal : '+r.pal);
+      return !('act' in activiteResume(Object.assign({email:'y@t'},u,{activation:undefined}),Date.now()))?true:_echec('act sur un compte antérieur');});
+    ok('RCM : install_passe (« Continuer sans installer ») et premiere_seance_prete',()=>{
+      for(const e of ['install_passe','premiere_seance_prete']) if(RCM_EVENEMENTS.indexOf(e)<0) return _echec(e+' absent de RCM_EVENEMENTS');
+      if(!/rcm\('install_passe'\)/.test(String(rcInstallPasser))) return _echec('rcInstallPasser ne compte pas');
+      return /rcm\('premiere_seance_prete'\)/.test(String(_psRendre))?true:_echec('la séance prête n’est pas comptée');});
     ok('Premier écran : « Julie sera prévenu… », et l’événement part à la première séance',()=>{
       const u={role:'athlete',sessions:[],parrainage:{parrainCode:'JULIE7K2',parrainPrenom:'Julie'}};
       if(phraseParrainPremiereSeance(u)!=='Julie sera prévenu quand tu feras ta première séance.') return _echec(phraseParrainPremiereSeance(u));
@@ -56326,7 +56390,7 @@ async function testExercices(){
       if(!r.lev.parcours||r.lev.checkin||!r.lev.coach||!r.lev.duel||!r.lev.invite) return _echec('leviers '+JSON.stringify(r.lev));
       const txt=JSON.stringify(r);
       if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,''))) return _echec('un contenu a fui : '+txt);
-      if(Object.keys(r).sort().join()!=='debut,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
+      if(Object.keys(r).sort().join()!=='debut,finEssai,inscrit,j30,jour,lev,pal,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
       if(activiteResume({role:'coach',createdAt:1},_RET)!==null||activiteResume({role:'athlete'},_RET)!==null) return _echec('coach ou sans date');
       return /activitePublier\(u\)/.test(String(loadClientHome))?true:_echec('publié depuis l’accueil');});
     ok('Rétention : l’écran Viralité — actifs, cohortes et courbes SVG, entonnoir, leviers avec alerte sous 30',()=>{

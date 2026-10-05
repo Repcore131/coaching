@@ -1721,6 +1721,7 @@ function rcInstallPasser(){
     const n=(parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1;
     localStorage.setItem(RC_INST_REFUS,String(n));
   }catch(e){}
+  rcm('install_passe');
   go('s-welcome');
   return true;
 }
