@@ -54344,6 +54344,46 @@ async function testExercices(){
       sautDeCharge:true,plateauMuscle:true,sousMEV:true,restrictionLongue:true,habitudesBasses:true,calibrageDu:true,blocPrioriteFini:true,
       details:{douleur:{exercice:'SQUAT',max:7},decrochage:{faits:10,prevus:16},plateauMuscle:{muscle:'quadriceps',lib:'Quadriceps',semaines:4},
         sousMEV:{muscle:'mollets',lib:'Mollets'},volumeHaut:{muscle:'pectoraux',lib:'Pectoraux'},restrictionLongue:{semaines:14}}});
+    // ══ C2 RÉÉCRIT PAR L'ASSISTANT (05/10/2026) : CE QUI PART, ET CE QUI NE PART JAMAIS ══
+    ok('C2 IA — chargeBrouillonIA : rien pour un profil TCA (le brouillon reste déterministe)',()=>{
+      const u=_C2U({tcaRisque:true,bilans:[{id:'dep',date:new Date(2026,7,1).getTime(),type:'depart','deb-tca':'anorexie il y a 5 ans'},_C2B(28,60)]});
+      return chargeBrouillonIA(u,u.bilans[1],SIGNAUX_VIDES,{email:'k@t.fr'})===null?true:_echec('une charge part pour un profil TCA');});
+    ok('C2 IA — chargeBrouillonIA : jamais deb-health, deb-traitement, ni sommeil ni stress chiffrés ; les faits et le texte libre',()=>{
+      const u=_C2U({bilans:[{id:'dep',date:new Date(2026,7,1).getTime(),type:'depart','deb-health':'hernie discale L5','deb-traitement':'Levothyrox 75'},
+        _C2B(28,72.4,{'bil-diff-detail':'les horaires du boulot','bil-sleep-quality':'Mal, j\'ai du mal à me reposer','bil-stress':'Énormément',
+          'bil-stress-detail':'un déménagement','bil-cheat-reasons':'deux repas de famille'})]});
+      const ch=chargeBrouillonIA(u,u.bilans[1],SIGNAUX_VIDES,{email:'k@t.fr'});
+      if(!ch) return _echec('aucune charge');
+      const j=JSON.stringify(ch);
+      for(const x of ['hernie','Levothyrox','deb-health','deb-traitement','deb-tca','Mal, j','Énormément','bil-sleep','bil-stress"'])
+        if(j.indexOf(x)>=0) return _echec('« '+x+' » part au serveur');
+      if(ch.texteLibre.difficultes!=='les horaires du boulot'||ch.texteLibre.stress!=='un déménagement'||ch.texteLibre.ecarts!=='deux repas de famille') return _echec('texte libre : '+JSON.stringify(ch.texteLibre));
+      if(!ch.faits.length||!/72,4 kg/.test(ch.faits.join(' '))) return _echec('faits : '+JSON.stringify(ch.faits));
+      if(ch.prenom!=='Léa'||!ch.formules||ch.formules.ouverture==null) return _echec('prénom ou formules');
+      return Object.keys(ch).sort().join(',')==='accroche,faits,formules,notesSeances,prenom,styleCoach,texteLibre'?true:_echec('clés : '+Object.keys(ch).join(','));});
+    ok('C2 IA — chargeBrouillonIA : champs longs coupés (1 200), 8 notes de séance au plus (300), style du coach rattaché seulement (800)',()=>{
+      const ses=[]; for(let j=10;j<=20;j++) ses.push(Object.assign(_C2S(j),{notes:'n'.repeat(500)}));
+      const vieux=[1,2,3,4].map(j=>Object.assign(_C2B(j,null),{reponseCoach:'r'.repeat(1000)+j,reponseDate:new Date(2026,8,j+1).getTime()}));
+      const u=_C2U({coachEmailKey:'k@t,fr',sessions:ses,bilans:vieux.concat([_C2B(28,null,{'bil-diff-detail':'d'.repeat(5000)})])});
+      const b=u.bilans[4];
+      const ch=chargeBrouillonIA(u,b,SIGNAUX_VIDES,{email:'k@t.fr'});
+      if(ch.texteLibre.difficultes.length!==1200) return _echec('difficultés : '+ch.texteLibre.difficultes.length);
+      if(ch.notesSeances.length!==8||ch.notesSeances.some(n=>n.length!==300)) return _echec('notes : '+ch.notesSeances.map(n=>n.length).join(','));
+      if(ch.styleCoach.length!==3||ch.styleCoach.some(r=>r.length!==800)) return _echec('style : '+ch.styleCoach.map(r=>r.length).join(','));
+      // Un autre coach : aucune réponse de style.
+      return chargeBrouillonIA(u,b,SIGNAUX_VIDES,{email:'autre@t.fr'}).styleCoach.length===0?true:_echec('le style d’un autre coach part');});
+    ok('C2 IA — _distanceTexte : 0 pour deux textes égaux, 1 contre le vide, normalisée et bornée',()=>{
+      if(_distanceTexte('Salut Léa','Salut Léa')!==0) return _echec('a,a');
+      if(_distanceTexte('','x')!==1||_distanceTexte('x','')!==1) return _echec('vide');
+      if(_distanceTexte('chat','chats')!==0.2) return _echec('chat/chats : '+_distanceTexte('chat','chats'));
+      const d=_distanceTexte('a'.repeat(9000),'a'.repeat(9000)+'b');
+      return d===0?true:_echec('au-delà de 4 000 caractères : '+d);});
+    ok('C2 IA — la proposition ne remplace que si le coach n’a pas tapé ; le retour part après un envoi réussi, sans attendre',()=>{
+      const r=String(rbReecrireIA), s=String(saveReponseBilan);
+      if(!/rbBrouillon\(email,bilanId\)/.test(r)||!/Utiliser/.test(r)||!/dataset\.journalId/.test(r)) return _echec('rbReecrireIA');
+      if(!/CLOUD\._callFn\('ia',\{tache:'bilan'/.test(r)) return _echec('l’appel ia');
+      if(!/CLOUD\._callFn\('iaRetour',\{journalId:jid,statut,distance\}\)\)\.catch/.test(s)) return _echec('iaRetour non avalé');
+      return s.indexOf('iaRetour')>s.indexOf('toastSync(')?true:_echec('le retour part avant l’envoi');});
     ok('C2 — brouillonBilan : sans poids antérieur, sans séance, sans signal, le brouillon dit ce qui a bougé et pose une question',()=>{
       const u=_C2U({bilans:[_C2B(28,72.4)]});
       const r=brouillonBilan(u,u.bilans[0],SIGNAUX_VIDES,{formules:{ouverture:'Salut {prénom}',cloture:'À lundi, Kévin'}});

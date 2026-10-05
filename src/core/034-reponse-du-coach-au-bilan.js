@@ -206,6 +206,19 @@ function saveReponseBilan(email,bilanId,taId){
   if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:email.replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});
   toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
     'la réponse est');
+  // LE RETOUR À L'ASSISTANT (ia.js, iaRetour) : ce que le coach a fait de la
+  // proposition, et de combien le texte envoyé s'en écarte. Sans attendre, et
+  // une erreur ici ne dit rien : la réponse, elle, est partie.
+  try{
+    const jid=ta&&ta.dataset.journalId;
+    if(jid&&CLOUD&&CLOUD._callFn){
+      const prop=ta.dataset.iaProposition||'';
+      const distance=_distanceTexte(prop,txt);
+      const statut=ta.dataset.iaUtilisee!=='1'?'rejete':(distance===0?'valide':'modifie');
+      delete ta.dataset.journalId; delete ta.dataset.iaProposition; delete ta.dataset.iaUtilisee;
+      Promise.resolve(CLOUD._callFn('iaRetour',{journalId:jid,statut,distance})).catch(()=>{});
+    }
+  }catch(e){}
   // ENCHAÎNEMENT. Quand le coach est entré par la ligne « Nouveaux bilans à
   // lire », on lui propose le suivant plutôt que de le renvoyer sur la fiche :
   // il devait sinon repasser par le tableau de bord entre chaque réponse.
@@ -476,6 +489,131 @@ function _brouillonPourChamp(b,c){
   let sig=null; try{ sig=signauxEntrainement(c,{complet:true}); }catch(e){ sig=null; }
   try{ return brouillonBilan(c,b,sig,{formules:formulesReponse(currentUser)}).texte; }catch(e){ return ''; }
 }
+// ══ C2 RÉÉCRIT PAR L'ASSISTANT (05/10/2026) ════════════════════════════════
+// Le brouillon déterministe reste la base, et le repli : « Réécrire avec
+// l'assistant » envoie au serveur (cloudflare/src/ia.js, tâche 'bilan') les
+// FAITS du brouillon et les mots de l'athlète, et rien d'autre. Le serveur
+// rejette tout texte qui avance un chiffre absent des faits.
+// ⚠ PROFIL TCA : rien ne part (null) — le brouillon reste déterministe.
+// ⚠ JAMAIS ENVOYÉS : les champs « alerte » du bilan de départ (deb-health,
+//   deb-traitement, deb-tca), le sommeil et le stress CHIFFRÉS (bil-sleep-
+//   quality, bil-stress). Seuls cinq champs de texte libre partent, nommés
+//   ci-dessous, chacun coupé.
+const IA_BILAN_TEXTE_MAX=1200, IA_BILAN_NOTES_N=8, IA_BILAN_NOTE_MAX=300;
+const IA_BILAN_STYLE_N=3, IA_BILAN_STYLE_MAX=800, IA_DISTANCE_MAX=4000;
+const IA_BILAN_LIBRES=Object.freeze({difficultes:'bil-diff-detail',ecarts:'bil-cheat-reasons',
+  modifs:'bil-prog-modifs',stress:'bil-stress-detail',objectifs:'bil-new-goals-detail'});
+/**
+ * PURE (les caches de volume mis à part). Ce que le serveur reçoit pour
+ * réécrire le brouillon C2, ou null (profil TCA, rien à réécrire).
+ * @param c       le dossier de l'athlète
+ * @param bilan   le bilan auquel on répond
+ * @param signaux signauxEntrainement (complet de préférence)
+ * @param coach   le coach (sa formule, son adresse)
+ */
+function chargeBrouillonIA(c,bilan,signaux,coach){
+  if(!c||!bilan) return null;
+  const tca=(()=>{ try{ return aTCA(c); }catch(e){ return true; } })();
+  if(tca) return null;
+  const formules=formulesReponse(coach);
+  const br=brouillonBilan(c,bilan,signaux,{formules});
+  const coupe=(v,n)=>String(v==null?'':v).trim().slice(0,n);
+  const texteLibre={};
+  for(const k of Object.keys(IA_BILAN_LIBRES)) texteLibre[k]=coupe(_texteReponse(bilan[IA_BILAN_LIBRES[k]]),IA_BILAN_TEXTE_MAX);
+  // Les notes de séance depuis le bilan précédent (quatre semaines sans lui).
+  const t=Number(bilan.date)||Date.now();
+  const prec=(c.bilans||[]).filter(x=>x&&x.date&&Number(x.date)<t).sort((x,y)=>y.date-x.date)[0];
+  const debut=prec?Number(prec.date):t-28*864e5;
+  const notesSeances=(c.sessions||[]).filter(s=>s&&Number(s.date)>debut&&Number(s.date)<=t&&String(s.notes||'').trim())
+    .sort((x,y)=>y.date-x.date).slice(0,IA_BILAN_NOTES_N).map(s=>coupe(s.notes,IA_BILAN_NOTE_MAX));
+  // LE STYLE : les trois dernières réponses de CE coach à CET athlète. Le
+  // dossier ne garde pas qui a répondu : on ne les prend que si l'athlète est
+  // rattaché à ce coach.
+  const kCoach=String((coach&&coach.email)||'').toLowerCase().replace(/\./g,',');
+  const sienne=!!kCoach&&String(c.coachEmailKey||'').toLowerCase()===kCoach;
+  const styleCoach=sienne?(c.bilans||[]).filter(x=>x&&x!==bilan&&String(x.reponseCoach||'').trim())
+    .sort((x,y)=>(Number(y.reponseDate)||Number(y.date)||0)-(Number(x.reponseDate)||Number(x.date)||0))
+    .slice(0,IA_BILAN_STYLE_N).map(x=>coupe(x.reponseCoach,IA_BILAN_STYLE_MAX)):[];
+  return {faits:br.bouge.slice(),accroche:br.accroche.slice(),texteLibre,notesSeances,styleCoach,
+    formules,prenom:String(c.fname||'')};
+}
+/**
+ * PURE. La distance de Levenshtein entre deux textes, rapportée à la plus
+ * longue des deux : 0 identiques, 1 tout réécrit. Bornée à 4 000 caractères.
+ */
+function _distanceTexte(a,b){
+  const x=String(a==null?'':a).slice(0,IA_DISTANCE_MAX), y=String(b==null?'':b).slice(0,IA_DISTANCE_MAX);
+  if(x===y) return 0;
+  if(!x.length||!y.length) return 1;
+  let prev=new Array(y.length+1), cur=new Array(y.length+1);
+  for(let j=0;j<=y.length;j++) prev[j]=j;
+  for(let i=1;i<=x.length;i++){
+    cur[0]=i;
+    const xi=x.charCodeAt(i-1);
+    for(let j=1;j<=y.length;j++){
+      const sub=prev[j-1]+(xi===y.charCodeAt(j-1)?0:1);
+      cur[j]=Math.min(sub,prev[j]+1,cur[j-1]+1);
+    }
+    const tmp=prev; prev=cur; cur=tmp;
+  }
+  return Math.round(prev[y.length]/Math.max(x.length,y.length)*1000)/1000;
+}
+// L'appel : le champ montre l'attente ; la proposition REMPLACE le texte si le
+// coach n'a pas tapé entre-temps, sinon elle s'affiche à côté avec « Utiliser ».
+// Échec, quota, hors ligne : un toast calme, le brouillon reste en place.
+async function rbReecrireIA(email,bilanId,taId){
+  const ta=document.getElementById(taId);
+  if(!ta||ta.dataset.iaAttente==='1') return false;
+  const users=DB.get('users')||{}, c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const b=(c.bilans||[]).find(x=>_idBilan(x)===bilanId);
+  if(!b) return false;
+  let sig=null; try{ sig=signauxEntrainement(c,{complet:true}); }catch(e){ sig=null; }
+  let charge=null; try{ charge=chargeBrouillonIA(c,b,sig,currentUser); }catch(e){ charge=null; }
+  if(!charge){ toast('L’assistant n’est pas proposé ici : le brouillon reste celui-ci.'); return false; }
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){ toast('Hors ligne : le brouillon reste celui-ci.'); return false; }
+  if(!CLOUD||!CLOUD._callFn){ toast('L’assistant n’est pas joignable : le brouillon reste celui-ci.'); return false; }
+  const avant=ta.value, tapeAvant=rbBrouillon(email,bilanId);
+  const etat=document.getElementById('rb-ia_'+bilanId);
+  ta.dataset.iaAttente='1'; ta.setAttribute('aria-busy','true'); ta.classList.add('rb-ia-attente');
+  if(etat) etat.innerHTML='<span class="sub">L’assistant réécrit le brouillon…</span>';
+  let r=null;
+  try{ r=await CLOUD._callFn('ia',{tache:'bilan',athlete:String(email||'').toLowerCase().replace(/\./g,','),charge}); }
+  catch(e){
+    r=null;
+    const q=e&&e.statut;
+    toast(q===429?'Quota de l’assistant atteint ce mois-ci : le brouillon reste celui-ci.'
+      :q===503?'L’assistant est en pause : le brouillon reste celui-ci.'
+      :'L’assistant n’a pas pu répondre : le brouillon reste celui-ci.');
+  }finally{
+    delete ta.dataset.iaAttente; ta.removeAttribute('aria-busy'); ta.classList.remove('rb-ia-attente');
+    if(etat) etat.innerHTML='';
+  }
+  if(!r) return false;
+  if(!r.ok||!r.proposition||typeof r.proposition.texte!=='string'||!r.proposition.texte.trim()){
+    toast('L’assistant n’a rien proposé d’utilisable : le brouillon reste celui-ci.'); return false; }
+  const prop=r.proposition.texte.trim().slice(0,2000);
+  if(r.journalId) ta.dataset.journalId=String(r.journalId);
+  ta.dataset.iaProposition=prop;
+  delete ta.dataset.iaUtilisee;
+  const tape=ta.value!==avant||rbBrouillon(email,bilanId)!==tapeAvant;
+  if(!tape) return rbUtiliserIA(email,bilanId,taId);
+  if(etat) etat.innerHTML='<div class="rb-ia-prop"><div class="sub">Proposition de l’assistant (ton texte n’a pas été touché)</div>'
+    +'<div class="rb-ia-texte">'+escapeHtml(prop)+'</div>'
+    +'<button type="button" class="rb-lien" onclick="rbUtiliserIA(\''+escapeHtml(email)+'\',\''+escapeHtml(bilanId)+'\',\''+escapeHtml(taId)+'\')">Utiliser</button></div>';
+  return true;
+}
+function rbUtiliserIA(email,bilanId,taId){
+  const ta=document.getElementById(taId);
+  if(!ta||!ta.dataset.iaProposition) return false;
+  ta.value=ta.dataset.iaProposition;
+  ta.dataset.iaUtilisee='1';
+  delete ta.dataset.brouillon;
+  rbNoterBrouillon(email,bilanId,ta.value);
+  const etat=document.getElementById('rb-ia_'+bilanId);
+  if(etat) etat.innerHTML='';
+  return true;
+}
 // « Repartir de zéro » : le champ se vide, et il le RESTE au prochain rendu
 // (le brouillon ne revient pas tout seul). Local, comme le brouillon tapé.
 function rbRepartiDeZero(email,bilanId){
@@ -562,7 +700,9 @@ function blocReponseBilan(b,c){
               <span class="sub">Brouillon pré-écrit : relis-le avant d’envoyer.</span>
               <button type="button" id="rb-zero_${ide}" class="rb-lien" onclick="rbRepartirDeZero('${em}','${ide}','${_taIdBilan(id)}')">Repartir de zéro</button>
               <button type="button" class="rb-lien" onclick="ouvrirFormulesReponse()">Ma formule</button>
-            </div>`
+              ${(!tca&&SERVEUR_LEGER)?`<button type="button" class="rb-lien" onclick="rbReecrireIA('${em}','${ide}','${_taIdBilan(id)}')">Réécrire avec l’assistant</button>`:''}
+            </div>
+            <div id="rb-ia_${ide}" class="rb-ia" aria-live="polite"></div>`
           :'');
     })()}
     <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"

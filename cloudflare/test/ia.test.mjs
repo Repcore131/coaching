@@ -3,7 +3,7 @@
 //   node cloudflare/test/ia.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, IA_PLAFONDS, TACHES, SCHEMAS } from '../src/ia.js';
+import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2 } from '../src/ia.js';
 import { repondreAppel, ErreurAppel } from '../src/appels.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -236,6 +236,63 @@ await test('/fn/ia de bout en bout : le jeton, puis {result} ; le 403 sort en er
   assert.equal((await r.json()).result.ok, true);
   const r2 = await repondreAppel(req({ tache: 'relance', athlete: AUTRE, charge: 'x' }), g, ctx);
   assert.equal(r2.status, 403);
+});
+
+// ══ LE BROUILLON C2 RÉÉCRIT (tâche 'bilan') ═════════════════════════════════
+const FAITS = ['Ton poids moyen sur 7 jours est passé de 72,4 à 71,9 kg depuis ton dernier bilan (−0,5 kg).',
+  '9 séances faites sur 12 prévues depuis ton dernier bilan.'];
+const CHARGE_C2 = { faits: FAITS, accroche: [], texteLibre: { difficultes: 'les horaires du boulot', ecarts: '', modifs: '', stress: '', objectifs: '' },
+  notesSeances: [], styleCoach: [], formules: { ouverture: 'Salut {prénom},', cloture: 'À très vite' }, prenom: 'Léa' };
+const repC2 = (texte) => (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: 'end_turn',
+  content: [{ type: 'text', text: JSON.stringify({ texte, elementsRepris: ['les horaires du boulot'], question: 'Comment ça se passe ?' }) }],
+  usage: { input_tokens: 900, output_tokens: 120 } });
+
+await test('chiffresInventes : un nombre absent des faits est signalé ; 72,4 = 72.4, 1 200 = 1200', async () => {
+  assert.deepEqual(chiffresInventes('Salut Léa, tu as perdu 3 kg.', FAITS), ['3']);
+  assert.deepEqual(chiffresInventes('De 72.4 à 71,9 kg en 7 jours, 9 séances sur 12.', FAITS), []);
+  assert.deepEqual(chiffresInventes('1 200 pas', ['1200 pas par jour']), []);
+  assert.deepEqual(chiffresInventes('Aucun chiffre ici.', []), []);
+});
+
+await test('bilan : « tu as perdu 3 kg » sans 3 dans les faits → rejet chiffre_invente, aucune proposition, journal en échec', async () => {
+  const w = monde({ reponse: repC2('Salut Léa,\n\nTu as perdu 3 kg, bravo. Les horaires du boulot t’ont compliqué la tâche : comment ça se passe ?\n\nÀ très vite') });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'bilan', athlete: ATH, charge: CHARGE_C2 } });
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, 'chiffre_invente');
+  assert.equal(r.proposition, undefined);
+  const j = Object.values(w.F.lire('ia_journal/' + COACH));
+  assert.equal(j.length, 1);
+  assert.equal(j[0].statut, 'echec');
+  assert.equal(j[0].raison, 'chiffre_invente');
+  // Le coût reste compté : l'appel a été facturé.
+  assert.equal(w.F.lire('ia_quota/' + COACH + '/' + MOIS), 900 * 2 + 120 * 10);
+});
+
+await test('bilan : une réponse conforme passe ; prompt système figé en cache, règles C2 mot pour mot, schéma {texte, elementsRepris, question}', async () => {
+  const texte = 'Salut Léa,\n\nTon poids moyen sur 7 jours est passé de 72,4 à 71,9 kg, et 9 séances sur 12. Tu parles des horaires du boulot : qu’est-ce qui a été le plus dur à caler ?\n\nÀ très vite';
+  const w = monde({ reponse: repC2(texte) });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'bilan', athlete: ATH, charge: CHARGE_C2 } });
+  assert.equal(r.ok, true);
+  assert.equal(r.proposition.texte, texte);
+  const { corps } = w.appels[0];
+  assert.equal(corps.model, 'claude-sonnet-5-5');
+  assert.equal(corps.output_config.effort, 'low');
+  assert.deepEqual(corps.output_config.format.schema.required, ['texte', 'elementsRepris', 'question']);
+  assert.ok(Array.isArray(corps.system) && corps.system.length === 1);
+  assert.deepEqual(corps.system[0].cache_control, { type: 'ephemeral' });
+  assert.ok(corps.system[0].text.includes(REGLES_C2), 'les règles C2 ne sont pas reprises telles quelles');
+  for (const m of ['baisse la charge', 'prends un jour', 'j’aimerais qu’on fasse un point', 'Une seule question', 'Tutoie'])
+    assert.ok(corps.system[0].text.includes(m), m);
+  // La charge part dans le message utilisateur, jamais dans le système (cache stable).
+  assert.ok(!corps.system[0].text.includes('les horaires du boulot'));
+  assert.ok(JSON.parse(corps.messages[0].content).texteLibre.difficultes === 'les horaires du boulot');
+  assert.equal(w.F.lire('ia_journal/' + COACH + '/' + r.journalId).statut, 'propose');
+});
+
+await test('bilan : sans faits → 400, sans appel', async () => {
+  const w = monde();
+  assert.equal(await statutDe(w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'bilan', athlete: ATH, charge: 'texte libre' } })), 400);
+  assert.equal(w.appels.length, 0);
 });
 
 console.log(ok + ' tests IA');
