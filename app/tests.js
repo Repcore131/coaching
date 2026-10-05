@@ -1330,7 +1330,11 @@ async function testExercices(){
       for(const v of Object.values(EX_GUIDE_BRUT||{}))
         String(v).split('~').forEach(x=>{x=x.trim(); if(x) noms.push(x);});
       if(noms.length<300) return _echec('catalogue illisible : '+noms.length+' noms');
-      const sans=noms.filter(n=>!_slugIllustre(exSlug(n)));
+      // Sauf ceux que le guide n'a jamais illustrés (EX_SANS_ILLUSTRATION,
+      // 05/10/2026) : la liste ne cache rien, chacun y est vraiment sans dessin.
+      const sans=noms.filter(n=>!_slugIllustre(exSlug(n))&&EX_SANS_ILLUSTRATION.indexOf(n)<0);
+      const faux=EX_SANS_ILLUSTRATION.filter(n=>_slugIllustre(exSlug(n)));
+      if(faux.length) return _echec('marqués sans dessin, mais illustrés : '+faux.join(' | '));
       return sans.length?_echec(sans.length+' sans image, dont '+sans.slice(0,4).join(' | ')):true;});
     ok('La liste des mots d\'agres ne contient AUCUNE precision d\'execution',()=>{
       // Y glisser « prise », « large » ou « incline » viderait la regle de
@@ -45812,7 +45816,10 @@ async function testExercices(){
       // 408 depuis le 30/09/2026 : quatre exercices sont passés au cardio.
       // 407 depuis le 01/10/2026 : « LEG EXTENSION » était écrit deux fois, dont
       // une avec une faute ; les deux lignes n'en font plus qu'une.
-      return 407+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
+      // 430 depuis le 05/10/2026 : vingt-trois exercices filmés dans le guide et
+      // non référencés ajoutés (les deux que Kevin citait existaient sous un
+      // autre nom : voir BQ_LIBELLES).
+      return 430+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
@@ -45821,6 +45828,34 @@ async function testExercices(){
         const sans=[...n].filter(x=>!schemaDe({name:x}));
         return n.size+' noms pour '+_guideAttendu()+' attendus'
           +(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
+    ok('Exercices non référencés (05/10/2026) : classés, trouvables en banque, « rdl » compris, vidéos rattachées',(()=>{
+      for(const [n,p,sch] of [['ELEVATION LATERALE POULIE BASSE UNILATERAL','DELT_LAT','isolation-epaule'],
+        ['RDL MACHINE GUIDEE','ISCHIOS','charniere-hanche'],['HIGH ROW HAMMER STRENGTH','DORSAUX','tirage-horizontal'],['SQUAT AU BELT SQUAT VERSION FESSIER','FESSIERS','squat']]){
+        const g=_exGuide().get(n); if(!g||g.p[0]!==p) return _echec(n+' : muscles '+JSON.stringify(g));
+        if(schemaDe({name:n})!==sch) return _echec(n+' : schéma '+schemaDe({name:n}));
+      }
+      // Une banque en ligne qui ne les a pas : l'app les ajoute, sans doublon.
+      const b=_indexerBanque(_bqCompleter([{slug:'elevation-laterale-poulie',nom:'ELEVATION LATERALE POULIE',muscles:['DELT_LAT']}]));
+      const f=b.parSlug['rdl-machine-guidee'];
+      if(!f||f.muscles[0]!=='ISCHIOS'||!/poignées basses/.test(f.execution)||f.repos!=='02 min'||f.materiel!=='machine guidee'||!f.videos.length) return _echec('fiche ajoutée : '+JSON.stringify(f));
+      if(b.liste.filter(x=>x.slug==='elevation-laterale-poulie').length!==1) return _echec('doublon d’une fiche déjà en ligne');
+      if(_bqCompleter([]).length!==0) return _echec('une banque vide se remplit toute seule');
+      // Les deux noms de Kevin (05/10/2026) : « hauteur de hanche », « rdl belt ».
+      const h=_indexerBanque([{slug:'elevation-laterale-poulie-elastique-unilateral',nom:'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL'}]).parSlug['elevation-laterale-poulie-elastique-unilateral'];
+      if(!h||scoreBanque(h,'elevation laterale hauteur de hanche',[])<=0) return _echec('hauteur de hanche introuvable à la recherche');
+      if(videosPour(h.nom).length!==1) return _echec('la vidéo à hauteur de hanche');
+      if(scoreBanque(f,'rdl belt',[])<=0||scoreBanque(f,'rdl',[])<=0) return _echec('« rdl » ne trouve pas le soulevé roumain');
+      // Une vidéo rangée sous un nom raccourci revient à son exercice.
+      if(!videosPour('ABDUCTION DEBOUT POULIE ELASTIQUE').length||videosPour('TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET').length!==1) return _echec('vidéos rattachées');
+      // Le RDL à la belt squat a SA photo (celle du guide), et un exercice à la
+      // belt squat sans photo ne prend pas celui de sa version à la barre.
+      if(_exoIndex&&_exoIndex.size){
+        if(_slugIllustre('rdl-machine-guidee')!=='rdl-machine-guidee') return _echec('photo du RDL belt squat');
+        if(_slugIllustre(exSlug('GOBELET SQUAT A LA BELT SQUAT'))) return _echec('une image d’un autre agrès');
+      }
+      // Aucune fiche ajoutée n'invente un texte : celui de BQ_TEXTES_APP, l'intro d'une variante, ou rien.
+      const inv=bqFichesApp([]).filter(x=>x.execution&&!BQ_TEXTES_APP[x.nom]&&!(EX_VARIANTES[x.nom]&&EX_VARIANTES[x.nom].intro===x.execution));
+      return inv.length?_echec('texte inventé : '+inv[0].nom):true;})());
     ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
     ok('Chaque schéma porte son libellé, son effectif et ses exemples',
        Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
@@ -49144,6 +49179,43 @@ async function testExercices(){
       if(r.fiches.find(x=>x.cle==='jambes').grise) return _echec('les longueurs restent en gris malgré des points justes');
       const h=String(_htmlAnat);
       if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
+      return true;});
+    // La photo prise en plongée : dite à l'envoi, et dite au coach (05/10/2026).
+    ok('PHOTO EN PLONGÉE : REFUSÉE À L’ENVOI QUAND ELLE EST NETTE, ET LE COACH LIT LA VRAIE CAUSE, PAS « VÉRIFIE LES POINTS »',()=>{
+      if(typeof priseDeVue!=='function') return _echec('priseDeVue n’existe pas');
+      const n=priseDeVue(0.25,0.52,0.90);
+      if(!n||n.sens!==null) return _echec('une photo d’aplomb est signalée : '+JSON.stringify(n));
+      const pl=priseDeVue(325,498,680);   // la fiche de Kevin : 1,05
+      if(!pl||pl.sens!=='plongee'||!pl.net) return _echec('la fiche de Kevin : '+JSON.stringify(pl));
+      if(priseDeVue(0.25,0.45,0.90).sens!=='contre') return _echec('contre-plongée non vue');
+      if(priseDeVue(0.5,0.5,0.9)!==null) return _echec('un tronc nul ne se lit pas');
+      // À L'ENVOI, sur les points du moteur.
+      const brut=()=>{ const pts=Array.from({length:33},()=>[0.5,0.1,1]);
+        const P={0:[0.5,0.12],11:[0.42,0.25],12:[0.58,0.25],13:[0.38,0.38],14:[0.62,0.38],15:[0.36,0.5],16:[0.64,0.5],
+          23:[0.45,0.56],24:[0.55,0.56],25:[0.45,0.74],26:[0.55,0.74],27:[0.45,0.88],28:[0.55,0.88],29:[0.45,0.93],30:[0.55,0.93],31:[0.44,0.95],32:[0.56,0.95]};
+        for(const i in P) pts[i]=[P[i][0],P[i][1],1];
+        return {ok:true,w:1000,h:1500,pts,z:Array(33).fill(0),lum:120}; };
+      const v=photoControle(brut(),'face');
+      if(v.etat!=='rouge'||v.codes.indexOf('plongee')<0) return _echec('à l’envoi : '+JSON.stringify(v));
+      if(!/hauteur de hanche/.test(v.raisons.join(' '))) return _echec('la consigne ne dit pas où poser le téléphone');
+      if(/jambe|court|morpho/i.test(PHOTO_CTL.MSG.plongee+PHOTO_CTL.MSG.contre)) return _echec('la consigne parle du corps, pas de la prise de vue');
+      // CÔTÉ COACH : le bas du corps écrasé de 38 %, comme vu d'en haut.
+      const pts=anatGabarit(1000,1500,'face');
+      const sol=pts.talon_l[1], ecr={};
+      for(const k of ['hanche','genou','cheville']) for(const c of ['_l','_r']){
+        const q=pts[k+c]; ecr[k+c]=[q[0],sol-(sol-q[1])*0.62,1]; }
+      const r=anatMesures(_anatGab(ecr),_anatDossier());
+      const ver=r.echelle.verif;
+      if(!ver||ver.statut!=='divergence') return _echec('la plongée ne fait pas diverger : '+JSON.stringify(ver));
+      if(!ver.prise||ver.prise.sens!=='plongee') return _echec('la cause n’est pas lue : '+JSON.stringify(ver.prise));
+      const tj=anatTexte(r.fiches.find(x=>x.cle==='jambes'),r);
+      if(!/plongée/.test(tj.court)||/genoux à vérifier/.test(tj.court)||!/hauteur de hanche/.test(tj.verifier)) return _echec('la fiche accuse encore les points : '+tj.court);
+      const h=String(_htmlAnat);
+      if(h.indexOf('Les points ne sont pas en cause')<0) return _echec('le bandeau ne disculpe pas les points');
+      // Des genoux mal placés sur une photo d'aplomb : toujours l'ancien bandeau.
+      const dy=0.05*ANAT_ROTULE.part*0.86;
+      const r2=anatMesures(_anatGab({genou_l:[pts.genou_l[0],pts.genou_l[1]-dy,1],genou_r:[pts.genou_r[0],pts.genou_r[1]-dy,1]}),_anatDossier());
+      if(r2.echelle.verif.prise) return _echec('un genou mal placé passe pour une plongée');
       return true;});
     ok('ANALYSE MORPHO : GENOUX DÉPLACÉS DE 5 % : BANDEAU, LONGUEURS EN GRIS',()=>{
       const pts=anatGabarit(1000,1500,'face');

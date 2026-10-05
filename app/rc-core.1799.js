@@ -36272,6 +36272,16 @@ function _cleRenommee(k,glob){
 //     élastique) : 'TRICEPS,PECTORAUX,DELT_ANT'. Les dips à la machine et
 //     les dips au banc (TRICEPS DIPS) restent aux triceps seuls ;
 //   • SIDE TRICEPS est une pose : EX_GUIDE_POSING.
+// LES EXERCICES NON RÉFÉRENCÉS (Kevin, 05/10/2026 : « l'élévation latérale
+// hauteur de hanche, ou même le RDL à la belt squat »). Vingt-trois exercices
+// filmés dans le guide n'avaient pas de ligne ici : sans ligne, pas de
+// muscles, pas de schéma, et le remplissage de la banque les écartait. Ils
+// sont classés sur leur plus proche voisin (même agrès, même geste). Les deux
+// que Kevin a nommés EXISTAIENT sous un autre nom (vérifié sur ses captures du
+// guide) : « ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL » est l'élévation à
+// hauteur de hanche, « RDL MACHINE GUIDEE » le RDL à la belt squat. Ils se
+// retrouvent par ces mots-là (BQ_LIBELLES). La banque en ligne, copie figée,
+// est complétée par l'app (bqFichesApp) : rien à republier.
 const EX_GUIDE_BRUT={
   'PECTORAUX,DELT_ANT,TRICEPS':'CHEST PRESS DEBOUT~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS BAS DE PECS~DIPS MACHINE BAS DE PECS~FLOOR PRESS~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES',
   // LES PULL-OVERS, BRAS TENDUS (Kevin, 27/09/2026, vérifié sur les photos) :
@@ -36284,7 +36294,7 @@ const EX_GUIDE_BRUT={
   // LES TIRAGES VERTICAUX : pas de rétraction de l'omoplate.
   'DORSAUX,BICEPS':'ISO LATERAL FRONT LAT PULLDOWN~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TIRAGE UNILATERAL SUR BANC~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION',
   'QUADRICEPS,FESSIERS,ISCHIOS,LOMBAIRES':'SOULEVE DE TERRE TRAP BARRE',
-  'TRICEPS':'BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BODYWEIGHT SKULL CRUSHER~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE COUCHE PRISE SERREE~DIPS MACHINE~DIPS MACHINE GUIDEE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~KICKBACK HALTERE~KICKBACK POULIE~POMPES SERREES~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS DIPS~TRICEPS EXTENSION MACHINE',
+  'TRICEPS':'BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BODYWEIGHT SKULL CRUSHER~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE COUCHE PRISE SERREE~DIPS MACHINE~DIPS MACHINE GUIDEE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~EXTENSIONS POULIE BASSE TRICEPS~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~FRENCH PRESS MACHINR~KICKBACK HALTERE~KICKBACK POULIE~POMPES SERREES~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS DIPS~TRICEPS EXTENSION MACHINE',
   'TRICEPS,PECTORAUX,DELT_ANT':'DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS ELASTIQUE~DIPS LESTE~DIPS SUR BARRE~DIPS SUR BARRE ELASTIQUE~DIPS SUR BARRE LESTE',
   'ABDOS':'AB CRUNCH BENCH~ABS ROLLER~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH AU SOL AVEC POIDS~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LE VACUUM~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~V SIT UP',
   // Les SHRUGS elevent l'omoplate : trapeze SUPERIEUR, et lui seul.
@@ -36301,17 +36311,17 @@ const EX_GUIDE_BRUT={
   // TOUS LES ROWINGS, uni- ou bilatéraux (revue du 27/09/2026) : quinze
   // d'entre eux, dont le rowing haltère, ne créditaient pas le trapèze médian,
   // alors que la règle de repli, plus bas, le fait pour tout rowing.
-  'DORSAUX,TRAP_MED,BICEPS':'RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING PLANCHE BARRE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING SAC UNILATERAL SUR BANC~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC',
+  'DORSAUX,TRAP_MED,BICEPS':'HIGH ROW HAMMER STRENGTH~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING PLANCHE BARRE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING SAC UNILATERAL SUR BANC~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE NEUTRE~TIRAGE HORIZONTAL MACHINE CONVERGENTE PRONATION~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE SUPINATION~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE~TIRAGE HORIZONTAL MACHINE UNILATERAL SUPINATION~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC',
   'BICEPS,AVANT_BRAS':'BICEPS BRAS EN CROIX~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRACTION PRISE SERREE',
   // LES « TIRAGES VERTICAUX » DU GUIDE SONT DES TIRAGES MENTON : debout, la
   // barre monte le long du buste, coudes hauts (vérifié sur les trois photos).
   // Ils étaient rangés avec les rowings, en dorsaux. Deltoïde latéral, et le
   // trapèze supérieur qui finit l'élévation ; même chose pour les tirages menton.
   'DELT_LAT,TRAP_SUP':'TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE',
-  'DELT_ANT,TRICEPS':'DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~HANDSTAND PUSH UP~PIKE PUSH UP~POWER SMITH EPAULES~SHOULDER PRESS',
+  'DELT_ANT,TRICEPS':'DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~HANDSTAND PUSH UP~PIKE PUSH UP~POWER SMITH EPAULES~SHOULDER PRESS~SHOULDER PRESS PURE METEOR~VIKING PRESS PRISE NEUTRE',
   'DELT_ANT':'ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE',
-  'FESSIERS':'BOOTYMIZER~DONKEY KICK SMITH MACHINE~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~HIP THRUST~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE',
-  'DELT_LAT':'ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~LATERAL RAISE',
+  'FESSIERS':'BOOTYMIZER~DONKEY KICK SMITH MACHINE~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~HIP THRUST~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE',
+  'DELT_LAT':'ELEVATION LATERALE ASSIS SUR BANC~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE BASSE UNILATERAL~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~LATERAL RAISE',
   'MOLLETS':'CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION',
   // L'ÉLÉVATION Y : bras en Y, pouces en haut, le milieu et le bas du trapèze
   // font le geste ; l'arrière d'épaule accompagne.
@@ -36333,10 +36343,10 @@ const EX_GUIDE_BRUT={
   // tiennent verrouillé en haut.
   'LOMBAIRES,FESSIERS,ISCHIOS,TRAP_SUP':'RACK POOL',
   'ISCHIOS,LOMBAIRES':'SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE',
-  'ISCHIOS':'ISO LATERAL CURL~LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE',
-  'QUADRICEPS,FESSIERS':'CHUTE DE BOX SAUT~DEEP SQUAT~FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS EN BAS~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC SAC~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SAUTE~SQUAT SAUTE SUR BOX~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE',
-  'ISCHIOS,FESSIERS,LOMBAIRES':'GOOD MORNING~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL',
-  'ISCHIOS,FESSIERS':'HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~MONTER SUR BANC~RELEVE FESSIER BANC A LOMBAIRE~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES',
+  'ISCHIOS':'ISO LATERAL CURL~LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ALLONGE HALTERE~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE',
+  'QUADRICEPS,FESSIERS':'CHUTE DE BOX SAUT~DEEP SQUAT~FENTE BULGARE A LA BELT SQUAT~FENTE BULGARE MACHINE~FENTES A LA V SQUAT~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~GOBELET SQUAT A LA BELT SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS EN BAS~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AU BELT SQUAT VERSION QUADS~SQUAT AVEC HALTERES~SQUAT AVEC SAC~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SAUTE~SQUAT SAUTE SUR BOX~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT FACE AU SIEGE',
+  'ISCHIOS,FESSIERS,LOMBAIRES':'GOOD MORNING~RDL MACHINE GUIDEE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL',
+  'ISCHIOS,FESSIERS':'HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~MONTER SUR BANC~RELEVE FESSIER BANC A LOMBAIRE~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES',
   'QUADRICEPS':'GAINAGE CHAISE~HACKSQUAT~LEG EXTENSION~LEG EXTENSION HALTERE~PENDULUM SQUAT~PRESSE A CUISSE ISO LATERALE~SISSY SQUAT~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~V SQUAT',
   'AVANT_BRAS':'BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER',
   'ABDUCTEURS':'3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~COPENHAGEN PLANK',
@@ -36365,7 +36375,10 @@ const EX_GUIDE_BRUT={
   'FESSIERS,ABDUCTEURS':'FIRE HYDRANT',
   'ABDUCTEURS,FESSIERS':'ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~STANDING ADUCTOR',
   'FESSIERS,ISCHIOS,QUADRICEPS':'PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE INCLINE PIEDS EN HAUT',
-  'QUADRICEPS,ADDUCTEURS,FESSIERS':'PRESSE A CUISSE INCLINE PIEDS ECARTES'
+  'QUADRICEPS,ADDUCTEURS,FESSIERS':'PRESSE A CUISSE INCLINE PIEDS ECARTES',
+  // LA VERSION FESSIER DU BELT SQUAT (05/10/2026) : buste penché, hanches
+  // reculées, le fessier mène et le quadriceps suit.
+  'FESSIERS,QUADRICEPS':'SQUAT AU BELT SQUAT VERSION FESSIER'
 };
 const EX_GUIDE_CARDIO='BATTLE ROPE~CORDE A SAUTER~ESCALIERS~JUMPING JACK~LE SKIERG~MONTE DE GENOUX~POWER RUN~QUAD STOMP~RAMEUR~TAPIS DE COURSE~TAPIS DE COURSE COURIR~TAPIS DE COURSE MARCHE AVEC PENTE~VELO D INTERIEUR~VELO ELLIPTIQUE';
 // Les exercices tenus sans mouvement : leur technique est l'isométrie par défaut
@@ -37005,9 +37018,25 @@ function videosPour(nom){
   return _videosDeCle(resoudreAlias(exKey(nom)));
 }
 // PURE. Les videos du guide pour une clef DEJA resolue.
+// LA VIDÉO RANGÉE SOUS UN AUTRE NOM (05/10/2026). Le guide écrit parfois le
+// lien sous un nom raccourci : « ABDUCTION DEBOUT POULIE » pour l'exercice
+// « ABDUCTION DEBOUT POULIE ELASTIQUE ». La vidéo existait, la fiche ne la
+// trouvait jamais. Exercice → clef de la vidéo, quand l'exercice n'en a pas.
+const EX_VIDEOS_SOUS={
+  'ABDUCTION DEBOUT POULIE ELASTIQUE':'ABDUCTION DEBOUT POULIE',
+  'ADDUCTION DEBOUT POULIE ELASTIQUE':'ADDUCTION DEBOUT POULIE',
+  'DEVELOPPE COUCHE PRISE SERREE':'DEVELOPPE COUCHE PRISE SEREE',
+  'ELEVATION FRONTALE POULIE ELASTIQUE':'ELEVATION FRONTALE POULIE',
+  'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL':'ELEVATION LATERALE POULIE UNILATERAL',
+  'EXTENSION DE BUSTE SUR BANC':'EXTENSION DE BUSTE SUR BANC 1',
+  'FLEXION LATERAL DE BUSTE POULIE ELASTIQUE':'FLEXION LATERAL DE BUSTE POULIE',
+  'OISEAUX BUSTE PENCHE POULIE ELASTIQUE':'OISEAUX BUSTE PENCHE POULIE',
+  'ROTATION DE BUSTE POULIE ELASTIQUE HAUTE':'ROTATION DE BUSTE POULIE HAUTE',
+  'TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET':'TIRAGE MENTON POULIE'
+};
 function _videosDeCle(k){
   if(!k) return [];
-  const brut=EX_VIDEOS[k];
+  const brut=EX_VIDEOS[k]||EX_VIDEOS[EX_VIDEOS_SOUS[k]];
   if(!brut) return [];
   return brut.split('~').map(v=>{
     const [id,lbl]=v.split('|');
@@ -41803,7 +41832,16 @@ const EX_MOTS_AGRES=new Set(['poulie','poulies','machine','guidee','guide',
   'haltere','halteres','barre','smith','kettlebell','elastique','elastiques',
   'trx','sangle','sangles','disque','disques','sac','corde','pupitre','banc',
   'gym80','presse','chaise','cadre','roulette','ballon','swiss','bulgare',
-  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo']);
+  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo',
+  // La belt squat est un agrès (05/10/2026) : un exercice à la belt squat ne
+  // prend pas le dessin de sa version à la barre.
+  'belt']);
+// LES EXERCICES DU GUIDE SANS DESSIN (05/10/2026) : filmés, mais le guide ne
+// leur donne pas d'illustration, et aucune autre ne les montre fidèlement.
+// Leur fiche dit « Aucune illustration » plutôt que l'image d'un autre geste.
+const EX_SANS_ILLUSTRATION=Object.freeze(['HIGH ROW HAMMER STRENGTH','EXTENSION DE HANCHE POULIE CROISE',
+  'EXTENSION DE HANCHE POULIE PIEDS HAUT','EXTENSION DE HANCHE POULIE SUR BANC','LEG CURL ALLONGE HALTERE',
+  'FENTE BULGARE A LA BELT SQUAT','FENTES A LA V SQUAT','GOBELET SQUAT A LA BELT SQUAT']);
 function _slugIllustre(sl){
   if(!sl||!_exoIndex) return null;
   if(_exoIndex.has(sl)) return sl;
@@ -41967,6 +42005,12 @@ function _musclesAJour(f){
   try{
     const g=_exGuide().get(k);
     if(g) f.muscles=g.p.concat(g.s);
+    // Le nom du terrain, pour la recherche (BQ_LIBELLES), s'il manque.
+    if(!f.libelle&&BQ_LIBELLES[k]) f.libelle=BQ_LIBELLES[k];
+    // La vidéo du guide, quand la fiche en ligne n'en porte pas (05/10/2026).
+    if(!(Array.isArray(f.videos)&&f.videos.length)){
+      const vv=_videosDeCle(k); if(vv.length) f.videos=vv.map(x=>({id:x.id,lib:x.lbl||''}));
+    }
     const tag=_exGuideEstPosing(k)?'posing':(_exGuideEstCardio(k)?'cardio':'');
     if(tag){
       const t=Array.isArray(f.tags)?f.tags:[];
@@ -41974,6 +42018,66 @@ function _musclesAJour(f){
     }
   }catch(e){}
   return f;
+}
+// ── LES FICHES QUE LA BANQUE EN LIGNE N'A PAS (05/10/2026) ──────────────
+// La banque est une copie figée du guide au jour de son remplissage : un
+// exercice ajouté depuis à la table du guide (EX_GUIDE_BRUT) ou à ses
+// variantes n'y est pas, donc introuvable pour le coach. L'app fabrique sa
+// fiche à partir de ce qu'elle sait : muscles, schéma, matériel déduit du nom
+// (les mêmes règles que scripts/seed_exercices.py), vidéos du guide, et un
+// texte seulement quand il est écrit (BQ_TEXTES_APP). Rien n'est inventé.
+// Le texte du guide, recopié tel quel (capture de Kevin, 05/10/2026).
+const BQ_TEXTES_APP=Object.freeze({
+  'RDL MACHINE GUIDEE':'En face de la machine, se pencher le buste et garder les jambes légèrement fléchies et le dos droit. Prendre les poignées basses, puis se redresser en utilisant un mouvement de bassin et garder les poignées près de ses jambes.',
+  'ELEVATION LATERALE POULIE BASSE UNILATERAL':'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation d\'un seul côté vers l\'extérieur jusqu\'à ce que le bras soit parallèle au sol et se tenir à la structure pour pencher son corps sur le côté. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.'
+});
+const BQ_REPOS_APP=Object.freeze({'RDL MACHINE GUIDEE':'02 min','ELEVATION LATERALE POULIE BASSE UNILATERAL':'02 min'});
+// LES NOMS DU TERRAIN (Kevin, 05/10/2026) : ce que le coach tape pour les
+// trouver. Le libellé s'ajoute au nom pour la recherche, la clef ne change
+// pas (historiques de charge, programmes déjà écrits).
+const BQ_LIBELLES=Object.freeze({
+  'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL':'ÉLÉVATION LATÉRALE POULIE UNILATÉRALE, À HAUTEUR DE HANCHE',
+  'RDL MACHINE GUIDEE':'RDL À LA BELT SQUAT (SOULEVÉ DE TERRE ROUMAIN, MACHINE GUIDÉE)'
+});
+function _bqMateriel(k){
+  const R=[['cardio',/\bTAPIS\b|\bVELO\b|\bRAMEUR\b|\bCORDE A SAUTER\b|\bESCALIERS\b|\bSKIERG\b|\bBATTLE ROPE\b|\bELLIPTIQUE\b|\bPOWER RUN\b/],
+    ['smith',/\bSMITH\b|\bHYPTRUST\b/],
+    ['poulie',/\bPOULIE\b|\bCABLE\b|\bCROSSOVER\b|\bFACE PULL\b|\bPULL OVER\b|\bCHEST PRESS DEBOUT\b|\bTIRAGE\b(?!.*\bBARRE\b)|\bPULLDOWN\b/],
+    ['elastique',/\bELASTIQUE\b|\bBANDE\b/],['kettlebell',/\bKETTLEBELL\b/],
+    ['machine convergente',/\bCONVERGENTE\b|\bISO LATERAL\b|\bHAMMER STRENGTH\b/],
+    ['machine guidee',/\bMACHINES?\b|\bBELT SQUAT\b|\bV SQUAT\b|\bHACKSQUAT\b|\bPRESSE\b|\bPENDULUM\b|\bLEG (EXTENSION|CURL)\b|\bPURE\b/],
+    ['halteres',/\bHALTERE|\bCURL\b|\bELEVATION (LATERALE|FRONTALE|Y|ARRIERE)\b|\bOISEAU\b|\bSUR BANC\b/],
+    ['barre',/\bBARRE\b|\bLANDMINE\b|\bSOULEVE DE TERRE\b|\bSQUAT\b|\bDEVELOPPE COUCHE\b|\bHIP THRUST\b|\bROWING\b|\bVIKING\b/],
+    ['poids du corps',/\bPOMPE|\bTRACTION|\bDIPS\b|\bGAINAGE\b|\bCRUNCH\b|\bAU SOL\b|\bFENTE/]];
+  for(const [c,r] of R) if(r.test(k)) return c;
+  return null;
+}
+function _bqFicheApp(k){
+  const g=_exGuide().get(k); if(!g&&!EX_VARIANTES[k]) return null;
+  const v=EX_VARIANTES[k]||null;
+  const gm=g||(v&&_exGuide().get(v.base))||null;
+  let sch=null; try{ sch=schemaDe({name:k}); }catch(e){ sch=null; }
+  const tags=_exGuideEstPosing(k)?['posing']:(_exGuideEstCardio(k)?['cardio']:[]);
+  return {slug:exSlug(k),nom:k,libelle:(v&&v.nom)||BQ_LIBELLES[k]||undefined,muscles:gm?gm.p.concat(gm.s):[],schema:sch,
+    materiel:_bqMateriel(k),niveau:/\bSOULEVE DE TERRE\b(?!.*(MACHINE|BELT))/.test(k)?'avance':(/\bBARRE\b|\bHALTERE|\bSQUAT\b|\bFENTE/.test(k)?'intermediaire':'debutant'),
+    unilateral:/\bUNILATERAL|\bALTERNE/.test(k),tags,
+    execution:BQ_TEXTES_APP[k]||(v&&v.intro)||'',repos:BQ_REPOS_APP[k]||'',
+    videos:_videosDeCle(k).map(x=>({id:x.id,lib:x.lbl||''})),image:null,erreurs:[],consignes:[],app:true};
+}
+// PURE. Les fiches à ajouter : tout nom du guide (variantes comprises) qui
+// n'a pas de fiche dans la liste reçue.
+function bqFichesApp(liste){
+  const vus=new Set();
+  for(const f of (liste||[])){ if(f&&f.nom){ try{ vus.add(exKey(_nomBanqueCorrige(f.nom))); }catch(e){} } if(f&&f.slug) vus.add(String(f.slug).replace(/-/g,' ').toUpperCase()); }
+  const noms=new Set([..._exGuide().keys(),...Object.keys(EX_VARIANTES)]);
+  const out=[];
+  for(const k of noms){ if(vus.has(k)) continue; const f=_bqFicheApp(k); if(f) out.push(f); }
+  return out;
+}
+// La banque reçue (non vide) est complétée ; une banque vide reste vide.
+function _bqCompleter(liste){
+  const l=Array.isArray(liste)?liste:[];
+  return l.length?l.concat(bqFichesApp(l)):l;
 }
 function _indexerBanque(liste){
   const parSlug={};
@@ -41995,7 +42099,7 @@ async function chargerBanque(force){
       if(brut){
         const d=JSON.parse(brut);
         if(d&&Array.isArray(d.exercices)&&(Date.now()-(d.at||0))<BANQUE_TTL_MS){
-          _banque=_indexerBanque(d.exercices);
+          _banque=_indexerBanque(_bqCompleter(d.exercices));
           return _banque;
         }
       }
@@ -42015,7 +42119,7 @@ async function chargerBanque(force){
     const d=t?JSON.parse(t):null;
     const liste=(d&&Array.isArray(d.exercices))?d.exercices:null;
     if(!liste) return _banque;
-    _banque=_indexerBanque(liste);
+    _banque=_indexerBanque(_bqCompleter(liste));
     try{ localStorage.setItem(BANQUE_CLE,JSON.stringify({at:Date.now(),exercices:liste})); }catch(e){}
   }catch(e){}
   return _banque;
@@ -42722,6 +42826,8 @@ function _passeFiltres(f,ft){
 // successifs donnent le meme ordre.
 //
 // Ce bareme sera relu et ajuste. Les nombres sont ronds pour ca.
+// Ce que le coach tape, et ce que le guide écrit en toutes lettres (05/10/2026).
+const BQ_ABREVIATIONS=Object.freeze({rdl:'souleve de terre roumain',sdt:'souleve de terre'});
 const BQ_SCORE=Object.freeze({
   primaire:100, secondaire:40, nom:30, partie:20, exact:15, debut:10, horsSujet:-200
 });
@@ -42747,7 +42853,9 @@ function scoreBanque(f,q,muscles,user){
     return sc;
   }
   const mots=n.split(' ').filter(Boolean);
-  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0)) sc+=BQ_SCORE.nom;
+  // Les abréviations du terrain : « rdl » trouve le soulevé de terre roumain.
+  const ab=m=>{ const x=BQ_ABREVIATIONS[m]; return !!x&&(nom.indexOf(x)>=0||lib.indexOf(x)>=0); };
+  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0||ab(m))) sc+=BQ_SCORE.nom;
   if(f.partie_specifique){
     const ps=_normRech(f.partie_specifique);
     if(mots.every(m=>ps.indexOf(m)>=0)) sc+=BQ_SCORE.partie;
@@ -61381,7 +61489,21 @@ function anatVerifEchelle(u,F,kGenou){
   const ratio=ANAT_ROTULE.part*F.stature/hG;
   const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
   if(ecartee) r.mesureEcartee=ecartee;
+  // LA CAUSE, QUAND ÇA DIVERGE : une photo en plongée écrase les jambes, et le
+  // genou tombe trop bas. Les points n'y sont pour rien.
+  if(r.statut==='divergence'){
+    const pv=_anatSafe(()=>anatPriseDeVue(F));
+    if(pv&&pv.sens) r.prise=pv;
+  }
   return r;
+}
+/** PURE. La prise de vue d'une vue de face (épaules, hanches, chevilles posées). */
+function anatPriseDeVue(F){
+  if(!F||!F.P2) return null;
+  const m=k=>{ const g=F.P2(k,'g'),d=F.P2(k,'d'); return (g&&d)?(g.y+d.y)/2:null; };
+  const e=m('epaule'),h=m('hanche'),c=m('cheville');
+  if(e==null||h==null||c==null) return null;
+  return priseDeVue(e,h,c);
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);
@@ -63248,6 +63370,14 @@ function _anatTexteBrut(f,res){
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
     return T;
   }
+  if(f.grise&&res&&res.echelle&&res.echelle.verif&&res.echelle.verif.prise){
+    const pl=res.echelle.verif.prise.sens==='plongee';
+    T.court='Longueurs en gris : photo prise '+(pl?'en plongée (téléphone trop haut ou trop près)':'en contre-plongée (téléphone trop bas)')+', à refaire.';
+    T.lecture='Sur cette photo, les jambes paraissent environ '+res.echelle.verif.prise.pct+' % plus '+(pl?'courtes':'longues')+' qu’elles ne sont par rapport au buste : c’est la perspective, pas la morphologie, et aucun déplacement de point ne la corrige. Aucune longueur n’est classée.'
+      +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
+    T.verifier='Refaire la photo : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.';
+    return T;
+  }
   if(f.grise){
     T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure (sommet du crâne, talons et genoux à vérifier).';
     T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
@@ -64118,7 +64248,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
@@ -65665,7 +65795,12 @@ function _htmlAnat(c){
         :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
       +'</span></div>';
   })():'';
-  const alerteEch=alerteRotule+((ver&&ver.statut==='divergence')
+  const alertePrise=(ver&&ver.statut==='divergence'&&ver.prise)
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Photo prise '+(ver.prise.sens==='plongee'?'en plongée':'en contre-plongée')+'</b> : le téléphone était trop '
+      +(ver.prise.sens==='plongee'?'haut ou trop près':'bas')+'. Les jambes y paraissent environ '+ver.prise.pct+' % plus '
+      +(ver.prise.sens==='plongee'?'courtes':'longues')+' qu’elles ne sont, par rapport au buste. <b>Les points ne sont pas en cause</b>, inutile de les déplacer : '
+      +'les longueurs restent en gris sur cette photo. À refaire : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.</span></div>':'';
+  const alerteEch=alerteRotule+(alertePrise?alertePrise:(ver&&ver.statut==='divergence')
     ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
       +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
       +'</span></div>':'');
@@ -78017,6 +78152,31 @@ function posesGenre(prefix){
 //   placement. Aucune mesure, aucune lecture du corps ; la photo passe par le
 //   moteur de pose SUR L'APPAREIL, et rien d'autre n'est gardé que le verdict
 //   (vert / orange) et les codes des consignes, pour le coach.
+// LA PHOTO PRISE EN PLONGÉE (Kevin, 05/10/2026). Téléphone tenu trop haut et
+// trop près : les jambes, plus loin de l'objectif que le buste, sortent
+// écrasées. Sur la fiche qui a révélé le défaut, elles faisaient 38 % de la
+// hauteur du corps au lieu de 50 %, le genou tombait à 19 % au lieu de 28 %,
+// et l'analyse accusait les points (« 42,9 % d'écart ») alors qu'ils étaient
+// justes. On le lit sur un rapport que la distance ne change pas : hauteur
+// hanches → chevilles sur hauteur épaules → hanches. Il vaut 1,6 sur un corps
+// d'aplomb (de Leva), 1,4 sur les points bruts du moteur ; sous 1,25 la photo
+// est en plongée, sous 1,12 elle n'est plus mesurable. Au-dessus de 2,1, le
+// téléphone était trop bas (contre-plongée).
+const PRISE_VUE=Object.freeze({PLONGEE:1.25,PLONGEE_NETTE:1.12,CONTRE:2.1,REF:1.6});
+/**
+ * PURE. @param {number} yEp @param {number} yHa @param {number} yCh hauteurs
+ * (y vers le bas) du milieu des épaules, des hanches et des chevilles.
+ * @returns {null|{r:number,sens:'plongee'|'contre'|null,net:boolean,pct:number}}
+ */
+function priseDeVue(yEp,yHa,yCh){
+  const tr=Number(yHa)-Number(yEp), ja=Number(yCh)-Number(yHa);
+  if(!(tr>0)||!(ja>0)) return null;
+  const r=ja/tr, P=PRISE_VUE;
+  return {r:Math.round(r*100)/100,
+    sens:r<P.PLONGEE?'plongee':(r>P.CONTRE?'contre':null),
+    net:r<P.PLONGEE_NETTE,
+    pct:Math.round(Math.abs(1-r/P.REF)*100)};
+}
 const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,ROT_ORANGE:8,ROT_ROUGE:25,PROFIL_MIN:35,
   CLES:Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28]),
   MSG:Object.freeze({
@@ -78028,6 +78188,8 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
     rotation:'Tourne-toi bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     rotationDos:'Dos bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     profil:'Mets-toi bien de profil : l’épaule vers le téléphone.',
+    plongee:'Le téléphone est trop haut ou trop près : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
+    contre:'Le téléphone est trop bas ou penché vers le haut : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
     sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
     clair:'Photo trop claire : évite le soleil direct ou le flash.',
     ok:'Photo exploitable : tout est dans le cadre.'})});
@@ -78080,6 +78242,16 @@ function photoControle(raw,vue){
       // ⚠ JAMAIS ROUGE : la profondeur du moteur est bruitée — une photo de face
       //   sortait « à reprendre ». Au-delà de 8°, une réserve, pas un refus.
       else if(rot>C.ROT_ORANGE) dire(vue==='back'?'rotationDos':'rotation',false);
+    }
+  }
+  // La prise de vue : plongée ou contre-plongée. Rouge quand elle est nette,
+  // la photo ne se mesure plus ; une réserve sinon.
+  {
+    const hg=P(23), hd=P(24), cg=P(27), cd=P(28);
+    if(eg&&ed&&hg&&hd&&cg&&cd&&[eg,ed,hg,hd,cg,cd].every(q=>q.v>=0.5)){
+      const pv=priseDeVue((eg.y+ed.y)/2,(hg.y+hd.y)/2,(cg.y+cd.y)/2);
+      if(pv&&pv.sens==='plongee') dire('plongee',pv.net);
+      else if(pv&&pv.sens==='contre') dire('contre',false);
     }
   }
   // La lumière.
@@ -79545,16 +79717,16 @@ function renderContraintesAthlete(){
 // séparés par ~.
 const ZONES_ARTICULAIRES=Object.freeze(["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche","genou","cheville"]);
 const SCHEMAS_META=Object.freeze({
-  "charniere-hanche":{lib:"Charnière de hanche",nb:32,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
-  "squat":{lib:"Squat",nb:31,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
-  "fente":{lib:"Fente",nb:12,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
-  "poussee-verticale":{lib:"Poussée verticale",nb:15,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
+  "charniere-hanche":{lib:"Charnière de hanche",nb:37,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
+  "squat":{lib:"Squat",nb:35,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
+  "fente":{lib:"Fente",nb:14,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
+  "poussee-verticale":{lib:"Poussée verticale",nb:17,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
   "poussee-horizontale":{lib:"Poussée horizontale",nb:64,ex:["butterfly","chest crossover dual","chest press debout"],hors:["rachis-cervical","hanche","genou","cheville"]},
   "tirage-vertical":{lib:"Tirage vertical",nb:27,ex:["fessier a la machine de traction","iso lateral front lat pulldown","muscle up"],hors:["hanche","genou","cheville"]},
-  "tirage-horizontal":{lib:"Tirage horizontal",nb:53,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
-  "isolation-epaule":{lib:"Isolation épaule",nb:24,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
-  "isolation-coude":{lib:"Isolation coude",nb:64,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
-  "isolation-genou":{lib:"Isolation genou",nb:10,ex:["leg curl allonge","leg curl allonge en unilateral","leg curl assis"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","cheville"]},
+  "tirage-horizontal":{lib:"Tirage horizontal",nb:59,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
+  "isolation-epaule":{lib:"Isolation épaule",nb:26,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
+  "isolation-coude":{lib:"Isolation coude",nb:65,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
+  "isolation-genou":{lib:"Isolation genou",nb:11,ex:["leg curl allonge","leg curl allonge en unilateral","leg curl assis"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","cheville"]},
   "isolation-hanche":{lib:"Isolation hanche",nb:11,ex:["3d abductor","abducteur a la machine","abducteur assis avec elastique"],hors:["rachis-cervical","epaule","coude","poignet","genou","cheville"]},
   "mollets-cheville":{lib:"Mollets et cheville",nb:12,ex:["calf extension machine","donkey calf raise machine","mollets a la hacksquat en unilateral"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche"]},
   "gainage-tronc":{lib:"Gainage et tronc",nb:37,ex:["ab crunch bench","abs roller","copenhagen plank"],hors:["coude","genou","cheville"]},
@@ -79572,20 +79744,20 @@ const SCHEMAS_BRUT={
   "isolation-hanche":"3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~ADDUCTEUR A LA MACHINE~ADDUCTION DEBOUT POULIE ELASTIQUE~DONKEY KICK SMITH MACHINE~FIRE HYDRANT~STANDING ADUCTOR",
   "gainage-tronc":"AB CRUNCH BENCH~ABS ROLLER~COPENHAGEN PLANK~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH AU SOL AVEC POIDS~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE CHAISE~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~ROWING PLANCHE BARRE~SUPERMAN~V SIT UP",
   "posing":"ABDOMINALS AND THIGHS~SIDE TRICEPS~BACK DOUBLE BICEPS~FRONT DOUBLE BICEPS~FRONT LAT SPREAD~ICARUS POSE~LE VACUUM~MOON POSE~MOST MUSCULAR POSE~PRIEST MANTIS POSE~QUARTER TURN~REAR LAT SPREAD~SIDE CHEST~THE CHRISTMAS THREE~THE KNEEL~VACUUM POSE~ZYZZ POSE",
-  "isolation-epaule":"ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~ELEVATION Y~LATERAL RAISE~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE",
+  "isolation-epaule":"ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~ELEVATION LATERALE ASSIS SUR BANC~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE BASSE UNILATERAL~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~ELEVATION Y~LATERAL RAISE~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE",
   "pliometrie":"BARBELL THUSTERS~BURPEES~CHUTE DE BOX SAUT~JUMPING JACK~MONTE DE GENOUX~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES~POWER RUN~QUAD STOMP~RENVERSEMENT DE PNEU~SAUT SUR LES COTES~SAUTS SUR PLACE AVEC ELASTIQUE~SLEDGE~SQUAT SAUTE~SQUAT SAUTE SUR BOX~WALL BALL",
-  "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~REVERSE CURL HALTERE ALTERNE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
+  "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~EXTENSIONS POULIE BASSE TRICEPS~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~REVERSE CURL HALTERE ALTERNE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
   "poignet-avant-bras":"BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER",
-  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
+  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RDL MACHINE GUIDEE~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
   "poussee-horizontale":"BUTTERFLY~BUTTERFLY UNILATERAL~CHEST CROSSOVER DUAL~CHEST PRESS DEBOUT~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE PRISE SERREE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS BAS DE PECS~DIPS ELASTIQUE~DIPS LESTE~DIPS MACHINE~DIPS MACHINE BAS DE PECS~DIPS MACHINE GUIDEE~DIPS SUR BARRE~DIPS SUR BARRE ELASTIQUE~DIPS SUR BARRE LESTE~ECARTE HALTERE SUR BANC~ECARTE HALTERE SUR BANC DECLINE~ECARTE HALTERE SUR BANC INCLINE~ECARTE MACHINE~ECARTE MACHINE HAUT DE PEC~ECARTE POULIE BASSE~ECARTE POULIE BASSE EN UNILATERAL~ECARTE POULIE BASSE SUR BANC~ECARTE POULIE HAUT EN UNILATERAL~ECARTE POULIE HAUTE~ECARTE POULIE HAUTE BUSTE PENCHE~ECARTE POULIE HAUTE CONTRE BANC~ECARTE POULIE SUR BANC~ECARTE POULIE SUR BANC INCLINE~FLOOR PRESS~PIKE PUSH UP~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SERREES~TRICEPS DIPS",
   "mollets-cheville":"CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION",
   "halterophilie":"CLEAN AND JERK~POWER CLEAN~SNATCH",
-  "squat":"DEEP SQUAT~HACKSQUAT~PENDULUM SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS ECARTES~PRESSE A CUISSE INCLINE PIEDS EN BAS~PRESSE A CUISSE INCLINE PIEDS EN HAUT~PRESSE A CUISSE ISO LATERALE~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES~SQUAT AVEC SAC~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT",
-  "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS",
-  "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE",
-  "fente":"FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
+  "squat":"DEEP SQUAT~GOBELET SQUAT A LA BELT SQUAT~HACKSQUAT~PENDULUM SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS ECARTES~PRESSE A CUISSE INCLINE PIEDS EN BAS~PRESSE A CUISSE INCLINE PIEDS EN HAUT~PRESSE A CUISSE ISO LATERALE~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AU BELT SQUAT VERSION FESSIER~SQUAT AU BELT SQUAT VERSION QUADS~SQUAT AVEC HALTERES~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES~SQUAT AVEC SAC~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT~V SQUAT FACE AU SIEGE",
+  "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS~SHOULDER PRESS PURE METEOR~VIKING PRESS PRISE NEUTRE",
+  "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~HIGH ROW HAMMER STRENGTH~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE NEUTRE~TIRAGE HORIZONTAL MACHINE CONVERGENTE PRONATION~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE SUPINATION~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE~TIRAGE HORIZONTAL MACHINE UNILATERAL SUPINATION~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE",
+  "fente":"FENTE BULGARE A LA BELT SQUAT~FENTE BULGARE MACHINE~FENTES A LA V SQUAT~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
   "tirage-vertical":"FESSIER A LA MACHINE DE TRACTION~ISO LATERAL FRONT LAT PULLDOWN~MUSCLE UP~PULL OVER~PULL OVER CORDE~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TRACTION PRISE SERREE~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION",
-  "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~LEG EXTENSION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
+  "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ALLONGE HALTERE~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~LEG EXTENSION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
   "port-de-charge":"MARCHE DU FERMIER~MONTEE DE CORDE~MONTEE DE CORDE SANS LES JAMBES"
 };
 // Index nom d'exercice → schéma, construit une fois.

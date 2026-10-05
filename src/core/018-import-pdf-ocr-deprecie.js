@@ -408,7 +408,16 @@ const EX_MOTS_AGRES=new Set(['poulie','poulies','machine','guidee','guide',
   'haltere','halteres','barre','smith','kettlebell','elastique','elastiques',
   'trx','sangle','sangles','disque','disques','sac','corde','pupitre','banc',
   'gym80','presse','chaise','cadre','roulette','ballon','swiss','bulgare',
-  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo']);
+  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo',
+  // La belt squat est un agrès (05/10/2026) : un exercice à la belt squat ne
+  // prend pas le dessin de sa version à la barre.
+  'belt']);
+// LES EXERCICES DU GUIDE SANS DESSIN (05/10/2026) : filmés, mais le guide ne
+// leur donne pas d'illustration, et aucune autre ne les montre fidèlement.
+// Leur fiche dit « Aucune illustration » plutôt que l'image d'un autre geste.
+const EX_SANS_ILLUSTRATION=Object.freeze(['HIGH ROW HAMMER STRENGTH','EXTENSION DE HANCHE POULIE CROISE',
+  'EXTENSION DE HANCHE POULIE PIEDS HAUT','EXTENSION DE HANCHE POULIE SUR BANC','LEG CURL ALLONGE HALTERE',
+  'FENTE BULGARE A LA BELT SQUAT','FENTES A LA V SQUAT','GOBELET SQUAT A LA BELT SQUAT']);
 function _slugIllustre(sl){
   if(!sl||!_exoIndex) return null;
   if(_exoIndex.has(sl)) return sl;
@@ -572,6 +581,12 @@ function _musclesAJour(f){
   try{
     const g=_exGuide().get(k);
     if(g) f.muscles=g.p.concat(g.s);
+    // Le nom du terrain, pour la recherche (BQ_LIBELLES), s'il manque.
+    if(!f.libelle&&BQ_LIBELLES[k]) f.libelle=BQ_LIBELLES[k];
+    // La vidéo du guide, quand la fiche en ligne n'en porte pas (05/10/2026).
+    if(!(Array.isArray(f.videos)&&f.videos.length)){
+      const vv=_videosDeCle(k); if(vv.length) f.videos=vv.map(x=>({id:x.id,lib:x.lbl||''}));
+    }
     const tag=_exGuideEstPosing(k)?'posing':(_exGuideEstCardio(k)?'cardio':'');
     if(tag){
       const t=Array.isArray(f.tags)?f.tags:[];
@@ -579,6 +594,66 @@ function _musclesAJour(f){
     }
   }catch(e){}
   return f;
+}
+// ── LES FICHES QUE LA BANQUE EN LIGNE N'A PAS (05/10/2026) ──────────────
+// La banque est une copie figée du guide au jour de son remplissage : un
+// exercice ajouté depuis à la table du guide (EX_GUIDE_BRUT) ou à ses
+// variantes n'y est pas, donc introuvable pour le coach. L'app fabrique sa
+// fiche à partir de ce qu'elle sait : muscles, schéma, matériel déduit du nom
+// (les mêmes règles que scripts/seed_exercices.py), vidéos du guide, et un
+// texte seulement quand il est écrit (BQ_TEXTES_APP). Rien n'est inventé.
+// Le texte du guide, recopié tel quel (capture de Kevin, 05/10/2026).
+const BQ_TEXTES_APP=Object.freeze({
+  'RDL MACHINE GUIDEE':'En face de la machine, se pencher le buste et garder les jambes légèrement fléchies et le dos droit. Prendre les poignées basses, puis se redresser en utilisant un mouvement de bassin et garder les poignées près de ses jambes.',
+  'ELEVATION LATERALE POULIE BASSE UNILATERAL':'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation d\'un seul côté vers l\'extérieur jusqu\'à ce que le bras soit parallèle au sol et se tenir à la structure pour pencher son corps sur le côté. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.'
+});
+const BQ_REPOS_APP=Object.freeze({'RDL MACHINE GUIDEE':'02 min','ELEVATION LATERALE POULIE BASSE UNILATERAL':'02 min'});
+// LES NOMS DU TERRAIN (Kevin, 05/10/2026) : ce que le coach tape pour les
+// trouver. Le libellé s'ajoute au nom pour la recherche, la clef ne change
+// pas (historiques de charge, programmes déjà écrits).
+const BQ_LIBELLES=Object.freeze({
+  'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL':'ÉLÉVATION LATÉRALE POULIE UNILATÉRALE, À HAUTEUR DE HANCHE',
+  'RDL MACHINE GUIDEE':'RDL À LA BELT SQUAT (SOULEVÉ DE TERRE ROUMAIN, MACHINE GUIDÉE)'
+});
+function _bqMateriel(k){
+  const R=[['cardio',/\bTAPIS\b|\bVELO\b|\bRAMEUR\b|\bCORDE A SAUTER\b|\bESCALIERS\b|\bSKIERG\b|\bBATTLE ROPE\b|\bELLIPTIQUE\b|\bPOWER RUN\b/],
+    ['smith',/\bSMITH\b|\bHYPTRUST\b/],
+    ['poulie',/\bPOULIE\b|\bCABLE\b|\bCROSSOVER\b|\bFACE PULL\b|\bPULL OVER\b|\bCHEST PRESS DEBOUT\b|\bTIRAGE\b(?!.*\bBARRE\b)|\bPULLDOWN\b/],
+    ['elastique',/\bELASTIQUE\b|\bBANDE\b/],['kettlebell',/\bKETTLEBELL\b/],
+    ['machine convergente',/\bCONVERGENTE\b|\bISO LATERAL\b|\bHAMMER STRENGTH\b/],
+    ['machine guidee',/\bMACHINES?\b|\bBELT SQUAT\b|\bV SQUAT\b|\bHACKSQUAT\b|\bPRESSE\b|\bPENDULUM\b|\bLEG (EXTENSION|CURL)\b|\bPURE\b/],
+    ['halteres',/\bHALTERE|\bCURL\b|\bELEVATION (LATERALE|FRONTALE|Y|ARRIERE)\b|\bOISEAU\b|\bSUR BANC\b/],
+    ['barre',/\bBARRE\b|\bLANDMINE\b|\bSOULEVE DE TERRE\b|\bSQUAT\b|\bDEVELOPPE COUCHE\b|\bHIP THRUST\b|\bROWING\b|\bVIKING\b/],
+    ['poids du corps',/\bPOMPE|\bTRACTION|\bDIPS\b|\bGAINAGE\b|\bCRUNCH\b|\bAU SOL\b|\bFENTE/]];
+  for(const [c,r] of R) if(r.test(k)) return c;
+  return null;
+}
+function _bqFicheApp(k){
+  const g=_exGuide().get(k); if(!g&&!EX_VARIANTES[k]) return null;
+  const v=EX_VARIANTES[k]||null;
+  const gm=g||(v&&_exGuide().get(v.base))||null;
+  let sch=null; try{ sch=schemaDe({name:k}); }catch(e){ sch=null; }
+  const tags=_exGuideEstPosing(k)?['posing']:(_exGuideEstCardio(k)?['cardio']:[]);
+  return {slug:exSlug(k),nom:k,libelle:(v&&v.nom)||BQ_LIBELLES[k]||undefined,muscles:gm?gm.p.concat(gm.s):[],schema:sch,
+    materiel:_bqMateriel(k),niveau:/\bSOULEVE DE TERRE\b(?!.*(MACHINE|BELT))/.test(k)?'avance':(/\bBARRE\b|\bHALTERE|\bSQUAT\b|\bFENTE/.test(k)?'intermediaire':'debutant'),
+    unilateral:/\bUNILATERAL|\bALTERNE/.test(k),tags,
+    execution:BQ_TEXTES_APP[k]||(v&&v.intro)||'',repos:BQ_REPOS_APP[k]||'',
+    videos:_videosDeCle(k).map(x=>({id:x.id,lib:x.lbl||''})),image:null,erreurs:[],consignes:[],app:true};
+}
+// PURE. Les fiches à ajouter : tout nom du guide (variantes comprises) qui
+// n'a pas de fiche dans la liste reçue.
+function bqFichesApp(liste){
+  const vus=new Set();
+  for(const f of (liste||[])){ if(f&&f.nom){ try{ vus.add(exKey(_nomBanqueCorrige(f.nom))); }catch(e){} } if(f&&f.slug) vus.add(String(f.slug).replace(/-/g,' ').toUpperCase()); }
+  const noms=new Set([..._exGuide().keys(),...Object.keys(EX_VARIANTES)]);
+  const out=[];
+  for(const k of noms){ if(vus.has(k)) continue; const f=_bqFicheApp(k); if(f) out.push(f); }
+  return out;
+}
+// La banque reçue (non vide) est complétée ; une banque vide reste vide.
+function _bqCompleter(liste){
+  const l=Array.isArray(liste)?liste:[];
+  return l.length?l.concat(bqFichesApp(l)):l;
 }
 function _indexerBanque(liste){
   const parSlug={};
@@ -600,7 +675,7 @@ async function chargerBanque(force){
       if(brut){
         const d=JSON.parse(brut);
         if(d&&Array.isArray(d.exercices)&&(Date.now()-(d.at||0))<BANQUE_TTL_MS){
-          _banque=_indexerBanque(d.exercices);
+          _banque=_indexerBanque(_bqCompleter(d.exercices));
           return _banque;
         }
       }
@@ -620,7 +695,7 @@ async function chargerBanque(force){
     const d=t?JSON.parse(t):null;
     const liste=(d&&Array.isArray(d.exercices))?d.exercices:null;
     if(!liste) return _banque;
-    _banque=_indexerBanque(liste);
+    _banque=_indexerBanque(_bqCompleter(liste));
     try{ localStorage.setItem(BANQUE_CLE,JSON.stringify({at:Date.now(),exercices:liste})); }catch(e){}
   }catch(e){}
   return _banque;
@@ -1327,6 +1402,8 @@ function _passeFiltres(f,ft){
 // successifs donnent le meme ordre.
 //
 // Ce bareme sera relu et ajuste. Les nombres sont ronds pour ca.
+// Ce que le coach tape, et ce que le guide écrit en toutes lettres (05/10/2026).
+const BQ_ABREVIATIONS=Object.freeze({rdl:'souleve de terre roumain',sdt:'souleve de terre'});
 const BQ_SCORE=Object.freeze({
   primaire:100, secondaire:40, nom:30, partie:20, exact:15, debut:10, horsSujet:-200
 });
@@ -1352,7 +1429,9 @@ function scoreBanque(f,q,muscles,user){
     return sc;
   }
   const mots=n.split(' ').filter(Boolean);
-  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0)) sc+=BQ_SCORE.nom;
+  // Les abréviations du terrain : « rdl » trouve le soulevé de terre roumain.
+  const ab=m=>{ const x=BQ_ABREVIATIONS[m]; return !!x&&(nom.indexOf(x)>=0||lib.indexOf(x)>=0); };
+  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0||ab(m))) sc+=BQ_SCORE.nom;
   if(f.partie_specifique){
     const ps=_normRech(f.partie_specifique);
     if(mots.every(m=>ps.indexOf(m)>=0)) sc+=BQ_SCORE.partie;

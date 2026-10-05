@@ -364,7 +364,21 @@ function anatVerifEchelle(u,F,kGenou){
   const ratio=ANAT_ROTULE.part*F.stature/hG;
   const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
   if(ecartee) r.mesureEcartee=ecartee;
+  // LA CAUSE, QUAND ÇA DIVERGE : une photo en plongée écrase les jambes, et le
+  // genou tombe trop bas. Les points n'y sont pour rien.
+  if(r.statut==='divergence'){
+    const pv=_anatSafe(()=>anatPriseDeVue(F));
+    if(pv&&pv.sens) r.prise=pv;
+  }
   return r;
+}
+/** PURE. La prise de vue d'une vue de face (épaules, hanches, chevilles posées). */
+function anatPriseDeVue(F){
+  if(!F||!F.P2) return null;
+  const m=k=>{ const g=F.P2(k,'g'),d=F.P2(k,'d'); return (g&&d)?(g.y+d.y)/2:null; };
+  const e=m('epaule'),h=m('hanche'),c=m('cheville');
+  if(e==null||h==null||c==null) return null;
+  return priseDeVue(e,h,c);
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);
@@ -2229,6 +2243,14 @@ function _anatTexteBrut(f,res){
     T.court='Repères insuffisants pour lire cette zone avec une marge honnête : à placer à la main.';
     T.lecture='Les points nécessaires ne sont pas visibles, ou le membre est plié (un membre plié paraît plus court qu’il n’est). « Ajuster les points » permet de les poser à la main, puis de relancer l’analyse.';
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
+    return T;
+  }
+  if(f.grise&&res&&res.echelle&&res.echelle.verif&&res.echelle.verif.prise){
+    const pl=res.echelle.verif.prise.sens==='plongee';
+    T.court='Longueurs en gris : photo prise '+(pl?'en plongée (téléphone trop haut ou trop près)':'en contre-plongée (téléphone trop bas)')+', à refaire.';
+    T.lecture='Sur cette photo, les jambes paraissent environ '+res.echelle.verif.prise.pct+' % plus '+(pl?'courtes':'longues')+' qu’elles ne sont par rapport au buste : c’est la perspective, pas la morphologie, et aucun déplacement de point ne la corrige. Aucune longueur n’est classée.'
+      +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
+    T.verifier='Refaire la photo : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.';
     return T;
   }
   if(f.grise){

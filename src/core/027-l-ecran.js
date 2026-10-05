@@ -583,7 +583,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
@@ -2130,7 +2130,12 @@ function _htmlAnat(c){
         :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
       +'</span></div>';
   })():'';
-  const alerteEch=alerteRotule+((ver&&ver.statut==='divergence')
+  const alertePrise=(ver&&ver.statut==='divergence'&&ver.prise)
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Photo prise '+(ver.prise.sens==='plongee'?'en plongée':'en contre-plongée')+'</b> : le téléphone était trop '
+      +(ver.prise.sens==='plongee'?'haut ou trop près':'bas')+'. Les jambes y paraissent environ '+ver.prise.pct+' % plus '
+      +(ver.prise.sens==='plongee'?'courtes':'longues')+' qu’elles ne sont, par rapport au buste. <b>Les points ne sont pas en cause</b>, inutile de les déplacer : '
+      +'les longueurs restent en gris sur cette photo. À refaire : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.</span></div>':'';
+  const alerteEch=alerteRotule+(alertePrise?alertePrise:(ver&&ver.statut==='divergence')
     ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
       +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
       +'</span></div>':'');
