@@ -405,7 +405,12 @@ ACTIONS.importAll = el => {
     let data; try { data = JSON.parse(fr.result); } catch (e) { toast('Fichier invalide.'); return; }
     if (!data.users || !data.clubs) { toast('Ce n’est pas une sauvegarde Fit Pulse.'); return; }
     if (!await confirmDlg('Remplacer toutes les données actuelles par cette sauvegarde ?', { ok: 'Restaurer', danger: true })) return;
-    db.replace(data); toast('Sauvegarde restaurée.');
+    db.replace(data);
+    // En ligne : les cles de connexion des membres actifs sont reposees, pour
+    // que leurs codes marchent tout de suite (changement de base, de projet).
+    const keys = {}; Object.values(S.users).forEach(u => { if (u.bootKey && u.status !== 'archived') keys[u.bootKey] = u.id; });
+    if (backend.mode === 'firebase') await backend.setBoot(keys);
+    toast('Sauvegarde restaurée.');
   };
   fr.readAsText(file);
 };
