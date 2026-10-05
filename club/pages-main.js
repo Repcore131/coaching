@@ -36,7 +36,7 @@ document.addEventListener('submit', e => {
   login(st.users[uid]);
   toast('Club créé. Ajoutez votre équipe dans Membres.');
 });
-ACTIONS.loadDemo = () => { db.replace(demoState()); render(); };
+ACTIONS.loadDemo = () => { db.replace(demoState()); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
 
 // ── Connexion ─────────────────────────────────────────────────────────────
 PAGES.login = {
@@ -51,15 +51,39 @@ PAGES.login = {
         <button class="btn" type="button" data-act="fbSignup" style="background:#1b1b1e;border-color:#2a2a2e;color:#fff">Première connexion : créer mon mot de passe</button></form>
         <p class="muted small" style="margin-top:12px">Seules les adresses ajoutées par un manager peuvent entrer.</p></div></div>`;
     }
-    const users = Object.values(S.users).filter(isActive).sort((a, b) => (a.role === 'manager' ? 0 : 1) - (b.role === 'manager' ? 0 : 1) || fullName(a).localeCompare(fullName(b)));
-    return `<div class="auth"><div class="auth-card">${head}<h1 style="font-size:26px">Qui êtes-vous ?</h1>
-      <p class="muted">Mode local : choisissez votre profil.${S.meta.demo ? ' Données de démonstration.' : ''}</p>
-      <div class="who">${users.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${u.role === 'manager' ? 'Manager' : 'Membre'} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>
-      ${S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo et créer mon club</button>' : ''}</div></div>`;
+    // Mode local : e-mail + code personnel. Les profils de demonstration (sans
+    // code) restent accessibles d'un clic.
+    const demo = Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b)));
+    return `<div class="auth"><div class="auth-card">${head}<h1 style="font-size:26px">Connexion</h1>
+      <form id="lgc" class="grid" style="margin-top:14px">
+        <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required autocomplete="username" value="${esc(safeLS.get('parkpulse.lastEmail') || '')}"></label>
+        <label class="field"><span>Code d’accès</span><input class="input" name="code" id="lg-code" required autocomplete="current-password" placeholder="FP-XXXX-XXXX-XXXX" style="letter-spacing:.08em;text-transform:uppercase"></label>
+        <button class="btn primary" type="submit">Se connecter</button>
+      </form>
+      <p class="muted small" style="margin-top:12px">Votre code vous est remis par le créateur ou un manager du club. Il est personnel : ne le partagez pas.</p>
+      ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
+      ${S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !Object.keys(S.entries).length ? '<button class="btn" style="width:100%;margin-top:16px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}</div></div>`;
   },
 };
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'lgc') return;
+  e.preventDefault();
+  const f = formData(e.target);
+  const email = f.email.trim().toLowerCase();
+  safeLS.set('parkpulse.lastEmail', email);
+  // Une meme adresse peut porter plusieurs comptes (createur et manager) :
+  // c'est le code qui designe le compte.
+  for (const u of Object.values(S.users)) {
+    if ((u.email || '').toLowerCase() !== email || !u.codeHash || u.status === 'archived') continue;
+    if (await hashCode(u.salt, f.code) === u.codeHash) {
+      if (u.status === 'pending') db.set(['users', u.id, 'status'], 'active');
+      login(S.users[u.id]); toast(`Bienvenue ${u.first} · accès ${roleLabel(u.role)}`); return;
+    }
+  }
+  toast('E-mail ou code incorrect.');
+});
 ACTIONS.loginAs = el => login(S.users[el.dataset.id]);
-ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les données de ce navigateur ?', { ok: 'Tout effacer', danger: true })) { backend.wipe(); S = null; ME = null; render(); } };
+ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les données de ce navigateur ?', { ok: 'Tout effacer', danger: true })) { backend.wipe(); S = null; ME = null; if ((window.PARKPULSE_ACCOUNTS || []).length && backend.mode === 'local') { db.replace(emptyState()); db.batch(bootstrapOps()); } render(); } };
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'lg') return;
   e.preventDefault();
@@ -85,10 +109,10 @@ PAGES.dashboard = {
   title: 'Tableau de bord',
   render() {
     const mk = UI.dashMonth || curMonth();
-    const view = UI.dashView || 'perso';
+    const view = UI.dashView || (isCreator() ? 'club' : 'perso');
     const tab = UI.dashTab || 'objectifs';
     const members = clubMembers(CLUB.id);
-    let who = view === 'perso' ? (UI.dashUser && S.users[UI.dashUser] ? UI.dashUser : ME.id) : null;
+    let who = view === 'perso' ? (UI.dashUser && S.users[UI.dashUser] ? UI.dashUser : isCreator() ? (members[0] || {}).id || null : ME.id) : null;
     if (who && !isManager() && who !== ME.id) who = ME.id;
     const r = rangeOf('month', mk);
     const st = statsFor(CLUB.id, who, r);

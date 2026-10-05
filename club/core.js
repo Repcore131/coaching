@@ -352,3 +352,41 @@ function demoState() {
   st.meta.demo = true;
   return st;
 }
+
+// ── Roles et codes d'acces ────────────────────────────────────────────────
+// createur : tout (clubs, KPI et points, roles, sauvegarde, remise a zero).
+// manager  : les clubs ou il est rattache (equipe, objectifs, imports, taches, defis).
+// membre   : ses saisies, son tableau de bord, classement, retention, chat, feed.
+const ROLES = {
+  createur: { label: 'Créateur', rank: 3 },
+  manager: { label: 'Manager', rank: 2 },
+  membre: { label: 'Membre', rank: 1 },
+};
+const roleLabel = r => (ROLES[r] || ROLES.membre).label;
+const normCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^FP/, '').replace(/(.{4})(?=.)/g, '$1-').replace(/^/, 'FP-');
+async function hashCode(salt, code) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + normCode(code)));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function randomCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint32Array(12));
+  return 'FP-' + [0, 1, 2].map(g => [0, 1, 2, 3].map(i => A[r[g * 4 + i] % A.length]).join('')).join('-');
+}
+async function newCodeRecord() {
+  const code = randomCode(); const salt = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return { code, salt, codeHash: await hashCode(salt, code) };
+}
+// Comptes declares dans config.js : crees s'ils manquent, rattaches a tous les clubs.
+function bootstrapOps() {
+  const ops = []; const accounts = window.PARKPULSE_ACCOUNTS || [];
+  if (!accounts.length) return ops;
+  const club = window.PARKPULSE_CLUB;
+  if (club && !S.clubs[club.id]) ops.push([['clubs', club.id], { ...club, createdAt: Date.now() }]);
+  const allClubs = [...new Set([...Object.keys(S.clubs), ...(club ? [club.id] : [])])];
+  for (const a of accounts) {
+    if (S.users[a.id]) continue;
+    ops.push([['users', a.id], { id: a.id, first: a.first, last: a.last, email: a.email, role: a.role, clubs: allClubs, avatar: 'h1', status: 'active', salt: a.salt, codeHash: a.codeHash, createdAt: Date.now() }]);
+    if (a.email) ops.push([['team', a.email.toLowerCase().replace(/\./g, ',')], true]);
+  }
+  return ops;
+}

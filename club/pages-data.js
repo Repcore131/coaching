@@ -384,15 +384,15 @@ PAGES.clubs = {
   manager: true,
   render() {
     const tab = UI.clubTab || 'clubs';
-    return `<div class="page-head"><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class="spacer"></span>${tab === 'clubs' ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
-      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ['settings', 'Réglages']], tab)}${{ clubs: clubList, base: clubBase, settings: clubSettings }[tab]()}`;
+    return `<div class="page-head"><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
+      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(isCreator() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, settings: isCreator() ? clubSettings : clubList }[tab]()}`;
   },
 };
 function clubList() {
-  const clubs = Object.values(S.clubs).sort((a, b) => a.name.localeCompare(b.name));
+  const clubs = myClubs().sort((a, b) => a.name.localeCompare(b.name));
   return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${clubs.map(c => {
     const r = rangeOf('month', curMonth()); const st = statsFor(c.id, null, r);
-    return `<div class="card"><div class="card-head">${ico('building')}<div class="spacer"><h3>${esc(c.name)}</h3><div class="muted small">${esc([c.address, c.city].filter(Boolean).join(', ') || 'Adresse non renseignée')}</div></div><button class="btn ghost icon sm" data-act="clubForm" data-id="${c.id}">${ico('edit')}</button></div>
+    return `<div class="card"><div class="card-head">${ico('building')}<div class="spacer"><h3>${esc(c.name)}</h3><div class="muted small">${esc([c.address, c.city].filter(Boolean).join(', ') || 'Adresse non renseignée')}</div></div>${isCreator() ? `<button class="btn ghost icon sm" data-act="clubForm" data-id="${c.id}">${ico('edit')}</button>` : ''}</div>
       <div class="row small"><span>${clubMembers(c.id).length} membre(s) actif(s)</span><span class="spacer"></span><b>${fmtP(st.max ? st.earned / st.max : null)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}
       ${c.address || c.city ? `<a class="btn sm" style="margin-top:12px" target="_blank" rel="noopener" href="https://www.openstreetmap.org/search?query=${encodeURIComponent([c.address, c.city].join(' '))}">${ico('map')} Voir sur la carte</a>` : ''}</div>`;
   }).join('')}</div>`;
@@ -428,7 +428,7 @@ function clubSettings() {
       <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>
     <div class="card"><h3>Confidentialité</h3><p class="small">Park Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En mode partagé, seules les adresses de l’équipe (Membres) peuvent lire la base, grâce aux règles Firebase.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>
     <div class="card"><h3>Sauvegarde</h3><p class="muted small">Exportez toutes les données (clubs, équipe, saisies, imports, clients) dans un fichier, pour les archiver ou les déplacer sur un autre appareil.</p>
-      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button></div></div></div>`;
+      <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label><button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button></div></div></div>`;
 }
 ACTIONS.kpiSet = el => { const k = el.dataset.k; const v = el.type === 'checkbox' ? el.checked : (k === 'points' || k === 'order') ? toNum(el.value) : el.value.trim(); db.set(['kpis', el.dataset.id, k], v); };
 ACTIONS.kpiNew = () => openModal({ title: 'Nouveau KPI', body: `<form id="kf" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="label" required></label><label class="field"><span>Unité</span><select class="input" name="unit"><option value="qty">Quantité</option><option value="eur">Euros</option></select></label><label class="field"><span>Points à 100 %</span><input class="input" type="number" name="points" value="300"></label><label class="field"><span>Emoji</span><input class="input" name="emoji" value="🎯"></label></form>`,
@@ -446,3 +446,4 @@ ACTIONS.importAll = el => {
   };
   fr.readAsText(file);
 };
+ACTIONS.askDemo = async () => { if (await confirmDlg('Remplacer toutes les données par des données de démonstration fictives ? Vos accès Créateur et Manager sont conservés.', { ok: 'Charger la démo', danger: true })) ACTIONS.loadDemo(); };

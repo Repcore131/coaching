@@ -24,6 +24,19 @@ Application sans dépendance (HTML, CSS, JavaScript), ouverte à `club/index.htm
 
 Les règles de calcul (score, paliers, rythme, égalités) sont écrites en tête de `calc.js` et affichées dans l'app.
 
+## Accès
+
+| Rôle | Peut faire |
+|---|---|
+| Créateur | Tout : nos clubs, KPI et points, nommer managers et créateurs, sauvegarde, remise à zéro. Voit tous les clubs, n'est ni classé ni objectivé. |
+| Manager | Ses clubs : équipe (membres), objectifs, imports, tâches, défis flash, codes d'accès des membres. |
+| Membre | Ses saisies, son tableau de bord, classement, rétention, résiliations, chat, feed. |
+
+Connexion par **e-mail + code personnel** (`FP-XXXX-XXXX-XXXX`). Une même adresse peut porter un accès Créateur et un accès
+Manager : c'est le code qui choisit le compte. Les comptes de départ sont déclarés dans `config.js` avec l'empreinte
+(SHA-256 salée) de leur code, jamais le code lui-même. Un code n'est affiché qu'une fois, à sa création ; on en régénère
+un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurité.
+
 ## Deux modes
 
 - **Local** (par défaut) : les données restent dans le navigateur. Idéal pour essayer (bouton « données de démonstration »).

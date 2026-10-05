@@ -7,8 +7,9 @@ const UI = {};            // etat d'ecran (onglets, filtres) conserve entre deux
 const PAGES = {};         // route -> { title, render(), mount?(), manager? }
 const ACTIONS = {};       // data-act -> fonction(el, event)
 
-const isManager = () => ME && ME.role === 'manager';
-const myClubs = () => (ME ? (ME.clubs || []) : []).map(id => S.clubs[id]).filter(Boolean);
+const isCreator = () => ME && ME.role === 'createur';
+const isManager = () => ME && (ME.role === 'manager' || ME.role === 'createur');
+const myClubs = () => (ME ? (ME.role === 'createur' ? Object.keys(S.clubs) : (ME.clubs || [])) : []).map(id => S.clubs[id]).filter(Boolean);
 const pref = (k, d) => { const p = (S.prefs[ME.id] || {})[k]; return p === undefined ? d : p; };
 const setPref = (k, v) => db.set(['prefs', ME.id, k], v);
 
@@ -143,7 +144,7 @@ function shell(route, inner) {
         <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>Mon profil</span></a>
         <a href="javascript:void 0" data-act="theme">${ico(theme === 'dark' ? 'sun' : 'moon')}<span>Thème ${theme === 'dark' ? 'clair' : 'sombre'}</span></a>
         <a href="javascript:void 0" data-act="logout">${ico('logout')}<span>Se déconnecter</span></a>
-        <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${isManager() ? 'Manager' : 'Membre'}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
+        <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${roleLabel(ME.role)}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
       </div>
     </aside>
     <main class="main">
@@ -177,7 +178,7 @@ function renderNow() {
   if (!ME) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   ME = S.users[ME.id] || null;
   if (!ME || ME.status === 'archived') { logout(); return; }
-  if (!CLUB || !S.clubs[CLUB.id] || !inClub(ME, CLUB.id)) CLUB = myClubs()[0] || null;
+  if (!CLUB || !S.clubs[CLUB.id] || !myClubs().some(c => c.id === CLUB.id)) CLUB = myClubs()[0] || null;
   else CLUB = S.clubs[CLUB.id];
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
   let { r, args } = currentRoute();

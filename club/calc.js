@@ -81,7 +81,8 @@ function elapsed(r) {
 const isActive = u => u && u.status === 'active';
 const inClub = (u, clubId) => u && (u.clubs || []).includes(clubId);
 function clubMembers(clubId, { all = false } = {}) {
-  return Object.values(S.users).filter(u => inClub(u, clubId) && (all || isActive(u))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
+  // le compte Createur administre : il n'est ni classe ni objective
+  return Object.values(S.users).filter(u => u.role !== 'createur' && inClub(u, clubId) && (all || isActive(u))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
 }
 function monthTarget(mk, userId, kpiId) { return Number(deepGet(S.targets, [mk, userId, kpiId])) || 0; }
 function clubMonthTarget(mk, clubId, kpiId) { return clubMembers(clubId).reduce((s, u) => s + monthTarget(mk, u.id, kpiId), 0); }

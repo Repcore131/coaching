@@ -15,17 +15,28 @@ PAGES.members = {
   mount() { if ((UI.memTab || 'org') === 'tasks') bindPlanner(); },
 };
 
+// Un createur gere tout le monde ; un manager gere les membres (et lui-meme).
+const canEdit = u => isCreator() || u.id === ME.id || u.role === 'membre';
 function memberRow(u) {
   return `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)">${avatar(u)}<div class="spacer"><b>${esc(fullName(u))}</b>${u.id === ME.id ? ' <span class="muted small">(vous)</span>' : ''}<div class="muted small">${esc(u.email || 'pas d’e-mail')}</div></div>
-    ${u.status === 'pending' ? '<span class="badge warn">En attente</span>' : ''}<span class="badge ${u.role === 'manager' ? 'ok' : ''}">${u.role === 'manager' ? 'Manager' : 'Membre'}</span>
-    <button class="btn ghost icon sm" data-act="editMember" data-id="${u.id}" title="Modifier">${ico('edit')}</button></div>`;
+    ${u.status === 'pending' ? '<span class="badge warn">En attente</span>' : ''}${u.codeHash ? '' : '<span class="badge bad" title="Sans code, cette personne ne peut pas se connecter">sans code</span>'}<span class="badge ${u.role === 'createur' ? 'fp' : u.role === 'manager' ? 'ok' : ''}">${roleLabel(u.role)}</span>
+    ${canEdit(u) ? `<button class="btn ghost icon sm" data-act="editMember" data-id="${u.id}" title="Modifier">${ico('edit')}</button>` : '<span style="width:30px"></span>'}</div>`;
 }
 function memOrg() {
   const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'archived');
+  const creators = Object.values(S.users).filter(u => u.role === 'createur' && u.status !== 'archived');
   return `<div class="card"><div class="card-head">${ico('building')}<h3>${esc(CLUB.name)}</h3></div>
+    <h3 class="muted" style="font-size:13px;margin:8px 0 2px">Créateur</h3>${creators.map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
     <h3 class="muted" style="font-size:13px;margin:8px 0 2px">Managers</h3>${all.filter(u => u.role === 'manager').map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
     <h3 class="muted" style="font-size:13px;margin:18px 0 2px">Membres</h3>${all.filter(u => u.role !== 'manager').map(memberRow).join('') || '<p class="muted">Aucun membre. Ajoutez votre équipe.</p>'}
-    <p class="muted small" style="margin-bottom:0">Une invitation en attente ne compte dans aucun total tant que la personne ne s’est pas connectée.</p></div>`;
+    <p class="muted small" style="margin-bottom:0">Une invitation en attente ne compte dans aucun total tant que la personne ne s’est pas connectée.</p></div>
+  <div class="card" style="margin-top:14px"><h3>Accès et rôles</h3>
+    <div class="table-wrap" style="margin-top:10px"><table class="t"><thead><tr><th>Ce que l’on peut faire</th><th>Créateur</th><th>Manager</th><th>Membre</th></tr></thead><tbody>
+    ${[['Saisir ses KPI, voir son tableau de bord, le classement, le feed, le chat', 1, 1, 1], ['Traiter les relances (Action Rétention) et les résiliations', 1, 1, 1],
+       ['Vue club, saisir pour un membre, fixer les objectifs', 1, 1, 0], ['Imports CSV, planning des tâches, défis flash', 1, 1, 0], ['Ajouter un membre et lui générer un code', 1, 1, 0],
+       ['Nommer un manager ou un créateur, modifier un manager', 1, 0, 0], ['Créer un club, régler les KPI et les points', 1, 0, 0], ['Sauvegarde, restauration, tout effacer', 1, 0, 0], ['Classé et soumis à objectifs', 0, 1, 1]]
+      .map(([l, ...v]) => `<tr><td>${l}</td>${v.map(x => `<td>${x ? '<b class="ok">✓</b>' : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <p class="muted small" style="margin-bottom:0">Le compte Créateur administre l’outil : il voit tous nos clubs mais n’apparaît ni au classement ni dans les objectifs. Une même adresse e-mail peut avoir un accès Créateur et un accès Manager : c’est le code qui choisit le compte.</p></div>`;
 }
 ACTIONS.addMember = () => memberForm(null);
 ACTIONS.editMember = el => memberForm(S.users[el.dataset.id]);
@@ -34,14 +45,16 @@ function memberForm(u) {
   openModal({ title: u ? 'Modifier le membre' : 'Ajouter un membre', body: `<form id="mf" class="grid">
     <div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" required value="${esc(u ? u.first : '')}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(u ? u.last : '')}"></label></div>
     <label class="field"><span>E-mail (sert à la connexion en mode partagé)</span><input class="input" type="email" name="email" value="${esc(u ? u.email || '' : '')}"></label>
-    <div class="form-grid"><label class="field"><span>Rôle</span><select class="input" name="role"><option value="membre">Membre</option><option value="manager" ${u && u.role === 'manager' ? 'selected' : ''}>Manager</option></select></label>
+    <div class="form-grid"><label class="field"><span>Rôle</span><select class="input" name="role" ${u && u.id === ME.id && !isCreator() ? 'disabled' : ''}>${Object.entries(ROLES).filter(([r]) => isCreator() || r === 'membre' || (u && u.role === r)).sort((a, b) => a[1].rank - b[1].rank).map(([r, x]) => `<option value="${r}" ${(u ? u.role : 'membre') === r ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
     <div class="field"><span>Club(s)</span>${clubs.map(c => `<label class="row small"><input type="checkbox" name="club_${c.id}" ${(u ? (u.clubs || []).includes(c.id) : c.id === CLUB.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div></div>
-    ${!u ? `<label class="row small"><input type="checkbox" name="pending" ${backend.mode === 'firebase' ? 'checked' : ''}> Invitation en attente (devient actif à la première connexion)</label>` : ''}
+    ${!u ? `<label class="row small"><input type="checkbox" name="pending" ${backend.mode === 'firebase' ? 'checked' : ''}> Invitation en attente (devient actif à la première connexion)</label><p class="muted small" style="margin:0">Un code d’accès personnel sera généré à l’enregistrement.</p>` : `<div class="row"><span class="small spacer">${u.codeHash ? 'Code d’accès actif.' : '<b class="bad">Aucun code : connexion impossible.</b>'}</span><button class="btn sm" type="button" data-act="regenCode" data-id="${u.id}">${ico('shield')} ${u.codeHash ? 'Générer un nouveau code' : 'Générer un code'}</button></div>`}
     </form>`,
     foot: `${u && u.id !== ME.id ? `<button class="btn danger" data-act="archiveMember" data-id="${u.id}" style="margin-right:auto">Archiver</button>` : ''}<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveMember" data-id="${u ? u.id : ''}">${u ? 'Enregistrer' : 'Ajouter'}</button>` });
 }
-ACTIONS.saveMember = el => {
+ACTIONS.saveMember = async el => {
   const f = formData($('#mf'));
+  if (!f.role) f.role = S.users[el.dataset.id].role;
+  if (!isCreator() && f.role !== 'membre' && !(el.dataset.id && S.users[el.dataset.id].role === f.role)) { toast('Seul le créateur peut nommer un manager.'); return; }
   if (!f.first.trim()) { toast('Le prénom est obligatoire.'); return; }
   const clubs = Object.keys(S.clubs).filter(id => f['club_' + id]);
   if (!clubs.length) { toast('Choisissez au moins un club.'); return; }
@@ -49,14 +62,33 @@ ACTIONS.saveMember = el => {
   const id = el.dataset.id || newId();
   const old = S.users[id];
   const u = { ...(old || { createdAt: Date.now(), avatar: 'h1', status: f.pending ? 'pending' : 'active' }), id, first: f.first.trim(), last: f.last.trim(), email, role: f.role, clubs };
-  if (old && old.id === ME.id && f.role !== 'manager' && !Object.values(S.users).some(x => x.id !== ME.id && x.role === 'manager' && x.status === 'active')) { toast('Il faut au moins un autre manager actif.'); return; }
+  if (old && old.role === 'createur' && f.role !== 'createur' && !Object.values(S.users).some(x => x.id !== id && x.role === 'createur' && x.status === 'active')) { toast('Il faut garder au moins un créateur actif.'); return; }
+  let code = null;
+  if (!old) { const c = await newCodeRecord(); code = c.code; u.salt = c.salt; u.codeHash = c.codeHash; }
   const ops = [[['users', id], u]];
   if (email) ops.push([['team', email.replace(/\./g, ',')], true]);
   if (old && old.email && old.email !== email) ops.push([['team', old.email.replace(/\./g, ',')], null]);
-  db.batch(ops); closeModal(); toast(old ? 'Membre mis à jour.' : 'Membre ajouté.');
+  db.batch(ops); closeModal();
+  if (code) showCode(u, code); else toast('Membre mis à jour.');
+};
+// Le code n'est affiche qu'une fois : seule son empreinte est enregistree.
+function showCode(u, code) {
+  openModal({ title: 'Code d’accès', body: `<p style="margin-top:0">Code personnel de <b>${esc(fullName(u))}</b> (${roleLabel(u.role)}). Il ne sera plus affiché : notez-le ou transmettez-le maintenant.</p>
+    <div class="card" style="text-align:center;padding:18px"><div class="muted small">${esc(u.email || 'pas d’e-mail : ajoutez-en un pour la connexion')}</div><div class="title" id="code-val" style="font-size:30px;letter-spacing:.06em;user-select:all">${code}</div></div>`,
+    foot: '<button class="btn" data-act="copyCode">Copier</button><button class="btn primary" data-close>C’est noté</button>' });
+}
+ACTIONS.copyCode = () => { const t = $('#code-val').textContent; navigator.clipboard.writeText(t).then(() => toast('Code copié.'), () => { const r = document.createRange(); r.selectNodeContents($('#code-val')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Sélectionné : faites Ctrl+C.'); }); };
+ACTIONS.regenCode = async el => {
+  const u = S.users[el.dataset.id];
+  if (u.codeHash && !await confirmDlg(`Générer un nouveau code pour ${esc(fullName(u))} ? L’ancien code ne fonctionnera plus.`, { ok: 'Générer' })) return;
+  const c = await newCodeRecord();
+  db.batch([[['users', u.id, 'salt'], c.salt], [['users', u.id, 'codeHash'], c.codeHash]]);
+  showCode(S.users[u.id], c.code);
 };
 ACTIONS.archiveMember = async el => {
   const u = S.users[el.dataset.id];
+  if (!canEdit(u)) return;
+  if (u.role === 'createur' && !Object.values(S.users).some(x => x.id !== u.id && x.role === 'createur' && x.status === 'active')) { toast('Il faut garder au moins un créateur actif.'); return; }
   if (!await confirmDlg(`Archiver ${esc(fullName(u))} ? Il sort des calculs du mois et ne peut plus se connecter, mais garde son historique.`, { ok: 'Archiver', danger: true })) return;
   const ops = [[['users', u.id, 'status'], 'archived'], [['users', u.id, 'archivedAt'], today()]];
   if (u.email) ops.push([['team', u.email.replace(/\./g, ',')], null]);
@@ -218,7 +250,7 @@ PAGES.profile = {
     const tab = UI.profTab || 'perf';
     const pts = allTime(ME.id); const lv = levelOf(pts);
     const head = `<div class="card" style="margin-bottom:14px"><div class="row wrap" style="gap:16px">${avatar(ME, 'lg')}<div class="spacer"><h1 style="font-size:26px">${esc(fullName(ME))}</h1>
-      <div class="row wrap small" style="margin-top:4px"><span class="badge fp">${lv.label}</span><span class="muted">${esc(ME.email || '')}</span><span class="badge">${isManager() ? 'Manager' : 'Membre'}</span>${(ME.clubs || []).map(c => S.clubs[c] ? `<span class="badge">${esc(S.clubs[c].name)}</span>` : '').join('')}</div></div>
+      <div class="row wrap small" style="margin-top:4px"><span class="badge fp">${lv.label}</span><span class="muted">${esc(ME.email || '')}</span><span class="badge">${roleLabel(ME.role)}</span>${(ME.clubs || []).map(c => S.clubs[c] ? `<span class="badge">${esc(S.clubs[c].name)}</span>` : '').join('')}</div></div>
       <div style="text-align:right"><div class="title" style="font-size:30px">${fmtN(pts)} pts</div><div class="muted small">${lv.next ? `${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}` : 'Niveau maximum'}</div></div></div>
       <div class="levels">${LEVELS.map(l => `<div class="${pts >= l.min ? 'got' : ''}">${l.label}<br><span class="muted">${fmtN(l.min)}</span></div>`).join('')}</div></div>`;
     return head + tabs('profTab', [['perf', 'Performances'], ['account', 'Compte']], tab) + (tab === 'perf' ? profPerf() : profAccount());
@@ -244,13 +276,13 @@ function profAccount() {
   const live = pref('liveBanner', true); const digest = pref('digest', true);
   return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
-      <p class="muted small" style="margin:0">Rôle : ${isManager() ? 'Manager' : 'Membre'} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
+      <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
     <div class="card"><h3>Avatar du tableau de bord</h3><div class="row wrap" style="margin-top:10px">${['h1', 'h2', 'f1', 'f2'].map((a, i) => `<button class="btn ${ME.avatar === a ? 'primary' : ''}" style="flex-direction:column;padding:8px" data-act="setAvatar" data-a="${a}">${mascot(a, 'happy', 54)}<span class="small">${['Homme 1', 'Homme 2', 'Femme 1', 'Femme 2'][i]}</span></button>`).join('')}</div></div>
     <div class="card"><h3>Notifications</h3>
       <label class="row" style="margin-top:12px"><input type="checkbox" data-change="prefToggle" data-k="liveBanner" ${live ? 'checked' : ''}> <span>Bandeau en direct quand un collègue saisit</span></label>
       <label class="row" style="margin-top:10px"><input type="checkbox" data-change="prefToggle" data-k="digest" ${digest ? 'checked' : ''}> <span>Bilan hebdomadaire du club (lundi matin)</span></label>
       <p class="muted small">Le bandeau ne montre que les saisies de nos clubs.</p></div>
-    <div class="card"><h3>Sécurité</h3>${backend.mode === 'firebase' ? `<p class="small">Connexion par e-mail et mot de passe.</p><button class="btn" data-act="resetPwd">Recevoir un lien de changement de mot de passe</button>` : `<p class="muted small">Mode local : pas de mot de passe, les données restent dans ce navigateur. Activez le mode partagé (config.js) pour des comptes protégés.</p>`}</div></div>`;
+    <div class="card"><h3>Sécurité</h3>${backend.mode === 'firebase' ? `<p class="small">Connexion par e-mail et mot de passe.</p><button class="btn" data-act="resetPwd">Recevoir un lien de changement de mot de passe</button>` : `<p class="small">Connexion par e-mail et code d’accès personnel.</p><form id="cc" class="grid"><label class="field"><span>Code actuel</span><input class="input" name="cur" id="cc-cur" placeholder="FP-XXXX-XXXX-XXXX" autocomplete="current-password"></label><button class="btn" type="button" data-act="changeMyCode">${ico('shield')} Générer un nouveau code</button></form><p class="muted small">En mode local, les données restent dans ce navigateur : le code protège l’accès à l’écran. Le mode partagé (config.js) ajoute des comptes protégés côté serveur.</p>`}</div></div>`;
 }
 ACTIONS.saveProfile = () => { const f = formData($('#pf')); if (!f.first.trim()) return; db.batch([[['users', ME.id, 'first'], f.first.trim()], [['users', ME.id, 'last'], f.last.trim()]]); toast('Profil enregistré.'); };
 ACTIONS.setAvatar = el => db.set(['users', ME.id, 'avatar'], el.dataset.a);
@@ -319,3 +351,11 @@ function drawWrapCard() {
   x.fillStyle = '#fff'; x.font = 'italic 22px Inter, sans-serif'; x.fillText(d.phrase, 36, 724);
 }
 ACTIONS.wrapDownload = () => { const c = $('#wrap-canvas'); c.toBlob(b => downloadFile(`bilan-${UI.wrapData.mk}-${norm(fullName(UI.wrapData.u)).replace(/ /g, '-')}.png`, b), 'image/png'); };
+
+ACTIONS.changeMyCode = async () => {
+  const cur = $('#cc-cur').value;
+  if (ME.codeHash && await hashCode(ME.salt, cur) !== ME.codeHash) { toast('Code actuel incorrect.'); return; }
+  const c = await newCodeRecord();
+  db.batch([[['users', ME.id, 'salt'], c.salt], [['users', ME.id, 'codeHash'], c.codeHash]]);
+  showCode(S.users[ME.id], c.code);
+};
