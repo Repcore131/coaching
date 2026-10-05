@@ -728,8 +728,9 @@ function renderReponsesBilans(bilans,client){
         <div class="bn-tete${depart?' bn-tete-dep':''}">
           <div class="bn-tete-g">
             <div class="bn-titre">${depart?'Bilan <em>d’inscription</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
-            <div class="bn-date">${d}</div>
+            <div class="bn-date">${d}${b.modifieLe?' · modifié le '+new Date(b.modifieLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):''}</div>
           </div>
+          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
         ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
@@ -919,7 +920,8 @@ const DEB_STEPS=[
     // booleen qu elles produisent l est.
     bLbl('Quelques questions de sécurité')+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-transform:none;letter-spacing:normal;font-weight:400">Elles servent à savoir si un objectif de poids est prudent pour toi en ce moment. Tes réponses ne sont pas enregistrées.</div>`+
-    SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join('')+
+    (_bilEdition?'<div class="hb-note">Les questions de sécurité ne sont pas reposées : leurs réponses ne sont pas conservées.</div>'
+      :SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join(''))+
     bLbl('Quel type de suivi nutritionnel préfères-tu ?')+
     // R35 — valeurs inchangees : les libelles viennent de BIL_CHOIX_LIBELLES.
     `<div>${bC('deb-nutrition-type',['Diet strict : Plan alimentaire détaillé avec quantités précises','Diet flexible : Conseils personnalisés + calcul via application'])}</div>`+
@@ -955,6 +957,7 @@ function saveBilanFinal(){
   // seuil : on ecrit la trace quoi qu il arrive, absence du coach comprise.
   // Elle remonte par la synchronisation, et l appareil du coach la relevera.
   try{ _dispoTracerSante('bilan'); }catch(e){}
+  if(_bilEdition) return _bilEnregistrerModif();
   // ⚠ L'ACCORD DE SANTE AVANT TOUT LE RESTE (26/09/2026). La porte etait posee
   //   plus bas, juste avant l'ecriture du bilan — mais APRES l'effacement du
   //   brouillon et apres les ecritures dans le dossier (questionnaire marque

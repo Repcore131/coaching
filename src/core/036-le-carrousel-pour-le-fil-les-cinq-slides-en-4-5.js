@@ -71,12 +71,14 @@ function _rendreCarteWrapped(){
     for(const p of wrappedPeriodes(Date.now())){
       const w=calculerWrapped(u||{},p.debut,p.fin);
       if(!w.seances) continue;
+      if(accCarteMasquee('wrapped-'+p.cle)) continue;
       let vu=false; try{ vu=localStorage.getItem('rc_wrapped_vu_'+p.cle)==='1'; }catch(e){}
-      html+='<button type="button" class="wr-carte" onclick="ouvrirWrapped(\''+p.cle+'\')">'
+      html+='<div class="acc-fermable">'+_htmlCroixAccueil('wrapped-'+p.cle,p.carte)
+        +'<button type="button" class="wr-carte" onclick="ouvrirWrapped(\''+p.cle+'\')">'
         +'<span class="wr-carte-eclair" aria-hidden="true">'+icon('zap',18)+'</span>'
         +'<span class="wr-carte-t"><b>'+escapeHtml(p.carte)+'</b>'
         +'<span>'+w.seances+' séance'+(w.seances>1?'s':'')+(w.profil?' · '+escapeHtml(vu?w.profil.nom:'ton profil t’attend'):'')+'</span></span>'
-        +'<span class="wr-carte-v">'+(vu?'Revoir':'Voir')+'</span></button>';
+        +'<span class="wr-carte-v">'+(vu?'Revoir':'Voir')+'</span></button></div>';
     }
   }catch(e){ html=''; }
   z.innerHTML=html;

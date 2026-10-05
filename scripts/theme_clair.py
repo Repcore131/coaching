@@ -495,7 +495,7 @@ def vif(valeur):
 # boutons blancs sont des ENFANTS de la banniere, et passaient au noir sur
 # rouge en theme clair (bouton « blanc » devenu noir compris). Ces selecteurs
 # ne recoivent aucune copie claire : la regle sombre vaut dans les deux themes.
-SUR_BANNIERE = re.compile(r'\.(px-(tete|num|nom|b-blanc|mus|diff|cmd|ava)|pr-(tete|titre|cmd))(?![\w])')
+SUR_BANNIERE = re.compile(r'\.(px-(tete|num|nom|b-blanc|mus|diff|cmd|ava)|pr-(tete|titre|cmd)|hb-(ouvrir|b|b-r))(?![\w])')
 
 
 def regle_claire(sel, corps):

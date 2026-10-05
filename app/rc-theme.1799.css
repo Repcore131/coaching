@@ -1050,6 +1050,16 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .px-media-img img{background:#090909;border:1px solid var(--border)}
 :root[data-theme="clair"] .px-media-vide{background:var(--surface-2);border:2px dashed var(--border)}
 :root[data-theme="clair"] .px-media-lire{background:var(--surface-2);border:1px solid var(--border);color:var(--red-text)}
+:root[data-theme="clair"] .acc-x{background:color-mix(in srgb,var(--text) 8%,transparent);border:1px solid color-mix(in srgb,var(--text) 16%,transparent);color:var(--text)}
+:root[data-theme="clair"] .acc-x:hover{background:color-mix(in srgb,var(--text) 16%,transparent)}
+:root[data-theme="clair"] .acc-x:focus-visible{outline:2px solid var(--red-text)}
+:root[data-theme="clair"] .acc-fermable .acc-x{background:var(--surface-2);border-color:var(--border)}
+:root[data-theme="clair"] .hb{background:var(--surface-2)}
+:root[data-theme="clair"] .hb-l{background:var(--surface-1);border:1px solid var(--border)}
+:root[data-theme="clair"] .hb-l-t b{color:var(--text-strong)}
+:root[data-theme="clair"] .hb-l-t span{color:var(--sub)}
+:root[data-theme="clair"] .hb-l-t i{color:var(--text-faint)}
+:root[data-theme="clair"] .hb-note{color:var(--text-faint)}
 :root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:var(--surface-0)}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}

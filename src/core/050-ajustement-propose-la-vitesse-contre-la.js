@@ -386,6 +386,31 @@ function enregistrerPointSemaine(u,e,decision){
   if(l.length>PTS_SEMAINE_MAX) u.pointsSemaine=l.slice(-PTS_SEMAINE_MAX);
   return true;
 }
+// ══ LA CROIX DES CARTES DE L'ACCUEIL (Kevin, 05/10/2026) ════════════════
+// « Ton point de la semaine » et « Ton mois de septembre est prêt » se
+// posaient sur l'accueil sans qu'on puisse les écarter. Chacune porte une
+// croix. Le point de la semaine revient au rendez-vous suivant (six jours
+// plus tard au plus tôt) ; le mois écarté ne revient pas, le suivant si.
+// GARDÉ SUR L'APPAREIL, par compte : c'est un rangement d'écran, pas une
+// donnée du dossier. Aucune décision n'est enregistrée par la croix.
+const ACC_MASQUE_POINT_J=6;
+function _accCle(nom){ return 'rc_acc_masque_'+nom+'_'+((currentUser&&currentUser.email)||''); }
+function accCarteMasquee(nom,maintenant){
+  let v=null; try{ v=localStorage.getItem(_accCle(nom)); }catch(e){ v=null; }
+  if(!v) return false;
+  if(v==='1') return true;
+  const jusqu=Number(v);
+  return jusqu>(maintenant||Date.now());
+}
+function accMasquerCarte(nom){
+  const t=Date.now();
+  try{ localStorage.setItem(_accCle(nom),nom==='point'?String(t+ACC_MASQUE_POINT_J*864e5):'1'); }catch(e){}
+  if(nom==='point') _rendrePointSemaine(); else _rendreCarteWrapped();
+  return true;
+}
+function _htmlCroixAccueil(nom,quoi){
+  return '<button type="button" class="acc-x" onclick="accMasquerCarte(\''+nom+'\')" aria-label="Masquer : '+escapeHtml(quoi)+'">×</button>';
+}
 function htmlPointSemaine(e,u){
   if(!e) return '';
   const jour=pointJourDe(u);
@@ -415,7 +440,8 @@ function _rendrePointSemaine(){
   const u=currentUser;
   let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
   if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){ rcErreurMuette('_rendrePointSemaine',err); } }
-  z.innerHTML=htmlPointSemaine(e,u);
+  // Écartée par sa croix : le point reste calculé et gardé, seule la carte se tait.
+  z.innerHTML=accCarteMasquee('point')?'':htmlPointSemaine(e,u).replace('<div class="ps-tete">',_htmlCroixAccueil('point','ton point de la semaine')+'<div class="ps-tete">');
   return e;
 }
 // Les deux boutons : l'ajustement EXISTANT, et la décision gardée dans le point.
