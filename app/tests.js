@@ -47437,6 +47437,39 @@ async function testExercices(){
       const h=String(_htmlAnat);
       if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
       return true;})());
+    // ══ LA SIGNATURE DES EXPORTS (05/10/2026) ═════════════════════════════════
+    ok('EXPORTS SIGNÉS : RepCore, le coach, l’athlète destinataire, la date, sur chaque document ; le coach et la date sur les visuels',(()=>{
+      if(typeof signatureDocument!=='function'||typeof htmlSignatureDocument!=='function'||typeof _recSignatureLigne2!=='function') return _echec('signatureDocument n’existe pas');
+      const jour=new Date(2026,9,6,12).getTime();
+      const a={role:'athlete',fname:'Léa',lname:'Martin',coachName:'Kevin Guellec'};
+      const s=signatureDocument(a,{date:jour});
+      if(s!=='RepCore · Coach Kevin Guellec · pour Léa Martin · 6 octobre 2026') return _echec('athlète : « '+s+' »');
+      if(/\/\d\d/.test(s)) return _echec('une date en chiffres se lit comme une note : '+s);
+      if(signatureDocument(a,{date:jour,athlete:false})!=='RepCore · Coach Kevin Guellec · 6 octobre 2026') return _echec('sans le nom de l’athlète');
+      if(signatureDocument({role:'athlete',fname:'Léa'},{date:jour})!=='RepCore · pour Léa · 6 octobre 2026') return _echec('sans coach : un morceau vide est resté');
+      if(signatureDocument({role:'coach',fname:'Kevin',lname:'Guellec',teamName:'Team KG'},{date:jour})!=='RepCore · Coach Team KG · 6 octobre 2026') return _echec('dossier de coach');
+      if(signatureDocument(null,{date:jour})!=='RepCore · 6 octobre 2026') return _echec('sans dossier');
+      // Le texte sort brut, le pied l'échappe.
+      const h=htmlSignatureDocument({role:'athlete',fname:'<img src=x onerror=1>',coachName:'<b>x</b>'},{date:jour});
+      if(/<img|<b>/.test(h)||h.indexOf('class="doc-sign"')<0) return _echec('pied non échappé : '+h);
+      // CHAQUE DOCUMENT LE PORTE.
+      const pp=htmlProgrammePrint(Object.assign({sessions_config:[]},a));
+      if(pp.indexOf('class="doc-sign"')<0||pp.indexOf('pour Léa Martin')<0) return _echec('fiche programme sans signature');
+      for(const [nom,f,motif] of [
+        ['rapport de la période (données)',rapportPeriode,'signatureDocument(u,'],
+        ['rapport de la période (rendu)',htmlRapport,'r.signature'],
+        ['bilan de bloc',bilanBlocExportHtml,'htmlSignatureDocument(c)'],
+        ['analyse morpho',anatExportHtml,'htmlSignatureDocument(c)'],
+        ['fiche alimentaire (données)',ficheAlimDonnees,'edite:Date.now()'],
+        ['fiche alimentaire (rendu)',htmlFicheAlim,'fa-pied-pour']])
+        if(String(f).indexOf(motif)<0) return _echec(nom+' : pas de signature');
+      if((String(anatExportHtml).match(/htmlSignatureDocument\(c\)/g)||[]).length<2) return _echec('une des deux versions morpho (coach, athlète) n’est pas signée');
+      if(String(anatExportHtml).indexOf('Préparé par ton coach<br>')>=0) return _echec('les consignes de l’athlète ne nomment pas le coach');
+      // LES VISUELS : le coach et la date, sous « NOM · REPCORE » ; le nom de l'athlète suit toujours son réglage.
+      if(_recSignatureLigne2(a,jour)!=='COACH KEVIN GUELLEC · 06/10/2026') return _echec('visuel : « '+_recSignatureLigne2(a,jour)+' »');
+      if(_recSignatureLigne2({role:'athlete'},jour)!=='06/10/2026') return _echec('visuel sans coach');
+      if(/fname|lname|pseudo/.test(String(_recSignatureLigne2))) return _echec('la seconde ligne écrit le nom de l’athlète sans passer par son réglage');
+      return String(_recSignature).indexOf('_recSignatureLigne2(currentUser)')>=0?true:_echec('les cartes ne dessinent pas la seconde ligne');})());
     // La photo prise en plongée : dite à l'envoi, et dite au coach (05/10/2026).
     ok('PHOTO EN PLONGÉE : REFUSÉE À L’ENVOI QUAND ELLE EST NETTE, ET LE COACH LIT LA VRAIE CAUSE, PAS « VÉRIFIE LES POINTS »',(()=>{
       if(typeof priseDeVue!=='function') return _echec('priseDeVue n’existe pas');

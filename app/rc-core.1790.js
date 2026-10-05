@@ -18571,6 +18571,38 @@ function marqueCoachDe(user,usrs){
   if(!c) return '';
   return String(c.logo||c.signature||'');
 }
+// ══ LA SIGNATURE D'UN EXPORT (Kevin, 05/10/2026) ════════════════════════════
+//
+// « Chaque export doit porter une signature : RepCore, le coach, l'athlète
+// destinataire, la date. Discrète en pied de page pour les documents, intégrée
+// au visuel pour les images. » Aucun document ne portait les quatre : chacun
+// composait son en-tête à la main.
+//
+// PURE. Elle lit le dossier qu'on IMPRIME (jamais currentUser : quand le coach
+// imprime pour un athlète, ce n'est pas le même). Chaque morceau absent est
+// sauté. Le texte sort BRUT : chaque document l'échappe.
+//   o.date     : la date à écrire (défaut : maintenant) ;
+//   o.athlete  : false pour ne pas nommer l'athlète (visuels où un test l'interdit).
+function signatureCoachNom(u){
+  if(!u) return '';
+  const net=x=>String(x==null?'':x).replace(/\s+/g,' ').trim();
+  if(u.role==='coach') return net(u.teamName)||net((u.fname||'')+' '+(u.lname||''));
+  let c=null; try{ c=coachAffichable(u)||null; }catch(e){ c=null; }
+  return net(c&&c.teamName)||net(((c&&c.fname)||'')+' '+((c&&c.lname)||''))||net(u.coachName);
+}
+function signatureDocument(u,o){
+  const opt=o||{};
+  const coach=signatureCoachNom(u);
+  const ath=(u&&u.role!=='coach'&&opt.athlete!==false)?String(((u.fname||'')+' '+(u.lname||''))).replace(/\s+/g,' ').trim():'';
+  // La date en toutes lettres : « 6 octobre 2026 ». En chiffres, « 06/10/2026 »
+  // se lisait « /10 » dans un document qui s'interdit toute note.
+  let d=''; try{ d=new Date(opt.date||Date.now()).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ d=''; }
+  return ['RepCore',coach?'Coach '+coach:'',ath?'pour '+ath:'',d].filter(Boolean).join(' · ');
+}
+// Le pied d'un document imprimé, déjà échappé.
+function htmlSignatureDocument(u,o){
+  return '<p class="doc-sign">'+escapeHtml(signatureDocument(u,o))+'</p>';
+}
 
 // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
 // Le numéro personnel du coach vivait dans coach_public.phone, lisible par
@@ -37568,7 +37600,7 @@ function bilanBlocExportHtml(c,b){
     +'.bb-phrase{font-size:12pt;font-weight:700;margin:6px 0 4px}.bb-vide,.bb-s{font-size:8.5pt;color:#52525b}td small{display:block;font-size:7.5pt;color:#71717a}'
     +'</style></head><body><div class="ex-t"><div><h1>Bilan <span>de bloc</span></h1><p>'+escapeHtml(nom)+'</p></div>'
     +'<div class="ex-m">Édité le '+escapeHtml(_bbJour(Date.now()))+'</div></div>'+_htmlBilanBlocCorps(b)
-    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p></body></html>';
+    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p>'+htmlSignatureDocument(c)+'</body></html>';
 }
 // La feuille, depuis le bloc de la fiche coach : lire, puis exporter.
 function ouvrirBilanBloc(){
@@ -49773,6 +49805,26 @@ function _recSignature(g,o,sig,y,LARG){
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
+  // LE COACH ET LA DATE, en petit, sous la signature (05/10/2026). Le nom de
+  // l'athlète, lui, reste celui de son réglage « Nom affiché sur mes visuels » :
+  // c'est `sig`, et « rien » reste rien.
+  try{
+    const l2=_recSignatureLigne2(currentUser);
+    if(l2){
+      g.save();
+      g.textAlign='center'; g.textBaseline='alphabetic';
+      g.font="600 17px Montserrat,'Segoe UI',sans-serif";
+      g.fillStyle='rgba(255,255,255,.55)';
+      g.fillText(l2,cx,y+27,LARG);
+      g.restore();
+    }
+  }catch(e){}
+}
+// PURE. « COACH <NOM> · 05/10/2026 », ou la date seule sans coach.
+function _recSignatureLigne2(u,maintenant){
+  let coach=''; try{ coach=signatureCoachNom(u); }catch(e){ coach=''; }
+  let d=''; try{ d=new Date(maintenant||Date.now()).toLocaleDateString('fr-FR'); }catch(e){ d=''; }
+  return [(coach&&u&&u.role!=='coach')?'COACH '+coach.toLocaleUpperCase('fr-FR'):'',d].filter(Boolean).join(' · ');
 }
 // PURE. Le sur-titre de la carte d'un record.
 function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
@@ -61473,7 +61525,8 @@ function _anatExportCss(){
     +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
     +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
     +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:4px}.ex-z ul{margin:4px 0 0 16px;padding:0}'
-    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}'
+    +'.doc-sign{font-size:7.5pt;color:#71717a;text-align:center;letter-spacing:.4px;margin-top:10px}';
 }
 /** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
 function _anatExportPhoto(a,pb,vue,legende){
@@ -61521,12 +61574,12 @@ function anatExportHtml(c,mode){
 
   if(mode==='athlete'){
     const cs=anatConsignesExport(prios);
-    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par '+escapeHtml(signatureCoachNom(c)||'ton coach')+'<br>le '+dJour)
       +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
       +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
       +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
         :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
-      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>'+htmlSignatureDocument(c);
     return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
   }
 
@@ -61561,7 +61614,7 @@ function anatExportHtml(c,mode){
     +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
     +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
   // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
-  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+  return doc('Analyse · '+nom+' · '+dBilan,corps+htmlSignatureDocument(c),'ex-coach');
 }
 /**
  * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression
@@ -67728,6 +67781,8 @@ function rapportPeriode(u,debut,fin,opts){
     periode:{debut,fin,libelle:rapLibellePeriode(debut,fin)},
     athlete:{prenom:(u&&u.fname)||''},
     coach:(()=>{ try{ return _nomCoachAffiche()||''; }catch(e){ return ''; } })(),
+    // Le pied du document, lu sur le dossier IMPRIMÉ (signatureDocument).
+    signature:(()=>{ try{ return signatureDocument(u,{date:now}); }catch(e){ return ''; } })(),
     nSeances:ss.length,
     suffisant:ss.length>=RAP_MIN_SEANCES,
     assiduite:rapAssiduite(u,debut,fin),
@@ -68044,6 +68099,9 @@ function htmlRapport(r){
   if(B.mot) h+=`<section class="rap-bloc"><h2>Mot du coach</h2>
     <div class="rap-mot" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mot du coach"></div>
     <p class="rap-note rap-noprint">Écris ici avant d'imprimer. Rien n'est enregistré : ce texte vit le temps de l'impression.</p></section>`;
+  // LA SIGNATURE, HORS DE TOUTE CASE : en-tête décoché, le document sortait
+  // sans rien qui dise d'où il vient ni pour qui.
+  if(r.signature) h+=`<p class="doc-sign">${escapeHtml(r.signature)}</p>`;
   return h;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────
@@ -68259,6 +68317,7 @@ function ficheAlimDonnees(user,chercher){
     return n||String(u.coachName||'').trim()||'';
   })();
   return {ok:true,
+    edite:Date.now(),
     athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
     kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
     jourOn:isOn,
@@ -68304,7 +68363,7 @@ function htmlFicheAlim(user,chercher){
     </div>`;
   const pied=`<footer class="fa-pied">
       <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
-      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
+      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
 
@@ -68612,7 +68671,8 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>';
+  const sign=htmlSignatureDocument(u);
+  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>'+sign;
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -68631,7 +68691,7 @@ function htmlProgrammePrint(u){
       +_ppBloc('Retour au calme',cd)
       +_ppBloc('Notes',s.notes)
       +'</section>';
-  }).join('');
+  }).join('')+sign;
 }
 let _ppCible=null;
 // Sur le modèle d’ouvrirRapport : la cible est passée, et le défaut est le

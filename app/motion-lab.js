@@ -12973,7 +12973,7 @@ function _mlcRendre(){
   if(!a||!b){ z.innerHTML='<p class="mlc-p">Choisis une autre analyse de cet exercice.</p>'; return; }
   const [ancien,recent]=Number(a.date)<=Number(b.date)?[a,b]:[b,a];
   const ra=mlcResume(ancien), rb=mlcResume(recent), r=mlcComparer(ra,rb);
-  _mlcEtat.dernier={ra,rb,r};
+  _mlcEtat.dernier={ra,rb,r,ancien,recent};
   const jour=(v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   z.innerHTML='<div class="mlc-leg"><span class="mlc-a">'+E(jour(ancien))+'</span><span class="mlc-b">'+E(jour(recent))+'</span></div>'
     +_mlcSvg(ra,rb)
@@ -13014,7 +13014,26 @@ function mlExporterComparaison(){
   const W=1080, H=1350, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d'); if(!g) return false;
   g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H);
-  g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,100);
+  g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,88);
+  // LES DEUX DATES ET L'EXERCICE, que l'écran affichait et que l'image taisait
+  // (05/10/2026), chacune dans la couleur de son tracé.
+  try{
+    const jour=(v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const exo=String(((d.recent||{}).lien||{}).exerciceNom||((d.ancien||{}).lien||{}).exerciceNom||'');
+    g.font='600 24px Montserrat,sans-serif';
+    let x=60;
+    if(d.ancien){ g.fillStyle='#8a8a8a'; const t=jour(d.ancien); g.fillText(t,x,122); x+=g.measureText(t).width+26; }
+    if(d.recent){ g.fillStyle='#E02020'; const t=jour(d.recent); g.fillText(t,x,122); x+=g.measureText(t).width+26; }
+    if(exo){ g.fillStyle='#a1a1aa'; g.fillText(exo.slice(0,40),x,122); }
+  }catch(e){}
+  // LA SIGNATURE, en pied : RepCore, le coach, l'athlète, la date. Ce document
+  // lui est destiné et ne se publie pas : son nom y a sa place.
+  try{
+    const dossier=((DB.get('users')||{})[_mlcEtat.email])||null;
+    const sig=(typeof signatureDocument==='function')?signatureDocument(dossier||currentUser):'RepCore';
+    g.fillStyle='#71717a'; g.font='600 22px Montserrat,sans-serif'; g.textAlign='center';
+    g.fillText(sig,W/2,H-36,W-120); g.textAlign='left';
+  }catch(e){}
   const trace=(t,coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
     t.x.forEach((x,i)=>{ if(!isFinite(x)||!isFinite(t.y[i])){ p=false; return; } const X=90+x*900, Y=720-t.y[i]*560; if(p) g.lineTo(X,Y); else { g.moveTo(X,Y); p=true; } }); g.stroke(); };
   g.fillStyle='#161618'; g.fillRect(60,130,960,620);
