@@ -743,7 +743,7 @@ function _sanOrigine(o,plateforme){
 // `gardes` compte les jours où une saisie manuelle plus récente l'emporte.
 function sanFusionSync(dossier,sync,maintenant){
   const u=dossier||{}, t=Number(maintenant)||Date.now();
-  const plan={pas:[],sommeil:[],poids:[],fc:[],vfc:[],origines:{},gardes:0};
+  const plan={pas:[],sommeil:[],poids:[],fc:[],vfc:[],masseGrasse:[],origines:{},gardes:0};
   const meta=(sync&&sync.meta)||{}, jours=(sync&&sync.jours)||{};
   if(!meta.empreinte&&!meta.derniereReception) return plan;
   const auj=localISODate(new Date(t));
@@ -796,6 +796,14 @@ function sanFusionSync(dossier,sync,maintenant){
       const e=trouver(u.fcReposLog,d);
       if(!(e&&e.bpm===Math.round(bpm))) plan.fc.push({date:d,bpm:Math.round(bpm)});
     }
+    // LA MASSE GRASSE MESURÉE (05/10/2026) : celle d'une balance à impédance
+    // passée par Health Connect ou Apple Santé. Bornes 3-60 %, comme le serveur.
+    const mg=Number(j.masseGrasse);
+    if(isFinite(mg)&&mg>=MG_PCT_MIN&&mg<=MG_PCT_MAX){
+      const e=trouver(u.masseGrasseLog,d), v=Math.round(mg*10)/10;
+      if(_sanManuelGagne(e,recu)) plan.gardes++;
+      else if(!(e&&e.dataStatus==='sync'&&e.pct===v)) plan.masseGrasse.push({date:d,pct:v});
+    }
     const ms=Number(j.vfc), methode=j.vfcMethode==='rmssd'||j.vfcMethode==='sdnn'?j.vfcMethode:null;
     if(isFinite(ms)&&ms>=5&&ms<=250&&methode){
       const e=trouver(u.vfcLog,d), v=Math.round(ms*10)/10;
@@ -804,9 +812,10 @@ function sanFusionSync(dossier,sync,maintenant){
   }
   return plan;
 }
-// Un journal {date,…} : la valeur du jour remplacée, triée, purgée à 180 jours.
-function _sanJournalPoser(liste,entree,maintenant){
-  const min=localISODate(new Date((Number(maintenant)||Date.now())-SAN_SYNC_RETENTION_JOURS*864e5));
+// Un journal {date,…} : la valeur du jour remplacée, triée, purgée à 180 jours
+// (ou `jours` : la masse grasse, donnée de composition, en garde 730).
+function _sanJournalPoser(liste,entree,maintenant,jours){
+  const min=localISODate(new Date((Number(maintenant)||Date.now())-(Number(jours)||SAN_SYNC_RETENTION_JOURS)*864e5));
   const l=(Array.isArray(liste)?liste:[]).filter(e=>e&&e.date!==entree.date&&e.date>=min);
   l.push(entree);
   return l.sort((a,b)=>a.date<b.date?-1:1);
@@ -823,6 +832,12 @@ function sanAppliquerSync(plan){
   for(const p of plan.poids) if(_recordWeight(p.date,p.kg,{dataStatus:'sync'})) n++;
   for(const f of plan.fc){ u.fcReposLog=_sanJournalPoser(u.fcReposLog,f); n++; }
   for(const v of plan.vfc){ u.vfcLog=_sanJournalPoser(u.vfcLog,v); n++; }
+  for(const m of (plan.masseGrasse||[])){
+    const e={date:m.date,pct:m.pct,methode:'impedance',dataStatus:'sync',updatedAt:Date.now()};
+    if(plan.origines&&plan.origines.pas) e.source=plan.origines.pas;
+    u.masseGrasseLog=_sanJournalPoser(u.masseGrasseLog,e,Date.now(),MG_RETENTION_JOURS);
+    n++;
+  }
   const o=plan.origines||{};
   for(const q of ['pas','sommeil']){
     if(o[q]&&(!u.santeSource||u.santeSource[q]!==o[q])){

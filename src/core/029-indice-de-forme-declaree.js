@@ -670,8 +670,15 @@ function _sodiumAthleteDe(user){
   try{ poids=_poidsPourPlancher(user); }catch(e){}
   let mm=null;
   try{ mm=masseMaigreDuBilan(user); }catch(e){}
+  // UNE MESURE RÉCENTE PASSE DEVANT (05/10/2026) : la masse grasse mesurée de
+  // moins de 30 jours (bodyFatPctRecent) ; la masse maigre du bilan, estimée au
+  // ruban, s'efface alors pour que fatFreeMassKg lise la mesure.
+  let bf=null;
+  try{ bf=bodyFatPctRecent(user,Date.now()); }catch(e){ bf=null; }
+  if(bf!=null) mm=null;
   const s=(user&&user.sodium)||{};
   return {weightKg:poids,
+    bodyFatPct:bf,
     // Elle vient du dernier bilan et repose sur ses mensurations ; le poids,
     // lui, vient de la dernière pesée. Les deux peuvent donc dater de jours
     // différents, et c'est voulu : chacun est la donnée la plus fraîche de son

@@ -47681,7 +47681,8 @@ async function testExercices(){
       const h=_htmlCcdCourbes(u,1200);
       if(!/Poids et masse grasse/.test(h)) return _echec('la carte du poids n’existe pas');
       if(!/Masse maigre et masse grasse/.test(h)) return _echec('la carte des masses n’existe pas');
-      if(!/Masse maigre \(kg\)/.test(h)) return _echec('la masse maigre n’est pas en légende');
+      // 05/10/2026 : la légende nomme la méthode (« estimée » au ruban, « mesurée » à l'appareil).
+      if(!/Masse maigre estimée \(kg\)/.test(h)) return _echec('la masse maigre n’est pas en légende');
       // LA MARGE DE MESURE EST ANNONCÉE, ET LES DEUX SONT LES CONSTANTES MESURÉES.
       if(h.indexOf('marge de la balance : ± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg')<0)
         return _echec('la marge de la balance n’est pas dite');
@@ -53226,6 +53227,90 @@ async function testExercices(){
         if(h.indexOf('sanSyncDeconnecter()')>=0) return _echec('« Déconnecter » Health Connect sans jeton');
         return true;
       } finally { _sanSyncMeta=sv; _garminEtat=svG; }});
+    // ══ 05/10/2026 — LA MASSE GRASSE MESURÉE ═══════════════════════════════
+    ok('Masse grasse synchronisée : fusionnée dans masseGrasseLog (bornes 3-60, arrondi, 730 jours), une seule fois',()=>{
+      const sv=currentUser, T=Date.now(), d=localISODate(new Date(T-864e5)), d2=localISODate(new Date(T-2*864e5));
+      const meta={empreinte:'e',derniereReception:T-3600e3,plateforme:'android'};
+      const jours={[d]:{masseGrasse:18.24,recu:T-3600e3},[d2]:{masseGrasse:72,recu:T-3600e3}};
+      const plan=sanFusionSync({masseGrasseLog:[]},{meta,jours},T);
+      if(JSON.stringify(plan.masseGrasse)!==JSON.stringify([{date:d,pct:18.2}])) return _echec('plan : '+JSON.stringify(plan.masseGrasse));
+      try{
+        currentUser={email:'mg@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},masseGrasseLog:[
+          {date:localISODate(new Date(T-700*864e5)),pct:20,methode:'dexa',dataStatus:'manual',updatedAt:1}]};
+        if(!(sanAppliquerSync(plan)>=1)) return _echec('rien appliqué');
+        const l=currentUser.masseGrasseLog;
+        if(l.length!==2) return _echec('730 jours : la mesure de 700 jours a été purgée ('+l.length+')');
+        const e=l.find(x=>x.date===d);
+        if(!e||e.pct!==18.2||e.dataStatus!=='sync'||e.methode!=='impedance'||!(e.updatedAt>0)) return _echec(JSON.stringify(e));
+        // La même valeur reçue à nouveau : rien à écrire.
+        if(sanFusionSync(currentUser,{meta,jours},T).masseGrasse.length) return _echec('valeur identique réécrite');
+        return CHAMPS_SANTE.indexOf('masseGrasseLog')>=0?true:_echec('masseGrasseLog non classé santé');
+      } finally { currentUser=sv; }});
+    ok('Masse grasse : une saisie manuelle plus récente que la réception l’emporte ; une plus ancienne cède',()=>{
+      const T=Date.now(), d=localISODate(new Date(T-864e5));
+      const meta={empreinte:'e',derniereReception:T-3600e3};
+      const jours={[d]:{masseGrasse:22,recu:T-3600e3}};
+      const recente={masseGrasseLog:[{date:d,pct:15,methode:'dexa',dataStatus:'manual',updatedAt:T-60e3}]};
+      const p=sanFusionSync(recente,{meta,jours},T);
+      if(p.masseGrasse.length||p.gardes!==1) return _echec('la saisie récente est écrasée : '+JSON.stringify(p));
+      const ancienne={masseGrasseLog:[{date:d,pct:15,methode:'dexa',dataStatus:'manual',updatedAt:T-5*3600e3}]};
+      const q=sanFusionSync(ancienne,{meta,jours},T);
+      return q.masseGrasse.length===1&&q.masseGrasse[0].pct===22?true:_echec('la réception plus récente ne passe pas : '+JSON.stringify(q));});
+    ok('pctMasseGrasseDu / ccdCompositionSerie : la mesure à ±3 j passe devant la Navy, DEXA > plis > impédance, la méthode est marquée',()=>{
+      const jr=(n)=>new Date(2026,8,1+n,10).getTime(), iso=n=>localISODate(new Date(jr(n)));
+      const bil=(n,o)=>Object.assign({type:n?'coaching':'depart',date:jr(n),'bil-weight':'80','bil-waist':'90','bil-neck':'38'},o||{});
+      const u={gender:'H',height:180,bilans:[bil(0),bil(10),bil(30)],
+        masseGrasseLog:[{date:iso(12),pct:17.5,methode:'impedance',dataStatus:'sync'},{date:iso(9),pct:16,methode:'plis',dataStatus:'manual'},
+          {date:iso(20),pct:19,methode:'impedance',dataStatus:'sync'},{date:iso(60),pct:99,methode:'dexa'}]};
+      u.weightLog=[{date:iso(20),kg:79}];
+      const n0=pctMasseGrasseDu(u,iso(0)), n10=pctMasseGrasseDu(u,iso(10));
+      if(!n0||n0.methode!=='navy') return _echec('bilan 1 : '+JSON.stringify(n0));
+      if(!n10||n10.methode!=='mesure'||n10.type!=='plis'||n10.pct!==16) return _echec('bilan 2 (plis > impédance) : '+JSON.stringify(n10));
+      if(pctMasseGrasseDu(u,iso(60))!==null) return _echec('hors bornes acceptée');
+      const c=ccdCompositionSerie(u);
+      const m=c.map(x=>x.methode+(x.type?':'+x.type:'')).join(',');
+      if(m!=='navy,mesure:plis,mesure:impedance,navy') return _echec('méthodes : '+m);
+      const p20=c[2];
+      if(p20.poids!==79||p20.pct!==19||p20.gras!==15) return _echec('point mesuré hors bilan : '+JSON.stringify(p20));
+      if(libMethodeMG(c[1])!=='mesurée (pince à plis)'||libMethodeMG(c[0])!=='estimée (US Navy)') return _echec('libellés');
+      return true;});
+    ok('Masse grasse : les séries ne se mélangent pas — deux courbes, des écarts dans une même méthode',()=>{
+      const jr=(n)=>new Date(2026,8,1+n,10).getTime(), iso=n=>localISODate(new Date(jr(n)));
+      const bil=(n)=>({type:n?'coaching':'depart',date:jr(n),'bil-weight':'80','bil-waist':'90','bil-neck':'38'});
+      const u={gender:'H',height:180,bilans:[bil(0),bil(10),bil(40)],weightLog:[{date:iso(20),kg:79},{date:iso(30),kg:78}],
+        masseGrasseLog:[{date:iso(20),pct:19,methode:'impedance',dataStatus:'sync'},{date:iso(30),pct:18,methode:'impedance',dataStatus:'sync'}]};
+      const s=dbSeriesPoidsGras(u);
+      if(s.pctN.length!==3||s.pctM.length!==2) return _echec('séries : '+s.pctN.length+' estimées, '+s.pctM.length+' mesurées');
+      if(s.pctM.some(p=>s.pctN.some(q=>q.x===p.x))) return _echec('un point dans les deux séries');
+      const svP=_ccdPeriode; _ccdPeriode=0;
+      const d=document.createElement('div');
+      try{ d.innerHTML=_dbCartePoids(u,320,false); } finally { _ccdPeriode=svP; }
+      const leg=d.textContent;
+      if(!/estimée, US Navy/.test(leg)||!/mesurée/.test(leg)) return _echec('légende : '+leg.slice(0,160));
+      // Le dernier point est estimé : son écart se lit sur l'estimation précédente, pas sur la mesure du jour 30.
+      const v=ccdVerdict(u,false);
+      if(v.gras.methode!=='navy') return _echec('dernier point : '+v.gras.methode);
+      const c=ccdCompositionSerie(u);
+      if(v.gras.depuis!==c.filter(x=>x.methode==='navy').slice(-2)[0].date) return _echec('écart calculé contre une autre méthode');
+      const sr=_ccdSeries(u);
+      return sr.gras.length===3?true:_echec('petite courbe : '+sr.gras.length+' points (méthodes mêlées ?)');});
+    ok('Masse grasse : saisie au bilan (bil-bf-mesure), bodyFatPct récent, masquage comme le poids',()=>{
+      const T=Date.now();
+      const u={masseGrasseLog:[]};
+      if(bilanMasseGrasseNoter(u,{date:T,'bil-bf-mesure':'2'},T)) return _echec('hors bornes acceptée');
+      if(!bilanMasseGrasseNoter(u,{date:T,'bil-bf-mesure':'21,4','bil-bf-methode':'DEXA'},T)) return _echec('saisie refusée');
+      const e=u.masseGrasseLog[0];
+      if(e.pct!==21.4||e.methode!=='dexa'||e.dataStatus!=='manual') return _echec(JSON.stringify(e));
+      if(bodyFatPctRecent(u,T)!==21.4) return _echec('bodyFatPct');
+      if(bodyFatPctRecent({masseGrasseLog:[{date:localISODate(new Date(T-40*864e5)),pct:20}]},T)!==null) return _echec('une mesure de 40 jours compte');
+      const a=_sodiumAthleteDe(Object.assign({gender:'H',weightLog:[{date:localISODate(new Date(T)),kg:80}]},u));
+      if(a.bodyFatPct!==21.4) return _echec('_sodiumAthleteDe : '+a.bodyFatPct);
+      const f=fatFreeMassKg({weightKg:80,bodyFatPct:21.4});
+      if(!(Math.abs(f.kg-62.88)<0.01)||f.estimee) return _echec('fatFreeMassKg : '+JSON.stringify(f));
+      const h=BIL_STEPS[0]();
+      if(h.indexOf('bil-bf-mesure')<0||!/Balance à impédance/.test(h)||!/Pince à plis/.test(h)||!/DEXA/.test(h)) return _echec('champ du bilan');
+      if(!mgMasquee({masquerPoids:true})||mgMasquee({})) return _echec('masquage');
+      return true;});
     ok('Garmin : un compte relié à Garmin seul est « synchronisé », et ses jours portent la source Garmin',()=>{
       const T=Date.now(), d=localISODate(new Date(T-864e5));
       const meta={derniereReception:T-3600e3,garmin:{lieLe:T-864e5}};

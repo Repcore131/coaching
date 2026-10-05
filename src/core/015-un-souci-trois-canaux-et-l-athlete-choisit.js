@@ -2200,12 +2200,16 @@ function renderBilanEvolution(c){
 
   // ── % Masse grasse + masse maigre ──────────────────────────────────
   const buildFatSection=()=>{
+    // 05/10/2026 : une masse grasse MESURÉE à ±3 jours du bilan passe devant
+    // l'estimation US Navy, et le tableau dit laquelle (mgMasquee : comme le poids).
+    const _mgU=_dossier(c)||c||null;
     const bfVals=bilans.map(b=>{
       const w=getBW(b),waist=getBM(b,'waist'),neck=getBM(b,'neck'),hips=getBM(b,'hips');
-      const bf=calcBF(waist,neck,hips,height,gender);
+      let mes=null; try{ if(_mgU&&!mgMasquee(_mgU)) mes=_mgMesureAutour(_mgU,localISODate(new Date(b.date))); }catch(e){ mes=null; }
+      const bf=mes?mes.pct:calcBF(waist,neck,hips,height,gender);
       const mg=bf!==null&&w?Math.round(w*bf/10)/10:null;
       const mm=mg!==null&&w?Math.round((w-mg)*10)/10:null;
-      return{bf,mg,mm,w};
+      return{bf,mg,mm,w,mes};
     });
     // Formula note
     const formulaNote=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
@@ -2237,7 +2241,7 @@ function renderBilanEvolution(c){
         ['Bilan',...bHeaders],
         [
           {label:'% graisse corporelle',labelBg:'var(--surface-2)',labelColor:'var(--red)',
-            values:bfVals.map(b=>{const v=b.bf;return v!==null&&!isNaN(v)?v+'%':null;})},
+            values:bfVals.map(b=>{const v=b.bf;return v!==null&&!isNaN(v)?v+'%'+(b.mes?' · '+libMethodeMG({methode:'mesure',type:b.mes.type}):''):null;})},
           {label:'Masse grasse en Kg',labelBg:'var(--surface-2)',labelColor:'var(--red)',
             values:bfVals.map(b=>{const v=b.mg;return v!==null&&!isNaN(v)?String(v):null;})},
           {label:'Masse maigre en Kg',labelBg:'var(--surface-2)',labelColor:'var(--red)',
@@ -2383,11 +2387,18 @@ function renderBilanEvolution(c){
     // Fat chart
     const fcv=document.getElementById('evo-fat-chart');
     if(fcv){
-      const bfData=bilans.map(b=>{
+      // DEUX JEUX DE DONNÉES (05/10/2026) : l'estimation US Navy et la mesure,
+      // chacun son trait — drawLineChart ne relie que les points d'un même jeu.
+      const _u=_dossier(c)||c||null;
+      const mes=bilans.map(b=>{ try{ return (_u&&!mgMasquee(_u))?_mgMesureAutour(_u,localISODate(new Date(b.date))):null; }catch(e){ return null; } });
+      const bfData=bilans.map((b,i)=>{
+        if(mes[i]) return 0;
         const w=getBW(b),waist=getBM(b,'waist'),neck=getBM(b,'neck'),hips=getBM(b,'hips');
         return calcBF(waist,neck,hips,height,gender)||0;
       });
-      drawLineChart(fcv,[{data:bfData,color:'var(--red)'}],labels);
+      const ds=[{data:bfData,color:'var(--red)'}];
+      if(mes.some(Boolean)) ds.push({data:mes.map(m=>m?m.pct:0),color:'#3b82f6'});
+      drawLineChart(fcv,ds,labels);
     }
     // Pie charts
     bilans.forEach((_,i)=>{

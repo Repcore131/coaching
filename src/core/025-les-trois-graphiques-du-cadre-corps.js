@@ -880,13 +880,16 @@ function ccdVerdict(u,depuisLePremier){
   const calc=ccdCompositionSerie(u);
   if(calc.length){
     const f=calc[calc.length-1];
-    const d=(calc.length>1)?calc[_dp?0:(calc.length-2)]:null;
-    out.gras={kg:f.gras,pct:f.pct,date:f.date,marge:CCD_BF_MARGE,
+    // L'ÉCART SE LIT DANS UNE MÊME MÉTHODE (05/10/2026) : une mesure comparée à
+    // une estimation au ruban dirait un changement du corps qui n'en est pas un.
+    const memes=calc.filter(x=>x.methode===f.methode);
+    const d=(memes.length>1)?memes[_dp?0:(memes.length-2)]:null;
+    out.gras={kg:f.gras,pct:f.pct,date:f.date,marge:CCD_BF_MARGE,methode:f.methode,type:f.type||null,
       delta:d?Math.round((f.gras-d.gras)*10)/10:null,depuis:d?d.date:0,
-      premier:calc[0].gras};
+      premier:memes[0].gras};
     const dm=d?Math.round((f.maigre-d.maigre)*10)/10:null;
     out.maigre={kg:f.maigre,date:f.date,delta:dm,depuis:d?d.date:0,
-      premier:calc[0].maigre,
+      premier:memes[0].maigre,
       sens:(dm==null)?null:(Math.abs(dm)<CCD_MAIGRE_BRUIT?'preservee':(dm>0?'hausse':'baisse'))};
   } else {
     // RIEN A CALCULER : on dit CE QUI MANQUE, et rien d'autre. Une carte qui
@@ -962,6 +965,8 @@ function _htmlCcdVerdict(u,depuisLePremier){
   if(!v.poids&&(!v.gras||v.gras.manque)&&!v.dort.n) return '';
   const sr=_ccdSeries(u);
   const dep=t=>t?('par rapport au bilan du '+_ccdJour(t)):'';
+  // Une masse grasse mesurée se compare à la mesure précédente, pas à un bilan.
+  const depMG=t=>t?((v.gras&&v.gras.methode==='mesure')?('par rapport à la mesure du '+_ccdJour(t)):dep(t)):'';
   const cartes=[];
   // 1. LE POIDS.
   if(v.poids){
@@ -985,15 +990,17 @@ function _htmlCcdVerdict(u,depuisLePremier){
     const dit={preservee:'préservée',baisse:'en baisse',hausse:'en hausse'}[m&&m.sens]||'';
     const lm=_ccdLu(m.kg,'kg',m.delta,m.premier);
     cartes.push(_ccdCarte('Masse maigre',lm.grand,lm.petit,dit,
-      'le poids moins la masse grasse, au bilan du '+_ccdJour(m.date)+' · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près',
+      'le poids moins la masse grasse '+libMethodeMG(v.gras)+', le '+_ccdJour(m.date)+' · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près',
       {k:'maigre',ico:CCD_ICO.maigre,spark:_ccdSpark(sr.maigre),d:_ccdLecture==='absolu'?m.delta:null,
-       ton:m.sens==='baisse'?'mal':'bien',dep:_ccdLecture==='absolu'?dep(m.depuis):''}));
+       ton:m.sens==='baisse'?'mal':'bien',dep:_ccdLecture==='absolu'?depMG(m.depuis):''}));
     const lg=_ccdLu(v.gras.kg,'kg',v.gras.delta,v.gras.premier);
     cartes.push(_ccdCarte('Masse grasse',lg.grand,lg.petit,
       _synNombre(v.gras.pct)+' % de son poids',
-      'estimée au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près',
+      v.gras.methode==='mesure'
+        ?(libMethodeMG(v.gras)+' le '+_ccdJour(v.gras.date))
+        :('estimée (US Navy) au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près'),
       {k:'gras',ico:CCD_ICO.gras,spark:_ccdSpark(sr.gras),d:_ccdLecture==='absolu'?v.gras.delta:null,
-       ton:(v.gras.delta!=null&&v.gras.delta>0)?'attention':'bien',dep:_ccdLecture==='absolu'?dep(v.gras.depuis):''}));
+       ton:(v.gras.delta!=null&&v.gras.delta>0)?'attention':'bien',dep:_ccdLecture==='absolu'?depMG(v.gras.depuis):''}));
   }
   // 4. CE QUI DORT.
   const d=v.dort;
@@ -1008,8 +1015,11 @@ function _htmlCcdVerdict(u,depuisLePremier){
     // dans une infobulle : ce qu'elle dit change la façon de lire les deux
     // chiffres du milieu, et personne n'ouvre une infobulle avant de lire.
     +((v.gras&&!v.gras.manque)
-      ?'<p class="ccd-v-note">Masse grasse estimée au ruban : c\'est son écart d\'un '
-        +'bilan à l\'autre qui se lit, pas le chiffre du jour.</p>':'');
+      ?(v.gras.methode==='mesure'
+        ?'<p class="ccd-v-note">Masse grasse '+escapeHtml(libMethodeMG(v.gras))+' : comparée aux seules mesures, '
+          +'jamais à l\'estimation au ruban.</p>'
+        :'<p class="ccd-v-note">Masse grasse estimée au ruban (US Navy) : c\'est son écart d\'un '
+        +'bilan à l\'autre qui se lit, pas le chiffre du jour.</p>'):'');
 }
 /**
  * UNE SEULE LIGNE D'ALERTE, LA PLUS SAILLANTE, ou rien. expliquerUrgence rend
@@ -1827,8 +1837,12 @@ function _ccdSpark(vals){
 function _ccdSeries(u){
   let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
   let comp=[]; try{ comp=ccdCompositionSerie(u)||[]; }catch(e){ comp=[]; }
+  // La petite courbe d'une carte suit la méthode de son dernier point, et elle
+  // seule : mêler mesures et estimations y dessinerait un faux saut.
+  const m=comp.length?comp[comp.length-1].methode:null;
+  const meme=comp.filter(x=>x.methode===m);
   return {poids:bl.map(b=>getBW(b)).filter(x=>x>0),
-    gras:comp.map(x=>x.gras),maigre:comp.map(x=>x.maigre)};
+    gras:meme.map(x=>x.gras),maigre:meme.map(x=>x.maigre)};
 }
 // L'en-tete de l'etage : lecture, periodes, et les deux bilans compares.
 function _htmlCcdTete(u){
@@ -1999,6 +2013,96 @@ function ccdPeriodeLib(){
   const p=CCD_PERIODES.find(x=>x.j===_ccdPeriode);
   return p?p.lib.toLowerCase():'tout';
 }
+// ══ LA MASSE GRASSE MESURÉE (05/10/2026) ══════════════════════════════════
+// Deux origines, qui ne se mélangent jamais :
+//   · MESURÉE — u.masseGrasseLog [{date:'AAAA-MM-JJ', pct, methode, dataStatus,
+//     source?, updatedAt}] : une balance à impédance synchronisée (Health
+//     Connect, Apple Santé) ou une saisie au bilan (impédance, pince à plis,
+//     DEXA) ;
+//   · ESTIMÉE — la formule US Navy (calcBF) sur les tours d'un bilan.
+// Une mesure à ±3 jours passe devant l'estimation, et entre deux mesures, la
+// méthode la plus exacte : DEXA > plis > impédance. Les courbes tracent les
+// deux origines en DEUX séries : passer de l'une à l'autre n'est pas une
+// variation du corps, et un trait qui les relierait dessinerait un faux saut.
+const MG_PCT_MIN=3, MG_PCT_MAX=60;
+const MG_RETENTION_JOURS=730;      // une donnée de composition se lit sur des mois
+const MG_FENETRE_JOURS=3;          // une mesure « du jour » d'un bilan : à ±3 jours
+const MG_RECENTE_JOURS=30;         // bodyFatPct : la dernière mesure de moins de 30 jours
+const MG_METHODES=Object.freeze({
+  dexa:Object.freeze({lib:'DEXA',rang:3}),
+  plis:Object.freeze({lib:'pince à plis',rang:2}),
+  impedance:Object.freeze({lib:'impédance',rang:1})});
+// PURE. Une mesure lisible, ou null : date, pourcentage dans les bornes.
+function _mgMesure(e){
+  if(!e||!/^\d{4}-\d{2}-\d{2}$/.test(String(e.date||''))) return null;
+  const p=Number(e.pct);
+  if(!isFinite(p)||p<MG_PCT_MIN||p>MG_PCT_MAX) return null;
+  return {date:e.date,pct:Math.round(p*10)/10,type:MG_METHODES[e.methode]?e.methode:'impedance',dataStatus:e.dataStatus||'manual'};
+}
+// PURE. Le libellé d'un point : « mesurée (impédance) » ou « estimée (US Navy) ».
+function libMethodeMG(p){
+  if(!p) return '';
+  return p.methode==='mesure'?('mesurée ('+((MG_METHODES[p.type]||MG_METHODES.impedance).lib)+')'):'estimée (US Navy)';
+}
+// PURE. La meilleure mesure à ±MG_FENETRE_JOURS de `dateISO` : la méthode la
+// plus exacte, puis la plus proche, puis la plus récente.
+function _mgMesureAutour(u,dateISO){
+  const l=((u&&u.masseGrasseLog)||[]).map(_mgMesure).filter(Boolean)
+    .map(m=>Object.assign(m,{ecart:Math.abs(_joursEntre(dateISO,m.date))}))
+    .filter(m=>m.ecart<=MG_FENETRE_JOURS);
+  if(!l.length) return null;
+  l.sort((a,b)=>(MG_METHODES[b.type].rang-MG_METHODES[a.type].rang)||(a.ecart-b.ecart)||(a.date<b.date?1:-1));
+  return l[0];
+}
+// PURE. L'estimation US Navy d'un bilan, ou null.
+function _mgNavyBilan(u,b){
+  const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
+  if(!taille||!b) return null;
+  let v=null;
+  try{ v=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,(u&&(u._evol_gender||u.gender))||''); }catch(e){ v=null; }
+  return (v==null||!isFinite(v))?null:v;
+}
+/**
+ * PURE. Le pourcentage de masse grasse d'un jour, et sa méthode :
+ * {pct, methode:'mesure', type, date} (une mesure à ±3 j) ou
+ * {pct, methode:'navy'} (un bilan de ce jour qui a ses tours), sinon null.
+ */
+function pctMasseGrasseDu(u,dateISO){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO||''))) return null;
+  const m=_mgMesureAutour(u,dateISO);
+  if(m) return {pct:m.pct,methode:'mesure',type:m.type,date:m.date};
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  const b=bl.filter(x=>x&&localISODate(new Date(Number(x.date)))===dateISO).pop();
+  const v=_mgNavyBilan(u,b);
+  return v==null?null:{pct:v,methode:'navy'};
+}
+// PURE. Le poids d'un jour : la pesée du jour, sinon la plus proche à ±3 jours
+// (journal des pesées, puis bilans). null si aucune.
+function _mgPoidsAutour(u,dateISO){
+  const cands=[];
+  for(const e of ((u&&u.weightLog)||[])) if(e&&e.date&&Number(e.kg)>0) cands.push({d:e.date,kg:Number(e.kg)});
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  for(const b of bl){ const p=getBW(b); if(p>0) cands.push({d:localISODate(new Date(Number(b.date))),kg:p}); }
+  let best=null;
+  for(const c of cands){
+    const ec=Math.abs(_joursEntre(dateISO,c.d));
+    if(ec<=MG_FENETRE_JOURS&&(!best||ec<best.ec)) best={ec,kg:c.kg};
+  }
+  return best?best.kg:null;
+}
+// PURE. La dernière mesure de moins de MG_RECENTE_JOURS, en %, ou null :
+// c'est elle que fatFreeMassKg lit sous le nom bodyFatPct.
+function bodyFatPctRecent(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const min=localISODate(new Date(t-MG_RECENTE_JOURS*864e5));
+  const l=((u&&u.masseGrasseLog)||[]).map(_mgMesure).filter(m=>m&&m.date>=min).sort((a,b)=>a.date<b.date?-1:1);
+  return l.length?l[l.length-1].pct:null;
+}
+// La masse grasse se masque comme le poids : antécédent alimentaire ou poids masqué.
+function mgMasquee(u){
+  try{ return !!(u&&(u.masquerPoids||aTCA(u))); }catch(e){ return !!(u&&u.masquerPoids); }
+}
+
 /**
  * PURE. La composition du corps, bilan par bilan : le poids releve, le
  * pourcentage de masse grasse estime, les kilos de gras et ceux de maigre.
@@ -2009,23 +2113,52 @@ function ccdPeriodeLib(){
  *   lequel croire.
  * @returns {Array<{date:number,pct:number,poids:number,gras:number,maigre:number}>}
  */
+//
+// 05/10/2026 : chaque point porte `methode` ('mesure' | 'navy') et, mesuré,
+// `type` (dexa, plis, impedance). Un bilan prend la mesure à ±3 jours s'il y en
+// a une (pctMasseGrasseDu) ; une mesure loin de tout bilan devient un point à
+// elle, avec la pesée la plus proche (±3 jours) — sans pesée, pas de kilos,
+// donc pas de point de composition.
 function ccdCompositionSerie(u){
   let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
-  const taille=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)||null;
-  const genre=(u&&(u._evol_gender||u.gender))||'';
   const out=[];
-  if(!taille) return out;
+  const point=(date,p,r)=>{
+    const gras=Math.round(p*r.pct/100*10)/10;
+    const o={date:Number(date)||0,pct:r.pct,poids:p,gras:gras,maigre:Math.round((p-gras)*10)/10,methode:r.methode};
+    if(r.type) o.type=r.type;
+    out.push(o);
+  };
+  const joursBilans=[];
   for(const b of bl){
     const p=getBW(b);
     if(!(p>0)) continue;
-    let v=null;
-    try{ v=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,genre); }catch(e){ v=null; }
-    if(v==null) continue;
-    const gras=Math.round(p*v/100*10)/10;
-    out.push({date:Number(b.date)||0,pct:v,poids:p,gras:gras,
-      maigre:Math.round((p-gras)*10)/10});
+    const d=localISODate(new Date(Number(b.date)||0));
+    joursBilans.push(d);
+    const m=_mgMesureAutour(u,d);
+    const r=m?{pct:m.pct,methode:'mesure',type:m.type}:(()=>{ const v=_mgNavyBilan(u,b); return v==null?null:{pct:v,methode:'navy'}; })();
+    if(r) point(b.date,p,r);
   }
-  return out;
+  // Les mesures hors de la fenêtre d'un bilan : une par jour, la plus exacte.
+  const parJour={};
+  for(const m of ((u&&u.masseGrasseLog)||[]).map(_mgMesure).filter(Boolean)){
+    if(joursBilans.some(d=>Math.abs(_joursEntre(d,m.date))<=MG_FENETRE_JOURS)) continue;
+    const x=parJour[m.date];
+    if(!x||MG_METHODES[m.type].rang>MG_METHODES[x.type].rang) parJour[m.date]=m;
+  }
+  for(const d of Object.keys(parJour)){
+    const p=_mgPoidsAutour(u,d);
+    if(!(p>0)) continue;
+    const m=parJour[d];
+    point(dateLocaleDeCle(d).getTime(),p,{pct:m.pct,methode:'mesure',type:m.type});
+  }
+  return out.sort((a,b)=>a.date-b.date);
+}
+// PURE. Une série de points {x,v} coupée par méthode : deux séries, jamais un
+// trait entre une mesure et une estimation.
+function ccdParMethode(comp,cle){
+  const l=comp||[];
+  return {mesure:l.filter(c=>c.methode==='mesure').map(c=>({x:c.date,v:c[cle]})),
+    navy:l.filter(c=>c.methode!=='mesure').map(c=>({x:c.date,v:c[cle]}))};
 }
 // PURE. La masse maigre en points de courbe.
 function ccdPointsMaigre(u){
@@ -2228,8 +2361,12 @@ function dbTaille(u){
 // Le poids et le pourcentage de gras, bilan par bilan.
 function dbSeriesPoidsGras(u){
   const comp=ccdCompositionSerie(u);
+  // 05/10/2026 : chaque grandeur coupée par méthode (pctM/pctN, grasM/grasN,
+  // maigreM/maigreN) : les courbes en font deux séries, jamais une.
+  const p=ccdParMethode(comp,'pct'), g=ccdParMethode(comp,'gras'), m=ccdParMethode(comp,'maigre');
   return {poids:corpsPointsPoids(u), pct:comp.map(c=>({x:c.date,v:c.pct})),
-    maigre:comp.map(c=>({x:c.date,v:c.maigre})), gras:comp.map(c=>({x:c.date,v:c.gras}))};
+    maigre:comp.map(c=>({x:c.date,v:c.maigre})), gras:comp.map(c=>({x:c.date,v:c.gras})),
+    pctM:p.mesure,pctN:p.navy,grasM:g.mesure,grasN:g.navy,maigreM:m.mesure,maigreN:m.navy};
 }
 // Les séries dures d'un groupe dans une semaine (muscles additionnés).
 function _dbSomme(vol,g){ return Math.round(g.m.reduce((a,m)=>a+(Number((vol||{})[m])||0),0)*10)/10; }
@@ -2495,13 +2632,15 @@ function _dbLegende(series){
 function _dbVide(t){ return '<p class="graphe-vide">'+escapeHtml(t)+'</p>'; }
 
 function _dbCartePoids(u,W,neutre){
-  const info=_dbInfo('pg','Poids relevé au bilan (axe de gauche) et masse grasse estimée par la formule de la Navy à partir des tours de taille, de cou'
-    +' et de hanches (axe de droite). La bande grise autour du poids est la marge de la balance : ± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg.');
+  const info=_dbInfo('pg','Poids relevé au bilan (axe de gauche) et masse grasse (axe de droite) : mesurée (balance à impédance, pince à plis, DEXA) '
+    +'ou estimée par la formule de la Navy à partir des tours de taille, de cou et de hanches. Les deux sont deux courbes : elles ne se relient jamais.'
+    +' La bande grise autour du poids est la marge de la balance : ± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg.');
   if(neutre) return _dbCarte('db-c-pg','Poids et masse grasse',info,'',_dbVide('Courbe de poids masquée : un antécédent est déclaré au questionnaire de départ.'));
   const s=dbSeriesPoidsGras(u);
   const series=[{lib:'Poids (kg)',couleur:'#ef4444',points:ccdFenetre(s.poids),bande:SYN_BRUIT_POIDS,fmt:v=>_dbNb(v,1)+' kg'}];
-  const pct=ccdFenetre(s.pct);
-  if(pct.length) series.push({lib:'Masse grasse (%)',couleur:'#3b82f6',points:pct,axe:'d',fmt:v=>_dbNb(v,1)+' %'});
+  const pct=ccdFenetre(s.pct), pctN=ccdFenetre(s.pctN), pctM=ccdFenetre(s.pctM);
+  if(pctN.length) series.push({lib:'Masse grasse estimée, US Navy (%)',couleur:'#3b82f6',points:pctN,axe:'d',fmt:v=>_dbNb(v,1)+' % (estimée)'});
+  if(pctM.length) series.push({lib:'Masse grasse mesurée (%)',couleur:'#06b6d4',points:pctM,axe:'d',fmt:v=>_dbNb(v,1)+' % (mesurée)'});
   const c=_dbCourbe({id:'db-pg',titre:'Poids et masse grasse',W,H:180,series,repere:true,fmtD:v=>_dbNb(v,0)+'%'});
   let proj=''; try{ proj=_htmlCcdProjection(u)||''; }catch(e){ proj=''; }
   return _dbCarte('db-c-pg','Poids et masse grasse',info,_dbPeriodes(),
@@ -2512,10 +2651,15 @@ function _dbCarteMasses(u,W,neutre){
     +' La masse musculaire seule ne se mesure qu’avec une balance à impédance : on ne l’invente pas. Marge de la masse maigre : ± '+String(CCD_MAIGRE_BRUIT).replace('.',',')+' kg.');
   if(neutre) return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,'',_dbVide('Masquée pour la même raison que le poids.'));
   const s=dbSeriesPoidsGras(u);
-  const maigre=ccdFenetre(s.maigre), gras=ccdFenetre(s.gras);
+  const maigre=ccdFenetre(s.maigre);
   if(maigre.length<2) return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,_dbPeriodes(),_htmlCcdManqueMaigre(u));
-  const series=[{lib:'Masse grasse (kg)',couleur:'#22c55e',points:gras,fmt:v=>_dbNb(v,1)+' kg'},
-    {lib:'Masse maigre (kg)',couleur:'#a855f7',points:maigre,bande:CCD_MAIGRE_BRUIT,fmt:v=>_dbNb(v,1)+' kg'}];
+  // Mesurée et estimée : deux courbes chacune, jamais reliées.
+  const series=[
+    {lib:'Masse grasse estimée (kg)',couleur:'#22c55e',points:ccdFenetre(s.grasN),fmt:v=>_dbNb(v,1)+' kg'},
+    {lib:'Masse maigre estimée (kg)',couleur:'#a855f7',points:ccdFenetre(s.maigreN),bande:CCD_MAIGRE_BRUIT,fmt:v=>_dbNb(v,1)+' kg'},
+    {lib:'Masse grasse mesurée (kg)',couleur:'#84cc16',points:ccdFenetre(s.grasM),fmt:v=>_dbNb(v,1)+' kg'},
+    {lib:'Masse maigre mesurée (kg)',couleur:'#d946ef',points:ccdFenetre(s.maigreM),bande:CCD_MAIGRE_BRUIT,fmt:v=>_dbNb(v,1)+' kg'}]
+    .filter(x=>x.points.length);
   return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,_dbPeriodes(),
     _dbLegende(series)+_dbCourbe({id:'db-mm',titre:'Masse maigre et masse grasse',W,H:180,series,minG:0}));
 }

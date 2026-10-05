@@ -755,13 +755,37 @@ function renderReponsesBilans(bilans,client){
     ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
     :emptyState('message-circle','Tes réponses écrites aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon bilan','openBilanChoice()');
 }
+// Les méthodes de la masse grasse mesurée, du libellé du bilan à la clé de
+// masseGrasseLog (MG_METHODES).
+const BIL_MG_METHODES=Object.freeze([
+  Object.freeze({lib:'Balance à impédance',cle:'impedance'}),
+  Object.freeze({lib:'Pince à plis',cle:'plis'}),
+  Object.freeze({lib:'DEXA',cle:'dexa'})]);
+// La mesure saisie au bilan, dans masseGrasseLog (dataStatus 'manual'). Hors
+// bornes, rien. Rend true si une entrée a été posée.
+function bilanMasseGrasseNoter(u,bi,maintenant){
+  const v=parseFloat(String((bi&&bi['bil-bf-mesure'])||'').replace(',','.'));
+  if(!u||!isFinite(v)||v<MG_PCT_MIN||v>MG_PCT_MAX) return false;
+  const t=Number(maintenant)||Date.now();
+  const m=BIL_MG_METHODES.find(x=>x.lib===bi['bil-bf-methode'])||BIL_MG_METHODES[0];
+  const d=localISODate(new Date(Number(bi.date)||t));
+  u.masseGrasseLog=_sanJournalPoser(u.masseGrasseLog,
+    {date:d,pct:Math.round(v*10)/10,methode:m.cle,dataStatus:'manual',updatedAt:t},t,MG_RETENTION_JOURS);
+  return true;
+}
 const BIL_STEPS=[
   // Step 1 : Mensurations — schéma corporel interactif
   ()=>bSec('Mensurations ',
     `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
     _htmlNoteReprises()+
     `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}</div>`+
-    bBodySchema('bil')
+    bBodySchema('bil')+
+    // LA MASSE GRASSE MESURÉE, FACULTATIVE (05/10/2026) : un chiffre d'appareil,
+    // jamais calculé ici. Elle passe devant l'estimation au ruban à ±3 jours
+    // (pctMasseGrasseDu) et entre dans masseGrasseLog avec sa méthode.
+    `<div style="display:flex;flex-direction:column;margin-top:12px">${bMeas('bil-bf-mesure','Masse grasse mesurée (facultatif)','%')}</div>`+
+    bLbl('Mesurée avec\u00a0:')+
+    `<div>${bC('bil-bf-methode',BIL_MG_METHODES.map(m=>m.lib))}</div>`
   ),
   // Step 2 : Difficultés & Alimentation
   ()=>bSec('Difficultés & Alimentation',
@@ -1122,6 +1146,7 @@ function saveBilanFinal(){
   //  ne s'ecrit sans l'accord.)
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
+  try{ bilanMasseGrasseNoter(currentUser,bi,Date.now()); }catch(e){ rcErreurMuette('bilan · masse grasse',e); }
   // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
   // enregistre juste apres, par le meme chemin : rien a pousser de plus.
   try{ consommerDemandesMesure(bi,currentUser); }catch(e){}

@@ -1606,7 +1606,9 @@ function _progOngletVide(tab,u){
   try{ if(rcVerrou(tab==='volume'?'volume':(tab==='perf'?'perfs1rm':''),u)) return false; }catch(e){}
   const bl=bilansOrdonnes(u);
   if(tab==='poids') return !bl.length&&!(u.weightLog||[]).length;
-  if(tab==='mensus'||tab==='masseGrasse') return !bl.length;
+  if(tab==='mensus') return !bl.length;
+  // Une masse grasse MESURÉE (synchronisée ou saisie) suffit à remplir l'onglet.
+  if(tab==='masseGrasse') return !bl.length&&!(((currentUser||{}).masseGrasseLog)||[]).length;
   // « Notes » a DEUX etats vides : aucun bilan, ou des bilans sans aucune
   // reponse ecrite — renderReponsesBilans rend alors son propre etat vide.
   // Memes filtres, memes questions, meme lecture de la reponse.
@@ -1758,7 +1760,11 @@ function showProgressTab(tab,btn,sansMemo){
     try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
 
   } else if(tab==='masseGrasse'){
-    if(!bl.length){c.innerHTML=emptyState('clipboard','Ta masse grasse se calcule sur les mesures d\'un bilan. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
+    // LES MESURES (05/10/2026) : masse grasse synchronisée (balance à impédance)
+    // ou saisie au bilan. Masquées comme le poids (antécédent, poids masqué).
+    const _mgCache=mgMasquee(currentUser);
+    const _mesMG=_mgCache?[]:((currentUser.masseGrasseLog)||[]).map(_mgMesure).filter(Boolean).sort((a,b)=>a.date<b.date?-1:1);
+    if(!bl.length&&!_mesMG.length){c.innerHTML=emptyState('clipboard','Ta masse grasse se calcule sur les mesures d\'un bilan. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
     const deb=(currentUser.bilans||[]).find(b=>b.type==='depart');
     const storedH=parseFloat(currentUser._evol_height||deb?.['deb-height']||currentUser['init-height']||0);
     const storedG=currentUser._evol_gender||currentUser.gender||'H';
@@ -1769,9 +1775,19 @@ function showProgressTab(tab,btn,sansMemo){
     });
     const mgKgs=bl.map((b,i)=>{const w=getBW(b),p=bfPcts[i];return(p!==null&&w)?Math.round(w*(p/100)*10)/10:null;});
     const mmKgs=bl.map((b,i)=>{const w=getBW(b),mg=mgKgs[i];return(mg!==null&&w)?Math.round((w-mg)*10)/10:null;});
-    const valid=bfPcts.filter(v=>v!==null);
+    // LE DÉPART ET L'ACTUEL SE LISENT DANS UNE MÊME MÉTHODE : la dernière valeur
+    // (mesure ou estimation, la plus récente) et la première de SA méthode.
+    const _isoB=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
+    const _navyPts=bl.map((b,i)=>({d:_isoB(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d)
+      .filter(p=>!_mesMG.some(m=>Math.abs(_joursEntre(p.d,m.date))<=MG_FENETRE_JOURS));
+    const _mesPts=_mesMG.map(m=>({d:m.date,v:m.pct,type:m.type}));
+    const _derN=_navyPts[_navyPts.length-1], _derM=_mesPts[_mesPts.length-1];
+    const _methAct=(_derM&&(!_derN||_derM.d>=_derN.d))?'mesure':(_derN?'navy':null);
+    const _serieAct=_methAct==='mesure'?_mesPts:_navyPts;
+    const valid=_serieAct.map(p=>p.v);
     const fb=valid[0]??null,lb=valid[valid.length-1]??null;
     const diff=fb!==null&&lb!==null?parseFloat((lb-fb).toFixed(1)):null;
+    const _libAct=_methAct==='mesure'?libMethodeMG({methode:'mesure',type:_derM.type}):(_methAct?'estimée (US Navy)':'');
     // R33 — l'ecart sous le bruit se dit « stable », en gris : ni vert ni rouge
     // pour un mouvement que la formule ne sait pas distinguer de sa marge.
     const ecartLib=ecartMasseGrasse(diff);
@@ -1781,7 +1797,7 @@ function showProgressTab(tab,btn,sansMemo){
     // decide s'il y a un chiffre « actuel ». Les bilans plus anciens sans
     // estimation sont cites a part, en une ligne.
     const _der=bl[bl.length-1];
-    const msgMesures=(!missingHeight&&bfPcts[bl.length-1]===null)?messageMesuresMasseGrasse(_der,female):null;
+    const msgMesures=(bl.length&&!missingHeight&&bfPcts[bl.length-1]===null&&_methAct!=='mesure')?messageMesuresMasseGrasse(_der,female):null;
     const _ancSans=missingHeight?[]:bl.slice(0,-1).map((b,i)=>bfPcts[i]===null?String(i+1):null).filter(Boolean);
     const msgAnciens=_ancSans.length
       ?'Pas d’estimation '+(_ancSans.length===1?'au bilan '+_ancSans[0]
@@ -1793,11 +1809,13 @@ function showProgressTab(tab,btn,sansMemo){
     // masse grasse »). Même en-tête, même tracé SVG, points à la DATE de chaque
     // bilan — et l'ancienne couleur, gardée. L'écart suit R33 : sous la marge
     // de la formule il se dit « stable », en gris.
-    const _isoMG=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
-    const _ptsMG=bl.map((b,i)=>({d:_isoMG(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d);
+    // DEUX SÉRIES, JAMAIS RELIÉES (05/10/2026) : l'estimation US Navy aux bilans,
+    // et les mesures. Passer de l'une à l'autre n'est pas un mouvement du corps.
     const _couleurMG=e=>(ecartMasseGrasse(e)==='stable')?'var(--sub)':(e<0?'var(--green)':'var(--red)');
-    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:ROUGE_MARQUE,pts:_ptsMG}],
-      {unite:'%',couleur:_couleurMG}):'';
+    const _seriesMG=[];
+    if(_navyPts.length>1) _seriesMG.push({label:'Estimée (US Navy)',color:ROUGE_MARQUE,pts:_navyPts});
+    if(_mesPts.length>1) _seriesMG.push({label:'Mesurée ('+(MG_METHODES[_derM.type]||MG_METHODES.impedance).lib+')',color:'#3b82f6',pts:_mesPts});
+    const _traceMG=_seriesMG.length?_courbeMesures(_seriesMG,{unite:'%',couleur:_couleurMG}):'';
     const _ecartMG=ecartLib===null?''
       :`<span class="pc-ecart" style="color:${col}">${ecartLib==='stable'?'stable'
         :(diff>0?'+':'')+String(diff).replace('.',',')+' %'}</span>`;
@@ -1809,6 +1827,7 @@ function showProgressTab(tab,btn,sansMemo){
         </div>
         ${_traceMG||`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">${
           !valid.length?'La courbe apparaîtra dès qu’une première estimation sera possible.'
+          :_methAct==='mesure'?'Une seule mesure pour l’instant : la courbe en demande deux.'
           :bl.length<2?'Une courbe demande deux bilans. Il en manque encore un.'
           :'Une seule estimation pour l’instant. Reprends tes mesures au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
       </div>`;
@@ -1857,7 +1876,7 @@ function showProgressTab(tab,btn,sansMemo){
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div class="metric-box"><div class="metric-val">${fb!==null?fb+'%':'-'}</div><div class="metric-label">MG départ</div></div>
-        <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'-'}</div><div class="metric-label">MG actuel</div><span class="metric-i">${rcInfo('masse_grasse')}</span></div>
+        <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'-'}</div><div class="metric-label">MG actuel</div><span class="metric-i">${rcInfo('masse_grasse')}</span>${_libAct?`<div class="mg-methode" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:2px">${escapeHtml(_libAct)}</div>`:''}</div>
         <div class="metric-box"><div class="metric-val" style="color:${col}">${ecartLib!==null?ecartLib:'-'}</div><div class="metric-label">Évolution</div></div>
       </div>
       <!-- R11 : LA NOTE DE METHODE PERMANENTE A ETE RETIREE (Kevin,

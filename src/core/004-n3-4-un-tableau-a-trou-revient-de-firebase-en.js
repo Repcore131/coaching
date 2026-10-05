@@ -746,6 +746,8 @@ const CHAMPS_SANTE=Object.freeze([
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
   'sleepLog','stepsLog','fcReposLog','vfcLog',
+  // La masse grasse MESURÉE (05/10/2026) : synchronisée ou saisie au bilan.
+  'masseGrasseLog',
   // Le point de la semaine (lot N1) : la vitesse du poids, semaine par semaine.
   'pointsSemaine','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
