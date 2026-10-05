@@ -21,7 +21,8 @@ function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
   const n = daysIn(mk); const isCur = mk === curMonth(); const dayNow = isCur ? Number(today().slice(8)) : n;
   const cum = []; let acc = 0;
   for (let d = 1; d <= n; d++) { if (d > dayNow) break; acc += sumRange(clubId, null, kpiId, `${mk}-${pad(d)}`, `${mk}-${pad(d)}`); cum.push(acc); }
-  const proj = dayNow ? acc / dayNow * n : 0;
+  const fc = isCur && typeof forecast === 'function' ? forecast(clubId, kpiId, mk) : null;
+  const proj = fc ? fc.value : dayNow ? acc / dayNow * n : 0;
   const top = Math.max(s.max * 1.12, proj * 1.05, acc * 1.1, 1);
   const W = 720, H = height, L = 44, R = 92, T = 16, B = 28;
   const X = d => L + (W - L - R) * (d - 1) / Math.max(1, n - 1), Y = v => T + (H - T - B) * (1 - v / top);
@@ -49,7 +50,7 @@ function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
   return `<div class="race">
     <div class="race-h"><div><div class="eyebrow">Course au palier</div><h3>${esc(k.label)} · équipe</h3></div><span class="spacer"></span>${healthChip(h)}</div>
     <div class="chart race-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(k.label)} : ${fmtN(acc)} réalisés, projection ${fmtN(proj)}">${g}</svg></div>
-    <div class="race-f"><span><i class="lg-line"></i>Réalisé</span><span><i class="lg-pace"></i>Rythme pour le P${s.tiers.length}</span>${isCur ? `<span><i class="lg-proj" style="border-color:${h.color}"></i>Projection fin de mois : <b style="color:${h.color}">${fmtN(proj)}</b> ${projTier ? `→ Palier ${projTier}` : '→ aucun palier'}</span>` : ''}</div></div>`;
+    <div class="race-f"><span><i class="lg-line"></i>Réalisé</span><span><i class="lg-pace"></i>Rythme pour le P${s.tiers.length}</span>${isCur ? `<span><i class="lg-proj" style="border-color:${h.color}"></i>Projection fin de mois : <b style="color:${h.color}">${fmtN(proj)}</b>${fc && fc.high > fc.low ? ` <span class="muted">(${fmtN(fc.low)} à ${fmtN(fc.high)})</span>` : ''} ${projTier ? `→ Palier ${projTier}` : '→ aucun palier'}</span>` : ''}</div></div>`;
 }
 
 // Anneau de progression (objectifs perso, palier…)

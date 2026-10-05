@@ -227,7 +227,7 @@ function memTargets() {
   const kpis = kpiList();
   const locked = mk < curMonth();
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('tgMonth', mk)}<span class="spacer"></span>
-    <button class="btn sm" data-act="copyTargets" data-mk="${mk}">${ico('history')} Reprendre les objectifs de ${monthLabel(addMonths(mk, -1))}</button></div>
+    <button class="btn sm" data-act="yearPlan">${ico('cal')} Proposer les objectifs de l’année</button><button class="btn sm" data-act="copyTargets" data-mk="${mk}">${ico('history')} Reprendre les objectifs de ${monthLabel(addMonths(mk, -1))}</button></div>
     ${locked ? '<div class="alert" style="margin-bottom:12px">Mois terminé : les objectifs restent modifiables, mais cela change les scores et trophées déjà calculés.</div>' : ''}
     <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num" title="${k.required ? 'KPI obligatoire' : ''}">${k.required ? ico('crown', 'ico ico-xs') + ' ' : ''}${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'} · ${fmtN(k.points)} pts</span></th>`).join('')}</tr></thead><tbody>
     ${members.map(u => `<tr><td class="nowrap"><b>${esc(fullName(u))}</b>${u.status === 'pending' ? ' <span class="badge warn">en attente</span>' : ''}</td>${kpis.map(k => `<td class="num"><input class="cell" type="number" min="0" value="${monthTarget(mk, u.id, k.id) || ''}" placeholder="0" data-change="tgCell" data-mk="${mk}" data-u="${u.id}" data-k="${k.id}"></td>`).join('')}</tr>`).join('')}

@@ -35,7 +35,7 @@ function palierBlock(clubId, mk, kpiId, big) {
     <div class="row"><span class="palier-k">${kpiIcon(k)} ${esc(k.label)}</span><span class="spacer"></span><b class="palier-n">${fmtN(s.real)}</b></div>
     <div class="palier-track"><i style="width:${clamp(s.real / scale * 100, 0, 100)}%"></i>${s.tiers.map((t, i) => `<span class="palier-mark ${s.real >= t.target ? 'got' : ''}" style="left:${t.target / scale * 100}%"><em>P${i + 1}</em></span>`).join('')}<span class="palier-pace" style="left:${clamp(s.expected * s.max / scale * 100, 0, 100)}%" title="Rythme attendu pour le dernier palier"></span></div>
     <div class="palier-tiers">${s.tiers.map((t, i) => `<span class="${s.real >= t.target ? 'got' : ''}">${palierBadge(i + 1, 28, s.real >= t.target)} ${fmtN(t.target)}</span>`).join('')}</div>
-    <div class="palier-msg">${s.next ? `Encore <b>${fmtN(Math.ceil(left))}</b> pour le <b>Palier ${s.reached + 1}</b>${s.next.reward ? ` · ${esc(s.next.reward)}` : ''} <span class="muted">· ${(left / daysLeft).toFixed(1).replace('.', ',')} par jour</span>` : `${palierBadge(3, 28)} <b>Tous les paliers sont atteints</b>`}</div></div>`;
+    <div class="palier-msg">${s.next ? `Encore <b>${fmtN(Math.ceil(left))}</b> pour le <b>Palier ${s.reached + 1}</b>${s.next.reward ? ` · ${esc(s.next.reward)}` : ''} <span class="muted">· ${(left / daysLeft).toFixed(1).replace('.', ',')} par jour</span>` : `${palierBadge(3, 28)} <b>Tous les paliers sont atteints</b>`}</div>${big || typeof manqueActions !== 'function' ? '' : manqueActions(clubId, mk, kpiId)}</div>`;
 }
 
 // Célébration plein écran (palier franchi, client sauvé, impayé récupéré)
@@ -195,6 +195,7 @@ PAGES.home = {
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${plur(acc.streak, 'jour', 'jours')} de suite</small></a>` : ''}</div></div></section>
       ${weekDigestCard()}
       ${challengeBanner()}
+      ${manager ? saisonBanner() : ''}
       ${manager ? '' : myPlanCard()}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
@@ -287,7 +288,7 @@ function memPaliers() {
   const p = paliersFor(CLUB.id, mk); const saved = !!deepGet(S, ['paliers', CLUB.id, mk]);
   const kpis = kpiList().filter(k => k.unit === 'qty' && k.points > 0);
   const rows = Object.keys(p);
-  return `<div class="row wrap" style="margin-bottom:12px">${monthNav('palMonth', mk)}<span class="spacer"></span>${saved ? '<span class="badge ok">Réglés pour ce mois</span>' : '<span class="badge warn">Repris du mois précédent : enregistrez pour les figer</span>'}</div>
+  return `<div class="row wrap" style="margin-bottom:12px">${monthNav('palMonth', mk)}<span class="spacer"></span><button class="btn sm" data-act="palPropose">Proposer d’après les objectifs</button>${saved ? '<span class="badge ok">Réglés pour ce mois</span>' : '<span class="badge warn">Repris du mois précédent : enregistrez pour les figer</span>'}</div>
     <p class="muted small">Objectifs COLLECTIFS du club : chaque saisie de l’équipe fait avancer la barre, visible sur l’accueil de tous. Laissez un seuil vide pour retirer un palier.</p>
     <div class="grid">${rows.map(k => `<div class="card"><div class="card-head"><h3>${esc(S.kpis[k] ? S.kpis[k].label : k)}</h3><span class="spacer"></span><button class="btn ghost sm danger" data-act="palDel" data-k="${k}">Retirer</button></div>
       <div class="table-wrap"><table class="t"><thead><tr><th>Palier</th><th class="num">Seuil (équipe)</th><th>Récompense</th></tr></thead><tbody>${[0, 1, 2].map(i => { const t = (p[k] || [])[i] || {}; return `<tr><td><b>P${i + 1}</b></td><td class="num"><input class="cell" type="number" min="0" value="${t.target || ''}" data-pal="${k}" data-i="${i}" data-f="target"></td><td><input class="input sm" value="${esc(t.reward || '')}" placeholder="ex. Prime 100 € chacun" data-pal="${k}" data-i="${i}" data-f="reward"></td></tr>`; }).join('')}</tbody></table></div></div>`).join('')}</div>

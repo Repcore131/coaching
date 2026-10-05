@@ -186,7 +186,7 @@ function dashObjectives(st, r, subject, who) {
         <div class="row"><span class="muted small">${subject ? 'Progression du mois' : 'Progression du club'}</span><span class="spacer"></span><span class="badge ${status.cls === 'status-ok' ? 'ok' : status.cls === 'status-warn' ? 'warn' : status.cls === 'status-bad' ? 'bad' : ''}">${status.label}</span></div>
         <div class="big">${fmtP(pctPts)}</div>
         <div><b>${fmtN(st.earned)}</b> / ${fmtN(st.max)} pts ${lag > 0 ? `· <span style="color:#ff8a7a">${fmtN(lag)} pts de retard</span> sur le rythme` : st.max ? '· <span style="color:#7be0a5">dans le rythme</span>' : ''}</div>
-        <div class="tiers">${TIERS.map(t => `<span class="${pctPts >= t ? 'got' : ''}">${t * 100} %</span>`).join('')}</div>
+        <div class="tiers">${TIERS.map(t => `<span class="${pctPts >= t ? 'got' : ''}">${t * 100} %</span>`).join('')}</div>${typeof rattrapage === 'function' && r.from.slice(0, 7) === curMonth() ? rattrapage(st) : ''}
         <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">Bilan du jour</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
       </div>
     </div>
