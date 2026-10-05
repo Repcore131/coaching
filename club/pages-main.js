@@ -104,7 +104,7 @@ document.addEventListener('submit', async e => {
       const u = S.users[id];
       if (!u || u.status === 'archived') { await backend.signOut(); done(); loginMsg('Ce compte n’est plus actif. Voyez avec votre manager.'); return; }
       if (u.status === 'pending') db.set(['users', u.id, 'status'], 'active');
-      if (history.replaceState && location.search) history.replaceState(null, '', location.pathname + location.hash);
+      if (history.replaceState && /[?&]email=/.test(location.search)) { const q = new URLSearchParams(location.search); q.delete('email'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
       login(S.users[id]); toast(`Bienvenue ${u.first} · accès ${roleLabel(u.role)}`);
     } catch (err) { done(); loginMsg(err.kind ? err.message : 'Connexion impossible : ' + (err.code || err.message)); }
     return;

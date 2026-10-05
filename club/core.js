@@ -252,15 +252,18 @@ const firebaseBackend = {
     if (this.root) this.root.off();
     this.denied = false;
     this.root = this.fb.database().ref('pulse');
-    await new Promise((ok) => {
+    let slow = null;
+    await new Promise((ok, ko) => {
       let first = true;
+      // reseau tres lent ou bloque : on ne laisse pas tourner le bouton sans fin
+      slow = setTimeout(() => { if (first) { first = false; this.root.off(); ko(new LoginError('offline', 'La base ne répond pas : vérifiez votre connexion internet puis réessayez.')); } }, 25000);
       this.root.on('value', snap => {
         const before = S;
         S = snap.val() ? normalizeState(snap.val()) : null;
         REV++;
         if (first) { first = false; ok(); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
       }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
-    });
+    }).finally(() => clearTimeout(slow));
     if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
   },
   // Reserve le compte technique des la creation du code (mot de passe = code) :
