@@ -7,7 +7,7 @@ PAGES.onboarding = {
   render() {
     return `<div class="auth"><div class="auth-card">
       ${brandBlock(true)}
-      <h1 style="font-size:26px">Bienvenue</h1>
+      <h1 class="t-24">Bienvenue</h1>
       <p class="muted">L’outil de pilotage commercial de <b style="color:#fff">nos</b> clubs Fitness Park : objectifs, classement, rétention, imports Resamania. Aucun autre club, aucun réseau : vos chiffres restent chez vous.</p>
       <form id="ob" class="grid" style="margin-top:16px">
         <label class="field"><span>Nom du club</span><input class="input" name="club" required placeholder="Fitness Park …"></label>
@@ -156,9 +156,7 @@ function moodOf(st) {
 }
 function dashObjectives(st, r, subject, who) {
   if (!st.rows.some(x => x.target > 0)) {
-    return `<div class="card empty"><div class="title">Pas d’objectif pour ${monthLabel(r.from.slice(0, 7))}</div>
-      <p>${isManager() ? 'Fixez les objectifs du mois dans Membres > Objectifs.' : 'Votre manager n’a pas encore fixé vos objectifs du mois.'}</p>
-      ${isManager() ? '<a class="btn primary" href="#/members" data-act="go" data-href="#/members">Fixer les objectifs</a>' : ''}</div>`;
+    return `<div class="card">${emptyBox({ art: 'target', title: isManager() ? 'Objectifs à fixer' : 'Vos objectifs arrivent', text: isManager() ? `Fixez les objectifs de ${monthLabel(r.from.slice(0, 7)).toLowerCase()} dans Équipe, onglet Objectifs.` : 'En attendant, chaque vente saisie compte déjà dans le fil et les paliers d’équipe.', cta: isManager() ? '<a class="btn primary sm" href="#/members" data-act="goTargets">Fixer les objectifs</a>' : '<button class="btn primary sm" data-act="tbSaisir">Saisir une vente</button>' })}</div>`;
   }
   const exp = st.expected;
   // Avancement continu compare au rythme (les points en marches de 25 % ne le
@@ -172,11 +170,11 @@ function dashObjectives(st, r, subject, who) {
     if (tti) {
       const rows = who ? [tti[who]].filter(Boolean) : Object.values(tti);
       const cr = rows.reduce((a, x) => a + Number(x.created || 0), 0), tr = rows.reduce((a, x) => a + Number(x.transformed || 0), 0);
-      if (cr) return { v: fmtP(tr / cr), sub: `${fmtN(tr)} transformé(s) / ${fmtN(cr)} prospect(s) créé(s) · source Resamania` };
+      if (cr) return { v: fmtP(tr / cr), sub: `${plur(tr, 'transformé', 'transformés')} / ${plur(cr, 'prospect créé', 'prospects créés')} · source Resamania` };
     }
     const c = st.rows.find(x => x.k.id === 'contrats'), p = st.rows.find(x => x.k.id === 'prospects');
-    if (!c || !p || !p.real) return { v: '—', sub: `${fmtN(c ? c.real : 0)} contrat(s) / ${fmtN(p ? p.real : 0)} prospect(s)` };
-    return { v: fmtP(c.real / p.real), sub: `${fmtN(c.real)} contrat(s) / ${fmtN(p.real)} prospect(s)` };
+    if (!c || !p || !p.real) return { v: 'n.d.', sub: `${plur(c ? c.real : 0, 'contrat', 'contrats')} / ${plur(p ? p.real : 0, 'prospect', 'prospects')}` };
+    return { v: fmtP(c.real / p.real), sub: `${plur(c.real, 'contrat', 'contrats')} / ${plur(p.real, 'prospect', 'prospects')}` };
   })();
   const order = pref('kpiOrder', null);
   let rows = st.rows.filter(x => x.target > 0 || x.real > 0);
@@ -184,7 +182,7 @@ function dashObjectives(st, r, subject, who) {
   const tips = pref('tipDrag', true);
   return `<div class="dash-top">
     <div class="card hero">
-      <div>${mascot(subject ? subject.avatar : 'h1', moodOf(st), 120)}</div>
+      <div class="hero-ring">${ring(Math.min(st.progress || 0, 1), { label: fmtP(st.progress), sub: { happy: 'en avance', ok: 'dans le rythme', tired: 'à relancer' }[moodOf(st)], color: healthOf(st.progress != null && st.expected ? st.progress / st.expected : null).color, size: 120 })}</div>
       <div>
         <div class="row"><span class="muted small">${subject ? 'Progression du mois' : 'Progression du club'}</span><span class="spacer"></span><span class="badge ${status.cls === 'status-ok' ? 'ok' : status.cls === 'status-warn' ? 'warn' : status.cls === 'status-bad' ? 'bad' : ''}">${status.label}</span></div>
         <div class="big">${fmtP(pctPts)}</div>
@@ -194,9 +192,9 @@ function dashObjectives(st, r, subject, who) {
       </div>
     </div>
     <div class="grid">
-      <div class="card"><div class="muted small">Taux de conversion</div><div class="title" style="font-size:34px">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
-      ${!who && typeof recovList === 'function' && recovList(CLUB.id, r.from, r.to).length ? (() => { const L = recovList(CLUB.id, r.from, r.to); const t = L.reduce((a, x) => a + x.amount, 0); const e = L.filter(x => x.canal === 'equipe').reduce((a, x) => a + x.amount, 0); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title" style="font-size:34px">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
-      <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title" style="font-size:34px">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
+      <div class="card"><div class="muted small">Taux de conversion</div><div class="title t-32">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
+      ${!who && typeof recovList === 'function' && recovList(CLUB.id, r.from, r.to).length ? (() => { const L = recovList(CLUB.id, r.from, r.to); const t = L.reduce((a, x) => a + x.amount, 0); const e = L.filter(x => x.canal === 'equipe').reduce((a, x) => a + x.amount, 0); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
+      <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div>
   </div>
   ${tips ? `<div class="alert info" style="margin-bottom:14px">${ico('grip')}<div class="spacer">Astuce : réorganisez les cartes par glisser-déposer (poignée en haut à droite).</div><button class="btn ghost sm" data-act="closeTip">${ico('x')}</button></div>` : ''}
@@ -208,7 +206,7 @@ function kpiCard(x, exp) {
   const hl = healthOf(pct != null && exp ? pct / exp : null);
   return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
     <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span><span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span></div>
-    <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls}" style="font-size:18px">${fmtP(pct)}</b></div>
+    <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>
     <div class="kpi-msg">${esc(paceMessage(x, exp))}</div></div>`;
@@ -261,17 +259,17 @@ function dashAnalyses(r, who) {
         <select class="input sm" style="width:auto" data-change="anaKpi">${kpis.map(x => `<option value="${x.id}" ${x.id === kSel ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
         ${isManager() ? `<a class="btn sm" href="#/imports" data-act="goManual" title="Corriger l’historique mensuel">${ico('edit')}</a>` : ''}</div>
       <div class="row wrap" style="gap:22px;margin-bottom:8px">
-        <div><div class="muted small">${y - 1} (${closed.length} mois)</div><b class="title" style="font-size:22px">${fmtV(totN1, k.unit)}</b></div>
-        <div><div class="muted small">${y} (${closed.length} mois)</div><b class="title" style="font-size:22px">${fmtV(totN, k.unit)}</b></div>
-        <div><div class="muted small">Évolution à période égale</div><b class="title ${evo == null ? '' : evo >= 0 ? 'ok' : 'bad'}" style="font-size:22px">${evo == null ? '—' : (evo >= 0 ? '+' : '') + (evo * 100).toFixed(1).replace('.', ',') + ' %'}</b></div>
+        <div><div class="muted small">${y - 1} (${closed.length} mois)</div><b class="title t-20">${fmtV(totN1, k.unit)}</b></div>
+        <div><div class="muted small">${y} (${closed.length} mois)</div><b class="title t-20">${fmtV(totN, k.unit)}</b></div>
+        <div><div class="muted small">Évolution à période égale</div><b class="title ${evo == null ? '' : evo >= 0 ? 'ok' : 'bad'} t-20">${evo == null ? 'n.d.' : (evo >= 0 ? '+' : '') + (evo * 100).toFixed(1).replace('.', ',') + ' %'}</b></div>
         <div class="muted small" style="max-width:280px">Le mois en cours (${monthLabel(cm)}) est affiché mais exclu du total tant qu’il n’est pas terminé.</div>
       </div>
-      <div class="legend"><span><i style="background:#8a8a90"></i>${y - 1}</span><span><i style="background:#FFD200"></i>${y}</span></div>
-      ${barChart({ labels: lab, series: [{ name: String(y - 1), color: '#8a8a90', values: vN1 }, { name: String(y), color: '#FFD200', values: vN }], fmt: v => k.unit === 'eur' ? fmtN(v) + ' €' : fmtN(v) })}
+      <div class="legend"><span><i style="background:var(--d-3)"></i>${y - 1}</span><span><i style="background:var(--d-1)"></i>${y}</span></div>
+      ${barChart({ labels: lab, series: [{ name: String(y - 1), color: 'var(--d-3)', values: vN1 }, { name: String(y), color: 'var(--d-1)', values: vN }], fmt: v => k.unit === 'eur' ? fmtN(v) + ' €' : fmtN(v) })}
     </div>
     <div class="card">
       <div class="card-head"><h3>Progression par objectif</h3><span class="spacer"></span><span class="muted small">Repère : rythme attendu au ${Math.round(exp * daysIn(mk))}/${daysIn(mk)}</span></div>
-      <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--ok)"></i>En avance / à l’heure</span><span><i style="background:var(--warn)"></i>En léger retard</span><span><i style="background:var(--bad)"></i>Très en retard</span></div>
+      <div class="legend" style="margin-bottom:10px"><span><i style="background:var(--ok)"></i>Dans le rythme</span><span><i style="background:var(--warn)"></i>En léger retard</span><span><i style="background:var(--bad)"></i>Très en retard</span></div>
       ${st.rows.filter(x => x.target > 0).map(x => {
         const col = x.status.cls === 'status-ok' ? 'var(--ok)' : x.status.cls === 'status-warn' ? 'var(--warn)' : x.status.cls === 'status-bad' ? 'var(--bad)' : 'var(--muted)';
         return `<div style="display:grid;grid-template-columns:150px 1fr 60px;gap:12px;align-items:center;margin:9px 0"><span class="small"><b>${esc(x.k.label)}</b></span>
@@ -295,10 +293,10 @@ ACTIONS.dayRecap = el => {
     const list = Object.values(S.entries).filter(e => e.date === d && e.clubId === CLUB.id && (!who || e.userId === who) && entryCounts(e));
     const r = rangeOf('month', d.slice(0, 7)); const st = statsFor(CLUB.id, who, r);
     const byK = {}; list.forEach(e => { byK[e.kpiId] = (byK[e.kpiId] || 0) + Number(e.value); });
-    const title = !list.length ? 'Journée sans saisie' : Object.keys(byK).length >= 3 ? 'Mission accomplie 💪' : 'Belle journée';
+    const title = !list.length ? 'Journée sans saisie' : Object.keys(byK).length >= 3 ? 'Mission accomplie' : 'Belle journée';
     return `<div class="row" style="justify-content:center;gap:6px;margin-bottom:12px"><button class="btn icon sm" data-d="-1">${ico('chevL')}</button><b style="min-width:200px;text-align:center">${dayLabel(d)}</b><button class="btn icon sm" data-d="1" ${d >= today() ? 'disabled' : ''}>${ico('chevR')}</button></div>
-      <div style="text-align:center"><div class="title" style="font-size:28px">${title}</div></div>
-      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title" style="font-size:20px">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
+      <div style="text-align:center"><div class="title t-28">${title}</div></div>
+      ${list.length ? `<div class="grid" style="margin:16px 0">${Object.entries(byK).map(([kid, v]) => `<div class="row card" style="padding:10px 14px"><span class="kpi-ico">${kpiIcon(S.kpis[kid] || { id: kid })}</span><b>${esc(S.kpis[kid] ? S.kpis[kid].label : kid)}</b><span class="spacer"></span><b class="title t-20">+${fmtV(v, S.kpis[kid] ? S.kpis[kid].unit : 'qty')}</b></div>`).join('')}</div>` : '<p class="muted" style="text-align:center">Aucune saisie enregistrée ce jour-là.</p>'}
       <div class="muted small" style="margin-top:8px">Progression du mois</div>${progressBar(st.progress || 0, { pace: st.expected })}<div class="small" style="margin-top:4px"><b>${fmtP(st.max ? st.earned / st.max : 0)}</b> · ${fmtN(st.earned)} / ${fmtN(st.max)} pts</div>`;
   };
   const m = openModal({ title: 'Récap du jour', body: `<div id="dr">${draw()}</div>` });
@@ -364,7 +362,7 @@ ACTIONS.openSaisies = () => {
 };
 function tasksToday() {
   const plan = Object.values(S.tasks.plan[CLUB.id] || {}).sort((a, b) => a.hour - b.hour);
-  if (!plan.length) return `<div class="empty"><div class="title">Aucune tâche configurée</div><p>${isManager() ? 'Construisez le planning dans Membres > Tâches.' : 'Votre manager n’a pas encore construit le planning du club.'}</p></div>`;
+  if (!plan.length) return emptyBox({ art: 'todo', title: 'Aucune tâche prévue', text: isManager() ? 'Construisez le planning dans Équipe, onglet Tâches.' : 'Votre manager n’a pas encore construit le planning du club.' });
   const done = deepGet(S.tasks.done, [today(), ME.id]) || {};
   return `<p class="muted small">Cochez au fil de la journée. ${Object.keys(done).length}/${plan.length} faites.</p>` + plan.map(p => {
     const t = S.tasks.library[p.taskId]; if (!t) return '';
@@ -387,7 +385,7 @@ PAGES.leaderboard = {
     if (scope === 'clubs') {
       const cr = clubRanking(r);
       main = `<div class="card"><p class="muted small" style="margin-top:0">Nos clubs uniquement. Score d’un club = moyenne des scores de ses membres actifs sur les KPI obligatoires : un grand club n’est pas avantagé.</p>
-        ${cr.map(x => `<div class="rank-row ${x.c.id === CLUB.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${ico('building')}<div><b>${esc(x.c.name)}</b><div class="muted small">${x.members} membre(s)</div></div></div><div>${progressBar(x.score)}</div><b class="num">${fmtP(x.score)}</b></div>`).join('')}</div>`;
+        ${cr.map(x => `<div class="rank-row ${x.c.id === CLUB.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${ico('building')}<div><b>${esc(x.c.name)}</b><div class="muted small">${plur(x.members, 'membre', 'membres')}</div></div></div><div>${progressBar(x.score)}</div><b class="num">${fmtP(x.score)}</b></div>`).join('')}</div>`;
     } else {
       const rk = ranking(CLUB.id, r, kpi || null);
       const meRow = rk.find(x => x.u.id === ME.id);
@@ -396,16 +394,16 @@ PAGES.leaderboard = {
       const val = x => k ? `${fmtV(x.real, k.unit)} · ${fmtP(x.score)}` : `${fmtP(x.score)} · ${fmtN(x.earned)} pts`;
       main = `<div class="card">
         <div class="tabs" style="margin-top:-4px">${[['', 'Global'], ...kpiList().filter(x => x.points > 0).map(x => [x.id, x.label])].map(([v, l]) => `<button data-act="ui" data-key="lbKpi" data-val="${v}" class="${kpi === v ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
-        ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}">${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>
-        ${meRow ? `<div class="banner-me">Vous êtes #${meRow.rank} ${period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois-ci'} — ${val(meRow)}</div>` : ''}
+        ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}"><div class="pod-medal">${trophyArt({ icon: 'medal', tone: ['silver', 'gold', 'bronze'][i], label: ['2e', '1er', '3e'][i] }, 44)}</div>${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>
+        ${meRow ? `<div class="banner-me">Vous êtes #${meRow.rank} ${period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois-ci'} : ${val(meRow)}</div>` : ''}
         ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${trophyIcon(t, 'ico ico-xs')}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts"><i class="hdot ${healthOf(x.score != null && x.st.expected ? (k ? x.score : x.score) / Math.max(x.st.expected, 0.01) : null).cls}"></i> ${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
-        <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires 👑.'}</p></div>`;
+        <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires.'}</p></div>`;
     }
     const atMode = UI.atMode || 'score';
     const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'pending').map(u => ({ u, pts: allTime(u.id), tr: trophies(u.id).length }));
     all.sort((a, b) => atMode === 'score' ? b.pts - a.pts : b.tr - a.tr);
     const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div>
-      ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : x.tr + ' 🏅'}</b></div>`).join('')}
+      ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : plur(x.tr, 'trophée', 'trophées')}</b></div>`).join('')}
       <p class="muted small">Points cumulés de tous les mois (paliers atteints) + 200 pts par défi flash gagné.</p></div>`;
     return `<div class="page-head"><div><h1>Classement</h1><p>${esc(scope === 'clubs' ? 'Nos clubs' : CLUB.name)} · ${r.label}</p></div></div>
       <div class="row wrap" style="margin-bottom:14px">${seg('lbPeriod', [['week', 'Hebdomadaire'], ['month', 'Mensuel'], ['quarter', 'Trimestriel']], period)}${multi ? seg('lbScope', [['members', 'Membres'], ['clubs', 'Nos clubs']], scope) : ''}<span class="spacer"></span>${nav}</div>
@@ -434,12 +432,12 @@ PAGES.feed = {
         <div class="row"><span class="muted small">${k ? kpiIcon(k, 'ico ico-xs') + ' ' + esc(k.label) : ''}</span><span class="spacer"></span><span class="muted small">${ago(e.at)}</span></div>
         <div class="amount">+${fmtV(e.value, k ? k.unit : 'qty')}</div>
         <div class="row small" style="margin-top:4px">${avatar(u, 'xs')}<b>${esc(fullName(u))}</b>${c ? `<span class="muted">· ${ico('map')} ${esc(c.name)}</span>` : ''}</div>
-        <div class="reacts">${['🔥', '💪', '👏'].map(em => { const who = rx[em] ? Object.keys(rx[em]) : []; return `<button data-act="react" data-id="${e.id}" data-em="${em}" class="${who.includes(ME.id) ? 'on' : ''}" title="${esc(who.map(id => fullName(S.users[id])).join(', '))}">${em} ${who.length || ''}</button>`; }).join('')}</div>
+        <div class="reacts">${['🔥', '💪', '👏'].map(em => { const who = rx[em] ? Object.keys(rx[em]) : []; return `<button data-act="react" data-id="${e.id}" data-em="${em}" class="${who.includes(ME.id) ? 'on' : ''}" aria-label="${REACT_ICON[em][1]}" title="${esc([REACT_ICON[em][1], ...who.map(id => fullName(S.users[id]))].join(', '))}">${reactIco(em)} ${who.length || ''}</button>`; }).join('')}</div>
       </div></div>`;
     }).join('');
     return `<div class="page-head"><div><h1>Feed</h1><p>Les saisies de l’équipe, en direct. Visible uniquement par les membres de nos clubs.</p></div></div>
       ${multi ? `<div style="margin-bottom:12px">${seg('feedScope', [['club', esc(CLUB.name)], ['all', 'Tous nos clubs']], scope)}</div>` : ''}
-      <div class="feed">${items || '<div class="card empty"><div class="title">Pas encore d’activité</div><p>Les saisies de votre équipe apparaîtront ici en direct.</p></div>'}</div>`;
+      <div class="feed">${items || `<div class="card">${emptyBox({ art: 'feed', title: 'Le fil démarre à la première saisie', text: 'Les ventes de l’équipe apparaissent ici en direct.', cta: '<button class="btn primary sm" data-act="tbSaisir">Saisir</button>' })}</div>`}</div>`;
   },
 };
 ACTIONS.react = el => { const p = ['reactions', el.dataset.id, el.dataset.em, ME.id]; db.set(p, deepGet(S, p) ? null : true); };
@@ -459,8 +457,8 @@ PAGES.chat = {
       return `<div class="msg ${m.userId === ME.id ? 'mine' : ''}">${avatar(u)}<div>
         <div class="meta"><b>${esc(fullName(u))}</b>${u && u.role === 'manager' ? ' <span class="badge fp">MANAGER</span>' : ''} · ${timeOf(m.at)}</div>
         ${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ''}${safeImg(m.image) ? `<img class="att" src="${m.image}" alt="Image jointe">` : ''}
-        <div class="tools">${Object.entries(rx).filter(([, w]) => Object.keys(w).length).map(([em, w]) => `<a data-act="chatReact" data-id="${m.id}" data-em="${em}" title="${esc(Object.keys(w).map(id => fullName(S.users[id])).join(', '))}">${em} ${Object.keys(w).length}</a>`).join('')}
-          <a data-act="chatReact" data-id="${m.id}" data-em="👍">👍</a><a data-act="chatReact" data-id="${m.id}" data-em="🔥">🔥</a>
+        <div class="tools">${Object.entries(rx).filter(([em, w]) => REACT_ICON[em] && Object.keys(w || {}).length).map(([em, w]) => `<a data-act="chatReact" data-id="${m.id}" data-em="${em}" title="${esc(Object.keys(w).map(id => fullName(S.users[id])).join(', '))}">${reactIco(em)} ${Object.keys(w).length}</a>`).join('')}
+          <a data-act="chatReact" data-id="${m.id}" data-em="👍" aria-label="Réagir : OK">${reactIco('👍')}</a><a data-act="chatReact" data-id="${m.id}" data-em="🔥" aria-label="Réagir : bravo">${reactIco('🔥')}</a>
           ${!m.parentId ? `<a data-act="chatReply" data-id="${m.id}">Répondre</a>` : ''}
           ${m.userId === ME.id || isManager() ? `<a data-act="chatDel" data-id="${m.id}">Supprimer</a>` : ''}</div>
         ${!m.parentId && replies(m.id).length ? `<div class="replies">${replies(m.id).map(bubble).join('')}</div>` : ''}
@@ -470,7 +468,7 @@ PAGES.chat = {
     setTimeout(() => { if (unseenChat()) setPref('chatSeen', Date.now()); const l = $('#chat-list'); if (l) l.scrollTop = l.scrollHeight; }, 50);
     const rep = UI.chatReply && S.chat[UI.chatReply];
     return `<div class="card chat-wrap"><div class="chat-head"><h3>Canal</h3>${seg('chatCh', chans.map(([id, n]) => [id, esc(n)]), ch)}<span class="spacer"></span><span class="muted small">${ch === 'all' ? 'Toutes les équipes de nos clubs' : 'L’équipe du club uniquement'}</span></div>
-      <div class="chat-list" id="chat-list">${list || '<div class="empty"><div class="title">Aucun message</div><p>Lancez la discussion avec votre équipe.</p></div>'}</div>
+      <div class="chat-list" id="chat-list">${list || emptyBox({ art: 'chat', title: 'Aucun message', text: 'Lancez la discussion avec votre équipe.' })}</div>
       <form class="chat-input" id="chat-form">
         <div class="spacer">${rep ? `<div class="small muted" style="margin-bottom:4px">Réponse à ${esc(fullName(S.users[rep.userId]))} <a href="javascript:void 0" data-act="chatReply" data-id="">annuler</a></div>` : ''}<textarea class="input" name="text" placeholder="Écrire un message…" rows="1" data-focus="chat"></textarea></div>
         <label class="btn icon" title="Joindre une image">${ico('clip')}<input type="file" accept="image/*" hidden id="chat-file"></label>
@@ -521,10 +519,10 @@ PAGES.challenges = {
         ${rk.slice(0, isLive ? 10 : 3).map((x, i) => `<div class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:24px">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><span class="muted small">${fmtV(x.value, k ? k.unit : 'qty')}</span><b style="width:70px;text-align:right">${fmtP(x.norm)}</b></div>`).join('')}
         ${isLive && isManager() ? `<div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn sm danger" data-act="endChallenge" data-id="${ch.id}">Arrêter le défi</button></div>` : ''}</div>`;
     };
-    return `<div class="page-head"><div><h1>⚡ Défis flash</h1><p>Un mini-défi de 6 à 72 h sur un KPI. Classement rapporté à l’objectif mensuel de chacun : équitable entre profils.</p></div><span class="spacer"></span>${isManager() ? `<button class="btn primary" data-act="newChallenge">${ico('plus')} Lancer un défi</button>` : ''}</div>
+    return `<div class="page-head"><div><h1>Défis flash</h1><p>Un mini-défi de 6 à 72 h sur un KPI. Classement rapporté à l’objectif mensuel de chacun : équitable entre profils.</p></div><span class="spacer"></span>${isManager() ? `<button class="btn primary" data-act="newChallenge">${ico('plus')} Lancer un défi</button>` : ''}</div>
       ${live.length ? `<h2 style="margin-bottom:10px">En cours</h2><div class="grid" style="margin-bottom:20px">${live.map(c => card(c, true)).join('')}</div>` : ''}
       <h2 style="margin-bottom:10px">Historique des défis</h2>
-      ${past.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(320px, 100%), 1fr))">${past.map(c => card(c, false)).join('')}</div>` : '<div class="card empty">Aucun défi flash terminé pour le moment.</div>'}`;
+      ${past.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(320px, 100%), 1fr))">${past.map(c => card(c, false)).join('')}</div>` : `<div class="card">${emptyBox({ art: 'challenge', title: 'Aucun défi terminé', text: 'Un défi flash de 6 à 72 heures relance l’équipe sur un KPI.', cta: isManager() ? '<button class="btn primary sm" data-act="newChallenge">Lancer un défi</button>' : '' })}</div>`}`;
   },
 };
 ACTIONS.newChallenge = () => {
@@ -541,6 +539,6 @@ ACTIONS.createChallenge = async () => {
   if (!await confirmDlg(`Lancer « ${esc(f.title)} » pour ${f.dur} h ? Toute l’équipe le verra immédiatement.`, { ok: 'Lancer' })) return;
   const id = newId(); const now = Date.now();
   db.set(['challenges', id], { id, clubId: CLUB.id, title: f.title.trim(), desc: f.desc.trim(), kpiId: f.kpi, start: now, end: now + Number(f.dur) * 3600000, by: ME.id });
-  closeModal(); toast('Défi lancé ⚡');
+  closeModal(); toast('Défi lancé');
 };
 ACTIONS.endChallenge = async el => { if (await confirmDlg('Arrêter ce défi maintenant ? Le classement actuel devient définitif.', { ok: 'Arrêter', danger: true })) db.set(['challenges', el.dataset.id, 'end'], Date.now()); };

@@ -175,20 +175,20 @@ const echap = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<'
 export function emailInvitation(d) {
   const lien = `${SITE}/?email=${encodeURIComponent(d.email)}`;
   const role = ROLES[d.role] || 'Membre';
-  const objet = `${d.first}, ton accès Fit Pulse est prêt 💪`;
+  const objet = `${d.first}, votre accès Fit Pulse est prêt`;
   const texte = [
-    `Salut ${d.first} !`, '',
-    `Bienvenue dans Fit Pulse, l'appli commerciale de ${d.club}.`,
-    `Ton accès : ${role}`, '',
-    `Ton code personnel : ${d.code}`, `Ton identifiant : ${d.email}`, '',
-    `1. Ouvre ${lien}`, `2. Connecte-toi avec ton e-mail et ton code`,
+    `Bonjour ${d.first},`, '',
+    `Bienvenue dans Fit Pulse, l'application commerciale de ${d.club}.`,
+    `Votre accès : ${role}`, '',
+    `Votre code personnel : ${d.code}`, `Votre identifiant : ${d.email}`, '',
+    `1. Ouvrez ${lien}`, `2. Connectez-vous avec votre e-mail et votre code`,
     `3. Installe l'appli : iPhone → Safari > Partager > « Sur l'écran d'accueil » ; Android → Chrome > ⋮ > « Installer l'application »`, '',
-    `Ton code est personnel : ne le partage avec personne.`, '', `À très vite sur le plateau !`, `L'équipe ${d.club}`,
+    `Votre code est personnel : ne le partagez avec personne.`, '', `À très vite sur le plateau !`, `L'équipe ${d.club}`,
   ].join('\n');
   const Y = '#FFD600';
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>${echap(objet)}</title></head>
 <body style="margin:0;padding:0;background:#0a0a0a;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Ton code personnel et l'appli à installer en 1 minute.</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Votre code personnel et l'application à installer en une minute.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;"><tr><td align="center" style="padding:28px 12px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#111111;border-radius:20px;overflow:hidden;font-family:Montserrat,'Segoe UI',Helvetica,Arial,sans-serif;color:#f5f5f3;">
   <tr><td style="background:#000000;padding:30px 28px 22px;border-bottom:4px solid ${Y};" align="center">
@@ -197,28 +197,28 @@ export function emailInvitation(d) {
   </td></tr>
   <tr><td style="padding:30px 28px 6px;">
     <div style="font-size:30px;line-height:1.05;font-weight:900;font-style:italic;text-transform:uppercase;color:#ffffff;">Bienvenue <span style="color:${Y};">${echap(d.first)}</span> !</div>
-    <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:#d6d6d3;">Ton accès à <b style="color:#fff;">Fit Pulse</b>, l'appli commerciale du club, est prêt. Paliers de l'équipe, saisie en un geste, relances du jour : tout est dans ta poche.</p>
+    <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:#d6d6d3;">Votre accès à <b style="color:#fff;">Fit Pulse</b>, l'application commerciale du club, est prêt. Paliers de l'équipe, saisie en un geste, relances du jour : tout est sur votre téléphone.</p>
     <p style="margin:14px 0 0;"><span style="display:inline-block;background:${Y};color:#000;font-weight:800;font-size:12px;letter-spacing:1px;text-transform:uppercase;padding:5px 12px;border-radius:99px;">Accès ${echap(role)}</span></p>
   </td></tr>
   <tr><td style="padding:22px 28px 8px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000;border:2px dashed ${Y};border-radius:16px;"><tr><td align="center" style="padding:22px 12px;">
-      <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#9b9b9b;">Ton code personnel</div>
+      <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#9b9b9b;">Votre code personnel</div>
       <div style="margin-top:8px;font-family:'Courier New',Courier,monospace;font-size:28px;font-weight:700;letter-spacing:3px;color:${Y};">${echap(d.code)}</div>
       <div style="margin-top:10px;font-size:13px;color:#bdbdbd;">Identifiant : <span style="color:#fff;">${echap(d.email)}</span></div>
     </td></tr></table>
   </td></tr>
   <tr><td align="center" style="padding:20px 28px 6px;">
-    <a href="${lien}" style="display:inline-block;background:${Y};color:#000000;text-decoration:none;font-weight:900;font-style:italic;text-transform:uppercase;font-size:18px;letter-spacing:1px;padding:16px 34px;border-radius:12px;">Ouvrir Fit Pulse →</a>
-    <div style="margin-top:10px;font-size:12px;color:#8a8a8a;">ou copie : <a href="${lien}" style="color:#bdbdbd;">${echap(SITE.replace('https://', ''))}</a></div>
+    <a href="${lien}" style="display:inline-block;background:${Y};color:#000000;text-decoration:none;font-weight:900;font-style:italic;text-transform:uppercase;font-size:18px;letter-spacing:1px;padding:16px 34px;border-radius:12px;">Ouvrir Fit Pulse</a>
+    <div style="margin-top:10px;font-size:12px;color:#8a8a8a;">ou copiez : <a href="${lien}" style="color:#bdbdbd;">${echap(SITE.replace('https://', ''))}</a></div>
   </td></tr>
   <tr><td style="padding:24px 28px 4px;">
     <div style="font-size:16px;font-weight:900;font-style:italic;text-transform:uppercase;color:#fff;">Installe l'appli en 1 minute</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
-      ${[['1', 'Ouvre le lien', 'sur ton téléphone, et connecte-toi avec ton e-mail et ton code.'], ['2', 'iPhone', 'dans Safari, touche Partager <span style="color:#fff;">⬆</span> puis « Sur l’écran d’accueil ».'], ['3', 'Android', 'dans Chrome, touche ⋮ puis « Installer l’application ».']].map(([n, t, x]) => `<tr><td width="40" valign="top" style="padding:0 0 12px;"><div style="width:30px;height:30px;line-height:30px;text-align:center;border-radius:8px;background:${Y};color:#000;font-weight:900;font-style:italic;">${n}</div></td><td style="padding:3px 0 12px;font-size:14px;line-height:1.5;color:#d6d6d3;"><b style="color:#fff;">${t}</b> ${x}</td></tr>`).join('')}
+      ${[['1', 'Ouvrez le lien', 'sur votre téléphone, et connectez-vous avec votre e-mail et votre code.'], ['2', 'iPhone', 'dans Safari, touchez Partager puis « Sur l’écran d’accueil ».'], ['3', 'Android', 'dans Chrome ou Samsung Internet, touchez ⋮ puis « Installer l’application ».']].map(([n, t, x]) => `<tr><td width="40" valign="top" style="padding:0 0 12px;"><div style="width:30px;height:30px;line-height:30px;text-align:center;border-radius:8px;background:${Y};color:#000;font-weight:900;font-style:italic;">${n}</div></td><td style="padding:3px 0 12px;font-size:14px;line-height:1.5;color:#d6d6d3;"><b style="color:#fff;">${t}</b> ${x}</td></tr>`).join('')}
     </table>
   </td></tr>
   <tr><td style="padding:6px 28px 28px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1b1b1b;border-radius:12px;"><tr><td style="padding:14px 16px;font-size:13px;line-height:1.5;color:#bdbdbd;">🔒 Ton code est <b style="color:#fff;">personnel</b> : ne le partage avec personne. Perdu ? Demande-en un nouveau à ton manager.</td></tr></table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1b1b1b;border-radius:12px;"><tr><td style="padding:14px 16px;font-size:13px;line-height:1.5;color:#bdbdbd;">Votre code est <b style="color:#fff;">personnel</b> : ne le partagez avec personne. Perdu ? Demandez-en un nouveau à votre manager.</td></tr></table>
   </td></tr>
   <tr><td style="background:#000;padding:20px 28px;border-top:1px solid #222;" align="center">
     <div style="font-size:20px;font-weight:900;font-style:italic;text-transform:uppercase;color:#fff;">À très vite sur le <span style="color:${Y};">plateau</span> !</div>

@@ -85,12 +85,12 @@ function impNew() {
   const w = UI.wiz;
   const steps = s => `<div class="steps">${['Document', 'Matching', 'Validation'].map((l, i) => `<span class="${s >= i + 1 ? 'on' : ''}"><i>${i + 1}</i>${l}</span>`).join('')}</div>`;
   if (!w) {
-    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title" style="font-size:18px;margin-top:8px">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class="muted small">.csv ou .tsv (séparateur ; , ou tabulation), tel qu’exporté de Resamania</div></div><input type="file" id="file" accept=".csv,.tsv,.txt" hidden>
+    return `<div class="card">${steps(1)}<div class="drop" id="drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposer un fichier CSV ou cliquer pour sélectionner</div><div class="muted small">.csv ou .tsv (séparateur ; , ou tabulation), tel qu’exporté de Resamania</div></div><input type="file" id="file" accept=".csv,.tsv,.txt" hidden>
       <h3 style="margin:20px 0 8px">Les fichiers que vous pouvez importer</h3><p class="muted small" style="margin-top:0">Le type est reconnu automatiquement par le nom et les colonnes ; vous confirmez à l’étape suivante.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>Export Resamania</th><th>Alimente</th></tr></thead><tbody>${IMPORT_PROFILES.map(p => `<tr><td><b>${esc(p.label)}</b></td><td>${esc(p.feeds)}</td></tr>`).join('')}</tbody></table></div></div>`;
   }
   const H = w.headers;
-  const colSel = (key, label, opt = false) => `<label class="field"><span>${label}</span><select class="input sm" data-change="wizCol" data-k="${key}"><option value="">${opt ? '— aucune —' : '— choisir —'}</option>${H.map((h, i) => `<option value="${i}" ${w.col[key] === String(i) ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
+  const colSel = (key, label, opt = false) => `<label class="field"><span>${label}</span><select class="input sm" data-change="wizCol" data-k="${key}"><option value="">${opt ? 'Aucune' : 'Choisir…'}</option>${H.map((h, i) => `<option value="${i}" ${w.col[key] === String(i) ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
   if (w.step === 2) {
     let mapping = '';
     if (w.type === 'kpi') {
@@ -121,10 +121,10 @@ function impNew() {
   // etape 3 : validation
   const plan = w.plan;
   return `<div class="card">${steps(3)}
-    ${plan.type === 'kpi' ? `<div class="row wrap" style="gap:22px;margin-bottom:12px"><div><div class="muted small">Saisies à créer</div><b class="title" style="font-size:24px">${plan.entries.length}</b></div><div><div class="muted small">Période</div><b>${plan.entries.length ? `${dmy(plan.from)} → ${dmy(plan.to)}` : '—'}</b></div><div><div class="muted small">Doublons ignorés</div><b class="${plan.dups ? 'warn' : ''}">${plan.dups}</b></div><div><div class="muted small">Lignes ignorées</div><b>${plan.skipped}</b></div></div>
-      ${plan.dups ? `<div class="alert" style="margin-bottom:12px">${plan.dups} ligne(s) existent déjà dans un import actif (même commercial, KPI, jour et montant) : elles ne seront pas comptées deux fois.</div>` : ''}
+    ${plan.type === 'kpi' ? `<div class="row wrap" style="gap:22px;margin-bottom:12px"><div><div class="muted small">Saisies à créer</div><b class="title t-24">${plan.entries.length}</b></div><div><div class="muted small">Période</div><b>${plan.entries.length ? `${dmy(plan.from)} → ${dmy(plan.to)}` : 'n.d.'}</b></div><div><div class="muted small">Doublons ignorés</div><b class="${plan.dups ? 'warn' : ''}">${plan.dups}</b></div><div><div class="muted small">Lignes ignorées</div><b>${plan.skipped}</b></div></div>
+      ${plan.dups ? `<div class="alert" style="margin-bottom:12px">${plur(plan.dups, 'ligne', 'lignes')} existent déjà dans un import actif (même commercial, KPI, jour et montant) : elles ne seront pas comptées deux fois.</div>` : ''}
       <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th><th>KPI</th><th class="num">Total importé</th><th class="num">Lignes</th></tr></thead><tbody>${plan.summary.map(s => `<tr><td>${esc(fullName(S.users[s.userId]))}</td><td>${esc(S.kpis[s.kpiId].label)}</td><td class="num">${fmtV(s.value, S.kpis[s.kpiId].unit)}</td><td class="num">${s.n}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucune ligne exploitable.</td></tr>'}</tbody></table></div>`
-      : `<div class="row wrap" style="gap:22px;margin-bottom:12px"><div><div class="muted small">${plan.type === 'resil' ? 'Résiliations' : 'Clients'} à créer</div><b class="title" style="font-size:24px">${plan.created}</b></div><div><div class="muted small">À mettre à jour</div><b class="title" style="font-size:24px">${plan.updated}</b></div><div><div class="muted small">Lignes ignorées</div><b>${plan.skipped}</b></div></div>`}
+      : `<div class="row wrap" style="gap:22px;margin-bottom:12px"><div><div class="muted small">${plan.type === 'resil' ? 'Résiliations' : 'Clients'} à créer</div><b class="title t-24">${plan.created}</b></div><div><div class="muted small">À mettre à jour</div><b class="title t-24">${plan.updated}</b></div><div><div class="muted small">Lignes ignorées</div><b>${plan.skipped}</b></div></div>`}
     <div class="row" style="margin-top:16px"><button class="btn" data-act="wizBack">${ico('chevL')} Retour</button><button class="btn ghost" data-act="wizCancel">Annuler</button><span class="spacer"></span><button class="btn primary" data-act="wizCommit" ${plan.empty ? 'disabled' : ''}>Importer dans ${esc(CLUB.name)}</button></div></div>`;
 }
 ACTIONS.wizCol = el => { UI.wiz.col[el.dataset.k] = el.value; if (el.dataset.k === 'user') UI.wiz.userMap = {}; render(); };
@@ -210,7 +210,7 @@ ACTIONS.wizCommit = () => {
     meta.count = plan.items.length;
   }
   ops.push([['imports', impId], meta]);
-  db.batch(ops); UI.wiz = null; UI.impTab = 'history'; render(); toast('Import terminé ✅');
+  db.batch(ops); UI.wiz = null; UI.impTab = 'history'; render(); toast('Import terminé');
 };
 
 function impHistory() {
@@ -222,7 +222,7 @@ function impHistory() {
   const label = { kpi: 'KPI', clients: 'Base client', soldes: 'Solde clients', resil: 'Résiliations', control: 'Contrôle' };
   return `<div class="row wrap" style="margin-bottom:12px">${seg('impFilter', [['all', `Tous ${cnt('all')}`], ['kpi', `KPI ${cnt('kpi')}`], ['clients', `Base client ${cnt('clients')}`], ['resil', `Résiliations ${cnt('resil')}`]], f)}</div>
     <div class="card" style="padding:6px 16px">${shown.map(i => `<div class="row wrap" style="padding:12px 0;border-bottom:1px solid var(--line)">${ico('list')}<div class="spacer"><b>${esc(i.name)}</b> <span class="badge ${i.active === false ? '' : 'ok'}">${i.active === false ? 'Annulé' : 'Actif'}</span> <span class="badge">${label[i.type] || i.type}</span>${i.source === 'resamania' ? ' <span class="badge fp">Resamania</span>' : ''}
-      <div class="muted small">${i.from ? `${dmy(i.from)} → ${dmy(i.to)} · ` : ''}${i.count ?? i.rows} ligne(s) importée(s) sur ${i.rows} · ${dmy(isoOf(new Date(i.at)))} par ${esc(fullName(S.users[i.by]))}</div></div>
+      <div class="muted small">${i.from ? `${dmy(i.from)} → ${dmy(i.to)} · ` : ''}${plur(i.count ?? i.rows, 'ligne importée', 'lignes importées')} sur ${i.rows} · ${dmy(isoOf(new Date(i.at)))} par ${esc(fullName(S.users[i.by]))}</div></div>
       ${i.type === 'kpi' ? `<button class="btn sm" data-act="impDetail" data-id="${i.id}">Détail ${ico('chevR')}</button>` : ''}
       ${i.active === false ? `<button class="btn sm" data-act="impRestore" data-id="${i.id}">${ico('undo')} Rétablir</button>` : `<button class="btn sm danger" data-act="impCancel" data-id="${i.id}">Annuler l’import</button>`}</div>`).join('') || '<div class="empty">Aucun import.</div>'}
     ${list.length > 10 && !UI.impMore ? `<div style="padding:12px 0"><button class="btn sm" data-act="ui" data-key="impMore" data-val="1">Voir les ${list.length - 10} imports plus anciens</button></div>` : ''}</div>`;
@@ -243,7 +243,7 @@ ACTIONS.impRestore = async el => { const i = S.imports[el.dataset.id]; const ops
   const mine = Object.values(S.entries).filter(e => e.importId === i.id && !(e.importIds && Object.keys(e.importIds).length > 1));
   const dup = []; mine.forEach(e => { const n = active.get(k(e)) || 0; if (n > 0) { dup.push(e); active.set(k(e), n - 1); } });
   if (dup.length) {
-    if (!await confirmDlg(`${dup.length} ligne(s) de cet import sont déjà comptées par un autre import actif. Rétablir uniquement les ${mine.length - dup.length} ligne(s) nouvelles ?`, { ok: 'Rétablir sans doublon' })) return;
+    if (!await confirmDlg(`${plur(dup.length, 'ligne', 'lignes')} de cet import sont déjà comptées par un autre import actif. Rétablir uniquement les ${plur(mine.length - dup.length, 'ligne', 'lignes')} nouvelles ?`, { ok: 'Rétablir sans doublon' })) return;
     dup.forEach(e => ops.push([['entries', e.id, 'suppressed'], true]));
   } Object.values(S.resiliations).filter(r => r.importId === i.id).forEach(r => ops.push([['resiliations', r.id, 'hidden'], null])); db.batch(ops); toast('Import rétabli.'); };
 ACTIONS.impDetail = el => {
@@ -251,7 +251,7 @@ ACTIONS.impDetail = el => {
   const rows = Object.values(S.entries).filter(e => e.importId === i.id).sort((a, b) => a.date.localeCompare(b.date));
   openModal({ title: i.name, drawer: true, body: `<div class="table-wrap"><table class="t"><thead><tr><th>Membre</th><th>Date</th><th>KPI</th><th class="num">Valeur</th><th></th></tr></thead><tbody>
     ${rows.map(e => `<tr><td>${esc(fullName(S.users[e.userId]))}</td><td>${dm(e.date)}</td><td>${esc(S.kpis[e.kpiId] ? S.kpis[e.kpiId].label : '')}</td><td class="num">${fmtV(e.value, S.kpis[e.kpiId] ? S.kpis[e.kpiId].unit : 'qty')}</td><td><button class="btn ghost icon sm" data-delimp="${e.id}" title="Retirer cette ligne">${ico('trash')}</button></td></tr>`).join('')}</tbody></table></div>
-    <p class="muted small">${rows.length} ligne(s) active(s) sur ${i.rows}.</p>`,
+    <p class="muted small">${plur(rows.length, 'ligne active', 'lignes actives')} sur ${i.rows}.</p>`,
     onMount: m => m.addEventListener('click', async e => { const b = e.target.closest('[data-delimp]'); if (b && await confirmDlg('Retirer cette ligne de l’import ?', { ok: 'Retirer', danger: true })) { db.set(['entries', b.dataset.delimp], null); } }) });
 };
 
@@ -287,7 +287,7 @@ PAGES.loyalty = {
       if (!Object.values(S.imports).some(i => i.clubId === CLUB.id && i.type === 'soldes' && i.active !== false) && !clients.some(c => Number(c.balance) > 0)) alerts.push(['Aucun solde importé', 'Les impayés n’apparaîtront pas tant que l’export « Solde clients » n’est pas importé.']);
     }
     const body = tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : loyLost(tasks.filter(t => t.state === 'lost'));
-    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · ${todo.length} tâche(s) à traiter · ${clients.length} client(s) en base</p></div><span class="spacer"></span><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · ${plur(todo.length, 'tâche', 'tâches')} à traiter · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
       ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
       ${tabs('loyTab', [['tasks', `Tâches (${todo.length})`], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
   },
@@ -303,10 +303,10 @@ function loyTasks(todo) {
   return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
     <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
     <select class="input sm" style="width:auto" data-change="loySort"><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
-    ${list.length ? `<div class="grid">${list.map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.failed ? ` <span class="badge warn">${t.failed}/${MAX_ATTEMPTS} tentative(s)</span>` : ''}
-      <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${t.client.incidents} incident(s)` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
+    ${list.length ? `<div class="grid">${list.map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
+      <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${plur(t.client.incidents, 'incident', 'incidents')}` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
-      : '<div class="card empty"><div class="title">Aucune tâche</div><p>Rien à traiter sur cette vue pour le moment.</p></div>'}`;
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.' })}</div>`}`;
 }
 ACTIONS.loyQ = el => { UI.loyQ = el.value; render(); };
 ACTIONS.loySort = el => { UI.loySort = el.value; render(); };
@@ -330,12 +330,12 @@ function loyPerf() {
   const by = {}; acts.forEach(a => { const x = by[a.userId] = by[a.userId] || { n: 0, ok: 0 }; x.n++; if (OUTCOMES[a.outcome] && OUTCOMES[a.outcome].done && !OUTCOMES[a.outcome].lost) x.ok++; });
   const rows = Object.entries(by).sort((a, b) => b[1].n - a[1].n);
   return `<div class="row" style="margin-bottom:12px">${monthNav('loyMonth', mk)}</div>
-    ${rows.length ? `<div class="card">${rows.map(([uid, x], i) => `<div class="rank-row"><div class="rank-n">${i + 1}</div><div class="row">${avatar(S.users[uid])}<b>${esc(fullName(S.users[uid]))}</b></div><div>${progressBar(x.n ? x.ok / x.n : 0, { ticks: false })}<span class="muted small">${fmtP(x.n ? x.ok / x.n : 0)} de succès</span></div><b class="num">${x.n} action(s)</b></div>`).join('')}</div>`
-      : '<div class="card empty"><div class="title">Aucune action ce mois-ci</div><p>Le classement démarre au premier appel.</p></div>'}`;
+    ${rows.length ? `<div class="card">${rows.map(([uid, x], i) => `<div class="rank-row"><div class="rank-n">${i + 1}</div><div class="row">${avatar(S.users[uid])}<b>${esc(fullName(S.users[uid]))}</b></div><div>${progressBar(x.n ? x.ok / x.n : 0, { ticks: false })}<span class="muted small">${fmtP(x.n ? x.ok / x.n : 0)} de succès</span></div><b class="num">${plur(x.n, 'action', 'actions')}</b></div>`).join('')}</div>`
+      : `<div class="card">${emptyBox({ art: 'todo', title: 'Aucune action ce mois-ci', text: 'Le classement démarre au premier appel.' })}</div>`}`;
 }
 function loyLost(list) {
-  return list.length ? `<div class="grid">${list.map(t => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(LOYALTY_TYPES[t.type].icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge bad">${LOYALTY_TYPES[t.type].label}</span><div class="muted small">${t.acts.length} tentative(s) · dernière : ${t.acts[0] ? esc(OUTCOMES[t.acts[0].outcome].label) + ' par ' + esc(fullName(S.users[t.acts[0].userId])) + ', ' + ago(t.acts[0].at) : '—'}${t.acts[0] && t.acts[0].note ? ' · « ' + esc(t.acts[0].note) + ' »' : ''}</div></div><button class="btn sm" data-act="loyRetry" data-c="${t.client.id}" data-t="${t.type}">Relancer</button></div>`).join('')}</div>`
-    : '<div class="card empty"><div class="title">Aucun client perdu</div><p>Les relances épuisées (3 tentatives) ou abandonnées apparaîtront ici.</p></div>';
+  return list.length ? `<div class="grid">${list.map(t => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(LOYALTY_TYPES[t.type].icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge bad">${LOYALTY_TYPES[t.type].label}</span><div class="muted small">${plur(t.acts.length, 'tentative', 'tentatives')} · dernière : ${t.acts[0] ? esc(OUTCOMES[t.acts[0].outcome].label) + ' par ' + esc(fullName(S.users[t.acts[0].userId])) + ', ' + ago(t.acts[0].at) : 'n.d.'}${t.acts[0] && t.acts[0].note ? ' · « ' + esc(t.acts[0].note) + ' »' : ''}</div></div><button class="btn sm" data-act="loyRetry" data-c="${t.client.id}" data-t="${t.type}">Relancer</button></div>`).join('')}</div>`
+    : `<div class="card">${emptyBox({ art: 'done', title: 'Aucun client perdu', text: 'Les relances épuisées ou abandonnées apparaîtront ici.' })}</div>`;
 }
 ACTIONS.loyRetry = el => { const id = newId(); db.set(['loyalty', id], { id, clientId: el.dataset.c, type: el.dataset.t, outcome: 'reopen', userId: ME.id, at: Date.now() }); toast('Remis dans les tâches'); };
 ACTIONS.loyHistory = () => {
@@ -362,7 +362,7 @@ function clubList() {
   return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(300px, 100%), 1fr))">${clubs.map(c => {
     const r = rangeOf('month', curMonth()); const st = statsFor(c.id, null, r);
     return `<div class="card"><div class="card-head">${ico('building')}<div class="spacer"><h3>${esc(c.name)}</h3><div class="muted small">${esc([c.address, c.city].filter(Boolean).join(', ') || 'Adresse non renseignée')}</div></div>${isCreator() ? `<button class="btn ghost icon sm" data-act="clubForm" data-id="${c.id}">${ico('edit')}</button>` : ''}</div>
-      <div class="row small"><span>${clubMembers(c.id).length} membre(s) actif(s)</span><span class="spacer"></span><b>${fmtP(st.progress)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}
+      <div class="row small"><span>${plur(clubMembers(c.id).length, 'membre actif', 'membres actifs')}</span><span class="spacer"></span><b>${fmtP(st.progress)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}
       ${c.address || c.city ? `<a class="btn sm" style="margin-top:12px" target="_blank" rel="noopener" href="https://www.openstreetmap.org/search?query=${encodeURIComponent([c.address, c.city].join(' '))}">${ico('map')} Voir sur la carte</a>` : ''}</div>`;
   }).join('')}</div>`;
 }
@@ -387,14 +387,14 @@ function clubBase() {
     <div class="alert info" style="margin-bottom:12px">${ico('info')}<div>La base nette = clients actifs nets − sortants du mois. « Contrats à signer » = objectif de fin de mois − base nette : comparez-le à la somme des objectifs « Contrats signés » de l’équipe.</div></div>
     <div class="table-wrap"><table class="t"><thead><tr><th>Mois</th><th class="num">Clients actifs nets</th><th class="num">Sortants</th><th class="num">Base nette</th><th class="num">Objectif fin de mois</th><th class="num">Contrats à signer</th><th class="num">Objectifs équipe</th></tr></thead><tbody>
     ${MOIS.map((ml, i) => { const mk = `${y}-${pad(i + 1)}`; const v = data[mk] || {}; const net = (Number(v.actifs) || 0) - (Number(v.sortants) || 0); const toSign = v.objectif ? Number(v.objectif) - net : null; const team = clubMonthTarget(mk, CLUB.id, 'contrats');
-      return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${['actifs', 'sortants'].map(k => `<td class="num"><input class="cell" type="number" min="0" value="${v[k] ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="${k}"></td>`).join('')}<td class="num">${v.actifs ? fmtN(net) : '—'}</td><td class="num"><input class="cell" type="number" min="0" value="${v.objectif ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="objectif"></td><td class="num">${toSign != null ? `<b>${fmtN(toSign)}</b>` : '—'}</td><td class="num ${toSign != null && team && team < toSign ? 'bad' : ''}">${team ? fmtN(team) : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+      return `<tr><td>${ml}${mk === cm ? ' <span class="badge">en cours</span>' : ''}</td>${['actifs', 'sortants'].map(k => `<td class="num"><input class="cell" type="number" min="0" value="${v[k] ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="${k}"></td>`).join('')}<td class="num">${v.actifs ? fmtN(net) : 'n.d.'}</td><td class="num"><input class="cell" type="number" min="0" value="${v.objectif ?? ''}" data-change="baseCell" data-mk="${mk}" data-k="objectif"></td><td class="num">${toSign != null ? `<b>${fmtN(toSign)}</b>` : 'n.d.'}</td><td class="num ${toSign != null && team && team < toSign ? 'bad' : ''}">${team ? fmtN(team) : 'n.d.'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 ACTIONS.baseCell = el => { db.set(['base', CLUB.id, el.dataset.mk, el.dataset.k], el.value === '' ? null : toNum(el.value)); toast('Enregistré'); };
 function clubSettings() {
   return `<div class="grid">
     ${offersCard()}
-    <div class="card"><h3>KPI suivis</h3><p class="muted small">Points = valeur du KPI à 100 % de l’objectif. 👑 Obligatoire = compte dans le classement global.</p>
-      <div class="table-wrap"><table class="t"><thead><tr><th>Actif</th><th>KPI</th><th>Unité</th><th class="num">Points</th><th>👑 Obligatoire</th><th>Ordre</th></tr></thead><tbody>
+    <div class="card"><h3>KPI suivis</h3><p class="muted small">Points = valeur du KPI à 100 % de l’objectif. Obligatoire = compte dans le classement global.</p>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Actif</th><th>KPI</th><th>Unité</th><th class="num">Points</th><th>Obligatoire</th><th>Ordre</th></tr></thead><tbody>
       ${Object.values(S.kpis).sort((a, b) => a.order - b.order).map(k => `<tr><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="enabled" ${k.enabled ? 'checked' : ''}></td><td><input class="input sm" style="width:200px" value="${esc(k.label)}" data-change="kpiSet" data-id="${k.id}" data-k="label"></td><td>${k.unit === 'eur' ? '€' : 'Quantité'}</td><td class="num"><input class="cell" type="number" min="0" step="50" value="${k.points}" data-change="kpiSet" data-id="${k.id}" data-k="points"></td><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="required" ${k.required ? 'checked' : ''}></td><td><input class="cell" style="width:50px" type="number" value="${k.order}" data-change="kpiSet" data-id="${k.id}" data-k="order"></td></tr>`).join('')}</tbody></table></div>
       <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>
     <div class="card"><h3>Confidentialité</h3><p class="small">Fit Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En ligne, seuls les membres munis d’un code valide peuvent lire la base de l’équipe (règles Firebase) ; changer ou retirer un code coupe l’accès aussitôt.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>

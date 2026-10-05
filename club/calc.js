@@ -192,10 +192,10 @@ function statusOf(pct, exp) {
   if (isReached(pct)) return { key: 'done', label: 'Objectif atteint', cls: 'status-ok' };
   if (exp <= 0) return { key: 'wait', label: 'Pas commencé', cls: '' };
   const ratio = pct / exp;
-  if (ratio >= 1.05) return { key: 'ahead', label: 'En avance', cls: 'status-ok' };
-  if (ratio >= 0.95) return { key: 'ontime', label: 'À l’heure', cls: 'status-ok' };
-  if (ratio >= 0.75) return { key: 'late', label: 'En léger retard', cls: 'status-warn' };
-  return { key: 'verylate', label: 'Très en retard', cls: 'status-bad' };
+  if (ratio >= 1.05) return { key: 'ahead', label: 'Dans le rythme', cls: 'status-ok' };
+  if (ratio >= 0.95) return { key: 'ontime', label: 'Dans le rythme', cls: 'status-ok' };
+  if (ratio >= 0.75) return { key: 'late', label: 'À surveiller', cls: 'status-warn' };
+  return { key: 'verylate', label: 'En retard', cls: 'status-bad' };
 }
 
 // Phrase de rythme sous chaque carte KPI.
@@ -249,6 +249,8 @@ function allTime(userId) {
     return Math.round(pts);
   });
 }
+// Rythme de points par semaine (mois en cours, a defaut le mois dernier) : estimation du temps avant le niveau suivant.
+function weeklyPace(uid) { const u = S.users[uid]; if (!u) return 0; const cm = curMonth(); const d = Number(today().slice(8)); const pts = mk => (u.clubs || []).reduce((s, c) => s + statsFor(c, uid, rangeOf('month', mk)).earned, 0); const cur = pts(cm); if (d >= 7 && cur > 0) return cur / (d / 7); const pm = addMonths(cm, -1); return pts(pm) / (daysIn(pm) / 7); }
 function levelOf(pts) { let l = LEVELS[0]; for (const x of LEVELS) if (pts >= x.min) l = x; const next = LEVELS[LEVELS.indexOf(l) + 1]; return { ...l, next }; }
 
 function allTrophies() {
@@ -261,7 +263,7 @@ function allTrophies() {
       for (const mk of idx().months.filter(m => m < cm)) {
         const r = rangeOf('month', mk);
         const rk = ranking(c.id, r);
-        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: 'trophy', label: `Meilleur·e commercial·e ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
+        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'month', icon: 'trophy', label: `N°1 du mois ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}`, mk, clubId: c.id });
         for (const k of kpiList()) {
           if (!k.points) continue;
           const kr = ranking(c.id, r, k.id).filter(x => x.score != null && x.real > 0);
@@ -274,14 +276,14 @@ function allTrophies() {
         const r = rangeOf('quarter', qf);
         if (r.to >= t) continue;
         const rk = ranking(c.id, r);
-        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'season', icon: 'crown', label: `Champion·ne de la saison ${r.label}`, mk: r.to.slice(0, 7), clubId: c.id });
+        if (rk[0] && rk[0].score > 0) out.push({ userId: rk[0].u.id, kind: 'season', icon: 'crown', label: `N°1 de la saison ${r.label}`, mk: r.to.slice(0, 7), clubId: c.id });
       }
       // semaines terminees (12 dernieres)
       let w = weekStart(addDays(t, -7));
       for (let i = 0; i < 12; i++, w = addDays(w, -7)) {
         const r = rangeOf('week', w);
         const rk = ranking(c.id, r).filter(x => x.score > 0);
-        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `Champion·ne de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
+        rk.slice(0, 3).forEach((x, j) => out.push({ userId: x.u.id, kind: 'week', icon: 'medal', tone: ['gold', 'silver', 'bronze'][j], label: j ? `Podium semaine du ${dm(w)}` : `N°1 de la semaine du ${dm(w)}`, mk: w.slice(0, 7), clubId: c.id }));
       }
     }
     // defis flash termines
@@ -334,7 +336,7 @@ function challengeRanking(ch) {
 
 // ── Retention : taches generees depuis la base clients ─────────────────────
 // Icone d'un trophee (nom d'icone controle, teinte or/argent/bronze pour le podium).
-const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}">${ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
+const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}" title="${esc(t.label || '')}">${typeof trophyArt === 'function' ? trophyArt(t, /ico-xs/.test(cls) ? 18 : /ico-xl/.test(cls) ? 56 : 32) : ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
 const LOYALTY_TYPES = {
   suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
   renouvellement: { label: 'Renouvellement', icon: 'repeat', hint: 'Fin de contrat dans les 30 jours' },
@@ -343,7 +345,7 @@ const LOYALTY_TYPES = {
   mandat: { label: 'Sans mandat', icon: 'bank', hint: 'Abonné sans mandat de prélèvement' },
 };
 const OUTCOMES = {
-  ok: { label: 'Joint — OK', cls: 'ok', done: true },
+  ok: { label: 'Joint, OK', cls: 'ok', done: true },
   rdv: { label: 'RDV pris', cls: 'ok', done: true },
   paid: { label: 'Réglé', cls: 'ok', done: true },
   noanswer: { label: 'Pas de réponse', cls: 'warn', done: false },

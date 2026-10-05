@@ -36,12 +36,12 @@ function impRsm() {
   const wk = dateOf(weekStart(today())).getTime(), mo = dateOf(curMonth() + '-01').getTime();
   const item = ([id, filt, file], since) => {
     const d = defById(id); const ts = routine[id]; const ok = ts && ts >= since;
-    return `<details class="rsm-item"><summary class="row"><span class="badge ${ok ? 'ok' : ''}" style="min-width:26px;justify-content:center">${ok ? '✓' : '·'}</span><b class="spacer">${esc(d.label)}</b><span class="muted small">${ts ? 'importé le ' + dm(isoOf(new Date(ts))) : 'jamais importé'}</span></summary>
+    return `<details class="rsm-item"><summary class="row"><span class="badge ${ok ? 'ok' : ''}" style="min-width:26px;justify-content:center">${ok ? ico('check', 'ico ico-xs') : '·'}</span><b class="spacer">${esc(d.label)}</b><span class="muted small">${ts ? 'importé le ' + dm(isoOf(new Date(ts))) : 'jamais importé'}</span></summary>
       <div class="small" style="padding:8px 0 4px 36px;display:grid;gap:4px"><div><span class="muted">Où :</span> ${esc(d.path)}</div><div><span class="muted">Filtres :</span> ${esc(filt)}</div><div><span class="muted">Nom à donner :</span> <code>${esc(file)}</code></div><div><span class="muted">Alimente :</span> ${esc(d.feeds)}</div></div></details>`;
   };
   const cnt = (list, since) => list.filter(([id]) => (routine[id] || 0) >= since).length;
   return `${done}
-    <div class="card" style="margin-bottom:14px"><div class="drop" id="rsm-drop">${ico('upload')}<div class="title" style="font-size:19px;margin-top:8px">Déposez vos exports Resamania</div>
+    <div class="card" style="margin-bottom:14px"><div class="drop" id="rsm-drop">${ico('upload')}<div class="title t-18" style="margin-top:8px">Déposez vos exports Resamania</div>
       <div class="muted small">Plusieurs fichiers à la fois : CSV des listes, ZIP des exports de gestion (sans les décompresser), XLSX. Chaque fichier est reconnu par ses colonnes.</div></div>
       <input type="file" id="rsm-file" multiple accept=".csv,.tsv,.txt,.zip,.xlsx" hidden></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(340px, 100%), 1fr));margin-bottom:14px">
@@ -52,18 +52,18 @@ function impRsm() {
     <div class="card"><h3>Où trouver quoi dans Resamania</h3><p class="muted small">Une seule source de vérité par KPI : on n’additionne jamais deux exports pour le même chiffre.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>KPI Fit Pulse</th><th>Source Resamania</th><th>Rattachement au commercial</th></tr></thead><tbody>
       ${[['Contrats signés', 'Exports de gestion > Membres & Ventes > Vente d’abonnements', 'Commercial initial (code KGUE, AREA…)'],
-         ['Nutrition', 'Exports de gestion > Finance > Factures & avoirs (DetailLignes) — ou liste Lignes de factures', 'Auteur / Vendeur'],
+         ['Nutrition', 'Exports de gestion > Finance > Factures & avoirs (DetailLignes) ou liste Lignes de factures', 'Auteur / Vendeur'],
          ['Accessoires', 'Idem, codes produit FPARK / NO_FPARK', 'Auteur / Vendeur'],
          ['Impayés récupérés', 'Données financières > Incidents (Statut = Régularisé)', 'Auteur de la régularisation → canal'],
          ['Contrat B2B', 'Factures & avoirs : « Société du client » renseignée', 'Commercial initial'],
          ['Prospects', 'Clients > Prospects (liste) ou Prospects (S)', 'Commercial (initial)'],
          ['Taux de transformation', 'Exports de gestion > Taux de transformation par commerciaux', 'Commercial'],
          ['Résiliations / sauvetages', 'Clients > Résiliations (Etat canceled = sauvetage)', 'Créateur'],
-         ['Impayés en cours', 'Points d’attention > Clients en incident', '—'],
-         ['Sans mandat', 'Points d’attention > Clients abonnés sans prélèvement', '—'],
-         ['Anniversaires', 'Clients > Clients club (Statut = Client)', '—'],
-         ['Fins de contrat', 'Clients > Abonnements (Fin d’engagement)', '—'],
-         ['Invités > Contrats', 'Pas d’export dans Resamania (liste Invitations) : saisie manuelle', '—']]
+         ['Impayés en cours', 'Points d’attention > Clients en incident', 'n.d.'],
+         ['Sans mandat', 'Points d’attention > Clients abonnés sans prélèvement', 'n.d.'],
+         ['Anniversaires', 'Clients > Clients club (Statut = Client)', 'n.d.'],
+         ['Fins de contrat', 'Clients > Abonnements (Fin d’engagement)', 'n.d.'],
+         ['Invités > Contrats', 'Pas d’export dans Resamania (liste Invitations) : saisie manuelle', 'n.d.']]
         .map(([k, s2, r]) => `<tr><td><b>${k}</b></td><td>${s2}</td><td class="muted">${r}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 function mountRsm() {
@@ -104,25 +104,25 @@ function rsmReview() {
     const byC = {}; r.recov.forEach(x => { const k = byC[x.canal] = byC[x.canal] || { v: 0, n: 0 }; k.v += x.amount; k.n++; });
     const nClients = Object.keys(r.clients).length + r.clientsByName.length;
     const lines = [
-      ...Object.entries(byK).map(([k, x]) => `<div class="row small"><span>${S.kpis[k] ? kpiIcon(S.kpis[k], 'ico ico-xs') + ' ' + esc(S.kpis[k].label) : esc(k)}</span><span class="spacer"></span><b>${fmtV(x.v, S.kpis[k] ? S.kpis[k].unit : 'qty')}</b><span class="muted">${x.n} ligne(s)</span></div>`),
-      ...Object.entries(byC).map(([k, x]) => `<div class="row small"><span>💶 Récupéré · ${esc(k === 'annule' ? 'annulé / avoir (pas d’argent encaissé)' : RECOV_CHANNELS[k].label)}</span><span class="spacer"></span><b>${fmtE(x.v)}</b><span class="muted">${x.n}</span></div>`),
-      nClients ? `<div class="row small"><span>👥 Fiches clients mises à jour</span><span class="spacer"></span><b>${nClients}</b></div>` : '',
-      r.balances ? `<div class="row small"><span>⚠️ Impayés en cours (photo du jour)</span><span class="spacer"></span><b>${fmtE(r.balances.list.reduce((s, x) => s + x.amount, 0))}</b><span class="muted">${r.balances.list.length} client(s)</span></div>` : '',
-      r.noMandate ? `<div class="row small"><span>🏦 Adhérents sans mandat</span><span class="spacer"></span><b>${r.noMandate.length}</b></div>` : '',
-      r.resil.length ? `<div class="row small"><span>🚪 Résiliations</span><span class="spacer"></span><b>${r.resil.length}</b><span class="muted">dont ${r.resil.filter(x => x.saved).length} sauvetage(s)</span></div>` : '',
-      r.controls.length ? `<div class="row small"><span>🔎 Données de contrôle</span><span class="spacer"></span><b>${r.controls.length}</b>${r.def.monthly ? `<span class="muted">mois ${esc(r.month)}</span>` : ''}</div>` : '',
+      ...Object.entries(byK).map(([k, x]) => `<div class="row small"><span>${S.kpis[k] ? kpiIcon(S.kpis[k], 'ico ico-xs') + ' ' + esc(S.kpis[k].label) : esc(k)}</span><span class="spacer"></span><b>${fmtV(x.v, S.kpis[k] ? S.kpis[k].unit : 'qty')}</b><span class="muted">${plur(x.n, 'ligne', 'lignes')}</span></div>`),
+      ...Object.entries(byC).map(([k, x]) => `<div class="row small"><span>${ico('coins', 'ico ico-xs')} Récupéré · ${esc(k === 'annule' ? 'annulé / avoir (pas d’argent encaissé)' : RECOV_CHANNELS[k].label)}</span><span class="spacer"></span><b>${fmtE(x.v)}</b><span class="muted">${x.n}</span></div>`),
+      nClients ? `<div class="row small"><span>${ico('users', 'ico ico-xs')} Fiches clients mises à jour</span><span class="spacer"></span><b>${nClients}</b></div>` : '',
+      r.balances ? `<div class="row small"><span>${ico('alert', 'ico ico-xs')} Impayés en cours (photo du jour)</span><span class="spacer"></span><b>${fmtE(r.balances.list.reduce((s, x) => s + x.amount, 0))}</b><span class="muted">${plur(r.balances.list.length, 'client', 'clients')}</span></div>` : '',
+      r.noMandate ? `<div class="row small"><span>${ico('bank', 'ico ico-xs')} Adhérents sans mandat</span><span class="spacer"></span><b>${r.noMandate.length}</b></div>` : '',
+      r.resil.length ? `<div class="row small"><span>${ico('door', 'ico ico-xs')} Résiliations</span><span class="spacer"></span><b>${r.resil.length}</b><span class="muted">dont ${plur(r.resil.filter(x => x.saved).length, 'sauvetage', 'sauvetages')}</span></div>` : '',
+      r.controls.length ? `<div class="row small"><span>${ico('search', 'ico ico-xs')} Données de contrôle</span><span class="spacer"></span><b>${r.controls.length}</b>${r.def.monthly ? `<span class="muted">mois ${esc(r.month)}</span>` : ''}</div>` : '',
     ].filter(Boolean).join('');
     const skipped = Object.entries(r.skipped);
-    return `<div class="card"><div class="row wrap">${ico('check')}<div class="spacer"><b>${esc(r.def.label)}</b><div class="muted small">${esc(r.name)} · ${r.rowsCount} ligne(s) · ${esc(r.encoding || '')}${r.from ? ` · ${dmy(r.from)} → ${dmy(r.to)}` : ''}</div></div><span class="badge ${r.def.family === 'liste' ? 'info' : 'fp'}">${r.def.family === 'liste' ? 'Liste' : 'Export de gestion'}</span></div>
+    return `<div class="card"><div class="row wrap">${ico('check')}<div class="spacer"><b>${esc(r.def.label)}</b><div class="muted small">${esc(r.name)} · ${plur(r.rowsCount, 'ligne', 'lignes')} · ${esc(r.encoding || '')}${r.from ? ` · ${dmy(r.from)} → ${dmy(r.to)}` : ''}</div></div><span class="badge ${r.def.family === 'liste' ? 'info' : 'fp'}">${r.def.family === 'liste' ? 'Liste' : 'Export de gestion'}</span></div>
       <div style="margin-top:10px;display:grid;gap:5px">${lines || '<span class="muted small">Rien à importer dans ce fichier.</span>'}</div>
       ${r.warnings.map(w => `<div class="alert" style="margin-top:8px;padding:8px 12px"><span class="small">${esc(w)}</span></div>`).join('')}
-      ${skipped.length ? `<details style="margin-top:8px"><summary class="muted small">${skipped.reduce((s, [, n]) => s + n, 0)} ligne(s) écartée(s)</summary><div class="small muted" style="padding-top:6px">${skipped.map(([w, n]) => `${n} × ${esc(w)}`).join('<br>')}</div></details>` : ''}</div>`;
+      ${skipped.length ? `<details style="margin-top:8px"><summary class="muted small">${plur(skipped.reduce((s, [, n]) => s + n, 0), 'ligne écartée', 'lignes écartées')}</summary><div class="small muted" style="padding-top:6px">${skipped.map(([w, n]) => `${n} × ${esc(w)}`).join('<br>')}</div></details>` : ''}</div>`;
   };
-  const opt = (k, cur) => `<option value="">— choisir —</option>${members.map(u => `<option value="${u.id}" ${cur === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}<option value="system" ${cur === 'system' ? 'selected' : ''}>Vente en ligne / système (personne)</option><option value="ignore" ${cur === 'ignore' ? 'selected' : ''}>Ignorer</option>`;
+  const opt = (k, cur) => `<option value="">Choisir…</option>${members.map(u => `<option value="${u.id}" ${cur === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}<option value="system" ${cur === 'system' ? 'selected' : ''}>Vente en ligne / système (personne)</option><option value="ignore" ${cur === 'ignore' ? 'selected' : ''}>Ignorer</option>`;
   const usable = B.filter(r => r.def && !r.def.silent).length;
-  return `<div class="row wrap" style="margin-bottom:12px"><h2 class="spacer">${B.length} fichier(s) analysé(s)</h2><button class="btn" data-act="rsmCancel">Annuler</button><button class="btn primary" data-act="rsmCommit" ${usable ? '' : 'disabled'}>Importer ${usable} fichier(s) dans ${esc(CLUB.name)}</button></div>
-    ${unk.length ? `<div class="card" style="margin-bottom:14px;border-color:var(--fp)"><h3>Qui est qui ? ${unk.length} nom(s) Resamania à rattacher</h3><p class="muted small">Resamania écrit un vendeur sous plusieurs formes (NOM Prénom, e-mail, code). Votre choix est retenu pour les prochains imports. Sans choix, la ligne n’est attribuée à personne.</p>
-      <div class="table-wrap"><table class="t"><tbody>${unk.map(u => `<tr><td><b>${esc(u.label)}</b><div class="muted small">${u.count} ligne(s)</div></td><td style="width:280px"><select class="input sm" data-change="rsmChoice" data-k="${esc(u.key)}">${opt(u.key, UI.rsmChoices[u.key])}</select></td></tr>`).join('')}</tbody></table></div></div>` : ''}
+  return `<div class="row wrap" style="margin-bottom:12px"><h2 class="spacer">${plur(B.length, 'fichier analysé', 'fichiers analysés')}</h2><button class="btn" data-act="rsmCancel">Annuler</button><button class="btn primary" data-act="rsmCommit" ${usable ? '' : 'disabled'}>Importer ${plur(usable, 'fichier', 'fichiers')} dans ${esc(CLUB.name)}</button></div>
+    ${unk.length ? `<div class="card" style="margin-bottom:14px;border-color:var(--fp)"><h3>Qui est qui ? ${plur(unk.length, 'nom', 'noms')} Resamania à rattacher</h3><p class="muted small">Resamania écrit un vendeur sous plusieurs formes (NOM Prénom, e-mail, code). Votre choix est retenu pour les prochains imports. Sans choix, la ligne n’est attribuée à personne.</p>
+      <div class="table-wrap"><table class="t"><tbody>${unk.map(u => `<tr><td><b>${esc(u.label)}</b><div class="muted small">${plur(u.count, 'ligne', 'lignes')}</div></td><td style="width:280px"><select class="input sm" data-change="rsmChoice" data-k="${esc(u.key)}">${opt(u.key, UI.rsmChoices[u.key])}</select></td></tr>`).join('')}</tbody></table></div></div>` : ''}
     <div class="grid">${B.map(card).join('')}</div>`;
 }
 ACTIONS.rsmChoice = el => { UI.rsmChoices[el.dataset.k] = el.value; };
@@ -242,7 +242,7 @@ ACTIONS.rsmCommit = () => {
   Object.values(pendingClients).forEach(c => ops.push([['clients', c.id], c]));
   db.batch(ops);
   UI.rsmBatch = null; UI.rsmDone = summary; render();
-  toast(`Import Resamania terminé : ${summary.files} fichier(s) ✅`);
+  toast(`Import Resamania terminé : ${plur(summary.files, 'fichier', 'fichiers')}`);
 };
 function rsmDoneCard() {
   const s = UI.rsmDone; const mk = addMonths(curMonth(), -1);
@@ -250,7 +250,7 @@ function rsmDoneCard() {
   const perf = deepGet(ctrl(), ['perf', mk]); const ppC = sumRange(CLUB.id, null, 'contrats', mk + '-01', `${mk}-${daysIn(mk)}`);
   const perfTot = perf ? Object.values(perf).reduce((a, b) => a + Number(b || 0), 0) : null;
   return `<div class="card" style="margin-bottom:14px;border-color:var(--ok)"><div class="card-head">${ico('check')}<h3>Import terminé</h3><span class="spacer"></span><button class="btn ghost sm" data-act="ui" data-key="rsmDone" data-val="">${ico('x')}</button></div>
-    <div class="row wrap" style="gap:22px"><div><div class="muted small">Fichiers</div><b class="title" style="font-size:22px">${s.files}</b></div><div><div class="muted small">Saisies créées</div><b class="title" style="font-size:22px">${s.entries}</b></div><div><div class="muted small">Déjà connues (mises à jour, pas de doublon)</div><b class="title" style="font-size:22px">${s.updated}</b></div><div><div class="muted small">Régularisations d’impayés</div><b class="title" style="font-size:22px">${s.recov}</b></div><div><div class="muted small">Fiches clients</div><b class="title" style="font-size:22px">${s.clients}</b></div><div><div class="muted small">Résiliations</div><b class="title" style="font-size:22px">${s.resil}</b></div></div>
+    <div class="row wrap" style="gap:22px"><div><div class="muted small">Fichiers</div><b class="title t-20">${s.files}</b></div><div><div class="muted small">Saisies créées</div><b class="title t-20">${s.entries}</b></div><div><div class="muted small">Déjà connues (mises à jour, pas de doublon)</div><b class="title t-20">${s.updated}</b></div><div><div class="muted small">Régularisations d’impayés</div><b class="title t-20">${s.recov}</b></div><div><div class="muted small">Fiches clients</div><b class="title t-20">${s.clients}</b></div><div><div class="muted small">Résiliations</div><b class="title t-20">${s.resil}</b></div></div>
     ${perfTot != null ? `<div class="alert ${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'info' : ''}" style="margin-top:12px">${ico('target')}<div><b>Contrôle ${monthLabel(mk)} : ${fmtN(ppC)} contrats dans Fit Pulse, ${fmtN(perfTot)} dans les performances commerciales Resamania</b>${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'Les deux sources concordent.' : 'Écart à vérifier : vente d’abonnements incomplète, ou changements d’offre comptés d’un côté seulement.'}</div></div>` : ''}
     ${s.recov ? `<div style="margin-top:12px"><a class="btn sm primary" href="#/impayes">Voir les impayés par canal ${ico('chevR')}</a></div>` : ''}</div>`;
 }
@@ -280,12 +280,12 @@ const impayesAnalyse = {
       ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucune régularisation importée</b>Dans Resamania : Données financières > Incidents > FILTRER (Statut = Régularisé, Date de régularisation = le mois, Club) > ⋮ > Exporter. Déposez le fichier dans Imports > Resamania.</div></div>` : ''}
       <div class="grid" style="grid-template-columns:1.2fr 1fr;margin-bottom:14px">
         <div class="card hero" style="grid-template-columns:1fr"><div><div class="muted small">Récupéré en ${monthLabel(mk)}, tous canaux</div><div class="big">${fmtE(total)}</div>
-          <div class="muted small" style="margin-top:4px">${list.length} régularisation(s) · dont équipe ${fmtE(by.equipe.v)} (${fmtP(total ? by.equipe.v / total : null)})</div>
+          <div class="muted small" style="margin-top:4px">${plur(list.length, 'régularisation', 'régularisations')} · dont équipe ${fmtE(by.equipe.v)} (${fmtP(total ? by.equipe.v / total : null)})</div>
           <div style="display:flex;height:14px;border-radius:99px;overflow:hidden;margin-top:14px;background:#26262a">${Object.entries(RECOV_CHANNELS).map(([k, c]) => by[k].v ? `<i style="width:${by[k].v / total * 100}%;background:${c.color}" title="${esc(c.label)} : ${fmtE(by[k].v)}"></i>` : '').join('')}</div></div></div>
-        <div class="card"><div class="muted small">Impayés en cours</div><div class="title" style="font-size:34px">${fmtE(enCours)}</div><div class="muted small">${clients.length} client(s) débiteur(s)${balAt ? ` · photo du ${dmy(balAt)}` : ''}</div>
+        <div class="card"><div class="muted small">Impayés en cours</div><div class="title t-32">${fmtE(enCours)}</div><div class="muted small">${plur(clients.length, 'client débiteur', 'clients débiteurs')}${balAt ? ` · photo du ${dmy(balAt)}` : ''}</div>
           <a class="btn sm" style="margin-top:10px" href="#/loyalty" data-act="loyImpaye">Relancer dans Action Rétention ${ico('chevR')}</a></div></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(200px, 100%), 1fr));margin-bottom:14px">
-        ${Object.entries(RECOV_CHANNELS).map(([k, c]) => `<div class="card"><div class="row"><i style="width:10px;height:10px;border-radius:3px;background:${c.color};flex:none"></i><b class="small">${c.label}</b></div><span class="badge" style="margin-top:6px">${c.human ? 'action de l’équipe' : 'sans action du club'}</span><div class="title" style="font-size:26px;margin-top:6px">${fmtE(by[k].v)}</div><div class="muted small">${by[k].n} régul. · ${fmtP(total ? by[k].v / total : null)}</div><div class="muted small" style="margin-top:6px">${c.hint}</div></div>`).join('')}</div>
+        ${Object.entries(RECOV_CHANNELS).map(([k, c]) => `<div class="card"><div class="row"><i style="width:10px;height:10px;border-radius:3px;background:${c.color};flex:none"></i><b class="small">${c.label}</b></div><span class="badge" style="margin-top:6px">${c.human ? 'action de l’équipe' : 'sans action du club'}</span><div class="title t-24" style="margin-top:6px">${fmtE(by[k].v)}</div><div class="muted small">${by[k].n} régul. · ${fmtP(total ? by[k].v / total : null)}</div><div class="muted small" style="margin-top:6px">${c.hint}</div></div>`).join('')}</div>
       <div class="grid" style="grid-template-columns:1fr 1fr">
         <div class="card"><h3>Part de l’équipe (prime impayés)</h3><p class="muted small">Seul le canal « Équipe du club » compte pour le KPI Impayés récupérés et le classement.</p>
           ${Object.entries(team).sort((a, b) => b[1].v - a[1].v).map(([uid, t]) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">${uid === '_' ? '<span class="avatar xs">?</span><span class="spacer">Non rattaché <a href="#/members" data-act="goAliases" class="small">rattacher</a></span>' : `${avatar(S.users[uid], 'xs')}<span class="spacer">${esc(fullName(S.users[uid]))}</span>`}<span class="muted small">${t.n}</span><b>${fmtE(t.v)}</b></div>`).join('') || '<p class="muted">Aucune régularisation par l’équipe ce mois-ci.</p>'}</div>

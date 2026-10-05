@@ -138,11 +138,11 @@ function resolveSeller(raw, code) {
 
 // ── Classement des regularisations d'impayes par canal ────────────────────
 const RECOV_CHANNELS = {
-  equipe: { label: 'Équipe du club', hint: 'Encaissé à l’accueil, lien de paiement ou CB à distance par un membre de l’équipe', color: '#FFD200', human: true },
-  client: { label: 'Client en ligne', hint: 'Payé par le client lui-même depuis son espace adhérent', color: '#2F6FDB', human: false },
-  auto: { label: 'Prélèvement automatique', hint: '« Traitement automatique » : nouveau prélèvement ou re-présentation', color: '#1F9D55', human: false },
-  automatismes: { label: 'Automatismes', hint: 'Règle système « Automatismes » (prélèvement CB ou clôture automatique)', color: '#8A63D2', human: false },
-  tiers: { label: 'Tiers / autre', hint: 'Tiers payeur, huissier ou auteur non identifié', color: '#8a8a90', human: false },
+  equipe: { label: 'Équipe du club', hint: 'Encaissé à l’accueil, lien de paiement ou CB à distance par un membre de l’équipe', color: 'var(--d-1)', human: true },
+  client: { label: 'Client en ligne', hint: 'Payé par le client lui-même depuis son espace adhérent', color: 'var(--d-2)', human: false },
+  auto: { label: 'Prélèvement automatique', hint: '« Traitement automatique » : nouveau prélèvement ou re-présentation', color: 'var(--d-3)', human: false },
+  automatismes: { label: 'Automatismes', hint: 'Règle système « Automatismes » (prélèvement CB ou clôture automatique)', color: 'var(--d-4)', human: false },
+  tiers: { label: 'Tiers / autre', hint: 'Tiers payeur, huissier ou auteur non identifié', color: 'var(--d-5)', human: false },
 };
 function recovChannel(author, clientName) {
   const n = norm(String(author || '').replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, ''));
@@ -218,7 +218,7 @@ const RSM_DEFS = [
         }
         if (!kpi) c.skip('ligne hors nutrition / accessoires');
       }
-      if (b2b.size) c.warn(`${b2b.size} facture(s) avec une « Société du client » comptées en Contrat B2B : à vérifier sur un contrat B2B connu.`);
+      if (b2b.size) c.warn(`${plur(b2b.size, 'facture', 'factures')} avec une « Société du client » comptées en Contrat B2B : à vérifier sur un contrat B2B connu.`);
     },
   },
   {
@@ -258,7 +258,7 @@ const RSM_DEFS = [
         }
         if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0 }; o.amount += amount; o.count++; }
       }
-      if (weak) c.warn(`${weak} incident(s) sans numéro de paiement : clé plus faible (montant et type ajoutés).`);
+      if (weak) c.warn(`${plur(weak, 'incident', 'incidents')} sans numéro de paiement : clé plus faible (montant et type ajoutés).`);
       const list = Object.values(open);
       if (list.length) { c.balances(list, 'incidents'); }
     },
@@ -302,7 +302,7 @@ const RSM_DEFS = [
   },
   {
     id: 'prospects', label: 'Prospects', family: 'liste', feeds: 'Prospects créés par commercial',
-    path: 'Clients > Prospects > FILTRER (Date de création) > ⋮ > Exporter — ou Exports de gestion > Membres & Ventes > Prospects (S)', filters: 'Date de création = la période', file: 'RSM_prospects_AAAA-MM.csv',
+    path: 'Clients > Prospects > FILTRER (Date de création) > ⋮ > Exporter ou Exports de gestion > Membres & Ventes > Prospects (S)', filters: 'Date de création = la période', file: 'RSM_prospects_AAAA-MM.csv',
     sig: has => (has('valeur du prospect') || has('statut de prospection')) && has('date de creation'),
     parse(c) {
       const iN = c.colExact('nom'), iP = c.col('prenom'), iD = c.col('date de creation');
@@ -327,7 +327,7 @@ const RSM_DEFS = [
         const seller = resolveSeller(r[iCr]);
         c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, seller });
       }
-      if (tech) c.warn(`${tech} résiliation(s) technique(s) écartée(s) : elles gonfleraient le churn.`);
+      if (tech) c.warn(`${plur(tech, 'résiliation technique écartée', 'résiliations techniques écartées')} : elles gonfleraient le churn.`);
     },
   },
   {
@@ -373,7 +373,7 @@ const RSM_DEFS = [
     parse(c) { c.control(/perte/i.test(c.fileName) ? 'lost' : 'gained', { count: c.rows.length }); },
   },
   {
-    id: 'ignored', label: 'Export reconnu, non utilisé', family: 'gestion', feeds: '—', silent: true,
+    id: 'ignored', label: 'Export reconnu, non utilisé', family: 'gestion', feeds: '', silent: true,
     sig: (has, name) => has('situation des incidents') || has('montant ttc restant a ventiler') || /repartition|synthese|regroupement|tbo-|controle-/i.test(name) || has('contient representation') || has('cumul client actif'),
     parse(c) { c.warn('Fichier de contrôle ou d’agrégat : rien à importer.'); },
   },
@@ -427,7 +427,7 @@ function analyzeTable(t, { clubId, month }) {
     noMandate: list => { res.noMandate = list; },
   };
   def.parse(c);
-  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('⚠ Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
+  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
   if (t.encoding === 'ISO-8859-15') res.warnings.push('Encodage ISO-8859-15 (export de gestion) : accents et « € » corrigés automatiquement.');
   if (def.monthly) res.month = (t.name.match(/(\d{4})-(\d{2})(?!-\d)/) || [])[0] || month;
   return res;

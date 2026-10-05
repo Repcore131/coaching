@@ -11,7 +11,7 @@ PAGES.members = {
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
     T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal']);
     const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases, paliers: memPaliers, presences: memPresences, journal: memJournal }[tab]();
-    return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${all.filter(u => u.role === 'manager' && u.status === 'active').length} manager(s), ${all.filter(u => u.role === 'membre' && u.status === 'active').length} membre(s) actif(s), ${all.filter(u => u.status === 'pending').length} invitation(s) en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
+    return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${plur(all.filter(u => u.role === 'manager' && u.status === 'active').length, 'manager', 'managers')}, ${plur(all.filter(u => u.role === 'membre' && u.status === 'active').length, 'membre actif', 'membres actifs')}, ${plur(all.filter(u => u.status === 'pending').length, 'invitation', 'invitations')} en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
       ${tabs('memTab', T, tab)}${body}`;
   },
   mount() { if ((UI.memTab || 'org') === 'tasks') bindPlanner(); },
@@ -28,16 +28,16 @@ function memOrg() {
   const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'archived');
   const creators = Object.values(S.users).filter(u => u.role === 'createur' && u.status !== 'archived');
   return `<div class="card"><div class="card-head">${ico('building')}<h3>${esc(CLUB.name)}</h3></div>
-    <h3 class="muted" style="font-size:13px;margin:8px 0 2px">Créateur</h3>${creators.map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
-    <h3 class="muted" style="font-size:13px;margin:8px 0 2px">Managers</h3>${all.filter(u => u.role === 'manager').map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
-    <h3 class="muted" style="font-size:13px;margin:18px 0 2px">Membres</h3>${all.filter(u => u.role !== 'manager').map(memberRow).join('') || '<p class="muted">Aucun membre. Ajoutez votre équipe.</p>'}
+    <h3 class="muted t-13" style="margin:8px 0 2px">Créateur</h3>${creators.map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
+    <h3 class="muted t-13" style="margin:8px 0 2px">Managers</h3>${all.filter(u => u.role === 'manager').map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
+    <h3 class="muted t-13" style="margin:18px 0 2px">Membres</h3>${all.filter(u => u.role !== 'manager').map(memberRow).join('') || '<p class="muted">Aucun membre. Ajoutez votre équipe.</p>'}
     <p class="muted small" style="margin-bottom:0">Une invitation en attente ne compte dans aucun total tant que la personne ne s’est pas connectée.</p></div>
   <div class="card" style="margin-top:14px"><h3>Accès et rôles</h3>
     <div class="table-wrap" style="margin-top:10px"><table class="t"><thead><tr><th>Ce que l’on peut faire</th><th>Créateur</th><th>Manager</th><th>Membre</th></tr></thead><tbody>
     ${[['Saisir ses KPI, voir son tableau de bord, le classement, le feed, le chat', 1, 1, 1], ['Traiter les relances (Action Rétention) et les résiliations', 1, 1, 1],
        ['Vue club, saisir pour un membre, fixer les objectifs', 1, 1, 0], ['Imports CSV, planning des tâches, défis flash', 1, 1, 0], ['Ajouter un membre et lui générer un code', 1, 1, 0],
        ['Nommer un manager ou un créateur, modifier un manager', 1, 0, 0], ['Créer un club, régler les KPI et les points', 1, 0, 0], ['Sauvegarde, restauration, tout effacer', 1, 0, 0], ['Classé et soumis à objectifs', 0, 1, 1]]
-      .map(([l, ...v]) => `<tr><td>${l}</td>${v.map(x => `<td>${x ? '<b class="ok">✓</b>' : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      .map(([l, ...v]) => `<tr><td>${l}</td>${v.map(x => `<td>${x ? `<b class="ok">${ico('check', 'ico ico-xs')}</b>` : '<span class="muted">n.d.</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
     <p class="muted small" style="margin-bottom:0">Le compte Créateur administre l’outil : il voit tous nos clubs mais n’apparaît ni au classement ni dans les objectifs. Une même adresse e-mail peut avoir un accès Créateur et un accès Manager : c’est le code qui choisit le compte.</p></div>`;
 }
 ACTIONS.addMember = () => memberForm(null);
@@ -48,7 +48,7 @@ function memberForm(u) {
     <div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" required value="${esc(u ? u.first : '')}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(u ? u.last : '')}"></label></div>
     <label class="field"><span>E-mail (identifiant de connexion)</span><input class="input" type="email" name="email" value="${esc(u ? u.email || '' : '')}"></label>
     <div class="form-grid"><label class="field"><span>Rôle</span><select class="input" name="role" ${u && u.id === ME.id && !isCreator() ? 'disabled' : ''}>${Object.entries(ROLES).filter(([r]) => isCreator() || r === 'membre' || (u && u.role === r)).sort((a, b) => a[1].rank - b[1].rank).map(([r, x]) => `<option value="${r}" ${(u ? u.role : 'membre') === r ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
-    <div class="field"><span>Club(s)</span>${clubs.map(c => `<label class="row small"><input type="checkbox" name="club_${c.id}" ${(u ? (u.clubs || []).includes(c.id) : c.id === CLUB.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div></div>
+    <div class="field"><span>Clubs</span>${clubs.map(c => `<label class="row small"><input type="checkbox" name="club_${c.id}" ${(u ? (u.clubs || []).includes(c.id) : c.id === CLUB.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div></div>
     ${!u ? `<label class="row small"><input type="checkbox" name="pending" ${backend.mode === 'firebase' ? 'checked' : ''}> Invitation en attente (devient actif à la première connexion)</label><p class="muted small" style="margin:0">Un code d’accès personnel sera généré à l’enregistrement.</p>` : `<div class="row"><span class="small spacer">${u.codeHash ? 'Code d’accès actif.' : '<b class="bad">Aucun code : connexion impossible.</b>'}</span><button class="btn sm" type="button" data-act="regenCode" data-id="${u.id}">${ico('shield')} ${u.codeHash ? 'Générer un nouveau code' : 'Générer un code'}</button></div>`}
     </form>`,
     foot: `${u && u.id !== ME.id ? `<button class="btn danger" data-act="archiveMember" data-id="${u.id}" style="margin-right:auto">Archiver</button>` : ''}<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveMember" data-id="${u ? u.id : ''}">${u ? 'Enregistrer' : 'Ajouter'}</button>` });
@@ -94,22 +94,22 @@ function inviteText(u, code) {
   const url = `${location.origin}${location.pathname}?email=${encodeURIComponent(u.email || '')}`;
   const club = CLUB ? CLUB.name : 'Fitness Park';
   return {
-    subject: `Ton accès Fit Pulse · ${club}`,
-    body: `Salut ${u.first || ''} 👋
+    subject: `Votre accès Fit Pulse · ${club}`,
+    body: `Bonjour ${u.first || ''},
 
-Bienvenue dans Fit Pulse, l’appli de l’équipe ${club} : tes objectifs, les paliers, le classement et tes relances, dans ta poche.
+Bienvenue dans Fit Pulse, l’application de l’équipe ${club} : vos objectifs, les paliers, le classement et vos relances, sur votre téléphone.
 
-TON ACCÈS
+VOTRE ACCÈS
 • Lien : ${url}
 • E-mail : ${u.email}
 • Code personnel : ${normCode(code)}
 
-INSTALLER L’APPLI SUR TON TÉLÉPHONE
-• iPhone (Safari) : ouvre le lien, bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».
-• Android / Samsung : ouvre le lien dans Chrome ou Samsung Internet, menu ⋮ puis « Ajouter à l’écran d’accueil ».
+INSTALLER L’APPLICATION SUR VOTRE TÉLÉPHONE
+• iPhone (Safari) : ouvrez le lien, bouton Partager puis « Sur l’écran d’accueil ».
+• Android ou Samsung : ouvrez le lien dans Chrome ou Samsung Internet, menu ⋮ puis « Ajouter à l’écran d’accueil ».
 
-Ton code est personnel : ne le partage pas.
-À tout de suite sur le terrain 💪
+Votre code est personnel : ne le partagez pas.
+À tout de suite sur le terrain.
 ${ME ? fullName(ME) : ''}`,
   };
 }
@@ -182,7 +182,7 @@ function memHistory() {
       <tr class="total"><td>Total</td>${kpis.map(k => { const t = clubMonthTarget(mk, CLUB.id, k.id); return `<td class="num">${fmtV(tot[k.id] || 0, k.unit)}${t ? `<br><span class="muted small">/ ${fmtV(t, k.unit)} · ${fmtP((tot[k.id] || 0) / t)}</span>` : ''}</td>`; }).join('')}</tr></tbody></table></div>`;
   }
   const uid = UI.histUser && S.users[UI.histUser] ? UI.histUser : (members[0] && members[0].id);
-  if (!uid) return '<div class="card empty">Aucun membre actif.</div>';
+  if (!uid) return `<div class="card">${emptyBox({ art: 'target', title: 'Aucun membre actif', text: 'Ajoutez votre équipe dans l’organigramme.' })}</div>`;
   const n = daysIn(mk);
   let html = `<div class="row wrap" style="margin-bottom:12px">${seg('histMode', [['month', 'Mois'], ['day', 'Jour par jour']], mode)}${monthNav('histMonth', mk)}
     <select class="input sm" style="width:auto" data-change="histUserSel">${members.map(u => `<option value="${u.id}" ${u.id === uid ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></div>
@@ -225,10 +225,10 @@ function memTargets() {
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('tgMonth', mk)}<span class="spacer"></span>
     <button class="btn sm" data-act="copyTargets" data-mk="${mk}">${ico('history')} Reprendre les objectifs de ${monthLabel(addMonths(mk, -1))}</button></div>
     ${locked ? '<div class="alert" style="margin-bottom:12px">Mois terminé : les objectifs restent modifiables, mais cela change les scores et trophées déjà calculés.</div>' : ''}
-    <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num" title="${k.required ? 'KPI obligatoire' : ''}">${k.required ? '👑 ' : ''}${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'} · ${fmtN(k.points)} pts</span></th>`).join('')}</tr></thead><tbody>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num" title="${k.required ? 'KPI obligatoire' : ''}">${k.required ? ico('crown', 'ico ico-xs') + ' ' : ''}${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'} · ${fmtN(k.points)} pts</span></th>`).join('')}</tr></thead><tbody>
     ${members.map(u => `<tr><td class="nowrap"><b>${esc(fullName(u))}</b>${u.status === 'pending' ? ' <span class="badge warn">en attente</span>' : ''}</td>${kpis.map(k => `<td class="num"><input class="cell" type="number" min="0" value="${monthTarget(mk, u.id, k.id) || ''}" placeholder="0" data-change="tgCell" data-mk="${mk}" data-u="${u.id}" data-k="${k.id}"></td>`).join('')}</tr>`).join('')}
     <tr class="total"><td>Total club (actifs)</td>${kpis.map(k => `<td class="num">${fmtV(clubMonthTarget(mk, CLUB.id, k.id), k.unit)}</td>`).join('')}</tr></tbody></table></div>
-    <p class="muted small">👑 = KPI obligatoire du classement global. Points et KPI se règlent dans Mes clubs > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
+    <p class="muted small">Couronne = KPI obligatoire du classement global. Points et KPI se règlent dans Mes clubs > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
 }
 ACTIONS.tgCell = el => { const v = parseFloat(String(el.value).replace(',', '.')); db.set(['targets', el.dataset.mk, el.dataset.u, el.dataset.k], v > 0 ? v : null); };
 ACTIONS.copyTargets = async el => {
@@ -241,7 +241,8 @@ ACTIONS.copyTargets = async el => {
 };
 
 // Recaps : le bilan mensuel de chaque membre.
-const tierName = s => s == null ? '—' : s >= 1 ? 'ELITE' : s >= 0.75 ? 'PRO' : s >= 0.5 ? 'RISING' : 'STARTER';
+// Mois en or, argent, bronze : distinct des niveaux (Rookie a Legende).
+const monthTier = s => s == null ? 'EN COURS' : s >= 1 ? 'OR' : s >= 0.75 ? 'ARGENT' : s >= 0.5 ? 'BRONZE' : 'EN COURS';
 function memRecaps() {
   const mk = UI.recMonth || addMonths(curMonth(), -1);
   const r = rangeOf('month', mk);
@@ -254,8 +255,8 @@ function memRecaps() {
   if (sort === 'name') rows.sort((a, b) => fullName(a.u).localeCompare(fullName(b.u)));
   if (sort === 'badges') rows.sort((a, b) => b.tr - a.tr);
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('recMonth', mk)}<span class="spacer"></span><span class="muted small">Score = moyenne pondérée par les points, plafond 150 % par KPI.</span></div>
-    <div class="table-wrap"><table class="t"><thead><tr><th class="sortable" data-act="ui" data-key="recSort" data-val="name">Membre</th><th class="num">Score</th><th>Palier</th><th class="num sortable" data-act="ui" data-key="recSort" data-val="rank">Rang</th><th class="num">KPI atteints</th><th>Top KPI</th><th class="num sortable" data-act="ui" data-key="recSort" data-val="badges">Trophées</th><th></th></tr></thead><tbody>
-    ${rows.map(x => `<tr><td><b>${esc(fullName(x.u))}</b></td><td class="num">${fmtP(x.score)}</td><td><span class="badge ${x.score >= 1 ? 'fp' : x.score >= .75 ? 'ok' : x.score >= .5 ? 'info' : ''}">${tierName(x.score)}</span></td><td class="num">${x.rank}</td><td class="num">${x.reached}/${x.count}</td><td>${x.best ? `${esc(x.best.k.label)} ${fmtP(x.best.pct)}` : '—'}</td><td class="num">${x.tr}</td><td><a class="btn sm" href="#/wrap/${mk}/${x.u.id}">Voir le bilan</a></td></tr>`).join('')}
+    <div class="table-wrap"><table class="t"><thead><tr><th class="sortable" data-act="ui" data-key="recSort" data-val="name">Membre</th><th class="num">Score</th><th>Mois</th><th class="num sortable" data-act="ui" data-key="recSort" data-val="rank">Rang</th><th class="num">KPI atteints</th><th>Top KPI</th><th class="num sortable" data-act="ui" data-key="recSort" data-val="badges">Trophées</th><th></th></tr></thead><tbody>
+    ${rows.map(x => `<tr><td><b>${esc(fullName(x.u))}</b></td><td class="num">${fmtP(x.score)}</td><td><span class="tag ${x.score >= 1 ? 'is-brand' : x.score >= .75 ? 'is-ok' : x.score >= .5 ? 'is-info' : ''}">${monthTier(x.score)}</span></td><td class="num">${x.rank}</td><td class="num">${x.reached}/${x.count}</td><td>${x.best ? `${esc(x.best.k.label)} ${fmtP(x.best.pct)}` : 'n.d.'}</td><td class="num">${x.tr}</td><td class="nowrap"><a class="btn sm" href="#/wrap/${mk}/${x.u.id}">Voir le bilan</a> <button class="btn sm ghost" data-act="wrapNote" data-u="${x.u.id}" data-mk="${mk}">${deepGet(S, ['wrapNotes', mk, x.u.id]) ? 'Modifier le mot' : 'Ajouter un mot'}</button></td></tr>`).join('')}
     </tbody></table></div>`;
 }
 
@@ -268,14 +269,14 @@ function memTasks() {
   const cats = [...new Set(lib.map(t => t.cat))];
   let hours = '';
   for (let h = 6; h <= 23; h++) {
-    hours += `<div class="hour"><div class="h">${pad(h)}:00</div><div class="slot" data-hour="${h}">${(byHour[h] || []).map(p => { const t = S.tasks.library[p.taskId]; return t ? `<span class="chip ${done[p.id] ? 'done' : ''}" draggable="true" data-plan="${p.id}" title="${done[p.id] ? `Validée par ${done[p.id]} personne(s) aujourd’hui` : ''}">${esc(t.label)}<button data-act="unplan" data-id="${p.id}" aria-label="Retirer">✕</button></span>` : ''; }).join('')}<button class="btn ghost sm" data-act="planAt" data-hour="${h}" title="Ajouter une tâche">${ico('plus')}</button></div></div>`;
+    hours += `<div class="hour"><div class="h">${pad(h)}:00</div><div class="slot" data-hour="${h}">${(byHour[h] || []).map(p => { const t = S.tasks.library[p.taskId]; return t ? `<span class="chip ${done[p.id] ? 'done' : ''}" draggable="true" data-plan="${p.id}" title="${done[p.id] ? `Validée par ${plur(done[p.id], 'personne', 'personnes')} aujourd’hui` : ''}">${esc(t.label)}<button data-act="unplan" data-id="${p.id}" aria-label="Retirer">${ico('x', 'ico ico-xs')}</button></span>` : ''; }).join('')}<button class="btn ghost sm" data-act="planAt" data-hour="${h}" title="Ajouter une tâche">${ico('plus')}</button></div></div>`;
   }
   const doneToday = Object.entries(S.tasks.done[today()] || {});
   return `<div class="planner"><div class="card"><div class="card-head"><h3>Planning type de la journée</h3><span class="spacer"></span><button class="btn sm" data-act="resetPlan">Réinitialiser au modèle par défaut</button></div>
       <p class="muted small" style="margin-top:-6px">Glissez une tâche de la bibliothèque vers une heure (ou bouton +). L’équipe coche ses tâches dans le panneau Saisies du tableau de bord.</p>${hours}</div>
     <div class="grid"><div class="card"><div class="card-head"><h3>Tâches disponibles</h3><span class="spacer"></span><button class="btn sm" data-act="newTask">${ico('plus')}</button></div>
       <div class="lib">${cats.map(c => `<div class="muted small" style="margin-top:6px;font-weight:700">${esc(c)}</div>${lib.filter(t => t.cat === c).map(t => `<span class="chip" draggable="true" data-lib="${t.id}">${esc(t.label)}</span>`).join('')}`).join('')}</div></div>
-      <div class="card"><h3>Validations du jour</h3>${doneToday.length ? doneToday.map(([uid, m]) => `<div class="small" style="margin-top:8px"><b>${esc(fullName(S.users[uid]))}</b> : ${Object.keys(m).length} tâche(s)</div>`).join('') : '<p class="muted small">Aucune validation aujourd’hui.</p>'}</div></div></div>`;
+      <div class="card"><h3>Validations du jour</h3>${doneToday.length ? doneToday.map(([uid, m]) => `<div class="small" style="margin-top:8px"><b>${esc(fullName(S.users[uid]))}</b> : ${plur(Object.keys(m).length, 'tâche', 'tâches')}</div>`).join('') : '<p class="muted small">Aucune validation aujourd’hui.</p>'}</div></div></div>`;
 }
 function bindPlanner() {
   let drag = null;
@@ -296,7 +297,7 @@ ACTIONS.unplan = el => db.set(['tasks', 'plan', CLUB.id, el.dataset.id], null);
 ACTIONS.planAt = el => {
   const h = Number(el.dataset.hour);
   const lib = Object.values(S.tasks.library);
-  openModal({ title: `Ajouter une tâche à ${pad(h)}:00`, body: `<select class="input" id="pt">${lib.map(t => `<option value="${t.id}">${esc(t.cat)} — ${esc(t.label)}</option>`).join('')}</select>`,
+  openModal({ title: `Ajouter une tâche à ${pad(h)}:00`, body: `<select class="input" id="pt">${lib.map(t => `<option value="${t.id}">${esc(t.cat)} : ${esc(t.label)}</option>`).join('')}</select>`,
     foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="planAdd">Ajouter</button>', onMount: m => { m.dataset.hour = h; } });
 };
 ACTIONS.planAdd = () => { const m = $('.modal'); const id = newId(); db.set(['tasks', 'plan', CLUB.id, id], { id, taskId: $('#pt').value, hour: Number(m.dataset.hour) }); closeModal(); };
@@ -317,10 +318,11 @@ PAGES.profile = {
   render() {
     const tab = UI.profTab || 'perf';
     const pts = allTime(ME.id); const lv = levelOf(pts);
-    const head = `<div class="card" style="margin-bottom:14px"><div class="row wrap" style="gap:16px">${avatar(ME, 'lg')}<div class="spacer"><h1 style="font-size:26px">${esc(fullName(ME))}</h1>
-      <div class="row wrap small" style="margin-top:4px"><span class="badge fp">${lv.label}</span><span class="muted">${esc(ME.email || '')}</span><span class="badge">${roleLabel(ME.role)}</span>${(ME.clubs || []).map(c => S.clubs[c] ? `<span class="badge">${esc(S.clubs[c].name)}</span>` : '').join('')}</div></div>
-      <div style="text-align:right"><div class="title" style="font-size:30px">${fmtN(pts)} pts</div><div class="muted small">${lv.next ? `${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}` : 'Niveau maximum'}</div></div></div>
-      <div class="levels">${LEVELS.map(l => `<div class="${pts >= l.min ? 'got' : ''}">${l.label}<br><span class="muted">${fmtN(l.min)}</span></div>`).join('')}</div></div>`;
+    const head = `<div class="card" style="margin-bottom:14px"><div class="row wrap prof-head" style="gap:16px">${levelBadge(lv, 72)}${avatar(ME, 'lg')}<div class="spacer"><h1 class="h-profile">${esc(fullName(ME))}</h1>
+      <div class="row wrap small" style="margin-top:4px"><span class="muted">${esc(ME.email || '')}</span><span class="badge">${roleLabel(ME.role)}</span>${(ME.clubs || []).map(c => S.clubs[c] ? `<span class="badge">${esc(S.clubs[c].name)}</span>` : '').join('')}</div></div>
+      <div style="text-align:right"><div class="title t-28">${fmtN(pts)} pts</div><div class="muted small">${lv.next ? `${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}` : 'Niveau maximum'}</div></div></div>
+      <div class="lvl-row">${LEVELS.map((l, i) => { const got = pts >= l.min, nxt = lv.next && lv.next.id === l.id; const pr = nxt ? clamp((pts - LEVELS[i - 1].min) / (l.min - LEVELS[i - 1].min), 0, 1) : 0; return `<div class="lv ${nxt ? 'next' : ''}">${levelBadge(l, 40, { dim: !got && !nxt })}${nxt ? `<div class="lvl-prog"><i style="width:${Math.round(pr * 100)}%"></i></div>` : ''}<span>${fmtN(l.min)}</span></div>`; }).join('')}</div>
+      ${lv.next ? `<p class="muted small" style="margin:8px 0 0">${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}${(() => { const w = weeklyPace(ME.id); return w > 0 ? `, soit environ ${plur(Math.ceil((lv.next.min - pts) / w), 'semaine', 'semaines')} au rythme actuel` : ''; })()}.</p>` : ''}</div>`;
     return head + tabs('profTab', [['perf', 'Performances'], ['account', 'Compte']], tab) + (tab === 'perf' ? profPerf() : profAccount());
   },
 };
@@ -332,12 +334,12 @@ function profPerf() {
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">
     <div class="card"><h3>Accomplissements</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px">
-      <div class="trophy"><div class="ic">📅</div><b>Régularité : ${acc.streak} jour(s) de suite</b><span class="muted small">${acc.streak >= 3 ? 'Série en cours, continuez !' : 'Prochain palier : trois jours de suite'}</span></div>
-      <div class="trophy"><div class="ic">${acc.first100 ? '💯' : '🔒'}</div><b>Premier 100 %</b><span class="muted small">${acc.first100 ? 'Obtenu' : 'Un KPI à 100 % sur un mois'}</span></div>
-      <div class="trophy"><div class="ic">${acc.all100 ? '🏅' : '🔒'}</div><b>Grand chelem</b><span class="muted small">${acc.all100 ? 'Obtenu' : 'Tous les KPI à 100 % sur un mois'}</span></div></div></div>
+      <div class="trophy"><div class="ic">${trophyArt({ kind: 'kpi', label: 'Régularité' }, 48, !acc.streak)}</div><b>Régularité : ${plur(acc.streak, 'jour', 'jours')} de suite</b><span class="muted small">${acc.streak >= 3 ? 'Série en cours, continuez !' : 'Prochain palier : trois jours de suite'}</span></div>
+      <div class="trophy"><div class="ic">${trophyArt({ kind: 'month', icon: 'trophy', label: 'Premier 100 %' }, 48, !acc.first100)}</div><b>Premier 100 %</b><span class="muted small">${acc.first100 ? 'Obtenu' : 'Un KPI à 100 % sur un mois'}</span></div>
+      <div class="trophy"><div class="ic">${trophyArt({ kind: 'season', icon: 'crown', label: 'Grand chelem' }, 48, !acc.all100)}</div><b>Grand chelem</b><span class="muted small">${acc.all100 ? 'Obtenu' : 'Tous les KPI à 100 % sur un mois'}</span></div></div></div>
     <div class="card"><h3>Mes trophées (${tr.length})</h3><p class="muted small">Le même décompte que le classement.</p>
       ${groups.map(([k, l]) => { const g = tr.filter(t => t.kind === k); return `<div class="muted small" style="font-weight:700;margin:12px 0 6px">${l} · ${g.length}</div>${g.length ? `<div class="trophies">${g.slice().reverse().map(t => `<div class="trophy"><div class="ic">${trophyIcon(t)}</div><b>${esc(t.label)}</b></div>`).join('')}</div>` : '<p class="muted small">Aucun pour l’instant.</p>'}`; }).join('')}</div>
-    <div class="card"><h3>Mes bilans mensuels</h3>${months.length ? (showAll ? months : months.slice(0, 3)).map((m, i) => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none" href="#/wrap/${m}/${ME.id}">${ico('chart')}<b class="spacer">${monthLabel(m)}</b>${i === 0 ? '<span class="badge fp">Dernier bilan — replay</span>' : ''}${ico('chevR')}</a>`).join('') : '<p class="muted">Votre premier bilan apparaîtra à la fin du mois.</p>'}
+    <div class="card"><h3>Mes bilans mensuels</h3>${months.length ? (showAll ? months : months.slice(0, 3)).map((m, i) => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none" href="#/wrap/${m}/${ME.id}">${ico('chart')}<b class="spacer">${monthLabel(m)}</b>${i === 0 ? '<span class="badge fp">Dernier bilan, à revoir</span>' : ''}${ico('chevR')}</a>`).join('') : '<p class="muted">Votre premier bilan apparaîtra à la fin du mois.</p>'}
       ${months.length > 3 && !showAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="profWraps" data-val="all">Voir ${months.length - 3} mois de plus</button>` : ''}</div></div>`;
 }
 function profAccount() {
@@ -345,7 +347,6 @@ function profAccount() {
   return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
-    <div class="card"><h3>Avatar du tableau de bord</h3><div class="row wrap" style="margin-top:10px">${['h1', 'h2', 'f1', 'f2'].map((a, i) => `<button class="btn ${ME.avatar === a ? 'primary' : ''}" style="flex-direction:column;padding:8px" data-act="setAvatar" data-a="${a}">${mascot(a, 'happy', 54)}<span class="small">${['Homme 1', 'Homme 2', 'Femme 1', 'Femme 2'][i]}</span></button>`).join('')}</div></div>
     <div class="card"><h3>Notifications</h3>
       <label class="row" style="margin-top:12px"><input type="checkbox" data-change="prefToggle" data-k="liveBanner" ${live ? 'checked' : ''}> <span>Bandeau en direct quand un collègue saisit</span></label>
       <label class="row" style="margin-top:10px"><input type="checkbox" data-change="prefToggle" data-k="digest" ${digest ? 'checked' : ''}> <span>Bilan hebdomadaire du club (lundi matin)</span></label>
@@ -356,68 +357,111 @@ ACTIONS.saveProfile = () => { const f = formData($('#pf')); if (!f.first.trim())
 ACTIONS.setAvatar = el => db.set(['users', ME.id, 'avatar'], el.dataset.a);
 ACTIONS.prefToggle = el => setPref(el.dataset.k, el.checked);
 
+// Mot du manager sur le bilan d'un membre (une slide dediee, signee).
+ACTIONS.wrapNote = el => {
+  const { u, mk } = el.dataset; const cur = deepGet(S, ['wrapNotes', mk, u]) || {};
+  openModal({ title: `Un mot pour ${esc(fullName(S.users[u]))}`, body: `<textarea class="input" id="wn" rows="4" maxlength="280" placeholder="280 caractères au plus">${esc(cur.text || '')}</textarea>`,
+    foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="wrapNoteSave" data-u="${u}" data-mk="${mk}">Enregistrer</button>` });
+};
+ACTIONS.wrapNoteSave = el => { const t = ($('#wn').value || '').trim().slice(0, 280); db.set(['wrapNotes', el.dataset.mk, el.dataset.u], t ? { text: t, by: ME.id, at: Date.now() } : null); closeModal(); toast('Mot enregistré'); };
+
 // ── Bilan mensuel (format stories) ────────────────────────────────────────
+// Toujours tourne vers le mois suivant : le bas du classement voit sa
+// progression ou son meilleur KPI, jamais un rang qui decourage.
+function wrapActions(uid, mk) {
+  const from = mk + '-01', to = `${mk}-${daysIn(mk)}`;
+  const saved = Object.values(S.entries).filter(e => e.userId === uid && e.kpiId === 'sauvetage' && e.date >= from && e.date <= to && entryCounts(e)).reduce((s, e) => s + Number(e.value || 0), 0);
+  const paid = Object.values(S.entries).filter(e => e.userId === uid && e.kpiId === 'impayes' && e.date >= from && e.date <= to && entryCounts(e)).reduce((s, e) => s + Number(e.value || 0), 0);
+  const good = Object.values(S.loyalty || {}).filter(l => l.userId === uid && isoOf(new Date(l.at)).slice(0, 7) === mk && OUTCOMES[l.outcome] && OUTCOMES[l.outcome].done && !OUTCOMES[l.outcome].lost).length;
+  return { saved, paid, good };
+}
 PAGES.wrap = {
   render(args) {
     const [mk, uid0] = args; const uid = uid0 && S.users[uid0] ? uid0 : ME.id;
     if (!/^\d{4}-\d{2}$/.test(mk || '')) return '<div class="auth"><div class="auth-card">Bilan introuvable. <a href="#/profile">Retour</a></div></div>';
     if (uid !== ME.id && !isManager()) return '<div class="auth"><div class="auth-card">Ce bilan est personnel. <a href="#/profile">Retour</a></div></div>';
     const u = S.users[uid]; const clubId = (u.clubs || []).includes(CLUB.id) ? CLUB.id : u.clubs[0];
-    const r = rangeOf('month', mk); const st = statsFor(clubId, uid, r);
+    const r = rangeOf('month', mk); const st = statsFor(clubId, uid, r, { requiredOnly: true }); const stAll = statsFor(clubId, uid, r);
+    const prev = statsFor(clubId, uid, rangeOf('month', addMonths(mk, -1)), { requiredOnly: true });
     const rk = ranking(clubId, r); const me = rk.find(x => x.u.id === uid);
-    const best = st.rows.filter(x => x.pct != null).sort((a, b) => b.pct - a.pct)[0];
+    const top = me && me.rank <= Math.ceil(rk.length / 2);
+    const best = stAll.rows.filter(x => x.pct != null).sort((a, b) => b.pct - a.pct)[0];
+    const worst = stAll.rows.filter(x => x.target > 0 && x.k.required && x.pct != null && x.pct < 1).sort((a, b) => a.pct - b.pct)[0];
     const tr = trophies(uid).filter(t => t.mk === mk);
-    const club = S.clubs[clubId];
-    const phrase = st.score == null ? 'Pas d’objectif ce mois-là.' : st.score >= 1 ? 'Mois exceptionnel. Tu as tout donné.' : st.score >= .75 ? 'Très beau mois, l’élite n’est pas loin.' : st.score >= .5 ? 'À mi-chemin : le mois prochain sera le bon.' : 'Mois difficile. On repart plus fort.';
+    const club = S.clubs[clubId]; const act = wrapActions(uid, mk); const note = deepGet(S, ['wrapNotes', mk, uid]);
+    const prog = st.score != null && prev.score != null ? Math.round((st.score - prev.score) * 100) : null;
+    const nextMk = addMonths(mk, 1);
+    const perWeek = worst ? Math.max(1, Math.ceil((worst.target - worst.real) / 4)) : 0;
+    const phrase = st.score == null ? 'Vos objectifs arrivent : chaque vente compte déjà.'
+      : worst ? `Le mois prochain : ${worst.k.unit === 'eur' ? fmtE(perWeek) : plur(perWeek, worst.k.label.toLowerCase(), worst.k.label.toLowerCase())} de plus par semaine.`
+      : 'Tous vos objectifs sont tenus. On garde ce rythme.';
     const slides = [
-      `<div class="title" style="font-size:22px;color:var(--fp)">FIT PULSE</div><div class="avatar lg" style="margin:0 auto">${esc(initials(u))}</div><h1 style="font-size:40px">${esc(u.first)}</h1><div style="font-size:18px">Ton mois de ${monthLabel(mk)}</div><div class="muted small" style="margin-top:30px">Touche pour continuer</div>`,
-      `<div style="font-size:18px">Ton score global</div><div class="huge" id="wrap-count">0 %</div><div class="muted small">Moyenne de tes KPI pondérée par leurs points</div>`,
-      best ? `<div style="font-size:18px">Ton meilleur KPI</div><div class="wrap-ico">${kpiIcon(best.k, 'ico ico-xl')}</div><h1 style="font-size:36px">${esc(best.k.label)}</h1><div class="huge" style="font-size:56px">${fmtP(best.pct)}</div><div>${fmtV(best.real, best.k.unit)} / ${fmtV(best.target, best.k.unit)}</div>` : '<div>Aucun KPI ce mois-là.</div>',
-      `<div style="font-size:18px;margin-bottom:10px">Tes KPI ce mois</div>${st.rows.filter(x => x.target > 0).map(x => `<div style="text-align:left;margin:6px 0"><div class="row small"><b>${esc(x.k.label)}</b><span class="spacer"></span>${fmtV(x.real, x.k.unit)} / ${fmtV(x.target, x.k.unit)}</div>${progressBar(x.pct, { ticks: false })}</div>`).join('')}`,
-      `<div style="font-size:18px">Ton classement</div><div class="huge">#${me ? me.rank : '—'}</div><div class="title" style="font-size:20px">${esc(club ? club.name : '')}</div><div class="muted">${rk.length} membres classés</div>`,
-      `<div style="font-size:18px">Tes trophées</div><div class="huge">${tr.length}</div><div class="wrap-trophies">${tr.map(t => trophyIcon(t)).join('')}</div><div class="small">${tr.map(t => esc(t.label)).join('<br>')}</div>`,
-      `<div style="font-size:18px">Ton résumé</div><canvas id="wrap-canvas" width="540" height="760" style="width:100%;max-width:300px;margin:0 auto;border-radius:14px"></canvas><div class="row" style="justify-content:center"><button class="btn primary" data-act="wrapDownload">${ico('download')} Télécharger</button></div><div class="muted small">Chiffres internes au club : à garder pour soi ou l’équipe.</div>`,
+      `<div class="title wrap-brand">FIT PULSE</div><div class="avatar lg" style="margin:0 auto">${esc(initials(u))}</div><h1 class="wrap-name">${esc(u.first)}</h1><div class="wrap-lead">Votre mois de ${monthLabel(mk)}</div><div class="muted small wrap-hint">Touchez ou utilisez les flèches pour continuer</div>`,
+      `<div class="wrap-lead">Votre score du mois</div><div class="huge" id="wrap-count">0 %</div><div class="muted small">Moyenne de vos KPI obligatoires, chacun compté selon son importance</div>`,
+      best ? `<div class="wrap-lead">Votre meilleur KPI</div><div class="wrap-ico">${kpiIcon(best.k, 'ico ico-xl')}</div><h1 class="wrap-kpi">${esc(best.k.label)}</h1><div class="huge wrap-mid">${fmtP(best.pct)}</div><div>${fmtV(best.real, best.k.unit)} sur ${fmtV(best.target, best.k.unit)}</div>` : '<div>Aucun KPI ce mois-là.</div>',
+      `<div class="wrap-lead">Vos KPI du mois</div>${stAll.rows.filter(x => x.target > 0).map(x => `<div style="text-align:left;margin:6px 0"><div class="row small"><b>${esc(x.k.label)}</b><span class="spacer"></span>${fmtV(x.real, x.k.unit)} sur ${fmtV(x.target, x.k.unit)}</div>${progressBar(x.pct, { ticks: false })}</div>`).join('')}`,
+      top ? `<div class="wrap-lead">Votre classement</div><div class="huge">${me.rank}<sup>${me.rank === 1 ? 'er' : 'e'}</sup></div><div class="title wrap-club">${esc(club ? club.name : '')}</div><div class="muted">sur ${plur(rk.length, 'membre classé', 'membres classés')}</div>`
+        : prog != null && prog > 0 ? `<div class="wrap-lead">Votre progression</div><div class="huge">+${prog}</div><div class="muted">points de score par rapport à ${monthLabel(addMonths(mk, -1)).toLowerCase()}</div>`
+        : `<div class="wrap-lead">Votre point fort</div><div class="huge wrap-mid">${best ? esc(best.k.label) : 'À venir'}</div><div class="muted">${best ? fmtP(best.pct) + ' de l’objectif' : ''}</div>`,
+      `<div class="wrap-lead">Vos actions</div><div class="wrap-acts"><div><b>${fmtN(act.saved)}</b><span>${plur(act.saved, 'client sauvé', 'clients sauvés', false)}</span></div><div><b>${fmtE(act.paid)}</b><span>impayés récupérés</span></div><div><b>${fmtN(act.good)}</b><span>${plur(act.good, 'relance aboutie', 'relances abouties', false)}</span></div></div>`,
+      `<div class="wrap-lead">Vos trophées</div><div class="huge">${tr.length}</div><div class="wrap-trophies">${tr.map(t => `<div class="wt">${trophyIcon(t)}<small>${esc(t.label)}</small></div>`).join('')}</div>`,
+      ...(note && note.text ? [`<div class="wrap-lead">Le mot de votre manager</div><blockquote class="wrap-note">« ${esc(note.text)} »</blockquote><div class="muted">${S.users[note.by] ? esc(S.users[note.by].first) : ''}</div>`] : []),
+      `<div class="wrap-lead">Votre résumé</div><canvas id="wrap-canvas" width="540" height="760" style="width:100%;max-width:300px;margin:0 auto;border-radius:14px"></canvas><div class="row" style="justify-content:center;gap:8px">${navigator.share ? `<button class="btn" data-act="wrapShare">${ico('share')} Partager</button>` : ''}<button class="btn primary" data-act="wrapDownload">${ico('download')} Télécharger</button></div><div class="muted small">Chiffres internes au club : à garder pour vous ou l’équipe.</div>`,
     ];
-    UI.wrapData = { u, mk, st, me, tr, club, phrase, slides: slides.length };
-    return `<div class="wrap-stage"><div class="wrap-card"><div class="wrap-bars">${slides.map(() => '<i><b></b></i>').join('')}</div>
-      <button class="wrap-close" data-act="wrapClose" aria-label="Fermer">✕</button>
-      <div class="wrap-tap l" data-act="wrapPrev"></div><div class="wrap-tap r" data-act="wrapNext"></div>
-      ${slides.map((s, i) => `<div class="wrap-slide ${i ? 'hidden' : ''}" data-slide="${i}">${s}</div>`).join('')}</div></div>`;
+    UI.wrapData = { u, mk, st, me, top, tr, club, phrase, prog, slides: slides.length };
+    return `<div class="wrap-stage" tabindex="-1"><div class="wrap-card"><div class="wrap-bars">${slides.map(() => '<i><b></b></i>').join('')}</div>
+      <button class="wrap-close" data-act="wrapClose" aria-label="Fermer">${ico('x')}</button>
+      <button class="wrap-tap l" data-act="wrapPrev" aria-label="Précédent"></button><button class="wrap-tap r" data-act="wrapNext" aria-label="Suivant"></button>
+      ${slides.map((s, i) => `<div class="wrap-slide ${i ? 'hidden' : ''}" data-slide="${i}" aria-live="polite">${s}</div>`).join('')}</div></div>`;
   },
-  mount() { UI.wrapIdx = 0; wrapShow(0); },
+  mount() {
+    UI.wrapIdx = 0; UI.wrapPaused = false; wrapShow(0);
+    const st = $('.wrap-stage'); if (!st) return; st.focus({ preventScroll: true });
+    st.addEventListener('pointerdown', () => { UI.wrapPaused = true; clearTimeout(wrapTimer); });
+    st.addEventListener('pointerup', () => { UI.wrapPaused = false; });
+  },
 };
+document.addEventListener('keydown', e => {
+  if (!$('.wrap-stage')) return;
+  if (e.key === 'ArrowRight') ACTIONS.wrapNext(); else if (e.key === 'ArrowLeft') ACTIONS.wrapPrev(); else if (e.key === 'Escape') ACTIONS.wrapClose();
+});
 let wrapTimer = null;
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function wrapShow(i) {
   const n = UI.wrapData.slides; i = clamp(i, 0, n - 1); UI.wrapIdx = i;
   $$('.wrap-slide').forEach(s => s.classList.toggle('hidden', Number(s.dataset.slide) !== i));
-  $$('.wrap-bars i').forEach((b, j) => { b.className = j < i ? 'done' : j === i ? 'cur' : ''; const x = $('b', b); x.style.animation = 'none'; void x.offsetWidth; x.style.animation = ''; });
+  $$('.wrap-bars i').forEach((b, j) => { b.className = j < i ? 'done' : j === i ? (reducedMotion() ? 'done' : 'cur') : ''; const x = $('b', b); x.style.animation = 'none'; void x.offsetWidth; x.style.animation = ''; });
   clearTimeout(wrapTimer);
-  if (i === 1) { const target = Math.round((UI.wrapData.st.score || 0) * 100); let v = 0; const el = $('#wrap-count'); const t = setInterval(() => { v = Math.min(target, v + Math.max(1, Math.round(target / 40))); if (el) el.textContent = v + ' %'; if (v >= target) clearInterval(t); }, 30); }
+  if (i === 1) { const target = Math.round((UI.wrapData.st.score || 0) * 100); const el = $('#wrap-count'); if (reducedMotion()) { if (el) el.textContent = target + ' %'; } else { let v = 0; const t = setInterval(() => { v = Math.min(target, v + Math.max(1, Math.round(target / 40))); if (el) el.textContent = v + ' %'; if (v >= target) clearInterval(t); }, 30); } }
   if (i === n - 1) { drawWrapCard(); return; }
-  wrapTimer = setTimeout(() => wrapShow(i + 1), 6000);
+  if (!reducedMotion()) wrapTimer = setTimeout(() => { if (!UI.wrapPaused) wrapShow(i + 1); }, 6000);
 }
 ACTIONS.wrapNext = () => wrapShow(UI.wrapIdx + 1);
 ACTIONS.wrapPrev = () => wrapShow(UI.wrapIdx - 1);
 ACTIONS.wrapClose = () => { clearTimeout(wrapTimer); history.length > 1 ? history.back() : (location.hash = '#/profile'); };
-function drawWrapCard() {
+async function drawWrapCard() {
   const c = $('#wrap-canvas'); if (!c) return; const x = c.getContext('2d'); const d = UI.wrapData;
-  x.fillStyle = '#111113'; x.fillRect(0, 0, 540, 760);
-  const g = x.createRadialGradient(470, 0, 10, 470, 0, 380); g.addColorStop(0, 'rgba(255,210,0,.35)'); g.addColorStop(1, 'rgba(255,210,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 540, 760);
-  x.fillStyle = '#FFD200'; x.font = '30px Anton, Impact'; x.fillText('FIT PULSE', 36, 64);
-  x.fillStyle = '#fff'; x.font = '52px Anton, Impact'; x.fillText(d.u.first.toUpperCase(), 36, 140);
-  x.font = '22px Inter, sans-serif'; x.fillStyle = '#bbb'; x.fillText(`${d.club ? d.club.name : ''} · ${monthLabel(d.mk)}`, 36, 176);
-  x.fillStyle = '#FFD200'; x.font = '110px Anton, Impact'; x.fillText(fmtP(d.st.score).replace(' ', ''), 36, 300);
-  x.fillStyle = '#fff'; x.font = '24px Anton, Impact'; x.fillText(`${tierName(d.st.score)} · #${d.me ? d.me.rank : '—'} · ${d.tr.length} TROPHÉE(S)`, 36, 344);
-  let y = 400; x.font = '20px Inter, sans-serif';
-  d.st.rows.filter(r => r.target > 0).slice(0, 7).forEach(r => {
-    x.fillStyle = '#ddd'; x.fillText(r.k.label, 36, y);
-    const gap = r.real - r.target; x.fillStyle = gap >= 0 ? '#5BD38C' : '#ff8a7a'; x.textAlign = 'right'; x.fillText(`${fmtP(r.pct)}  (${gap >= 0 ? '+' : ''}${fmtV(gap, r.k.unit)})`, 504, y); x.textAlign = 'left';
-    x.fillStyle = '#2a2a2e'; x.fillRect(36, y + 10, 468, 6); x.fillStyle = '#FFD200'; x.fillRect(36, y + 10, 468 * clamp(r.pct, 0, 1), 6);
+  try { await document.fonts.load('800 italic 40px "Barlow Condensed"'); await document.fonts.load('600 20px Montserrat'); await document.fonts.ready; } catch (e) { /* polices systeme */ }
+  const Y = getComputedStyle(document.documentElement).getPropertyValue('--fp').trim() || '#FFD600';
+  const T = (size) => `italic 800 ${size}px "Barlow Condensed", Impact, sans-serif`, B = (size, w = 500) => `${w} ${size}px Montserrat, system-ui, sans-serif`;
+  x.fillStyle = '#0A0A0A'; x.fillRect(0, 0, 540, 760);
+  x.save(); x.fillStyle = Y; x.beginPath(); x.moveTo(380, 760); x.lineTo(540, 560); x.lineTo(540, 640); x.lineTo(460, 760); x.closePath(); x.fill(); x.globalAlpha = .35; x.beginPath(); x.moveTo(300, 760); x.lineTo(540, 460); x.lineTo(540, 520); x.lineTo(350, 760); x.closePath(); x.fill(); x.restore();
+  x.fillStyle = Y; x.font = T(30); x.fillText('FIT PULSE', 36, 64);
+  x.fillStyle = '#fff'; x.font = T(58); x.fillText(d.u.first.toUpperCase(), 36, 140);
+  x.font = B(20); x.fillStyle = '#bbb'; x.fillText(`${d.club ? d.club.name : ''} · ${monthLabel(d.mk)}`, 36, 176);
+  x.fillStyle = Y; x.font = T(120); x.fillText(fmtP(d.st.score).replace(' ', ''), 36, 300);
+  x.fillStyle = '#fff'; x.font = T(26); x.fillText(`MOIS ${monthTier(d.st.score)} · ${d.top ? 'RANG ' + d.me.rank : d.prog > 0 ? '+' + d.prog + ' PTS' : 'EN PROGRESSION'} · ${plur(d.tr.length, 'TROPHÉE', 'TROPHÉES')}`, 36, 344);
+  let y = 400; x.font = B(18);
+  d.st.rows.filter(r => r.target > 0).slice(0, 6).forEach(r => {
+    x.fillStyle = '#ddd'; x.font = B(18, 600); x.fillText(r.k.label, 36, y);
+    x.fillStyle = '#fff'; x.textAlign = 'right'; x.fillText(fmtP(r.pct), 504, y); x.textAlign = 'left';
+    x.fillStyle = '#2A2A2E'; x.fillRect(36, y + 10, 468, 6); x.fillStyle = Y; x.fillRect(36, y + 10, 468 * clamp(r.pct || 0, 0, 1), 6);
     y += 46;
   });
-  x.fillStyle = '#fff'; x.font = 'italic 22px Inter, sans-serif'; x.fillText(d.phrase, 36, 724);
+  x.fillStyle = '#fff'; x.font = B(17, 600); x.fillText(d.phrase.slice(0, 52), 36, 716);
 }
 ACTIONS.wrapDownload = () => { const c = $('#wrap-canvas'); c.toBlob(b => downloadFile(`bilan-${UI.wrapData.mk}-${norm(fullName(UI.wrapData.u)).replace(/ /g, '-')}.png`, b), 'image/png'); };
+ACTIONS.wrapShare = () => { const c = $('#wrap-canvas'); c.toBlob(async b => { const f = new File([b], `bilan-${UI.wrapData.mk}.png`, { type: 'image/png' }); try { if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Mon bilan Fit Pulse' }); else downloadFile(f.name, b); } catch (e) { /* annule */ } }, 'image/png'); };
 
 ACTIONS.changeMyCode = async () => {
   const cur = $('#cc-cur').value;

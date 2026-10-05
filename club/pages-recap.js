@@ -48,7 +48,7 @@ function monthFigures(clubId, mk) {
 }
 // variation colorée : up = true si une hausse est une bonne nouvelle
 function delta(cur, prev, { up = true, unit = 'qty', pct = false } = {}) {
-  if (cur == null || prev == null) return '<span class="dl dl-none">—</span>';
+  if (cur == null || prev == null) return '<span class="dl dl-none">n.d.</span>';
   const d = cur - prev;
   if (Math.abs(d) < 1e-9) return '<span class="dl dl-flat">= stable</span>';
   const good = (d > 0) === up;
@@ -98,9 +98,9 @@ PAGES.recap = {
       <div class="rc-grid">
         ${tile('Ventes réelles (contrats)', fmtN(F.contrats), delta(F.contrats, P.contrats))}
         ${tile('Nouveaux entrants', fmtN(F.entrants), delta(F.entrants, P.entrants), F.entrantsSrc)}
-        ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${F.demandes} demande(s) · ${F.sauvees} sauvée(s)`)}
-        ${tile('Taux de résiliation', F.tauxResil == null ? '—' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %', delta(F.tauxResil, P.tauxResil, { up: false, pct: true }), F.actifs ? `sur ${fmtN(F.actifs)} adhérents actifs` : 'base adhérents à renseigner')}
-        ${tile('Impayés en cours', F.du == null ? '—' : fmtE(F.du), delta(F.du, P.du, { up: false, unit: 'eur' }), 'total dû en fin de mois')}
+        ${tile('Résiliations', fmtN(F.resiliees), delta(F.resiliees, P.resiliees, { up: false }), `${plur(F.demandes, 'demande', 'demandes')} · ${plur(F.sauvees, 'sauvée', 'sauvées')}`)}
+        ${tile('Taux de résiliation', F.tauxResil == null ? 'n.d.' : (F.tauxResil * 100).toFixed(1).replace('.', ',') + ' %', delta(F.tauxResil, P.tauxResil, { up: false, pct: true }), F.actifs ? `sur ${fmtN(F.actifs)} adhérents actifs` : 'base adhérents à renseigner')}
+        ${tile('Impayés en cours', F.du == null ? 'n.d.' : fmtE(F.du), delta(F.du, P.du, { up: false, unit: 'eur' }), 'total dû en fin de mois')}
         ${tile('Impayés récupérés par l’équipe', fmtE(F.impayesEquipe), delta(F.impayesEquipe, P.impayesEquipe, { unit: 'eur' }), `tous canaux : ${fmtE(F.recupere)}`)}
         ${tile('Avis Google', fmtN(F.avis), delta(F.avis, P.avis))}
         ${tile('Ventes boutique', fmtE(F.boutique), delta(F.boutique, P.boutique, { unit: 'eur' }), `nutrition ${fmtE(F.nutrition)} · accessoires ${fmtE(F.accessoires)}`)}
@@ -109,19 +109,19 @@ PAGES.recap = {
         ${(() => { const enc = encaisseMois(CLUB.id, mk), encP = encaisseMois(CLUB.id, pm), ch = churnEuros(CLUB.id, mk), chP = churnEuros(CLUB.id, pm); return `
         ${tile('Revenu récurrent mensuel', fmtE(mrrClub(CLUB.id)), '', 'abonnés actifs × prix de leur offre (aujourd’hui)')}
         ${tile('Encaissé réel', enc == null ? 'non importé' : fmtE(enc), enc == null ? '' : delta(enc, encP, { unit: 'eur' }), enc == null ? 'export Paiements à déposer' : 'source : export Paiements')}
-        ${tile('Churn en euros', ch == null ? '—' : fmtE(ch), ch == null ? '' : delta(ch, chP, { up: false, unit: 'eur' }), 'mensualités perdues par les résiliations du mois')}
+        ${tile('Churn en euros', ch == null ? 'n.d.' : fmtE(ch), ch == null ? '' : delta(ch, chP, { up: false, unit: 'eur' }), 'mensualités perdues par les résiliations du mois')}
         ${tile('Valeur d’un adhérent', fmtE(Math.round(prixMoyen(CLUB.id) * dureeVieMois(CLUB.id))), '', `${plur(dureeVieMois(CLUB.id), 'mois', 'mois')} de durée de vie moyenne`)}`; })()}
       </div>
 
       <div class="g12">
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Entrées et sorties</h3></div><span class="spacer"></span><span class="muted small">solde</span> ${(() => { const out = x => x.sorties ?? x.resiliees; return delta(F.entrants - out(F), P.entrants - out(P)); })()}</div>
           ${monthBars(months, [{ label: 'Nouveaux entrants', color: 'var(--fp)', values: H6.map(x => x.entrants) }, { label: F.sorties != null ? 'Sorties (Resamania)' : 'Résiliations', color: 'var(--bad)', values: H6.map(x => x.sorties ?? x.resiliees) }])}
-          ${(() => { const net = F.entrants - (F.sorties ?? F.resiliees); return `<p class="muted small">Solde du mois : <b style="color:${net >= 0 ? 'var(--ok)' : 'var(--bad)'}">${net >= 0 ? '+' : ''}${fmtN(net)} adhérents</b>${F.sorties != null ? ` · dont ${fmtN(F.resiliees)} résiliation(s) suivie(s) dans Fit Pulse` : ''}</p>`; })()}</div>
+          ${(() => { const net = F.entrants - (F.sorties ?? F.resiliees); return `<p class="muted small">Solde du mois : <b style="color:${net >= 0 ? 'var(--ok)' : 'var(--bad)'}">${net >= 0 ? '+' : ''}${fmtN(net)} adhérents</b>${F.sorties != null ? ` · dont ${plur(F.resiliees, 'résiliation suivie', 'résiliations suivies')} dans Fit Pulse` : ''}</p>`; })()}</div>
         <div class="card col6"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Impayés : dû et récupéré</h3></div></div>
           ${monthBars(months, [{ label: 'Total dû en fin de mois', color: 'var(--bad)', values: H6.map(x => x.du || 0) }, { label: 'Récupéré dans le mois', color: 'var(--ok)', values: H6.map(x => x.recupere) }], { fmt: fmtE })}
           <div class="rc-split">${Object.entries(RECOV_CHANNELS).filter(([k]) => F.recBy[k]).map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label} <b>${fmtE(F.recBy[k])}</b></span>`).join('') || '<span class="muted small">Aucune régularisation importée pour ce mois.</span>'}</div></div>
         <div class="card col4"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Ventes réelles</h3></div></div>${monthBars(months, [{ label: 'Contrats', color: 'var(--fp)', values: H6.map(x => x.contrats) }], { width: 340 })}</div>
-        <div class="card col4"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Avis Google</h3></div></div>${monthBars(months, [{ label: 'Avis', color: '#4285F4', values: H6.map(x => x.avis) }], { width: 340 })}</div>
+        <div class="card col4"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Avis Google</h3></div></div>${monthBars(months, [{ label: 'Avis', color: 'var(--d-1)', values: H6.map(x => x.avis) }], { width: 340 })}</div>
         <div class="card col4"><div class="race-h"><div><div class="eyebrow">6 derniers mois</div><h3>Boutique</h3></div></div>${monthBars(months, [{ label: 'Boutique', color: 'var(--text)', values: H6.map(x => x.boutique) }], { fmt: v => fmtN(v) + ' €', width: 340 })}</div>
       </div>
 

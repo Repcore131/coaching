@@ -19,7 +19,7 @@ const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFr
 const fmtN = n => nf0.format(Math.round(n || 0));
 const fmtE = n => (Number.isInteger(Math.round((n || 0) * 100) / 100) ? nf0.format(n || 0) : nf2.format(n || 0)) + ' €';
 const fmtV = (v, unit) => unit === 'eur' ? fmtE(v) : fmtN(v);
-const fmtP = p => p == null ? '—' : Math.round(p * 100) + ' %';
+const fmtP = p => p == null ? 'n.d.' : Math.round(p * 100) + ' %';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const MOIS_C = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
@@ -124,6 +124,10 @@ const ICONS = {
 const KPI_ICON = { avis: 'star', nutrition: 'cup', contrats: 'pen', accessoires: 'cap', impayes: 'coins', b2b: 'briefcase', invites: 'ticket', sauvetage: 'lifebuoy', prospects: 'magnet' };
 const kpiIconName = k => (k && ICONS[k.icon]) ? k.icon : (k && KPI_ICON[k.id]) || 'target';
 const kpiIcon = (k, cls = 'ico') => ico(kpiIconName(k), cls);
+// Reactions : les cles historiques restent (pas de perte), l'affichage passe
+// en icones. Toute autre cle est ignoree (jamais injectee dans la page).
+const REACT_ICON = { '🔥': ['flame', 'Bravo'], '💪': ['medal', 'Costaud'], '👏': ['sparkle', 'Bien joué'], '👍': ['check', 'OK'] };
+const reactIco = em => REACT_ICON[em] ? ico(REACT_ICON[em][0], 'ico') : '';
 // Image du chat : uniquement une image encodee (data:), jamais un texte qui pourrait sortir de l'attribut.
 const safeImg = v => typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -155,10 +159,12 @@ const DEFAULT_TASKS = [
 
 const LEVELS = [
   { id: 'rookie', label: 'Rookie', min: 0 },
-  { id: 'performer', label: 'Performer', min: 10000 },
-  { id: 'warrior', label: 'Warrior', min: 30000 },
-  { id: 'elite', label: 'Élite', min: 50000 },
-  { id: 'legende', label: 'Légende', min: 100000 },
+  // Recalibre sur un mois parfait (environ 3 500 pts) : Performer des le premier
+  // mois complet a 100 %, Legende en un peu plus d'un an d'excellence.
+  { id: 'performer', label: 'Performer', min: 3000 },
+  { id: 'warrior', label: 'Warrior', min: 10000 },
+  { id: 'elite', label: 'Élite', min: 25000 },
+  { id: 'legende', label: 'Légende', min: 50000 },
 ];
 
 function emptyState() {
@@ -453,13 +459,13 @@ function demoState() {
    ['r6', 'Claire Fontaine', -15, -2, 'Concurrence', 'resiliee', 'u5']].forEach(([id, client, ago, eff, reason, status, owner]) => {
     const at = Date.now() + ago * 86400000;
     st.resiliations[id] = { id, clubId: 'niort', client, date: addDays(today(), ago), effective: addDays(today(), eff), reason, status, saved: status === 'sauvee', ownerId: owner, userId: owner, at,
-      actions: [{ at, by: 'u2', label: 'Demande enregistrée' }, ...(owner ? [{ at: at + 86400000, by: owner, label: status === 'sauvee' ? 'Offre proposée · Suspension' : 'Message laissé', note: status === 'traitement' ? 'Rappeler en fin de semaine' : '' }] : []), ...(status === 'sauvee' ? [{ at: at + 2 * 86400000, by: owner, label: 'Client sauvé 🛟' }] : [])] };
+      actions: [{ at, by: 'u2', label: 'Demande enregistrée' }, ...(owner ? [{ at: at + 86400000, by: owner, label: status === 'sauvee' ? 'Offre proposée · Suspension' : 'Message laissé', note: status === 'traitement' ? 'Rappeler en fin de semaine' : '' }] : []), ...(status === 'sauvee' ? [{ at: at + 2 * 86400000, by: owner, label: 'Client sauvé' }] : [])] };
     if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: 'niort', kpiId: 'sauvetage', date: addDays(today(), ago + 2), value: 1, source: 'manual', at: at + 2 * 86400000 };
   });
 
-  st.chat.m1 = { id: 'm1', channel: 'niort', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier 💪 On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
+  st.chat.m1 = { id: 'm1', channel: 'niort', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier. On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
   st.chat.m2 = { id: 'm2', channel: 'niort', userId: 'u3', text: 'Je m’occupe des relances anniversaires cette semaine.', at: Date.now() - 86400000, parentId: 'm1' };
-  st.chat.m3 = { id: 'm3', channel: 'all', userId: 'u1', text: 'Point mensuel des deux clubs vendredi 10h. Venez avec vos chiffres 📊', at: Date.now() - 5 * 3600000 };
+  st.chat.m3 = { id: 'm3', channel: 'all', userId: 'u1', text: 'Point mensuel des deux clubs vendredi 10h. Venez avec vos chiffres.', at: Date.now() - 5 * 3600000 };
 
   const libIds = Object.keys(st.tasks.library);
   st.tasks.plan.niort = {};

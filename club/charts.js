@@ -8,8 +8,8 @@
 const HEALTH = {
   good: { label: 'Dans le rythme', cls: 'h-good', color: 'var(--ok)' },
   watch: { label: 'À surveiller', cls: 'h-watch', color: 'var(--warn)' },
-  alert: { label: 'Alerte', cls: 'h-alert', color: 'var(--bad)' },
-  none: { label: '—', cls: 'h-none', color: 'var(--muted)' },
+  alert: { label: 'En retard', cls: 'h-alert', color: 'var(--bad)' },
+  none: { label: 'Sans donnée', cls: 'h-none', color: 'var(--muted)' },
 };
 // ratio = réalisé / attendu à date
 function healthOf(ratio) { if (ratio == null || !isFinite(ratio)) return HEALTH.none; return ratio >= 0.95 ? HEALTH.good : ratio >= 0.75 ? HEALTH.watch : HEALTH.alert; }
@@ -33,7 +33,7 @@ function palierRace(clubId, mk, kpiId, { height = 250 } = {}) {
   for (let i = 0; i <= 4; i++) { const v = top * i / 4; g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="c-grid"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" class="c-tick">${fmtN(v)}</text>`; }
   [1, 8, 15, 22, n].forEach(d => { g += `<text x="${X(d)}" y="${H - 8}" text-anchor="middle" class="c-tick">${d}</text>`; });
   // paliers : lignes horizontales nommées
-  s.tiers.forEach((t, i) => { const got = s.real >= t.target; g += `<line x1="${L}" x2="${W - R}" y1="${Y(t.target)}" y2="${Y(t.target)}" class="c-tier ${got ? 'got' : ''}"/><text x="${W - R + 8}" y="${Y(t.target) + 4}" class="c-tier-l ${got ? 'got' : ''}">P${i + 1} · ${fmtN(t.target)}${got ? ' ✓' : ''}</text>`; });
+  s.tiers.forEach((t, i) => { const got = s.real >= t.target; g += `<line x1="${L}" x2="${W - R}" y1="${Y(t.target)}" y2="${Y(t.target)}" class="c-tier ${got ? 'got' : ''}"/><text x="${W - R + 8}" y="${Y(t.target) + 4}" class="c-tier-l ${got ? 'got' : ''}">P${i + 1} · ${fmtN(t.target)}${got ? ' (atteint)' : ''}</text>`; });
   // rythme à tenir pour le dernier palier
   g += `<line x1="${X(1)}" y1="${Y(target / n)}" x2="${X(n)}" y2="${Y(target)}" class="c-pace"/>`;
   // réalisé
@@ -74,6 +74,6 @@ function resFunnel(clubId, mk) {
   const max = Math.max(1, L.length);
   const rate = L.length ? taken / L.length : null;
   const h = rate == null ? HEALTH.none : rate >= 0.9 ? HEALTH.good : rate >= 0.6 ? HEALTH.watch : HEALTH.alert;
-  return `<div class="funnel">${steps.map(([l, v, c], i) => `<div class="fn-r"><span class="fn-l">${l}</span><div class="fn-b"><i style="width:${Math.max(v / max * 100, v ? 6 : 0)}%;background:${c}"></i></div><b>${v}</b>${i ? `<small>${L.length ? fmtP(v / L.length) : '—'}</small>` : '<small></small>'}</div>`).join('')}</div>
-    <div class="row" style="margin-top:8px">${healthChip(h)}<span class="muted small">${L.length ? `${L.length - taken} demande(s) jamais prise(s) en charge` : 'Aucune demande ce mois-ci'}</span></div>`;
+  return `<div class="funnel">${steps.map(([l, v, c], i) => `<div class="fn-r"><span class="fn-l">${l}</span><div class="fn-b"><i style="width:${Math.max(v / max * 100, v ? 6 : 0)}%;background:${c}"></i></div><b>${v}</b>${i ? `<small>${L.length ? fmtP(v / L.length) : 'n.d.'}</small>` : '<small></small>'}</div>`).join('')}</div>
+    <div class="row" style="margin-top:8px">${healthChip(h)}<span class="muted small">${L.length ? `${plur(L.length - taken, 'demande jamais prise', 'demandes jamais prises')} en charge` : 'Aucune demande ce mois-ci'}</span></div>`;
 }

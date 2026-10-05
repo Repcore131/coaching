@@ -24,7 +24,7 @@ PAGES.quality = {
     const repl = live.filter(e => entryCounts(e) && replacedByImport(e));
     if (repl.length) alerts.push(['is-info', `${plur(repl.length, 'saisie manuelle remplacée', 'saisies manuelles remplacées')} par l’import du même mois (pas de double compte).`]);
     const removed = live.filter(e => e.removedBy && impActive(e.removedBy));
-    if (removed.length) alerts.push(['is-warn', `${plur(removed.length, 'vente retirée', 'ventes retirées')} : absente(s) du dernier export de gestion (annulée(s) dans Resamania ?).`]);
+    if (removed.length) alerts.push(['is-warn', `${plur(removed.length, 'vente retirée', 'ventes retirées')} : absentes du dernier export de gestion, sans doute annulées dans Resamania.`]);
     for (const k of kpiList()) { const na = unassigned(CLUB.id, k.id, r.from, r.to); if (Math.abs(na) > 0.004) alerts.push(['is-warn', `${esc(k.label)} : ${fmtV(na, k.unit)} non attribué (créateur, autre club ou membre archivé avant le mois).`]); }
     const arch = clubMembers(CLUB.id, { all: true }).filter(u => u.status === 'archived' && live.some(e => e.userId === u.id && entryCounts(e)));
     if (arch.length) alerts.push(['is-info', `Saisies de membres archivés ce mois : ${arch.map(u => esc(fullName(u))).join(', ')}.`]);

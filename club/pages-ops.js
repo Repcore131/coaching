@@ -43,13 +43,13 @@ PAGES.resiliations = {
       <div class="stat ${open.length ? 'hot' : ''}"><span>À traiter</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
       <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
       <div class="stat"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small>taux de sauvetage ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
-      <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : '—'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
+      <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
     if (tab === 'todo') {
-      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : '<div class="card empty"><div class="title">Aucune demande à traiter</div><p>Les nouvelles demandes (saisies ou importées de Resamania) arrivent ici.</p></div>';
+      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune demande à traiter', text: 'Les nouvelles demandes, saisies ou importées de Resamania, arrivent ici.' })}</div>`;
     } else {
-      body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}<span class="spacer"></span><span class="muted small">Motifs : ${Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || '—'}</span></div>
-        ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || '—')}</td><td>${r.effective ? dmy(r.effective) : '—'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">—</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
+      body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}<span class="spacer"></span><span class="muted small">Motifs : ${Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || 'n.d.'}</span></div>
+        ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
     }
     return head + kpis + tabs('resTab', [['todo', `À traiter (${open.length})`], ['all', 'Historique du mois']], tab) + body;
   },
@@ -58,10 +58,10 @@ function resCard(r) {
   const n = daysTo(r.effective); const st = resStatus(r); const last = resActions(r).slice(-1)[0];
   const mine = r.ownerId === ME.id;
   return `<div class="card dossier ${resUrgent(r) ? 'urgent' : ''}">
-    <div class="row wrap"><div class="spacer" style="min-width:180px"><b style="font-size:15px">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
+    <div class="row wrap"><div class="spacer" style="min-width:180px"><b class="t-14">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
       ${r.effective ? `<span class="badge ${n <= 7 ? 'bad' : n <= 15 ? 'warn' : ''}">${n < 0 ? 'effective depuis ' + (-n) + ' j' : n === 0 ? 'effective aujourd’hui' : 'J-' + n}</span>` : '<span class="badge">date effective ?</span>'}
       <span class="badge ${RES_STATUS[st].cls}">${RES_STATUS[st].label}</span></div>
-    ${last ? `<div class="small" style="margin-top:8px"><span class="muted">Dernière action :</span> ${esc(last.label)}${last.note ? ' — « ' + esc(last.note) + ' »' : ''} <span class="muted">· ${esc(fullName(S.users[last.by]))}, ${ago(last.at)}</span></div>` : ''}
+    ${last ? `<div class="small" style="margin-top:8px"><span class="muted">Dernière action :</span> ${esc(last.label)}${last.note ? '<br><span class="muted">« ' + esc(last.note) + ' »</span>' : ''} <span class="muted">· ${esc(fullName(S.users[last.by]))}, ${ago(last.at)}</span></div>` : ''}
     <div class="row wrap" style="margin-top:10px;gap:6px">
       ${r.ownerId ? `<span class="small">${avatar(S.users[r.ownerId], 'xs')}</span><span class="small spacer">${mine ? '<b>Vous</b>' : esc(fullName(S.users[r.ownerId]))}</span>` : `<button class="btn sm primary" data-act="resTake" data-id="${r.id}">Je m’en occupe</button><span class="spacer"></span>`}
       <button class="btn sm" data-act="resCall" data-id="${r.id}">${ico('phone')} Noter un appel</button>
@@ -91,9 +91,9 @@ ACTIONS.resCallSave = () => {
 };
 ACTIONS.resSaveIt = el => {
   const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
-  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé 🛟'),
+  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
     [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
-  celebrate('CLIENT SAUVÉ', `${r.client} reste au club`);
+  celebrate('Client sauvé', `${r.client} reste au club`, { kind: 'win' });
 };
 ACTIONS.resLose = async el => {
   const r = S.resiliations[el.dataset.id];
@@ -104,12 +104,12 @@ ACTIONS.resOpen = el => {
   const r = S.resiliations[el.dataset.id]; const members = clubMembers(CLUB.id);
   openModal({ title: r.client, drawer: true, body: `<form id="rdf" class="grid">
     <div class="form-grid"><label class="field"><span>Statut</span><select class="input" name="status">${Object.entries(RES_STATUS).map(([k, v]) => `<option value="${k}" ${resStatus(r) === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
-    <label class="field"><span>Responsable</span><select class="input" name="owner"><option value="">—</option>${members.map(u => `<option value="${u.id}" ${r.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
+    <label class="field"><span>Responsable</span><select class="input" name="owner"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${r.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
     <label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${r.date}"></label>
     <label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${r.effective || ''}"></label>
     <label class="field full"><span>Motif</span><select class="input" name="reason">${[...new Set([...(r.reason ? [r.reason] : []), ...RES_REASONS])].map(o => `<option ${o === r.reason ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label></div>
     <button class="btn primary" type="button" data-act="resDetailSave" data-id="${r.id}">Enregistrer</button></form>
-    <h3 style="margin:20px 0 8px">Historique</h3>${resActions(r).slice().reverse().map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)" class="small"><b>${esc(a.label)}</b>${a.note ? ' — « ' + esc(a.note) + ' »' : ''}<div class="muted">${esc(fullName(S.users[a.by]))} · ${dmy(isoOf(new Date(a.at)))} ${timeOf(a.at)}</div></div>`).join('') || '<p class="muted small">Aucune action pour l’instant.</p>'}
+    <h3 style="margin:20px 0 8px">Historique</h3>${resActions(r).slice().reverse().map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)" class="small"><b>${esc(a.label)}</b>${a.note ? '<br><span class="muted">« ' + esc(a.note) + ' »</span>' : ''}<div class="muted">${esc(fullName(S.users[a.by]))} · ${dmy(isoOf(new Date(a.at)))} ${timeOf(a.at)}</div></div>`).join('') || '<p class="muted small">Aucune action pour l’instant.</p>'}
     ${isManager() ? `<button class="btn sm danger" style="margin-top:16px" data-act="resDel" data-id="${r.id}">Supprimer la demande</button>` : ''}` });
 };
 ACTIONS.resDetailSave = el => {
@@ -187,7 +187,7 @@ function dunTable() {
   const cnt = k => rows.filter(pick[k]).length;
   const empty = !rows.length;
   return `<div class="stat-row">
-      <div class="stat hot"><span>Total dû</span><b>${fmtE(total)}</b><small>${open.length} dossier(s) ouvert(s)</small></div>
+      <div class="stat hot"><span>Total dû</span><b>${fmtE(total)}</b><small>${plur(open.length, 'dossier ouvert', 'dossiers ouverts')}</small></div>
       <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${cnt('due')}</b><small>${cnt('nobody')} sans responsable</small></div>
       <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${fmtE(recTot)}</b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
       <div class="stat"><span>Dossiers soldés ce mois</span><b>${recMonth.length}</b><small>passés en « Récupéré »</small></div></div>
@@ -195,15 +195,15 @@ function dunTable() {
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
     ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Depuis</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
-      return `<tr class="${dunDue(c) ? 'due' : ''}"><td><b>${esc(c.name || '—')}</b><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + c.incidents + ' incident(s)' : ''}</div></td>
+      return `<tr class="${dunDue(c) ? 'due' : ''}"><td><b>${esc(c.name || 'Sans nom')}</b><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
-        <td class="small nowrap">${rec ? 'soldé le ' + dm(d.recoveredAt) : c.balanceAt ? dmy(c.balanceAt) : '—'}</td>
+        <td class="small nowrap">${rec ? 'soldé le ' + dm(d.recoveredAt) : c.balanceAt ? dmy(c.balanceAt) : 'n.d.'}</td>
         <td>${rec ? `<span class="badge ok">Récupéré${d.canal && RECOV_CHANNELS[d.canal] ? ' · ' + RECOV_CHANNELS[d.canal].label.toLowerCase() : ''}</span>${d.by ? `<div class="muted small">par ${esc(fullName(S.users[d.by]))}</div>` : ''}` : `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="status">${Object.entries(DUN_STATUS).filter(([k]) => k !== 'recupere').map(([k, v]) => `<option value="${k}" ${st === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>`}</td>
-        <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">—</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>
+        <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>
         <td>${rec ? '' : `<input class="input sm" type="date" value="${d.next || ''}" data-change="dunSet" data-id="${c.id}" data-k="next">`}</td>
         <td><input class="input sm note" value="${esc(d.note || '')}" placeholder="Ajouter une note" data-change="dunSet" data-id="${c.id}" data-k="note"></td>
         <td class="nowrap">${rec ? '' : `<button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>`
-      : `<div class="card empty"><div class="title">Rien dans cette vue</div><p>${f === 'mine' ? 'Prenez un dossier avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.'}</p></div>`}
+      : `<div class="card">${emptyBox({ art: 'done', title: f === 'mine' ? 'Aucun dossier à votre nom' : 'Rien dans cette vue', text: f === 'mine' ? 'Prenez un dossier sans responsable avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.', cta: f === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="dunFilter" data-val="nobody">Voir les dossiers sans responsable</button>' : '' })}</div>`}
     <p class="muted small">Un client absent du prochain export « Clients en incident » passe automatiquement en « Récupéré », avec le canal lu dans la liste Incidents (équipe, client en ligne, prélèvement…). Les notes, responsables et dates restent d’un import à l’autre.</p>`;
 }
 ACTIONS.dunQ = el => { UI.dunQ = el.value; render(); };
@@ -229,7 +229,7 @@ ACTIONS.dunPaid = el => {
 ACTIONS.dunPaidSave = () => {
   const c = S.clients[$('.modal').dataset.id]; const f = formData($('#dpf')); const canal = $('#dpf input[name=canal]:checked').value;
   const amount = Math.round(toNum(f.amount) * 100) / 100;
-  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); celebrate('IMPAYÉ RÉCUPÉRÉ', `${fmtE(amount)} · ${c.name}`);
+  db.batch(markPaidOps(c, amount, canal, dunOf(c).ownerId || ME.id, 'impayes')); closeModal(); celebrate('Impayé récupéré', `${fmtE(amount)}, ${c.name}`, { kind: 'win' });
 };
 // Un seul chemin pour « payé » (Impayés, Rétention) : dossier en Récupéré, solde
 // a 0, et UNE saisie d'id fixe dn_<client>_<jour> (deux clics = une saisie).

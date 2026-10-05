@@ -48,21 +48,6 @@ const formData = root => { const o = {}; $$('[name]', root).forEach(el => { o[el
 
 // ── Avatars ───────────────────────────────────────────────────────────────
 // Mascotte du tableau de bord : 4 silhouettes, l'humeur suit le rythme.
-function mascot(kind = 'h1', mood = 'ok', size = 120) {
-  const skin = { h1: '#F2C9A0', h2: '#8D5A3B', f1: '#F5D0B5', f2: '#C68B5E' }[kind] || '#F2C9A0';
-  const hair = { h1: '#2B1E16', h2: '#111', f1: '#B5651D', f2: '#1d1d1d' }[kind] || '#222';
-  const fem = kind[0] === 'f';
-  const mouth = mood === 'happy' ? 'M44 66 Q60 80 76 66' : mood === 'tired' ? 'M46 72 Q60 64 74 72' : 'M46 70 L74 70';
-  const eyes = mood === 'tired' ? '<path d="M40 52 h12 M68 52 h12" stroke="#111" stroke-width="3" stroke-linecap="round"/>' : '<circle cx="46" cy="52" r="4.5" fill="#111"/><circle cx="74" cy="52" r="4.5" fill="#111"/>';
-  const sweat = mood === 'tired' ? '<path d="M90 36 q5 9 0 12 q-5-3 0-12z" fill="#7cc4ff"/>' : '';
-  const spark = mood === 'happy' ? '<path d="M100 18 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" fill="#FFD200"/>' : '';
-  return `<svg viewBox="0 0 120 150" width="${size}" height="${size * 1.25}" aria-hidden="true">
-    <rect x="22" y="104" width="76" height="46" rx="22" fill="#FFD200"/><text x="60" y="136" text-anchor="middle" font-family="Anton,Impact" font-size="17" fill="#0B0B0C">FP</text>
-    ${fem ? `<path d="M22 60 q-6 40 14 46 h48 q20-6 14-46z" fill="${hair}"/>` : ''}
-    <circle cx="60" cy="58" r="36" fill="${skin}"/>
-    <path d="M24 52 q4-34 36-34 q32 0 36 34 q-14-16-36-14 q-22-2-36 14z" fill="${hair}"/>
-    ${eyes}<path d="${mouth}" stroke="#111" stroke-width="3.5" fill="none" stroke-linecap="round"/>${sweat}${spark}</svg>`;
-}
 function avatar(u, cls = '') { return `<span class="avatar ${cls}" title="${esc(fullName(u))}">${esc(initials(u))}</span>`; }
 
 // ── Graphiques SVG ────────────────────────────────────────────────────────
@@ -75,12 +60,12 @@ function barChart({ labels, series, height = 220, fmt = fmtN }) {
   for (let i = 0; i <= 4; i++) { const y = T + (H - T - B) * (1 - i / 4); g += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".08"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${fmt(max * i / 4)}</text>`; }
   labels.forEach((lb, i) => {
     const x0 = L + i * gw + (gw - bw * series.length) / 2;
-    series.forEach((s, j) => { const v = s.values[i] || 0; const h = (H - T - B) * v / max; g += `<rect x="${x0 + j * bw}" y="${H - B - h}" width="${bw - 2}" height="${Math.max(0, h)}" rx="3" fill="${s.color}"><title>${esc(s.name)} — ${esc(lb)} : ${fmt(v)}</title></rect>`; });
+    series.forEach((s, j) => { const v = s.values[i] || 0; const h = (H - T - B) * v / max; g += `<rect x="${x0 + j * bw}" y="${H - B - h}" width="${bw - 2}" height="${Math.max(0, h)}" rx="3" style="fill:${s.color}"><title>${esc(s.name)}, ${esc(lb)} : ${fmt(v)}</title></rect>`; });
     g += `<text x="${L + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle">${esc(lb)}</text>`;
   });
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" style="color:var(--text)">${g}</svg></div>`;
 }
-function lineChart({ labels, values, height = 200, fmt = fmtN, color = '#FFD200' }) {
+function lineChart({ labels, values, height = 200, fmt = fmtN, color = 'var(--d-1)' }) {
   const W = 640, H = height, L = 50, B = 26, T = 12;
   const max = Math.max(1, ...values) * 1.1; const n = Math.max(1, labels.length - 1);
   const pt = (v, i) => [L + (W - L - 10) * i / n, T + (H - T - B) * (1 - v / max)];
@@ -88,9 +73,9 @@ function lineChart({ labels, values, height = 200, fmt = fmtN, color = '#FFD200'
   for (let i = 0; i <= 4; i++) { const y = T + (H - T - B) * (1 - i / 4); g += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".08"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${fmt(max * i / 4)}</text>`; }
   const pts = values.map(pt);
   if (pts.length) {
-    g += `<path d="M${pts[0][0]},${H - B} ${pts.map(p => 'L' + p.join(',')).join(' ')} L${pts[pts.length - 1][0]},${H - B}Z" fill="${color}" opacity=".15"/>`;
-    g += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="2.5"/>`;
-    pts.forEach((p, i) => { g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${color}"><title>${esc(labels[i])} : ${fmt(values[i])}</title></circle>`; });
+    g += `<path d="M${pts[0][0]},${H - B} ${pts.map(p => 'L' + p.join(',')).join(' ')} L${pts[pts.length - 1][0]},${H - B}Z" style="fill:${color}" opacity=".25"/>`;
+    g += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + p.join(',')).join(' ')}" fill="none" class="c-line2" style="stroke:${color}" stroke-width="2.5"/>`;
+    pts.forEach((p, i) => { g += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" style="fill:${color}"><title>${esc(labels[i])} : ${fmt(values[i])}</title></circle>`; });
   }
   const step = Math.ceil(labels.length / 12);
   labels.forEach((lb, i) => { if (i % step === 0) g += `<text x="${pt(0, i)[0]}" y="${H - 8}" text-anchor="middle">${esc(lb)}</text>`; });
@@ -162,7 +147,7 @@ function shell(route, inner) {
     </aside>
     <main class="main">
       <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(window.PARKPULSE_ASSETS || {}).icon ? `<img class="top-icon" src="${window.PARKPULSE_ASSETS.icon}" alt="">` : ''}
-        <b class="title" style="font-size:17px">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
+        <b class="title t-16">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
         <div class="countdown" id="countdown"></div><button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
       <div class="page page-${route}">${inner}</div>
     </main>
