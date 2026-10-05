@@ -492,7 +492,7 @@ PAGES.challenges = {
     return `<div class="page-head"><div><h1>⚡ Défis flash</h1><p>Un mini-défi de 6 à 72 h sur un KPI. Classement rapporté à l’objectif mensuel de chacun : équitable entre profils.</p></div><span class="spacer"></span>${isManager() ? `<button class="btn primary" data-act="newChallenge">${ico('plus')} Lancer un défi</button>` : ''}</div>
       ${live.length ? `<h2 style="margin-bottom:10px">En cours</h2><div class="grid" style="margin-bottom:20px">${live.map(c => card(c, true)).join('')}</div>` : ''}
       <h2 style="margin-bottom:10px">Historique des défis</h2>
-      ${past.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${past.map(c => card(c, false)).join('')}</div>` : '<div class="card empty">Aucun défi flash terminé pour le moment.</div>'}`;
+      ${past.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(320px, 100%), 1fr))">${past.map(c => card(c, false)).join('')}</div>` : '<div class="card empty">Aucun défi flash terminé pour le moment.</div>'}`;
   },
 };
 ACTIONS.newChallenge = () => {

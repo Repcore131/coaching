@@ -105,7 +105,7 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
 // Logo Fit Pulse (image) ; à défaut, la marque en texte
 function brandBlock(big = false) {
   const w = (window.PARKPULSE_ASSETS || {}).wordmark;
-  if (w) return `<div class="brand ${big ? 'big' : ''}"><img class="brand-logo" src="${w}" alt="Fit Pulse"><div class="brand-sub">${esc(APP.tagline)}</div></div>`;
+  if (w) return `<div class="brand with-logo ${big ? 'big' : ''}"><img class="brand-logo" src="${w}" alt="Fit Pulse"><div class="brand-sub">${esc(APP.tagline)}</div></div>`;
   return `<div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>`;
 }
 

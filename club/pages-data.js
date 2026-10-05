@@ -353,7 +353,7 @@ PAGES.clubs = {
 };
 function clubList() {
   const clubs = myClubs().sort((a, b) => a.name.localeCompare(b.name));
-  return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${clubs.map(c => {
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(300px, 100%), 1fr))">${clubs.map(c => {
     const r = rangeOf('month', curMonth()); const st = statsFor(c.id, null, r);
     return `<div class="card"><div class="card-head">${ico('building')}<div class="spacer"><h3>${esc(c.name)}</h3><div class="muted small">${esc([c.address, c.city].filter(Boolean).join(', ') || 'Adresse non renseignée')}</div></div>${isCreator() ? `<button class="btn ghost icon sm" data-act="clubForm" data-id="${c.id}">${ico('edit')}</button>` : ''}</div>
       <div class="row small"><span>${clubMembers(c.id).length} membre(s) actif(s)</span><span class="spacer"></span><b>${fmtP(st.max ? st.earned / st.max : null)}</b> <span class="muted">du mois</span></div>${progressBar(st.max ? st.earned / st.max : 0, { pace: st.expected })}

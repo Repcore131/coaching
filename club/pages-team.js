@@ -264,7 +264,7 @@ function profPerf() {
   const months = pastMonths().filter(m => m < curMonth()).reverse();
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">
-    <div class="card"><h3>Accomplissements</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:10px">
+    <div class="card"><h3>Accomplissements</h3><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(220px, 100%), 1fr));margin-top:10px">
       <div class="trophy"><div class="ic">📅</div><b>Régularité : ${acc.streak} jour(s) de suite</b><span class="muted small">${acc.streak >= 3 ? 'Série en cours, continuez !' : 'Prochain palier : trois jours de suite'}</span></div>
       <div class="trophy"><div class="ic">${acc.first100 ? '💯' : '🔒'}</div><b>Premier 100 %</b><span class="muted small">${acc.first100 ? 'Obtenu' : 'Un KPI à 100 % sur un mois'}</span></div>
       <div class="trophy"><div class="ic">${acc.all100 ? '🏅' : '🔒'}</div><b>Grand chelem</b><span class="muted small">${acc.all100 ? 'Obtenu' : 'Tous les KPI à 100 % sur un mois'}</span></div></div></div>
@@ -275,7 +275,7 @@ function profPerf() {
 }
 function profAccount() {
   const live = pref('liveBanner', true); const digest = pref('digest', true);
-  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
     <div class="card"><h3>Avatar du tableau de bord</h3><div class="row wrap" style="margin-top:10px">${['h1', 'h2', 'f1', 'f2'].map((a, i) => `<button class="btn ${ME.avatar === a ? 'primary' : ''}" style="flex-direction:column;padding:8px" data-act="setAvatar" data-a="${a}">${mascot(a, 'happy', 54)}<span class="small">${['Homme 1', 'Homme 2', 'Femme 1', 'Femme 2'][i]}</span></button>`).join('')}</div></div>
