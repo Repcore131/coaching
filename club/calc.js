@@ -271,6 +271,7 @@ const LOYALTY_TYPES = {
   renouvellement: { label: 'Renouvellement', icon: '🔁', hint: 'Fin de contrat dans les 30 jours' },
   anniversaire: { label: 'Anniversaire', icon: '🎂', hint: 'Anniversaire dans les 7 jours' },
   impaye: { label: 'Impayé', icon: '💶', hint: 'Solde débiteur' },
+  mandat: { label: 'Sans mandat', icon: '🏦', hint: 'Abonné sans mandat de prélèvement' },
 };
 const OUTCOMES = {
   ok: { label: 'Joint — OK', cls: 'ok', done: true },
@@ -289,6 +290,8 @@ function loyaltyTasks(clubId) {
     const actions = Object.values(S.loyalty);
     for (const c of Object.values(S.clients)) {
       if (c.clubId !== clubId) continue;
+      // anciens clients, perdus, prospects : pas de relance de fidelisation
+      if (c.status && /ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status))) continue;
       const cand = [];
       if (c.start) { const age = (dateOf(t) - dateOf(c.start)) / 86400000; if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
       if (c.end && c.end >= t && c.end <= addDays(t, 30)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -30) });
@@ -297,6 +300,7 @@ function loyaltyTasks(clubId) {
         if (bd <= addDays(t, 7)) cand.push({ type: 'anniversaire', due: bd, since: addDays(bd, -7) });
       }
       if (Number(c.balance) > 0) cand.push({ type: 'impaye', due: t, since: c.balanceAt || '2000-01-01', amount: Number(c.balance) });
+      if (c.noMandate) cand.push({ type: 'mandat', due: t, since: c.noMandateAt || '2000-01-01' });
       for (const x of cand) {
         const sinceTs = dateOf(x.since).getTime();
         let acts = actions.filter(a => a.clientId === c.id && a.type === x.type && a.at >= sinceTs).sort((a, b) => b.at - a.at);

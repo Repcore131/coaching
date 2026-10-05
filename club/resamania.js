@@ -1,0 +1,426 @@
+'use strict';
+// ══ PARK PULSE — liaison Resamania ════════════════════════════════════════
+//
+// D'apres l'audit Resamania du 05/10/2026. Deux familles d'exports :
+//  - les LISTES (menus Clients, Donnees financieres) : CSV UTF-8, « ; »,
+//    dates AAAA-MM-JJ, PLAFONNEES A 2 000 LIGNES (tronquees sans avertissement) ;
+//  - les EXPORTS DE GESTION : ZIP, ISO-8859-15, dates JJ/MM/AAAA ou JJ-MM-AAAA,
+//    sans plafond, avec commercial actuel ET initial.
+// Chaque fichier est reconnu par ses colonnes (jamais par son nom seul).
+// Chaque ligne recoit une cle stable : reimporter le meme fichier, ou deux
+// exports qui se recouvrent, ne cree jamais de doublon.
+
+// ── Lecture de fichiers : CSV, XLSX, ZIP ──────────────────────────────────
+const LIBS = {
+  jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+};
+const libLoaded = {};
+function loadLib(k) {
+  if (!libLoaded[k]) libLoaded[k] = new Promise((ok, ko) => { const s = document.createElement('script'); s.src = LIBS[k]; s.onload = ok; s.onerror = () => ko(new Error('Bibliothèque indisponible : ' + k)); document.head.appendChild(s); });
+  return libLoaded[k];
+}
+// UTF-8 d'abord ; si les octets n'en sont pas, ISO-8859-15 (le « € » y vaut 0xA4).
+function decodeBytes(buf) {
+  const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(u8), encoding: 'UTF-8' }; }
+  catch (e) { return { text: new TextDecoder('iso-8859-15').decode(u8), encoding: 'ISO-8859-15' }; }
+}
+async function readXlsx(name, buf) {
+  await loadLib('xlsx');
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+  return wb.SheetNames.map(sn => {
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: false, defval: '' });
+    return tableFromAoa(`${name} › ${sn}`, aoa, 'XLSX');
+  });
+}
+function tableFromAoa(name, aoa, encoding) {
+  const rows = aoa.map(r => r.map(c => String(c ?? '').trim())).filter(r => r.some(Boolean));
+  // l'en-tete est la premiere ligne qui a au moins deux cellules remplies
+  let h = 0; while (h < rows.length - 1 && rows[h].filter(Boolean).length < 2) h++;
+  const headers = rows[h] || [];
+  return { name, encoding, headers, rows: rows.slice(h + 1).map(r => headers.map((_, i) => r[i] || '')) };
+}
+async function readAnyFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith('.zip') || (buf[0] === 0x50 && buf[1] === 0x4b && !lower.endsWith('.xlsx'))) {
+    await loadLib('jszip');
+    const zip = await JSZip.loadAsync(buf);
+    const out = [];
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir || /(^|\/)(__MACOSX|\.)/.test(entry.name)) continue;
+      const data = await entry.async('uint8array');
+      const n = `${file.name} › ${entry.name.split('/').pop()}`;
+      if (/\.xlsx$/i.test(entry.name)) out.push(...await readXlsx(n, data));
+      else if (/\.(csv|tsv|txt)$/i.test(entry.name)) { const d = decodeBytes(data); out.push({ name: n, encoding: d.encoding, ...parseCSV(d.text) }); }
+      else out.push({ name: n, skipped: 'Fichier non tabulaire (PDF…) : ignoré' });
+    }
+    return out;
+  }
+  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return readXlsx(file.name, buf);
+  const d = decodeBytes(buf);
+  return [{ name: file.name, encoding: d.encoding, ...parseCSV(d.text) }];
+}
+
+// ── Outils de lecture ─────────────────────────────────────────────────────
+function rsmDate(s) {
+  if (!s) return null; s = String(s).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})\b/); if (m) return `20${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  if (/^\d{5}(\.\d+)?$/.test(s)) { const d = new Date(Math.round((Number(s) - 25569) * 86400000)); return d.toISOString().slice(0, 10); } // date Excel
+  return null;
+}
+const rsmNum = s => toNum(String(s ?? '').replace(/[¤€\s]/g, ''));
+// cle courte et stable a partir d'un texte (FNV-1a sur 2 x 32 bits)
+function hkey(str) {
+  let a = 0x811c9dc5, b = 0x01000193 ^ 0x5bd1e995;
+  for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); a = Math.imul(a ^ c, 16777619) >>> 0; b = Math.imul(b ^ c, 2246822519) >>> 0; }
+  return a.toString(36) + b.toString(36);
+}
+const tokensKey = s => norm(s).split(' ').filter(Boolean).sort().join(' ');
+// Firebase refuse . # $ / [ ] dans une cle
+const safeKey = k => String(k).replace(/[.#$/\[\]]/g, ',');
+
+// ── Annuaire des commerciaux ──────────────────────────────────────────────
+// Resamania ecrit le meme vendeur de quatre facons : « NOM Prénom »,
+// « Prénom NOM <email> », « Prénom NOM <email> {id} », ou un code trigramme
+// (KGUE). Les correspondances validees sont gardees dans S.rsm.aliases :
+// cle -> id de membre, 'system' (vente en ligne / automatique) ou 'ignore'.
+const SYSTEM_SELLERS = ['traitement automatique', 'automatismes', 'automatique', 'site web fitness park public', 'pso site', 'spso', 'en ligne', 'fitness park backoffice mobile', 'espace membre fitnesspark public', 'qualite de la donnee', 'site', 'web', 'borne'];
+function sellerKeys(raw, code) {
+  raw = String(raw || '').trim();
+  const email = (raw.match(/<([^>]+)>/) || [])[1];
+  const uid = (raw.match(/\{(\d+)\}/) || [])[1];
+  const name = raw.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '').trim();
+  const keys = [];
+  if (email) keys.push('e:' + email.toLowerCase());
+  if (uid) keys.push('i:' + uid);
+  if (code) keys.push('c:' + String(code).trim().toUpperCase());
+  if (name) keys.push('n:' + tokensKey(name));
+  return { keys, email, name: name || code || email || '', label: raw || code || '' };
+}
+function resolveSeller(raw, code) {
+  const k = sellerKeys(raw, code);
+  if (!k.keys.length) return { status: 'system', label: '(vide)' };
+  const nm = norm(k.name);
+  if (SYSTEM_SELLERS.includes(nm) || (code && String(code).toUpperCase() === 'SPSO')) return { status: 'system', label: k.label };
+  const al = (S.rsm && S.rsm.aliases) || {};
+  for (const key of k.keys) {
+    const v = al[safeKey(key)];
+    if (v === 'system' || v === 'ignore') return { status: v, label: k.label };
+    if (v && S.users[v]) return { status: 'user', userId: v, label: k.label };
+  }
+  const users = Object.values(S.users).filter(u => u.role !== 'createur');
+  if (k.email) { const u = users.find(x => (x.email || '').toLowerCase() === k.email.toLowerCase()); if (u) return { status: 'user', userId: u.id, label: k.label }; }
+  if (k.name) { const t = tokensKey(k.name); const u = users.find(x => tokensKey(`${x.first} ${x.last}`) === t); if (u) return { status: 'user', userId: u.id, label: k.label }; }
+  return { status: 'unknown', key: k.keys[0], keys: k.keys, label: k.label };
+}
+
+// ── Classement des regularisations d'impayes par canal ────────────────────
+const RECOV_CHANNELS = {
+  equipe: { label: 'Équipe du club', hint: 'Encaissé à l’accueil, lien de paiement ou CB à distance par un membre de l’équipe', color: '#FFD200', human: true },
+  client: { label: 'Client en ligne', hint: 'Payé par le client lui-même depuis son espace adhérent', color: '#2F6FDB', human: false },
+  auto: { label: 'Prélèvement automatique', hint: '« Traitement automatique » : nouveau prélèvement ou re-présentation', color: '#1F9D55', human: false },
+  automatismes: { label: 'Automatismes', hint: 'Règle système « Automatismes » (prélèvement CB ou clôture automatique)', color: '#8A63D2', human: false },
+  tiers: { label: 'Tiers / autre', hint: 'Tiers payeur, huissier ou auteur non identifié', color: '#8a8a90', human: false },
+};
+function recovChannel(author, clientName) {
+  const n = norm(String(author || '').replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, ''));
+  if (!n) return { canal: 'tiers' };
+  if (n.includes('traitement automatique')) return { canal: 'auto' };
+  if (n.includes('automatisme')) return { canal: 'automatismes' };
+  const s = resolveSeller(author);
+  if (s.status === 'user') return { canal: 'equipe', seller: s };
+  if (clientName && tokensKey(n) === tokensKey(clientName)) return { canal: 'client' };
+  if (s.status === 'system') return { canal: 'client' };
+  // un e-mail inconnu : membre d'equipe pas encore rattache, ou tiers payeur
+  return { canal: 'equipe', seller: s, maybeTiers: true };
+}
+
+// ── Definitions des exports ───────────────────────────────────────────────
+// sig(has) : reconnaissance par colonnes. parse(c) : lignes -> donnees.
+const PRODUCT_EXCLUDE = ['changement d offre', 'acces employe', 'vip', 'reconduction', 'transfert'];
+const TECH_MOTIFS = ['changement de formule', 'resiliation pack option', 'transfert', 'erreur de migration'];
+const isNutrition = (fam, code, label) => norm(fam).includes('nutrition') || /NUTRI/i.test(code || '') || /nutri/i.test(norm(label));
+const isAccessory = code => /(^|_)FPARK$/i.test(String(code || '').trim());
+
+const RSM_DEFS = [
+  {
+    id: 'ventes', label: 'Vente d’abonnements', family: 'gestion', feeds: 'Contrats signés (commercial initial) · nouveaux adhérents J+15 / J+30',
+    path: 'Exports de gestion > Exporter > Membres & Ventes > Vente d’abonnements', filters: 'Date de début = 1er du mois (ou J-30), Date de fin = dernier jour', file: 'RSM_ventes-abonnements_AAAA-MM.csv',
+    sig: has => has('numero du client') && has('nom du produit') && has('echeancier'),
+    parse(c) {
+      const iNum = c.col('numero du client'), iProd = c.col('nom du produit'), iDate = c.col('date de creation'), iOffre = c.col('nom de l offre'), iEtat = c.col('etat'), iCanal = c.col('canal'), iPrix = c.col('prix toutes taxes'), iPre = c.colAt(2, 'prenom'), iNom = c.colAt(3, 'nom');
+      const iCode = c.find(h => h.includes('code') && h.includes('initial')), iCN = c.find(h => h.includes('nom') && h.includes('initial') && !h.includes('prenom')), iCP = c.find(h => h.includes('prenom') && h.includes('initial'));
+      // repli positionnel (colonnes 21-23) si les en-tetes du commercial sont muets
+      const pos = k => (k >= 0 ? k : -1);
+      const gCode = r => r[pos(iCode)] ?? r[22] ?? '', gName = r => [r[pos(iCP)] ?? r[21] ?? '', r[pos(iCN)] ?? r[20] ?? ''].join(' ').trim();
+      for (const r of c.rows) {
+        const date = rsmDate(r[iDate]); if (!date) { c.skip('date illisible'); continue; }
+        const prod = `${r[iProd] || ''} ${r[iOffre] || ''}`; const etat = norm(r[iEtat]);
+        if (PRODUCT_EXCLUDE.some(x => norm(prod).includes(x))) { c.skip('changement d’offre, accès employé, VIP ou reconduction'); continue; }
+        if (etat && /(annul|panier|conserv|brouillon)/.test(etat)) { c.skip('panier ou vente annulée'); continue; }
+        const num = r[iNum];
+        c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: resolveSeller(gName(r), gCode(r)) });
+        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]) });
+      }
+    },
+  },
+  {
+    id: 'factures', label: 'Factures & avoirs (DetailLignesFacture&AvoirsV2)', family: 'gestion', feeds: 'Nutrition · Accessoires · Contrat B2B (société du client)',
+    path: 'Exports de gestion > Exporter > Finance > Factures & avoirs', filters: 'Dates du mois, Entité = FPN GESTION, Club', file: 'RSM_factures-avoirs_AAAA-MM.zip',
+    sig: has => has('nature') && has('code du produit') && has('famille de produit niveau 1'),
+    parse(c) {
+      const iDate = c.col('date de creation de la facture'), iNum = c.col('numero de la facture'), iNat = c.col('nature'), iEtat = c.col('etat'), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iFam = c.col('famille de produit niveau 1'), iAut = c.col('auteur'), iSoc = c.col('societe du client');
+      const ttc = c.H.map((h, i) => [h, i]).filter(([h]) => h.includes('ttc')).map(([, i]) => i);
+      const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : (ttc[1] ?? ttc[0]);
+      const iCI = c.find(h => h.includes('code') && h.includes('initial')), iNI = c.find(h => h.includes('nom') && h.includes('initial') && !h.includes('prenom')), iPI = c.find(h => h.includes('prenom') && h.includes('initial'));
+      const seen = {}; const b2b = new Set();
+      for (const r of c.rows) {
+        const date = rsmDate(r[iDate]); if (!date) { c.skip('date illisible'); continue; }
+        if (/annul/.test(norm(r[iEtat]))) { c.skip('pièce annulée'); continue; }
+        if (/reconduction/.test(norm(r[iProd]))) { c.skip('reconduction mensuelle'); continue; }
+        const avoir = /avoir/.test(norm(r[iNat]));
+        let v = rsmNum(r[iTtc]); if (avoir && v > 0) v = -v;
+        const kpi = isNutrition(r[iFam], r[iCode], r[iProd]) ? 'nutrition' : isAccessory(r[iCode]) ? 'accessoires' : null;
+        const base = `fl:${r[iNum]}:${String(r[iCode]).trim()}:${norm(r[iProd])}:${v}`; seen[base] = (seen[base] || 0) + 1;
+        if (kpi && v) c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iAut]) });
+        // B2B : une facture d'abonnement a une societe (hors boutique)
+        if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(r[iNum])) {
+          b2b.add(r[iNum]);
+          const seller = (iCI >= 0 || iNI >= 0) ? resolveSeller(`${r[iPI] || ''} ${r[iNI] || ''}`.trim(), r[iCI]) : resolveSeller(r[iAut]);
+          c.entry({ key: `b2b:${r[iNum]}`, kpiId: 'b2b', date, value: 1, seller });
+        }
+        if (!kpi) c.skip('ligne hors nutrition / accessoires');
+      }
+      if (b2b.size) c.warn(`${b2b.size} facture(s) avec une « Société du client » comptées en Contrat B2B : à vérifier sur un contrat B2B connu.`);
+    },
+  },
+  {
+    id: 'lignes-factures', label: 'Lignes de factures (liste)', family: 'liste', feeds: 'Nutrition · Accessoires (vendeur)',
+    path: 'Données financières > Lignes de factures > FILTRER (période) > ⋮ > Exporter', filters: 'Période d’une semaine maximum (plafond 2 000 lignes)', file: 'invoice_lines.csv',
+    sig: has => has('num facture') && has('code du produit') && has('vendeur'),
+    parse(c) { linesParse(c, false); },
+  },
+  {
+    id: 'lignes-avoirs', label: 'Lignes d’avoirs (liste)', family: 'liste', feeds: 'Retours nutrition / accessoires (déduits)',
+    path: 'Données financières > Lignes d’avoirs > FILTRER > ⋮ > Exporter', filters: 'Période', file: 'credit_note_lines.csv',
+    sig: has => has('num avoir') && has('code du produit'),
+    parse(c) { linesParse(c, true); },
+  },
+  {
+    id: 'incidents', label: 'Incidents (liste)', family: 'liste', feeds: 'Impayés récupérés PAR CANAL (équipe, client en ligne, prélèvement, automatismes) · impayés en cours',
+    path: 'Données financières > Incidents > FILTRER (Statut, Date de régularisation, Club) > ⋮ > Exporter', filters: 'Récupérés : Statut = Régularisé + Date de régularisation = la période. En cours : Statut = En cours', file: 'RSM_impayes-regularises_AAAA-MM.csv',
+    sig: has => has('auteur de la regularisation') && has('date de regularisation'),
+    parse(c) {
+      const iDI = c.col('date de l incident'), iType = c.col('type d incident'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iNum = c.col('num client'), iMoy = c.col('moyen de paiement'), iNP = c.col('numero du paiement'), iMt = c.col('montant du paiement'), iSt = c.col('statut'), iDR = c.col('date de regularisation'), iAR = c.col('auteur de la regularisation');
+      const open = {};
+      for (const r of c.rows) {
+        const st = norm(r[iSt]); const amount = Math.abs(rsmNum(r[iMt])); const client = `${r[iPre] || ''} ${r[iNom] || ''}`.trim();
+        const key = `inc:${r[iNP] || ''}:${rsmDate(r[iDI]) || r[iDI]}:${r[iNum]}`;
+        if (/annul|cancel/.test(st)) { c.recov({ key, date: rsmDate(r[iDR]) || rsmDate(r[iDI]), amount, canal: 'annule', type: r[iType], clientNum: r[iNum], author: r[iAR] }); continue; }
+        const dr = rsmDate(r[iDR]);
+        if (/closed|regularis|clos/.test(st) && dr) {
+          const ch = recovChannel(r[iAR], client);
+          c.recov({ key, date: dr, amount, canal: ch.canal, type: r[iType], clientNum: r[iNum], author: r[iAR], seller: ch.seller || null, moyen: r[iMoy] });
+          if (ch.canal === 'equipe') c.entry({ key, kpiId: 'impayes', date: dr, value: amount, seller: ch.seller });
+          continue;
+        }
+        if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0 }; o.amount += amount; o.count++; }
+      }
+      const list = Object.values(open);
+      if (list.length) { c.balances(list, 'incidents'); }
+    },
+  },
+  {
+    id: 'clients-incident', label: 'Clients en incident', family: 'gestion', feeds: 'Impayés en cours : solde par client à une date',
+    path: 'Exports de gestion > Exporter > Points d’attention > Clients en incident', filters: 'Date de visualisation = aujourd’hui, Club', file: 'RSM_impayes-encours_AAAA-MM-JJ.csv',
+    sig: has => has('nombre d incidents') && has('numero du client'),
+    parse(c) {
+      const iNum = c.col('numero du client'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iMt = c.col('montant de l incident'), iN = c.col('nombre d incidents');
+      c.balances(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), amount: Math.abs(rsmNum(r[iMt])), count: rsmNum(r[iN]) })).filter(x => x.num), 'clients-incident');
+    },
+  },
+  {
+    id: 'sans-mandat', label: 'Clients abonnés sans prélèvement', family: 'gestion', feeds: 'Adhérents sans mandat (tâche de relance)',
+    path: 'Exports de gestion > Exporter > Points d’attention > Clients abonnés sans prélèvement', filters: 'Club', file: 'RSM_sans-mandat_AAAA-MM-JJ.csv',
+    sig: has => has('prochaine facturation') && has('numero du client'),
+    parse(c) {
+      const iNum = c.col('numero du client'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iAb = c.col('nom de l abonnement');
+      c.noMandate(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), offer: r[iAb] })).filter(x => x.num));
+    },
+  },
+  {
+    id: 'clients', label: 'Clients club (liste)', family: 'liste', feeds: 'Base clients : anniversaires, statut, commercial',
+    path: 'Clients > Clients club > FILTRER (Statut = Client) > ⋮ > Exporter', filters: 'Statut = Client (plafond 2 000 lignes : filtrer « Anniversaire ce jour » ou par lettre si besoin)', file: 'RSM_clients_AAAA-MM-JJ.csv',
+    sig: has => has('date d anniversaire') && has('numero'),
+    parse(c) {
+      const iNum = c.col('numero'), iBd = c.col('date d anniversaire'), iNom = c.colExact('nom'), iPre = c.col('prenom'), iEtat = c.col('etat'), iCom = c.col('commercial');
+      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: rsmDate(r[iBd]), status: r[iEtat] || '', seller: r[iCom] || '' }); }
+    },
+  },
+  {
+    id: 'abonnements', label: 'Abonnements (liste)', family: 'liste', feeds: 'Fins de contrat (relances de renouvellement)',
+    path: 'Clients > Abonnements > FILTRER (Fin d’engagement = 30 prochains jours, Masquer les résiliés) > ⋮ > Exporter', filters: 'Fin d’engagement = période à venir', file: 'RSM_fins-contrat_AAAA-MM-JJ.csv',
+    sig: has => has('fin d engagement') && has('libelle') && has('contact'),
+    parse(c) {
+      const iC = c.col('contact'), iL = c.col('libelle'), iFE = c.col('fin d engagement'), iFV = c.col('fin de validite'), iDeb = c.col('debut de validite');
+      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); if (!r[iC] || !end) continue; c.clientByName(r[iC], { end, offer: r[iL] || '', start: rsmDate(r[iDeb]) }); }
+      c.warn('Cette liste n’a pas de numéro client : rapprochement par nom (homonymes possibles).');
+    },
+  },
+  {
+    id: 'prospects', label: 'Prospects', family: 'liste', feeds: 'Prospects créés par commercial',
+    path: 'Clients > Prospects > FILTRER (Date de création) > ⋮ > Exporter — ou Exports de gestion > Membres & Ventes > Prospects (S)', filters: 'Date de création = la période', file: 'RSM_prospects_AAAA-MM.csv',
+    sig: has => (has('valeur du prospect') || has('statut de prospection')) && has('date de creation'),
+    parse(c) {
+      const iN = c.colExact('nom'), iP = c.col('prenom'), iD = c.col('date de creation');
+      const iCom = c.find(h => h === 'commercial initial') >= 0 ? c.find(h => h === 'commercial initial') : c.find(h => h === 'commercial' || h.startsWith('commercial'));
+      for (const r of c.rows) { const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; } c.entry({ key: `pr:${tokensKey(`${r[iN]} ${r[iP]}`)}:${d}`, kpiId: 'prospects', date: d, value: 1, seller: resolveSeller(r[iCom]) }); }
+    },
+  },
+  {
+    id: 'resil', label: 'Résiliations', family: 'liste', feeds: 'Résiliations · sauvetages (Etat = canceled) · motifs techniques écartés',
+    path: 'Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter', filters: 'Date de création = le mois, tous statuts', file: 'RSM_resiliations_AAAA-MM.csv',
+    sig: has => has('motif') && (has('createur') || has('commercial actuel')) && (has('etat') || has('statut')),
+    parse(c) {
+      const iD = c.find(h => h === 'date creation' || h === 'date de creation') >= 0 ? c.find(h => h === 'date creation' || h === 'date de creation') : c.find(h => h === 'date' || h.startsWith('date'));
+      const iE = c.find(h => h === 'etat' || h === 'statut'), iCr = c.col('createur'), iT = c.colExact('type'), iM = c.col('motif'), iCt = c.find(h => h === 'contact' || h === 'nom de l abonnement');
+      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom');
+      let tech = 0;
+      for (const r of c.rows) {
+        const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
+        const motif = r[iM] || ''; if (TECH_MOTIFS.some(t => norm(motif).includes(t))) { tech++; c.skip('motif technique (changement de formule, pack option, transfert, migration)'); continue; }
+        const etat = norm(r[iE]); const saved = /cancel|annul/.test(etat); if (/reject|rejet/.test(etat)) { c.skip('demande rejetée'); continue; }
+        const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
+        const seller = resolveSeller(r[iCr]);
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, client, date: d, reason: motif, type: r[iT] || '', saved, seller });
+        if (saved) c.entry({ key: `sv:${tokensKey(client)}:${d}`, kpiId: 'sauvetage', date: d, value: 1, seller });
+      }
+      if (tech) c.warn(`${tech} résiliation(s) technique(s) écartée(s) : elles gonfleraient le churn.`);
+    },
+  },
+  {
+    id: 'tti', label: 'Taux de transformation par commerciaux', family: 'gestion', feeds: 'Taux de transformation des prospects (contrôle, par commercial)', monthly: true,
+    path: 'Exports de gestion > Exporter > Membres & Ventes > Taux de transformation par commerciaux', filters: 'Dates du mois', file: 'RSM_tti-commerciaux_AAAA-MM.csv',
+    sig: has => has('nombre de creations'),
+    parse(c) {
+      const iC = c.col('commercial'), iCr = c.col('nombre de creations'), iTr = c.col('nombre de contacts transformes');
+      for (const r of c.rows) { const s = resolveSeller(r[iC]); c.control('tti', { seller: s, created: rsmNum(r[iCr]), transformed: rsmNum(r[iTr]) }); }
+    },
+  },
+  {
+    id: 'web', label: 'Rapport détaillé des transactions Web', family: 'gestion', feeds: 'Contrôle : impayés réglés en ligne (Recouvrement = 1)',
+    path: 'Exports de gestion > Exporter > Finance > Rapport détaillé des transactions Web', filters: 'Mois, Club', file: 'RSM_web-transactions_AAAA-MM.csv',
+    sig: has => has('recouvrement') && has('psp'),
+    parse(c) {
+      const iD = c.col('date de la transaction'), iM = c.colExact('montant'), iR = c.col('recouvrement'), iS = c.col('statut');
+      for (const r of c.rows) { const d = rsmDate(r[iD]); if (!d || String(r[iR]).trim() !== '1' || /refus|echec|fail|annul/.test(norm(r[iS]))) continue; c.control('web', { date: d, amount: rsmNum(r[iM]) }); }
+    },
+  },
+  {
+    id: 'paiements', label: 'Paiements (liste)', family: 'liste', feeds: 'Contrôle : encaissements par moyen de paiement et par auteur',
+    path: 'Données financières > Paiements > FILTRER (Période) > ⋮ > Exporter', filters: 'Période d’une semaine (≈ 2 000 paiements par mois)', file: 'RSM_paiements_AAAA-Sxx.csv',
+    sig: has => has('moyen de paiement') && has('numero de paiement') && has('auteur') && !has('date de regularisation'),
+    parse(c) {
+      const iD = c.col('date du paiement'), iM = c.col('moyen de paiement'), iMt = c.colExact('montant'), iSt = c.col('statut');
+      for (const r of c.rows) { const d = rsmDate(r[iD]); if (!d || !/valid/.test(norm(r[iSt]))) continue; c.control('payments', { date: d, moyen: r[iM] || 'Autre', amount: rsmNum(r[iMt]) }); }
+    },
+  },
+  {
+    id: 'perf', label: 'Export des performances commerciales', family: 'gestion', feeds: 'Contrôle : contrats par commercial (Page 1)', monthly: true,
+    path: 'Exports de gestion > Exporter > Spécifiques > Export des performances commerciales', filters: 'Mois, Club', file: 'RSM_perf-commerciales_AAAA-MM.xlsx',
+    sig: has => has('cdd1') || has('cdi') && has('cdd12'),
+    parse(c) {
+      const cols = c.H.map((h, i) => [h, i]).filter(([h]) => /^(cdd|cdi)/.test(h)).map(([, i]) => i);
+      for (const r of c.rows) { if (!r[0] || /total/i.test(r[0])) continue; c.control('perf', { seller: resolveSeller(r[0]), contrats: cols.reduce((s, i) => s + rsmNum(r[i]), 0) }); }
+    },
+  },
+  {
+    id: 'evolution', label: 'Évolution clients (detail-gain / detail-perte)', family: 'gestion', feeds: 'Base adhérents : entrées et sortants du mois', monthly: true,
+    path: 'Exports de gestion > Exporter > Membres & Ventes > Évolution clients', filters: 'Dates du mois, Club', file: 'RSM_evolution-clients_AAAA-MM.zip',
+    sig: (has, name) => /detail-(gain|perte)/i.test(name) && has('nom de l abonnement'),
+    parse(c) { c.control(/perte/i.test(c.fileName) ? 'lost' : 'gained', { count: c.rows.length }); },
+  },
+  {
+    id: 'ignored', label: 'Export reconnu, non utilisé', family: 'gestion', feeds: '—', silent: true,
+    sig: (has, name) => has('situation des incidents') || has('montant ttc restant a ventiler') || /repartition|synthese|regroupement|tbo-|controle-/i.test(name) || has('contient representation') || has('cumul client actif'),
+    parse(c) { c.warn('Fichier de contrôle ou d’agrégat : rien à importer.'); },
+  },
+];
+function linesParse(c, avoir) {
+  const iNum = c.find(h => h.startsWith('num facture') || h.startsWith('num avoir')), iDate = c.find(h => h.startsWith('date de')), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iV = c.col('vendeur'), iSt = c.find(h => h.startsWith('statut'));
+  const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : c.find(h => h.includes('ttc'));
+  const seen = {};
+  for (const r of c.rows) {
+    const date = rsmDate(r[iDate]); if (!date) { c.skip('date illisible'); continue; }
+    if (/annul/.test(norm(r[iSt]))) { c.skip('pièce annulée'); continue; }
+    if (/reconduction/.test(norm(r[iProd]))) { c.skip('reconduction mensuelle'); continue; }
+    const kpi = isNutrition('', r[iCode], r[iProd]) ? 'nutrition' : isAccessory(r[iCode]) ? 'accessoires' : null;
+    if (!kpi) { c.skip('ligne hors nutrition / accessoires'); continue; }
+    let v = rsmNum(r[iTtc]); if (avoir && v > 0) v = -v; if (!v) continue;
+    const base = `fl:${r[iNum]}:${String(r[iCode]).trim()}:${norm(r[iProd])}:${v}`; seen[base] = (seen[base] || 0) + 1;
+    c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iV]) });
+  }
+}
+
+function detectDef(t) {
+  const H = t.headers.map(norm);
+  const has = p => { const n = norm(p); return H.some(h => h === n || h.includes(n)); };
+  return RSM_DEFS.find(d => d.sig(has, t.name)) || null;
+}
+
+// ── Analyse : fichier -> plan d'import ────────────────────────────────────
+function analyzeTable(t, { clubId, month }) {
+  const def = t.skipped || !t.headers ? null : detectDef(t);
+  const res = { name: t.name, encoding: t.encoding, rowsCount: (t.rows || []).length, def, entries: [], recov: [], clients: {}, clientsByName: [], resil: [], controls: [], balances: null, noMandate: null, warnings: [], skipped: {}, from: null, to: null };
+  if (t.skipped) { res.warnings.push(t.skipped); return res; }
+  if (!def) return res;
+  const H = t.headers.map(norm);
+  const find = f => H.findIndex(f);
+  const c = {
+    H, rows: t.rows, fileName: t.name, clubId, month,
+    find,
+    col: p => { const n = norm(p); const e = H.indexOf(n); return e >= 0 ? e : H.findIndex(h => h.includes(n)); },
+    colExact: p => H.indexOf(norm(p)),
+    colAt: (pos, p) => (norm(H[pos] || '') === norm(p) ? pos : H.indexOf(norm(p))),
+    skip: why => { res.skipped[why] = (res.skipped[why] || 0) + 1; },
+    warn: w => res.warnings.push(w),
+    entry: e => { res.entries.push(e); if (!res.from || e.date < res.from) res.from = e.date; if (!res.to || e.date > res.to) res.to = e.date; },
+    recov: x => { res.recov.push(x); if (x.date && (!res.from || x.date < res.from)) res.from = x.date; if (x.date && (!res.to || x.date > res.to)) res.to = x.date; },
+    client: (num, o) => { res.clients[num] = { ...(res.clients[num] || {}), ...Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== '')) }; },
+    clientByName: (name, o) => res.clientsByName.push({ name, ...o }),
+    resil: x => res.resil.push(x),
+    control: (k, v) => res.controls.push([k, v]),
+    balances: (list, src) => { res.balances = { list, src }; },
+    noMandate: list => { res.noMandate = list; },
+  };
+  def.parse(c);
+  if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('⚠ Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');
+  if (t.encoding === 'ISO-8859-15') res.warnings.push('Encodage ISO-8859-15 (export de gestion) : accents et « € » corrigés automatiquement.');
+  if (def.monthly) res.month = (t.name.match(/(\d{4})-(\d{2})(?!-\d)/) || [])[0] || month;
+  return res;
+}
+// vendeurs inconnus, tous fichiers confondus. Deux libelles qui partagent une
+// cle (meme e-mail, meme code, memes nom et prenom dans un autre ordre) sont
+// une seule personne : on ne la propose qu'une fois.
+function unknownSellers(results) {
+  const groups = []; const byKey = {};
+  const visit = s => {
+    if (!s || s.status !== 'unknown') return;
+    let g = s.keys.map(k => byKey[k]).find(Boolean);
+    if (!g) { g = { key: s.key, keys: [], labels: new Set(), count: 0 }; groups.push(g); }
+    s.keys.forEach(k => { if (!g.keys.includes(k)) g.keys.push(k); byKey[k] = g; });
+    g.labels.add(s.label); g.count++;
+  };
+  results.forEach(r => { r.entries.forEach(e => visit(e.seller)); r.resil.forEach(e => visit(e.seller)); r.recov.forEach(e => visit(e.seller)); r.controls.forEach(([, v]) => visit(v.seller)); });
+  return groups.map(g => ({ key: g.key, keys: g.keys, label: [...g.labels].join(' · '), count: g.count })).sort((a, b) => b.count - a.count);
+}
+// choix fait pour un groupe -> valable pour toutes ses cles
+function choiceFor(s, choices, groups) {
+  if (!s || s.status !== 'unknown') return null;
+  const g = groups.find(x => x.keys.some(k => s.keys.includes(k)));
+  return g ? choices[g.key] || null : null;
+}

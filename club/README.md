@@ -24,6 +24,35 @@ Application sans dépendance (HTML, CSS, JavaScript), ouverte à `club/index.htm
 
 Les règles de calcul (score, paliers, rythme, égalités) sont écrites en tête de `calc.js` et affichées dans l'app.
 
+## Liaison Resamania
+
+Imports > **Resamania** : déposez plusieurs exports d'un coup (CSV des listes, ZIP des exports de gestion sans les
+décompresser, XLSX). Chaque fichier est reconnu par ses colonnes (`resamania.js`, d'après l'audit du 05/10/2026) :
+
+| Export Resamania | Alimente |
+|---|---|
+| Vente d'abonnements (gestion) | Contrats signés (commercial initial), nouveaux adhérents J+15/J+30 |
+| Factures & avoirs, DetailLignes (gestion, ZIP) | Nutrition, accessoires (FPARK / NO_FPARK), Contrat B2B (société du client), avoirs déduits |
+| Lignes de factures / d'avoirs (listes) | Nutrition, accessoires |
+| Incidents (liste) | **Impayés récupérés par canal** (équipe, client en ligne, prélèvement automatique, automatismes, tiers) + impayés en cours |
+| Clients en incident (gestion) | Impayés en cours, photo du jour |
+| Clients abonnés sans prélèvement (gestion) | Tâche de relance « Sans mandat » |
+| Clients club, Abonnements (listes) | Anniversaires, fins de contrat |
+| Prospects, Résiliations | Prospects par commercial, résiliations et sauvetages (motifs techniques écartés) |
+| Taux de transformation, performances commerciales, transactions Web, Paiements, Évolution clients | Contrôles et taux de transformation |
+
+- **Pas de doublon** : chaque ligne reçoit une clé stable ; réimporter un fichier, ou deux exports qui se recouvrent
+  (ZIP de gestion + liste), met à jour au lieu d'ajouter.
+- **Annuaire des commerciaux** (Membres > Correspondances Resamania) : codes trigrammes, e-mails, id, « NOM Prénom »
+  dans n'importe quel ordre. Un nom inconnu est demandé une fois, puis retenu. Les pseudo-vendeurs (Traitement
+  automatique, Site web, PSO Site, En ligne…) ne sont jamais attribués à un commercial.
+- **Contrôles** : liste à exactement 2 000 lignes (tronquée), encodage ISO-8859-15 corrigé, contrats Park Pulse vs
+  performances commerciales, client en ligne vs transactions Web.
+- **Routines** : 7 exports chaque lundi, 10 le 2 du mois, avec chemin, filtres et nom de fichier, cochés à l'import.
+- Page **Impayés** : total récupéré tous canaux, part de l'équipe (seule comptée pour le KPI et la prime), 6 mois.
+
+ZIP et XLSX sont lus avec JSZip et SheetJS, chargés depuis cdnjs à la première utilisation.
+
 ## Accès
 
 | Rôle | Peut faire |

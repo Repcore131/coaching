@@ -317,3 +317,7 @@ table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .wrap-slide { position: relative; z-index: 3; pointer-events: none; }
 .wrap-slide button, .wrap-slide a { pointer-events: auto; }
+.rsm-item summary { list-style: none; cursor: pointer; padding: 5px 0; }
+.rsm-item summary::-webkit-details-marker { display: none; }
+.rsm-item[open] summary b { color: var(--accent-text); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }

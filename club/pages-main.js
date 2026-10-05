@@ -146,6 +146,13 @@ function dashObjectives(st, r, subject, who) {
   const lag = Math.round(st.max * exp - st.earned);
   const status = statusOf(pctPts, exp);
   const conv = (() => {
+    // Resamania (Taux de transformation par commerciaux) prime quand il est importe
+    const tti = deepGet(S, ['rsm', 'controls', CLUB.id, 'tti', r.from.slice(0, 7)]);
+    if (tti) {
+      const rows = who ? [tti[who]].filter(Boolean) : Object.values(tti);
+      const cr = rows.reduce((a, x) => a + Number(x.created || 0), 0), tr = rows.reduce((a, x) => a + Number(x.transformed || 0), 0);
+      if (cr) return { v: fmtP(tr / cr), sub: `${fmtN(tr)} transformé(s) / ${fmtN(cr)} prospect(s) créé(s) · source Resamania` };
+    }
     const c = st.rows.find(x => x.k.id === 'contrats'), p = st.rows.find(x => x.k.id === 'prospects');
     if (!c || !p || !p.real) return { v: '—', sub: `${fmtN(c ? c.real : 0)} contrat(s) / ${fmtN(p ? p.real : 0)} prospect(s)` };
     return { v: fmtP(c.real / p.real), sub: `${fmtN(c.real)} contrat(s) / ${fmtN(p.real)} prospect(s)` };
@@ -167,6 +174,7 @@ function dashObjectives(st, r, subject, who) {
     </div>
     <div class="grid">
       <div class="card"><div class="muted small">Taux de conversion</div><div class="title" style="font-size:34px">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
+      ${!who && typeof recovList === 'function' && recovList(CLUB.id, r.from, r.to).length ? (() => { const L = recovList(CLUB.id, r.from, r.to); const t = L.reduce((a, x) => a + x.amount, 0); const e = L.filter(x => x.canal === 'equipe').reduce((a, x) => a + x.amount, 0); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title" style="font-size:34px">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title" style="font-size:34px">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
     </div>
   </div>

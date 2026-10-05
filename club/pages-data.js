@@ -48,15 +48,16 @@ function guessProfile(name, headers) {
 const guessCol = (headers, words) => { const i = headers.findIndex(h => words.some(w => norm(h).includes(w))); return i < 0 ? '' : String(i); };
 
 PAGES.imports = {
-  title: 'Imports CSV',
+  title: 'Imports',
   manager: true,
   render() {
-    const tab = UI.impTab || 'new';
-    const body = { new: impNew, history: impHistory, manual: impManual }[tab]();
-    return `<div class="page-head"><div><h1>Imports CSV</h1><p>Vérifiez et corrigez les KPI de vos commerciaux à partir des exports Resamania.</p></div></div>
-      ${tabs('impTab', [['new', 'Nouvel import'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
+    const tab = UI.impTab || 'rsm';
+    const body = { rsm: impRsm, new: impNew, history: impHistory, manual: impManual }[tab]();
+    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Park Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div></div>
+      ${tabs('impTab', [['rsm', 'Resamania'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
+    if ((UI.impTab || 'rsm') === 'rsm') { mountRsm(); return; }
     const drop = $('#drop'); if (!drop) return;
     const input = $('#file');
     drop.addEventListener('click', () => input.click());
@@ -75,8 +76,8 @@ function readImport(file) {
   };
   fr.readAsText(file, 'utf-8');
 }
-function startWizard(name, text) {
-  const p = parseCSV(text);
+function startWizard(name, text) { startWizardTable(name, parseCSV(text)); }
+function startWizardTable(name, p) {
   if (!p.headers.length || !p.rows.length) { toast('Fichier vide ou illisible.'); return; }
   const prof = guessProfile(name, p.headers);
   const H = p.headers;
@@ -222,9 +223,9 @@ function impHistory() {
   const cnt = t => all.filter(i => t === 'all' || i.type === t || (t === 'clients' && i.type === 'soldes')).length;
   const list = all.filter(i => f === 'all' || i.type === f || (f === 'clients' && i.type === 'soldes'));
   const shown = UI.impMore ? list : list.slice(0, 10);
-  const label = { kpi: 'KPI', clients: 'Base client', soldes: 'Solde clients', resil: 'Résiliations' };
+  const label = { kpi: 'KPI', clients: 'Base client', soldes: 'Solde clients', resil: 'Résiliations', control: 'Contrôle' };
   return `<div class="row wrap" style="margin-bottom:12px">${seg('impFilter', [['all', `Tous ${cnt('all')}`], ['kpi', `KPI ${cnt('kpi')}`], ['clients', `Base client ${cnt('clients')}`], ['resil', `Résiliations ${cnt('resil')}`]], f)}</div>
-    <div class="card" style="padding:6px 16px">${shown.map(i => `<div class="row wrap" style="padding:12px 0;border-bottom:1px solid var(--line)">${ico('list')}<div class="spacer"><b>${esc(i.name)}</b> <span class="badge ${i.active === false ? '' : 'ok'}">${i.active === false ? 'Annulé' : 'Actif'}</span> <span class="badge">${label[i.type] || i.type}</span>
+    <div class="card" style="padding:6px 16px">${shown.map(i => `<div class="row wrap" style="padding:12px 0;border-bottom:1px solid var(--line)">${ico('list')}<div class="spacer"><b>${esc(i.name)}</b> <span class="badge ${i.active === false ? '' : 'ok'}">${i.active === false ? 'Annulé' : 'Actif'}</span> <span class="badge">${label[i.type] || i.type}</span>${i.source === 'resamania' ? ' <span class="badge fp">Resamania</span>' : ''}
       <div class="muted small">${i.from ? `${dmy(i.from)} → ${dmy(i.to)} · ` : ''}${i.count ?? i.rows} ligne(s) importée(s) sur ${i.rows} · ${dmy(isoOf(new Date(i.at)))} par ${esc(fullName(S.users[i.by]))}</div></div>
       ${i.type === 'kpi' ? `<button class="btn sm" data-act="impDetail" data-id="${i.id}">Détail ${ico('chevR')}</button>` : ''}
       ${i.active === false ? `<button class="btn sm" data-act="impRestore" data-id="${i.id}">${ico('undo')} Rétablir</button>` : `<button class="btn sm danger" data-act="impCancel" data-id="${i.id}">Annuler l’import</button>`}</div>`).join('') || '<div class="empty">Aucun import.</div>'}
@@ -290,14 +291,14 @@ function loyTasks(todo) {
   const q = norm(UI.loyQ || '');
   const sort = UI.loySort || 'due';
   let list = todo.filter(t => (f === 'all' || t.type === f) && (!q || norm(t.client.name).includes(q)));
-  const prio = { impaye: 0, renouvellement: 1, suivi: 2, anniversaire: 3 };
+  const prio = { impaye: 0, mandat: 1, renouvellement: 2, suivi: 3, anniversaire: 4 };
   list.sort((a, b) => sort === 'amount' ? (b.amount || 0) - (a.amount || 0) : sort === 'prio' ? prio[a.type] - prio[b.type] || a.due.localeCompare(b.due) : a.due.localeCompare(b.due));
   const cnt = t => todo.filter(x => t === 'all' || x.type === t).length;
   return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.icon} ${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
     <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
     <select class="input sm" style="width:auto" data-change="loySort"><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
     ${list.length ? `<div class="grid">${list.map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span style="font-size:22px">${ty.icon}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.failed ? ` <span class="badge warn">${t.failed}/${MAX_ATTEMPTS} tentative(s)</span>` : ''}
-      <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>` : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
+      <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${t.client.incidents} incident(s)` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
       : '<div class="card empty"><div class="title">Aucune tâche</div><p>Rien à traiter sur cette vue pour le moment.</p></div>'}`;
 }

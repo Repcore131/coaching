@@ -7,8 +7,8 @@ PAGES.members = {
   render() {
     const tab = UI.memTab || 'org';
     const all = clubMembers(CLUB.id, { all: true });
-    const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`]];
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived }[tab]();
+    const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${all.filter(u => u.role === 'manager' && u.status === 'active').length} manager(s), ${all.filter(u => u.role === 'membre' && u.status === 'active').length} membre(s) actif(s), ${all.filter(u => u.status === 'pending').length} invitation(s) en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
       ${tabs('memTab', T, tab)}${body}`;
   },

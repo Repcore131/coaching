@@ -91,6 +91,7 @@ const ICONS = {
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   map: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  euro: '<path d="M18 7a7 7 0 1 0 0 10"/><path d="M4 10h10M4 14h10"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
 };
 const ico = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -134,6 +135,7 @@ function emptyState() {
     clubs: {}, users: {}, kpis: JSON.parse(JSON.stringify(DEFAULT_KPIS)),
     targets: {}, entries: {}, imports: {}, monthly: {}, base: {},
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
+    recov: {}, rsm: { aliases: {}, controls: {}, routine: {} },
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
     prefs: {}, team: {},
   };
@@ -349,6 +351,16 @@ function demoState() {
   [[7, 0], [8, 1], [10, 6], [11, 9], [14, 10], [15, 14], [17, 21], [20, 31]].forEach(([h, t], i) => { const id = 'p' + i; st.tasks.plan.niort[id] = { id, taskId: libIds[t], hour: h }; });
 
   st.challenges.ch1 = { id: 'ch1', clubId: 'niort', title: 'Sprint nutrition', desc: 'Le plus de ventes nutrition en 48 h (rapporté à l’objectif).', kpiId: 'nutrition', start: Date.now() - 20 * 86400000, end: Date.now() - 18 * 86400000, by: 'u2' };
+  // Regularisations d'impayes par canal (comme la liste Incidents de Resamania)
+  let rv = 0;
+  Object.values(st.entries).filter(e => e.kpiId === 'impayes' && e.clubId === 'niort').forEach(e => { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: e.date, amount: e.value, canal: 'equipe', userId: e.userId, type: 'Prélèvements rejetés', at: e.at }; });
+  months.forEach(mk => {
+    const days = mk === cm ? Math.max(1, Number(today().slice(8)) - 1) : daysIn(mk);
+    [['auto', 34, 42], ['client', 10, 38], ['automatismes', 7, 30], ['tiers', 1, 60]].forEach(([canal, n, avg]) => {
+      for (let i = 0; i < Math.round(n * days / daysIn(mk)); i++) { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: `${mk}-${pad(1 + Math.floor(R() * days))}`, amount: Math.round(avg * (0.5 + R()) * 100) / 100, canal, userId: null, type: 'Prélèvements rejetés', at: Date.now() }; }
+    });
+  });
+  st.rsm.aliases = { 'c:HLEF': 'u2', 'c:IMOR': 'u3', 'c:LPET': 'u4', 'c:SGAR': 'u5', 'c:CROU': 'u1' };
   st.meta.demo = true;
   return st;
 }
