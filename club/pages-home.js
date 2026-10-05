@@ -149,6 +149,7 @@ PAGES.home = {
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
           <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${acc.streak} jour(s) de suite</small></a>` : ''}</div></div></section>
+      ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
         <div class="card col8">${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</div>

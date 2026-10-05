@@ -181,6 +181,7 @@ ACTIONS.rsmCommit = () => {
         upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: 'recupere', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
       });
     }
+    if (r.balances) ops.push([['rsm', 'controls', club, 'du', today()], Math.round(r.balances.list.reduce((s2, b) => s2 + b.amount, 0) * 100) / 100]);
     if (r.noMandate) {
       const listed = new Set();
       r.noMandate.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { noMandate: true, noMandateAt: (pendingClients[c0.id] || c0).noMandate ? ((pendingClients[c0.id] || c0).noMandateAt || today()) : today(), offer: (pendingClients[c0.id] || c0).offer || b.offer, name: c0.name || b.name }); });

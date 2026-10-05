@@ -375,6 +375,8 @@ function demoState() {
   st.clients.c41 = { ...(st.clients.c41 || { id: 'c41', clubId: 'niort', name: 'Hugo Martin' }), clubId: 'niort', balance: 0, dunning: { status: 'recupere', recoveredAt: addDays(today(), -2), amount: 59.9, canal: 'equipe', by: 'u3' } };
   // Paliers collectifs du mois (prime d'équipe)
   st.paliers = { niort: { [cm]: { contrats: [{ target: 90, reward: 'Prime 50 € chacun' }, { target: 100, reward: 'Prime 100 € chacun' }, { target: 115, reward: 'Prime 150 € + resto d’équipe' }], avis: [{ target: 80, reward: 'Petit-déj d’équipe' }, { target: 100, reward: 'Prime 30 € chacun' }] } } };
+  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); st.rsm.controls.niort = st.rsm.controls.niort || {}; (st.rsm.controls.niort.du = st.rsm.controls.niort.du || {})[`${m}-28`] = Math.round((1900 - i * 140 + R() * 300) * 100) / 100; (st.rsm.controls.niort.evo = st.rsm.controls.niort.evo || {})[m] = { gained: Math.round(95 + R() * 40), lost: Math.round(60 + R() * 30) }; }
+  for (let i = 1; i <= 5; i++) { const m = addMonths(cm, -i); for (let j = 0; j < 3 + Math.floor(R() * 6); j++) { const id = `rh${i}_${j}`; const status = R() < .35 ? 'sauvee' : 'resiliee'; const date = `${m}-${pad(1 + Math.floor(R() * 26))}`; st.resiliations[id] = { id, clubId: 'niort', client: `${pick(P)} ${pick(N)}`, date, effective: addDays(date, 30), reason: pick(['Prix', 'Déménagement', 'Santé', 'Manque de temps']), status, saved: status === 'sauvee', ownerId: pick(['u2', 'u3', 'u4']), at: dateOf(date).getTime() }; } }
   st.rsm.aliases = { 'c:HLEF': 'u2', 'c:IMOR': 'u3', 'c:LPET': 'u4', 'c:SGAR': 'u5', 'c:CROU': 'u1' };
   st.meta.demo = true;
   return st;

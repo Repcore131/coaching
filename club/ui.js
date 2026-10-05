@@ -107,6 +107,7 @@ const NAV = [
   ['home', 'Accueil', 'dashboard'],
   ['dashboard', 'Mes objectifs', 'target'],
   ['leaderboard', 'Classement', 'trophy'],
+  ['recap', 'Récap du mois', 'chart', true],
   ['sep'],
   ['resiliations', 'Résiliations', 'door'],
   ['impayes', 'Impayés', 'euro'],

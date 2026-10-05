@@ -640,3 +640,44 @@ h3 { font-size: 20px; line-height: 1.05; }
   .page { padding: 18px 16px 110px; }
   h1 { font-size: 32px; }
 }
+
+/* ── Récapitulatif du mois ── */
+.recap-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.recap-head h1 { font-size: 46px; }
+.recap-head p { margin: 4px 0 0; }
+.rc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.rc-tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden; }
+.rc-tile::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--fp); }
+.rc-tile span { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.rc-tile b { font-family: var(--font-title); font-weight: 800; font-style: italic; font-size: 40px; line-height: 1; }
+.rc-tile small { color: var(--muted); font-size: 12px; }
+.dl { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.dl-good { color: var(--ok); } .dl-bad { color: var(--bad); } .dl-flat, .dl-none { color: var(--muted); }
+.rc-split { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; margin-top: 8px; }
+.rc-split i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.rc-sales { display: grid; gap: 8px; }
+.rc-sale { display: grid; grid-template-columns: 170px 1fr 44px 150px; gap: 12px; align-items: center; font-size: 13px; }
+.rc-bars { position: relative; height: 22px; }
+.rc-bars i { position: absolute; left: 0; border-radius: 5px; }
+.rc-bars i.prev { top: 0; bottom: 0; background: var(--surface-2); border: 1px solid var(--line); }
+.rc-bars i.cur { top: 5px; bottom: 5px; background: var(--fp); }
+.rc-sale b { font-family: var(--font-title); font-style: italic; font-weight: 800; font-size: 20px; text-align: right; }
+.rc-table td { vertical-align: top; }
+.rc-cell { position: relative; padding-bottom: 6px; }
+.rc-cell i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--fp); border-radius: 2px; }
+.recap-ready { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--radius); background: var(--fp); color: #000; text-decoration: none; }
+.recap-ready svg { width: 26px; height: 26px; stroke: #000; fill: none; stroke-width: 2; flex: none; }
+.recap-ready div { flex: 1; display: flex; flex-direction: column; }
+.recap-ready b { font-family: var(--font-title); font-style: italic; font-weight: 800; text-transform: uppercase; font-size: 20px; }
+@media (max-width: 1100px) { .rc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rc-sale { grid-template-columns: 120px 1fr 36px; } .rc-sale small { display: none; } }
+@media (max-width: 560px) { .rc-grid { grid-template-columns: 1fr; } .recap-head h1 { font-size: 34px; } }
+/* impression : le récap seul, sur fond blanc */
+@media print {
+  :root { --bg: #fff; --surface: #fff; --surface-2: #f1f1ee; --line: #ddd; --text: #111; --muted: #555; color-scheme: light; }
+  body { background: #fff; }
+  .side, .topbar, .tabbar, .saisies-tab, .no-print, #toasts { display: none !important; }
+  .shell { display: block; }
+  .page { padding: 0; max-width: none; }
+  .card, .rc-tile { break-inside: avoid; box-shadow: none !important; }
+  .g12 { grid-template-columns: repeat(12, 1fr); }
+}
