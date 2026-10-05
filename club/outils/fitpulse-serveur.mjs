@@ -42,8 +42,57 @@ const MANAGER = `auth != null && auth.token.email.endsWith('@fitpulse-niort.web.
 export const DEBUT = '// >>> FITPULSE (bloc gere par club/outils/fitpulse-serveur.mjs : ne pas modifier a la main)';
 export const FIN = '// <<< FITPULSE';
 const j = s => JSON.stringify(s);
+// Rôle et statut du compte connecté, lus dans /pulse/users/{id} (l'id vient de /pulse_boot).
+const ROLE = `root.child('pulse/users/' + ${SOI} + '/role').val()`;
+const CREATEUR = `${MEMBRE} && ${ROLE} === 'createur'`;
+const MGR = `(${MANAGER})`;
+// Une saisie : la sienne, ou celle qu'on a créée pour un collègue (sauvetage,
+// impayé récupéré sur son dossier). Le reste : manager.
+const SAISIE = `${MGR} || (${MEMBRE} && (newData.exists() ? (newData.child('userId').val() === ${SOI} || (newData.child('by').val() === ${SOI} && (newData.child('kpiId').val() === 'sauvetage' || newData.child('kpiId').val() === 'impayes'))) : (data.child('userId').val() === ${SOI} || data.child('by').val() === ${SOI})))`;
+const FICHE = `${MGR} && (${CREATEUR} || (data.child('role').val() !== 'createur' && (!newData.exists() || newData.child('role').val() === 'membre' || newData.child('role').val() === data.child('role').val())))`;
+const SOIMEME = `${MEMBRE} && $uid === ${SOI}`;
+const mgrSeul = c => `    "${c}": { ".write": ${j(MGR)} },`;
 export const REGLE = `${DEBUT}
-    "pulse": { ".read": ${j(MEMBRE)}, ".write": ${j(MEMBRE)} },
+    "pulse": {
+      ".read": ${j(MEMBRE)},
+      ".write": ${j(`${CREATEUR} || (${MEMBRE} && !data.exists())`)},
+      "users": {
+        "$uid": {
+          ".write": ${j(FICHE)},
+          "first": { ".write": ${j(SOIMEME)} }, "last": { ".write": ${j(SOIMEME)} }, "avatar": { ".write": ${j(SOIMEME)} },
+          "salt": { ".write": ${j(SOIMEME)} }, "codeHash": { ".write": ${j(SOIMEME)} }, "bootKey": { ".write": ${j(SOIMEME)} },
+          "status": { ".write": ${j(`${SOIMEME} && data.val() === 'pending' && newData.val() === 'active'`)} }
+        }
+      },
+      "entries": {
+        "$id": {
+          ".write": ${j(SAISIE)},
+          ".validate": "newData.hasChildren(['userId', 'kpiId', 'date', 'value']) && newData.child('value').isNumber() && newData.child('value').val() > -1000000 && newData.child('value').val() < 1000000 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+        }
+      },
+      "prefs": { "$uid": { ".write": ${j(SOIMEME)} } },
+      "tasks": {
+        "library": { ".write": ${j(MGR)} },
+        "plan": { ".write": ${j(MGR)} },
+        "done": { ".write": ${j(MEMBRE)} }
+      },
+      "chat": {
+        "$id": {
+          ".write": ${j(`${MEMBRE} && (${MGR} || !data.exists() || data.child('userId').val() === ${SOI} || newData.exists())`)},
+          ".validate": "!newData.child('text').exists() || (newData.child('text').isString() && newData.child('text').val().length <= 2000)",
+          "image": { ".validate": "newData.isString() && newData.val().beginsWith('data:image/') && newData.val().length < 400000" }
+        }
+      },
+      "clients": { ".write": ${j(MEMBRE)} },
+      "loyalty": { ".write": ${j(MEMBRE)} },
+      "resiliations": { ".write": ${j(MEMBRE)} },
+      "recov": { ".write": ${j(MEMBRE)} },
+      "reactions": { ".write": ${j(MEMBRE)} },
+      "relances": { ".write": ${j(MEMBRE)} },
+      "touches": { ".write": ${j(MEMBRE)} },
+      "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
+      "$autre": { ".write": ${j(MGR)} }
+    },
     "pulse_boot": {
       ".read": ${j(MANAGER)},
       "$k": {
