@@ -1787,6 +1787,8 @@ window.onload=()=>{
               :'Invitation reconnue : valide pour créer ton compte';
             ban.style.display='block';
           }
+          // LE LIEN NE PORTE PLUS LE COACH (05/10/2026) : son nom vient du code.
+          if(!c&&inp&&inp.value) try{ _aeBanniereDepuisCode(inp.value); }catch(e){}
         },350);
       } else {
         go(rcEcranDeDepart());

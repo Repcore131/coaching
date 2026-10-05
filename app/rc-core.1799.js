@@ -8632,6 +8632,8 @@ window.onload=()=>{
               :'Invitation reconnue : valide pour créer ton compte';
             ban.style.display='block';
           }
+          // LE LIEN NE PORTE PLUS LE COACH (05/10/2026) : son nom vient du code.
+          if(!c&&inp&&inp.value) try{ _aeBanniereDepuisCode(inp.value); }catch(e){}
         },350);
       } else {
         go(rcEcranDeDepart());
@@ -13542,7 +13544,7 @@ function ouvrirCodeCoach(){
     const inp=document.getElementById('ae-code');
     let _ie=null; try{ _ie=invitationEnAttente(Date.now()); }catch(e){}
     const code=window._invitationCode||(_ie&&_ie.inv)||'';
-    if(inp&&code&&!inp.value) inp.value=code;
+    if(inp&&code&&!inp.value){ inp.value=code; try{ _aeBanniereDepuisCode(code); }catch(e){} }
   }catch(e){} },60);
   return 's-athlete-entry';
 }
@@ -129323,16 +129325,21 @@ function relancePossible(c,maintenant){
   if(ecoule>=RELANCE_DELAI_MS) return {ok:true,reste:0};
   return {ok:false,reste:Math.ceil((RELANCE_DELAI_MS-ecoule)/3600000)};
 }
-// PURE. Le lien d'invitation d'un code donné : le profil du coach ET le code.
-// Le profil permet à l'appareil de l'athlète d'afficher son coach sans
-// serveur ; le code, lui, est ce qui rend l'invitation traçable.
+// PURE. Le lien d'invitation d'un code donné : LE CODE SEUL, par le lien court.
+//
+// ⚠ PLUS DE coachpkg (05/10/2026). Le profil du coach en base64 faisait un
+//   lien de 300 caractères, illisible dans un message, et qui sautait la page
+//   /i (le tuto, l'aide Instagram). Le coach se retrouve désormais par le CODE :
+//   _verifierCodeSansConsommer lit /rc_codes/<code>, qui porte coachId et
+//   coachName. Les anciens liens (?coachpkg=…&inv=…) restent lus par
+//   importFromURL.
+// /i sur Firebase (RC_LIEN_COURT) ; ailleurs — GitHub Pages, sous-dossier —
+// la réécriture n'existe pas, mais i/index.html est à côté de app/ : 'i/'.
 function lienInvitation(code,user){
   const u=_dossier(user);
   if(!u||!code) return '';
-  const payload={id:u.id,fname:u.fname,lname:u.lname,email:u.email,
-    code:u.code,role:'coach'};
-  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  return lienAttribue(APP_BASE_URL+'?coachpkg='+encoded+'&inv='+encodeURIComponent(code),{src:'invitation'});
+  const base=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT:APP_BASE_URL.replace(/app\/$/,'')+'i/';
+  return lienAttribue(base+'?inv='+encodeURIComponent(code),{src:'invitation'});
 }
 // Le retour à la ligne d'un message WhatsApp. Nommé pour ne pas le confondre
 // avec celui du code source, et déclaré AVANT son usage : un const n'est pas
@@ -129806,6 +129813,24 @@ async function _coachDuCode(code){
     // La forme attendue par _annoncerDejaRattache : un objet coach.
     return (d&&d.coachId)?{id:d.coachId,fname:d.coachName||'',lname:''}:null;
   }catch(e){ return null; }
+}
+// LA BANNIÈRE DE L'ESPACE ATHLÈTE, DEPUIS LE CODE (05/10/2026). Le lien
+// d'invitation ne porte plus que ?inv=CODE : le nom du coach est lu dans
+// /rc_codes/<code>, SANS le consommer. Code refusé (invalide, expiré, déjà
+// utilisé) : le message existant, à la place de la bannière. Hors ligne : la
+// bannière générique reste, et la validation dira le reste.
+async function _aeBanniereDepuisCode(code){
+  const ban=document.getElementById('ae-coach-banner'), err=document.getElementById('ae-err');
+  try{
+    const d=await _verifierCodeSansConsommer(code);
+    const nom=String((d&&d.coachName)||'').trim();
+    if(ban&&nom){ ban.textContent='Coach '+nom+' reconnu : valide pour créer ton compte'; ban.style.display='block'; }
+    return d||null;
+  }catch(e){
+    const m=String((e&&e.message)||'');
+    if(err&&m&&!/connexion/i.test(m)){ err.textContent=m; err.style.display='block'; if(ban) ban.style.display='none'; }
+    return null;
+  }
 }
 async function _verifierCodeSansConsommer(raw){
   const code=String(raw||'').trim().toUpperCase();

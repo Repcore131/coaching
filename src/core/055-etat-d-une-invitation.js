@@ -235,6 +235,24 @@ async function _coachDuCode(code){
     return (d&&d.coachId)?{id:d.coachId,fname:d.coachName||'',lname:''}:null;
   }catch(e){ return null; }
 }
+// LA BANNIÈRE DE L'ESPACE ATHLÈTE, DEPUIS LE CODE (05/10/2026). Le lien
+// d'invitation ne porte plus que ?inv=CODE : le nom du coach est lu dans
+// /rc_codes/<code>, SANS le consommer. Code refusé (invalide, expiré, déjà
+// utilisé) : le message existant, à la place de la bannière. Hors ligne : la
+// bannière générique reste, et la validation dira le reste.
+async function _aeBanniereDepuisCode(code){
+  const ban=document.getElementById('ae-coach-banner'), err=document.getElementById('ae-err');
+  try{
+    const d=await _verifierCodeSansConsommer(code);
+    const nom=String((d&&d.coachName)||'').trim();
+    if(ban&&nom){ ban.textContent='Coach '+nom+' reconnu : valide pour créer ton compte'; ban.style.display='block'; }
+    return d||null;
+  }catch(e){
+    const m=String((e&&e.message)||'');
+    if(err&&m&&!/connexion/i.test(m)){ err.textContent=m; err.style.display='block'; if(ban) ban.style.display='none'; }
+    return null;
+  }
+}
 async function _verifierCodeSansConsommer(raw){
   const code=String(raw||'').trim().toUpperCase();
   if(!_INVITE_RE.test(code)) throw new Error('Format attendu : RC-XXXX-XXXX (lettres et chiffres).');

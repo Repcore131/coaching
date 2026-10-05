@@ -2122,16 +2122,21 @@ function relancePossible(c,maintenant){
   if(ecoule>=RELANCE_DELAI_MS) return {ok:true,reste:0};
   return {ok:false,reste:Math.ceil((RELANCE_DELAI_MS-ecoule)/3600000)};
 }
-// PURE. Le lien d'invitation d'un code donné : le profil du coach ET le code.
-// Le profil permet à l'appareil de l'athlète d'afficher son coach sans
-// serveur ; le code, lui, est ce qui rend l'invitation traçable.
+// PURE. Le lien d'invitation d'un code donné : LE CODE SEUL, par le lien court.
+//
+// ⚠ PLUS DE coachpkg (05/10/2026). Le profil du coach en base64 faisait un
+//   lien de 300 caractères, illisible dans un message, et qui sautait la page
+//   /i (le tuto, l'aide Instagram). Le coach se retrouve désormais par le CODE :
+//   _verifierCodeSansConsommer lit /rc_codes/<code>, qui porte coachId et
+//   coachName. Les anciens liens (?coachpkg=…&inv=…) restent lus par
+//   importFromURL.
+// /i sur Firebase (RC_LIEN_COURT) ; ailleurs — GitHub Pages, sous-dossier —
+// la réécriture n'existe pas, mais i/index.html est à côté de app/ : 'i/'.
 function lienInvitation(code,user){
   const u=_dossier(user);
   if(!u||!code) return '';
-  const payload={id:u.id,fname:u.fname,lname:u.lname,email:u.email,
-    code:u.code,role:'coach'};
-  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  return lienAttribue(APP_BASE_URL+'?coachpkg='+encoded+'&inv='+encodeURIComponent(code),{src:'invitation'});
+  const base=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT:APP_BASE_URL.replace(/app\/$/,'')+'i/';
+  return lienAttribue(base+'?inv='+encodeURIComponent(code),{src:'invitation'});
 }
 // Le retour à la ligne d'un message WhatsApp. Nommé pour ne pas le confondre
 // avec celui du code source, et déclaré AVANT son usage : un const n'est pas

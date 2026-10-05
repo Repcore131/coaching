@@ -15780,19 +15780,18 @@ async function testExercices(){
             return _echec('le titre n’annonce pas les onze : '+z.innerText.slice(0,60));
           return /\+ 3 autres/.test(z.innerText)
             ?true:_echec('le surplus ne se laisse pas deplier : '+z.innerText);});
-        ok('Le lien d\'invitation porte le code, et le profil du coach',()=>{
+        // 05/10/2026 : LE CODE SEUL, par le lien court (/i) — plus de coachpkg :
+        // le coach se retrouve par le code (_verifierCodeSansConsommer).
+        ok('Le lien d\'invitation : /i, le code, pas de profil coach, moins de 90 caractères',()=>{
           // Sans le code, il n'y a rien à tracer : c'était le lien générique
           // d'avant ce lot, réutilisable par n'importe qui, sans destinataire.
           const u={id:'c1',email:'c@t',role:'coach',fname:'K',lname:'G',code:'RC-AAAA-1111'};
           const l=lienInvitation('RC-BBBB-2222',u);
           if(l.indexOf('inv=RC-BBBB-2222')<0) return _echec('le code n\'est pas dans le lien : '+l);
-          if(l.indexOf('coachpkg=')<0) return _echec('le profil coach a disparu du lien');
-          // Le profil est décodable et ne porte rien de plus que le nécessaire.
-          const pkg=new URL(l).searchParams.get('coachpkg');
-          const d=JSON.parse(decodeURIComponent(escape(atob(pkg))));
-          for(const k of Object.keys(d))
-            if(['id','fname','lname','email','code','role'].indexOf(k)<0)
-              return _echec('champ de trop dans le lien : '+k);
+          if(l.indexOf('/i')<0) return _echec('pas par le lien court : '+l);
+          if(l.indexOf('coachpkg')>=0) return _echec('le profil coach est encore dans le lien');
+          if(!(l.length<90)) return _echec(l.length+' caractères : '+l);
+          if(new URL(l).searchParams.get('src')!=='invitation') return _echec('src=invitation absent');
           return lienInvitation('',u)===''?true:_echec('un code vide produit un lien');});
         ok('Le message de relance contient le lien, et ne promet pas d\'expiration',()=>{
           // Un lien qui n'expire pas est une promesse tenable : c'est le grief
@@ -58206,7 +58205,7 @@ async function testExercices(){
     ok('Attribution : les liens de l’app passent tous par lienAttribue',()=>{
       const s=_prodSrc();
       if(!/function lienPerso\([\s\S]{0,1500}?lienAttribue\(page,\{src,ref:/.test(s)) return _echec('lienPerso');
-      if(!/lienAttribue\(APP_BASE_URL\+'\?coachpkg='[\s\S]{0,80}?\{src:'invitation'\}\)/.test(s)) return _echec('invitation');
+      if(!/lienAttribue\(base\+'\?inv='\+encodeURIComponent\(code\),\{src:'invitation'\}\)/.test(s)) return _echec('invitation');
       if(!/ambLienInvitation\(code\)\{ return lienAttribue\(/.test(s)) return _echec('ambassadeur');
       return (s.match(/function lienAttribue\(/g)||[]).length===1?true:_echec('plusieurs constructeurs');});
     ok('Attribution : partages résolus, téléchargements et liens copiés sont comptés, par type',()=>{
@@ -83242,6 +83241,37 @@ vendredi 78 6h 44m
       } finally {
         currentUser=svU; window._invitationCode=svI; if(inp) inp.value=svV;
         if(z) z.style.display=svZ;
+        if(svS==null) localStorage.removeItem('rc_invitation'); else localStorage.setItem('rc_invitation',svS);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        ecrans.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }});
+
+    okA('Invitation par le code seul : ?inv=CODE → Espace athlète pré-rempli, le coach lu dans le code, un code expiré le dit',async()=>{
+      const svU=currentUser, svI=window._invitationCode, svV=window._verifierCodeSansConsommer, svS=localStorage.getItem('rc_invitation');
+      const ecrans=[...document.querySelectorAll('.screen.active')];
+      const inp=document.getElementById('ae-code'), ban=document.getElementById('ae-coach-banner'), err=document.getElementById('ae-err');
+      const z=document.getElementById('ae-code-zone');
+      const sv={v:inp&&inp.value,b:ban&&ban.textContent,bd:ban&&ban.style.display,e:err&&err.textContent,ed:err&&err.style.display,z:z&&z.style.display};
+      try{
+        if(!inp||!ban||!err) return _echec('champs de l’Espace athlète absents');
+        currentUser=null; localStorage.removeItem('rc_invitation');
+        // CE QUE LAISSE importFromURL pour /app/?inv=RC-B7QP-2XYZ (sans coachpkg).
+        window._invitationCode='RC-B7QP-2XYZ'; inp.value=''; ban.style.display='none'; err.style.display='none';
+        window._verifierCodeSansConsommer=async c=>({coachId:'c1',coachName:'Kevin G',active:true,expiry:Date.now()+864e5});
+        if(ouvrirCodeCoach()!=='s-athlete-entry') return _echec('pas l’Espace athlète');
+        await new Promise(r=>setTimeout(r,200));
+        if(inp.value!=='RC-B7QP-2XYZ') return _echec('#ae-code : « '+inp.value+' »');
+        if(ban.style.display==='none'||!/^Coach Kevin G reconnu/.test(ban.textContent)) return _echec('bannière : « '+ban.textContent+' »');
+        // UN CODE EXPIRÉ : le message existant, et pas de bannière.
+        inp.value=''; ban.style.display='none';
+        window._verifierCodeSansConsommer=async c=>{ throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.'); };
+        ouvrirCodeCoach(); await new Promise(r=>setTimeout(r,200));
+        if(err.style.display==='none'||!/a expiré/.test(err.textContent)) return _echec('erreur : « '+err.textContent+' »');
+        return ban.style.display==='none'?true:_echec('la bannière reste sur un code expiré');
+      } finally {
+        currentUser=svU; window._invitationCode=svI; window._verifierCodeSansConsommer=svV;
+        if(inp) inp.value=sv.v; if(ban){ ban.textContent=sv.b; ban.style.display=sv.bd; } if(err){ err.textContent=sv.e; err.style.display=sv.ed; }
+        if(z) z.style.display=sv.z;
         if(svS==null) localStorage.removeItem('rc_invitation'); else localStorage.setItem('rc_invitation',svS);
         document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
         ecrans.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });

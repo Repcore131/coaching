@@ -2126,7 +2126,7 @@ function ouvrirCodeCoach(){
     const inp=document.getElementById('ae-code');
     let _ie=null; try{ _ie=invitationEnAttente(Date.now()); }catch(e){}
     const code=window._invitationCode||(_ie&&_ie.inv)||'';
-    if(inp&&code&&!inp.value) inp.value=code;
+    if(inp&&code&&!inp.value){ inp.value=code; try{ _aeBanniereDepuisCode(code); }catch(e){} }
   }catch(e){} },60);
   return 's-athlete-entry';
 }
