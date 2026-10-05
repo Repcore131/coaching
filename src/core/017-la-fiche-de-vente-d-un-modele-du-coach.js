@@ -948,6 +948,7 @@ function _boutonsCopieJour(fn,i){
     <!-- N4.17, ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
          athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
          seul appelant qui en ait un. -->
+    ${fn==='coachCopyDay'&&_importIAOuvert()?`<button onclick="importerSeanceIA(${i})" title="Lire la séance sur un PDF ou des photos" aria-label="Importer cette séance depuis un PDF ou des photos" style="background:none;border:1px dashed var(--border);color:var(--text-strong);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">PDF ou photos</button>`:''}
     ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
   </div>`;
 }

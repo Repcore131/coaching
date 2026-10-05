@@ -217,7 +217,10 @@ function _buildVideoLinksArray(rawText, links, exercises){
   return links; // fallback positionnel inchangé
 }
 
-async function analyzePhotoWithClaude(idx){
+// analyzePhotoOcr : renommée le 05/10/2026 (son ancien nom citait Claude) ; elle
+// n'a jamais fait que de la reconnaissance de texte (Tesseract), et l'import
+// par Claude Vision existe désormais à part (importerSeanceIA).
+async function analyzePhotoOcr(idx){
   if(!_importLegacyOuvert()) return _refusImportLegacy();
   const cfg=currentUser.sessions_config;
   const photo=cfg[idx].photo;

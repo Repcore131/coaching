@@ -3,7 +3,7 @@
 //   node cloudflare/test/ia.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2 } from '../src/ia.js';
+import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport } from '../src/ia.js';
 import { repondreAppel, ErreurAppel } from '../src/appels.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -293,6 +293,64 @@ await test('bilan : sans faits → 400, sans appel', async () => {
   const w = monde();
   assert.equal(await statutDe(w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'bilan', athlete: ATH, charge: 'texte libre' } })), 400);
   assert.equal(w.appels.length, 0);
+});
+
+// ══ L'IMPORT DE SÉANCE PAR PDF OU PHOTO (tâche 'import', Claude Vision) ══════
+const IMG = Buffer.from('fausse image jpeg').toString('base64');
+const CHARGE_IMPORT = { pages: [{ type: 'image', media_type: 'image/jpeg', data: IMG }, { type: 'image', media_type: 'image/jpeg', data: IMG }],
+  banque: ['SQUAT', 'DÉVELOPPÉ COUCHÉ BARRE'] };
+const sortieImport = { seances: [{ nom: 'Jambes', jour: null, echauffement: null, exercices: [
+  { nomLu: 'Squat barre', nomBanque: 'SQUAT', series: 4, reps: '8', repos: '2 min', tempo: null, note: null, videoUrl: null, confiance: 0.9 },
+  { nomLu: 'Presse 45', nomBanque: 'PRESSE À CUISSES INVENTÉE', series: null, reps: null, repos: null, tempo: null, note: null, videoUrl: null, confiance: 0.4 }] }],
+  nonLu: ['ligne 7 effacée'] };
+const repImport = (stop, sortie) => (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: stop,
+  content: [{ type: 'text', text: JSON.stringify(sortie) }], usage: { input_tokens: 3000, output_tokens: 500 } });
+
+await test('import : le schéma de sortie est strict (null admis, rien d’autre) ; les pages partent en blocs image ; nomBanque hors liste → null', async () => {
+  // Le schéma : chaque objet ferme ses propriétés et les exige toutes.
+  const exo = SCHEMA_IMPORT.properties.seances.items.properties.exercices.items;
+  assert.equal(SCHEMA_IMPORT.additionalProperties, false);
+  assert.deepEqual(SCHEMA_IMPORT.required, ['seances', 'nonLu']);
+  assert.equal(exo.additionalProperties, false);
+  assert.deepEqual(exo.required, ['nomLu', 'nomBanque', 'series', 'reps', 'repos', 'tempo', 'note', 'videoUrl', 'confiance']);
+  assert.deepEqual(exo.properties.series, { anyOf: [{ type: 'integer' }, { type: 'null' }] });
+  assert.deepEqual(SCHEMA_IMPORT.properties.seances.items.required, ['nom', 'jour', 'echauffement', 'exercices']);
+  const w = monde({ reponse: repImport('end_turn', sortieImport) });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'import', charge: CHARGE_IMPORT } });
+  assert.equal(r.ok, true);
+  const { corps } = w.appels[0];
+  assert.equal(corps.model, 'claude-sonnet-5-5');
+  assert.equal(corps.output_config.effort, 'medium');
+  assert.deepEqual(corps.output_config.format.schema, SCHEMA_IMPORT);
+  const contenu = corps.messages[0].content;
+  assert.deepEqual(contenu.slice(0, 2).map((b) => b.type), ['image', 'image']);
+  assert.deepEqual(contenu[0].source, { type: 'base64', media_type: 'image/jpeg', data: IMG });
+  assert.deepEqual(JSON.parse(contenu[2].text).banque, CHARGE_IMPORT.banque);
+  assert.match(corps.system[0].text, /rends null plutôt qu’un défaut/);
+  const ex = r.proposition.seances[0].exercices;
+  assert.equal(ex[0].nomBanque, 'SQUAT');
+  assert.equal(ex[1].nomBanque, null);
+  assert.equal(ex[1].series, null);
+  assert.deepEqual(controlerImport({ seances: [{ exercices: [{ nomBanque: 'X' }] }] }, ['Y']).seances[0].exercices[0].nomBanque, null);
+});
+
+await test('import : stop_reason max_tokens → ok:false, aucune proposition ; pages invalides → 400', async () => {
+  const w = monde({ reponse: repImport('max_tokens', sortieImport) });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'import', charge: CHARGE_IMPORT } });
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, 'coupee');
+  assert.equal(r.proposition, undefined);
+  const v = monde();
+  const sept = { pages: Array.from({ length: 7 }, () => ({ type: 'image', media_type: 'image/jpeg', data: IMG })), banque: [] };
+  const mixte = { pages: [{ type: 'image', media_type: 'image/jpeg', data: IMG }, { type: 'document', media_type: 'application/pdf', data: IMG }], banque: [] };
+  const gif = { pages: [{ type: 'image', media_type: 'image/gif', data: IMG }], banque: [] };
+  for (const charge of [sept, mixte, gif, { pages: [], banque: [] }])
+    assert.equal(await statutDe(v.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'import', charge } })), 400);
+  assert.equal(v.appels.length, 0);
+  // Un PDF seul passe, en bloc document.
+  const p = monde({ reponse: repImport('end_turn', sortieImport) });
+  await p.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'import', charge: { pages: [{ type: 'document', media_type: 'application/pdf', data: IMG }], banque: [] } } });
+  assert.equal(p.appels[0].corps.messages[0].content[0].type, 'document');
 });
 
 console.log(ok + ' tests IA');

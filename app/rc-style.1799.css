@@ -12853,6 +12853,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ps-tit{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);margin-bottom:4px}
 .ps-ligne{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:44px;padding:8px 0;background:none;border:0;border-top:1px solid var(--border);color:var(--text);font:inherit;text-align:left;cursor:pointer}
 .ps-ligne span{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.imp-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+.imp-feuille .sub{font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px}
+.imp-onglets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.imp-onglet{min-height:44px;padding:4px 12px;border:1px solid var(--border);border-radius:var(--r-2);background:none;color:var(--sub);font:inherit;font-size:var(--fs-xs);cursor:pointer}
+.imp-onglet.actif{color:var(--text);border-color:var(--red)}
+.imp-ex{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
+.imp-doute{border-color:var(--warning-border);background:var(--warning-bg)}
+.imp-alerte{font-size:var(--fs-2xs);font-weight:800;color:var(--warning)}
+.imp-nom{font-weight:700;text-transform:uppercase}
+.imp-lu{font-size:var(--fs-2xs);color:var(--sub)}
+.imp-grille{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.imp-grille label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-2xs);color:var(--sub);font-weight:700}
+.imp-absent{border:1px solid var(--orange)!important;background:var(--warning-bg)}
+.imp-nonlu{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:8px 0 12px}
 .rb-lien{background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 /* LOT C3 : les relances automatiques (écran, entrée, fiche, carte athlète) */
 .rel-entree{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;margin:-8px 0 20px;padding:10px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font:inherit;cursor:pointer;text-align:left}

@@ -14967,6 +14967,44 @@ async function testExercices(){
           if(LEGACY_PDF_IMPORT!==false) return _echec('drapeau = '+LEGACY_PDF_IMPORT);
           return _importLegacyOuvert()===false
             ?true:_echec('la garde ne suit pas le drapeau');});
+        // ══ L'IMPORT PAR CLAUDE VISION (05/10/2026) ══
+        okA('Import IA : un nomBanque inventé revient null, un champ series null reste vide (orange), confiance < 0,6 surlignée',async()=>{
+          const sv=CLOUD._callFn, svI=_importIA;
+          try{
+            const banque=banqueImportIA(currentUser);
+            const vrai=banque[0]||'SQUAT';
+            CLOUD._callFn=async(nom,data)=>{
+              if(nom!=='ia'||data.tache!=='import'||!Array.isArray(data.charge.pages)) throw new Error('appel inattendu');
+              return {ok:true,journalId:'j1',coutMois:1,plafond:3e6,proposition:{nonLu:['ligne 7'],seances:[{nom:'Jambes',jour:null,echauffement:null,exercices:[
+                {nomLu:'Squat',nomBanque:vrai,series:4,reps:'8',repos:null,tempo:null,note:null,videoUrl:null,confiance:0.9},
+                {nomLu:'Presse 45',nomBanque:'PRESSE INVENTÉE PAR LE MODÈLE',series:null,reps:null,repos:null,tempo:null,note:null,videoUrl:null,confiance:0.3}]}]}};
+            };
+            const ok=await importerPagesIA(0,[{type:'image',media_type:'image/jpeg',data:'AAAA'}]);
+            if(!ok||!_importIA) return _echec('aucune relecture');
+            const ex=_importIA.lu.seances[0].exercices;
+            if(ex[1].nomBanque!==null) return _echec('nomBanque inventé conservé : '+ex[1].nomBanque);
+            if(banque.length&&ex[0].nomBanque!==vrai) return _echec('nomBanque de la banque perdu');
+            if(ex[1].series!==null) return _echec('series inventé : '+ex[1].series);
+            const s=document.getElementById('imp-series-1');
+            if(!s||s.value!==''||!s.classList.contains('imp-absent')) return _echec('la case séries n’est pas vide et orange');
+            if(!document.getElementById('imp-ex-1').classList.contains('imp-doute')) return _echec('ligne douteuse non surlignée');
+            if(document.getElementById('imp-ex-0').classList.contains('imp-doute')) return _echec('ligne sûre surlignée');
+            if(!/Pas trouvé dans ta banque/.test(document.getElementById('imp-ex-1').textContent)) return _echec('nom hors banque non signalé');
+            // Relue telle quelle, la case vide reste null : pas de 3 × 10.
+            const e=_exerciceImportIA({nom:'presse',series:s.value,reps:'',repos:'',tempo:'',note:'',video:''});
+            if(e.series!==null||e.reps!==null||e.repos!==null) return _echec('défaut inventé à la validation : '+JSON.stringify(e));
+            return /enregistrerBrouillon\(\)/.test(String(validerImportIA))&&!/saveCoachSessions|pushOne/.test(String(validerImportIA))
+              ?true:_echec('la validation publie au lieu de mettre en brouillon');
+          } finally { CLOUD._callFn=sv; _importIA=svI; try{ closeModal(); }catch(e){} }});
+        ok('Import IA : l’ancien chemin reste fermé quand IMPORT_IA et LEGACY_PDF_IMPORT sont faux ; le contrôle borne la confiance',()=>{
+          if(_importIARoute(false,false,false)!=='ferme') return _echec('IA et legacy fermés : '+_importIARoute(false,false,false));
+          if(_importIARoute(true,false,true)!=='ferme') return _echec('échec IA sans legacy');
+          if(_importIARoute(false,true,false)!=='legacy'||_importIARoute(true,true,true)!=='legacy') return _echec('repli legacy');
+          if(_importIARoute(true,false,false)!=='ia') return _echec('chemin IA');
+          if(LEGACY_PDF_IMPORT!==false) return _echec('LEGACY_PDF_IMPORT rouvert');
+          const c=controlerImportIA({seances:[{nom:'A',exercices:[{nomLu:'x',nomBanque:'Y',series:0,confiance:7}]}]},['Z']);
+          const x=c.seances[0].exercices[0];
+          return x.nomBanque===null&&x.series===null&&x.confiance===1&&x.reps===null?true:_echec(JSON.stringify(x));});
         ok('TOUTES les fonctions d\'extraction refusent, drapeau baissé',()=>{
           // Le cahier des charges est explicite : une règle d'accès ne se
           // résume jamais à un bouton masqué. Chaque fonction se garde.
@@ -14978,7 +15016,7 @@ async function testExercices(){
           // page. Le corps a donc ete retire — voir l'assertion dediee juste
           // apres, qui verifie qu'elle leve TOUJOURS et ne porte plus ni clef
           // ni point d'acces.
-          const attendues=['analyzeProgPhotos','analyzePhotoWithClaude',
+          const attendues=['analyzeProgPhotos','analyzePhotoOcr',
             'importVideoLinksFromPdf','loadProgPhoto2','parsePdfProgramme',
             'triggerPdfProgrammeImport','_parsePdfFromDriveFile'];
           for(const nom of attendues){

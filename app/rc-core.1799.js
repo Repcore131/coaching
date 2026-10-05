@@ -39326,6 +39326,7 @@ function _boutonsCopieJour(fn,i){
     <!-- N4.17, ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
          athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
          seul appelant qui en ait un. -->
+    ${fn==='coachCopyDay'&&_importIAOuvert()?`<button onclick="importerSeanceIA(${i})" title="Lire la séance sur un PDF ou des photos" aria-label="Importer cette séance depuis un PDF ou des photos" style="background:none;border:1px dashed var(--border);color:var(--text-strong);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">PDF ou photos</button>`:''}
     ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
   </div>`;
 }
@@ -40901,6 +40902,219 @@ function _appliquerDeprecationImport(){
     const e=document.getElementById(id);
     if(e) e.style.setProperty('display','none','important');
   }
+  return true;
+}
+
+// ══════ L'IMPORT DE SÉANCE PAR CLAUDE VISION (05/10/2026) ══════
+// La même entrée rouverte, autrement : les photos de la fiche (6 au plus,
+// réduites à 1 568 px) ou le PDF (10 Mo, 20 pages au plus) partent au serveur
+// (cloudflare/src/ia.js, tâche 'import'), qui rend une transcription
+// STRUCTURÉE. Rien ne part chez l'athlète : ce qui est validé dans la fenêtre
+// de relecture devient un BROUILLON (enregistrerBrouillon), que le coach
+// publie ensuite comme toute autre modification.
+// ⚠ AUCUNE VALEUR INVENTÉE. Un champ que la fiche ne porte pas arrive null et
+//   reste vide (en orange) dans la relecture : pas de « 3 × 10 » par défaut.
+// ⚠ nomBanque est CONTRÔLÉ ICI AUSSI : un nom absent de la banque devient null.
+const IMPORT_IA=true;
+function _importIAOuvert(){ return IMPORT_IA===true; }
+const IMPORT_IA_IMAGES_MAX=6, IMPORT_IA_PX=1568, IMPORT_IA_PDF_OCTETS=10*1024*1024, IMPORT_IA_PDF_PAGES=20;
+const IMPORT_IA_BANQUE_MAX=600, IMPORT_IA_CONFIANCE=0.6;
+/** PURE. Le chemin d'import : 'ia', l'ancien ('legacy'), ou 'ferme'. */
+function _importIARoute(iaOuvert,legacyOuvert,echecIA){
+  if(iaOuvert&&!echecIA) return 'ia';
+  return legacyOuvert?'legacy':'ferme';
+}
+function _importIAMessageFerme(){
+  toast('L’import de séance par PDF ou photo n’est pas disponible pour le moment : saisis la séance depuis la banque d’exercices.','var(--orange)');
+  return false;
+}
+/** Les noms canoniques de la banque : dédoublonnés par exKey, 600 au plus. */
+function banqueImportIA(user){
+  let l=[]; try{ l=catalogueCoach(user)||[]; }catch(e){ l=[]; }
+  const vus=new Set(), out=[];
+  for(const f of l){
+    const nom=String((f&&f.nom)||'').trim();
+    const k=exKey(nom);
+    if(!nom||!k||vus.has(k)) continue;
+    vus.add(k); out.push(nom.slice(0,80));
+    if(out.length>=IMPORT_IA_BANQUE_MAX) break;
+  }
+  return out;
+}
+/**
+ * PURE. Le contrôle a posteriori d'une réponse du serveur : nomBanque hors de
+ * la banque → null ; les champs absents → null (jamais un défaut) ; confiance
+ * bornée à [0, 1].
+ */
+function controlerImportIA(sortie,banque){
+  const ok=new Set(banque||[]);
+  const o=sortie&&typeof sortie==='object'?sortie:{};
+  const txt=v=>(typeof v==='string'&&v.trim())?v.trim():null;
+  const ent=v=>(Number.isInteger(v)&&v>0)?v:null;
+  return {
+    seances:(Array.isArray(o.seances)?o.seances:[]).map(s=>({
+      nom:txt(s&&s.nom)||'',jour:txt(s&&s.jour),echauffement:txt(s&&s.echauffement),
+      exercices:(Array.isArray(s&&s.exercices)?s.exercices:[]).map(e=>({
+        nomLu:txt(e&&e.nomLu)||'',
+        nomBanque:(e&&typeof e.nomBanque==='string'&&ok.has(e.nomBanque))?e.nomBanque:null,
+        series:ent(e&&e.series),reps:txt(e&&e.reps),repos:txt(e&&e.repos),tempo:txt(e&&e.tempo),
+        note:txt(e&&e.note),videoUrl:txt(e&&e.videoUrl),
+        confiance:Math.max(0,Math.min(1,Number(e&&e.confiance)||0))}))})),
+    nonLu:(Array.isArray(o.nonLu)?o.nonLu:[]).filter(x=>typeof x==='string'&&x.trim())
+  };
+}
+// PURE (à peu près). Le nombre de pages d'un PDF, lu dans son texte brut :
+// assez pour refuser un document de cent pages avant de l'envoyer.
+function _pagesPdf(binaire){
+  const m=String(binaire||'').match(/\/Type\s*\/Page(?![s\w])/g);
+  return m?m.length:0;
+}
+function _lireFichier(f,binaire){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=()=>rej(new Error('Fichier illisible'));
+    if(binaire) r.readAsBinaryString(f); else r.readAsDataURL(f);
+  });
+}
+let _importIA=null;
+// L'entrée : un sélecteur de fichiers, puis la lecture.
+function importerSeanceIA(idx){
+  const route=_importIARoute(_importIAOuvert(),_importLegacyOuvert(),false);
+  if(route==='ferme') return _importIAMessageFerme();
+  if(route==='legacy') return analyzePhotoOcr(idx);
+  if(!currentUser||currentUser.role!=='coach'||!_coachEditClient){
+    toast('Ouvre d’abord le programme de l’athlète.','var(--orange)'); return false; }
+  const inp=document.createElement('input');
+  inp.type='file'; inp.multiple=true; inp.accept='image/jpeg,image/png,image/webp,image/*,application/pdf';
+  inp.style.display='none';
+  inp.onchange=()=>{ const l=Array.from(inp.files||[]); inp.remove(); _importIAFichiers(idx,l); };
+  document.body.appendChild(inp);
+  inp.click();
+  return true;
+}
+async function _importIAFichiers(idx,fichiers){
+  const l=(fichiers||[]).filter(Boolean);
+  if(!l.length) return false;
+  const pdfs=l.filter(f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||''));
+  const imgs=l.filter(f=>pdfs.indexOf(f)<0);
+  if(pdfs.length>1||(pdfs.length&&imgs.length)){ toast('Un PDF, ou des photos : pas les deux à la fois.','var(--orange)'); return false; }
+  if(imgs.length>IMPORT_IA_IMAGES_MAX){ toast('Six photos au plus.','var(--orange)'); return false; }
+  const pages=[];
+  try{
+    if(pdfs.length){
+      const f=pdfs[0];
+      if(f.size>IMPORT_IA_PDF_OCTETS){ toast('PDF trop lourd : 10 Mo au plus.','var(--orange)'); return false; }
+      const n=_pagesPdf(await _lireFichier(f,true));
+      if(n>IMPORT_IA_PDF_PAGES){ toast('PDF trop long : 20 pages au plus ('+n+' lues).','var(--orange)'); return false; }
+      const url=await _lireFichier(f,false);
+      pages.push({type:'document',media_type:'application/pdf',data:String(url).split(',')[1]||''});
+    } else {
+      for(const f of imgs){
+        const brut=await _lireFichier(f,false);
+        // Réduite à 1 568 px de grand côté, en JPEG 0,85 (resizeForOcr).
+        const url=await resizeForOcr(brut,IMPORT_IA_PX).catch(()=>brut);
+        const m=/^data:(image\/(?:jpeg|png|webp));base64,(.*)$/.exec(String(url));
+        if(!m){ toast('Format de photo non lu : envoie une photo JPEG ou PNG.','var(--orange)'); return false; }
+        pages.push({type:'image',media_type:m[1],data:m[2]});
+      }
+    }
+  }catch(e){ toast('Fichier illisible : réessaie avec une autre photo.','var(--orange)'); return false; }
+  return importerPagesIA(idx,pages);
+}
+// L'appel, puis la relecture. Échec : l'ancien chemin s'il est ouvert, sinon
+// un message clair.
+async function importerPagesIA(idx,pages){
+  const banque=banqueImportIA(currentUser);
+  let r=null, statut=0;
+  try{ r=await CLOUD._callFn('ia',{tache:'import',charge:{pages,banque}}); }
+  catch(e){ r=null; statut=(e&&e.statut)||0; }
+  if(!r||!r.ok){
+    if(_importIARoute(_importIAOuvert(),_importLegacyOuvert(),true)==='legacy') return analyzePhotoOcr(idx);
+    toast(statut===429?'Quota de l’assistant atteint ce mois-ci : l’import attendra le mois prochain.'
+      :statut===503?'L’assistant est en pause : l’import n’est pas disponible pour le moment.'
+      :(r&&r.raison==='coupee')?'Document trop long à transcrire d’un coup : envoie moins de pages.'
+      :'La lecture n’a pas abouti : réessaie avec une photo plus nette, ou saisis la séance.','var(--orange)');
+    return false;
+  }
+  const lu=controlerImportIA(r.proposition,banque);
+  if(!lu.seances.length||!lu.seances.some(s=>s.exercices.length)){
+    toast('Aucun exercice lu sur ce document.','var(--orange)'); return false; }
+  _importIA={idx,lu,sel:0};
+  showImportIAModal();
+  return true;
+}
+// La fenêtre de relecture : les vides en orange, les lignes douteuses surlignées.
+function _htmlImportIA(lu,sel){
+  const s=lu.seances[sel]||{exercices:[]};
+  const v=x=>x==null?'':escapeHtml(String(x));
+  const vide=x=>x==null?' imp-absent':'';
+  const onglets=lu.seances.length>1?'<div class="imp-onglets">'+lu.seances.map((x,i)=>
+    '<button type="button" class="imp-onglet'+(i===sel?' actif':'')+'" aria-pressed="'+(i===sel)+'" onclick="_importIAChoisir('+i+')">'
+    +escapeHtml(x.nom||('Séance '+(i+1)))+'</button>').join('')+'</div>':'';
+  const lignes=s.exercices.map((e,i)=>
+    '<div class="imp-ex'+(e.confiance<IMPORT_IA_CONFIANCE?' imp-doute':'')+'" id="imp-ex-'+i+'">'
+    +(e.confiance<IMPORT_IA_CONFIANCE?'<div class="imp-alerte">Lecture incertaine : vérifie cette ligne.</div>':'')
+    +'<input id="imp-nom-'+i+'" class="imp-nom" value="'+v(e.nomBanque||e.nomLu)+'" placeholder="Nom de l’exercice" aria-label="Nom de l’exercice">'
+    +(e.nomBanque&&exKey(e.nomBanque)!==exKey(e.nomLu)?'<div class="imp-lu">Lu : '+escapeHtml(e.nomLu)+'</div>':'')
+    +(!e.nomBanque?'<div class="imp-lu">Pas trouvé dans ta banque : nom tel que lu.</div>':'')
+    +'<div class="imp-grille">'
+      +'<label>Séries<input id="imp-series-'+i+'" type="number" min="1" max="20" inputmode="numeric" class="'+vide(e.series).trim()+'" value="'+v(e.series)+'"></label>'
+      +'<label>Reps<input id="imp-reps-'+i+'" class="'+vide(e.reps).trim()+'" value="'+v(e.reps)+'"></label>'
+      +'<label>Repos<input id="imp-repos-'+i+'" class="'+vide(e.repos).trim()+'" value="'+v(e.repos)+'"></label>'
+      +'<label>Tempo<input id="imp-tempo-'+i+'" class="'+vide(e.tempo).trim()+'" value="'+v(e.tempo)+'"></label>'
+    +'</div>'
+    +'<textarea id="imp-note-'+i+'" rows="2" placeholder="Note">'+v(e.note)+'</textarea>'
+    +'<input id="imp-absento-'+i+'" class="'+vide(e.videoUrl).trim()+'" value="'+v(e.videoUrl)+'" placeholder="https://youtu.be/…" aria-label="Vidéo">'
+    +'<button type="button" class="rb-lien" onclick="document.getElementById(\'imp-ex-'+i+'\').remove()">Retirer</button>'
+    +'</div>').join('');
+  return '<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div class="imp-feuille"><h2>'+s.exercices.length+' exercice'+(s.exercices.length>1?'s':'')+' lu'+(s.exercices.length>1?'s':'')+'</h2>'
+    +'<p class="sub">Vérifie chaque ligne. Les cases vides en orange n’étaient pas sur le document : rien n’a été inventé. Ce que tu valides part en brouillon, pas chez l’athlète.</p>'
+    +onglets+'<div id="imp-lignes">'+lignes+'</div>'
+    +(lu.nonLu.length?'<div class="imp-nonlu"><b>Non lu :</b> '+lu.nonLu.map(escapeHtml).join(' · ')+'</div>':'')
+    +'<button class="btn btn-red" onclick="validerImportIA('+s.exercices.length+')">Enregistrer en brouillon</button>'
+    +'<button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button></div></div>';
+}
+function showImportIAModal(){
+  if(!_importIA) return false;
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend',_htmlImportIA(_importIA.lu,_importIA.sel));
+  return true;
+}
+function _importIAChoisir(i){ if(!_importIA) return false; _importIA.sel=i; return showImportIAModal(); }
+// PURE. La ligne relue : un champ vidé reste null, jamais remplacé par un défaut.
+function _exerciceImportIA(champs){
+  const t=v=>{ const s=String(v==null?'':v).trim(); return s?s:null; };
+  const n=parseInt(champs.series,10);
+  return {name:String(champs.nom||'').toUpperCase().trim(),series:(n>0?n:null),reps:t(champs.reps),repos:t(champs.repos),
+    tempo:t(champs.tempo),description:t(champs.note)||'',image:null,
+    videoUrl:(typeof normaliserUrlVideo==='function'?normaliserUrlVideo(champs.video):t(champs.video))||'',videoUrl2:'',ss:false};
+}
+// La validation : un BROUILLON, jamais une publication.
+function validerImportIA(n){
+  if(!_importIA||!_coachEditClient||!Array.isArray(_coachEditClient.sessions_config)) return false;
+  const sc=_coachEditClient.sessions_config[_importIA.idx];
+  if(!sc){ toast('Séance introuvable : rouvre le programme.','var(--orange)'); return false; }
+  const val=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  const res=[];
+  for(let i=0;i<n;i++){
+    if(!document.getElementById('imp-ex-'+i)) continue;
+    const ex=_exerciceImportIA({nom:val('imp-nom-'+i),series:val('imp-series-'+i),reps:val('imp-reps-'+i),
+      repos:val('imp-repos-'+i),tempo:val('imp-tempo-'+i),note:val('imp-note-'+i),video:val('imp-absento-'+i)});
+    if(ex.name) res.push(ex);
+  }
+  if(!res.length){ toast('Aucun exercice à enregistrer.','var(--orange)'); return false; }
+  const s=_importIA.lu.seances[_importIA.sel]||{};
+  sc.exercises=res;
+  if(!sc.name&&s.nom) sc.name=s.nom;
+  if(!sc.warmup&&s.echauffement) sc.warmup=s.echauffement;
+  let ok=false;
+  if(enregistrerBrouillon()){ try{ ok=saveUser(); }catch(e){ rcErreurMuette('validerImportIA',e); } }
+  closeModal();
+  _importIA=null;
+  toastEcriture(ok,res.length+' exercices en brouillon : relis-les, puis publie.','le brouillon est');
+  try{ if(typeof loadCoachSessionSlots==='function') loadCoachSessionSlots(); }catch(e){}
   return true;
 }
 
@@ -126477,7 +126691,10 @@ function _buildVideoLinksArray(rawText, links, exercises){
   return links; // fallback positionnel inchangé
 }
 
-async function analyzePhotoWithClaude(idx){
+// analyzePhotoOcr : renommée le 05/10/2026 (son ancien nom citait Claude) ; elle
+// n'a jamais fait que de la reconnaissance de texte (Tesseract), et l'import
+// par Claude Vision existe désormais à part (importerSeanceIA).
+async function analyzePhotoOcr(idx){
   if(!_importLegacyOuvert()) return _refusImportLegacy();
   const cfg=currentUser.sessions_config;
   const photo=cfg[idx].photo;
