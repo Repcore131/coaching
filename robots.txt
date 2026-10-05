@@ -2,6 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /i
 
-Sitemap: https://repcore131.github.io/coaching/sitemap.xml
+Sitemap: https://repcore-sync.web.app/sitemap.xml
 # Les vitrines publiées des coachs (servi par le serveur léger, cloudflare/src/pages.js).
 Sitemap: https://repcore-serveur.repcore.workers.dev/sitemap-coachs.xml
