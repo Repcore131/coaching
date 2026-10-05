@@ -174,6 +174,19 @@ async function testExercices(){
       if(der&&ou) der.ou=ou;
     });
   };
+  // ── CE QU'UN TEST LAISSE DANS LA PAGE (02/10/2026) ─────────────────────
+  // idempotence.mjs joue la suite trois fois dans la même page : ce qu'un test
+  // n'a pas rendu, le suivant le lit. Deux restes revenaient d'eux-mêmes :
+  //  · le chronomètre d'une séance lancée : l'intervalle est arrêté, mais
+  //    #wo-timer garde « 00:00:03 », et le gabarit du chronomètre est faux ;
+  //  · la feuille du laboratoire (#ml-style), injectée à la demande, que la
+  //    charte, les états vides et « le cyan au repos » lisent ensuite.
+  const _woTimerZero=()=>{ try{ const tm=document.getElementById('wo-timer'); if(tm) tm.textContent=fmtDureeSeance(0); }catch(e){} };
+  const _mlStyleRendre=avant=>{ try{ const st=document.getElementById('ml-style'); if(st&&!avant) st.remove(); }catch(e){} };
+  //  · les célébrations qu'une séance met en file : _bdgPlanifier ouvre
+  //    #bdg-ecran 900 ms plus tard, au milieu d'un autre test, et l'écran
+  //    reste ; la passe suivante trouve CET écran-là avant le sien.
+  const _bdgRendre=()=>{ try{ clearTimeout(_bdgMinuterie); _bdgMinuterie=null; _bdgFile=[]; _bdgRecap=[]; _bdgFermerEcran(true); }catch(e){} };
   // LES DEUX BOUCHONS DE MODALE, ecrits une fois. Ils rendent une PROMESSE, et
   // non la valeur nue : un appelant du produit qui oublierait son `await`
   // recevrait un objet Promesse — toujours vrai — et le test doit pouvoir le
@@ -8767,6 +8780,7 @@ async function testExercices(){
           if(sv.b==null) localStorage.removeItem(CLOUD._cleBase('quota@t.fr')); else localStorage.setItem(CLOUD._cleBase('quota@t.fr'),sv.b);
           DB._echecLocal.users=false; DB._echecLocal.session=false; DB._quotaAnnonce=false;
           try{ CLOUD._defiler('quota@t.fr'); CLOUD._annulerRetry(); }catch(e){}
+          _bdgRendre();
         };
         okA('Quota plein sur rc_users : saveUser après une séance, le PUT porte la séance, et le ✓ ne vient qu’après',async()=>{
           const sv=_qMonter();
@@ -11885,11 +11899,13 @@ async function testExercices(){
             const scan=(r,ou)=>{ if(!r) return; r.querySelectorAll('*').forEach(el=>{
               const direct=[...el.childNodes].filter(n=>n.nodeType===3&&n.textContent.trim());
               if(!direct.length) return;
+              // NON RENDU, ignoré (05/10/2026) : checkVisibility dit ce que le
+              // navigateur affiche — l'élément ET ses parents (display:none,
+              // content-visibility), et visibility avec checkVisibilityCSS. Le
+              // test de display/visibility, lui, laissait passer un texte masqué
+              // autrement : « 0 / 1 800 V » vit dans .rg-txt, retiré de l'en-tête.
+              if(!el.checkVisibility||!el.checkVisibility({checkVisibilityCSS:true})) return;
               const cs=getComputedStyle(el);
-              if(cs.display==='none'||cs.visibility==='hidden') return;
-              // MASQUÉ PAR UN PARENT, il ne s'affiche pas : « 0 / 1 800 V » vit dans
-              // .rg-txt, retiré de l'en-tête (display:none), et comptait quand même.
-              for(let e=el.parentElement;e&&e!==r;e=e.parentElement){ const s=getComputedStyle(e); if(s.display==='none'||s.visibility==='hidden') return; }
               // TROIS EXCEPTIONS, DÉCIDÉES PAR KEVIN LE 30/09/2026 (« garder la maquette ») : l'en-tête
               // dessiné au pixel (.clh-tete : rang, « SEMAINE 1 », « Encore N séances »), la rangée des
               // jours de la séance du jour (.sem-jour, .sem-sur), et les sept onglets, qui ne tiennent
@@ -27425,7 +27441,7 @@ async function testExercices(){
         renderSets(woState.exercises[0],woState.sessionData[0],0);
         return document.getElementById('wo-douleur-0');
       };
-      const _fin=()=>{ try{ clearInterval(woState.timerInterval); }catch(e){} };
+      const _fin=()=>{ try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero(); };
 
       // ── Le seuil ──
       ok('Critère 1 : une seule série à 4 ou plus → aucune carte',()=>{
@@ -27761,7 +27777,7 @@ async function testExercices(){
         const apres=(woState.aFilmer||[]).length;
         cb.checked=false; cb.dispatchEvent(new Event('change'));
         const vide=(woState.aFilmer||[]).length;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         woState=sauveW2;
         return apres===1&&vide===0;});
       ok('La case relit son état en revenant sur l\'exercice',()=>{
@@ -27779,7 +27795,7 @@ async function testExercices(){
         const surLe2=document.getElementById('film-ex').checked;
         try{ woNav(-1); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const revenu=document.getElementById('film-ex').checked;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         woState=sauveW2;
         return surLe2===false&&revenu===true;});
 
@@ -28076,7 +28092,7 @@ async function testExercices(){
         const cb=document.getElementById('film-ex');
         const pre=(woState.aFilmer||[]).join('|')==='SQUAT';
         const coche=!!(cb&&cb.checked);
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         woState=sauveW2;
         return pre&&coche;});
       ok('Sans demande, la case n\'est pas pré-cochée',()=>{
@@ -28086,7 +28102,7 @@ async function testExercices(){
         const cb=document.getElementById('film-ex');
         const vide=(woState.aFilmer||[]).length===0;
         const decoche=!!(cb&&!cb.checked);
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         woState=sauveW2;
         return vide&&decoche;});
       ok('Un cardio demandé n\'est pas pré-coché',()=>{
@@ -28096,7 +28112,7 @@ async function testExercices(){
         const sauveW2=woState;
         try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const vide=(woState.aFilmer||[]).length===0;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         woState=sauveW2;
         return vide;});
 
@@ -35722,7 +35738,10 @@ async function testExercices(){
       //    de 10ch coupait la phrase en deux, et la seconde ligne traversait le
       //    bas du cadre. Mesuré sur une copie du badge, dans un conteneur à la
       //    largeur de chaque téléphone : tout y est en cqw.
-      ok('1627 — LE CADRE « SEMAINE 1 » : LA PHRASE TIENT SUR UNE LIGNE, DANS LE CADRE, À 375, 390 ET 430',()=>{
+      // 05/10/2026 : DEUX LIGNES AU PLUS. Au plancher de 11 px (et non plus
+      // 1,95cqw, 7 px à 360), « Encore 3 séances » ne tient plus sur une ligne
+      // avant le chevron : elle passe sur deux, sous « SEMAINE 1 » remonté.
+      ok('1627 — LE CADRE « SEMAINE 1 » : LA PHRASE TIENT EN DEUX LIGNES AU PLUS, DANS LE CADRE, À 360, 375, 390, 412, 430 ET 480',()=>{
         const src=document.getElementById('clh-streak');
         if(!src) return _echec('pas de badge');
         const boite=document.createElement('div');
@@ -35733,10 +35752,13 @@ async function testExercices(){
           const ch=cl.querySelector('.sk-chiffres'), r=cl.querySelector('.sk-reste'), c=cl.querySelector('.sk-cadre');
           ch.setAttribute('data-nul',''); cl.querySelector('.sk-lbl').textContent='SEMAINE 1';
           r.textContent=affichageStreak(0,3,0).reste;
-          for(const w of [375,390,430]){
+          for(const w of [360,375,390,412,430,480]){
             boite.style.width=w+'px';
             const a=r.getBoundingClientRect(), k=c.getBoundingClientRect(), fs=parseFloat(getComputedStyle(r).fontSize);
-            if(a.height>fs*1.6) return _echec(w+' px : la phrase passe sur deux lignes');
+            if(fs<11) return _echec(w+' px : la phrase est à '+fs+' px, sous le plancher');
+            if(a.height>fs*2.6) return _echec(w+' px : la phrase passe sur trois lignes');
+            const l=cl.querySelector('.sk-lbl').getBoundingClientRect();
+            if(a.top<l.bottom-0.5) return _echec(w+' px : la phrase chevauche « SEMAINE 1 »');
             if(a.bottom>k.bottom-1) return _echec(w+' px : la phrase déborde sous le cadre');
             // Plus d'équerre (seconde maquette) : le chevron, à droite.
             const chv=cl.querySelector('.sk-chev');
@@ -55222,12 +55244,13 @@ async function testExercices(){
       return true;});
     ok('Notifications : le choix est écrit dans u.pushPrefs AVANT la demande de permission',()=>{
       const svU=currentUser, svSave=window.saveUser, svN=Object.getOwnPropertyDescriptor(window,'Notification');
-      // LA ZONE EXISTE DÉJÀ (écran de fin de séance) : en créer une seconde doublait les
-      // identifiants, et getElementById lisait les cases de la PREMIÈRE, laissée par un test
-      // précédent. On emprunte la vraie zone, et on la rend telle quelle.
-      const _zv=document.getElementById('wd-notif-invite');
-      const z=_zv||document.body.appendChild(Object.assign(document.createElement('div'),{id:'wd-notif-invite'}));
-      const _zh=_zv?_zv.innerHTML:null;
+      // LA VRAIE ZONE, ET ELLE SEULE (05/10/2026) : #wd-notif-invite est dans
+      // index.html (écran de fin de séance). En créer une seconde doublait
+      // l'identifiant, et getElementById lisait les cases de la PREMIÈRE. On
+      // l'emprunte, et son contenu est rendu tel quel dans le finally.
+      const z=document.getElementById('wd-notif-invite');
+      if(!z) return _echec('#wd-notif-invite absent de la page');
+      const _zh=z.innerHTML;
       let vu=null, demande=0;
       try{
         currentUser={email:'lea@t.fr',role:'athlete',coachEmailKey:'k',pushPrefs:{acces:false}};
@@ -55241,7 +55264,7 @@ async function testExercices(){
         if(!vu||vu.coach!==false||vu.bilan!==false||vu.defi!==false||('serie' in vu)||('filleul' in vu)||vu.acces!==false)
           return _echec('pushPrefs au moment de la demande : '+JSON.stringify(vu));
       }finally{
-        if(_zv) _zv.innerHTML=_zh; else z.remove(); currentUser=svU; window.saveUser=svSave;
+        z.innerHTML=_zh; currentUser=svU; window.saveUser=svSave;
         if(svN) Object.defineProperty(window,'Notification',svN); else delete window.Notification;
       }
       return true;});
@@ -55788,6 +55811,10 @@ async function testExercices(){
       if(!/voirLegende\(typeDuSelecteur\('serie-fonds'\)\)[^>]*>Voir la légende/.test(h)) return _echec('le bouton manque à côté du format');
       if(typeDuSelecteur('serie-fonds')!=='serie'||typeDuSelecteur('musc-12-fonds')!=='muscles'||typeDuSelecteur('wd-fonds')!=='bilan') return _echec('types');
       for(const k of Object.keys(_legendePrete)) delete _legendePrete[k];
+      // LA LÉGENDE PRÉPARÉE EST VIDÉE EN SORTANT (02/10/2026) : la dernière
+      // assertion en laisse une de 220 « x », et le partage du test suivant,
+      // rejoué dans la même page, la publiait.
+      try{
       const t=voirLegende('rang');
       const x=document.getElementById('legende-texte');
       if(!x||x.value!==t) return _echec('la légende n’est pas affichée');
@@ -55796,7 +55823,11 @@ async function testExercices(){
       fermerLegende();
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
-      return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');});
+      return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');
+      } finally {
+        for(const k of Object.keys(_legendePrete)) delete _legendePrete[k];
+        try{ fermerLegende(); }catch(e){}
+      }});
     // ══ 28/09/2026 — UN SEUL ÉCRAN PLEIN, LES TROPHÉES DU JOUR ═════════════
     const _BSEC=()=>BADGES_ACQUIS.find(b=>b.famille==='secret').id;
     const _BPAL=(n)=>BADGES_ACQUIS.find(b=>b.palier===n).id;
@@ -60720,7 +60751,7 @@ async function testExercices(){
         if(woState._surchargeVue) return _echec('le drapeau de séance survit à une nouvelle séance');
         return true;
       } finally {
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state');
         if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
@@ -60968,7 +60999,7 @@ async function testExercices(){
         if(seriesDouloureusesSeance(0)!==2) return _echec('seriesDouloureusesSeance rend '+seriesDouloureusesSeance(0));
         return true;
       } finally {
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state');
         if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
@@ -62036,8 +62067,9 @@ async function testExercices(){
         }
         return trop.length?_echec(trop.join(' ; ')):true;
       } finally {
+        _bdgRendre();
         window.saveUser=svSave; window.toast=svToast;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
       }
@@ -62114,18 +62146,18 @@ async function testExercices(){
         // Le réglage coupé : aucune demande.
         currentUser.ecranAllume=false; req=0;
         lancer(); await pause(0);
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         if(req!==0) return _echec('écran demandé alors que le réglage est coupé');
         _woLibererEcran(); currentUser.ecranAllume=true;
         // Une API qui refuse : aucune exception.
         Object.defineProperty(navigator,'wakeLock',{configurable:true,get:()=>({request:()=>Promise.reject(new Error('refus'))})});
         try{ lancer(); await pause(0); }catch(e){ return _echec('refus : '+e.message); }
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         _woLibererEcran();
         // Sans l'API : aucune exception.
         Object.defineProperty(navigator,'wakeLock',{configurable:true,get:()=>undefined});
         try{ lancer(); await pause(0); }catch(e){ return _echec('sans wakeLock : '+e.message); }
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         return ecranAllumeActif({})&&!ecranAllumeActif({ecranAllume:false})?true:_echec('réglage : vrai par défaut');
       } finally {
         try{ _woLibererEcran(); }catch(e){}
@@ -62197,6 +62229,7 @@ async function testExercices(){
         // Le retrait animé du bandeau (lancé par annulerRepos) finit en 200 ms :
         // on l'attend APRÈS lui, sinon il viderait le bandeau du test suivant.
         await new Promise(r=>setTimeout(r,400));
+        _bdgRendre();
       }});
 
     // ── L'ÉCRAN DE SÉANCE TIENT DANS LA FENÊTRE PENDANT UN REPOS (30/09/2026) ──
@@ -62258,7 +62291,7 @@ async function testExercices(){
         try{ scr.style.height=''; scr.style.minHeight=''; }catch(e){}
         _reposHauteur=sH;
         try{ annulerRepos(); }catch(e){}
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
         if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
         // Le retrait animé du bandeau finit en 200 ms : on l'attend.
@@ -62344,7 +62377,7 @@ async function testExercices(){
       } finally {
         try{ _rirBandeFermer(); }catch(e){}
         try{ annulerRepos(); }catch(e){}
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
         if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
         await new Promise(r=>setTimeout(r,400));
@@ -62416,7 +62449,7 @@ async function testExercices(){
       } finally {
         rcConfirm3=sC3; rcConfirm=sC; finishWorkout=sF;
         try{ annulerRepos(); }catch(e){}
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
         if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
         await new Promise(r=>setTimeout(r,450));
@@ -62443,7 +62476,7 @@ async function testExercices(){
         return true;
       } finally {
         try{ annulerRepos(); }catch(e){}
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
         if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
         await new Promise(r=>setTimeout(r,400));
@@ -62527,7 +62560,7 @@ async function testExercices(){
       } finally {
         try{ annulerRepos(); }catch(e){}
         window.saveUser=svSave; window.toast=svToast;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
       }
@@ -62609,7 +62642,7 @@ async function testExercices(){
         return true;
       } finally {
         window.saveUser=svSave; window.toast=svToast;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state'); if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
       }
@@ -63163,7 +63196,7 @@ async function testExercices(){
     okA('R30 — l’athlète revoit sa correction : lecteur, cartes, vidéo d’origine, et la voix se tait en sortant',async()=>{
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true; window.toast=()=>{};
         try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
@@ -63207,7 +63240,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -63215,7 +63248,7 @@ async function testExercices(){
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast, svC=window.rcConfirm;
       const svPush=CLOUD.pushOne, svMedia=navigator.mediaDevices&&navigator.mediaDevices.getUserMedia;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true; window.toast=()=>{}; window.rcConfirm=async()=>true;
         CLOUD.pushOne=()=>Promise.resolve(true);
@@ -63288,7 +63321,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -63326,7 +63359,7 @@ async function testExercices(){
     okA('R31 — la carte du coach n’entre qu’à son tour, et la vidéo perdue se dit',async()=>{
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true; window.toast=()=>{};
         try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
@@ -63379,7 +63412,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -63695,7 +63728,7 @@ async function testExercices(){
     okA('R34 — on épingle ce qu’on voit, et seulement pendant une correction',async()=>{
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true;
         const dits=[]; window.toast=m=>{ dits.push(String(m)); };
@@ -63758,7 +63791,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -64924,7 +64957,7 @@ async function testExercices(){
     okA('R29 — l’écran : une trajectoire se perd quand ses bornes bougent, et le coach en est prévenu',async()=>{
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svRat=window._ratProfilFait, svT=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
         window._ratProfilFait=true;
@@ -64967,7 +65000,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -65128,7 +65161,7 @@ async function testExercices(){
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svC=window.rcConfirm, svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
       const svVc=[window._vcEmail,window._vcVideoId,window._tsAnnotations];
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
         try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
@@ -65184,7 +65217,7 @@ async function testExercices(){
       }
       await new Promise(r=>setTimeout(r,900));
       try{ document.getElementById('modal-overlay')?.remove(); }catch(e){}
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -65313,7 +65346,7 @@ async function testExercices(){
     okA('MLX — le coach trace, nomme, enregistre ; l’athlète revoit sa vidéo annotée',async()=>{
       const sU=currentUser, svUsers=JSON.stringify(DB.get('users')||{}), sv=[...document.querySelectorAll('.screen.active')];
       const svO=Object.assign({},_ecranOrigine), svC=window.rcConfirm, svRat=window._ratProfilFait, svT=window.toast, svPush=CLOUD.pushOne;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const verifier=async()=>{
         window._ratProfilFait=true; window.toast=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
         try{ await chargerMotionLab(); }catch(e){ return 'chargement : '+e.message; }
@@ -65391,7 +65424,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -66764,7 +66797,7 @@ async function testExercices(){
     okA('R27 — toucher une version ouvre l’éditeur sur elle',async()=>{
       const sU=currentUser, sv=[...document.querySelectorAll('.screen.active')], svO=Object.assign({},_ecranOrigine);
       const svRat=window._ratProfilFait, svIdx=_editProgTemplateIdx;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       let msg=null;
       try{
         window._ratProfilFait=true;
@@ -66784,7 +66817,7 @@ async function testExercices(){
       }
       // Même raison que l'itinéraire R21 : les go() ont posé des tracés.
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -66792,6 +66825,10 @@ async function testExercices(){
       const sU=currentUser, svOk=CLOUD.ok, svE=CLOUD.ecrireProgrammeBoutique, svP=CLOUD.majSeancesProgrammeBoutique;
       const svRaf=window.rafraichirBoutique, svSave=window.saveUser, svToast=window.toast;
       const svCache=JSON.stringify(_boutiqueLocale()), svIdx=_editProgTemplateIdx;
+      // LE CONTENU AUSSI (02/10/2026) : la publication écrit les séances dans
+      // rc_boutique_contenu, qui recouvre la fiche — gardé, il livrait à la
+      // passe suivante la version d'avant (et ses trois séances).
+      const svContenu=localStorage.getItem(RC_BOUTIQUE_CONTENU_CLE);
       const inp=document.getElementById('cpt-name'), svIn=inp&&inp.value;
       const ecrits=[], patchs=[];
       // Le message est rendu à la fin, après la restauration : _echec le pose
@@ -66890,6 +66927,7 @@ async function testExercices(){
         CLOUD.ok=svOk; CLOUD.ecrireProgrammeBoutique=svE; CLOUD.majSeancesProgrammeBoutique=svP;
         window.rafraichirBoutique=svRaf; window.saveUser=svSave; window.toast=svToast;
         _poserBoutiqueLocale(JSON.parse(svCache)); currentUser=sU; _editProgTemplateIdx=svIdx;
+        if(svContenu==null) localStorage.removeItem(RC_BOUTIQUE_CONTENU_CLE); else localStorage.setItem(RC_BOUTIQUE_CONTENU_CLE,svContenu);
         if(inp) inp.value=svIn;
         try{ loadCoachProgramsList(); }catch(e){}
       }
@@ -66899,7 +66937,7 @@ async function testExercices(){
     okA('R27 — la fiche de la boutique se ferme comme les autres, et la boutique mène à « Mes programmes »',async()=>{
       const sU=currentUser, sv=[...document.querySelectorAll('.screen.active')], svO=Object.assign({},_ecranOrigine);
       const svRat=window._ratProfilFait, svRaf=window.rafraichirBoutique;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const z=document.getElementById('rc-vente'), pv=document.getElementById('rc-progvente');
       const attendre=()=>new Promise(r=>setTimeout(r,ARC.strike+60));
       const verifier=async()=>{
@@ -66930,7 +66968,7 @@ async function testExercices(){
         sv.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
       }
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -67075,7 +67113,7 @@ async function testExercices(){
     const _r25Ranger=(sU,sW,sSnap,svSave,svToast)=>{
       window.saveUser=svSave; window.toast=svToast;
       try{ document.activeElement&&document.activeElement.blur(); }catch(e){}
-      try{ clearInterval(woState.timerInterval); }catch(e){}
+      try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
       localStorage.removeItem('rc_wo_state');
       if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
       currentUser=sU; woState=sW;
@@ -67441,7 +67479,7 @@ async function testExercices(){
         if(!/Siège cran 4 <b>large<\/b>/.test(ligne().textContent)||ligne().querySelector('b')) return _echec('la ligne n’affiche pas la note échappée');
         // UN NOUVEAU launchWorkout : la note revient.
         const cfg=currentUser.sessions_config[0];
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state'); woState=null;
         launchWorkout(cfg,0);
         if(!ligne()||ligne().textContent.indexOf('Siège cran 4')!==0) return _echec('la note ne survit pas au launchWorkout : '+(ligne()||{}).textContent);
@@ -67701,7 +67739,7 @@ async function testExercices(){
       } finally {
         ecran.style.maxWidth=svW;
         window.saveUser=svSave;
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state');
         if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         currentUser=sU; woState=sW;
@@ -67848,7 +67886,7 @@ async function testExercices(){
     okA('R21 — la flèche et le retour du système mènent aux mêmes écrans, jusqu’à la racine, sans boucle',async()=>{
       const sU=currentUser, svO=Object.assign({},_ecranOrigine), svSave=window.saveUser;
       const svRat=window._ratProfilFait, svToast=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const sv=[...document.querySelectorAll('.screen.active')];
       const actif=()=>(document.querySelector('.screen.active')||{}).id;
       // Date de naissance et genre : sans eux, loadNutrition ouvre d'abord la
@@ -67937,7 +67975,7 @@ async function testExercices(){
       // leur animation, qui ne tourne pas quand le panneau ne se dessine pas :
       // on retire tout ce que ce test a posé, et seulement cela.
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return trop.length?_echec(trop.join(' | ')):true;
     });
 
@@ -67949,7 +67987,7 @@ async function testExercices(){
     okA('R21 — le retour ferme l’achat, les deux fiches de vente, le contact et le lexique, et reste sur l’écran',async()=>{
       const sU=currentUser, svO=Object.assign({},_ecranOrigine), svSave=window.saveUser;
       const svRat=window._ratProfilFait, svToast=window.toast;
-      const arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
+      const mlStyleAvant=!!document.getElementById('ml-style'), arcAvant=new Set((()=>{ try{ return [..._arcCalque().children]; }catch(e){ return []; } })());
       const sv=[...document.querySelectorAll('.screen.active')];
       const actif=()=>(document.querySelector('.screen.active')||{}).id;
       const attendre=()=>new Promise(r=>setTimeout(r,ARC.strike+60));
@@ -68007,7 +68045,7 @@ async function testExercices(){
       }
       // Même raison que l'itinéraire ci-dessus : les go() ont posé des tracés.
       await new Promise(r=>setTimeout(r,900));
-      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){}
+      try{ [..._arcCalque().children].filter(n=>!arcAvant.has(n)).forEach(n=>n.remove()); }catch(e){} _mlStyleRendre(mlStyleAvant);
       return msg?_echec(msg):true;
     });
 
@@ -68187,7 +68225,7 @@ async function testExercices(){
         if(!a2||a2.getAttribute('href')!==safeUrl(normaliserUrlVideo('https://youtu.be/dQw4w9WgXcQ'))) return _echec('la vidéo du coach ne passe pas devant');
         return true;
       } finally {
-        try{ clearInterval(woState.timerInterval); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero();
         localStorage.removeItem('rc_wo_state');
         if(sSnap) localStorage.setItem('rc_wo_state',sSnap);
         if(!_exoIndex&&sIdx) _exoIndex=sIdx;
