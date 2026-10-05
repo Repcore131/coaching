@@ -315,6 +315,24 @@ const ANAT_ERR=Object.freeze({echelle:3,main:1,auto:2,estime:4});
  */
 const ANAT_ROTULE=Object.freeze({part:0.278,disp:3.2,source:'0,278 × taille, ANSUR II, ±3,2 %'});
 const ANAT_ECHELLE_CONFIRMEE=0.02;
+// UNE HAUTEUR DE ROTULE INVRAISEMBLABLE EST ÉCARTÉE (Kevin, 05/10/2026). Une
+// fiche affichait « 42,9 % d'écart » avec des points bien placés : c'était la
+// mesure du bilan qui était fausse (prise à la hanche, ou au mauvais repère),
+// et le bandeau envoyait le coach déplacer des points justes. La rotule est à
+// 0,278 × la taille, ±3,2 % (ANSUR II) : à plus de 15 % de cette part, soit
+// près de cinq écarts-types, ce n'est plus une morphologie, c'est une saisie.
+// On ne s'en sert alors pas : l'échelle est vérifiée par l'estimation, et le
+// bandeau nomme le chiffre fautif et la fourchette attendue.
+const ANAT_ROTULE_TOLERANCE=0.15;
+/** PURE. null si la mesure est plausible pour cette taille, sinon ce qu'il faut en dire. */
+function anatRotuleInvraisemblable(genouCm,tailleCm){
+  const g=Number(genouCm), t=Number(tailleCm);
+  if(!(g>0)||!(t>0)) return null;
+  const att=ANAT_ROTULE.part*t;
+  if(Math.abs(g/att-1)<=ANAT_ROTULE_TOLERANCE) return null;
+  return {cm:g,taille:t,min:Math.round(att*(1-ANAT_ROTULE_TOLERANCE)),
+    max:Math.round(att*(1+ANAT_ROTULE_TOLERANCE))};
+}
 const ANAT_ECHELLE_A_VERIFIER_PCT=5;
 /**
  * PURE. Les deux échelles d'une vue de face, et leur accord.
@@ -332,14 +350,21 @@ function anatVerifEchelle(u,F,kGenou){
   const e1=F.cmPx||null;
   // Le mètre d'abord : l'échelle du lot 7, sur la même hauteur de genou.
   const m=_anatSafe(()=>morphoEchellePhoto(u,{genou:hG}));
+  let ecartee=null;
   if(m&&m.cmPx&&e1){
     const ratio=m.cmPx/e1;
-    return _anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    const v=_anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    // La mesure ne colle pas avec la photo ET ne colle pas avec la taille :
+    // c'est elle qui est fausse, pas les points. On passe à l'estimation.
+    if(v.statut==='divergence') ecartee=anatRotuleInvraisemblable(m.genouCm,_anatSafe(()=>_tailleCm(u)));
+    if(!ecartee) return v;
   }
   // Sinon l'estimation : l'écart ne dépend alors pas de la taille (0,278 × la
   // hauteur du corps sur la photo, comparé à la hauteur du genou).
   const ratio=ANAT_ROTULE.part*F.stature/hG;
-  return _anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  if(ecartee) r.mesureEcartee=ecartee;
+  return r;
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);

@@ -2116,8 +2116,24 @@ function _htmlAnat(c){
   // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
   // PHOTO. Kevin : « pas un bouton, plutôt un menu déroulant du haut vers le
   // bas ; que tout cet espace prenne la même place que la photo ».
-  const alerteEch=(ver&&ver.statut==='divergence')
-    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.</span></div>':'';
+  // LA MESURE FAUTIVE D'ABORD (05/10/2026) : quand la hauteur de rotule du
+  // bilan a été écartée, le bandeau le dit, avec le chiffre et la fourchette,
+  // et propose de la redemander à l'athlète (le chemin des mesures demandées).
+  const alerteRotule=(ver&&ver.mesureEcartee)?(function(){
+    const e=ver.mesureEcartee;
+    const dem=_anatSafe(()=>demandeMesurePour('deb-rotule',getOwnedClient(currentClientId)));
+    const coach=_anatSafe(()=>!!getOwnedClient(currentClientId));
+    return '<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Hauteur de rotule du bilan écartée</b> : '
+      +_anatN(e.cm,1)+' cm pour '+_anatN(e.taille,0)+' cm de taille, on attend entre '+e.min+' et '+e.max
+      +' cm. Elle ne sert pas : l’échelle est vérifiée par l’estimation à la place. À remesurer debout, pieds nus, du sol au milieu de la rotule.'
+      +(coach?(dem?' <i>Mesure déjà redemandée.</i>'
+        :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
+      +'</span></div>';
+  })():'';
+  const alerteEch=alerteRotule+((ver&&ver.statut==='divergence')
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
+      +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
+      +'</span></div>':'');
   const alertePieds=(echelle&&echelle.piedsCoupes)
     ?'<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Pieds coupés : l’échelle est estimée.</b> Les orteils sortent du cadre ou ne se lisent pas : le talon, bout bas de l’échelle, est deviné. Au prochain bilan, photo en pied avec un peu de sol sous les pieds.</span></div>':'';
   const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch+alertePieds

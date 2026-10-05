@@ -48953,6 +48953,24 @@ async function testExercices(){
       const m=anatMesures(_anatGab(),_anatDossier({bilans:[{type:'depart',date:1,'deb-rotule':'50'}]})).echelle.verif;
       if(!m||m.source!=='metre'||m.statut!=='confirmee') return _echec('au mètre : '+(m&&m.source)+' / '+(m&&m.statut)+' / '+(m&&m.ecart));
       return true;});
+    // Une hauteur de rotule invraisemblable est écartée, pas crue (05/10/2026).
+    ok('ANALYSE MORPHO : UNE ROTULE SAISIE INVRAISEMBLABLE EST ÉCARTÉE, L’ÉCHELLE RESTE VÉRIFIÉE PAR L’ESTIMATION',()=>{
+      if(typeof anatRotuleInvraisemblable!=='function') return _echec('anatRotuleInvraisemblable n’existe pas');
+      if(anatRotuleInvraisemblable(50,178)||anatRotuleInvraisemblable(45,178)) return _echec('une rotule normale est écartée');
+      const e=anatRotuleInvraisemblable(68,178);
+      if(!e||!(e.min<50&&e.max>50)||e.cm!==68) return _echec('68 cm pour 178 : '+JSON.stringify(e));
+      if(anatRotuleInvraisemblable(68,null)!==null) return _echec('sans taille, rien à dire');
+      const base=_anatDossier();
+      const taille=_tailleCm(base);
+      const fausse=String(Math.min(74,Math.round(taille*0.39)));
+      const r=anatMesures(_anatGab(),_anatDossier({bilans:[{type:'depart',date:1,'deb-rotule':fausse}]}));
+      const v=r.echelle.verif;
+      if(!v||!v.mesureEcartee) return _echec('la mesure fausse ('+fausse+' cm pour '+taille+') n’est pas écartée : '+JSON.stringify(v));
+      if(v.source!=='estimation'||v.statut!=='confirmee') return _echec('après écart : '+v.source+' / '+v.statut);
+      if(r.fiches.find(x=>x.cle==='jambes').grise) return _echec('les longueurs restent en gris malgré des points justes');
+      const h=String(_htmlAnat);
+      if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
+      return true;});
     ok('ANALYSE MORPHO : GENOUX DÉPLACÉS DE 5 % : BANDEAU, LONGUEURS EN GRIS',()=>{
       const pts=anatGabarit(1000,1500,'face');
       const dy=0.05*ANAT_ROTULE.part*0.86;   // 5 % de la hauteur du genou, en fraction de la photo

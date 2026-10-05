@@ -61116,6 +61116,24 @@ const ANAT_ERR=Object.freeze({echelle:3,main:1,auto:2,estime:4});
  */
 const ANAT_ROTULE=Object.freeze({part:0.278,disp:3.2,source:'0,278 × taille, ANSUR II, ±3,2 %'});
 const ANAT_ECHELLE_CONFIRMEE=0.02;
+// UNE HAUTEUR DE ROTULE INVRAISEMBLABLE EST ÉCARTÉE (Kevin, 05/10/2026). Une
+// fiche affichait « 42,9 % d'écart » avec des points bien placés : c'était la
+// mesure du bilan qui était fausse (prise à la hanche, ou au mauvais repère),
+// et le bandeau envoyait le coach déplacer des points justes. La rotule est à
+// 0,278 × la taille, ±3,2 % (ANSUR II) : à plus de 15 % de cette part, soit
+// près de cinq écarts-types, ce n'est plus une morphologie, c'est une saisie.
+// On ne s'en sert alors pas : l'échelle est vérifiée par l'estimation, et le
+// bandeau nomme le chiffre fautif et la fourchette attendue.
+const ANAT_ROTULE_TOLERANCE=0.15;
+/** PURE. null si la mesure est plausible pour cette taille, sinon ce qu'il faut en dire. */
+function anatRotuleInvraisemblable(genouCm,tailleCm){
+  const g=Number(genouCm), t=Number(tailleCm);
+  if(!(g>0)||!(t>0)) return null;
+  const att=ANAT_ROTULE.part*t;
+  if(Math.abs(g/att-1)<=ANAT_ROTULE_TOLERANCE) return null;
+  return {cm:g,taille:t,min:Math.round(att*(1-ANAT_ROTULE_TOLERANCE)),
+    max:Math.round(att*(1+ANAT_ROTULE_TOLERANCE))};
+}
 const ANAT_ECHELLE_A_VERIFIER_PCT=5;
 /**
  * PURE. Les deux échelles d'une vue de face, et leur accord.
@@ -61133,14 +61151,21 @@ function anatVerifEchelle(u,F,kGenou){
   const e1=F.cmPx||null;
   // Le mètre d'abord : l'échelle du lot 7, sur la même hauteur de genou.
   const m=_anatSafe(()=>morphoEchellePhoto(u,{genou:hG}));
+  let ecartee=null;
   if(m&&m.cmPx&&e1){
     const ratio=m.cmPx/e1;
-    return _anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    const v=_anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    // La mesure ne colle pas avec la photo ET ne colle pas avec la taille :
+    // c'est elle qui est fausse, pas les points. On passe à l'estimation.
+    if(v.statut==='divergence') ecartee=anatRotuleInvraisemblable(m.genouCm,_anatSafe(()=>_tailleCm(u)));
+    if(!ecartee) return v;
   }
   // Sinon l'estimation : l'écart ne dépend alors pas de la taille (0,278 × la
   // hauteur du corps sur la photo, comparé à la hauteur du genou).
   const ratio=ANAT_ROTULE.part*F.stature/hG;
-  return _anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  if(ecartee) r.mesureEcartee=ecartee;
+  return r;
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);
@@ -65410,8 +65435,24 @@ function _htmlAnat(c){
   // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
   // PHOTO. Kevin : « pas un bouton, plutôt un menu déroulant du haut vers le
   // bas ; que tout cet espace prenne la même place que la photo ».
-  const alerteEch=(ver&&ver.statut==='divergence')
-    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.</span></div>':'';
+  // LA MESURE FAUTIVE D'ABORD (05/10/2026) : quand la hauteur de rotule du
+  // bilan a été écartée, le bandeau le dit, avec le chiffre et la fourchette,
+  // et propose de la redemander à l'athlète (le chemin des mesures demandées).
+  const alerteRotule=(ver&&ver.mesureEcartee)?(function(){
+    const e=ver.mesureEcartee;
+    const dem=_anatSafe(()=>demandeMesurePour('deb-rotule',getOwnedClient(currentClientId)));
+    const coach=_anatSafe(()=>!!getOwnedClient(currentClientId));
+    return '<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Hauteur de rotule du bilan écartée</b> : '
+      +_anatN(e.cm,1)+' cm pour '+_anatN(e.taille,0)+' cm de taille, on attend entre '+e.min+' et '+e.max
+      +' cm. Elle ne sert pas : l’échelle est vérifiée par l’estimation à la place. À remesurer debout, pieds nus, du sol au milieu de la rotule.'
+      +(coach?(dem?' <i>Mesure déjà redemandée.</i>'
+        :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
+      +'</span></div>';
+  })():'';
+  const alerteEch=alerteRotule+((ver&&ver.statut==='divergence')
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
+      +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
+      +'</span></div>':'');
   const alertePieds=(echelle&&echelle.piedsCoupes)
     ?'<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Pieds coupés : l’échelle est estimée.</b> Les orteils sortent du cadre ou ne se lisent pas : le talon, bout bas de l’échelle, est deviné. Au prochain bilan, photo en pied avec un peu de sol sous les pieds.</span></div>':'';
   const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch+alertePieds
