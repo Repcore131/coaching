@@ -130004,6 +130004,10 @@ async function _pfUtiliser(slug){
 async function chargerTests(){
   // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
   window._rcEnTests=true;
+  // tests.js D'ABORD (05/10/2026). Sur le miroir minifié, son en-tête pose de
+  // quoi relire le texte d'origine du code : il doit être en place AVANT que
+  // les lectures ci-dessous partent.
+  await _chargerScriptTests();
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
@@ -130095,16 +130099,17 @@ async function chargerTests(){
       window._RC_RULES=r.ok?await r.text():null;
     }catch(e){ window._RC_RULES=null; }
   }
-  if(typeof testExercices!=='function'){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='./tests.js';
-      s.onload=res;
-      s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
-      document.head.appendChild(s);
-    });
-  }
   return testExercices();
+}
+async function _chargerScriptTests(){
+  if(typeof testExercices==='function') return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='./tests.js';
+    s.onload=res;
+    s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
+    document.head.appendChild(s);
+  });
 }
 
 // ══ L'ANCIENNE ADRESSE : LE BANDEAU DU COMPTE OUVERT (05/10/2026) ══════════

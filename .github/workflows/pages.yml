@@ -23,9 +23,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # ⚠ ON NE PUBLIE PLUS LE DEPOT ENTIER (05/10/2026). « path: . » mettait en
+      #   ligne tests.js, scripts/, cloudflare/, database.rules.json, docs/ et
+      #   toutes les notes de travail. Le site est assemble par le meme script
+      #   que pour Firebase (une seule liste), plus ce que SEULES les Pages
+      #   servent : l'appli VAULT construite.
+      - name: Assembler le site
+        run: |
+          set -e
+          node scripts/fabriquer_site.mjs _pages --pages
+          test -f _pages/index.html
+          test -f _pages/app/index.html
+          test -f _pages/vault/app/index.html
+          test ! -f _pages/app/tests.js
+          test ! -e _pages/scripts
+          test ! -e _pages/database.rules.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _pages
       - id: deploiement
         uses: actions/deploy-pages@v4

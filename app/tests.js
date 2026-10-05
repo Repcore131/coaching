@@ -10,6 +10,43 @@
 // tests.js n’est PAS dans ASSETS du service worker : l’y mettre reviendrait
 // à le télécharger quand même, ce que cette séparation évite.
 //
+// ── SUR LE MIROIR MINIFIÉ, LE TEXTE DU CODE EST CELUI D'ORIGINE (05/10/2026) ──
+//
+// Le fichier mis en ligne est minifié (scripts/minifier.mjs) : plus de
+// commentaires, des noms internes raccourcis. La suite est rejouée dessus
+// (scripts/miroir_minifie.mjs), et c'est bien le code minifié qui S'EXÉCUTE.
+// Mais des centaines d'assertions ne jugent pas un comportement : elles
+// relisent le TEXTE d'une fonction, ou du fichier. Ce texte-là, le miroir le
+// garde dans app/_origine/. Quand ce dossier existe :
+//   - String(fn) rend le texte d'origine de la fonction (retrouvée par
+//     IDENTITÉ, pas par nom : une fonction remplacée par un test garde son
+//     propre texte) ;
+//   - une lecture de rc-core.<build>.js ou de rc-style.<build>.css rend le
+//     fichier d'origine.
+// Dans le dépôt, _origine/ n'existe pas : la requête répond 404, rien n'est posé.
+(function(){
+  try{
+    const x=new XMLHttpRequest(); x.open('GET','./_origine/fonctions.json',false); x.send(null);
+    if(x.status!==200) return;
+    const T=JSON.parse(x.responseText), M=new Map();
+    for(const k in T){ try{ const f=(0,eval)(k); if(typeof f==='function'&&!M.has(f)) M.set(f,T[k]); }catch(e){} }
+    const natif=Function.prototype.toString;
+    Function.prototype.toString=function(){ const s=M.get(this); return s!=null?s:natif.call(this); };
+    const vers=u=>{ const s=String(u);
+      if(/rc-core\.\d+\.js/.test(s)) return './_origine/rc-core.js';
+      if(/rc-style\.\d+\.css/.test(s)) return './_origine/rc-style.css';
+      return u; };
+    const f0=window.fetch;
+    const f1=function(u,o){ return f0.call(this,(typeof u==='string')?vers(u):u,o); };
+    // Le produit pose des marques sur fetch (suivi des écritures) : on les garde.
+    try{ Object.assign(f1,f0); }catch(e){}
+    window.fetch=f1;
+    const o0=XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open=function(m,u){ arguments[1]=vers(u); return o0.apply(this,arguments); };
+    window.RC_SUITE_MINIFIEE=M.size;
+  }catch(e){}
+})();
+//
 // ── LA SOURCE DE PRODUCTION ─────────────────────────────────────────────
 //
 // Une trentaine d’assertions lisent le fichier pour vérifier ce qu’il
@@ -79775,7 +79812,10 @@ vendredi 78 6h 44m
         const paires=[['--arc-attack',ARC.attack],['--arc-strike',ARC.strike],
           ['--arc-release',ARC.release],['--arc-afterglow',ARC.afterglow],
           ['--arc-ambient',ARC.ambient],['--arc-plat',ARC.plat]];
-        const faux=paires.filter(([n,j])=>_v(n)!==j+'ms')
+        // ⚠ ON COMPARE LA DURÉE, PAS SON ÉCRITURE : une feuille minifiée écrit
+        // « .12s » là où la source écrit « 120ms ». C'est la même durée.
+        const ms=s=>{ const m=/^\s*(-?\d*\.?\d+)(ms|s)\s*$/.exec(String(s)); return m?Number(m[1])*(m[2]==='s'?1000:1):NaN; };
+        const faux=paires.filter(([n,j])=>!(Math.abs(ms(_v(n))-j)<0.001))
           .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j+'ms');
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('Les trois courbes ARC sont les mêmes en CSS et en JS',(()=>{
@@ -79839,7 +79879,9 @@ vendredi 78 6h 44m
           ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],
           ['--arc-flash-peak',ARC.flashPeak],['--arc-translate',ARC.translate+'px'],
           ['--arc-glow-radius',ARC.glowRadius+'px'],['--arc-glow-rest',ARC.glowRest+'px']];
-        const faux=paires.filter(([n,j])=>_v(n)!==String(j))
+        // Même règle : « .94 » et « 0.94 » sont le même nombre ; l'unité, elle, doit suivre.
+        const nu=s=>{ const m=/^\s*(-?\d*\.?\d+)([a-z%]*)\s*$/.exec(String(s)); return m?[Number(m[1]),m[2]]:[NaN,String(s)]; };
+        const faux=paires.filter(([n,j])=>{ const a=nu(_v(n)), b=nu(j); return !(Math.abs(a[0]-b[0])<1e-9&&a[1]===b[1]); })
           .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j);
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('L\'objet ARC est gelé : aucune valeur ne se corrige à chaud',(()=>{
