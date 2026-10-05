@@ -53311,6 +53311,27 @@ async function testExercices(){
       if(h.indexOf('bil-bf-mesure')<0||!/Balance à impédance/.test(h)||!/Pince à plis/.test(h)||!/DEXA/.test(h)) return _echec('champ du bilan');
       if(!mgMasquee({masquerPoids:true})||mgMasquee({})) return _echec('masquage');
       return true;});
+    ok('Poids synchronisé : l’heure de la pesée retenue (poidsHeure) entre dans weightLog, le coach la lit',()=>{
+      const sv=currentUser, T=Date.now(), d=localISODate(new Date(T-864e5));
+      const meta={empreinte:'e',derniereReception:T-3600e3,plateforme:'android'};
+      const plan=sanFusionSync({weightLog:[]},{meta,jours:{[d]:{poids:80,poidsHeure:'07:10',recu:T-3600e3}}},T);
+      if(JSON.stringify(plan.poids)!==JSON.stringify([{date:d,kg:80,heure:'07:10'}])) return _echec('plan : '+JSON.stringify(plan.poids));
+      if(sanFusionSync({weightLog:[]},{meta,jours:{[d]:{poids:80,poidsHeure:'7h10',recu:T-3600e3}}},T).poids[0].heure) return _echec('heure mal formée acceptée');
+      try{
+        currentUser={email:'ph@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},weightLog:[]};
+        sanAppliquerSync(plan);
+        const e=currentUser.weightLog.find(x=>x.date===d);
+        if(!e||e.kg!==80||e.heure!=='07:10'||e.dataStatus!=='sync') return _echec('journal : '+JSON.stringify(e));
+        // Même poids, même heure : rien à réécrire ; une autre heure : réécrit.
+        if(sanFusionSync(currentUser,{meta,jours:{[d]:{poids:80,poidsHeure:'07:10',recu:T-3600e3}}},T).poids.length) return _echec('réécrit à l’identique');
+        if(sanFusionSync(currentUser,{meta,jours:{[d]:{poids:80,poidsHeure:'06:50',recu:T-3600e3}}},T).poids.length!==1) return _echec('nouvelle heure ignorée');
+        const s=serieWeight(currentUser);
+        if(s[s.length-1].heure!=='07:10') return _echec('serieWeight perd l’heure');
+        if(!/dernière pesée le [^<]* à 07 h 10/.test(blocPoidsCoach(currentUser))) return _echec('le coach ne voit pas l’heure');
+        // Une saisie à la main efface l'heure de la synchro.
+        _recordWeight(d,79.6);
+        return currentUser.weightLog.find(x=>x.date===d).heure===undefined?true:_echec('l’heure survit à une saisie manuelle');
+      } finally { currentUser=sv; }});
     ok('Garmin : un compte relié à Garmin seul est « synchronisé », et ses jours portent la source Garmin',()=>{
       const T=Date.now(), d=localISODate(new Date(T-864e5));
       const meta={derniereReception:T-3600e3,garmin:{lieLe:T-864e5}};

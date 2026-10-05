@@ -785,11 +785,14 @@ function sanFusionSync(dossier,sync,maintenant){
         &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===ss))
         plan.sommeil.push(nuit);
     }
+    // LA PESÉE RETENUE est la première du matin (lignes.js, Jours.kt) ; son
+    // heure (poidsHeure, HH:MM) suit dans l'entrée du journal : le coach la voit.
     const kg=Number(j.poids);
     if(isFinite(kg)&&kg>=PESEE_MIN&&kg<=PESEE_MAX){
       const e=trouver(u.weightLog,d), v=Math.round(kg*10)/10;
+      const h=/^\d{2}:\d{2}$/.test(j.poidsHeure||'')?j.poidsHeure:null;
       if(e&&e.dataStatus!=='sync') plan.gardes++;
-      else if(!(e&&e.kg===v)) plan.poids.push({date:d,kg:v});
+      else if(!(e&&e.kg===v&&(e.heure||null)===h)){ const p={date:d,kg:v}; if(h) p.heure=h; plan.poids.push(p); }
     }
     const bpm=Number(j.fcRepos);
     if(isFinite(bpm)&&bpm>=30&&bpm<=120){
@@ -829,7 +832,12 @@ function sanAppliquerSync(plan){
   for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
   for(const s of plan.sommeil)
     if(_recordSleep(s.date,{bed:s.bed,wake:s.wake,duration:s.duration,phases:s.phases},{dataStatus:'sync',source:s.source})) n++;
-  for(const p of plan.poids) if(_recordWeight(p.date,p.kg,{dataStatus:'sync'})) n++;
+  for(const p of plan.poids){
+    if(!_recordWeight(p.date,p.kg,{dataStatus:'sync'})) continue;
+    const e=(u.weightLog||[]).find(x=>x&&x.date===p.date);
+    if(e){ if(p.heure) e.heure=p.heure; else delete e.heure; }
+    n++;
+  }
   for(const f of plan.fc){ u.fcReposLog=_sanJournalPoser(u.fcReposLog,f); n++; }
   for(const v of plan.vfc){ u.vfcLog=_sanJournalPoser(u.vfcLog,v); n++; }
   for(const m of (plan.masseGrasse||[])){

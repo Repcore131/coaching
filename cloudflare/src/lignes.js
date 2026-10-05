@@ -9,8 +9,9 @@
 //                                          ou Deep, Core, REM, Awake, InBed, Asleep)
 //   fcRepos      date;bpm                 (dernière valeur du jour)
 //   vfc          date;ms                  (moyenne du jour, SDNN chez Apple)
-//   poids        date;kg                  (dernière valeur du jour)
-//   masseGrasse  date;fraction ou %       (0,178 = 17,8 %)
+//   poids        date;kg                  (la PREMIÈRE pesée du matin, 4 h-12 h ;
+//                                          sans pesée du matin, la première du jour)
+//   masseGrasse  date;fraction ou %       (0,178 = 17,8 % ; même règle que le poids)
 // LES JOURS SONT CEUX DE PARIS (paris() de metier.js) ; une nuit appartient
 // au jour de son RÉVEIL. Au plus LIGNES_MAX lignes en tout : le reste est
 // ignoré (plafond de 10 ms de CPU du Worker).
@@ -70,7 +71,7 @@ export function lignesVersJours(lignes) {
     const j = jour(paris(t).jour);
     j.pas = (j.pas || 0) + n;
   }
-  // FC DE REPOS et POIDS : la dernière valeur du jour ; VFC : la moyenne.
+  // FC DE REPOS : la dernière valeur du jour ; VFC : la moyenne.
   const dernier = (liste, champ, conv) => {
     const vu = {};
     for (const [a, v] of liste) {
@@ -81,10 +82,25 @@ export function lignesVersJours(lignes) {
     }
     for (const d of Object.keys(vu)) jour(d)[champ] = vu[d].n;
   };
+  // POIDS et MASSE GRASSE : la PREMIÈRE mesure du matin (4 h-12 h, heure de
+  // Paris), à jeun et au lever, la seule comparable d'un jour à l'autre ; sans
+  // pesée du matin, la première du jour. `champHeure` reçoit son heure (HH:MM).
+  const premierDuMatin = (liste, champ, conv, champHeure) => {
+    const vu = {};
+    for (const [a, v] of liste) {
+      const t = instant(a), n = conv(nombre(v));
+      if (!Number.isFinite(t) || !Number.isFinite(n)) { ignores++; continue; }
+      const p = paris(t), matin = p.heure >= 4 && p.heure < 12;
+      const x = vu[p.jour];
+      // Un matin bat un hors-matin ; à égalité de rang, la plus ancienne.
+      if (!x || (matin && !x.matin) || (matin === x.matin && t < x.t)) vu[p.jour] = { t, n, matin };
+    }
+    for (const d of Object.keys(vu)) { const j = jour(d); j[champ] = vu[d].n; if (champHeure) j[champHeure] = hhmm(vu[d].t); }
+  };
   dernier(types.fcRepos, 'fcRepos', (x) => x);
-  dernier(types.poids, 'poids', (x) => x);
+  premierDuMatin(types.poids, 'poids', (x) => x, 'poidsHeure');
   // Apple Santé donne une fraction (0,178) ; une valeur déjà en % passe telle quelle.
-  dernier(types.masseGrasse, 'masseGrasse', (x) => (x <= 1 ? Math.round(x * 1000) / 10 : x));
+  premierDuMatin(types.masseGrasse, 'masseGrasse', (x) => (x <= 1 ? Math.round(x * 1000) / 10 : x));
   const vfc = {};
   for (const [a, v] of types.vfc) {
     const t = instant(a), n = nombre(v);

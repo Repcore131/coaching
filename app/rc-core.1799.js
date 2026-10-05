@@ -117698,7 +117698,10 @@ function _recordWeight(dateStr,kg,marque){
   const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
-  _sanMarquer(currentUser.weightLog.find(e=>e.date===dateStr),marque);
+  const _e=currentUser.weightLog.find(e=>e.date===dateStr);
+  _sanMarquer(_e,marque);
+  // L'heure d'une pesée synchronisée ne vaut pas pour une saisie à la main.
+  if(_e&&!(marque&&marque.dataStatus==='sync')) delete _e.heure;
   const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
   currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
   currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
@@ -117723,6 +117726,7 @@ function serieWeight(user){
     const v=parseFloat(e.kg);
     if(isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) continue;
     parJour[e.date]={date:e.date,kg:v,source:'pesee'};
+    if(/^\d{2}:\d{2}$/.test(e.heure||'')) parJour[e.date].heure=e.heure;
   }
   return Object.values(parJour).sort((a,b)=>a.date<b.date?-1:1);
 }
@@ -121600,7 +121604,7 @@ function blocPoidsCoach(user,depuis){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
+      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}${der.heure?' à '+der.heure.replace(':',' h '):''} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
       <span style="font-size:var(--fs-xl);font-weight:400;color:var(--text);font-family:var(--pile-titre);letter-spacing:1px">${_synNombre(der.kg)} kg</span>
@@ -123711,11 +123715,14 @@ function sanFusionSync(dossier,sync,maintenant){
         &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===ss))
         plan.sommeil.push(nuit);
     }
+    // LA PESÉE RETENUE est la première du matin (lignes.js, Jours.kt) ; son
+    // heure (poidsHeure, HH:MM) suit dans l'entrée du journal : le coach la voit.
     const kg=Number(j.poids);
     if(isFinite(kg)&&kg>=PESEE_MIN&&kg<=PESEE_MAX){
       const e=trouver(u.weightLog,d), v=Math.round(kg*10)/10;
+      const h=/^\d{2}:\d{2}$/.test(j.poidsHeure||'')?j.poidsHeure:null;
       if(e&&e.dataStatus!=='sync') plan.gardes++;
-      else if(!(e&&e.kg===v)) plan.poids.push({date:d,kg:v});
+      else if(!(e&&e.kg===v&&(e.heure||null)===h)){ const p={date:d,kg:v}; if(h) p.heure=h; plan.poids.push(p); }
     }
     const bpm=Number(j.fcRepos);
     if(isFinite(bpm)&&bpm>=30&&bpm<=120){
@@ -123755,7 +123762,12 @@ function sanAppliquerSync(plan){
   for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
   for(const s of plan.sommeil)
     if(_recordSleep(s.date,{bed:s.bed,wake:s.wake,duration:s.duration,phases:s.phases},{dataStatus:'sync',source:s.source})) n++;
-  for(const p of plan.poids) if(_recordWeight(p.date,p.kg,{dataStatus:'sync'})) n++;
+  for(const p of plan.poids){
+    if(!_recordWeight(p.date,p.kg,{dataStatus:'sync'})) continue;
+    const e=(u.weightLog||[]).find(x=>x&&x.date===p.date);
+    if(e){ if(p.heure) e.heure=p.heure; else delete e.heure; }
+    n++;
+  }
   for(const f of plan.fc){ u.fcReposLog=_sanJournalPoser(u.fcReposLog,f); n++; }
   for(const v of plan.vfc){ u.vfcLog=_sanJournalPoser(u.vfcLog,v); n++; }
   for(const m of (plan.masseGrasse||[])){

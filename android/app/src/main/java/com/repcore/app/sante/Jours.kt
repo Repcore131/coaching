@@ -33,6 +33,8 @@ data class Jour(
     var vfc: Double? = null,
     var vfcMethode: String? = null,
     var poids: Double? = null,
+    /** L'heure (HH:mm, fuseau du téléphone) de la pesée retenue. */
+    var poidsHeure: String? = null,
     var masseGrasse: Double? = null,
 )
 
@@ -40,6 +42,9 @@ object Jours {
     /** Au plus 14 jours par envoi : c'est la limite du serveur. */
     const val JOURS_PAR_ENVOI = 14
     const val FENETRE_MIN = 3
+    /** Le matin d'une pesée : de 4 h (inclus) à 12 h (exclu), heure du téléphone. */
+    const val MATIN_DEBUT = 4
+    const val MATIN_FIN = 12
     const val FENETRE_MAX = 30
 
     // Les types de phase de Health Connect (SleepSessionRecord.STAGE_TYPE_*),
@@ -164,9 +169,22 @@ object Jours {
                 poser(jour(d), ms.maxByOrNull { it.instant }!!.valeur)
             }
         }
+        // POIDS et MASSE GRASSE : la PREMIÈRE mesure du matin (4 h-12 h), à jeun
+        // et au lever, la seule comparable d'un jour à l'autre ; sans mesure du
+        // matin, la première du jour. La FC de repos reste la dernière valeur.
+        fun premierDuMatin(l: List<Mesure>, poser: (Jour, Mesure) -> Unit) {
+            for ((d, ms) in l.groupBy { date(it.instant) }) {
+                if (!dans(d)) continue
+                val matin = ms.filter { it.instant.atZone(zone).hour in MATIN_DEBUT until MATIN_FIN }
+                poser(jour(d), (if (matin.isNotEmpty()) matin else ms).minByOrNull { it.instant }!!)
+            }
+        }
         dernier(fcRepos) { j, v -> j.fcRepos = Math.round(v).toInt() }
-        dernier(poids) { j, v -> j.poids = Math.round(v * 10) / 10.0 }
-        dernier(masseGrasse) { j, v -> j.masseGrasse = Math.round(v * 10) / 10.0 }
+        premierDuMatin(poids) { j, m ->
+            j.poids = Math.round(m.valeur * 10) / 10.0
+            j.poidsHeure = m.instant.atZone(zone).format(HHMM)
+        }
+        premierDuMatin(masseGrasse) { j, m -> j.masseGrasse = Math.round(m.valeur * 10) / 10.0 }
         for ((d, ms) in vfcRmssd.groupBy { date(it.instant) }) {
             if (!dans(d)) continue
             val j = jour(d)
@@ -198,6 +216,7 @@ object Jours {
         j.vfc?.let { c += "\"vfc\":" + nombre(it) }
         j.vfcMethode?.let { c += "\"vfcMethode\":" + chaine(it) }
         j.poids?.let { c += "\"poids\":" + nombre(it) }
+        j.poidsHeure?.let { c += "\"poidsHeure\":" + chaine(it) }
         j.masseGrasse?.let { c += "\"masseGrasse\":" + nombre(it) }
         return "{" + c.joinToString(",") + "}"
     }

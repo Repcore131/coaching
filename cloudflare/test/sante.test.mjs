@@ -256,7 +256,7 @@ await test('lignes : heure d’été (mars) et d’hiver (octobre), jours de Par
   assert.equal(p['2026-10-15'].pas, 1200); assert.equal(p['2026-10-14'].pas, 300);
 });
 
-await test('lignes : virgule décimale, masse grasse en fraction, VFC moyenne en SDNN, dernier poids du jour', async () => {
+await test('lignes : virgule décimale, masse grasse en fraction, VFC moyenne en SDNN, première pesée du matin', async () => {
   const { jours, ignores } = lignesVersJours({
     pas: '2026-10-15T08:00:00+02:00;1000\n2026-10-15T09:00:00+02:00;2 500\nnimporte;quoi',
     poids: '2026-10-15T07:00:00+02:00;78,4\n2026-10-15T20:00:00+02:00;79,1',
@@ -265,10 +265,43 @@ await test('lignes : virgule décimale, masse grasse en fraction, VFC moyenne en
     fcRepos: '2026-10-15T09:00:00+02:00;55',
   });
   const j = jours['2026-10-15'];
-  assert.equal(j.pas, 3500); assert.equal(j.poids, 79.1); assert.equal(j.masseGrasse, 17.8);
+  assert.equal(j.pas, 3500); assert.equal(j.poids, 78.4); assert.equal(j.poidsHeure, '07:00'); assert.equal(j.masseGrasse, 17.8);
   assert.equal(j.vfc, 45); assert.equal(j.vfcMethode, 'sdnn'); assert.equal(j.fcRepos, 55); assert.equal(ignores, 1);
 });
 
+// ══ LE POIDS : LA PREMIÈRE PESÉE DU MATIN (05/10/2026) ═════════════════════
+await test('poids : trois pesées le même jour (07:10, 13:00, 21:00) → celle de 07:10, avec son heure', async () => {
+  const { jours } = lignesVersJours({ poids: '2026-10-15T21:00:00+02:00;81,4\n2026-10-15T07:10:00+02:00;80,0\n2026-10-15T13:00:00+02:00;80,9' });
+  assert.equal(jours['2026-10-15'].poids, 80.0);
+  assert.equal(jours['2026-10-15'].poidsHeure, '07:10');
+});
+await test('poids : sans pesée du matin (14:00, 20:00) → la première du jour ; deux matins → le plus tôt', async () => {
+  const a = lignesVersJours({ poids: '2026-10-15T20:00:00+02:00;81,0\n2026-10-15T14:00:00+02:00;80,6' }).jours['2026-10-15'];
+  assert.equal(a.poids, 80.6); assert.equal(a.poidsHeure, '14:00');
+  // 03:30 n'est pas un matin (avant 4 h) : 09:00 passe devant, et 05:00 devant 09:00.
+  const b = lignesVersJours({ poids: '2026-10-15T03:30:00+02:00;82\n2026-10-15T09:00:00+02:00;80,2\n2026-10-15T05:00:00+02:00;80,1' }).jours['2026-10-15'];
+  assert.equal(b.poids, 80.1); assert.equal(b.poidsHeure, '05:00');
+  // 12:00 pile n'est plus le matin.
+  const c = lignesVersJours({ poids: '2026-10-15T12:00:00+02:00;80,5\n2026-10-15T11:59:00+02:00;80,7' }).jours['2026-10-15'];
+  assert.equal(c.poids, 80.7);
+  // La masse grasse suit la même règle ; la FC de repos reste la dernière valeur.
+  const d = lignesVersJours({ masseGrasse: '2026-10-15T21:00:00+02:00;0,19\n2026-10-15T07:00:00+02:00;0,18',
+    fcRepos: '2026-10-15T07:00:00+02:00;50\n2026-10-15T21:00:00+02:00;58' }).jours['2026-10-15'];
+  assert.equal(d.masseGrasse, 18); assert.equal(d.fcRepos, 58);
+});
+await test('poidsHeure : HH:MM, seulement avec un poids ; un poids sans heure efface l’heure précédente', async () => {
+  assert.equal(nettoyerJour({ poids: 80, poidsHeure: '07:10' }, 'healthconnect').v.poidsHeure, '07:10');
+  const x = nettoyerJour({ poids: 80, poidsHeure: '7h10' }, 'healthconnect');
+  assert.equal(x.v.poidsHeure, undefined); assert.equal(x.ignores, 1);
+  const y = nettoyerJour({ pas: 100, poidsHeure: '07:10' }, 'healthconnect');
+  assert.equal(y.v.poidsHeure, undefined); assert.equal(y.ignores, 1);
+  const M = monde();
+  const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);
+  await envoyer(M, jeton, { v: 1, plateforme: 'android', source: 'healthconnect', envoye: T0, jours: { '2026-10-14': { poids: 80, poidsHeure: '07:10' } } });
+  await envoyer(M, jeton, { v: 1, plateforme: 'android', source: 'healthconnect', envoye: T0, jours: { '2026-10-14': { poids: 80.4 } } });
+  const j = M.F.lire('sante_sync/lea@t,fr/jours/2026-10-14');
+  assert.equal(j.poids, 80.4); assert.equal(j.poidsHeure, undefined);
+});
 await test('un envoi iPhone en lignes passe par la même validation', async () => {
   const M = monde();
   const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);

@@ -1170,7 +1170,7 @@ function blocPoidsCoach(user,depuis){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
+      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}${der.heure?' à '+der.heure.replace(':',' h '):''} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
       <span style="font-size:var(--fs-xl);font-weight:400;color:var(--text);font-family:var(--pile-titre);letter-spacing:1px">${_synNombre(der.kg)} kg</span>

@@ -1976,7 +1976,10 @@ function _recordWeight(dateStr,kg,marque){
   const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
-  _sanMarquer(currentUser.weightLog.find(e=>e.date===dateStr),marque);
+  const _e=currentUser.weightLog.find(e=>e.date===dateStr);
+  _sanMarquer(_e,marque);
+  // L'heure d'une pesée synchronisée ne vaut pas pour une saisie à la main.
+  if(_e&&!(marque&&marque.dataStatus==='sync')) delete _e.heure;
   const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
   currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
   currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
@@ -2001,6 +2004,7 @@ function serieWeight(user){
     const v=parseFloat(e.kg);
     if(isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) continue;
     parJour[e.date]={date:e.date,kg:v,source:'pesee'};
+    if(/^\d{2}:\d{2}$/.test(e.heure||'')) parJour[e.date].heure=e.heure;
   }
   return Object.values(parJour).sort((a,b)=>a.date<b.date?-1:1);
 }
