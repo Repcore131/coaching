@@ -21792,6 +21792,12 @@ async function testExercices(){
       if(!s) return _echec('pas de sélecteur');
       if([...s.options].map(o=>o.value).join()!==',harris,mifflin') return _echec('options');
       const e=_htmlEcartFormules(cibleTableur(c,{appliquerPlancher:false}));
+      // L'explication dit D'ABORD la formule réellement calculée (05/10/2026).
+      const tk={poids:80,taille:180,age:30,sexe:'M',mbSource:'katch',mbBrut:1850};
+      const ek=_htmlEcartFormules(tk), em=_htmlEcartFormules(Object.assign({},tk,{mbSource:'mifflin'})), eh=_htmlEcartFormules(Object.assign({},tk,{mbSource:'harris'}));
+      if(!/^Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée \(1.850 kcal\)/.test(ek)||!/ne servira que sans masse maigre/.test(ek)) return _echec('masse maigre : '+ek);
+      if(em.indexOf('Calcul actuel : Mifflin-St Jeor, ')!==0||!/Harris-Benedict donnerait/.test(em)||/masse maigre/.test(em)) return _echec('Mifflin : '+em);
+      if(eh.indexOf('Calcul actuel : Harris-Benedict, ')!==0||!/Mifflin-St Jeor donnerait/.test(eh)) return _echec('Harris : '+eh);
       return /écart de \d+ kcal/.test(e)&&/Formule du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
     // ── L'OBJECTIF DE L'ATHLÈTE CHANGE VRAIMENT SES CIBLES ──
     const _OBJa=(obj,o)=>Object.assign({id:'objA',email:'obja@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
