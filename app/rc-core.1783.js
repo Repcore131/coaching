@@ -58784,7 +58784,21 @@ function anatVerifEchelle(u,F,kGenou){
   const ratio=ANAT_ROTULE.part*F.stature/hG;
   const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
   if(ecartee) r.mesureEcartee=ecartee;
+  // LA CAUSE, QUAND ÇA DIVERGE : une photo en plongée écrase les jambes, et le
+  // genou tombe trop bas. Les points n'y sont pour rien.
+  if(r.statut==='divergence'){
+    const pv=_anatSafe(()=>anatPriseDeVue(F));
+    if(pv&&pv.sens) r.prise=pv;
+  }
   return r;
+}
+/** PURE. La prise de vue d'une vue de face (épaules, hanches, chevilles posées). */
+function anatPriseDeVue(F){
+  if(!F||!F.P2) return null;
+  const m=k=>{ const g=F.P2(k,'g'),d=F.P2(k,'d'); return (g&&d)?(g.y+d.y)/2:null; };
+  const e=m('epaule'),h=m('hanche'),c=m('cheville');
+  if(e==null||h==null||c==null) return null;
+  return priseDeVue(e,h,c);
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);
@@ -60651,6 +60665,14 @@ function _anatTexteBrut(f,res){
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
     return T;
   }
+  if(f.grise&&res&&res.echelle&&res.echelle.verif&&res.echelle.verif.prise){
+    const pl=res.echelle.verif.prise.sens==='plongee';
+    T.court='Longueurs en gris : photo prise '+(pl?'en plongée (téléphone trop haut ou trop près)':'en contre-plongée (téléphone trop bas)')+', à refaire.';
+    T.lecture='Sur cette photo, les jambes paraissent environ '+res.echelle.verif.prise.pct+' % plus '+(pl?'courtes':'longues')+' qu’elles ne sont par rapport au buste : c’est la perspective, pas la morphologie, et aucun déplacement de point ne la corrige. Aucune longueur n’est classée.'
+      +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
+    T.verifier='Refaire la photo : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.';
+    return T;
+  }
   if(f.grise){
     T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure (sommet du crâne, talons et genoux à vérifier).';
     T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
@@ -61521,7 +61543,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
@@ -63068,7 +63090,12 @@ function _htmlAnat(c){
         :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
       +'</span></div>';
   })():'';
-  const alerteEch=alerteRotule+((ver&&ver.statut==='divergence')
+  const alertePrise=(ver&&ver.statut==='divergence'&&ver.prise)
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Photo prise '+(ver.prise.sens==='plongee'?'en plongée':'en contre-plongée')+'</b> : le téléphone était trop '
+      +(ver.prise.sens==='plongee'?'haut ou trop près':'bas')+'. Les jambes y paraissent environ '+ver.prise.pct+' % plus '
+      +(ver.prise.sens==='plongee'?'courtes':'longues')+' qu’elles ne sont, par rapport au buste. <b>Les points ne sont pas en cause</b>, inutile de les déplacer : '
+      +'les longueurs restent en gris sur cette photo. À refaire : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.</span></div>':'';
+  const alerteEch=alerteRotule+(alertePrise?alertePrise:(ver&&ver.statut==='divergence')
     ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
       +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
       +'</span></div>':'');
@@ -75348,6 +75375,31 @@ function posesGenre(prefix){
 //   placement. Aucune mesure, aucune lecture du corps ; la photo passe par le
 //   moteur de pose SUR L'APPAREIL, et rien d'autre n'est gardé que le verdict
 //   (vert / orange) et les codes des consignes, pour le coach.
+// LA PHOTO PRISE EN PLONGÉE (Kevin, 05/10/2026). Téléphone tenu trop haut et
+// trop près : les jambes, plus loin de l'objectif que le buste, sortent
+// écrasées. Sur la fiche qui a révélé le défaut, elles faisaient 38 % de la
+// hauteur du corps au lieu de 50 %, le genou tombait à 19 % au lieu de 28 %,
+// et l'analyse accusait les points (« 42,9 % d'écart ») alors qu'ils étaient
+// justes. On le lit sur un rapport que la distance ne change pas : hauteur
+// hanches → chevilles sur hauteur épaules → hanches. Il vaut 1,6 sur un corps
+// d'aplomb (de Leva), 1,4 sur les points bruts du moteur ; sous 1,25 la photo
+// est en plongée, sous 1,12 elle n'est plus mesurable. Au-dessus de 2,1, le
+// téléphone était trop bas (contre-plongée).
+const PRISE_VUE=Object.freeze({PLONGEE:1.25,PLONGEE_NETTE:1.12,CONTRE:2.1,REF:1.6});
+/**
+ * PURE. @param {number} yEp @param {number} yHa @param {number} yCh hauteurs
+ * (y vers le bas) du milieu des épaules, des hanches et des chevilles.
+ * @returns {null|{r:number,sens:'plongee'|'contre'|null,net:boolean,pct:number}}
+ */
+function priseDeVue(yEp,yHa,yCh){
+  const tr=Number(yHa)-Number(yEp), ja=Number(yCh)-Number(yHa);
+  if(!(tr>0)||!(ja>0)) return null;
+  const r=ja/tr, P=PRISE_VUE;
+  return {r:Math.round(r*100)/100,
+    sens:r<P.PLONGEE?'plongee':(r>P.CONTRE?'contre':null),
+    net:r<P.PLONGEE_NETTE,
+    pct:Math.round(Math.abs(1-r/P.REF)*100)};
+}
 const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,ROT_ORANGE:8,ROT_ROUGE:25,PROFIL_MIN:35,
   CLES:Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28]),
   MSG:Object.freeze({
@@ -75359,6 +75411,8 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
     rotation:'Tourne-toi bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     rotationDos:'Dos bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     profil:'Mets-toi bien de profil : l’épaule vers le téléphone.',
+    plongee:'Le téléphone est trop haut ou trop près : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
+    contre:'Le téléphone est trop bas ou penché vers le haut : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
     sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
     clair:'Photo trop claire : évite le soleil direct ou le flash.',
     ok:'Photo exploitable : tout est dans le cadre.'})});
@@ -75411,6 +75465,16 @@ function photoControle(raw,vue){
       // ⚠ JAMAIS ROUGE : la profondeur du moteur est bruitée — une photo de face
       //   sortait « à reprendre ». Au-delà de 8°, une réserve, pas un refus.
       else if(rot>C.ROT_ORANGE) dire(vue==='back'?'rotationDos':'rotation',false);
+    }
+  }
+  // La prise de vue : plongée ou contre-plongée. Rouge quand elle est nette,
+  // la photo ne se mesure plus ; une réserve sinon.
+  {
+    const hg=P(23), hd=P(24), cg=P(27), cd=P(28);
+    if(eg&&ed&&hg&&hd&&cg&&cd&&[eg,ed,hg,hd,cg,cd].every(q=>q.v>=0.5)){
+      const pv=priseDeVue((eg.y+ed.y)/2,(hg.y+hd.y)/2,(cg.y+cd.y)/2);
+      if(pv&&pv.sens==='plongee') dire('plongee',pv.net);
+      else if(pv&&pv.sens==='contre') dire('contre',false);
     }
   }
   // La lumière.

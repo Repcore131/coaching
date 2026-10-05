@@ -47297,6 +47297,43 @@ async function testExercices(){
       const h=String(_htmlAnat);
       if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
       return true;})());
+    // La photo prise en plongée : dite à l'envoi, et dite au coach (05/10/2026).
+    ok('PHOTO EN PLONGÉE : REFUSÉE À L’ENVOI QUAND ELLE EST NETTE, ET LE COACH LIT LA VRAIE CAUSE, PAS « VÉRIFIE LES POINTS »',(()=>{
+      if(typeof priseDeVue!=='function') return _echec('priseDeVue n’existe pas');
+      const n=priseDeVue(0.25,0.52,0.90);
+      if(!n||n.sens!==null) return _echec('une photo d’aplomb est signalée : '+JSON.stringify(n));
+      const pl=priseDeVue(325,498,680);   // la fiche de Kevin : 1,05
+      if(!pl||pl.sens!=='plongee'||!pl.net) return _echec('la fiche de Kevin : '+JSON.stringify(pl));
+      if(priseDeVue(0.25,0.45,0.90).sens!=='contre') return _echec('contre-plongée non vue');
+      if(priseDeVue(0.5,0.5,0.9)!==null) return _echec('un tronc nul ne se lit pas');
+      // À L'ENVOI, sur les points du moteur.
+      const brut=()=>{ const pts=Array.from({length:33},()=>[0.5,0.1,1]);
+        const P={0:[0.5,0.12],11:[0.42,0.25],12:[0.58,0.25],13:[0.38,0.38],14:[0.62,0.38],15:[0.36,0.5],16:[0.64,0.5],
+          23:[0.45,0.56],24:[0.55,0.56],25:[0.45,0.74],26:[0.55,0.74],27:[0.45,0.88],28:[0.55,0.88],29:[0.45,0.93],30:[0.55,0.93],31:[0.44,0.95],32:[0.56,0.95]};
+        for(const i in P) pts[i]=[P[i][0],P[i][1],1];
+        return {ok:true,w:1000,h:1500,pts,z:Array(33).fill(0),lum:120}; };
+      const v=photoControle(brut(),'face');
+      if(v.etat!=='rouge'||v.codes.indexOf('plongee')<0) return _echec('à l’envoi : '+JSON.stringify(v));
+      if(!/hauteur de hanche/.test(v.raisons.join(' '))) return _echec('la consigne ne dit pas où poser le téléphone');
+      if(/jambe|court|morpho/i.test(PHOTO_CTL.MSG.plongee+PHOTO_CTL.MSG.contre)) return _echec('la consigne parle du corps, pas de la prise de vue');
+      // CÔTÉ COACH : le bas du corps écrasé de 38 %, comme vu d'en haut.
+      const pts=anatGabarit(1000,1500,'face');
+      const sol=pts.talon_l[1], ecr={};
+      for(const k of ['hanche','genou','cheville']) for(const c of ['_l','_r']){
+        const q=pts[k+c]; ecr[k+c]=[q[0],sol-(sol-q[1])*0.62,1]; }
+      const r=anatMesures(_anatGab(ecr),_anatDossier());
+      const ver=r.echelle.verif;
+      if(!ver||ver.statut!=='divergence') return _echec('la plongée ne fait pas diverger : '+JSON.stringify(ver));
+      if(!ver.prise||ver.prise.sens!=='plongee') return _echec('la cause n’est pas lue : '+JSON.stringify(ver.prise));
+      const tj=anatTexte(r.fiches.find(x=>x.cle==='jambes'),r);
+      if(!/plongée/.test(tj.court)||/genoux à vérifier/.test(tj.court)||!/hauteur de hanche/.test(tj.verifier)) return _echec('la fiche accuse encore les points : '+tj.court);
+      const h=String(_htmlAnat);
+      if(h.indexOf('Les points ne sont pas en cause')<0) return _echec('le bandeau ne disculpe pas les points');
+      // Des genoux mal placés sur une photo d'aplomb : toujours l'ancien bandeau.
+      const dy=0.05*ANAT_ROTULE.part*0.86;
+      const r2=anatMesures(_anatGab({genou_l:[pts.genou_l[0],pts.genou_l[1]-dy,1],genou_r:[pts.genou_r[0],pts.genou_r[1]-dy,1]}),_anatDossier());
+      if(r2.echelle.verif.prise) return _echec('un genou mal placé passe pour une plongée');
+      return true;})());
     ok('ANALYSE MORPHO : GENOUX DÉPLACÉS DE 5 % : BANDEAU, LONGUEURS EN GRIS',(()=>{
       const pts=anatGabarit(1000,1500,'face');
       const dy=0.05*ANAT_ROTULE.part*0.86;   // 5 % de la hauteur du genou, en fraction de la photo
