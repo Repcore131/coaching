@@ -1,6 +1,6 @@
-# RepCore — Influenceurs avec email (2K–400K)
+# RepCore — Influenceurs avec email direct (2K–400K)
 
-108 influenceurs francophones salle & muscu, **tous avec un email public** (aucun inventé, source indiquée). Version PDF : `RepCore-Base-Influenceurs.pdf`. Recherche du 05/10/2026.
+104 influenceurs francophones salle & muscu, **tous avec un email public direct** (aucune agence, aucun email inventé, source indiquée). Version PDF : `RepCore-Base-Influenceurs.pdf`. Recherche du 05/10/2026.
 
 ## Athlètes TEVEO (France) (20)
 
@@ -15,7 +15,7 @@
 | Vincent | @tounna199 | 72K | Athlète fitness, code Tounna10 | Tounna199.pro@gmail.com | Bio Insta (Modash) |
 | Lynda | @little__beaast | 74K | Fondatrice Little BEAST (fitness femmes) | contact@littlebeast.fr ⚠ à vérifier | littlebeast.fr/mentions-legales (adresse société) |
 | Laura Spohr | @laulaupoussedelafonte | 57K | Salle, fessiers, perte de gras | laulaupoussedelafonte@gmail.com | linktr.ee/laulaupoussedelafonte |
-| Elodie Vanbierwliet | @elo_nutryfit | 52K | Diététicienne, perte de gras | Elonutryagent@gmail.com | linktr.ee/Elonutryfit (lien « collab ») |
+| Elodie Vanbierwliet | @elo_nutryfit | 52K | Diététicienne, perte de gras | elonutryfit@gmail.com | linktr.ee/Elonutryfit |
 | Cam Baudroit | @_beglees | 38K | Fitgirl, salle, ambassadrice TEVEO + ESN | camilleguerin.dsgn@gmail.com ⚠ à vérifier | linktr.ee/_beglees (nom différent sur l'adresse) |
 | Kenya Scandella | @kenyascandella | 22K | Salle / mindset | kenya.scandella06@gmail.com | linktr.ee/kenyascandella |
 | Pauline Pichard | @pauline.pichard | 21K | Fitness, code FITBYPAU | Pauline.pichard1@outlook.com | Bio TikTok + bio Insta (Modash) |
@@ -27,17 +27,14 @@
 | Esther Laurent | @esther_brooks99 | 11K | Sport / UGC | esther180715@hotmail.com ⚠ à vérifier | Bio Insta (Modash), adresse d'apparence perso |
 | Julia Allain-Schöning | @yu.arefit | 5,7K (21K TikTok) | Powerlifting, coach BPJEPS | yu.arefit@hotmail.com | linktr.ee/yu.arefit |
 
-## Influenceuses muscu (21)
+## Influenceuses muscu (18)
 
 | Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
 |---|---|---|---|---|---|
 | Clémentine «Fit by Clem» Chaillou | @fitbyclem | ~296K | Coach diplômée, muscu / fitness | contact@fitbyclem.fr | fitbyclem.fr/mentions-legales |
-| Mel | @lagirlmel_ | 141K | Salle, Gymshark / AYBL | mel@migosmedia.com | Bio Insta (Modash), agence |
-| Zoé Amalys | @zoeamalys | 119K | Programmes muscu | zoe@beyond.media | YouTube À propos, agence |
 | Morghane | @morghane.pl | 107K | Salle, coach diplômée (AYBL) | morghane.pl@gmail.com | linktr.ee/morghane.pl |
 | Karen | @karenn_life | 109K | CrossFit / food, Marseille, Nutripure | karennlife@outlook.fr | Bio Insta (Modash) |
 | Flora | @flora_fitmind | 97K | Workouts + mindset, Gymshark | florafitmind@gmail.com | linktr.ee/flora_fitmind |
-| Margot Lambert | @margot_fit | 53K | Programmes fessiers / muscu | juliaecbeditor@gmail.com ⚠ à vérifier | YouTube À propos (semble être son monteur) |
 | Chelly | @chelly__fit | ~22K | « Musculation sérieuse », coaching | Chellyfitcoaching@gmail.com ⚠ à vérifier | Bio Insta (extrait moteur de recherche) |
 | Léna P. | @lenaa.psl | 21K | Fitness / lifestyle, Aix-Marseille | Contact.lenapsl@gmail.com | Bio Insta (Modash) |
 | Justine | @lifestyle_byju | 14K | Lifestyle / fitness, Paris | justine.ppro@hotmail.com | Bio Insta (Modash) |
@@ -112,12 +109,11 @@
 | «StrongApe» | @strongapefitness | IG ? (2,1K YouTube) | Prépa physique (BE) | strongapefitness@outlook.com | YouTube À propos |
 | Alpha Keita | @iamelkapo | IG ? | Champion de France junior Classic Physique | Alphakeita715@gmail.com | YouTube À propos |
 
-## Francophonie hors France (langue à vérifier) (13)
+## Francophonie hors France (langue à vérifier) (12)
 
 | Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
 |---|---|---|---|---|---|
-| Cindy Perron | @cindy_perron | 42K | Lifestyle / wellness / fitness (Québec) | cindy.1999@live.ca | Bio Insta (Modash) — agence : mliviadufresne@jinfluence.biz |
-| Aleksa Gagovic | @aleksa_gagovic_ | 23K | Fitness hommes (Montréal) | mliviadufresne@jinfluence.biz | Bio Insta (Modash), agence |
+| Cindy Perron | @cindy_perron | 42K | Lifestyle / wellness / fitness (Québec) | cindy.1999@live.ca | Bio Insta (Modash) |
 | Alex Blais | @tite_boule | 21K | Athlète CrossFit (Montréal) | titeboule.collabs@gmail.com | Bio Insta (Modash) |
 | Hicham Rabeh | @hichamfitness | 108K | Coach (Maroc, bio en français) | hicham.rabeh@gmail.com | Bio Insta (Modash) |
 | Niama Elkettani | @prettymiyama | 61K | Beauté / fitness, égérie Fitness Park Maroc | niama.elkettani007@gmail.com | Bio Insta (Modash) |
