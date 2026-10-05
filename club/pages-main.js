@@ -54,7 +54,8 @@ PAGES.login = {
     // Mode local : e-mail + code personnel. Les profils de demonstration (sans
     // code) restent accessibles d'un clic.
     const demo = Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b)));
-    return `<div class="auth"><div class="auth-card">${head}<h1 style="font-size:26px">Connexion</h1>
+    const img = (window.PARKPULSE_ASSETS || {}).login;
+    return `<div class="auth split">${img ? `<div class="auth-visual" style="--login:url('${img}')"><div class="auth-claim"><span>Chaque contrat compte.</span><span>Chaque client aussi.</span></div></div>` : ''}<div class="auth-side"><div class="auth-card">${head}<h1 style="font-size:30px">Connexion</h1>
       <form id="lgc" class="grid" style="margin-top:14px">
         <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required autocomplete="username" value="${esc(safeLS.get('parkpulse.lastEmail') || '')}"></label>
         <label class="field"><span>Code d’accès</span><input class="input" name="code" id="lg-code" required autocomplete="current-password" placeholder="FP-XXXX-XXXX-XXXX" style="letter-spacing:.08em;text-transform:uppercase"></label>
@@ -62,7 +63,7 @@ PAGES.login = {
       </form>
       <p class="muted small" style="margin-top:12px">Votre code vous est remis par le créateur ou un manager du club. Il est personnel : ne le partagez pas.</p>
       ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
-      ${S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !Object.keys(S.entries).length ? '<button class="btn" style="width:100%;margin-top:16px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}</div></div>`;
+      ${S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !Object.keys(S.entries).length ? '<button class="btn" style="width:100%;margin-top:16px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}</div></div></div>`;
   },
 };
 document.addEventListener('submit', async e => {
@@ -184,7 +185,8 @@ function dashObjectives(st, r, subject, who) {
 ACTIONS.closeTip = () => setPref('tipDrag', false);
 function kpiCard(x, exp) {
   const { k, real, target, pct, earned, status } = x;
-  return `<div class="card kpi" draggable="true" data-kpi="${k.id}">
+  const hl = healthOf(pct != null && exp ? pct / exp : null);
+  return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
     <div class="row"><span style="font-size:18px">${k.emoji || ''}</span><b>${esc(k.label)}</b>${k.required ? '<span class="badge" title="KPI obligatoire du classement">👑</span>' : ''}<span class="spacer"></span><span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span></div>
     <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls}" style="font-size:18px">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
@@ -364,7 +366,7 @@ PAGES.leaderboard = {
         <div class="tabs" style="margin-top:-4px">${[['', 'Global'], ...kpiList().filter(x => x.points > 0).map(x => [x.id, x.label])].map(([v, l]) => `<button data-act="ui" data-key="lbKpi" data-val="${v}" class="${kpi === v ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>
         ${rk.length ? `<div class="podium">${[top[1], top[0], top[2]].map((x, i) => x ? `<div class="step p${[2, 1, 3][i]}">${avatar(x.u, 'lg')}<div style="margin-top:6px"><b>${esc(fullName(x.u))}</b></div><div class="muted small">${val(x)}</div><div class="block">${[2, 1, 3][i]}</div></div>` : '<div></div>').join('')}</div>
         ${meRow ? `<div class="banner-me">Vous êtes #${meRow.rank} ${period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois-ci'} — ${val(meRow)}</div>` : ''}
-        ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${t.icon}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts">${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
+        ${rk.slice(3).map(x => `<div class="rank-row ${x.u.id === ME.id ? 'me-row' : ''}"><div class="rank-n">${x.rank}</div><div class="row">${avatar(x.u)}<div><b>${esc(fullName(x.u))}</b><div class="small">${trophies(x.u.id).slice(-4).map(t => `<span title="${esc(t.label)}">${t.icon}</span>`).join('')}</div></div></div><div>${progressBar(x.score)}</div><b class="num pts"><i class="hdot ${healthOf(x.score != null && x.st.expected ? (k ? x.score : x.score) / Math.max(x.st.expected, 0.01) : null).cls}"></i> ${val(x)}</b></div>`).join('')}` : '<div class="empty">Aucun membre actif.</div>'}
         <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires 👑.'}</p></div>`;
     }
     const atMode = UI.atMode || 'score';

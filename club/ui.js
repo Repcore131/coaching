@@ -141,6 +141,7 @@ function shell(route, inner) {
   return `<div class="shell" id="shell">
     <aside class="side">
       <div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>
+      ${(window.PARKPULSE_ASSETS || {}).logo ? `<div class="club-logo"><img src="${window.PARKPULSE_ASSETS.logo}" alt="Fitness Park"></div>` : ''}
       <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : `<div class="club-name">${esc(CLUB.name)}</div>`}</div>
       <nav class="nav">${nav}</nav>
       <div class="side-foot nav">
@@ -153,7 +154,7 @@ function shell(route, inner) {
     <main class="main">
       <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>
         <b class="title" style="font-size:17px">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
-        <div class="countdown" id="countdown"></div></div>
+        <div class="countdown" id="countdown"></div><button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
       <div class="page page-${route}">${inner}</div>
     </main>
     ${tabBar(route)}

@@ -112,6 +112,14 @@ function todoList(limit = 6) {
 }
 
 // ── Accueil ───────────────────────────────────────────────────────────────
+const ASSET = k => (window.PARKPULSE_ASSETS || {})[k] || null;
+function clubWeather(mk) {
+  // météo du club = la pire projection des paliers collectifs
+  const keys = Object.keys(paliersFor(CLUB.id, mk)); if (!keys.length) return HEALTH.none;
+  let worst = HEALTH.good;
+  keys.forEach(k => { const s = palierState(CLUB.id, mk, k); if (!s) return; const dayNow = Number(today().slice(8)); const proj = s.real / Math.max(1, dayNow) * daysIn(mk); const t = s.tiers.filter(x => proj >= x.target).length; const h = t === s.tiers.length ? HEALTH.good : t ? HEALTH.watch : HEALTH.alert; if (h === HEALTH.alert || (h === HEALTH.watch && worst === HEALTH.good)) worst = h; });
+  return worst;
+}
 PAGES.home = {
   title: 'Accueil',
   render() {
@@ -122,35 +130,54 @@ PAGES.home = {
     const hour = new Date().getHours();
     const hello = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
     const daysLeft = Math.max(1, daysIn(mk) - Number(today().slice(8)) + 1);
-    // mission du jour : ce qu'il faut faire aujourd'hui pour tenir MES objectifs
     const mission = st.rows.filter(x => x.target > 0 && x.real < x.target && ['contrats', 'avis', 'nutrition', 'accessoires'].includes(x.k.id)).map(x => {
       const per = (x.target - x.real) / daysLeft; const doneToday = sumRange(CLUB.id, ME.id, x.k.id, today(), today());
       return { k: x.k, per: x.k.unit === 'qty' ? Math.max(1, Math.ceil(per)) : Math.ceil(per), done: doneToday };
     });
-    const cockpit = isManager() ? managerCockpit() : '';
     const palierKeys = Object.keys(paliersFor(CLUB.id, mk));
-    return `<div class="home">
-      <div class="home-hero"><div><div class="home-hello">${hello} ${esc(ME.first)}</div><h1 class="home-title">${MOIS[Number(mk.slice(5)) - 1]} <span>${mk.slice(0, 4)}</span></h1></div>
-        <div class="home-badges">${me && me.score != null ? `<a class="hb" href="#/leaderboard"><b>#${me.rank}</b><span>classement</span></a>` : ''}<div class="hb"><b>${acc.streak}</b><span>jour${acc.streak > 1 ? 's' : ''} de suite</span></div>${st.max ? `<a class="hb" href="#/dashboard"><b>${fmtP(st.earned / st.max)}</b><span>mes objectifs</span></a>` : ''}</div></div>
-      ${cockpit}
-      <section class="block"><div class="block-h"><h2>Paliers de l’équipe</h2>${isManager() ? '<a class="btn ghost sm" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>
-        <div class="card paliers">${palierKeys.map(k => palierBlock(CLUB.id, mk, k, true)).join('') || '<p class="muted">Aucun palier collectif ce mois-ci.</p>'}</div></section>
-      <section class="block"><div class="block-h"><h2>Saisir</h2><span class="muted small">Un toucher = enregistré</span></div>${quickPad()}</section>
-      ${mission.length ? `<section class="block"><div class="block-h"><h2>Ma mission du jour</h2><span class="muted small">pour tenir mes objectifs</span></div><div class="mission">${mission.map(m => `<div class="mission-i ${m.done >= m.per ? 'done' : ''}"><b>${m.done >= m.per ? '✓' : m.k.unit === 'eur' ? fmtE(m.per) : m.per}</b><span>${esc(m.k.label)}</span><small>${m.k.unit === 'eur' ? fmtE(m.done) : fmtN(m.done)} fait aujourd’hui</small></div>`).join('')}</div></section>` : ''}
-      <section class="block"><div class="block-h"><h2>Mes relances</h2><a class="btn ghost sm" href="#/relances">Tout voir</a></div><div class="card" style="padding:6px 14px">${todoList()}</div></section>
-    </div>`;
+    const weather = clubWeather(mk);
+    const myPct = st.max ? st.earned / st.max : null;
+    const myHealth = healthOf(myPct != null && st.expected ? myPct / st.expected : null);
+    const banner = ASSET('banner');
+    const bigKpis = palierKeys.slice(0, 2).map(k => { const s = palierState(CLUB.id, mk, k); if (!s) return ''; return `<div class="bk"><span>${esc(S.kpis[k].label)} · équipe</span><b>${fmtN(s.real)}</b><small>${s.next ? `P${s.reached + 1} à ${fmtN(s.next.target)} · encore ${fmtN(Math.ceil(s.next.target - s.real))}` : 'tous les paliers atteints'}</small></div>`; }).join('');
+    const top5 = rk.filter(x => x.score != null).slice(0, 5);
+    const manager = isManager();
+    const recovRows = manager && typeof recovList === 'function' ? (() => { const out = []; for (let i = 3; i >= 0; i--) { const m = addMonths(mk, -i); const L = recovList(CLUB.id, m + '-01', `${m}-${daysIn(m)}`); const parts = {}; L.forEach(x => { parts[x.canal] = (parts[x.canal] || 0) + x.amount; }); out.push({ label: MOIS_C[Number(m.slice(5)) - 1], parts, total: L.reduce((a, x) => a + x.amount, 0) }); } return out; })() : [];
+    return `<div class="home2">
+      <section class="banner" ${banner ? `style="--banner:url('${banner}')"` : ''}><div class="banner-stripe"></div>
+        <div class="banner-in"><div class="eyebrow light">${esc(CLUB.name)} · ${monthLabel(mk)}</div>
+          <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
+          <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
+          <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${acc.streak} jour(s) de suite</small></a>` : ''}</div></div></section>
+      ${manager ? managerCockpit() : ''}
+      <div class="g12">
+        <div class="card col8">${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</div>
+        <div class="card col4 paliers"><div class="race-h"><div><div class="eyebrow light">Prime d’équipe</div><h3>Paliers du mois</h3></div><span class="spacer"></span>${manager ? '<a class="btn ghost sm light" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>${palierKeys.map(k => palierBlock(CLUB.id, mk, k, false)).join('') || '<p class="muted">Aucun palier collectif.</p>'}</div>
+        <div class="card col5"><div class="race-h"><div><div class="eyebrow">Un toucher = enregistré</div><h3>Saisir</h3></div></div>${quickPad()}</div>
+        <div class="card col3"><div class="race-h"><div><div class="eyebrow">Mes objectifs</div><h3>Ma progression</h3></div></div>
+          <div class="center">${ring(myPct, { label: fmtP(myPct), sub: 'des points', color: myHealth.color })}${healthChip(myHealth)}</div>
+          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? '✓' : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus 👏</p>'}</div>
+        <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Top 5</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
+          ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><i class="hdot ${h.cls}" title="${h.label}"></i><b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>
+        <div class="card ${manager ? 'col6' : 'col12'}"><div class="race-h"><div><div class="eyebrow">À mon nom</div><h3>Mes relances</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/relances">Tout voir</a></div>${todoList(5)}</div>
+        ${manager ? `<div class="card col3"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, mk)}</div>
+        <div class="card col3"><div class="race-h"><div><div class="eyebrow">Tous canaux</div><h3>Impayés récupérés</h3></div></div>${stackRows(recovRows, Object.entries(RECOV_CHANNELS).map(([key, c]) => ({ key, label: c.label, color: c.color })))}</div>` : ''}
+      </div></div>`;
   },
 };
 ACTIONS.goPaliers = () => { UI.memTab = 'paliers'; location.hash = '#/members'; };
 function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;
-  const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0); const dunTot = dun.reduce((s, c) => s + Number(c.balance), 0); const dunNobody = dun.filter(c => !dunOf(c).ownerId).length;
-  const team = clubMembers(CLUB.id).filter(u => u.role !== 'createur');
+  const dun = dunRows(CLUB.id).filter(c => Number(c.balance) > 0); const dunTot = dun.reduce((s, c) => s + Number(c.balance), 0); const dunNobody = dun.filter(c => !dunOf(c).ownerId).length; const dunDueN = dun.filter(dunDue).length;
+  const team = clubMembers(CLUB.id);
   const silent = team.filter(u => !Object.values(S.entries).some(e => e.userId === u.id && e.date === today() && e.source === 'manual'));
-  return `<section class="block"><div class="block-h"><h2>À traiter aujourd’hui</h2><span class="muted small">vue manager</span></div><div class="cockpit">
-    <a class="ck ${urgent ? 'alarm' : res.length ? 'hot' : ''}" href="#/resiliations"><span>Résiliations</span><b>${res.length}</b><small>${urgent} à J-7 · ${noOwner} sans responsable</small></a>
-    <a class="ck ${dunNobody ? 'hot' : ''}" href="#/impayes"><span>Impayés en cours</span><b>${fmtE(dunTot)}</b><small>${dun.length} dossiers · ${dunNobody} sans responsable</small></a>
-    <a class="ck ${silent.length ? 'hot' : ''}" href="#/members"><span>Sans saisie aujourd’hui</span><b>${silent.length}/${team.length}</b><small>${silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi'}</small></a></div></section>`;
+  const lvl = (bad, warn) => bad ? 'h-alert' : warn ? 'h-watch' : 'h-good';
+  const tile = (href, l, cls, label, value, sub) => `<a class="ck2 ${cls}" href="${href}"><div class="ck2-h"><span>${label}</span><i class="hdot ${cls}"></i></div><b>${value}</b><small>${sub}</small><em>${l}</em></a>`;
+  return `<div class="cockpit2">
+    ${tile('#/resiliations', 'Traiter', lvl(urgent, noOwner), 'Résiliations à traiter', res.length, `${urgent} à J-7 · ${noOwner} sans responsable`)}
+    ${tile('#/impayes', 'Relancer', lvl(dunNobody > 2, dunNobody || dunDueN), 'Impayés en cours', fmtE(dunTot), `${dun.length} dossiers · ${dunDueN} à relancer aujourd’hui`)}
+    ${tile('#/members', 'Voir', lvl(silent.length > team.length / 2 && new Date().getHours() >= 15, silent.length), 'Sans saisie aujourd’hui', `${silent.length}/${team.length}`, silent.slice(0, 3).map(u => esc(u.first)).join(', ') || 'toute l’équipe a saisi')}
+  </div>`;
 }
 
 // ── Relances (onglet du téléphone) ────────────────────────────────────────

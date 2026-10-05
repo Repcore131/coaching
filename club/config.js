@@ -28,3 +28,13 @@ window.PARKPULSE_ACCOUNTS = [
   { id: 'kg-createur', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'createur', salt: 'c1e2c0f885e88133', codeHash: '18c5a02277b8bab8d72fa5eb511ae202b15025f066067d09208c3c4210c7b358' },
   { id: 'kg-manager', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'manager', salt: 'd8a29558ba1fbce4', codeHash: '223ecb32cf76b5fe1560af2119eaf86285531e09858aee8b5f59c862142e7440' },
 ];
+
+// ══ VISUELS ═══════════════════════════════════════════════════════════════
+// Images d'ambiance (Canva) et logo officiel du club. Pour passer en haute
+// définition : exporter les images depuis Canva et remplacer les fichiers de
+// club/assets/ sous le même nom. logo : null pour n'afficher que Fit Pulse.
+window.PARKPULSE_ASSETS = {
+  banner: 'assets/hero-banner.jpg',
+  login: 'assets/hero-login.jpg',
+  logo: 'assets/logo-fitness-park.svg',
+};
