@@ -109,3 +109,25 @@ substitution lève à mi-parcours ; la suite étant un seul `try`, tout ce qui
 suivait ne s'exécutait plus. Mesuré : **2 117** tests joués sans ce
 chargement, **3 729** avec. 1 612 assertions passaient pour absentes, et un
 lot pouvait en casser sans que rien ne l'indique.
+
+## La fumée des pages
+
+```bash
+node scripts/verif/fumee-pages.mjs [http://127.0.0.1:8799] [9223]
+```
+
+Charge `/`, `/app/` (sans compte, puis l'accueil d'un athlète de
+démonstration), `/i/`, `/p/`, `/c/`, `/a/` et `/maj/`, en 390×844 et 1280×800,
+à Paris et à la Martinique : 32 chargements, chacun sur un stockage vide et
+réseau extérieur coupé. Sortie 1 sur une exception non rattrapée, une
+ressource du site en 4xx/5xx (hors `EXCEPTIONS` du script : `favicon.ico`,
+images à repli) ou un texte visible contenant NaN, undefined, Infinity ou
+[object Object] — sans égard à la casse, car un titre en majuscules CSS
+s'affiche « UNDEFINED ».
+
+Contre-épreuve du 05/10/2026 : « Tes '+undefined+' missions » dans l'accueil
+de l'athlète → 4 échecs (2 tailles × 2 fuseaux), sortie 1.
+
+Joué par `suite.yml` (chaque push) et `firebase.yml` (avant « Deployer »), avec
+`banniere-geometrie.mjs` et les règles sur l'émulateur
+(`firebase emulators:exec --only database --project demo-repcore`).

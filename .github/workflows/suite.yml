@@ -117,3 +117,18 @@ jobs:
           SUITE_ATTENDUS: scripts/verif/echecs-attendus.json
         # La fenetre (412x4000, mobile) est fixee par suite.mjs lui-meme (lot 51).
         run: timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
+      # LES MÊMES CONTRÔLES QUE LA LIVRAISON (firebase.yml), À CHAQUE PUSH ET PR
+      # (05/10/2026) : sans eux ici, une page qui lève ou un « undefined » à
+      # l'écran ne se verrait qu'au moment de livrer main.
+      - name: Fumée des pages
+        run: timeout 900 node scripts/verif/fumee-pages.mjs "http://127.0.0.1:8799" 9223
+
+      - name: Géométrie de la bannière
+        run: timeout 300 node scripts/verif/banniere-geometrie.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
+      - name: Règles (émulateur)
+        run: |
+          npm install -g firebase-tools
+          firebase emulators:exec --only database --project demo-repcore \
+            "node cloudflare/test/regles-amis.emu.mjs && node cloudflare/test/regles-evenements.emu.mjs && node cloudflare/test/regles-sante.emu.mjs"

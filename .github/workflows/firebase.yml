@@ -246,6 +246,37 @@ jobs:
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/app/index.html >/dev/null && break; sleep 0.5; done
           timeout 1800 node scripts/verif/suite.mjs "http://127.0.0.1:8799/app/index.html" 9223
 
+      # LA FUMÉE DES PAGES (05/10/2026) : /, /app/ (sans compte et accueil de
+      # l'athlète), /i/, /p/, /c/, /a/, /maj/, en 390×844 et 1280×800, à Paris et
+      # à la Martinique. Rouge sur une exception, une ressource du site en
+      # 4xx/5xx (hors exceptions documentées dans le script) ou un « undefined »,
+      # « NaN », « Infinity », « [object Object] » visible. Le serveur et Chrome
+      # de l'étape précédente servent encore ; relancés s'ils manquent.
+      - name: Fumée des pages
+        run: |
+          curl -sf http://127.0.0.1:8799/index.html >/dev/null || { python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 & sleep 2; }
+          if ! curl -sf http://127.0.0.1:9223/json/version >/dev/null; then
+            google-chrome --headless=new --no-sandbox --disable-gpu --no-first-run \
+              --user-data-dir="$RUNNER_TEMP/chrome-fumee" --remote-debugging-port=9223 about:blank >/dev/null 2>&1 &
+            for i in $(seq 1 30); do curl -sf http://127.0.0.1:9223/json/version >/dev/null && break; sleep 1; done
+          fi
+          timeout 900 node scripts/verif/fumee-pages.mjs "http://127.0.0.1:8799" 9223
+
+      # LA BANNIÈRE D'INSTALLATION à six largeurs réelles (320 à 1024) : elle ne
+      # descend jamais sur la barre d'onglets. Même Chrome que la suite.
+      - name: Géométrie de la bannière
+        run: timeout 300 node scripts/verif/banniere-geometrie.mjs "http://127.0.0.1:8799/app/index.html" 9223
+
+      # LES RÈGLES SUR L'ÉMULATEUR (05/10/2026) : regles.mjs lit le fichier, ces
+      # trois scripts écrivent pour de vrai contre la Realtime Database émulée
+      # (projet demo-, aucun accès à la production, aucun secret). Ils lisent
+      # EMU, http://127.0.0.1:9000 par défaut, le port de l'émulateur database.
+      - name: Règles (émulateur)
+        run: |
+          npm install -g firebase-tools
+          firebase emulators:exec --only database --project demo-repcore \
+            "node cloudflare/test/regles-amis.emu.mjs && node cloudflare/test/regles-evenements.emu.mjs && node cloudflare/test/regles-sante.emu.mjs"
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
