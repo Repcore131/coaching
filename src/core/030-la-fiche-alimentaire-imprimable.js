@@ -1570,7 +1570,7 @@ function _streakRattrapage(){
   if(!u||u.role==='coach') return null;
   let b=null; try{ b=_streakAppliquerJokers(u,Date.now()); }catch(e){ b=null; }
   if(b&&b.sauve){
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_streakRattrapage',e); }
     try{ toast(ICO.bouclier+' '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
   }
   return b;
@@ -1752,7 +1752,7 @@ function _rendreUniteReglages(){
 function choisirUnite(v){
   if(!currentUser||UNITES_CHARGE.indexOf(v)<0) return false;
   if(v==='lb') currentUser.unite='lb'; else delete currentUser.unite;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('choisirUnite',e); }
   _rendreUniteReglages();
   toast(v==='lb'?'Charges en livres '+ICO.coche:'Charges en kilos '+ICO.coche,'var(--green)');
   return true;

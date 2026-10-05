@@ -2237,7 +2237,7 @@ function relancerInvitation(token){
   }
   const msg=messageRelance(c,u);
   c.relanceLe=new Date().toISOString();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('relancerInvitation',e); }
   // L'horodatage part aussi sur le nœud, pour que le coach retrouve l'état
   // depuis un autre appareil. Sans jeton ce PATCH échouera — ce n'est pas
   // grave, la limite locale a déjà joué.
@@ -2329,7 +2329,7 @@ async function inviterAthlete(prenom,nom){
     prenom:pn,nom:nm};
   if(!u.studentCodes) u.studentCodes=[];
   u.studentCodes.push(entree);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('inviterAthlete',e); }
   return {ok:true,invitation:entree,lien:lienInvitation(gen.token,u)};
 }
 

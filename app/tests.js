@@ -83032,6 +83032,77 @@ vendredi 78 6h 44m
       const r=src.match(/new Date\([a-zA-Z_]+\.date\)\.toLocaleDateString/g);
       return r?_echec(r.length+' new Date(x.date).toLocaleDateString'):true;});
 
+    // ══ 05/10/2026 — UNE ÉCRITURE QUI RATE SE GARDE, ET UNE SAISIE PERDUE SE DIT ══
+    // rcErreurMuette garde les 50 dernières erreurs en mémoire (sans réseau) ;
+    // saveUserOuDire le dit à l'utilisateur, une fois par minute au plus ; et
+    // saveUser ne réécrit plus une carte rc_users qu'il ne sait pas lire.
+    const _seMonter=()=>{
+      const sv={cu:currentUser,cw:CLOUD.canWrite,t:window.toast,si:Storage.prototype.setItem,
+        u:localStorage.getItem('rc_users'),se:localStorage.getItem('rc_session'),
+        err:window._rcErreurs,dd:_rcDireDernier};
+      CLOUD.canWrite=()=>false; window._rcErreurs=[]; _rcDireDernier=0;
+      return sv;
+    };
+    const _seRanger=(sv)=>{
+      Storage.prototype.setItem=sv.si; currentUser=sv.cu; CLOUD.canWrite=sv.cw; window.toast=sv.t;
+      for(const [k,v] of [['rc_users',sv.u],['rc_session',sv.se]]){ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }
+      for(const k of Object.keys(localStorage)) if(/^rc_users_corrompu_/.test(k)) localStorage.removeItem(k);
+      try{ DB._memo.delete('users'); DB._memo.delete('session'); }catch(e){}
+      DB._echecLocal.users=false; DB._echecLocal.session=false; DB._quotaAnnonce=false;
+      window._rcErreurs=sv.err; _rcDireDernier=sv.dd;
+    };
+    ok('Écriture : rc_users illisible, saveUser ne détruit pas la clé, en garde une copie et n’écrit que la session',()=>{
+      const sv=_seMonter();
+      try{
+        const brut='{"a@t.fr":{"email":"a@t.fr","sessions":[1,2,3]'+',CORROMPU';
+        localStorage.setItem('rc_users',brut);
+        currentUser={id:'se',email:'se@t.fr',role:'athlete',fname:'S',sessions:[],consent:{health:true,policyVersion:POLICY_VERSION}};
+        const r=saveUser();
+        if(r!==false) return _echec('saveUser annonce un succès : '+r);
+        if(localStorage.getItem('rc_users')!==brut) return _echec('la carte illisible a été réécrite');
+        const copies=Object.keys(localStorage).filter(k=>/^rc_users_corrompu_\d+$/.test(k));
+        if(copies.length!==1||localStorage.getItem(copies[0])!==brut) return _echec('copie : '+copies.join());
+        const s=JSON.parse(localStorage.getItem('rc_session')||'null');
+        if(!s||s.email!=='se@t.fr') return _echec('la session n’a pas été écrite');
+        return (window._rcErreurs.length===1&&/rc_users illisible/.test(window._rcErreurs[0].ou))?true:_echec('erreurs : '+JSON.stringify(window._rcErreurs));
+      } finally { _seRanger(sv); }});
+    ok('Écriture : sans compte, saveUserOuDire ne lève pas et garde l’erreur en mémoire',()=>{
+      const sv=_seMonter();
+      try{
+        window.toast=()=>{}; currentUser=null;
+        let r;
+        try{ r=saveUserOuDire('Ton check-in'); }catch(e){ return _echec('saveUserOuDire a levé : '+e.message); }
+        if(r!==false) return _echec('rend '+r);
+        const e=window._rcErreurs[0];
+        if(window._rcErreurs.length!==1||!/Ton check-in/.test(e.ou)||!e.message) return _echec(JSON.stringify(window._rcErreurs));
+        // LA BORNE : 50 entrées, les plus récentes.
+        for(let i=0;i<60;i++) rcErreurMuette('borne '+i,new Error('x'));
+        return (window._rcErreurs.length===50&&window._rcErreurs[49].ou==='borne 59')?true:_echec(window._rcErreurs.length+' entrées');
+      } finally { _seRanger(sv); }});
+    ok('Écriture : stockage plein, le toast orange dit la perte UNE fois par minute, pas à chaque série',()=>{
+      const sv=_seMonter();
+      try{
+        const vus=[];
+        window.toast=(m,c)=>vus.push([String(m),c]);
+        currentUser={id:'qt',email:'qt@t.fr',role:'athlete',fname:'Q',sessions:[],consent:{health:true,policyVersion:POLICY_VERSION}};
+        const si=sv.si;
+        Storage.prototype.setItem=function(k,v){
+          if(k==='rc_users'||k==='rc_session'){ const e=new Error('quota'); e.name='QuotaExceededError'; throw e; }
+          return si.call(this,k,v);
+        };
+        for(let i=0;i<4;i++) if(saveUserOuDire('Ton check-in')!==false) return _echec('un succès annoncé, essai '+(i+1));
+        // DB.setLocal dit déjà « Stockage plein » à chaque écriture ratée : on ne
+        // compte ici que le message de saveUserOuDire.
+        const _miens=()=>vus.filter(x=>/n'a pas pu être enregistré sur cet appareil/.test(x[0]));
+        if(_miens().length!==1) return _echec(_miens().length+' toasts : '+_miens().map(x=>x[0]).join(' | '));
+        vus.splice(0,vus.length,..._miens());
+        if(vus[0][0]!=='Ton check-in n\'a pas pu être enregistré sur cet appareil'||vus[0][1]!=='var(--orange)') return _echec('toast : '+JSON.stringify(vus[0]));
+        if(window._rcErreurs.length!==4) return _echec(window._rcErreurs.length+' erreurs gardées pour 4 échecs');
+        // UNE MINUTE PLUS TARD, il le redit.
+        _rcDireDernier-=60000; saveUserOuDire('Ton check-in');
+        return _miens().length===2?true:_echec('après une minute : '+_miens().length+' toasts');
+      } finally { _seRanger(sv); }});
+
     // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
     //
     // Ce qui est verifie ici n'est pas la justesse d'une somme : c'est que

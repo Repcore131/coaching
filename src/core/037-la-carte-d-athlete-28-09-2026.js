@@ -191,7 +191,7 @@ function majCarteAthlete(u,maintenant,o){
     semaine:n.semaine,le:t,avant:prec?(Number(prec.globale)||null):null,
     // La carte reste sur l'accueil tant qu'elle n'a été ni partagée ni fermée.
     aMontrer:monte||!!(prec&&prec.aMontrer),foudre:cadreChange||!!(prec&&prec.foudre)};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('majCarteAthlete',e); }
   return {note:n,monte,cadreChange};
 }
 // ── Les cadres dessinés (cartes-bruts/ → app/img/cartes/<cadre>.webp) ─────
@@ -347,7 +347,7 @@ function partagerCarteAthlete(btn,format){
     ok=_storySortirPartage(dessin(),nom,undefined,fmt)||_storySortirTelechargement(dessin(),nom,fmt);
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
-  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){ rcErreurMuette('partagerCarteAthlete',e); } }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
@@ -405,14 +405,14 @@ function _rendreCarteAccueil(u){
   if(cadre&&!cadre.complete) cadre.addEventListener('load',peindre,{once:true});
   // LE CHANGEMENT DE CADRE : la foudre frappe la carte, une fois.
   if(u.carte.foudre){
-    u.carte.foudre=false; try{ saveUser(); }catch(e){}
+    u.carte.foudre=false; try{ saveUser(); }catch(e){ rcErreurMuette('_rendreCarteAccueil',e); }
     setTimeout(()=>{ try{ rcFoudre(document.getElementById('ca-vignette'),{eclairs:3}); }catch(e){} },400);
   }
   return true;
 }
 function fermerCarteAccueil(){
   const u=currentUser;
-  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){ rcErreurMuette('fermerCarteAccueil',e); } }
   const z=document.getElementById('clh-carte'); if(z){ z.innerHTML=''; z.hidden=true; }
   return true;
 }

@@ -2570,7 +2570,7 @@ function demanderResiliation(motif){
   const ts=Date.now();
   u.abonnement.resiliationDemandee={ts:ts,motif:String(motif||'').slice(0,300)};
   // Le LOCAL d'abord : hors ligne, l'utilisateur doit voir son accusé.
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('demanderResiliation',e); }
   _fileResilPoser(u.email,ts);
   // Puis l'envoi. S'il aboutit, la file se vide ; sinon elle sera rejouée.
   _rejouerResiliation();
@@ -2584,7 +2584,7 @@ function _majRenonciation(accepte){
   if(!u.abonnement||typeof u.abonnement!=='object') u.abonnement={};
   u.abonnement.renonciationRetractation=
     accepte===true?{accepte:true,ts:Date.now()}:{accepte:false,ts:null};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_majRenonciation',e); }
   _majBoutonPaypal();
   return true;
 }
@@ -8552,7 +8552,7 @@ window.onload=()=>{
               return;
             }
             if(CLOUD.canWrite()){
-              try{saveUser();}catch(e){}
+              try{ saveUser(); }catch(e){ rcErreurMuette('_majIndicAttente',e); }
               // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
               setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},800);
             }
@@ -9026,9 +9026,9 @@ function routeUser(){
   // Le trapeze s'est dedouble le 08/09/2026 : on reporte l'ancien reglage sur
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
-  try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Les entrées du journal comptées 0 kcal alors que leurs macros sont connues.
-  try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -9041,7 +9041,7 @@ function routeUser(){
   try{ attribActifSemaine(currentUser); }catch(e){}
   // LE FUSEAU DE L'APPAREIL, pour le serveur léger : ses heures calmes et le
   // jour du plafond d'un push sont ceux de l'athlète. Écrit seulement s'il a changé.
-  try{ if(fuseauAssurer(currentUser)) saveUser(); }catch(e){}
+  try{ if(fuseauAssurer(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
   // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
@@ -13128,7 +13128,7 @@ async function doRegister(){
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
     rcm('register_completed');
     // L'ORIGINE DU COMPTE (users/<clé>/origine) et l'inscription par src.
-    try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){}
+    try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){ rcErreurMuette('doRegister',e); }
     if(selRole==='coach'){
       // Compté seulement maintenant : les deux sorties précédentes (compte déjà
       // présent, invitation refusée) ne sont pas des inscriptions abouties.
@@ -14406,7 +14406,7 @@ async function _migrerSantePriveeLocale(){
     // récupère ce que l'autre appareil avait déjà écrit.
     if(cst.length) u.constantes=cst;
     if(ana.length) u.analyses=ana;
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_migrerSantePriveeLocale',e); }
     // L'envoi passe par le chemin NORMAL : santeBlocsPrives collecte les
     // deux séries, _doPushOne les écrit dans sante_privee. Un second chemin
     // d'écriture divergerait un jour de celui-ci.
@@ -21327,7 +21327,7 @@ async function publierPagePublique(u,reg,o){
   if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
   if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
   u.pagePublique={pseudo:neu,active:!!reg.active,montrer:Object.assign({},reg.montrer||{}),publieLe:Date.now()};
-  if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){}
+  if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){ rcErreurMuette('publierPagePublique',e); }
   return {ok:true};
 }
 // La page suit l'athlète : après une séance, et au plus toutes les six heures
@@ -21337,7 +21337,7 @@ async function majPagePublique(o){
   if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')||!CLOUD.ok()) return false;
   if(!(o&&o.force)&&Date.now()-(Number(p.publieLe)||0)<6*3600e3) return false;
   const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:pageMontrerComplet(p.montrer)},{silencieux:true});
-  if(r.ok) try{ saveUser(); }catch(e){}
+  if(r.ok) try{ saveUser(); }catch(e){ rcErreurMuette('majPagePublique',e); }
   return r.ok;
 }
 // PURE. Le bloc des réglages, dans le profil.
@@ -21398,7 +21398,7 @@ function htmlPropositionPage(u){
 // Le passage est noté À L'AFFICHAGE : c'est « proposée », pas « acceptée ».
 function _noterPropositionPage(u,rang){
   u.pagePropose={fois:(Number(u.pagePropose&&u.pagePropose.fois)||0)+1,rang:Number(rang)||0,le:Date.now()};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_noterPropositionPage',e); }
 }
 // UN GESTE : le pseudo du champ, les choix par défaut (charges exclues). Pris
 // par quelqu'un d'autre : deux chiffres ajoutés, trois essais.
@@ -21930,7 +21930,7 @@ async function publierVitrinePublique(u){
   for(const s of essais){
     const ok=await CLOUD.racinePatch({['slugs/'+s]:moi,['vitrines/'+s]:d}).catch(()=>false);
     if(ok){
-      if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){} }
+      if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){ rcErreurMuette('publierVitrinePublique',e); } }
       try{ _rendreLienVitrineCoach(); }catch(e){}
       return true;
     }
@@ -22894,7 +22894,7 @@ async function parrainageAssurerCode(u){
   }
   if(!c) return '';
   u.parrainage=Object.assign({},u.parrainage||{},{code:c});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('parrainageAssurerCode',e); }
   // L'appareil du parrain, pour que personne ne s'inscrive comme filleul depuis lui.
   CLOUD.parrainagePut('appareils/'+rcAppareilId(),moi).catch(()=>false);
   return c;
@@ -22975,7 +22975,7 @@ async function parrainagePublierRang(u){
   const n=rangPublic(u);
   if(Number(p.rangPublie)===n) return false;
   const ok=await CLOUD.parrainagePut('codesPublics/'+p.code+'/rang',n).catch(()=>false);
-  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){} }
+  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){ rcErreurMuette('parrainagePublierRang',e); } }
   return !!ok;
 }
 async function majParrainageMiroir(u){
@@ -23899,7 +23899,7 @@ async function creerDuel(mesure,duree){
     ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false); }
   if(!ok) return {ok:false,erreur:'Création impossible pour l’instant.'};
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('creerDuel',e); }
   _duelsCache[id]={createur:moi,createurNom:prenom,mesure:m,duree:d,statut:'attente',creeLe:Date.now()};
   return {ok:true,id};
 }
@@ -23931,7 +23931,7 @@ async function rejoindreDuel(id,btn){
     return false;
   }
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('rejoindreDuel',e); }
   deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
   toast('Défi relevé '+ICO.eclair+' Il commence à ta prochaine séance.','var(--green)',4000);
   delete _duelsCache[id];
@@ -23959,7 +23959,7 @@ async function duelsApresSeance(){
     if(d.statut!=='en_cours') continue;
     if(await deposerEvenement({type:'duel_maj',id}).catch(()=>false)) n++;
   }
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('duelsApresSeance',e); }
   return n;
 }
 // ── L'accueil : l'invitation reçue, les duels en cours, « Défie un pote » ──
@@ -24597,7 +24597,7 @@ async function creerDuelAvecAmi(pseudo,mesure,duree){
   const ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom:nom,mesure:r.mesure,duree:r.duree}}).catch(()=>false);
   if(!ok) return {ok:false,lien:true,erreur:prenom+' ne te suit pas encore : un duel direct demande qu’il te suive. Envoie-lui le lien du duel à la place.'};
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('creerDuelAvecAmi',e); }
   _duelsCache[id]=duel;
   deposerEvenement({type:'duel_cree',id}).catch(()=>{});
   return {ok:true,id,prenom};
@@ -24625,7 +24625,7 @@ async function duelsRecusRattacher(u){
   let n=0;
   const x=Object.assign({},u.duels||{});
   for(const id of Object.keys(r.v)) if(DUEL_ID_RE.test(id)&&!x[id]){ x[id]={role:'invite',le:Number(r.v[id].le)||Date.now()}; n++; }
-  if(n){ u.duels=x; try{ saveUser(); }catch(e){} }
+  if(n){ u.duels=x; try{ saveUser(); }catch(e){ rcErreurMuette('duelsRecusRattacher',e); } }
   return n;
 }
 async function _rendreDuelsAccueil(){
@@ -25368,7 +25368,7 @@ async function majRecompensesServeur(o){
   }catch(e){ nl=0; }
   const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns+nl;
   if(n){
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('majRecompensesServeur',e); }
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
     // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
     // Un DUEL clos n'est pas un défi du Canal : il a sa carte sur l'accueil.
@@ -26706,7 +26706,7 @@ function renderRiteReponse(){
   el.style.display=h?'':'none';
   // APRÈS le rendu : si l’écriture échouait, le bloc serait quand même à
   // l’écran, et c’est ce qui compte.
-  if(h&&r&&r.reponseVue!==true){ r.reponseVue=true; try{ saveUser(); }catch(e){} }
+  if(h&&r&&r.reponseVue!==true){ r.reponseVue=true; try{ saveUser(); }catch(e){ rcErreurMuette('renderRiteReponse',e); } }
   return !!h;
 }
 function riteAfficherSiBesoin(){
@@ -27743,7 +27743,7 @@ function _ajEcrire(action){
   // est le report. On le pose donc, mais seulement dans ce cas.
   const vise=_ajCtx.exercice&&_ajCtx.exercice.nom;
   const touche=cibles.some(x=>_ajCle(x.nomEcrit)===_ajCle(vise));
-  if(vise&&touche){ try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){} }
+  if(vise&&touche){ try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){ rcErreurMuette('_ajEcrire',e); } }
   closeModal();
   _ajCtx=null;
   try{ renderTodoBlock(getClients()); }catch(e){}
@@ -28278,7 +28278,7 @@ function _relEcrire(coach,maj){
   maj(n);
   n.maj=Date.now();
   coach.relancesAuto=n;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_relEcrire',e); }
   return true;
 }
 // Régler une ligne. REFUSÉ pour tout signal hors des cinq : la douleur ne
@@ -31024,7 +31024,7 @@ function loadCoachHome(){
     // Le comptage de cycles se fait ICI, une fois par ouverture du tableau
     // de bord, avec le cache deja lu. Il n ecrit dans le dossier que quand
     // le mois change : un enregistrement par mois, pas un par affichage.
-    if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){}
+    if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){ rcErreurMuette('loadCoachHome',e); }
     const _za=document.getElementById('ch-alerte-palier');
     if(_za) _za.innerHTML=_htmlAlertePalier(u,_cacheUsers);
     _rendreInvitations();
@@ -32883,12 +32883,12 @@ function poserMotCoach(user,texte){
     return {ok:false,raison:'Ton mot fait '+brut.length+' caractères. Le maximum est '
       +MOT_COACH_MAX+' : l’essentiel tient dedans, et le reste se dit de vive voix.'};
   const t=brut.trim();
-  if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){} return {ok:true,efface:true}; }
+  if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){ rcErreurMuette('poserMotCoach',e); } return {ok:true,efface:true}; }
   // ⚠ LE TEXTE EST STOCKE TEL QUEL. Pas de normalisation, pas de majuscule
   // initiale, pas de ponctuation ajoutee : « remonte tel quel » commence a
   // l'ecriture. Le seul traitement est l'echappement A L'AFFICHAGE.
   u.motCoach={texte:t,maj:Date.now()};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('poserMotCoach',e); }
   return {ok:true};
 }
 // PURE. Le mot est-il NOUVEAU pour ce coach ? Le marqueur de lecture vit dans
@@ -32914,7 +32914,7 @@ function marquerMotCoachLu(coach,athlete){
   if(!c.motsLus||typeof c.motsLus!=='object') c.motsLus={};
   if(Number(c.motsLus[id])>=m.maj) return false;   // deja lu : aucune ecriture
   c.motsLus[id]=m.maj;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('marquerMotCoachLu',e); }
   return true;
 }
 // ── LA SURFACE DE L'ATHLETE ────────────────────────────────────────────
@@ -32988,7 +32988,7 @@ function fermerContactCoach(tout_de_suite){ _feuilleFermer('rc-contact',tout_de_
 // un bouton touche. Le journal vit dans le dossier de l'ATHLETE — c'est le seul
 // document qu'il peut ecrire.
 function _journaliserContactCoach(){
-  try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){}
+  try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){ rcErreurMuette('_journaliserContactCoach',e); }
   return true;
 }
 // Ouvre l'editeur du mot au coach ET l'amene sous les yeux : il vit plus bas
@@ -37266,7 +37266,7 @@ function progPublicPoser(i,v){
   //   detruire un travail de plusieurs heures sur un choix qui se revient en
   //   deux clics. Elle est MASQUEE, elle reste ecrite, et la carte le dit.
   p.publicVise=v;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('progPublicPoser',e); }
   try{ loadCoachProgramsList(); }catch(e){}
   return true;
 }
@@ -37672,7 +37672,7 @@ function cplDeplacer(i,sens){
   while(j>=0&&j<l.length&&_cplGroupe(l[j])!==r) j+=sens;
   if(j<0||j>=l.length) return false;
   const t=l[i]; l[i]=l[j]; l[j]=t;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('cplDeplacer',e); }
   loadCoachProgramsList();
   return true;
 }
@@ -38369,7 +38369,7 @@ async function copierSeanceVersAthlete(i){
   if(!_poserBrouillonSessions(dest,atelier)){
     toast('Brouillon non enregistré : stockage plein.','var(--red)'); return false;
   }
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('copierSeanceVersAthlete',e); }
   toast('« '+r.nom+' » portée chez '+nom+' en brouillon. Publie depuis son programme.','var(--success)');
   return true;
 }
@@ -40138,7 +40138,7 @@ async function _proposerBrouillon(){
   if(!brouillonDiffere(b,c.sessions_config)){
     // Identique au publié : rien à reprendre, et le brouillon a fait son
     // temps. On le retire pour ne pas reposer la question à chaque ouverture.
-    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('_proposerBrouillon',e); }
     return false;
   }
   const age=brouillonAgeJours(b);
@@ -40149,7 +40149,7 @@ async function _proposerBrouillon(){
   const ok=await rcConfirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
     +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.',null,'Confirmer');
   if(!ok){
-    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('_proposerBrouillon',e); }
     return false;
   }
   // Les photos ne sont pas dans le brouillon : on les REPREND du publié
@@ -40231,7 +40231,7 @@ function saveCoachSessions(){
   try{ accueilRelanceProgramme(stocke).catch(()=>{}); }catch(e){}
   // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
   // proposer une reprise vers un état identique à la prochaine ouverture.
-  if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+  if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('saveCoachSessions',e); }
   const localOk=DB.set('users',users);
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');
@@ -40789,7 +40789,7 @@ function bqChoisir(slug){
   const f=ficheBanque(slug)||catalogueCoach().find(x=>x.slug===slug);
   if(!f) return false;
   noterRecent(slug);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('bqChoisir',e); }
   const cb=_bqCb;
   fermerBanque();
   if(cb) try{ cb(f); }catch(e){ console.error('[RepCore] banque :',e); }
@@ -40798,7 +40798,7 @@ function bqChoisir(slug){
 function bqFavori(slug,ev){
   if(ev&&ev.stopPropagation) ev.stopPropagation();
   basculerFavori(slug);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('bqFavori',e); }
   _bqRendre();
 }
 
@@ -41170,7 +41170,7 @@ function ouvrirFicheBanque(slug,ev){
 async function _supprimerExoPerso(slug){
   if(!await rcConfirm('Supprimer cet exercice de tes exercices personnels ?',null,'Supprimer')) return false;
   const ok=supprimerExercicePerso(slug);
-  if(ok){ try{ saveUser(); }catch(e){} }
+  if(ok){ try{ saveUser(); }catch(e){ rcErreurMuette('_supprimerExoPerso',e); } }
   closeModal(); _bqRendre();
   return ok;
 }
@@ -41215,7 +41215,7 @@ function _validerCreationExo(){
   // déborde, il disparaît au rechargement. L'annoncer créé sans le savoir
   // envoyait le coach construire une séance autour d'un exercice perdu.
   let ok=false;
-  try{ ok=saveUser(); }catch(e){}
+  try{ ok=saveUser(); }catch(e){ rcErreurMuette('_validerCreationExo',e); }
   closeModal();
   // N4.8 — LA CREATION S'ENCHAINE SUR L'AJOUT. Le coach qui vient d'ecrire une
   // fiche voulait s'en servir : il devait la retrouver dans la liste et
@@ -42820,7 +42820,7 @@ function _compterVueSonRepos(){
   if(seance&&u.vus.reposSonSeance===seance) return false;
   u.vus.reposSonVus=(Number(u.vus.reposSonVus)||0)+1;
   if(seance) u.vus.reposSonSeance=seance;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_compterVueSonRepos',e); }
   return true;
 }
 // « Activer » : allume, confirme dans la ligne, puis la retire. Aucune
@@ -43514,7 +43514,7 @@ function forcerMethode(user,ex,evaluation){
   // sans ca l'editeur reposerait la question a chaque ouverture, et le coach
   // finirait par ne plus la lire.
   ex.methodeForcee=true;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('forcerMethode',e); }
   return {ok:true};
 }
 // PURE. Les depassements des sept derniers jours, pour la fiche client.
@@ -44787,7 +44787,7 @@ function _saveProgramInterne(){
       // pas réécrit à chaque caractère tapé.
       // Il n'atteint PAS l'athlète : c'est saveCoachSessions qui publie.
       let broOk=false;
-      if(enregistrerBrouillon()){ try{ broOk=saveUser(); }catch(e){} }
+      if(enregistrerBrouillon()){ try{ broOk=saveUser(); }catch(e){ rcErreurMuette('_saveProgramInterne',e); } }
       toastEcriture(broOk,'Séance enregistrée en brouillon','le brouillon est');
       go('s-coach-sessions');loadCoachSessionSlots();return;
     }
@@ -46534,7 +46534,7 @@ async function enregistrerFicheVente(){
   if(!ok) return _venteErreur('La publication a échoué. Réessaie.');
   // LE LIEN MODELE → FICHE, pose une fois. C'est lui qui fait retoucher la
   // meme fiche la prochaine fois, et suivre les seances a chaque sauvegarde.
-  if(m&&m.boutiqueId!==id){ m.boutiqueId=id; try{ saveUser(); }catch(e){} }
+  if(m&&m.boutiqueId!==id){ m.boutiqueId=id; try{ saveUser(); }catch(e){ rcErreurMuette('enregistrerFicheVente',e); } }
   // On relit le noeud plutot que de recopier ce qu'on croit avoir ecrit : la
   // base a pu normaliser, et c'est elle qui fait foi.
   await rafraichirBoutique();
@@ -55393,7 +55393,7 @@ function enregistrerTestCalibrage(user,t){
   liste.push({date:Date.now(),exercice:nom,chargeKg:kg,
     repsAnnoncees:ra,rirAnnonce:ri,repsReelles:rr});
   u.calibrageRir=calculerCalibrageRir(liste);
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton test de calibrage');
   // LES CACHES PORTENT DES VERDICTS QUE LE BIAIS VIENT DE CHANGER. Meme geste
   // que la decharge, pour la meme raison : un e1RM et un etat de plateau
   // calcules avec l'ancien repere resteraient servis jusqu'au rechargement.
@@ -57997,7 +57997,7 @@ function ccdEpingler(cle){
   currentUser.ccdEpingles=t;
   // ⚠ LE DOSSIER DU COACH, ET C'EST TOUT. saveUser n'enregistre que
   //   currentUser : l'athlete ne porte rien de ce choix, qui n'est pas le sien.
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ccdEpingler',e); }
   _ccdRefaireEtages();
   return l;
 }
@@ -70679,7 +70679,7 @@ function _streakRattrapage(){
   if(!u||u.role==='coach') return null;
   let b=null; try{ b=_streakAppliquerJokers(u,Date.now()); }catch(e){ b=null; }
   if(b&&b.sauve){
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_streakRattrapage',e); }
     try{ toast(ICO.bouclier+' '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
   }
   return b;
@@ -70861,7 +70861,7 @@ function _rendreUniteReglages(){
 function choisirUnite(v){
   if(!currentUser||UNITES_CHARGE.indexOf(v)<0) return false;
   if(v==='lb') currentUser.unite='lb'; else delete currentUser.unite;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('choisirUnite',e); }
   _rendreUniteReglages();
   toast(v==='lb'?'Charges en livres '+ICO.coche:'Charges en kilos '+ICO.coche,'var(--green)');
   return true;
@@ -72678,7 +72678,7 @@ function _echMentionAVoir(user){
 function _echMarquerVue(user){
   const u=_dossier(user);
   if(u&&u.echeance&&!u.echeance.vueLe){ u.echeance.vueLe=Date.now();
-    try{ saveUser(); }catch(e){} }
+    try{ saveUser(); }catch(e){ rcErreurMuette('_echMarquerVue',e); } }
   return true;
 }
 function _renderEcheance(){
@@ -72938,7 +72938,7 @@ function ouvrirEcheance(user,o){
       {type:type,date:d,
        ...(ancienne?{ancienneDate:ancienne.date,ancienType:ancienne.type}:{})});
   }catch(e){}
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ouvrirEcheance',e); }
   return {ok:true,remplacee:!!ancienne};
 }
 // L'ECRITURE D'UNE FICHE DE JOUR. Les bornes refusent, elles n'avertissent pas.
@@ -73238,7 +73238,7 @@ function noterSeance(user,cle){
   if(_srpeValeur(cle)==null) return {ok:false,raison:'Note inconnue.'};
   const s=u.sessions[u.sessions.length-1];
   s.srpe=cle;
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton ressenti de séance');
   try{ _viderCacheSignaux(); }catch(e){}
   return {ok:true,charge:chargeSeance(s)};
 }
@@ -73670,7 +73670,7 @@ function ajouterSalle(user,nom,materiel){
     materiel:_tabBloc(materiel).filter(m=>SALLE_MATERIEL.indexOf(m)>=0),
     parDefaut:!l.length};
   u.salles=l.concat([s]);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ajouterSalle',e); }
   return {ok:true,salle:s};
 }
 
@@ -74797,7 +74797,7 @@ function dispoAllegerSeance(idx,d){
   // C'est la meme information, et elle est plus utile tot.
   _journalSeance(u,'dispo_allegement',{exercice:ex.name,avant:avant,apres:avant-1,
     cause:(d&&d.cause)||null,note:(d&&d.note)||null});
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton allègement de séance');
   const _envoi=CLOUD.pushOne(u.email,u);
   toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
@@ -74813,7 +74813,7 @@ function _dispoConsommerAllegement(exercices,slotIdx){
   const i=_dispoIndexAlleger(exercices);
   if(i<0) return false;
   exercices[i].series=Math.max(1,(Number(exercices[i].series)||3)-1);
-  try{ delete u.allegementJour; saveUser(); }catch(e){}
+  try{ delete u.allegementJour; saveUser(); }catch(e){ rcErreurMuette('_dispoConsommerAllegement',e); }
   return true;
 }
 // LE GESTE ROUGE. Reutilise le mecanisme de decharge plutot que d'en ecrire un
@@ -74831,7 +74831,7 @@ async function dispoReporterSeance(d){
   try{ fait=appliquerDecharge(u); }catch(e){ fait=false; }
   if(!fait){ try{ toast('Aucune séance active à alléger.','var(--orange)'); }catch(e){} return false; }
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton report de séance');
   const _envoi=CLOUD.pushOne(u.email,u);
   toastSync(true,_envoi,'Semaine allégée '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
@@ -75100,7 +75100,7 @@ function appliquerRetourMuscle(user,muscle,cleRevolue){
   etat.derniereSemaine=cle;
   etat.maj=Date.now();
   u.reperesAuto[muscle]=etat;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('appliquerRetourMuscle',e); }
   // Les caches portent des verdicts de zone que ce deplacement change.
   try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
   return {bouge:bouge,de:de,vers:vers,raison:v,semaine:cle};
@@ -75417,7 +75417,7 @@ function reinitialiserReperesMuscle(user,muscle){
   let n=0;
   for(const m of cibles) if(u.reperesAuto[m]){ delete u.reperesAuto[m]; n++; }
   if(!n) return {ok:true,n:0};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('reinitialiserReperesMuscle',e); }
   try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
   // JOURNALISE COMME LES AJUSTEMENTS NUTRITION. Un repere qui revient a la
   // reference change des seuils : l'athlete doit pouvoir savoir quand, et le
@@ -78420,7 +78420,7 @@ function ecrireNoteExo(nom,texte){
   if(t) u.notesExo[k]={texte:t,maj:Date.now()};
   else delete u.notesExo[k];
   if(!Object.keys(u.notesExo).length) delete u.notesExo;
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton commentaire d’exercice');
   return true;
 }
 function _htmlNoteExo(idx,ex){
@@ -78556,7 +78556,7 @@ function _poserMotifEcart(motif){
       woPersist();
     }catch(e){}
   }
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton motif d’écart');
   // SILENCIEUX EN CAS DE SUCCES, PARLANT EN CAS D'ECHEC. Un try/catch nu
   // autour d'une poussee avale l'echec : l'ecart resterait sur le telephone et
   // le coach ne verrait jamais le remplacement. direSiEnvoiEchoue ne dit rien
@@ -79220,7 +79220,7 @@ function enregistrerFormulesReponse(){
   if(!currentUser) return false;
   const lire=id=>String(((document.getElementById(id)||{}).value)||'').replace(/\s+/g,' ').trim().slice(0,BROUILLON_FORMULE_MAX);
   currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('enregistrerFormulesReponse',e); }
   closeModal();
   toast('Formule enregistrée '+ICO.coche,'var(--green)');
   return true;
@@ -80957,7 +80957,7 @@ function _rendreInvitationNotif(){
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
   z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
-  try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){}
+  try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationNotif',e); }
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
 // cette carte : le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire
@@ -81243,7 +81243,7 @@ async function pushActiverDepuisReglages(){
   }
   const ok=await pushAbonner({geste:true});
   if(ok){
-    try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
+    try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){ rcErreurMuette('pushActiverDepuisReglages',e); }
     toast('Notifications activées '+ICO.coche);
   } else if(_notifSupported()&&Notification.permission==='denied'){
     toast('Notifications bloquées par le navigateur.','var(--orange)');
@@ -81286,7 +81286,7 @@ async function _pushAuPremierGeste(){
   }
   if(p!=='granted') return false;
   const ok=await pushAbonner({geste:true});
-  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){ rcErreurMuette('_pushAuPremierGeste',e); }
   return ok;
 }
 async function pushActiverParDefaut(){
@@ -81314,7 +81314,7 @@ async function pushActiverParDefaut(){
 // serveur n'a plus où envoyer), et le refus retenu pour ne pas redemander.
 async function pushDesactiverDepuisReglages(){
   await pushDesabonner();
-  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(e){} }
+  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(e){ rcErreurMuette('pushDesactiverDepuisReglages',e); } }
   toast('Notifications désactivées sur cet appareil.','var(--sub)');
   _rendreReglagesPush();
   return true;
@@ -81409,7 +81409,7 @@ function _rendreInvitationInstall(){
   }catch(e){ etat='rien'; }
   if(etat==='rien'){ z.innerHTML=''; return; }
   z.innerHTML=_htmlInvitationInstall(etat,!sup);
-  try{ currentUser._installDemandeeLe=Date.now(); saveUser(); }catch(e){}
+  try{ currentUser._installDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationInstall',e); }
 }
 // LES DEUX GESTES EXISTENT DEJA : on les appelle, on ne les refait pas.
 // installApp porte la garde Samsung et l'invitation du navigateur ;
@@ -82315,7 +82315,7 @@ function majBadges(o){
   if(!nouveaux.length) return [];
   u.badges=deja;
   for(const x of nouveaux) u.badges[x.id]={at:(x.at>0?x.at:t)};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('majBadges',e); }
   const neufs=nouveaux.map(x=>x.id);
   // LA CÉLÉBRATION : le plus rare de la séance a l'écran plein (BDG_ECRAN_MAX),
   // le reste va dans « Tes trophées du jour ». Au RATTRAPAGE (mise à jour),
@@ -82610,7 +82610,7 @@ function celebrationsChoisir(k){
   const u=currentUser;
   if(!u||(k!=='completes'&&k!=='discretes')) return false;
   u.celebrations=k;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('celebrationsChoisir',e); }
   const z=document.getElementById('atp-celebrations'); if(z) z.innerHTML=htmlReglageCelebrations(u);
   return true;
 }
@@ -84508,7 +84508,7 @@ function aaReglage(nom,val){
 function aaConsentementCoach(on){
   const u=currentUser; if(!u) return false;
   u.consentementPartageCoach=on?{date:Date.now()}:null;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('aaConsentementCoach',e); }
   toast(on?'Ton coach peut partager tes progrès.':'Ton coach ne peut plus partager tes progrès sous ton nom.');
   return true;
 }
@@ -85314,7 +85314,7 @@ async function accueilEcrireRelances(u){
   const l=accueilRelancesAthlete(u);
   let ok=true;
   for(const x of l) ok=(await _accueilDeposer(moi,x.jour,x.etape))&&ok;
-  if(ok){ u.parcours.relancesEcrites=Date.now(); try{ saveUser(); }catch(e){} }
+  if(ok){ u.parcours.relancesEcrites=Date.now(); try{ saveUser(); }catch(e){ rcErreurMuette('accueilEcrireRelances',e); } }
   return ok;
 }
 // Le coach publie : si l'athlète est dans son accueil et n'a pas lu son
@@ -85497,7 +85497,7 @@ function parcoursAvancer(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return null;
   const r=majParcours(u);
-  if(r.nouvelles.length){ try{ saveUser(); }catch(e){} }
+  if(r.nouvelles.length){ try{ saveUser(); }catch(e){ rcErreurMuette('parcoursAvancer',e); } }
   if(r.fini){ try{ majBadges(); }catch(e){} try{ majXp(); }catch(e){} }
   try{ _rendreParcours(u); }catch(e){}
   parcoursEcrireJ21(u).catch(()=>{});
@@ -85509,7 +85509,7 @@ function parcoursRelancer(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||!u.parcours||u.parcours.existant||u.parcours.fini) return false;
   u.parcours.relance=Date.now();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('parcoursRelancer',e); }
   try{ _rendreParcours(u); }catch(e){}
   return true;
 }
@@ -85539,7 +85539,7 @@ async function parcoursEcrireJ21(u){
   const moi=String(u.email).replace(/\./g,',');
   const r=await fetch(CLOUD._fbUrl.replace('users.json','parcours_j21/'+jour+'/'+moi+'.json')+'?auth='+token,
     {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>null);
-  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){} return true; }
+  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){ rcErreurMuette('parcoursEcrireJ21',er); } return true; }
   return false;
 }
 // Une invitation partie (lien de parrainage, carte, duel) : l'étape
@@ -85947,7 +85947,7 @@ function majXp(){
     u.xpNiveau=code; change=true;
     if(!fete&&_rangDuCode(code)===_rangDuCode(vuN)) sous=code;
   }
-  if(change) try{ saveUser(); }catch(e){}
+  if(change) try{ saveUser(); }catch(e){ rcErreurMuette('majXp',e); }
   if(fete) try{ _celebrerRang(fete); }catch(e){}
   if(sous) try{ _celebrerSousNiveau(r.total); }catch(e){}
   return {total:r.total,rang:rg.rang.n,fete,sous};
@@ -86273,7 +86273,7 @@ function missionOuvrirCoffre(btn){
   if(!u) return null;
   const k=ouvrirCoffre(u,localISODate(new Date()));
   if(!k) return null;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('missionOuvrirCoffre',e); }
   const e=_rendreMission(u);
   try{
     const g=document.querySelector('#clh-mission .mj-gain');
@@ -86299,7 +86299,7 @@ function missionMobiliteLancer(){
     if(reste>0) return;
     missionMobiliteArreter();
     const u=currentUser;
-    if(missionActe(u,'mobilite')){ try{ saveUser(); }catch(e){} }
+    if(missionActe(u,'mobilite')){ try{ saveUser(); }catch(e){ rcErreurMuette('missionMobiliteLancer',e); } }
     try{ toast(ICO.coche+' 10 min de mobilité','var(--green)'); }catch(e){}
     try{ _rendreMission(u); }catch(e){}
   };
@@ -86339,7 +86339,7 @@ function missionProchaineVoir(){
     +'<button type="button" class="btn btn-outline btn-sm" onclick="this.closest(\'.mj-feuille\').remove()">Fermer</button></div>';
   d.addEventListener('click',e=>{ if(e.target===d) d.remove(); });
   document.body.appendChild(d);
-  if(missionActe(u,'prochaine')){ try{ saveUser(); }catch(e){} }
+  if(missionActe(u,'prochaine')){ try{ saveUser(); }catch(e){ rcErreurMuette('missionProchaineVoir',e); } }
   try{ _rendreMission(u); }catch(e){}
   return true;
 }
@@ -86452,7 +86452,7 @@ function liguesBasculer(on){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return false;
   if(on) delete u.liguesOff; else u.liguesOff=true;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('liguesBasculer',e); }
   try{ toast(on?'Tu rejoins les ligues dès ta prochaine séance.':'Tu ne participes plus aux ligues.','var(--green)'); }catch(e){}
   try{ _rendreLigue(u); }catch(e){}
   document.querySelectorAll('.lg-feuille').forEach(x=>x.remove());
@@ -86674,7 +86674,7 @@ function majCarteAthlete(u,maintenant,o){
     semaine:n.semaine,le:t,avant:prec?(Number(prec.globale)||null):null,
     // La carte reste sur l'accueil tant qu'elle n'a été ni partagée ni fermée.
     aMontrer:monte||!!(prec&&prec.aMontrer),foudre:cadreChange||!!(prec&&prec.foudre)};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('majCarteAthlete',e); }
   return {note:n,monte,cadreChange};
 }
 // ── Les cadres dessinés (cartes-bruts/ → app/img/cartes/<cadre>.webp) ─────
@@ -86830,7 +86830,7 @@ function partagerCarteAthlete(btn,format){
     ok=_storySortirPartage(dessin(),nom,undefined,fmt)||_storySortirTelechargement(dessin(),nom,fmt);
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
-  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){ rcErreurMuette('partagerCarteAthlete',e); } }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ const l=sp.textContent; _texteIco(sp,'Carte prête '+ICO.coche); setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
@@ -86888,14 +86888,14 @@ function _rendreCarteAccueil(u){
   if(cadre&&!cadre.complete) cadre.addEventListener('load',peindre,{once:true});
   // LE CHANGEMENT DE CADRE : la foudre frappe la carte, une fois.
   if(u.carte.foudre){
-    u.carte.foudre=false; try{ saveUser(); }catch(e){}
+    u.carte.foudre=false; try{ saveUser(); }catch(e){ rcErreurMuette('_rendreCarteAccueil',e); }
     setTimeout(()=>{ try{ rcFoudre(document.getElementById('ca-vignette'),{eclairs:3}); }catch(e){} },400);
   }
   return true;
 }
 function fermerCarteAccueil(){
   const u=currentUser;
-  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){ rcErreurMuette('fermerCarteAccueil',e); } }
   const z=document.getElementById('clh-carte'); if(z){ z.innerHTML=''; z.hidden=true; }
   return true;
 }
@@ -89818,7 +89818,7 @@ function checkinRepondre(cle,n){
   const _fait=checkinDuJour(u,Date.now());
   if(cle==='faim'&&_fait){
     _fait.faim=_ciNote(n);
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton check-in');
     _rendreCheckin(u);
     return true;
   }
@@ -89832,7 +89832,7 @@ function checkinRepondre(cle,n){
     u.checkin=(u.checkin&&typeof u.checkin==='object')?u.checkin:{};
     u.checkin[j]=c;
     _ciBrouillon={};
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton check-in');
     try{ majXp(); _rendreRang(u); }catch(e){}
     try{ arcHaptique('succes'); }catch(e){}
   }
@@ -90113,7 +90113,7 @@ function repriseDouceChoisir(oui){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return false;
   u._repriseDouce={depuis:Date.now(),accepte:!!oui};
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton choix de reprise');
   try{ _afficherRepriseDouce(u); }catch(e){}
   try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
   try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère '+ICO.coche:'C’est noté : tes charges restent les mêmes '+ICO.coche); }catch(e){}
@@ -90613,7 +90613,7 @@ function showProgressTab(tab,btn,sansMemo){
   // photos) — lancerait une synchronisation pour rien.
   if(!sansMemo&&currentUser&&PROG_ONGLETS.indexOf(tab)>=0&&currentUser.uiProgressTab!==tab){
     currentUser.uiProgressTab=tab;
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('showProgressTab',e); }
   }
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}
@@ -91834,7 +91834,7 @@ function verifierRappelAvantSeance(){
   const e=rappelAvantSeanceEtat(u,Date.now());
   if(!e.envoyer) return false;
   u.nutrition.rappelAvantSeanceLe=localISODate(new Date());
-  try{ saveUser(); }catch(err){}
+  try{ saveUser(); }catch(err){ rcErreurMuette('verifierRappelAvantSeance',err); }
   try{
     document.getElementById('rappel-gluc-banniere')?.remove();
     const b=document.createElement('div');
@@ -98601,7 +98601,7 @@ function ajouterRecettePlan(lid){
   const e=entreeLignePlanRecette(it,r,_fjIdsNeufs(date,1)[0]);
   const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){ rcErreurMuette('ajouterRecettePlan',er); }
     toast(e.nom+' ajouté','var(--green)');
     try{ _renderFjRecent(); }catch(er){}
   }
@@ -98677,7 +98677,7 @@ function validerPortionRecette(){
   const e=recetteEntree(r,s.n,s.repas,_fjIdsNeufs(date,1)[0],undefined,s.de);
   const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){ rcErreurMuette('validerPortionRecette',er); }
     _fjRepas=s.repas; _fjRepasChoisi=true;
     toast(e.nom+' ajouté','var(--green)');
   }
@@ -99141,7 +99141,7 @@ function ajouterRecent(i){
   const e=Object.assign({},r.e,{repas,periSeance:false});
   const ok=_fjAjouter(_fjCopier([e],date,repas),date,escapeHtml(r.e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(err){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(err){ rcErreurMuette('ajouterRecent',err); }
     _fjRepasChoisi=true;
     toast(r.e.nom+' ajouté','var(--green)');
     try{ _renderFjRecent(); }catch(err){}
@@ -108208,7 +108208,7 @@ function terminerTraitement(user,id,quand){
   // celui de l'athlete non pousse. L'appelant s'en charge.
   const _u=_dossier(user);
   if(!currentUser||!_u||_u===currentUser||_u.email===currentUser.email)
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton traitement');
   return {ok:true};
 }
 // ══════════════ LA TABLE D'INTERACTIONS ════════════════════════════════
@@ -108382,7 +108382,7 @@ function basculerPrise(user,quoi,id,moment,dateISO){
   // chaque sauvegarde, et un releve qui s'accumule sans borne finit par peser.
   const jours=Object.keys(p).sort();
   while(jours.length>PRISE_JOURS_MAX) delete p[jours.shift()];
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton suivi de traitement');
   return !etait;
 }
 // PURE. LE TAUX DE PRISE sur `n` jours. Rend null quand rien n'etait DU sur la
@@ -108471,7 +108471,7 @@ function _trtMarquerMention(user){
   if(!u.sante||typeof u.sante!=='object') u.sante={};
   if(u.sante.mentionTraitementsVue) return false;
   u.sante.mentionTraitementsVue=Date.now();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_trtMarquerMention',e); }
   return true;
 }
 function ouvrirTraitements(){
@@ -111661,7 +111661,7 @@ function _renderVideosListe(){
   // LA MIGRATION DU LOT 7, ICI : c'est le seul ecran ou ces commentaires se
   // lisent, et le dossier est deja en main. Elle ne fait rien sur un dossier
   // qui n'a jamais eu de comparaison, c'est-a-dire presque tous.
-  try{ if(migrerComparaisons(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerComparaisons(currentUser)) saveUser(); }catch(e){ rcErreurMuette('_renderVideosListe',e); }
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
@@ -112025,7 +112025,7 @@ async function cldDossierMenage(maxi){
       if(r.status===404){ cldDossierRetirer(e.publicId); cldFileRetirer(e.publicId); n++; }
     }catch(err){}
   }
-  if(n){ try{ saveUser(); }catch(err){} }
+  if(n){ try{ saveUser(); }catch(err){ rcErreurMuette('cldDossierMenage',err); } }
   return n;
 }
 // CE QUE L'ÉCRAN PEUT ANNONCER : combien, et depuis quand le plus ancien.
@@ -114049,7 +114049,7 @@ function _tplListe(){
   if(!currentUser) return [];
   if(!Array.isArray(currentUser.msgTemplates)||!currentUser.msgTemplates.length){
     currentUser.msgTemplates=templateMigrerCommentaires(currentUser);
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_tplListe',e); }
   }
   return currentUser.msgTemplates.slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 }
@@ -114176,7 +114176,7 @@ function tplMajCorps(id,v){
   const t=(currentUser.msgTemplates||[]).find(x=>x&&x.id===id);
   if(!t) return;
   t.corps=String(v||'');
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('tplMajCorps',e); }
 }
 // Un modèle supprimé ne doit PAS vider un brouillon en cours : l'insertion a
 // copié le TEXTE, jamais une référence. Il n'y a donc rien à faire ici — le
@@ -117555,7 +117555,7 @@ function _rendrePointSemaine(){
   if(!z) return null;
   const u=currentUser;
   let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
-  if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){} }
+  if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){ rcErreurMuette('_rendrePointSemaine',err); } }
   z.innerHTML=htmlPointSemaine(e,u);
   return e;
 }
@@ -123648,6 +123648,39 @@ function srcImageAttr(s){
 // autour : onclick="f(${jsArg(x)})".
 function jsArg(v){ return escapeHtml(JSON.stringify(String(v==null?'':v))); }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
+// ══ LES ERREURS QU'ON NE MONTRE PAS, MAIS QU'ON GARDE (05/10/2026) ══════════
+// Un try/catch vide autour de saveUser avalait l'échec sans trace : la saisie
+// était perdue, et rien, nulle part, ne permettait de le savoir. Les 50
+// dernières sont gardées EN MÉMOIRE (window._rcErreurs) et dites à la console.
+// Aucun envoi réseau : ce qui échoue ici peut porter des données de santé.
+const RC_ERREURS_MAX=50;
+function rcErreurMuette(ou,e){
+  try{
+    const l=Array.isArray(window._rcErreurs)?window._rcErreurs:(window._rcErreurs=[]);
+    l.push({ou:String(ou||'?'),message:String((e&&e.message)||e||''),nom:(e&&e.name)||'',at:Date.now()});
+    if(l.length>RC_ERREURS_MAX) l.splice(0,l.length-RC_ERREURS_MAX);
+  }catch(_){}
+  try{ console.warn('[RepCore]',ou,e); }catch(_){}
+}
+// UNE SAISIE DE L'UTILISATEUR, et il doit savoir quand elle n'est pas gardée.
+// `perdu` nomme ce qui est perdu, au masculin : « Ton entraînement », « Ton
+// poids »… Le toast dit l'échec UNE FOIS PAR MINUTE au plus : une séance
+// enregistre à chaque série, et dix toasts à la suite ne se lisent plus.
+// Rend true si la saisie est sur l'appareil.
+let _rcDireDernier=0;
+const RC_DIRE_INTERVALLE_MS=60000;
+function saveUserOuDire(perdu){
+  let ok=false, err=null;
+  try{ ok=(saveUser()!==false); }catch(e){ err=e; }
+  if(ok) return true;
+  rcErreurMuette('saveUser · '+String(perdu||'saisie'),err||new Error('saveUser a rendu false (stockage local)'));
+  const t=Date.now();
+  if(t-_rcDireDernier>=RC_DIRE_INTERVALLE_MS){
+    _rcDireDernier=t;
+    try{ toast(String(perdu||'Ta saisie')+' n\'a pas pu être enregistré sur cet appareil','var(--orange)'); }catch(_){}
+  }
+  return false;
+}
 // Retourne true si la donnée est réellement sur l'appareil, false si le quota
 // localStorage a débordé. Les appelants qui annoncent un succès à l'utilisateur
 // doivent conditionner leur « ✓ » sur cette valeur : sinon l'utilisateur ferme
@@ -123656,7 +123689,22 @@ function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd
 function saveUser(){
   currentUser.updatedAt=Date.now();
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
-  const users=DB.get('users')||{};
+  // ⚠ rc_users ILLISIBLE (05/10/2026) : la clé est là mais ne se lit plus
+  //   (JSON corrompu). `DB.get('users')||{}` partait d'une carte VIDE et la
+  //   réécrivait avec le seul dossier courant : tous les autres dossiers de
+  //   l'appareil (les athlètes d'un coach) étaient détruits. On garde la
+  //   chaîne brute à part, on le note, et on n'écrit que 'session'.
+  let brutUsers=null;
+  try{ brutUsers=localStorage.getItem('rc_users'); }catch(e){}
+  const lus=DB.get('users');
+  if(brutUsers&&brutUsers.trim()!=='null'&&lus==null){
+    const aEcrire=_sansSante(currentUser);
+    try{ localStorage.setItem('rc_users_corrompu_'+Date.now(),brutUsers); }catch(e){ rcErreurMuette('saveUser · copie de rc_users',e); }
+    rcErreurMuette('saveUser · rc_users illisible, carte non réécrite',new Error(brutUsers.length+' caractères illisibles'));
+    DB.set('session',aEcrire);
+    return false;
+  }
+  const users=lus||{};
   // ⚠ LE VERROU DE L'ARTICLE 9, ET C'EST ICI QU'IL DOIT ETRE.
   //
   // saveUser est le SEUL point par lequel un dossier devient durable : le
@@ -129306,7 +129354,7 @@ function relancerInvitation(token){
   }
   const msg=messageRelance(c,u);
   c.relanceLe=new Date().toISOString();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('relancerInvitation',e); }
   // L'horodatage part aussi sur le nœud, pour que le coach retrouve l'état
   // depuis un autre appareil. Sans jeton ce PATCH échouera — ce n'est pas
   // grave, la limite locale a déjà joué.
@@ -129398,7 +129446,7 @@ async function inviterAthlete(prenom,nom){
     prenom:pn,nom:nm};
   if(!u.studentCodes) u.studentCodes=[];
   u.studentCodes.push(entree);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('inviterAthlete',e); }
   return {ok:true,invitation:entree,lien:lienInvitation(gen.token,u)};
 }
 

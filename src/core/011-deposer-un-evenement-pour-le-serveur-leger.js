@@ -516,7 +516,7 @@ async function creerDuel(mesure,duree){
     ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false); }
   if(!ok) return {ok:false,erreur:'Création impossible pour l’instant.'};
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('creerDuel',e); }
   _duelsCache[id]={createur:moi,createurNom:prenom,mesure:m,duree:d,statut:'attente',creeLe:Date.now()};
   return {ok:true,id};
 }
@@ -548,7 +548,7 @@ async function rejoindreDuel(id,btn){
     return false;
   }
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('rejoindreDuel',e); }
   deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
   toast('Défi relevé '+ICO.eclair+' Il commence à ta prochaine séance.','var(--green)',4000);
   delete _duelsCache[id];
@@ -576,7 +576,7 @@ async function duelsApresSeance(){
     if(d.statut!=='en_cours') continue;
     if(await deposerEvenement({type:'duel_maj',id}).catch(()=>false)) n++;
   }
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('duelsApresSeance',e); }
   return n;
 }
 // ── L'accueil : l'invitation reçue, les duels en cours, « Défie un pote » ──
@@ -1214,7 +1214,7 @@ async function creerDuelAvecAmi(pseudo,mesure,duree){
   const ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom:nom,mesure:r.mesure,duree:r.duree}}).catch(()=>false);
   if(!ok) return {ok:false,lien:true,erreur:prenom+' ne te suit pas encore : un duel direct demande qu’il te suive. Envoie-lui le lien du duel à la place.'};
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('creerDuelAvecAmi',e); }
   _duelsCache[id]=duel;
   deposerEvenement({type:'duel_cree',id}).catch(()=>{});
   return {ok:true,id,prenom};
@@ -1242,7 +1242,7 @@ async function duelsRecusRattacher(u){
   let n=0;
   const x=Object.assign({},u.duels||{});
   for(const id of Object.keys(r.v)) if(DUEL_ID_RE.test(id)&&!x[id]){ x[id]={role:'invite',le:Number(r.v[id].le)||Date.now()}; n++; }
-  if(n){ u.duels=x; try{ saveUser(); }catch(e){} }
+  if(n){ u.duels=x; try{ saveUser(); }catch(e){ rcErreurMuette('duelsRecusRattacher',e); } }
   return n;
 }
 async function _rendreDuelsAccueil(){
@@ -1985,7 +1985,7 @@ async function majRecompensesServeur(o){
   }catch(e){ nl=0; }
   const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns+nl;
   if(n){
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('majRecompensesServeur',e); }
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
     // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
     // Un DUEL clos n'est pas un défi du Canal : il a sa carte sur l'accueil.

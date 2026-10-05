@@ -1693,6 +1693,39 @@ function srcImageAttr(s){
 // autour : onclick="f(${jsArg(x)})".
 function jsArg(v){ return escapeHtml(JSON.stringify(String(v==null?'':v))); }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
+// ══ LES ERREURS QU'ON NE MONTRE PAS, MAIS QU'ON GARDE (05/10/2026) ══════════
+// Un try/catch vide autour de saveUser avalait l'échec sans trace : la saisie
+// était perdue, et rien, nulle part, ne permettait de le savoir. Les 50
+// dernières sont gardées EN MÉMOIRE (window._rcErreurs) et dites à la console.
+// Aucun envoi réseau : ce qui échoue ici peut porter des données de santé.
+const RC_ERREURS_MAX=50;
+function rcErreurMuette(ou,e){
+  try{
+    const l=Array.isArray(window._rcErreurs)?window._rcErreurs:(window._rcErreurs=[]);
+    l.push({ou:String(ou||'?'),message:String((e&&e.message)||e||''),nom:(e&&e.name)||'',at:Date.now()});
+    if(l.length>RC_ERREURS_MAX) l.splice(0,l.length-RC_ERREURS_MAX);
+  }catch(_){}
+  try{ console.warn('[RepCore]',ou,e); }catch(_){}
+}
+// UNE SAISIE DE L'UTILISATEUR, et il doit savoir quand elle n'est pas gardée.
+// `perdu` nomme ce qui est perdu, au masculin : « Ton entraînement », « Ton
+// poids »… Le toast dit l'échec UNE FOIS PAR MINUTE au plus : une séance
+// enregistre à chaque série, et dix toasts à la suite ne se lisent plus.
+// Rend true si la saisie est sur l'appareil.
+let _rcDireDernier=0;
+const RC_DIRE_INTERVALLE_MS=60000;
+function saveUserOuDire(perdu){
+  let ok=false, err=null;
+  try{ ok=(saveUser()!==false); }catch(e){ err=e; }
+  if(ok) return true;
+  rcErreurMuette('saveUser · '+String(perdu||'saisie'),err||new Error('saveUser a rendu false (stockage local)'));
+  const t=Date.now();
+  if(t-_rcDireDernier>=RC_DIRE_INTERVALLE_MS){
+    _rcDireDernier=t;
+    try{ toast(String(perdu||'Ta saisie')+' n\'a pas pu être enregistré sur cet appareil','var(--orange)'); }catch(_){}
+  }
+  return false;
+}
 // Retourne true si la donnée est réellement sur l'appareil, false si le quota
 // localStorage a débordé. Les appelants qui annoncent un succès à l'utilisateur
 // doivent conditionner leur « ✓ » sur cette valeur : sinon l'utilisateur ferme
@@ -1701,7 +1734,22 @@ function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd
 function saveUser(){
   currentUser.updatedAt=Date.now();
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
-  const users=DB.get('users')||{};
+  // ⚠ rc_users ILLISIBLE (05/10/2026) : la clé est là mais ne se lit plus
+  //   (JSON corrompu). `DB.get('users')||{}` partait d'une carte VIDE et la
+  //   réécrivait avec le seul dossier courant : tous les autres dossiers de
+  //   l'appareil (les athlètes d'un coach) étaient détruits. On garde la
+  //   chaîne brute à part, on le note, et on n'écrit que 'session'.
+  let brutUsers=null;
+  try{ brutUsers=localStorage.getItem('rc_users'); }catch(e){}
+  const lus=DB.get('users');
+  if(brutUsers&&brutUsers.trim()!=='null'&&lus==null){
+    const aEcrire=_sansSante(currentUser);
+    try{ localStorage.setItem('rc_users_corrompu_'+Date.now(),brutUsers); }catch(e){ rcErreurMuette('saveUser · copie de rc_users',e); }
+    rcErreurMuette('saveUser · rc_users illisible, carte non réécrite',new Error(brutUsers.length+' caractères illisibles'));
+    DB.set('session',aEcrire);
+    return false;
+  }
+  const users=lus||{};
   // ⚠ LE VERROU DE L'ARTICLE 9, ET C'EST ICI QU'IL DOIT ETRE.
   //
   // saveUser est le SEUL point par lequel un dossier devient durable : le

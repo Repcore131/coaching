@@ -289,7 +289,7 @@ async function publierPagePublique(u,reg,o){
   if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
   if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
   u.pagePublique={pseudo:neu,active:!!reg.active,montrer:Object.assign({},reg.montrer||{}),publieLe:Date.now()};
-  if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){}
+  if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){ rcErreurMuette('publierPagePublique',e); }
   return {ok:true};
 }
 // La page suit l'athlète : après une séance, et au plus toutes les six heures
@@ -299,7 +299,7 @@ async function majPagePublique(o){
   if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')||!CLOUD.ok()) return false;
   if(!(o&&o.force)&&Date.now()-(Number(p.publieLe)||0)<6*3600e3) return false;
   const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:pageMontrerComplet(p.montrer)},{silencieux:true});
-  if(r.ok) try{ saveUser(); }catch(e){}
+  if(r.ok) try{ saveUser(); }catch(e){ rcErreurMuette('majPagePublique',e); }
   return r.ok;
 }
 // PURE. Le bloc des réglages, dans le profil.
@@ -360,7 +360,7 @@ function htmlPropositionPage(u){
 // Le passage est noté À L'AFFICHAGE : c'est « proposée », pas « acceptée ».
 function _noterPropositionPage(u,rang){
   u.pagePropose={fois:(Number(u.pagePropose&&u.pagePropose.fois)||0)+1,rang:Number(rang)||0,le:Date.now()};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_noterPropositionPage',e); }
 }
 // UN GESTE : le pseudo du champ, les choix par défaut (charges exclues). Pris
 // par quelqu'un d'autre : deux chiffres ajoutés, trois essais.
@@ -892,7 +892,7 @@ async function publierVitrinePublique(u){
   for(const s of essais){
     const ok=await CLOUD.racinePatch({['slugs/'+s]:moi,['vitrines/'+s]:d}).catch(()=>false);
     if(ok){
-      if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){} }
+      if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){ rcErreurMuette('publierVitrinePublique',e); } }
       try{ _rendreLienVitrineCoach(); }catch(e){}
       return true;
     }
@@ -1856,7 +1856,7 @@ async function parrainageAssurerCode(u){
   }
   if(!c) return '';
   u.parrainage=Object.assign({},u.parrainage||{},{code:c});
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('parrainageAssurerCode',e); }
   // L'appareil du parrain, pour que personne ne s'inscrive comme filleul depuis lui.
   CLOUD.parrainagePut('appareils/'+rcAppareilId(),moi).catch(()=>false);
   return c;
@@ -1937,7 +1937,7 @@ async function parrainagePublierRang(u){
   const n=rangPublic(u);
   if(Number(p.rangPublie)===n) return false;
   const ok=await CLOUD.parrainagePut('codesPublics/'+p.code+'/rang',n).catch(()=>false);
-  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){} }
+  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){ rcErreurMuette('parrainagePublierRang',e); } }
   return !!ok;
 }
 async function majParrainageMiroir(u){

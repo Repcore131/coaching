@@ -63,7 +63,7 @@ function fermerContactCoach(tout_de_suite){ _feuilleFermer('rc-contact',tout_de_
 // un bouton touche. Le journal vit dans le dossier de l'ATHLETE — c'est le seul
 // document qu'il peut ecrire.
 function _journaliserContactCoach(){
-  try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){}
+  try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){ rcErreurMuette('_journaliserContactCoach',e); }
   return true;
 }
 // Ouvre l'editeur du mot au coach ET l'amene sous les yeux : il vit plus bas

@@ -1702,7 +1702,7 @@ async function enregistrerFicheVente(){
   if(!ok) return _venteErreur('La publication a échoué. Réessaie.');
   // LE LIEN MODELE → FICHE, pose une fois. C'est lui qui fait retoucher la
   // meme fiche la prochaine fois, et suivre les seances a chaque sauvegarde.
-  if(m&&m.boutiqueId!==id){ m.boutiqueId=id; try{ saveUser(); }catch(e){} }
+  if(m&&m.boutiqueId!==id){ m.boutiqueId=id; try{ saveUser(); }catch(e){ rcErreurMuette('enregistrerFicheVente',e); } }
   // On relit le noeud plutot que de recopier ce qu'on croit avoir ecrit : la
   // base a pu normaliser, et c'est elle qui fait foi.
   await rafraichirBoutique();

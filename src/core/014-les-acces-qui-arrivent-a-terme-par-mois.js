@@ -404,7 +404,7 @@ function loadCoachHome(){
     // Le comptage de cycles se fait ICI, une fois par ouverture du tableau
     // de bord, avec le cache deja lu. Il n ecrit dans le dossier que quand
     // le mois change : un enregistrement par mois, pas un par affichage.
-    if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){}
+    if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){ rcErreurMuette('loadCoachHome',e); }
     const _za=document.getElementById('ch-alerte-palier');
     if(_za) _za.innerHTML=_htmlAlertePalier(u,_cacheUsers);
     _rendreInvitations();
@@ -2263,12 +2263,12 @@ function poserMotCoach(user,texte){
     return {ok:false,raison:'Ton mot fait '+brut.length+' caractères. Le maximum est '
       +MOT_COACH_MAX+' : l’essentiel tient dedans, et le reste se dit de vive voix.'};
   const t=brut.trim();
-  if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){} return {ok:true,efface:true}; }
+  if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){ rcErreurMuette('poserMotCoach',e); } return {ok:true,efface:true}; }
   // ⚠ LE TEXTE EST STOCKE TEL QUEL. Pas de normalisation, pas de majuscule
   // initiale, pas de ponctuation ajoutee : « remonte tel quel » commence a
   // l'ecriture. Le seul traitement est l'echappement A L'AFFICHAGE.
   u.motCoach={texte:t,maj:Date.now()};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('poserMotCoach',e); }
   return {ok:true};
 }
 // PURE. Le mot est-il NOUVEAU pour ce coach ? Le marqueur de lecture vit dans
@@ -2294,7 +2294,7 @@ function marquerMotCoachLu(coach,athlete){
   if(!c.motsLus||typeof c.motsLus!=='object') c.motsLus={};
   if(Number(c.motsLus[id])>=m.maj) return false;   // deja lu : aucune ecriture
   c.motsLus[id]=m.maj;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('marquerMotCoachLu',e); }
   return true;
 }
 // ── LA SURFACE DE L'ATHLETE ────────────────────────────────────────────

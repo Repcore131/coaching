@@ -809,7 +809,7 @@ function demanderResiliation(motif){
   const ts=Date.now();
   u.abonnement.resiliationDemandee={ts:ts,motif:String(motif||'').slice(0,300)};
   // Le LOCAL d'abord : hors ligne, l'utilisateur doit voir son accusé.
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('demanderResiliation',e); }
   _fileResilPoser(u.email,ts);
   // Puis l'envoi. S'il aboutit, la file se vide ; sinon elle sera rejouée.
   _rejouerResiliation();
@@ -823,7 +823,7 @@ function _majRenonciation(accepte){
   if(!u.abonnement||typeof u.abonnement!=='object') u.abonnement={};
   u.abonnement.renonciationRetractation=
     accepte===true?{accepte:true,ts:Date.now()}:{accepte:false,ts:null};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_majRenonciation',e); }
   _majBoutonPaypal();
   return true;
 }

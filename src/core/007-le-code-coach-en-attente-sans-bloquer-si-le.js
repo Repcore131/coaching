@@ -852,7 +852,7 @@ async function _migrerSantePriveeLocale(){
     // récupère ce que l'autre appareil avait déjà écrit.
     if(cst.length) u.constantes=cst;
     if(ana.length) u.analyses=ana;
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_migrerSantePriveeLocale',e); }
     // L'envoi passe par le chemin NORMAL : santeBlocsPrives collecte les
     // deux séries, _doPushOne les écrit dans sante_privee. Un second chemin
     // d'écriture divergerait un jour de celui-ci.

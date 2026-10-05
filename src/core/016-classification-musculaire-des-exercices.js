@@ -1872,7 +1872,7 @@ function progPublicPoser(i,v){
   //   detruire un travail de plusieurs heures sur un choix qui se revient en
   //   deux clics. Elle est MASQUEE, elle reste ecrite, et la carte le dit.
   p.publicVise=v;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('progPublicPoser',e); }
   try{ loadCoachProgramsList(); }catch(e){}
   return true;
 }
@@ -2278,7 +2278,7 @@ function cplDeplacer(i,sens){
   while(j>=0&&j<l.length&&_cplGroupe(l[j])!==r) j+=sens;
   if(j<0||j>=l.length) return false;
   const t=l[i]; l[i]=l[j]; l[j]=t;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('cplDeplacer',e); }
   loadCoachProgramsList();
   return true;
 }

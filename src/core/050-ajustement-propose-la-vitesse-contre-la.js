@@ -414,7 +414,7 @@ function _rendrePointSemaine(){
   if(!z) return null;
   const u=currentUser;
   let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
-  if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){} }
+  if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){ rcErreurMuette('_rendrePointSemaine',err); } }
   z.innerHTML=htmlPointSemaine(e,u);
   return e;
 }

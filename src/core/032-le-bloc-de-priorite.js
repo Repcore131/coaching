@@ -926,7 +926,7 @@ function dispoAllegerSeance(idx,d){
   // C'est la meme information, et elle est plus utile tot.
   _journalSeance(u,'dispo_allegement',{exercice:ex.name,avant:avant,apres:avant-1,
     cause:(d&&d.cause)||null,note:(d&&d.note)||null});
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton allègement de séance');
   const _envoi=CLOUD.pushOne(u.email,u);
   toastSync(true,_envoi,'Dernière série retirée sur '+ex.name+' '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
@@ -942,7 +942,7 @@ function _dispoConsommerAllegement(exercices,slotIdx){
   const i=_dispoIndexAlleger(exercices);
   if(i<0) return false;
   exercices[i].series=Math.max(1,(Number(exercices[i].series)||3)-1);
-  try{ delete u.allegementJour; saveUser(); }catch(e){}
+  try{ delete u.allegementJour; saveUser(); }catch(e){ rcErreurMuette('_dispoConsommerAllegement',e); }
   return true;
 }
 // LE GESTE ROUGE. Reutilise le mecanisme de decharge plutot que d'en ecrire un
@@ -960,7 +960,7 @@ async function dispoReporterSeance(d){
   try{ fait=appliquerDecharge(u); }catch(e){ fait=false; }
   if(!fait){ try{ toast('Aucune séance active à alléger.','var(--orange)'); }catch(e){} return false; }
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton report de séance');
   const _envoi=CLOUD.pushOne(u.email,u);
   toastSync(true,_envoi,'Semaine allégée '+ICO.coche,'l’allègement est');
   try{ _renderApercu(); }catch(e){}
@@ -1229,7 +1229,7 @@ function appliquerRetourMuscle(user,muscle,cleRevolue){
   etat.derniereSemaine=cle;
   etat.maj=Date.now();
   u.reperesAuto[muscle]=etat;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('appliquerRetourMuscle',e); }
   // Les caches portent des verdicts de zone que ce deplacement change.
   try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
   return {bouge:bouge,de:de,vers:vers,raison:v,semaine:cle};
@@ -1546,7 +1546,7 @@ function reinitialiserReperesMuscle(user,muscle){
   let n=0;
   for(const m of cibles) if(u.reperesAuto[m]){ delete u.reperesAuto[m]; n++; }
   if(!n) return {ok:true,n:0};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('reinitialiserReperesMuscle',e); }
   try{ _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
   // JOURNALISE COMME LES AJUSTEMENTS NUTRITION. Un repere qui revient a la
   // reference change des seuils : l'athlete doit pouvoir savoir quand, et le

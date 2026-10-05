@@ -1155,7 +1155,7 @@ function ccdEpingler(cle){
   currentUser.ccdEpingles=t;
   // ⚠ LE DOSSIER DU COACH, ET C'EST TOUT. saveUser n'enregistre que
   //   currentUser : l'athlete ne porte rien de ce choix, qui n'est pas le sien.
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ccdEpingler',e); }
   _ccdRefaireEtages();
   return l;
 }

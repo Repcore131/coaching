@@ -2360,7 +2360,7 @@ function ajouterRecettePlan(lid){
   const e=entreeLignePlanRecette(it,r,_fjIdsNeufs(date,1)[0]);
   const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){ rcErreurMuette('ajouterRecettePlan',er); }
     toast(e.nom+' ajouté','var(--green)');
     try{ _renderFjRecent(); }catch(er){}
   }
@@ -2436,7 +2436,7 @@ function validerPortionRecette(){
   const e=recetteEntree(r,s.n,s.repas,_fjIdsNeufs(date,1)[0],undefined,s.de);
   const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){ rcErreurMuette('validerPortionRecette',er); }
     _fjRepas=s.repas; _fjRepasChoisi=true;
     toast(e.nom+' ajouté','var(--green)');
   }

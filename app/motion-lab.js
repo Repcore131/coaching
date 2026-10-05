@@ -4853,7 +4853,7 @@ function mlEchEnregistrer(){
     const d=_mlxDisquesCoach(), mesures={...d.mesures};
     if(e.src.indexOf('mesure|')===0) mesures[e.src.slice(7)]=Math.round(Number(e.mm));
     currentUser.mlDisques={dernier:e.src,mesures};
-    try{ saveUser(); }catch(x){}
+    try{ saveUser(); }catch(x){ rcErreurMuette('mlEchEnregistrer',x); }
   }
   _ml.outil='selection';
   _mlxApresChangement();
@@ -4892,7 +4892,7 @@ function mlCouleurSens(c,texte){
   const o={..._mlxSens()};
   o[c]=String(texte||'').trim().slice(0,ANNOT_NOM_MAX);
   currentUser.mlCouleurs=o;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('mlCouleurSens',e); }
   return true;
 }
 /** @returns {number} l'instant affiché, en ms */
@@ -5721,7 +5721,7 @@ async function mlModeleAnnotRetirer(i){
   if(!await rcConfirm('Retirer ce modèle ?',String(perso[j].nom||''),'Retirer','Garder')) return false;
   perso.splice(j,1);
   currentUser.mlModelesAnnot=perso;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('mlModeleAnnotRetirer',e); }
   _mlxMajModeles();
   return true;
 }
@@ -11141,7 +11141,7 @@ function mlModeleRetirer(i){
   if(!l[i]) return false;
   l.splice(i,1);
   currentUser.motionModeles=l;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('mlModeleRetirer',e); }
   _mlMajCorrection();
   return true;
 }

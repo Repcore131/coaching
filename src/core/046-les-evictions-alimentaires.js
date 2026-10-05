@@ -510,7 +510,7 @@ function terminerTraitement(user,id,quand){
   // celui de l'athlete non pousse. L'appelant s'en charge.
   const _u=_dossier(user);
   if(!currentUser||!_u||_u===currentUser||_u.email===currentUser.email)
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton traitement');
   return {ok:true};
 }
 // ══════════════ LA TABLE D'INTERACTIONS ════════════════════════════════
@@ -684,7 +684,7 @@ function basculerPrise(user,quoi,id,moment,dateISO){
   // chaque sauvegarde, et un releve qui s'accumule sans borne finit par peser.
   const jours=Object.keys(p).sort();
   while(jours.length>PRISE_JOURS_MAX) delete p[jours.shift()];
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton suivi de traitement');
   return !etait;
 }
 // PURE. LE TAUX DE PRISE sur `n` jours. Rend null quand rien n'etait DU sur la
@@ -773,7 +773,7 @@ function _trtMarquerMention(user){
   if(!u.sante||typeof u.sante!=='object') u.sante={};
   if(u.sante.mentionTraitementsVue) return false;
   u.sante.mentionTraitementsVue=Date.now();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_trtMarquerMention',e); }
   return true;
 }
 function ouvrirTraitements(){

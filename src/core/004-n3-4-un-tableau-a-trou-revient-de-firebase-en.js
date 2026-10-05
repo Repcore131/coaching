@@ -1707,7 +1707,7 @@ window.onload=()=>{
               return;
             }
             if(CLOUD.canWrite()){
-              try{saveUser();}catch(e){}
+              try{ saveUser(); }catch(e){ rcErreurMuette('_majIndicAttente',e); }
               // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
               setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},800);
             }
@@ -2181,9 +2181,9 @@ function routeUser(){
   // Le trapeze s'est dedouble le 08/09/2026 : on reporte l'ancien reglage sur
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
-  try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Les entrées du journal comptées 0 kcal alors que leurs macros sont connues.
-  try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -2196,7 +2196,7 @@ function routeUser(){
   try{ attribActifSemaine(currentUser); }catch(e){}
   // LE FUSEAU DE L'APPAREIL, pour le serveur léger : ses heures calmes et le
   // jour du plafond d'un push sont ceux de l'athlète. Écrit seulement s'il a changé.
-  try{ if(fuseauAssurer(currentUser)) saveUser(); }catch(e){}
+  try{ if(fuseauAssurer(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
   // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne

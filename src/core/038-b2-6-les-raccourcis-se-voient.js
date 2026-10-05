@@ -837,7 +837,7 @@ function checkinRepondre(cle,n){
   const _fait=checkinDuJour(u,Date.now());
   if(cle==='faim'&&_fait){
     _fait.faim=_ciNote(n);
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton check-in');
     _rendreCheckin(u);
     return true;
   }
@@ -851,7 +851,7 @@ function checkinRepondre(cle,n){
     u.checkin=(u.checkin&&typeof u.checkin==='object')?u.checkin:{};
     u.checkin[j]=c;
     _ciBrouillon={};
-    try{ saveUser(); }catch(e){}
+    saveUserOuDire('Ton check-in');
     try{ majXp(); _rendreRang(u); }catch(e){}
     try{ arcHaptique('succes'); }catch(e){}
   }
@@ -1132,7 +1132,7 @@ function repriseDouceChoisir(oui){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return false;
   u._repriseDouce={depuis:Date.now(),accepte:!!oui};
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton choix de reprise');
   try{ _afficherRepriseDouce(u); }catch(e){}
   try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
   try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère '+ICO.coche:'C’est noté : tes charges restent les mêmes '+ICO.coche); }catch(e){}
@@ -1632,7 +1632,7 @@ function showProgressTab(tab,btn,sansMemo){
   // photos) — lancerait une synchronisation pour rien.
   if(!sansMemo&&currentUser&&PROG_ONGLETS.indexOf(tab)>=0&&currentUser.uiProgressTab!==tab){
     currentUser.uiProgressTab=tab;
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('showProgressTab',e); }
   }
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}

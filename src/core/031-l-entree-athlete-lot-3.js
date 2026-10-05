@@ -1150,7 +1150,7 @@ function _echMentionAVoir(user){
 function _echMarquerVue(user){
   const u=_dossier(user);
   if(u&&u.echeance&&!u.echeance.vueLe){ u.echeance.vueLe=Date.now();
-    try{ saveUser(); }catch(e){} }
+    try{ saveUser(); }catch(e){ rcErreurMuette('_echMarquerVue',e); } }
   return true;
 }
 function _renderEcheance(){
@@ -1410,7 +1410,7 @@ function ouvrirEcheance(user,o){
       {type:type,date:d,
        ...(ancienne?{ancienneDate:ancienne.date,ancienType:ancienne.type}:{})});
   }catch(e){}
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ouvrirEcheance',e); }
   return {ok:true,remplacee:!!ancienne};
 }
 // L'ECRITURE D'UNE FICHE DE JOUR. Les bornes refusent, elles n'avertissent pas.
@@ -1710,7 +1710,7 @@ function noterSeance(user,cle){
   if(_srpeValeur(cle)==null) return {ok:false,raison:'Note inconnue.'};
   const s=u.sessions[u.sessions.length-1];
   s.srpe=cle;
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton ressenti de séance');
   try{ _viderCacheSignaux(); }catch(e){}
   return {ok:true,charge:chargeSeance(s)};
 }
@@ -2142,7 +2142,7 @@ function ajouterSalle(user,nom,materiel){
     materiel:_tabBloc(materiel).filter(m=>SALLE_MATERIEL.indexOf(m)>=0),
     parDefaut:!l.length};
   u.salles=l.concat([s]);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('ajouterSalle',e); }
   return {ok:true,salle:s};
 }
 

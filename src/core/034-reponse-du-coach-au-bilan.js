@@ -519,7 +519,7 @@ function enregistrerFormulesReponse(){
   if(!currentUser) return false;
   const lire=id=>String(((document.getElementById(id)||{}).value)||'').replace(/\s+/g,' ').trim().slice(0,BROUILLON_FORMULE_MAX);
   currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('enregistrerFormulesReponse',e); }
   closeModal();
   toast('Formule enregistrée '+ICO.coche,'var(--green)');
   return true;
@@ -2256,7 +2256,7 @@ function _rendreInvitationNotif(){
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
   z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
-  try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){}
+  try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationNotif',e); }
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
 // cette carte : le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire

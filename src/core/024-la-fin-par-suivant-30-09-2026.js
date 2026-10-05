@@ -778,7 +778,7 @@ function enregistrerTestCalibrage(user,t){
   liste.push({date:Date.now(),exercice:nom,chargeKg:kg,
     repsAnnoncees:ra,rirAnnonce:ri,repsReelles:rr});
   u.calibrageRir=calculerCalibrageRir(liste);
-  try{ saveUser(); }catch(e){}
+  saveUserOuDire('Ton test de calibrage');
   // LES CACHES PORTENT DES VERDICTS QUE LE BIAIS VIENT DE CHANGER. Meme geste
   // que la decharge, pour la meme raison : un e1RM et un etat de plateau
   // calcules avec l'ancien repere resteraient servis jusqu'au rechargement.

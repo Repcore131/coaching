@@ -1775,7 +1775,7 @@ function _tplListe(){
   if(!currentUser) return [];
   if(!Array.isArray(currentUser.msgTemplates)||!currentUser.msgTemplates.length){
     currentUser.msgTemplates=templateMigrerCommentaires(currentUser);
-    try{ saveUser(); }catch(e){}
+    try{ saveUser(); }catch(e){ rcErreurMuette('_tplListe',e); }
   }
   return currentUser.msgTemplates.slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 }
@@ -1902,7 +1902,7 @@ function tplMajCorps(id,v){
   const t=(currentUser.msgTemplates||[]).find(x=>x&&x.id===id);
   if(!t) return;
   t.corps=String(v||'');
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('tplMajCorps',e); }
 }
 // Un modèle supprimé ne doit PAS vider un brouillon en cours : l'insertion a
 // copié le TEXTE, jamais une référence. Il n'y a donc rien à faire ici — le

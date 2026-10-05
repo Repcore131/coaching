@@ -244,7 +244,7 @@ async function pushActiverDepuisReglages(){
   }
   const ok=await pushAbonner({geste:true});
   if(ok){
-    try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
+    try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){ rcErreurMuette('pushActiverDepuisReglages',e); }
     toast('Notifications activées '+ICO.coche);
   } else if(_notifSupported()&&Notification.permission==='denied'){
     toast('Notifications bloquées par le navigateur.','var(--orange)');
@@ -287,7 +287,7 @@ async function _pushAuPremierGeste(){
   }
   if(p!=='granted') return false;
   const ok=await pushAbonner({geste:true});
-  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){ rcErreurMuette('_pushAuPremierGeste',e); }
   return ok;
 }
 async function pushActiverParDefaut(){
@@ -315,7 +315,7 @@ async function pushActiverParDefaut(){
 // serveur n'a plus où envoyer), et le refus retenu pour ne pas redemander.
 async function pushDesactiverDepuisReglages(){
   await pushDesabonner();
-  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(e){} }
+  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(e){ rcErreurMuette('pushDesactiverDepuisReglages',e); } }
   toast('Notifications désactivées sur cet appareil.','var(--sub)');
   _rendreReglagesPush();
   return true;
@@ -410,7 +410,7 @@ function _rendreInvitationInstall(){
   }catch(e){ etat='rien'; }
   if(etat==='rien'){ z.innerHTML=''; return; }
   z.innerHTML=_htmlInvitationInstall(etat,!sup);
-  try{ currentUser._installDemandeeLe=Date.now(); saveUser(); }catch(e){}
+  try{ currentUser._installDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationInstall',e); }
 }
 // LES DEUX GESTES EXISTENT DEJA : on les appelle, on ne les refait pas.
 // installApp porte la garde Samsung et l'invitation du navigateur ;
@@ -1316,7 +1316,7 @@ function majBadges(o){
   if(!nouveaux.length) return [];
   u.badges=deja;
   for(const x of nouveaux) u.badges[x.id]={at:(x.at>0?x.at:t)};
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('majBadges',e); }
   const neufs=nouveaux.map(x=>x.id);
   // LA CÉLÉBRATION : le plus rare de la séance a l'écran plein (BDG_ECRAN_MAX),
   // le reste va dans « Tes trophées du jour ». Au RATTRAPAGE (mise à jour),
@@ -1611,7 +1611,7 @@ function celebrationsChoisir(k){
   const u=currentUser;
   if(!u||(k!=='completes'&&k!=='discretes')) return false;
   u.celebrations=k;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('celebrationsChoisir',e); }
   const z=document.getElementById('atp-celebrations'); if(z) z.innerHTML=htmlReglageCelebrations(u);
   return true;
 }

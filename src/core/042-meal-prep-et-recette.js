@@ -293,7 +293,7 @@ function ajouterRecent(i){
   const e=Object.assign({},r.e,{repas,periSeance:false});
   const ok=_fjAjouter(_fjCopier([e],date,repas),date,escapeHtml(r.e.nom)+' ajouté');
   if(ok){
-    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(err){}
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(err){ rcErreurMuette('ajouterRecent',err); }
     _fjRepasChoisi=true;
     toast(r.e.nom+' ajouté','var(--green)');
     try{ _renderFjRecent(); }catch(err){}

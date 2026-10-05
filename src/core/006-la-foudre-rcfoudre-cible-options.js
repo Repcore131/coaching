@@ -1757,7 +1757,7 @@ async function doRegister(){
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
     rcm('register_completed');
     // L'ORIGINE DU COMPTE (users/<clé>/origine) et l'inscription par src.
-    try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){}
+    try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){ rcErreurMuette('doRegister',e); }
     if(selRole==='coach'){
       // Compté seulement maintenant : les deux sorties précédentes (compte déjà
       // présent, invitation refusée) ne sont pas des inscriptions abouties.

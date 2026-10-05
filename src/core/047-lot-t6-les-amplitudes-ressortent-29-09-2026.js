@@ -1791,7 +1791,7 @@ function _renderVideosListe(){
   // LA MIGRATION DU LOT 7, ICI : c'est le seul ecran ou ces commentaires se
   // lisent, et le dossier est deja en main. Elle ne fait rien sur un dossier
   // qui n'a jamais eu de comparaison, c'est-a-dire presque tous.
-  try{ if(migrerComparaisons(currentUser)) saveUser(); }catch(e){}
+  try{ if(migrerComparaisons(currentUser)) saveUser(); }catch(e){ rcErreurMuette('_renderVideosListe',e); }
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
@@ -2155,7 +2155,7 @@ async function cldDossierMenage(maxi){
       if(r.status===404){ cldDossierRetirer(e.publicId); cldFileRetirer(e.publicId); n++; }
     }catch(err){}
   }
-  if(n){ try{ saveUser(); }catch(err){} }
+  if(n){ try{ saveUser(); }catch(err){ rcErreurMuette('cldDossierMenage',err); } }
   return n;
 }
 // CE QUE L'ÉCRAN PEUT ANNONCER : combien, et depuis quand le plus ancien.

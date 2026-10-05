@@ -689,7 +689,7 @@ function renderRiteReponse(){
   el.style.display=h?'':'none';
   // APRÈS le rendu : si l’écriture échouait, le bloc serait quand même à
   // l’écran, et c’est ce qui compte.
-  if(h&&r&&r.reponseVue!==true){ r.reponseVue=true; try{ saveUser(); }catch(e){} }
+  if(h&&r&&r.reponseVue!==true){ r.reponseVue=true; try{ saveUser(); }catch(e){ rcErreurMuette('renderRiteReponse',e); } }
   return !!h;
 }
 function riteAfficherSiBesoin(){
@@ -1726,7 +1726,7 @@ function _ajEcrire(action){
   // est le report. On le pose donc, mais seulement dans ce cas.
   const vise=_ajCtx.exercice&&_ajCtx.exercice.nom;
   const touche=cibles.some(x=>_ajCle(x.nomEcrit)===_ajCle(vise));
-  if(vise&&touche){ try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){} }
+  if(vise&&touche){ try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){ rcErreurMuette('_ajEcrire',e); } }
   closeModal();
   _ajCtx=null;
   try{ renderTodoBlock(getClients()); }catch(e){}
@@ -2261,7 +2261,7 @@ function _relEcrire(coach,maj){
   maj(n);
   n.maj=Date.now();
   coach.relancesAuto=n;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_relEcrire',e); }
   return true;
 }
 // Régler une ligne. REFUSÉ pour tout signal hors des cinq : la douleur ne

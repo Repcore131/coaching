@@ -332,7 +332,7 @@ function verifierRappelAvantSeance(){
   const e=rappelAvantSeanceEtat(u,Date.now());
   if(!e.envoyer) return false;
   u.nutrition.rappelAvantSeanceLe=localISODate(new Date());
-  try{ saveUser(); }catch(err){}
+  try{ saveUser(); }catch(err){ rcErreurMuette('verifierRappelAvantSeance',err); }
   try{
     document.getElementById('rappel-gluc-banniere')?.remove();
     const b=document.createElement('div');

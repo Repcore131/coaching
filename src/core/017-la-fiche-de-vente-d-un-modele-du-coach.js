@@ -552,7 +552,7 @@ async function copierSeanceVersAthlete(i){
   if(!_poserBrouillonSessions(dest,atelier)){
     toast('Brouillon non enregistré : stockage plein.','var(--red)'); return false;
   }
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('copierSeanceVersAthlete',e); }
   toast('« '+r.nom+' » portée chez '+nom+' en brouillon. Publie depuis son programme.','var(--success)');
   return true;
 }
@@ -2321,7 +2321,7 @@ async function _proposerBrouillon(){
   if(!brouillonDiffere(b,c.sessions_config)){
     // Identique au publié : rien à reprendre, et le brouillon a fait son
     // temps. On le retire pour ne pas reposer la question à chaque ouverture.
-    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('_proposerBrouillon',e); }
     return false;
   }
   const age=brouillonAgeJours(b);
@@ -2332,7 +2332,7 @@ async function _proposerBrouillon(){
   const ok=await rcConfirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
     +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.',null,'Confirmer');
   if(!ok){
-    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('_proposerBrouillon',e); }
     return false;
   }
   // Les photos ne sont pas dans le brouillon : on les REPREND du publié
@@ -2414,7 +2414,7 @@ function saveCoachSessions(){
   try{ accueilRelanceProgramme(stocke).catch(()=>{}); }catch(e){}
   // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
   // proposer une reprise vers un état identique à la prochaine ouverture.
-  if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+  if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('saveCoachSessions',e); }
   const localOk=DB.set('users',users);
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');

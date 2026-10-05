@@ -486,7 +486,7 @@ function bqChoisir(slug){
   const f=ficheBanque(slug)||catalogueCoach().find(x=>x.slug===slug);
   if(!f) return false;
   noterRecent(slug);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('bqChoisir',e); }
   const cb=_bqCb;
   fermerBanque();
   if(cb) try{ cb(f); }catch(e){ console.error('[RepCore] banque :',e); }
@@ -495,7 +495,7 @@ function bqChoisir(slug){
 function bqFavori(slug,ev){
   if(ev&&ev.stopPropagation) ev.stopPropagation();
   basculerFavori(slug);
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('bqFavori',e); }
   _bqRendre();
 }
 
@@ -867,7 +867,7 @@ function ouvrirFicheBanque(slug,ev){
 async function _supprimerExoPerso(slug){
   if(!await rcConfirm('Supprimer cet exercice de tes exercices personnels ?',null,'Supprimer')) return false;
   const ok=supprimerExercicePerso(slug);
-  if(ok){ try{ saveUser(); }catch(e){} }
+  if(ok){ try{ saveUser(); }catch(e){ rcErreurMuette('_supprimerExoPerso',e); } }
   closeModal(); _bqRendre();
   return ok;
 }
@@ -912,7 +912,7 @@ function _validerCreationExo(){
   // déborde, il disparaît au rechargement. L'annoncer créé sans le savoir
   // envoyait le coach construire une séance autour d'un exercice perdu.
   let ok=false;
-  try{ ok=saveUser(); }catch(e){}
+  try{ ok=saveUser(); }catch(e){ rcErreurMuette('_validerCreationExo',e); }
   closeModal();
   // N4.8 — LA CREATION S'ENCHAINE SUR L'AJOUT. Le coach qui vient d'ecrire une
   // fiche voulait s'en servir : il devait la retrouver dans la liste et

@@ -1038,7 +1038,7 @@ function aaReglage(nom,val){
 function aaConsentementCoach(on){
   const u=currentUser; if(!u) return false;
   u.consentementPartageCoach=on?{date:Date.now()}:null;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('aaConsentementCoach',e); }
   toast(on?'Ton coach peut partager tes progrès.':'Ton coach ne peut plus partager tes progrès sous ton nom.');
   return true;
 }
@@ -1844,7 +1844,7 @@ async function accueilEcrireRelances(u){
   const l=accueilRelancesAthlete(u);
   let ok=true;
   for(const x of l) ok=(await _accueilDeposer(moi,x.jour,x.etape))&&ok;
-  if(ok){ u.parcours.relancesEcrites=Date.now(); try{ saveUser(); }catch(e){} }
+  if(ok){ u.parcours.relancesEcrites=Date.now(); try{ saveUser(); }catch(e){ rcErreurMuette('accueilEcrireRelances',e); } }
   return ok;
 }
 // Le coach publie : si l'athlète est dans son accueil et n'a pas lu son
@@ -2027,7 +2027,7 @@ function parcoursAvancer(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return null;
   const r=majParcours(u);
-  if(r.nouvelles.length){ try{ saveUser(); }catch(e){} }
+  if(r.nouvelles.length){ try{ saveUser(); }catch(e){ rcErreurMuette('parcoursAvancer',e); } }
   if(r.fini){ try{ majBadges(); }catch(e){} try{ majXp(); }catch(e){} }
   try{ _rendreParcours(u); }catch(e){}
   parcoursEcrireJ21(u).catch(()=>{});
@@ -2039,7 +2039,7 @@ function parcoursRelancer(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||!u.parcours||u.parcours.existant||u.parcours.fini) return false;
   u.parcours.relance=Date.now();
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('parcoursRelancer',e); }
   try{ _rendreParcours(u); }catch(e){}
   return true;
 }
@@ -2069,7 +2069,7 @@ async function parcoursEcrireJ21(u){
   const moi=String(u.email).replace(/\./g,',');
   const r=await fetch(CLOUD._fbUrl.replace('users.json','parcours_j21/'+jour+'/'+moi+'.json')+'?auth='+token,
     {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>null);
-  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){} return true; }
+  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){ rcErreurMuette('parcoursEcrireJ21',er); } return true; }
   return false;
 }
 // Une invitation partie (lien de parrainage, carte, duel) : l'étape
@@ -2477,7 +2477,7 @@ function majXp(){
     u.xpNiveau=code; change=true;
     if(!fete&&_rangDuCode(code)===_rangDuCode(vuN)) sous=code;
   }
-  if(change) try{ saveUser(); }catch(e){}
+  if(change) try{ saveUser(); }catch(e){ rcErreurMuette('majXp',e); }
   if(fete) try{ _celebrerRang(fete); }catch(e){}
   if(sous) try{ _celebrerSousNiveau(r.total); }catch(e){}
   return {total:r.total,rang:rg.rang.n,fete,sous};
@@ -2803,7 +2803,7 @@ function missionOuvrirCoffre(btn){
   if(!u) return null;
   const k=ouvrirCoffre(u,localISODate(new Date()));
   if(!k) return null;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('missionOuvrirCoffre',e); }
   const e=_rendreMission(u);
   try{
     const g=document.querySelector('#clh-mission .mj-gain');
@@ -2829,7 +2829,7 @@ function missionMobiliteLancer(){
     if(reste>0) return;
     missionMobiliteArreter();
     const u=currentUser;
-    if(missionActe(u,'mobilite')){ try{ saveUser(); }catch(e){} }
+    if(missionActe(u,'mobilite')){ try{ saveUser(); }catch(e){ rcErreurMuette('missionMobiliteLancer',e); } }
     try{ toast(ICO.coche+' 10 min de mobilité','var(--green)'); }catch(e){}
     try{ _rendreMission(u); }catch(e){}
   };
@@ -2869,7 +2869,7 @@ function missionProchaineVoir(){
     +'<button type="button" class="btn btn-outline btn-sm" onclick="this.closest(\'.mj-feuille\').remove()">Fermer</button></div>';
   d.addEventListener('click',e=>{ if(e.target===d) d.remove(); });
   document.body.appendChild(d);
-  if(missionActe(u,'prochaine')){ try{ saveUser(); }catch(e){} }
+  if(missionActe(u,'prochaine')){ try{ saveUser(); }catch(e){ rcErreurMuette('missionProchaineVoir',e); } }
   try{ _rendreMission(u); }catch(e){}
   return true;
 }
@@ -2982,7 +2982,7 @@ function liguesBasculer(on){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u) return false;
   if(on) delete u.liguesOff; else u.liguesOff=true;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('liguesBasculer',e); }
   try{ toast(on?'Tu rejoins les ligues dès ta prochaine séance.':'Tu ne participes plus aux ligues.','var(--green)'); }catch(e){}
   try{ _rendreLigue(u); }catch(e){}
   document.querySelectorAll('.lg-feuille').forEach(x=>x.remove());

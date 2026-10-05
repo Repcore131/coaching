@@ -45,7 +45,7 @@ function _compterVueSonRepos(){
   if(seance&&u.vus.reposSonSeance===seance) return false;
   u.vus.reposSonVus=(Number(u.vus.reposSonVus)||0)+1;
   if(seance) u.vus.reposSonSeance=seance;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('_compterVueSonRepos',e); }
   return true;
 }
 // « Activer » : allume, confirme dans la ligne, puis la retire. Aucune
@@ -739,7 +739,7 @@ function forcerMethode(user,ex,evaluation){
   // sans ca l'editeur reposerait la question a chaque ouverture, et le coach
   // finirait par ne plus la lire.
   ex.methodeForcee=true;
-  try{ saveUser(); }catch(e){}
+  try{ saveUser(); }catch(e){ rcErreurMuette('forcerMethode',e); }
   return {ok:true};
 }
 // PURE. Les depassements des sept derniers jours, pour la fiche client.
@@ -2012,7 +2012,7 @@ function _saveProgramInterne(){
       // pas réécrit à chaque caractère tapé.
       // Il n'atteint PAS l'athlète : c'est saveCoachSessions qui publie.
       let broOk=false;
-      if(enregistrerBrouillon()){ try{ broOk=saveUser(); }catch(e){} }
+      if(enregistrerBrouillon()){ try{ broOk=saveUser(); }catch(e){ rcErreurMuette('_saveProgramInterne',e); } }
       toastEcriture(broOk,'Séance enregistrée en brouillon','le brouillon est');
       go('s-coach-sessions');loadCoachSessionSlots();return;
     }
