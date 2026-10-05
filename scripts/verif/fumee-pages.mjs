@@ -110,7 +110,11 @@ for (const fuseau of FUSEAUX) for (const taille of TAILLES) for (const page of P
     await charger(false);
     if (athlete) {
       await o.cmd('Runtime.evaluate', { expression: `(()=>{ const u=Object.assign(${JSON.stringify(DEMO)},{consent:{health:true,policyVersion:POLICY_VERSION}});
-        localStorage.setItem('rc_session',JSON.stringify(u)); localStorage.setItem('rc_users',JSON.stringify({[u.email]:u})); })()` });
+        localStorage.setItem('rc_session',JSON.stringify(u)); localStorage.setItem('rc_users',JSON.stringify({[u.email]:u}));
+        // L'ACCUEIL, pas les accueils de nouvel inscrit : depuis le 05/10/2026,
+        // un athlète sans coach et sans séance part sur le parcours de première
+        // séance (et, avant, sur la question des jours). On les dit déjà vus.
+        localStorage.setItem('rc_jours_vu_'+u.email,'1'); localStorage.setItem('rc_premiere_seance_'+u.email,'1'); })()` });
       await charger(true);
       const r = await o.cmd('Runtime.evaluate', { expression: '(document.querySelector(".screen.active")||{}).id||""', returnByValue: true });
       const ecran = r.result && r.result.result && r.result.result.value;
