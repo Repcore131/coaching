@@ -11483,6 +11483,16 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .cap-rel-j{flex:0 0 96px;font-weight:700;color:var(--text);text-transform:capitalize}
 .cap-rel-c{flex:1 1 90px;min-height:44px;max-width:140px}
 .cap-rel-a,.cap-rel-g{font-size:var(--fs-xs);color:var(--text-dim)}
+.pc-pt-agr{opacity:.55}
+.rec-ex{margin-bottom:8px}
+.rec-ex>summary,.rec-ex-seul{display:flex;align-items:baseline;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;min-height:24px}
+.rec-ex>summary::-webkit-details-marker{display:none}
+.rec-ex-seul{cursor:default}
+.rec-trs{margin:6px 0 4px;padding:6px 0 0 10px;border-left:2px solid var(--border)}
+.rec-tr{display:flex;align-items:baseline;gap:8px;font-size:var(--fs-2xs);color:var(--sub);margin-bottom:4px}
+.rec-tr span{flex:1;min-width:0}
+.rec-tr b{color:var(--text);font-weight:800;white-space:nowrap}
+.rec-tr i{font-style:normal;color:var(--text-faint);white-space:nowrap}
 .pc-obj{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--green);pointer-events:none}
 .pc-obj span{position:absolute;left:4px;bottom:2px;font-size:var(--fs-2xs);font-weight:700;color:var(--green)}
 .pc-bul-lib{font-style:normal;font-size:var(--fs-2xs);font-weight:600;color:var(--text-faint);text-transform:lowercase}

@@ -2022,10 +2022,21 @@ function _htmlRecords(user){
   const dt=ms=>new Date(ms).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Records</div>
-    ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${String(_kgAff(x.rec.meilleureCharge.kg)).replace('.',',')}${_uniteTxt(x.nom)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
-    </div>`).join('')}
+    ${lignes.map(x=>{
+      // UNE LIGNE DÉPLIABLE PAR EXERCICE (05/10/2026) : le record de charge en
+      // tête, et dessous le record à chaque tranche de répétitions (« au moins
+      // N »), puis la meilleure série en volume.
+      const pr=x.rec.parReps||{}, u=_uniteTxt(x.nom);
+      const kg=v=>String(_kgAff(v)).replace('.',',');
+      const tranches=RECORDS_TRANCHES.filter(N=>pr[N]).map(N=>`<div class="rec-tr"><span>${N} rép${N>1?'s':''} et +</span><b>${kg(pr[N].kg)}${u}</b><i>${dt(pr[N].date)}</i></div>`).join('');
+      const mv=x.rec.meilleurVolumeSerie;
+      const vol=mv?`<div class="rec-tr"><span>Meilleure série (volume)</span><b>${kg(mv.kg)}${u} × ${mv.reps}</b><i>${dt(mv.date)}</i></div>`:'';
+      const tete=`<span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${kg(x.rec.meilleureCharge.kg)}${u}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>`;
+      return (tranches||vol)
+        ?`<details class="rec-ex"><summary>${tete}</summary><div class="rec-trs">${tranches}${vol}</div></details>`
+        :`<div class="rec-ex rec-ex-seul">${tete}</div>`;
+    }).join('')}
   </div>`;
 }
 // Fiche coach : le RIR moyen des quatre dernières séances.

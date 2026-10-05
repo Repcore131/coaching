@@ -2412,6 +2412,10 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .pc-bulle{background:var(--surface-0);border:1.5px solid #1f9d55;box-shadow:var(--e3)}
 :root[data-theme="clair"] .cap-rel-j{color:var(--text)}
 :root[data-theme="clair"] .cap-rel-a,:root[data-theme="clair"] .cap-rel-g{color:var(--text-dim)}
+:root[data-theme="clair"] .rec-trs{border-left:2px solid var(--border)}
+:root[data-theme="clair"] .rec-tr{color:var(--sub)}
+:root[data-theme="clair"] .rec-tr b{color:var(--text)}
+:root[data-theme="clair"] .rec-tr i{color:var(--text-faint)}
 :root[data-theme="clair"] .pc-obj{border-top:2px dashed var(--green)}
 :root[data-theme="clair"] .pc-obj span{color:var(--green-text)}
 :root[data-theme="clair"] .pc-bul-lib{color:var(--text-faint)}

@@ -785,7 +785,10 @@ const PESEE_COURBE_JOURS=84;                    // la periode par defaut : 12 s
 const PESEE_PERIODES=Object.freeze([
   Object.freeze({k:'7J',j:7,lib:'7 jours'}),Object.freeze({k:'4S',j:28,lib:'4 semaines'}),
   Object.freeze({k:'12S',j:84,lib:'12 semaines'}),Object.freeze({k:'6M',j:182,lib:'6 mois'}),
-  Object.freeze({k:'1A',j:365,lib:'1 an'})]);
+  Object.freeze({k:'1A',j:365,lib:'1 an'}),
+  // « TOUT » (05/10/2026) : de la première pesée à la dernière, semaines
+  // agrégées comprises — c'est là qu'on voit les années passées.
+  Object.freeze({k:'Tout',j:0,lib:'tout l’historique'})]);
 let _pesPeriode='12S';
 // Les cartes a l'ecran : id → {serie, opts}. Un clic sur une periode refait la sienne.
 const _pesCartes=new Map();
@@ -819,7 +822,12 @@ function _courbePesee(serie,opts){
   const pts=serie.filter(e=>e.date>=debut);
   if(pts.length<2) return '';
   const complete=(Array.isArray(o.serieComplete)&&o.serieComplete.length)?o.serieComplete.filter(e=>e.date<=fin):serie;
-  const segs=segmentsWeight(pts);
+  // LE RELEVÉ À L'ÉCRAN relie aussi les semaines agrégées (une par lundi) :
+  // segmentsWeight les écarte, parce qu'elles ne sont pas des pesées — mais
+  // tracer leur suite est précisément ce que la période « Tout » montre.
+  const segs=[]; { let cur=[];
+    for(const e of pts){ if(cur.length&&_joursEntre(cur[cur.length-1].date,e.date)>PESEE_COUPURE_JOURS){ segs.push(cur); cur=[]; } cur.push(e); }
+    if(cur.length) segs.push(cur); }
   const jours=_joursEntre(pts[0].date,fin)||1;
   // LA TENDANCE ET LA PLAGE, segment par segment — calculées sur la série
   // COMPLÈTE, puis gardées dans la fenêtre.
@@ -882,7 +890,7 @@ function _courbePesee(serie,opts){
   // Les points : chaque pesee, et la derniere, soulignee une seule fois.
   const der=pts[pts.length-1];
   const pasA=Math.max(1,Math.ceil(pts.length/6));
-  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
+  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}${e.agrege?' pc-pt-agr':''}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
   // La bulle : le poids, et l'ECART DE TENDANCE sur la période — la moyenne
   // sur sept jours au dernier jour moins celle du premier jour de la fenêtre.
   // Une seule pesée haute ne retourne plus son signe (05/10/2026). Sans
@@ -945,7 +953,7 @@ function _carteCourbePoids(serie,opts){
   const o=Object.assign({id:'pc-carte'},opts||{});
   _pesCartes.set(o.id,{serie,opts:o});
   const per=PESEE_PERIODES.find(p=>p.k===_pesPeriode)||PESEE_PERIODES[2];
-  const jours=o.jours||per.j;
+  const jours=o.jours||per.j||((serie&&serie.length)?_joursEntre(serie[0].date,serie[serie.length-1].date)+1:PESEE_COURBE_JOURS);
   const corps=_courbePesee(serie,Object.assign({},o,{jours}));
   const phraseObj=o.phraseObjectif?'<p class="pc-obj-phrase">'+escapeHtml(o.phraseObjectif)+'</p>':'';
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
@@ -2102,8 +2110,9 @@ function _recordSteps(dateStr,count,marque){
   if(idx>=0) currentUser.stepsLog[idx].count=n;
   else currentUser.stepsLog.push({date:dateStr,count:n});
   _sanMarquer(currentUser.stepsLog.find(e=>e.date===dateStr),marque);
-  const cutoff=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
-  currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
+  // Au-delà de STEPS_RETENTION_JOURS, la journée rejoint la moyenne de sa
+  // semaine (stepsHebdo) : elle n'est plus supprimée (05/10/2026).
+  compacterDossierSante(currentUser);
   return true;
 }
 function saveSteps(){

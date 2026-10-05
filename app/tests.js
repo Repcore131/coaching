@@ -23369,10 +23369,15 @@ async function testExercices(){
     ok('Arrondi au dixième',()=>{
       currentUser.weightLog=[]; _recordWeight(_pj(0),80.44);
       return currentUser.weightLog[0].kg===80.4;});
-    ok('Purge au-delà de deux ans',()=>{
-      currentUser.weightLog=[{date:localISODate(new Date(Date.now()-800*864e5)),kg:90}];
+    // 05/10/2026 : au-delà de deux ans, la pesée n'est plus SUPPRIMÉE, elle
+    // rejoint la moyenne de sa semaine (entrée agrégée, lundi ISO).
+    ok('Au-delà de deux ans : compactée en semaine, jamais supprimée',()=>{
+      const vieux=localISODate(new Date(Date.now()-800*864e5));
+      currentUser.weightLog=[{date:vieux,kg:90}];
       _recordWeight(localISODate(new Date()),80);
-      return currentUser.weightLog.length===1&&currentUser.weightLog[0].kg===80;});
+      const ag=currentUser.weightLog.find(e=>e.agrege);
+      return currentUser.weightLog.length===2&&ag&&ag.kg===90&&ag.n===1&&ag.date===_cleSemaineISO(vieux)
+        &&currentUser.weightLog[1].kg===80;});
 
     // ── serieWeight : fusion sans migration ──
     ok('Les bilans sont lus, jamais recopiés',()=>{
@@ -23651,7 +23656,7 @@ async function testExercices(){
       if(_trPoints(_courbePesee(s))!==n(84)) return _echec('défaut ≠ 12 semaines');
       const z=document.createElement('div'); z.innerHTML=_carteCourbePoids(s,{id:'pc-test'});
       const b=[...z.querySelectorAll('.pc-per button')].map(x=>x.textContent);
-      if(b.join(',')!=='7J,4S,12S,6M,1A') return _echec('boutons : '+b.join(','));
+      if(b.join(',')!=='7J,4S,12S,6M,1A,Tout') return _echec('boutons : '+b.join(','));
       if((z.querySelector('.pc-per .actif')||{}).textContent!=='12S') return _echec('12S n’est pas actif');
       return true;});
 
@@ -23736,6 +23741,88 @@ async function testExercices(){
       const s=_ps(40,i=>85-i/14);
       const h=_courbePesee(s,{objectif:82});
       return /class="pc-obj" style="top:[\d.]+%"/.test(h)&&/objectif 82 kg/.test(h);});
+
+    // ── LE COMPACTAGE HEBDOMADAIRE (05/10/2026) ──────────────────────────
+    // Trois ans de pesées quotidiennes : 52 semaines pleines au-delà de 730
+    // jours, et deux ans bruts. Construit pour tomber juste : les vieilles
+    // pesées couvrent 52 semaines ISO entières, les récentes partent de la
+    // limite elle-même.
+    const _cpISO=n=>localISODate(new Date(Date.now()-n*864e5));
+    const _cp3ans=()=>{
+      const min=_cpISO(PESEE_RETENTION_JOURS), L=_cleSemaineISO(min), l=[];
+      for(let i=364;i>=1;i--){ const d=_jourPlus(L,-i); l.push({date:d,kg:Math.round((90-i/100+((i*7)%5)/10)*10)/10}); }
+      for(let n=PESEE_RETENTION_JOURS;n>=0;n--) l.push({date:_cpISO(n),kg:Math.round((86-n/200+((n*3)%7)/10)*10)/10,dataStatus:'manual'});
+      return {l,min};
+    };
+    ok('Compactage du poids : 3 ans → 2 ans bruts + 52 semaines agrégées, mm7 et vitesse identiques sur 2 ans',()=>{
+      const {l,min}=_cp3ans();
+      const apres=compacterPoids(l);
+      const ag=apres.filter(e=>e.agrege), br=apres.filter(e=>!e.agrege);
+      if(ag.length!==52) return _echec(ag.length+' semaines agrégées');
+      if(br.length!==PESEE_RETENTION_JOURS+1||br[0].date!==min) return _echec(br.length+' brutes, première '+br[0].date);
+      if(ag.some(e=>e.n!==7||new Date(e.date+'T12:00:00').getDay()!==1)) return _echec('une semaine n’a pas 7 pesées ou ne tombe pas un lundi');
+      // LA MOYENNE EST CELLE DE LA SEMAINE.
+      const s0=l.filter(e=>_cleSemaineISO(e.date)===ag[0].date);
+      if(Math.abs(s0.reduce((a,e)=>a+e.kg,0)/7-ag[0].kg)>0.051) return _echec('moyenne de semaine');
+      // mm7 et vitesse : identiques sur les deux dernières années.
+      const A=serieWeight({weightLog:l}), B=serieWeight({weightLog:apres});
+      if(B.filter(e=>e.agrege).length!==52) return _echec('serieWeight perd les semaines agrégées');
+      for(let n=PESEE_RETENTION_JOURS-7;n>=0;n-=3){ const d=_cpISO(n);
+        if(mm7(A,d)!==mm7(B,d)) return _echec('mm7 diffère le '+d+' : '+mm7(A,d)+' / '+mm7(B,d)); }
+      if(JSON.stringify(vitesseHebdo(A))!==JSON.stringify(vitesseHebdo(B))) return _echec('vitesse');
+      // mm7 ne lit jamais une semaine agrégée, les segments non plus.
+      if(mm7(B,ag[10].date)!==null) return _echec('mm7 lit une moyenne de semaine');
+      if(segmentsWeight(B).some(sg=>sg.some(e=>e.agrege))) return _echec('un segment contient une semaine agrégée');
+      // La période « Tout » les montre.
+      const h=_courbePesee(B,{jours:_joursEntre(B[0].date,B[B.length-1].date)+1});
+      return (h.match(/pc-pt-agr/g)||[]).length===52?true:_echec('« Tout » ne montre pas les 52 semaines');});
+    ok('Compactage : relancé, il ne change rien ; aucune pesée perdue ; l’entrée agrégée n’est jamais la saisie du jour',()=>{
+      const {l}=_cp3ans();
+      const a=compacterPoids(l), b=compacterPoids(a);
+      if(JSON.stringify(a)!==JSON.stringify(b)) return _echec('le second compactage change le journal');
+      const total=a.reduce((t,e)=>t+(e.agrege?e.n:1),0);
+      if(total!==l.length) return _echec(total+' pesées comptées au lieu de '+l.length);
+      const sv=currentUser;
+      try{
+        currentUser={email:'cp@t.fr',id:'cp',role:'athlete',weightLog:a.map(e=>({...e}))};
+        const ag=currentUser.weightLog.find(e=>e.agrege);
+        const kg0=ag.kg;
+        if(!_recordWeight(localISODate(new Date()),79.9)) return _echec('saisie du jour refusée');
+        if(currentUser.weightLog.filter(e=>e.agrege).some(e=>e.kg===79.9)) return _echec('une semaine agrégée a pris la pesée du jour');
+        // Une pesée posée À LA DATE d'une semaine agrégée la rejoint, sans l'écraser.
+        _recordWeight(ag.date,200);
+        const ag2=currentUser.weightLog.find(e=>e.agrege&&e.date===ag.date);
+        if(!ag2||ag2.n!==8||ag2.kg===200||Math.abs(ag2.kg-(kg0*7+200)/8)>0.06) return _echec('fusion : '+JSON.stringify(ag2));
+        return currentUser.weightLog.filter(e=>e.date===ag.date).length===1?true:_echec('doublon de date');
+      } finally { currentUser=sv; }});
+    ok('Compactage du dossier : pas, sommeil, FC, VFC au-delà de 180 j → semaines (VFC par méthode), migration sans perte, idempotente',()=>{
+      const u={stepsLog:[],sleepLog:[],fcReposLog:[],vfcLog:[],weightLog:[]};
+      for(let n=400;n>=0;n--){ const d=_cpISO(n);
+        u.stepsLog.push({date:d,count:5000+n}); u.sleepLog.push({date:d,duration:7+(n%3)/10});
+        u.fcReposLog.push({date:d,bpm:55+(n%4)}); u.vfcLog.push({date:d,ms:40+(n%5),methode:n%2?'rmssd':'sdnn'}); }
+      const avant=JSON.stringify(u);
+      const k=compacterDossierSante(u);
+      if(k!==4*(400-SANTE_AGREGE_JOURS)) return _echec(k+' entrées fondues');
+      const lim=_cpISO(SANTE_AGREGE_JOURS);
+      if(u.stepsLog.some(e=>e.date<lim)||!u.stepsHebdo||!u.stepsHebdo.length) return _echec('pas');
+      const nPas=u.stepsHebdo.reduce((t,e)=>t+e.n,0)+u.stepsLog.length;
+      if(nPas!==401) return _echec(nPas+' journées de pas au lieu de 401');
+      if(!u.vfcHebdo.some(e=>e.methode==='rmssd')||!u.vfcHebdo.some(e=>e.methode==='sdnn')) return _echec('VFC mélangée');
+      if(!u.sleepHebdo.length||!u.fcReposHebdo.length) return _echec('sommeil ou FC');
+      if(!(u.xpArchive&&u.xpArchive.sommeil>0)) return _echec('les volts des nuits fondues sont perdus');
+      const une=JSON.stringify(u);
+      if(compacterDossierSante(u)!==0||JSON.stringify(u)===avant||JSON.stringify(u)!==une) return _echec('relancé, il change le dossier');
+      if(!['stepsHebdo','sleepHebdo','fcReposHebdo','vfcHebdo'].every(c=>CHAMPS_SANTE.indexOf(c)>=0)) return _echec('CHAMPS_SANTE');
+      // Le coach : la vue « 1 an » lit les semaines agrégées.
+      const sv=_csEtat.pas.vue;
+      try{
+        _csEtat.pas.vue='1a';
+        const b=_csSerie(Object.assign({stepsGoals:{on:8000,off:6000}},u),'pas');
+        if(b.length!==52) return _echec(b.length+' semaines');
+        const vieille=b.find(x=>x.iso<lim&&x.iso>=_cpISO(360));
+        if(!vieille||vieille.v==null) return _echec('une semaine de plus de 180 jours est vide');
+        return /onglet\('1a','1 an'\)|1 an<\/button>/.test(_htmlCsGraphe({stepsGoals:{on:8000,off:6000}},'pas'))?true:_echec('onglet « 1 an »');
+      } finally { _csEtat.pas.vue=sv; }});
 
     // ── UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION ──────────────────
     // Même signalement : « les mensurations restées identiques et inchangées
@@ -79838,6 +79925,24 @@ async function testExercices(){
           const r=recordsExercice(u,'SQUAT');
           return r.meilleureCharge.kg===100
             ?true:_echec('record à '+r.meilleureCharge.kg+' kg');});
+        ok('Records par tranche : la meilleure charge à au moins N répétitions validées, et la meilleure série en volume',()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(12,{'SQUAT':{sets:[_st(100,6),_st(90,10)]}}),
+            _sc(9,{'SQUAT':{sets:[_st(110,3),_st(80,12)]}}),
+            _sc(6,{'SQUAT':{sets:[_st(120,1),Object.assign(_st(130,5),{done:false})]}}),
+            _sc(3,{'SQUAT':{sets:[_st(95,8)]}})]);
+          const r=recordsExercice(u,'SQUAT');
+          if(!r||!r.parReps) return _echec('pas de parReps');
+          const att={1:120,3:110,5:100,8:95,10:90,12:80};
+          for(const N of RECORDS_TRANCHES)
+            if(!r.parReps[N]||r.parReps[N].kg!==att[N]) return _echec(N+' reps : '+JSON.stringify(r.parReps[N])+' au lieu de '+att[N]);
+          if(r.parReps[5].kg===130) return _echec('une série non validée compte');
+          const mv=r.meilleurVolumeSerie;
+          if(!mv||mv.volume!==960||mv.kg!==80||mv.reps!==12) return _echec('volume : '+JSON.stringify(mv));
+          // L'écran : une ligne dépliable par exercice, avec ses tranches.
+          const h=_htmlRecords(u);
+          return /<details class="rec-ex">/.test(h)&&/12 réps et \+/.test(h)&&/Meilleure série \(volume\)/.test(h)
+            ?true:_echec('rendu : '+h.slice(0,300));});
         ok('Une série non validée ne fait aucun record',()=>{
           // Une charge saisie mais jamais cochée n'a pas été soulevée.
           _viderCachePlateau();

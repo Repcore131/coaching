@@ -746,6 +746,8 @@ const CHAMPS_SANTE=Object.freeze([
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
   'sleepLog','stepsLog','fcReposLog','vfcLog',
+  // Leurs moyennes hebdomadaires, au-delà de 180 jours (05/10/2026).
+  'stepsHebdo','sleepHebdo','fcReposHebdo','vfcHebdo',
   // La masse grasse MESURÉE (05/10/2026) : synchronisée ou saisie au bilan.
   'masseGrasseLog',
   // L'objectif de poids (05/10/2026) : une cible de poids, donnée de santé.
@@ -2240,6 +2242,10 @@ function routeUser(){
   try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Les entrées du journal comptées 0 kcal alors que leurs macros sont connues.
   try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
+  // LE COMPACTAGE HEBDOMADAIRE (05/10/2026), à la première ouverture comme à
+  // chaque suivante : ce qui a dépassé sa durée de conservation rejoint la
+  // moyenne de sa semaine, sans perte. Rien à fondre : rien n'est poussé.
+  try{ if(compacterDossierSante(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');

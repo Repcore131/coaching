@@ -828,6 +828,9 @@ function _sanJournalPoser(liste,entree,maintenant,jours){
 function sanAppliquerSync(plan){
   const u=currentUser;
   if(!u||!plan||!aConsentiSante(u)) return 0;
+  // AVANT de poser : _sanJournalPoser coupe à 180 jours, et ce qui en sort
+  // doit d'abord rejoindre sa semaine (fcReposHebdo, vfcHebdo).
+  compacterDossierSante(u);
   let n=0;
   for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
   for(const s of plan.sommeil)
@@ -1454,16 +1457,10 @@ function _recordSleep(dateStr,{bed,wake,duration,phases}={},marque){
     currentUser.sleepLog.push(entry);
   }
   _sanMarquer(currentUser.sleepLog.find(e=>e.date===dateStr),marque);
-  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
-  // LES VOLTS DES NUITS PURGÉES sont mis de côté : xpCalcul relit le journal,
-  // et une nuit qui en sort ne doit pas faire BAISSER les volts.
-  const _purgees=new Set(currentUser.sleepLog.filter(e=>e&&e.date<cutoff&&Number(e.duration)>0).map(e=>e.date));
-  if(_purgees.size){
-    const a=(currentUser.xpArchive&&typeof currentUser.xpArchive==='object')?currentUser.xpArchive:{};
-    a.sommeil=(Number(a.sommeil)||0)+_purgees.size*XP_ACTIONS.sommeil;
-    currentUser.xpArchive=a;
-  }
-  currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
+  // Les nuits sorties du journal rejoignent la moyenne de leur semaine
+  // (sleepHebdo) : elles ne sont plus supprimées (05/10/2026). Leurs volts
+  // sont mis de côté par compacterDossierSante (u.xpArchive.sommeil).
+  compacterDossierSante(currentUser);
   return true;
 }
 function saveSleep(){

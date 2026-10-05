@@ -1494,6 +1494,23 @@ function _coachCardio(u,debut,fin){
     vfc:v.length?{moyenne:moy(v,'ms'),n:v.length,methode:meth}:null};
 }
 function _libVfc(m){ return m==='sdnn'?'SDNN':'RMSSD'; }
+// PURE. FC de repos et VFC sur un an : les mesures brutes (180 derniers jours)
+// et les semaines agrégées au-delà (fcReposHebdo, vfcHebdo), au prorata de n.
+// La VFC garde la méthode de la dernière mesure.
+function _coachCardioAn(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const debut=localISODate(new Date(t-364*864e5));
+  const acc=(brut,hebdo,k,filtre)=>{
+    let s=0,n=0;
+    for(const e of (brut||[])) if(e&&e.date>=debut&&Number(e[k])>0&&(!filtre||filtre(e))){ s+=Number(e[k]); n++; }
+    for(const e of (hebdo||[])) if(e&&e.date>=_cleSemaineISO(debut)&&Number(e[k])>0&&Number(e.n)>0&&(!filtre||filtre(e))){ s+=Number(e[k])*Number(e.n); n+=Number(e.n); }
+    return n?{moyenne:Math.round(s/n),n}:null;
+  };
+  const der=((u&&u.vfcLog)||[]).concat((u&&u.vfcHebdo)||[]).filter(e=>e&&e.date&&e.methode).sort((a,b)=>a.date<b.date?-1:1).pop();
+  const meth=der?der.methode:null;
+  const vfc=meth?acc(u&&u.vfcLog,u&&u.vfcHebdo,'ms',e=>e.methode===meth):null;
+  return {fcRepos:acc(u&&u.fcReposLog,u&&u.fcReposHebdo,'bpm'),vfc:vfc?Object.assign(vfc,{methode:meth}):null};
+}
 // ⚠ LA SPARKLINE, PUIS LA CARTE DE PERIODE ET LES LIGNES « 7 j vs 7 j », SONT
 // PARTIES : le tableau de bord de chaque domaine (_htmlDomaineCoach) porte
 // maintenant la courbe sur 7 jours, 28 jours ou 3 mois, et la tendance.
@@ -1654,8 +1671,36 @@ function _csDate(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.get
 function _csPl(n,D,adj){ return n+' '+(n>1?D.noms:D.nom)+(adj?' '+adj+(D.f?'e':'')+(n>1?'s':''):''); }
 // Les barres. 7 jours : une par jour, jour et date dessous. 28 jours : une par
 // jour, la date une fois sur quatre. 3 mois : la moyenne de chaque semaine.
+// « 1 AN » (05/10/2026) : la moyenne de chaque semaine ISO sur 52 semaines.
+// Au-delà de 180 jours, les jours ne sont plus au journal : la semaine se lit
+// dans stepsHebdo / sleepHebdo (moyenne, n), et une semaine à cheval sur la
+// limite fond les deux au prorata des jours.
+// PURE. {somme, n} d'une semaine (lundi ISO) pour `q`, jours bruts + semaine agrégée.
+function _csSemaineAn(c,q,lundi){
+  const D=CS_DOM[q];
+  let somme=0, n=0;
+  for(let i=0;i<7;i++){ const iso=_jourPlus(lundi,i); const v=D.val(c,iso); if(v!=null){ somme+=v; n++; } }
+  const h=((c&&(q==='pas'?c.stepsHebdo:c.sleepHebdo))||[]).find(e=>e&&e.date===lundi);
+  if(h&&Number(h.n)>0){
+    const v=q==='pas'?Number(h.count):Math.round(Number(h.duration)*60);
+    if(isFinite(v)){ somme+=v*Number(h.n); n+=Number(h.n); }
+  }
+  return {somme,n};
+}
 function _csSerie(c,quoi){
   const D=CS_DOM[_csQ(quoi)], E=_csEtat[_csQ(quoi)];
+  if(E.vue==='1a'){
+    const out=[], q=_csQ(quoi);
+    const lundi0=_cleSemaineISO(sanJours(E.off)[6].iso);
+    for(let k=51;k>=0;k--){
+      const lundi=_jourPlus(lundi0,-7*k);
+      const s=_csSemaineAn(c,q,lundi);
+      const d=new Date(lundi+'T12:00:00');
+      out.push({iso:lundi,d,o:D.obj(c),v:s.n?Math.round(s.somme/s.n):null,
+        lib:(k%4===0)?_csDate(d):'',sous:_csDate(d),semaine:true});
+    }
+    return out;
+  }
   if(E.vue==='3m'){
     const out=[];
     for(let k=12;k>=0;k--){
@@ -1698,11 +1743,11 @@ function _htmlCsGraphe(c,quoi){
       +'</div>';
   }).join('');
   const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(E.vue===k?' actif':'')+'" aria-pressed="'+(E.vue===k)+'" onclick="csVue(\''+k+'\',\''+q+'\')">'+l+'</button>';
-  const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':'Moyenne de chaque semaine, sur 3 mois';
+  const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':E.vue==='1a'?'Moyenne de chaque semaine, sur 1 an':'Moyenne de chaque semaine, sur 3 mois';
   return '<section class="cso-carte cso-graphe">'
     +'<div class="cso-g-tete"><span class="cso-g-ico">'+CS_ICO.barres+'</span>'
       +'<div><h4>'+D.graphe+'</h4><span>'+sous+'</span></div>'
-      +'<div class="cso-onglets" role="group" aria-label="Période du graphique">'+onglet('7j','7 jours')+onglet('28j','28 jours')+onglet('3m','3 mois')+'</div></div>'
+      +'<div class="cso-onglets" role="group" aria-label="Période du graphique">'+onglet('7j','7 jours')+onglet('28j','28 jours')+onglet('3m','3 mois')+onglet('1a','1 an')+'</div></div>'
     +'<div class="cso-plot'+(dense?' cso-dense':'')+'"><div class="cso-axe">'+grilles
       +'<div class="cso-obj" style="bottom:'+pc(obj)+'%"><span>Objectif '+escapeHtml(D.fmt(obj))+'</span></div></div>'
       +'<div class="cso-barres">'+b+'</div></div>'
@@ -1808,6 +1853,9 @@ function _htmlDomaineCoach(c,quoi){
         +(reg?ligne('Régularité des couchers','± '+reg.ecart+' min'):'')
         +(bil.fcRepos?ligne('FC de repos ('+bil.fenetre+' j)',bil.fcRepos.moyenne+' bpm · '+bil.fcRepos.n+' mesure'+(bil.fcRepos.n>1?'s':'')):'')
         +(bil.vfc?ligne('VFC '+_libVfc(bil.vfc.methode)+' ('+bil.fenetre+' j)',bil.vfc.moyenne+' ms · '+bil.vfc.n+' mesure'+(bil.vfc.n>1?'s':'')):'')
+        +(E.vue==='1a'&&q==='sommeil'?(function(){ const an=_coachCardioAn(c);
+          return (an.fcRepos?ligne('FC de repos (1 an)',an.fcRepos.moyenne+' bpm · '+an.fcRepos.n+' jour'+(an.fcRepos.n>1?'s':'')):'')
+            +(an.vfc?ligne('VFC '+_libVfc(an.vfc.methode)+' (1 an)',an.vfc.moyenne+' ms · '+an.vfc.n+' jour'+(an.vfc.n>1?'s':'')):''); })():'')
         +'<div class="cso-note">'+D.note+'</div>'
       +'</section>'
       +'<section class="cso-carte cso-attn"><div class="cso-s-t" data-ton="orange">'+CS_ICO.alerte+'<h4>Points d’attention</h4></div>'+attH+'</section>'
@@ -1832,7 +1880,7 @@ function renderPasCoach(c){
 function _csRepeindre(q){ try{ const c=getOwnedClient(currentClientId); if(!c) return;
   if(_csQ(q)==='pas') renderPasCoach(c); else renderSommeilCoach(c); }catch(e){} }
 function csPeriode(v,q){ const E=_csEtat[_csQ(q)]; const n=Math.round(Number(v)); E.off=(isFinite(n)&&n<=0)?n:0; E.vise=null; _csRepeindre(q); }
-function csVue(v,q){ const E=_csEtat[_csQ(q)]; E.vue=(v==='28j'||v==='3m')?v:'7j'; E.vise=null; _csRepeindre(q); }
+function csVue(v,q){ const E=_csEtat[_csQ(q)]; E.vue=(v==='28j'||v==='3m'||v==='1a')?v:'7j'; E.vise=null; _csRepeindre(q); }
 // Un point d'attention allume les jours dont il parle, sur le graphe 7 jours.
 function csViser(isos,q){ const E=_csEtat[_csQ(q)]; E.vue='7j';
   E.vise=(E.vise&&E.vise.join()===(isos||[]).join())?null:(isos||[]); _csRepeindre(q);

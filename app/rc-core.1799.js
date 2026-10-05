@@ -7659,6 +7659,8 @@ const CHAMPS_SANTE=Object.freeze([
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
   'sleepLog','stepsLog','fcReposLog','vfcLog',
+  // Leurs moyennes hebdomadaires, au-delà de 180 jours (05/10/2026).
+  'stepsHebdo','sleepHebdo','fcReposHebdo','vfcHebdo',
   // La masse grasse MESURÉE (05/10/2026) : synchronisée ou saisie au bilan.
   'masseGrasseLog',
   // L'objectif de poids (05/10/2026) : une cible de poids, donnée de santé.
@@ -9153,6 +9155,10 @@ function routeUser(){
   try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Les entrées du journal comptées 0 kcal alors que leurs macros sont connues.
   try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
+  // LE COMPACTAGE HEBDOMADAIRE (05/10/2026), à la première ouverture comme à
+  // chaque suivante : ce qui a dépassé sa durée de conservation rejoint la
+  // moyenne de sa semaine, sans perte. Rien à fondre : rien n'est poussé.
+  try{ if(compacterDossierSante(currentUser)) saveUser(); }catch(e){ rcErreurMuette('routeUser',e); }
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -89455,10 +89461,21 @@ function _htmlRecords(user){
   const dt=ms=>new Date(ms).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Records</div>
-    ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${String(_kgAff(x.rec.meilleureCharge.kg)).replace('.',',')}${_uniteTxt(x.nom)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
-    </div>`).join('')}
+    ${lignes.map(x=>{
+      // UNE LIGNE DÉPLIABLE PAR EXERCICE (05/10/2026) : le record de charge en
+      // tête, et dessous le record à chaque tranche de répétitions (« au moins
+      // N »), puis la meilleure série en volume.
+      const pr=x.rec.parReps||{}, u=_uniteTxt(x.nom);
+      const kg=v=>String(_kgAff(v)).replace('.',',');
+      const tranches=RECORDS_TRANCHES.filter(N=>pr[N]).map(N=>`<div class="rec-tr"><span>${N} rép${N>1?'s':''} et +</span><b>${kg(pr[N].kg)}${u}</b><i>${dt(pr[N].date)}</i></div>`).join('');
+      const mv=x.rec.meilleurVolumeSerie;
+      const vol=mv?`<div class="rec-tr"><span>Meilleure série (volume)</span><b>${kg(mv.kg)}${u} × ${mv.reps}</b><i>${dt(mv.date)}</i></div>`:'';
+      const tete=`<span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${kg(x.rec.meilleureCharge.kg)}${u}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>`;
+      return (tranches||vol)
+        ?`<details class="rec-ex"><summary>${tete}</summary><div class="rec-trs">${tranches}${vol}</div></details>`
+        :`<div class="rec-ex rec-ex-seul">${tete}</div>`;
+    }).join('')}
   </div>`;
 }
 // Fiche coach : le RIR moyen des quatre dernières séances.
@@ -90360,6 +90377,8 @@ function _serieRecords(user,nomEx){
   out.sort((a,b)=>a.date-b.date);
   return _marquerAberrations(out);
 }
+/** Les tranches de répétitions des records (« au moins N »). */
+const RECORDS_TRANCHES=Object.freeze([1,3,5,8,10,12]);
 // PURE. Rend null quand rien n'est retenable.
 function recordsExercice(user,nomEx){
   if(!user||!nomEx) return null;
@@ -90373,6 +90392,14 @@ function recordsExercice(user,nomEx){
   const _pts=_t==='assiste'
     ?((user.sessions)||[]).filter(x=>x&&x.date&&!x.deload).map(x=>{ const nom=_nomDansSeance(x,nomEx,user); return nom?{date:x.date,nom,sess:x,sansRirDominant:false}:null; }).filter(Boolean)
     :_serieRecords(user,nomEx);
+  // LES RECORDS PAR TRANCHE DE RÉPÉTITIONS (05/10/2026) : la meilleure charge
+  // soulevée pour AU MOINS N répétitions validées. 100 kg × 6 vaut record à 1,
+  // 3 et 5 — pas à 8. Et la meilleure série en volume (charge × répétitions).
+  // Mêmes séries que le record de charge : validées, non aberrantes, hors
+  // décharge ; rien pour une machine assistée, où la charge se lit à l'envers.
+  /** @type {Object<string,{kg:number,date:number}>} */
+  const parReps={};
+  let mv=null;
   for(const pt of _pts){
     if(pt.aberrant) continue;              // saisie probablement fautive
     const d=pt.sess.data[pt.nom];
@@ -90387,6 +90414,12 @@ function recordsExercice(user,nomEx){
       // Meilleure charge : la plus lourde, et à charge égale la plus longue.
       else if(w>0&&(!mc||w>mc.kg||(w===mc.kg&&(r||0)>(mc.reps||0))))
         mc={kg:w,reps:(r>0?r:null),date:pt.date};
+      if(_t!=='assiste'&&w>0&&r>0){
+        for(const N of RECORDS_TRANCHES)
+          if(r>=N&&(!parReps[N]||w>parReps[N].kg)) parReps[N]={kg:w,date:pt.date};
+        const vol=Math.round(w*r*10)/10;
+        if(!mv||vol>mv.volume) mv={volume:vol,kg:w,reps:r,date:pt.date};
+      }
       // e1RM : la séance doit avoir ses RIR, et la série rester dans les bornes
       // où le modèle vaut quelque chose. Au-delà de PERF_REPS_MAX_E1RM,
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
@@ -90398,7 +90431,7 @@ function recordsExercice(user,nomEx){
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
     }
   }
-  const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me}:null;
+  const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me,parReps,meilleurVolumeSerie:mv}:null;
   _cachePlateau[cle]=res;
   return res;
 }
@@ -117716,16 +117749,19 @@ function _recordWeight(dateStr,kg,marque){
   if(!dateStr||isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) return false;
   if(!currentUser.weightLog) currentUser.weightLog=[];
   const arrondi=Math.round(v*10)/10;
-  const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
+  // UNE ENTRÉE AGRÉGÉE N'EST JAMAIS LA PESÉE DU JOUR : c'est la moyenne d'une
+  // semaine passée. La saisie ne la touche pas — elle pose une pesée à côté,
+  // que le compactage fondra dans la semaine si elle date de plus de deux ans.
+  const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr&&!e.agrege);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
-  const _e=currentUser.weightLog.find(e=>e.date===dateStr);
+  const _e=currentUser.weightLog.find(e=>e.date===dateStr&&!e.agrege);
   _sanMarquer(_e,marque);
   // L'heure d'une pesée synchronisée ne vaut pas pour une saisie à la main.
   if(_e&&!(marque&&marque.dataStatus==='sync')) delete _e.heure;
-  const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
-  currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
-  currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
+  // AU-DELÀ DE PESEE_RETENTION_JOURS, ON COMPACTE, ON NE SUPPRIME PLUS
+  // (05/10/2026) : une semaine de pesées devient sa moyenne.
+  currentUser.weightLog=compacterPoids(currentUser.weightLog);
   return true;
 }
 
@@ -117746,6 +117782,9 @@ function serieWeight(user){
     if(!e||!e.date) continue;
     const v=parseFloat(e.kg);
     if(isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) continue;
+    // L'ENTRÉE AGRÉGÉE (une semaine de plus de deux ans) reste à l'affichage,
+    // marquée : mm7, la vitesse et les segments ne la lisent pas.
+    if(e.agrege){ if(!parJour[e.date]||parJour[e.date].source==='bilan') parJour[e.date]={date:e.date,kg:v,source:'agrege',agrege:true,n:Number(e.n)||1}; continue; }
     parJour[e.date]={date:e.date,kg:v,source:'pesee'};
     if(/^\d{2}:\d{2}$/.test(e.heure||'')) parJour[e.date].heure=e.heure;
   }
@@ -117764,11 +117803,121 @@ function serieWeight(user){
 // qui ne démarre qu'au septième jour.
 function mm7(serie,jour,pleine){
   if(!serie||!serie.length||!jour) return null;
+  // LA MOYENNE D'UNE SEMAINE N'EST PAS UNE PESÉE : les entrées agrégées
+  // n'entrent jamais dans une moyenne mobile.
+  const brutes=serie.some(e=>e&&e.agrege)?serie.filter(e=>e&&!e.agrege):serie;
+  if(!brutes.length) return null;
   const debut=_jourPlus(jour,-(PESEE_FENETRE_MM-1));
-  if(pleine&&debut<serie[0].date) return null;
-  const dans=serie.filter(e=>e.date>=debut&&e.date<=jour);
+  if(pleine&&debut<brutes[0].date) return null;
+  const dans=brutes.filter(e=>e.date>=debut&&e.date<=jour);
   if(dans.length<PESEE_MM_MIN) return null;
   return dans.reduce((a,b)=>a+b.kg,0)/dans.length;
+}
+
+// ══ LE COMPACTAGE HEBDOMADAIRE (05/10/2026) ════════════════════════════════
+// PLUS AUCUNE DONNÉE DE PROGRESSION N'EST SUPPRIMÉE : au-delà de sa durée de
+// conservation, une donnée quotidienne devient la MOYENNE DE SA SEMAINE ISO
+// ({date: le lundi, …moyennes, n: le nombre de jours fondus}).
+//   · le poids : au-delà de PESEE_RETENTION_JOURS (730), dans weightLog même,
+//     marqué agrege:true — la courbe « Tout » le montre ;
+//   · pas, sommeil, FC de repos, VFC : au-delà de SANTE_AGREGE_JOURS (180),
+//     dans stepsHebdo, sleepHebdo, fcReposHebdo, vfcHebdo (VFC : une moyenne
+//     PAR MÉTHODE, RMSSD et SDNN ne se moyennent pas ensemble).
+// IDEMPOTENT : relancer ne change rien, puisqu'il ne reste plus de donnée
+// brute ancienne à fondre. Une donnée brute ancienne arrivée après coup est
+// fondue dans sa semaine, au prorata de n.
+const SANTE_AGREGE_JOURS=180;
+/**
+ * PURE. Fond `vieilles` (entrées brutes {date,…}) dans `semaines` (entrées
+ * agrégées) : une entrée par lundi ISO (et par `cleSup`, la méthode de VFC).
+ * `champs` : {champ: décimales} des valeurs moyennées.
+ */
+function _fondreSemaines(vieilles,semaines,champs,cleSup){
+  const par=new Map();
+  const cle=(lundi,e)=>lundi+(cleSup?'|'+String(e[cleSup]||''):'');
+  for(const a of (Array.isArray(semaines)?semaines:[])){
+    if(!a||!a.date) continue;
+    par.set(cle(a.date,a),{...a});
+  }
+  for(const e of vieilles){
+    const lundi=_cleSemaineISO(e.date);
+    const k=cle(lundi,e);
+    const a=par.get(k)||{date:lundi,n:0,agrege:true,...(cleSup?{[cleSup]:e[cleSup]}:{})};
+    const n0=Number(a.n)||0;
+    if(!Object.keys(champs).some(c=>isFinite(Number(e[c])))) continue;
+    for(const c of Object.keys(champs)){
+      const v=Number(e[c]);
+      if(!isFinite(v)) continue;
+      const m=n0?((Number(a[c])||0)*n0+v)/(n0+1):v;
+      a[c]=m;
+    }
+    a.n=n0+1;
+    par.set(k,a);
+  }
+  return [...par.values()].map(a=>{
+    for(const c of Object.keys(champs)) if(a[c]!=null){ const f=Math.pow(10,champs[c]); a[c]=Math.round(a[c]*f)/f; }
+    return a;
+  }).sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0));
+}
+/**
+ * PURE. Le journal des pesées compacté : brutes au-delà de 730 jours fondues
+ * en semaines agrégées, le reste intact, trié.
+ * @param {any[]} log
+ * @param {number} [maintenant]
+ */
+function compacterPoids(log,maintenant){
+  const l=(Array.isArray(log)?log:[]).filter(e=>e&&e.date);
+  const min=localISODate(new Date((Number(maintenant)||Date.now())-PESEE_RETENTION_JOURS*864e5));
+  const vieilles=l.filter(e=>!e.agrege&&e.date<min&&isFinite(parseFloat(e.kg)));
+  if(!vieilles.length) return l.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+  const sem=_fondreSemaines(vieilles.map(e=>({date:e.date,kg:parseFloat(e.kg)})),l.filter(e=>e.agrege),{kg:1});
+  return l.filter(e=>!e.agrege&&!(e.date<min)).concat(sem).sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+}
+// Les quatre journaux de santé quotidienne, leur champ hebdomadaire et leurs valeurs.
+const SANTE_HEBDO=Object.freeze([
+  Object.freeze({log:'stepsLog',hebdo:'stepsHebdo',champs:{count:0}}),
+  Object.freeze({log:'sleepLog',hebdo:'sleepHebdo',champs:{duration:2}}),
+  Object.freeze({log:'fcReposLog',hebdo:'fcReposHebdo',champs:{bpm:1}}),
+  Object.freeze({log:'vfcLog',hebdo:'vfcHebdo',champs:{ms:1},cleSup:'methode'})]);
+/**
+ * Compacte le dossier `u` sur place : poids au-delà de 730 jours, pas,
+ * sommeil, FC et VFC au-delà de 180. Rend le nombre d'entrées brutes fondues
+ * (0 : rien n'a changé — la migration ne pousse rien).
+ * @param {any} u
+ * @param {number} [maintenant]
+ * @returns {number}
+ */
+function compacterDossierSante(u,maintenant){
+  if(!u||typeof u!=='object') return 0;
+  const t=Number(maintenant)||Date.now();
+  let n=0;
+  if(Array.isArray(u.weightLog)){
+    const min=localISODate(new Date(t-PESEE_RETENTION_JOURS*864e5));
+    const k=u.weightLog.filter(e=>e&&e.date&&!e.agrege&&e.date<min).length;
+    if(k){ u.weightLog=compacterPoids(u.weightLog,t); n+=k; }
+  }
+  const min=localISODate(new Date(t-SANTE_AGREGE_JOURS*864e5));
+  for(const d of SANTE_HEBDO){
+    const l=Array.isArray(u[d.log])?u[d.log]:null;
+    if(!l) continue;
+    const vieilles=l.filter(e=>e&&e.date&&e.date<min);
+    if(!vieilles.length) continue;
+    // LES VOLTS DES NUITS QUI SORTENT DU JOURNAL sont mis de côté : xpCalcul
+    // relit sleepLog, et une nuit qui en sort ne doit pas faire BAISSER les
+    // volts (u.xpArchive.sommeil, lu par xpCalcul).
+    if(d.log==='sleepLog'&&typeof XP_ACTIONS!=='undefined'){
+      const nuits=new Set(vieilles.filter(e=>Number(e.duration)>0).map(e=>e.date)).size;
+      if(nuits){
+        const a=(u.xpArchive&&typeof u.xpArchive==='object')?u.xpArchive:{};
+        a.sommeil=(Number(a.sommeil)||0)+nuits*XP_ACTIONS.sommeil;
+        u.xpArchive=a;
+      }
+    }
+    u[d.hebdo]=_fondreSemaines(vieilles,u[d.hebdo],d.champs,d.cleSup);
+    u[d.log]=l.filter(e=>e&&e.date&&e.date>=min);
+    n+=vieilles.length;
+  }
+  return n;
 }
 
 // Une interruption longue coupe la série : comparer une pesée d'aujourd'hui à
@@ -117776,6 +117925,7 @@ function mm7(serie,jour,pleine){
 function segmentsWeight(serie){
   const segs=[]; let cur=[];
   for(const e of (serie||[])){
+    if(e&&e.agrege) continue;     // une moyenne de semaine n'est pas une pesée
     if(cur.length&&_joursEntre(cur[cur.length-1].date,e.date)>PESEE_COUPURE_JOURS){
       segs.push(cur); cur=[];
     }
@@ -119609,6 +119759,23 @@ function _coachCardio(u,debut,fin){
     vfc:v.length?{moyenne:moy(v,'ms'),n:v.length,methode:meth}:null};
 }
 function _libVfc(m){ return m==='sdnn'?'SDNN':'RMSSD'; }
+// PURE. FC de repos et VFC sur un an : les mesures brutes (180 derniers jours)
+// et les semaines agrégées au-delà (fcReposHebdo, vfcHebdo), au prorata de n.
+// La VFC garde la méthode de la dernière mesure.
+function _coachCardioAn(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const debut=localISODate(new Date(t-364*864e5));
+  const acc=(brut,hebdo,k,filtre)=>{
+    let s=0,n=0;
+    for(const e of (brut||[])) if(e&&e.date>=debut&&Number(e[k])>0&&(!filtre||filtre(e))){ s+=Number(e[k]); n++; }
+    for(const e of (hebdo||[])) if(e&&e.date>=_cleSemaineISO(debut)&&Number(e[k])>0&&Number(e.n)>0&&(!filtre||filtre(e))){ s+=Number(e[k])*Number(e.n); n+=Number(e.n); }
+    return n?{moyenne:Math.round(s/n),n}:null;
+  };
+  const der=((u&&u.vfcLog)||[]).concat((u&&u.vfcHebdo)||[]).filter(e=>e&&e.date&&e.methode).sort((a,b)=>a.date<b.date?-1:1).pop();
+  const meth=der?der.methode:null;
+  const vfc=meth?acc(u&&u.vfcLog,u&&u.vfcHebdo,'ms',e=>e.methode===meth):null;
+  return {fcRepos:acc(u&&u.fcReposLog,u&&u.fcReposHebdo,'bpm'),vfc:vfc?Object.assign(vfc,{methode:meth}):null};
+}
 // ⚠ LA SPARKLINE, PUIS LA CARTE DE PERIODE ET LES LIGNES « 7 j vs 7 j », SONT
 // PARTIES : le tableau de bord de chaque domaine (_htmlDomaineCoach) porte
 // maintenant la courbe sur 7 jours, 28 jours ou 3 mois, et la tendance.
@@ -119769,8 +119936,36 @@ function _csDate(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.get
 function _csPl(n,D,adj){ return n+' '+(n>1?D.noms:D.nom)+(adj?' '+adj+(D.f?'e':'')+(n>1?'s':''):''); }
 // Les barres. 7 jours : une par jour, jour et date dessous. 28 jours : une par
 // jour, la date une fois sur quatre. 3 mois : la moyenne de chaque semaine.
+// « 1 AN » (05/10/2026) : la moyenne de chaque semaine ISO sur 52 semaines.
+// Au-delà de 180 jours, les jours ne sont plus au journal : la semaine se lit
+// dans stepsHebdo / sleepHebdo (moyenne, n), et une semaine à cheval sur la
+// limite fond les deux au prorata des jours.
+// PURE. {somme, n} d'une semaine (lundi ISO) pour `q`, jours bruts + semaine agrégée.
+function _csSemaineAn(c,q,lundi){
+  const D=CS_DOM[q];
+  let somme=0, n=0;
+  for(let i=0;i<7;i++){ const iso=_jourPlus(lundi,i); const v=D.val(c,iso); if(v!=null){ somme+=v; n++; } }
+  const h=((c&&(q==='pas'?c.stepsHebdo:c.sleepHebdo))||[]).find(e=>e&&e.date===lundi);
+  if(h&&Number(h.n)>0){
+    const v=q==='pas'?Number(h.count):Math.round(Number(h.duration)*60);
+    if(isFinite(v)){ somme+=v*Number(h.n); n+=Number(h.n); }
+  }
+  return {somme,n};
+}
 function _csSerie(c,quoi){
   const D=CS_DOM[_csQ(quoi)], E=_csEtat[_csQ(quoi)];
+  if(E.vue==='1a'){
+    const out=[], q=_csQ(quoi);
+    const lundi0=_cleSemaineISO(sanJours(E.off)[6].iso);
+    for(let k=51;k>=0;k--){
+      const lundi=_jourPlus(lundi0,-7*k);
+      const s=_csSemaineAn(c,q,lundi);
+      const d=new Date(lundi+'T12:00:00');
+      out.push({iso:lundi,d,o:D.obj(c),v:s.n?Math.round(s.somme/s.n):null,
+        lib:(k%4===0)?_csDate(d):'',sous:_csDate(d),semaine:true});
+    }
+    return out;
+  }
   if(E.vue==='3m'){
     const out=[];
     for(let k=12;k>=0;k--){
@@ -119813,11 +120008,11 @@ function _htmlCsGraphe(c,quoi){
       +'</div>';
   }).join('');
   const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(E.vue===k?' actif':'')+'" aria-pressed="'+(E.vue===k)+'" onclick="csVue(\''+k+'\',\''+q+'\')">'+l+'</button>';
-  const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':'Moyenne de chaque semaine, sur 3 mois';
+  const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':E.vue==='1a'?'Moyenne de chaque semaine, sur 1 an':'Moyenne de chaque semaine, sur 3 mois';
   return '<section class="cso-carte cso-graphe">'
     +'<div class="cso-g-tete"><span class="cso-g-ico">'+CS_ICO.barres+'</span>'
       +'<div><h4>'+D.graphe+'</h4><span>'+sous+'</span></div>'
-      +'<div class="cso-onglets" role="group" aria-label="Période du graphique">'+onglet('7j','7 jours')+onglet('28j','28 jours')+onglet('3m','3 mois')+'</div></div>'
+      +'<div class="cso-onglets" role="group" aria-label="Période du graphique">'+onglet('7j','7 jours')+onglet('28j','28 jours')+onglet('3m','3 mois')+onglet('1a','1 an')+'</div></div>'
     +'<div class="cso-plot'+(dense?' cso-dense':'')+'"><div class="cso-axe">'+grilles
       +'<div class="cso-obj" style="bottom:'+pc(obj)+'%"><span>Objectif '+escapeHtml(D.fmt(obj))+'</span></div></div>'
       +'<div class="cso-barres">'+b+'</div></div>'
@@ -119923,6 +120118,9 @@ function _htmlDomaineCoach(c,quoi){
         +(reg?ligne('Régularité des couchers','± '+reg.ecart+' min'):'')
         +(bil.fcRepos?ligne('FC de repos ('+bil.fenetre+' j)',bil.fcRepos.moyenne+' bpm · '+bil.fcRepos.n+' mesure'+(bil.fcRepos.n>1?'s':'')):'')
         +(bil.vfc?ligne('VFC '+_libVfc(bil.vfc.methode)+' ('+bil.fenetre+' j)',bil.vfc.moyenne+' ms · '+bil.vfc.n+' mesure'+(bil.vfc.n>1?'s':'')):'')
+        +(E.vue==='1a'&&q==='sommeil'?(function(){ const an=_coachCardioAn(c);
+          return (an.fcRepos?ligne('FC de repos (1 an)',an.fcRepos.moyenne+' bpm · '+an.fcRepos.n+' jour'+(an.fcRepos.n>1?'s':'')):'')
+            +(an.vfc?ligne('VFC '+_libVfc(an.vfc.methode)+' (1 an)',an.vfc.moyenne+' ms · '+an.vfc.n+' jour'+(an.vfc.n>1?'s':'')):''); })():'')
         +'<div class="cso-note">'+D.note+'</div>'
       +'</section>'
       +'<section class="cso-carte cso-attn"><div class="cso-s-t" data-ton="orange">'+CS_ICO.alerte+'<h4>Points d’attention</h4></div>'+attH+'</section>'
@@ -119947,7 +120145,7 @@ function renderPasCoach(c){
 function _csRepeindre(q){ try{ const c=getOwnedClient(currentClientId); if(!c) return;
   if(_csQ(q)==='pas') renderPasCoach(c); else renderSommeilCoach(c); }catch(e){} }
 function csPeriode(v,q){ const E=_csEtat[_csQ(q)]; const n=Math.round(Number(v)); E.off=(isFinite(n)&&n<=0)?n:0; E.vise=null; _csRepeindre(q); }
-function csVue(v,q){ const E=_csEtat[_csQ(q)]; E.vue=(v==='28j'||v==='3m')?v:'7j'; E.vise=null; _csRepeindre(q); }
+function csVue(v,q){ const E=_csEtat[_csQ(q)]; E.vue=(v==='28j'||v==='3m'||v==='1a')?v:'7j'; E.vise=null; _csRepeindre(q); }
 // Un point d'attention allume les jours dont il parle, sur le graphe 7 jours.
 function csViser(isos,q){ const E=_csEtat[_csQ(q)]; E.vue='7j';
   E.vise=(E.vise&&E.vise.join()===(isos||[]).join())?null:(isos||[]); _csRepeindre(q);
@@ -121244,7 +121442,10 @@ const PESEE_COURBE_JOURS=84;                    // la periode par defaut : 12 s
 const PESEE_PERIODES=Object.freeze([
   Object.freeze({k:'7J',j:7,lib:'7 jours'}),Object.freeze({k:'4S',j:28,lib:'4 semaines'}),
   Object.freeze({k:'12S',j:84,lib:'12 semaines'}),Object.freeze({k:'6M',j:182,lib:'6 mois'}),
-  Object.freeze({k:'1A',j:365,lib:'1 an'})]);
+  Object.freeze({k:'1A',j:365,lib:'1 an'}),
+  // « TOUT » (05/10/2026) : de la première pesée à la dernière, semaines
+  // agrégées comprises — c'est là qu'on voit les années passées.
+  Object.freeze({k:'Tout',j:0,lib:'tout l’historique'})]);
 let _pesPeriode='12S';
 // Les cartes a l'ecran : id → {serie, opts}. Un clic sur une periode refait la sienne.
 const _pesCartes=new Map();
@@ -121278,7 +121479,12 @@ function _courbePesee(serie,opts){
   const pts=serie.filter(e=>e.date>=debut);
   if(pts.length<2) return '';
   const complete=(Array.isArray(o.serieComplete)&&o.serieComplete.length)?o.serieComplete.filter(e=>e.date<=fin):serie;
-  const segs=segmentsWeight(pts);
+  // LE RELEVÉ À L'ÉCRAN relie aussi les semaines agrégées (une par lundi) :
+  // segmentsWeight les écarte, parce qu'elles ne sont pas des pesées — mais
+  // tracer leur suite est précisément ce que la période « Tout » montre.
+  const segs=[]; { let cur=[];
+    for(const e of pts){ if(cur.length&&_joursEntre(cur[cur.length-1].date,e.date)>PESEE_COUPURE_JOURS){ segs.push(cur); cur=[]; } cur.push(e); }
+    if(cur.length) segs.push(cur); }
   const jours=_joursEntre(pts[0].date,fin)||1;
   // LA TENDANCE ET LA PLAGE, segment par segment — calculées sur la série
   // COMPLÈTE, puis gardées dans la fenêtre.
@@ -121341,7 +121547,7 @@ function _courbePesee(serie,opts){
   // Les points : chaque pesee, et la derniere, soulignee une seule fois.
   const der=pts[pts.length-1];
   const pasA=Math.max(1,Math.ceil(pts.length/6));
-  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
+  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}${e.agrege?' pc-pt-agr':''}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
   // La bulle : le poids, et l'ECART DE TENDANCE sur la période — la moyenne
   // sur sept jours au dernier jour moins celle du premier jour de la fenêtre.
   // Une seule pesée haute ne retourne plus son signe (05/10/2026). Sans
@@ -121404,7 +121610,7 @@ function _carteCourbePoids(serie,opts){
   const o=Object.assign({id:'pc-carte'},opts||{});
   _pesCartes.set(o.id,{serie,opts:o});
   const per=PESEE_PERIODES.find(p=>p.k===_pesPeriode)||PESEE_PERIODES[2];
-  const jours=o.jours||per.j;
+  const jours=o.jours||per.j||((serie&&serie.length)?_joursEntre(serie[0].date,serie[serie.length-1].date)+1:PESEE_COURBE_JOURS);
   const corps=_courbePesee(serie,Object.assign({},o,{jours}));
   const phraseObj=o.phraseObjectif?'<p class="pc-obj-phrase">'+escapeHtml(o.phraseObjectif)+'</p>':'';
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
@@ -122561,8 +122767,9 @@ function _recordSteps(dateStr,count,marque){
   if(idx>=0) currentUser.stepsLog[idx].count=n;
   else currentUser.stepsLog.push({date:dateStr,count:n});
   _sanMarquer(currentUser.stepsLog.find(e=>e.date===dateStr),marque);
-  const cutoff=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
-  currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
+  // Au-delà de STEPS_RETENTION_JOURS, la journée rejoint la moyenne de sa
+  // semaine (stepsHebdo) : elle n'est plus supprimée (05/10/2026).
+  compacterDossierSante(currentUser);
   return true;
 }
 function saveSteps(){
@@ -124027,6 +124234,9 @@ function _sanJournalPoser(liste,entree,maintenant,jours){
 function sanAppliquerSync(plan){
   const u=currentUser;
   if(!u||!plan||!aConsentiSante(u)) return 0;
+  // AVANT de poser : _sanJournalPoser coupe à 180 jours, et ce qui en sort
+  // doit d'abord rejoindre sa semaine (fcReposHebdo, vfcHebdo).
+  compacterDossierSante(u);
   let n=0;
   for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
   for(const s of plan.sommeil)
@@ -124653,16 +124863,10 @@ function _recordSleep(dateStr,{bed,wake,duration,phases}={},marque){
     currentUser.sleepLog.push(entry);
   }
   _sanMarquer(currentUser.sleepLog.find(e=>e.date===dateStr),marque);
-  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
-  // LES VOLTS DES NUITS PURGÉES sont mis de côté : xpCalcul relit le journal,
-  // et une nuit qui en sort ne doit pas faire BAISSER les volts.
-  const _purgees=new Set(currentUser.sleepLog.filter(e=>e&&e.date<cutoff&&Number(e.duration)>0).map(e=>e.date));
-  if(_purgees.size){
-    const a=(currentUser.xpArchive&&typeof currentUser.xpArchive==='object')?currentUser.xpArchive:{};
-    a.sommeil=(Number(a.sommeil)||0)+_purgees.size*XP_ACTIONS.sommeil;
-    currentUser.xpArchive=a;
-  }
-  currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
+  // Les nuits sorties du journal rejoignent la moyenne de leur semaine
+  // (sleepHebdo) : elles ne sont plus supprimées (05/10/2026). Leurs volts
+  // sont mis de côté par compacterDossierSante (u.xpArchive.sommeil).
+  compacterDossierSante(currentUser);
   return true;
 }
 function saveSleep(){

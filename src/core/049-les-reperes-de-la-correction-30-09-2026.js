@@ -1977,16 +1977,19 @@ function _recordWeight(dateStr,kg,marque){
   if(!dateStr||isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) return false;
   if(!currentUser.weightLog) currentUser.weightLog=[];
   const arrondi=Math.round(v*10)/10;
-  const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
+  // UNE ENTRÉE AGRÉGÉE N'EST JAMAIS LA PESÉE DU JOUR : c'est la moyenne d'une
+  // semaine passée. La saisie ne la touche pas — elle pose une pesée à côté,
+  // que le compactage fondra dans la semaine si elle date de plus de deux ans.
+  const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr&&!e.agrege);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
-  const _e=currentUser.weightLog.find(e=>e.date===dateStr);
+  const _e=currentUser.weightLog.find(e=>e.date===dateStr&&!e.agrege);
   _sanMarquer(_e,marque);
   // L'heure d'une pesée synchronisée ne vaut pas pour une saisie à la main.
   if(_e&&!(marque&&marque.dataStatus==='sync')) delete _e.heure;
-  const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
-  currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
-  currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
+  // AU-DELÀ DE PESEE_RETENTION_JOURS, ON COMPACTE, ON NE SUPPRIME PLUS
+  // (05/10/2026) : une semaine de pesées devient sa moyenne.
+  currentUser.weightLog=compacterPoids(currentUser.weightLog);
   return true;
 }
 
@@ -2007,6 +2010,9 @@ function serieWeight(user){
     if(!e||!e.date) continue;
     const v=parseFloat(e.kg);
     if(isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) continue;
+    // L'ENTRÉE AGRÉGÉE (une semaine de plus de deux ans) reste à l'affichage,
+    // marquée : mm7, la vitesse et les segments ne la lisent pas.
+    if(e.agrege){ if(!parJour[e.date]||parJour[e.date].source==='bilan') parJour[e.date]={date:e.date,kg:v,source:'agrege',agrege:true,n:Number(e.n)||1}; continue; }
     parJour[e.date]={date:e.date,kg:v,source:'pesee'};
     if(/^\d{2}:\d{2}$/.test(e.heure||'')) parJour[e.date].heure=e.heure;
   }
@@ -2025,11 +2031,121 @@ function serieWeight(user){
 // qui ne démarre qu'au septième jour.
 function mm7(serie,jour,pleine){
   if(!serie||!serie.length||!jour) return null;
+  // LA MOYENNE D'UNE SEMAINE N'EST PAS UNE PESÉE : les entrées agrégées
+  // n'entrent jamais dans une moyenne mobile.
+  const brutes=serie.some(e=>e&&e.agrege)?serie.filter(e=>e&&!e.agrege):serie;
+  if(!brutes.length) return null;
   const debut=_jourPlus(jour,-(PESEE_FENETRE_MM-1));
-  if(pleine&&debut<serie[0].date) return null;
-  const dans=serie.filter(e=>e.date>=debut&&e.date<=jour);
+  if(pleine&&debut<brutes[0].date) return null;
+  const dans=brutes.filter(e=>e.date>=debut&&e.date<=jour);
   if(dans.length<PESEE_MM_MIN) return null;
   return dans.reduce((a,b)=>a+b.kg,0)/dans.length;
+}
+
+// ══ LE COMPACTAGE HEBDOMADAIRE (05/10/2026) ════════════════════════════════
+// PLUS AUCUNE DONNÉE DE PROGRESSION N'EST SUPPRIMÉE : au-delà de sa durée de
+// conservation, une donnée quotidienne devient la MOYENNE DE SA SEMAINE ISO
+// ({date: le lundi, …moyennes, n: le nombre de jours fondus}).
+//   · le poids : au-delà de PESEE_RETENTION_JOURS (730), dans weightLog même,
+//     marqué agrege:true — la courbe « Tout » le montre ;
+//   · pas, sommeil, FC de repos, VFC : au-delà de SANTE_AGREGE_JOURS (180),
+//     dans stepsHebdo, sleepHebdo, fcReposHebdo, vfcHebdo (VFC : une moyenne
+//     PAR MÉTHODE, RMSSD et SDNN ne se moyennent pas ensemble).
+// IDEMPOTENT : relancer ne change rien, puisqu'il ne reste plus de donnée
+// brute ancienne à fondre. Une donnée brute ancienne arrivée après coup est
+// fondue dans sa semaine, au prorata de n.
+const SANTE_AGREGE_JOURS=180;
+/**
+ * PURE. Fond `vieilles` (entrées brutes {date,…}) dans `semaines` (entrées
+ * agrégées) : une entrée par lundi ISO (et par `cleSup`, la méthode de VFC).
+ * `champs` : {champ: décimales} des valeurs moyennées.
+ */
+function _fondreSemaines(vieilles,semaines,champs,cleSup){
+  const par=new Map();
+  const cle=(lundi,e)=>lundi+(cleSup?'|'+String(e[cleSup]||''):'');
+  for(const a of (Array.isArray(semaines)?semaines:[])){
+    if(!a||!a.date) continue;
+    par.set(cle(a.date,a),{...a});
+  }
+  for(const e of vieilles){
+    const lundi=_cleSemaineISO(e.date);
+    const k=cle(lundi,e);
+    const a=par.get(k)||{date:lundi,n:0,agrege:true,...(cleSup?{[cleSup]:e[cleSup]}:{})};
+    const n0=Number(a.n)||0;
+    if(!Object.keys(champs).some(c=>isFinite(Number(e[c])))) continue;
+    for(const c of Object.keys(champs)){
+      const v=Number(e[c]);
+      if(!isFinite(v)) continue;
+      const m=n0?((Number(a[c])||0)*n0+v)/(n0+1):v;
+      a[c]=m;
+    }
+    a.n=n0+1;
+    par.set(k,a);
+  }
+  return [...par.values()].map(a=>{
+    for(const c of Object.keys(champs)) if(a[c]!=null){ const f=Math.pow(10,champs[c]); a[c]=Math.round(a[c]*f)/f; }
+    return a;
+  }).sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0));
+}
+/**
+ * PURE. Le journal des pesées compacté : brutes au-delà de 730 jours fondues
+ * en semaines agrégées, le reste intact, trié.
+ * @param {any[]} log
+ * @param {number} [maintenant]
+ */
+function compacterPoids(log,maintenant){
+  const l=(Array.isArray(log)?log:[]).filter(e=>e&&e.date);
+  const min=localISODate(new Date((Number(maintenant)||Date.now())-PESEE_RETENTION_JOURS*864e5));
+  const vieilles=l.filter(e=>!e.agrege&&e.date<min&&isFinite(parseFloat(e.kg)));
+  if(!vieilles.length) return l.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+  const sem=_fondreSemaines(vieilles.map(e=>({date:e.date,kg:parseFloat(e.kg)})),l.filter(e=>e.agrege),{kg:1});
+  return l.filter(e=>!e.agrege&&!(e.date<min)).concat(sem).sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+}
+// Les quatre journaux de santé quotidienne, leur champ hebdomadaire et leurs valeurs.
+const SANTE_HEBDO=Object.freeze([
+  Object.freeze({log:'stepsLog',hebdo:'stepsHebdo',champs:{count:0}}),
+  Object.freeze({log:'sleepLog',hebdo:'sleepHebdo',champs:{duration:2}}),
+  Object.freeze({log:'fcReposLog',hebdo:'fcReposHebdo',champs:{bpm:1}}),
+  Object.freeze({log:'vfcLog',hebdo:'vfcHebdo',champs:{ms:1},cleSup:'methode'})]);
+/**
+ * Compacte le dossier `u` sur place : poids au-delà de 730 jours, pas,
+ * sommeil, FC et VFC au-delà de 180. Rend le nombre d'entrées brutes fondues
+ * (0 : rien n'a changé — la migration ne pousse rien).
+ * @param {any} u
+ * @param {number} [maintenant]
+ * @returns {number}
+ */
+function compacterDossierSante(u,maintenant){
+  if(!u||typeof u!=='object') return 0;
+  const t=Number(maintenant)||Date.now();
+  let n=0;
+  if(Array.isArray(u.weightLog)){
+    const min=localISODate(new Date(t-PESEE_RETENTION_JOURS*864e5));
+    const k=u.weightLog.filter(e=>e&&e.date&&!e.agrege&&e.date<min).length;
+    if(k){ u.weightLog=compacterPoids(u.weightLog,t); n+=k; }
+  }
+  const min=localISODate(new Date(t-SANTE_AGREGE_JOURS*864e5));
+  for(const d of SANTE_HEBDO){
+    const l=Array.isArray(u[d.log])?u[d.log]:null;
+    if(!l) continue;
+    const vieilles=l.filter(e=>e&&e.date&&e.date<min);
+    if(!vieilles.length) continue;
+    // LES VOLTS DES NUITS QUI SORTENT DU JOURNAL sont mis de côté : xpCalcul
+    // relit sleepLog, et une nuit qui en sort ne doit pas faire BAISSER les
+    // volts (u.xpArchive.sommeil, lu par xpCalcul).
+    if(d.log==='sleepLog'&&typeof XP_ACTIONS!=='undefined'){
+      const nuits=new Set(vieilles.filter(e=>Number(e.duration)>0).map(e=>e.date)).size;
+      if(nuits){
+        const a=(u.xpArchive&&typeof u.xpArchive==='object')?u.xpArchive:{};
+        a.sommeil=(Number(a.sommeil)||0)+nuits*XP_ACTIONS.sommeil;
+        u.xpArchive=a;
+      }
+    }
+    u[d.hebdo]=_fondreSemaines(vieilles,u[d.hebdo],d.champs,d.cleSup);
+    u[d.log]=l.filter(e=>e&&e.date&&e.date>=min);
+    n+=vieilles.length;
+  }
+  return n;
 }
 
 // Une interruption longue coupe la série : comparer une pesée d'aujourd'hui à
@@ -2037,6 +2153,7 @@ function mm7(serie,jour,pleine){
 function segmentsWeight(serie){
   const segs=[]; let cur=[];
   for(const e of (serie||[])){
+    if(e&&e.agrege) continue;     // une moyenne de semaine n'est pas une pesée
     if(cur.length&&_joursEntre(cur[cur.length-1].date,e.date)>PESEE_COUPURE_JOURS){
       segs.push(cur); cur=[];
     }

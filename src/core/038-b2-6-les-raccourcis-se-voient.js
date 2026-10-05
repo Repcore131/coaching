@@ -424,6 +424,8 @@ function _serieRecords(user,nomEx){
   out.sort((a,b)=>a.date-b.date);
   return _marquerAberrations(out);
 }
+/** Les tranches de répétitions des records (« au moins N »). */
+const RECORDS_TRANCHES=Object.freeze([1,3,5,8,10,12]);
 // PURE. Rend null quand rien n'est retenable.
 function recordsExercice(user,nomEx){
   if(!user||!nomEx) return null;
@@ -437,6 +439,14 @@ function recordsExercice(user,nomEx){
   const _pts=_t==='assiste'
     ?((user.sessions)||[]).filter(x=>x&&x.date&&!x.deload).map(x=>{ const nom=_nomDansSeance(x,nomEx,user); return nom?{date:x.date,nom,sess:x,sansRirDominant:false}:null; }).filter(Boolean)
     :_serieRecords(user,nomEx);
+  // LES RECORDS PAR TRANCHE DE RÉPÉTITIONS (05/10/2026) : la meilleure charge
+  // soulevée pour AU MOINS N répétitions validées. 100 kg × 6 vaut record à 1,
+  // 3 et 5 — pas à 8. Et la meilleure série en volume (charge × répétitions).
+  // Mêmes séries que le record de charge : validées, non aberrantes, hors
+  // décharge ; rien pour une machine assistée, où la charge se lit à l'envers.
+  /** @type {Object<string,{kg:number,date:number}>} */
+  const parReps={};
+  let mv=null;
   for(const pt of _pts){
     if(pt.aberrant) continue;              // saisie probablement fautive
     const d=pt.sess.data[pt.nom];
@@ -451,6 +461,12 @@ function recordsExercice(user,nomEx){
       // Meilleure charge : la plus lourde, et à charge égale la plus longue.
       else if(w>0&&(!mc||w>mc.kg||(w===mc.kg&&(r||0)>(mc.reps||0))))
         mc={kg:w,reps:(r>0?r:null),date:pt.date};
+      if(_t!=='assiste'&&w>0&&r>0){
+        for(const N of RECORDS_TRANCHES)
+          if(r>=N&&(!parReps[N]||w>parReps[N].kg)) parReps[N]={kg:w,date:pt.date};
+        const vol=Math.round(w*r*10)/10;
+        if(!mv||vol>mv.volume) mv={volume:vol,kg:w,reps:r,date:pt.date};
+      }
       // e1RM : la séance doit avoir ses RIR, et la série rester dans les bornes
       // où le modèle vaut quelque chose. Au-delà de PERF_REPS_MAX_E1RM,
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
@@ -462,7 +478,7 @@ function recordsExercice(user,nomEx){
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
     }
   }
-  const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me}:null;
+  const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me,parReps,meilleurVolumeSerie:mv}:null;
   _cachePlateau[cle]=res;
   return res;
 }
