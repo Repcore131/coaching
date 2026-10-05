@@ -34654,6 +34654,7 @@ const EX_RENOMMAGES=Object.freeze({
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE':'CURL LARRY SCOTT MACHINE GUIDEE',
   'DEVELOPPE MACHINE HAUT DE PECS OU A LA SMITH':'DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS',
   'HIP THRUST MACHINE OU A LA BARRE':'HIP THRUST MACHINE',
+  'HIP THRUST MACHINE CONVERGENTE':'HIP THRUST MACHINE',
   // LE CAS SIGNALE. Debout, barre accrochee au cable : c'est ce que le fichier
   // « curl barre poulie elastique » montre, et c'est ce que la consigne decrit.
   'CURL A LA POULIE':'CURL BARRE POULIE',
@@ -34884,12 +34885,12 @@ const EX_GUIDE_POSING='ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BIC
 // classique. Elle est donc versee dans la description au seeding, et retiree
 // du libelle de la pastille.
 const EX_PRECISIONS=Object.freeze({
-  'BATTLE ROPE':'Cordes alternées, une main après l\'autre.',
-  'CURL LARRY SCOTT':'À la barre EZ.',
+  'BATTLE ROPE':'Cordes alternées,​ une main après l\'autre.',
+  'CURL LARRY SCOTT':'À la barre⁠ EZ.',
   'DEVELOPPE COUCHE MACHINE':'Prise en pronation, pouces à l\'intérieur.',
   'ELEVATION FRONTALE POULIE':'À la poulie.',
   'ELEVATION LATERALE HALTERE':'Aux haltères.',
-  'ESCALIERS':'Une marche à la fois.',
+  'ESCALIERS':'Une marche à la fois, sans sauter de palier.',
   'EXTENSION TRICEPS POULIE BASSE':'Sur banc incliné.',
   'FENTES ARRIERES BARRE':'Grand pas vers l\'arrière.',
   'MARCHE DU FERMIER':'Aux haltères.',
@@ -34902,7 +34903,7 @@ const EX_PRECISIONS=Object.freeze({
 
 const EX_VARIANTES=Object.freeze({
   'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
-  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
+  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
   'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES : UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
@@ -40383,7 +40384,7 @@ function _normRech(s){
 // Les clefs brutes (TRICEPS, DELT_ANT) sont ajoutees automatiquement plus bas
 // avec les libelles de MUSCLES : inutile de les repeter ici.
 const MUSCLE_SYNONYMES=Object.freeze({
-  TRICEPS   :['triceps'],
+  TRICEPS   :['triceps','tricipital'],
   BICEPS    :['biceps'],
   PECTORAUX :['pecs','pectoraux','poitrine','pec'],
   DORSAUX   :['dos','dorsaux','lats','grand dorsal','dorsal'],
@@ -75552,7 +75553,7 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
 /** Les six consignes illustrées de chaque vue (E1). */
 const PHOTO_CONSIGNES=Object.freeze({
   face:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Face à la lumière, fond clair et uni','Bras relâchés, légèrement écartés du corps','Bien face au téléphone, pieds à largeur de hanches','Tenue près du corps, pieds nus'],
-  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
+  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
   side:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, mains contre les cuisses','Bien de profil, épaule vers le téléphone, regard droit devant','Pieds joints, tenue près du corps, pieds nus']});
 const PHOTO_ICONES=['M4 4h16v16H4zM12 7v10','M7 21h10M12 17v4M9 3h6v14H9z','M12 3v2M5 12H3m18 0h-2M6 6l1.5 1.5M18 6l-1.5 1.5M8 12a4 4 0 0 0 8 0','M12 5v7m-5 8 3-8h4l3 8M5 10l4 1m10-1-4 1','M12 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-4 18 2-9h4l2 9','M8 4h8l2 5-3 1v10H9V10L6 9z'];
 /**
