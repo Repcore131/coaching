@@ -116091,7 +116091,7 @@ function segMaxMs(){ return VID_BOUCLE_MAX_S*1000; }
 // mentirait.
 const SEG_BARRE_POINTS_MAX=150;
 const SEG_BARRE_PHASES=Object.freeze(['depart','pic_vitesse','point_haut','reception','point_bas']);
-const SEG_BARRE_ALERTES=Object.freeze(['fps_bas','disque_petit','perte_suivi','disque_bord','doutes']);
+const SEG_BARRE_ALERTES=Object.freeze(['fps_bas','disque_petit','perte_suivi','disque_bord','doutes','cycle_douteux']);
 // LES ARTICULATIONS : quatorze points du corps, soixante-douze échantillons
 // au plus. À douze par seconde, une répétition de trois secondes en compte
 // trente-six ; une de dix — le maximum — descend à sept par seconde. Bornes

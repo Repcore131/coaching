@@ -64751,6 +64751,116 @@ async function testExercices(){
       return vMaxChemin>3*vMaxVert
         ?true:_echec('chemin '+vMaxChemin.toFixed(2)+' m/s contre verticale '+vMaxVert.toFixed(2));});
 
+    // ── LE DÉCOUPAGE EN RÉPÉTITIONS (05/10/2026) ──────────────────────────
+    // Une série synthétique à 60 i/s : excentrique en demi-sinus, pause au
+    // fond, concentrique en demi-sinus, immobilité en haut ; bruit ±0,01 m/s
+    // pseudo-aléatoire (graine fixe : le test ne dépend pas du hasard).
+    const _DEC=(()=>{
+      const pas=1000/60;
+      // ML_TEMPO_ARRET est lu A L'APPEL : motion-lab.js n'est charge qu'au premier test.
+      const syn=(reps,o)=>{ o=o||{}; let graine=7; const S=ML_TEMPO_ARRET;
+        const rnd=()=>{ graine=(graine*16807)%2147483647; return graine/2147483647; };
+        const t=[],v=[],conf=[]; let T=0; const att=[];
+        const push=(ms,f,c)=>{ const n=Math.round(ms/pas);
+          for(let k=0;k<n;k++){ t.push(T); v.push(f(k*pas/ms,T)+(rnd()*2-1)*0.01); conf.push(c==null?0.9:c); T+=pas; } };
+        push(o.lead==null?400:o.lead,()=>0);
+        reps.forEach((r,i)=>{
+          const T0=T;
+          push(r.te,u=>-r.ve*Math.sin(Math.PI*u),r.cE);
+          push(150,()=>0,r.cE);
+          const Tc=T;
+          if(r.coupe){ push(r.tc*r.coupe,u=>r.vc*Math.sin(Math.PI*u*r.coupe)); return; }
+          push(r.tc,u=>r.vc*Math.sin(Math.PI*u));
+          // Les instants où |v| franchit le seuil d'arrêt : là doivent tomber les bornes.
+          att.push({deb:T0+r.te/Math.PI*Math.asin(S/r.ve),fin:Tc+r.tc-r.tc/Math.PI*Math.asin(S/r.vc)});
+          const T1=T;
+          push(r.repos||(i===reps.length-1?500:400),(u,TT)=>o.micro?o.micro*Math.sin(2*Math.PI*(TT-T1)/300):0);
+        });
+        return {s:{t,v,conf},att};
+      };
+      const rep=x=>Object.assign({te:900,ve:0.5,tc:800,vc:0.6},x||{});
+      const reps=(n,x)=>Array.from({length:n},()=>rep(x));
+      return {pas,syn,rep,reps};
+    })();
+    okA('Découpage : 5 sinusoïdes bruitées → 5 répétitions, bornes à ±1 image, tempo complet',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const {s,att}=_DEC.syn(_DEC.reps(5));
+      const r=mlDecouperRepetitions(s,{pasMs:_DEC.pas});
+      if(r.length!==5||r.some(x=>x.partielle)) return _echec(r.length+' répétition(s) : '+JSON.stringify(r.map(x=>x.partielle)));
+      for(let i=0;i<5;i++){
+        if(Math.abs(r[i].debutMs-att[i].deb)>_DEC.pas) return _echec('début '+i+' : '+r[i].debutMs+' au lieu de '+att[i].deb.toFixed(0));
+        if(Math.abs(r[i].finMs-att[i].fin)>_DEC.pas) return _echec('fin '+i+' : '+r[i].finMs+' au lieu de '+att[i].fin.toFixed(0));
+        if(Math.abs(r[i].amplitudeM-0.6*2*0.8/Math.PI)>0.02) return _echec('amplitude '+r[i].amplitudeM);
+        // CHAQUE BORNE DANS L'IMMOBILITÉ : mlTempo y lit une répétition complète.
+        const i0=s.t.findIndex(x=>Math.round(x)===r[i].debutMs), i1=s.t.findIndex(x=>Math.round(x)===r[i].finMs);
+        const tm=mlTempo({t:s.t.slice(i0,i1+1),v:s.v.slice(i0,i1+1)});
+        if(!tm.complet) return _echec('tempo incomplet sur la répétition '+(i+1));
+      }
+      return r.every(x=>x.groupe===0&&!x.douteux)?true:_echec('groupe ou doute inattendu');});
+    okA('Découpage : répétition partielle en fin (ou en début) → écartée et signalée',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const fin=mlDecouperRepetitions(_DEC.syn(_DEC.reps(4).concat([_DEC.rep({coupe:0.5})])).s,{pasMs:_DEC.pas});
+      if(fin.filter(x=>!x.partielle).length!==4) return _echec(fin.filter(x=>!x.partielle).length+' complètes au lieu de 4');
+      if(fin.filter(x=>x.partielle==='fin').length!==1) return _echec('la partielle de fin n’est pas signalée');
+      // Le début : la vidéo commence au milieu du premier excentrique.
+      const {s}=_DEC.syn(_DEC.reps(3),{lead:0}), k=20;
+      const deb=mlDecouperRepetitions({t:s.t.slice(k),v:s.v.slice(k),conf:s.conf.slice(k)},{pasMs:_DEC.pas});
+      if(deb.map(x=>x.partielle||'ok').join(',')!=='debut,ok,ok') return _echec('début tronqué : '+deb.map(x=>x.partielle||'ok').join(','));
+      // Et la partielle ne devient pas un segment.
+      const segs=mlSegmentsDecoupes([{id:'p',label:'Rép 1',debutMs:0,finMs:9000}],'p',fin);
+      return segs&&segs.length===4?true:_echec('segments : '+(segs&&segs.length));});
+    okA('Découpage : micro-oscillations sous 8 cm ignorées ; rest-pause en deux groupes ; cycle douteux sans tempo',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Une barre qui tremble au verrouillage : 0,15 m/s, mais 1,4 cm d'aller-retour.
+      const m=mlDecouperRepetitions(_DEC.syn(_DEC.reps(3,{repos:1000}),{micro:0.15}).s,{pasMs:_DEC.pas});
+      if(m.length!==3||m.some(x=>x.partielle)) return _echec('avec tremblement : '+m.length);
+      const t=[],v=[]; for(let i=0;i<300;i++){ t.push(i*_DEC.pas); v.push(0.15*Math.sin(2*Math.PI*i*_DEC.pas/300)); }
+      if(mlDecouperRepetitions({t,v},{pasMs:_DEC.pas}).length) return _echec('un tremblement seul donne une répétition');
+      // Rest-pause : quatre secondes d'arrêt après la troisième.
+      const rp=mlDecouperRepetitions(_DEC.syn([..._DEC.reps(2),_DEC.rep({repos:4000}),..._DEC.reps(2)]).s,{pasMs:_DEC.pas});
+      if(rp.map(x=>x.groupe).join(',')!=='0,0,0,1,1') return _echec('groupes : '+rp.map(x=>x.groupe).join(','));
+      // Confiance 0,3 sur l'excentrique et la pause (≈ 55 % du cycle) : douteux.
+      const dt=mlDecouperRepetitions(_DEC.syn([_DEC.rep(),_DEC.rep({cE:0.3}),_DEC.rep()]).s,{pasMs:_DEC.pas});
+      if(dt.map(x=>x.douteux).join(',')!=='false,true,false') return _echec('doutes : '+dt.map(x=>x.douteux).join(','));
+      // Le tableau : un cycle marqué douteux n'a pas de tempo.
+      const pu=[]; for(let i=0;i<=90;i++) pu.push({t:i*1000/_L9.FPS,x:640,y:300+Math.sin(Math.PI*i/90)*0.3/_L9.MPP});
+      const b=_L9.barre(pu);
+      const bd=b&&mlDecouperBarre(b,b.debutMs,b.finMs,{douteux:true});
+      if(!bd||!bd.av.includes('cycle_douteux')) return _echec('le doute n’est pas porté par la trajectoire');
+      const vb=segBarreValide(bd,bd.debutMs,bd.finMs);
+      if(!vb||!vb.av.includes('cycle_douteux')) return _echec('le doute tombe à la validation');
+      const l=mlTableauSerie([{id:'d',label:'Rép 1',debutMs:vb.debutMs,finMs:vb.finMs,barre:vb}],{})[0];
+      return l.tempo===null&&l.douteux===true?true:_echec('tempo affiché sur un cycle douteux');});
+    okA('Découpage : une série de 8 répétitions analysée → 8 segments en un geste, tableau de perte rempli',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // Huit répétitions de 40 cm, le concentrique qui ralentit (fatigue).
+      const pas=1000/_L9.FPS, A=0.40/_L9.MPP, pts=[]; let t=0;
+      const pousse=(ms,f)=>{ for(let k=0;k<Math.round(ms/pas);k++){ pts.push({t,x:640,y:300+f(k*pas/ms)*A}); t+=pas; } };
+      const c=u=>(1-Math.cos(Math.PI*u))/2;
+      pousse(300,()=>0);
+      for(let k=0;k<8;k++){ pousse(350,u=>c(u)); pousse(50,()=>1); pousse(300+20*k,u=>1-c(u)); pousse(350,()=>0); }
+      const b=_L9.barre(pts);
+      const bv=b&&segBarreValide(b,Math.round(b.debutMs),Math.round(b.finMs));
+      if(!bv) return _echec('trajectoire de la série invalide');
+      const r=mlSerieRelue(bv);
+      const reps=mlDecouperRepetitions({t:r.t,v:r.v,conf:r.conf},{pasMs:r.pasMs});
+      if(reps.filter(x=>!x.partielle).length!==8) return _echec(reps.length+' répétition(s) détectée(s)');
+      const segs=mlSegmentsDecoupes([{id:'p',label:'Rép 1',debutMs:bv.debutMs,finMs:bv.finMs,barre:bv}],'p',reps);
+      if(!segs||segs.length!==8) return _echec('segments : '+(segs&&segs.length));
+      if(segs.map(s=>s.label).join(',')!=='Rép 1,Rép 2,Rép 3,Rép 4,Rép 5,Rép 6,Rép 7,Rép 8') return _echec('noms : '+segs.map(s=>s.label).join(','));
+      // Ce qui part au dossier passe la validation, comme toute répétition.
+      const lus=segmentsVideo({segments:segs});
+      if(lus.length!==8||lus.some(s=>!s.barre)) return _echec('une trajectoire recoupée ne passe pas segmentsVideo');
+      const l=mlTableauSerie(lus,{});
+      if(l.some(x=>!x.analysee||x.vMax==null)) return _echec('une ligne du tableau est vide');
+      if(l.filter(x=>x.tempo&&x.tempo.complet).length<8) return _echec('tempo incomplet : '+l.filter(x=>x.tempo&&x.tempo.complet).length+'/8');
+      const pe=mlPertesSerie(l);
+      if(!pe||!(pe.vitesse<-10)) return _echec('perte de vitesse : '+JSON.stringify(pe));
+      // L'écran : le bouton dit combien, l'aperçu se valide ou s'annule.
+      const src=String(_mlHtmlDecoupe)+String(mlDecoupageValider)+String(mlDecoupageDefaire);
+      if(!/Découper en répétitions \(/.test(src)||!/détectées/.test(src)) return _echec('pas de bouton « Découper en répétitions (N détectées) »');
+      if(!/Annuler le découpage/.test(src)||!/mlTableauSerie|_mlMajLecture/.test(src)) return _echec('ni annulation ni relecture du tableau');
+      return true;});
     okA('Sens concentrique : vertical, descente 1 s puis remontée 3 s — sc=-1 → con≈1000, exc≈3000 ; sc=1 → l’inverse',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // Une poignée de poulie haute : elle DESCEND en 1 s (concentrique), puis remonte en 3 s.
