@@ -66,9 +66,9 @@ const EAU_ML_PAR_KG=35;
 const EAU_ML_PAR_SEANCE=500;
 // ⚠ LE POIDS DE RÉFÉRENCE, ET DES BORNES (30/09/2026). 35 ml × le poids total
 //   donnait 4,2 L à 120 kg un jour de repos, 4,7 L un jour d'entraînement :
-//   la masse grasse ne boit pas comme le muscle. Le poids est désormais celui
-//   des macros (poidsMacros : masse maigre × 1,15 si très gras, sinon poids
-//   ajusté si IMC ≥ 30, sinon poids total), le même pour tout le dossier.
+//   la masse grasse ne boit pas comme le muscle. Le poids est celui des
+//   macros (poidsMacros), le même pour tout le dossier. 05/10/2026 : c'est de
+//   nouveau le POIDS DU CORPS, et ce sont les bornes qui contiennent le repère.
 //   Le repère de base est borné de 1,5 à 4,0 L ; le jour ON ajoute 0,5 L
 //   par-dessus (4,5 L au plus).
 const EAU_MIN_L=1.5, EAU_MAX_L=4.0;

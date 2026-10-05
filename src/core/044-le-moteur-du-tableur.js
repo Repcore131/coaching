@@ -1757,9 +1757,20 @@ function tbkDelta(sens){
 function _htmlEcartFormules(t){
   const hb=mbHarrisBenedict(t.poids,t.taille,t.age,t.sexe), mf=mbMifflin(t.poids,t.taille,t.age,t.sexe);
   if(!(hb>0)||!(mf>0)) return '';
-  const e=hb-mf;
-  return 'Harris-Benedict '+_tbNb(hb)+' · Mifflin '+_tbNb(mf)+' kcal : écart de '+_tbNb(Math.abs(e))+' kcal'
-    +(t.mbSource==='katch'?' · la masse maigre mesurée prime (Katch-McArdle)':'');
+  const e=_tbNb(Math.abs(hb-mf));
+  // D'ABORD CE QUI EST REELLEMENT CALCULE (Kevin, 05/10/2026). Avec une masse
+  // maigre mesuree, c'est Katch-McArdle, quel que soit le choix du menu : la
+  // phrase le disait en dernier, apres deux chiffres qui ne servaient pas, et
+  // le menu « Mifflin-St Jeor » se lisait comme la formule en cours.
+  if(t.mbSource==='katch')
+    return 'Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée'
+      +(t.mbBrut>0?' ('+_tbNb(t.mbBrut)+' kcal)':'')
+      +'. Ce choix ne servira que sans masse maigre : Harris-Benedict '+_tbNb(hb)
+      +', Mifflin-St Jeor '+_tbNb(mf)+', écart de '+e+' kcal.';
+  const harris=t.mbSource==='harris';
+  return 'Calcul actuel : '+(harris?'Harris-Benedict':'Mifflin-St Jeor')+', '
+    +_tbNb(harris?hb:mf)+' kcal. '+(harris?'Mifflin-St Jeor':'Harris-Benedict')
+    +' donnerait '+_tbNb(harris?mf:hb)+' kcal : écart de '+e+' kcal.';
 }
 function majTableauTableur(quoi,val){
   const users=DB.get('users')||{};

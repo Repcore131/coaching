@@ -2056,40 +2056,17 @@ function _repartition(kcal,poids,gParKg,lipGparKg,ref){
   return {p,l,g,depasse,glucidesBas,ref:r0};
 }
 const GLUC_MIN_G_KG=2, GLUC_MIN_G_JOUR=100;
-// ══ LE POIDS DE REFERENCE DES MACROS (30/09/2026) ═══════════════════════
-// 2,4 g/kg de POIDS TOTAL chez un homme de 120 kg et 175 cm, c'est 288 g de
-// proteines : le gras ne demande pas de proteines. D'ou, dans l'ordre :
-//   1. masse maigre connue et % de gras au-dela de 25 % (H) / 32 % (F) :
-//      la masse maigre × 1,15 (l'equivalent d'un poids « sec ») ;
-//   2. sinon IMC >= 30 : poids ajuste = poids ideal (IMC 25) + 25 % de l'exces ;
-//   3. sinon le poids total.
-const POIDS_REF_GRAS_HAUT=Object.freeze({H:25,F:32});
-const POIDS_REF_MM_FACTEUR=1.15, POIDS_REF_IMC=30, POIDS_REF_IMC_IDEAL=25, POIDS_REF_EXCES=0.25;
+// ══ LE POIDS DES MACROS : LE POIDS DU CORPS, POINT (Kevin, 05/10/2026) ═══
+// « 2,2 g par kilo de poids de corps », c'est 2,2 × le poids de la balance :
+// 85 kg donnent 187 g de protéines, pas 147. Le 30/09 j'avais remplacé ce
+// poids par la masse maigre × 1,15 (ou un poids « ajusté » dès l'IMC 30) sans
+// que l'écran le dise à l'endroit du chiffre : le libellé annonçait un calcul
+// et la case en affichait un autre. Kevin : « on ne calcule pas selon la masse
+// maigre ». Les deux règles sont RETIRÉES. Si un dossier demande moins de
+// protéines, le coach baisse le g/kg : c'est son réglage, et il se lit.
+// La fonction reste, avec sa forme, pour ses appelants (macros, eau).
 function poidsMacros(u){
   let poids=null; try{ poids=poidsNutritionnel(u).kg; }catch(e){ poids=null; }
-  if(!(poids>0)) return {kg:poids,type:'total',lib:''};
-  const bl=((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((x,y)=>x.date-y.date);
-  const b=bl[bl.length-1]||{};
-  const taille=parseFloat((u&&(u._evol_height||u['init-height']))||b['deb-height']||(u&&u.height)||0)||null;
-  const sexe=(u&&(u._evol_gender||u.gender))||b['deb-gender']||'';
-  let mm=null; try{ mm=masseMaigreDuBilan(u); }catch(e){ mm=null; }
-  if(mm>0){
-    const w=getBW(b);
-    const gras=(w>0)?(w-mm)/w*100:null;
-    const seuil=isFemale(sexe)?POIDS_REF_GRAS_HAUT.F:POIDS_REF_GRAS_HAUT.H;
-    if(gras!=null&&gras>seuil){
-      const kg=Math.round(mm*POIDS_REF_MM_FACTEUR*10)/10;
-      return {kg,type:'maigre',lib:'masse maigre × 1,15'};
-    }
-  }
-  if(taille>0){
-    const imc=poids/Math.pow(taille/100,2);
-    if(imc>=POIDS_REF_IMC){
-      const ideal=POIDS_REF_IMC_IDEAL*Math.pow(taille/100,2);
-      const kg=Math.round((ideal+POIDS_REF_EXCES*(poids-ideal))*10)/10;
-      return {kg,type:'ajuste',lib:'poids ajusté'};
-    }
-  }
   return {kg:poids,type:'total',lib:''};
 }
 // La phrase : « protéines sur 87 kg de poids ajusté », vide au poids total.
