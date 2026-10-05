@@ -1934,9 +1934,14 @@ const PREMIERS_PAS=Object.freeze([
   Object.freeze({icone:'folder', titre:'Créer un programme',
     detail:'Un modèle Homme/Femme, réutilisable pour tous.',
     action:'openCoachPrograms()'}),
-  Object.freeze({icone:'clipboard', titre:'Importer une fiche existante',
-    detail:'PDF ou photo. L\'import se fait dans le programme d\'un athlète : commence par en ajouter un.',
-    action:'openAddAthlete()'}),
+  // COLLER, PAS IMPORTER (05/10/2026). L'import par PDF ou photo est fermé
+  // (LEGACY_PDF_IMPORT) : le promettre ici menait à une impasse. Le coach a son
+  // programme dans un tableur — il le colle, une ligne par exercice.
+  // `icone` est un nom de l'icônier (ICO), pas un emoji : le rendu affiche le
+  // numéro de l'étape, et scripts/emojis.py tient le compte des emojis.
+  Object.freeze({icone:'clipboard', titre:'Coller un programme existant',
+    detail:'Depuis Excel ou Google Sheets : une ligne par exercice.',
+    action:'ouvrirImportCollage()'}),
 ]);
 // `clients` est injectable : la suite l'éprouve sans toucher au stockage.
 function _renderPremiersPas(clients){

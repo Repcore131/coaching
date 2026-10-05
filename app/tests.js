@@ -20649,6 +20649,10 @@ async function testExercices(){
           if(!z) return _echec('emplacement absent du DOM');
           try{
             if(PREMIERS_PAS.length!==3) return _echec(PREMIERS_PAS.length+' actions');
+            const titres=PREMIERS_PAS.map(x=>x.titre).join(' | ');
+            if(titres!=='Inviter mon premier athlète | Créer un programme | Coller un programme existant')
+              return _echec('titres : '+titres);
+            if(PREMIERS_PAS[2].action!=='ouvrirImportCollage()') return _echec('3e action : '+PREMIERS_PAS[2].action);
             _renderPremiersPas([]);
             const h=z.innerHTML;
             for(const a of PREMIERS_PAS) if(h.indexOf(a.titre)<0)
@@ -20661,6 +20665,77 @@ async function testExercices(){
             return (z.innerHTML||'')===''
               ?true:_echec('le bloc subsiste avec un athlète');
           } finally { z.innerHTML=''; }});
+        // ══ COLLER UN PROGRAMME EXISTANT (05/10/2026) ═══════════════════════
+        ok('Onboarding coach : aucun « PDF ou photo » tant que LEGACY_PDF_IMPORT vaut false',()=>{
+          if(LEGACY_PDF_IMPORT!==false) return true;
+          const z=document.getElementById('ch-premiers-pas');
+          try{
+            _renderPremiersPas([]);
+            const vus=[JSON.stringify(PREMIERS_PAS),String(_renderPremiersPas),z?z.innerHTML:'',
+              (document.getElementById('s-coach-home')||{}).innerHTML||''].join('\n');
+            if(/PDF ou (une )?photo/i.test(vus)) return _echec('« PDF ou photo » encore promis dans l’onboarding coach');
+            return /import[^'"]*fiche/i.test(JSON.stringify(PREMIERS_PAS))?_echec('« Importer une fiche » subsiste'):true;
+          } finally { if(z) z.innerHTML=''; }});
+        ok('parserCollageProgramme : tabulations (Sheets), en-tête ignorée, plage de reps, exKey',()=>{
+          const b=_nomsRemplacement(), A=b[0], B=b[1];
+          const bas=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const r=parserCollageProgramme('Exercice\tSéries\tReps\tCharge\n'+bas(A)+'\t4\t8-10\t60 kg\n'+B+'\t3\t8 à 12\tRIR 2');
+          if(r.ignorees!==1) return _echec('en-tête : '+r.ignorees+' ignorée(s)');
+          if(r.seances.length!==1||r.seances[0].exercices.length!==2) return _echec(JSON.stringify(r.seances));
+          const [x,y]=r.seances[0].exercices;
+          if(x.name!==A||x._inconnu) return _echec('exKey : « '+bas(A)+' » non rapproché de « '+A+' » : '+x.name);
+          if(x.sets!==4||x.reps!=='8-10'||x.charge!=='60 kg') return _echec(JSON.stringify(x));
+          if(y.reps!=='8-12'||y.rir!=='2'||y.sets!==3) return _echec(JSON.stringify(y));
+          return r.reconnus===2&&r.inconnus===0?true:_echec(r.reconnus+' reconnus');});
+        ok('parserCollageProgramme : « ; » et « , », 4x10, ligne vide = nouvelle séance, titre de séance',()=>{
+          const b=_nomsRemplacement();
+          const r=parserCollageProgramme('Séance Haut :\n'+b[0]+' ; 4 ; 10\n'+b[1]+';3;12\n\n'+b[2]+', 5x5\n\n\n'+b[3]+',3,15');
+          const noms=r.seances.map(s=>s.nom+':'+s.exercices.length).join(' | ');
+          if(noms!=='Séance Haut:2 | Séance B:1 | Séance C:1') return _echec(noms);
+          const e=r.seances[1].exercices[0];
+          return e.sets===5&&e.reps==='5'?true:_echec('4x10 : '+JSON.stringify(e));});
+        ok('parserCollageProgramme : exercice inconnu marqué, avec suggestions ; vide ; 200 lignes au plus',()=>{
+          const b=_nomsRemplacement();
+          const r=parserCollageProgramme('Mon mouvement maison\t3\t10\n'+b[0]+'\t3\t10');
+          const [i,k]=r.seances[0].exercices;
+          if(!i._inconnu||i.name!=='Mon mouvement maison') return _echec('inconnu : '+JSON.stringify(i));
+          if(k._inconnu) return _echec('le connu est marqué inconnu');
+          const mot=exKey(b[0]).split(' ').find(w=>w.length>=4);
+          if(mot&&!suggestionsBanque(mot+' xyz').length) return _echec('aucune suggestion pour « '+mot+' »');
+          const v=parserCollageProgramme('');
+          if(v.seances.length||v.reconnus) return _echec('texte vide : '+JSON.stringify(v));
+          const t=parserCollageProgramme(Array.from({length:250},(_,n)=>b[n%b.length]+'\t3\t10').join('\n'));
+          const n=t.seances.reduce((a,s)=>a+s.exercices.length,0);
+          return t.tronque&&n===COLLAGE_LIGNES_MAX?true:_echec(n+' exercices gardés, tronqué '+t.tronque);});
+        ok('Le collage devient un modèle : sept créneaux, Homme et Femme, séries et reps, jours espacés',()=>{
+          const b=_nomsRemplacement();
+          const r=parserCollageProgramme(b[0]+'\t4\t8-10\n\n'+b[1]+'\t3\t12\tRIR 1\n\n'+b[2]+'\t3\t10');
+          const p=modeleDepuisCollage(r,'Mon prog','Mardi');
+          for(const g of ['sessions_H','sessions_F']){
+            if(p[g].length!==7) return _echec(g+' : '+p[g].length+' créneaux');
+            const act=p[g].filter(s=>s.active).map(s=>s.day).join(',');
+            if(act!=='Mardi,Jeudi,Samedi') return _echec(g+' jours : '+act);
+          }
+          if(p.sessions_H===p.sessions_F||p.sessions_H[1].exercises===p.sessions_F[1].exercises) return _echec('versions partagées');
+          const e=p.sessions_H.find(s=>s.day==='Jeudi').exercises[0];
+          if(e.series!==3||e.reps!=='12'||e.rir!=='1') return _echec(JSON.stringify(e));
+          return p.name==='Mon prog'&&_cplSeancesPleines(p,'H').length===3?true:_echec('modèle : '+p.name);});
+        ok('ouvrirImportCollage : aperçu, inconnu surligné, 0 reconnu = message et pas de création',()=>{
+          const sv=currentUser;
+          try{
+            currentUser={id:'c_col',email:'col@t',role:'coach',coachPrograms:[]};
+            if(!ouvrirImportCollage()) return _echec('la modale ne s’ouvre pas');
+            if(!document.getElementById('col-jour')||document.getElementById('col-jour').options.length!==8) return _echec('select des jours');
+            document.getElementById('col-texte').value='Truc inventé\t3\t10\nAutre chose\t4\t8';
+            collageApercu();
+            const err=document.getElementById('col-err').textContent;
+            if(!/Aucun exercice reconnu/.test(err)) return _echec('message : '+err);
+            if(document.getElementById('col-creer')) return _echec('création proposée sans exercice reconnu');
+            document.getElementById('col-texte').value=_nomsRemplacement()[0]+'\t3\t10\nTruc inventé\t3\t10';
+            collageApercu();
+            if(document.querySelectorAll('#col-apercu .col-inconnu').length!==1) return _echec('inconnu non surligné');
+            return document.getElementById('col-creer')?true:_echec('pas de bouton « Créer le modèle »');
+          } finally { currentUser=sv; closeModal(); }});
         ok('La promesse dit un CLIENT, jamais une durée',()=>{
           // Écrite une seule fois : deux exemplaires finiraient par diverger.
           if(!/premier client/i.test(PROMESSE_COACH)) return _echec('le premier client n\'est pas nommé');

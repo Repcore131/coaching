@@ -28123,9 +28123,14 @@ const PREMIERS_PAS=Object.freeze([
   Object.freeze({icone:'folder', titre:'Créer un programme',
     detail:'Un modèle Homme/Femme, réutilisable pour tous.',
     action:'openCoachPrograms()'}),
-  Object.freeze({icone:'clipboard', titre:'Importer une fiche existante',
-    detail:'PDF ou photo. L\'import se fait dans le programme d\'un athlète : commence par en ajouter un.',
-    action:'openAddAthlete()'}),
+  // COLLER, PAS IMPORTER (05/10/2026). L'import par PDF ou photo est fermé
+  // (LEGACY_PDF_IMPORT) : le promettre ici menait à une impasse. Le coach a son
+  // programme dans un tableur — il le colle, une ligne par exercice.
+  // `icone` est un nom de l'icônier (ICO), pas un emoji : le rendu affiche le
+  // numéro de l'étape, et scripts/emojis.py tient le compte des emojis.
+  Object.freeze({icone:'clipboard', titre:'Coller un programme existant',
+    detail:'Depuis Excel ou Google Sheets : une ligne par exercice.',
+    action:'ouvrirImportCollage()'}),
 ]);
 // `clients` est injectable : la suite l'éprouve sans toucher au stockage.
 function _renderPremiersPas(clients){
@@ -37892,6 +37897,251 @@ async function createCoachProgTemplate(){
   currentUser.coachPrograms.push(p);
   saveUser();
   editCoachProgTemplate(currentUser.coachPrograms.length-1);
+}
+
+// ══ COLLER UN PROGRAMME EXISTANT (05/10/2026) ═════════════════════════════
+// Le coach qui arrive a ses programmes dans un tableur. L'import par PDF ou
+// photo est fermé (LEGACY_PDF_IMPORT) ; ce chemin-ci ne lit que du texte
+// collé, ce que Sheets et Excel donnent tels quels (tabulations).
+//
+// UNE LIGNE PAR EXERCICE : nom ; séries ; reps ; puis, facultatifs, la charge
+// et/ou le RIR (« RIR 2 »). « 4x10 » dans la colonne des séries vaut séries et
+// reps. Une LIGNE VIDE ouvre la séance suivante ; une ligne seule qui se
+// termine par « : » ou commence par « Séance »/« Jour » la nomme. Les lignes
+// d'en-tête (« Exercice », « Séries »…) sont ignorées.
+//
+// ⚠ LE NOM EST RAPPROCHÉ DE LA BANQUE PAR exKey, la clé qui fait l'identité
+//   stable d'un exercice (vidéos, historique, alias). Un nom reconnu prend
+//   l'écriture de la banque ; un nom inconnu est GARDÉ tel quel et marqué
+//   `_inconnu` : l'aperçu le montre, et le coach choisit une suggestion ou le
+//   laisse — un exercice maison reste un exercice.
+const COLLAGE_LIGNES_MAX=200;
+const COLLAGE_SEANCES_MAX=7;
+const _COLLAGE_ENTETES=new Set(['EXERCICE','EXERCICES','EXERCISE','EXERCISES','NOM','MOUVEMENT','MOUVEMENTS',
+  'SERIES','SERIE','SETS','REPS','REPETITIONS','CHARGE','POIDS','RIR']);
+let _collageIndex=null;
+// La banque indexée par clé (alias du coach compris), construite une fois.
+function _collageBanque(){
+  if(_collageIndex) return _collageIndex;
+  const m=new Map();
+  try{ for(const n of _nomsRemplacement()){ const k=exKey(n); if(k&&!m.has(k)) m.set(k,n); } }catch(e){}
+  _collageIndex=m;
+  return m;
+}
+function _collageReconnaitre(nom){
+  const m=_collageBanque();
+  let k=''; try{ k=exKey(nom); }catch(e){ k=''; }
+  if(!k) return '';
+  if(m.has(k)) return m.get(k);
+  let a=''; try{ a=resoudreAlias(k); }catch(e){ a=''; }
+  return (a&&m.has(a))?m.get(a):'';
+}
+// PURE. « 8-10 », « 8 à 10 », « 8–10 » → « 8-10 » ; « 12 » → « 12 » ; le reste
+// (« MAX », « 30 s ») tel quel.
+function _collageReps(v){
+  const s=String(v==null?'':v).trim();
+  const p=/^(\d+)\s*(?:-|–|—|à|a)\s*(\d+)$/i.exec(s);
+  if(p) return p[1]+'-'+p[2];
+  return s;
+}
+function _collageCellules(l){
+  const sep=l.indexOf('\t')>=0?'\t':(l.indexOf(';')>=0?';':',');
+  return l.split(sep).map(c=>c.trim());
+}
+function _collageEntete(cells){
+  return cells.filter(Boolean).length>0&&cells.filter(Boolean).every(c=>{
+    let k=''; try{ k=exKey(c); }catch(e){} return _COLLAGE_ENTETES.has(k)||/^(EXERCICE|SERIE|REPETITION|CHARGE)/.test(k);
+  });
+}
+/**
+ * PURE (la banque est une constante). Le texte collé → les séances.
+ * @param {string} texte
+ * @returns {{seances:{nom:string,exercices:{name:string,sets:number|null,reps:string,charge?:string,rir?:string,_inconnu:boolean}[]}[],
+ *   ignorees:number,tronque:boolean,reconnus:number,inconnus:number}}
+ */
+function parserCollageProgramme(texte){
+  const toutes=String(texte||'').split(/\r?\n/);
+  const tronque=toutes.length>COLLAGE_LIGNES_MAX;
+  const seances=[]; let cur=null, ignorees=0, reconnus=0, inconnus=0;
+  const fermer=()=>{ if(cur&&cur.exercices.length) seances.push(cur); cur=null; };
+  for(const brut of toutes.slice(0,COLLAGE_LIGNES_MAX)){
+    if(!brut.trim()){ fermer(); continue; }
+    const cells=_collageCellules(brut);
+    if(_collageEntete(cells)){ ignorees++; continue; }
+    const nom=cells[0]||'';
+    const reste=cells.slice(1).filter(Boolean);
+    // Une ligne seule qui NOMME la séance.
+    if(!reste.length&&(/:\s*$/.test(nom)||/^(s[ée]ance|jour|day|session)\b/i.test(nom))){
+      fermer(); cur={nom:nom.replace(/:\s*$/,'').trim(),exercices:[]}; continue;
+    }
+    if(!nom){ ignorees++; continue; }
+    let sets=null, reps='';
+    const sx=/^(\d+)\s*[x×*]\s*(.+)$/i.exec(cells[1]||'');
+    if(sx){ sets=+sx[1]; reps=_collageReps(sx[2]); }
+    else {
+      const n=parseInt(cells[1],10);
+      sets=Number.isFinite(n)&&n>0?n:null;
+      reps=_collageReps(cells[2]);
+    }
+    const ex={name:nom,sets,reps,_inconnu:false};
+    for(const c of cells.slice(sx?2:3)){
+      if(!c) continue;
+      const r=/^rir\s*:?\s*(\d+(?:\s*-\s*\d+)?)$/i.exec(c);
+      if(r){ ex.rir=r[1].replace(/\s+/g,''); continue; }
+      if(!ex.charge) ex.charge=c;
+    }
+    const banque=_collageReconnaitre(nom);
+    if(banque){ ex.name=banque; reconnus++; } else { ex._inconnu=true; inconnus++; }
+    if(!cur) cur={nom:'',exercices:[]};
+    cur.exercices.push(ex);
+  }
+  fermer();
+  seances.forEach((s,i)=>{ if(!s.nom) s.nom='Séance '+String.fromCharCode(65+i); });
+  return {seances,ignorees,tronque,reconnus,inconnus};
+}
+// PURE. Les noms de la banque les plus proches d'un nom inconnu : les mots en
+// commun (quatre lettres au moins), puis l'ordre alphabétique.
+function suggestionsBanque(nom,n){
+  let mots=[]; try{ mots=exKey(nom).split(' ').filter(w=>w.length>=4); }catch(e){}
+  if(!mots.length) return [];
+  const l=[];
+  for(const [k,v] of _collageBanque()){
+    const kk=' '+k+' ';
+    let sc=0; for(const w of mots) if(kk.indexOf(' '+w)>=0) sc++;
+    if(sc) l.push({v,sc});
+  }
+  return l.sort((a,b)=>b.sc-a.sc||(a.v<b.v?-1:1)).slice(0,n||4).map(x=>x.v);
+}
+// PURE. Les jours des séances : à partir du jour choisi, un jour sur deux
+// jusqu'à trois séances, puis jour après jour. « Nouveau modèle » part du lundi.
+function joursCollage(nb,depart){
+  const d=Math.max(0,DAYS.indexOf(depart));
+  const pas=nb<=3?2:1;
+  const vus=new Set(), l=[];
+  for(let i=0;i<nb;i++){
+    let j=(d+i*pas)%7;
+    while(vus.has(j)) j=(j+1)%7;
+    vus.add(j); l.push(DAYS[j]);
+  }
+  return l;
+}
+// PURE. Le modèle : même forme que createCoachProgTemplate — sept créneaux,
+// les deux versions (Homme et Femme) garnies à l'identique.
+function modeleDepuisCollage(r,nom,depart){
+  const jours=joursCollage(r.seances.length,depart);
+  const version=()=>{
+    const v=_cptSeancesVides();
+    r.seances.forEach((s,i)=>{
+      const slot=v.find(x=>x.day===jours[i]);
+      slot.name=s.nom; slot.active=true;
+      slot.exercises=s.exercices.map(e=>{
+        const o={name:e.name,series:e.sets||3,reps:e.reps||'10',repos:'',description:'',videoUrl:'',videoUrl2:''};
+        if(e.charge) o.charge=e.charge;
+        if(e.rir) o.rir=e.rir;
+        return o;
+      });
+    });
+    return v;
+  };
+  return {id:Date.now().toString(36),name:String(nom||'').trim().slice(0,80)||'Programme importé',createdAt:Date.now(),
+    origine:'collage',sessions_H:version(),sessions_F:version()};
+}
+let _collageEtat=null;
+const _collageChamp='width:100%;box-sizing:border-box;font-family:Montserrat,sans-serif;font-size:var(--fs-md);'
+  +'background:var(--surface-1);color:var(--text);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px';
+function ouvrirImportCollage(){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  try{ closeModal(); }catch(e){}
+  _collageEtat=null;
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div id="col-feuille" role="dialog" aria-modal="true" aria-labelledby="col-titre" onclick="event.stopPropagation()" '
+    +'style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;'
+    +'max-width:560px;max-height:88vh;overflow-y:auto;box-sizing:border-box;animation:fadeIn var(--t-3) var(--c-out)">'
+    +'<h2 id="col-titre" style="margin:0 0 4px;font-size:var(--fs-lg)">Coller un programme existant</h2>'
+    +'<p class="sub" style="font-size:var(--fs-xs);line-height:1.5;margin:0 0 12px">Copie les lignes depuis Excel ou '
+    +'Google Sheets : <b>exercice, séries, reps</b>, puis la charge ou le RIR si tu les as. Une ligne vide sépare deux séances. '
+    +COLLAGE_LIGNES_MAX+' lignes au plus.</p>'
+    +'<textarea id="col-texte" rows="9" placeholder="Développé couché\t4\t8-10\nRowing barre\t4\t10\n\nSquat\t5\t5\tRIR 2" '
+    +'style="'+_collageChamp+';resize:vertical;min-height:160px;font-size:var(--fs-sm)"></textarea>'
+    +'<div style="display:flex;gap:8px;margin:12px 0">'
+    +'<input id="col-nom" placeholder="Nom du modèle" style="'+_collageChamp+';flex:1;min-width:0" maxlength="80">'
+    +'<select id="col-jour" aria-label="Premier jour" style="'+_collageChamp+';flex:1;min-width:0">'
+    +'<option value="">Nouveau modèle (dès lundi)</option>'
+    +DAYS.map(d=>'<option value="'+d+'">À partir du '+d.toLowerCase()+'</option>').join('')+'</select></div>'
+    +'<div id="col-err" style="display:none;font-size:var(--fs-sm);color:var(--red-light);line-height:1.5;margin-bottom:8px"></div>'
+    +'<div id="col-apercu"></div>'
+    +'<button type="button" id="col-voir" class="btn btn-red" style="width:100%;min-height:46px;margin-bottom:10px" onclick="collageApercu()">Voir l’aperçu</button>'
+    +'<button type="button" class="btn btn-outline" style="width:100%;min-height:44px" onclick="closeModal()">Annuler</button>'
+    +'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+function _collageDire(m){
+  const e=document.getElementById('col-err');
+  if(e){ e.textContent=m||''; e.style.display=m?'block':'none'; }
+}
+// L'aperçu AVANT d'écrire quoi que ce soit : chaque séance, chaque exercice,
+// les inconnus surlignés avec les suggestions de la banque.
+function collageApercu(){
+  const r=parserCollageProgramme((document.getElementById('col-texte')||{}).value||'');
+  _collageEtat=r;
+  return _collageRendre();
+}
+function _collageRendre(){
+  const r=_collageEtat, z=document.getElementById('col-apercu'), voir=document.getElementById('col-voir');
+  if(!r||!z) return false;
+  const nbEx=r.seances.reduce((a,s)=>a+s.exercices.length,0);
+  if(!nbEx){ z.innerHTML=''; _collageDire('Aucun exercice trouvé : colle une ligne par exercice — le nom, puis les séries et les reps.'); return false; }
+  if(!r.reconnus){ _collageDire('Aucun exercice reconnu dans la banque. Vérifie que la première colonne est bien le nom de l’exercice '
+    +'(« Développé couché », « Squat »…), ou choisis une suggestion ci-dessous.'); }
+  else if(r.seances.length>COLLAGE_SEANCES_MAX) _collageDire(r.seances.length+' séances : '+COLLAGE_SEANCES_MAX+' au plus, une par jour. Regroupe-les avant de coller.');
+  else _collageDire('');
+  z.innerHTML='<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">'
+    +r.seances.length+' séance'+(r.seances.length>1?'s':'')+' · '+nbEx+' exercice'+(nbEx>1?'s':'')
+    +' · '+r.reconnus+' reconnu'+(r.reconnus>1?'s':'')
+    +(r.inconnus?' · <b style="color:var(--orange)">'+r.inconnus+' à vérifier</b>':'')
+    +(r.tronque?' · au-delà de '+COLLAGE_LIGNES_MAX+' lignes, la suite est ignorée':'')+'</div>'
+    +r.seances.map((s,i)=>'<div class="col-seance" style="background:var(--surface-1);border:1px solid var(--border);'
+      +'border-radius:var(--r-3);padding:10px 12px;margin-bottom:8px">'
+      +'<div style="font-weight:800;font-size:var(--fs-sm);margin-bottom:6px">'+escapeHtml(s.nom)+'</div>'
+      +s.exercices.map((e,j)=>'<div class="col-ex'+(e._inconnu?' col-inconnu':'')+'" style="padding:6px 8px;margin-bottom:4px;'
+        +'border-radius:var(--r-2);'+(e._inconnu?'border:1px solid var(--orange);background:color-mix(in srgb,var(--orange) 10%,transparent)':'border:1px solid transparent')+'">'
+        +'<div style="font-size:var(--fs-sm)">'+escapeHtml(e.name)
+        +' <span style="color:var(--sub)">· '+(e.sets||'?')+' × '+escapeHtml(e.reps||'?')
+        +(e.charge?' · '+escapeHtml(e.charge):'')+(e.rir?' · RIR '+escapeHtml(e.rir):'')+'</span></div>'
+        +(e._inconnu?'<div style="font-size:var(--fs-xs);color:var(--orange);margin-top:4px">Pas dans la banque'
+          +(suggestionsBanque(e.name).length?' : ':', gardé tel quel.')
+          +suggestionsBanque(e.name).map(n=>'<button type="button" class="btn btn-outline btn-sm col-sugg" style="margin:4px 4px 0 0" '
+            +'onclick="collageChoisir('+i+','+j+',this.dataset.n)" data-n="'+escapeHtml(n)+'">'+escapeHtml(n)+'</button>').join('')
+          +'</div>':'')
+        +'</div>').join('')
+      +'</div>').join('')
+    +(r.reconnus&&r.seances.length<=COLLAGE_SEANCES_MAX
+      ?'<button type="button" id="col-creer" class="btn btn-red" style="width:100%;min-height:46px;margin:4px 0 10px" onclick="collageCreer()">'
+        +'Créer le modèle</button>':'');
+  if(voir){ voir.textContent='Relire le collage'; voir.className='btn btn-outline'; }
+  return true;
+}
+// Une suggestion choisie : le nom de la banque remplace le nom collé.
+function collageChoisir(i,j,nom){
+  const e=_collageEtat&&_collageEtat.seances[i]&&_collageEtat.seances[i].exercices[j];
+  if(!e||!nom) return false;
+  e.name=nom; e._inconnu=false;
+  _collageEtat.inconnus=Math.max(0,_collageEtat.inconnus-1); _collageEtat.reconnus++;
+  return _collageRendre();
+}
+function collageCreer(){
+  const r=_collageEtat;
+  if(!r||!r.reconnus||!r.seances.length||r.seances.length>COLLAGE_SEANCES_MAX) return false;
+  const p=modeleDepuisCollage(r,(document.getElementById('col-nom')||{}).value,(document.getElementById('col-jour')||{}).value||'Lundi');
+  if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
+  currentUser.coachPrograms.push(p);
+  try{ saveUser(); }catch(e){ rcErreurMuette('collageCreer',e); }
+  try{ closeModal(); }catch(e){}
+  toast(ICO.coche+' Modèle créé : '+p.name,'var(--green)');
+  try{ editCoachProgTemplate(currentUser.coachPrograms.length-1); }catch(e){ rcErreurMuette('collageCreer',e); }
+  return p;
 }
 
 // `genre` : la version qu'on a touchee dans la liste. Sans lui, la version
