@@ -2485,3 +2485,315 @@ function resolveClient(cid){
 // même clé, donc renommer un exercice ne coupe plus son historique de charge.
 // Ce n'est PAS une clé de stockage : rien n'est écrit sous cette forme dans
 // sessions[n].data, qui reste indexé par le nom en clair.
+
+// ══ LE PREMIER PROGRAMME PROPOSÉ PAR L'ASSISTANT (05/10/2026) ══════════════
+// Depuis la fiche d'un athlète qui a rempli son bilan de départ et n'a pas de
+// programme : « Proposer un premier programme ». Le serveur (ia.js, tâche
+// 'programme') reçoit les réponses de départ utiles, les contraintes, les
+// modèles du coach résumés et la banque ; Claude CHOISIT un modèle et LISTE
+// des ajustements. Il ne réécrit jamais le programme.
+// ⚠ L'APP APPLIQUE ELLE-MÊME, ajustement par ajustement (appliquerAjustementsIA),
+//   et écarte ceux qui ne valident pas : séance ou exercice inconnus, jour
+//   occupé, remplacement par un nom hors banque.
+// ⚠ UN BROUILLON, JAMAIS UNE PUBLICATION. Le coach coche, valide, et le
+//   résultat part dans enregistrerBrouillon ; il le publie ensuite depuis
+//   « Modifier le programme », comme toute autre modification.
+// ⚠ LES CONTRAINTES PARTENT EN CONTRAINTE (deb-health et contraintesSante) :
+//   ni deb-traitement ni deb-tca ne sont lus ici. Une contrainte ambiguë
+//   revient en alerte « à vérifier avec l'athlète », pas en ajustement.
+// ⚠ PROFIL TCA : aucun ajustement ni alerte qui parle de poids ou de nutrition
+//   (écartés ici, quoi que réponde le serveur), et les objectifs qui en parlent
+//   ne partent pas.
+const PREMIER_PROG_MODELES_MAX=12, PREMIER_PROG_BANQUE_MAX=600, PREMIER_PROG_TEXTE_MAX=400;
+const PREMIER_PROG_DEPART=Object.freeze([['objectifs','deb-goals'],['jours','deb-training-days'],
+  ['duree','deb-session-duration'],['moment','deb-training-time'],['lieu','deb-location'],['salle','deb-gym'],
+  ['rythmeTravail','deb-work-rhythm'],['antecedents','deb-history']]);
+const PREMIER_PROG_TYPES=Object.freeze(['jour','remplacement','retrait','series','duree']);
+const PREMIER_PROG_RAISONS=Object.freeze({type_inconnu:'type inconnu',seance_inconnue:'séance absente du modèle',
+  exercice_inconnu:'exercice absent de la séance',hors_banque:'pas dans ta banque',jour_inconnu:'jour illisible',
+  jour_occupe:'ce jour a déjà une séance',seance_vide:'la séance resterait vide',valeur_invalide:'valeur illisible',
+  profil_tca:'parle de poids ou de nutrition'});
+const RE_POIDS_IA=/poids|\bkg\b|kilo|calor|kcal|nutrition|aliment|r[ée]gime|maigr|minc|s[èe]che|grossir|graisse|gras\b|silhouette|\bimc\b/i;
+const RE_REPOS_IA=/^(\d{1,3} ?s|\d{1,2} ?min( ?\d{1,2})?)$/i;
+
+// Le DERNIER bilan de départ, ou null.
+function _bilanDepartIA(c){
+  const t=b=>{ const x=new Date(b.date).getTime(); return isFinite(x)?x:0; };
+  return (c&&Array.isArray(c.bilans)?c.bilans:[]).filter(b=>b&&b.type==='depart')
+    .sort((a,b)=>t(b)-t(a))[0]||null;
+}
+function _seancesModeleIA(p,genre){
+  if(Array.isArray(p)) return p;
+  if(!p) return [];
+  const g=progGenreServi(p,genre||'H');
+  return (g==='F'?p.sessions_F:p.sessions_H)||[];
+}
+// PURE. Le libellé de chaque séance PLEINE (null sinon) : son nom, ou son
+// jour. Deux séances du même nom se distinguent par leur jour. C'est ce
+// libellé que le serveur reçoit, et contre lui que « seance » est relue.
+function _libellesSeancesIA(sessions){
+  const vus={};
+  return (Array.isArray(sessions)?sessions:[]).map((s,i)=>{
+    if(!_modPleine(s)) return null;
+    let l=String(s.name||'').trim()||String(s.day||DAYS[i]||('Séance '+(i+1)));
+    if(vus[_modCle(l)]) l+=' ('+(s.day||DAYS[i])+')';
+    vus[_modCle(l)]=true;
+    return l;
+  });
+}
+/**
+ * PURE. Ce que le serveur reçoit pour proposer un premier programme, ou null
+ * (pas de bilan de départ, aucun modèle utilisable).
+ * @param c        le dossier de l'athlète
+ * @param modeles  les modèles du coach (coachPrograms)
+ * @param banque   les fiches de la banque ({nom, materiel}) ou des noms
+ */
+function chargeProgrammeIA(c,modeles,banque){
+  const b=_bilanDepartIA(c);
+  if(!b) return null;
+  const tca=(()=>{ try{ return aTCA(c); }catch(e){ return true; } })();
+  const genre=isFemale(c._evol_gender||c.gender)?'F':'H';
+  const depart={};
+  for(const [k,cle] of PREMIER_PROG_DEPART){
+    const t=_texteReponse(b[cle]);
+    if(!t||(tca&&RE_POIDS_IA.test(t))) continue;
+    depart[k]=t.slice(0,PREMIER_PROG_TEXTE_MAX);
+  }
+  if(c.level) depart.niveau=String(c.level).slice(0,80);
+  let zones=[]; try{ zones=contraintesActives(c); }catch(e){ zones=[]; }
+  const contraintes={texte:_texteReponse(b['deb-health']).slice(0,1000),
+    zones:zones.map(z=>({zone:libZone(z.zone),niveau:libNiveau(z.niveau),cote:z.cote||null,libelle:String(z.libelle||'').slice(0,200)}))};
+  const resumes=(Array.isArray(modeles)?modeles:[]).filter(p=>p&&p.id).map(p=>{
+    const ss=_seancesModeleIA(p,genre), libs=_libellesSeancesIA(ss), seances=[], jours=[];
+    ss.forEach((s,i)=>{ if(!libs[i]) return;
+      jours.push(String(s.day||DAYS[i]));
+      seances.push({nom:libs[i],exercices:s.exercises.filter(e=>e&&e.name).map(e=>[String(e.name),e.series==null?null:e.series,e.reps==null?null:String(e.reps)])}); });
+    return {id:String(p.id),nom:String(p.name||'Programme').slice(0,80),jours,seances};
+  }).filter(m=>m.seances.length).slice(0,PREMIER_PROG_MODELES_MAX);
+  if(!resumes.length) return null;
+  // LA BANQUE, RANGÉE PAR MATÉRIEL : plus courte qu'une liste d'objets, et le
+  // matériel est ce qui compte pour un lieu donné.
+  const parMat={}, vus=new Set();
+  let n=0;
+  for(const f of (Array.isArray(banque)?banque:[])){
+    const nom=String((typeof f==='string'?f:f&&f.nom)||'').trim(), k=exKey(nom);
+    if(!nom||!k||vus.has(k)) continue;
+    vus.add(k);
+    const m=(f&&typeof f==='object'&&String(f.materiel||'').trim())||'non précisé';
+    (parMat[m]=parMat[m]||[]).push(nom.slice(0,80));
+    if(++n>=PREMIER_PROG_BANQUE_MAX) break;
+  }
+  return {depart,contraintes,profilSansPoids:tca,modeles:resumes,banque:parMat};
+}
+// PURE. Un ajustement appliqué sur `out` (muté) ; rend la raison du rejet, ou ''.
+function _unAjustementIA(out,parLib,a,fiches,tca){
+  if(!a||PREMIER_PROG_TYPES.indexOf(a.type)<0) return 'type_inconnu';
+  if(tca&&RE_POIDS_IA.test(String(a.pourquoi||'')+' '+String(a.par||''))) return 'profil_tca';
+  const s=parLib[_modCle(a.seance)];
+  if(!s) return 'seance_inconnue';
+  const par=String(a.par==null?'':a.par).trim();
+  if(a.type==='jour'){
+    const j=DAYS.findIndex(d=>exKey(d)===exKey(par)), i=out.indexOf(s);
+    if(j<0) return 'jour_inconnu';
+    if(i===j) return '';
+    if(_modPleine(out[j])) return 'jour_occupe';
+    out[j]=s; s.day=DAYS[j];
+    out[i]={day:DAYS[i],name:'',active:false,exercises:[]};
+    return '';
+  }
+  const exs=s.exercises;
+  const idx=a.exercice==null?-1:exs.findIndex(e=>e&&_modCle(e.name)===_modCle(a.exercice));
+  if(a.type==='duree'&&a.exercice==null){
+    if(!RE_REPOS_IA.test(par)) return 'valeur_invalide';
+    exs.forEach(e=>{ if(e&&e.name) e.repos=par; });
+    return '';
+  }
+  if(idx<0) return 'exercice_inconnu';
+  if(a.type==='remplacement'){
+    const f=fiches[exKey(par)];
+    if(!f) return 'hors_banque';
+    exs[idx]=(typeof f==='object')?exRemplaceParFiche(exs[idx],f)
+      :Object.assign({},exs[idx],{name:f,description:'',videoUrl:'',videoUrl2:'',image:null});
+    return '';
+  }
+  if(a.type==='retrait'){
+    if(exs.filter(e=>e&&e.name).length<=1) return 'seance_vide';
+    exs.splice(idx,1);
+    return '';
+  }
+  if(a.type==='series'){
+    const n=Number(par);
+    if(!Number.isInteger(n)||n<1||n>10) return 'valeur_invalide';
+    exs[idx].series=n;
+    return '';
+  }
+  if(!RE_REPOS_IA.test(par)) return 'valeur_invalide';
+  exs[idx].repos=par;
+  return '';
+}
+/**
+ * PURE. Le modèle choisi, ajusté. Ni le modèle ni les ajustements ne sont
+ * touchés : rend {sessions_config, appliques, rejetes:[{a, raison}]}.
+ * Rejoué sur son propre résultat, il rend le même programme.
+ * @param modele       un modèle du coach (ou directement ses séances)
+ * @param ajustements  ceux du serveur, ou ceux que le coach a gardés
+ * @param banque       les fiches de la banque ({nom, ...}) ou des noms
+ * @param opts         {genre:'H'|'F', tca:boolean}
+ */
+function appliquerAjustementsIA(modele,ajustements,banque,opts){
+  const o=opts||{};
+  const out=JSON.parse(JSON.stringify(_seancesModeleIA(modele,o.genre)));
+  while(out.length<DAYS.length) out.push({day:DAYS[out.length],name:'',active:false,exercises:[]});
+  const fiches={};
+  for(const f of (Array.isArray(banque)?banque:[])){
+    const nom=typeof f==='string'?f:(f&&f.nom);
+    const k=exKey(nom);
+    if(k&&!fiches[k]) fiches[k]=f;
+  }
+  // Le libellé est pris UNE fois, avant tout déplacement : un « jour » ne
+  // change pas le nom par lequel les ajustements suivants désignent la séance.
+  const parLib={};
+  _libellesSeancesIA(out).forEach((l,i)=>{ if(l) parLib[_modCle(l)]=out[i]; });
+  const appliques=[], rejetes=[];
+  for(const a of (Array.isArray(ajustements)?ajustements:[])){
+    const r=_unAjustementIA(out,parLib,a,fiches,!!o.tca);
+    if(r) rejetes.push({a,raison:r}); else appliques.push(a);
+  }
+  return {sessions_config:out,appliques,rejetes};
+}
+// PURE. Le bouton se montre-t-il ? Un coach, un athlète inscrit, un bilan de
+// départ, AUCUN programme réel, et au moins un modèle utilisable.
+function peutProposerPremierProgramme(c,coach){
+  if(!c||c._fromCode||!coach||coach.role!=='coach') return false;
+  if(!_bilanDepartIA(c)) return false;
+  if(_configReelle(c.sessions_config)) return false;
+  return (Array.isArray(coach.coachPrograms)?coach.coachPrograms:[]).some(p=>p&&p.id&&
+    (_seancesModeleIA(p,'H').some(_modPleine)||_seancesModeleIA(p,'F').some(_modPleine)));
+}
+function renderPremierProgrammeIA(c){
+  const z=document.getElementById('ccd-premier-prog');
+  if(!z) return false;
+  if(!peutProposerPremierProgramme(c,currentUser)){ z.innerHTML=''; return false; }
+  let bro=null; try{ bro=brouillonDe(c.id); }catch(e){ bro=null; }
+  z.innerHTML=bro
+    ?'<div class="pp-ia"><span>Un brouillon de son premier programme t’attend.</span><button type="button" class="btn btn-outline btn-sm" onclick="openCoachSessions()">Le relire</button></div>'
+    :'<div class="pp-ia"><span>Son bilan de départ est là, et il n’a pas encore de programme.</span>'
+      +'<button type="button" class="btn btn-outline btn-sm" id="pp-ia-btn" onclick="proposerPremierProgramme()">Proposer un premier programme</button></div>';
+  return true;
+}
+let _ppIA=null;
+async function proposerPremierProgramme(){
+  const c=getOwnedClient(currentClientId);
+  const btn=document.getElementById('pp-ia-btn');
+  if(!c||!peutProposerPremierProgramme(c,currentUser)) return false;
+  if(btn&&btn.getAttribute('aria-busy')==='true') return false;
+  let fiches=[]; try{ fiches=catalogueCoach(currentUser)||[]; }catch(e){ fiches=[]; }
+  const modeles=currentUser.coachPrograms||[];
+  const charge=chargeProgrammeIA(c,modeles,fiches);
+  if(!charge){ toast('Aucun modèle utilisable : crée-en un depuis l’onglet Programmes.','var(--orange)'); return false; }
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){ toast('Hors ligne : réessaie une fois connecté.','var(--orange)'); return false; }
+  if(!CLOUD||!CLOUD._callFn){ toast('L’assistant n’est pas joignable pour le moment.','var(--orange)'); return false; }
+  if(btn){ btn.setAttribute('aria-busy','true'); btn.disabled=true; btn.textContent='L’assistant lit son bilan…'; }
+  let r=null, statut=0;
+  try{ r=await CLOUD._callFn('ia',{tache:'programme',athlete:String(c.email||'').toLowerCase().replace(/\./g,','),charge}); }
+  catch(e){ r=null; statut=(e&&e.statut)||0; }
+  finally{ try{ renderPremierProgrammeIA(c); }catch(e){} }
+  if(!r||!r.ok||!r.proposition){
+    toast(statut===429?'Quota de l’assistant atteint ce mois-ci.'
+      :statut===503?'L’assistant est en pause pour le moment.'
+      :'L’assistant n’a rien proposé d’utilisable : pars d’un modèle depuis « Modifier le programme ».','var(--orange)');
+    return false;
+  }
+  const p=r.proposition;
+  const modele=modeles.find(m=>m&&String(m.id)===String(p.modeleId));
+  if(!modele){ toast('Le modèle proposé n’existe plus.','var(--orange)'); return false; }
+  const tca=(()=>{ try{ return aTCA(c); }catch(e){ return true; } })();
+  const genre=progGenreServi(modele,isFemale(c._evol_gender||c.gender)?'F':'H');
+  const res=appliquerAjustementsIA(modele,p.ajustements,fiches,{genre,tca});
+  const alertes=(p.alertes||[]).filter(x=>typeof x==='string'&&x.trim()&&!(tca&&RE_POIDS_IA.test(x)));
+  _ppIA={id:c.id,modele,genre,fiches,tca,res,alertes,raison:(tca&&RE_POIDS_IA.test(String(p.raisonChoix||'')))?'':String(p.raisonChoix||''),journalId:r.journalId||null};
+  ouvrirRecapPremierProgramme();
+  return true;
+}
+// Le récapitulatif : le composant de la propagation C4 (c4-ath, c4-op).
+function _htmlRecapPremierProgramme(x,c){
+  const E=escapeHtml;
+  let morpho=[]; try{ morpho=_c4Morpho(c,appliquerAjustementsIA(x.modele,x.res.appliques,x.fiches,{genre:x.genre,tca:x.tca}).sessions_config); }catch(e){ morpho=[]; }
+  const lib=a=>{
+    const s=E(a.seance||'');
+    if(a.type==='jour') return 'Séance « '+s+' » déplacée au '+E(String(a.par||'').toLowerCase());
+    if(a.type==='remplacement') return E(a.exercice||'')+' remplacé par '+E(a.par||'');
+    if(a.type==='retrait') return E(a.exercice||'')+' retiré';
+    if(a.type==='series') return E(a.exercice||'')+' : '+E(String(a.par||''))+' séries';
+    return (a.exercice?E(a.exercice):'Toute la séance')+' : repos '+E(String(a.par||''));
+  };
+  let h='';
+  if(x.alertes.length) h+='<div class="c4-perdu"><b>À vérifier avec l’athlète</b> : '+x.alertes.map(E).join(' ')+'</div>';
+  h+='<div class="c4-ath"><div class="c4-l-n">'+E(x.modele.name||'Programme')+' <span>version '+E(x.genre)+'</span></div>'
+    +(x.raison?'<div class="pp-ia-raison">'+E(x.raison)+'</div>':'')
+    +(x.res.appliques.length?x.res.appliques.map((a,i)=>'<label class="c4-op"><input type="checkbox" data-pp="'+i+'" checked>'
+      +'<span><span class="c4-op-s">'+E(a.seance||'')+'</span> '+lib(a)+(a.pourquoi?'<em class="pp-ia-pq">'+E(a.pourquoi)+'</em>':'')+'</span></label>').join('')
+      :emptyState('','Le modèle convient tel quel : aucun ajustement proposé.',null,null,'padding:12px 0'))
+    +x.res.rejetes.map(r=>'<label class="c4-op c4-op-off"><input type="checkbox" disabled><span>'+lib(r.a)
+      +'<em>Écarté : '+E(PREMIER_PROG_RAISONS[r.raison]||r.raison)+'</em></span></label>').join('')
+    +'</div>';
+  for(const m of morpho)
+    h+='<div class="c4-morpho">'+E(_c4Prenom(c))+' : '+E((m.source&&m.source.lib)||'profil morpho')+'. Le programme contient '
+      +E(m.exercices.join(', '))+'. À envisager : '+E(m.quoi)+', '+E(m.reglage)+'</div>';
+  return h;
+}
+function ouvrirRecapPremierProgramme(){
+  const x=_ppIA; if(!x) return false;
+  const c=getOwnedClient(currentClientId);
+  if(!c||c.id!==x.id) return false;
+  const html=`<div id="modal-overlay" onclick="annulerPremierProgramme()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Premier programme proposé</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px">Un modèle à toi, et les ajustements de l’assistant. Décoche ce que tu ne veux pas : le résultat devient un brouillon, rien n’est publié chez l’athlète.</p>
+    <div id="pp-recap">${_htmlRecapPremierProgramme(x,c)}</div>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="validerPremierProgramme()">Enregistrer en brouillon</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="annulerPremierProgramme()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+function _retourPremierProgramme(statut,distance){
+  const jid=_ppIA&&_ppIA.journalId;
+  if(!jid||!CLOUD||!CLOUD._callFn) return;
+  try{ Promise.resolve(CLOUD._callFn('iaRetour',{journalId:jid,statut,distance})).catch(()=>{}); }catch(e){}
+}
+function annulerPremierProgramme(){
+  _retourPremierProgramme('rejete',1);
+  _ppIA=null;
+  closeModal();
+  return true;
+}
+function validerPremierProgramme(){
+  const x=_ppIA; if(!x) return false;
+  const c=getOwnedClient(currentClientId);
+  if(!c||c.id!==x.id){ toast('Athlète introuvable : rouvre sa fiche.','var(--orange)'); return false; }
+  const gardes=[...document.querySelectorAll('#pp-recap input[data-pp]')].filter(cb=>cb.checked).map(cb=>x.res.appliques[Number(cb.dataset.pp)]).filter(Boolean);
+  const res=appliquerAjustementsIA(x.modele,gardes,x.fiches,{genre:x.genre,tca:x.tca});
+  // LE BROUILLON PASSE PAR enregistrerBrouillon, sur une copie de travail :
+  // la copie ouverte dans l'éditeur, s'il y en a une, est rendue telle quelle.
+  const avant=_coachEditClient;
+  _coachEditClient=Object.assign(JSON.parse(JSON.stringify(c)),{sessions_config:res.sessions_config});
+  let ok=false, enr=false;
+  try{
+    enr=enregistrerBrouillon();
+    if(enr){
+      const b=_brouillons()[c.id];
+      if(b) b.ia={modeleId:String(x.modele.id),journalId:x.journalId||null};
+      ok=saveUser();
+    }
+  }catch(e){ rcErreurMuette('validerPremierProgramme',e); }
+  finally{ _coachEditClient=avant; }
+  if(!enr){ toast('Le brouillon n’a pas pu être enregistré.','var(--orange)'); return false; }
+  const n=x.res.appliques.length;
+  _retourPremierProgramme(gardes.length===n?'valide':'modifie',n?(n-gardes.length)/n:0);
+  _ppIA=null;
+  closeModal();
+  try{ renderPremierProgrammeIA(c); }catch(e){}
+  toastEcriture(ok,'Brouillon prêt : relis-le dans « Modifier le programme », puis publie.','le brouillon est');
+  return true;
+}

@@ -537,7 +537,8 @@ instructions du guide Garmin.
 
 ## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
 
-Le socle côté serveur existe ; **rien n'est encore branché dans l'app**. Deux appels (protocole
+Le socle côté serveur ; l'app s'en sert pour le brouillon C2, le point de la semaine, l'import
+de séance et le premier programme. Deux appels (protocole
 onCall, jeton Firebase vérifié) :
 
 - `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
@@ -549,6 +550,17 @@ onCall, jeton Firebase vérifié) :
   **Rien n'est écrit sous `users/`** : la proposition repart vers l'app, qui la fait relire.
 - `/fn/iaRetour` `{journalId, statut:'valide'|'modifie'|'rejete', distance}` : ce que le coach en a
   fait, et l'écart (0 à 1) entre la proposition et le texte envoyé.
+
+**Le premier programme (`programme`, 05/10/2026).** Depuis la fiche d'un athlète qui a son bilan
+de départ et aucun programme, l'app envoie `{depart, contraintes, profilSansPoids, modeles, banque}`
+(`chargeProgrammeIA` : les réponses de départ utiles, `deb-health` et les contraintes déclarées
+en CONTRAINTE, jamais `deb-tca` ni `deb-traitement` ; 12 modèles résumés au plus ; la banque rangée
+par matériel). Claude **ne réécrit pas le programme** : il rend `{modeleId, raisonChoix,
+ajustements:[{type, seance, exercice, par, pourquoi}], alertes}` (types `jour`, `remplacement`,
+`retrait`, `series`, `duree`). Le Worker contrôle la sortie (`controlerProgramme`) : un modèle hors
+de la liste → `{ok:false, raison:'sortie_invalide'}` ; un remplacement par un nom hors banque est
+retiré. L'app rejoue les ajustements elle-même (`appliquerAjustementsIA`), écarte ceux qui ne
+valident pas, montre un récapitulatif à cocher, et n'écrit qu'un **brouillon**.
 
 **Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
 nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète

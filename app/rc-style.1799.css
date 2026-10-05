@@ -12936,6 +12936,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .c4-op-s{color:var(--sub);font-weight:700}
 .c4-op em{display:block;font-style:normal;color:var(--orange)}
 .c4-op-off{opacity:.55;cursor:default}
+/* Le premier programme proposé par l'assistant (renderPremierProgrammeIA). */
+.pp-ia{display:flex;flex-direction:column;gap:8px;margin:0 0 14px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);line-height:1.5;color:var(--text)}
+.pp-ia .btn{margin:0;align-self:flex-start}
+.pp-ia-raison{font-size:var(--fs-xs);line-height:1.55;color:var(--sub)}
+.c4-op em.pp-ia-pq{color:var(--sub)}
 /* LOT C5 : la proposition de la semaine et les messages programmés du canal */
 .cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .cp{border-left:3px solid var(--red)}

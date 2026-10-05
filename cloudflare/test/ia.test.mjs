@@ -3,7 +3,7 @@
 //   node cloudflare/test/ia.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport } from '../src/ia.js';
+import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport, SCHEMA_PROGRAMME, controlerProgramme } from '../src/ia.js';
 import { repondreAppel, ErreurAppel } from '../src/appels.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -351,6 +351,59 @@ await test('import : stop_reason max_tokens → ok:false, aucune proposition ; p
   const p = monde({ reponse: repImport('end_turn', sortieImport) });
   await p.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'import', charge: { pages: [{ type: 'document', media_type: 'application/pdf', data: IMG }], banque: [] } } });
   assert.equal(p.appels[0].corps.messages[0].content[0].type, 'document');
+});
+
+// ══ LE PREMIER PROGRAMME (tâche 'programme') : un modèle choisi, des ajustements ══
+const CHARGE_PROG = { depart: { jours: ['Lundi', 'Mercredi', 'Vendredi'], duree: '45 min', lieu: 'En salle' },
+  contraintes: { texte: 'douleur épaule', zones: [] },
+  modeles: [{ id: 'p_full', nom: 'Full body', jours: ['Lundi', 'Mercredi', 'Vendredi'], seances: [{ nom: 'A', exercices: [['DÉVELOPPÉ MILITAIRE', 4, '8']] }] }],
+  banque: { Barre: ['DÉVELOPPÉ MILITAIRE', 'SQUAT'], 'Haltères': ['DÉVELOPPÉ HALTÈRES ASSIS'] } };
+const sortieProg = (o) => Object.assign({ modeleId: 'p_full', raisonChoix: 'Trois jours, comme demandé.', ajustements: [
+  { type: 'remplacement', seance: 'A', exercice: 'DÉVELOPPÉ MILITAIRE', par: 'DÉVELOPPÉ HALTÈRES ASSIS', pourquoi: 'amplitude plus libre' },
+  { type: 'remplacement', seance: 'A', exercice: 'SQUAT', par: 'PRESSE INVENTÉE', pourquoi: 'x' },
+  { type: 'jour', seance: 'A', exercice: null, par: 'Mardi', pourquoi: 'jour souhaité' }],
+  alertes: ['Épaule : à vérifier avec l’athlète.'] }, o || {});
+
+await test('programme : schéma strict {modeleId, raisonChoix, ajustements, alertes} ; effort medium ; remplacement hors banque retiré', async () => {
+  assert.equal(SCHEMA_PROGRAMME.additionalProperties, false);
+  assert.deepEqual(SCHEMA_PROGRAMME.required, ['modeleId', 'raisonChoix', 'ajustements', 'alertes']);
+  const aj = SCHEMA_PROGRAMME.properties.ajustements.items;
+  assert.equal(aj.additionalProperties, false);
+  assert.deepEqual(aj.required, ['type', 'seance', 'exercice', 'par', 'pourquoi']);
+  assert.deepEqual(aj.properties.type.enum, ['jour', 'remplacement', 'retrait', 'series', 'duree']);
+  assert.deepEqual(aj.properties.par, { anyOf: [{ type: 'string' }, { type: 'null' }] });
+  assert.equal(SCHEMAS.programme, SCHEMA_PROGRAMME);
+  const w = monde({ reponse: repImport('end_turn', sortieProg()) });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'programme', athlete: ATH, charge: CHARGE_PROG } });
+  assert.equal(r.ok, true);
+  const { corps } = w.appels[0];
+  assert.equal(corps.model, 'claude-sonnet-5-5');
+  assert.equal(corps.output_config.effort, 'medium');
+  assert.deepEqual(corps.output_config.format.schema, SCHEMA_PROGRAMME);
+  assert.match(corps.system[0].text, /Tu ne réécris pas le programme/);
+  assert.match(corps.system[0].text, /à vérifier avec l’athlète/);
+  assert.equal(r.proposition.modeleId, 'p_full');
+  assert.deepEqual(r.proposition.ajustements.map((a) => a.par), ['DÉVELOPPÉ HALTÈRES ASSIS', 'Mardi']);
+  assert.equal(r.proposition.retires, 1);
+  assert.deepEqual(r.proposition.alertes, ['Épaule : à vérifier avec l’athlète.']);
+});
+
+await test('programme : sortie invalide (modèle hors liste, objet illisible) → ok:false sortie_invalide, journal en échec ; charge sans modèle → 400', async () => {
+  const w = monde({ reponse: repImport('end_turn', sortieProg({ modeleId: 'p_invente' })) });
+  const r = await w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'programme', athlete: ATH, charge: CHARGE_PROG } });
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, 'sortie_invalide');
+  assert.equal(r.proposition, undefined);
+  const j = w.F.lire('ia_journal/' + COACH + '/' + r.journalId);
+  assert.equal(j.statut, 'echec');
+  assert.equal(j.raison, 'sortie_invalide');
+  assert.equal(controlerProgramme(null, ['p_full'], []), null);
+  assert.equal(controlerProgramme({ modeleId: 3 }, ['p_full'], []), null);
+  const v = monde();
+  for (const charge of [{ banque: [] }, { modeles: [], banque: [] }, { modeles: [{ nom: 'sans id' }], banque: [] },
+    { modeles: Array.from({ length: 13 }, (_, i) => ({ id: 'm' + i })), banque: [] }])
+    assert.equal(await statutDe(v.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'programme', athlete: ATH, charge } })), 400);
+  assert.equal(v.appels.length, 0);
 });
 
 console.log(ok + ' tests IA');

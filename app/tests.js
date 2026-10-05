@@ -15005,6 +15005,114 @@ async function testExercices(){
           const c=controlerImportIA({seances:[{nom:'A',exercices:[{nomLu:'x',nomBanque:'Y',series:0,confiance:7}]}]},['Z']);
           const x=c.seances[0].exercices[0];
           return x.nomBanque===null&&x.series===null&&x.confiance===1&&x.reps===null?true:_echec(JSON.stringify(x));});
+        // ══ LE PREMIER PROGRAMME PROPOSÉ PAR L'ASSISTANT (05/10/2026) ══
+        const _PPB=[{nom:'SQUAT',materiel:'Barre'},{nom:'DÉVELOPPÉ MILITAIRE',materiel:'Barre'},{nom:'DÉVELOPPÉ HALTÈRES ASSIS',materiel:'Haltères'},
+          {nom:'ROWING BARRE',materiel:'Barre'},{nom:'TIRAGE VERTICAL',materiel:'Poulie'},{nom:'FENTES',materiel:''}];
+        const _PPS=()=>{ const l=DAYS.map(d=>({day:d,name:'',active:false,exercises:[]}));
+          l[0]={day:'Lundi',name:'Full A',active:true,exercises:[{name:'SQUAT',series:4,reps:'8',repos:'2 min'},{name:'DÉVELOPPÉ MILITAIRE',series:4,reps:'8',repos:'2 min'}]};
+          l[2]={day:'Mercredi',name:'Full B',active:true,exercises:[{name:'ROWING BARRE',series:3,reps:'10',repos:'1 min 30'},{name:'FENTES',series:3,reps:'10',repos:'1 min 30'}]};
+          l[4]={day:'Vendredi',name:'Full C',active:true,exercises:[{name:'TIRAGE VERTICAL',series:3,reps:'12',repos:'1 min 30'},{name:'SQUAT',series:3,reps:'6',repos:'2 min'}]};
+          return l; };
+        const _PPM=()=>({id:'p_full',name:'Full body 3 j',public:'mixte',sessions_H:_PPS(),sessions_F:_PPS()});
+        const _PPA=o=>Object.assign({id:'pp-ath',email:'pp@t.fr',role:'athlete',fname:'Léo',gender:'H',sessions_config:[],
+          bilans:[{type:'depart',date:new Date(2026,9,1).getTime(),'deb-location':['En salle'],'deb-gym':'Basic-Fit','deb-training-days':['Lundi','Mercredi','Vendredi'],
+            'deb-session-duration':'45 min','deb-goals':'Prendre du muscle','deb-health':'douleur épaule droite quand je pousse au-dessus de la tête',
+            'deb-traitement':true,'deb-traitement-detail':'Levothyrox 75','deb-tca':'Oui, anorexie par le passé'}]},o||{});
+        ok('Premier programme IA — appliquerAjustementsIA : un « par » hors banque est rejeté, un changement de jour appliqué, et rejouer le résultat ne change rien',()=>{
+          const m=_PPM(), avant=JSON.stringify(m);
+          const aj=[{type:'remplacement',seance:'Full A',exercice:'DÉVELOPPÉ MILITAIRE',par:'PRESSE INVENTÉE',pourquoi:'x'},
+            {type:'remplacement',seance:'Full A',exercice:'DÉVELOPPÉ MILITAIRE',par:'DÉVELOPPÉ HALTÈRES ASSIS',pourquoi:'épaule'},
+            {type:'jour',seance:'Full B',exercice:null,par:'Mardi',pourquoi:'jour souhaité'},
+            {type:'series',seance:'Full C',exercice:'SQUAT',par:'4',pourquoi:'volume'},
+            {type:'duree',seance:'Full A',exercice:null,par:'1 min 30',pourquoi:'45 minutes'},
+            {type:'retrait',seance:'Séance fantôme',exercice:'SQUAT',par:null,pourquoi:'x'},
+            {type:'retrait',seance:'Full C',exercice:'CURL',par:null,pourquoi:'x'},
+            {type:'jour',seance:'Full C',exercice:null,par:'Lundi',pourquoi:'x'}];
+          const r=appliquerAjustementsIA(m,aj,_PPB,{genre:'H'});
+          if(JSON.stringify(m)!==avant) return _echec('le modèle a été muté');
+          const raisons=r.rejetes.map(x=>x.raison).join(',');
+          if(raisons!=='hors_banque,seance_inconnue,exercice_inconnu,jour_occupe') return _echec('rejets : '+raisons);
+          const sc=r.sessions_config;
+          if(sc[1].name!=='Full B'||!sc[1].active||sc[1].day!=='Mardi'||_modPleine(sc[2])) return _echec('le jour n’a pas changé');
+          if(sc[0].exercises[1].name!=='DÉVELOPPÉ HALTÈRES ASSIS'||sc[0].exercises[1].series!==4) return _echec('remplacement : '+JSON.stringify(sc[0].exercises[1]));
+          if(sc[4].exercises[1].series!==4||sc[0].exercises.some(e=>e.repos!=='1 min 30')) return _echec('séries ou repos');
+          const r2=appliquerAjustementsIA(sc,aj,_PPB,{genre:'H'});
+          if(JSON.stringify(r2.sessions_config)!==JSON.stringify(sc)) return _echec('non idempotent');
+          // Profil TCA : un ajustement qui parle de poids est écarté.
+          const t=appliquerAjustementsIA(m,[{type:'series',seance:'Full A',exercice:'SQUAT',par:'5',pourquoi:'pour perdre du poids'}],_PPB,{genre:'H',tca:true});
+          return t.rejetes.length===1&&t.rejetes[0].raison==='profil_tca'&&t.sessions_config[0].exercises[0].series===4
+            ?true:_echec('TCA : '+JSON.stringify(t.rejetes));});
+        ok('Premier programme IA — chargeProgrammeIA : ni deb-tca ni deb-traitement ; deb-health en contrainte ; 12 modèles au plus, banque par matériel',()=>{
+          const mods=Array.from({length:15},(_,i)=>Object.assign(_PPM(),{id:'p'+i}));
+          const ch=chargeProgrammeIA(_PPA(),mods,_PPB);
+          if(!ch) return _echec('aucune charge');
+          const j=JSON.stringify(ch);
+          for(const x of ['deb-tca','deb-traitement','Levothyrox','anorexie','tca']) if(j.indexOf(x)>=0) return _echec('« '+x+' » est parti');
+          if(!/douleur épaule/.test(ch.contraintes.texte)) return _echec('la contrainte manque');
+          if(ch.depart.lieu!=='En salle'||ch.depart.salle!=='Basic-Fit'||ch.depart.duree!=='45 min'||ch.depart.jours!=='Lundi, Mercredi, Vendredi') return _echec('départ : '+JSON.stringify(ch.depart));
+          if(ch.modeles.length!==12) return _echec(ch.modeles.length+' modèles');
+          const m0=ch.modeles[0];
+          if(m0.jours.join()!=='Lundi,Mercredi,Vendredi'||m0.seances[0].nom!=='Full A'||JSON.stringify(m0.seances[0].exercices[0])!=='["SQUAT",4,"8"]') return _echec('résumé : '+JSON.stringify(m0));
+          if(!ch.banque.Barre||ch.banque.Barre.indexOf('SQUAT')<0||!ch.banque['non précisé']) return _echec('banque : '+JSON.stringify(ch.banque));
+          // Sans bilan de départ, rien ne part ; un profil TCA garde ses objectifs hors poids.
+          if(chargeProgrammeIA(_PPA({bilans:[]}),mods,_PPB)!==null) return _echec('charge sans bilan de départ');
+          const a=_PPA({tcaRisque:true}); a.bilans[0]['deb-goals']='Perdre du poids';
+          const t=chargeProgrammeIA(a,mods,_PPB);
+          return t.profilSansPoids===true&&!t.depart.objectifs?true:_echec('TCA : '+JSON.stringify(t.depart));});
+        ok('Premier programme IA — le bouton est absent si l’athlète a déjà un programme (ou pas de bilan de départ)',()=>{
+          const sv=currentUser;
+          const z=document.getElementById('ccd-premier-prog');
+          if(!z) return _echec('#ccd-premier-prog manque à la fiche');
+          try{
+            currentUser={role:'coach',email:'coach-pp@t.fr',coachPrograms:[_PPM()],brouillonsProg:{}};
+            const a=_PPA();
+            if(!peutProposerPremierProgramme(a,currentUser)) return _echec('absent pour un athlète sans programme');
+            renderPremierProgrammeIA(a);
+            if(!document.getElementById('pp-ia-btn')) return _echec('bouton non rendu');
+            const b=_PPA({sessions_config:_PPS()});
+            if(peutProposerPremierProgramme(b,currentUser)) return _echec('proposé alors qu’il a un programme');
+            renderPremierProgrammeIA(b);
+            if(z.innerHTML!=='') return _echec('bouton rendu malgré le programme');
+            if(peutProposerPremierProgramme(_PPA({bilans:[{type:'suivi',date:1}]}),currentUser)) return _echec('proposé sans bilan de départ');
+            if(peutProposerPremierProgramme(a,{role:'coach',coachPrograms:[]})) return _echec('proposé sans modèle');
+            // La validation met en brouillon, jamais en ligne.
+            return /enregistrerBrouillon\(\)/.test(String(validerPremierProgramme))&&!/saveCoachSessions|pushOne|_assignerModele/.test(String(validerPremierProgramme))
+              ?true:_echec('la validation publie');
+          } finally { currentUser=sv; z.innerHTML=''; }});
+        okA('Premier programme IA — scénario « salle, 3 jours, 45 min, douleur épaule » : le brouillon ne contient aucun exercice hors banque',async()=>{
+          const sv=CLOUD._callFn, svU=currentUser, svC=currentClientId, svO=getOwnedClient;
+          const a=_PPA();
+          let recu=null;
+          try{
+            currentUser={role:'coach',email:'coach-pp@t.fr',coachPrograms:[_PPM()],brouillonsProg:{},exCustom:_PPB.map(f=>Object.assign({},f))};
+            currentClientId=a.id;
+            getOwnedClient=id=>id===a.id?a:null;
+            CLOUD._callFn=async(nom,data)=>{
+              if(nom==='iaRetour') return {ok:true};
+              if(nom!=='ia'||data.tache!=='programme') throw new Error('appel inattendu');
+              recu=data;
+              return {ok:true,journalId:'jpp',proposition:{modeleId:'p_full',raisonChoix:'Trois séances, comme ses trois jours.',retires:0,
+                alertes:['Épaule : à vérifier avec l’athlète avant les poussées au-dessus de la tête.'],ajustements:[
+                {type:'remplacement',seance:'Full A',exercice:'DÉVELOPPÉ MILITAIRE',par:'DÉVELOPPÉ HALTÈRES ASSIS',pourquoi:'amplitude plus libre'},
+                {type:'remplacement',seance:'Full B',exercice:'FENTES',par:'LEG PRESS INVENTÉE',pourquoi:'x'},
+                {type:'duree',seance:'Full C',exercice:null,par:'1 min 30',pourquoi:'tenir 45 minutes'}]}};
+            };
+            const ok=await proposerPremierProgramme();
+            if(!ok||!_ppIA) return _echec('aucun récapitulatif');
+            if(!recu||recu.athlete!=='pp@t,fr') return _echec('athlète : '+(recu&&recu.athlete));
+            const rec=document.getElementById('pp-recap');
+            if(!rec||!/à vérifier avec l’athlète/.test(rec.textContent)) return _echec('alerte absente');
+            if(rec.querySelectorAll('input[data-pp]:checked').length!==2) return _echec('ajustements non cochés par défaut');
+            if(!/Écarté : pas dans ta banque/.test(rec.textContent)) return _echec('rejet non montré');
+            if(!validerPremierProgramme()) return _echec('validation refusée');
+            const b=currentUser.brouillonsProg[a.id];
+            if(!b||!Array.isArray(b.sessions_config)) return _echec('pas de brouillon');
+            const noms=new Set(catalogueCoach(currentUser).map(f=>exKey(f.nom)));
+            const hors=[].concat(...b.sessions_config.map(s=>(s.exercises||[]).map(e=>e.name))).filter(n=>!noms.has(exKey(n)));
+            if(hors.length) return _echec('hors banque : '+hors.join(', '));
+            if(a.sessions_config.length) return _echec('publié chez l’athlète');
+            return b.ia&&b.ia.modeleId==='p_full'?true:_echec('origine non notée');
+          } finally { CLOUD._callFn=sv; currentUser=svU; currentClientId=svC; getOwnedClient=svO; _ppIA=null; try{ closeModal(); }catch(e){} }});
         ok('TOUTES les fonctions d\'extraction refusent, drapeau baissé',()=>{
           // Le cahier des charges est explicite : une règle d'accès ne se
           // résume jamais à un bouton masqué. Chaque fonction se garde.
