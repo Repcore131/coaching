@@ -182,7 +182,7 @@ const RSM_DEFS = [
         if (etat && /(annul|panier|conserv|brouillon)/.test(etat)) { c.skip('panier ou vente annulée'); continue; }
         const num = r[iNum];
         c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: resolveSeller(gName(r), gCode(r)) });
-        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]) });
+        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), ...c.contact(r) });
       }
     },
   },
@@ -269,7 +269,7 @@ const RSM_DEFS = [
     sig: has => has('nombre d incidents') && has('numero du client'),
     parse(c) {
       const iNum = c.col('numero du client'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iMt = c.col('montant de l incident'), iN = c.col('nombre d incidents');
-      c.balances(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), amount: Math.abs(rsmNum(r[iMt])), count: rsmNum(r[iN]) })).filter(x => x.num), 'clients-incident');
+      c.balances(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), amount: Math.abs(rsmNum(r[iMt])), count: rsmNum(r[iN]), ...c.contact(r) })).filter(x => x.num), 'clients-incident');
     },
   },
   {
@@ -278,7 +278,7 @@ const RSM_DEFS = [
     sig: has => has('prochaine facturation') && has('numero du client'),
     parse(c) {
       const iNum = c.col('numero du client'), iPre = c.col('prenom'), iNom = c.colExact('nom'), iAb = c.col('nom de l abonnement');
-      c.noMandate(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), offer: r[iAb] })).filter(x => x.num));
+      c.noMandate(c.rows.map(r => ({ num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), offer: r[iAb], ...c.contact(r) })).filter(x => x.num));
     },
   },
   {
@@ -287,7 +287,7 @@ const RSM_DEFS = [
     sig: has => has('date d anniversaire') && has('numero'),
     parse(c) {
       const iNum = c.col('numero'), iBd = c.col('date d anniversaire'), iNom = c.colExact('nom'), iPre = c.col('prenom'), iEtat = c.col('etat'), iCom = c.col('commercial');
-      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: rsmDate(r[iBd]), status: r[iEtat] || '', seller: r[iCom] || '' }); }
+      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: rsmDate(r[iBd]), status: r[iEtat] || '', seller: r[iCom] || '', ...c.contact(r) }); }
     },
   },
   {
@@ -414,6 +414,8 @@ function analyzeTable(t, { clubId, month }) {
     find,
     col: p => { const n = norm(p); const e = H.indexOf(n); return e >= 0 ? e : H.findIndex(h => h.includes(n)); },
     colExact: p => H.indexOf(norm(p)),
+    // Coordonnees si l'export les porte (colonne Telephone / Portable / Mobile, E-mail).
+    contact: r => { if (c._ip === undefined) { c._ip = H.findIndex(h => /portable|mobile|telephone|^tel\b/.test(h)); c._ie = H.findIndex(h => /mail/.test(h)); } const o = {}; if (c._ip >= 0 && r[c._ip]) { const p = phoneE164(r[c._ip]); if (p) { o.phone = p; o.phoneSrc = 'rsm'; } } if (c._ie >= 0 && /@/.test(r[c._ie] || '')) o.email = String(r[c._ie]).trim().toLowerCase(); return o; },
     colAt: (pos, p) => (norm(H[pos] || '') === norm(p) ? pos : H.indexOf(norm(p))),
     skip: why => { res.skipped[why] = (res.skipped[why] || 0) + 1; },
     warn: w => res.warnings.push(w),

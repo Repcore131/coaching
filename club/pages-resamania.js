@@ -139,7 +139,8 @@ ACTIONS.rsmCommit = () => {
   const written = new Set();
   const clientIdx = {}; Object.values(S.clients).filter(c => c.clubId === club).forEach(c => { if (c.num) clientIdx['n:' + c.num] = c; clientIdx['t:' + tokensKey(c.name || '')] = clientIdx['t:' + tokensKey(c.name || '')] || c; });
   const pendingClients = {};
-  const upClient = (c0, patch) => { const id = c0.id; pendingClients[id] = { ...(pendingClients[id] || c0), ...patch }; };
+  // Un telephone saisi a la main n'est jamais remplace par celui d'un import.
+  const upClient = (c0, patch) => { const id = c0.id; const cur = pendingClients[id] || c0; if (cur.phoneSrc === 'manual' && patch.phone) { patch = { ...patch }; delete patch.phone; delete patch.phoneSrc; } pendingClients[id] = { ...cur, ...patch }; };
   const summary = { files: 0, entries: 0, updated: 0, recov: 0, clients: 0, resil: 0, kpis: {} };
   for (const r of B) {
     if (!r.def || r.def.silent) continue;
@@ -201,7 +202,7 @@ ACTIONS.rsmCommit = () => {
     }
     if (r.balances) {
       const listed = new Set();
-      r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
+      r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
       // photo complete : un client absent du fichier n'a plus d'impaye
       // Seule la photo complete « Clients en incident » solde les absents. Une
       // liste Incidents partielle ne touche jamais aux autres clients. Sans
@@ -215,7 +216,7 @@ ACTIONS.rsmCommit = () => {
     if (r.balances) ops.push([['rsm', 'controls', club, 'du', today()], Math.round(r.balances.list.reduce((s2, b) => s2 + b.amount, 0) * 100) / 100]);
     if (r.noMandate) {
       const listed = new Set();
-      r.noMandate.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { noMandate: true, noMandateAt: (pendingClients[c0.id] || c0).noMandate ? ((pendingClients[c0.id] || c0).noMandateAt || today()) : today(), offer: (pendingClients[c0.id] || c0).offer || b.offer, name: c0.name || b.name }); });
+      r.noMandate.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), noMandate: true, noMandateAt: (pendingClients[c0.id] || c0).noMandate ? ((pendingClients[c0.id] || c0).noMandateAt || today()) : today(), offer: (pendingClients[c0.id] || c0).offer || b.offer, name: c0.name || b.name }); });
       Object.values(S.clients).filter(c => c.clubId === club && c.noMandate && !listed.has(c.id)).forEach(c => upClient(c, { noMandate: false }));
     }
     for (const x of r.resil) {

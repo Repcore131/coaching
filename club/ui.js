@@ -44,7 +44,7 @@ function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
       onClose: () => { if (!done) res(false); } });
   });
 }
-const formData = root => { const o = {}; $$('[name]', root).forEach(el => { o[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return o; };
+const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; else if (!(el.name in o)) o[el.name] = ''; return; } o[el.name] = el.type === 'checkbox' ? el.checked : el.value; }); return o; };
 
 // ── Avatars ───────────────────────────────────────────────────────────────
 // Mascotte du tableau de bord : 4 silhouettes, l'humeur suit le rythme.
@@ -95,19 +95,23 @@ function brandBlock(big = false) {
 }
 
 // ── Coque ──────────────────────────────────────────────────────────────────
+// 4e champ : true = managers seulement, 'm' = commerciaux seulement (leur menu
+// tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
   ['home', 'Accueil', 'dashboard'],
   ['dashboard', 'Mes objectifs', 'target'],
+  ['relances', 'Relances', 'phone'],
   ['leaderboard', 'Classement', 'trophy'],
+  ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
   ['quality', 'Contrôle qualité', 'shield', true],
   ['sep'],
-  ['resiliations', 'Résiliations', 'door'],
-  ['impayes', 'Impayés', 'euro'],
-  ['loyalty', 'Action Rétention', 'heart'],
-  ['challenges', 'Défis flash', 'bolt'],
-  ['chat', 'Chat', 'chat'],
-  ['feed', 'Feed', 'feed'],
+  ['resiliations', 'Résiliations', 'door', true],
+  ['impayes', 'Impayés', 'euro', true],
+  ['loyalty', 'Rétention', 'heart', true],
+  ['challenges', 'Défis flash', 'bolt', true],
+  ['chat', 'Chat', 'chat', true],
+  ['feed', 'Fil d’équipe', 'feed', true],
   ['sep'],
   ['imports', 'Imports Resamania', 'upload', true],
   ['members', 'Équipe & paliers', 'users', true],
@@ -126,8 +130,9 @@ function unseenChat() {
 function shell(route, inner) {
   const nav = NAV.map(([id, label, icon, mgr]) => {
     if (id === 'sep') return '<div class="nav-sep"></div>';
-    if (mgr && !isManager()) return '';
-    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
+    if (mgr === true && !isManager()) return '';
+    if (mgr === 'm' && isManager()) return '';
+    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? unseenFeed() + unseenChat() : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
   }).join('');
   const clubs = myClubs();

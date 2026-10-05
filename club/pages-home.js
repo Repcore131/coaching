@@ -63,30 +63,64 @@ function checkPalierCrossed(before) {
 }
 
 // ── Saisie rapide : un geste = une saisie, annulable 5 s ──────────────────
+// Le retour dit ce que la vente vient de changer : realise, ecart a l'etape,
+// rang. Une etape franchie = bandeau ; 100 % = celebration.
 function quickAdd(kpiId, value, userId = ME.id) {
   const before = palierSnapshot();
+  const r = rangeOf('month', curMonth());
+  const row0 = (statsFor(CLUB.id, userId, r, { kpiIds: [kpiId] }).rows[0]) || null;
+  const rk0 = ranking(CLUB.id, r).find(x => x.u.id === userId);
   const id = newId();
   db.set(['entries', id], { id, userId, clubId: CLUB.id, kpiId, date: today(), value, source: 'manual', at: Date.now(), by: ME.id });
   const k = S.kpis[kpiId];
-  toastUndo(`+${fmtV(value, k.unit)} ${k.label} enregistré`, () => db.set(['entries', id], null));
+  const row = (statsFor(CLUB.id, userId, r, { kpiIds: [kpiId] }).rows[0]) || null;
+  const rk = ranking(CLUB.id, r).find(x => x.u.id === userId);
+  const parts = [`+${fmtV(value, k.unit)} ${k.label.toLowerCase()}`];
+  let tierHit = null;
+  if (row && row.target > 0) {
+    parts.push(`${fmtV(row.real, k.unit)} sur ${fmtV(row.target, k.unit)}`);
+    const next = TIERS.find(t => row.pct < t - 1e-9);
+    if (next) { const need = next * row.target - row.real; parts.push(`plus que ${fmtV(k.unit === 'qty' ? Math.ceil(need) : need, k.unit)} pour l’étape ${next * 100} %`); }
+    tierHit = TIERS.filter(t => row0 && row0.pct < t - 1e-9 && row.pct >= t - 1e-9).pop() || null;
+  }
+  if (rk0 && rk && rk.rank < rk0.rank) parts.push(`vous passez ${rk.rank}${rk.rank === 1 ? 'er' : 'e'}`);
+  let pending = null;
+  if (tierHit === 1) pending = setTimeout(() => celebrate('OBJECTIF ATTEINT', `${k.label} : ${fmtV(row.real, k.unit)}`, { kind: 'team', art: trophyArt({ icon: 'trophy', kind: 'month', label: k.label }, 200) }), 400);
+  else if (tierHit) pending = setTimeout(() => stepBanner(`Étape ${tierHit * 100} % · ${k.label}`), 300);
+  if (navigator.vibrate && pref('vibrate', true)) navigator.vibrate(tierHit ? [30, 40, 30, 40, 30] : 15);
+  toastUndo(parts.join('. '), () => { clearTimeout(pending); db.set(['entries', id], null); });
   checkPalierCrossed(before);
 }
+function stepBanner(t) { const el = document.createElement('div'); el.className = 'step-banner'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 1600); }
 function toastUndo(msg, undo) {
   const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span><button>Annuler</button>`;
   el.style.pointerEvents = 'auto';
   $('button', el).addEventListener('click', () => { undo(); el.remove(); toast('Saisie annulée'); });
   $('#toasts').appendChild(el); setTimeout(() => el.remove(), 5000);
 }
+// Prospects en dernier (0 point) ; les impayes recuperes passent par les relances.
 const QUICK_QTY = ['contrats', 'avis', 'b2b', 'invites', 'prospects'];
-const QUICK_EUR = ['nutrition', 'accessoires', 'impayes'];
-function quickPad() {
-  const qty = QUICK_QTY.filter(k => S.kpis[k] && S.kpis[k].enabled);
-  const eur = QUICK_EUR.filter(k => S.kpis[k] && S.kpis[k].enabled);
-  const mine = id => sumRange(CLUB.id, ME.id, id, today(), today());
-  return `<div class="quick">${qty.map(k => `<button class="quick-btn" data-act="qAdd" data-k="${k}"><span class="quick-plus">+1</span><span class="quick-l">${esc(S.kpis[k].label)}</span>${mine(k) ? `<span class="quick-today">${fmtN(mine(k))} auj.</span>` : ''}</button>`).join('')}
-    ${eur.map(k => `<button class="quick-btn eur" data-act="qEur" data-k="${k}"><span class="quick-plus">€</span><span class="quick-l">${esc(S.kpis[k].label)}</span>${mine(k) ? `<span class="quick-today">${fmtE(mine(k))} auj.</span>` : ''}</button>`).join('')}</div>`;
+const QUICK_EUR = ['nutrition', 'accessoires'];
+function quickOrder(list) {
+  if (pref('padFixed', false)) return list;
+  const st = statsFor(CLUB.id, ME.id, rangeOf('month', curMonth()));
+  const lag = id => { const x = st.rows.find(rr => rr.k.id === id); return x && x.target > 0 ? (x.pct || 0) - st.expected : 9; };
+  return list.slice().sort((a, b) => (a === 'prospects') - (b === 'prospects') || lag(a) - lag(b));
 }
-ACTIONS.qAdd = el => { quickAdd(el.dataset.k, 1); };
+function quickPad() {
+  const qty = quickOrder(QUICK_QTY.filter(k => S.kpis[k] && S.kpis[k].enabled));
+  const eur = quickOrder(QUICK_EUR.filter(k => S.kpis[k] && S.kpis[k].enabled));
+  const mine = id => sumRange(CLUB.id, ME.id, id, today(), today());
+  return `<div class="quick">${qty.map(k => `<div class="quick-cell"><button class="quick-btn ${k === 'prospects' ? 'second' : ''}" data-act="qAdd" data-k="${k}"><span class="quick-plus">+1</span><span class="quick-l">${esc(S.kpis[k].label)}</span>${mine(k) ? `<span class="quick-today">${fmtN(mine(k))} auj.</span>` : ''}</button><button class="quick-more" data-act="qMore" data-k="${k}" aria-label="Plusieurs ${esc(S.kpis[k].label)}">+N</button></div>`).join('')}
+    ${eur.map(k => `<button class="quick-btn eur" data-act="qEur" data-k="${k}"><span class="quick-plus">€</span><span class="quick-l">${esc(S.kpis[k].label)}</span>${mine(k) ? `<span class="quick-today">${fmtE(mine(k))} auj.</span>` : ''}</button>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">Impayé récupéré : passez par <a href="#/relances">vos relances</a>.</p>`;
+}
+ACTIONS.qAdd = el => { closeModal(); quickAdd(el.dataset.k, 1); };
+ACTIONS.qMore = el => {
+  const k = S.kpis[el.dataset.k];
+  openModal({ title: `Combien de ${esc(k.label.toLowerCase())} ?`, body: `<div class="qn">${[2, 3, 4, 5].map(n => `<button class="quick-btn" data-act="qN" data-k="${k.id}" data-n="${n}"><span class="quick-plus">+${n}</span></button>`).join('')}</div>` });
+};
+ACTIONS.qN = el => { closeModal(); quickAdd(el.dataset.k, Number(el.dataset.n)); };
 ACTIONS.qEur = el => {
   const k = S.kpis[el.dataset.k];
   openModal({ title: k.label, body: `<div class="pad-display" id="pad-v">0</div><div class="pad">${['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map(x => `<button type="button" data-p="${x}">${x}</button>`).join('')}</div><div class="row wrap" style="gap:6px;margin-top:10px">${[5, 10, 20, 30, 50].map(v => `<button type="button" class="btn sm" data-q="${v}">${v} €</button>`).join('')}</div>`,
@@ -110,16 +144,13 @@ function myToDo() {
   const loy = loyaltyTasks(CLUB.id).filter(t => t.state === 'todo' && ['anniversaire', 'suivi', 'renouvellement'].includes(t.type)).sort((a, b) => a.due.localeCompare(b.due));
   return { res, dun, loy };
 }
+// Mes prochaines actions : la tete de MA file de relances (appeler d'abord).
 function todoList(limit = 6) {
-  const { res, dun, loy } = myToDo();
-  const rows = [
-    ...res.map(r => ({ icon: 'door', title: r.client, sub: `Résiliation · ${r.effective ? (daysTo(r.effective) <= 0 ? 'effective' : 'J-' + daysTo(r.effective)) : 'sans date'}`, hot: resUrgent(r), act: `data-act="resCall" data-id="${r.id}"`, cta: 'Noter un appel' })),
-    ...dun.map(c => ({ icon: 'coins', title: c.name, sub: `Impayé · ${fmtE(Number(c.balance))}${dunOf(c).next ? ' · relance ' + dm(dunOf(c).next) : ''}`, hot: dunDue(c), act: `data-act="dunPaid" data-id="${c.id}"`, cta: 'Récupéré' })),
-    ...loy.slice(0, 4).map(t => ({ icon: LOYALTY_TYPES[t.type].icon, title: t.client.name, sub: `${LOYALTY_TYPES[t.type].label}${t.client.phone ? ' · ' + t.client.phone : ''}`, hot: false, act: `data-act="go" data-href="#/loyalty"`, cta: 'Ouvrir' })),
-  ];
-  if (!rows.length) return emptyBox({ art: 'done', title: 'Aucune relance à votre nom', text: 'Prenez un dossier sans responsable dans Impayés ou Résiliations.', cta: '<a class="btn primary sm" href="#/impayes">Voir les impayés</a>' });
-  return rows.slice(0, limit).map(x => `<div class="todo ${x.hot ? 'hot' : ''}"><span class="todo-i">${ico(x.icon)}</span><div class="spacer"><b>${esc(x.title)}</b><div class="muted small">${esc(x.sub)}</div></div><button class="btn sm" ${x.act}>${x.cta}</button></div>`).join('') + (rows.length > limit ? `<a class="btn ghost sm" href="#/relances" style="margin-top:6px">Voir les ${rows.length} relances ${ico('chevR')}</a>` : '');
+  const Q = relQueue(CLUB.id, 'mine'); const rows = Q.now.concat(Q.nophone).slice(0, limit);
+  if (!rows.length) return emptyBox({ art: 'done', title: 'Aucune relance à votre nom', text: 'Prenez une relance non attribuée dans Relances.', cta: '<a class="btn primary sm" href="#/relances" data-act="relNobody">Prendre une relance</a>' });
+  return rows.map(r => { const rl = r.top; const L = contactLinks(rl); return `<div class="todo ${rl.kind === 'resiliation' || rl.kind === 'impaye' ? 'hot' : ''}"><span class="todo-i">${ico(REL_KINDS[rl.kind].icon)}</span><div class="spacer"><b>${esc(r.name)}</b><div class="muted small">${REL_KINDS[rl.kind].label} · ${esc(rl.reason)}</div></div>${r.phone ? `<a class="btn sm primary" href="${L.tel}" data-act="relCall" data-key="${rl.key}">${ico('phone', 'ico ico-xs')} Appeler</a>` : `<button class="btn sm" data-act="relNote" data-key="${rl.key}">Noter</button>`}</div>`; }).join('') + (Q.now.length + Q.nophone.length > limit ? `<a class="btn ghost sm" href="#/relances" style="margin-top:6px">Voir tout (${Q.now.length + Q.nophone.length})</a>` : '');
 }
+ACTIONS.relNobody = () => { UI.relScope = 'nobody'; UI.relSeg = 'file'; location.hash = '#/relances'; };
 
 // ── Accueil ───────────────────────────────────────────────────────────────
 const ASSET = k => (window.PARKPULSE_ASSETS || {})[k] || null;
@@ -162,19 +193,26 @@ PAGES.home = {
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
           <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${plur(acc.streak, 'jour', 'jours')} de suite</small></a>` : ''}</div></div></section>
+      ${challengeBanner()}
+      <div class="g12 home-now">
+        <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
+          <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${rk.length}</span></div><div><b class="num-l">J-${daysLeft - 1}</b><span>fin du mois</span></div>${healthChip(myHealth)}</div>
+          ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small">Objectifs du mois tenus.</p>'}
+          ${(() => { const a = weekActions(ME.id); return `<p class="muted small" style="margin:8px 0 0">Actions de la semaine : ${plur(a.calls, 'relance', 'relances')}, ${plur(a.good, 'issue positive', 'issues positives')}.</p>`; })()}</div>
+        <div class="card col6"><div class="race-h"><div><div class="eyebrow">Ma file de relances</div><h3>À faire maintenant</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/relances">Tout voir</a></div>${todoList(3)}</div>
+      </div>
       ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
       ${manager ? localTransferCard() : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
-        <div class="card col8">${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</div>
+        <div class="card col8"><details class="race-det" ${innerWidth > 860 ? 'open' : ''}><summary>Voir la course au palier</summary>${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</details></div>
         <div class="card col4 paliers"><div class="race-h"><div><div class="eyebrow light">Prime d’équipe</div><h3>Paliers du mois</h3></div><span class="spacer"></span>${manager ? '<a class="btn ghost sm light" href="#/members" data-act="goPaliers">Régler</a>' : ''}</div>${palierKeys.map(k => palierBlock(CLUB.id, mk, k, false)).join('') || '<p class="muted">Aucun palier collectif.</p>'}</div>
         <div class="card col5"><div class="race-h"><div><div class="eyebrow">Un toucher = enregistré</div><h3>Saisir</h3></div></div>${quickPad()}</div>
         <div class="card col3"><div class="race-h"><div><div class="eyebrow">Mes objectifs</div><h3>Ma progression</h3></div></div>
           <div class="center">${ring(myPct == null ? null : Math.min(myPct, 1), { label: fmtP(myPct), sub: 'score du mois', color: myHealth.color })}${healthChip(myHealth)}</div>
           ${mission.length ? `<div class="mini-mission">${mission.map(m => `<div class="${m.done >= m.per ? 'done' : ''}"><span>${esc(m.k.label)}</span><b>${m.done >= m.per ? ico('check', 'ico ico-xs') : (m.k.unit === 'eur' ? fmtE(m.per) : m.per) + ' auj.'}</b></div>`).join('')}</div>` : '<p class="muted small center">Objectifs du mois tenus</p>'}</div>
         <div class="card col4"><div class="race-h"><div><div class="eyebrow">Ce mois-ci</div><h3>Top 5</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/leaderboard">Classement</a></div>
-          ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span><i class="hdot ${h.cls}" title="${h.label}"></i><b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>
-        <div class="card ${manager ? 'col6' : 'col12'}"><div class="race-h"><div><div class="eyebrow">À mon nom</div><h3>Mes relances</h3></div><span class="spacer"></span><a class="btn ghost sm" href="#/relances">Tout voir</a></div>${todoList(5)}</div>
+          ${top5.map(x => { const h = healthOf(x.score != null && x.st.expected ? x.score / x.st.expected : null); return `<div class="top-r ${x.u.id === ME.id ? 'me' : ''}"><b class="top-n">${x.rank}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}</span>${manager || x.u.id === ME.id ? `<i class="hdot ${h.cls}" title="${h.label}"></i>` : ''}<b>${fmtP(x.score)}</b></div>`; }).join('') || '<p class="muted small">Pas encore de classement.</p>'}</div>
         ${manager ? `<div class="card col3"><div class="race-h"><div><div class="eyebrow">${MOIS[Number(mk.slice(5)) - 1]}</div><h3>Résiliations</h3></div></div>${resFunnel(CLUB.id, mk)}</div>
         <div class="card col3"><div class="race-h"><div><div class="eyebrow">Tous canaux</div><h3>Impayés récupérés</h3></div></div>${stackRows(recovRows, Object.entries(RECOV_CHANNELS).map(([key, c]) => ({ key, label: c.label, color: c.color })))}</div>` : ''}
       </div></div>`;
@@ -265,12 +303,29 @@ ACTIONS.palDel = el => { const mk = UI.palMonth || curMonth(); const p = palRead
 
 // ── Barre d'onglets du téléphone ──────────────────────────────────────────
 function tabBar(route) {
-  const t = [['home', 'Accueil', 'dashboard'], ['saisir', 'Saisir', 'plus'], ['relances', 'Relances', 'phone'], ['leaderboard', 'Classement', 'trophy'], ['more', 'Plus', 'menu']];
-  const n = (() => { const { res, dun } = myToDo(); return res.length + dun.filter(dunDue).length; })();
-  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Saisir">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : ''}</a>`).join('')}</nav>`;
+  // Accueil, Relances, [Saisir], Classement, Equipe (managers : Plus pour le menu complet).
+  const t = [['home', 'Accueil', 'dashboard'], ['relances', 'Relances', 'phone'], ['saisir', 'Saisir', 'plus'], ['leaderboard', 'Classement', 'trophy'], isManager() ? ['more', 'Plus', 'menu'] : ['equipe', 'Équipe', 'users']];
+  const n = relBadge();
+  return `<nav class="tabbar">${t.map(([id, l, i]) => id === 'saisir' ? `<button class="tb-main" data-act="tbSaisir" aria-label="Saisir">${ico('plus')}</button>` : id === 'more' ? `<button class="tb" data-act="burger">${ico(i)}<span>${l}</span></button>` : `<a class="tb ${route === id ? 'on' : ''}" href="#/${id}">${ico(i)}<span>${l}</span>${id === 'relances' && n ? `<em>${n}</em>` : id === 'equipe' && (unseenFeed() + unseenChat()) ? `<em>${Math.min(99, unseenFeed() + unseenChat())}</em>` : ''}</a>`).join('')}</nav>`;
 }
 ACTIONS.tbSaisir = () => {
   openModal({ title: 'Saisir', body: `${quickPad()}<p class="muted small" style="margin-bottom:0">Pour une autre date ou un autre membre : <a href="javascript:void 0" data-act="openSaisiesFromPad">saisie détaillée</a>.</p>` });
 };
 ACTIONS.openSaisiesFromPad = () => { closeModal(); ACTIONS.openSaisies(); };
 ACTIONS.goTargets = () => { UI.memTab = 'targets'; location.hash = '#/members'; };
+
+// Bandeau du defi flash en cours : visible sans defiler, avec mon rang.
+function challengeBanner() {
+  const now = Date.now(); const ch = Object.values(S.challenges || {}).filter(c => c.clubId === CLUB.id && c.start <= now && c.end > now).sort((a, b) => a.end - b.end)[0];
+  if (!ch) return '';
+  const rk = challengeRanking(ch); const me = rk.findIndex(x => x.u.id === ME.id); const h = Math.floor((ch.end - now) / 3600000), m = Math.floor((ch.end - now) / 60000) % 60;
+  return `<a class="chal-banner" href="#/${isManager() ? 'challenges' : 'equipe'}" data-act="goDefis">${ico('bolt')}<div><b>Défi en cours : ${esc(ch.title)}</b><span>${h} h ${pad(m)} restantes${me >= 0 ? ` · vous êtes ${me + 1}${me === 0 ? 'er' : 'e'}` : ''}${ch.reward ? ' · ' + esc(ch.reward) : ''}</span></div>${ico('chevR')}</a>`;
+}
+ACTIONS.goDefis = () => { UI.eqTab = 'defis'; location.hash = isManager() ? '#/challenges' : '#/equipe'; };
+// Actions de la semaine (relances notees et issues positives).
+function weekActions(uid) {
+  const from = dateOf(weekStart(today())).getTime();
+  const T = Object.values(S.touches || {}).filter(x => x.by === uid && x.at >= from);
+  const L = Object.values(S.loyalty || {}).filter(x => x.userId === uid && x.at >= from && !T.some(t => Math.abs(t.at - x.at) < 2000));
+  return { calls: T.length + L.length, good: T.filter(x => (TOUCH_OUTCOMES[x.outcome] || {}).reached).length + L.filter(x => OUTCOMES[x.outcome] && OUTCOMES[x.outcome].done && !OUTCOMES[x.outcome].lost).length };
+}

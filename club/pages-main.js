@@ -142,8 +142,7 @@ PAGES.dashboard = {
       <span class="spacer"></span>${monthNav('dashMonth', mk)}</div>`;
     const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(CLUB.name) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
     return head + filters + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], ['analyses', 'Analyses']], tab)}</div>` +
-      (tab === 'objectifs' ? dashObjectives(st, r, subject, who) : dashAnalyses(r, who)) +
-      `<button class="saisies-tab" data-act="openSaisies">＋ Saisir</button>`;
+      (tab === 'objectifs' ? dashObjectives(st, r, subject, who) : dashAnalyses(r, who));
   },
   mount() { bindKpiDrag(); },
 };
