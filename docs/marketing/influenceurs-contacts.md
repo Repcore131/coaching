@@ -1,174 +1,135 @@
-# RepCore — Base influenceurs (marketing d'influence)
+# RepCore — Influenceurs avec email (2K–400K)
 
-**117 profils francophones** de la salle et de la muscu (bodybuilding, physique, powerlifting, bikini/wellness, gym girls), de ~2K à plusieurs millions d'abonnés.
-Fichier à importer dans un outil d'emailing : `influenceurs-contacts.csv` (séparateur `;`, UTF-8, s'ouvre directement dans Excel).
-Recherche faite le 05/10/2026.
+108 influenceurs francophones salle & muscu, **tous avec un email public** (aucun inventé, source indiquée). Version PDF : `RepCore-Base-Influenceurs.pdf`. Recherche du 05/10/2026.
 
-| Priorité | Signification | Nb |
-|---|---|---|
-| **A** | Mail pro **vu sur une page publique** (bio YouTube, Linktree, site, bio Insta) → mailing direct | 32 |
-| **B** | Mail trouvé mais **à vérifier** (adresse coaching, société ou atypique) → mail possible, ton adapté | 10 |
-| **C** | Pas de mail public → **DM Insta** ou bouton « E-mail » dans l'appli | 75 |
+## Athlètes TEVEO (France) (20)
 
-> **Aucun email n'a été inventé** : chaque adresse a une source. Les abonnés sont approximatifs, à vérifier avant l'envoi.
-> « TVO » = **TEVEO** (marque allemande de sportswear qui sponsorise beaucoup d'influenceuses FR).
+| Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
+|---|---|---|---|---|---|
+| Pierre Mannaert | @mrt_pierre | 146K | Fitness / salle, égérie Fitness Park | pierre.mannaert@icloud.com | YouTube (description de la chaîne) |
+| Dounia Boufrioua | @douniacoach | 104K | Coach sportive (Fitness Park), transformation femmes | douniacoach@gmail.com | Bio Insta (Modash) |
+| Camille Ferrigno | @camillesandro_ | 101K | Fitness / transformation, maman | camillesfpro@gmail.com | Bio Insta (Modash) |
+| Mimi | @mimi_fitboxing | 128K | Boxe / MMA / calisthenics | mariamebtcontact@gmail.com | Bio Insta (Modash) |
+| Julie Lançon | @julie_cfs | 121K | Sport / bien-être | pro.juliecfs@gmail.com | Bio Insta (Modash) |
+| Pauline Robert | @rbt_pau | 125K | Tractions / force (fait aussi du Hyrox) | rbtpau@yahoo.com | Bio Insta (Modash) |
+| Vincent | @tounna199 | 72K | Athlète fitness, code Tounna10 | Tounna199.pro@gmail.com | Bio Insta (Modash) |
+| Lynda | @little__beaast | 74K | Fondatrice Little BEAST (fitness femmes) | contact@littlebeast.fr ⚠ à vérifier | littlebeast.fr/mentions-legales (adresse société) |
+| Laura Spohr | @laulaupoussedelafonte | 57K | Salle, fessiers, perte de gras | laulaupoussedelafonte@gmail.com | linktr.ee/laulaupoussedelafonte |
+| Elodie Vanbierwliet | @elo_nutryfit | 52K | Diététicienne, perte de gras | Elonutryagent@gmail.com | linktr.ee/Elonutryfit (lien « collab ») |
+| Cam Baudroit | @_beglees | 38K | Fitgirl, salle, ambassadrice TEVEO + ESN | camilleguerin.dsgn@gmail.com ⚠ à vérifier | linktr.ee/_beglees (nom différent sur l'adresse) |
+| Kenya Scandella | @kenyascandella | 22K | Salle / mindset | kenya.scandella06@gmail.com | linktr.ee/kenyascandella |
+| Pauline Pichard | @pauline.pichard | 21K | Fitness, code FITBYPAU | Pauline.pichard1@outlook.com | Bio TikTok + bio Insta (Modash) |
+| Samuel Meyz | @samuel_meyz | 21K (TikTok) | Fitness, recettes protéinées | samuel.meyz@hotmail.com | linktr.ee/samuel_meyz |
+| Emma Cadi | @em.cadi | 28K (TikTok) | Salle / course, UGC | emmacadipro@gmail.com | Bio TikTok |
+| Chloé Dyr | @chloe.dyr | 15K (TikTok) | Coach femmes débutantes en salle | dyr.chloe@gmail.com | Bio TikTok |
+| Clara | @clarabblt_ | 17K | Sport / lifestyle, code CLARAX10 | clarabblt.pro@gmail.com | Bio Insta (Modash) |
+| Jeanne | @by_jeannepro | 13K | Salle / lifestyle / UGC | byjeannepro@gmail.com | Bio Insta (Modash) |
+| Esther Laurent | @esther_brooks99 | 11K | Sport / UGC | esther180715@hotmail.com ⚠ à vérifier | Bio Insta (Modash), adresse d'apparence perso |
+| Julia Allain-Schöning | @yu.arefit | 5,7K (21K TikTok) | Powerlifting, coach BPJEPS | yu.arefit@hotmail.com | linktr.ee/yu.arefit |
 
-## Stratégie conseillée
+## Influenceuses muscu (21)
 
-1. **Vague 1 — micro/mid (2K–100K) en priorité A** : meilleur taux de réponse, souvent d'accord pour un échange (accès premium à vie + code promo affilié), plus proches de leur communauté.
-2. **Vague 2 — Corona Gym** via `coronagymoff@gmail.com` : une collab de groupe (vidéo « on teste RepCore pendant 30 jours ») touche ~1,5M de personnes.
-3. **Vague 3 — macro (Tibo InShape, Matala, Naj B, Sissy Mua…)** : quasi toujours via agence, donc budget payant. À garder pour après les premiers chiffres d'usage.
-4. **Profils C** : DM Instagram court + lien de présentation, puis bouton « E-mail » du profil s'il existe.
+| Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
+|---|---|---|---|---|---|
+| Clémentine «Fit by Clem» Chaillou | @fitbyclem | ~296K | Coach diplômée, muscu / fitness | contact@fitbyclem.fr | fitbyclem.fr/mentions-legales |
+| Mel | @lagirlmel_ | 141K | Salle, Gymshark / AYBL | mel@migosmedia.com | Bio Insta (Modash), agence |
+| Zoé Amalys | @zoeamalys | 119K | Programmes muscu | zoe@beyond.media | YouTube À propos, agence |
+| Morghane | @morghane.pl | 107K | Salle, coach diplômée (AYBL) | morghane.pl@gmail.com | linktr.ee/morghane.pl |
+| Karen | @karenn_life | 109K | CrossFit / food, Marseille, Nutripure | karennlife@outlook.fr | Bio Insta (Modash) |
+| Flora | @flora_fitmind | 97K | Workouts + mindset, Gymshark | florafitmind@gmail.com | linktr.ee/flora_fitmind |
+| Margot Lambert | @margot_fit | 53K | Programmes fessiers / muscu | juliaecbeditor@gmail.com ⚠ à vérifier | YouTube À propos (semble être son monteur) |
+| Chelly | @chelly__fit | ~22K | « Musculation sérieuse », coaching | Chellyfitcoaching@gmail.com ⚠ à vérifier | Bio Insta (extrait moteur de recherche) |
+| Léna P. | @lenaa.psl | 21K | Fitness / lifestyle, Aix-Marseille | Contact.lenapsl@gmail.com | Bio Insta (Modash) |
+| Justine | @lifestyle_byju | 14K | Lifestyle / fitness, Paris | justine.ppro@hotmail.com | Bio Insta (Modash) |
+| Cloé | @cloefitandflex | ~12K | Fitness & souplesse | cloefitandflex@outlook.fr ⚠ à vérifier | Bio Insta (extrait moteur de recherche) |
+| Ornette | @ornettecoaching | 11K | Coach fessiers, Marseille | breatheornette@gmail.com | Bio Insta (Modash) |
+| Tiphaine «Nala» | @eurasianfr_ | 8K | Fitness / wellness, Paris, UGC | nala.creator.ugc@gmail.com | Bio Insta (Modash) |
+| Sophia Mansouri | @sophia_coachsportif | 7,4K | Coach sportive, autrice livre renforcement | Sophia.coachsportif@gmail.com ⚠ à vérifier | Bio Insta (extrait moteur de recherche) |
+| Telma | @telma.gymsis | 7,2K | « Booty builder », PT Paris | fit.telma@gmail.com | linktr.ee/telma.gymsis |
+| Diane | @diane.snz | 3,8K | Santé / fitness, UGC | sanzdiane1@gmail.com | Bio Insta (Modash) |
+| Shayma | @shayma_emz | ~3,5K | Sport / lifestyle, Paris | shaymaemz@outlook.fr | Bio TikTok |
+| Aliénor «Alicuizz» Bérenger | @alicuizz | IG ? (392K TikTok) | Gym girl / powerlifting, Gymshark, TEVEO | alicuizz.pro@gmail.com | linktr.ee/alicuizz |
+| Noémie Allabert | @noemieallabert | IG ? | Powerlifting, 2× championne du monde IPF | n.allabert@live.fr | linktr.ee/noemieallabert |
+| Inès Védie | @ineesve | IG ? | Athlète bikini, coach | hello@inescoaching.com | inescoaching.com |
+| Mel | @melcoachonline | IG ? | Coach salle + maison | coach.mel.prive@gmail.com | YouTube À propos |
 
-**Profils les plus alignés avec RepCore** (le suivi de séances en salle) : les athlètes IFBB/naturels qui coachent (Jessy Pigury, JojoRush, Lucas Gouiffes, Théo Leguerrier, Rémi Fitness-Muscu), les powerlifteuses (Noémie Allabert), les coachs femmes en salle (Karoline Rollin, Telma, Ornette, Dounia Coach).
+## Créateurs muscu hommes (54)
 
-## Corona Gym (16)
+| Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
+|---|---|---|---|---|---|
+| Nassim Sahili | @nassim.sahili | 390K | Prise de masse, FITMASS | nassim@fitmass.fr ⚠ à vérifier | fitmass.fr (adresse société) |
+| Youcef Djoudi | @youcef_djoudi_ifbbpro | 302K | IFBB Pro Men's Physique | Youcefdz.anavaanava@gmail.com ⚠ à vérifier | Description vidéo YouTube (coaching) |
+| Nicolas «Fleckinho» Fleck | @fleckinho_ | 289K | Salle / transformation | fleckinho.pro@gmail.com | linktr.ee/fleckinho_ |
+| Nathan Mozango | @nathanmozango | 267K | Muscu entertainment | coachingpouralphas@gmail.com ⚠ à vérifier | Description vidéo YouTube (coaching) |
+| Théo Leguerrier | @theoleguerrier | 183K | Bodybuilder pro | theoleguerrier.pro@gmail.com | Description vidéo YouTube («pro uniquement») |
+| Imad «ImTarzan» Mujadzic | @imtarzan_ | 136K | Vlogs muscu | imtarzancollab@gmail.com | Description vidéo YouTube («Partenariat») |
+| Julien Quaglierini | @julienquaglierini | 125K | IFBB Pro, programmes | contact@julienquaglierini.com ⚠ à vérifier | julienquaglierini.com/mentions-legales |
+| Jonathan Djerehe | @jonathandjr_ | 120K | Lifestyle / fitness | jonathandjerehe@gmail.com | Bio Insta (Modash) |
+| Florian Poirson | @florianpoirson | 105K | IFBB Pro Men's Physique | flo.poirson@gmail.com ⚠ à vérifier | linktr.ee/florianpoirson (coaching) |
+| Thomas Rainieri | @thomasrainieri | 104K | Fitness / muscu | info@thomasrainieri.com ⚠ à vérifier | thomasrainieri.com/contact (peut être service client) |
+| Lucas Gouiffes | @lucasgouiffes | 87K | Bodybuilder naturel | lucasgouiffescontact@gmail.com | YouTube + lucasgouiffes.com |
+| Yoann Russel | @yoann.russel | 79K | Préparateur physique | yoprodigital@hotmail.com | Bio Insta (Modash) |
+| Jean «Onche Le Musclay» | @jeanonchemuscle | 65K | Muscu + humour (BE) | jeanonchelemusclay@gmail.com | YouTube À propos («Mail pro») |
+| Charles | @charlesfit_ness | 59K | Fitness / cuisine | Charlesgc.fit@gmail.com | Bio Insta (Modash) |
+| Joffrey «JojoRush» Vassaux | @jojorush_ | 46K | Classic Physique, coach | jojorusher@gmail.com | YouTube À propos + linktree |
+| Gabriel Gariépy | @gabrielgariepy_coaching | 40K | IFBB Pro, coach (Québec) | team.gg.coaching@gmail.com ⚠ à vérifier | linktr.ee (boîte coaching) |
+| Raphaël Cuesta | @raphaelcuesta | 40K | Fitness / muscu YouTube | raphaelcuestapro@gmail.com | Description vidéo YouTube |
+| Thomas Ortega | @th0mas0rtega | 35K | Fitness / lifestyle (Greenwhey) | thomasortega.influence@outlook.com | Bio Insta (Modash) |
+| Jessy Pigury | @jessy.pigury | 33K | IFBB Pro Men's Physique | jpigury@gmail.com | YouTube À propos («Collaboration») |
+| Kilian Hagen | @kilianhagen | 24K | Coach muscu / diététicien (BE) | atelierdumuscle@gmail.com ⚠ à vérifier | atelierdumuscle.be (sa marque) |
+| Antoine Louvard | @coach_louvard | 24K | Diététicien, coach (membre Corona Gym) | contact@coachlouvard.fr | coachlouvard.fr/policies/legal-notice |
+| Gwendal Haessy | @haessy_gwendal | 23K | Fitness / abdos | gwendalhaessy.pro@gmail.com | Bio Insta (Modash) |
+| Sébastien Theurel | @seb.theurel.ifbbpro | 11K | IFBB Pro Classic Physique | classical.coaching@hotmail.com ⚠ à vérifier | Description vidéo YouTube (coaching) |
+| Gaëtan Boeuf | @gaetanboeuf | 8,8K | Athlète, coach | Gaetanboeuf.coach@gmail.com ⚠ à vérifier | YouTube À propos (coaching) |
+| Nico Dalam | @nicodalam | 5,2K (202K YouTube) | « Ancien maigre », muscu | support@nicodalam.com ⚠ à vérifier | nicodalam.fr/mentions-legales (support) |
+| Sofiane Chekkali | @sofianechekkali | 2,1K | Coach prise de muscle | sofianechekkali.pro@gmail.com | Bio TikTok |
+| Rémi «Fitness-Muscu» | @remi_fitness_muscu | IG ? | Muscu basée sur la science | management@fitness-muscu.com | YouTube À propos («collaborations») |
+| Jordan «Se Transforme» | @jordansetransforme | IG ? (159K YouTube) | Transformation (LU) | jordansetransforme@gmail.com | YouTube À propos |
+| Greg Chipponi | @gregchipponicoaching | IG ? (118K YouTube) | Coach fitness | partenariats@gregchipponicoaching.fr | YouTube À propos |
+| Karim «Big K Coach» | @bigk_coach | IG ? (92K YouTube) | Musculation | Karim@bigkcoaching.com ⚠ à vérifier | YouTube À propos |
+| Nicolas «NicolasRxl» | — | IG ? (85K YouTube) | Perte de poids / muscu | contact@nicolasrxl.com | YouTube À propos |
+| «Prépa & Performance» | @prepaetperformance | IG ? (69K YouTube) | Science de l'entraînement | prepaetperformance@gmail.com | YouTube À propos |
+| «Thismafit» | @thismafit | IG ? (57K YouTube) | Salle (Prozis / Gymshark) | thismafitpro@gmail.com | YouTube À propos |
+| David Cruciani | @david.cruciani_ | IG ? (55K YouTube) | Musculation / humour | davidcrucianicoach@gmail.com | YouTube À propos |
+| Grégory Brahim | — | IG ? (42K YouTube) | Actu bodybuilding / coaching | sport_nutrition62@yahoo.fr ⚠ à vérifier | YouTube À propos (coaching) |
+| «Fitness Fusion» (cousins Origlia) | @fitnesss_fusion | IG ? (36K YouTube) | Musculation | origliacousins@gmail.com | YouTube À propos |
+| Nicolas Liberté | @nicolasliberte | IG ? (29K YouTube) | Musculation | nicolasforcetranquille@gmail.com | YouTube À propos |
+| Michaël Sebti | — | IG ? (29K YouTube) | Transformation | michael.sebti.coaching@gmail.com ⚠ à vérifier | YouTube À propos (coaching) |
+| Anthony Weiss | @antho_weiss | IG ? (22K YouTube) | Coach, ex-compétiteur | awcdirection@outlook.fr | YouTube À propos |
+| «Baki HD» | @baki_hd | IG ? (19K YouTube) | Force | strengthvision93@gmail.com | YouTube À propos |
+| Felix Daigle | @felixdaigle | IG ? (14K YouTube) | Coach (Québec) | info@fdfitness.ca ⚠ à vérifier | YouTube À propos (adresse société) |
+| Evans «Evanssito» | @evanssito.coach | IG ? (8,8K YouTube) | Coach / nutrition | coaching@evansspro.com ⚠ à vérifier | YouTube À propos (coaching) |
+| Nathan Pichon | — | IG ? (7,4K YouTube) | Musculation | contact@nathanpichon.com | YouTube À propos |
+| Jérémy «Physic'Home» | — | IG ? (6,5K YouTube) | Coach | contact@physic-home.fr | YouTube À propos |
+| Florian Ptr | @flowptr | IG ? (5,6K YouTube) | Coach prépa bodybuilding naturel | florianptrcontact@gmail.com | YouTube À propos |
+| Adrien «Fitz Shelby» | — | IG ? (5,6K YouTube) | Transformation | pro.fitzshelby@gmail.com | YouTube À propos |
+| Roméo | — | IG ? (4,8K YouTube) | Salle | romeomrt0@gmail.com | YouTube À propos |
+| Lotfi «Lotfit» | @lotfit_r | IG ? (3,4K YouTube) | Perte de poids | lotfivlogs@gmail.com | YouTube À propos |
+| Joss «Sport Brutal» | @brutaljoss | IG ? (3,1K YouTube) | Musculation / nutrition | sportbrutal@gmail.com | YouTube À propos |
+| «Tookran» | @tookran | IG ? (2,9K YouTube) | Coach | tookran.coach@gmail.com | YouTube À propos |
+| Rayane «Rayce Krispies» | @rayce_krispies | IG ? (2,7K YouTube) | Coach force | contactplentyofstrength@gmail.com ⚠ à vérifier | YouTube À propos (coaching) |
+| Maxime Buffeteau | @maxime.bfft | IG ? (2,1K YouTube) | Powerlifting | max.buffeteau@gmail.com | YouTube À propos |
+| «StrongApe» | @strongapefitness | IG ? (2,1K YouTube) | Prépa physique (BE) | strongapefitness@outlook.com | YouTube À propos |
+| Alpha Keita | @iamelkapo | IG ? | Champion de France junior Classic Physique | Alphakeita715@gmail.com | YouTube À propos |
 
-| Prio | Prénom | Nom | Instagram | Abonnés | Niche | Email | Source / contact |
-|---|---|---|---|---|---|---|---|
-| A | Ibrahim «Brah» | Wouhaibi | @brahhbrahh / @coronagymoff | 110K (groupe) · 1,1M TikTok · 300K YT | Fondateur Corona Gym | **coronagymoff@gmail.com** | coronagym.fr/pages/contact |
-| A | Ibrahim «Brah» | Wouhaibi | @coronagymoff |  | Société CORONA GYM | **contact@coronagym.fr** | coronagym.fr/pages/mentions-legales |
-| A | (salle) |  | Corona Gym Bordeaux Centre |  | Salle 1800 m² du groupe | **coronagymbordeauxcentre@gmail.com** | coronagymbdx.fr |
-| A | Antoine | Louvard | @coach_louvard | 24K | Diététicien-nutritionniste, coach | **contact@coachlouvard.fr** | coachlouvard.fr/policies/legal-notice |
-| C | Édouard | Lajus Vinot | @edouard_lajus_ | 13K | Muscu, athlète Nutrimuscle | — | DM / bouton Contact Insta |
-| C | Axel | Lajus | @axel.laj | ? | Coach (axellajus.com) | — | Formulaire axellajus.com |
-| C | Romain «ChestRo» |  | @romainaltt | 47K | Muscu, partenaire Gymshark | — | DM Insta |
-| C | Mathis |  | @mathis.pbz | 18-24K | Athlète Nutrimuscle (code CORONA) | — | DM Insta |
-| C | Dylan |  | @dylan_bnf | ? | Coach BPJEPS | — | linktr.ee/dylan.bnf |
-| C | Paul | Vionnet | @paul_vionnet | 5K | Coach, Master STAPS | — | DM Insta |
-| C | Haroun |  | @harounbfg | ? | Membre | — | DM Insta |
-| C | Julien |  | @milinkostaud | ? | Membre | — | DM Insta |
-| C | Solal |  | @solalbechame | ? | Membre | — | DM Insta |
-| C | Coco |  | @cocofeine_ | ? | Membre | — | DM Insta |
-| C | Samuel | Hartman | @iam.samuelhartman (TikTok) | 312K TikTok | IFBB Pro, champion du monde WNBF 2024 (invité) | — | DM / RetroMuscle |
-| C | Ehsan «Essan» | Najafi | @essan.nfc | 519K | Fondateur Team NFC (proche) | — | DM Insta |
+## Francophonie hors France (langue à vérifier) (13)
 
-## Bodybuilding / muscu hommes (46)
+| Prénom Nom | Instagram | Abonnés | Niche | Email | Source |
+|---|---|---|---|---|---|
+| Cindy Perron | @cindy_perron | 42K | Lifestyle / wellness / fitness (Québec) | cindy.1999@live.ca | Bio Insta (Modash) — agence : mliviadufresne@jinfluence.biz |
+| Aleksa Gagovic | @aleksa_gagovic_ | 23K | Fitness hommes (Montréal) | mliviadufresne@jinfluence.biz | Bio Insta (Modash), agence |
+| Alex Blais | @tite_boule | 21K | Athlète CrossFit (Montréal) | titeboule.collabs@gmail.com | Bio Insta (Modash) |
+| Hicham Rabeh | @hichamfitness | 108K | Coach (Maroc, bio en français) | hicham.rabeh@gmail.com | Bio Insta (Modash) |
+| Niama Elkettani | @prettymiyama | 61K | Beauté / fitness, égérie Fitness Park Maroc | niama.elkettani007@gmail.com | Bio Insta (Modash) |
+| Nasserdine | @nasserdine_life | 47K | Salle / fitness model (Maroc) | nasserdinelife@gmail.com | Bio Insta (Modash) |
+| Imane Lourdichi | @imanelourdichii | 23K | Coach nutrition / fitness (Casablanca) | ilourdichi@gmail.com | Bio Insta (Modash) |
+| Zakaria Hamzaoui | @zakaria_hamzaoui_ | 23K | Coach en ligne (Maroc) | thisizakaria@gmail.com | Bio Insta (Modash) |
+| Israa | @lamnr_israe | 21K | Fit girl / lifestyle (Casablanca) | Lamnaoauarisrae@gmail.com | Bio Insta (Modash) |
+| Oussama «Wild» | @wildoussama | 18K | Athlète fitness (Maroc) | thewildoussama@gmail.com | Bio Insta (Modash) |
+| Patricia Buza | @bza.patricia | 7,7K | PT / diététicienne (Belgique) | patricia.buza@hotmail.com | Bio Insta (Modash) |
+| Aya Boudhiaf | @aya_boudhiaf | 7,2K | Fitness model (Tunisie) | boudhiafaya8@gmail.com | Bio Insta (Modash) |
+| Yana | @yana_elyn | 4,8K | Santé / fitness (Belgique) | Yanaelyn@hotmail.com | Bio Insta (Modash) |
 
-| Prio | Prénom | Nom | Instagram | Abonnés | Niche | Email | Source / contact |
-|---|---|---|---|---|---|---|---|
-| A | Thibaud «Tibo InShape» | Delapart | @tiboinshape | 16,7M | Fitness/muscu, n°1 YouTube FR | **tiboinshapevideo@gmail.com** | youtube.com/@TiboInShape/about |
-| A | Stéphane | Matala | @stephane.matala | 572K | IFBB Pro bodybuilding, coach | **matala@influogen.com** | youtube.com/@StephaneMatala/about (agence Influogen) |
-| A | Naj «Naj B» |  | @najbfit | 522K | Fitness/muscu + lifestyle | **najbfit@insider.paris** | youtube.com/@Najbfit/about (agence) |
-| A | Théo | Leguerrier | @theoleguerrier | 183K | Bodybuilder pro | **theoleguerrier.pro@gmail.com** | description vidéo YouTube («pro uniquement») |
-| A | Imad «ImTarzan» | Mujadzic | @imtarzan_ | 136K | Vlogs muscu | **imtarzancollab@gmail.com** | description vidéo YouTube («Partenariat») |
-| A | Lucas | Gouiffes | @lucasgouiffes | 87K | Bodybuilder naturel | **lucasgouiffescontact@gmail.com** | YouTube + lucasgouiffes.com |
-| A | Joffrey «JojoRush» | Vassaux | @jojorush_ | 46,5K | Classic Physique, coach | **jojorusher@gmail.com** | youtube.com/@jojorush/about + linktree |
-| A | Raphaël | Cuesta | @raphaelcuesta | 39,6K | Fitness/muscu YouTube (101K) | **raphaelcuestapro@gmail.com** | description vidéo YouTube |
-| A | Jessy | Pigury | @jessy.pigury | 33,5K | IFBB Pro Men's Physique | **jpigury@gmail.com** | youtube.com/@JessyPigury/about («Collaboration») |
-| A | Rémi «Fitness-Muscu» |  | @remi_fitness_muscu | ? | Muscu basée sur la science | **management@fitness-muscu.com** | youtube.com/@fitness-muscu/about («collaborations») |
-| B | Nassim | Sahili | @nassim.sahili | 390K | Prise de masse, FITMASS | nassim@fitmass.fr ⚠ | fitmass.fr (adresse société) |
-| B | Youcef | Djoudi | @youcef_djoudi_ifbbpro | 302K | IFBB Pro Men's Physique | Youcefdz.anavaanava@gmail.com ⚠ | description vidéo YouTube (coaching) |
-| B | Nathan | Mozango | @nathanmozango | 267K | Muscu entertainment | coachingpouralphas@gmail.com ⚠ | description vidéo YouTube (coaching) |
-| B | Sébastien | Theurel | @seb.theurel.ifbbpro | 11,5K | IFBB Pro Classic Physique | classical.coaching@hotmail.com ⚠ | description vidéo YouTube (coaching) |
-| B | Gaëtan | Boeuf | @gaetanboeuf | 8,8K | Athlète, coach | Gaetanboeuf.coach@gmail.com ⚠ | youtube.com/@GaetanBoeuf/about (coaching) |
-| B | Thomas | Rainieri | @thomasrainieri | 104K | Fitness/muscu | info@thomasrainieri.com ⚠ | thomasrainieri.com/contact (peut être service client) |
-| C | Alex & PJ «Bodytime» |  | @bodytimexpress | 298K | Duo muscu, ~1M YouTube | — | bodytime.fr |
-| C | «Stanimal» |  | @stanimal9 | 265K | 1er IFBB Pro Men's Physique FR/CH | — | DM Insta |
-| C | Morgan | Aste | @morgano.69 | 158K | IFBB Pro, athlète Scitec | — | DM Insta |
-| C | Kenz |  | @kenz.nfc | 133K | IFBB Pro Men's Physique | — | DM Insta |
-| C | Julien | Quaglierini | @julienquaglierini | 125K | IFBB Pro, coach | — | julienquaglierini.com |
-| C | Florian | Poirson | @florianpoirson | 105K | IFBB Pro Men's Physique | — | florianpoirson.fr |
-| C | Rudy | Coia | @rudycoiasp | 78K | Coach muscu naturelle, SuperPhysique | — | rudycoia.com/contactez-nous |
-| C | Jean «Onche Le Musclay» |  | @jeanonchemuscle | 65K | Muscu + humour (BE) | — | DM Insta |
-| C | Avner «Road to Saiyan» | Peres | @avner_roadtosaiyan | 57K | Transformation, fondateur Broadwhey | — | DM Insta |
-| C | Antoine «Ananas Musclé» | Manciet | @ananasmuscle | 43K | Muscu pour ectomorphes | — | ananasmuscle.fr |
-| C | Gabriel | Gariépy | @gabrielgariepy_coaching | 40K | IFBB Pro, coach (Québec) | — | DM Insta |
-| C | Joffrey «Joffrey Coach» |  | @joffreycoach | 26K | Coach transformation | — | DM Insta |
-| C | Kilian | Hagen | @kilianhagen | 24K | Coach muscu (BE), Nutrimuscle | — | kilianhagen.be |
-| C | Jean «Tonton Jean» |  | @tonton__jean | 19,6K | Muscu/nutrition (ex All-Musculation) | — | DM Insta |
-| C | Pierre-Martin | Murcia | @pierre.martin_m | 13,8K | Compétiteur, PM Coaching | — | DM Insta |
-| C | Jérôme | Thévenin | @jeromethevenin_ifbbpro | 12,7K | IFBB Pro Men's Physique | — | DM Insta |
-| C | Yann | Leterrier | @yann.let | 10,3K | Bodybuilder naturel pro | — | DM Insta |
-| C | «CBB Fit» |  | @cbbfit_ | 7,8K | Vlogs bodybuilding | — | DM Insta |
-| C | Yoan | Ferreira | @yo.ferreira_ | 6,2K | Gérant salle AFIT, coach prépa | — | DM Insta |
-| C | Nico | Dalam | @nicodalam | 5,2K (202K YouTube) | «Ancien maigre» muscu | — | DM Insta |
-| C | Cédric «Crts» |  | @cedric_crts | 3,9K | Muscu evidence-based | — | DM Insta |
-| C | Dylan | Tymen | @dt_coach | 3,2K | Coach prépa naturelle | — | DM Insta |
-| C | Owen «OwenV» |  | @owenv_coaching | 2,7K | Bodybuilder naturel, coach | — | DM Insta |
-| C | Sofiane | Chekkali | @sofianechekkali | 2,1K | Coach prise de muscle | — | DM Insta |
-| C | Jimseuh |  | @jimseuh | 983K | Contenu salle / muscu | — | DM Insta |
-| C | Brutus |  | @brutuslerobuste | 335K | Contenu salle / muscu | — | DM Insta |
-| C | Nicolas | Fleck | @fleckinho_ | 289K | Contenu salle / muscu | — | DM Insta |
-| C | Matis | Mallie | @matis.mallie | 240K | Contenu salle / muscu | — | DM Insta |
-| C | Zramdani |  | @zramdani_ | 117K | Contenu salle / muscu | — | DM Insta |
-| C | Enzo | Foukra | @enzofoukra | 101K | Contenu salle / muscu | — | DM Insta |
+## Annexe — Corona Gym (proposition à la salle, plus tard)
 
-## Influenceuses muscu (34)
-
-| Prio | Prénom | Nom | Instagram | Abonnés | Niche | Email | Source / contact |
-|---|---|---|---|---|---|---|---|
-| A | Sissy | Mua | @sissymua | 1,5M | Fitness, app TrainSweatEat | **sissy@po.agency** | youtube.com/@SissyMua/about (agence) |
-| A | Juju | Fitcats | @jujufitcats | 2,9M | Fitness / lifestyle | **jujufitcatspro@gmail.com** | youtube.com/@jujufitcats/about |
-| A | Karoline | Rollin | @karoline.ro | 150-420K (595K YT) | Coach muscu, app BeStrong | **karolinefitness95@gmail.com** | youtube.com/@KarolineRo/about («Business inquiries ONLY») |
-| A | Mel |  | @lagirlmel_ | 141K | Gym, Gymshark/AYBL | **mel@migosmedia.com** | bio Insta via Modash (agence) |
-| A | Zoé | Amalys | @zoeamalys | 119K | Programmes muscu + running | **zoe@beyond.media** | youtube.com/@zoeamalys/about (agence) |
-| A | Aliénor «Alicuizz» | Bérenger | @alicuizz | 392K TikTok | Gym girl / powerlifting, Gymshark, TEVEO | **alicuizz.pro@gmail.com** | linktr.ee/alicuizz |
-| A | Flora |  | @flora_fitmind | 97K | Workouts + mindset, Gymshark | **florafitmind@gmail.com** | linktr.ee/flora_fitmind |
-| A | Noémie | Allabert | @noemieallabert | ? | Powerlifting, 2× championne du monde IPF | **n.allabert@live.fr** | linktr.ee/noemieallabert |
-| A | Ornette |  | @ornettecoaching | 11K | Coach fessiers (Marseille) | **breatheornette@gmail.com** | bio Insta via Modash |
-| A | Telma |  | @telma.gymsis | 7,2K | «Booty builder» PT Paris | **fit.telma@gmail.com** | linktr.ee/telma.gymsis |
-| A | Inès | Védie | @ineesve | ? | Athlète bikini, coach | **hello@inescoaching.com** | inescoaching.com |
-| A | Mel |  | @melcoachonline | ? | Coach salle + maison | **coach.mel.prive@gmail.com** | youtube.com/@melcoachfr/about |
-| B | Margot | Lambert | @margot_fit | 53K | Programmes fessiers/muscu | juliaecbeditor@gmail.com ⚠ | youtube.com/@MargotFit/about (semble être son monteur/éditeur) |
-| C | Clémentine «Fit by Clem» | Chaillou | @fitbyclem | 300K | Coach fitness/muscu, Gymshark | — | Formulaire fitbyclem.fr/contact |
-| C | Lucile | Woodward | @lucilewoodward | 256K | Coach diplômée, app | — | Formulaire lucilewoodward.com/contact |
-| C | Alaïa | Hennequin | @alohalaia_ | 371K | Muscu fessiers, Gymshark | — | Agence Point d'Orgue |
-| C | Nihad | Sadat | @nihad_sdt | 691K | Muscu + lifestyle, Nutrimuscle | — | linktr.ee/nihad_sdt |
-| C | Lauralie | Chapados | @lauraliechap | 420K+ | IFBB Bikini Pro, Ms Bikini Olympia 2024 (QC) | — | DM Insta |
-| C | Lya | Bavoil | @lya_powerlift | ~200K | Powerlifting, championne du monde IPF | — | DM Insta |
-| C | Caroline |  | @carolineclnfit | 183K | Fitness / compétitrice IFBB, MyProtein | — | DM Insta |
-| C | Anne-Françoise | Lambrecht | @coachingbyaf | 123K | Coach prise de muscle femmes | — | linktr.ee/coachingbyaf |
-| C | Laurie & Clara |  | @twinsb_fit | ? | Jumelles gym/fessiers, Gymshark | — | DM Insta |
-| C | Sabrina | Montoya | @sab.montoya | 97K | PT diplômée, Women's Best | — | DM Insta |
-| C | Samantha | Eugénie | @coeurlymonster | 53K | Powerlifting, champ. monde junior IPF | — | DM Insta |
-| C | Syncia |  | @syncia.off | 25K | Coach fitness Lyon | — | DM Insta |
-| C | «Sunny» |  | @eckenoff | 17K | Coach, ESN / Women's Best | — | linktr.ee/eckenoff |
-| C | Clémence |  | @clem.trains | 14,6K | Fitness/muscu, Nutripure | — | DM Insta |
-| C | Nyna | Benigno | @ninette.benigno | 7,8K | -35 kg puis musculation (Lyon) | — | DM Insta |
-| C | Laura | Las | @laurallas | 3K | PT Nantes, MyProtein | — | DM Insta |
-| C | Laurène | Gaudelier | @laurenetrn.ifbbpro | 3,5K | IFBB Pro figure, coach | — | DM Insta |
-| C | Marion | Grymyslawski | @mariongrym_ifbbpro | ? | IFBB Pro figure (5e FIBO Pro 2026) | — | DM Insta |
-| C | Ambre | Bonneau-Abram | @ambre.pwr | ? | Powerlifting, championne de France | — | DM Insta |
-| C | Ophélie | Issner | @ophelieissner | ? | Prise de muscle femmes | — | DM Insta |
-| C | Amélie |  | @amelie.gfit | ? | Powerlifting | — | DM Insta |
-
-## Athlètes TEVEO (FR) (21)
-
-| Prio | Prénom | Nom | Instagram | Abonnés | Niche | Email | Source / contact |
-|---|---|---|---|---|---|---|---|
-| A | Vincent |  | @tounna199 | 72K | Fitness, code Tounna10 | **Tounna199.pro@gmail.com** | bio Insta via Modash |
-| A | Camille | Ferrigno | @camillesandro_ | 101K | Fitness/transformation, maman | **camillesfpro@gmail.com** | bio Insta via Modash |
-| A | Dounia | Boufrioua | @douniacoach | 104K | Coach (Fitness Park), transfo femmes | **douniacoach@gmail.com** | bio Insta via Modash |
-| A | Clara |  | @clarabblt_ | 17K | Sport/lifestyle, code CLARAX10 | **clarabblt.pro@gmail.com** | bio Insta via Modash |
-| A | Jeanne |  | @by_jeannepro | 13K | Gym/lifestyle/UGC, athlète TEVEO | **byjeannepro@gmail.com** | bio Insta via Modash |
-| A | Julie | Lançon | @julie_cfs | 121K | Sport/bien-être/business | **pro.juliecfs@gmail.com** | bio Insta via Modash |
-| B | Esther | Laurent | @esther_brooks99 | 10,6K | Sport/UGC, code ESTHERFR | esther180715@hotmail.com ⚠ | bio Insta via Modash (adresse perso-like) |
-| B | Pauline | Robert | @rbt_pau | 125K | Tractions + Hyrox (limite) | rbtpau@yahoo.com ⚠ | bio Insta via Modash |
-| B | Cam | Baudroit | @_beglees | 38,5K | Fitgirl, TEVEO + ESN | camilleguerin.dsgn@gmail.com ⚠ | linktr.ee/_beglees (adresse atypique) |
-| C | Joachim |  | @joachim_fit_ | 86K | Physique, coaching, code JOACHIM10 | — | DM Insta |
-| C | Aline |  | @alyneah | 119K | «Gym rat», code ALYNEAHFR | — | DM Insta |
-| C | Elisa | Ebert | @lou_eeb | 106K | Kiné + coach, Nutrimuscle | — | DM Insta |
-| C | Lynda |  | @little__beaast | 74K | Fondatrice Little BEAST | — | DM Insta |
-| C | Manue |  | @iam_manueb | 21K | Gymgirl, -13 kg | — | DM Insta |
-| C | Christelle | Mouandjo | @cricri.strongwoman | 12K | Strongwoman (France's Strongest Woman 2026) | — | DM Insta |
-| C | Capucine «Caps» |  | @capucine.chvl | 9,2K | Coach diplômée | — | DM Insta |
-| C | Lydie |  | @lydiee.fit | 7,5K | Coach sportive | — | DM Insta |
-| C | Iloa | Fernandes | @iloafnd | 5,7K | Fitness, musculation, nutrition | — | DM Insta |
-| C | Julia | Allain-Schöning | @yu.arefit | 5,7K | Powerlifting -69 kg, coach | — | DM Insta |
-| C | Lola | Dumenil | @dumenil_lola | 126K | Fitness/lifestyle, TEVEO, proche Corona Gym | — | DM Insta |
-| C | Nina | Smits | @leanwithnien | 16K | ⚠ Influencer Manager chez TEVEO (contact interne marque, NL) | — | DM Insta |
-
-## À savoir
-
-- **« Bison » : toujours pas identifié.** Une vidéo TikTok de Corona Gym Bordeaux tague « @BISON », mais je n'ai pas pu confirmer le compte. Donne-moi son lien Insta si tu l'as.
-- **Écartés volontairement** : « La Menace » (Bordeaux, visé par des enquêtes presse pour contenu masculiniste, risqué pour l'image de marque), les profils yoga/running/Hyrox purs.
-- **Nina Smits (@leanwithnien)** est *Influencer Manager chez TEVEO* : c'est un contact côté marque, utile si un jour tu veux un partenariat TEVEO × RepCore.
-- **Bonus hors France** : la recherche TEVEO a aussi sorti ~20 profils allemands, néerlandais, italiens et polonais (dont 12 avec mail). Je ne les ai pas mis dans la liste, car l'appli est en français. Dis-moi si tu les veux.
-
-## Cadre légal (RGPD / CNIL)
-
-- Prospection B2B vers une **adresse pro publiée par la personne** + message **en lien avec son activité** → autorisé sans consentement préalable.
-- Dans chaque mail : qui tu es (RepCore), d'où vient l'adresse (« publiée sur votre profil »), et un **désabonnement simple** (« répondez STOP »).
-- Un mail **individuel et personnalisé** par personne (jamais tout le monde en copie visible), 2 relances maximum, pas d'achat de fichiers.
-- Les adresses marquées ⚠ (coaching, société) : préciser dès la 1re ligne qu'il s'agit d'une proposition de partenariat.
+coronagymoff@gmail.com · contact@coronagym.fr · coronagymbordeauxcentre@gmail.com
