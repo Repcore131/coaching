@@ -354,7 +354,7 @@ PAGES.clubs = {
   render() {
     const tab = UI.clubTab || 'clubs';
     return `<div class="page-head"><div><h1>Mes clubs</h1><p>Uniquement nos clubs Fitness Park. Aucun autre club ne voit ces données.</p></div><span class="spacer"></span>${tab === 'clubs' && isCreator() ? `<button class="btn primary" data-act="clubForm">${ico('plus')} Ajouter un club</button>` : ''}</div>
-      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(isManager() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, settings: isManager() ? clubSettings : clubList }[tab]()}`;
+      ${tabs('clubTab', [['clubs', 'Nos clubs'], ['base', 'Adhérents'], ...(myClubs().length > 1 && isManager() ? [['compare', 'Comparatif']] : []), ...(isManager() ? [['settings', 'Réglages']] : [])], tab)}${{ clubs: clubList, base: clubBase, compare: myClubs().length > 1 ? clubCompare : clubList, settings: isManager() ? clubSettings : clubList }[tab]()}`;
   },
 };
 function clubList() {

@@ -989,3 +989,17 @@ td.to-check { background: var(--warn-soft); }
 .hours div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; text-align: center; font-size: 11px; }
 .hours i { align-self: end; background: var(--fp); border-radius: 6px 6px 0 0; min-height: 2px; }
 .hours small { color: var(--muted); }
+.prime-sim { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.prime-card { margin-bottom: 18px; }
+.bilan-print { display: none; }
+@media print {
+  body.printing-bilan > *:not(.bilan-print) { display: none !important; }
+  body.printing-bilan .bilan-print { display: block; color: #000; background: #fff; font-family: var(--font); padding: 0; }
+  .bilan-print header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 14px; font-size: 12px; }
+  .bilan-print h1 { font-size: 22px; margin: 0 0 8px; }
+  .bilan-print table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; break-inside: avoid; }
+  .bilan-print th, .bilan-print td { border: 1px solid #999; padding: 5px 8px; text-align: left; }
+  .bilan-note { border: 1px solid #000; min-height: 160px; padding: 10px; margin-top: 16px; break-inside: avoid; }
+  .card { break-inside: avoid; }
+  @page { size: A4; margin: 14mm; }
+}

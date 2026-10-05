@@ -283,6 +283,10 @@ function actionPoints(userId, from, to) {
     return tot;
   });
 }
+// Points cumulés depuis un mois donné (classement « 12 derniers mois »).
+function pointsSince(userId, sinceMk) {
+  return memo(`ps|${userId}|${sinceMk}`, () => { const u = S.users[userId]; if (!u) return 0; let pts = 0; for (const mk of pastMonths().filter(m => m >= sinceMk)) for (const c of u.clubs || []) { const st = statsFor(c, userId, rangeOf('month', mk)); pts += st.earned + overBonus(st); } pts += trophies(userId).filter(t => t.kind === 'flash' && (t.mk || '') >= sinceMk).length * 200; pts += actionPoints(userId, sinceMk + '-01', today()); return Math.round(pts); });
+}
 function levelOf(pts) { let l = LEVELS[0]; for (const x of LEVELS) if (pts >= x.min) l = x; const next = LEVELS[LEVELS.indexOf(l) + 1]; return { ...l, next }; }
 
 function allTrophies() {
@@ -336,6 +340,9 @@ function allTrophies() {
         Object.entries(sc).forEach(([uid, s]) => { if (s == null) return; if (best[uid] != null && s > best[uid] + 1e-9) out.push({ userId: uid, kind: 'perso', icon: 'flag', label: `Record personnel ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); best[uid] = Math.max(best[uid] ?? -1, s); });
         if (prevScores) { const up = Object.entries(sc).filter(([uid, s]) => s != null && prevScores[uid] != null).map(([uid, s]) => [uid, s - prevScores[uid]]).sort((a, b) => b[1] - a[1])[0]; if (up && up[1] > 0.005) out.push({ userId: up[0], kind: 'perso', icon: 'sparkle', label: `Plus belle progression ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); }
         prevScores = sc;
+        const r0 = dateOf(mk + '-01').getTime(), r1 = dateOf(addMonths(mk, 1) + '-01').getTime();
+        const pil = team.map(u => ({ u, n: Object.values(S.loyalty || {}).filter(a => a.userId === u.id && a.at >= r0 && a.at < r1 && (OUTCOMES[a.outcome] || {}).done && !(OUTCOMES[a.outcome] || {}).lost).length })).sort((a, b) => b.n - a.n)[0];
+        if (pil && pil.n >= 15) out.push({ userId: pil.u.id, kind: 'perso', icon: 'heart', label: `Pilier rétention ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
         team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = new Set(Object.values(S.entries).filter(e => e.userId === u.id && e.source === 'manual' && e.date.slice(0, 7) === mk).map(e => e.date)); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }

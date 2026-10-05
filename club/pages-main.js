@@ -418,9 +418,10 @@ PAGES.leaderboard = {
         <p class="muted small" style="margin-bottom:0">Égalités départagées par les points, puis par ordre alphabétique. ${kpi ? '' : 'Classement global calculé sur les KPI obligatoires.'}</p></div>`;
     }
     const atMode = UI.atMode || 'score';
-    const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'pending').map(u => ({ u, pts: allTime(u.id), tr: trophies(u.id).length }));
+    const y12 = (UI.atRange || '12') === '12'; const since = addMonths(curMonth(), -11);
+    const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'pending').map(u => ({ u, pts: y12 ? pointsSince(u.id, since) : allTime(u.id), tr: trophies(u.id).filter(t => !y12 || (t.mk || '') >= since).length }));
     all.sort((a, b) => atMode === 'score' ? b.pts - a.pts : b.tr - a.tr);
-    const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div>
+    const side = `<div class="card"><div class="card-head"><h3>Performance all-time</h3><span class="spacer"></span>${seg('atMode', [['score', 'Score'], ['badges', 'Badges']], atMode)}</div><div style="margin-bottom:8px">${seg('atRange', [['12', '12 derniers mois'], ['all', 'Depuis le début']], UI.atRange || '12')}</div>
       ${all.map((x, i) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><b class="title" style="width:22px;color:var(--muted)">${i + 1}</b>${avatar(x.u, 'xs')}<span class="spacer">${esc(fullName(x.u))}${x.u.status === 'archived' ? ' <span class="badge">archivé</span>' : ''}</span><b>${atMode === 'score' ? fmtN(x.pts) + ' pts' : plur(x.tr, 'trophée', 'trophées')}</b></div>`).join('')}
       <p class="muted small">Points cumulés : étapes atteintes chaque mois, bonus de dépassement, points d’action des relances et 200 pts par défi flash gagné.</p></div>`;
     return `<div class="page-head"><div><h1>Classement</h1><p>${esc(scope === 'clubs' ? 'Nos clubs' : CLUB.name)} · ${r.label}</p></div></div>

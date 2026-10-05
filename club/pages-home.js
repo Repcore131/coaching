@@ -199,6 +199,7 @@ PAGES.home = {
       ${manager ? saisonBanner() : ''}
       ${wrapBanner()}
       ${manager ? '' : myPlanCard()}
+      ${manager ? '' : primeCard()}
       <div class="g12 home-now">
         <div class="card col6 ma-journee"><div class="race-h"><div><div class="eyebrow">${dayLabel(today())}</div><h3>Ma journée</h3></div></div>
           <div class="mj-top"><div><b class="num-l">${fmtP(myPct)}</b><span>score du mois</span></div><div><b class="num-l">${me ? me.rank + '<sup>' + (me.rank === 1 ? 'er' : 'e') + '</sup>' : 'n.d.'}</b><span>sur ${rk.length}</span></div><div><b class="num-l">J-${daysLeft - 1}</b><span>fin du mois</span></div>${healthChip(myHealth)}</div>
@@ -293,12 +294,12 @@ function memPaliers() {
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('palMonth', mk)}<span class="spacer"></span><button class="btn sm" data-act="palPropose">Proposer d’après les objectifs</button>${saved ? '<span class="badge ok">Réglés pour ce mois</span>' : '<span class="badge warn">Repris du mois précédent : enregistrez pour les figer</span>'}</div>
     <p class="muted small">Objectifs COLLECTIFS du club : chaque saisie de l’équipe fait avancer la barre, visible sur l’accueil de tous. Laissez un seuil vide pour retirer un palier.</p>
     <div class="grid">${rows.map(k => `<div class="card"><div class="card-head"><h3>${esc(S.kpis[k] ? S.kpis[k].label : k)}</h3><span class="spacer"></span><button class="btn ghost sm danger" data-act="palDel" data-k="${k}">Retirer</button></div>
-      <div class="table-wrap"><table class="t"><thead><tr><th>Palier</th><th class="num">Seuil (équipe)</th><th>Récompense</th></tr></thead><tbody>${[0, 1, 2].map(i => { const t = (p[k] || [])[i] || {}; return `<tr><td><b>P${i + 1}</b></td><td class="num"><input class="cell" type="number" min="0" value="${t.target || ''}" data-pal="${k}" data-i="${i}" data-f="target"></td><td><input class="input sm" value="${esc(t.reward || '')}" placeholder="ex. Prime 100 € chacun" data-pal="${k}" data-i="${i}" data-f="reward"></td></tr>`; }).join('')}</tbody></table></div></div>`).join('')}</div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Palier</th><th class="num">Seuil (équipe)</th><th class="num">€ par personne</th><th>Récompense</th></tr></thead><tbody>${[0, 1, 2].map(i => { const t = (p[k] || [])[i] || {}; return `<tr><td><b>P${i + 1}</b></td><td class="num"><input class="cell" type="number" min="0" value="${t.target || ''}" data-pal="${k}" data-i="${i}" data-f="target"></td><td class="num"><input class="cell" type="number" min="0" value="${t.amount || ''}" data-pal="${k}" data-i="${i}" data-f="amount"></td><td><input class="input sm" value="${esc(t.reward || '')}" placeholder="ex. Prime 100 € chacun" data-pal="${k}" data-i="${i}" data-f="reward"></td></tr>`; }).join('')}</tbody></table></div></div>`).join('')}</div>
     <div class="row wrap" style="margin-top:12px"><select class="input sm" style="width:auto" id="pal-add">${kpis.filter(k => !rows.includes(k.id)).map(k => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select><button class="btn sm" data-act="palAdd">${ico('plus')} Ajouter un objectif collectif</button><span class="spacer"></span><button class="btn primary" data-act="palSave" data-mk="${mk}">Enregistrer les paliers de ${monthLabel(mk)}</button></div>`;
 }
 function palRead(mk) {
   const p = JSON.parse(JSON.stringify(paliersFor(CLUB.id, mk)));
-  $$('[data-pal]').forEach(el => { const k = el.dataset.pal, i = Number(el.dataset.i); p[k] = p[k] || []; while (p[k].length <= i) p[k].push({ target: 0, reward: '' }); p[k][i][el.dataset.f] = el.dataset.f === 'target' ? toNum(el.value) : el.value.trim(); });
+  $$('[data-pal]').forEach(el => { const k = el.dataset.pal, i = Number(el.dataset.i); p[k] = p[k] || []; while (p[k].length <= i) p[k].push({ target: 0, reward: '' }); p[k][i][el.dataset.f] = el.dataset.f === 'target' || el.dataset.f === 'amount' ? toNum(el.value) : el.value.trim(); });
   Object.keys(p).forEach(k => { p[k] = p[k].filter(t => Number(t.target) > 0).sort((a, b) => a.target - b.target); });
   return p;
 }
