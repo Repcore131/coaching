@@ -110,6 +110,12 @@ export const REGLE = `${DEBUT}
         ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
       }
     },
+    "pulse_inbox": {
+      "$uid": {
+        ".read": ${j(`${MEMBRE} && $uid === ${SOI}`)},
+        "$id": { "readAt": { ".write": ${j(`${MEMBRE} && $uid === ${SOI} && data.parent().exists()`)} } }
+      }
+    },
     "pulse_push": {
       "$uid": {
         ".read": false,
@@ -289,7 +295,7 @@ async function main() {
   await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
   await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
   // Notifications push (téléphone fermé).
-  try { const S = (await (await api(tk, 'pulse.json')).json()) || {}; console.log('Push :', JSON.stringify(await passagePush(api, tk, S))); } catch (e) { console.log('Push : échec,', e.message); }
+  try { const S = (await (await api(tk, 'pulse.json')).json()) || {}; const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
   const boite = await (await api(tk, 'fitpulse_mail.json')).json() || {};
   const ids = Object.keys(boite).slice(0, MAX_PAR_PASSAGE);
   console.log(`${Object.keys(boite).length} demande(s) en attente`);

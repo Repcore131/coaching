@@ -32,7 +32,7 @@ function openModal({ title, body, foot = '', wide = false, drawer = false, onMou
   $$('[data-close]', ov).forEach(b => b.addEventListener('click', closeModal));
   modalClose = onClose;
   if (onMount) onMount($('.modal', ov));
-  const f = $('input:not([type=hidden]),select,textarea', $('.modal-body', ov)); if (f && !drawer) setTimeout(() => f.focus(), 30);
+  const f = $('input:not([type=hidden]),select,textarea', $('.modal-body', ov)); if (f && !drawer) setTimeout(() => { const m = $('.modal', ov); if (m && !m.contains(document.activeElement)) f.focus(); }, 30);
   return $('.modal', ov);
 }
 function closeModal() { const r = $('#modal-root'); if (r && r.innerHTML) { r.innerHTML = ''; const f = modalClose; modalClose = null; if (f) f(); const o = modalOpener; modalOpener = null; if (o && o.isConnected && o.focus) try { o.focus({ preventScroll: true }); } catch (_) { /* rien */ } } }

@@ -13,6 +13,16 @@ const NOTIF_RULES = {
   live: { label: 'Saisies des collègues en direct', ex: 'Hugo Lefèvre : +1 Contrats signés, Fitness Park Niort' },
   alertes: { label: 'Signaux faibles de l’équipe, à 9 h', ex: '2 signaux faibles à regarder.', manager: true },
   digest: { label: 'Bilan de la semaine, le lundi', ex: 'Votre bilan de la semaine est prêt.' },
+  am_digest: { label: 'Votre journée, à 7 h 45', ex: '3 relances à votre nom aujourd’hui.' },
+  pm_digest: { label: 'Bilan du jour, à 19 h 30', ex: '4 saisies aujourd’hui. Équipe : 6 contrats.' },
+  dun_promise: { label: 'Promesse de paiement non tenue', ex: 'Le paiement promis n’est pas arrivé. Relancez aujourd’hui.' },
+  obj_late: { label: 'Objectif en retard (mardi et jeudi)', ex: 'Contrats signés en retard : 4 sur 12. 1 par jour pour finir.' },
+  record: { label: 'Record personnel battu', ex: 'Votre meilleur mois en contrats signés : 14.' },
+  dun_new: { label: 'Nouveaux impayés après un import', ex: '3 nouveaux dossiers, 180 € au total.', manager: true },
+  res_noowner: { label: 'Résiliations sans responsable depuis 24 h', ex: '2 résiliations attendent depuis 24 h.', manager: true },
+  anomalie: { label: 'Chiffre à vérifier', ex: 'Une saisie de Nutrition sort de l’ordinaire.', manager: true },
+  mgr_silent: { label: 'Commercial sans saisie depuis 2 jours', ex: 'Lucas n’a rien saisi depuis 2 jours.', manager: true },
+  rsm: { label: 'Imports Resamania à faire', ex: '4 sur 7 exports faits.', manager: true },
 };
 const notifPrefs = () => { const p = pref('notif', null) || {}; return { rules: p.rules || {}, quiet: { from: '20:30', to: '08:00', sunday: true, ...(p.quiet || {}) }, max: Number(p.max) || 6 }; };
 const ruleOn = id => id === 'live' ? pref('liveBanner', true) !== false : id === 'digest' ? pref('digest', true) !== false : notifPrefs().rules[id] !== false;
@@ -25,6 +35,8 @@ const unread = () => inbox().filter(x => !x.readAt).length;
 
 function notify(kind, text, href = '', { title = 'Fit Pulse', key = '', toastIt = true } = {}) {
   if (!ME || !ruleOn(kind)) return;
+  // Serveur d'envoi actif : il gère déjà cette alerte (cloche et téléphone), l'appli n'affiche que le message.
+  const srv = (S && S.serveur) || {}; if (['relances_jour', 'res_j7', 'digest', 'res_new', 'defi', 'palier'].includes(kind) && srv.at && Date.now() - srv.at < 3600e3) { if (toastIt && !document.hidden && kind !== 'relances_jour' && kind !== 'digest' && kind !== 'res_j7') toast(text); return; }
   const L = inbox(); if (key && L.some(x => x.key === key)) return;
   title = title === 'Fit Pulse' ? (NOTIF_TITLE[kind] || title) : title;
   const id = newId(); L.unshift({ id, key, kind, title, body: String(text).slice(0, 200), url: href, at: Date.now() }); saveInbox(L);
@@ -57,8 +69,8 @@ ACTIONS.bell = () => {
     ${L.length ? groups.filter(g => g[1].length).map(([l, g]) => `<div class="nt-g">${l}</div>${g.map(x => `<button class="nt-row ${x.readAt ? '' : 'unread'}" data-act="notifOpen" data-id="${esc(x.id)}"><span class="nt-ico">${ico(NOTIF_ICON[x.kind] || 'bell')}</span><span class="spacer"><b>${esc(x.title)}</b><span>${esc(x.body)}</span><small>${ago(x.at)}</small></span>${x.readAt ? '' : '<i class="nt-dot"></i>'}</button>`).join('')}`).join('') : emptyBox({ art: 'done', title: 'Aucune notification', text: 'Les nouveautés de l’équipe et vos rappels apparaîtront ici.' })}`,
     foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
 };
-const NOTIF_TITLE = { relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: 'Défi flash', live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
-const NOTIF_ICON = { relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
+const NOTIF_TITLE = { am_digest: 'Votre journée', pm_digest: 'Bilan du jour', dun_promise: 'Promesse non tenue', obj_late: 'Objectif en retard', record: 'Record battu', dun_new: 'Nouvel impayé', res_noowner: 'Dossier sans responsable', anomalie: 'Chiffre à vérifier', mgr_silent: 'Commercial sans saisie', rsm: 'Imports Resamania', relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: 'Défi flash', live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
+const NOTIF_ICON = { am_digest: 'sun', pm_digest: 'chart', dun_promise: 'coins', obj_late: 'target', record: 'flag', dun_new: 'coins', res_noowner: 'door', anomalie: 'alert', mgr_silent: 'users', rsm: 'upload', relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
 ACTIONS.notifOpen = el => { const L = inbox(); const x = L.find(m => m.id === el.dataset.id); if (!x) return; x.readAt = Date.now(); saveInbox(L); closeModal(); bellRefresh(); if (x.url) location.hash = x.url; };
 ACTIONS.notifAllRead = () => { const L = inbox(); L.forEach(x => { x.readAt = x.readAt || Date.now(); }); saveInbox(L); closeModal(); bellRefresh(); };
 
@@ -150,6 +162,29 @@ async function pushSubscribe() {
   safeLS.set('fitpulse.pushKey', key); safeLS.set('fitpulse.pushId', `${ME.id}/${h}`);
   return sub;
 }
-async function pushForget() { try { const id = safeLS.get('fitpulse.pushId'); if (id && backend.fb) await backend.fb.database().ref(`pulse_push/${id}`).remove(); safeLS.del('fitpulse.pushId'); const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (_) { /* rien */ } }
+async function pushForget() { if (INBOX_REF) { INBOX_REF.off(); INBOX_REF = null; } try { const id = safeLS.get('fitpulse.pushId'); if (id && backend.fb) await backend.fb.database().ref(`pulse_push/${id}`).remove(); safeLS.del('fitpulse.pushId'); const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (_) { /* rien */ } }
 // À chaque ouverture : abonnement remis à jour si les alertes sont autorisées.
 setTimeout(() => { pushSubscribe().catch(() => null); }, 6000);
+
+// ── Boîte de réception du serveur (notifications envoyées téléphone fermé) ─
+let INBOX_REF = null;
+function inboxListen() {
+  if (INBOX_REF || !ME || backend.mode !== 'firebase' || !backend.fb) return;
+  INBOX_REF = backend.fb.database().ref(`pulse_inbox/${ME.id}`).orderByChild('at').limitToLast(50);
+  INBOX_REF.on('value', snap => { const srv = snap.val() || {}; const L = inbox(); let changed = false;
+    Object.entries(srv).forEach(([id, x]) => { const sid = 'srv_' + id; const cur = L.find(m => m.id === sid); if (!cur) { L.push({ id: sid, key: sid, kind: x.kind, title: x.title, body: x.body, url: x.url, at: x.at, readAt: x.readAt || null }); changed = true; } else if (x.readAt && !cur.readAt) { cur.readAt = x.readAt; changed = true; } });
+    if (changed) { L.sort((a, b) => b.at - a.at); saveInbox(L); bellRefresh(); } }, () => { INBOX_REF = null; });
+}
+setInterval(inboxListen, 15000); setTimeout(inboxListen, 3000);
+const _notifOpen = ACTIONS.notifOpen;
+ACTIONS.notifOpen = el => { const id = el.dataset.id; if (id && id.startsWith('srv_') && backend.mode === 'firebase' && ME) backend.fb.database().ref(`pulse_inbox/${ME.id}/${id.slice(4)}/readAt`).set(Date.now()).catch(() => null); _notifOpen(el); };
+
+// ── Manager : alertes envoyées ce mois, et pause pour le club ────────────
+function alertsCard() {
+  if (!isManager()) return ''; const mk = curMonth(); const st = deepGet(S, ['serveur', 'stats', mk]) || {}; const srv = S.serveur || {}; const paused = !!(S.clubs[CLUB.id] || {}).notifPaused;
+  const alive = srv.at && Date.now() - srv.at < 3600e3;
+  return `<div class="card"><h3>Alertes de l’équipe</h3><p class="small">${alive ? `Serveur d’envoi actif (dernier passage ${ago(srv.at)}). Messagerie ${srv.mail ? 'réglée : invitations envoyées automatiquement' : 'non réglée : invitations par le bouton Envoyer par e-mail'}.` : 'Serveur d’envoi pas encore passé, ou arrêté depuis plus d’une heure.'}</p>
+    ${Object.keys(st).length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Alerte</th><th class="num">Envoyées ce mois</th></tr></thead><tbody>${Object.entries(st).sort((a, b) => b[1] - a[1]).map(([r, n]) => `<tr><td>${esc((NOTIF_RULES[r] || {}).label || r)}</td><td class="num">${fmtN(n)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Aucune alerte envoyée ce mois-ci.</p>'}
+    <label class="row small" style="margin-top:10px"><input type="checkbox" data-change="notifPause" ${paused ? 'checked' : ''}> Mettre les alertes en pause pour ${esc(CLUB.name)} (elles restent dans la cloche)</label></div>`;
+}
+ACTIONS.notifPause = el => { db.set(['clubs', CLUB.id, 'notifPaused'], el.checked || null); toast(el.checked ? 'Alertes en pause' : 'Alertes réactivées'); };

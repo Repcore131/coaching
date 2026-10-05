@@ -320,6 +320,7 @@ function shopCard(mk, userId = null) {
   if (s.sansNum) return `<div class="card"><h3>Boutique et nouveaux adhérents</h3><p class="muted small">Export sans numéro client : utilisez Factures & avoirs (gestion).</p></div>`;
   const line = (l, v, ref) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">${l}</span><b>${v}</b>${ref != null ? `<span class="muted small" style="margin-left:8px">club ${ref}</span>` : ''}</div>`;
   return `<div class="card"><h3>Boutique et nouveaux adhérents</h3><p class="muted small">${plur(s.n, 'nouvel adhérent', 'nouveaux adhérents')} ce mois-ci.</p>
+    ${(() => { const goal = Number((S.clubs[CLUB.id] || {}).attachTarget) || 0.25; const v = s.sig == null && s.j15 == null ? null : Math.max(s.sig || 0, s.j15 || 0); return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="spacer">Objectif d’attachement nutrition</span><b>${fmtP(goal)}</b>${v != null ? `<span class="tag ${v >= goal ? 'is-ok' : 'is-warn'}" style="margin-left:8px">${v >= goal ? 'atteint' : 'à travailler'}</span>` : ''}</div>`; })()}
     ${line('Achat le jour de la signature', fmtTaux(s.sig), c ? fmtTaux(c.sig) : null)}${line('Achat entre J+2 et J+30', fmtTaux(s.j15), c ? fmtTaux(c.j15) : null)}${line('Panier moyen par acheteur', s.panier == null ? 'n.d.' : fmtE(s.panier), c && c.panier != null ? fmtE(c.panier) : null)}${userId ? '' : line('Boutique par adhérent actif', s.parActif == null ? 'n.d.' : fmtE(s.parActif), null)}</div>`;
 }
 

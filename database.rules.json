@@ -57,6 +57,12 @@
         ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
       }
     },
+    "pulse_inbox": {
+      "$uid": {
+        ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()",
+        "$id": { "readAt": { ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && $uid === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() && data.parent().exists()" } }
+      }
+    },
     "pulse_push": {
       "$uid": {
         ".read": false,
