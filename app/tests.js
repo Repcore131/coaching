@@ -23655,6 +23655,88 @@ async function testExercices(){
       if((z.querySelector('.pc-per .actif')||{}).textContent!=='12S') return _echec('12S n’est pas actif');
       return true;});
 
+    // ── LA BULLE DIT LA TENDANCE, PAS UNE PESÉE (05/10/2026) ─────────────
+    // Kevin : la bulle changeait de signe sur une seule pesée haute. Elle lit
+    // maintenant l'écart de moyenne 7 jours, calculée sur la série COMPLÈTE.
+    const _bruit=i=>[0.8,-0.8,0.5,-0.6,0.7,-0.3,0.2][i%7];
+    ok('La bulle suit la tendance sur une série bruitée (±0,8 kg) qui baisse de 0,5 kg/sem',()=>{
+      const s=_ps(120,i=>85-i*0.5/7+_bruit(i));
+      s[s.length-1].kg+=0.8;                         // une pesée haute en dernier
+      const h=_courbePesee(s,{jours:28});
+      const b=_courbePesee.derniereBulle;
+      if(!b||b.base!=='tendance') return _echec('la bulle ne lit pas la tendance : '+JSON.stringify(b));
+      if(!(b.ecart<-1.4&&b.ecart>-2.6)) return _echec('écart de tendance hors de ~−2 kg : '+b.ecart);
+      if(!/pc-bul-lib">tendance</.test(h)) return _echec('le libellé « tendance » manque');
+      // Sur toute fenêtre de 7 jours glissée sur la série, jamais de signe +.
+      for(let k=40;k<=120;k+=7){
+        _courbePesee(s.slice(0,k+1),{jours:28});
+        if(_courbePesee.derniereBulle.ecart>0) return _echec('signe + au jour '+k);
+      }
+      return true;});
+    ok('La tendance est tracée dès le 1er jour de la fenêtre quand des pesées la précèdent',()=>{
+      const s=_ps(60,i=>80-i/14);
+      const h=_courbePesee(s,{jours:7,serieComplete:s});
+      const d=(h.match(/data-trait="moyenne"[^>]*d="([^"]+)"/)||h.match(/d="([^"]+)"[^>]*data-trait="moyenne"/)||[])[1]||'';
+      const pts=(d.match(/[ML]/g)||[]).length;
+      if(pts<7) return _echec('la tendance ne couvre pas la fenêtre : '+pts+' point(s)');
+      return /^M0\.00 /.test(d)?true:_echec('la tendance ne part pas du 1er jour : '+d.slice(0,20));});
+    ok('Sans tendance possible, la bulle retombe sur les pesées et le dit',()=>{
+      const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
+      return _courbePesee.derniereBulle.base==='pesees'&&/pc-bul-lib">pesées</.test(h);});
+    ok('Projection : une pente nulle s’écrit « stable », jamais « −0 kg »',()=>{
+      const J=864e5, t=Date.now();
+      const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+      const wl=[]; for(let k=26;k>=0;k-=2) wl.push({date:iso(t-k*J),kg:80});
+      const h=_htmlCcdProjection({id:'st',email:'st@t.fr',role:'athlete',weightLog:wl,bilans:[]});
+      if(!/soit stable\./.test(h)) return _echec(h);
+      return /[−+]0 kg/.test(h)?_echec('un zéro signé subsiste'):true;});
+
+    // ── L'OBJECTIF DE POIDS ───────────────────────────────────────────────
+    const _uObj=(pente,o)=>{
+      const J=864e5, t=Date.now();
+      const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+      const wl=[]; for(let k=27;k>=0;k--) wl.push({date:iso(t-k*J),kg:Math.round((85+(27-k)*pente/7)*10)/10});
+      return Object.assign({id:'ob',email:'ob@t.fr',role:'athlete',gender:'H',weightLog:wl,bilans:[]},o||{});
+    };
+    ok('Objectif de poids refusé sous TCA, et rien ne s’affiche',()=>{
+      const u=_uObj(-0.5,{tcaRisque:true,bilans:[{type:'depart','deb-tca':'anorexie il y a 5 ans'}]});
+      const r=poserObjectifPoids(u,'78','athlete');
+      if(r.ok||u.objectifPoids) return _echec('objectif accepté sous TCA');
+      u.objectifPoids={kg:78,fixeLe:1,par:'coach'};
+      if(objectifPoidsDe(u)||phraseObjectifPoids(u)||_htmlObjectifPoidsAthlete(u)||_htmlObjectifPoidsCoach(u))
+        return _echec('un objectif transparaît sous TCA');
+      return true;});
+    ok('Objectif masqué avec le poids',()=>{
+      const u=_uObj(-0.5,{masquerPoids:true});
+      return !poserObjectifPoids(u,'80','athlete').ok&&!objectifPoidsDe(Object.assign(u,{objectifPoids:{kg:80}}));});
+    ok('Objectif posé : date estimée et fourchette, jamais au-delà de 26 semaines',()=>{
+      const u=_uObj(-0.5);
+      const r=poserObjectifPoids(u,'81','athlete',123);
+      if(!r.ok) return _echec('refusé : '+r.raison);
+      if(u.objectifPoids.par!=='athlete'||u.objectifPoids.kg!==81) return _echec(JSON.stringify(u.objectifPoids));
+      const e=estimationObjectifPoids(u);
+      if(!e||!e.date) return _echec('aucune date : '+JSON.stringify(e));
+      const sem=(e.date-Date.now())/(7*864e5);
+      if(sem<4||sem>12) return _echec('date incohérente : '+sem+' sem');
+      if(!(e.bas<=e.date&&(!e.haut||e.date<=e.haut))) return _echec('fourchette');
+      if(!/^Au rythme actuel : objectif vers le .+ \(fourchette .+ – .+\)\.$/.test(phraseObjectifPoids(u))) return _echec(phraseObjectifPoids(u));
+      u.objectifPoids.kg=60;
+      const l=estimationObjectifPoids(u);
+      return l&&l.loin&&!l.date?true:_echec('au-delà de 26 semaines : '+JSON.stringify(l));});
+    ok('Pente opposée à l’objectif : aucune date estimée',()=>{
+      const u=_uObj(+0.5,{objectifPoids:{kg:80,fixeLe:1,par:'coach'}});
+      const e=estimationObjectifPoids(u);
+      if(!e||!e.oppose||e.date) return _echec(JSON.stringify(e));
+      const p=phraseObjectifPoids(u);
+      return p==='La tendance ne va pas vers l’objectif pour l’instant.'&&!/vers le/.test(p)?true:_echec(p);});
+    ok('Sans projection, aucune phrase d’objectif',()=>{
+      const u={id:'o2',email:'o2@t.fr',role:'athlete',weightLog:[{date:_pj(0),kg:80}],bilans:[],objectifPoids:{kg:75,fixeLe:1,par:'athlete'}};
+      return phraseObjectifPoids(u)==='';});
+    ok('La ligne d’objectif est tracée sur la courbe',()=>{
+      const s=_ps(40,i=>85-i/14);
+      const h=_courbePesee(s,{objectif:82});
+      return /class="pc-obj" style="top:[\d.]+%"/.test(h)&&/objectif 82 kg/.test(h);});
+
     // ── UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION ──────────────────
     // Même signalement : « les mensurations restées identiques et inchangées
     // devraient être affichées et comptées même dans les graphiques — le but,

@@ -2224,7 +2224,10 @@ function ccdProjection(u,semaines){
   return {valeur:Math.round(valeur*10)/10,
     bas:Math.round((valeur-marge)*10)/10,haut:Math.round((valeur+marge)*10)/10,
     date:d.getTime(),kgSem:Math.round(pente*7*100)/100,n:n,
-    debut:dans[0].date,fin:fin,semaines:sem};
+    debut:dans[0].date,fin:fin,semaines:sem,
+    // Pour l'estimation d'un objectif (05/10/2026) : la valeur ajustée au
+    // dernier jour, la pente par jour et son incertitude.
+    courant:ord+pente*xFin,penteJour:pente,sePente};
 }
 // « 21 octobre ».
 function _ccdJourLong(ts){
@@ -2260,7 +2263,8 @@ function _htmlCcdProjection(u){
   return '<p class="ccd-proj"><b>'+escapeHtml('Au rythme des quatre dernières semaines : '
       +_synNombre(p.valeur)+' kg le '+_ccdJourLong(p.date)+'.')+'</b><br>'
     +escapeHtml(p.n+' pesées du '+_ccdJourISO(p.debut)+' au '+_ccdJourISO(p.fin)+', soit '
-      +(p.kgSem>0?'+':'−')+_synNombre(p.kgSem)+' kg par semaine. À cette date, la fourchette '
+      // Sous 0,05 kg par semaine : « stable », jamais « −0 kg ».
+      +(Math.abs(p.kgSem)<0.05?'stable':((p.kgSem>0?'+':'−')+_synNombre(Math.abs(p.kgSem))+' kg par semaine'))+'. À cette date, la fourchette '
       +'va de '+_synNombre(p.bas)+' à '+_synNombre(p.haut)+' kg. Une tendance n’est pas une promesse.')
     +'</p>';
 }

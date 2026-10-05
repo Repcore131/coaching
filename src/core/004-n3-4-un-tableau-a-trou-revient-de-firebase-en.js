@@ -748,6 +748,8 @@ const CHAMPS_SANTE=Object.freeze([
   'sleepLog','stepsLog','fcReposLog','vfcLog',
   // La masse grasse MESURÉE (05/10/2026) : synchronisée ou saisie au bilan.
   'masseGrasseLog',
+  // L'objectif de poids (05/10/2026) : une cible de poids, donnée de santé.
+  'objectifPoids',
   // Le point de la semaine (lot N1) : la vitesse du poids, semaine par semaine.
   'pointsSemaine','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.

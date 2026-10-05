@@ -7661,6 +7661,8 @@ const CHAMPS_SANTE=Object.freeze([
   'sleepLog','stepsLog','fcReposLog','vfcLog',
   // La masse grasse MESURÉE (05/10/2026) : synchronisée ou saisie au bilan.
   'masseGrasseLog',
+  // L'objectif de poids (05/10/2026) : une cible de poids, donnée de santé.
+  'objectifPoids',
   // Le point de la semaine (lot N1) : la vitesse du poids, semaine par semaine.
   'pointsSemaine','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
@@ -59677,7 +59679,10 @@ function ccdProjection(u,semaines){
   return {valeur:Math.round(valeur*10)/10,
     bas:Math.round((valeur-marge)*10)/10,haut:Math.round((valeur+marge)*10)/10,
     date:d.getTime(),kgSem:Math.round(pente*7*100)/100,n:n,
-    debut:dans[0].date,fin:fin,semaines:sem};
+    debut:dans[0].date,fin:fin,semaines:sem,
+    // Pour l'estimation d'un objectif (05/10/2026) : la valeur ajustée au
+    // dernier jour, la pente par jour et son incertitude.
+    courant:ord+pente*xFin,penteJour:pente,sePente};
 }
 // « 21 octobre ».
 function _ccdJourLong(ts){
@@ -59713,7 +59718,8 @@ function _htmlCcdProjection(u){
   return '<p class="ccd-proj"><b>'+escapeHtml('Au rythme des quatre dernières semaines : '
       +_synNombre(p.valeur)+' kg le '+_ccdJourLong(p.date)+'.')+'</b><br>'
     +escapeHtml(p.n+' pesées du '+_ccdJourISO(p.debut)+' au '+_ccdJourISO(p.fin)+', soit '
-      +(p.kgSem>0?'+':'−')+_synNombre(p.kgSem)+' kg par semaine. À cette date, la fourchette '
+      // Sous 0,05 kg par semaine : « stable », jamais « −0 kg ».
+      +(Math.abs(p.kgSem)<0.05?'stable':((p.kgSem>0?'+':'−')+_synNombre(Math.abs(p.kgSem))+' kg par semaine'))+'. À cette date, la fourchette '
       +'va de '+_synNombre(p.bas)+' à '+_synNombre(p.haut)+' kg. Une tendance n’est pas une promesse.')
     +'</p>';
 }
@@ -121240,30 +121246,44 @@ function _pesGraduations(mn,mx){
  * Le corps de la courbe. `opts` (FACULTATIF) :
  *   jours     — la fenetre, comptee depuis la derniere pesee (84 par defaut) ;
  *   couleur   — (ecartKg)=>couleur CSS de l'ecart dans la bulle ;
+ *   serieComplete — la serie ENTIERE (par defaut `serie`) : la moyenne sur
+ *               sept jours s'y calcule, puis seuls ses points de la fenetre
+ *               se tracent. Les premiers jours de la periode ont ainsi une
+ *               vraie moyenne, nourrie des pesees d'avant (05/10/2026) ;
+ *   objectif  — un poids (kg) : une ligne horizontale en tirets.
  * Declare le trait dessine dans _courbePesee.dernierTrait : 'moyenne' ou 'pesees'.
  */
 function _courbePesee(serie,opts){
   const o=opts||{};
   _courbePesee.dernierTrait='';
+  _courbePesee.derniereBulle=null;
   if(!serie||serie.length<2) return '';
   const fin=serie[serie.length-1].date;
   const debut=_jourPlus(fin,-((o.jours||PESEE_COURBE_JOURS)-1));
   const pts=serie.filter(e=>e.date>=debut);
   if(pts.length<2) return '';
+  const complete=(Array.isArray(o.serieComplete)&&o.serieComplete.length)?o.serieComplete.filter(e=>e.date<=fin):serie;
   const segs=segmentsWeight(pts);
   const jours=_joursEntre(pts[0].date,fin)||1;
-  // LA TENDANCE ET LA PLAGE, segment par segment.
+  // LA TENDANCE ET LA PLAGE, segment par segment — calculées sur la série
+  // COMPLÈTE, puis gardées dans la fenêtre.
   const plage=(seg,d)=>{ const f=seg.filter(e=>e.date<=d&&e.date>=_jourPlus(d,-(PESEE_FENETRE_MM-1))).map(e=>e.kg);
     return f.length?[Math.min(...f),Math.max(...f)]:null; };
-  const courbes=segs.map(seg=>{
+  const courbes=segmentsWeight(complete).map(seg=>{
     const t=[];
-    for(const e of seg){ const v=mm7(seg,e.date); if(v!=null) t.push({d:e.date,v,p:plage(seg,e.date)}); }
+    for(const e of seg){
+      if(e.date<pts[0].date) continue;
+      const v=mm7(seg,e.date); if(v!=null) t.push({d:e.date,v,p:plage(seg,e.date)});
+    }
     return t.length>=2?t:null;
   }).filter(Boolean);
   const brut=!courbes.length;
   // L'ECHELLE couvre les pesees ET la plage : rien ne sort du cadre.
   const vals=pts.map(e=>e.kg);
   courbes.forEach(t=>t.forEach(x=>{ if(x.p) vals.push(x.p[0],x.p[1]); }));
+  const obj=Number(o.objectif);
+  const avecObj=o.objectif!=null&&isFinite(obj)&&obj>=PESEE_MIN&&obj<=PESEE_MAX;
+  if(avecObj) vals.push(obj);
   let mn=Math.min(...vals), mx=Math.max(...vals);
   if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }   // série plate : bande d'1 kg
   const grad=_pesGraduations(mn-(mx-mn)*0.08,mx+(mx-mn)*0.08);
@@ -121307,12 +121327,20 @@ function _courbePesee(serie,opts){
   const der=pts[pts.length-1];
   const pasA=Math.max(1,Math.ceil(pts.length/6));
   const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
-  // La bulle : le poids, et l'ecart depuis le debut de la periode affichee.
-  const ecart=Math.round((der.kg-pts[0].kg)*10)/10;
+  // La bulle : le poids, et l'ECART DE TENDANCE sur la période — la moyenne
+  // sur sept jours au dernier jour moins celle du premier jour de la fenêtre.
+  // Une seule pesée haute ne retourne plus son signe (05/10/2026). Sans
+  // tendance aux deux bouts, l'écart brut des pesées, et le libellé le dit.
+  const tFin=mm7(complete,fin), tDeb=mm7(complete,pts[0].date);
+  const tendanceOk=tFin!=null&&tDeb!=null;
+  const ecart=Math.round(((tendanceOk?tFin-tDeb:der.kg-pts[0].kg))*10)/10;
+  _courbePesee.derniereBulle={ecart,base:tendanceOk?'tendance':'pesees'};
   const coulE=(typeof o.couleur==='function')?o.couleur(ecart):'var(--sub)';
   const yD=Y(der.kg);
   const bulle=`<div class="pc-bulle${yD<30?' pc-bulle-bas':''}" style="top:${f2(yD)}%">
-      <b>${_synNombre(der.kg)} kg</b><span style="color:${coulE}">${ecart>0?'+':(ecart<0?'−':'')}${_synNombre(Math.abs(ecart))} kg</span></div>`;
+      <b>${_synNombre(der.kg)} kg</b><span style="color:${coulE}">${ecart>0?'+':(ecart<0?'−':'')}${_synNombre(Math.abs(ecart))} kg</span><i class="pc-bul-lib">${tendanceOk?'tendance':'pesées'}</i></div>`;
+  // L'OBJECTIF : une ligne horizontale en tirets, et son poids.
+  const ligneObj=avecObj?`<div class="pc-obj" style="top:${f2(Y(obj))}%"><span>objectif ${_synNombre(obj)} kg</span></div>`:'';
   // Les graduations et les dates : du HTML, jamais du texte etire.
   const lignes=grad.map(v=>`<div class="pc-g" style="top:${f2(Y(v))}%"><span>${String(v).replace('.',',')}</span></div>`).join('');
   const nX=Math.min(5,Math.max(2,jours>=6?5:2));
@@ -121332,7 +121360,7 @@ function _courbePesee(serie,opts){
           <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             ${defs}${sous}${aires.join('')}${releves}${tendances.join('')}
           </svg>
-          ${points}${bulle}
+          ${ligneObj}${points}${bulle}
         </div>
       </div>
       <div class="pc-x">${xs}</div>
@@ -121363,6 +121391,7 @@ function _carteCourbePoids(serie,opts){
   const per=PESEE_PERIODES.find(p=>p.k===_pesPeriode)||PESEE_PERIODES[2];
   const jours=o.jours||per.j;
   const corps=_courbePesee(serie,Object.assign({},o,{jours}));
+  const phraseObj=o.phraseObjectif?'<p class="pc-obj-phrase">'+escapeHtml(o.phraseObjectif)+'</p>':'';
   const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
       `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
   const vide=(serie&&serie.length>=2)
@@ -121375,6 +121404,7 @@ function _carteCourbePoids(serie,opts){
         ${choix}
       </div>
       ${corps||vide}
+      ${corps?phraseObj:''}
     </div>`;
 }
 /**
@@ -121536,8 +121566,12 @@ function blocPoids(user){
   // _courbePesee qui sait si le trait est une moyenne ou les pesees reliees,
   // et c'est donc elle qui l'ecrit, sous le trace.
   // Mode neutre : l'ecart de la bulle reste neutre, sans couleur de verdict.
+  // L'OBJECTIF (05/10/2026) : jamais en mode neutre — ni ligne, ni date.
+  const objP=neutre?null:objectifPoidsDe(user);
   const courbe=_carteCourbePoids(serie,{id:'pc-athlete',
-    couleur:e=>neutre?'var(--sub)':couleurEvolution(user,e)});
+    couleur:e=>neutre?'var(--sub)':couleurEvolution(user,e),
+    objectif:objP?objP.kg:null,phraseObjectif:objP?phraseObjectifPoids(user):''});
+  const carteObj=neutre?'':_htmlObjectifPoidsAthlete(user);
   const vitesse=neutre?'':`<div class="evo-carte pv-carte">
       <span class="pv-ico" aria-hidden="true">${_pesIcone('eclair')}</span>
       <div class="pv-c">
@@ -121555,7 +121589,7 @@ function blocPoids(user){
         La rétention d'eau de la seconde moitié du cycle déplace couramment le poids
         de 1 à 2 kg. La moyenne sur sept jours en absorbe une partie, pas la totalité :
         comparer une semaine à la même semaine du cycle précédent reste plus juste.</div>`:'';
-  return entete+neutreNote+vitesse+courbe+noteCycle
+  return entete+neutreNote+vitesse+courbe+carteObj+noteCycle
     +`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">
        RepCore n'est pas un dispositif médical et ne remplace pas un avis professionnel.</div>
      <button class="btn btn-outline btn-sm" onclick="togglePoidsMasque()" style="letter-spacing:1px;font-size:var(--fs-2xs);margin-bottom:14px">Masquer le suivi du poids</button>`;
@@ -121622,10 +121656,14 @@ function blocPoidsCoach(user,depuis){
     ${_carteCourbePoids(_pDep?serie.filter(e=>{
       try{ return new Date(e.date+'T12:00:00').getTime()>=_pDep; }catch(x){ return true; }
     }):serie,{id:'pc-coach',couleur:e=>couleurEvolution(user,e),
+      // La moyenne sur sept jours se calcule sur la série entière (05/10/2026).
+      serieComplete:serie,
+      objectif:(objectifPoidsDe(user)||{}).kg,phraseObjectif:objectifPoidsDe(user)?phraseObjectifPoids(user):'',
       // LA PERIODE DU COACH PRIME : posee en haut de « Ses courbes », elle cadre
       // deja la serie — pas de second choix de periode dans la carte.
       periodes:!_pDep,jours:_pDep?100000:0})}
     ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie dans « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
+    ${_htmlObjectifPoidsCoach(user)}
   </div>`;
 }
 function renderPoidsCoach(c){
@@ -121878,6 +121916,126 @@ function _htmlPhaseCoach(c){
     ${_peak}
     ${combi}
   </div>`;
+}
+// ══ L'OBJECTIF DE POIDS (05/10/2026) ════════════════════════════════════════
+// u.objectifPoids={kg, fixeLe, par:'athlete'|'coach'}. Posé par l'athlète ou
+// par son coach ; un objectif de PERTE passe par refusObjectifPerte (TCA,
+// grossesse, signaux de déficit), et tout se tait — ligne, phrase, carte —
+// quand le poids est masqué ou qu'un antécédent est déclaré, comme la pesée.
+const OBJ_POIDS_SEM_MAX=26;      // jamais de date à plus de six mois
+// PURE. L'objectif affichable, ou null (masqué, absent, illisible).
+function objectifPoidsDe(u){
+  if(!u||u.masquerPoids) return null;
+  try{ if(aTCA(u)) return null; }catch(e){}
+  const o=u.objectifPoids, kg=Number(o&&o.kg);
+  return (isFinite(kg)&&kg>=PESEE_MIN&&kg<=PESEE_MAX)?{kg,fixeLe:Number(o.fixeLe)||0,par:o.par==='coach'?'coach':'athlete'}:null;
+}
+/**
+ * PURE. Pose (ou retire, kg vide) l'objectif sur le dossier `u`. Rend
+ * {ok:true} ou {ok:false, raison}. Un objectif sous le poids actuel est une
+ * PERTE : refusé quand refusObjectifPerte parle.
+ */
+function poserObjectifPoids(u,kg,par,maintenant){
+  if(!u) return {ok:false,raison:'Dossier introuvable.'};
+  if(u.masquerPoids) return {ok:false,raison:'Le suivi du poids est masqué.'};
+  try{ if(aTCA(u)) return {ok:false,raison:TCA_REFUS_SECHE}; }catch(e){}
+  if(kg===''||kg==null){ delete u.objectifPoids; return {ok:true,retire:true}; }
+  const v=parseFloat(String(kg).replace(',','.'));
+  if(!isFinite(v)||v<PESEE_MIN||v>PESEE_MAX) return {ok:false,raison:'Un objectif entre '+PESEE_MIN+' et '+PESEE_MAX+' kg.'};
+  const s=serieWeight(u), der=s.length?s[s.length-1]:null;
+  const ref=der?(mm7(s,der.date)??der.kg):null;
+  if(ref!=null&&v<ref){
+    const r=refusObjectifPerte(u);
+    if(r) return {ok:false,raison:r};
+  }
+  u.objectifPoids={kg:Math.round(v*10)/10,fixeLe:Number(maintenant)||Date.now(),par:par==='coach'?'coach':'athlete'};
+  return {ok:true};
+}
+/**
+ * PURE (au jour de la dernière pesée près). L'arrivée estimée sur l'objectif,
+ * depuis la droite de ccdProjection : {date, bas, haut} (ms ; haut null
+ * au-delà de six mois), {atteint}, {oppose} si la tendance s'en éloigne,
+ * {loin} au-delà de OBJ_POIDS_SEM_MAX semaines, ou null sans projection.
+ */
+function estimationObjectifPoids(u){
+  const o=objectifPoidsDe(u);
+  if(!o) return null;
+  let p=null; try{ p=ccdProjection(u); }catch(e){ p=null; }
+  if(!p||p.manque||!isFinite(p.courant)||!isFinite(p.penteJour)) return null;
+  const ecart=o.kg-p.courant;
+  if(Math.abs(ecart)<SYN_BRUIT_POIDS) return {atteint:true};
+  if(Math.abs(p.penteJour*7)<0.05||Math.sign(ecart)!==Math.sign(p.penteJour)) return {oppose:true};
+  const max=OBJ_POIDS_SEM_MAX*7;
+  const j=ecart/p.penteJour;
+  if(j>max) return {loin:true};
+  // LA FOURCHETTE : la pente à plus ou moins son incertitude.
+  const r=Math.min(0.9,Math.abs((Number(p.sePente)||0)/p.penteJour));
+  const jTot=ecart/(p.penteJour*(1+r)), jTard=ecart/(p.penteJour*(1-r));
+  const jour=n=>{ const [A,M,J]=String(p.fin).split('-').map(Number); const d=new Date(A,M-1,J,12); d.setDate(d.getDate()+Math.round(n)); return d.getTime(); };
+  return {date:jour(j),bas:jour(jTot),haut:jTard>max?null:jour(jTard)};
+}
+// PURE. La phrase sous la courbe, ou ''.
+function phraseObjectifPoids(u){
+  const e=estimationObjectifPoids(u);
+  if(!e) return '';
+  if(e.atteint) return 'Objectif atteint : la tendance est à moins de '+_synNombre(SYN_BRUIT_POIDS)+' kg de lui.';
+  if(e.oppose) return 'La tendance ne va pas vers l’objectif pour l’instant.';
+  if(e.loin) return 'Au rythme actuel, l’objectif est à plus de six mois.';
+  const j=t=>new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  const c=t=>new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return 'Au rythme actuel : objectif vers le '+j(e.date)+' (fourchette '+c(e.bas)+' – '+(e.haut?c(e.haut):'au-delà de six mois')+').';
+}
+// L'encart de l'athlète : son objectif, et le champ pour le poser.
+function _htmlObjectifPoidsAthlete(u){
+  if(!u||u.masquerPoids) return '';
+  try{ if(aTCA(u)) return ''; }catch(e){}
+  const o=objectifPoidsDe(u);
+  return '<div class="evo-carte obj-poids">'
+    +'<div class="evo-titre">Objectif de poids</div>'
+    +(o?'<div class="obj-poids-v"><b>'+_synNombre(o.kg)+' kg</b><span>fixé '+(o.par==='coach'?'par ton coach':'par toi')+'</span></div>':'')
+    +'<div class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="obj-poids-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
+    +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids(\'\')">Retirer</button>':'')
+    +'</div></div>';
+}
+function athleteSetObjectifPoids(val){
+  if(!currentUser) return false;
+  const v=val===''?'':((document.getElementById('obj-poids-kg')||{}).value||'');
+  const r=poserObjectifPoids(currentUser,v,'athlete');
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  toastEcriture(saveUser(),r.retire?'Objectif retiré':'Objectif enregistré '+ICO.coche,'ton objectif est');
+  try{ showProgressTab('poids',document.querySelector('#prog-tabs button')); }catch(e){}
+  return true;
+}
+// La ligne du coach, sous la courbe : l'objectif, et le champ pour le poser.
+function _htmlObjectifPoidsCoach(c){
+  if(!c||c.masquerPoids) return '';
+  try{ if(aTCA(c)) return ''; }catch(e){}
+  const o=objectifPoidsDe(c);
+  return '<div class="obj-poids obj-poids-coach">'
+    +'<span class="obj-poids-l">Objectif de poids'+(o?' : <b>'+_synNombre(o.kg)+' kg</b> ('+(o.par==='coach'?'posé par toi':'posé par l’athlète')+')':'')+'</span>'
+    +'<span class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="ccd-obj-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
+    +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids(\'\')">Retirer</button>':'')
+    +'</span></div>';
+}
+// MÊME PATRON QUE coachSetPhase : la carte des utilisateurs passée à
+// getOwnedClient, l'écriture sur le vrai dossier, l'envoi, le repeint.
+function coachSetObjectifPoids(val){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return false; }
+  const v=val===''?'':((document.getElementById('ccd-obj-kg')||{}).value||'');
+  const r=poserObjectifPoids(c,v,'coach');
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ renderPoidsCoach(c); }catch(e){}
+  toastSync(ok,envoi,r.retire?'Objectif retiré':'Objectif enregistré','l’objectif est');
+  return true;
 }
 function coachSetPhase(t){
   if(!PHASES[t]) return;

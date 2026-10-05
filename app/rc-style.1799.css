@@ -11477,6 +11477,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 28%,transparent),0 0 16px rgba(255,30,30,.85)}
 .pc-bulle{position:absolute;right:-10px;transform:translateY(calc(-100% - 20px));display:flex;flex-direction:column;align-items:center;gap:2px;
   padding:8px 14px;border-radius:var(--r-3);background:var(--surface-0);border:1.5px solid #1f9d55;box-shadow:var(--e3);white-space:nowrap;pointer-events:none}
+/* L'objectif de poids (05/10/2026) : une ligne en tirets à son poids, son libellé à gauche. */
+.pc-obj{position:absolute;left:0;right:0;height:0;border-top:2px dashed var(--green);pointer-events:none}
+.pc-obj span{position:absolute;left:4px;bottom:2px;font-size:var(--fs-2xs);font-weight:700;color:var(--green)}
+.pc-bul-lib{font-style:normal;font-size:var(--fs-2xs);font-weight:600;color:var(--text-faint);text-transform:lowercase}
+.pc-obj-phrase{margin:8px 0 0;font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.obj-poids-v{display:flex;align-items:baseline;gap:8px;margin:6px 0 8px}
+.obj-poids-v b{font-size:var(--fs-lg);color:var(--text)}
+.obj-poids-v span,.obj-poids-l{font-size:var(--fs-xs);color:var(--sub)}
+.obj-poids-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.obj-poids-f input{width:96px;min-height:40px;font-size:var(--fs-md)}
+.obj-poids-coach{display:flex;flex-direction:column;gap:6px;margin-top:12px}
 .pc-bulle::after{content:'';position:absolute;right:18px;bottom:-7px;width:12px;height:12px;background:var(--surface-0);border-right:1.5px solid #1f9d55;border-bottom:1.5px solid #1f9d55;transform:rotate(45deg)}
 .pc-bulle.pc-bulle-bas{transform:translateY(20px)}
 .pc-bulle.pc-bulle-bas::after{bottom:auto;top:-7px;transform:rotate(225deg)}
