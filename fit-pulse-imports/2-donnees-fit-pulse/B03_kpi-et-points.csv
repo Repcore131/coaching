@@ -1,0 +1,10 @@
+﻿id_kpi;Libellé;Unité (qty / eur);Points;Obligatoire (oui / non);Actif (oui / non);Ordre;Emoji
+avis;Avis Google;qty;100;oui;oui;1;⭐
+nutrition;Nutrition;eur;500;oui;oui;2;🥤
+contrats;Contrats signés;qty;1000;oui;oui;3;✍️
+accessoires;Accessoires;eur;500;oui;oui;4;🧢
+impayes;Impayés récupérés;eur;750;oui;oui;5;💶
+b2b;Contrat B2B;qty;100;non;oui;6;🏢
+invites;Invités > Contrats;qty;300;non;oui;7;🎟️
+sauvetage;Sauvetage résiliations;qty;300;non;oui;8;🛟
+prospects;Prospects;qty;0;non;oui;9;🧲

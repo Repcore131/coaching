@@ -1,0 +1,90 @@
+FIT PULSE — DOSSIER DES IMPORTS
+================================
+
+But : remplir ces fichiers puis me les renvoyer (déposés dans ce dossier,
+sans changer leur nom de début « 01_ », « B04_ »…). Je mets à jour Fit Pulse
+avec tout ce qu'ils contiennent.
+
+Format de tous les fichiers : CSV, séparateur « ; », UTF-8 (s'ouvre dans Excel).
+La première ligne (les titres des colonnes) ne doit pas être modifiée.
+Remplacez « AAAA-MM » dans le nom par le mois (ex. 2026-09), « AAAA-MM-JJ »
+par la date, « Sxx » par la semaine (ex. S39).
+Le plus simple pour les exports Resamania : exporter depuis Resamania et
+déposer le fichier tel quel (ZIP compris) en le renommant comme le modèle.
+Les modèles servent à voir les colonnes attendues.
+
+
+1) EXPORTS RESAMANIA  (dossier 1-exports-resamania)
+---------------------------------------------------
+Chaque modèle a les colonnes exactes que Fit Pulse reconnaît (vérifié).
+
+01 Vente d'abonnements → Contrats signés par commercial, nouveaux adhérents J+15/J+30
+   Où : Exports de gestion > Exporter > Membres & Ventes > Vente d'abonnements
+   Filtres : 1er → dernier jour du mois
+02 Factures & avoirs → Nutrition, Accessoires, Contrats B2B
+   Où : Exports de gestion > Exporter > Finance > Factures & avoirs
+   Filtres : mois, Entité = FPN GESTION, Club (le ZIP peut être déposé tel quel)
+03 Lignes de factures (alternative au 02, plafond 2 000 lignes)
+   Où : Données financières > Lignes de factures > FILTRER > ⋮ > Exporter (1 semaine max)
+04 Lignes d'avoirs → retours nutrition / accessoires déduits
+   Où : Données financières > Lignes d'avoirs > FILTRER > ⋮ > Exporter
+05 Incidents régularisés → Impayés récupérés par canal (équipe, client, prélèvement…)
+   Où : Données financières > Incidents > FILTRER (Statut = Régularisé,
+   Date de régularisation = le mois, Club) > ⋮ > Exporter
+06 Clients en incident → impayés en cours (solde par client)
+   Où : Exports de gestion > Points d'attention > Clients en incident (date = aujourd'hui)
+07 Clients abonnés sans prélèvement → relances « sans mandat »
+   Où : Exports de gestion > Points d'attention > Clients abonnés sans prélèvement
+08 Clients club → base clients, anniversaires
+   Où : Clients > Clients club > FILTRER (Statut = Client) > ⋮ > Exporter
+09 Abonnements → fins de contrat (renouvellements)
+   Où : Clients > Abonnements > FILTRER (Fin d'engagement = 30 prochains jours,
+   Masquer les résiliés) > ⋮ > Exporter
+10 Prospects → prospects créés par commercial
+   Où : Clients > Prospects > FILTRER (Date de création = le mois) > ⋮ > Exporter
+11 Résiliations → résiliations et sauvetages (Etat « canceled/annulée » = sauvé)
+   Où : Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter
+12 Taux de transformation par commerciaux
+   Où : Exports de gestion > Membres & Ventes > Taux de transformation par commerciaux
+13 Transactions Web → contrôle des impayés payés en ligne
+   Où : Exports de gestion > Finance > Rapport détaillé des transactions Web
+14 Paiements → contrôle des encaissements
+   Où : Données financières > Paiements > FILTRER (1 semaine) > ⋮ > Exporter
+15 Performances commerciales → contrôle contrats par commercial (XLSX accepté)
+   Où : Exports de gestion > Spécifiques > Export des performances commerciales
+16 Évolution clients → entrées (detail-gain) et sorties (detail-perte) du mois
+   Où : Exports de gestion > Membres & Ventes > Évolution clients (ZIP accepté)
+   Garder « detail-gain » / « detail-perte » dans le nom du fichier.
+
+Attention : une liste de EXACTEMENT 2 000 lignes est coupée par Resamania.
+Refaire l'export sur une période plus courte.
+
+
+2) DONNÉES FIT PULSE  (dossier 2-donnees-fit-pulse)
+---------------------------------------------------
+Ce que Resamania n'a pas. Une ligne = un élément.
+
+B01 Clubs : id_club court sans espace (ex. niort), nom, adresse, ville.
+B02 Équipe : un membre par ligne. Rôle = createur, manager ou membre.
+    Clubs : id_club séparés par | (ex. niort|rochelle).
+    Code commercial Resamania (ex. KGUE) et nom tel qu'écrit dans Resamania :
+    servent à rattacher automatiquement les ventes importées à la bonne personne.
+B03 KPI et points : déjà rempli avec les réglages actuels, à corriger si besoin.
+    Unité : qty (nombre) ou eur (euros).
+B04 Objectifs mensuels : un mois + un membre par ligne, un objectif par KPI.
+    ex. 2026-10 ; niort ; prenom.nom@mail.fr ; 20 ; 300 ; 20 ; 150 ; 250 ; 2 ; 3 ; 2 ; 40
+B05 Paliers d'équipe (primes collectives) : ex. niort ; 2026-10 ; contrats ; 100 ; Prime 100 € chacun
+B06 Historique mensuel du club (comparaison N-1) : un mois par ligne.
+B07 Base adhérents : actifs, sortants et objectif d'actifs par mois.
+B08 Saisies manuelles (ce qui n'est pas dans Resamania : avis Google,
+    invités > contrats, etc.) : date ; club ; email du membre ; id_kpi ; valeur.
+B09 Bibliothèque de tâches : déjà remplie, ajouter / supprimer des lignes.
+B10 Planning des tâches : à quelle heure chaque tâche (libellé exact de B09).
+B11 Défis flash : titre, KPI visé, début et fin.
+B12 Compléments clients : téléphone / email par numéro client Resamania
+    (pour les appels de suivi, anniversaires, impayés).
+
+id_kpi possibles : avis, nutrition, contrats, accessoires, impayes, b2b,
+invites, sauvetage, prospects.
+Dates : JJ/MM/AAAA ou AAAA-MM-JJ. Montants : 59,90 ou 59.90 (sans « € » obligatoire).
+Un fichier vide est simplement ignoré : remplissez seulement ce que vous avez.
