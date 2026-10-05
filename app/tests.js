@@ -16133,11 +16133,15 @@ async function testExercices(){
             currentUser={id:'c_lot',email:'lot@t.fr',role:'coach',fname:'K',lname:'G',
               studentCodes:[{token:'RC-DEJA-0001',prenom:'Tom',nom:'',active:true,redeemed:false,etat:'envoye',createdAt:Date.now()}]};
             window.saveUser=()=>true; CLOUD._getToken=async()=>'jeton';
+            // SEULS LES APPELS DU LOT (/rc_codes/) sont comptés : la page peut
+            // faire un appel d'arrière-plan pendant l'attente, et le compter
+            // rendait ce test dépendant du minutage de la machine.
             window.fetch=async(url,o)=>{
-              enVol++; max=Math.max(max,enVol);
+              const lot=String(url).indexOf('/rc_codes/')>=0;
+              if(lot){ enVol++; max=Math.max(max,enVol); }
               await new Promise(r=>setTimeout(r,5));
-              enVol--;
-              if(o&&o.method==='PUT') puts.push(JSON.parse(o.body));
+              if(lot) enVol--;
+              if(lot&&o&&o.method==='PUT') puts.push(JSON.parse(o.body));
               return new Response('{}',{status:200});
             };
             const r=await inviterEnLot(parserListeInvites('Léa Martin ; lea@x.fr\nTom\nZoé'),'m_abc');
