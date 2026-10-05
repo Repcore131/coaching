@@ -125,7 +125,9 @@ function relancesFor(clubId) {
     return out.filter(rl => !['gagne', 'perdu', 'annule'].includes(rl.status) && !rl.promiseKept);
   });
 }
-const touchesOf = key => Object.values(S.touches || {}).filter(x => x.relKey === key).sort((a, b) => b.at - a.at);
+// Index des échanges par relance (une passe par version des données, au lieu d'une par relance).
+const touchIndex = () => memo('touchIdx', () => { const m = new Map(); for (const x of Object.values(S.touches || {})) { if (!x || !x.relKey) continue; let l = m.get(x.relKey); if (!l) m.set(x.relKey, l = []); l.push(x); } m.forEach(l => l.sort((a, b) => b.at - a.at)); return m; });
+const touchesOf = key => (touchIndex().get(key) || []).slice();
 function relScore(rl) {
   let s = REL_KINDS[rl.kind].base;
   if (rl.kind === 'impaye') s += Math.min(30, (rl.amount || 0) / 10);
