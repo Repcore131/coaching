@@ -12319,7 +12319,9 @@ async function testExercices(){
           // Les aliments de l'ANSES seuls (id > 0) : les génériques RepCore (ids négatifs) n'en sont pas.
           const reel=(_ciqualDB||[]).filter(f=>f&&f.id>0).length;
           if(!reel) return _echec('base non chargée : appeler _loadCiqual() avant la suite');
-          return annonce===reel
+          // « Près de 3 500 » (05/10/2026) : un arrondi, plus un compte exact. Il
+          // doit rester honnête : à moins de cinquante aliments du fichier.
+          return Math.abs(annonce-reel)<=50
             ?true:_echec('annoncé '+annonce+', réel '+reel);})());
         ok('AUCUN argument ne vend une fonction éteinte',(()=>{
           // « Programme papier importé en une photo » est resté à l'écran
@@ -21831,10 +21833,13 @@ async function testExercices(){
         currentUser=u;
         const h=_htmlDepartAthlete(u.nutrition);
         if(!h) return _echec('la carte ne se rend pas');
-        if(h.indexOf('Harris-Benedict')<0||/Mifflin/.test(h)) return _echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
+        // (05/10/2026) L'athlète lit le LIBELLÉ MAISON de la formule qui a calculé,
+        // jamais son nom réel ; les deux méthodes gardent deux libellés distincts.
+        if(/Harris|Mifflin|Katch/.test(h)) return _echec('le nom réel d’une formule est affiché à l’athlète');
+        if(h.indexOf(MB_NOMS_MAISON.harris)<0||h.indexOf(MB_NOMS_MAISON.mifflin)>=0) return _echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
         u.nutrition.tableur.formuleMB='mifflin';
         const h2=_htmlDepartAthlete(u.nutrition);
-        return (h2.indexOf('Mifflin-St Jeor')>=0&&!/Harris/.test(h2))?true:_echec('en Mifflin');
+        return (h2.indexOf(MB_NOMS_MAISON.mifflin)>=0&&h2.indexOf(MB_NOMS_MAISON.harris)<0&&!/Harris|Mifflin/.test(h2))?true:_echec('en Mifflin');
       } finally { currentUser=sv; }})());
     ok('Tableau du coach : le sélecteur « Formule du métabolisme » et l’écart entre les deux formules',(()=>{
       const c=_MBa(80,180,{nutrition:{cycle:false}});
@@ -21846,10 +21851,37 @@ async function testExercices(){
       // L'explication dit D'ABORD la formule réellement calculée (05/10/2026).
       const tk={poids:80,taille:180,age:30,sexe:'M',mbSource:'katch',mbBrut:1850};
       const ek=_htmlEcartFormules(tk), em=_htmlEcartFormules(Object.assign({},tk,{mbSource:'mifflin'})), eh=_htmlEcartFormules(Object.assign({},tk,{mbSource:'harris'}));
-      if(!/^Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée \(1.850 kcal\)/.test(ek)||!/ne servira que sans masse maigre/.test(ek)) return _echec('masse maigre : '+ek);
-      if(em.indexOf('Calcul actuel : Mifflin-St Jeor, ')!==0||!/Harris-Benedict donnerait/.test(em)||/masse maigre/.test(em)) return _echec('Mifflin : '+em);
-      if(eh.indexOf('Calcul actuel : Harris-Benedict, ')!==0||!/Mifflin-St Jeor donnerait/.test(eh)) return _echec('Harris : '+eh);
-      return /écart de \d+ kcal/.test(e)&&/Formule du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
+      if(!/^Calcul actuel : méthode RepCore, sur sa masse maigre mesurée \(1.850 kcal\)/.test(ek)||!/ne servira que sans masse maigre/.test(ek)) return _echec('masse maigre : '+ek);
+      if(em.indexOf('Calcul actuel : méthode prudente, ')!==0||!/La méthode standard donnerait/.test(em)||/masse maigre/.test(em)) return _echec('prudente : '+em);
+      if(eh.indexOf('Calcul actuel : méthode standard, ')!==0||!/La méthode prudente donnerait/.test(eh)) return _echec('standard : '+eh);
+      if(/Harris|Mifflin|Katch/.test(ek+em+eh+d.textContent)) return _echec('le nom réel d’une formule est affiché au coach');
+      if(d.querySelector('#tbk-noms-reels')) return _echec('le réglage des noms réels est montré à un autre que le créateur');
+      return /écart de \d+ kcal/.test(e)&&/Méthode de calcul du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
+    ok('NOMS RÉELS DES FORMULES : réservés au compte du créateur, et seulement quand il les demande ; les calculs ne bougent pas',(()=>{
+      if(typeof nomsReels!=='function'||typeof nr!=='function'||typeof mbNom!=='function') return _echec('nomsReels / nr / mbNom n’existent pas');
+      const sU=currentUser, sK=localStorage.getItem(NOMS_REELS_CLE);
+      const tk={poids:80,taille:180,age:30,sexe:'M',mbSource:'katch',mbBrut:1850};
+      try{
+        // Un compte quelconque, même avec la clé posée à la main : libellés maison.
+        currentUser={email:'quelquun@t.fr',role:'coach'};
+        localStorage.setItem(NOMS_REELS_CLE,'1');
+        if(nomsReels()||mbNom('harris')!==MB_NOMS_MAISON.harris||nr('a','b')!=='b') return _echec('un autre compte lit les noms réels');
+        if(basculerNomsReels(true)!==false) return _echec('un autre compte peut basculer le réglage');
+        // Le créateur, réglage éteint : libellés maison aussi.
+        currentUser={email:CREATOR_EMAIL,role:'coach'};
+        localStorage.removeItem(NOMS_REELS_CLE);
+        if(nomsReels()||/Katch/.test(_htmlEcartFormules(tk))) return _echec('noms réels sans les avoir demandés');
+        const avant=cibleTableur(_MBa(80,180,{nutrition:{cycle:false}}),{appliquerPlancher:false}).kcal;
+        // Réglage allumé : les noms réels reviennent, partout où ils étaient.
+        localStorage.setItem(NOMS_REELS_CLE,'1');
+        if(!nomsReels()||mbNom('katch')!=='Katch-McArdle'||mbNom('mifflin')!=='Mifflin-St Jeor') return _echec('le créateur ne retrouve pas les noms réels');
+        const ek=_htmlEcartFormules(tk);
+        if(!/^Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée/.test(ek)||!/Harris-Benedict 1.\d{3}/.test(ek)||!/Mifflin-St Jeor 1.\d{3}/.test(ek)) return _echec('explication du créateur : '+ek);
+        if(!/Mifflin-St Jeor donnerait/.test(_htmlEcartFormules(Object.assign({},tk,{mbSource:'harris'})))) return _echec('Harris, vu du créateur');
+        // ET PAS UN CHIFFRE NE BOUGE.
+        const apres=cibleTableur(_MBa(80,180,{nutrition:{cycle:false}}),{appliquerPlancher:false}).kcal;
+        return avant===apres&&avant>0?true:_echec('le réglage a changé un calcul : '+avant+' → '+apres);
+      } finally { currentUser=sU; if(sK===null) localStorage.removeItem(NOMS_REELS_CLE); else localStorage.setItem(NOMS_REELS_CLE,sK); }})());
     // ── L'OBJECTIF DE L'ATHLÈTE CHANGE VRAIMENT SES CIBLES ──
     const _OBJa=(obj,o)=>Object.assign({id:'objA',email:'obja@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:'180','init-age':30,sessions_config:[],
@@ -26077,9 +26109,18 @@ async function testExercices(){
         return h.filter(x=>/non reconnue/.test(x)).length===1
           ?true:_echec(JSON.stringify(h));})());
       ok('Le facteur s\'écrit à deux décimales',(()=>{
-        const h=besoinsProposes(_ath()).hypotheses.join(' | ');
-        if(/NEAT × 1,2\b/.test(h)) return _echec('facteur tronqué : '+h);
-        return /NEAT × 1,20/.test(h)?true:_echec(h);})());
+        // (05/10/2026) Le coefficient n'est plus montré : le mot NEAT reste, le
+        // chiffre ne revient que pour le créateur qui demande les noms réels.
+        const h0=besoinsProposes(_ath()).hypotheses.join(' | ');
+        if(/NEAT ×|× 1,2/.test(h0)) return _echec('le coefficient est affiché : '+h0);
+        if(!/NEAT/.test(h0)) return _echec('le NEAT n’est plus nommé : '+h0);
+        const sU=currentUser, sK=localStorage.getItem(NOMS_REELS_CLE);
+        try{
+          currentUser={email:CREATOR_EMAIL,role:'coach'}; localStorage.setItem(NOMS_REELS_CLE,'1');
+          const h=besoinsProposes(_ath()).hypotheses.join(' | ');
+          if(/NEAT × 1,2\b/.test(h)) return _echec('facteur tronqué : '+h);
+          return /NEAT × 1,20/.test(h)?true:_echec(h);
+        } finally { currentUser=sU; if(sK===null) localStorage.removeItem(NOMS_REELS_CLE); else localStorage.setItem(NOMS_REELS_CLE,sK); }})());
       ok('La ligne de musculation déclarée ne redit pas le mot deux fois',(()=>{
         const u=_ath({sessions_config:[],
           bilans:[_bil(2,{'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
@@ -26178,7 +26219,8 @@ async function testExercices(){
           const h=bMetier('deb-job');
           bilData={};
           // Le facteur annoncé est celui que le calcul applique (échelle du tableur).
-          return /facteur 1,6(?!\d)/.test(h)&&/Effort physique continu/.test(h);})());
+          // (05/10/2026) Le niveau est dit, le facteur ne l'est plus.
+          return /Niveau d’activité : effort physique continu/.test(h)&&!/facteur/.test(h);})());
         ok('Un métier inconnu prévient au lieu de faire semblant',(()=>{
           bilData['deb-job']='Dresseur de licornes';
           const h=bMetier('deb-job');
@@ -26465,12 +26507,14 @@ async function testExercices(){
           const txt=(z&&z.textContent)||'';
           const t=cibleTableur(c,_tbOptsDe(c));
           if(!t||!t.mbSource) return _echec('aucun calcul');
-          const nom=t.mbSource==='katch'?'Katch-McArdle'
-            :(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
-          if(txt.indexOf('Estimation basée sur la méthode '+nom)<0)
+          // (05/10/2026) Sous son libellé maison, et le niveau d'activité sans son coefficient.
+          const nom=mbNom(t.mbSource);
+          if(/Harris|Mifflin|Katch/.test(nom)) return _echec('nom réel : '+nom);
+          if(txt.indexOf('Estimation : '+nom)<0)
             return _echec('la formule '+nom+' n\'est pas nommée');
-          const naf='base × '+String(t.naf.f).replace('.',',');
-          return txt.indexOf(naf)>=0?true:_echec('le facteur « '+naf+' » n\'est pas écrit');})());
+          const naf='niveau d’activité : '+t.naf.lib.toLowerCase();
+          if(/base × \d/.test(txt)) return _echec('le coefficient d’activité est affiché');
+          return txt.indexOf(naf)>=0?true:_echec('le niveau « '+naf+' » n\'est pas écrit');})());
         ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
           poser();
           proposerPointDepart();
@@ -34623,8 +34667,8 @@ async function testExercices(){
           return _echec('l’étiquette « Estimation » manque');
         const s=(bes.querySelector('.tbk-cap-s')||{}).textContent||'';
         const premiere=(bes.querySelector('tbody tr .tbk-aide')||{}).textContent||'';
-        const formule=(s.match(/méthode (.+)$/)||[])[1]||'';
-        if(!formule||premiere.indexOf(formule)<0)
+        const formule=((s.match(/^Estimation : (.+)$/)||[])[1]||'').toLowerCase();
+        if(!formule||premiere.toLowerCase().indexOf(formule)<0)
           return _echec('le sous-titre nomme « '+formule+' », la ligne dit « '+premiere+' »');
         if(!/estimations/.test((bes.querySelector('tfoot .tbk-note')||{}).textContent||''))
           return _echec('la note des estimations manque');
@@ -58887,7 +58931,7 @@ async function testExercices(){
         if((det.querySelector('summary')||{}).textContent!=='Comment ces objectifs sont calculés')
           return _echec('intitulé : « '+(det.querySelector('summary')||{}).textContent+' »');
         const contenu=det.querySelector('div');
-        const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
+        const nom=mbNom(b.source);
         const attendu=nom+' · dépense estimée '+b.depense+' kcal : '+b.hypotheses.join(' · ')+'.';
         const cl=contenu.cloneNode(true); cl.querySelectorAll('.rc-i').forEach(x=>x.remove());
         if(cl.textContent!==attendu) return _echec('le texte a changé : « '+cl.textContent+' »');
