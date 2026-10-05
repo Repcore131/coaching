@@ -36575,6 +36575,53 @@ async function testExercices(){
         const c3=accesCalcul('ouvrir',{etat:'absent'},{maintenant:now,mois:0,palier:'ultime'});
         return c3.echeance===0?true:_echec('sans fin vaut '+c3.echeance);})());
 
+      // ORDRE DE FERMETURE, ÉTAPE 1 (05/10/2026) : compter ce que le dossier ouvre seul, sans rien décider.
+      ok('DROITS, ÉTAPE 1 — droitsEcarts nomme les portes que seul le dossier tient, ne change aucun accès, et l’interrupteur redescend',(()=>{
+        if(typeof droitsEcarts!=='function'||typeof droitsEcartsCompter!=='function') return _echec('droitsEcarts n’existe pas');
+        const mail='test-droits-ecarts@t.fr', now=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE), sauveS=localStorage.getItem(DROITS_SERVEUR_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE), sauveJ=localStorage.getItem(DROITS_ECART_CLE);
+        const sR=window.rcm, vus=[];
+        try{
+          localStorage.removeItem(PAIEMENT_RECENT_CLE); localStorage.removeItem(DROITS_SERVEUR_CLE);
+          const suivi={email:mail,role:'athlete',status:'COACHING_SUIVI'};
+          const abo={email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',abonnement:{formule:'ultime'}};
+          const essai={email:mail,role:'athlete',status:'FREE',essai:{ouvertLe:now-864e5,finit:now+20*864e5}};
+          // Le serveur n'a jamais répondu : on ne juge pas.
+          const brut=JSON.parse(localStorage.getItem(DROITS_CLE)||'{}'); delete brut[mail]; delete brut[mail.replace(/\./g,',')];
+          if(droitsDe(suivi).etat==='inconnu'&&droitsEcarts(suivi).length) return _echec('jugé sans réponse du serveur');
+          // Nœud lu et vide : chaque porte du dossier est nommée, et l'accès N'A PAS BOUGÉ.
+          _droitsPoser(mail,null,true);
+          const avant=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
+          if(droitsEcarts(suivi).join()!=='suivi') return _echec('suivi : '+droitsEcarts(suivi).join());
+          if(droitsEcarts(abo).join()!=='abo') return _echec('abonnement : '+droitsEcarts(abo).join());
+          if(droitsEcarts(essai).join()!=='essai') return _echec('essai : '+droitsEcarts(essai).join());
+          const apres=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
+          if(avant.join()!==apres.join()||avant[0]!=='suivi'||avant[1]!=='ultime'||!avant[2]) return _echec('compter a changé un accès : '+avant.join()+' → '+apres.join());
+          // Ce que le serveur atteste n'est pas un écart.
+          _droitsPoser(mail,{palier:'ultime',echeance:0,source:'paypal'},false);
+          if(droitsEcarts(abo).length) return _echec('un abonnement attesté est compté : '+droitsEcarts(abo).join());
+          _droitsPoser(mail,{palier:'aucun',echeance:0,source:'paiement_coach',suiviJusqu:now+864e5},false);
+          if(droitsEcarts(suivi).length) return _echec('un suivi attesté est compté');
+          _droitsPoser(mail,{palier:'ultime',echeance:now+864e5,source:'essai',essaiFinit:now+864e5},false);
+          if(droitsEcarts(essai).length) return _echec('un essai attesté est compté');
+          if(droitsEcarts({email:mail,role:'coach'}).length) return _echec('un coach est compté');
+          // Le compteur : une fois par jour et par appareil, des noms de la liste fermée, rien d'autre.
+          window.rcm=n=>{ vus.push(n); };
+          _droitsPoser(mail,null,true); localStorage.removeItem(DROITS_ECART_CLE);
+          const sU=currentUser;
+          if(!droitsEcartsCompter(suivi)||droitsEcartsCompter(suivi)) return _echec('pas une fois par jour');
+          if(vus.join()!=='droits_ecart_vu,droits_ecart_suivi') return _echec('compteurs : '+vus.join());
+          for(const n of vus) if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors de la liste fermée');
+          // L'interrupteur redescend quand le serveur RÉPOND qu'il n'existe plus.
+          const src=String(rafraichirDroitsServeur);
+          if(src.indexOf('removeItem(DROITS_SERVEUR_CLE)')<0||/droitsServeurActif\(\)\) return/.test(src)) return _echec('l’interrupteur reste posé pour toujours');
+          return true;
+        } finally {
+          window.rcm=sR;
+          const remet=(k,v)=>{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); };
+          remet(DROITS_CLE,sauve); remet(DROITS_SERVEUR_CLE,sauveS); remet(PAIEMENT_RECENT_CLE,sauveP); remet(DROITS_ECART_CLE,sauveJ);
+        }})());
+
       ok('1614 — DROITS PORTÉS PAR LE SERVEUR : effacer accessExpiry ou s’écrire abonné dans son dossier n’ouvre rien',(()=>{
         const mail='test-droits-1614@t.fr', now=Date.now();
         const u={email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',abonnement:{formule:'ultime'}};
