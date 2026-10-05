@@ -236,7 +236,7 @@ class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind 
 const firebaseBackend = {
   mode: 'firebase', fb: null, root: null, user: null, userId: null, denied: false,
   async loadSdk() {
-    const v = '10.12.2';
+    // SDK Firebase compat 10.12.2, hébergé dans vendor/
     for (const f of ['firebase-app-compat', 'firebase-auth-compat', 'firebase-database-compat']) {
       await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `vendor/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }

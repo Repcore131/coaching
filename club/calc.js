@@ -258,6 +258,8 @@ function allTime(userId) {
 }
 // Rythme de points par semaine (mois en cours, a defaut le mois dernier) : estimation du temps avant le niveau suivant.
 function weeklyPace(uid) { const u = S.users[uid]; if (!u) return 0; const cm = curMonth(); const d = Number(today().slice(8)); const pts = mk => (u.clubs || []).reduce((s, c) => s + statsFor(c, uid, rangeOf('month', mk)).earned, 0); const cur = pts(cm); if (d >= 7 && cur > 0) return cur / (d / 7); const pm = addMonths(cm, -1); return pts(pm) / (daysIn(pm) / 7); }
+// Jours où un membre a fait au moins une saisie manuelle (index, une seule lecture des saisies).
+function manualDays(uid) { return memo('mdays', () => { const by = {}; Object.values(S.entries).forEach(e => { if (e.source === 'manual' && e.userId) (by[e.userId] = by[e.userId] || new Set()).add(e.date); }); return by; })[uid] || new Set(); }
 // Bonus de dépassement (niveaux seulement) : +10 % des points du KPI par tranche de 10 % au-delà de 100 %, plafonné à 150 %.
 const overBonus = st => st.rows.reduce((s, x) => s + (x.pct > 1 && x.k.points > 0 ? Math.floor((Math.min(x.pct, 1.5) - 1) * 10 + 1e-9) * 0.1 * x.k.points : 0), 0);
 // Points d'action : relances notées via les boutons d'issue. Une fiche rapporte une fois par jour, 300 points par semaine au plus.
@@ -343,7 +345,7 @@ function allTrophies() {
         const r0 = dateOf(mk + '-01').getTime(), r1 = dateOf(addMonths(mk, 1) + '-01').getTime();
         const pil = team.map(u => ({ u, n: Object.values(S.loyalty || {}).filter(a => a.userId === u.id && a.at >= r0 && a.at < r1 && (OUTCOMES[a.outcome] || {}).done && !(OUTCOMES[a.outcome] || {}).lost).length })).sort((a, b) => b.n - a.n)[0];
         if (pil && pil.n >= 15) out.push({ userId: pil.u.id, kind: 'perso', icon: 'heart', label: `Pilier rétention ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id });
-        team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = new Set(Object.values(S.entries).filter(e => e.userId === u.id && e.source === 'manual' && e.date.slice(0, 7) === mk).map(e => e.date)); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
+        team.forEach(u => { if (!(u.clubs || []).includes(c.id)) return; const days = manualDays(u.id); let run = 0, top = 0; for (let d = 1; d <= daysIn(mk); d++) { if (days.has(`${mk}-${pad(d)}`)) { run++; top = Math.max(top, run); } else run = 0; } if (top >= 5) out.push({ userId: u.id, kind: 'perso', icon: 'calcheck', label: `Régularité ${MOIS_C[Number(mk.slice(5)) - 1]}`, mk, clubId: c.id }); });
       }
     }
     // defis flash termines
@@ -376,7 +378,7 @@ function accomplishments(userId) {
 // Classement normalise par l'objectif mensuel : 3 contrats pour un objectif de
 // 10 valent mieux que 4 pour un objectif de 20.
 function challengeRanking(ch) {
-  const from = isoOf(new Date(ch.start)), to = isoOf(new Date(Math.min(ch.end, Date.now())));
+  const from = isoOf(new Date(ch.start));
   const hours = (ch.end - ch.start) / 3600000;
   const list = clubMembers(ch.clubId).map(u => {
     let value = 0;

@@ -52,7 +52,6 @@ const MGR = `(${MANAGER})`;
 const SAISIE = `${MGR} || (${MEMBRE} && (newData.exists() ? (newData.child('userId').val() === ${SOI} || (newData.child('by').val() === ${SOI} && (newData.child('kpiId').val() === 'sauvetage' || newData.child('kpiId').val() === 'impayes'))) : (data.child('userId').val() === ${SOI} || data.child('by').val() === ${SOI})))`;
 const FICHE = `${MGR} && (${CREATEUR} || (data.child('role').val() !== 'createur' && (!newData.exists() || newData.child('role').val() === 'membre' || newData.child('role').val() === data.child('role').val())))`;
 const SOIMEME = `${MEMBRE} && $uid === ${SOI}`;
-const mgrSeul = c => `    "${c}": { ".write": ${j(MGR)} },`;
 export const REGLE = `${DEBUT}
     "pulse": {
       ".read": ${j(MEMBRE)},

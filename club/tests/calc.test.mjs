@@ -1,5 +1,5 @@
 // Tests du moteur de calcul Fit Pulse : le vrai code (core, parse, calc) chargé dans un contexte isolé.
-// Lancer : TZ=Europe/Paris node --test club/tests/
+// Lancer : TZ=Europe/Paris node --test club/tests/*.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';

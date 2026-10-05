@@ -18,7 +18,7 @@ function offersSeen(clubId) {
   return Object.values(by).map(o => ({ ...o, gamme: gammeOf(o.libelle), prix: median(o.prices) })).sort((a, b) => b.n - a.n);
 }
 function offerOf(client) { const o = deepGet(S, ['offers', client.clubId, offerKey(client.offer)]); return o || null; }
-function prixMoyen(clubId) { const L = activeClients(clubId).map(c => mensualite(c, true)).filter(x => x > 0); return L.length ? L.reduce((s, x) => s + x, 0) / L.length : 29.99; }
+function prixMoyen(clubId) { return memo(`pmoy|${clubId}`, () => { const L = activeClients(clubId).map(c => mensualite(c, true)).filter(x => x > 0); return L.length ? L.reduce((s, x) => s + x, 0) / L.length : 29.99; }); }
 // Mensualite : bareme du club, sinon prix importe, sinon prix moyen du club.
 function mensualite(client, noFallback = false) {
   const o = offerOf(client); if (o && Number(o.prixMensuelTTC) > 0) return Number(o.prixMensuelTTC);

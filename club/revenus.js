@@ -128,8 +128,10 @@ function tauxSauvetage(clubId) {
 function panierNutrition(clubId) {
   return memo(`pan|${clubId}`, () => { const L = Object.values(S.entries).filter(e => e.clubId === clubId && e.kpiId === 'nutrition' && Number(e.value) > 0 && e.date >= addDays(today(), -90) && entryCounts(e)); return L.length >= 5 ? L.reduce((s, e) => s + Number(e.value), 0) / L.length : 35; });
 }
-const prixGamme = (clubId, g) => { const L = activeClients(clubId).filter(c => gammeOf(c.offer) === g).map(c => mensualite(c, true)).filter(x => x > 0); return L.length ? median(L) : null; };
-const hasShop = c => c.num && Object.values(S.entries).some(e => e.clientNum && String(e.clientNum) === String(c.num) && ['nutrition', 'accessoires'].includes(e.kpiId) && e.date >= c.start && entryCounts(e));
+const prixGamme = (clubId, g) => memo(`pg|${clubId}|${g}`, () => { const L = activeClients(clubId).filter(c => gammeOf(c.offer) === g).map(c => mensualite(c, true)).filter(x => x > 0); return L.length ? median(L) : null; });
+// Achats boutique par numéro client (index construit une fois par révision).
+const shopIndex = () => memo('shopidx', () => { const m = {}; Object.values(S.entries).forEach(e => { if (e.clientNum && ['nutrition', 'accessoires'].includes(e.kpiId) && entryCounts(e)) (m[String(e.clientNum)] = m[String(e.clientNum)] || []).push(e.date); }); return m; });
+const hasShop = c => !!c.num && (shopIndex()[String(c.num)] || []).some(d => d >= c.start);
 const OPP_TYPES = {
   resiliation: { label: 'Résiliation', icon: 'door' }, impaye: { label: 'Impayé', icon: 'coins' }, prospect: { label: 'Prospect chaud', icon: 'magnet' }, invite: { label: 'Invité', icon: 'ticket' },
   fin: { label: 'Fin d’engagement', icon: 'calcheck' }, upsell: { label: 'Montée en gamme', icon: 'sparkle' }, nutrition: { label: 'Boutique J+15', icon: 'cup' }, ancien: { label: 'Ancien membre', icon: 'repeat' },

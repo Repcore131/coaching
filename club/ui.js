@@ -189,7 +189,10 @@ function render() {
   if (renderQueued) return; renderQueued = true;
   requestAnimationFrame(() => { renderQueued = false; renderNow(); });
 }
-function renderNow() {
+// ?perf dans l'adresse : temps de chaque rendu affiché en bas à gauche.
+const PERF_ON = /[?&]perf\b/.test(location.search);
+function renderNow() { const t0 = performance.now(); renderNowInner(); if (PERF_ON) { const ms = performance.now() - t0; let el = $('#perf-hud'); if (!el) { el = document.createElement('div'); el.id = 'perf-hud'; el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;background:#000;color:#ffd600;font:12px monospace;padding:6px 8px;border-radius:6px'; document.body.appendChild(el); } el.textContent = `rendu ${ms.toFixed(1)} ms · ${(location.hash || '#/home').slice(2)} · ${Object.keys(S && S.entries || {}).length} saisies`; } }
+function renderNowInner() {
   const app = $('#app');
   if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   if (!S) { app.innerHTML = PAGES.onboarding.render(); return; }

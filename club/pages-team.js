@@ -394,7 +394,6 @@ PAGES.wrap = {
     const tr = trophies(uid).filter(t => t.mk === mk);
     const club = S.clubs[clubId]; const act = wrapActions(uid, mk); const note = deepGet(S, ['wrapNotes', mk, uid]);
     const prog = st.score != null && prev.score != null ? Math.round((st.score - prev.score) * 100) : null;
-    const nextMk = addMonths(mk, 1);
     const perWeek = worst ? Math.max(1, Math.ceil((worst.target - worst.real) / 4)) : 0;
     const phrase = st.score == null ? 'Vos objectifs arrivent : chaque vente compte déjà.'
       : worst ? `Le mois prochain : ${worst.k.unit === 'eur' ? fmtE(perWeek) : plur(perWeek, worst.k.label.toLowerCase(), worst.k.label.toLowerCase())} de plus par semaine.`
