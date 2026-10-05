@@ -2685,13 +2685,13 @@ async function assistantEnvoyer(){
       if(document.getElementById('rc-anc-adr')) return;
       const d=document.createElement('div');
       d.id='rc-anc-adr'; d.setAttribute('role','status');
-      d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#1a0000;border-bottom:1px solid '+ROUGE_MARQUE+';color:#fff;font:600 13px/1.45 Montserrat,sans-serif;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;text-align:center';
+      d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:var(--red-bg);border-bottom:1px solid var(--red);color:var(--text-strong);font:600 13px/1.45 Montserrat,sans-serif;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;text-align:center';
       const t=document.createElement('span');
       t.textContent='RepCore change d’adresse : celle-ci va s’arrêter. Ouvre la nouvelle, connecte-toi avec les mêmes identifiants et installe l’app, tes données te suivent. ';
       const a=document.createElement('a');
       a.href=dest.replace(/[?#].*$/,''); a.target='_blank'; a.rel='noopener';
       a.textContent='Ouvrir repcore-sync.web.app';
-      a.style.cssText='color:#fff;text-decoration:underline;font-weight:800;white-space:nowrap';
+      a.style.cssText='color:var(--text-strong);text-decoration:underline;font-weight:800;white-space:nowrap';
       d.appendChild(t); d.appendChild(a);
       document.body.appendChild(d);
     }catch(e){}
