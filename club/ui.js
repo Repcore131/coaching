@@ -186,7 +186,7 @@ function render() {
 }
 function renderNow() {
   const app = $('#app');
-  if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); return; }
+  if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   if (!S) { app.innerHTML = PAGES.onboarding.render(); return; }
   if (!ME) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   ME = S.users[ME.id] || null;
@@ -247,7 +247,7 @@ function monthNav(key, mk) {
     <button class="btn icon sm" data-act="ui" data-key="${key}" data-val="${addMonths(mk, 1)}" aria-label="Mois suivant">${ico('chevR')}</button></div>`;
 }
 function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (!location.hash) location.hash = '#/home'; render(); }
-async function logout() { ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') await backend.signOut(); render(); }
+async function logout() { ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') { await backend.signOut(); S = null; } render(); }
 
 // Telechargement d'un fichier genere
 function downloadFile(name, content, type = 'text/plain') {

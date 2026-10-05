@@ -69,8 +69,7 @@ un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurit
 ## Deux modes
 
 - **Local** (par défaut) : les données restent dans le navigateur. Idéal pour essayer (bouton « données de démonstration »).
-- **Partagé** : renseigner un projet Firebase dans `config.js` et déployer `database.rules.pulse.json`. Seules les adresses
-  ajoutées dans Membres peuvent lire et écrire la base.
+- **Partagé** (site en ligne) : base Firebase repcore-sync, nœud `/pulse`. Connexion e-mail + code depuis n'importe quel appareil : la clé SHA-256(e-mail|code) ouvre `/pulse_boot`, règles posées par `outils/fitpulse-serveur.mjs` (lancé à chaque mise en ligne et par `fitpulse-mail.yml`).
 
 ## Mettre en ligne (vraie adresse)
 

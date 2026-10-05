@@ -39,71 +39,89 @@ document.addEventListener('submit', e => {
 ACTIONS.loadDemo = () => { db.replace(demoState()); const ops = bootstrapOps(); if (ops.length) db.batch(ops); render(); };
 
 // ── Connexion ─────────────────────────────────────────────────────────────
+// Un seul parcours, sur ordinateur comme sur telephone : e-mail + code
+// personnel. En ligne (mode partage), le code est verifie par la base de
+// l'equipe : il marche sur n'importe quel appareil.
 PAGES.login = {
   auth: false,
   render() {
-    const head = `${brandBlock(true)}`;
-    if (backend.mode === 'firebase') {
-      return `<div class="auth"><div class="auth-card">${head}<h1 style="font-size:26px">Connexion</h1>
-        <form id="lg" class="grid" style="margin-top:14px"><label class="field"><span>E-mail</span><input class="input" type="email" name="email" required></label>
-        <label class="field"><span>Mot de passe</span><input class="input" type="password" name="pass" required minlength="6"></label>
-        <button class="btn primary" type="submit">Se connecter</button>
-        <button class="btn" type="button" data-act="fbSignup" style="background:#1b1b1e;border-color:#2a2a2e;color:#fff">Première connexion : créer mon mot de passe</button></form>
-        <p class="muted small" style="margin-top:12px">Seules les adresses ajoutées par un manager peuvent entrer.</p></div></div>`;
-    }
-    // Mode local : e-mail + code personnel. Les profils de demonstration (sans
-    // code) restent accessibles d'un clic.
-    const demo = Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b)));
+    const shared = backend.mode === 'firebase';
     const img = (window.PARKPULSE_ASSETS || {}).login;
-    return `<div class="auth split">${img ? `<div class="auth-visual" style="--login:url('${img}')"><div class="auth-claim"><span>Chaque contrat compte.</span><span>Chaque client aussi.</span></div></div>` : ''}<div class="auth-side"><div class="auth-card">${head}<h1 style="font-size:30px">Connexion</h1>
-      <form id="lgc" class="grid" style="margin-top:14px">
-        <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required autocomplete="username" value="${esc(safeLS.get('parkpulse.lastEmail') || '')}"></label>
-        <label class="field"><span>Code d’accès</span><input class="input" name="code" id="lg-code" required autocomplete="current-password" placeholder="FP-XXXX-XXXX-XXXX" style="letter-spacing:.08em;text-transform:uppercase"></label>
-        <button class="btn primary" type="submit">Se connecter</button>
-      </form>
-      <p class="muted small" style="margin-top:12px">Votre code vous est remis par le créateur ou un manager du club. Il est personnel : ne le partagez pas.</p>
-      ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
-      ${S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !Object.keys(S.entries).length ? '<button class="btn" style="width:100%;margin-top:16px;background:#1b1b1e;border-color:#2a2a2e;color:#fff" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}</div></div></div>`;
+    const club = (window.PARKPULSE_CLUB || {}).name || 'Fitness Park';
+    const q = new URLSearchParams(location.search);
+    const email = q.get('email') || safeLS.get('parkpulse.lastEmail') || '';
+    const demo = !shared && S ? Object.values(S.users).filter(u => isActive(u) && !u.codeHash).sort((a, b) => (ROLES[b.role] || {}).rank - (ROLES[a.role] || {}).rank || fullName(a).localeCompare(fullName(b))) : [];
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    return `<div class="auth login2"${img ? ` style="--login:url('${img}')"` : ''}><div class="login-bg" aria-hidden="true"></div>
+      <div class="login-wrap">
+        <div class="login-claim"><span>Chaque contrat compte.</span><span>Chaque client aussi.</span><p>${esc(club)} · l’équipe commerciale</p></div>
+        <div class="login-card">
+          ${brandBlock(true)}
+          <h1>Connexion</h1>
+          <form id="lgc" class="login-form" novalidate>
+            <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenom.nom@exemple.fr" value="${esc(email)}"></label>
+            <label class="field"><span>Code d’accès</span><input class="input code-input" name="code" id="lg-code" required autocomplete="current-password" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="17" placeholder="FP-XXXX-XXXX-XXXX"></label>
+            <div id="lg-msg" class="login-msg" role="alert" aria-live="polite">${navigator.onLine ? '' : 'Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'}</div>
+            <button class="btn primary login-btn" type="submit" id="lg-btn">Se connecter</button>
+          </form>
+          <p class="login-help">Votre code personnel vous a été envoyé par e-mail. Pas reçu ? Regardez dans les spams ou demandez-le à votre manager.</p>
+          ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
+          ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
+          ${!shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}
+        </div>
+      </div></div>`;
+  },
+  mount() {
+    const c = $('#lg-code'), e = $('#lg-email');
+    if (c) c.addEventListener('input', () => {
+      const raw = c.value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^FP/, '').slice(0, 12);
+      const v = raw ? 'FP-' + raw.replace(/(.{4})(?=.)/g, '$1-') : '';
+      if (v !== c.value) c.value = v;
+      loginMsg('');
+    });
+    if (e && !e.value) e.focus({ preventScroll: true }); else if (c && matchMedia('(pointer:fine)').matches) c.focus({ preventScroll: true });
   },
 };
+function loginMsg(t, kind = 'bad') { const m = $('#lg-msg'); if (m) { m.textContent = t; m.dataset.kind = kind; } }
+addEventListener('online', () => { if ($('#lg-msg') && /internet/.test($('#lg-msg').textContent)) loginMsg(''); });
+addEventListener('offline', () => { if ($('#lg-msg')) loginMsg('Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'); });
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'lgc') return;
   e.preventDefault();
   const f = formData(e.target);
-  const email = f.email.trim().toLowerCase();
+  const email = (f.email || '').trim().toLowerCase();
+  const code = (f.code || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { loginMsg('Saisissez votre adresse e-mail complète.'); $('#lg-email').focus(); return; }
+  if (normCode(code).replace(/[^A-Z0-9]/g, '').length !== 14) { loginMsg('Le code fait 12 caractères : FP-XXXX-XXXX-XXXX.'); $('#lg-code').focus(); return; }
   safeLS.set('parkpulse.lastEmail', email);
-  // Une meme adresse peut porter plusieurs comptes (createur et manager) :
-  // c'est le code qui designe le compte.
+  const btn = $('#lg-btn'); btn.disabled = true; btn.classList.add('loading'); btn.textContent = 'Connexion…'; loginMsg('');
+  const done = () => { if (btn.isConnected) { btn.disabled = false; btn.classList.remove('loading'); btn.textContent = 'Se connecter'; } };
+  if (backend.mode === 'firebase') {
+    try {
+      const id = await backend.codeLogin(email, code);
+      if (!S) db.replace(emptyState());
+      const ops = bootstrapOps(); if (ops.length) db.batch(ops);
+      const u = S.users[id];
+      if (!u || u.status === 'archived') { await backend.signOut(); done(); loginMsg('Ce compte n’est plus actif. Voyez avec votre manager.'); return; }
+      if (u.status === 'pending') db.set(['users', u.id, 'status'], 'active');
+      if (history.replaceState && location.search) history.replaceState(null, '', location.pathname + location.hash);
+      login(S.users[id]); toast(`Bienvenue ${u.first} · accès ${roleLabel(u.role)}`);
+    } catch (err) { done(); loginMsg(err.kind ? err.message : 'Connexion impossible : ' + (err.code || err.message)); }
+    return;
+  }
+  // Mode local : une meme adresse peut porter plusieurs comptes (createur et
+  // manager) : c'est le code qui designe le compte.
   for (const u of Object.values(S.users)) {
     if ((u.email || '').toLowerCase() !== email || !u.codeHash || u.status === 'archived') continue;
-    if (await hashCode(u.salt, f.code) === u.codeHash) {
+    if (await hashCode(u.salt, code) === u.codeHash) {
       if (u.status === 'pending') db.set(['users', u.id, 'status'], 'active');
       login(S.users[u.id]); toast(`Bienvenue ${u.first} · accès ${roleLabel(u.role)}`); return;
     }
   }
-  toast('E-mail ou code incorrect.');
+  done(); loginMsg('E-mail ou code incorrect.');
 });
 ACTIONS.loginAs = el => login(S.users[el.dataset.id]);
 ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les données de ce navigateur ?', { ok: 'Tout effacer', danger: true })) { backend.wipe(); S = null; ME = null; if ((window.PARKPULSE_ACCOUNTS || []).length && backend.mode === 'local') { db.replace(emptyState()); db.batch(bootstrapOps()); } render(); } };
-document.addEventListener('submit', async e => {
-  if (e.target.id !== 'lg') return;
-  e.preventDefault();
-  const f = formData(e.target);
-  try { await backend.signIn(f.email, f.pass); afterFirebaseLogin(); } catch (err) { toast('Connexion impossible : ' + (err.code || err.message)); }
-});
-ACTIONS.fbSignup = async () => {
-  const f = formData($('#lg'));
-  if (!f.email || (f.pass || '').length < 6) { toast('Saisissez votre e-mail et un mot de passe de 6 caractères minimum.'); return; }
-  try { await backend.signUp(f.email, f.pass); afterFirebaseLogin(); } catch (err) { toast('Création impossible : ' + (err.code || err.message)); }
-};
-function afterFirebaseLogin() {
-  const email = (backend.user.email || '').toLowerCase();
-  if (!S) { render(); return; }
-  const u = Object.values(S.users).find(x => (x.email || '').toLowerCase() === email && x.status !== 'archived');
-  if (!u) { toast('Adresse inconnue : demandez à un manager de vous ajouter.'); backend.signOut(); return; }
-  if (u.status === 'pending') db.set(['users', u.id, 'status'], 'active');
-  login(S.users[u.id]);
-}
 
 // ── Tableau de bord ───────────────────────────────────────────────────────
 PAGES.dashboard = {

@@ -45,7 +45,7 @@ function memberForm(u) {
   const clubs = Object.values(S.clubs);
   openModal({ title: u ? 'Modifier le membre' : 'Ajouter un membre', body: `<form id="mf" class="grid">
     <div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" required value="${esc(u ? u.first : '')}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(u ? u.last : '')}"></label></div>
-    <label class="field"><span>E-mail (sert à la connexion en mode partagé)</span><input class="input" type="email" name="email" value="${esc(u ? u.email || '' : '')}"></label>
+    <label class="field"><span>E-mail (identifiant de connexion)</span><input class="input" type="email" name="email" value="${esc(u ? u.email || '' : '')}"></label>
     <div class="form-grid"><label class="field"><span>Rôle</span><select class="input" name="role" ${u && u.id === ME.id && !isCreator() ? 'disabled' : ''}>${Object.entries(ROLES).filter(([r]) => isCreator() || r === 'membre' || (u && u.role === r)).sort((a, b) => a[1].rank - b[1].rank).map(([r, x]) => `<option value="${r}" ${(u ? u.role : 'membre') === r ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
     <div class="field"><span>Club(s)</span>${clubs.map(c => `<label class="row small"><input type="checkbox" name="club_${c.id}" ${(u ? (u.clubs || []).includes(c.id) : c.id === CLUB.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div></div>
     ${!u ? `<label class="row small"><input type="checkbox" name="pending" ${backend.mode === 'firebase' ? 'checked' : ''}> Invitation en attente (devient actif à la première connexion)</label><p class="muted small" style="margin:0">Un code d’accès personnel sera généré à l’enregistrement.</p>` : `<div class="row"><span class="small spacer">${u.codeHash ? 'Code d’accès actif.' : '<b class="bad">Aucun code : connexion impossible.</b>'}</span><button class="btn sm" type="button" data-act="regenCode" data-id="${u.id}">${ico('shield')} ${u.codeHash ? 'Générer un nouveau code' : 'Générer un code'}</button></div>`}
@@ -64,34 +64,95 @@ ACTIONS.saveMember = async el => {
   const old = S.users[id];
   const u = { ...(old || { createdAt: Date.now(), avatar: 'h1', status: f.pending ? 'pending' : 'active' }), id, first: f.first.trim(), last: f.last.trim(), email, role: f.role, clubs };
   if (old && old.role === 'createur' && f.role !== 'createur' && !Object.values(S.users).some(x => x.id !== id && x.role === 'createur' && x.status === 'active')) { toast('Il faut garder au moins un créateur actif.'); return; }
+  if (!email && (!old || backend.mode === 'firebase')) { toast('L’e-mail est obligatoire : c’est l’identifiant de connexion.'); return; }
+  if (email && Object.values(S.users).some(x => x.id !== id && x.status !== 'archived' && (x.email || '') === email && x.role === f.role)) { toast('Cette adresse a déjà un compte ' + roleLabel(f.role) + '.'); return; }
+  // Nouveau membre, ou e-mail change (la cle de connexion en depend) : nouveau code.
   let code = null;
-  if (!old) { const c = await newCodeRecord(); code = c.code; u.salt = c.salt; u.codeHash = c.codeHash; }
+  if (!old || (old.email !== email && old.codeHash)) { const c = await issueCode(u, email); code = c.code; Object.assign(u, { salt: c.salt, codeHash: c.codeHash, bootKey: c.bootKey }); await backend.setBoot(c.boot); }
   const ops = [[['users', id], u]];
   if (email) ops.push([['team', email.replace(/\./g, ',')], true]);
   if (old && old.email && old.email !== email) ops.push([['team', old.email.replace(/\./g, ',')], null]);
   db.batch(ops); closeModal();
-  if (code) showCode(u, code); else toast('Membre mis à jour.');
+  if (code) showCode(u, code, { mail: true }); else toast('Membre mis à jour.');
 };
+// Nouveau code : empreinte (mode local) + cle de connexion (mode partage).
+// L'ancienne cle est effacee dans le meme envoi : l'ancien code est coupe net.
+async function issueCode(u, email) {
+  const c = await newCodeRecord();
+  const key = await bootKeyOf(email || u.email, c.code);
+  await backend.precreate(key, c.code);
+  const boot = { [key]: u.id };
+  if (u.bootKey && u.bootKey !== key) boot[u.bootKey] = null;
+  return { ...c, bootKey: key, boot };
+}
+// Invitation : un e-mail pret a partir (ouvert dans la messagerie du manager,
+// marche partout, tout de suite). Si l'envoi automatique est active
+// (PARKPULSE_MAIL_AUTO), la demande part aussi dans /fitpulse_mail : le serveur
+// (club/outils/fitpulse-serveur.mjs) envoie le bel e-mail puis l'efface.
+function inviteText(u, code) {
+  const url = `${location.origin}${location.pathname}?email=${encodeURIComponent(u.email || '')}`;
+  const club = CLUB ? CLUB.name : 'Fitness Park';
+  return {
+    subject: `Ton accès Fit Pulse · ${club}`,
+    body: `Salut ${u.first || ''} 👋
+
+Bienvenue dans Fit Pulse, l’appli de l’équipe ${club} : tes objectifs, les paliers, le classement et tes relances, dans ta poche.
+
+TON ACCÈS
+• Lien : ${url}
+• E-mail : ${u.email}
+• Code personnel : ${normCode(code)}
+
+INSTALLER L’APPLI SUR TON TÉLÉPHONE
+• iPhone (Safari) : ouvre le lien, bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».
+• Android / Samsung : ouvre le lien dans Chrome ou Samsung Internet, menu ⋮ puis « Ajouter à l’écran d’accueil ».
+
+Ton code est personnel : ne le partage pas.
+À tout de suite sur le terrain 💪
+${ME ? fullName(ME) : ''}`,
+  };
+}
+async function sendInvite(u, code) {
+  const st = $('#mail-state');
+  if (!window.PARKPULSE_MAIL_AUTO || backend.mode !== 'firebase' || !u.email) return;
+  if (st) st.innerHTML = '<span class="muted">Envoi automatique de l’invitation…</span>';
+  try {
+    await backend.queueMail({ email: u.email, first: (u.first || '').slice(0, 40) || 'Bonjour', code: normCode(code), role: u.role, club: (CLUB ? CLUB.name : '').slice(0, 60), by: fullName(ME).slice(0, 60) });
+    if ($('#mail-state')) $('#mail-state').innerHTML = `<span class="ok">${ico('check')} Invitation envoyée à <b>${esc(u.email)}</b></span><br><span class="muted small">Elle arrive en moins de 5 minutes (pensez aux spams).</span>`;
+  } catch (e) {
+    if ($('#mail-state')) $('#mail-state').innerHTML = `<span class="bad">Envoi automatique impossible (${esc(e.code || e.message || 'erreur')}).</span> Utilisez « Envoyer par e-mail ».`;
+  }
+}
+ACTIONS.mailInvite = () => { const l = UI.lastCode; const u = l && S.users[l.id]; if (!u) return; const t = inviteText(u, l.code); location.href = `mailto:${encodeURIComponent(u.email || '')}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(t.body)}`; };
+ACTIONS.shareInvite = async () => { const l = UI.lastCode; const u = l && S.users[l.id]; if (!u) return; const t = inviteText(u, l.code); try { await navigator.share({ title: t.subject, text: t.body }); } catch (e) { /* annule */ } };
 // Le code n'est affiche qu'une fois : seule son empreinte est enregistree.
-function showCode(u, code) {
-  openModal({ title: 'Code d’accès', body: `<p style="margin-top:0">Code personnel de <b>${esc(fullName(u))}</b> (${roleLabel(u.role)}). Il ne sera plus affiché : notez-le ou transmettez-le maintenant.</p>
-    <div class="card" style="text-align:center;padding:18px"><div class="muted small">${esc(u.email || 'pas d’e-mail : ajoutez-en un pour la connexion')}</div><div class="title" id="code-val" style="font-size:30px;letter-spacing:.06em;user-select:all">${code}</div></div>`,
-    foot: '<button class="btn" data-act="copyCode">Copier</button><button class="btn primary" data-close>C’est noté</button>' });
+function showCode(u, code, opt = {}) {
+  UI.lastCode = { id: u.id, code };
+  openModal({ title: 'Code d’accès', body: `<p style="margin-top:0">Code personnel de <b>${esc(fullName(u))}</b> (${roleLabel(u.role)}). Il ne sera plus affiché.</p>
+    <div class="card" style="text-align:center;padding:18px"><div class="muted small">${esc(u.email || 'pas d’e-mail : ajoutez-en un pour la connexion')}</div><div class="title" id="code-val" style="font-size:clamp(20px,7vw,30px);letter-spacing:.06em;user-select:all;word-break:break-all">${code}</div></div>
+    ${opt.mail ? '<div id="mail-state" class="small" style="margin-top:12px;line-height:1.5"></div>' : ''}
+    <p class="muted small" style="margin-bottom:0">Connexion : <b>${esc(location.origin + location.pathname)}</b> avec l’e-mail ci-dessus et ce code, sur téléphone ou ordinateur.</p>`,
+    foot: `<button class="btn" data-act="copyCode">Copier</button>${u.email ? `<button class="btn" data-act="mailInvite">${ico('mail')} Envoyer par e-mail</button>` : ''}${navigator.share ? `<button class="btn" data-act="shareInvite">${ico('share')} Partager</button>` : ''}<button class="btn primary" data-close>C’est noté</button>` });
+  if (opt.mail) sendInvite(u, code);
 }
 ACTIONS.copyCode = () => { const t = $('#code-val').textContent; navigator.clipboard.writeText(t).then(() => toast('Code copié.'), () => { const r = document.createRange(); r.selectNodeContents($('#code-val')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Sélectionné : faites Ctrl+C.'); }); };
 ACTIONS.regenCode = async el => {
   const u = S.users[el.dataset.id];
   if (u.codeHash && !await confirmDlg(`Générer un nouveau code pour ${esc(fullName(u))} ? L’ancien code ne fonctionnera plus.`, { ok: 'Générer' })) return;
-  const c = await newCodeRecord();
-  db.batch([[['users', u.id, 'salt'], c.salt], [['users', u.id, 'codeHash'], c.codeHash]]);
-  showCode(S.users[u.id], c.code);
+  if (!u.email) { toast('Ajoutez d’abord un e-mail à ce membre : c’est son identifiant.'); return; }
+  const c = await issueCode(u);
+  await backend.setBoot(c.boot);
+  db.batch([[['users', u.id, 'salt'], c.salt], [['users', u.id, 'codeHash'], c.codeHash], [['users', u.id, 'bootKey'], c.bootKey]]);
+  closeModal(); showCode(S.users[u.id], c.code, { mail: true });
 };
 ACTIONS.archiveMember = async el => {
   const u = S.users[el.dataset.id];
   if (!canEdit(u)) return;
   if (u.role === 'createur' && !Object.values(S.users).some(x => x.id !== u.id && x.role === 'createur' && x.status === 'active')) { toast('Il faut garder au moins un créateur actif.'); return; }
   if (!await confirmDlg(`Archiver ${esc(fullName(u))} ? Il sort des calculs du mois et ne peut plus se connecter, mais garde son historique.`, { ok: 'Archiver', danger: true })) return;
-  const ops = [[['users', u.id, 'status'], 'archived'], [['users', u.id, 'archivedAt'], today()]];
+  // Le code est retire : a la reactivation, on en genere un nouveau.
+  const ops = [[['users', u.id, 'status'], 'archived'], [['users', u.id, 'archivedAt'], today()], [['users', u.id, 'codeHash'], null], [['users', u.id, 'salt'], null], [['users', u.id, 'bootKey'], null]];
+  if (u.bootKey) await backend.setBoot({ [u.bootKey]: null });
   if (u.email) ops.push([['team', u.email.replace(/\./g, ',')], null]);
   db.batch(ops); toast('Membre archivé.');
 };
@@ -100,7 +161,7 @@ function memArchived() {
   return `<div class="card">${list.map(u => `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)">${avatar(u)}<div class="spacer"><b>${esc(fullName(u))}</b><div class="muted small">${esc(u.email || '')} · archivé le ${dmy(u.archivedAt)}</div></div><button class="btn sm" data-act="unarchive" data-id="${u.id}">Réactiver</button></div>`).join('') || '<div class="empty">Aucun membre archivé.</div>'}
     <p class="muted small" style="margin-bottom:0">Les membres archivés sortent des calculs du mois mais gardent leur historique (classement all-time, trophées).</p></div>`;
 }
-ACTIONS.unarchive = el => { const u = S.users[el.dataset.id]; const ops = [[['users', u.id, 'status'], 'active'], [['users', u.id, 'archivedAt'], null]]; if (u.email) ops.push([['team', u.email.replace(/\./g, ',')], true]); db.batch(ops); toast('Membre réactivé.'); };
+ACTIONS.unarchive = el => { const u = S.users[el.dataset.id]; const ops = [[['users', u.id, 'status'], 'active'], [['users', u.id, 'archivedAt'], null]]; if (u.email) ops.push([['team', u.email.replace(/\./g, ',')], true]); db.batch(ops); toast('Membre réactivé : générez-lui un nouveau code (fiche du membre).'); };
 
 // Historique : grille membres x KPI (mois) ou jours x KPI (un membre), editable.
 function memHistory() {
@@ -283,12 +344,11 @@ function profAccount() {
       <label class="row" style="margin-top:12px"><input type="checkbox" data-change="prefToggle" data-k="liveBanner" ${live ? 'checked' : ''}> <span>Bandeau en direct quand un collègue saisit</span></label>
       <label class="row" style="margin-top:10px"><input type="checkbox" data-change="prefToggle" data-k="digest" ${digest ? 'checked' : ''}> <span>Bilan hebdomadaire du club (lundi matin)</span></label>
       <p class="muted small">Le bandeau ne montre que les saisies de nos clubs.</p></div>
-    <div class="card"><h3>Sécurité</h3>${backend.mode === 'firebase' ? `<p class="small">Connexion par e-mail et mot de passe.</p><button class="btn" data-act="resetPwd">Recevoir un lien de changement de mot de passe</button>` : `<p class="small">Connexion par e-mail et code d’accès personnel.</p><form id="cc" class="grid"><label class="field"><span>Code actuel</span><input class="input" name="cur" id="cc-cur" placeholder="FP-XXXX-XXXX-XXXX" autocomplete="current-password"></label><button class="btn" type="button" data-act="changeMyCode">${ico('shield')} Générer un nouveau code</button></form><p class="muted small">En mode local, les données restent dans ce navigateur : le code protège l’accès à l’écran. Le mode partagé (config.js) ajoute des comptes protégés côté serveur.</p>`}</div></div>`;
+    <div class="card"><h3>Sécurité</h3>${`<p class="small">Connexion par e-mail et code d’accès personnel.</p><form id="cc" class="grid"><label class="field"><span>Code actuel</span><input class="input" name="cur" id="cc-cur" placeholder="FP-XXXX-XXXX-XXXX" autocomplete="current-password"></label><button class="btn" type="button" data-act="changeMyCode">${ico('shield')} Générer un nouveau code</button></form><p class="muted small">${backend.mode === 'firebase' ? 'Votre code ouvre la base de l’équipe depuis n’importe quel appareil. Le nouveau code remplace l’ancien partout.' : 'En mode local, les données restent dans ce navigateur : le code protège l’accès à l’écran.'}</p>`}</div></div>`;
 }
 ACTIONS.saveProfile = () => { const f = formData($('#pf')); if (!f.first.trim()) return; db.batch([[['users', ME.id, 'first'], f.first.trim()], [['users', ME.id, 'last'], f.last.trim()]]); toast('Profil enregistré.'); };
 ACTIONS.setAvatar = el => db.set(['users', ME.id, 'avatar'], el.dataset.a);
 ACTIONS.prefToggle = el => setPref(el.dataset.k, el.checked);
-ACTIONS.resetPwd = async () => { try { await backend.fb.auth().sendPasswordResetEmail(ME.email); toast('Lien envoyé à ' + ME.email); } catch (e) { toast(e.message); } };
 
 // ── Bilan mensuel (format stories) ────────────────────────────────────────
 PAGES.wrap = {
@@ -356,7 +416,16 @@ ACTIONS.wrapDownload = () => { const c = $('#wrap-canvas'); c.toBlob(b => downlo
 ACTIONS.changeMyCode = async () => {
   const cur = $('#cc-cur').value;
   if (ME.codeHash && await hashCode(ME.salt, cur) !== ME.codeHash) { toast('Code actuel incorrect.'); return; }
-  const c = await newCodeRecord();
-  db.batch([[['users', ME.id, 'salt'], c.salt], [['users', ME.id, 'codeHash'], c.codeHash]]);
+  if (!ME.email) { toast('Ajoutez d’abord un e-mail à votre profil.'); return; }
+  const c = await issueCode(ME);
+  const old = ME.bootKey;
+  // Mode partage : la nouvelle cle d'abord, on bascule la session dessus, puis
+  // on efface l'ancienne (sinon on se couperait soi-meme l'acces).
+  await backend.setBoot({ [c.bootKey]: ME.id });
+  db.batch([[['users', ME.id, 'salt'], c.salt], [['users', ME.id, 'codeHash'], c.codeHash], [['users', ME.id, 'bootKey'], c.bootKey]]);
+  if (backend.mode === 'firebase') {
+    try { await backend.codeLogin(ME.email, c.code); if (old && old !== c.bootKey) await backend.setBoot({ [old]: null }); }
+    catch (e) { toast('Nouveau code enregistré : reconnectez-vous avec lui.'); }
+  }
   showCode(S.users[ME.id], c.code);
 };

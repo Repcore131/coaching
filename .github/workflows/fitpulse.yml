@@ -39,6 +39,13 @@ jobs:
           rm -f _en_ligne/assets/fitpulse-source.webp
           test -f _en_ligne/index.html && test -f _en_ligne/app.js
 
+      # Les regles d'acces (base partagee /pulse, cles de connexion, boite
+      # d'envoi des invitations) AVANT la page qui s'en sert.
+      - name: Regles d'acces Fit Pulse
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node club/outils/fitpulse-serveur.mjs regles
+
       - name: Creer le site si besoin, puis deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

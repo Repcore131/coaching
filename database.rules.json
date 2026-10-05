@@ -1,5 +1,31 @@
 {
   "rules": {
+    // >>> FITPULSE (bloc gere par club/outils/fitpulse-serveur.mjs : ne pas modifier a la main)
+    "pulse": { ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()", ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists()" },
+    "pulse_boot": {
+      ".read": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')",
+      "$k": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && ((auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur')) || newData.val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() || (!newData.exists() && data.val() === root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val()))",
+        ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+      }
+    },
+    "fitpulse_mail": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && auth.token.email.endsWith('@fitpulse-niort.web.app') && root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).exists() && (root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'manager' || root.child('pulse/users/' + root.child('pulse_boot/' + auth.token.email.replace('@fitpulse-niort.web.app', '').replace('fp-', '')).val() + '/role').val() === 'createur') && !data.exists() && newData.exists() && $id.length <= 40",
+        ".validate": "newData.hasChildren(['email', 'first', 'code', 'role', 'club', 'at']) && newData.child('at').val() == now",
+        "email": { ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^@ ]+@[^@ ]+[.][a-zA-Z]{2,24}$/)" },
+        "first": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+        "code": { ".validate": "newData.isString() && newData.val().matches(/^FP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)" },
+        "role": { ".validate": "newData.val() == 'membre' || newData.val() == 'manager' || newData.val() == 'createur'" },
+        "club": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "by": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "at": { ".validate": "newData.isNumber()" },
+        "$autre": { ".validate": false }
+      }
+    },
+    // <<< FITPULSE
     "users": {
       "$emailKey": {
         ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",

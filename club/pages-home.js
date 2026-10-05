@@ -150,6 +150,7 @@ PAGES.home = {
           <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${acc.streak} jour(s) de suite</small></a>` : ''}</div></div></section>
       ${manager && Number(today().slice(8)) <= 5 ? `<a class="recap-ready" href="#/recap">${ico('chart')}<div><b>Le récapitulatif de ${MOIS[Number(addMonths(mk, -1).slice(5)) - 1].toLowerCase()} est prêt</b><span>Ventes, résiliations, impayés, avis, boutique : comparés au mois d’avant.</span></div>${ico('chevR')}</a>` : ''}
+      ${manager ? localTransferCard() : ''}
       ${manager ? managerCockpit() : ''}
       <div class="g12">
         <div class="card col8">${palierKeys.includes('contrats') ? palierRace(CLUB.id, mk, 'contrats') : palierKeys[0] ? palierRace(CLUB.id, mk, palierKeys[0]) : '<p class="muted">Aucun palier ce mois-ci.</p>'}</div>
@@ -166,6 +167,40 @@ PAGES.home = {
       </div></div>`;
   },
 };
+// Donnees saisies sur cet appareil AVANT le mode partage (ancien mode local) :
+// on propose de les verser dans la base de l'equipe, sans rien ecraser.
+function localData() {
+  if (backend.mode !== 'firebase' || safeLS.get('parkpulse.transferred')) return null;
+  try { const st = JSON.parse(safeLS.get(LOCAL_KEY) || 'null'); if (!st || (st.meta && st.meta.demo)) return null; return st; } catch (e) { return null; }
+}
+function localTransferPlan(st) {
+  const ops = []; let users = 0, items = 0;
+  for (const [coll, val] of Object.entries(st)) {
+    if (!val || typeof val !== 'object' || Array.isArray(val) || ['team', 'meta'].includes(coll)) continue;
+    const remote = S[coll] || {};
+    for (const [k, v] of Object.entries(val)) {
+      if (remote[k] !== undefined) continue;
+      if (coll === 'users') { const { salt, codeHash, bootKey, ...rest } = v; ops.push([[coll, k], rest]); users++; }
+      else { ops.push([[coll, k], v]); items++; }
+    }
+  }
+  return { ops, users, items };
+}
+function localTransferCard() {
+  const st = localData(); if (!st) return '';
+  const p = localTransferPlan(st); if (!p.ops.length) return '';
+  return `<div class="recap-ready" style="cursor:default">${ico('upload')}<div><b>Données trouvées sur cet appareil</b><span>${p.users} membre(s) et ${p.items} élément(s) saisis avant la base partagée. Transférez-les pour que toute l’équipe les voie. Les membres transférés auront besoin d’un nouveau code (envoyé par e-mail).</span></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn primary sm" data-act="localTransfer">Transférer</button><button class="btn ghost sm" data-act="localTransferSkip">Ignorer</button></div></div>`;
+}
+ACTIONS.localTransfer = () => {
+  const st = localData(); if (!st) return;
+  const p = localTransferPlan(st);
+  for (let i = 0; i < p.ops.length; i += 400) db.batch(p.ops.slice(i, i + 400));
+  safeLS.set('parkpulse.transferred', '1');
+  toast(`Transféré : ${p.users} membre(s), ${p.items} élément(s). Générez maintenant leurs codes dans Équipe.`);
+  render();
+};
+ACTIONS.localTransferSkip = () => { safeLS.set('parkpulse.transferred', '1'); render(); };
 ACTIONS.goPaliers = () => { UI.memTab = 'paliers'; location.hash = '#/members'; };
 function managerCockpit() {
   const res = resToHandle(CLUB.id); const urgent = res.filter(resUrgent).length; const noOwner = res.filter(r => !r.ownerId).length;

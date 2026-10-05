@@ -61,6 +61,8 @@ const ICONS = {
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
   feed: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
+  mail: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
@@ -178,21 +180,77 @@ const localBackend = {
 
 // Firebase Realtime Database : meme arbre, sous /pulse. L'ecoute en direct
 // redessine l'ecran quand un collegue saisit quelque chose.
+//
+// CONNEXION PAR E-MAIL + CODE, depuis n'importe quel appareil :
+//  - cle = SHA-256(e-mail|code), 40 caracteres hexadecimaux (bootKey) ;
+//  - le manager qui cree un code ecrit /pulse_boot/{cle} = id du membre ;
+//  - le membre se connecte a un compte Firebase « technique »
+//    fp-{cle}@fitpulse-niort.web.app dont le mot de passe est son code
+//    (cree a la premiere connexion) ;
+//  - les regles n'ouvrent /pulse qu'a un compte dont la cle existe dans
+//    /pulse_boot. Changer ou retirer un code efface la cle : acces coupe.
+const AUTH_DOMAIN_FP = '@fitpulse-niort.web.app';
+async function bootKeyOf(email, code) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(email || '').trim().toLowerCase() + '|' + normCode(code)));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+}
+class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
 const firebaseBackend = {
-  mode: 'firebase', fb: null, root: null, user: null,
+  mode: 'firebase', fb: null, root: null, user: null, userId: null, denied: false,
   async loadSdk() {
     const v = '10.12.2';
     for (const f of ['firebase-app-compat', 'firebase-auth-compat', 'firebase-database-compat']) {
-      await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `https://www.gstatic.com/firebasejs/${v}/${f}.js`; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+      await new Promise((ok, ko) => { const s = document.createElement('script'); s.src = `https://www.gstatic.com/firebasejs/${v}/${f}.js`; s.onload = ok; s.onerror = () => ko(new LoginError('offline', 'Pas de connexion internet.')); document.head.appendChild(s); });
     }
     this.fb = window.firebase; this.fb.initializeApp(window.PARKPULSE_FIREBASE);
   },
+  keyOfUser(u) { const m = /^fp-([0-9a-f]{40})@/.exec((u && u.email) || ''); return m ? m[1] : null; },
   async start() {
     await this.loadSdk();
-    await new Promise(ok => this.fb.auth().onAuthStateChanged(u => { this.user = u; ok(); }));
-    if (this.user) await this.attach();
+    await new Promise(ok => { const off = this.fb.auth().onAuthStateChanged(u => { off(); this.user = u; ok(); }); });
+    if (!this.user) return;
+    const key = this.keyOfUser(this.user);
+    // Session ouverte sur cet appareil : on verifie que le code est toujours valable.
+    let id = null;
+    try { id = key ? await this.readBoot(key) : null; } catch (e) { id = safeLS.get(SESSION_KEY); }
+    if (!id) { await this.fb.auth().signOut(); this.user = null; return; }
+    this.userId = id;
+    await this.attach();
+  },
+  // Lecture publique d'une seule cle (jamais de la liste) : savoir si un code
+  // existe avant de creer quoi que ce soit.
+  async readBoot(key) {
+    let r;
+    try { r = await fetch(`${window.PARKPULSE_FIREBASE.databaseURL}/pulse_boot/${key}.json`, { cache: 'no-store' }); }
+    catch (e) { throw new LoginError('offline', 'Pas de connexion internet.'); }
+    if (!r.ok) throw new LoginError('server', 'Serveur indisponible (' + r.status + ').');
+    const v = await r.json();
+    return typeof v === 'string' ? v : null;
+  },
+  async codeLogin(email, code) {
+    if (!navigator.onLine) throw new LoginError('offline', 'Pas de connexion internet.');
+    const key = await bootKeyOf(email, code);
+    const id = await this.readBoot(key);
+    if (!id) throw new LoginError('bad', 'E-mail ou code incorrect.');
+    const auth = this.fb.auth(), mail = 'fp-' + key + AUTH_DOMAIN_FP, pass = normCode(code);
+    try { await auth.signInWithEmailAndPassword(mail, pass); }
+    catch (e) {
+      if (e.code === 'auth/network-request-failed') throw new LoginError('offline', 'Pas de connexion internet.');
+      if (e.code === 'auth/too-many-requests') throw new LoginError('server', 'Trop d’essais : patientez une minute.');
+      // Premiere connexion avec ce code : le compte technique n'existe pas encore.
+      try { await auth.createUserWithEmailAndPassword(mail, pass); }
+      catch (e2) {
+        if (e2.code === 'auth/network-request-failed') throw new LoginError('offline', 'Pas de connexion internet.');
+        throw new LoginError('server', 'Connexion refusée (' + (e2.code || e.code || 'inconnu') + ').');
+      }
+    }
+    this.user = auth.currentUser; this.userId = id; safeLS.set(SESSION_KEY, id);
+    await this.attach();
+    return id;
   },
   async attach() {
+    if (this.root) this.root.off();
+    this.denied = false;
     this.root = this.fb.database().ref('pulse');
     await new Promise((ok) => {
       let first = true;
@@ -200,17 +258,29 @@ const firebaseBackend = {
         const before = S;
         S = snap.val() ? normalizeState(snap.val()) : null;
         REV++;
-        if (first) { first = false; ok(); } else { detectLive(before, S); listeners.forEach(f => f()); }
-      }, err => { toast('Accès refusé à la base : votre adresse n’est pas dans l’équipe.'); ok(); });
+        if (first) { first = false; ok(); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
+      }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
     });
+    if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
   },
-  async signIn(email, pass) { await this.fb.auth().signInWithEmailAndPassword(email, pass); this.user = this.fb.auth().currentUser; await this.attach(); },
-  async signUp(email, pass) { await this.fb.auth().createUserWithEmailAndPassword(email, pass); this.user = this.fb.auth().currentUser; await this.attach(); },
-  async signOut() { if (this.root) this.root.off(); await this.fb.auth().signOut(); },
+  // Reserve le compte technique des la creation du code (mot de passe = code) :
+  // connaitre la cle ne suffit donc jamais, il faut le code. Passe par l'API
+  // REST : la session du manager n'est pas touchee.
+  async precreate(key, code) {
+    try {
+      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${window.PARKPULSE_FIREBASE.apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'fp-' + key + AUTH_DOMAIN_FP, password: normCode(code), returnSecureToken: false }) });
+    } catch (e) { /* hors ligne : le compte sera cree a la premiere connexion */ }
+  },
+  // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
+  setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
+  queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
+  async signOut() { if (this.root) this.root.off(); this.root = null; this.userId = null; await this.fb.auth().signOut(); this.user = null; },
   write(path, value) { this.fb.database().ref(['pulse', ...path].join('/')).set(value ?? null).catch(e => toast('Écriture refusée : ' + e.message)); },
   replaceAll() { this.fb.database().ref('pulse').set(S); },
   wipe() { this.fb.database().ref('pulse').set(null); },
 };
+localBackend.setBoot = () => {};
+localBackend.precreate = async () => {};
 
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
 
@@ -399,7 +469,8 @@ async function hashCode(salt, code) {
 }
 function randomCode() {
   const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint32Array(12));
-  return 'FP-' + [0, 1, 2].map(g => [0, 1, 2, 3].map(i => A[r[g * 4 + i] % A.length]).join('')).join('-');
+  const c = 'FP-' + [0, 1, 2].map(g => [0, 1, 2, 3].map(i => A[r[g * 4 + i] % A.length]).join('')).join('-');
+  return c.startsWith('FP-FP') ? randomCode() : c; // normCode retire un « FP » de tete
 }
 async function newCodeRecord() {
   const code = randomCode(); const salt = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -414,7 +485,7 @@ function bootstrapOps() {
   const allClubs = [...new Set([...Object.keys(S.clubs), ...(club ? [club.id] : [])])];
   for (const a of accounts) {
     if (S.users[a.id]) continue;
-    ops.push([['users', a.id], { id: a.id, first: a.first, last: a.last, email: a.email, role: a.role, clubs: allClubs, avatar: 'h1', status: 'active', salt: a.salt, codeHash: a.codeHash, createdAt: Date.now() }]);
+    ops.push([['users', a.id], { id: a.id, first: a.first, last: a.last, email: a.email, role: a.role, clubs: allClubs, avatar: 'h1', status: 'active', salt: a.salt, codeHash: a.codeHash, ...(a.bootKey ? { bootKey: a.bootKey } : {}), createdAt: Date.now() }]);
     if (a.email) ops.push([['team', a.email.toLowerCase().replace(/\./g, ',')], true]);
   }
   return ops;
