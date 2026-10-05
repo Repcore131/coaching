@@ -1003,3 +1003,8 @@ td.to-check { background: var(--warn-soft); }
   .card { break-inside: avoid; }
   @page { size: A4; margin: 14mm; }
 }
+#offline-bar { position: fixed; left: 50%; transform: translateX(-50%); top: 8px; z-index: 95; background: #000; color: var(--fp); border: 1px solid var(--fp); padding: 8px 14px; border-radius: 99px; font-weight: 700; font-size: 13px; }
+.prose h3 { margin: 14px 0 4px; } .prose p { margin: 0 0 6px; line-height: 1.55; }
+/* Pas de décalage de mise en page quand la barre de défilement apparaît (un clic ne se perd plus). */
+html { scrollbar-gutter: stable; }
+body:has(#modal-root .overlay) { overflow: hidden; }

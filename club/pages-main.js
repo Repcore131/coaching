@@ -490,7 +490,7 @@ PAGES.chat = {
       <div class="chat-list" id="chat-list">${list || emptyBox({ art: 'chat', title: 'Aucun message', text: 'Lancez la discussion avec votre équipe.' })}</div>
       <form class="chat-input" id="chat-form">
         <div class="spacer">${rep ? `<div class="small muted" style="margin-bottom:4px">Réponse à ${esc(fullName(S.users[rep.userId]))} <a href="javascript:void 0" data-act="chatReply" data-id="">annuler</a></div>` : ''}<textarea class="input" name="text" placeholder="Écrire un message…" rows="1" data-focus="chat"></textarea></div>
-        <label class="btn icon" title="Joindre une image">${ico('clip')}<input type="file" accept="image/*" hidden id="chat-file"></label>
+        <label class="btn icon" title="Joindre une image (pas de pièce d’identité, de RIB ni de données d’adhérent)">${ico('clip')}<input type="file" accept="image/*" hidden id="chat-file"></label>
         <button class="btn primary icon" type="submit" title="Envoyer">${ico('send')}</button>
       </form></div>`;
   },

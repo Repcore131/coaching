@@ -211,7 +211,7 @@ const localBackend = {
   mode: 'local',
   async start() { const raw = safeLS.get(LOCAL_KEY); S = raw ? normalizeState(JSON.parse(raw)) : null; },
   write(path, value) { this.flush(); },
-  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { if (!safeLS.set(LOCAL_KEY, JSON.stringify(S))) toast('Stockage du navigateur plein : exportez une sauvegarde (Mes clubs > Réglages).'); }, 150); }; })(),
+  flush: (() => { let t = null; return function () { clearTimeout(t); t = setTimeout(() => { const js = JSON.stringify(S); if (js.length > 4e6) toast('Données locales volumineuses (plus de 4 Mo) : passez en mode partagé ou exportez une sauvegarde.'); if (!safeLS.set(LOCAL_KEY, js)) toast('Stockage du navigateur plein : exportez une sauvegarde (Mes clubs > Réglages).'); }, 150); }; })(),
   replaceAll() { safeLS.set(LOCAL_KEY, JSON.stringify(S)); },
   wipe() { safeLS.del(LOCAL_KEY); },
 };
@@ -291,15 +291,19 @@ const firebaseBackend = {
     this.denied = false;
     this.root = this.fb.database().ref('pulse');
     let slow = null;
+    // Démarrage hors ligne : la dernière copie connue de la base s'affiche, l'écoute reprend au retour du réseau.
+    const cached = !navigator.onLine ? await idbGet('pulse').catch(() => null) : null;
     await new Promise((ok, ko) => {
       let first = true;
+      if (cached) { S = normalizeState(cached); REV++; first = false; this.offlineStart = true; ok(); }
       // reseau tres lent ou bloque : on ne laisse pas tourner le bouton sans fin
       slow = setTimeout(() => { if (first) { first = false; this.root.off(); ko(new LoginError('offline', 'La base ne répond pas : vérifiez votre connexion internet puis réessayez.')); } }, 25000);
       this.root.on('value', snap => {
         const before = S;
         S = snap.val() ? normalizeState(snap.val()) : null;
         REV++;
-        if (first) { first = false; ok(); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
+        snapSave(snap.val());
+        if (first) { first = false; ok(); setTimeout(outboxReplay, 1000); } else { detectLive(before, S); if (ME && S && S.users[ME.id]) ME = S.users[ME.id]; listeners.forEach(f => f()); }
       }, () => { this.denied = true; if (first) { first = false; ok(); } else { toast('Votre accès a été retiré.'); logout(); } });
     }).finally(() => clearTimeout(slow));
     if (this.denied) { await this.fb.auth().signOut(); this.user = null; throw new LoginError('bad', 'Accès refusé : ce code n’est plus valable.'); }
@@ -315,8 +319,8 @@ const firebaseBackend = {
   // Cles de connexion : ecrites a part (hors /pulse), en une seule fois.
   setBoot(map) { const up = {}; for (const [k, v] of Object.entries(map)) if (/^[0-9a-f]{40}$/.test(k)) up['pulse_boot/' + k] = v; if (Object.keys(up).length) return this.fb.database().ref().update(up).catch(e => toast('Code non enregistré : ' + e.message)); },
   queueMail(d) { return this.fb.database().ref('fitpulse_mail').push({ ...d, at: this.fb.database.ServerValue.TIMESTAMP }); },
-  async signOut() { if (this.root) this.root.off(); this.root = null; this.userId = null; await this.fb.auth().signOut(); this.user = null; },
-  write(path, value) { this.fb.database().ref(['pulse', ...path].join('/')).set(value ?? null).catch(e => toast('Écriture refusée : ' + e.message)); },
+  async signOut() { if (this.root) this.root.off(); this.root = null; if (window.indexedDB) idbSet('pulse', null).catch(() => null); this.userId = null; await this.fb.auth().signOut(); this.user = null; },
+  write(path, value) { const up = { [path.join('/')]: value ?? null }; outboxPush(up); this.fb.database().ref('pulse').update(up).then(() => outboxDone(up), e => writeFail(e)); },
   replaceAll() { this.fb.database().ref('pulse').set(S); },
   wipe() { this.fb.database().ref('pulse').set(null); },
 };
@@ -324,6 +328,21 @@ localBackend.setBoot = () => {};
 localBackend.precreate = async () => {};
 
 const backend = window.PARKPULSE_FIREBASE ? firebaseBackend : localBackend;
+// File d'écritures gardée sur l'appareil tant que la base n'a pas confirmé : une saisie faite
+// hors ligne survit à un rechargement et repart au retour du réseau.
+// Copie locale de la base (IndexedDB) pour démarrer sans réseau.
+function idbOpen() { return new Promise((ok, ko) => { const r = indexedDB.open('fitpulse', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); }
+async function idbGet(k) { const d = await idbOpen(); return new Promise((ok, ko) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result || null); q.onerror = () => ko(q.error); }); }
+async function idbSet(k, v) { const d = await idbOpen(); return new Promise((ok, ko) => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => ok(); t.onerror = () => ko(t.error); }); }
+const snapSave = (() => { let t = null; return v => { clearTimeout(t); t = setTimeout(() => { if (v && window.indexedDB) idbSet('pulse', v).catch(() => null); }, 3000); }; })();
+const OUTBOX_KEY = 'fitpulse.outbox';
+const outboxRead = () => { try { return JSON.parse(safeLS.get(OUTBOX_KEY) || '[]'); } catch (_) { return []; } };
+const outboxSig = up => Object.keys(up).sort().join('|') + '#' + JSON.stringify(Object.keys(up).sort().map(k => up[k])).length;
+function outboxPush(up) { if (navigator.onLine) return; const L = outboxRead(); L.push({ sig: outboxSig(up), up, at: Date.now() }); safeLS.set(OUTBOX_KEY, JSON.stringify(L.slice(-500))); if (typeof renderOffline === 'function') renderOffline(); }
+function outboxDone(up) { const L = outboxRead(); if (!L.length) return; const sig = outboxSig(up); const i = L.findIndex(x => x.sig === sig); if (i >= 0) { L.splice(i, 1); safeLS.set(OUTBOX_KEY, JSON.stringify(L)); if (typeof renderOffline === 'function') renderOffline(); } }
+function outboxReplay() { if (backend.mode !== 'firebase' || !backend.fb || !navigator.onLine) return; const L = outboxRead(); if (!L.length) return; L.reduce((pr, x) => pr.then(() => backend.fb.database().ref('pulse').update(x.up).then(() => outboxDone(x.up))), Promise.resolve()).catch(writeFail); }
+function writeFail(e) { toast('Écriture refusée : ' + ((e && e.message) || 'erreur inconnue')); if (typeof logError === 'function') logError('write', e); }
+addEventListener('online', () => setTimeout(outboxReplay, 1500));
 
 const db = {
   set(path, value) {
@@ -337,7 +356,13 @@ const db = {
     ops.forEach(([p, v]) => setPath(S, p, v));
     REV++;
     if (backend.mode === 'local') backend.write();
-    else { const up = {}; ops.forEach(([p, v]) => { up[p.join('/')] = v ?? null; }); backend.fb.database().ref('pulse').update(up).catch(e => toast('Écriture refusée : ' + e.message)); }
+    else {
+      // Lots de 500 chemins au plus, envoyés l'un après l'autre (un import de 50 000 lignes passe).
+      const keys = ops.map(([p]) => p.join('/')); const all = {}; ops.forEach(([p, v]) => { all[p.join('/')] = v ?? null; });
+      const chunks = []; for (let i = 0; i < keys.length; i += 500) { const up = {}; keys.slice(i, i + 500).forEach(k => { up[k] = all[k]; }); chunks.push(up); }
+      chunks.forEach(outboxPush);
+      chunks.reduce((pr, up) => pr.then(() => backend.fb.database().ref('pulse').update(up).then(() => outboxDone(up))), Promise.resolve()).catch(writeFail);
+    }
     listeners.forEach(f => f());
   },
   replace(state) { S = normalizeState(state); REV++; backend.replaceAll(); listeners.forEach(f => f()); },
@@ -345,7 +370,10 @@ const db = {
 };
 
 // Complete les collections absentes (Firebase n'enregistre pas les objets vides).
+const BIRTH_FIX = new Set(); // fiches dont l'année de naissance reste à effacer en base
 function normalizeState(st) {
+  // Minimisation : la date de naissance ne garde que le jour et le mois (MM-JJ).
+  if (st && st.clients) for (const c of Object.values(st.clients)) if (c && typeof c.birth === 'string' && c.birth.length > 5) { c.birth = c.birth.slice(-5); if (c.id) BIRTH_FIX.add(c.id); }
   // Anciens KPI : le champ emoji (texte libre) devient un nom d'icone controle.
   if (st.kpis) for (const k of Object.values(st.kpis)) if (k && k.emoji !== undefined) { if (!k.icon) k.icon = KPI_ICON[k.id] || 'target'; delete k.emoji; }
   const base = emptyState();
@@ -440,7 +468,7 @@ function demoState() {
     const start = addDays(today(), -Math.floor(R() * 400));
     const end = addDays(today(), Math.floor(R() * 120) - 20);
     const bal = R() < .22 ? Math.round((20 + R() * 180) * 100) / 100 : 0;
-    st.clients['c' + i] = { id: 'c' + i, clubId: club, name: `${pick(P)} ${pick(N)}`, phone: `06 ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))}`, birth: i % 3 ? addDays(birth, 0) : null, start, end, balance: bal, offer: pick(['Ultimate', 'Premium', 'Basic', 'Ultimate']) };
+    st.clients['c' + i] = { id: 'c' + i, clubId: club, name: `${pick(P)} ${pick(N)}`, phone: `06 ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))} ${pad(Math.floor(R() * 99))}`, birth: i % 3 ? birth.slice(5) : null, start, end, balance: bal, offer: pick(['Ultimate', 'Premium', 'Basic', 'Ultimate']) };
   }
   // Quelques relances deja faites
   ['c1', 'c2', 'c5'].forEach((c, i) => { st.loyalty['l' + i] = { id: 'l' + i, clientId: c, type: 'suivi', userId: ['u3', 'u4', 'u2'][i], outcome: i === 1 ? 'noanswer' : 'ok', note: '', at: Date.now() - (i + 1) * 86400000 }; });

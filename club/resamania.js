@@ -297,7 +297,7 @@ const RSM_DEFS = [
     sig: has => has('date d anniversaire') && has('numero'),
     parse(c) {
       const iNum = c.col('numero'), iBd = c.col('date d anniversaire'), iNom = c.colExact('nom'), iPre = c.col('prenom'), iEtat = c.col('etat'), iCom = c.col('commercial');
-      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: rsmDate(r[iBd]), status: r[iEtat] || '', seller: r[iCom] || '', ...c.contact(r) }); }
+      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: (rsmDate(r[iBd]) || '').slice(5) || null, status: r[iEtat] || '', seller: r[iCom] || '', ...c.contact(r) }); }
     },
   },
   {

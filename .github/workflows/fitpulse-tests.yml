@@ -1,0 +1,32 @@
+# Fit Pulse : vérifications rapides à chaque modification de club/ (syntaxe de
+# tous les scripts, tests du moteur de calcul et des montants, règles d'accès).
+name: Fit Pulse - tests
+
+on:
+  pull_request:
+    paths:
+      - 'club/**'
+      - '.github/workflows/fitpulse-tests.yml'
+  push:
+    branches: [main, 'claude/eloquent-lamport-0qxwdd']
+    paths:
+      - 'club/**'
+      - '.github/workflows/fitpulse-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Paris
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntaxe des scripts
+        run: for f in club/*.js; do node --check "$f"; done
+      - name: Tests du moteur
+        run: node --test club/tests/*.mjs
+      - name: Bloc de règles Fit Pulse généré
+        run: node -e "import('./club/outils/fitpulse-serveur.mjs').then(m => { if (!m.REGLE.includes('\"pulse\"')) process.exit(1); console.log('règles ok'); })"

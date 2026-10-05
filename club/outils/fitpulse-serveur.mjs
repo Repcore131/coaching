@@ -96,6 +96,8 @@ export const REGLE = `${DEBUT}
       "companies": { ".write": ${j(MEMBRE)} },
       "opps": { ".write": ${j(MEMBRE)} },
       "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
+      "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },
+      "logs": { "$club": { "$day": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } } } },
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
       "$autre": { ".write": ${j(MGR)} }
     },

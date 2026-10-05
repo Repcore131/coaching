@@ -228,9 +228,14 @@ document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (el && ACTIONS[el.dataset.change]) ACTIONS[el.dataset.change](el, e);
 });
+// Recherches : un seul rendu 200 ms après la dernière frappe (le curseur reste en place).
+const debounce = (fn, ms) => { let t = null; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounced = {};
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-input]');
-  if (el && ACTIONS[el.dataset.input]) ACTIONS[el.dataset.input](el, e);
+  if (!el || !ACTIONS[el.dataset.input]) return;
+  const k = el.dataset.input;
+  if (/Q$/.test(k)) { (debounced[k] = debounced[k] || debounce(ACTIONS[k], 200))(el, e); } else ACTIONS[k](el, e);
 });
 // onglets / segments generiques : data-ui="cle" data-val="valeur"
 ACTIONS.ui = el => { UI[el.dataset.key] = el.dataset.val; render(); };

@@ -192,6 +192,8 @@ ACTIONS.rsmCommit = () => {
       ops.push([['recov', id], { id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now }]);
       summary.recov++;
     }
+    const wasErased = typeof erasedNums === 'function' ? erasedNums(club) : () => false; const back = Object.keys(r.clients).filter(wasErased);
+    if (back.length) summary.erased = (summary.erased || 0) + back.length;
     for (const [num, o0] of Object.entries(r.clients)) {
       const { sellerObj, ...o } = o0; if (sellerObj) { const sid = pick(sellerObj); if (sid) o.sellerId = sid; }
       const c0 = clientIdx['n:' + num] || { id: 'c' + hkey(club + '|n:' + num), clubId: club, num };
@@ -288,6 +290,7 @@ function rsmDoneCard() {
   return `<div class="card" style="margin-bottom:14px;border-color:var(--ok)"><div class="card-head">${ico('check')}<h3>Import terminé</h3><span class="spacer"></span><button class="btn ghost sm" data-act="ui" data-key="rsmDone" data-val="">${ico('x')}</button></div>
     <div class="row wrap" style="gap:22px"><div><div class="muted small">Fichiers</div><b class="title t-20">${s.files}</b></div><div><div class="muted small">Saisies créées</div><b class="title t-20">${s.entries}</b></div><div><div class="muted small">Déjà connues (mises à jour, pas de doublon)</div><b class="title t-20">${s.updated}</b></div><div><div class="muted small">Régularisations d’impayés</div><b class="title t-20">${s.recov}</b></div><div><div class="muted small">Fiches clients</div><b class="title t-20">${s.clients}</b></div><div><div class="muted small">Résiliations</div><b class="title t-20">${s.resil}</b></div></div>
     ${perfTot != null ? `<div class="alert ${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'info' : ''}" style="margin-top:12px">${ico('target')}<div><b>Contrôle ${monthLabel(mk)} : ${fmtN(ppC)} contrats dans Fit Pulse, ${fmtN(perfTot)} dans les performances commerciales Resamania</b>${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'Les deux sources concordent.' : 'Écart à vérifier : vente d’abonnements incomplète, ou changements d’offre comptés d’un côté seulement.'}</div></div>` : ''}
+    ${s.erased ? `<div class="alert" style="margin-top:12px">${ico('alert')}<div><b>${plur(s.erased, 'adhérent effacé revient', 'adhérents effacés reviennent')} dans cet import</b>Vérifiez qu’ils ont bien un nouveau contrat ; sinon, effacez de nouveau la fiche.</div></div>` : ''}
     ${s.matched2 || s.doubt || s.nomatch ? `<p class="small" style="margin:12px 0 0">Fins de contrat : <b>${s.matched2 || 0}</b> rattachées, <b>${s.doubt || 0}</b> à vérifier, <b>${s.nomatch || 0}</b> sans correspondance.</p>` : ''}
     ${s.recov ? `<div style="margin-top:12px"><a class="btn sm primary" href="#/impayes">Voir les impayés par canal ${ico('chevR')}</a></div>` : ''}</div>`;
 }
