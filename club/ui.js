@@ -165,7 +165,7 @@ function shell(route, inner) {
     <main class="main">
       <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(window.PARKPULSE_ASSETS || {}).icon ? `<img class="top-icon" src="${window.PARKPULSE_ASSETS.icon}" alt="">` : ''}
         <b class="title t-16">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
-        <div class="countdown" id="countdown"></div>${bellBtn()}<button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
+        <div class="countdown" id="countdown"></div><button class="btn ghost icon" data-act="search" aria-label="Rechercher un client">${ico('search')}</button>${bellBtn()}<button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
       <div class="page page-${route}">${inner}</div>
     </main>
     ${tabBar(route)}

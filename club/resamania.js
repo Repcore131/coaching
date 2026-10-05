@@ -306,8 +306,7 @@ const RSM_DEFS = [
     sig: has => has('fin d engagement') && has('libelle') && has('contact'),
     parse(c) {
       const iC = c.col('contact'), iL = c.col('libelle'), iFE = c.col('fin d engagement'), iFV = c.col('fin de validite'), iDeb = c.col('debut de validite');
-      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); if (!r[iC] || !end) continue; c.clientByName(r[iC], { end, offer: r[iL] || '', start: rsmDate(r[iDeb]) }); }
-      c.warn('Cette liste n’a pas de numéro client : rapprochement par nom (homonymes possibles).');
+      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); const name = cleanContact(r[iC]); if (!name || !end) continue; c.clientByName(name, { end, offer: r[iL] || '', start: rsmDate(r[iDeb]), strict: true }); }
     },
   },
   {
@@ -421,6 +420,8 @@ function linesParse(c, avoir) {
   }
 }
 
+// Nom de contact sans civilité, parenthèses ni e-mail entre chevrons.
+const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
 function detectDef(t) {
   const H = t.headers.map(norm);
   const has = p => { const n = norm(p); return H.some(h => h === n || h.includes(n)); };

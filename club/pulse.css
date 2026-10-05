@@ -985,3 +985,7 @@ td.to-check { background: var(--warn-soft); }
 .tour-card p { margin: 0; color: #ddd; line-height: 1.5; }
 .tour-dots { display: flex; gap: 6px; } .tour-dots i { width: 8px; height: 8px; border-radius: 50%; background: #444; } .tour-dots i.on { background: var(--fp); width: 22px; border-radius: 4px; }
 @media (max-width: 560px) { .dash-top .hero { grid-template-columns: 1fr; } .dash-top .hero-ring { justify-self: center; } .dash-top .hero .big { font-size: var(--t-40); } }
+.hours { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 150px; }
+.hours div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; text-align: center; font-size: 11px; }
+.hours i { align-self: end; background: var(--fp); border-radius: 6px 6px 0 0; min-height: 2px; }
+.hours small { color: var(--muted); }

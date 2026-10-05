@@ -104,9 +104,14 @@ function relancesFor(clubId) {
       rl.touches = touchesOf(rl.key);
       rl.attempts = rl.attempts || rl.touches.filter(x => x.channel === 'call' && !(TOUCH_OUTCOMES[x.outcome] || {}).reached).length;
       rl.status = rl.status || 'todo';
-      rl.score = relScore(rl);
+      // Promesse arrivée à échéance : tenue si le solde a baissé du montant promis, sinon elle remonte en tête.
+      const dn = c && c.dunning; if (rl.kind === 'impaye' && dn && dn.status === 'promesse' && dn.promiseDate && dn.promiseDate < t) { if (dn.promiseBase != null && Number(c.balance) <= Number(dn.promiseBase) - Number(dn.promiseAmount || 0) + 0.01) rl.promiseKept = true; else { rl.broken = true; rl.nextAt = 0; rl.status = 'todo'; } }
+      // Responsable archivé ou absent depuis 3 jours : sa relance en retard redevient libre, à réattribuer.
+      const ow = rl.ownerId && S.users[rl.ownerId]; const seen = ow && deepGet(S, ['prefs', ow.id, 'lastSeen']);
+      if (rl.ownerId && rl.due && rl.due < t && (!ow || ow.status === 'archived' || (seen && Date.now() - seen > 3 * 864e5))) { rl.reassign = true; rl.ownerId = null; }
+      rl.score = relScore(rl) + (rl.broken ? 60 : 0);
     });
-    return out.filter(rl => !['gagne', 'perdu', 'annule'].includes(rl.status));
+    return out.filter(rl => !['gagne', 'perdu', 'annule'].includes(rl.status) && !rl.promiseKept);
   });
 }
 const touchesOf = key => Object.values(S.touches || {}).filter(x => x.relKey === key).sort((a, b) => b.at - a.at);
@@ -211,16 +216,17 @@ PAGES.relances = {
     const seg0 = UI.relSeg || 'file';
     const scope = UI.relScope || (isManager() ? 'all' : 'mine');
     const head = `<div class="page-head"><div><h1>Relances</h1><p>Une seule liste, triée par urgence : appeler, noter, passer au suivant.</p></div><span class="spacer"></span>${seg0 === 'file' ? '<button class="btn primary" data-act="relSession">Démarrer la session</button>' : ''}</div>
-      ${tabs('relSeg', [['file', 'File d’appels'], ['resiliations', 'Résiliations'], ['impayes', 'Impayés'], ['retention', 'Rétention']], seg0)}`;
+      ${tabs('relSeg', [['file', 'File d’appels'], ['resiliations', 'Résiliations'], ['impayes', 'Impayés'], ['retention', 'Rétention'], ['perf', 'Performance']], seg0)}`;
     if (seg0 === 'resiliations') return head + PAGES.resiliations.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'impayes') return head + PAGES.impayes.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
+    if (seg0 === 'perf') return head + relPerf();
     if (seg0 === 'retention') return head + PAGES.loyalty.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     const Q = relQueue(CLUB.id, scope);
     const kf = UI.relKind || 'all';
     const f = rows => rows.filter(r => kf === 'all' || r.list.some(rl => rl.kind === kf));
     const counts = {}; relQueue(CLUB.id, scope).now.forEach(r => r.list.forEach(rl => { counts[rl.kind] = (counts[rl.kind] || 0) + 1; }));
     return head + `<div class="rel-tiles"><div><b>${Q.now.length}</b><span>à appeler maintenant</span></div><div><b>${Q.later.length}</b><span>rappels plus tard aujourd’hui</span></div><div><b>${Q.nophone.length}</b><span>sans téléphone</span></div></div>
-      <div class="row wrap" style="gap:8px;margin:12px 0">${seg('relScope', [['mine', 'Mes relances'], ['nobody', 'Non attribuées'], ['all', 'Tout le club']], scope)}
+      <div class="row wrap" style="gap:8px;margin:12px 0">${seg('relScope', [['mine', 'Mes relances'], ['nobody', 'Non attribuées'], ['all', 'Tout le club']], scope)}${isManager() && scope === 'nobody' && Q.now.length ? '<button class="btn sm" data-act="relSpread">Répartir équitablement</button>' : ''}
         <div class="chips">${[['all', 'Tout'], ...Object.entries(REL_KINDS).filter(([k]) => counts[k]).map(([k, v]) => [k, `${v.label} ${counts[k]}`])].map(([k, l]) => `<button class="chip-radio ${kf === k ? 'on' : ''}" data-act="ui" data-key="relKind" data-val="${k}"><span>${l}</span></button>`).join('')}</div></div>
       ${f(Q.now).length ? `<div class="rel-list">${f(Q.now).map(relRow).join('')}</div>` : emptyBox({ art: 'done', title: scope === 'mine' ? 'Aucune relance à votre nom' : 'Tout est à jour', text: scope === 'mine' ? 'Prenez une relance non attribuée.' : 'Revenez après le prochain import Resamania.', cta: scope === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="relScope" data-val="nobody">Voir les non attribuées</button>' : '' })}
       ${Q.later.length ? `<h3 class="rel-h">Rappels plus tard aujourd’hui</h3><div class="rel-list">${Q.later.map(relRow).join('')}</div>` : ''}
@@ -234,7 +240,7 @@ function relRow(r) {
   const L = contactLinks(rl);
   const last = r.lastTouch;
   return `<div class="rel-row ${lock ? 'locked' : ''}">
-    <div class="rel-main"><div class="rel-name"><a href="#/client/${esc(rl.clientId || '')}" ${rl.clientId ? '' : 'onclick="return false"'}><b>${esc(r.name)}</b></a>${kinds.map(k => `<span class="tag ${k === 'resiliation' || k === 'impaye' ? 'is-warn' : ''}">${REL_KINDS[k].label}</span>`).join('')}</div>
+    <div class="rel-main"><div class="rel-name"><a href="#/client/${esc(rl.clientId || '')}" ${rl.clientId ? '' : 'onclick="return false"'}><b>${esc(r.name)}</b></a>${kinds.map(k => `<span class="tag ${k === 'resiliation' || k === 'impaye' ? 'is-warn' : ''}">${REL_KINDS[k].label}</span>`).join('')}${r.list.some(x => x.broken) ? '<span class="tag is-bad">Promesse non tenue</span>' : ''}${r.list.some(x => x.reassign) ? '<span class="tag is-info">Réattribuer</span>' : ''}</div>
       <div class="muted small">${r.list.map(x => esc(x.reason)).join(' · ')}</div>
       <div class="muted small">${owner ? 'Responsable : ' + esc(owner) : 'Non attribuée'}${rl.attempts ? ` · ${plur(rl.attempts, 'tentative', 'tentatives')}` : ''}${last ? ` · dernier contact ${ago(last.at)} : ${esc((TOUCH_OUTCOMES[last.outcome] || {}).label || last.outcome)}` : ''}${r.next > Date.now() ? ` · rappel à ${new Date(r.next).toTimeString().slice(0, 5)}` : ''}${lock ? ` · <b>en cours par ${esc((S.users[lock.claimedBy] || {}).first || 'un collègue')}</b>` : ''}</div></div>
     <div class="rel-acts">
@@ -328,7 +334,7 @@ ACTIONS.relSave = el => {
   const T = TOUCH_OUTCOMES[o]; const ops = []; let next = null, status = rl.status === 'todo' ? 'encours' : rl.status, extra = {};
   const t = { channel: ch, outcome: o, note: (f.note || '').trim().slice(0, 280) };
   if (o === 'rappeler') { next = new Date(f.callbackAt).getTime(); status = 'attente'; t.callbackAt = next; }
-  else if (o === 'promesse') { const a = parseMontant(f.promiseAmount); t.promiseAmount = a; t.promiseDate = f.promiseDate; next = dateOf(addDays(f.promiseDate, 1)).getTime() + 10 * 3600000; status = 'attente'; if (rl.client) ops.push(dunPatch(rl.client, { status: 'promesse', promiseAmount: a, promiseDate: f.promiseDate, next: addDays(f.promiseDate, 1) }, `Promesse : ${fmtE(a)} le ${dm(f.promiseDate)}`)); }
+  else if (o === 'promesse') { const a = parseMontant(f.promiseAmount); t.promiseAmount = a; t.promiseDate = f.promiseDate; next = dateOf(addDays(f.promiseDate, 1)).getTime() + 10 * 3600000; status = 'attente'; if (rl.client) ops.push(dunPatch(rl.client, { status: 'promesse', promiseBase: Number(rl.client.balance) || 0, promiseAmount: a, promiseDate: f.promiseDate, next: addDays(f.promiseDate, 1) }, `Promesse : ${fmtE(a)} le ${dm(f.promiseDate)}`)); }
   else if (o === 'rdv') { t.rdvAt = new Date(f.rdvAt).getTime(); t.rdvObj = f.rdvObj; status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'rdv' }; }
   else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaidOps(rl.client, a, 'equipe', rl.ownerId || ME.id, 'relances')); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
   else if (o === 'sauve') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'sauve' }; }
@@ -395,3 +401,61 @@ PAGES.equipe = {
   },
   mount() { const t = UI.eqTab || 'fil'; if (t === 'chat' && PAGES.chat.mount) PAGES.chat.mount(); if (t === 'fil' && PAGES.feed.mount) PAGES.feed.mount(); },
 };
+
+// ── Répartir les relances non attribuées entre les membres actifs ─────────
+ACTIONS.relSpread = async () => {
+  const kf = UI.relKind || 'all'; const free = relQueue(CLUB.id, 'nobody').now.filter(r => kf === 'all' || r.list.some(rl => rl.kind === kf));
+  const team = clubMembers(CLUB.id).filter(u => u.role === 'membre'); const pool = team.length ? team : clubMembers(CLUB.id); if (!pool.length || !free.length) return;
+  const load = {}; pool.forEach(u => { load[u.id] = relancesFor(CLUB.id).filter(rl => rl.ownerId === u.id).length; });
+  if (!await confirmDlg(`Répartir ${plur(free.length, 'client', 'clients')} entre ${plur(pool.length, 'membre', 'membres')}, en tenant compte de ce que chacun a déjà en cours ?`, { ok: 'Répartir' })) return;
+  const ops = [];
+  free.forEach(r => { const u = pool.slice().sort((a, b) => load[a.id] - load[b.id] || a.first.localeCompare(b.first))[0]; load[u.id]++; r.list.forEach(rl => ops.push(...relPatch(rl, { ownerId: u.id }))); });
+  db.batch(ops); toast('Relances réparties');
+};
+
+// ── Performance des relances (mois, club et par commercial) ───────────────
+function relPerf() {
+  const mk = UI.relPerfMonth || curMonth(); const r = rangeOf('month', mk); const from = dateOf(r.from).getTime(), to = dateOf(r.to).getTime() + 864e5;
+  const T = Object.values(S.touches || {}).filter(t => t.clubId === CLUB.id && t.at >= from && t.at < to);
+  const calls = T.filter(t => t.channel === 'call'); const reached = calls.filter(t => (TOUCH_OUTCOMES[t.outcome] || {}).reached);
+  const msgs = T.filter(t => ['sms', 'whatsapp', 'email'].includes(t.channel)).length;
+  const rels = Object.entries(S.relances || {}).map(([key, v]) => ({ key, ...v })).filter(v => v.closedAt >= from && v.closedAt < to && (v.clubId === CLUB.id || !v.clubId));
+  const kindOf = v => v.kind || String(v.key).split('_')[0];
+  const conv = L => { const g = L.filter(v => v.status === 'gagne').length, p = L.filter(v => v.status === 'perdu').length; return g + p ? g / (g + p) : null; };
+  const firstDelay = L => { const d = L.map(v => { const tt = Object.values(S.touches || {}).filter(t => t.relKey === v.key).sort((a, b) => a.at - b.at)[0]; const an = String(v.key).split('_').pop() || ''; const t0 = v.createdAt || (/^\d{4}-\d{2}-\d{2}$/.test(an) ? dateOf(an).getTime() + 9 * 3600000 : null); return tt && t0 ? (tt.at - t0) / 3600000 : null; }).filter(x => x != null && x >= 0); return d.length ? d.reduce((s, x) => s + x, 0) / d.length : null; };
+  const recov = typeof recovList === 'function' ? recovList(CLUB.id, r.from, r.to) : [];
+  const team = recov.filter(x => x.canal === 'equipe').reduce((s, x) => s + x.amount, 0);
+  const touchedNums = c => Object.values(S.touches || {}).filter(t => t.clientId === c.id && t.clubId === CLUB.id);
+  const infl = recov.filter(x => x.canal !== 'equipe' && x.clientNum).filter(x => { const c = clubClients(CLUB.id).find(cc => String(cc.num) === String(x.clientNum)); if (!c) return false; const lim = dateOf(x.date).getTime(); return touchedNums(c).some(t => t.at <= lim + 864e5 && t.at >= lim - 14 * 864e5 && ['joint', 'promesse', 'envoye'].includes(t.outcome)); }).reduce((s, x) => s + x.amount, 0);
+  const pct = (a, b) => (b ? fmtP(a / b) : 'n.d.'); const hrs = v => (v == null ? 'n.d.' : v < 48 ? `${Math.round(v)} h` : `${Math.round(v / 24)} j`);
+  const kinds = Object.keys(REL_KINDS);
+  const late = relancesFor(CLUB.id).filter(rl => ['todo', 'attente'].includes(rl.status) && ((rl.nextAt && rl.nextAt < Date.now() - 2 * 864e5) || (rl.due && rl.due < addDays(today(), -2))));
+  const users = isManager() ? clubMembers(CLUB.id) : [ME];
+  const h90 = Object.values(S.touches || {}).filter(t => t.clubId === CLUB.id && t.channel === 'call' && t.at >= Date.now() - 90 * 864e5);
+  const hours = Array.from({ length: 12 }, (_, i) => i + 9).map(h => { const L = h90.filter(t => new Date(t.at).getHours() === h); return { h, n: L.length, p: L.length ? L.filter(t => (TOUCH_OUTCOMES[t.outcome] || {}).reached).length / L.length : 0 }; });
+  return `<div class="row wrap" style="margin:12px 0">${monthNav('relPerfMonth', mk)}<span class="spacer"></span><button class="btn sm" data-act="relCsv">${ico('download')} CSV des contacts du mois</button></div>
+    <div class="rc-grid"><div class="rc-tile"><span>Joignabilité</span><b>${pct(reached.length, calls.length)}</b><small>${plur(calls.length, 'appel', 'appels')}, ${plur(msgs, 'message', 'messages')}</small></div><div class="rc-tile"><span>Conversion</span><b>${conv(rels) == null ? 'n.d.' : fmtP(conv(rels))}</b><small>relances gagnées sur closes</small></div><div class="rc-tile"><span>Récupéré par l’équipe</span><b>${fmtE(team)}</b><small>impayés, canal équipe</small></div><div class="rc-tile"><span>Euros influencés</span><b>${fmtE(infl)}</b><small>payés dans les 14 jours après un contact</small></div><div class="rc-tile"><span>Premier contact</span><b>${hrs(firstDelay(rels))}</b><small>délai moyen</small></div><div class="rc-tile"><span>En retard</span><b>${late.length}</b><small>de plus de 2 jours</small></div></div>
+    <div class="g12" style="margin-top:14px"><div class="card col6"><h3>Par type de relance</h3><div class="table-wrap"><table class="t"><thead><tr><th>Type</th><th class="num">Tentatives</th><th class="num">Joignabilité</th><th class="num">Conversion</th><th class="num">Délai</th></tr></thead><tbody>
+      ${kinds.map(k => { const C = calls.filter(t => t.kind === k); const L = rels.filter(v => kindOf(v) === k); return C.length || L.length ? `<tr><td>${REL_KINDS[k].label}</td><td class="num">${C.length}</td><td class="num">${pct(C.filter(t => (TOUCH_OUTCOMES[t.outcome] || {}).reached).length, C.length)}</td><td class="num">${conv(L) == null ? 'n.d.' : fmtP(conv(L))}</td><td class="num">${hrs(firstDelay(L))}</td></tr>` : ''; }).join('') || '<tr><td colspan="5" class="muted">Aucune relance ce mois-ci.</td></tr>'}</tbody></table></div></div>
+    <div class="card col6"><h3>Par commercial</h3><div class="table-wrap"><table class="t"><thead><tr><th>Commercial</th><th class="num">Tentatives</th><th class="num">Joignabilité</th><th class="num">Gagnées</th><th class="num">Euros</th><th class="num">En retard</th></tr></thead><tbody>
+      ${users.map(u => { const C = calls.filter(t => t.by === u.id); return `<tr><td>${esc(fullName(u))}</td><td class="num">${C.length}</td><td class="num">${pct(C.filter(t => (TOUCH_OUTCOMES[t.outcome] || {}).reached).length, C.length)}</td><td class="num">${rels.filter(v => v.closedBy === u.id && v.status === 'gagne').length}</td><td class="num">${fmtE(recov.filter(x => x.canal === 'equipe' && x.userId === u.id).reduce((s, x) => s + x.amount, 0))}</td><td class="num">${late.filter(rl => rl.ownerId === u.id).length}</td></tr>`; }).join('')}
+      ${isManager() ? '' : `<tr class="total"><td>Club</td><td class="num">${calls.length}</td><td class="num">${pct(reached.length, calls.length)}</td><td class="num">${rels.filter(v => v.status === 'gagne').length}</td><td class="num">${fmtE(team)}</td><td class="num">${late.length}</td></tr>`}</tbody></table></div></div>
+    <div class="card col12"><h3>Meilleures heures d’appel</h3><p class="muted small">Joignabilité par heure, 90 derniers jours.</p><div class="hours">${hours.map(x => `<div title="${plur(x.n, 'appel', 'appels')}"><i style="height:${Math.round(x.p * 100)}%"></i><span>${x.h} h</span><small>${x.n ? fmtP(x.p) : ''}</small></div>`).join('')}</div></div></div>`;
+}
+ACTIONS.relCsv = () => {
+  const mk = UI.relPerfMonth || curMonth(); const r = rangeOf('month', mk); const from = dateOf(r.from).getTime(), to = dateOf(r.to).getTime() + 864e5;
+  const T = Object.values(S.touches || {}).filter(t => t.clubId === CLUB.id && t.at >= from && t.at < to).sort((a, b) => a.at - b.at);
+  downloadFile(`fitpulse-contacts-${mk}-CONFIDENTIEL.csv`, toCsv(['Date', 'Heure', 'Par', 'Client', 'Canal', 'Issue', 'Note'], T.map(t => [dmy(isoOf(new Date(t.at))), new Date(t.at).toTimeString().slice(0, 5), t.by && S.users[t.by] ? fullName(S.users[t.by]) : '', t.clientId && S.clients[t.clientId] ? S.clients[t.clientId].name : '', t.channel, (TOUCH_OUTCOMES[t.outcome] || {}).label || t.outcome || '', t.note || ''])), 'text/csv;charset=utf-8');
+  db.set(['audit', newId()], { at: Date.now(), by: ME.id, action: 'export_csv', club: CLUB.id, type: 'contacts', lignes: T.length });
+};
+
+// ── Recherche globale (nom, numéro, téléphone), club courant ─────────────
+ACTIONS.search = () => {
+  openModal({ title: 'Rechercher un client', body: `<input class="input" id="gs-q" placeholder="Nom, numéro Resamania ou téléphone" autocomplete="off"><div id="gs-res" style="margin-top:10px"></div>`, onMount: m => { const q = $('#gs-q', m); q.addEventListener('input', () => { $('#gs-res', m).innerHTML = searchResults(q.value); }); setTimeout(() => q.focus(), 30); } });
+};
+function searchResults(q) {
+  const n = norm(q || '').trim(); const digits = String(q || '').replace(/\D/g, ''); if (n.length < 2 && digits.length < 3) return '';
+  const dig = d => String(d || '').replace(/\D/g, '').replace(/^33/, '0');
+  const L = clubClients(CLUB.id).filter(c => (n && norm(c.name || '').includes(n)) || (digits.length >= 3 && (String(c.num || '').includes(digits) || dig(c.phone).includes(digits.replace(/^33/, '0')) || dig(c.phone2).includes(digits)))).slice(0, 12);
+  return L.length ? L.map(c => `<a class="row opp-mini" href="#/client/${esc(c.id)}" data-close><span class="spacer"><b>${esc(c.name || 'Sans nom')}</b><span class="muted small">${c.num ? 'n° ' + esc(c.num) + ' · ' : ''}${esc(phoneFmt(clientPhone(c)) || 'pas de téléphone')}${c.status && /ancien/.test(norm(c.status)) ? ' · ancien membre' : ''}</span></span>${ico('chevR')}</a>`).join('') : '<p class="muted small">Aucun client trouvé dans ce club.</p>';
+}

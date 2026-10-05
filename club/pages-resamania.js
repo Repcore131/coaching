@@ -31,7 +31,7 @@ const ctrl = (clubId = CLUB.id) => deepGet(S, ['rsm', 'controls', clubId]) || {}
 function impRsm() {
   if (UI.rsmBusy) return `<div class="card empty"><div class="title">Lecture des fichiers…</div><p>Décompression et reconnaissance des exports Resamania.</p></div>`;
   if (UI.rsmBatch) return rsmReview();
-  const done = UI.rsmDone ? rsmDoneCard() : '';
+  const done = (UI.rsmDone ? rsmDoneCard() : '') + rsmPending();
   const routine = deepGet(S, ['rsm', 'routine', CLUB.id]) || {};
   const wk = dateOf(weekStart(today())).getTime(), mo = dateOf(curMonth() + '-01').getTime();
   const item = ([id, filt, file], since) => {
@@ -200,11 +200,25 @@ ACTIONS.rsmCommit = () => {
       if (o.start && /ancien|perdu/.test(norm(cur.status || '')) && o.start > (cur.endDate || '')) o.returnedAt = o.start;
       // Un sortant importé n'écrase pas un client redevenu actif depuis.
       if (o.status === 'Ancien client' && cur.start && o.endDate && cur.start > o.endDate) { delete o.status; delete o.endDate; }
+      // Renouvellement : nouvelle vente proche de la fin d'engagement, la relance de fin de contrat est gagnée.
+      if (r.def.id === 'ventes' && o.start && cur.end && cur.start && o.start > cur.start && o.start >= addDays(cur.end, -45)) { const k = relKey('fincontrat', c0.id, cur.end); ops.push([['relances', k, 'status'], 'gagne'], [['relances', k, 'result'], 'renouvele'], [['relances', k, 'closedAt'], now], [['relances', k, 'kind'], 'fincontrat'], [['relances', k, 'clubId'], club]); o.renewedAt = o.start; o.end = null; }
       clientIdx['n:' + num] = c0; upClient(c0, o); summary.clients++;
     }
     for (const o of r.clientsByName) {
-      const t = tokensKey(o.name); const c0 = clientIdx['t:' + t] || { id: 'c' + hkey(club + '|t:' + t), clubId: club, name: o.name };
-      clientIdx['t:' + t] = c0; const { name, ...rest } = o; upClient(c0, Object.fromEntries(Object.entries(rest).filter(([, v]) => v))); summary.clients++;
+      const t = tokensKey(o.name); const { name, strict, ...rest } = o; const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v));
+      if (strict) {
+        // Fins de contrat sans numéro : un seul candidat sûr, sinon file « À rapprocher ». Jamais de fiche créée.
+        const linked = deepGet(S, ['rsm', 'nameLinks', club, safeKey(t)]);
+        let cands = Object.values(S.clients).filter(c => c.clubId === club && tokensKey(c.name || '') === t);
+        if (linked && S.clients[linked]) cands = [S.clients[linked]];
+        else if (cands.length > 1 && o.offer) { const by = cands.filter(c => c.offer && norm(o.offer).includes(norm(c.offer))); if (by.length) cands = by; }
+        if (cands.length > 1 && o.start) { const by = cands.filter(c => c.start && Math.abs(dateOf(c.start) - dateOf(o.start)) <= 3 * 864e5); if (by.length) cands = by; }
+        if (cands.length === 1) { upClient(cands[0], patch); summary.matched2 = (summary.matched2 || 0) + 1; }
+        else { ops.push([['rsm', 'pendingMatches', club, safeKey(t + '|' + (o.end || ''))], { name, end: o.end || null, offer: o.offer || '', start: o.start || null, candidates: Object.values(S.clients).filter(c => c.clubId === club && tokensKey(c.name || '') === t).map(c => c.id), at: now }]); if (cands.length) summary.doubt = (summary.doubt || 0) + 1; else summary.nomatch = (summary.nomatch || 0) + 1; }
+        continue;
+      }
+      const c0 = clientIdx['t:' + t] || { id: 'c' + hkey(club + '|t:' + t), clubId: club, name: o.name };
+      clientIdx['t:' + t] = c0; upClient(c0, patch); summary.clients++;
     }
     if (r.balances) {
       const listed = new Set();
@@ -274,8 +288,23 @@ function rsmDoneCard() {
   return `<div class="card" style="margin-bottom:14px;border-color:var(--ok)"><div class="card-head">${ico('check')}<h3>Import terminé</h3><span class="spacer"></span><button class="btn ghost sm" data-act="ui" data-key="rsmDone" data-val="">${ico('x')}</button></div>
     <div class="row wrap" style="gap:22px"><div><div class="muted small">Fichiers</div><b class="title t-20">${s.files}</b></div><div><div class="muted small">Saisies créées</div><b class="title t-20">${s.entries}</b></div><div><div class="muted small">Déjà connues (mises à jour, pas de doublon)</div><b class="title t-20">${s.updated}</b></div><div><div class="muted small">Régularisations d’impayés</div><b class="title t-20">${s.recov}</b></div><div><div class="muted small">Fiches clients</div><b class="title t-20">${s.clients}</b></div><div><div class="muted small">Résiliations</div><b class="title t-20">${s.resil}</b></div></div>
     ${perfTot != null ? `<div class="alert ${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'info' : ''}" style="margin-top:12px">${ico('target')}<div><b>Contrôle ${monthLabel(mk)} : ${fmtN(ppC)} contrats dans Fit Pulse, ${fmtN(perfTot)} dans les performances commerciales Resamania</b>${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'Les deux sources concordent.' : 'Écart à vérifier : vente d’abonnements incomplète, ou changements d’offre comptés d’un côté seulement.'}</div></div>` : ''}
+    ${s.matched2 || s.doubt || s.nomatch ? `<p class="small" style="margin:12px 0 0">Fins de contrat : <b>${s.matched2 || 0}</b> rattachées, <b>${s.doubt || 0}</b> à vérifier, <b>${s.nomatch || 0}</b> sans correspondance.</p>` : ''}
     ${s.recov ? `<div style="margin-top:12px"><a class="btn sm primary" href="#/impayes">Voir les impayés par canal ${ico('chevR')}</a></div>` : ''}</div>`;
 }
+// « À rapprocher » : lignes Abonnements sans fiche sûre. Le choix est retenu pour les imports suivants.
+function rsmPending() {
+  const P = Object.entries(deepGet(S, ['rsm', 'pendingMatches', CLUB.id]) || {}); if (!P.length) return '';
+  return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('alert')}<h3>À rapprocher (${P.length})</h3></div><p class="muted small">Fins de contrat dont le nom correspond à plusieurs fiches, ou à aucune. Aucune date n’est écrite tant que vous n’avez pas choisi.</p>
+    ${P.slice(0, 30).map(([k, x]) => `<div class="row wrap opp-mini"><div class="spacer"><b>${esc(x.name)}</b><div class="muted small">${esc(x.offer || 'offre inconnue')} · fin le ${x.end ? dmy(x.end) : 'n.d.'}</div></div>
+      <select class="input sm" style="width:auto" data-change="pmPick" data-k="${esc(k)}"><option value="">${x.candidates.length ? 'Choisir la fiche' : 'Aucune fiche à ce nom'}</option>${(x.candidates.length ? x.candidates : []).map(id => S.clients[id]).filter(Boolean).map(c => `<option value="${c.id}">${esc(c.name)}${c.num ? ' · n° ' + esc(c.num) : ''}${c.offer ? ' · ' + esc(c.offer) : ''}</option>`).join('')}</select>
+      <button class="btn sm ghost" data-act="pmIgnore" data-k="${esc(k)}">Ignorer</button></div>`).join('')}</div>`;
+}
+ACTIONS.pmPick = el => {
+  const k = el.dataset.k; const x = deepGet(S, ['rsm', 'pendingMatches', CLUB.id, k]); const c = S.clients[el.value]; if (!x || !c) return;
+  db.batch([[['clients', c.id, 'end'], x.end], ...(x.offer ? [[['clients', c.id, 'offer'], c.offer || x.offer]] : []), [['rsm', 'nameLinks', CLUB.id, safeKey(tokensKey(x.name))], c.id], [['rsm', 'pendingMatches', CLUB.id, k], null]]);
+  toast('Rattaché, et retenu pour les prochains imports');
+};
+ACTIONS.pmIgnore = el => db.set(['rsm', 'pendingMatches', CLUB.id, el.dataset.k], null);
 
 // ── Page Impayés : tous les canaux ────────────────────────────────────────
 function recovList(clubId, from, to) {
