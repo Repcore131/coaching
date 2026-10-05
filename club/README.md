@@ -72,6 +72,18 @@ un depuis Membres (créateur, manager pour ses membres) ou Mon profil > Sécurit
 - **Partagé** : renseigner un projet Firebase dans `config.js` et déployer `database.rules.pulse.json`. Seules les adresses
   ajoutées dans Membres peuvent lire et écrire la base.
 
+## Mettre en ligne (vraie adresse)
+
+Fit Pulse a son propre projet Firebase, séparé de RepCore. Depuis Google Cloud Shell :
+
+    firebase login --no-localhost          # première fois seulement, commande seule
+    bash club/mettre-en-ligne.sh fitpulse-niort
+
+→ `https://fitpulse-niort.web.app` (gratuit). Si le nom est pris, en choisir un autre (`fitpulse-niort-79`…).
+Sur téléphone : ouvrir l'adresse puis « Ajouter à l'écran d'accueil » : l'app s'installe avec son icône.
+Un nom de domaine à soi (ex. `fitpulse.fr`) s'achète chez un registraire (≈ 10 €/an) puis se relie dans
+Firebase > Hosting > Ajouter un domaine personnalisé.
+
 ## Lancer en local
 
     cd club && python3 -m http.server 8765    # puis http://localhost:8765
