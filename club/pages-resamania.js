@@ -169,7 +169,7 @@ ACTIONS.rsmCommit = () => {
       }
       const old = S.entries[id];
       const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), [impId]: true };
-      ops.push([['entries', id], { id, userId: uid, clubId: club, kpiId: e.kpiId, date: e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now }]);
+      ops.push([['entries', id], { id, userId: uid, clubId: club, kpiId: e.kpiId, date: e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}) }]);
     }
     // Export de gestion qui couvre une periode complete : une vente deja importee
     // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
@@ -189,11 +189,17 @@ ACTIONS.rsmCommit = () => {
       if (canal === 'equipe') { uid = pick(x.seller); if (!uid) { const ch = choiceFor(x.seller, choices, unk); canal = ch === 'system' ? 'client' : ch === 'ignore' ? 'tiers' : 'equipe'; } }
       let id = 'v' + hkey(club + '|' + x.key);
       if (x.legacyKey && (S.recov || {})['v' + hkey(club + '|' + x.legacyKey)]) id = 'v' + hkey(club + '|' + x.legacyKey);
-      ops.push([['recov', id], { id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', importId: impId, at: now }]);
+      ops.push([['recov', id], { id, clubId: club, date: x.date, amount: x.amount, canal, userId: uid, type: x.type || '', moyen: x.moyen || '', clientNum: x.clientNum || '', author: x.author || '', incidentDate: x.incidentDate || null, importId: impId, at: now }]);
       summary.recov++;
     }
-    for (const [num, o] of Object.entries(r.clients)) {
+    for (const [num, o0] of Object.entries(r.clients)) {
+      const { sellerObj, ...o } = o0; if (sellerObj) { const sid = pick(sellerObj); if (sid) o.sellerId = sid; }
       const c0 = clientIdx['n:' + num] || { id: 'c' + hkey(club + '|n:' + num), clubId: club, num };
+      const cur = pendingClients[c0.id] || c0;
+      // Ancien membre qui re-signe : on garde la trace du retour (réactivation).
+      if (o.start && /ancien|perdu/.test(norm(cur.status || '')) && o.start > (cur.endDate || '')) o.returnedAt = o.start;
+      // Un sortant importé n'écrase pas un client redevenu actif depuis.
+      if (o.status === 'Ancien client' && cur.start && o.endDate && cur.start > o.endDate) { delete o.status; delete o.endDate; }
       clientIdx['n:' + num] = c0; upClient(c0, o); summary.clients++;
     }
     for (const o of r.clientsByName) {
@@ -202,7 +208,7 @@ ACTIONS.rsmCommit = () => {
     }
     if (r.balances) {
       const listed = new Set();
-      r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
+      r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), ...(b.oldest ? { oldestIncident: b.oldest } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
       // photo complete : un client absent du fichier n'a plus d'impaye
       // Seule la photo complete « Clients en incident » solde les absents. Une
       // liste Incidents partielle ne touche jamais aux autres clients. Sans
@@ -229,6 +235,21 @@ ACTIONS.rsmCommit = () => {
       if (status === 'sauvee' && owner && !S.entries['sv_' + id]) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now }]);
       summary.resil++;
     }
+    // Prospects nominatifs : id stable, reimport sans doublon, suivi Fit Pulse conserve.
+    for (const p of r.prospects) {
+      const id = 'p' + hkey(club + '|' + p.key); const old = (S.prospects || {})[id] || {};
+      const { key, seller, ...rest } = p; const uid = pick(seller);
+      ops.push([['prospects', id], { ...old, ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== '' && v != null)), id, clubId: club, commercialId: uid || old.commercialId || null, importId: impId, at: old.at || now }]);
+    }
+    if (r.prospects.length) summary.prospects = (summary.prospects || 0) + r.prospects.length;
+    // Entreprises clientes (Société du client) : créées ou mises à jour, statut signé.
+    for (const co of Object.values(r.companies)) {
+      const id = 'co' + hkey(club + '|' + norm(co.nom)); const old = (S.companies || {})[id] || {};
+      ops.push([['companies', id], { ...old, id, clubId: club, nom: old.nom || co.nom, statut: 'signe', signeLe: old.signeLe || r.from || today(), adherents: co.nums.length || old.adherents || 0, nums: co.nums.length ? co.nums : (old.nums || []), at: old.at || now }]);
+      co.nums.forEach(num => { const c0 = clientIdx['n:' + num]; if (c0) upClient(c0, { company: co.nom }); });
+    }
+    if (Object.keys(r.flags).length) ops.push([['rsm', 'flags', club, r.def.id], r.flags]);
+    if (r.counts.descentes) summary.descentes = (summary.descentes || 0) + r.counts.descentes;
     // controles
     const mk = r.month || (r.from || today()).slice(0, 7);
     const agg = {};

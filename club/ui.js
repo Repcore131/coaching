@@ -99,6 +99,7 @@ function brandBlock(big = false) {
 // tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
   ['home', 'Accueil', 'dashboard'],
+  ['opportunites', 'Opportunités', 'coins'],
   ['dashboard', 'Mes objectifs', 'target'],
   ['relances', 'Relances', 'phone'],
   ['leaderboard', 'Classement', 'trophy'],

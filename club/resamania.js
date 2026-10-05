@@ -178,11 +178,21 @@ const RSM_DEFS = [
       for (const r of c.rows) {
         const date = rsmDate(r[iDate]); if (!date) { c.skip('date illisible'); continue; }
         const prod = `${r[iProd] || ''} ${r[iOffre] || ''}`; const etat = norm(r[iEtat]);
-        if (PRODUCT_EXCLUDE.some(x => norm(prod).includes(x))) { c.skip('changement d’offre, accès employé, VIP ou reconduction'); continue; }
         if (etat && /(annul|panier|conserv|brouillon)/.test(etat)) { c.skip('panier ou vente annulée'); continue; }
         const num = r[iNum];
+        // Changement d'offre : une montée en gamme (écart de prix mensuel), jamais un contrat.
+        if (norm(prod).includes('changement d offre')) {
+          const old = num ? Object.values(S.clients || {}).find(x => x.clubId === c.clubId && String(x.num || '') === String(num)) : null;
+          const np = rsmNum(r[iPrix]); const op = old ? Number(old.price) || 0 : 0; const diff = np > 0 && op > 0 ? Math.round((np - op) * 100) / 100 : 0;
+          c.entry({ key: `up:${num}:${date}`, kpiId: 'upsell', date, value: Math.max(0, diff), seller: resolveSeller(gName(r), gCode(r)), down: diff < 0 });
+          if (diff < 0) c.count('descentes'); else if (diff > 0) c.count('montees');
+          if (num) c.client(num, { num, offer: r[iOffre] || r[iProd] || '', price: np || null, upgradedAt: diff > 0 ? date : null });
+          continue;
+        }
+        if (PRODUCT_EXCLUDE.some(x => norm(prod).includes(x))) { c.skip('accès employé, VIP, transfert ou reconduction'); continue; }
         c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: resolveSeller(gName(r), gCode(r)) });
-        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), ...c.contact(r) });
+        const parrain = /parrain/.test(norm(`${prod} ${r[iCanal] || ''}`));
+        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), sellerObj: resolveSeller(gName(r), gCode(r)), source: parrain ? 'parrainage' : null, status: 'Client', ...c.contact(r) });
       }
     },
   },
@@ -205,12 +215,12 @@ const RSM_DEFS = [
         const kpi = isNutrition(r[iFam], r[iCode], r[iProd]) ? 'nutrition' : isAccessory(r[iCode]) ? 'accessoires' : null;
         if (kpi && Number.isNaN(vm)) { c.skip('montant illisible'); continue; }
         const base = `fl:${r[iNum]}:${String(r[iCode]).trim()}:${norm(r[iProd])}:${v}`; seen[base] = (seen[base] || 0) + 1;
-        if (kpi && v) c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iAut]) });
-        // B2B : une facture d'abonnement a une societe (hors boutique)
-        // Une fois par client (ou societe) et par produit, et seulement a la
-        // premiere facture : la facture mensuelle d'un abonnement d'entreprise
-        // ne recompte pas un contrat chaque mois.
-        const bk = `b2b:${norm(iCli >= 0 && r[iCli] ? r[iCli] : r[iSoc] || '')}:${norm(r[iProd] || '')}`;
+        if (kpi && v) c.entry({ key: `${base}:${seen[base]}`, kpiId: kpi, date, value: Math.round(v * 100) / 100, seller: resolveSeller(r[iAut]), clientNum: iCli >= 0 ? String(r[iCli] || '').trim() : '' });
+        if (kpi && iCli < 0) c.flag('sansNumClient');
+        const soc = (r[iSoc] || '').trim(); if (soc && !kpi && !avoir) c.company(soc, iCli >= 0 ? String(r[iCli] || '').trim() : '');
+        // B2B : une entreprise compte une fois, a sa premiere facture
+        // d'abonnement (trois factures d'une meme societe = une entreprise).
+        const bk = `b2b:${norm(r[iSoc] || '')}`;
         if (!avoir && !kpi && (r[iSoc] || '').trim() && !b2b.has(bk) && !Object.values(S.entries || {}).some(e => e.rowKey === bk && e.kpiId === 'b2b')) {
           b2b.add(bk);
           const seller = (iCI >= 0 || iNI >= 0) ? resolveSeller(`${r[iPI] || ''} ${r[iNI] || ''}`.trim(), r[iCI]) : resolveSeller(r[iAut]);
@@ -218,7 +228,7 @@ const RSM_DEFS = [
         }
         if (!kpi) c.skip('ligne hors nutrition / accessoires');
       }
-      if (b2b.size) c.warn(`${plur(b2b.size, 'facture', 'factures')} avec une « Société du client » comptées en Contrat B2B : à vérifier sur un contrat B2B connu.`);
+      if (b2b.size) c.warn(`${plur(b2b.size, 'nouvelle entreprise', 'nouvelles entreprises')} (« Société du client ») comptées en Contrat B2B : à vérifier.`);
     },
   },
   {
@@ -252,11 +262,11 @@ const RSM_DEFS = [
         const dr = rsmDate(r[iDR]);
         if (/closed|regularis|clos/.test(st) && dr) {
           const ch = recovChannel(r[iAR], client);
-          c.recov({ key, legacyKey, date: dr, amount, canal: ch.canal, type: r[iType], clientNum: r[iNum], author: r[iAR], seller: ch.seller || null, moyen: r[iMoy] });
+          c.recov({ key, legacyKey, date: dr, amount, canal: ch.canal, type: r[iType], clientNum: r[iNum], author: r[iAR], seller: ch.seller || null, moyen: r[iMoy], incidentDate: rsmDate(r[iDI]) || null });
           if (ch.canal === 'equipe') c.entry({ key, legacyKey, kpiId: 'impayes', date: dr, value: amount, seller: ch.seller, clientNum: r[iNum] || '' });
           continue;
         }
-        if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0 }; o.amount += amount; o.count++; }
+        if (/open|en cours/.test(st) || !dr) { const o = open[r[iNum]] = open[r[iNum]] || { num: r[iNum], name: client, amount: 0, count: 0, oldest: null }; o.amount += amount; o.count++; const di = rsmDate(r[iDI]); if (di && (!o.oldest || di < o.oldest)) o.oldest = di; }
       }
       if (weak) c.warn(`${plur(weak, 'incident', 'incidents')} sans numéro de paiement : clé plus faible (montant et type ajoutés).`);
       const list = Object.values(open);
@@ -307,7 +317,14 @@ const RSM_DEFS = [
     parse(c) {
       const iN = c.colExact('nom'), iP = c.col('prenom'), iD = c.col('date de creation');
       const iCom = c.find(h => h === 'commercial initial') >= 0 ? c.find(h => h === 'commercial initial') : c.find(h => h === 'commercial' || h.startsWith('commercial'));
-      for (const r of c.rows) { const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; } c.entry({ key: `pr:${tokensKey(`${r[iN]} ${r[iP]}`)}:${d}`, kpiId: 'prospects', date: d, value: 1, seller: resolveSeller(r[iCom]) }); }
+      const iSt = c.col('statut de prospection'), iVal = c.col('valeur du prospect'), iSrc = c.find(h => /provenance|origine|source/.test(h));
+      if (iSrc < 0) c.flag('sansProvenance');
+      for (const r of c.rows) {
+        const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
+        const key = `pr:${tokensKey(`${r[iN]} ${r[iP]}`)}:${d}`; const seller = resolveSeller(r[iCom]);
+        c.entry({ key, kpiId: 'prospects', date: d, value: 1, seller });
+        c.prospect({ key, nom: r[iN] || '', prenom: r[iP] || '', creeLe: d, seller, statut: iSt >= 0 ? r[iSt] || '' : '', valeur: iVal >= 0 ? rsmNum(r[iVal]) || 0 : 0, provenance: iSrc >= 0 ? r[iSrc] || '' : '', ...c.contact(r) });
+      }
     },
   },
   {
@@ -370,7 +387,16 @@ const RSM_DEFS = [
     id: 'evolution', label: 'Évolution clients (detail-gain / detail-perte)', family: 'gestion', feeds: 'Base adhérents : entrées et sortants du mois', monthly: true,
     path: 'Exports de gestion > Exporter > Membres & Ventes > Évolution clients', filters: 'Dates du mois, Club', file: 'RSM_evolution-clients_AAAA-MM.zip',
     sig: (has, name) => /detail-(gain|perte)/i.test(name) && has('nom de l abonnement'),
-    parse(c) { c.control(/perte/i.test(c.fileName) ? 'lost' : 'gained', { count: c.rows.length }); },
+    parse(c) {
+      const lost = /perte/i.test(c.fileName); c.control(lost ? 'lost' : 'gained', { count: c.rows.length });
+      if (!lost) return;
+      const iNum = c.find(h => /^num(ero)?( du)?( client)?$/.test(h)), iN = c.colExact('nom'), iP = c.col('prenom'), iAb = c.col('nom de l abonnement'), iD = c.find(h => h.includes('date') && /(fin|sortie|resil|perte)/.test(h)) >= 0 ? c.find(h => h.includes('date') && /(fin|sortie|resil|perte)/.test(h)) : c.find(h => h.includes('date'));
+      for (const r of c.rows) {
+        const name = `${iP >= 0 ? r[iP] || '' : ''} ${iN >= 0 ? r[iN] || '' : ''}`.trim(); if (!name) continue;
+        const o = { name, status: 'Ancien client', endDate: iD >= 0 ? rsmDate(r[iD]) : null, offer: iAb >= 0 ? r[iAb] || '' : '', ...c.contact(r) };
+        if (iNum >= 0 && r[iNum]) c.client(r[iNum], { num: r[iNum], ...o }); else c.clientByName(name, o);
+      }
+    },
   },
   {
     id: 'ignored', label: 'Export reconnu, non utilisé', family: 'gestion', feeds: '', silent: true,
@@ -404,7 +430,7 @@ function detectDef(t) {
 // ── Analyse : fichier -> plan d'import ────────────────────────────────────
 function analyzeTable(t, { clubId, month }) {
   const def = t.skipped || !t.headers ? null : detectDef(t);
-  const res = { name: t.name, encoding: t.encoding, rowsCount: (t.rows || []).length, def, entries: [], recov: [], clients: {}, clientsByName: [], resil: [], controls: [], balances: null, noMandate: null, warnings: [], skipped: {}, from: null, to: null };
+  const res = { name: t.name, encoding: t.encoding, rowsCount: (t.rows || []).length, def, entries: [], recov: [], clients: {}, clientsByName: [], resil: [], controls: [], balances: null, noMandate: null, prospects: [], companies: {}, flags: {}, counts: {}, warnings: [], skipped: {}, from: null, to: null };
   if (t.skipped) { res.warnings.push(t.skipped); return res; }
   if (!def) return res;
   const H = t.headers.map(norm);
@@ -427,6 +453,10 @@ function analyzeTable(t, { clubId, month }) {
     control: (k, v) => res.controls.push([k, v]),
     balances: (list, src) => { res.balances = { list, src }; },
     noMandate: list => { res.noMandate = list; },
+    prospect: p => res.prospects.push(p),
+    company: (nom, num) => { const k = norm(nom); const o = res.companies[k] = res.companies[k] || { nom, nums: [] }; if (num && !o.nums.includes(num)) o.nums.push(num); },
+    flag: k => { res.flags[k] = true; },
+    count: k => { res.counts[k] = (res.counts[k] || 0) + 1; },
   };
   def.parse(c);
   if (def.family === 'liste' && t.rows.length === 2000) res.warnings.unshift('Exactement 2 000 lignes : la liste est TRONQUÉE par Resamania. Refaites l’export sur une période plus courte (ex. une semaine).');

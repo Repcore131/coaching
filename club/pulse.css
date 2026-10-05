@@ -909,3 +909,28 @@ td.to-check { background: var(--warn-soft); }
 .topbar .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .bell { flex: none; }
 @media (max-width: 360px) { .topbar .countdown { display: none; } }
+/* Opportunités et entonnoir */
+.opp-hero { background: #000; color: #fff; border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 4px; }
+.opp-hero b { font-family: var(--font-title); font-style: italic; text-transform: uppercase; font-size: var(--t-20); color: var(--fp); }
+.opp-hero span { font-size: var(--t-13); color: #ddd; }
+.opp-row { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.opp-row:last-child { border-bottom: 0; }
+.opp-row > .spacer { min-width: 200px; }
+.opp-ico { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fp-soft); }
+.opp-eur { text-align: right; display: grid; min-width: 80px; }
+.opp-eur b { font-family: var(--font-title); font-size: var(--t-20); }
+.opp-eur small { color: var(--muted); font-size: var(--t-11); }
+.opp-act { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.opp-act select { width: auto; }
+.opp-foot { margin: 12px 0 4px; }
+.opp-mini { gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; align-items: center; }
+.opp-mini:last-child { border-bottom: 0; }
+.opp-mini .spacer { display: grid; min-width: 0; }
+.opp-mini .opp-ico { width: 30px; height: 30px; }
+.fn-row { display: grid; grid-template-columns: 120px 1fr 48px 48px; gap: 10px; align-items: center; padding: 6px 0; font-size: var(--t-13); }
+.fn-bar { height: 14px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+.fn-bar i { display: block; height: 100%; background: var(--fp); border-radius: 7px; }
+.fn-row b { text-align: right; }
+.fn-row small { color: var(--muted); text-align: right; }
+@media (max-width: 640px) { .opp-eur { text-align: left; } .opp-act { width: 100%; } .fn-row { grid-template-columns: 90px 1fr 36px 40px; } }
+@media (max-width: 640px) { .opp-row > .spacer { min-width: 0; flex: 1 1 0; } .opp-eur { text-align: right; min-width: 64px; } .opp-eur b { font-size: var(--t-16); } }

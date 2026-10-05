@@ -92,6 +92,9 @@ export const REGLE = `${DEBUT}
       "reactions": { ".write": ${j(MEMBRE)} },
       "relances": { ".write": ${j(MEMBRE)} },
       "touches": { ".write": ${j(MEMBRE)} },
+      "guests": { ".write": ${j(MEMBRE)} },
+      "companies": { ".write": ${j(MEMBRE)} },
+      "opps": { ".write": ${j(MEMBRE)} },
       "coaching": { "$uid": { "actions": { ".write": ${j(MEMBRE)} } } },
       "$autre": { ".write": ${j(MGR)} }
     },
