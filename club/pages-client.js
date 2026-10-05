@@ -31,6 +31,12 @@ function clientTimeline(c) {
   ((c.dunning || {}).history || []).forEach(h => out.push({ at: h.at, by: h.by, type: 'paiement', icon: 'coins', label: h.label }));
   Object.values(S.recov || {}).filter(x => x.clubId === c.clubId && c.num && String(x.clientNum) === String(c.num) && x.canal !== 'annule').forEach(x => out.push({ at: dateOf(x.date).getTime() + 12 * 3600000, type: 'paiement', icon: 'coins', label: `Régularisation ${fmtE(x.amount)} · ${(RECOV_CHANNELS[x.canal] || {}).label || x.canal}` }));
   resList(c.clubId).filter(r => r.clientId === c.id || tokensKey(r.client || '') === tokensKey(c.name || '')).forEach(r => resActions(r).forEach(a => out.push({ at: a.at, by: a.by, type: 'resiliation', icon: 'door', label: `Résiliation : ${a.label}`, note: a.note })));
+  // Avant l'inscription : appels du prospect ou de l'invité devenu ce client, et parrainages.
+  if (typeof prospectsOf === 'function') {
+    prospectsOf(c.clubId).filter(p => { const v = prospectConv(p); return v && v.client.id === c.id; }).forEach(p => { out.push({ at: dateOf(p.creeLe).getTime() + 9 * 3600000, type: 'all', icon: 'magnet', label: `Prospect créé${p.provenance ? ' (' + p.provenance + ')' : ''}` }); Object.values(S.touches || {}).filter(t => t.prospectId === p.id).forEach(t => out.push({ at: t.at, by: t.by, type: t.channel === 'call' ? 'appel' : 'message', icon: 'phone', label: `Prospect : ${(TOUCH_OUTCOMES[t.outcome] || {}).label || t.outcome || 'contact'}`, note: t.note || '' })); });
+    guestsOf(c.clubId).filter(g => { const v = guestConv(g); return v && v.id === c.id; }).forEach(g => { out.push({ at: dateOf(g.date).getTime() + 12 * 3600000, by: g.by, type: 'all', icon: 'ticket', label: `Séance découverte${g.parrainId && S.clients[g.parrainId] ? ', invité par ' + S.clients[g.parrainId].name : ''}` }); Object.values(S.touches || {}).filter(t => t.guestId === g.id).forEach(t => out.push({ at: t.at, by: t.by, type: 'appel', icon: 'phone', label: `Invité : ${(TOUCH_OUTCOMES[t.outcome] || {}).label || t.outcome || 'contact'}`, note: t.note || '' })); });
+    guestsOf(c.clubId).filter(g => g.parrainId === c.id).forEach(g => { const v = guestConv(g); out.push({ at: dateOf(g.date).getTime() + 12 * 3600000, type: 'all', icon: 'users', label: v ? `A parrainé ${v.name}, inscrit le ${dm(v.start)}` : `A invité ${g.nom}` }); });
+  }
   return out.filter(x => x.at).sort((a, b) => b.at - a.at);
 }
 ACTIONS.cliEdit = el => {

@@ -49,10 +49,12 @@ const REL_KINDS = {
   suivi15: { label: 'Suivi J+15', base: 32, icon: 'phone' },
   suivi30: { label: 'Suivi J+30', base: 30, icon: 'phone' },
   anniversaire: { label: 'Anniversaire', base: 15, icon: 'cake' },
+  prospect: { label: 'Prospect', base: 38, icon: 'magnet' },
+  invite: { label: 'Invité', base: 42, icon: 'ticket' },
 };
 const KIND_OUTCOMES = {
   impaye: ['promesse', 'paye'], resiliation: ['sauve'], suivi15: ['rdv'], suivi30: ['rdv'],
-  fincontrat: ['ok'], mandat: ['ok'], anniversaire: ['ok'],
+  fincontrat: ['ok'], mandat: ['ok'], anniversaire: ['ok'], prospect: ['rdv'], invite: ['rdv'],
 };
 const REFUS_MOTIFS = {
   resiliation: () => RES_REASONS,
@@ -68,6 +70,8 @@ const CADENCES = {
   suivi15: [{ d: 0, ch: 'call' }, { d: 1, ch: 'sms' }, { d: 3, ch: 'call' }],
   suivi30: [{ d: 0, ch: 'call' }, { d: 1, ch: 'sms' }, { d: 3, ch: 'call' }],
   anniversaire: [{ d: 0, ch: 'sms' }],
+  prospect: [{ d: 0, ch: 'call' }, { d: 1, ch: 'sms' }, { d: 3, ch: 'call' }, { d: 7, ch: 'call' }],
+  invite: [{ d: 0, ch: 'call' }, { d: 2, ch: 'sms' }, { d: 5, ch: 'call' }],
 };
 const relCfg = clubId => ({ lockMinutes: 15, quietFrom: '09:00', quietTo: '20:00', sundayOff: true, ...(deepGet(S, ['relanceCfg', clubId]) || {}) });
 
@@ -96,10 +100,17 @@ function relancesFor(clubId) {
       const n = daysTo(r.effective);
       add('resiliation', { refId: r.id, clientId: c ? c.id : null, clientName: r.client, anchor: r.date, due: r.date, effective: r.effective, reason: `demande du ${dm(r.date)}${n != null ? ` · effective ${n <= 0 ? 'maintenant' : 'dans ' + plur(n, 'jour', 'jours')}` : ''}`, ownerHint: r.ownerId || null });
     }
+    // Prospects (0 à 21 jours) et invités (1 à 10 jours) non encore inscrits : dans la file comme les adhérents.
+    if (typeof prospectsOf === 'function') {
+      for (const p of prospectsOf(clubId)) { const a = Math.round((dateOf(t) - dateOf(p.creeLe)) / 864e5); if (a < 0 || a > 21 || prospectConv(p) || (p.statut && /refus|perdu|injoignable definitif/.test(norm(p.statut)))) continue; const nm = `${p.prenom || ''} ${p.nom || ''}`.trim();
+        add('prospect', { refId: p.id, clientId: null, clientName: nm, pseudo: { id: null, clubId, name: nm, phone: p.phone, email: p.email }, anchor: p.creeLe, due: addDays(p.creeLe, 1), ownerHint: p.commercialId || null, reason: `prospect créé le ${dm(p.creeLe)}${p.provenance ? ' · ' + p.provenance : ''}` }); }
+      for (const g of guestsOf(clubId)) { const a = Math.round((dateOf(t) - dateOf(g.date)) / 864e5); if (a < 1 || a > 10 || guestConv(g)) continue; const par = g.parrainId && S.clients[g.parrainId];
+        add('invite', { refId: g.id, clientId: null, clientName: g.nom, pseudo: { id: null, clubId, name: g.nom, phone: g.phone }, anchor: g.date, due: addDays(g.date, 1), ownerHint: g.by || null, reason: `séance découverte le ${dm(g.date)}${par ? ' · invité par ' + par.name : ''}` }); }
+    }
     // responsable par défaut : celui du dossier, sinon le vendeur s'il est membre actif
     out.forEach(rl => {
       const c = rl.clientId ? S.clients[rl.clientId] : null;
-      rl.client = c; rl.name = c ? c.name : rl.clientName || 'Client';
+      rl.client = c || rl.pseudo || null; rl.name = c ? c.name : rl.clientName || 'Client';
       if (!rl.ownerId) rl.ownerId = rl.ownerHint || (['suivi15', 'suivi30', 'fincontrat'].includes(rl.kind) && c && c.sellerId && S.users[c.sellerId] && isActive(S.users[c.sellerId]) ? c.sellerId : null);
       rl.touches = touchesOf(rl.key);
       rl.attempts = rl.attempts || rl.touches.filter(x => x.channel === 'call' && !(TOUCH_OUTCOMES[x.outcome] || {}).reached).length;
@@ -146,6 +157,10 @@ function relQueue(clubId, scope = 'mine') {
 
 // ── Modèles de messages et scripts d'appel ────────────────────────────────
 const TPL_DEFAULT = {
+  prospect: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
+  invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir le Fitness Park {club} ! Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
+    script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous êtes venu découvrir le club récemment : comment s’est passée la séance ?', 'Qu’avez-vous préféré : les machines, les cours, l’ambiance ?', 'Je vous propose de passer pour voir l’offre qui vous correspond, ou je vous l’envoie par SMS. Qu’est-ce qui vous arrange ?'] },
   suivi15: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. J’ai essayé de vous joindre pour savoir comment se passent vos débuts. Une question, un besoin ? Répondez ici, je vous rappelle.',
     script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Je vous appelle pour savoir comment se passent vos deux premières semaines. Vous avez deux minutes ?', 'Vous venez combien de fois par semaine ? Vous avez trouvé vos repères sur les machines ? Vous avez déjà fait votre séance avec un coach ?', 'Je vous propose un créneau avec un coach pour caler un programme. Plutôt en semaine ou le week-end ?'] },
   suivi30: { sms: 'Bonjour {prenom}, déjà un mois au Fitness Park {club}. Envie d’un point avec un coach pour garder le rythme ? Répondez OUI et je vous propose un créneau. {commercial}',
@@ -192,7 +207,7 @@ function contactLinks(rl, text = '') {
 
 // ── Écritures : état de la relance et journal ─────────────────────────────
 function relPatch(rl, patch) { const ops = []; for (const [k, v] of Object.entries(patch)) ops.push([['relances', rl.key, k], v]); ops.push([['relances', rl.key, 'kind'], rl.kind], [['relances', rl.key, 'clubId'], rl.clubId]); return ops; }
-function touchOp(rl, o) { const id = newId(); return [['touches', id], { id, clubId: rl.clubId, clientId: rl.clientId || null, refId: rl.refId || null, relKey: rl.key, kind: rl.kind, at: Date.now(), by: ME.id, ...o }]; }
+function touchOp(rl, o) { const id = newId(); return [['touches', id], { id, ...(rl.kind === 'prospect' ? { prospectId: rl.refId } : rl.kind === 'invite' ? { guestId: rl.refId } : {}), clubId: rl.clubId, clientId: rl.clientId || null, refId: rl.refId || null, relKey: rl.key, kind: rl.kind, at: Date.now(), by: ME.id, ...o }]; }
 // Prochaine étape de cadence, ramenée dans les horaires autorisés (4 h mini entre deux appels).
 function nextStepAt(rl, step) {
   const cad = CADENCES[rl.kind] || [{ d: 1 }]; const st = cad[step]; if (!st) return null;
