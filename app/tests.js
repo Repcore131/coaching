@@ -83195,6 +83195,58 @@ vendredi 78 6h 44m
       // Les autres lancements gardent leur aperçu.
       return /_apercuSaute=!!\(o&&o\.sansApercu\)/.test(String(startWorkoutSession))?true:_echec('startWorkoutSession ne remet pas le drapeau à zéro');});
 
+    // ══ 05/10/2026 — L'INVITATION SURVIT À L'INSTALLATION ══════════════════════
+    ok('Invitation : invitationEnAttente relit rc_invitation, 30 jours au plus, et ignore le reste',()=>{
+      const sv=localStorage.getItem('rc_invitation'), J=864e5, t=Date.now();
+      const poser=o=>localStorage.setItem('rc_invitation',JSON.stringify(o));
+      try{
+        localStorage.removeItem('rc_invitation');
+        if(invitationEnAttente(t)!==null) return _echec('rien de gardé : '+JSON.stringify(invitationEnAttente(t)));
+        poser({inv:'RC-A3KZ-W9MX',coach:{email:'k@t.fr',fname:'Kevin',lname:'G',code:'GCP1',photo:'x'},le:t-29*J});
+        const r=invitationEnAttente(t);
+        if(!r||r.inv!=='RC-A3KZ-W9MX'||!r.coach||r.coach.fname!=='Kevin'||('photo' in r.coach)) return _echec('29 jours : '+JSON.stringify(r));
+        poser({inv:'RC-A3KZ-W9MX',coach:null,le:t-31*J});
+        if(invitationEnAttente(t)!==null) return _echec('31 jours : encore là');
+        poser({inv:'pas un code',coach:null,le:t});
+        if(invitationEnAttente(t)!==null) return _echec('code invalide accepté');
+        poser({inv:null,coach:{fname:'Léa'},le:t});
+        const c=invitationEnAttente(t);
+        if(!c||c.inv!==null||c.coach.fname!=='Léa') return _echec('coachpkg seul : '+JSON.stringify(c));
+        localStorage.setItem('rc_invitation','{cassé');
+        return invitationEnAttente(t)===null?true:_echec('JSON cassé');
+      } finally { if(sv==null) localStorage.removeItem('rc_invitation'); else localStorage.setItem('rc_invitation',sv); }});
+    ok('Invitation : importFromURL la range (inv ou coachpkg), nettoie ?inv=, et le routage sans session la lit',()=>{
+      const s=_prodSrc();
+      if(s.indexOf("localStorage.setItem('rc_invitation',JSON.stringify({inv:_invOk?inv:null,coach:_c,le:Date.now()}))")<0) return _echec('rc_invitation n’est pas écrit');
+      if(!/\|\|!!params\.get\('inv'\)\)/.test(s)) return _echec('?inv= reste dans l’adresse');
+      if(s.indexOf("} else if(window._importedCoach||invitationEnAttente(Date.now())){")<0) return _echec('le routage sans session ne lit pas l’invitation gardée');
+      if(s.indexOf("if(!window._invitationCode){ const _ie=invitationEnAttente(Date.now()); if(_ie&&_ie.inv) window._invitationCode=_ie.inv; }")<0) return _echec('pas de réhydratation au démarrage');
+      // LE MARQUEUR EST DIFFÉRÉ : appelé pendant le chargement, il levait (zone morte de
+      // _invMarqueurArme) et le reste d'importFromURL ne s'exécutait plus.
+      if(s.indexOf('setTimeout(()=>{ try{ _armerMarqueurOuverture(inv); }catch(e){} },0)')<0) return _echec('_armerMarqueurOuverture est appelée pendant le chargement');
+      return /localStorage\.removeItem\('rc_invitation'\)/.test(String(_apresRattachement))?true:_echec('l’invitation survit au rattachement');});
+    okA('Invitation : sans compte, « J’ai un code coach » pré-remplit le code gardé',async()=>{
+      const svU=currentUser, svI=window._invitationCode, svS=localStorage.getItem('rc_invitation');
+      const ecrans=[...document.querySelectorAll('.screen.active')];
+      const inp=document.getElementById('ae-code'), svV=inp&&inp.value;
+      const z=document.getElementById('ae-code-zone'), svZ=z&&z.style.display;
+      try{
+        if(!inp) return _echec('#ae-code absent');
+        currentUser=null; window._invitationCode=null; inp.value='';
+        localStorage.setItem('rc_invitation',JSON.stringify({inv:'RC-B7QP-2XYZ',coach:null,le:Date.now()}));
+        if(ouvrirCodeCoach()!=='s-athlete-entry') return _echec('pas l’écran d’entrée');
+        await new Promise(r=>setTimeout(r,150));
+        if(inp.value!=='RC-B7QP-2XYZ') return _echec('#ae-code : « '+inp.value+' »');
+        const t=(document.getElementById('ae-coller')||{}).textContent||'';
+        return /Colle le lien reçu de ton coach/.test(t)?true:_echec('le texte pour iOS manque');
+      } finally {
+        currentUser=svU; window._invitationCode=svI; if(inp) inp.value=svV;
+        if(z) z.style.display=svZ;
+        if(svS==null) localStorage.removeItem('rc_invitation'); else localStorage.setItem('rc_invitation',svS);
+        document.querySelectorAll('.screen').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+        ecrans.forEach(s=>{ s.classList.add('active'); s.style.display='flex'; });
+      }});
+
     // ══ LE SIGNAL D'APPORT EN MICRONUTRIMENTS ════════════════════════════
     //
     // Ce qui est verifie ici n'est pas la justesse d'une somme : c'est que

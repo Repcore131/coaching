@@ -470,6 +470,7 @@ function rcRoleDepuisParams(params){
   // replaceState, et restait donc dans la barre d'adresse, prêt à repartir à
   // chaque rechargement.
   let aNettoyer=false;
+  let _coachRetenu=null;
   try{
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
@@ -478,7 +479,7 @@ function rcRoleDepuisParams(params){
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||params.get('ligue')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
       ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
-      ||!!params.get('garmin')||params.get('messages')==='1'||!!params.get('role'));
+      ||!!params.get('garmin')||params.get('messages')==='1'||!!params.get('role')||!!params.get('inv'));
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -499,6 +500,7 @@ function rcRoleDepuisParams(params){
         users[coach.email]=Object.assign(users[coach.email]||{},coach);
         DB.set('users',users);
         window._importedCoach=coach;
+        _coachRetenu=coach;
         // _st géré séparément — jamais mergé dans le profil coach
         if(typeof rawC._st==='string'&&rawC._st&&!CLOUD.canWrite()) CLOUD.configure(rawC._st);
       }
@@ -520,9 +522,27 @@ function rcRoleDepuisParams(params){
     // Le code de l'invitation voyage a cote du profil coach. On le retient
     // pour deux choses : marquer « ouvert », et pre-remplir le champ code.
     const inv=params.get('inv');
-    if(inv&&/^[A-Z0-9-]{6,20}$/.test(inv)){
+    const _invOk=!!(inv&&/^[A-Z0-9-]{6,20}$/.test(inv));
+    if(_invOk){
       window._invitationCode=inv;
-      _armerMarqueurOuverture(inv);
+      // ⚠ DIFFÉRÉ (05/10/2026). Ce bloc tourne PENDANT le chargement du script :
+      //   _armerMarqueurOuverture lit _invMarqueurArme, un `let` déclaré plus
+      //   loin dans rc-core (054) — appelée ici, elle levait une ReferenceError
+      //   (zone morte), le marqueur « ouvert » ne s'armait jamais, et le `try`
+      //   sautait TOUT ce qui suit (rc_invitation, ?s=, ?bilan=1, ?ref=…).
+      try{ setTimeout(()=>{ try{ _armerMarqueurOuverture(inv); }catch(e){} },0); }catch(e){}
+    }
+    // ⚠ L'INVITATION SURVIT À L'INSTALLATION (05/10/2026). La PWA installée
+    //   s'ouvre sur start_url, SANS paramètres : gardée en mémoire seulement,
+    //   l'invitation était perdue au premier lancement depuis l'icône. Elle est
+    //   rangée dans rc_invitation (30 jours, invitationEnAttente). Du coach, on
+    //   ne garde que ce que la bannière et le repli lisent : le profil complet
+    //   (photo comprise) est déjà dans rc_users, et le recopier ici remplirait
+    //   le stockage. Écrit en clair : ce bloc tourne au chargement du script.
+    if(_invOk||_coachRetenu){
+      const _c=_coachRetenu?{email:String(_coachRetenu.email||''),fname:String(_coachRetenu.fname||''),
+        lname:String(_coachRetenu.lname||''),code:String(_coachRetenu.code||'')}:null;
+      try{ localStorage.setItem('rc_invitation',JSON.stringify({inv:_invOk?inv:null,coach:_c,le:Date.now()})); }catch(e){}
     }
     const st=params.get('s');
     if(!CLOUD.canWrite()&&st) CLOUD.configure(atob(st));
@@ -619,6 +639,25 @@ function rcRoleDepuisParams(params){
     }
   }
 })();
+// PURE (le stockage mis à part). L'invitation gardée par importFromURL, si elle
+// a moins de 30 jours : {inv, coach} — l'un des deux peut être null — ou null.
+// Valeurs écrites EN CLAIR, sans constante d'un autre module : elle est appelée
+// juste en dessous, pendant le chargement du script.
+function invitationEnAttente(maintenant){
+  let o=null;
+  try{ o=JSON.parse(localStorage.getItem('rc_invitation')||'null'); }catch(e){ return null; }
+  if(!o||typeof o!=='object') return null;
+  const t=Number(maintenant)||Date.now(), le=Number(o.le)||0;
+  if(!(le>0)||t-le>30*864e5||le>t+864e5) return null;
+  const inv=(typeof o.inv==='string'&&/^[A-Z0-9-]{6,20}$/.test(o.inv))?o.inv:null;
+  const c=(o.coach&&typeof o.coach==='object')?o.coach:null;
+  const coach=c?{email:String(c.email||''),fname:String(c.fname||''),lname:String(c.lname||''),code:String(c.code||'')}:null;
+  if(!inv&&!coach) return null;
+  return {inv,coach};
+}
+// LE PREMIER LANCEMENT DEPUIS L'ICÔNE : sans paramètres, _invitationCode est
+// vide — on le reprend de l'invitation gardée.
+try{ if(!window._invitationCode){ const _ie=invitationEnAttente(Date.now()); if(_ie&&_ie.inv) window._invitationCode=_ie.inv; } }catch(e){}
 
 // ── Import d'un profil athlète : proposer, puis seulement écrire ────────────
 // Le paquet vient de l'URL et n'est pas signé. Rien n'est écrit, ni en local ni
@@ -1715,7 +1754,7 @@ window.onload=()=>{
             if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')) loadCoachHome();
           })();
         }
-      } else if(window._importedCoach){
+      } else if(window._importedCoach||invitationEnAttente(Date.now())){
         // CE BRAS NE VOIT QUE LE CAS SANS SESSION — il est dans le `else` de
         // `if(sess)`. Le cas AVEC session est traité plus bas, hors de cette
         // chaîne : il ne s'atteignait jamais ici, et un athlète déjà connecté
@@ -1724,7 +1763,11 @@ window.onload=()=>{
         // que l'athlète ait pu agir, et il devait retrouver puis ressaisir le
         // code lui-même. On ouvre l'accordéon, on pré-remplit, et la bannière
         // reste affichée : il ne lui reste qu'à valider.
-        const c=window._importedCoach;
+        // 05/10/2026 : OU L'INVITATION GARDÉE (rc_invitation) — le lancement
+        // depuis l'icône installée n'a plus l'URL. Jamais par s-welcome (la
+        // page de vente) : l'athlète vient pour son coach.
+        const _ie=invitationEnAttente(Date.now());
+        const c=window._importedCoach||(_ie&&_ie.coach)||null;
         go('s-athlete-entry');
         window._importedCoach=null;
         setTimeout(()=>{
@@ -1736,10 +1779,12 @@ window.onload=()=>{
           // GCP permanent du coach : il rattache, mais n'ouvre aucun accès daté.
           // Pré-rempli avec le second, la validation partait sur le mauvais
           // chemin et l'athlète obtenait un accès sans échéance.
-          if(inp) inp.value=window._invitationCode||c.code||'';
+          if(inp) inp.value=window._invitationCode||(_ie&&_ie.inv)||(c&&c.code)||'';
           const ban=document.getElementById('ae-coach-banner');
           if(ban){
-            ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu : valide pour créer ton compte';
+            ban.textContent=c
+              ?'Coach '+((c.fname||c.lname||'?').trim())+' reconnu : valide pour créer ton compte'
+              :'Invitation reconnue : valide pour créer ton compte';
             ban.style.display='block';
           }
         },350);

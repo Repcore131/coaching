@@ -220,6 +220,9 @@ function linkToCoach(coach){
 // Le bilan reste demandé — carte permanente sur l'accueil, relance à la fin de
 // la première séance — mais il ne conditionne plus l'accès à l'app.
 function _apresRattachement(){
+  // L'INVITATION A SERVI (05/10/2026) : elle ne se représente plus.
+  try{ localStorage.removeItem('rc_invitation'); }catch(e){}
+  try{ window._invitationCode=null; }catch(e){}
   // L INSCRIPTION A L ANNUAIRE DE SON COACH. C est le seul moyen pour lui de
   // DECOUVRIR ce dossier depuis un autre appareil : les regles lui
   // interdisent de parcourir /users. Sans await et sans traitement d echec —
