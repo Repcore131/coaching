@@ -60,11 +60,12 @@ PAGES.login = {
           <h1>Connexion</h1>
           <form id="lgc" class="login-form" novalidate>
             <label class="field"><span>E-mail</span><input class="input" type="email" name="email" id="lg-email" required inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="prenom.nom@exemple.fr" value="${esc(email)}"></label>
-            <label class="field"><span>Code d’accès</span><input class="input code-input" name="code" id="lg-code" required autocomplete="current-password" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="17" placeholder="FP-XXXX-XXXX-XXXX"></label>
+            <label class="field"><span>Code d’accès</span><input class="input code-input" name="code" id="lg-code" required autocomplete="current-password" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="17" placeholder="FP-XXXX-XXXX-XXXX"><button type="button" class="code-eye" data-act="codeEye" aria-label="Afficher le code">Afficher</button></label>
             <div id="lg-msg" class="login-msg" role="alert" aria-live="polite">${navigator.onLine ? '' : 'Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'}</div>
             <button class="btn primary login-btn" type="submit" id="lg-btn">Se connecter</button>
+            <p class="login-keep">Vous resterez connecté sur cet appareil.</p>
           </form>
-          <p class="login-help">Votre code personnel vous a été envoyé par e-mail. Pas reçu ? Regardez dans les spams ou demandez-le à votre manager.</p>
+          <details class="login-help"><summary>Code perdu ?</summary><p>Votre code personnel vous a été envoyé par e-mail (regardez aussi dans les spams). Vérifiez les tirets : FP-XXXX-XXXX-XXXX. Votre manager peut vous en générer un nouveau en un clic.</p></details>
           ${!standalone ? `<details class="login-install"><summary>${ico('download')} Installer Fit Pulse sur mon téléphone</summary><p><b>iPhone</b> (Safari) : bouton Partager ⬆︎ puis « Sur l’écran d’accueil ».<br><b>Android / Samsung</b> : menu ⋮ (ou ≡) puis « Ajouter à l’écran d’accueil » / « Installer l’application ».</p></details>` : ''}
           ${demo.length ? `<div class="muted small" style="margin-top:18px;font-weight:700">Profils de démonstration</div><div class="who">${demo.map(u => `<button data-act="loginAs" data-id="${u.id}">${avatar(u)}<span><b>${esc(fullName(u))}</b><br><span class="muted small">${roleLabel(u.role)} · ${(u.clubs || []).map(c => S.clubs[c] ? esc(S.clubs[c].name) : '').join(', ')}</span></span></button>`).join('')}</div>` : ''}
           ${!shared && S && S.meta.demo ? '<button class="btn sm ghost" style="margin-top:12px;color:#9a9aa0" data-act="resetAll">Effacer la démo</button>' : !shared && S && !Object.keys(S.entries).length ? '<button class="btn login-alt" data-act="loadDemo">Découvrir avec des données de démonstration</button>' : ''}
@@ -82,6 +83,7 @@ PAGES.login = {
     if (e && !e.value) e.focus({ preventScroll: true }); else if (c && matchMedia('(pointer:fine)').matches) c.focus({ preventScroll: true });
   },
 };
+ACTIONS.codeEye = el => { const c = $('#lg-code'); const show = c.type !== 'text'; c.type = show ? 'text' : 'password'; el.textContent = show ? 'Masquer' : 'Afficher'; el.setAttribute('aria-label', show ? 'Masquer le code' : 'Afficher le code'); };
 function loginMsg(t, kind = 'bad') { const m = $('#lg-msg'); if (m) { m.textContent = t; m.dataset.kind = kind; } }
 addEventListener('online', () => { if ($('#lg-msg') && /internet/.test($('#lg-msg').textContent)) loginMsg(''); });
 addEventListener('offline', () => { if ($('#lg-msg')) loginMsg('Pas de connexion internet : activez le Wi-Fi ou les données mobiles.'); });
@@ -125,11 +127,11 @@ ACTIONS.resetAll = async () => { if (await confirmDlg('Effacer toutes les donné
 
 // ── Tableau de bord ───────────────────────────────────────────────────────
 PAGES.dashboard = {
-  title: 'Tableau de bord',
+  title: 'Mes objectifs',
   render() {
     const mk = UI.dashMonth || curMonth();
     const view = UI.dashView || (isCreator() ? 'club' : 'perso');
-    const tab = UI.dashTab || 'objectifs';
+    let tab = UI.dashTab || 'objectifs';
     const members = clubMembers(CLUB.id);
     let who = view === 'perso' ? (UI.dashUser && S.users[UI.dashUser] ? UI.dashUser : isCreator() ? (members[0] || {}).id || null : ME.id) : null;
     if (who && !isManager() && who !== ME.id) who = ME.id;
@@ -137,15 +139,22 @@ PAGES.dashboard = {
     const st = statsFor(CLUB.id, who, r);
     const subject = who ? S.users[who] : null;
     const filters = `<div class="row wrap">
-      ${seg('dashView', [['perso', 'Vue perso'], ['club', 'Vue club']], view)}
+      ${seg('dashView', [['perso', isManager() ? 'Vue perso' : 'Moi'], ['club', isManager() ? 'Vue club' : 'L’équipe']], view)}
       ${view === 'perso' && isManager() ? `<select class="input sm" style="width:auto" data-change="dashUser">${members.map(u => `<option value="${u.id}" ${u.id === who ? 'selected' : ''}>${esc(fullName(u))}${u.id === ME.id ? ' (moi)' : ''}</option>`).join('')}</select>` : ''}
       <span class="spacer"></span>${monthNav('dashMonth', mk)}</div>`;
     const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(CLUB.name) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
-    return head + filters + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], ['analyses', 'Analyses'], ['entonnoir', 'Entonnoir']], tab)}</div>` +
-      (tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : dashAnalyses(r, who));
+    return head + filters + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], [isManager() ? 'analyses' : 'historique', isManager() ? 'Analyses' : 'Mon historique'], ['entonnoir', 'Entonnoir']], tab)}</div>` +
+      (tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : tab === 'historique' || !isManager() ? myHistory(who || ME.id) : dashAnalyses(r, who));
   },
   mount() { bindKpiDrag(); },
 };
+// Membre : l'évolution de son score sur 6 mois (pas de comparaison N/N-1 du club).
+function myHistory(uid) {
+  const months = []; for (let i = 5; i >= 0; i--) months.push(addMonths(curMonth(), -i));
+  const sc = months.map(m => statsFor(CLUB.id, uid, rangeOf('month', m), { requiredOnly: true }).score || 0);
+  return `<div class="card"><h3>Mon score sur 6 mois</h3>${monthBars(months, [{ label: 'Score du mois', color: 'var(--fp)', values: sc.map(x => Math.round(x * 100)) }], { fmt: v => v + ' %' })}<p class="muted small">Le score du mois en cours est provisoire.</p></div>`;
+}
+ACTIONS.kpiMove = el => { const ids = $$('#kpi-grid [data-kpi]').map(x => x.dataset.kpi); const i = ids.indexOf(el.dataset.k); const j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; setPref('kpiOrder', ids); };
 ACTIONS.dashUser = el => { UI.dashUser = el.value; render(); };
 
 function moodOf(st) {
@@ -177,8 +186,11 @@ function dashObjectives(st, r, subject, who) {
   })();
   const order = pref('kpiOrder', null);
   let rows = st.rows.filter(x => x.target > 0 || x.real > 0);
-  if (order) rows.sort((a, b) => (order.indexOf(a.k.id) + 1 || 99) - (order.indexOf(b.k.id) + 1 || 99));
-  const tips = pref('tipDrag', true);
+  // Par défaut : KPI obligatoires en retard d'abord, puis les autres, puis ceux à 100 %.
+  const lagOf = x => (x.pct == null ? 9 : x.pct >= 1 ? 8 : (x.k.required ? 0 : 4) + (exp ? x.pct / exp : x.pct));
+  if (order) rows.sort((a, b) => (order.indexOf(a.k.id) + 1 || 99) - (order.indexOf(b.k.id) + 1 || 99)); else rows.sort((a, b) => lagOf(a) - lagOf(b));
+  const touch = matchMedia('(pointer: coarse)').matches;
+  const tips = pref('tipDrag', true) && !touch;
   return `<div class="dash-top">
     <div class="card hero">
       <div class="hero-ring">${ring(Math.min(st.progress || 0, 1), { label: fmtP(st.progress), sub: { happy: 'en avance', ok: 'dans le rythme', tired: 'à relancer' }[moodOf(st)], color: healthOf(st.progress != null && st.expected ? st.progress / st.expected : null).color, size: 120 })}</div>
@@ -190,13 +202,14 @@ function dashObjectives(st, r, subject, who) {
         <div class="row" style="margin-top:12px"><button class="btn sm primary" data-act="dayRecap" data-who="${who || ''}">Bilan du jour</button><span class="muted small">Rythme attendu : ${fmtP(exp)} (jour ${Math.round(exp * daysIn(r.from.slice(0, 7)))}/${daysIn(r.from.slice(0, 7))})</span></div>
       </div>
     </div>
-    <div class="grid">
+    <details class="dash-more" ${innerWidth > 860 ? 'open' : ''}><summary>Détails : conversion et score pondéré</summary><div class="grid">
       <div class="card"><div class="muted small">Taux de conversion</div><div class="title t-32">${conv.v}</div><div class="muted small">${conv.sub}</div></div>
       ${!who && typeof recovList === 'function' && recovList(CLUB.id, r.from, r.to).length ? (() => { const L = recovList(CLUB.id, r.from, r.to); const t = L.reduce((a, x) => a + x.amount, 0); const e = L.filter(x => x.canal === 'equipe').reduce((a, x) => a + x.amount, 0); return `<a class="card" href="#/impayes" style="text-decoration:none"><div class="muted small">Impayés récupérés, tous canaux</div><div class="title t-32">${fmtE(t)}</div><div class="muted small">dont équipe ${fmtE(e)} (${fmtP(t ? e / t : null)}) · voir le détail par canal</div></a>`; })() : ''}
       <div class="card"><div class="muted small">Score pondéré ${ico('info', 'ico')}</div><div class="title t-32">${fmtP(st.score)}</div><div class="muted small">${st.reached}/${st.count} KPI atteints · moyenne des % pondérée par les points (plafond 150 % par KPI)</div></div>
-    </div>
+    </div></details>
   </div>
   ${tips ? `<div class="alert info" style="margin-bottom:14px">${ico('grip')}<div class="spacer">Astuce : réorganisez les cartes par glisser-déposer (poignée en haut à droite).</div><button class="btn ghost sm" data-act="closeTip">${ico('x')}</button></div>` : ''}
+  ${touch ? `<div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="btn sm ghost" data-act="ui" data-key="kpiReorder" data-val="${UI.kpiReorder ? '' : '1'}">${UI.kpiReorder ? 'Terminer' : 'Réorganiser'}</button></div>` : ''}
   <div class="kpi-grid" id="kpi-grid">${rows.map(x => kpiCard({ ...x, uid: who, range: r }, exp)).join('')}</div>`;
 }
 ACTIONS.closeTip = () => setPref('tipDrag', false);
@@ -204,7 +217,7 @@ function kpiCard(x, exp) {
   const { k, real, target, pct, earned, status } = x;
   const hl = healthOf(pct != null && exp ? pct / exp : null);
   return `<div class="card kpi ${hl.cls}" draggable="true" data-kpi="${k.id}">
-    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span><span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span></div>
+    <div class="row"><span class="kpi-ico">${kpiIcon(k)}</span><b>${esc(k.label)}</b>${k.required ? `<span class="badge req" title="KPI obligatoire du classement">${ico('crown', 'ico ico-xs')} Obligatoire</span>` : ''}<span class="spacer"></span>${matchMedia('(pointer: coarse)').matches ? (UI.kpiReorder ? `<button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="-1" aria-label="Monter">${ico('chevL')}</button><button class="btn icon sm" data-act="kpiMove" data-k="${k.id}" data-d="1" aria-label="Descendre">${ico('chevR')}</button>` : '') : `<span class="drag" title="Glisser pour réorganiser">${ico('grip')}</span>`}</div>
     <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>

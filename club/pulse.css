@@ -960,3 +960,28 @@ td.to-check { background: var(--warn-soft); }
 .lb-gap { text-align: center; color: var(--muted); padding: 2px 0; }
 .chal-reward { margin: 0 0 8px; font-size: var(--t-13); display: flex; gap: 6px; align-items: center; }
 .chal-team { background: var(--surface-2); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 6px; }
+/* Accessibilité : focus clavier, cibles tactiles, tailles, contrastes */
+.btn:focus-visible, .tb:focus-visible, .tb-main:focus-visible, .nav a:focus-visible, .seg button:focus-visible, .tabs button:focus-visible, a:focus-visible, select:focus-visible, .kb-card:focus-visible, .nt-row:focus-visible { outline: 2px solid var(--fp); outline-offset: 2px; }
+.btn.primary:focus-visible, .tb-main:focus-visible { outline-color: #000; }
+.tiers span { color: #b9b9be; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 860px) {
+  .btn.sm, .btn.icon, .seg button, .tabs button { min-height: 44px; }
+  .btn.icon { min-width: 44px; }
+  .tb, .badge, .eyebrow, .tiers span, .kpi .tierlbl, .palier-mark small, .brand-sub { font-size: max(12px, 1em); }
+  .tb span, .badge, .eyebrow { font-size: 12px; }
+}
+.code-eye { position: absolute; right: 8px; bottom: 8px; background: none; border: 0; color: var(--fp); font: inherit; font-weight: 700; font-size: 12px; cursor: pointer; padding: 6px; }
+.login-form .field { position: relative; }
+.login-keep { margin: 8px 0 0; font-size: 12px; color: #9a9aa0; text-align: center; }
+.login-help summary { cursor: pointer; font-weight: 700; color: var(--fp); }
+.dash-more summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+@media (min-width: 861px) { .dash-more summary { display: none; } }
+.tour { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.92); display: grid; place-items: center; padding: 20px; }
+.tour-card { max-width: 380px; text-align: center; color: #fff; display: grid; gap: 14px; justify-items: center; }
+.tour-ico { width: 84px; height: 84px; border-radius: 24px; background: var(--fp); color: #000; display: grid; place-items: center; transform: skewX(-8deg); }
+.tour-ico .ico { width: 40px; height: 40px; }
+.tour-card h2 { font-family: var(--font-title); font-style: italic; text-transform: uppercase; font-size: var(--t-28); margin: 0; color: var(--fp); }
+.tour-card p { margin: 0; color: #ddd; line-height: 1.5; }
+.tour-dots { display: flex; gap: 6px; } .tour-dots i { width: 8px; height: 8px; border-radius: 50%; background: #444; } .tour-dots i.on { background: var(--fp); width: 22px; border-radius: 4px; }
+@media (max-width: 560px) { .dash-top .hero { grid-template-columns: 1fr; } .dash-top .hero-ring { justify-self: center; } .dash-top .hero .big { font-size: var(--t-40); } }

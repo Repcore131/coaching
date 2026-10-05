@@ -360,7 +360,7 @@ ACTIONS.prefToggle = el => setPref(el.dataset.k, el.checked);
 // Mot du manager sur le bilan d'un membre (une slide dediee, signee).
 ACTIONS.wrapNote = el => {
   const { u, mk } = el.dataset; const cur = deepGet(S, ['wrapNotes', mk, u]) || {};
-  openModal({ title: `Un mot pour ${esc(fullName(S.users[u]))}`, body: `<textarea class="input" id="wn" rows="4" maxlength="280" placeholder="280 caractères au plus">${esc(cur.text || '')}</textarea>`,
+  openModal({ title: `Un mot pour ${fullName(S.users[u])}`, body: `<textarea class="input" id="wn" rows="4" maxlength="280" placeholder="280 caractères au plus">${esc(cur.text || '')}</textarea>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="wrapNoteSave" data-u="${u}" data-mk="${mk}">Enregistrer</button>` });
 };
 ACTIONS.wrapNoteSave = el => { const t = ($('#wn').value || '').trim().slice(0, 280); db.set(['wrapNotes', el.dataset.mk, el.dataset.u], t ? { text: t, by: ME.id, at: Date.now() } : null); closeModal(); toast('Mot enregistré'); };

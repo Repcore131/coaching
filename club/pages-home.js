@@ -118,7 +118,7 @@ function quickPad() {
 ACTIONS.qAdd = el => { closeModal(); quickAdd(el.dataset.k, 1); };
 ACTIONS.qMore = el => {
   const k = S.kpis[el.dataset.k];
-  openModal({ title: `Combien de ${esc(k.label.toLowerCase())} ?`, body: `<div class="qn">${[2, 3, 4, 5].map(n => `<button class="quick-btn" data-act="qN" data-k="${k.id}" data-n="${n}"><span class="quick-plus">+${n}</span></button>`).join('')}</div>` });
+  openModal({ title: `Combien de ${k.label.toLowerCase()} ?`, body: `<div class="qn">${[2, 3, 4, 5].map(n => `<button class="quick-btn" data-act="qN" data-k="${k.id}" data-n="${n}"><span class="quick-plus">+${n}</span></button>`).join('')}</div>` });
 };
 ACTIONS.qN = el => { closeModal(); quickAdd(el.dataset.k, Number(el.dataset.n)); };
 ACTIONS.qEur = el => {
@@ -163,6 +163,7 @@ function clubWeather(mk) {
 }
 PAGES.home = {
   title: 'Accueil',
+  mount() { setTimeout(() => { if (typeof tourMaybe === 'function') tourMaybe(); }, 400); },
   render() {
     const mk = curMonth(); const r = rangeOf('month', mk);
     const st = statsFor(CLUB.id, ME.id, r);

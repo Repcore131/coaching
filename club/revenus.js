@@ -89,7 +89,7 @@ function funnelView(mk, userId) {
 }
 ACTIONS.prospectNote = el => {
   const p = S.prospects[el.dataset.id];
-  openModal({ title: `Appel · ${esc(pName(p))}`, body: `<form id="pnf" class="grid"><div class="chips">${[['ok', 'Joint'], ['noanswer', 'Pas de réponse'], ['rdv', 'RDV pris'], ['refus', 'Pas intéressé']].map(([v, l], i) => `<label class="chip-radio"><input type="radio" name="o" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</div><input class="input" name="note" maxlength="200" placeholder="Note (facultatif)"></form>`,
+  openModal({ title: `Appel · ${pName(p)}`, body: `<form id="pnf" class="grid"><div class="chips">${[['ok', 'Joint'], ['noanswer', 'Pas de réponse'], ['rdv', 'RDV pris'], ['refus', 'Pas intéressé']].map(([v, l], i) => `<label class="chip-radio"><input type="radio" name="o" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</div><input class="input" name="note" maxlength="200" placeholder="Note (facultatif)"></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="prospectNoteSave" data-id="${p.id}">Enregistrer</button>` });
 };
 ACTIONS.prospectNoteSave = el => { const f = formData($('#pnf')); const id = newId(); db.set(['touches', id], { id, clubId: CLUB.id, prospectId: el.dataset.id, at: Date.now(), by: ME.id, channel: 'call', outcome: f.o === 'refus' ? 'refus' : f.o === 'noanswer' ? 'noanswer' : 'ok', note: (f.note || '').slice(0, 200) + (f.o === 'rdv' ? ' (RDV pris)' : '') }); closeModal(); toast('Appel noté'); };
@@ -378,7 +378,7 @@ PAGES.b2b = {
 };
 ACTIONS.coEdit = el => {
   const co = (el.dataset.id && S.companies[el.dataset.id]) || { statut: 'a_contacter', ownerId: ME.id };
-  openModal({ title: co.id ? esc(co.nom) : 'Nouvelle entreprise', body: `<form id="cof" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="nom" value="${esc(co.nom || '')}" required></label>
+  openModal({ title: co.id ? co.nom : 'Nouvelle entreprise', body: `<form id="cof" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="nom" value="${esc(co.nom || '')}" required></label>
     <label class="field"><span>Secteur</span><input class="input" name="secteur" value="${esc(co.secteur || '')}"></label><label class="field"><span>Effectif</span><input class="input" name="effectif" inputmode="numeric" value="${co.effectif || ''}"></label>
     <label class="field"><span>Contact</span><input class="input" name="contact" value="${esc(co.contact || '')}"></label><label class="field"><span>Téléphone</span><input class="input" name="tel" type="tel" value="${esc(co.tel || '')}"></label>
     <label class="field"><span>Statut</span><select class="input" name="statut">${Object.entries(CO_STATUS).map(([k, l]) => `<option value="${k}" ${co.statut === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>

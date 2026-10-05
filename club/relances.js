@@ -249,7 +249,7 @@ const relByKey = key => relancesFor(CLUB.id).find(rl => rl.key === key) || null;
 ACTIONS.relTake = el => { const rl = relByKey(el.dataset.key); if (!rl) return; const ops = relPatch(rl, { ownerId: ME.id }); if (rl.kind === 'impaye' && rl.client) ops.push(dunPatch(rl.client, { ownerId: ME.id }, 'Prise en charge')); if (rl.kind === 'resiliation') ops.push([['resiliations', rl.refId, 'ownerId'], ME.id]); db.batch(ops); toast('Relance ajoutée à votre liste'); };
 ACTIONS.relPhone = el => {
   const c = S.clients[el.dataset.id];
-  openModal({ title: `Téléphone · ${esc(c.name)}`, body: `<label class="field"><span>Numéro</span><input class="input" id="rp" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${esc(c.phone || '')}"></label>`,
+  openModal({ title: `Téléphone · ${c.name}`, body: `<label class="field"><span>Numéro</span><input class="input" id="rp" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 12 34 56 78" value="${esc(c.phone || '')}"></label>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="relPhoneSave" data-id="${c.id}">Enregistrer</button>` });
 };
 ACTIONS.relPhoneSave = el => { const p = phoneE164($('#rp').value); if (!p) { toast('Numéro invalide.'); return; } db.batch([[['clients', el.dataset.id, 'phone'], p], [['clients', el.dataset.id, 'phoneSrc'], 'manual'], [['clients', el.dataset.id, 'phoneBad'], null]]); closeModal(); toast('Numéro enregistré'); };
@@ -267,7 +267,7 @@ ACTIONS.relCall = async (el, ev) => {
   db.batch(relPatch(rl, { claimedBy: ME.id, claimedUntil: Date.now() + cfg.lockMinutes * 60000 }));
   UI.pendingCall = { key: rl.key, at: Date.now() };
   // Sur ordinateur, pas d'appli telephone : on affiche le numero a composer.
-  if (!matchMedia('(pointer: coarse)').matches) { openModal({ title: `Appeler ${esc(rl.name)}`, body: `<div class="title t-40" id="code-val">${esc(phoneFmt(clientPhone(rl.client)))}</div><p class="muted small">Composez ce numéro, puis notez le résultat.</p>`, foot: `<button class="btn" data-act="copyCode">Copier</button><button class="btn primary" data-act="relNote" data-key="${rl.key}">Noter le résultat</button>` }); UI.pendingCall = null; return; }
+  if (!matchMedia('(pointer: coarse)').matches) { openModal({ title: `Appeler ${rl.name}`, body: `<div class="title t-40" id="code-val">${esc(phoneFmt(clientPhone(rl.client)))}</div><p class="muted small">Composez ce numéro, puis notez le résultat.</p>`, foot: `<button class="btn" data-act="copyCode">Copier</button><button class="btn primary" data-act="relNote" data-key="${rl.key}">Noter le résultat</button>` }); UI.pendingCall = null; return; }
   location.href = el.getAttribute('href');
 };
 document.addEventListener('visibilitychange', () => {
@@ -281,7 +281,7 @@ ACTIONS.relNote = el => relSheet(el.dataset.key, 'call');
 ACTIONS.relMsg = el => {
   const rl = relByKey(el.dataset.key); if (!rl) return; const ch = el.dataset.ch;
   const f = fillTemplate(tplFor(rl.kind, 'sms'), tplCtx(rl));
-  openModal({ title: `${ch === 'email' ? 'E-mail' : ch === 'whatsapp' ? 'WhatsApp' : 'SMS'} · ${esc(rl.name)}`, body: `<textarea class="input" id="rm" rows="6">${esc(f.text)}</textarea><p class="muted small" id="rm-n">${f.text.length} caractères${ch === 'sms' ? ` · ${Math.ceil(f.text.length / 160)} SMS` : ''}</p>${f.missing.length ? `<p class="bad small">À compléter : ${f.missing.join(', ')}</p>` : ''}`,
+  openModal({ title: `${ch === 'email' ? 'E-mail' : ch === 'whatsapp' ? 'WhatsApp' : 'SMS'} · ${rl.name}`, body: `<textarea class="input" id="rm" rows="6">${esc(f.text)}</textarea><p class="muted small" id="rm-n">${f.text.length} caractères${ch === 'sms' ? ` · ${Math.ceil(f.text.length / 160)} SMS` : ''}</p>${f.missing.length ? `<p class="bad small">À compléter : ${f.missing.join(', ')}</p>` : ''}`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="relMsgSend" data-key="${rl.key}" data-ch="${ch}">Envoyer</button>` });
 };
 ACTIONS.relMsgSend = el => {
@@ -299,7 +299,7 @@ function relSheet(key, channel = 'call') {
   const rl = relByKey(key); if (!rl) return;
   const outs = ['joint', 'messagerie', 'pasreponse', 'mauvaisnumero', 'rappeler', ...(KIND_OUTCOMES[rl.kind] || []), 'refus', 'stop'];
   const motifs = (REFUS_MOTIFS[rl.kind] || (() => ['Pas intéressé', 'Autre']))();
-  openModal({ title: `Résultat · ${esc(rl.name)}`, drawer: true, body: `<form id="rsf" class="grid">
+  openModal({ title: `Résultat · ${rl.name}`, drawer: true, body: `<form id="rsf" class="grid">
     <div class="out-grid">${outs.map(o => `<label class="out-btn"><input type="radio" name="out" value="${o}"><span>${TOUCH_OUTCOMES[o].label}</span></label>`).join('')}</div>
     <div class="cond" data-for="rappeler"><div class="field"><span>Rappeler le</span><input class="input" type="datetime-local" name="callbackAt"></div><div class="chips">${[['soir', 'Ce soir 18 h'], ['demain', 'Demain 10 h'], ['lundi', 'Lundi 10 h']].map(([k, l]) => `<button type="button" class="chip-radio" data-act="relQuick" data-q="${k}"><span>${l}</span></button>`).join('')}</div></div>
     <div class="cond" data-for="promesse"><div class="form-grid"><label class="field"><span>Montant promis (€)</span><input class="input" name="promiseAmount" inputmode="decimal" value="${rl.amount ? String(rl.amount).replace('.', ',') : ''}"></label><label class="field"><span>Date promise</span><input class="input" type="date" name="promiseDate" min="${today()}"></label></div></div>
@@ -370,7 +370,7 @@ function sessionNext() {
   const rl = relByKey(s.keys[s.i]); if (!rl) { sessionNext(); return; }
   const sc = tplFor(rl.kind, 'script'); const ctx = tplCtx(rl); const L = contactLinks(rl);
   const c = rl.client || {};
-  openModal({ title: `${s.i + 1} sur ${s.keys.length} · ${esc(rl.name)}`, drawer: true, body: `<div class="sess">
+  openModal({ title: `${s.i + 1} sur ${s.keys.length} · ${rl.name}`, drawer: true, body: `<div class="sess">
     <div class="row wrap" style="gap:6px">${[rl.kind].map(k => `<span class="tag is-warn">${REL_KINDS[k].label}</span>`).join('')}<span class="muted small">${esc(rl.reason)}</span></div>
     <div class="muted small">${c.offer ? 'Offre : ' + esc(c.offer) + ' · ' : ''}${c.end ? 'fin ' + dmy(c.end) + ' · ' : ''}${rl.touches[0] ? 'dernière note : ' + esc(rl.touches[0].note || (TOUCH_OUTCOMES[rl.touches[0].outcome] || {}).label || '') : 'premier contact'}</div>
     ${['Ouverture', 'Questions', 'Conclusion'].map((h, i) => sc[i] ? `<div class="script"><b>${h}</b><p>${esc(fillTemplate(sc[i], ctx).text)}</p></div>` : '').join('')}

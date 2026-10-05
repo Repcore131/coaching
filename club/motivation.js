@@ -58,3 +58,13 @@ function wrapBanner() {
   const st = statsFor(CLUB.id, ME.id, rangeOf('month', pm)); if (!st.rows.some(x => x.target > 0)) return '';
   return `<a class="recap-ready" href="#/wrap/${pm}/${ME.id}">${ico('sparkle')}<div><b>Votre bilan de ${MOIS[Number(pm.slice(5)) - 1].toLowerCase()} est prêt</b><span>Vos chiffres, vos progrès et vos trophées du mois, en une minute.</span></div>${ico('chevR')}</a>`;
 }
+
+// ── Première connexion d'un membre : visite en 3 écrans, une seule fois ───
+const TOUR = [['plus', 'Saisissez une vente en 2 taps', 'Le bouton jaune Saisir, en bas au centre : choisissez le KPI, c’est enregistré. Annuler reste possible 5 secondes.'], ['target', 'Voyez où vous en êtes', 'La carte Ma journée donne votre score, votre rang et ce qu’il reste à faire aujourd’hui pour tenir le rythme.'], ['phone', 'Traitez vos relances', 'L’onglet Relances liste les appels du jour, classés par urgence. Un tap pour appeler, un tap pour noter le résultat.']];
+function tourMaybe() {
+  if (!ME || isManager() || pref('onboarded', false) || $('.tour')) return;
+  let i = 0; const el = document.createElement('div'); el.className = 'tour'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Découverte de Fit Pulse');
+  const draw = () => { const [ic, t, x] = TOUR[i]; el.innerHTML = `<div class="tour-card"><div class="tour-ico">${ico(ic)}</div><div class="tour-dots">${TOUR.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div><h2>${t}</h2><p>${x}</p><div class="row" style="gap:8px;justify-content:center"><button class="btn ghost" data-tour="skip">Passer</button><button class="btn primary" data-tour="next">${i < TOUR.length - 1 ? 'Suivant' : 'C’est parti'}</button></div></div>`; el.querySelector('[data-tour=next]').focus(); };
+  el.addEventListener('click', e => { const b = e.target.closest('[data-tour]'); if (!b) return; if (b.dataset.tour === 'next' && i < TOUR.length - 1) { i++; draw(); return; } el.remove(); setPref('onboarded', true); });
+  document.body.appendChild(el); draw();
+}

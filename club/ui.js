@@ -19,10 +19,12 @@ function toast(msg, ms = 3200) {
   $('#toasts').appendChild(el); setTimeout(() => el.remove(), ms);
 }
 let modalClose = null;
+let modalOpener = null;
 function openModal({ title, body, foot = '', wide = false, drawer = false, onMount = null, onClose = null }) {
-  closeModal();
+  const opener = $('#modal-root') && $('#modal-root').innerHTML ? modalOpener : document.activeElement;
+  closeModal(); modalOpener = opener;
   const root = $('#modal-root');
-  root.innerHTML = `<div class="overlay${drawer ? ' drawer' : ''}" data-overlay><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">
+  root.innerHTML = `<div class="overlay${drawer ? ' drawer' : ''}" data-overlay><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <div class="modal-head"><h2>${esc(title)}</h2><span class="spacer"></span><button class="btn ghost icon" data-close aria-label="Fermer">${ico('x')}</button></div>
     <div class="modal-body">${body}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div></div>`;
   const ov = $('[data-overlay]', root);
@@ -33,7 +35,14 @@ function openModal({ title, body, foot = '', wide = false, drawer = false, onMou
   const f = $('input:not([type=hidden]),select,textarea', $('.modal-body', ov)); if (f && !drawer) setTimeout(() => f.focus(), 30);
   return $('.modal', ov);
 }
-function closeModal() { const r = $('#modal-root'); if (r && r.innerHTML) { r.innerHTML = ''; const f = modalClose; modalClose = null; if (f) f(); } }
+function closeModal() { const r = $('#modal-root'); if (r && r.innerHTML) { r.innerHTML = ''; const f = modalClose; modalClose = null; if (f) f(); const o = modalOpener; modalOpener = null; if (o && o.isConnected && o.focus) try { o.focus({ preventScroll: true }); } catch (_) { /* rien */ } } }
+// Piège de focus : Tab reste dans la fenêtre ouverte.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return; const m = $('#modal-root .modal'); if (!m) return;
+  const L = $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', m).filter(x => x.offsetParent !== null);
+  if (!L.length) return; const first = L[0], last = L[L.length - 1];
+  if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); } else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 function confirmDlg(text, { ok = 'Confirmer', danger = false } = {}) {
   return new Promise(res => {
@@ -167,9 +176,11 @@ function tickCountdown() {
   const n = new Date(); const end = new Date(n.getFullYear(), n.getMonth() + 1, 1);
   let s = Math.max(0, Math.floor((end - n) / 1000));
   const d = Math.floor(s / 86400); s -= d * 86400; const h = Math.floor(s / 3600); s -= h * 3600; const m = Math.floor(s / 60); s -= m * 60;
-  el.innerHTML = `${ico('cal')}<b>${d}j ${pad(h)}:${pad(m)}:${pad(s)}</b><span>restants en ${MOIS[n.getMonth()]}</span>`;
+  const html = `${ico('cal')}<b>J-${d + (h || m ? 1 : 0)}</b><span>fin ${MOIS[n.getMonth()].toLowerCase()}</span>`;
+  el.title = `${d} j ${pad(h)} h ${pad(m)} min restantes en ${MOIS[n.getMonth()].toLowerCase()}`;
+  if (el.dataset.v !== html) { el.dataset.v = html; el.innerHTML = html; }
 }
-setInterval(tickCountdown, 1000);
+setInterval(tickCountdown, 60000);
 
 // ── Routeur ────────────────────────────────────────────────────────────────
 function currentRoute() { const h = location.hash.replace(/^#\/?/, ''); const [r, ...rest] = h.split('/'); return { r: r || 'home', args: rest }; }
@@ -197,6 +208,9 @@ function renderNow() {
   app.innerHTML = shell(r, PAGES[r].render(args));
   UI._lastRoute = r;
   if (PAGES[r].mount) PAGES[r].mount(args);
+  // Lecteurs d'écran : boutons icône nommés par leur infobulle, pastilles de santé lisibles.
+  $$('button[title]:not([aria-label]),a[title]:not([aria-label])', app).forEach(b => { if (!b.textContent.trim()) b.setAttribute('aria-label', b.title); });
+  $$('.hdot[title]:not([role])', app).forEach(i => { i.setAttribute('role', 'img'); i.setAttribute('aria-label', i.title); });
   tickCountdown();
   window.scrollTo(0, keepScroll);
   if (focusKey) { const el = $(`[data-focus="${focusKey}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }

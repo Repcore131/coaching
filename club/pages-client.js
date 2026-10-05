@@ -35,7 +35,7 @@ function clientTimeline(c) {
 }
 ACTIONS.cliEdit = el => {
   const c = S.clients[el.dataset.id];
-  openModal({ title: `Coordonnées · ${esc(c.name)}`, body: `<form id="cef" class="form-grid"><label class="field"><span>Téléphone</span><input class="input" name="phone" type="tel" value="${esc(phoneFmt(phoneE164(c.phone)) || c.phone || '')}"></label><label class="field"><span>Téléphone 2</span><input class="input" name="phone2" type="tel" value="${esc(c.phone2 || '')}"></label><label class="field full"><span>E-mail</span><input class="input" name="email" type="email" value="${esc(c.email || '')}"></label>
+  openModal({ title: `Coordonnées · ${c.name}`, body: `<form id="cef" class="form-grid"><label class="field"><span>Téléphone</span><input class="input" name="phone" type="tel" value="${esc(phoneFmt(phoneE164(c.phone)) || c.phone || '')}"></label><label class="field"><span>Téléphone 2</span><input class="input" name="phone2" type="tel" value="${esc(c.phone2 || '')}"></label><label class="field full"><span>E-mail</span><input class="input" name="email" type="email" value="${esc(c.email || '')}"></label>
     <label class="row small full"><input type="checkbox" name="optOutSms" ${c.optOutSms ? 'checked' : ''}> Opposé aux SMS et WhatsApp</label><label class="row small full"><input type="checkbox" name="optOutCall" ${c.optOutCall ? 'checked' : ''}> Opposé aux appels</label></form>`,
     foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="cliSave" data-id="${c.id}">Enregistrer</button>` });
 };
