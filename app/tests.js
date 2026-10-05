@@ -1292,7 +1292,11 @@ async function testExercices(){
       for(const v of Object.values(EX_GUIDE_BRUT||{}))
         String(v).split('~').forEach(x=>{x=x.trim(); if(x) noms.push(x);});
       if(noms.length<300) return _echec('catalogue illisible : '+noms.length+' noms');
-      const sans=noms.filter(n=>!_slugIllustre(exSlug(n)));
+      // Sauf ceux que le guide n'a jamais illustrés (EX_SANS_ILLUSTRATION,
+      // 05/10/2026) : la liste ne cache rien, chacun y est vraiment sans dessin.
+      const sans=noms.filter(n=>!_slugIllustre(exSlug(n))&&EX_SANS_ILLUSTRATION.indexOf(n)<0);
+      const faux=EX_SANS_ILLUSTRATION.filter(n=>_slugIllustre(exSlug(n)));
+      if(faux.length) return _echec('marqués sans dessin, mais illustrés : '+faux.join(' | '));
       return sans.length?_echec(sans.length+' sans image, dont '+sans.slice(0,4).join(' | ')):true;})());
     ok('La liste des mots d\'agres ne contient AUCUNE precision d\'execution',(()=>{
       // Y glisser « prise », « large » ou « incline » viderait la regle de
@@ -43944,7 +43948,10 @@ async function testExercices(){
       // 408 depuis le 30/09/2026 : quatre exercices sont passés au cardio.
       // 407 depuis le 01/10/2026 : « LEG EXTENSION » était écrit deux fois, dont
       // une avec une faute ; les deux lignes n'en font plus qu'une.
-      return 407+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
+      // 432 depuis le 05/10/2026 : vingt-cinq exercices non référencés ajoutés
+      // (vingt-trois filmés dans le guide, plus l'élévation latérale poulie
+      // hauteur de hanche et le soulevé roumain à la belt squat, demandés par Kevin).
+      return 432+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
@@ -43953,6 +43960,28 @@ async function testExercices(){
         const sans=[...n].filter(x=>!schemaDe({name:x}));
         return n.size+' noms pour '+_guideAttendu()+' attendus'
           +(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
+    ok('Exercices non référencés (05/10/2026) : classés, trouvables en banque, « rdl » compris, vidéos rattachées',(()=>{
+      for(const [n,p,sch] of [['ELEVATION LATERALE POULIE HAUTEUR DE HANCHE','DELT_LAT','isolation-epaule'],['SOULEVE DE TERRE ROUMAIN A LA BELT SQUAT','ISCHIOS','charniere-hanche'],
+        ['RDL MACHINE GUIDEE','ISCHIOS','charniere-hanche'],['HIGH ROW HAMMER STRENGTH','DORSAUX','tirage-horizontal'],['SQUAT AU BELT SQUAT VERSION FESSIER','FESSIERS','squat']]){
+        const g=_exGuide().get(n); if(!g||g.p[0]!==p) return _echec(n+' : muscles '+JSON.stringify(g));
+        if(schemaDe({name:n})!==sch) return _echec(n+' : schéma '+schemaDe({name:n}));
+      }
+      // Une banque en ligne qui ne les a pas : l'app les ajoute, sans doublon.
+      const b=_indexerBanque(_bqCompleter([{slug:'elevation-laterale-poulie',nom:'ELEVATION LATERALE POULIE',muscles:['DELT_LAT']}]));
+      const f=b.parSlug['souleve-de-terre-roumain-a-la-belt-squat'];
+      if(!f||f.muscles[0]!=='ISCHIOS'||!f.execution||f.materiel!=='machine guidee') return _echec('fiche ajoutée : '+JSON.stringify(f));
+      if(b.liste.filter(x=>x.slug==='elevation-laterale-poulie').length!==1) return _echec('doublon d’une fiche déjà en ligne');
+      if(_bqCompleter([]).length!==0) return _echec('une banque vide se remplit toute seule');
+      const h=b.parSlug['elevation-laterale-poulie-hauteur-de-hanche'];
+      if(!h||scoreBanque(h,'elevation laterale hanche',[])<=0) return _echec('hauteur de hanche introuvable à la recherche');
+      if(scoreBanque(f,'rdl belt',[])<=0||scoreBanque(f,'rdl',[])<=0) return _echec('« rdl » ne trouve pas le soulevé roumain');
+      // Une vidéo rangée sous un nom raccourci revient à son exercice.
+      if(!videosPour('ABDUCTION DEBOUT POULIE ELASTIQUE').length||videosPour('TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET').length!==1) return _echec('vidéos rattachées');
+      // Le RDL à la belt squat ne prend pas le dessin du RDL à la barre.
+      if(_exoIndex&&_exoIndex.size&&_slugIllustre(exSlug('SOULEVE DE TERRE ROUMAIN A LA BELT SQUAT'))) return _echec('le RDL belt squat prend une image d’un autre agrès');
+      // Aucune fiche ajoutée n'invente un texte : celui de BQ_TEXTES_APP, l'intro d'une variante, ou rien.
+      const inv=bqFichesApp([]).filter(x=>x.execution&&!BQ_TEXTES_APP[x.nom]&&!(EX_VARIANTES[x.nom]&&EX_VARIANTES[x.nom].intro===x.execution));
+      return inv.length?_echec('texte inventé : '+inv[0].nom):true;})());
     ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
     ok('Chaque schéma porte son libellé, son effectif et ses exemples',
        Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
