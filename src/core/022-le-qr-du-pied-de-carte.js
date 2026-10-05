@@ -1107,7 +1107,33 @@ function _recSignature(g,o,sig,y,LARG,adresse){
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
-  return {ts,dy:_visuelAdresse(g,o.ecrireEspace,cx,y,ts,adresse)};
+  const dy=_visuelAdresse(g,o.ecrireEspace,cx,y,ts,adresse);
+  // LE COACH ET LA DATE, en petit, sous la signature (05/10/2026, main) — et
+  // sous l'adresse quand elle est là. Le nom de l'athlète, lui, reste celui de
+  // son réglage « Nom affiché sur mes visuels » : c'est `sig`, et « rien »
+  // reste rien.
+  let dy2=0;
+  try{
+    const l2=_recSignatureLigne2(currentUser);
+    // Seulement si elle tient dans l'image : en format post, la signature est
+    // à 50 px du bas, et l'adresse en prend déjà une partie.
+    if(l2&&y+dy+27<=g.canvas.height-6){
+      dy2=27;
+      g.save();
+      g.textAlign='center'; g.textBaseline='alphabetic';
+      g.font="600 17px Montserrat,'Segoe UI',sans-serif";
+      g.fillStyle='rgba(255,255,255,.55)';
+      g.fillText(l2,cx,y+dy+dy2,LARG);
+      g.restore();
+    }
+  }catch(e){ dy2=0; }
+  return {ts,dy:dy+dy2};
+}
+// PURE. « COACH <NOM> · 05/10/2026 », ou la date seule sans coach.
+function _recSignatureLigne2(u,maintenant){
+  let coach=''; try{ coach=signatureCoachNom(u); }catch(e){ coach=''; }
+  let d=''; try{ d=new Date(maintenant||Date.now()).toLocaleDateString('fr-FR'); }catch(e){ d=''; }
+  return [(coach&&u&&u.role!=='coach')?'COACH '+coach.toLocaleUpperCase('fr-FR'):'',d].filter(Boolean).join(' · ');
 }
 // PURE. Le sur-titre de la carte d'un record.
 function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }

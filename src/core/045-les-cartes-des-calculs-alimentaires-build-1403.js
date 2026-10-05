@@ -96,7 +96,7 @@ function _htmlTableauxTableur(c){
     +li('Taille',vb(_tbNb(t.taille)+' cm'),'premier bilan',false,'taille')
     +li('Âge',vb(_tbNb(t.age)+' ans'),_srcAge,false,'calendar')
     +li('Niveau d’activité hors sport',
-        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
+        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+nr(' (×'+String(x.f).replace('.',',')+')','')})),
           t.naf.cle),
         t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' · '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
@@ -104,13 +104,19 @@ function _htmlTableauxTableur(c){
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
               :'aucune profession renseignée, choisis le niveau')),false,'course')
     // LA FORMULE DU METABOLISME, choisie ici (30/09/2026), l'ecart dit a cote.
-    +li('Formule du métabolisme',
+    +li(nr('Formule du métabolisme','Méthode de calcul du métabolisme'),
         sel('tbk-formule','formuleMB',[
-          {v:'',lib:'Auto · '+({harris:'Harris',mifflin:'Mifflin'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
-          {v:'harris',lib:'Harris-Benedict'},{v:'mifflin',lib:'Mifflin-St Jeor'}],
+          {v:'',lib:'Auto · '+(nomsReels()?{harris:'Harris',mifflin:'Mifflin'}:{harris:'standard',mifflin:'prudente'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
+          {v:'harris',lib:mbNom('harris')},{v:'mifflin',lib:mbNom('mifflin')}],
           (((c.nutrition||{}).tableur||{}).formuleMB)||''),
         _htmlEcartFormules(t),false,'calc')
-    +li('Coefficient d’objectif',
+    +((currentUser&&currentUser.email===CREATOR_EMAIL)
+      ?li('Noms réels des formules',
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
+            +(nomsReels()?' checked':'')+'> Afficher</label>',
+          'Réservé à ton compte : les autres voient les libellés RepCore, jamais le nom des formules ni les coefficients.',false,'calc')
+      :'')
+    +li(nr('Coefficient d’objectif','Ajustement selon l’objectif'),
         sel('tbk-coef','coef',(OBJ_COEF_ECHELLE[t.phase]||[1]).map(v=>({v:v,
           lib:Math.round(v*100)+' % de la dépense'})),t.coef),
         (PHASES[t.phase]?PHASES[t.phase].lib:'Maintien')
@@ -185,20 +191,20 @@ function _htmlTableauxTableur(c){
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 
   // ── TABLEAU 3 — LES BESOINS, LIGNE A LIGNE ──────────────────────────
-  const libMB=t.mbSource==='katch'?'masse maigre mesurée (Katch-McArdle)'
-    :(t.mbSource==='harris'?'Harris-Benedict, poids taille âge sexe'
-      :'Mifflin-St Jeor, poids taille âge sexe');
+  const libMB=t.mbSource==='katch'?nr('masse maigre mesurée (Katch-McArdle)','méthode RepCore, sur la masse maigre mesurée')
+    :(t.mbSource==='harris'?nr('Harris-Benedict, poids taille âge sexe','méthode RepCore standard, poids taille âge sexe')
+      :nr('Mifflin-St Jeor, poids taille âge sexe','méthode RepCore prudente, poids taille âge sexe'));
   // Le sous-titre NOMME LA FORMULE QUI A CALCULE, lue au meme endroit que la
   // premiere ligne : une maquette qui dirait « Harris-Benedict » pour un
   // calcul fait en Katch-McArdle mentirait.
-  const nomMB=t.mbSource==='katch'?'Katch-McArdle':(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+  const nomMB=mbNom(t.mbSource);
   let hBesoins='<table class="tbk">'+_tbkCap('flame','Besoins caloriques',
-      'Estimation basée sur la méthode '+nomMB,'Estimation')+'<tbody>'
+      nr('Estimation basée sur la méthode '+nomMB,'Estimation : '+nomMB),'Estimation')+'<tbody>'
     +li('Besoins de base',_tbNb(t.mb)+' kcal',libMB
         +(t.correction!==1?' · corrigé de '+(t.correction>1?'+':'')
           +Math.round((t.correction-1)*100)+' % sur ta décision':''),false,'calc')
     +li('Besoins selon l’activité hors sport',_tbNb(t.horsSport)+' kcal',
-        'base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),false,'canape')
+        nr('base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),'niveau d’activité : '+t.naf.lib.toLowerCase()),false,'canape')
     +li('Besoins selon l’activité sportive',_tbNb(t.avecSport)+' kcal',
         '+ '+_tbNb(t.sportJour)+' kcal de sport par jour',false,'haltere')
     // ⚠ CETTE LIGNE N'EST PAS CE QUE L'ATHLETE MANGE UN JOUR D'ENTRAINEMENT,
@@ -209,7 +215,7 @@ function _htmlTableauxTableur(c){
     // Un total qui ne dit pas qu'il est un total AVANT cyclage se fait
     // comparer a des chiffres d'apres.
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
-        '× '+String(t.coef).replace('.',',')
+        nr('× '+String(t.coef).replace('.',','),Math.round(t.coef*100)+' % de la dépense')
         +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
     // LA LIGNE « SOUS LE PLANCHER DE SÉCURITÉ » EST RETIRÉE (Kevin, 27/09/2026) :
     //   « ça sert à rien comme indication, je veux pas avoir ça sous les yeux ».

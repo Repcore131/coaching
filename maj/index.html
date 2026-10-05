@@ -62,8 +62,8 @@
   <h1>Mise à jour de RepCore</h1>
   <p id="sous">Nettoyage de la copie gardée par ce navigateur…</p>
   <ul>
-    <li id="l1"><b>·</b> Service workers</li>
-    <li id="l2"><b>·</b> Caches du site</li>
+    <li id="l1"><b>·</b> Ancienne version de l’application</li>
+    <li id="l2"><b>·</b> Fichiers gardés par ce navigateur</li>
   </ul>
   <a class="b" id="go" href="../app/">Ouvrir RepCore</a>
   <p class="n">Tes données sont dans le cloud : ce nettoyage ne touche qu’à la copie
@@ -84,8 +84,8 @@
   go.setAttribute('href',sortie);
   var nSW=0, nCache=0, souci=false;
   function fini(){
-    dire(l1,!souci,nSW?('Service workers retirés : '+nSW):'Aucun service worker à retirer');
-    dire(l2,!souci,nCache?('Caches vidés : '+nCache):'Aucun cache à vider');
+    dire(l1,!souci,nSW?'Ancienne version retirée':'Aucune ancienne version à retirer');
+    dire(l2,!souci,nCache?'Fichiers gardés effacés':'Aucun fichier gardé à effacer');
     sous.textContent=souci
       ? 'Nettoyage partiel. Ouvre RepCore : si l’ancienne version revient, supprime les données du site depuis l’icône à gauche de l’adresse.'
       : 'C’est fait. RepCore va s’ouvrir dans sa version la plus récente.';

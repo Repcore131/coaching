@@ -6,7 +6,7 @@
 // (git log -1 --format=%cs). Un fichier modifié et pas encore commité prend
 // la date du jour.
 //
-// APPELÉ PAR scripts/assembler_site.sh, donc par deploie.sh, pages.yml et
+// APPELÉ PAR scripts/fabriquer_site.mjs, donc par deploie.sh, pages.yml et
 // firebase.yml : la copie publiée est toujours à jour. Les deux workflows
 // clonent l'historique sans les contenus (fetch-depth: 0, filter: blob:none) ;
 // sur un clone SUPERFICIEL, une page inchangée depuis la limite du clone
@@ -24,7 +24,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
-export const SITE = 'https://repcore131.github.io/coaching/';
+export const SITE = 'https://repcore-sync.web.app/';   // l'adresse unique depuis le build 1786
 // [fichier du dépôt, chemin publié, priorité]
 export const PAGES_SITEMAP = [
   ['index.html', '', '1.0'],

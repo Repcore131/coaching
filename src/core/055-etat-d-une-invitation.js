@@ -2276,6 +2276,10 @@ async function _pfUtiliser(slug){
 async function chargerTests(){
   // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
   window._rcEnTests=true;
+  // tests.js D'ABORD (05/10/2026). Sur le miroir minifié, son en-tête pose de
+  // quoi relire le texte d'origine du code : il doit être en place AVANT que
+  // les lectures ci-dessous partent.
+  await _chargerScriptTests();
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
@@ -2373,29 +2377,32 @@ async function chargerTests(){
       window._RC_RULES=r.ok?await r.text():null;
     }catch(e){ window._RC_RULES=null; }
   }
-  if(typeof testExercices!=='function'){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='./tests.js';
-      s.onload=res;
-      // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
-      // et scripts/assembler_site.sh le retirent) : en production, la suite
-      // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
-      // ligne, c'est l'autre cas : il n'est jamais mis en cache.
-      s.onerror=()=>{
-        const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
-        const msg=horsLigne
-          ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
-          :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
-        try{ console.warn('[RepCore] '+msg); }catch(e){}
-        try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
-        rej(new Error(msg));
-      };
-      document.head.appendChild(s);
-    });
-  }
-  // testExercices est defini par tests.js, charge juste au-dessus.
+  // testExercices est defini par tests.js, charge en tete (_chargerScriptTests).
   return window.testExercices();
+}
+// tests.js, chargé une fois : APPELÉ EN TÊTE de chargerTests (05/10/2026, main) —
+// sur le miroir minifié, son en-tête doit être posé avant les lectures de source.
+async function _chargerScriptTests(){
+  if(typeof testExercices==='function') return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='./tests.js';
+    s.onload=res;
+    // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
+    // et scripts/fabriquer_site.mjs le retirent) : en production, la suite
+    // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
+    // ligne, c'est l'autre cas : il n'est jamais mis en cache.
+    s.onerror=()=>{
+      const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
+      const msg=horsLigne
+        ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
+        :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
+      try{ console.warn('[RepCore] '+msg); }catch(e){}
+      try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
+      rej(new Error(msg));
+    };
+    document.head.appendChild(s);
+  });
 }
 
 // ══ « DEMANDER À REPCORE » : L'ASSISTANT DE L'ATHLÈTE AUTONOME (05/10/2026) ══

@@ -515,6 +515,10 @@ function lienWhatsApp(texte){
 const RCM_EVENEMENTS=['landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
+  // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
+  // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
+  // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
+  'droits_ecart_vu','droits_ecart_essai','droits_ecart_suivi','droits_ecart_abo',
   'first_workout_started','first_workout_completed','first_bilan_completed',
   // ── LE TRAFIC QUI ARRIVE PAR UN NAVIGATEUR INTEGRE ──────────────────
   // Un compteur par application, et non un seul « iab_detecte » : savoir que
@@ -9475,18 +9479,73 @@ function _palierHerite(u,etat){
 //   remplir-paiements.mjs n'a pas écrit droits/ pour les abonnés d'avant (et
 //   posé reglages_publics/droitsServeur), un nœud vide ne prouve rien : ce
 //   sont eux, justement, qui n'en ont pas. Le dossier décide alors comme avant.
-//   Lu une fois par session avec droits/, et gardé : un réglage qui passe à
-//   vrai n'a pas de raison de revenir en arrière.
+//   Lu une fois par session avec droits/, et gardé entre deux sessions.
 const DROITS_SERVEUR_CLE='rc_droits_serveur';
 function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
 let _droitsServeurLu=false;
+// ⚠ ET IL REDESCEND (05/10/2026, ordre de fermeture, étape 1d). Il restait à
+//   '1' pour toujours sur l'appareil : retirer le réglage dans la base (le
+//   seul retour arrière prévu si la bascule coupait un payeur) n'atteignait
+//   donc aucun téléphone. Il est maintenant relu à chaque session, et retiré
+//   quand le serveur RÉPOND qu'il n'existe plus — les deux réglages, v1 et v2.
+//   Une lecture qui échoue ne change rien : hors ligne, l'appareil garde ce
+//   qu'il savait.
 async function rafraichirDroitsServeur(){
-  if(_droitsServeurLu||(droitsServeurActif()&&droitsV2Actif())) return;
+  if(_droitsServeurLu) return;
   const v=await CLOUD.pullDroitsServeur().catch(()=>null);
   if(v===null) return;
   _droitsServeurLu=true;
-  if(v&&v.actif){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
-  if(v&&v.v>=2){ try{ localStorage.setItem(DROITS_V2_CLE,'1'); }catch(e){} }
+  try{ if(v&&v.actif) localStorage.setItem(DROITS_SERVEUR_CLE,'1'); else localStorage.removeItem(DROITS_SERVEUR_CLE); }catch(e){}
+  try{ if(v&&v.v>=2) localStorage.setItem(DROITS_V2_CLE,'1'); else localStorage.removeItem(DROITS_V2_CLE); }catch(e){}
+}
+// ══ CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, étape 1c, 05/10/2026) ══
+//
+// Trois portes s'ouvrent encore par une simple écriture dans son propre
+// dossier : l'essai (essai.finit), le suivi (status COACHING_SUIVI) et, tant
+// que la bascule n'est pas posée, l'abonnement (status + paymentStatus). Avant
+// de les fermer une à une, il faut savoir COMBIEN de comptes légitimes ne
+// tiennent leur accès que par là : ce sont eux qu'une fermeture couperait.
+//
+// droitsEcarts ne DÉCIDE RIEN : aucun écran ne la lit, aucun accès n'en
+// dépend. Elle compare ce que l'app accorde aujourd'hui à ce que le serveur
+// atteste seul (droits/), et nomme les portes que seul le dossier tient.
+// PURE (le dossier et le cache local). [] quand le serveur n'a jamais répondu :
+// on ne juge pas sans lui.
+function droitsEcarts(u,maintenant){
+  if(!u||u.role==='coach') return [];
+  const d=droitsDe(u);
+  if(d.etat==='inconnu') return [];
+  const t=Number(maintenant)||Date.now(), rang=p=>PALIERS_ORDRE.indexOf(p);
+  // Le palier que le serveur atteste, sans rien lire du dossier.
+  let strict='aucun';
+  if(d.etat==='serveur'){
+    strict=(d.echeance>0&&t>=d.echeance)?'aucun':d.palier;
+    if(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>t&&rang(strict)<rang('ultime')) strict='ultime';
+    if((Number(d.suiviJusqu)||0)>t) strict='suivi';
+  }
+  const out=[];
+  let accorde='aucun'; try{ accorde=palierDe(u); }catch(e){ accorde='aucun'; }
+  if(rang(accorde)>rang(strict)) out.push(accorde==='suivi'?'suivi':'abo');
+  // L'essai : ouvert par le dossier, pas attesté par le serveur.
+  let essai=false; try{ essai=essaiActif(u); }catch(e){ essai=false; }
+  if(essai&&!((Number(d.essaiFinit)||0)>t)&&rang(strict)<rang('ultime')) out.push('essai');
+  return out;
+}
+// Un passage par jour et par appareil, dans les compteurs agrégés (aucun nom,
+// aucun identifiant : un entier par jour). `droits_ecart_vu` est le
+// dénominateur : les comptes jugés ce jour-là.
+const DROITS_ECART_CLE='rc_droits_ecart_jour';
+function droitsEcartsCompter(u){
+  try{
+    if(!u||!u.email||u.role==='coach') return false;
+    if(droitsDe(u).etat==='inconnu') return false;
+    const jour=localISODate(new Date()), marque=jour+'|'+String(u.email).toLowerCase();
+    if(localStorage.getItem(DROITS_ECART_CLE)===marque) return false;
+    localStorage.setItem(DROITS_ECART_CLE,marque);
+    rcm('droits_ecart_vu');
+    for(const e of droitsEcarts(u)) rcm('droits_ecart_'+e);
+    return true;
+  }catch(e){ return false; }
 }
 // ══ LA BASCULE COMPLETE : droits/ ET coachs_registre/ SEULS (30/09/2026) ══
 // Posee (reglages_publics/droitsServeur/v = 2) par cloudflare/scripts/
@@ -9645,6 +9704,8 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  // Le serveur vient de répondre : c'est le moment de compter (étape 1c).
+  if(cible===currentUser) droitsEcartsCompter(cible);
   return true;
 }
 // ══════════════════════════════════════════════════════════════════════════
@@ -19744,6 +19805,38 @@ function marqueCoachDe(user,usrs){
   const c=coachAffichable(user,usrs);
   if(!c) return '';
   return String(c.logo||c.signature||'');
+}
+// ══ LA SIGNATURE D'UN EXPORT (Kevin, 05/10/2026) ════════════════════════════
+//
+// « Chaque export doit porter une signature : RepCore, le coach, l'athlète
+// destinataire, la date. Discrète en pied de page pour les documents, intégrée
+// au visuel pour les images. » Aucun document ne portait les quatre : chacun
+// composait son en-tête à la main.
+//
+// PURE. Elle lit le dossier qu'on IMPRIME (jamais currentUser : quand le coach
+// imprime pour un athlète, ce n'est pas le même). Chaque morceau absent est
+// sauté. Le texte sort BRUT : chaque document l'échappe.
+//   o.date     : la date à écrire (défaut : maintenant) ;
+//   o.athlete  : false pour ne pas nommer l'athlète (visuels où un test l'interdit).
+function signatureCoachNom(u){
+  if(!u) return '';
+  const net=x=>String(x==null?'':x).replace(/\s+/g,' ').trim();
+  if(u.role==='coach') return net(u.teamName)||net((u.fname||'')+' '+(u.lname||''));
+  let c=null; try{ c=coachAffichable(u)||null; }catch(e){ c=null; }
+  return net(c&&c.teamName)||net(((c&&c.fname)||'')+' '+((c&&c.lname)||''))||net(u.coachName);
+}
+function signatureDocument(u,o){
+  const opt=o||{};
+  const coach=signatureCoachNom(u);
+  const ath=(u&&u.role!=='coach'&&opt.athlete!==false)?String(((u.fname||'')+' '+(u.lname||''))).replace(/\s+/g,' ').trim():'';
+  // La date en toutes lettres : « 6 octobre 2026 ». En chiffres, « 06/10/2026 »
+  // se lisait « /10 » dans un document qui s'interdit toute note.
+  let d=''; try{ d=new Date(opt.date||Date.now()).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ d=''; }
+  return ['RepCore',coach?'Coach '+coach:'',ath?'pour '+ath:'',d].filter(Boolean).join(' · ');
+}
+// Le pied d'un document imprimé, déjà échappé.
+function htmlSignatureDocument(u,o){
+  return '<p class="doc-sign">'+escapeHtml(signatureDocument(u,o))+'</p>';
 }
 
 // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
@@ -36205,6 +36298,7 @@ const EX_RENOMMAGES=Object.freeze({
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE':'CURL LARRY SCOTT MACHINE GUIDEE',
   'DEVELOPPE MACHINE HAUT DE PECS OU A LA SMITH':'DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS',
   'HIP THRUST MACHINE OU A LA BARRE':'HIP THRUST MACHINE',
+  'HIP THRUST MACHINE CONVERGENTE':'HIP THRUST MACHINE',
   // LE CAS SIGNALE. Debout, barre accrochee au cable : c'est ce que le fichier
   // « curl barre poulie elastique » montre, et c'est ce que la consigne decrit.
   'CURL A LA POULIE':'CURL BARRE POULIE',
@@ -36435,12 +36529,12 @@ const EX_GUIDE_POSING='ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BIC
 // classique. Elle est donc versee dans la description au seeding, et retiree
 // du libelle de la pastille.
 const EX_PRECISIONS=Object.freeze({
-  'BATTLE ROPE':'Cordes alternées, une main après l\'autre.',
-  'CURL LARRY SCOTT':'À la barre EZ.',
+  'BATTLE ROPE':'Cordes alternées,​ une main après l\'autre.',
+  'CURL LARRY SCOTT':'À la barre⁠ EZ.',
   'DEVELOPPE COUCHE MACHINE':'Prise en pronation, pouces à l\'intérieur.',
   'ELEVATION FRONTALE POULIE':'À la poulie.',
   'ELEVATION LATERALE HALTERE':'Aux haltères.',
-  'ESCALIERS':'Une marche à la fois.',
+  'ESCALIERS':'Une marche à la fois, sans sauter de palier.',
   'EXTENSION TRICEPS POULIE BASSE':'Sur banc incliné.',
   'FENTES ARRIERES BARRE':'Grand pas vers l\'arrière.',
   'MARCHE DU FERMIER':'Aux haltères.',
@@ -36453,7 +36547,7 @@ const EX_PRECISIONS=Object.freeze({
 
 const EX_VARIANTES=Object.freeze({
   'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
-  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
+  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
   'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES : UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
@@ -39392,7 +39486,7 @@ function bilanBlocExportHtml(c,b){
     +'.bb-phrase{font-size:12pt;font-weight:700;margin:6px 0 4px}.bb-vide,.bb-s{font-size:8.5pt;color:#52525b}td small{display:block;font-size:7.5pt;color:#71717a}'
     +'</style></head><body><div class="ex-t"><div><h1>Bilan <span>de bloc</span></h1><p>'+escapeHtml(nom)+'</p></div>'
     +'<div class="ex-m">Édité le '+escapeHtml(_bbJour(Date.now()))+'</div></div>'+_htmlBilanBlocCorps(b)
-    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p></body></html>';
+    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p>'+htmlSignatureDocument(c)+'</body></html>';
 }
 // La feuille, depuis le bloc de la fiche coach : lire, puis exporter.
 function ouvrirBilanBloc(){
@@ -42701,7 +42795,7 @@ function _normRech(s){
 // Les clefs brutes (TRICEPS, DELT_ANT) sont ajoutees automatiquement plus bas
 // avec les libelles de MUSCLES : inutile de les repeter ici.
 const MUSCLE_SYNONYMES=Object.freeze({
-  TRICEPS   :['triceps'],
+  TRICEPS   :['triceps','tricipital'],
   BICEPS    :['biceps'],
   PECTORAUX :['pecs','pectoraux','poitrine','pec'],
   DORSAUX   :['dos','dorsaux','lats','grand dorsal','dorsal'],
@@ -52239,7 +52333,33 @@ function _recSignature(g,o,sig,y,LARG,adresse){
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
-  return {ts,dy:_visuelAdresse(g,o.ecrireEspace,cx,y,ts,adresse)};
+  const dy=_visuelAdresse(g,o.ecrireEspace,cx,y,ts,adresse);
+  // LE COACH ET LA DATE, en petit, sous la signature (05/10/2026, main) — et
+  // sous l'adresse quand elle est là. Le nom de l'athlète, lui, reste celui de
+  // son réglage « Nom affiché sur mes visuels » : c'est `sig`, et « rien »
+  // reste rien.
+  let dy2=0;
+  try{
+    const l2=_recSignatureLigne2(currentUser);
+    // Seulement si elle tient dans l'image : en format post, la signature est
+    // à 50 px du bas, et l'adresse en prend déjà une partie.
+    if(l2&&y+dy+27<=g.canvas.height-6){
+      dy2=27;
+      g.save();
+      g.textAlign='center'; g.textBaseline='alphabetic';
+      g.font="600 17px Montserrat,'Segoe UI',sans-serif";
+      g.fillStyle='rgba(255,255,255,.55)';
+      g.fillText(l2,cx,y+dy+dy2,LARG);
+      g.restore();
+    }
+  }catch(e){ dy2=0; }
+  return {ts,dy:dy+dy2};
+}
+// PURE. « COACH <NOM> · 05/10/2026 », ou la date seule sans coach.
+function _recSignatureLigne2(u,maintenant){
+  let coach=''; try{ coach=signatureCoachNom(u); }catch(e){ coach=''; }
+  let d=''; try{ d=new Date(maintenant||Date.now()).toLocaleDateString('fr-FR'); }catch(e){ d=''; }
+  return [(coach&&u&&u.role!=='coach')?'COACH '+coach.toLocaleUpperCase('fr-FR'):'',d].filter(Boolean).join(' · ');
 }
 // PURE. Le sur-titre de la carte d'un record.
 function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
@@ -60767,7 +60887,7 @@ function dbRapports(u,ref){
     const der=vals.length?vals[vals.length-1]:null;
     const base=vals.length>1?(ref==='debut'?vals[0]:vals[vals.length-2]):null;
     return Object.assign({},df,{valeur:der,ecart:(der!=null&&base!=null)?der-base:null,
-      formule:df.cle==='mb'?(comp.length?'Katch-McArdle':MB_NOMS[mbFormuleDe(u)]):''});
+      formule:df.cle==='mb'?mbNom(comp.length?'katch':mbFormuleDe(u)):''});
   });
 }
 // La composition par zone. `tours` : l'écart du ruban depuis la première
@@ -61046,7 +61166,7 @@ const DB_ICONES={
 };
 function _dbCarteRapports(u,neutre){
   const info=_dbInfo('rk','IMC : poids / taille². Ratio taille / hanches : tour de taille divisé par tour de hanches. Ratio masse maigre : part du poids qui n’est pas du gras. '
-    +'Métabolisme : dépense au repos, par Katch-McArdle (masse maigre) ou, à défaut, la formule retenue pour ce dossier (Harris-Benedict ou Mifflin-St Jeor). Écarts comparés à la mesure précédente ou à la première.');
+    +'Métabolisme : dépense au repos, par la méthode RepCore : sur la masse maigre quand elle est mesurée, sinon sur le poids, la taille, l’âge et le sexe. Écarts comparés à la mesure précédente ou à la première.');
   const sel='<select class="db-sel" onchange="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
   const masquer=new Set(neutre?['imc','maigre','mb']:[]);
   const t=dbRapports(u,_dbRef).filter(r=>!masquer.has(r.cle)).map(r=>{
@@ -64105,7 +64225,8 @@ function _anatExportCss(){
     +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
     +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
     +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:4px}.ex-z ul{margin:4px 0 0 16px;padding:0}'
-    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}'
+    +'.doc-sign{font-size:7.5pt;color:#71717a;text-align:center;letter-spacing:.4px;margin-top:10px}';
 }
 /** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
 function _anatExportPhoto(a,pb,vue,legende){
@@ -64153,12 +64274,12 @@ function anatExportHtml(c,mode){
 
   if(mode==='athlete'){
     const cs=anatConsignesExport(prios);
-    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par '+escapeHtml(signatureCoachNom(c)||'ton coach')+'<br>le '+dJour)
       +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
       +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
       +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
         :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
-      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>'+htmlSignatureDocument(c);
     return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
   }
 
@@ -64193,7 +64314,7 @@ function anatExportHtml(c,mode){
     +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
     +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
   // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
-  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+  return doc('Analyse · '+nom+' · '+dBilan,corps+htmlSignatureDocument(c),'ex-coach');
 }
 /**
  * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression
@@ -70406,6 +70527,8 @@ function rapportPeriode(u,debut,fin,opts){
     periode:{debut,fin,libelle:rapLibellePeriode(debut,fin)},
     athlete:{prenom:(u&&u.fname)||''},
     coach:(()=>{ try{ return _nomCoachAffiche()||''; }catch(e){ return ''; } })(),
+    // Le pied du document, lu sur le dossier IMPRIMÉ (signatureDocument).
+    signature:(()=>{ try{ return signatureDocument(u,{date:now}); }catch(e){ return ''; } })(),
     nSeances:ss.length,
     suffisant:ss.length>=RAP_MIN_SEANCES,
     assiduite:rapAssiduite(u,debut,fin),
@@ -70722,6 +70845,9 @@ function htmlRapport(r){
   if(B.mot) h+=`<section class="rap-bloc"><h2>Mot du coach</h2>
     <div class="rap-mot" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mot du coach"></div>
     <p class="rap-note rap-noprint">Écris ici avant d'imprimer. Rien n'est enregistré : ce texte vit le temps de l'impression.</p></section>`;
+  // LA SIGNATURE, HORS DE TOUTE CASE : en-tête décoché, le document sortait
+  // sans rien qui dise d'où il vient ni pour qui.
+  if(r.signature) h+=`<p class="doc-sign">${escapeHtml(r.signature)}</p>`;
   return h;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────
@@ -70937,6 +71063,7 @@ function ficheAlimDonnees(user,chercher){
     return n||String(u.coachName||'').trim()||'';
   })();
   return {ok:true,
+    edite:Date.now(),
     athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
     kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
     jourOn:isOn,
@@ -70982,7 +71109,7 @@ function htmlFicheAlim(user,chercher){
     </div>`;
   const pied=`<footer class="fa-pied">
       <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
-      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
+      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
 
@@ -71290,7 +71417,8 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0');
+  const sign=htmlSignatureDocument(u);
+  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0')+sign;
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -71309,7 +71437,7 @@ function htmlProgrammePrint(u){
       +_ppBloc('Retour au calme',cd)
       +_ppBloc('Notes',s.notes)
       +'</section>';
-  }).join('');
+  }).join('')+sign;
 }
 let _ppCible=null;
 // Sur le modèle d’ouvrirRapport : la cible est passée, et le défaut est le
@@ -78196,7 +78324,7 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
 /** Les six consignes illustrées de chaque vue (E1). */
 const PHOTO_CONSIGNES=Object.freeze({
   face:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Face à la lumière, fond clair et uni','Bras relâchés, légèrement écartés du corps','Bien face au téléphone, pieds à largeur de hanches','Tenue près du corps, pieds nus'],
-  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
+  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
   side:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, mains contre les cuisses','Bien de profil, épaule vers le téléphone, regard droit devant','Pieds joints, tenue près du corps, pieds nus']});
 const PHOTO_ICONES=['M4 4h16v16H4zM12 7v10','M7 21h10M12 17v4M9 3h6v14H9z','M12 3v2M5 12H3m18 0h-2M6 6l1.5 1.5M18 6l-1.5 1.5M8 12a4 4 0 0 0 8 0','M12 5v7m-5 8 3-8h4l3 8M5 10l4 1m10-1-4 1','M12 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-4 18 2-9h4l2 9','M8 4h8l2 5-3 1v10H9V10L6 9z'];
 /**
@@ -78340,7 +78468,7 @@ function bMetier(id){
       value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
     <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 var(--r-3) var(--r-3);max-height:210px;overflow:auto"></div>
     <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:6px;color:${n?'var(--success)':'var(--text-faint)'}">${
-      n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
+      n?nr(escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',','),'Niveau d’activité : '+escapeHtml(n.lib).toLowerCase())
        :(v?'Métier non reconnu : le calcul utilisera le nombre de séances.':'')}</div>
   </div>`;
 }
@@ -78361,7 +78489,7 @@ function _bMetierSaisie(id,val){
   if(zn){
     const n=facteurProfession(val);
     zn.style.color=n?'var(--success)':'var(--text-faint)';
-    zn.textContent=n?(n.lib+' → facteur '+String(n.f).replace('.',','))
+    zn.textContent=n?nr(n.lib+' → facteur '+String(n.f).replace('.',','),'Niveau d’activité : '+n.lib.toLowerCase())
       :(val?'Métier non reconnu : le calcul utilisera le nombre de séances.':'');
   }
 }
@@ -95986,7 +96114,7 @@ function _htmlDepartAthlete(nut){
   const b=besoinsProposes(currentUser);
   if(!b||b.source===null) return '';
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
-  const nom=MB_NOMS[b.source]||'Mifflin-St Jeor';
+  const nom=mbNom(b.source);
   const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
@@ -101933,7 +102061,7 @@ function htmlRepartitionProt(u,entrees,jour){
       +'<span class="rp-piste">'+(r.seuil!=null?'<i class="rp-seuil" style="left:'+pc(r.seuil)+'%"></i>':'')
       +'<b class="rp-b'+(x.prise?' rp-plein':'')+'" style="width:'+pc(x.g)+'%"></b></span>'
       +'<span class="rp-g">'+escapeHtml(String(Math.round(x.g)))+' g</span></div>').join('')+'</div>'
-    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g (0,4 g par kilo), le repère qui profite le mieux au muscle.</div>':'')
+    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g'+nr(' (0,4 g par kilo)','')+', le repère qui profite le mieux au muscle.</div>':'')
     +(ph?'<div class="rp-phrase">'+escapeHtml(ph)+'</div>':'')
     +'</div>';
 }
@@ -105581,7 +105709,7 @@ function poidsMacros(u){
 function libPoidsMacros(pm){
   if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
   return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
-    +(pm.type==='maigre'?'poids sec (masse maigre × 1,15)':'poids ajusté');
+    +(pm.type==='maigre'?nr('poids sec (masse maigre × 1,15)','poids sec'):'poids ajusté');
 }
 // Les deux alertes, dites à l'écran (coach et athlète).
 function _htmlAlertesMacros(x,vu){
@@ -105709,6 +105837,35 @@ function mbEstime(poids,taille,age,sexe,u){
 }
 const MB_FORMULES=Object.freeze(['harris','mifflin']);
 const MB_NOMS=Object.freeze({katch:'Katch-McArdle',harris:'Harris-Benedict',mifflin:'Mifflin-St Jeor'});
+// ══ LES NOMS QU'ON MONTRE (05/10/2026) ═════════════════════════════════════
+//
+// Les écrans de calcul des besoins ne nomment plus les formules ni leurs
+// coefficients : ils disent « Méthode RepCore, sur la masse maigre », « niveau
+// d'activité : moyennement actif ». LES CALCULS NE CHANGENT PAS D'UN CHIFFRE :
+// seul le libellé change, et MB_NOMS garde les noms réels.
+//
+// UN RÉGLAGE, RÉSERVÉ AU COMPTE DU CRÉATEUR, les réaffiche (« Noms réels des
+// formules », dans le tableau « Facteurs » de la fiche nutrition) : Kevin doit
+// pouvoir relire ce que l'app calcule vraiment. Il vit sur l'appareil, et ne
+// vaut que pour ce compte : pour tout autre, nomsReels() rend faux quoi qu'il
+// y ait dans le stockage.
+//   nr(reel, maison) : le texte à montrer, selon ce réglage.
+//   mbNom(cle)       : le nom de la formule du métabolisme.
+const NOMS_REELS_CLE='rc_noms_reels';
+const MB_NOMS_MAISON=Object.freeze({katch:'Méthode RepCore, sur la masse maigre',harris:'Méthode RepCore standard',mifflin:'Méthode RepCore prudente'});
+function nomsReels(){
+  try{ return !!(currentUser&&currentUser.email===CREATOR_EMAIL)&&localStorage.getItem(NOMS_REELS_CLE)==='1'; }catch(e){ return false; }
+}
+function nr(reel,maison){ return nomsReels()?reel:maison; }
+function mbNom(cle){
+  return nomsReels()?(MB_NOMS[cle]||'Mifflin-St Jeor'):(MB_NOMS_MAISON[cle]||'Méthode RepCore');
+}
+function basculerNomsReels(on){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+  try{ if(on) localStorage.setItem(NOMS_REELS_CLE,'1'); else localStorage.removeItem(NOMS_REELS_CLE); }catch(e){}
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
 const MB_IMC_MIFFLIN=30;
 // PURE. La formule d'estimation du metabolisme pour CE dossier :
 //   1. le reglage du coach (nutrition.tableur.formuleMB) ;
@@ -106075,7 +106232,7 @@ function besoinsProposes(user,opts){
     // a la place de Mifflin, sur decision de Kevin — et un athlete dont la
     // proposition monte de 137 kcal a le droit de savoir pourquoi.
     hypotheses.push('tours de mesure absents : estimation '
-      +(MB_NOMS[source]||'Mifflin-St Jeor')
+      +mbNom(source)
       +' sur poids, taille, âge et sexe'); }
   if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
   // AVANT le facteur d'activité, et sur le métabolisme de repos seul. Ce
@@ -106123,12 +106280,12 @@ function besoinsProposes(user,opts){
   // ── Le NEAT, nommé et chiffré ──
   if(neat.source==='profession')
     hypotheses.push(metier.toLowerCase()+' : '+neat.lib.toLowerCase()
-      +' → NEAT × '+_vf(neat.f));
+      +nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else if(neat.source==='pas')
     hypotheses.push(neat.pas.toLocaleString('fr-FR')
-      +' pas par jour en moyenne → NEAT × '+_vf(neat.f));
+      +' pas par jour en moyenne'+nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else
-    hypotheses.push('ni profession reconnue ni relevé de pas → NEAT × '+_vf(neat.f));
+    hypotheses.push('ni profession reconnue ni relevé de pas'+nr(' → NEAT × '+_vf(neat.f),' : NEAT de base'));
   // Dire « déduit des pas » sans aucun relevé de pas était faux. La phrase
   // suit ce qui a RÉELLEMENT servi.
   if(metier&&neat.source==='pas')
@@ -106142,7 +106299,7 @@ function besoinsProposes(user,opts){
   if(_naf.source==='declare'&&nafIncoherent(user)) hypotheses.push(NAF_ALERTE_METIER);
   // Le poids qui chiffre le sport (MET nets).
   if(sport.semaine>0)
-    hypotheses.push('sport chiffré en MET nets sur '+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
+    hypotheses.push(nr('sport chiffré en MET nets sur ','sport chiffré sur un poids de ')+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
       +(sport.poidsDefaut?' (poids inconnu : valeur par défaut)':''));
   if(sport.source==='coach')
     hypotheses.push('sports réglés à la main par le coach → '+sport.semaine
@@ -107407,14 +107564,16 @@ function _htmlEcartFormules(t){
   // maigre mesuree, c'est Katch-McArdle, quel que soit le choix du menu : la
   // phrase le disait en dernier, apres deux chiffres qui ne servaient pas, et
   // le menu « Mifflin-St Jeor » se lisait comme la formule en cours.
+  const nH=nr('Harris-Benedict','méthode standard'), nM=nr('Mifflin-St Jeor','méthode prudente');
+  const cap=x=>x.charAt(0).toUpperCase()+x.slice(1);
   if(t.mbSource==='katch')
-    return 'Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée'
+    return 'Calcul actuel : '+nr('Katch-McArdle','méthode RepCore')+', sur sa masse maigre mesurée'
       +(t.mbBrut>0?' ('+_tbNb(t.mbBrut)+' kcal)':'')
-      +'. Ce choix ne servira que sans masse maigre : Harris-Benedict '+_tbNb(hb)
-      +', Mifflin-St Jeor '+_tbNb(mf)+', écart de '+e+' kcal.';
+      +'. Ce choix ne servira que sans masse maigre : '+nH+' '+_tbNb(hb)
+      +', '+nM+' '+_tbNb(mf)+', écart de '+e+' kcal.';
   const harris=t.mbSource==='harris';
-  return 'Calcul actuel : '+(harris?'Harris-Benedict':'Mifflin-St Jeor')+', '
-    +_tbNb(harris?hb:mf)+' kcal. '+(harris?'Mifflin-St Jeor':'Harris-Benedict')
+  return 'Calcul actuel : '+(harris?nH:nM)+', '
+    +_tbNb(harris?hb:mf)+' kcal. '+nr(harris?'Mifflin-St Jeor':'Harris-Benedict',cap('la '+(harris?nM:nH)))
     +' donnerait '+_tbNb(harris?mf:hb)+' kcal : écart de '+e+' kcal.';
 }
 function majTableauTableur(quoi,val){
@@ -107898,7 +108057,7 @@ function _htmlTableauxTableur(c){
     +li('Taille',vb(_tbNb(t.taille)+' cm'),'premier bilan',false,'taille')
     +li('Âge',vb(_tbNb(t.age)+' ans'),_srcAge,false,'calendar')
     +li('Niveau d’activité hors sport',
-        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
+        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+nr(' (×'+String(x.f).replace('.',',')+')','')})),
           t.naf.cle),
         t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' · '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
@@ -107906,13 +108065,19 @@ function _htmlTableauxTableur(c){
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
               :'aucune profession renseignée, choisis le niveau')),false,'course')
     // LA FORMULE DU METABOLISME, choisie ici (30/09/2026), l'ecart dit a cote.
-    +li('Formule du métabolisme',
+    +li(nr('Formule du métabolisme','Méthode de calcul du métabolisme'),
         sel('tbk-formule','formuleMB',[
-          {v:'',lib:'Auto · '+({harris:'Harris',mifflin:'Mifflin'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
-          {v:'harris',lib:'Harris-Benedict'},{v:'mifflin',lib:'Mifflin-St Jeor'}],
+          {v:'',lib:'Auto · '+(nomsReels()?{harris:'Harris',mifflin:'Mifflin'}:{harris:'standard',mifflin:'prudente'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
+          {v:'harris',lib:mbNom('harris')},{v:'mifflin',lib:mbNom('mifflin')}],
           (((c.nutrition||{}).tableur||{}).formuleMB)||''),
         _htmlEcartFormules(t),false,'calc')
-    +li('Coefficient d’objectif',
+    +((currentUser&&currentUser.email===CREATOR_EMAIL)
+      ?li('Noms réels des formules',
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
+            +(nomsReels()?' checked':'')+'> Afficher</label>',
+          'Réservé à ton compte : les autres voient les libellés RepCore, jamais le nom des formules ni les coefficients.',false,'calc')
+      :'')
+    +li(nr('Coefficient d’objectif','Ajustement selon l’objectif'),
         sel('tbk-coef','coef',(OBJ_COEF_ECHELLE[t.phase]||[1]).map(v=>({v:v,
           lib:Math.round(v*100)+' % de la dépense'})),t.coef),
         (PHASES[t.phase]?PHASES[t.phase].lib:'Maintien')
@@ -107987,20 +108152,20 @@ function _htmlTableauxTableur(c){
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 
   // ── TABLEAU 3 — LES BESOINS, LIGNE A LIGNE ──────────────────────────
-  const libMB=t.mbSource==='katch'?'masse maigre mesurée (Katch-McArdle)'
-    :(t.mbSource==='harris'?'Harris-Benedict, poids taille âge sexe'
-      :'Mifflin-St Jeor, poids taille âge sexe');
+  const libMB=t.mbSource==='katch'?nr('masse maigre mesurée (Katch-McArdle)','méthode RepCore, sur la masse maigre mesurée')
+    :(t.mbSource==='harris'?nr('Harris-Benedict, poids taille âge sexe','méthode RepCore standard, poids taille âge sexe')
+      :nr('Mifflin-St Jeor, poids taille âge sexe','méthode RepCore prudente, poids taille âge sexe'));
   // Le sous-titre NOMME LA FORMULE QUI A CALCULE, lue au meme endroit que la
   // premiere ligne : une maquette qui dirait « Harris-Benedict » pour un
   // calcul fait en Katch-McArdle mentirait.
-  const nomMB=t.mbSource==='katch'?'Katch-McArdle':(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+  const nomMB=mbNom(t.mbSource);
   let hBesoins='<table class="tbk">'+_tbkCap('flame','Besoins caloriques',
-      'Estimation basée sur la méthode '+nomMB,'Estimation')+'<tbody>'
+      nr('Estimation basée sur la méthode '+nomMB,'Estimation : '+nomMB),'Estimation')+'<tbody>'
     +li('Besoins de base',_tbNb(t.mb)+' kcal',libMB
         +(t.correction!==1?' · corrigé de '+(t.correction>1?'+':'')
           +Math.round((t.correction-1)*100)+' % sur ta décision':''),false,'calc')
     +li('Besoins selon l’activité hors sport',_tbNb(t.horsSport)+' kcal',
-        'base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),false,'canape')
+        nr('base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),'niveau d’activité : '+t.naf.lib.toLowerCase()),false,'canape')
     +li('Besoins selon l’activité sportive',_tbNb(t.avecSport)+' kcal',
         '+ '+_tbNb(t.sportJour)+' kcal de sport par jour',false,'haltere')
     // ⚠ CETTE LIGNE N'EST PAS CE QUE L'ATHLETE MANGE UN JOUR D'ENTRAINEMENT,
@@ -108011,7 +108176,7 @@ function _htmlTableauxTableur(c){
     // Un total qui ne dit pas qu'il est un total AVANT cyclage se fait
     // comparer a des chiffres d'apres.
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
-        '× '+String(t.coef).replace('.',',')
+        nr('× '+String(t.coef).replace('.',','),Math.round(t.coef*100)+' % de la dépense')
         +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
     // LA LIGNE « SOUS LE PLANCHER DE SÉCURITÉ » EST RETIRÉE (Kevin, 27/09/2026) :
     //   « ça sert à rien comme indication, je veux pas avoir ça sous les yeux ».
@@ -134903,6 +135068,10 @@ async function _pfUtiliser(slug){
 async function chargerTests(){
   // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
   window._rcEnTests=true;
+  // tests.js D'ABORD (05/10/2026). Sur le miroir minifié, son en-tête pose de
+  // quoi relire le texte d'origine du code : il doit être en place AVANT que
+  // les lectures ci-dessous partent.
+  await _chargerScriptTests();
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
@@ -135000,29 +135169,32 @@ async function chargerTests(){
       window._RC_RULES=r.ok?await r.text():null;
     }catch(e){ window._RC_RULES=null; }
   }
-  if(typeof testExercices!=='function'){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='./tests.js';
-      s.onload=res;
-      // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
-      // et scripts/assembler_site.sh le retirent) : en production, la suite
-      // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
-      // ligne, c'est l'autre cas : il n'est jamais mis en cache.
-      s.onerror=()=>{
-        const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
-        const msg=horsLigne
-          ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
-          :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
-        try{ console.warn('[RepCore] '+msg); }catch(e){}
-        try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
-        rej(new Error(msg));
-      };
-      document.head.appendChild(s);
-    });
-  }
-  // testExercices est defini par tests.js, charge juste au-dessus.
+  // testExercices est defini par tests.js, charge en tete (_chargerScriptTests).
   return window.testExercices();
+}
+// tests.js, chargé une fois : APPELÉ EN TÊTE de chargerTests (05/10/2026, main) —
+// sur le miroir minifié, son en-tête doit être posé avant les lectures de source.
+async function _chargerScriptTests(){
+  if(typeof testExercices==='function') return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='./tests.js';
+    s.onload=res;
+    // DEUX RAISONS, DEUX PHRASES. tests.js n'est jamais publie (firebase.yml
+    // et scripts/fabriquer_site.mjs le retirent) : en production, la suite
+    // n'existe pas, et le dire ainsi evite de chercher une panne reseau. Hors
+    // ligne, c'est l'autre cas : il n'est jamais mis en cache.
+    s.onerror=()=>{
+      const horsLigne=(typeof navigator!=='undefined'&&navigator.onLine===false);
+      const msg=horsLigne
+        ?'Suite de tests non disponible hors ligne : tests.js n\'est jamais mis en cache.'
+        :'Suite de tests non disponible ici : tests.js n\'est pas publié en production (lancer la suite depuis le dépôt local, node scripts/verif/suite.mjs).';
+      try{ console.warn('[RepCore] '+msg); }catch(e){}
+      try{ toast(horsLigne?'Suite de tests non disponible hors ligne.':'Suite de tests non disponible ici.','var(--orange)'); }catch(e){}
+      rej(new Error(msg));
+    };
+    document.head.appendChild(s);
+  });
 }
 
 // ══ « DEMANDER À REPCORE » : L'ASSISTANT DE L'ATHLÈTE AUTONOME (05/10/2026) ══

@@ -65,9 +65,9 @@ echo "== build app=$B  sw=$S =="
 # et non sur la racine : le depot porte des choses qui n'ont rien a faire en
 # ligne — la planche de badges d'origine, les notes, les scripts de verif.
 echo "== assemblage =="
-# LA LISTE DE CE QUI EST PUBLIC : scripts/assembler_site.sh, la même que le
-# workflow firebase.yml (deux copies divergeaient : tarifs.json manquait ici).
-bash scripts/assembler_site.sh _site                                 || exit 1
+# (05/10/2026) Le MEME assemblage que les deux workflows : fichiers de travail
+# ecartes, rc-core et rc-style minifies. Une seule liste : scripts/fabriquer_site.mjs.
+node scripts/fabriquer_site.mjs _site                               || exit 1
 grep -q '"com.repcore.app"' _site/.well-known/assetlinks.json       || { echo "!! assetlinks.json absent ou vide"; exit 1; }
 
 # LE GARDE-FOU. Un cp qui echoue a moitie donne un site amputé, et Firebase

@@ -5,8 +5,8 @@
 #   tout était lisible à repcore131.github.io/coaching/<chemin>.
 #
 # CE QUI EST PUBLIÉ, désormais : le site public assemblé par
-# scripts/assembler_site.sh — LA MÊME LISTE que Firebase Hosting — plus vault/
-# (l'appli d'épargne, servie seulement ici : vault/README.md).
+# scripts/fabriquer_site.mjs — LA MÊME LISTE que Firebase Hosting — plus
+# l'appli VAULT construite (servie seulement ici).
 #
 # POURQUOI PAS vault/ SEUL : le sitemap, robots.txt, les balises canonical et
 # les images d'aperçu (og:image) de la page de vente, du blog et de l'app
@@ -39,20 +39,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
-      # assembler_site.sh) date chaque page par son dernier commit.
+      # fabriquer_site.mjs) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           filter: blob:none
-      - uses: actions/configure-pages@v5
-      - name: Assembler ce qui est public (et rien d'autre)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # ⚠ ON NE PUBLIE PLUS LE DEPOT ENTIER (05/10/2026). « path: . » mettait en
+      #   ligne tests.js, scripts/, cloudflare/, database.rules.json, docs/ et
+      #   toutes les notes de travail. Le site est assemble par le meme script
+      #   que pour Firebase (une seule liste), plus ce que SEULES les Pages
+      #   servent : l'appli VAULT construite.
+      - name: Assembler le site
         run: |
-          bash scripts/assembler_site.sh _pages --avec-vault
-          # GARDE-FOU : rien de privé ne doit y entrer.
-          for x in scripts cloudflare functions docs android database.rules.json firebase.json deploie.sh .github; do
-            if [ -e "_pages/$x" ]; then echo "::error::$x ne doit pas être publié"; exit 1; fi
-          done
-          test -f _pages/index.html && test -f _pages/vault/README.md && test -f _pages/app/index.html
+          set -e
+          node scripts/fabriquer_site.mjs _pages --pages
+          test -f _pages/index.html
+          test -f _pages/app/index.html
+          test -f _pages/vault/app/index.html
+          test ! -f _pages/app/tests.js
+          test ! -e _pages/scripts
+          test ! -e _pages/database.rules.json
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _pages

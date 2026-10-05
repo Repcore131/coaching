@@ -16,7 +16,9 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
-      - 'scripts/**'
+      # ⚠ 'scripts/**' A QUITTE CETTE LISTE (05/10/2026) : fabriquer_site.mjs et
+      #   minifier.mjs decident du fichier servi. Les ignorer aurait laisse une
+      #   correction de la fabrication dans le depot sans jamais la publier.
       - 'docs/**'
       # VAULT (appli d'épargne) n'est pas servie par Firebase : GitHub Pages la publie.
       - 'vault/**'
@@ -37,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # L'HISTORIQUE SANS LES CONTENUS : scripts/sitemap.mjs (appelé par
-      # assembler_site.sh) date chaque page par son dernier commit.
+      # fabriquer_site.mjs) date chaque page par son dernier commit.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -62,24 +64,13 @@ jobs:
           fi
           node scripts/assembler_core.mjs --verifier
 
-      # LA LISTE DE CE QUI EST PUBLIC vit dans scripts/assembler_site.sh,
-      # partagée avec deploie.sh et pages.yml (deux copies divergeaient).
+      # UN SEUL ASSEMBLAGE POUR LES DEUX HOTES (05/10/2026) : la liste de ce qui
+      # est mis en ligne vit dans scripts/fabriquer_site.mjs, que pages.yml
+      # appelle aussi. Il ecarte les fichiers de travail (tests.js, sources,
+      # notes) et MINIFIE rc-core et rc-style : le depot garde le code lisible,
+      # seul le fichier servi change.
       - name: Assembler _site
-        run: |
-          bash scripts/assembler_site.sh _site
-          # LA SUITE DE TESTS NE PART JAMAIS (5,3 Mo). assembler_site.sh la retire
-          # deja ; on la retire ICI aussi, au plus pres de l'envoi, pour qu'une
-          # modification de la liste partagee ne la republie pas en silence.
-          # En ligne, chargerTests() dit « suite non disponible ici ».
-          rm -f _site/app/tests.js
-
-      # LA COPIE PUBLIEE EST MINIFIEE, LE DEPOT JAMAIS (01/10/2026) : tests.js
-      # et assertNoCycleRuleAltersSeries lisent le SOURCE des fonctions
-      # (String(fn)). esbuild sans --minify-identifiers (les noms globaux sont
-      # appeles depuis des onclick="..."). Avant/apres en brut, gzip, brotli ;
-      # le script echoue si un fichier minifie ne se parse plus.
-      - name: Minifier _site
-        run: node scripts/minifier_site.mjs _site
+        run: node scripts/fabriquer_site.mjs _site
 
       # GARDE-FOU. Un deploiement remplace TOUT le site : si l'assemblage a
       # rate, on prefere ne rien envoyer plutot que de vider sync.web.app.
@@ -110,8 +101,15 @@ jobs:
           grep -q 'rel="canonical"' _site/index.html
           # Le service worker de l'app, lui, doit bien etre la.
           test -f _site/app/sw.js
-          # La suite de tests ne part pas (5,5 Mo publics, utiles en local seulement).
+          # AUCUN FICHIER DE TRAVAIL, AUCUNE CARTE DE SOURCE (05/10/2026).
           test ! -f _site/app/tests.js
+          test ! -e _site/scripts
+          test ! -e _site/database.rules.json
+          test -z "$(find _site -name '*.map' | head -1)"
+          # Le code servi est bien le code minifie : plus un seul commentaire
+          # de bloc en tete de fichier, et un poids qui a fondu.
+          core=$(ls _site/app/rc-core.*.js)
+          if [ "$(wc -c < "$core")" -gt 5500000 ]; then echo "rc-core n'est pas minifie"; exit 1; fi
           n=$(find _site -type f | wc -l)
           if [ "$n" -lt 400 ]; then
             echo "Seulement $n fichiers : assemblage suspect, on n'envoie rien."
@@ -323,3 +321,36 @@ jobs:
 
   # L'ANCIEN JOB « suite-navigateur », NON BLOQUANT, EST RETIRE (lot 51) : la
   # suite joue desormais dans « deployer », avant « Deployer », et l'arrete.
+  # LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) dans le Chrome du
+  # runner. UN JOB A PART, qui ne retient PAS le deploiement : elle dure
+  # plusieurs minutes, et le site ne doit pas attendre. Rouge, elle se voit
+  # dans l'onglet Actions ; la corriger reste la priorite.
+  # LA SUITE SUR LE FICHIER SERVI (05/10/2026, main) : le site met en ligne un
+  # rc-core MINIFIE. La suite sur le depot bloque deja le deploiement (job
+  # « deployer », lot 51) ; celle-ci, plus longue, juge le code minifie sans
+  # retenir le site.
+  suite-navigateur:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # LA MEME SUITE, SUR LE FICHIER SERVI (05/10/2026). Le site met en ligne un
+      # rc-core MINIFIE : c'est lui que les utilisateurs executent, c'est donc
+      # lui aussi qu'on juge. Le miroir garde tests.js et le texte d'origine des
+      # fonctions (pour les assertions qui relisent le code), voir
+      # scripts/miroir_minifie.mjs.
+      - name: Suite navigateur sur le code minifie
+        run: |
+          set -e
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then
+            echo "::warning::Pas de Chrome sur ce runner : suite minifiee non jouee."
+            exit 0
+          fi
+          node scripts/miroir_minifie.mjs "$RUNNER_TEMP/miroir"
+          ( cd "$RUNNER_TEMP/miroir" && python3 -m http.server 8001 --bind 127.0.0.1 >/dev/null 2>&1 & )
+          for i in $(seq 1 30); do curl -s http://127.0.0.1:8001/app/index.html >/dev/null && break; sleep 1; done
+          VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8001/app/index.html 9223

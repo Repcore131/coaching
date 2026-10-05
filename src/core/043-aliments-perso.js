@@ -2073,7 +2073,7 @@ function poidsMacros(u){
 function libPoidsMacros(pm){
   if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
   return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
-    +(pm.type==='maigre'?'poids sec (masse maigre × 1,15)':'poids ajusté');
+    +(pm.type==='maigre'?nr('poids sec (masse maigre × 1,15)','poids sec'):'poids ajusté');
 }
 // Les deux alertes, dites à l'écran (coach et athlète).
 function _htmlAlertesMacros(x,vu){

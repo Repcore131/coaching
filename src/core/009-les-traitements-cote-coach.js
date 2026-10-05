@@ -921,6 +921,38 @@ function marqueCoachDe(user,usrs){
   if(!c) return '';
   return String(c.logo||c.signature||'');
 }
+// ══ LA SIGNATURE D'UN EXPORT (Kevin, 05/10/2026) ════════════════════════════
+//
+// « Chaque export doit porter une signature : RepCore, le coach, l'athlète
+// destinataire, la date. Discrète en pied de page pour les documents, intégrée
+// au visuel pour les images. » Aucun document ne portait les quatre : chacun
+// composait son en-tête à la main.
+//
+// PURE. Elle lit le dossier qu'on IMPRIME (jamais currentUser : quand le coach
+// imprime pour un athlète, ce n'est pas le même). Chaque morceau absent est
+// sauté. Le texte sort BRUT : chaque document l'échappe.
+//   o.date     : la date à écrire (défaut : maintenant) ;
+//   o.athlete  : false pour ne pas nommer l'athlète (visuels où un test l'interdit).
+function signatureCoachNom(u){
+  if(!u) return '';
+  const net=x=>String(x==null?'':x).replace(/\s+/g,' ').trim();
+  if(u.role==='coach') return net(u.teamName)||net((u.fname||'')+' '+(u.lname||''));
+  let c=null; try{ c=coachAffichable(u)||null; }catch(e){ c=null; }
+  return net(c&&c.teamName)||net(((c&&c.fname)||'')+' '+((c&&c.lname)||''))||net(u.coachName);
+}
+function signatureDocument(u,o){
+  const opt=o||{};
+  const coach=signatureCoachNom(u);
+  const ath=(u&&u.role!=='coach'&&opt.athlete!==false)?String(((u.fname||'')+' '+(u.lname||''))).replace(/\s+/g,' ').trim():'';
+  // La date en toutes lettres : « 6 octobre 2026 ». En chiffres, « 06/10/2026 »
+  // se lisait « /10 » dans un document qui s'interdit toute note.
+  let d=''; try{ d=new Date(opt.date||Date.now()).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ d=''; }
+  return ['RepCore',coach?'Coach '+coach:'',ath?'pour '+ath:'',d].filter(Boolean).join(' · ');
+}
+// Le pied d'un document imprimé, déjà échappé.
+function htmlSignatureDocument(u,o){
+  return '<p class="doc-sign">'+escapeHtml(signatureDocument(u,o))+'</p>';
+}
 
 // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
 // Le numéro personnel du coach vivait dans coach_public.phone, lisible par

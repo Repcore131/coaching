@@ -105,9 +105,9 @@ interface Window {
   /** Le moteur de pose, posé par son propre script une fois chargé. */
   Pose?: any;
 }
-
-// Le tempo prescrit et la cle d'exercice (rc-core) : lus par la comparaison
-// de tempo du laboratoire (lot Motion Lab T3, build 1682). Absents d'ici, ils
-// faisaient echouer le typage depuis ce build.
-declare function tempoLu(txt: string): any;
-declare function exKey(nom: string): string;
+/** La signature d'un export : « RepCore · Coach X · pour Y · date » (rc-core). */
+declare function signatureDocument(u: any, o?: any): string;
+/** Le tempo prescrit lu : ses quatre temps en secondes, ou null (rc-core). */
+declare function tempoLu(txt: any): any;
+/** La clé d'un exercice : son nom en capitales, sans accent ni ponctuation (rc-core). */
+declare function exKey(nom: any): string;

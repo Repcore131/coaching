@@ -1277,7 +1277,7 @@ function _normRech(s){
 // Les clefs brutes (TRICEPS, DELT_ANT) sont ajoutees automatiquement plus bas
 // avec les libelles de MUSCLES : inutile de les repeter ici.
 const MUSCLE_SYNONYMES=Object.freeze({
-  TRICEPS   :['triceps'],
+  TRICEPS   :['triceps','tricipital'],
   BICEPS    :['biceps'],
   PECTORAUX :['pecs','pectoraux','poitrine','pec'],
   DORSAUX   :['dos','dorsaux','lats','grand dorsal','dorsal'],

@@ -240,8 +240,11 @@ def zones_css(css, masque):
         elif ch == '}':
             if pile:
                 j, sel = pile.pop()
+                # @media print : les couleurs du PAPIER (gris fonce sur blanc),
+                # que les jetons du theme sombre ne sauraient pas donner. Meme
+                # exception que les documents d'impression du JS (DOC_AUTONOME).
                 if (sel == ':root' or 'data-theme' in sel or T.RE_FICHE.search(sel)
-                        or T.SUR_BANNIERE.search(sel)):
+                        or T.SUR_BANNIERE.search(sel) or sel.lstrip().startswith('@media print')):
                     exclues.append((j, i))
             debut_sel = i + 1
         elif ch == ';' and not pile:

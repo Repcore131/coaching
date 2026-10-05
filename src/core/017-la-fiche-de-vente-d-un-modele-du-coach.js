@@ -767,7 +767,7 @@ function bilanBlocExportHtml(c,b){
     +'.bb-phrase{font-size:12pt;font-weight:700;margin:6px 0 4px}.bb-vide,.bb-s{font-size:8.5pt;color:#52525b}td small{display:block;font-size:7.5pt;color:#71717a}'
     +'</style></head><body><div class="ex-t"><div><h1>Bilan <span>de bloc</span></h1><p>'+escapeHtml(nom)+'</p></div>'
     +'<div class="ex-m">Édité le '+escapeHtml(_bbJour(Date.now()))+'</div></div>'+_htmlBilanBlocCorps(b)
-    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p></body></html>';
+    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p>'+htmlSignatureDocument(c)+'</body></html>';
 }
 // La feuille, depuis le bloc de la fiche coach : lire, puis exporter.
 function ouvrirBilanBloc(){

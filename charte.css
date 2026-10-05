@@ -13,7 +13,7 @@
    LES JETONS sont ceux de :root dans app/rc-style.<build>.css ; les polices,
    les @font-face d'app/index.html (memes fichiers, memes plages). Les adresses
    des polices sont RELATIVES A CETTE FEUILLE, qui vit a la racine du site.
-   Publiee par scripts/assembler_site.sh. */
+   Publiee par scripts/fabriquer_site.mjs. */
 
 @font-face{
   font-family:'Montserrat';

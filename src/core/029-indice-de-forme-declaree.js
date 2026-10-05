@@ -1950,6 +1950,8 @@ function rapportPeriode(u,debut,fin,opts){
     periode:{debut,fin,libelle:rapLibellePeriode(debut,fin)},
     athlete:{prenom:(u&&u.fname)||''},
     coach:(()=>{ try{ return _nomCoachAffiche()||''; }catch(e){ return ''; } })(),
+    // Le pied du document, lu sur le dossier IMPRIMÉ (signatureDocument).
+    signature:(()=>{ try{ return signatureDocument(u,{date:now}); }catch(e){ return ''; } })(),
     nSeances:ss.length,
     suffisant:ss.length>=RAP_MIN_SEANCES,
     assiduite:rapAssiduite(u,debut,fin),
@@ -2266,6 +2268,9 @@ function htmlRapport(r){
   if(B.mot) h+=`<section class="rap-bloc"><h2>Mot du coach</h2>
     <div class="rap-mot" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mot du coach"></div>
     <p class="rap-note rap-noprint">Écris ici avant d'imprimer. Rien n'est enregistré : ce texte vit le temps de l'impression.</p></section>`;
+  // LA SIGNATURE, HORS DE TOUTE CASE : en-tête décoché, le document sortait
+  // sans rien qui dise d'où il vient ni pour qui.
+  if(r.signature) h+=`<p class="doc-sign">${escapeHtml(r.signature)}</p>`;
   return h;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────

@@ -203,18 +203,73 @@ function _palierHerite(u,etat){
 //   remplir-paiements.mjs n'a pas écrit droits/ pour les abonnés d'avant (et
 //   posé reglages_publics/droitsServeur), un nœud vide ne prouve rien : ce
 //   sont eux, justement, qui n'en ont pas. Le dossier décide alors comme avant.
-//   Lu une fois par session avec droits/, et gardé : un réglage qui passe à
-//   vrai n'a pas de raison de revenir en arrière.
+//   Lu une fois par session avec droits/, et gardé entre deux sessions.
 const DROITS_SERVEUR_CLE='rc_droits_serveur';
 function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
 let _droitsServeurLu=false;
+// ⚠ ET IL REDESCEND (05/10/2026, ordre de fermeture, étape 1d). Il restait à
+//   '1' pour toujours sur l'appareil : retirer le réglage dans la base (le
+//   seul retour arrière prévu si la bascule coupait un payeur) n'atteignait
+//   donc aucun téléphone. Il est maintenant relu à chaque session, et retiré
+//   quand le serveur RÉPOND qu'il n'existe plus — les deux réglages, v1 et v2.
+//   Une lecture qui échoue ne change rien : hors ligne, l'appareil garde ce
+//   qu'il savait.
 async function rafraichirDroitsServeur(){
-  if(_droitsServeurLu||(droitsServeurActif()&&droitsV2Actif())) return;
+  if(_droitsServeurLu) return;
   const v=await CLOUD.pullDroitsServeur().catch(()=>null);
   if(v===null) return;
   _droitsServeurLu=true;
-  if(v&&v.actif){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
-  if(v&&v.v>=2){ try{ localStorage.setItem(DROITS_V2_CLE,'1'); }catch(e){} }
+  try{ if(v&&v.actif) localStorage.setItem(DROITS_SERVEUR_CLE,'1'); else localStorage.removeItem(DROITS_SERVEUR_CLE); }catch(e){}
+  try{ if(v&&v.v>=2) localStorage.setItem(DROITS_V2_CLE,'1'); else localStorage.removeItem(DROITS_V2_CLE); }catch(e){}
+}
+// ══ CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, étape 1c, 05/10/2026) ══
+//
+// Trois portes s'ouvrent encore par une simple écriture dans son propre
+// dossier : l'essai (essai.finit), le suivi (status COACHING_SUIVI) et, tant
+// que la bascule n'est pas posée, l'abonnement (status + paymentStatus). Avant
+// de les fermer une à une, il faut savoir COMBIEN de comptes légitimes ne
+// tiennent leur accès que par là : ce sont eux qu'une fermeture couperait.
+//
+// droitsEcarts ne DÉCIDE RIEN : aucun écran ne la lit, aucun accès n'en
+// dépend. Elle compare ce que l'app accorde aujourd'hui à ce que le serveur
+// atteste seul (droits/), et nomme les portes que seul le dossier tient.
+// PURE (le dossier et le cache local). [] quand le serveur n'a jamais répondu :
+// on ne juge pas sans lui.
+function droitsEcarts(u,maintenant){
+  if(!u||u.role==='coach') return [];
+  const d=droitsDe(u);
+  if(d.etat==='inconnu') return [];
+  const t=Number(maintenant)||Date.now(), rang=p=>PALIERS_ORDRE.indexOf(p);
+  // Le palier que le serveur atteste, sans rien lire du dossier.
+  let strict='aucun';
+  if(d.etat==='serveur'){
+    strict=(d.echeance>0&&t>=d.echeance)?'aucun':d.palier;
+    if(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>t&&rang(strict)<rang('ultime')) strict='ultime';
+    if((Number(d.suiviJusqu)||0)>t) strict='suivi';
+  }
+  const out=[];
+  let accorde='aucun'; try{ accorde=palierDe(u); }catch(e){ accorde='aucun'; }
+  if(rang(accorde)>rang(strict)) out.push(accorde==='suivi'?'suivi':'abo');
+  // L'essai : ouvert par le dossier, pas attesté par le serveur.
+  let essai=false; try{ essai=essaiActif(u); }catch(e){ essai=false; }
+  if(essai&&!((Number(d.essaiFinit)||0)>t)&&rang(strict)<rang('ultime')) out.push('essai');
+  return out;
+}
+// Un passage par jour et par appareil, dans les compteurs agrégés (aucun nom,
+// aucun identifiant : un entier par jour). `droits_ecart_vu` est le
+// dénominateur : les comptes jugés ce jour-là.
+const DROITS_ECART_CLE='rc_droits_ecart_jour';
+function droitsEcartsCompter(u){
+  try{
+    if(!u||!u.email||u.role==='coach') return false;
+    if(droitsDe(u).etat==='inconnu') return false;
+    const jour=localISODate(new Date()), marque=jour+'|'+String(u.email).toLowerCase();
+    if(localStorage.getItem(DROITS_ECART_CLE)===marque) return false;
+    localStorage.setItem(DROITS_ECART_CLE,marque);
+    rcm('droits_ecart_vu');
+    for(const e of droitsEcarts(u)) rcm('droits_ecart_'+e);
+    return true;
+  }catch(e){ return false; }
 }
 // ══ LA BASCULE COMPLETE : droits/ ET coachs_registre/ SEULS (30/09/2026) ══
 // Posee (reglages_publics/droitsServeur/v = 2) par cloudflare/scripts/
@@ -373,6 +428,8 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  // Le serveur vient de répondre : c'est le moment de compter (étape 1c).
+  if(cible===currentUser) droitsEcartsCompter(cible);
   return true;
 }
 // ══════════════════════════════════════════════════════════════════════════

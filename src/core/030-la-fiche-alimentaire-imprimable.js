@@ -118,6 +118,7 @@ function ficheAlimDonnees(user,chercher){
     return n||String(u.coachName||'').trim()||'';
   })();
   return {ok:true,
+    edite:Date.now(),
     athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
     kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
     jourOn:isOn,
@@ -163,7 +164,7 @@ function htmlFicheAlim(user,chercher){
     </div>`;
   const pied=`<footer class="fa-pied">
       <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
-      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
+      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
 
@@ -471,7 +472,8 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0');
+  const sign=htmlSignatureDocument(u);
+  if(!seances.length) return tete+emptyState('','Aucun créneau actif : rien à imprimer.',null,null,'padding:12px 0')+sign;
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -490,7 +492,7 @@ function htmlProgrammePrint(u){
       +_ppBloc('Retour au calme',cd)
       +_ppBloc('Notes',s.notes)
       +'</section>';
-  }).join('');
+  }).join('')+sign;
 }
 let _ppCible=null;
 // Sur le modèle d’ouvrirRapport : la cible est passée, et le défaut est le

@@ -843,7 +843,7 @@ function htmlRepartitionProt(u,entrees,jour){
       +'<span class="rp-piste">'+(r.seuil!=null?'<i class="rp-seuil" style="left:'+pc(r.seuil)+'%"></i>':'')
       +'<b class="rp-b'+(x.prise?' rp-plein':'')+'" style="width:'+pc(x.g)+'%"></b></span>'
       +'<span class="rp-g">'+escapeHtml(String(Math.round(x.g)))+' g</span></div>').join('')+'</div>'
-    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g (0,4 g par kilo), le repère qui profite le mieux au muscle.</div>':'')
+    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g'+nr(' (0,4 g par kilo)','')+', le repère qui profite le mieux au muscle.</div>':'')
     +(ph?'<div class="rp-phrase">'+escapeHtml(ph)+'</div>':'')
     +'</div>';
 }

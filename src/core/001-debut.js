@@ -515,6 +515,10 @@ function lienWhatsApp(texte){
 const RCM_EVENEMENTS=['landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
+  // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
+  // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
+  // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
+  'droits_ecart_vu','droits_ecart_essai','droits_ecart_suivi','droits_ecart_abo',
   'first_workout_started','first_workout_completed','first_bilan_completed',
   // ── LE TRAFIC QUI ARRIVE PAR UN NAVIGATEUR INTEGRE ──────────────────
   // Un compteur par application, et non un seul « iab_detecte » : savoir que

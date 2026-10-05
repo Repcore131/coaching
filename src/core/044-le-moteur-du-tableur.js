@@ -64,6 +64,35 @@ function mbEstime(poids,taille,age,sexe,u){
 }
 const MB_FORMULES=Object.freeze(['harris','mifflin']);
 const MB_NOMS=Object.freeze({katch:'Katch-McArdle',harris:'Harris-Benedict',mifflin:'Mifflin-St Jeor'});
+// ══ LES NOMS QU'ON MONTRE (05/10/2026) ═════════════════════════════════════
+//
+// Les écrans de calcul des besoins ne nomment plus les formules ni leurs
+// coefficients : ils disent « Méthode RepCore, sur la masse maigre », « niveau
+// d'activité : moyennement actif ». LES CALCULS NE CHANGENT PAS D'UN CHIFFRE :
+// seul le libellé change, et MB_NOMS garde les noms réels.
+//
+// UN RÉGLAGE, RÉSERVÉ AU COMPTE DU CRÉATEUR, les réaffiche (« Noms réels des
+// formules », dans le tableau « Facteurs » de la fiche nutrition) : Kevin doit
+// pouvoir relire ce que l'app calcule vraiment. Il vit sur l'appareil, et ne
+// vaut que pour ce compte : pour tout autre, nomsReels() rend faux quoi qu'il
+// y ait dans le stockage.
+//   nr(reel, maison) : le texte à montrer, selon ce réglage.
+//   mbNom(cle)       : le nom de la formule du métabolisme.
+const NOMS_REELS_CLE='rc_noms_reels';
+const MB_NOMS_MAISON=Object.freeze({katch:'Méthode RepCore, sur la masse maigre',harris:'Méthode RepCore standard',mifflin:'Méthode RepCore prudente'});
+function nomsReels(){
+  try{ return !!(currentUser&&currentUser.email===CREATOR_EMAIL)&&localStorage.getItem(NOMS_REELS_CLE)==='1'; }catch(e){ return false; }
+}
+function nr(reel,maison){ return nomsReels()?reel:maison; }
+function mbNom(cle){
+  return nomsReels()?(MB_NOMS[cle]||'Mifflin-St Jeor'):(MB_NOMS_MAISON[cle]||'Méthode RepCore');
+}
+function basculerNomsReels(on){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+  try{ if(on) localStorage.setItem(NOMS_REELS_CLE,'1'); else localStorage.removeItem(NOMS_REELS_CLE); }catch(e){}
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
 const MB_IMC_MIFFLIN=30;
 // PURE. La formule d'estimation du metabolisme pour CE dossier :
 //   1. le reglage du coach (nutrition.tableur.formuleMB) ;
@@ -430,7 +459,7 @@ function besoinsProposes(user,opts){
     // a la place de Mifflin, sur decision de Kevin — et un athlete dont la
     // proposition monte de 137 kcal a le droit de savoir pourquoi.
     hypotheses.push('tours de mesure absents : estimation '
-      +(MB_NOMS[source]||'Mifflin-St Jeor')
+      +mbNom(source)
       +' sur poids, taille, âge et sexe'); }
   if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
   // AVANT le facteur d'activité, et sur le métabolisme de repos seul. Ce
@@ -478,12 +507,12 @@ function besoinsProposes(user,opts){
   // ── Le NEAT, nommé et chiffré ──
   if(neat.source==='profession')
     hypotheses.push(metier.toLowerCase()+' : '+neat.lib.toLowerCase()
-      +' → NEAT × '+_vf(neat.f));
+      +nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else if(neat.source==='pas')
     hypotheses.push(neat.pas.toLocaleString('fr-FR')
-      +' pas par jour en moyenne → NEAT × '+_vf(neat.f));
+      +' pas par jour en moyenne'+nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else
-    hypotheses.push('ni profession reconnue ni relevé de pas → NEAT × '+_vf(neat.f));
+    hypotheses.push('ni profession reconnue ni relevé de pas'+nr(' → NEAT × '+_vf(neat.f),' : NEAT de base'));
   // Dire « déduit des pas » sans aucun relevé de pas était faux. La phrase
   // suit ce qui a RÉELLEMENT servi.
   if(metier&&neat.source==='pas')
@@ -497,7 +526,7 @@ function besoinsProposes(user,opts){
   if(_naf.source==='declare'&&nafIncoherent(user)) hypotheses.push(NAF_ALERTE_METIER);
   // Le poids qui chiffre le sport (MET nets).
   if(sport.semaine>0)
-    hypotheses.push('sport chiffré en MET nets sur '+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
+    hypotheses.push(nr('sport chiffré en MET nets sur ','sport chiffré sur un poids de ')+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
       +(sport.poidsDefaut?' (poids inconnu : valeur par défaut)':''));
   if(sport.source==='coach')
     hypotheses.push('sports réglés à la main par le coach → '+sport.semaine
@@ -1762,14 +1791,16 @@ function _htmlEcartFormules(t){
   // maigre mesuree, c'est Katch-McArdle, quel que soit le choix du menu : la
   // phrase le disait en dernier, apres deux chiffres qui ne servaient pas, et
   // le menu « Mifflin-St Jeor » se lisait comme la formule en cours.
+  const nH=nr('Harris-Benedict','méthode standard'), nM=nr('Mifflin-St Jeor','méthode prudente');
+  const cap=x=>x.charAt(0).toUpperCase()+x.slice(1);
   if(t.mbSource==='katch')
-    return 'Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée'
+    return 'Calcul actuel : '+nr('Katch-McArdle','méthode RepCore')+', sur sa masse maigre mesurée'
       +(t.mbBrut>0?' ('+_tbNb(t.mbBrut)+' kcal)':'')
-      +'. Ce choix ne servira que sans masse maigre : Harris-Benedict '+_tbNb(hb)
-      +', Mifflin-St Jeor '+_tbNb(mf)+', écart de '+e+' kcal.';
+      +'. Ce choix ne servira que sans masse maigre : '+nH+' '+_tbNb(hb)
+      +', '+nM+' '+_tbNb(mf)+', écart de '+e+' kcal.';
   const harris=t.mbSource==='harris';
-  return 'Calcul actuel : '+(harris?'Harris-Benedict':'Mifflin-St Jeor')+', '
-    +_tbNb(harris?hb:mf)+' kcal. '+(harris?'Mifflin-St Jeor':'Harris-Benedict')
+  return 'Calcul actuel : '+(harris?nH:nM)+', '
+    +_tbNb(harris?hb:mf)+' kcal. '+nr(harris?'Mifflin-St Jeor':'Harris-Benedict',cap('la '+(harris?nM:nH)))
     +' donnerait '+_tbNb(harris?mf:hb)+' kcal : écart de '+e+' kcal.';
 }
 function majTableauTableur(quoi,val){

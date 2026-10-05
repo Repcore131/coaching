@@ -277,6 +277,7 @@ const EX_RENOMMAGES=Object.freeze({
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE':'CURL LARRY SCOTT MACHINE GUIDEE',
   'DEVELOPPE MACHINE HAUT DE PECS OU A LA SMITH':'DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS',
   'HIP THRUST MACHINE OU A LA BARRE':'HIP THRUST MACHINE',
+  'HIP THRUST MACHINE CONVERGENTE':'HIP THRUST MACHINE',
   // LE CAS SIGNALE. Debout, barre accrochee au cable : c'est ce que le fichier
   // « curl barre poulie elastique » montre, et c'est ce que la consigne decrit.
   'CURL A LA POULIE':'CURL BARRE POULIE',
@@ -507,12 +508,12 @@ const EX_GUIDE_POSING='ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BIC
 // classique. Elle est donc versee dans la description au seeding, et retiree
 // du libelle de la pastille.
 const EX_PRECISIONS=Object.freeze({
-  'BATTLE ROPE':'Cordes alternées, une main après l\'autre.',
-  'CURL LARRY SCOTT':'À la barre EZ.',
+  'BATTLE ROPE':'Cordes alternées,​ une main après l\'autre.',
+  'CURL LARRY SCOTT':'À la barre⁠ EZ.',
   'DEVELOPPE COUCHE MACHINE':'Prise en pronation, pouces à l\'intérieur.',
   'ELEVATION FRONTALE POULIE':'À la poulie.',
   'ELEVATION LATERALE HALTERE':'Aux haltères.',
-  'ESCALIERS':'Une marche à la fois.',
+  'ESCALIERS':'Une marche à la fois, sans sauter de palier.',
   'EXTENSION TRICEPS POULIE BASSE':'Sur banc incliné.',
   'FENTES ARRIERES BARRE':'Grand pas vers l\'arrière.',
   'MARCHE DU FERMIER':'Aux haltères.',
@@ -525,7 +526,7 @@ const EX_PRECISIONS=Object.freeze({
 
 const EX_VARIANTES=Object.freeze({
   'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
-  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
+  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
   'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES : UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},

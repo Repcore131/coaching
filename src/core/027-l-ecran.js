@@ -440,7 +440,8 @@ function _anatExportCss(){
     +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
     +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
     +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:4px}.ex-z ul{margin:4px 0 0 16px;padding:0}'
-    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}'
+    +'.doc-sign{font-size:7.5pt;color:#71717a;text-align:center;letter-spacing:.4px;margin-top:10px}';
 }
 /** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
 function _anatExportPhoto(a,pb,vue,legende){
@@ -488,12 +489,12 @@ function anatExportHtml(c,mode){
 
   if(mode==='athlete'){
     const cs=anatConsignesExport(prios);
-    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par '+escapeHtml(signatureCoachNom(c)||'ton coach')+'<br>le '+dJour)
       +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
       +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
       +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
         :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
-      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>'+htmlSignatureDocument(c);
     return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
   }
 
@@ -528,7 +529,7 @@ function anatExportHtml(c,mode){
     +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
     +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
   // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
-  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+  return doc('Analyse · '+nom+' · '+dBilan,corps+htmlSignatureDocument(c),'ex-coach');
 }
 /**
  * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression

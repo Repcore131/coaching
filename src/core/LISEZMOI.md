@@ -145,14 +145,14 @@ La liste fait foi dans `ls src/core/`. Ce tableau est celui de la découpe du bu
    - `EX_VIDEOS` (`016-classification-musculaire-des-exercices.js`).
 
    Chaque lecteur doit alors attendre la donnée, ou se rabattre proprement tant qu'elle n'est pas là.
-   Les fichiers JSON vont dans `ASSETS` (`sw.js`) et dans `scripts/assembler_site.sh`.
+   Les fichiers JSON vont dans `ASSETS` (`sw.js`) et dans `scripts/fabriquer_site.mjs` (copiés avec `app/`).
 3. **(c) Produire `app/rc-coach.<build>.js`** : `openClientDetail`, `renderClientList`,
    `_htmlTableauxTableur`, `canal*`, `relance*`, `ccd*`…
    - Il est chargé par un `chargerCoach()` au premier `go('s-coach-*')`, sur le modèle de
      `chargerMotionLab()`.
    - Des stubs globaux attendent le chargement, puis rappellent la vraie fonction.
    - **Préalable** : `ordre-core.mjs --strict` à 0 écart sur les morceaux concernés.
-   - `versionner_actifs.py`, `sw.js` (`ASSETS`), `actifs.mjs`, `minifier_site.mjs` et `chargerTests`
+   - `versionner_actifs.py`, `sw.js` (`ASSETS`), `actifs.mjs`, `minifier.mjs` et `chargerTests`
      (source lue par `tests.js`) doivent connaître le nouveau fichier.
 4. **(d) Supprimer les 53 fonctions sans référence.** La liste est à **régénérer par script**, pas à
    recopier : un nom de fonction présent **une seule fois** dans l'ensemble formé par rc-core,

@@ -2449,7 +2449,7 @@ function dbRapports(u,ref){
     const der=vals.length?vals[vals.length-1]:null;
     const base=vals.length>1?(ref==='debut'?vals[0]:vals[vals.length-2]):null;
     return Object.assign({},df,{valeur:der,ecart:(der!=null&&base!=null)?der-base:null,
-      formule:df.cle==='mb'?(comp.length?'Katch-McArdle':MB_NOMS[mbFormuleDe(u)]):''});
+      formule:df.cle==='mb'?mbNom(comp.length?'katch':mbFormuleDe(u)):''});
   });
 }
 // La composition par zone. `tours` : l'écart du ruban depuis la première
@@ -2728,7 +2728,7 @@ const DB_ICONES={
 };
 function _dbCarteRapports(u,neutre){
   const info=_dbInfo('rk','IMC : poids / taille². Ratio taille / hanches : tour de taille divisé par tour de hanches. Ratio masse maigre : part du poids qui n’est pas du gras. '
-    +'Métabolisme : dépense au repos, par Katch-McArdle (masse maigre) ou, à défaut, la formule retenue pour ce dossier (Harris-Benedict ou Mifflin-St Jeor). Écarts comparés à la mesure précédente ou à la première.');
+    +'Métabolisme : dépense au repos, par la méthode RepCore : sur la masse maigre quand elle est mesurée, sinon sur le poids, la taille, l’âge et le sexe. Écarts comparés à la mesure précédente ou à la première.');
   const sel='<select class="db-sel" onchange="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
   const masquer=new Set(neutre?['imc','maigre','mb']:[]);
   const t=dbRapports(u,_dbRef).filter(r=>!masquer.has(r.cle)).map(r=>{

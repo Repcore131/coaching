@@ -2242,7 +2242,7 @@ function _htmlDepartAthlete(nut){
   const b=besoinsProposes(currentUser);
   if(!b||b.source===null) return '';
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
-  const nom=MB_NOMS[b.source]||'Mifflin-St Jeor';
+  const nom=mbNom(b.source);
   const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
