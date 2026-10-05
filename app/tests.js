@@ -54384,6 +54384,44 @@ async function testExercices(){
       if(!/CLOUD\._callFn\('ia',\{tache:'bilan'/.test(r)) return _echec('l’appel ia');
       if(!/CLOUD\._callFn\('iaRetour',\{journalId:jid,statut,distance\}\)\)\.catch/.test(s)) return _echec('iaRetour non avalé');
       return s.indexOf('iaRetour')>s.indexOf('toastSync(')?true:_echec('le retour part avant l’envoi');});
+    // ══ LE POINT DE LA SEMAINE (05/10/2026) : LE RÉSUMÉ D'UN ATHLÈTE ══
+    const _HB_T=new Date(2026,8,28,20).getTime();
+    ok('Point de la semaine — resumeHebdoAthlete : pas de poids ni de texte de bilan pour un profil TCA',()=>{
+      const u=_C2U({tcaRisque:true,weightLog:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map(j=>({date:localISODate(new Date(2026,8,j+7)),kg:60-j/10})),
+        bilans:[{id:'dep',date:new Date(2026,7,1).getTime(),type:'depart','deb-tca':'anorexie'},_C2B(27,60,{'bil-diff-detail':'dur cette semaine'})]});
+      const r=resumeHebdoAthlete(u,_HB_T);
+      if(r.poidsTendance!==null) return _echec('poids : '+r.poidsTendance);
+      if(r.texteBilan!==null) return _echec('texte de bilan transmis');
+      const j=JSON.stringify(r);
+      return /anorexie|deb-tca|60,|kg/.test(j)?_echec('fuite : '+j):true;});
+    ok('Point de la semaine — resumeHebdoAthlete : sous 3 Ko avec 50 notes ; jamais de champ santé du bilan de départ',()=>{
+      const ses=[]; for(let i=0;i<50;i++) ses.push(Object.assign(_C2S(22+(i%6)),{id:'hb'+i,notes:'é'.repeat(400)}));
+      const u=_C2U({sessions:ses,bilans:[{id:'dep',date:new Date(2026,7,1).getTime(),type:'depart','deb-health':'hernie L5','deb-traitement':'Levothyrox'},
+        _C2B(27,72,{'bil-diff-detail':'x'.repeat(5000),'bil-sleep-quality':'Mal, j\'ai du mal à me reposer','bil-stress':'Énormément'})]});
+      const r=resumeHebdoAthlete(u,_HB_T);
+      const n=new TextEncoder().encode(JSON.stringify(r)).length;
+      if(n>=3000) return _echec(n+' octets');
+      if(r.notes.length>5||r.notes.some(x=>x.length>200)) return _echec('notes : '+r.notes.map(x=>x.length).join(','));
+      if(r.seances.faites!==50) return _echec('séances : '+JSON.stringify(r.seances));
+      const j=JSON.stringify(r);
+      for(const x of ['hernie','Levothyrox','Mal, j','Énormément']) if(j.indexOf(x)>=0) return _echec('« '+x+' » part');
+      return Object.keys(r).join(',')==='prenom,urgence,motifs,seances,poidsTendance,bilanSansReponse,notes,texteBilan'?true:_echec('clés : '+Object.keys(r).join(','));});
+    ok('Point de la semaine — resumeHebdoAthlete est stable : même entrée, même empreinte ; une note de plus la change',()=>{
+      const u=_C2U({sessions:[Object.assign(_C2S(25),{notes:'bonne séance'})],bilans:[_C2B(27,72)]});
+      const a=_empreinteHebdo(resumeHebdoAthlete(u,_HB_T)), b=_empreinteHebdo(resumeHebdoAthlete(JSON.parse(JSON.stringify(u)),_HB_T));
+      if(a!==b) return _echec('empreintes différentes : '+a+' / '+b);
+      u.sessions.push(Object.assign(_C2S(26),{notes:'genoux ok'}));
+      return _empreinteHebdo(resumeHebdoAthlete(u,_HB_T))!==a?true:_echec('l’empreinte ne bouge pas');});
+    ok('Point de la semaine — la carte : chaque ligne ouvre la fiche, une clé inconnue ne s’affiche pas, « Masquer » est local',()=>{
+      const h=_htmlPointSemaine({semaine:'2026-W40',point:{texte:'Une semaine calme.',sections:{aTraiter:[
+        {athlete:'lea@t,fr',pourquoi:'Bilan à lire : répondre au bilan.'},{athlete:'inconnu@t,fr',pourquoi:'x'}]}}},
+        [{id:'id-lea',email:'lea@t.fr',fname:'Léa'}]);
+      if(!/Ton point de la semaine/.test(h)) return _echec('titre');
+      if(!/openClientDetail\(&quot;id-lea&quot;\)/.test(h)) return _echec('ligne : '+h);
+      if(/inconnu/.test(h)) return _echec('une clé inconnue s’affiche');
+      if(!/masquerPointSemaine\('2026-W40'\)/.test(h)) return _echec('Masquer');
+      if(_htmlPointSemaine(null,[])!=='') return _echec('sans point');
+      return /localStorage/.test(String(masquerPointSemaine))&&/try\{/.test(String(masquerPointSemaine))?true:_echec('Masquer sans try');});
     ok('C2 — brouillonBilan : sans poids antérieur, sans séance, sans signal, le brouillon dit ce qui a bougé et pose une question',()=>{
       const u=_C2U({bilans:[_C2B(28,72.4)]});
       const r=brouillonBilan(u,u.bilans[0],SIGNAUX_VIDES,{formules:{ouverture:'Salut {prénom}',cloture:'À lundi, Kévin'}});

@@ -124,6 +124,10 @@ export function travaux(M) {
       un: (uid, t) => M.reactionsPushUn(uid, t), cout: 8, push: true },
     // La rétention (/stats/retention) : un résumé d'activité par compte, par lots,
     // la nuit (l'accumulateur est gardé entre deux minutes).
+    // LE POINT DE LA SEMAINE (hebdo.js, ia.js) : le lot part le dimanche après
+    // 23 h ; il est relevé chaque heure du lundi, jusqu'à ce qu'il soit fini.
+    { nom: 'hebdo_envoi', quand: (p) => p.joursem === 0 && apres(p, 23, 0), une: (t) => (M.hebdoEnvoi ? M.hebdoEnvoi(t) : null) },
+    { nom: 'hebdo_collecte', heure: true, quand: (p) => p.joursem === 1, une: (t) => (M.hebdoCollecte ? M.hebdoCollecte(t) : null) },
     // LE JOURNAL DE L'ASSISTANT IA (ia.js) : au-delà de 90 jours, effacé —
     // même règle que le journal des relances (journalAPurger).
     { nom: 'ia_journal', quand: (p) => apres(p, 4, 40), cles: () => (M.iaComptes ? M.iaComptes() : []),

@@ -27,6 +27,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { ErreurAppel } from './appels.js';
 import { planEffectif, moisParis } from './quota-coach.js';
+import { paris } from './metier.js';
+import { semaineISO, idsLot, requeteHebdo, lirePoint } from './hebdo.js';
 
 const SONNET = 'claude-sonnet-5-5';
 const HAIKU = 'claude-haiku-4-5';
@@ -317,5 +319,77 @@ export function creerIA({ env, db, fetchImpl, maintenant }) {
     return vieux.length;
   }
 
-  return { appeler, retour, purgerUn };
+  // ══ LE POINT DE LA SEMAINE, PAR LOT (hebdo.js, 05/10/2026) ═══════════════
+  // Le dimanche après 23 h : UN lot, une requête par coach (Batch API, moitié
+  // prix). Le lundi, chaque heure : quand le lot est fini, chaque résultat est
+  // rangé chez SON coach — par custom_id, jamais par position.
+  const lireVal = async (c) => (await db.ref(c).get()).val();
+  const resteDe = (M) => (M && typeof M.reste === 'function' ? M.reste() : Infinity);
+
+  async function hebdoEnvoi(t, M) {
+    if (coupee) return true;
+    if (resteDe(M) < 10) return false;
+    const semaine = semaineISO(paris(t).jour);
+    // PAS DE SECOND LOT LA MÊME SEMAINE : un lot noté, même vide, clôt la semaine.
+    if (await lireVal('hebdo_batch/' + semaine)) return true;
+    const [entrees, registres, quotas] = await Promise.all([lireVal('hebdo_entree'), lireVal('coachs_registre'), lireVal('ia_quota')]);
+    const mois = moisParis(t);
+    // Un coach entre au lot s'il a au moins une entrée et du quota ce mois-ci.
+    const coachs = Object.keys(entrees || {}).filter((k) => {
+      const e = entrees[k];
+      if (!e || typeof e !== 'object' || !Object.keys(e).length) return false;
+      const plafond = plafondDe(offreIA(registres && registres[k], null, t));
+      const conso = Number(quotas && quotas[k] && quotas[k][mois]) || 0;
+      return plafond > 0 && conso < plafond;
+    });
+    if (!coachs.length) { await db.ref('hebdo_batch/' + semaine).set({ cree: t, n: 0 }); return true; }
+    const { parId } = idsLot(coachs);
+    const requests = Object.keys(parId).map((id) => requeteHebdo(id, entrees[parId[id]], semaine));
+    const lot = await client.messages.batches.create({ requests });
+    await db.ref('hebdo_batch/' + semaine).set({ id: lot.id, cree: t, n: requests.length, coachs: parId });
+    return true;
+  }
+
+  async function hebdoCollecte(t, M) {
+    if (coupee) return true;
+    if (resteDe(M) < 12) return false;
+    // Le lundi : la semaine qui vient de finir (celle du dimanche).
+    const semaine = semaineISO(paris(t - 864e5).jour);
+    const lot = await lireVal('hebdo_batch/' + semaine);
+    if (!lot || !lot.id || lot.fini) return true;
+    const b = await client.messages.batches.retrieve(lot.id);
+    if (b.processing_status !== 'ended') return true;          // l'heure suivante
+    // INDEXÉS PAR custom_id : l'ordre des résultats n'est pas celui des requêtes.
+    const parCustom = {};
+    for await (const r of await client.messages.batches.results(lot.id)) if (r && r.custom_id) parCustom[r.custom_id] = r;
+    const entrees = (await lireVal('hebdo_entree')) || {};
+    const faits = lot.faits || {};
+    const mois = moisParis(t);
+    for (const id of Object.keys(lot.coachs || {}).sort()) {
+      const coach = lot.coachs[id];
+      if (faits[id]) continue;
+      if (resteDe(M) < 14) return false;                        // repris au réveil suivant
+      const point = lirePoint(parCustom[id], Object.keys(entrees[coach] || {}));
+      const maj = { ['hebdo_batch/' + semaine + '/faits/' + id]: point ? 'ok' : 'echec' };
+      if (point) {
+        // LE LOT COÛTE MOITIÉ PRIX : imputé ×0,5 au quota du coach.
+        const cout = Math.ceil(coutMicro(point.modele, point.usage) * 0.5);
+        await db.ref('ia_quota/' + coach + '/' + mois).transaction((v) => (Number(v) || 0) + cout);
+        maj['hebdo/' + coach + '/' + semaine] = { texte: point.texte, sections: point.sections, t };
+        maj['ia_journal/' + coach + '/' + db.ref('x').push().key] = { t, tache: 'hebdo', modele: point.modele,
+          tin: Number(point.usage.input_tokens) || 0, tout: Number(point.usage.output_tokens) || 0, cout, statut: 'propose' };
+      }
+      await db.ref().update(maj);
+      if (point && M && typeof M.envoyerPush === 'function') {
+        try {
+          await M.envoyerPush(coach, { type: 'coach', url: './', tag: 'hebdo-' + semaine,
+            title: 'Ton point de la semaine est prêt', body: 'Ce qui t’attend, ce qui avance, et qui est silencieux.' });
+        } catch (e) { /* le point est écrit : le coach le verra à l'ouverture */ }
+      }
+    }
+    await db.ref('hebdo_batch/' + semaine + '/fini').set(t);
+    return true;
+  }
+
+  return { appeler, retour, purgerUn, hebdoEnvoi, hebdoCollecte };
 }

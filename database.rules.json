@@ -2008,6 +2008,30 @@
         ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey"
       }
     },
+    // LE POINT DE LA SEMAINE (cloudflare/src/hebdo.js, 05/10/2026).
+    // hebdo_entree : le resume d un athlete, ecrit par SON coach seul (le
+    // dossier de l athlete le designe), lu par le Worker seul (compte de
+    // service). hebdo : le point ecrit par le Worker, lu par le coach.
+    // hebdo_batch : l etat du lot, au Worker seul.
+    "hebdo_entree": {
+      ".read": false,
+      "$coachKey": {
+        "$athleteKey": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          ".validate": "!newData.exists() || newData.hasChildren(['prenom'])"
+        }
+      }
+    },
+    "hebdo": {
+      ".write": false,
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey"
+      }
+    },
+    "hebdo_batch": {
+      ".read": false,
+      ".write": false
+    },
     "ia_journal": {
       ".write": false,
       "$emailKey": {

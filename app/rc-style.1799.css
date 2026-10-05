@@ -12845,6 +12845,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rb-ia{font-size:var(--fs-2xs);line-height:1.5}
 .rb-ia-prop{margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-2);background:var(--surface-2)}
 .rb-ia-texte{white-space:pre-line;font-size:var(--fs-xs);color:var(--text-strong);margin:6px 0}
+.ps-carte{margin-bottom:16px;padding:14px 16px}
+.ps-tete{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ps-tete h3{margin:0;font-size:var(--fs-sm);letter-spacing:1px;text-transform:uppercase}
+.ps-texte{margin:8px 0 4px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
+.ps-sec{margin-top:10px}
+.ps-tit{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);margin-bottom:4px}
+.ps-ligne{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:44px;padding:8px 0;background:none;border:0;border-top:1px solid var(--border);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.ps-ligne span{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
 .rb-lien{background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 /* LOT C3 : les relances automatiques (écran, entrée, fiche, carte athlète) */
 .rel-entree{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;margin:-8px 0 20px;padding:10px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font:inherit;cursor:pointer;text-align:left}

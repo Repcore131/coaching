@@ -614,6 +614,139 @@ function rbUtiliserIA(email,bilanId,taId){
   if(etat) etat.innerHTML='';
   return true;
 }
+// ══ LE POINT DE LA SEMAINE (05/10/2026) ═════════════════════════════════════
+// L'app sait calculer les signaux, le Worker non : chaque jour, à
+// l'ouverture, le coach dépose un résumé compact de chaque athlète actif
+// (hebdo_entree/<coach>/<athlète>), seulement s'il a changé. La nuit du
+// dimanche au lundi, le Worker en fait le point de la semaine
+// (cloudflare/src/hebdo.js), que la carte ci-dessous affiche.
+// ⚠ MÊMES EXCLUSIONS QUE chargeBrouillonIA : profil TCA → ni poids ni texte
+//   de bilan ; jamais deb-health / deb-traitement / deb-tca, ni sommeil ni
+//   stress chiffrés. Seuls les cinq textes libres (IA_BILAN_LIBRES).
+const HEBDO_ENTREE_MAX=3000, HEBDO_NOTES_N=5, HEBDO_NOTE_MAX=200, HEBDO_TEXTE_MAX=300;
+const HEBDO_MOTIFS_N=6, HEBDO_MOTIF_MAX=120, HEBDO_ACTIF_JOURS=60;
+const HEBDO_EMPREINTES='rc_hebdo_empreintes', HEBDO_MASQUE='rc_hebdo_masque';
+/**
+ * PURE (au calcul des signaux près). Le résumé d'un athlète pour la semaine
+ * qui finit à `maintenant` : moins de 3 Ko, toujours.
+ */
+function resumeHebdoAthlete(c,maintenant){
+  const u=c||{}, t=Number(maintenant)||Date.now(), debut=t-7*864e5;
+  const tca=(()=>{ try{ return aTCA(u); }catch(e){ return true; } })();
+  const coupe=(v,n)=>String(v==null?'':v).trim().slice(0,n);
+  const semaine=(u.sessions||[]).filter(s=>s&&Number(s.date)>debut&&Number(s.date)<=t);
+  let prevues=0; try{ prevues=Number(_creneauxPrevus(u))||0; }catch(e){ prevues=0; }
+  let poidsTendance=null;
+  if(!tca){ try{ const v=vitesseHebdo(serieWeight(u)); if(v&&isFinite(v.kgSem)) poidsTendance=Math.round(v.kgSem*100)/100; }catch(e){} }
+  let urgence=0; try{ urgence=Number(urgencyScore(u))||0; }catch(e){ urgence=0; }
+  let motifs=[]; try{ motifs=ccdSignaux(u).map(x=>coupe(x.motif,HEBDO_MOTIF_MAX)).filter(Boolean).slice(0,HEBDO_MOTIFS_N); }catch(e){ motifs=[]; }
+  let bilanSansReponse=false; try{ bilanSansReponse=!!hasNewBilan(u); }catch(e){}
+  const notes=semaine.filter(s=>String(s.notes||'').trim()).sort((a,b)=>b.date-a.date)
+    .slice(0,HEBDO_NOTES_N).map(s=>coupe(s.notes,HEBDO_NOTE_MAX));
+  const bil=(u.bilans||[]).filter(b=>b&&Number(b.date)>debut&&Number(b.date)<=t).sort((a,b)=>b.date-a.date)[0];
+  let texteBilan=null;
+  if(bil&&!tca){
+    texteBilan={};
+    for(const k of Object.keys(IA_BILAN_LIBRES)) texteBilan[k]=coupe(_texteReponse(bil[IA_BILAN_LIBRES[k]]),HEBDO_TEXTE_MAX);
+  }
+  const r={prenom:coupe(u.fname,40),urgence,motifs,seances:{faites:semaine.length,prevues},
+    poidsTendance,bilanSansReponse,notes,texteBilan};
+  // LA BORNE DES 3 Ko : les textes cèdent d'abord, jamais les faits.
+  const taille=()=>new TextEncoder().encode(JSON.stringify(r)).length;
+  while(taille()>HEBDO_ENTREE_MAX&&r.notes.length) r.notes.pop();
+  if(taille()>HEBDO_ENTREE_MAX&&r.texteBilan) for(const k of Object.keys(r.texteBilan)) r.texteBilan[k]=r.texteBilan[k].slice(0,100);
+  if(taille()>HEBDO_ENTREE_MAX) r.texteBilan=null;
+  return r;
+}
+// PURE. L'empreinte d'un résumé (FNV-1a sur sa forme JSON) : même entrée,
+// même empreinte — c'est elle qui évite de réécrire un résumé inchangé.
+function _empreinteHebdo(r){
+  const s=JSON.stringify(r);
+  let h=0x811c9dc5;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); }
+  return (h>>>0).toString(36);
+}
+const _cleFb=e=>String(e||'').toLowerCase().replace(/\./g,',');
+// Actif : une séance ou un bilan dans les 60 derniers jours.
+function _hebdoActif(c,t){
+  const lim=t-HEBDO_ACTIF_JOURS*864e5;
+  return (c.sessions||[]).some(s=>s&&Number(s.date)>lim)||(c.bilans||[]).some(b=>b&&Number(b.date)>lim);
+}
+// Une fois par jour, à l'ouverture du tableau de bord : les résumés changés.
+async function majHebdoEntrees(maintenant){
+  if(!currentUser||currentUser.role!=='coach'||!SERVEUR_LEGER||!CLOUD||typeof CLOUD.racinePatch!=='function') return 0;
+  const t=Number(maintenant)||Date.now();
+  const jour=localISODate(new Date(t)), kCoach=_cleFb(currentUser.email);
+  let cache={}; try{ cache=JSON.parse(localStorage.getItem(HEBDO_EMPREINTES)||'{}')||{}; }catch(e){ cache={}; }
+  if(cache.jour===jour&&cache.coach===kCoach) return 0;
+  const emp=cache.coach===kCoach&&cache.e&&typeof cache.e==='object'?Object.assign({},cache.e):{};
+  const users=DB.get('users')||{}, maj={};
+  for(const c of Object.values(users)){
+    if(!c||!c.email||!_estMonAthlete(c,currentUser)||!_hebdoActif(c,t)) continue;
+    let r=null; try{ r=resumeHebdoAthlete(c,t); }catch(e){ r=null; }
+    if(!r) continue;
+    const k=_cleFb(c.email), h=_empreinteHebdo(r);
+    if(emp[k]===h) continue;
+    maj['hebdo_entree/'+kCoach+'/'+k]=r; emp[k]=h;
+  }
+  if(Object.keys(maj).length){
+    let ok=false; try{ ok=await CLOUD.racinePatch(maj); }catch(e){ ok=false; }
+    if(!ok) return 0;                 // demain, ou à la prochaine ouverture
+  }
+  try{ localStorage.setItem(HEBDO_EMPREINTES,JSON.stringify({jour,coach:kCoach,e:emp})); }catch(e){}
+  return Object.keys(maj).length;
+}
+// Le dernier point écrit par le Worker (hebdo/<coach>, la dernière semaine).
+async function _lirePointSemaine(){
+  if(!currentUser||!CLOUD||typeof CLOUD._getToken!=='function') return null;
+  const token=await CLOUD._getToken();
+  if(!token) return null;
+  const url=CLOUD._fbUrl.replace('users.json','hebdo/'+encodeURIComponent(_cleFb(currentUser.email))+'.json')
+    +'?orderBy=%22%24key%22&limitToLast=1&auth='+token;
+  const r=await fetch(url);
+  if(!r.ok) return null;
+  const v=await r.json();
+  const sem=v&&typeof v==='object'?Object.keys(v).sort().pop():null;
+  return sem?{semaine:sem,point:v[sem]}:null;
+}
+const HEBDO_TITRES=Object.freeze({aTraiter:'À traiter',progres:'Ce qui avance',silencieux:'Silencieux'});
+// PURE. La carte « Ton point de la semaine », ou '' (rien, masqué).
+function _htmlPointSemaine(lu,clients){
+  if(!lu||!lu.point) return '';
+  const p=lu.point, parCle={};
+  for(const c of (clients||[])) if(c&&c.email&&c.id!=null) parCle[_cleFb(c.email)]=c;
+  let lignes='';
+  for(const s of Object.keys(HEBDO_TITRES)){
+    const l=((p.sections&&p.sections[s])||[]).filter(x=>x&&parCle[x.athlete]);
+    if(!l.length) continue;
+    lignes+='<div class="ps-sec"><div class="ps-tit">'+HEBDO_TITRES[s]+'</div>'
+      +l.map(x=>{ const c=parCle[x.athlete];
+        return '<button type="button" class="ps-ligne" onclick="openClientDetail('+escapeHtml(JSON.stringify(c.id))+')">'
+          +'<b>'+escapeHtml(c.fname||x.athlete)+'</b><span>'+escapeHtml(x.pourquoi||'')+'</span></button>'; }).join('')+'</div>';
+  }
+  if(!lignes&&!p.texte) return '';
+  return '<section class="ps-carte content-card" aria-label="Ton point de la semaine">'
+    +'<div class="ps-tete"><h3>Ton point de la semaine</h3>'
+    +'<button type="button" class="rb-lien" onclick="masquerPointSemaine(\''+escapeHtml(lu.semaine)+'\')">Masquer</button></div>'
+    +(p.texte?'<p class="ps-texte">'+escapeHtml(p.texte)+'</p>':'')+lignes+'</section>';
+}
+async function renderPointSemaine(){
+  const z=document.getElementById('ch-point-semaine');
+  if(!z) return false;
+  let lu=null; try{ lu=await _lirePointSemaine(); }catch(e){ lu=null; }
+  let masque=''; try{ masque=localStorage.getItem(HEBDO_MASQUE)||''; }catch(e){ masque=''; }
+  if(!lu||masque===lu.semaine){ z.innerHTML=''; return false; }
+  let clients=[]; try{ clients=Object.values(DB.get('users')||{}).filter(c=>c&&_estMonAthlete(c,currentUser)); }catch(e){ clients=[]; }
+  z.innerHTML=_htmlPointSemaine(lu,clients);
+  return !!z.innerHTML;
+}
+// « Masquer » : un choix LOCAL, pour cette semaine seulement.
+function masquerPointSemaine(semaine){
+  try{ localStorage.setItem(HEBDO_MASQUE,String(semaine||'')); }catch(e){}
+  const z=document.getElementById('ch-point-semaine');
+  if(z) z.innerHTML='';
+  return true;
+}
 // « Repartir de zéro » : le champ se vide, et il le RESTE au prochain rendu
 // (le brouillon ne revient pas tout seul). Local, comme le brouillon tapé.
 function rbRepartiDeZero(email,bilanId){

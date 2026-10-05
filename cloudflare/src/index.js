@@ -106,6 +106,9 @@ function outils(env) {
   // Le journal de l'assistant : la purge de la nuit, compte par compte (planif.js).
   M.iaComptes = () => db.ref('ia_journal').shallow();
   M.iaPurgerUn = (k, t) => creerIA({ env, db, fetchImpl: fetchCompte }).purgerUn(k, t);
+  // Le point de la semaine (hebdo.js) : le lot du dimanche, la collecte du lundi.
+  M.hebdoEnvoi = (t) => creerIA({ env, db, fetchImpl: fetchCompte }).hebdoEnvoi(t, M);
+  M.hebdoCollecte = (t) => creerIA({ env, db, fetchImpl: fetchCompte }).hebdoCollecte(t, M);
   return { db, M, env, fetchCompte, compteur: () => n, budget: lim.budget };
 }
 
