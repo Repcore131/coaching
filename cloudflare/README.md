@@ -538,7 +538,7 @@ instructions du guide Garmin.
 ## L'assistant IA (`ia.js`) : EN PAUSE tant que la clé n'est pas posée
 
 Le socle côté serveur ; l'app s'en sert pour le brouillon C2, le point de la semaine, l'import
-de séance, le premier programme, la photo du repas et la relance des athlètes à risque. Deux appels (protocole
+de séance, le premier programme, la photo du repas, la relance des athlètes à risque et « Demander à RepCore ». Deux appels (protocole
 onCall, jeton Firebase vérifié) :
 
 - `/fn/ia` `{tache, athlete?, charge}` → `{ok, proposition, journalId, coutMois, plafond}`.
@@ -589,6 +589,13 @@ modifie ; **seul son clic sur « Envoyer »** appelle `relanceIA` {athlete, text
 journalId}, qui vérifie qu'il est le coach, refuse une deuxième relance dans la semaine (409),
 envoie (carte « Un mot de ton coach », ou notification de type `relance`) et écrit
 `relances_auto/<coach>/<athlète>` avec `moyen:'ia_valide'`.
+
+**« Demander à RepCore » (`assistant`, Sonnet 5.5, effort low, 05/10/2026).** Le Worker est un
+**proxy sans état** : il relaie `{messages, tools}` (outils de l'app, JSON schema `strict:true`) avec
+un prompt système figé et mis en cache (`SYSTEME_ASSISTANT`), et rend la réponse brute
+`{contenu, stop_reason}`. La boucle d'outils tourne **dans l'app** (au plus 4 tours), avec ses
+fonctions pures : aucune donnée d'entraînement n'est lue ici, et le journal ne garde ni question ni
+réponse. Réservé à un athlète **autonome en Ultime** (403 sinon), au quota habituel (429).
 
 **Le quota du mois**, en micro-dollars (`ia_quota/<compte>/<AAAA-MM>`), selon l'offre lue dans les
 nœuds du serveur (`coachs_registre`, `droits/`) : coach Libre 0, Coach 3 $, Pro 10 $, athlète

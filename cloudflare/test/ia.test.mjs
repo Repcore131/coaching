@@ -3,7 +3,7 @@
 //   node cloudflare/test/ia.test.mjs
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport, SCHEMA_PROGRAMME, controlerProgramme, SCHEMA_REPAS, controlerRepas, REPAS_APPELS_MOIS } from '../src/ia.js';
+import { creerIA, routeIA, coutMicro, lireReponse, journalIAAPurger, offreIA, chiffresInventes, IA_PLAFONDS, TACHES, SCHEMAS, REGLES_C2, SCHEMA_IMPORT, controlerImport, SCHEMA_PROGRAMME, controlerProgramme, SCHEMA_REPAS, controlerRepas, REPAS_APPELS_MOIS, SYSTEME_ASSISTANT } from '../src/ia.js';
 import { repondreAppel, ErreurAppel } from '../src/appels.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -69,7 +69,10 @@ await test('routeIA : chaque tâche, son modèle et ses réglages', async () => 
   assert.equal(routeIA('inconnue'), null);
   assert.equal(routeIA('toString'), null);
   // Chaque tâche a son schéma strict.
-  for (const t of Object.keys(TACHES)) assert.equal(SCHEMAS[t].additionalProperties, false, t);
+  // 'assistant' n'a pas de schéma de sortie : il répond en texte, avec des outils
+  // (eux-mêmes en JSON schema strict, définis dans l'app).
+  for (const t of Object.keys(TACHES).filter((x) => x !== 'assistant')) assert.equal(SCHEMAS[t].additionalProperties, false, t);
+  assert.equal(SCHEMAS.assistant, undefined);
 });
 
 await test('sans jeton : 401, et rien n’est appelé', async () => {
@@ -513,6 +516,58 @@ await test('relanceIA : le coach envoie (canal ou push), une ligne moyen:ia_vali
   // L'athlète d'un autre coach ; un texte trop long.
   assert.equal(await statutDe(c.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: AUTRE, texte: 'x' } }, push)), 403);
   assert.equal(await statutDe(c.IA.envoyerRelance({ auth: auth('coach@t.fr'), data: { athlete: ATH, texte: 'x'.repeat(281) } }, push)), 400);
+});
+
+// ══ « DEMANDER À REPCORE » (tâche 'assistant') : un proxy sans état ══════════
+const SOLO = 'solo@t,fr';
+const OUTILS = [{ name: 'remplacements', description: 'Des exercices de la banque', strict: true,
+  input_schema: { type: 'object', properties: { exercice: { type: 'string' } }, required: ['exercice'], additionalProperties: false } }];
+const MSGS = [{ role: 'user', content: 'Par quoi remplacer le hip thrust ?' }];
+const repOutil = (c) => ({ id: 'm', type: 'message', role: 'assistant', model: c.model, stop_reason: 'tool_use',
+  content: [{ type: 'thinking', thinking: '…', signature: 'sig' }, { type: 'tool_use', id: 'tu_1', name: 'remplacements', input: { exercice: 'HIP THRUST' } }],
+  usage: { input_tokens: 2000, output_tokens: 100 } });
+
+await test('assistant : refusé sans Ultime (403), refusé à un athlète coaché même Ultime (403), sans appel', async () => {
+  const w = monde({ base: { users: { [SOLO]: {}, [ATH]: { coachEmailKey: COACH } }, droits: { [SOLO]: { palier: 'essentielle', echeance: 0 }, [ATH]: { palier: 'ultime', echeance: 0 } } } });
+  assert.equal(await statutDe(w.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: OUTILS } })), 403);
+  assert.equal(await statutDe(w.IA.appeler({ auth: auth('lea@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: OUTILS } })), 403);
+  assert.equal(await statutDe(w.IA.appeler({ auth: auth('coach@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: OUTILS } })), 403);
+  assert.equal(w.appels.length, 0);
+});
+
+await test('assistant : quota respecté (429) ; servi, il relaie messages et outils (strict) et rend la réponse brute', async () => {
+  const base = { users: { [SOLO]: {} }, droits: { [SOLO]: { palier: 'ultime', echeance: 0 } } };
+  const plein = monde({ base: Object.assign({ ia_quota: { [SOLO]: { [MOIS]: IA_PLAFONDS.ultime } } }, base) });
+  await assert.rejects(plein.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: OUTILS } }), (e) => e.statut === 429);
+  assert.equal(plein.appels.length, 0);
+  const w = monde({ base, reponse: repOutil });
+  const r = await w.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: OUTILS } });
+  assert.equal(r.ok, true);
+  assert.equal(r.stop_reason, 'tool_use');
+  assert.deepEqual(r.contenu[1], { type: 'tool_use', id: 'tu_1', name: 'remplacements', input: { exercice: 'HIP THRUST' } });
+  assert.equal(r.plafond, IA_PLAFONDS.ultime);
+  assert.equal(r.coutMois, 2000 * 2 + 100 * 10);
+  const { corps } = w.appels[0];
+  assert.equal(corps.model, 'claude-sonnet-5-5');
+  assert.equal(corps.output_config.effort, 'low');
+  assert.equal(corps.output_config.format, undefined);
+  assert.equal(corps.tools[0].strict, true);
+  assert.deepEqual(corps.messages, MSGS);
+  assert.equal(corps.system[0].text, SYSTEME_ASSISTANT);
+  assert.deepEqual(corps.system[0].cache_control, { type: 'ephemeral' });
+  // Le journal ne garde ni la question ni la réponse.
+  const j = w.F.lire('ia_journal/' + SOLO + '/' + r.journalId);
+  assert.equal(JSON.stringify(j).indexOf('hip'), -1);
+  assert.equal(j.tache, 'assistant');
+  // Un message de l'assistant suivi des résultats d'outils repart tel quel.
+  const suite = MSGS.concat([{ role: 'assistant', content: r.contenu }, { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: '{"exercices":[]}' }] }]);
+  await w.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages: suite, tools: OUTILS } });
+  assert.deepEqual(w.appels[1].corps.messages[1].content, r.contenu);
+  // Une conversation mal formée : 400, sans appel.
+  for (const messages of [[], [{ role: 'assistant', content: 'x' }], [{ role: 'user', content: [{ type: 'image' }] }]])
+    assert.equal(await statutDe(w.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages, tools: OUTILS } })), 400);
+  assert.equal(await statutDe(w.IA.appeler({ auth: auth('solo@t.fr'), data: { tache: 'assistant', messages: MSGS, tools: [{ name: 'a b' }] } })), 400);
+  assert.equal(w.appels.length, 2);
 });
 
 console.log(ok + ' tests IA');

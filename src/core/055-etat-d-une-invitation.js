@@ -2397,3 +2397,274 @@ async function chargerTests(){
   // testExercices est defini par tests.js, charge juste au-dessus.
   return window.testExercices();
 }
+
+// ══ « DEMANDER À REPCORE » : L'ASSISTANT DE L'ATHLÈTE AUTONOME (05/10/2026) ══
+// Un écran de questions pour un athlète AUTONOME en Ultime. Les réponses
+// s'appuient UNIQUEMENT sur ses données, lues par des OUTILS :
+//   signaux, volumeMuscle, progression, remplacements, proposerRemplacement.
+// ⚠ LA BOUCLE D'OUTILS TOURNE ICI, PAS DANS LE WORKER. Le Worker (ia.js, tâche
+//   'assistant') relaie messages et outils à Sonnet 5.5 et rend la réponse
+//   brute ; l'app exécute chaque appel d'outil avec ses fonctions pures et
+//   renvoie les tool_result. Au plus ASSISTANT_TOURS_MAX tours d'outils.
+// ⚠ AUCUN OUTIL N'ÉCRIT. proposerRemplacement rend une CARTE ; seule la touche
+//   « Enregistrer ce remplacement » (R31 : le verbe qui écrit) de l'athlète remplace l'exercice (une ligne), par le chemin
+//   d'écriture habituel (saveUser).
+// ⚠ LA SANTÉ N'ENTRE PAS. Une question qui parle de douleur, de blessure, de
+//   médicament ou de trouble alimentaire reçoit une réponse FIXE, sans appel.
+//   Les signaux sortent sans le détail des douleurs. Un drapeau levé met un
+//   bandeau fixe et ferme les remplacements (substitutsAutorises).
+const ASSISTANT_TOURS_MAX=4, ASSISTANT_HISTO_MAX=20, ASSISTANT_SORTIE_MAX=4000, ASSISTANT_CONTEXTE_ECHANGES=2;
+const ASSISTANT_REPONSE_SANTE='Je ne peux pas t’aider là-dessus : parles-en à un professionnel de santé (médecin, kiné). Pour l’entraînement, je reste là.';
+const RE_ASSISTANT_SANTE=/douleur|\bmal (?:au|à|aux|a)\b|bless|tendin|entorse|d[ée]chir|fractur|m[ée]dic|traitement|cachet|anorex|boulim|vomi|trouble[s]? alimentaire|hyperphag|purge/i;
+const ASSISTANT_LIEN_COACHING='https://beacons.ai/kevin.gllc';
+const _objStrict=(props,req)=>({type:'object',properties:props,required:req||Object.keys(props),additionalProperties:false});
+const ASSISTANT_OUTILS=Object.freeze([
+  {name:'signaux',strict:true,description:'Les signaux d’entraînement de l’athlète (décrochage, plateau, volume, forme…), sans aucun détail de santé.',
+    input_schema:_objStrict({})},
+  {name:'volumeMuscle',strict:true,description:'Les séries par muscle des N dernières semaines (8 au plus), avec les repères de volume (MEV, MAV, MRV).',
+    input_schema:_objStrict({semaines:{type:'integer',description:'Nombre de semaines, de 1 à 8.'}})},
+  {name:'progression',strict:true,description:'Les 8 dernières séances d’un exercice : date, charge et répétitions des séries faites.',
+    input_schema:_objStrict({exercice:{type:'string'}})},
+  {name:'remplacements',strict:true,description:'Au plus 5 exercices de la banque qui ciblent le même muscle principal que l’exercice donné, éventuellement avec un matériel.',
+    input_schema:_objStrict({exercice:{type:'string'},materiel:{anyOf:[{type:'string'},{type:'null'}]}})},
+  {name:'proposerRemplacement',strict:true,description:'Propose de remplacer un exercice d’une séance du programme par un exercice de la banque. Ne modifie RIEN : l’athlète verra une carte avec un bouton « Enregistrer ce remplacement ».',
+    input_schema:_objStrict({seance:{type:'string'},exercice:{type:'string'},par:{type:'string'}})}
+]);
+/** PURE (les drapeaux et le cache des droits). L'écran est-il proposé ? */
+function assistantOuvert(u){
+  if(!u||u.role==='coach') return false;
+  if(!estAutonome(u)) return false;
+  let p='aucun'; try{ p=palierDe(u); }catch(e){ p='aucun'; }
+  return p==='ultime';
+}
+// Un objet borné : au-delà de ASSISTANT_SORTIE_MAX octets, les listes sont
+// rognées par la fin jusqu'à tenir, et l'objet le dit (tronque:true).
+function _assistantBorne(o){
+  const taille=x=>new TextEncoder().encode(JSON.stringify(x)).length;
+  if(taille(o)<=ASSISTANT_SORTIE_MAX) return o;
+  const c=JSON.parse(JSON.stringify(o)); c.tronque=true;
+  const listes=[];
+  (function cherche(x){ if(!x||typeof x!=='object') return; for(const k of Object.keys(x)){ if(Array.isArray(x[k])) listes.push(x[k]); else cherche(x[k]); } })(c);
+  let n=0;
+  while(taille(c)>ASSISTANT_SORTIE_MAX&&n++<500){ const l=listes.filter(a=>a.length).sort((a,b)=>b.length-a.length)[0]; if(!l) break; l.pop(); }
+  return taille(c)<=ASSISTANT_SORTIE_MAX?c:{tronque:true,erreur:'réponse trop longue'};
+}
+function _assistantZone(u){
+  let d=null; try{ d=drapeauQuelconqueActif(u); }catch(e){ d=null; }
+  if(!d) return null;
+  if(d.zone&&d.zone!=='general'){ try{ return libZone(d.zone); }catch(e){ return String(d.zone); } }
+  return 'générale';
+}
+const _jourLocal=t=>{ try{ return localISODate(new Date(t)); }catch(e){ return ''; } };
+// ── LES OUTILS (purs, sauf la lecture de la banque déjà chargée) ─────────
+function outilSignaux(u){
+  let s=null; try{ s=signauxEntrainement(u,{complet:true}); }catch(e){ s=null; }
+  if(!s) return {erreur:'signaux indisponibles'};
+  const sans=['douleur','douleurDiffuse','douleurTous'];
+  const tca=(()=>{ try{ return aTCA(u); }catch(e){ return true; } })();
+  if(tca) sans.push('restrictionLongue');
+  const out={signaux:{},details:{}};
+  for(const k of Object.keys(s)){ if(k==='details'||sans.indexOf(k)>=0) continue; if(typeof s[k]==='boolean') out.signaux[k]=s[k]; }
+  for(const k of Object.keys(s.details||{})){ if(sans.indexOf(k)>=0||!out.signaux[k]) continue;
+    const j=JSON.stringify(s.details[k]); out.details[k]=j&&j.length<=400?s.details[k]:'(détail trop long)'; }
+  return _assistantBorne(out);
+}
+function outilVolumeMuscle(u,semaines){
+  const n=Math.max(1,Math.min(8,Math.round(Number(semaines)||4)));
+  const cles=[]; for(let i=n-1;i>=0;i--) cles.push(semaineISO(new Date(Date.now()-i*7*864e5)));
+  const muscles={};
+  cles.forEach((cle,i)=>{
+    let v={}; try{ v=volumeSemaine(u,cle)||{}; }catch(e){ v={}; }
+    for(const m of Object.keys(v)){ const x=Number(v[m])||0; if(!x) continue;
+      (muscles[m]=muscles[m]||{nom:(MUSCLES[m]||{}).lib||m,series:new Array(n).fill(0)}).series[i]=Math.round(x*10)/10; }
+  });
+  for(const m of Object.keys(muscles)){ let r=null; try{ r=reperesEffectifs(u,m); }catch(e){ r=null; }
+    muscles[m].reperes=r?{mev:r.mev,mavMin:r.mavMin,mavMax:r.mavMax,mrv:r.mrv}:null; }
+  return _assistantBorne({semaines:cles,muscles});
+}
+function outilProgression(u,exercice){
+  const k=exKey(exercice||'');
+  if(!k) return {erreur:'exercice manquant'};
+  const seances=[];
+  const l=((u&&u.sessions)||[]).filter(s=>s&&s.data&&Number(s.date)>0).sort((a,b)=>Number(b.date)-Number(a.date));
+  for(const s of l){
+    const nom=Object.keys(s.data).find(n=>exKey(n)===k);
+    if(!nom) continue;
+    const series=(((s.data[nom]||{}).sets)||[]).filter(x=>x&&x.done===true).slice(0,8)
+      .map(x=>({charge:parseFloat(x.weight)||0,reps:parseInt(x.reps,10)||0}));
+    if(series.length) seances.push({date:_jourLocal(s.date),series});
+    if(seances.length>=8) break;
+  }
+  return _assistantBorne({exercice:String(exercice),seances:seances.reverse(),vide:!seances.length});
+}
+function _ficheAssistant(nom,u){
+  let f=null; try{ f=ficheBanque(nom,u); }catch(e){ f=null; }
+  if(f) return f;
+  let l=[]; try{ l=rechercherBanque(String(nom||''),null,null,u); }catch(e){ l=[]; }
+  return l[0]||null;
+}
+function outilRemplacements(u,exercice,materiel){
+  if(!substitutsAutorises(u)) return {refuse:'Une zone est signalée : pas de remplacement proposé. Parles-en à un professionnel de santé.'};
+  const f0=_ficheAssistant(exercice,u);
+  if(!f0) return {erreur:'exercice introuvable dans la banque',exercices:[]};
+  const prim=(f0.muscles||[])[0];
+  if(!prim) return {erreur:'muscle principal inconnu',exercices:[]};
+  let l=[]; try{ l=rechercherBanque('',Object.assign({muscle:prim},materiel?{materiel:String(materiel)}:{}),null,u); }catch(e){ l=[]; }
+  const ex=l.filter(f=>f&&f.nom&&(f.muscles||[])[0]===prim&&exKey(f.nom)!==exKey(f0.nom)).slice(0,5)
+    .map(f=>({nom:f.nom,materiel:f.materiel||null}));
+  return _assistantBorne({exercice:f0.nom,muscle:(MUSCLES[prim]||{}).lib||prim,exercices:ex});
+}
+// Les cartes proposées, en mémoire seulement : rien n'est écrit avant « Enregistrer ce remplacement ».
+const _assistant={cartes:{},n:0,enCours:false,compteur:null,dernierTours:0};
+function _seanceAssistant(u,seance){
+  const sc=Array.isArray(u&&u.sessions_config)?u.sessions_config:[];
+  const k=exKey(seance||'');
+  return sc.findIndex(s=>s&&s.active!==false&&Array.isArray(s.exercises)&&(exKey(s.name||'')===k||exKey(s.day||'')===k));
+}
+function outilProposerRemplacement(u,seance,exercice,par){
+  if(!substitutsAutorises(u)) return {refuse:'Une zone est signalée : pas de remplacement proposé.'};
+  const j=_seanceAssistant(u,seance);
+  if(j<0) return {erreur:'séance introuvable dans le programme'};
+  const s=u.sessions_config[j];
+  const i=s.exercises.findIndex(e=>e&&exKey(e.name)===exKey(exercice));
+  if(i<0) return {erreur:'exercice absent de cette séance'};
+  const f=_ficheAssistant(par,u);
+  if(!f||exKey(f.nom)!==exKey(par)) return {erreur:'« '+String(par)+' » n’est pas dans la banque'};
+  const id='c'+(++_assistant.n);
+  _assistant.cartes[id]={j,i,ancien:s.exercises[i].name,seance:s.name||s.day||'',par:f.nom,slug:f.slug||null,etat:'propose'};
+  return {carte:id,seance:s.name||s.day||'',exercice:s.exercises[i].name,par:f.nom,
+    statut:'proposé : rien n’est modifié tant que l’athlète ne touche pas « Enregistrer ce remplacement »'};
+}
+/** Exécute un appel d'outil ; rend toujours un objet sérialisable. */
+function executerOutilAssistant(nom,entree,u){
+  const x=entree||{}, us=u||currentUser;
+  try{
+    if(nom==='signaux') return outilSignaux(us);
+    if(nom==='volumeMuscle') return outilVolumeMuscle(us,x.semaines);
+    if(nom==='progression') return outilProgression(us,x.exercice);
+    if(nom==='remplacements') return outilRemplacements(us,x.exercice,x.materiel||null);
+    if(nom==='proposerRemplacement') return outilProposerRemplacement(us,x.seance,x.exercice,x.par);
+  }catch(e){ return {erreur:'outil en échec'}; }
+  return {erreur:'outil inconnu'};
+}
+// « Enregistrer ce remplacement » : UNE ligne remplacée, et l'écriture habituelle.
+function appliquerCarteAssistant(id){
+  const c=_assistant.cartes[id], u=currentUser;
+  if(!c||c.etat!=='propose'||!u) return false;
+  const s=(u.sessions_config||[])[c.j], e=s&&s.exercises&&s.exercises[c.i];
+  if(!e||exKey(e.name)!==exKey(c.ancien)){ toast('Le programme a changé depuis : redemande à RepCore.','var(--orange)'); return false; }
+  const f=_ficheAssistant(c.par,u);
+  if(!f){ toast('Cet exercice n’est plus dans la banque.','var(--orange)'); return false; }
+  s.exercises[c.i]=exRemplaceParFiche(e,f);
+  c.etat='applique';
+  toastEcriture(saveUser(),c.ancien+' remplacé par '+f.nom,'le programme est');
+  try{ _rendreAssistant(); }catch(err){}
+  return true;
+}
+// ── L'HISTORIQUE, sur l'appareil seulement ───────────────────────────────
+function _assistantCle(){ return 'rc_assistant_'+String((currentUser&&currentUser.email)||'').toLowerCase(); }
+function assistantHistorique(){
+  try{ const l=JSON.parse(localStorage.getItem(_assistantCle())||'[]'); return Array.isArray(l)?l:[]; }catch(e){ return []; }
+}
+function _assistantNoter(q,r,cartes){
+  const l=assistantHistorique().concat([{q:String(q).slice(0,500),r:String(r).slice(0,3000),t:Date.now(),cartes:cartes||[]}]).slice(-ASSISTANT_HISTO_MAX);
+  try{ localStorage.setItem(_assistantCle(),JSON.stringify(l)); }catch(e){}
+  return l;
+}
+/**
+ * La question, puis la boucle : au plus ASSISTANT_TOURS_MAX tours d'outils.
+ * Rend {ok, texte, cartes, tours}. Ne modifie jamais le programme.
+ */
+async function assistantDemander(question){
+  const q=String(question||'').trim();
+  if(!q) return {ok:false,texte:''};
+  const u=currentUser;
+  if(!assistantOuvert(u)) return {ok:false,texte:'L’assistant est réservé aux athlètes autonomes en Ultime.'};
+  if(RE_ASSISTANT_SANTE.test(q)){ _assistantNoter(q,ASSISTANT_REPONSE_SANTE); return {ok:true,texte:ASSISTANT_REPONSE_SANTE,cartes:[],tours:0,fixe:true}; }
+  if(!CLOUD||!CLOUD._callFn) return {ok:false,texte:'L’assistant n’est pas joignable pour le moment.'};
+  try{ if(typeof chargerBanque==='function') await chargerBanque(); }catch(e){}
+  const zone=_assistantZone(u);
+  const contexte={profilSansNutritionChiffree:(()=>{ try{ return !!aTCA(u); }catch(e){ return true; } })(),zoneSignalee:zone,
+    programme:(u.sessions_config||[]).filter(s=>s&&s.active!==false&&Array.isArray(s.exercises)&&s.exercises.length)
+      .map(s=>({seance:s.name||s.day,exercices:s.exercises.filter(e=>e&&e.name).map(e=>e.name)})).slice(0,7)};
+  const messages=[];
+  for(const h of assistantHistorique().slice(-ASSISTANT_CONTEXTE_ECHANGES)) messages.push({role:'user',content:h.q},{role:'assistant',content:h.r||'…'});
+  messages.push({role:'user',content:[{type:'text',text:JSON.stringify({contexte}).slice(0,6000)},{type:'text',text:q}]});
+  const avant=new Set(Object.keys(_assistant.cartes));
+  let tours=0, texte='', ok=true;
+  for(;;){
+    let r=null, st=0;
+    try{ r=await CLOUD._callFn('ia',{tache:'assistant',messages,tools:ASSISTANT_OUTILS}); }
+    catch(e){ r=null; st=(e&&e.statut)||0; }
+    if(!r||!r.ok){
+      ok=false;
+      texte=st===429?'Quota de l’assistant atteint ce mois-ci.':st===403?'L’assistant est réservé aux athlètes autonomes en Ultime.'
+        :st===503?'L’assistant est en pause pour le moment.':'L’assistant n’a pas pu répondre : réessaie.';
+      break;
+    }
+    if(Number(r.plafond)>0) _assistant.compteur={coutMois:Number(r.coutMois)||0,plafond:Number(r.plafond)};
+    const contenu=Array.isArray(r.contenu)?r.contenu:[];
+    if(r.stop_reason!=='tool_use'){ texte=contenu.filter(b=>b&&b.type==='text').map(b=>b.text).join('\n').trim(); break; }
+    if(tours>=ASSISTANT_TOURS_MAX){ texte='La question demande trop d’étapes : pose-la plus simplement, ou parles-en à un coach.'; break; }
+    tours++;
+    const resultats=contenu.filter(b=>b&&b.type==='tool_use').map(b=>({type:'tool_result',tool_use_id:b.id,
+      content:JSON.stringify(executerOutilAssistant(b.name,b.input,u))}));
+    messages.push({role:'assistant',content:contenu},{role:'user',content:resultats});
+  }
+  _assistant.dernierTours=tours;
+  const cartes=Object.keys(_assistant.cartes).filter(id=>!avant.has(id));
+  if(ok) _assistantNoter(q,texte,cartes);
+  return {ok,texte,cartes,tours};
+}
+// ── L'ÉCRAN ──────────────────────────────────────────────────────────────
+function renderEntreeAssistant(u){
+  const z=document.getElementById('clh-assistant');
+  if(!z) return false;
+  if(!assistantOuvert(u)){ z.innerHTML=''; return false; }
+  z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirAssistant()"><span class="rel-entree-t">Demander à RepCore</span>'
+    +'<span class="rel-entree-e">Tes séances, ton volume, tes remplacements : réponses tirées de tes données</span></button>';
+  return true;
+}
+function ouvrirAssistant(){
+  if(!assistantOuvert(currentUser)){ toast('L’assistant est réservé aux athlètes autonomes en Ultime.','var(--orange)'); return false; }
+  go('s-assistant');
+  _rendreAssistant();
+  return true;
+}
+function _htmlCarteAssistant(id){
+  const c=_assistant.cartes[id]; if(!c) return '';
+  const E=escapeHtml, arg=_attrArg(id);
+  return '<div class="as-carte"><div class="as-carte-t">'+E(c.seance)+' : '+E(c.ancien)+' → '+E(c.par)+'</div>'
+    +(c.etat==='applique'?'<div class="as-carte-ok">Appliqué à ton programme.</div>'
+      :'<button type="button" class="btn btn-red btn-sm" onclick="appliquerCarteAssistant('+arg+')">Enregistrer ce remplacement</button>')+'</div>';
+}
+function _rendreAssistant(){
+  const z=document.getElementById('as-corps');
+  if(!z||!currentUser) return false;
+  const E=escapeHtml;
+  const zone=_assistantZone(currentUser);
+  let h=zone?'<div class="as-bandeau" role="alert">Une zone est signalée ('+E(zone)+') : pour elle, vois un professionnel de santé. RepCore ne répond pas aux questions d’entraînement qui la touchent.</div>':'';
+  const histo=assistantHistorique();
+  h+=histo.length?histo.map(x=>'<div class="as-q">'+E(x.q)+'</div><div class="as-r">'+E(x.r)+'</div>'+(x.cartes||[]).map(_htmlCarteAssistant).join('')).join('')
+    :'<p class="sub as-accueil">Pose une question sur ton entraînement : « par quoi remplacer le hip thrust ? », « mon volume de dos est-il suffisant ? ». Les réponses s’appuient sur tes séances, rien d’autre.</p>';
+  if(_assistant.enCours) h+='<div class="as-r sub">RepCore regarde tes données…</div>';
+  h+='<p class="sub as-pied">Pour un programme complet ou un suivi personnalisé, <a href="'+ASSISTANT_LIEN_COACHING+'" target="_blank" rel="noopener">parles-en à un coach</a>.'
+    +(_assistant.compteur?' Assistant ce mois-ci : '+Math.min(100,Math.round(_assistant.compteur.coutMois/_assistant.compteur.plafond*100))+' % utilisé.':'')+'</p>';
+  z.innerHTML=h;
+  return true;
+}
+async function assistantEnvoyer(){
+  const inp=document.getElementById('as-question');
+  if(!inp||_assistant.enCours) return false;
+  const q=inp.value.trim();
+  if(!q) return false;
+  _assistant.enCours=true; inp.disabled=true;
+  _rendreAssistant();
+  let r=null;
+  try{ r=await assistantDemander(q); }
+  finally{ _assistant.enCours=false; inp.disabled=false; }
+  if(r&&r.ok) inp.value='';
+  else if(r&&r.texte) toast(r.texte,'var(--orange)');
+  _rendreAssistant();
+  return !!(r&&r.ok);
+}

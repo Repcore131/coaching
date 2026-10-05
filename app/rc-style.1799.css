@@ -12962,6 +12962,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rq-txt{width:100%;margin-top:8px}
 .rq-b{display:flex;gap:8px;margin-top:8px}
 .rq-b .btn{margin:0}
+/* « Demander à RepCore » (assistant de l'athlète autonome). */
+#clh-assistant:empty{display:none}
+.as-bandeau{margin-bottom:12px;padding:10px 12px;border-radius:var(--r-2);border:1px solid var(--warning-border);background:var(--warning-bg);color:var(--text);font-size:var(--fs-xs);line-height:1.55}
+.as-q{margin:12px 0 4px auto;max-width:85%;width:fit-content;padding:8px 12px;border-radius:var(--r-3);background:var(--surface-1);border:1px solid var(--border);font-size:var(--fs-sm);color:var(--text)}
+.as-r{margin:4px 0;font-size:var(--fs-sm);line-height:1.6;color:var(--text);white-space:pre-line}
+.as-carte{margin:8px 0;padding:10px 12px;border-radius:var(--r-2);border:1px solid var(--border);background:var(--surface-1);display:flex;flex-direction:column;gap:8px}
+.as-carte .btn{margin:0;align-self:flex-start}
+.as-carte-t{font-size:var(--fs-xs);font-weight:700;color:var(--text)}
+.as-carte-ok{font-size:var(--fs-xs);color:var(--green)}
+.as-accueil,.as-pied{font-size:var(--fs-xs);line-height:1.6}
+.as-saisie{display:flex;gap:8px;align-items:flex-end;margin-top:12px}
+.as-saisie textarea{flex:1}
+.as-saisie .btn{margin:0}
 /* LOT C5 : la proposition de la semaine et les messages programmés du canal */
 .cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .cp{border-left:3px solid var(--red)}

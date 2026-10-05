@@ -554,6 +554,8 @@ function loadClientHome(){
   try{ _rendreCheckin(u); }catch(e){}
   try{ _rendreMobilisation(u); }catch(e){}
   try{ _rendreRelanceAthlete(u).catch(()=>{}); }catch(e){}
+  // « Demander à RepCore » : autonome en Ultime seulement.
+  try{ renderEntreeAssistant(u); }catch(e){}
   // LOT M2 : « Mon coach », le fil privé.
   try{ _rendreEntreeMessagesAthlete().catch(()=>{}); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}

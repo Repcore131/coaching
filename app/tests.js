@@ -15005,6 +15005,104 @@ async function testExercices(){
           const c=controlerImportIA({seances:[{nom:'A',exercices:[{nomLu:'x',nomBanque:'Y',series:0,confiance:7}]}]},['Z']);
           const x=c.seances[0].exercices[0];
           return x.nomBanque===null&&x.series===null&&x.confiance===1&&x.reps===null?true:_echec(JSON.stringify(x));});
+        // ══ « DEMANDER À REPCORE » (05/10/2026) ══
+        const _ASF=()=>[{slug:'p-hip',nom:'HIP THRUST',muscles:['FESSIERS'],materiel:'Barre',perso:true},
+          {slug:'p-pont',nom:'PONT FESSIER',muscles:['FESSIERS'],materiel:'Poids du corps',perso:true},
+          {slug:'p-kick',nom:'KICKBACK POULIE',muscles:['FESSIERS'],materiel:'Poulie',perso:true},
+          {slug:'p-abd',nom:'ABDUCTION MACHINE',muscles:['FESSIERS','ABDUCTEURS'],materiel:'Machine',perso:true},
+          {slug:'p-fente',nom:'FENTE BULGARE FESSIERS',muscles:['FESSIERS','QUADRICEPS'],materiel:'Haltères',perso:true},
+          {slug:'p-sdt',nom:'SOULEVÉ DE TERRE ROUMAIN FESSIERS',muscles:['FESSIERS','ISCHIOS'],materiel:'Barre',perso:true},
+          {slug:'p-squat',nom:'SQUAT',muscles:['QUADRICEPS','FESSIERS'],materiel:'Barre',perso:true}];
+        const _ASU=o=>{ const ses=[];
+          for(let i=0;i<40;i++) ses.push({id:'s'+i,date:Date.now()-(40-i)*2*864e5,name:'Jambes',data:{
+            'HIP THRUST':{sets:Array.from({length:5},(_,k)=>({weight:String(60+i),reps:String(10-k%3),done:true}))},
+            'SQUAT':{sets:Array.from({length:5},()=>({weight:'80',reps:'8',done:true}))}}});
+          return Object.assign({id:'as1',email:'as-ult@t.fr',role:'athlete',fname:'Ana',sessions:ses,exCustom:_ASF(),
+            sessions_config:[{day:'Lundi',name:'Jambes',active:true,exercises:[{name:'HIP THRUST',series:4,reps:'10'},{name:'SQUAT',series:4,reps:'8'}]},
+              {day:'Jeudi',name:'Haut',active:true,exercises:[{name:'DÉVELOPPÉ COUCHÉ',series:4,reps:'8'}]}]},o||{}); };
+        const _ASok=(u)=>{ _droitsPoser(u.email,{palier:'ultime',source:'paypal',echeance:0}); return u; };
+        ok('Assistant — chaque outil rend un objet sérialisable de moins de 4 Ko ; remplacements : 3 à 5 exercices de la banque, même muscle principal',()=>{
+          const u=_ASok(_ASU());
+          try{
+            const appels=[['signaux',{}],['volumeMuscle',{semaines:8}],['volumeMuscle',{semaines:99}],['progression',{exercice:'hip thrust'}],
+              ['remplacements',{exercice:'HIP THRUST',materiel:null}],['remplacements',{exercice:'inconnu zz',materiel:null}],
+              ['proposerRemplacement',{seance:'Jambes',exercice:'HIP THRUST',par:'PONT FESSIER'}],['outilInconnu',{}]];
+            for(const [n,e] of appels){
+              const o=executerOutilAssistant(n,e,u);
+              const j=JSON.stringify(o);
+              if(!o||typeof o!=='object'||JSON.stringify(JSON.parse(j))!==j) return _echec(n+' : non sérialisable');
+              const b=new TextEncoder().encode(j).length;
+              if(b>4096) return _echec(n+' : '+b+' octets');
+            }
+            const p=executerOutilAssistant('progression',{exercice:'hip thrust'},u);
+            if(p.seances.length!==8||p.seances[7].series[0].charge!==99) return _echec('progression : '+JSON.stringify(p).slice(0,200));
+            const r=executerOutilAssistant('remplacements',{exercice:'HIP THRUST',materiel:null},u);
+            const noms=new Set(_ASF().map(f=>f.nom));
+            if(!(r.exercices.length>=3&&r.exercices.length<=5)) return _echec(r.exercices.length+' remplacements');
+            if(r.exercices.some(x=>!noms.has(x.nom)||x.nom==='HIP THRUST'||x.nom==='SQUAT')) return _echec(JSON.stringify(r.exercices));
+            const s=executerOutilAssistant('signaux',{},u);
+            return JSON.stringify(s).indexOf('douleur')<0?true:_echec('la douleur sort des signaux');
+          } finally { _droitsPoser(u.email,null,true); }});
+        ok('Assistant — proposerRemplacement ne modifie pas sessions_config ; « Appliquer » change exactement une ligne, par saveUser',()=>{
+          const u=_ASok(_ASU()), svU=currentUser, svS=saveUser;
+          let ecrit=0;
+          try{
+            currentUser=u; saveUser=()=>{ ecrit++; return true; };
+            const avant=JSON.stringify(u.sessions_config);
+            const c=executerOutilAssistant('proposerRemplacement',{seance:'Jambes',exercice:'HIP THRUST',par:'PONT FESSIER'},u);
+            if(!c.carte) return _echec('pas de carte : '+JSON.stringify(c));
+            if(JSON.stringify(u.sessions_config)!==avant||ecrit) return _echec('la proposition a écrit');
+            const horsBanque=executerOutilAssistant('proposerRemplacement',{seance:'Jambes',exercice:'HIP THRUST',par:'INVENTÉ'},u);
+            if(!horsBanque.erreur) return _echec('un exercice hors banque est proposé');
+            if(!appliquerCarteAssistant(c.carte)) return _echec('Appliquer refusé');
+            const a=JSON.parse(avant), b=u.sessions_config;
+            let diff=0;
+            a.forEach((s,j)=>s.exercises.forEach((e,i)=>{ if(JSON.stringify(e)!==JSON.stringify(b[j].exercises[i])) diff++; }));
+            if(diff!==1||b[0].exercises[0].name!=='PONT FESSIER'||b[0].exercises[0].series!==4) return _echec(diff+' lignes : '+JSON.stringify(b[0].exercises[0]));
+            if(ecrit!==1) return _echec(ecrit+' écritures');
+            return appliquerCarteAssistant(c.carte)===false?true:_echec('appliquée deux fois');
+          } finally { currentUser=svU; saveUser=svS; _droitsPoser(u.email,null,true); }});
+        ok('Assistant — l’écran est absent pour Essentielle et pour un athlète coaché ; présent pour un autonome Ultime',()=>{
+          const ult=_ASok(_ASU()), coache=_ASok(_ASU({email:'as-co@t.fr',coachEmailKey:'co@t,fr'})), ess=_ASU({email:'as-ess@t.fr'});
+          _droitsPoser(ess.email,{palier:'essentielle',source:'paypal',echeance:0});
+          const z=document.getElementById('clh-assistant');
+          try{
+            if(!z) return _echec('#clh-assistant manque');
+            if(assistantOuvert(ess)||renderEntreeAssistant(ess)||z.innerHTML!=='') return _echec('ouvert en Essentielle');
+            if(assistantOuvert(coache)||renderEntreeAssistant(coache)) return _echec('ouvert pour un athlète coaché');
+            if(!assistantOuvert(ult)||!renderEntreeAssistant(ult)||!/Demander à RepCore/.test(z.textContent)) return _echec('fermé pour un autonome Ultime');
+            return document.getElementById('s-assistant')?true:_echec('écran absent');
+          } finally { z.innerHTML=''; for(const u of [ult,coache,ess]) _droitsPoser(u.email,null,true); }});
+        okA('Assistant — la boucle s’arrête à 4 tours d’outils ; une question de santé a sa réponse fixe, sans appel ; « hip thrust » : 3 à 5 exercices, rien d’appliqué',async()=>{
+          const u=_ASok(_ASU()), svU=currentUser, sv=CLOUD._callFn, svS=saveUser;
+          const appels=[]; let ecrit=0;
+          try{
+            currentUser=u; saveUser=()=>{ ecrit++; return true; };
+            try{ localStorage.removeItem(_assistantCle()); }catch(e){}
+            const avant=JSON.stringify(u.sessions_config);
+            CLOUD._callFn=async(nom,data)=>{ appels.push(data);
+              return {ok:true,coutMois:10,plafond:1e6,stop_reason:'tool_use',contenu:[{type:'tool_use',id:'t'+appels.length,name:'signaux',input:{}}]}; };
+            const r=await assistantDemander('Comment va mon entraînement ?');
+            if(r.tours!==4||appels.length!==5) return _echec(r.tours+' tours, '+appels.length+' appels');
+            if(!appels.every(d=>d.tache==='assistant'&&d.tools===ASSISTANT_OUTILS)) return _echec('appel mal formé');
+            const der=appels[4].messages;
+            if(der.filter(m=>m.role==='user'&&Array.isArray(m.content)&&m.content[0].type==='tool_result').length!==4) return _echec('tool_result manquants');
+            appels.length=0;
+            const s=await assistantDemander('J’ai une douleur au genou, je fais quoi ?');
+            if(appels.length||s.texte!==ASSISTANT_REPONSE_SANTE) return _echec('santé : '+appels.length+' appels');
+            // La démonstration : « par quoi remplacer le hip thrust ? »
+            let n=0, rendu=null;
+            CLOUD._callFn=async(nom,data)=>{ n++;
+              if(n===1) return {ok:true,coutMois:20,plafond:1e6,stop_reason:'tool_use',contenu:[{type:'tool_use',id:'r1',name:'remplacements',input:{exercice:'hip thrust',materiel:null}}]};
+              rendu=JSON.parse(data.messages[data.messages.length-1].content[0].content);
+              return {ok:true,coutMois:30,plafond:1e6,stop_reason:'end_turn',contenu:[{type:'text',text:'Essaie : '+rendu.exercices.map(x=>x.nom).join(', ')}]};
+            };
+            const h=await assistantDemander('Par quoi remplacer le hip thrust ?');
+            if(!h.ok||!rendu||rendu.exercices.length<3||rendu.exercices.length>5) return _echec('remplacements : '+JSON.stringify(rendu));
+            if(JSON.stringify(u.sessions_config)!==avant||ecrit) return _echec('modifié sans « Appliquer »');
+            if(_assistant.compteur.coutMois!==30) return _echec('compteur non lu');
+            return assistantHistorique().length===3?true:_echec(assistantHistorique().length+' échanges gardés');
+          } finally { CLOUD._callFn=sv; currentUser=svU; saveUser=svS; try{ localStorage.removeItem('rc_assistant_as-ult@t.fr'); }catch(e){} _droitsPoser(u.email,null,true); }});
         // ══ LE RISQUE D'ABANDON ET LA RELANCE PROPOSÉE (05/10/2026) ══
         ok('Risque — risqueVariables rend, sur le résumé de risque.test.mjs, les valeurs du serveur',()=>{
           const t=Date.parse('2026-10-05T10:00:00Z');

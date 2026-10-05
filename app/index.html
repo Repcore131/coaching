@@ -1667,6 +1667,24 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad"><div id="msga-corps"></div></div>
   </div>
 </div>
+<!-- « DEMANDER À REPCORE » (05/10/2026) : l'assistant de l'athlète autonome en
+     Ultime. Ses réponses s'appuient sur ses données, lues par des outils ;
+     rien n'est modifié sans « Appliquer ». -->
+<div id="s-assistant" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-assistant','s-client-home')">←</button>
+    <span class="topbar-title">Demander à RepCore</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="as-corps"></div>
+      <div class="as-saisie">
+        <textarea id="as-question" rows="2" maxlength="500" placeholder="Ta question sur ton entraînement" aria-label="Ta question"></textarea>
+        <button type="button" class="btn btn-red btn-sm" onclick="assistantEnvoyer()">Demander</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="s-coach-relances" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-relances','s-coach-home')">←</button>
@@ -3620,6 +3638,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-checkin"></div>
       <!-- LOT C3 : le message privé d’une relance automatique (_rendreRelanceAthlete). -->
       <div id="clh-relance"></div>
+      <!-- « Demander à RepCore » : autonome en Ultime seulement (renderEntreeAssistant). -->
+      <div id="clh-assistant"></div>
       <!-- LOT T6 : les mobilisations proposées avant la séance du jour (_rendreMobilisation). -->
       <div id="clh-mobilisation"></div>
       <div id="clh-reprise-douce"></div>
