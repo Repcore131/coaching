@@ -29,7 +29,7 @@ PAGES.resiliations = {
   render() {
     const tab = UI.resTab || 'todo';
     const all = resList(CLUB.id);
-    const open = all.filter(resOpen).sort((a, b) => (resUrgent(b) - resUrgent(a)) || (a.effective || a.date).localeCompare(b.effective || b.date));
+    const open = all.filter(resOpen).sort((a, b) => (resUrgent(b) - resUrgent(a)) || (valeurEnJeu(b).euros - valeurEnJeu(a).euros) || (a.effective || a.date).localeCompare(b.effective || b.date));
     const mk = UI.resMonth || curMonth();
     const month = all.filter(r => r.date.slice(0, 7) === mk);
     // sauvé = date du sauvetage ; résilié = date effective (à défaut, date de la demande)
@@ -38,17 +38,22 @@ PAGES.resiliations = {
     const handledTimes = month.map(r => { const a = resActions(r).find(x => x.label !== 'Demande enregistrée'); return a && r.at ? (a.at - r.at) / 86400000 : null; }).filter(x => x != null && x >= 0);
     const reasons = {}; month.forEach(r => { const k = r.reason || 'Non renseigné'; reasons[k] = (reasons[k] || 0) + 1; });
     const noOwner = open.filter(r => !r.ownerId).length, urgent = open.filter(resUrgent).length;
+    const enJeu = r => Number(r.enJeu) || valeurEnJeu(r).euros;
+    const vSaved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
+    const vLost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · chaque demande a un responsable, une échéance et une issue.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
     const kpis = `<div class="stat-row">
       <div class="stat ${open.length ? 'hot' : ''}"><span>À traiter</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
       <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
       <div class="stat"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small>taux de sauvetage ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
+      <div class="stat"><span>Valeur sauvée ce mois</span><b class="ok">${fmtE(vSaved)}</b><small>mensualités gardées</small></div>
+      <div class="stat"><span>Valeur perdue ce mois</span><b class="bad">${fmtE(vLost)}</b><small>résiliations effectives</small></div>
       <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
     if (tab === 'todo') {
       body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune demande à traiter', text: 'Les nouvelles demandes, saisies ou importées de Resamania, arrivent ici.' })}</div>`;
     } else {
-      body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}<span class="spacer"></span><span class="muted small">Motifs : ${Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || 'n.d.'}</span></div>
+      body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}</div>${resOffersTables(month, enJeu)}
         ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
     }
     return head + kpis + tabs('resTab', [['todo', `À traiter (${open.length})`], ['all', 'Historique du mois']], tab) + body;
@@ -61,6 +66,7 @@ function resCard(r) {
     <div class="row wrap"><div class="spacer" style="min-width:180px"><b class="t-14">${esc(r.client)}</b><div class="muted small">${esc(r.reason || 'Motif non renseigné')} · demande du ${dmy(r.date)}${r.source === 'resamania' ? ' · Resamania' : ''}</div></div>
       ${r.effective ? `<span class="badge ${n <= 7 ? 'bad' : n <= 15 ? 'warn' : ''}">${n < 0 ? 'effective depuis ' + (-n) + ' j' : n === 0 ? 'effective aujourd’hui' : 'J-' + n}</span>` : '<span class="badge">date effective ?</span>'}
       <span class="badge ${RES_STATUS[st].cls}">${RES_STATUS[st].label}</span></div>
+    ${(() => { const v = valeurEnJeu(r); const c = clubClients(r.clubId).find(x => tokensKey(x.name || '') === tokensKey(r.client || '')); return `<div class="res-val"><b>En jeu : ${fmtE(v.euros)}</b>${v.estimee ? ' <span class="muted small">valeur estimée</span>' : ''}${c && c.offer ? ` <span class="muted small">· ${esc(c.offer)}</span>` : ''}</div>`; })()}
     ${last ? `<div class="small" style="margin-top:8px"><span class="muted">Dernière action :</span> ${esc(last.label)}${last.note ? '<br><span class="muted">« ' + esc(last.note) + ' »</span>' : ''} <span class="muted">· ${esc(fullName(S.users[last.by]))}, ${ago(last.at)}</span></div>` : ''}
     <div class="row wrap" style="margin-top:10px;gap:6px">
       ${r.ownerId ? `<span class="small">${avatar(S.users[r.ownerId], 'xs')}</span><span class="small spacer">${mine ? '<b>Vous</b>' : esc(fullName(S.users[r.ownerId]))}</span>` : `<button class="btn sm primary" data-act="resTake" data-id="${r.id}">Je m’en occupe</button><span class="spacer"></span>`}
@@ -73,6 +79,22 @@ function resCard(r) {
 // commerciaux qui notent en meme temps ne s'ecrasent plus. L'ancien tableau
 // « actions » reste lu.
 function resLogOp(r, label, extra = {}) { const id = newId(); return [['resiliations', r.id, 'log', id], { at: Date.now(), by: ME.id, label, ...extra }]; }
+// Offre proposée (champ structuré, ou ancien libellé « … · Offre »).
+const actOffer = a => a.offer || RES_OFFERS.find(o => o !== 'Aucune' && (a.label || '').endsWith(' · ' + o)) || null;
+function resOffersTables(month, enJeu) {
+  const offers = {}; RES_OFFERS.filter(o => o !== 'Aucune').forEach(o => { offers[o] = { n: 0, ok: 0, v: 0 }; });
+  const motifs = {};
+  month.forEach(r => {
+    const acts = resActions(r); acts.forEach(a => { const o = actOffer(a); if (o && offers[o]) offers[o].n++; });
+    const lastO = acts.map(actOffer).filter(Boolean).pop();
+    if (resStatus(r) === 'sauvee' && lastO && offers[lastO]) { offers[lastO].ok++; offers[lastO].v += enJeu(r); }
+    const k = r.reason || 'Non renseigné'; const m = motifs[k] = motifs[k] || { n: 0, s: 0 }; m.n++; if (resStatus(r) === 'sauvee') m.s++;
+  });
+  return `<div class="g12" style="margin-bottom:14px"><div class="card col7"><h3>Offre proposée</h3><div class="table-wrap"><table class="t"><thead><tr><th>Offre</th><th class="num">Proposée</th><th class="num">Acceptée</th><th class="num">Taux</th><th class="num">Valeur sauvée</th></tr></thead><tbody>
+    ${Object.entries(offers).map(([o, x]) => `<tr><td>${esc(o)}</td><td class="num">${x.n}</td><td class="num">${x.ok}</td><td class="num">${fmtP(x.n ? x.ok / x.n : null)}</td><td class="num">${fmtE(x.v)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="card col5"><h3>Par motif</h3><div class="table-wrap"><table class="t"><thead><tr><th>Motif</th><th class="num">Demandes</th><th class="num">Sauvées</th><th class="num">Taux</th></tr></thead><tbody>
+    ${Object.entries(motifs).sort((a, b) => b[1].n - a[1].n).map(([k, m]) => `<tr><td>${esc(k)}</td><td class="num">${m.n}</td><td class="num">${m.s}</td><td class="num">${fmtP(m.n ? m.s / m.n : null)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Aucune demande.</td></tr>'}</tbody></table></div></div></div>`;
+}
 const resActions = r => [...(r.actions || []), ...Object.values(r.log || {})].sort((a, b) => (a.at || 0) - (b.at || 0));
 ACTIONS.resTake = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'ownerId'], ME.id], [['resiliations', r.id, 'status'], 'traitement'], resLogOp(r, 'Prise en charge')]); toast('Dossier ajouté à vos relances'); };
 ACTIONS.resCall = el => {
@@ -86,12 +108,12 @@ ACTIONS.resCall = el => {
 ACTIONS.resCallSave = () => {
   const r = S.resiliations[$('.modal').dataset.id]; const f = formData($('#rcf'));
   const out = $('#rcf input[name=out]:checked').value;
-  db.batch([resLogOp(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim() }), [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
+  db.batch([resLogOp(r, RES_CALLS[out] + (f.offer && f.offer !== 'Aucune' ? ' · ' + f.offer : ''), { note: f.note.trim(), out, offer: f.offer && f.offer !== 'Aucune' ? f.offer : null }), [['resiliations', r.id, 'status'], 'traitement'], [['resiliations', r.id, 'ownerId'], r.ownerId || ME.id]]);
   closeModal(); toast('Appel noté');
 };
 ACTIONS.resSaveIt = el => {
   const r = S.resiliations[el.dataset.id]; const owner = r.ownerId || ME.id;
-  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
+  db.batch([[['resiliations', r.id, 'status'], 'sauvee'], [['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'enJeu'], valeurEnJeu(r).euros], [['resiliations', r.id, 'ownerId'], owner], [['resiliations', r.id, 'userId'], owner], resLogOp(r, 'Client sauvé'),
     [['entries', 'sv_' + r.id], { id: 'sv_' + r.id, userId: owner, clubId: CLUB.id, kpiId: 'sauvetage', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]]);
   celebrate('Client sauvé', `${r.client} reste au club`, { kind: 'win' });
 };
@@ -182,7 +204,9 @@ function dunTable() {
   };
   const q = norm(UI.dunQ || '');
   const list = rows.filter(pick[f]).filter(c => !q || norm(c.name).includes(q) || String(c.num || '').includes(q))
-    .sort((a, b) => (dunDue(b) - dunDue(a)) || (Number(b.balance) - Number(a.balance)) || (dunOf(b).recoveredAt || '').localeCompare(dunOf(a).recoveredAt || ''));
+    .sort((a, b) => (Number(b.balance) > 0 && Number(a.balance) > 0 ? dunAttendu(b) - dunAttendu(a) : 0) || (Number(b.balance) - Number(a.balance)) || (dunOf(b).recoveredAt || '').localeCompare(dunOf(a).recoveredAt || ''));
+  const tranches = DUN_AGE.map((t, i) => { const L = open.filter(c => dunTranche(c) === i); return { t, n: L.length, v: L.reduce((s, c) => s + Number(c.balance), 0) }; });
+  const late30 = open.filter(c => dunAge(c) > 30 && !dunOf(c).ownerId);
   const members = clubMembers(CLUB.id);
   const cnt = k => rows.filter(pick[k]).length;
   const empty = !rows.length;
@@ -191,21 +215,32 @@ function dunTable() {
       <div class="stat ${cnt('due') ? 'alarm' : ''}"><span>À relancer aujourd’hui</span><b>${cnt('due')}</b><small>${cnt('nobody')} sans responsable</small></div>
       <div class="stat"><span>Récupéré en ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${fmtE(recTot)}</b><small>tous canaux · dont équipe ${fmtE(recTeam)}</small></div>
       <div class="stat"><span>Dossiers soldés ce mois</span><b>${recMonth.length}</b><small>passés en « Récupéré »</small></div></div>
+    ${open.length ? `<div class="age-tiles">${tranches.map(x => `<div class="age-tile ${x.t[3]}"><span>${x.t[2]}</span><b>${fmtE(x.v)}</b><small>${plur(x.n, 'dossier', 'dossiers')} · attendu ${fmtP(x.t[1])}</small></div>`).join('')}</div>` : ''}
+    ${late30.length ? `<div class="alert" style="margin-bottom:12px">${ico('alert')}<div><b>${plur(late30.length, 'dossier a passé', 'dossiers ont passé')} 30 jours sans responsable</b>${late30.slice(0, 4).map(c => esc(c.name || '')).join(', ')}. Chaque semaine perdue fait baisser la chance de récupérer.</div></div>` : ''}
     ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucun impayé pour l’instant</b>Dans Imports Resamania, déposez « Clients en incident » (Points d’attention) et la liste Incidents : chaque client débiteur devient une ligne ici.</div></div>` : ''}
     <div class="row wrap" style="margin-bottom:10px">${seg('dunFilter', [['todo', `En cours ${cnt('todo')}`], ['due', `À relancer ${cnt('due')}`], ['mine', `Mes dossiers ${cnt('mine')}`], ['nobody', `Sans responsable ${cnt('nobody')}`], ['promesse', `Promesses ${cnt('promesse')}`], ['recupere', `Récupérés ${cnt('recupere')}`], ['perdu', `Perdus ${cnt('perdu')}`]], f)}<span class="spacer"></span><input class="input sm" style="width:190px" placeholder="Nom ou n° client" data-input="dunQ" data-focus="dunQ" value="${esc(UI.dunQ || '')}"></div>
-    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Depuis</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="table-wrap sheet"><table class="t"><thead><tr><th>Client</th><th class="num">Montant</th><th>Âge</th><th class="num">Attendu</th><th>Statut</th><th>Responsable</th><th>Prochaine relance</th><th>Note</th><th></th></tr></thead><tbody>
     ${list.map(c => { const d = dunOf(c); const st = dunStatus(c); const rec = st === 'recupere';
       return `<tr class="${dunDue(c) ? 'due' : ''}"><td><b>${esc(c.name || 'Sans nom')}</b><div class="muted small">${c.num ? 'n° ' + esc(c.num) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${c.incidents ? ' · ' + plur(c.incidents, 'incident', 'incidents') : ''}</div></td>
         <td class="num"><b>${fmtE(rec ? d.amount || 0 : Number(c.balance))}</b></td>
-        <td class="small nowrap">${rec ? 'soldé le ' + dm(d.recoveredAt) : c.balanceAt ? dmy(c.balanceAt) : 'n.d.'}</td>
+        <td class="small nowrap">${rec ? 'soldé le ' + dm(d.recoveredAt) : `<span class="age-b ${DUN_AGE[dunTranche(c)][3]}">${plur(dunAge(c), 'jour', 'jours')}</span>`}</td>
+        <td class="num">${rec ? '' : fmtE(dunAttendu(c))}</td>
         <td>${rec ? `<span class="badge ok">Récupéré${d.canal && RECOV_CHANNELS[d.canal] ? ' · ' + RECOV_CHANNELS[d.canal].label.toLowerCase() : ''}</span>${d.by ? `<div class="muted small">par ${esc(fullName(S.users[d.by]))}</div>` : ''}` : `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="status">${Object.entries(DUN_STATUS).filter(([k]) => k !== 'recupere').map(([k, v]) => `<option value="${k}" ${st === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>`}</td>
         <td>${rec ? '' : d.ownerId ? `<select class="input sm" data-change="dunSet" data-id="${c.id}" data-k="ownerId"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${d.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select>` : `<button class="btn sm primary" data-act="dunTake" data-id="${c.id}">Je m’en occupe</button>`}</td>
         <td>${rec ? '' : `<input class="input sm" type="date" value="${d.next || ''}" data-change="dunSet" data-id="${c.id}" data-k="next">`}</td>
         <td><input class="input sm note" value="${esc(d.note || '')}" placeholder="Ajouter une note" data-change="dunSet" data-id="${c.id}" data-k="note"></td>
-        <td class="nowrap">${rec ? '' : `<button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>`
+        <td class="nowrap">${rec ? '' : `<button class="btn sm" data-act="dunLink" data-id="${c.id}" title="Copier un SMS avec le lien de paiement">Lien de paiement</button> <button class="btn sm ok-btn" data-act="dunPaid" data-id="${c.id}">Récupéré</button>`}</td></tr>`; }).join('')}</tbody></table></div>`
       : `<div class="card">${emptyBox({ art: 'done', title: f === 'mine' ? 'Aucun dossier à votre nom' : 'Rien dans cette vue', text: f === 'mine' ? 'Prenez un dossier sans responsable avec « Je m’en occupe ».' : 'Changez de filtre pour voir les autres dossiers.', cta: f === 'mine' ? '<button class="btn primary sm" data-act="ui" data-key="dunFilter" data-val="nobody">Voir les dossiers sans responsable</button>' : '' })}</div>`}
     <p class="muted small">Un client absent du prochain export « Clients en incident » passe automatiquement en « Récupéré », avec le canal lu dans la liste Incidents (équipe, client en ligne, prélèvement…). Les notes, responsables et dates restent d’un import à l’autre.</p>`;
 }
+// Message de paiement prêt à envoyer (modifiable dans Réglages), noté dans l'historique.
+const DUN_SMS = 'Bonjour {prenom}, il reste {montant} à régler sur votre abonnement Fitness Park. Vous pouvez payer en ligne depuis votre espace adhérent ou à l’accueil. Merci, l’équipe du club.';
+ACTIONS.dunLink = el => {
+  const c = S.clients[el.dataset.id]; const tpl = (S.clubs[CLUB.id] || {}).dunSms || DUN_SMS;
+  const txt = tpl.replace(/\{prenom\}/g, (c.name || '').split(' ')[0]).replace(/\{montant\}/g, fmtE(Number(c.balance)));
+  const done = () => { db.batch([dunPatch(c, {}, 'Lien de paiement envoyé')]); toast('Message copié : collez-le dans un SMS'); };
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(done, () => { openModal({ title: 'Message de paiement', body: `<textarea class="input" rows="5" readonly>${esc(txt)}</textarea>`, foot: '<button class="btn" data-close>Fermer</button>' }); done(); });
+};
 ACTIONS.dunQ = el => { UI.dunQ = el.value; render(); };
 function dunPatch(c, patch, label) {
   const d = { ...dunOf(c), ...patch };

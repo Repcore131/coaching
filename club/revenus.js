@@ -240,3 +240,22 @@ function palierManque() {
   const s = palierState(CLUB.id, mk, k); if (!s || !s.next) return '';
   return `<span>Il manque ${fmtV(Math.ceil(s.next.target - s.real), S.kpis[k].unit)} ${S.kpis[k].label.toLowerCase()} pour le palier ${s.reached + 1}.</span>`;
 }
+
+// ── Impayés : vitesse de récupération ─────────────────────────────────────
+function dunSpeed(mk) {
+  const r = rangeOf('month', mk); const L = recovList(CLUB.id, r.from, r.to).filter(x => x.incidentDate);
+  const byC = {}; L.forEach(x => { (byC[x.canal] = byC[x.canal] || []).push(Math.max(0, dayDiff(x.incidentDate, x.date))); });
+  const six = recovList(CLUB.id, addMonths(mk, -5) + '-01', r.to).filter(x => x.incidentDate); const tot6 = six.reduce((s, x) => s + x.amount, 0);
+  const curve = [7, 15, 30, 60].map(j => ({ j, p: tot6 ? six.filter(x => dayDiff(x.incidentDate, x.date) <= j).reduce((s, x) => s + x.amount, 0) / tot6 : null }));
+  const mins = Number((S.clubs[CLUB.id] || {}).minutesAppel) || 4;
+  const relances = clubClients(CLUB.id).reduce((n, c) => n + ((dunOf(c).history || []).filter(h => h.at >= dateOf(r.from).getTime() && h.at < dateOf(r.to).getTime() + 864e5 && !/^Statut|^Responsable|^Prise en charge/.test(h.label || '')).length), 0);
+  const team = recovList(CLUB.id, r.from, r.to).filter(x => x.canal === 'equipe').reduce((s, x) => s + x.amount, 0);
+  const heures = relances * mins / 60;
+  return `<div class="card" style="margin-top:14px"><h3>Vitesse de récupération</h3>
+    ${L.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Canal</th><th class="num">Régularisations</th><th class="num">Délai médian</th></tr></thead><tbody>${Object.entries(byC).map(([k, d]) => `<tr><td>${esc((RECOV_CHANNELS[k] || {}).label || k)}</td><td class="num">${d.length}</td><td class="num">${plur(Math.round(median(d.map(x => x || 0.5)) || 0), 'jour', 'jours')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Délai inconnu : réimportez la liste Incidents (la date de l’incident est maintenant gardée).</p>'}
+    <div class="row wrap" style="gap:10px;margin-top:12px">${curve.map(x => `<div class="stat"><span>Récupéré à J+${x.j}</span><b>${fmtP(x.p)}</b><small>des euros, 6 derniers mois</small></div>`).join('')}</div>
+    <p class="small" style="margin:12px 0 4px">${relances ? `1 relance = <b>${fmtE(team / relances)}</b> récupérés en moyenne · <b>${fmtE(heures ? team / heures : 0)}</b> par heure d’appel` : 'Aucune relance notée ce mois-ci.'}</p>
+    <label class="row small" style="gap:8px">Minutes par appel <input class="input sm" style="width:70px" type="number" min="1" max="30" value="${mins}" data-change="minutesAppel" ${isManager() ? '' : 'disabled'}></label></div>`;
+}
+ACTIONS.minutesAppel = el => { const v = Math.max(1, Math.min(30, Number(el.value) || 4)); db.set(['clubs', CLUB.id, 'minutesAppel'], v); };
+ACTIONS.dunSmsSet = el => { db.set(['clubs', CLUB.id, 'dunSms'], el.value.trim() || null); toast('Message enregistré'); };

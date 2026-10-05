@@ -316,7 +316,7 @@ const impayesAnalyse = {
       <div class="card" style="margin-top:14px"><h3>Contrôles</h3><div class="small" style="display:grid;gap:6px;margin-top:8px">
         <div>Client en ligne (Incidents) : <b>${fmtE(by.client.v)}</b> · Transactions Web avec Recouvrement = 1 : <b>${web ? fmtE(web) : 'non importé'}</b>${web ? (Math.abs(web - by.client.v) <= Math.max(5, web * 0.05) ? ' <span class="badge ok">concordant</span>' : ' <span class="badge warn">écart</span>') : ''}</div>
         <div>Comparez le total avec Resamania : Tableaux de bord > Vos prélèvements > graphique <b>Recouvrements</b> (barre du mois). La tuile « Total des montants recouverts » est un cumul depuis le démarrage : ne pas l’utiliser pour un mois.</div>
-        <div class="muted">Le montant compté est celui du paiement rejeté régularisé (pas forcément l’encaissement si le client a payé en plusieurs fois). Les incidents clos par avoir ne sont pas de l’argent encaissé : ils sont exclus.</div></div></div>`;
+        <div class="muted">Le montant compté est celui du paiement rejeté régularisé (pas forcément l’encaissement si le client a payé en plusieurs fois). Les incidents clos par avoir ne sont pas de l’argent encaissé : ils sont exclus.</div></div></div>${dunSpeed(mk)}`;
   },
 };
 ACTIONS.loyImpaye = () => { UI.loyType = 'impaye'; UI.loyTab = 'tasks'; location.hash = '#/loyalty'; };

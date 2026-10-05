@@ -197,7 +197,7 @@ function dashObjectives(st, r, subject, who) {
     </div>
   </div>
   ${tips ? `<div class="alert info" style="margin-bottom:14px">${ico('grip')}<div class="spacer">Astuce : réorganisez les cartes par glisser-déposer (poignée en haut à droite).</div><button class="btn ghost sm" data-act="closeTip">${ico('x')}</button></div>` : ''}
-  <div class="kpi-grid" id="kpi-grid">${rows.map(x => kpiCard(x, exp)).join('')}</div>`;
+  <div class="kpi-grid" id="kpi-grid">${rows.map(x => kpiCard({ ...x, uid: who, range: r }, exp)).join('')}</div>`;
 }
 ACTIONS.closeTip = () => setPref('tipDrag', false);
 function kpiCard(x, exp) {
@@ -208,7 +208,12 @@ function kpiCard(x, exp) {
     <div class="row" style="align-items:flex-end;margin-top:8px"><div class="val">${fmtV(real, k.unit)} <small>/ ${fmtV(target, k.unit)}</small></div><span class="spacer"></span><b class="${status.cls} t-18">${fmtP(pct)}</b></div>
     <div style="margin-top:10px">${progressBar(pct, { pace: exp })}</div>
     <div class="tierlbl"><span>${fmtN(earned)} / ${fmtN(target ? k.points : 0)} pts</span><span class="${status.cls}">${status.label}</span></div>
-    <div class="kpi-msg">${esc(paceMessage(x, exp))}</div></div>`;
+    <div class="kpi-msg">${esc(paceMessage(x, exp))}</div>${k.id === 'sauvetage' && real > 0 ? `<div class="small muted">soit ${fmtE(sauvValeur(x.uid, x.range))} de valeur gardée</div>` : ''}</div>`;
+}
+// Valeur gardée par les sauvetages d'une période (mensualités x mois restants).
+function sauvValeur(uid, r) {
+  if (!r || typeof valeurEnJeu !== 'function') return 0;
+  return resList(CLUB.id).filter(d => resStatus(d) === 'sauvee' && (!uid || d.ownerId === uid)).filter(d => { const e = S.entries['sv_' + d.id]; const dt = (e && e.date) || d.date; return dt >= r.from && dt <= r.to; }).reduce((s, d) => s + (Number(d.enJeu) || valeurEnJeu(d).euros), 0);
 }
 function bindKpiDrag() {
   const grid = $('#kpi-grid'); if (!grid) return;

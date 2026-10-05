@@ -934,3 +934,15 @@ td.to-check { background: var(--warn-soft); }
 .fn-row small { color: var(--muted); text-align: right; }
 @media (max-width: 640px) { .opp-eur { text-align: left; } .opp-act { width: 100%; } .fn-row { grid-template-columns: 90px 1fr 36px 40px; } }
 @media (max-width: 640px) { .opp-row > .spacer { min-width: 0; flex: 1 1 0; } .opp-eur { text-align: right; min-width: 64px; } .opp-eur b { font-size: var(--t-16); } }
+/* Impayés par âge, résiliations en euros */
+.age-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.age-tile { border-radius: var(--radius); padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); display: grid; gap: 2px; }
+.age-tile span { font-size: var(--t-11); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.age-tile b { font-family: var(--font-title); font-size: var(--t-24); }
+.age-tile small { color: var(--muted); font-size: var(--t-11); }
+.age-1 { border-left-color: var(--ok); } .age-2 { border-left-color: var(--fp); } .age-3 { border-left-color: var(--warn); } .age-4 { border-left-color: var(--bad); }
+.age-b { display: inline-block; padding: 2px 8px; border-radius: 99px; font-weight: 700; font-size: var(--t-11); background: var(--surface-2); }
+.age-b.age-1 { background: var(--ok-soft); color: var(--ok); } .age-b.age-2 { background: var(--fp-soft); } .age-b.age-3 { background: var(--warn-soft); color: var(--warn); } .age-b.age-4 { background: var(--bad-soft); color: var(--bad); }
+.res-val { margin-top: 8px; font-size: var(--t-13); }
+@media (max-width: 760px) { .age-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.table-wrap.sheet td:first-child { min-width: 170px; }

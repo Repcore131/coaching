@@ -487,6 +487,8 @@ function demoState() {
   st.meta.demo = true;
   // Revenus : prix, numéros, prospects, invités, anciens membres, entreprises.
   const PRIX = { Basic: 24.99, Premium: 29.99, Ultimate: 39.99 };
+  [['rc1', 'Marc Henry', 'Basic', 40], ['rc2', 'Julie Perrin', 'Ultimate', 240], ['rc3', 'Paul Noël', 'Premium', 90]].forEach(([id, name, offer, d], i) => { st.clients[id] = { id, clubId: 'niort', num: String(700100 + i), name, offer, price: PRIX[offer], status: 'Client', start: addDays(today(), -300), end: addDays(today(), d), phone: '+3361' + String(4000000 + i * 919).slice(0, 7) }; });
+  Object.values(st.recov).forEach((x, i) => { x.incidentDate = addDays(x.date, -[3, 6, 9, 14, 21, 35, 50][i % 7]); });
   const sellers = ['u2', 'u3', 'u4', 'u5', 'u6'];
   Object.values(st.clients).forEach((c, i) => { c.num = String(100200 + i); c.price = PRIX[c.offer] || 29.99; c.status = 'Client'; c.sellerId = sellers[i % sellers.length]; if (c.balance > 0) { c.balanceAt = addDays(today(), -[3, 12, 40, 75][i % 4]); c.oldestIncident = c.balanceAt; } });
   const cl = Object.values(st.clients).filter(c => c.clubId === 'niort');

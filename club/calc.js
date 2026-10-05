@@ -371,7 +371,7 @@ function loyaltyTasks(clubId) {
       if (c.status && /ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status))) continue;
       const cand = [];
       if (c.start) { const age = (dateOf(t) - dateOf(c.start)) / 86400000; if (age >= 13 && age <= 45) cand.push({ type: 'suivi', due: addDays(c.start, age < 30 ? 15 : 30), since: c.start }); }
-      if (c.end && c.end >= t && c.end <= addDays(t, 30)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -30) });
+      if (c.end && c.end >= t && c.end <= addDays(t, 45)) cand.push({ type: 'renouvellement', due: c.end, since: addDays(c.end, -45), amount: typeof mensualite === 'function' ? Math.round(mensualite(c) * dureeVieMois(clubId)) : 0 });
       if (c.birth) {
         const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(5)}`;
         if (bd <= addDays(t, 7)) cand.push({ type: 'anniversaire', due: bd, since: addDays(bd, -7) });
