@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — liaison Resamania ════════════════════════════════════════
+// ══ FIT PULSE — liaison Resamania ════════════════════════════════════════
 //
 // D'apres l'audit Resamania du 05/10/2026. Deux familles d'exports :
 //  - les LISTES (menus Clients, Donnees financieres) : CSV UTF-8, « ; »,
@@ -288,7 +288,7 @@ const RSM_DEFS = [
     parse(c) {
       const iD = c.find(h => h === 'date creation' || h === 'date de creation') >= 0 ? c.find(h => h === 'date creation' || h === 'date de creation') : c.find(h => h === 'date' || h.startsWith('date'));
       const iE = c.find(h => h === 'etat' || h === 'statut'), iCr = c.col('createur'), iT = c.colExact('type'), iM = c.col('motif'), iCt = c.find(h => h === 'contact' || h === 'nom de l abonnement');
-      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom');
+      const iCN = c.find(h => h === 'nom'), iCP = c.find(h => h === 'prenom'), iEff = c.find(h => h === 'date resiliation' || h === 'date effective' || h === 'date de resiliation');
       let tech = 0;
       for (const r of c.rows) {
         const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
@@ -296,8 +296,7 @@ const RSM_DEFS = [
         const etat = norm(r[iE]); const saved = /cancel|annul/.test(etat); if (/reject|rejet/.test(etat)) { c.skip('demande rejetée'); continue; }
         const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
         const seller = resolveSeller(r[iCr]);
-        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, client, date: d, reason: motif, type: r[iT] || '', saved, seller });
-        if (saved) c.entry({ key: `sv:${tokensKey(client)}:${d}`, kpiId: 'sauvetage', date: d, value: 1, seller });
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, seller });
       }
       if (tech) c.warn(`${tech} résiliation(s) technique(s) écartée(s) : elles gonfleraient le churn.`);
     },

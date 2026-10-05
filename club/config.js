@@ -1,4 +1,4 @@
-// ══ CONFIGURATION PARK PULSE ══════════════════════════════════════════════
+// ══ CONFIGURATION FIT PULSE ══════════════════════════════════════════════
 //
 // MODE LOCAL (par defaut, PARKPULSE_FIREBASE = null) : les donnees vivent dans
 // le navigateur qui ouvre la page. Parfait pour essayer, mais chaque appareil

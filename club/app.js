@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — demarrage ════════════════════════════════════════════════
+// ══ FIT PULSE — demarrage ════════════════════════════════════════════════
 (async function boot() {
   const theme = safeLS.get('parkpulse.theme');
   if (theme) document.documentElement.dataset.theme = theme;

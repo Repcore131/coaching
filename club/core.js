@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — socle : outils, stockage, donnees de depart ══════════════
+// ══ FIT PULSE — socle : outils, stockage, donnees de depart ══════════════
 //
 // Toutes les donnees tiennent dans un seul objet S, range par collections
 // (objets indexes par identifiant, jamais de tableaux : une ecriture vise
@@ -7,7 +7,7 @@
 // Rien ne sort de nos clubs : il n'existe ni reseau, ni classement inter-
 // enseignes, ni fil partage avec l'exterieur.
 
-const APP = { name: 'Park Pulse', tagline: 'Pilotage commercial de nos clubs Fitness Park' };
+const APP = { name: 'Fit Pulse', tagline: 'Pilotage commercial de nos clubs Fitness Park' };
 
 // ── Outils ─────────────────────────────────────────────────────────────────
 const $ = (s, r = document) => r.querySelector(s);
@@ -118,7 +118,7 @@ const DEFAULT_TASKS = [
   ['Réputation', ['Réponse aux avis Google', 'Réponse aux avis Wizville', 'Demande d’avis aux adhérents satisfaits']],
   ['Boutique', ['Mise en avant boutique nutrition', 'Inventaire accessoires', 'Réassort frigo']],
   ['Communication', ['Story Instagram', 'Post Facebook du club', 'Affichage planning cours']],
-  ['Clôture', ['Validation de caisse', 'Saisie des KPI du jour dans Park Pulse', 'Point équipe de fin de journée', 'Fermeture et alarme']],
+  ['Clôture', ['Validation de caisse', 'Saisie des KPI du jour dans Fit Pulse', 'Point équipe de fin de journée', 'Fermeture et alarme']],
 ];
 
 const LEVELS = [
@@ -135,7 +135,7 @@ function emptyState() {
     clubs: {}, users: {}, kpis: JSON.parse(JSON.stringify(DEFAULT_KPIS)),
     targets: {}, entries: {}, imports: {}, monthly: {}, base: {},
     clients: {}, loyalty: {}, resiliations: {}, challenges: {}, chat: {}, reactions: {},
-    recov: {}, rsm: { aliases: {}, controls: {}, routine: {} },
+    recov: {}, rsm: { aliases: {}, controls: {}, routine: {} }, paliers: {},
     tasks: { library: defaultLibrary(), plan: {}, done: {} },
     prefs: {}, team: {},
   };
@@ -339,8 +339,18 @@ function demoState() {
   // Quelques relances deja faites
   ['c1', 'c2', 'c5'].forEach((c, i) => { st.loyalty['l' + i] = { id: 'l' + i, clientId: c, type: 'suivi', userId: ['u3', 'u4', 'u2'][i], outcome: i === 1 ? 'noanswer' : 'ok', note: '', at: Date.now() - (i + 1) * 86400000 }; });
 
-  st.resiliations.r1 = { id: 'r1', clubId: 'niort', client: 'Marc Henry', date: addDays(today(), -4), reason: 'Déménagement', saved: false, userId: 'u2', at: Date.now() - 4 * 86400000 };
-  st.resiliations.r2 = { id: 'r2', clubId: 'niort', client: 'Julie Perrin', date: addDays(today(), -2), reason: 'Prix', saved: true, userId: 'u3', at: Date.now() - 2 * 86400000 };
+  // Résiliations : un circuit en cours (nouvelles, en traitement, sauvée, résiliée)
+  [['r1', 'Marc Henry', -4, 9, 'Déménagement', 'nouvelle', null],
+   ['r2', 'Julie Perrin', -2, 26, 'Prix', 'traitement', 'u3'],
+   ['r3', 'Paul Noël', -9, 4, 'Manque de temps', 'traitement', 'u2'],
+   ['r4', 'Sophie Lambert', -1, 30, 'Santé', 'nouvelle', null],
+   ['r5', 'Karim Benali', -12, 18, 'Prix', 'sauvee', 'u4'],
+   ['r6', 'Claire Fontaine', -15, -2, 'Concurrence', 'resiliee', 'u5']].forEach(([id, client, ago, eff, reason, status, owner]) => {
+    const at = Date.now() + ago * 86400000;
+    st.resiliations[id] = { id, clubId: 'niort', client, date: addDays(today(), ago), effective: addDays(today(), eff), reason, status, saved: status === 'sauvee', ownerId: owner, userId: owner, at,
+      actions: [{ at, by: 'u2', label: 'Demande enregistrée' }, ...(owner ? [{ at: at + 86400000, by: owner, label: status === 'sauvee' ? 'Offre proposée · Suspension' : 'Message laissé', note: status === 'traitement' ? 'Rappeler en fin de semaine' : '' }] : []), ...(status === 'sauvee' ? [{ at: at + 2 * 86400000, by: owner, label: 'Client sauvé 🛟' }] : [])] };
+    if (status === 'sauvee') st.entries['sv_' + id] = { id: 'sv_' + id, userId: owner, clubId: 'niort', kpiId: 'sauvetage', date: addDays(today(), ago + 2), value: 1, source: 'manual', at: at + 2 * 86400000 };
+  });
 
   st.chat.m1 = { id: 'm1', channel: 'niort', userId: 'u2', text: 'Bravo à toute l’équipe pour le mois dernier 💪 On garde le rythme sur les contrats !', at: Date.now() - 2 * 86400000 };
   st.chat.m2 = { id: 'm2', channel: 'niort', userId: 'u3', text: 'Je m’occupe des relances anniversaires cette semaine.', at: Date.now() - 86400000, parentId: 'm1' };
@@ -360,6 +370,11 @@ function demoState() {
       for (let i = 0; i < Math.round(n * days / daysIn(mk)); i++) { const id = 'v' + (++rv); st.recov[id] = { id, clubId: 'niort', date: `${mk}-${pad(1 + Math.floor(R() * days))}`, amount: Math.round(avg * (0.5 + R()) * 100) / 100, canal, userId: null, type: 'Prélèvements rejetés', at: Date.now() }; }
     });
   });
+  // Impayés : quelques dossiers déjà pris en charge
+  Object.values(st.clients).filter(c => c.balance > 0).forEach((c, i) => { c.num = String(10000 + i); c.balanceAt = addDays(today(), -3 - i * 4); c.incidents = 1 + (i % 2); if (i % 3 === 1) c.dunning = { status: 'relance', ownerId: ['u3', 'u4', 'u5'].at(i % 3), next: addDays(today(), i % 2 ? 0 : 3), note: i % 2 ? 'CB expirée, rappel prévu' : '' }; if (i % 3 === 2) c.dunning = { status: 'promesse', ownerId: 'u2', next: addDays(today(), 5), note: 'Paiera le 15' }; });
+  st.clients.c41 = { ...(st.clients.c41 || { id: 'c41', clubId: 'niort', name: 'Hugo Martin' }), clubId: 'niort', balance: 0, dunning: { status: 'recupere', recoveredAt: addDays(today(), -2), amount: 59.9, canal: 'equipe', by: 'u3' } };
+  // Paliers collectifs du mois (prime d'équipe)
+  st.paliers = { niort: { [cm]: { contrats: [{ target: 90, reward: 'Prime 50 € chacun' }, { target: 100, reward: 'Prime 100 € chacun' }, { target: 115, reward: 'Prime 150 € + resto d’équipe' }], avis: [{ target: 80, reward: 'Petit-déj d’équipe' }, { target: 100, reward: 'Prime 30 € chacun' }] } } };
   st.rsm.aliases = { 'c:HLEF': 'u2', 'c:IMOR': 'u3', 'c:LPET': 'u4', 'c:SGAR': 'u5', 'c:CROU': 'u1' };
   st.meta.demo = true;
   return st;

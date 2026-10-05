@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — centre Resamania, impayés par canal, correspondances ═════
+// ══ FIT PULSE — centre Resamania, impayés par canal, correspondances ═════
 
 // ── Routines d'export (audit du 05/10/2026) ───────────────────────────────
 const ROUTINE_WEEK = [
@@ -50,7 +50,7 @@ function impRsm() {
       <div class="card"><div class="card-head">${ico('cal')}<h3>Le 2 de chaque mois</h3><span class="spacer"></span><span class="badge ${cnt(ROUTINE_MONTH, mo) === ROUTINE_MONTH.length ? 'ok' : 'warn'}">${cnt(ROUTINE_MONTH, mo)}/${ROUTINE_MONTH.length} ce mois-ci</span></div>
         <p class="muted small" style="margin-top:-6px">Pour le mois clos. Les exports marqués (S) dans Resamania demandent un code reçu par e-mail.</p>${ROUTINE_MONTH.map(x => item(x, mo)).join('')}</div></div>
     <div class="card"><h3>Où trouver quoi dans Resamania</h3><p class="muted small">Une seule source de vérité par KPI : on n’additionne jamais deux exports pour le même chiffre.</p>
-      <div class="table-wrap"><table class="t"><thead><tr><th>KPI Park Pulse</th><th>Source Resamania</th><th>Rattachement au commercial</th></tr></thead><tbody>
+      <div class="table-wrap"><table class="t"><thead><tr><th>KPI Fit Pulse</th><th>Source Resamania</th><th>Rattachement au commercial</th></tr></thead><tbody>
       ${[['Contrats signés', 'Exports de gestion > Membres & Ventes > Vente d’abonnements', 'Commercial initial (code KGUE, AREA…)'],
          ['Nutrition', 'Exports de gestion > Finance > Factures & avoirs (DetailLignes) — ou liste Lignes de factures', 'Auteur / Vendeur'],
          ['Accessoires', 'Idem, codes produit FPARK / NO_FPARK', 'Auteur / Vendeur'],
@@ -176,7 +176,10 @@ ACTIONS.rsmCommit = () => {
       const listed = new Set();
       r.balances.list.forEach(b => { const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: (pendingClients[c0.id] || c0).balance === b.amount ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
       // photo complete : un client absent du fichier n'a plus d'impaye
-      if (r.balances.src === 'clients-incident' || r.balances.list.length) Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => upClient(c, { balance: 0, incidents: 0 }));
+      if (r.balances.src === 'clients-incident' || r.balances.list.length) Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
+        const rv = lastRecov(club, c.num, B);
+        upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: 'recupere', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
+      });
     }
     if (r.noMandate) {
       const listed = new Set();
@@ -185,7 +188,12 @@ ACTIONS.rsmCommit = () => {
     }
     for (const x of r.resil) {
       const id = 'rs' + hkey(club + '|' + x.key);
-      ops.push([['resiliations', id], { id, clubId: club, client: x.client, date: x.date, reason: x.reason, type: x.type, saved: x.saved, userId: pick(x.seller), importId: impId, source: 'resamania', at: now }]);
+      const old = S.resiliations[id];
+      const owner = old && old.ownerId ? old.ownerId : pick(x.seller);
+      // le suivi fait dans Fit Pulse (statut, responsable, actions) n'est jamais ecrase
+      const status = x.saved ? 'sauvee' : old && old.status ? old.status : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee';
+      ops.push([['resiliations', id], { ...(old || {}), id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
+      if (status === 'sauvee' && owner && !S.entries['sv_' + id]) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now }]);
       summary.resil++;
     }
     // controles
@@ -206,12 +214,12 @@ ACTIONS.rsmCommit = () => {
 };
 function rsmDoneCard() {
   const s = UI.rsmDone; const mk = addMonths(curMonth(), -1);
-  // controle : contrats Park Pulse vs Page 1 des performances commerciales
+  // controle : contrats Fit Pulse vs Page 1 des performances commerciales
   const perf = deepGet(ctrl(), ['perf', mk]); const ppC = sumRange(CLUB.id, null, 'contrats', mk + '-01', `${mk}-${daysIn(mk)}`);
   const perfTot = perf ? Object.values(perf).reduce((a, b) => a + Number(b || 0), 0) : null;
   return `<div class="card" style="margin-bottom:14px;border-color:var(--ok)"><div class="card-head">${ico('check')}<h3>Import terminé</h3><span class="spacer"></span><button class="btn ghost sm" data-act="ui" data-key="rsmDone" data-val="">${ico('x')}</button></div>
     <div class="row wrap" style="gap:22px"><div><div class="muted small">Fichiers</div><b class="title" style="font-size:22px">${s.files}</b></div><div><div class="muted small">Saisies créées</div><b class="title" style="font-size:22px">${s.entries}</b></div><div><div class="muted small">Déjà connues (mises à jour, pas de doublon)</div><b class="title" style="font-size:22px">${s.updated}</b></div><div><div class="muted small">Régularisations d’impayés</div><b class="title" style="font-size:22px">${s.recov}</b></div><div><div class="muted small">Fiches clients</div><b class="title" style="font-size:22px">${s.clients}</b></div><div><div class="muted small">Résiliations</div><b class="title" style="font-size:22px">${s.resil}</b></div></div>
-    ${perfTot != null ? `<div class="alert ${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'info' : ''}" style="margin-top:12px">${ico('target')}<div><b>Contrôle ${monthLabel(mk)} : ${fmtN(ppC)} contrats dans Park Pulse, ${fmtN(perfTot)} dans les performances commerciales Resamania</b>${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'Les deux sources concordent.' : 'Écart à vérifier : vente d’abonnements incomplète, ou changements d’offre comptés d’un côté seulement.'}</div></div>` : ''}
+    ${perfTot != null ? `<div class="alert ${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'info' : ''}" style="margin-top:12px">${ico('target')}<div><b>Contrôle ${monthLabel(mk)} : ${fmtN(ppC)} contrats dans Fit Pulse, ${fmtN(perfTot)} dans les performances commerciales Resamania</b>${Math.abs(perfTot - ppC) <= Math.max(1, perfTot * 0.03) ? 'Les deux sources concordent.' : 'Écart à vérifier : vente d’abonnements incomplète, ou changements d’offre comptés d’un côté seulement.'}</div></div>` : ''}
     ${s.recov ? `<div style="margin-top:12px"><a class="btn sm primary" href="#/impayes">Voir les impayés par canal ${ico('chevR')}</a></div>` : ''}</div>`;
 }
 
@@ -219,9 +227,7 @@ function rsmDoneCard() {
 function recovList(clubId, from, to) {
   return Object.values(S.recov || {}).filter(x => x.clubId === clubId && x.date >= from && x.date <= to && x.canal !== 'annule' && !(x.importId && S.imports[x.importId] && S.imports[x.importId].active === false));
 }
-PAGES.impayes = {
-  title: 'Impayés',
-  manager: true,
+const impayesAnalyse = {
   render() {
     const mk = UI.impMonth || curMonth();
     const r = rangeOf('month', mk);
@@ -238,7 +244,7 @@ PAGES.impayes = {
     const mt = months.map(m => { const L = recovList(CLUB.id, m + '-01', `${m}-${daysIn(m)}`); const o = {}; L.forEach(x => { o[x.canal] = (o[x.canal] || 0) + x.amount; }); return { m, o, t: L.reduce((s, x) => s + x.amount, 0) }; });
     const max = Math.max(1, ...mt.map(x => x.t));
     const empty = !Object.keys(S.recov || {}).some(id => S.recov[id].clubId === CLUB.id);
-    return `<div class="page-head"><div><h1>Impayés récupérés</h1><p>Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). ${esc(CLUB.name)}</p></div><span class="spacer"></span>${monthNav('impMonth', mk)}</div>
+    return `<div class="row wrap" style="margin-bottom:14px"><p class="muted spacer" style="margin:0">Tous les canaux, d’après la liste Incidents de Resamania (Auteur de la régularisation). ${esc(CLUB.name)}</p>${monthNav('impMonth', mk)}</div>
       ${empty ? `<div class="alert info" style="margin-bottom:14px">${ico('info')}<div><b>Aucune régularisation importée</b>Dans Resamania : Données financières > Incidents > FILTRER (Statut = Régularisé, Date de régularisation = le mois, Club) > ⋮ > Exporter. Déposez le fichier dans Imports > Resamania.</div></div>` : ''}
       <div class="grid" style="grid-template-columns:1.2fr 1fr;margin-bottom:14px">
         <div class="card hero" style="grid-template-columns:1fr"><div><div class="muted small">Récupéré en ${monthLabel(mk)}, tous canaux</div><div class="big">${fmtE(total)}</div>
@@ -280,3 +286,11 @@ ACTIONS.aliasAdd = () => {
   db.set(['rsm', 'aliases', safeKey(key)], f.u); toast('Correspondance ajoutée.');
 };
 ACTIONS.aliasDel = el => db.set(['rsm', 'aliases', el.dataset.k], null);
+
+// derniere regularisation connue d'un client (lot en cours d'abord, puis base)
+function lastRecov(club, num, batch) {
+  if (!num) return null;
+  const fromBatch = batch.flatMap(r => r.recov).filter(x => x.clientNum === num && x.canal !== 'annule').map(x => ({ date: x.date, canal: x.canal, userId: x.seller && x.seller.status === 'user' ? x.seller.userId : null }));
+  const fromBase = Object.values(S.recov || {}).filter(x => x.clubId === club && x.clientNum === num && x.canal !== 'annule');
+  return [...fromBatch, ...fromBase].sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] || null;
+}

@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — calculs ══════════════════════════════════════════════════
+// ══ FIT PULSE — calculs ══════════════════════════════════════════════════
 //
 // REGLES (affichees telles quelles dans l'aide de l'app) :
 //  - % d'un KPI = realise / objectif de la periode.

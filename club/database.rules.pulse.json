@@ -1,5 +1,5 @@
 {
-  "//": "REGLES DU MODE PARTAGE DE PARK PULSE. Toute la base vit sous /pulse. Une adresse n'y entre que si un manager l'a ajoutee a l'equipe (/pulse/team/<email avec les points remplaces par des virgules>). Aucun autre club, aucun editeur tiers. Le tout premier compte (base vide) peut creer le club.",
+  "//": "REGLES DU MODE PARTAGE DE FIT PULSE. Toute la base vit sous /pulse. Une adresse n'y entre que si un manager l'a ajoutee a l'equipe (/pulse/team/<email avec les points remplaces par des virgules>). Aucun autre club, aucun editeur tiers. Le tout premier compte (base vide) peut creer le club.",
   "rules": {
     "pulse": {
       ".read": "auth != null && (root.child('pulse/team').child(auth.token.email.replace('.', ',')).val() === true)",

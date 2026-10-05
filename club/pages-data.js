@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — imports Resamania, retention, resiliations, clubs ════════
+// ══ FIT PULSE — imports Resamania, retention, resiliations, clubs ════════
 
 // ── Lecture CSV / TSV ─────────────────────────────────────────────────────
 function parseCSV(text) {
@@ -53,7 +53,7 @@ PAGES.imports = {
   render() {
     const tab = UI.impTab || 'rsm';
     const body = { rsm: impRsm, new: impNew, history: impHistory, manual: impManual }[tab]();
-    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Park Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div></div>
+    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div></div>
       ${tabs('impTab', [['rsm', 'Resamania'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
@@ -250,7 +250,7 @@ ACTIONS.impDetail = el => {
 };
 
 // Saisie manuelle : l'historique mensuel du club, pour la comparaison
-// annuelle (utile pour les mois d'avant Park Pulse).
+// annuelle (utile pour les mois d'avant Fit Pulse).
 const MANUAL_FIELDS = [['contrats', 'Contrats signés', 'qty'], ['visiteurs', 'Visiteurs', 'qty'], ['complements', 'Compléments (nutrition) €', 'eur'], ['goodies', 'Goodies (accessoires) €', 'eur'], ['impayes', 'Impayés récupérés €', 'eur'], ['caPack', 'CA Pack €', 'eur']];
 function impManual() {
   const y = Number(UI.manYear || curMonth().slice(0, 4));
@@ -341,44 +341,6 @@ ACTIONS.addClient = () => openModal({ title: 'Ajouter un client', body: `<form i
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="saveClient">Ajouter</button>' });
 ACTIONS.saveClient = () => { const f = formData($('#cf')); if (!f.name.trim()) return; const id = newId(); db.set(['clients', id], { id, clubId: CLUB.id, name: f.name.trim(), phone: f.phone, email: f.email, birth: f.birth || null, start: f.start || null, end: f.end || null, balance: toNum(f.balance), balanceAt: today() }); closeModal(); toast('Client ajouté.'); };
 
-// ── Resiliations ──────────────────────────────────────────────────────────
-PAGES.resiliations = {
-  title: 'Résiliations',
-  render() {
-    const mk = UI.resMonth || curMonth();
-    const list = Object.values(S.resiliations).filter(r => r.clubId === CLUB.id && !r.hidden && r.date.slice(0, 7) === mk).sort((a, b) => b.date.localeCompare(a.date));
-    const saved = list.filter(r => r.saved).length;
-    const reasons = {}; list.forEach(r => { const k = r.reason || 'Non renseigné'; reasons[k] = (reasons[k] || 0) + 1; });
-    return `<div class="page-head"><div><h1>Résiliations</h1><p>Suivi des demandes et des sauvetages · ${esc(CLUB.name)}</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle résiliation</button></div>
-      <div class="row wrap" style="margin-bottom:14px">${monthNav('resMonth', mk)}</div>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:14px">
-        <div class="card"><div class="muted small">Demandes</div><div class="title" style="font-size:32px">${list.length}</div></div>
-        <div class="card"><div class="muted small">Sauvetages</div><div class="title ok" style="font-size:32px">${saved}</div><div class="muted small">comptés dans le KPI « Sauvetage résiliations »</div></div>
-        <div class="card"><div class="muted small">Taux de sauvetage</div><div class="title" style="font-size:32px">${fmtP(list.length ? saved / list.length : null)}</div></div>
-        <div class="card"><div class="muted small">Motifs</div>${Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="row small"><span class="spacer">${esc(k)}</span><b>${v}</b></div>`).join('') || '<span class="muted small">—</span>'}</div></div>
-      ${list.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Date</th><th>Client</th><th>Motif</th><th>Suivi par</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(r => `<tr><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || '—')}</td><td>${r.userId ? esc(fullName(S.users[r.userId])) : '<span class="muted">—</span>'}</td>
-        <td>${r.saved ? '<span class="badge ok">Sauvé 🛟</span>' : '<span class="badge bad">Résilié</span>'}</td><td class="nowrap">${r.saved ? '' : `<button class="btn sm" data-act="resSave" data-id="${r.id}">Marquer sauvé</button>`}${isManager() ? `<button class="btn ghost icon sm" data-act="resDel" data-id="${r.id}" title="Supprimer">${ico('trash')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
-        : '<div class="card empty"><div class="title">Aucune résiliation ce mois-ci</div><p>Saisissez-les ici ou importez l’export Résiliations de Resamania.</p></div>'}`;
-  },
-};
-const RES_REASONS = ['Prix', 'Déménagement', 'Santé', 'Manque de temps', 'Insatisfaction', 'Concurrence', 'Autre'];
-ACTIONS.resNew = () => openModal({ title: 'Nouvelle résiliation', body: `<form id="rf" class="form-grid"><label class="field full"><span>Client</span><input class="input" name="client" required></label><label class="field"><span>Date</span><input class="input" type="date" name="date" value="${today()}"></label><label class="field"><span>Motif</span><select class="input" name="reason">${RES_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label><label class="row full small"><input type="checkbox" name="saved"> Client sauvé (le sauvetage compte pour vous)</label></form>`,
-  foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="resCreate">Enregistrer</button>' });
-ACTIONS.resCreate = () => {
-  const f = formData($('#rf')); if (!f.client.trim()) { toast('Nom du client obligatoire.'); return; }
-  const id = newId(); const ops = [[['resiliations', id], { id, clubId: CLUB.id, client: f.client.trim(), date: f.date || today(), reason: f.reason, saved: !!f.saved, userId: ME.id, at: Date.now() }]];
-  if (f.saved) ops.push(...sauvetageOps(id, ME.id, f.date || today()));
-  db.batch(ops); closeModal(); toast('Résiliation enregistrée.');
-};
-function sauvetageOps(resId, userId, date) { const eid = 'sv_' + resId; return [[['entries', eid], { id: eid, userId, clubId: CLUB.id, kpiId: 'sauvetage', date, value: 1, source: 'manual', at: Date.now(), by: ME.id }]]; }
-ACTIONS.resSave = el => { const r = S.resiliations[el.dataset.id]; db.batch([[['resiliations', r.id, 'saved'], true], [['resiliations', r.id, 'userId'], ME.id], ...sauvetageOps(r.id, ME.id, today())]); toast('Sauvetage enregistré 🛟'); };
-ACTIONS.resDel = async el => { if (await confirmDlg('Supprimer cette résiliation ?', { ok: 'Supprimer', danger: true })) db.batch([[['resiliations', el.dataset.id], null], [['entries', 'sv_' + el.dataset.id], null]]); };
-ACTIONS.resExport = () => {
-  const list = Object.values(S.resiliations).filter(r => r.clubId === CLUB.id && !r.hidden).sort((a, b) => a.date.localeCompare(b.date));
-  const csv = ['Date;Client;Motif;Statut;Suivi par', ...list.map(r => [dmy(r.date), r.client, r.reason || '', r.saved ? 'Sauvé' : 'Résilié', r.userId ? fullName(S.users[r.userId]) : ''].map(x => `"${String(x).replace(/"/g, '""')}"`).join(';'))].join('\n');
-  downloadFile(`resiliations-${norm(CLUB.name).replace(/ /g, '-')}.csv`, '﻿' + csv, 'text/csv');
-};
-
 // ── Mes clubs ─────────────────────────────────────────────────────────────
 PAGES.clubs = {
   title: 'Mes clubs',
@@ -427,7 +389,7 @@ function clubSettings() {
       <div class="table-wrap"><table class="t"><thead><tr><th>Actif</th><th>KPI</th><th>Unité</th><th class="num">Points</th><th>👑 Obligatoire</th><th>Ordre</th></tr></thead><tbody>
       ${Object.values(S.kpis).sort((a, b) => a.order - b.order).map(k => `<tr><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="enabled" ${k.enabled ? 'checked' : ''}></td><td><input class="input sm" style="width:200px" value="${esc(k.label)}" data-change="kpiSet" data-id="${k.id}" data-k="label"></td><td>${k.unit === 'eur' ? '€' : 'Quantité'}</td><td class="num"><input class="cell" type="number" min="0" step="50" value="${k.points}" data-change="kpiSet" data-id="${k.id}" data-k="points"></td><td><input type="checkbox" data-change="kpiSet" data-id="${k.id}" data-k="required" ${k.required ? 'checked' : ''}></td><td><input class="cell" style="width:50px" type="number" value="${k.order}" data-change="kpiSet" data-id="${k.id}" data-k="order"></td></tr>`).join('')}</tbody></table></div>
       <button class="btn sm" style="margin-top:10px" data-act="kpiNew">${ico('plus')} Ajouter un KPI</button></div>
-    <div class="card"><h3>Confidentialité</h3><p class="small">Park Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En mode partagé, seules les adresses de l’équipe (Membres) peuvent lire la base, grâce aux règles Firebase.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>
+    <div class="card"><h3>Confidentialité</h3><p class="small">Fit Pulse ne connaît que nos clubs : pas de réseau, pas de classement inter-enseignes, pas de fil ou de chat partagé avec l’extérieur. ${backend.mode === 'firebase' ? 'En mode partagé, seules les adresses de l’équipe (Membres) peuvent lire la base, grâce aux règles Firebase.' : 'En mode local, les données ne quittent pas ce navigateur.'}</p></div>
     <div class="card"><h3>Sauvegarde</h3><p class="muted small">Exportez toutes les données (clubs, équipe, saisies, imports, clients) dans un fichier, pour les archiver ou les déplacer sur un autre appareil.</p>
       <div class="row wrap"><button class="btn" data-act="exportAll">${ico('download')} Exporter la sauvegarde</button><label class="btn">${ico('upload')} Restaurer une sauvegarde<input type="file" accept=".json" hidden data-change="importAll"></label><button class="btn" data-act="askDemo">Charger la démo</button><span class="spacer"></span><button class="btn danger" data-act="resetAll">Tout effacer</button></div></div></div>`;
 }
@@ -435,13 +397,13 @@ ACTIONS.kpiSet = el => { const k = el.dataset.k; const v = el.type === 'checkbox
 ACTIONS.kpiNew = () => openModal({ title: 'Nouveau KPI', body: `<form id="kf" class="form-grid"><label class="field full"><span>Nom</span><input class="input" name="label" required></label><label class="field"><span>Unité</span><select class="input" name="unit"><option value="qty">Quantité</option><option value="eur">Euros</option></select></label><label class="field"><span>Points à 100 %</span><input class="input" type="number" name="points" value="300"></label><label class="field"><span>Emoji</span><input class="input" name="emoji" value="🎯"></label></form>`,
   foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" data-act="kpiCreate">Créer</button>' });
 ACTIONS.kpiCreate = () => { const f = formData($('#kf')); if (!f.label.trim()) return; const id = 'k' + newId(); db.set(['kpis', id], { id, label: f.label.trim(), unit: f.unit, points: toNum(f.points), required: false, enabled: true, order: Object.keys(S.kpis).length + 1, emoji: f.emoji }); closeModal(); };
-ACTIONS.exportAll = () => downloadFile(`park-pulse-sauvegarde-${today()}.json`, JSON.stringify(S), 'application/json');
+ACTIONS.exportAll = () => downloadFile(`fit-pulse-sauvegarde-${today()}.json`, JSON.stringify(S), 'application/json');
 ACTIONS.importAll = el => {
   const file = el.files[0]; if (!file) return;
   const fr = new FileReader();
   fr.onload = async () => {
     let data; try { data = JSON.parse(fr.result); } catch (e) { toast('Fichier invalide.'); return; }
-    if (!data.users || !data.clubs) { toast('Ce n’est pas une sauvegarde Park Pulse.'); return; }
+    if (!data.users || !data.clubs) { toast('Ce n’est pas une sauvegarde Fit Pulse.'); return; }
     if (!await confirmDlg('Remplacer toutes les données actuelles par cette sauvegarde ?', { ok: 'Restaurer', danger: true })) return;
     db.replace(data); toast('Sauvegarde restaurée.');
   };

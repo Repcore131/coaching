@@ -1,4 +1,4 @@
-# Park Pulse
+# Fit Pulse
 
 Pilotage commercial de **nos** clubs Fitness Park, sur le modèle de fitup-pro, **sans aucune partie réseau** :
 pas de classement inter-enseignes, pas de feed ni de chat partagés avec d'autres clubs, pas d'observateurs.
@@ -46,7 +46,7 @@ décompresser, XLSX). Chaque fichier est reconnu par ses colonnes (`resamania.js
 - **Annuaire des commerciaux** (Membres > Correspondances Resamania) : codes trigrammes, e-mails, id, « NOM Prénom »
   dans n'importe quel ordre. Un nom inconnu est demandé une fois, puis retenu. Les pseudo-vendeurs (Traitement
   automatique, Site web, PSO Site, En ligne…) ne sont jamais attribués à un commercial.
-- **Contrôles** : liste à exactement 2 000 lignes (tronquée), encodage ISO-8859-15 corrigé, contrats Park Pulse vs
+- **Contrôles** : liste à exactement 2 000 lignes (tronquée), encodage ISO-8859-15 corrigé, contrats Fit Pulse vs
   performances commerciales, client en ligne vs transactions Web.
 - **Routines** : 7 exports chaque lundi, 10 le 2 du mois, avec chemin, filtres et nom de fichier, cochés à l'import.
 - Page **Impayés** : total récupéré tous canaux, part de l'équipe (seule comptée pour le KPI et la prime), 6 mois.

@@ -1,14 +1,15 @@
 'use strict';
-// ══ PARK PULSE — membres, profil, bilan mensuel ═══════════════════════════
+// ══ FIT PULSE — membres, profil, bilan mensuel ═══════════════════════════
 
 PAGES.members = {
-  title: 'Membres',
+  title: 'Équipe & paliers',
   manager: true,
   render() {
     const tab = UI.memTab || 'org';
     const all = clubMembers(CLUB.id, { all: true });
     const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
-    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases }[tab]();
+    T.splice(4, 0, ['paliers', 'Paliers collectifs']);
+    const body = { org: memOrg, hist: memHistory, tasks: memTasks, targets: memTargets, recaps: memRecaps, archived: memArchived, aliases: memAliases, paliers: memPaliers }[tab]();
     return `<div class="page-head"><div><h1>Membres</h1><p>${esc(CLUB.name)} · ${all.filter(u => u.role === 'manager' && u.status === 'active').length} manager(s), ${all.filter(u => u.role === 'membre' && u.status === 'active').length} membre(s) actif(s), ${all.filter(u => u.status === 'pending').length} invitation(s) en attente</p></div><span class="spacer"></span><button class="btn primary" data-act="addMember">${ico('plus')} Ajouter un membre</button></div>
       ${tabs('memTab', T, tab)}${body}`;
   },
@@ -238,7 +239,7 @@ ACTIONS.saveTask = () => { const f = formData($('#ntf')); if (!f.label.trim()) r
 ACTIONS.resetPlan = async () => {
   if (!await confirmDlg('Remplacer le planning du club par le modèle par défaut ?', { ok: 'Réinitialiser', danger: true })) return;
   const lib = Object.values(S.tasks.library); const find = l => (lib.find(t => t.label === l) || {}).id;
-  const model = [[7, 'Check passage du matin'], [7, 'Ouverture caisse'], [9, 'Réponse aux avis Google'], [10, 'Appels prospects de la veille'], [11, 'Appels J+15 nouveaux adhérents'], [14, 'Relance adhérents sans mandat'], [15, 'Relance impayés du jour'], [17, 'Story Instagram'], [18, 'Visites programmées'], [21, 'Saisie des KPI du jour dans Park Pulse'], [22, 'Validation de caisse']];
+  const model = [[7, 'Check passage du matin'], [7, 'Ouverture caisse'], [9, 'Réponse aux avis Google'], [10, 'Appels prospects de la veille'], [11, 'Appels J+15 nouveaux adhérents'], [14, 'Relance adhérents sans mandat'], [15, 'Relance impayés du jour'], [17, 'Story Instagram'], [18, 'Visites programmées'], [21, 'Saisie des KPI du jour dans Fit Pulse'], [22, 'Validation de caisse']];
   const plan = {}; model.forEach(([h, l]) => { const t = find(l); if (t) { const id = newId(); plan[id] = { id, taskId: t, hour: h }; } });
   db.set(['tasks', 'plan', CLUB.id], plan);
 };
@@ -303,7 +304,7 @@ PAGES.wrap = {
     const club = S.clubs[clubId];
     const phrase = st.score == null ? 'Pas d’objectif ce mois-là.' : st.score >= 1 ? 'Mois exceptionnel. Tu as tout donné.' : st.score >= .75 ? 'Très beau mois, l’élite n’est pas loin.' : st.score >= .5 ? 'À mi-chemin : le mois prochain sera le bon.' : 'Mois difficile. On repart plus fort.';
     const slides = [
-      `<div class="title" style="font-size:22px;color:var(--fp)">PARK PULSE</div><div class="avatar lg" style="margin:0 auto">${esc(initials(u))}</div><h1 style="font-size:40px">${esc(u.first)}</h1><div style="font-size:18px">Ton mois de ${monthLabel(mk)}</div><div class="muted small" style="margin-top:30px">Touche pour continuer</div>`,
+      `<div class="title" style="font-size:22px;color:var(--fp)">FIT PULSE</div><div class="avatar lg" style="margin:0 auto">${esc(initials(u))}</div><h1 style="font-size:40px">${esc(u.first)}</h1><div style="font-size:18px">Ton mois de ${monthLabel(mk)}</div><div class="muted small" style="margin-top:30px">Touche pour continuer</div>`,
       `<div style="font-size:18px">Ton score global</div><div class="huge" id="wrap-count">0 %</div><div class="muted small">Moyenne de tes KPI pondérée par leurs points</div>`,
       best ? `<div style="font-size:18px">Ton meilleur KPI</div><div style="font-size:54px">${best.k.emoji || '🏅'}</div><h1 style="font-size:36px">${esc(best.k.label)}</h1><div class="huge" style="font-size:56px">${fmtP(best.pct)}</div><div>${fmtV(best.real, best.k.unit)} / ${fmtV(best.target, best.k.unit)}</div>` : '<div>Aucun KPI ce mois-là.</div>',
       `<div style="font-size:18px;margin-bottom:10px">Tes KPI ce mois</div>${st.rows.filter(x => x.target > 0).map(x => `<div style="text-align:left;margin:6px 0"><div class="row small"><b>${esc(x.k.label)}</b><span class="spacer"></span>${fmtV(x.real, x.k.unit)} / ${fmtV(x.target, x.k.unit)}</div>${progressBar(x.pct, { ticks: false })}</div>`).join('')}`,
@@ -336,7 +337,7 @@ function drawWrapCard() {
   const c = $('#wrap-canvas'); if (!c) return; const x = c.getContext('2d'); const d = UI.wrapData;
   x.fillStyle = '#111113'; x.fillRect(0, 0, 540, 760);
   const g = x.createRadialGradient(470, 0, 10, 470, 0, 380); g.addColorStop(0, 'rgba(255,210,0,.35)'); g.addColorStop(1, 'rgba(255,210,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 540, 760);
-  x.fillStyle = '#FFD200'; x.font = '30px Anton, Impact'; x.fillText('PARK PULSE', 36, 64);
+  x.fillStyle = '#FFD200'; x.font = '30px Anton, Impact'; x.fillText('FIT PULSE', 36, 64);
   x.fillStyle = '#fff'; x.font = '52px Anton, Impact'; x.fillText(d.u.first.toUpperCase(), 36, 140);
   x.font = '22px Inter, sans-serif'; x.fillStyle = '#bbb'; x.fillText(`${d.club ? d.club.name : ''} · ${monthLabel(d.mk)}`, 36, 176);
   x.fillStyle = '#FFD200'; x.font = '110px Anton, Impact'; x.fillText(fmtP(d.st.score).replace(' ', ''), 36, 300);

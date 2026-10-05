@@ -1,5 +1,5 @@
 'use strict';
-// ══ PARK PULSE — interface commune : session, routes, coque, modales ══════
+// ══ FIT PULSE — interface commune : session, routes, coque, modales ══════
 
 let ME = null;            // utilisateur connecte
 let CLUB = null;          // club affiche
@@ -104,17 +104,19 @@ function progressBar(pct, { pace = null, ticks = true } = {}) {
 
 // ── Coque ──────────────────────────────────────────────────────────────────
 const NAV = [
-  ['dashboard', 'Tableau de bord', 'dashboard'],
+  ['home', 'Accueil', 'dashboard'],
+  ['dashboard', 'Mes objectifs', 'target'],
   ['leaderboard', 'Classement', 'trophy'],
-  ['loyalty', 'Action Rétention', 'heart'],
-  ['impayes', 'Impayés', 'euro', true],
+  ['sep'],
   ['resiliations', 'Résiliations', 'door'],
+  ['impayes', 'Impayés', 'euro'],
+  ['loyalty', 'Action Rétention', 'heart'],
+  ['challenges', 'Défis flash', 'bolt'],
   ['chat', 'Chat', 'chat'],
   ['feed', 'Feed', 'feed'],
-  ['challenges', 'Défis flash', 'bolt'],
   ['sep'],
   ['imports', 'Imports Resamania', 'upload', true],
-  ['members', 'Membres', 'users', true],
+  ['members', 'Équipe & paliers', 'users', true],
   ['clubs', 'Mes clubs', 'building', true],
 ];
 function unseenFeed() {
@@ -131,14 +133,14 @@ function shell(route, inner) {
   const nav = NAV.map(([id, label, icon, mgr]) => {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr && !isManager()) return '';
-    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : 0;
+    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
   }).join('');
   const clubs = myClubs();
   const theme = curTheme();
   return `<div class="shell" id="shell">
     <aside class="side">
-      <div class="brand"><div class="brand-mark">PP</div><div><div class="brand-name">PARK <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>
+      <div class="brand"><div class="brand-mark">${ico('bolt')}</div><div><div class="brand-name">FIT <span>PULSE</span></div><div class="brand-sub">${esc(APP.tagline)}</div></div></div>
       <div class="club-pick"><label>Votre club</label>${clubs.length > 1 ? `<select data-change="pickClub">${clubs.map(c => `<option value="${c.id}" ${c.id === CLUB.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>` : `<div class="club-name">${esc(CLUB.name)}</div>`}</div>
       <nav class="nav">${nav}</nav>
       <div class="side-foot nav">
@@ -152,8 +154,9 @@ function shell(route, inner) {
       <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>
         <b class="title" style="font-size:17px">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
         <div class="countdown" id="countdown"></div></div>
-      <div class="page">${inner}</div>
+      <div class="page page-${route}">${inner}</div>
     </main>
+    ${tabBar(route)}
   </div>`;
 }
 function tickCountdown() {
@@ -166,7 +169,7 @@ function tickCountdown() {
 setInterval(tickCountdown, 1000);
 
 // ── Routeur ────────────────────────────────────────────────────────────────
-function currentRoute() { const h = location.hash.replace(/^#\/?/, ''); const [r, ...rest] = h.split('/'); return { r: r || 'dashboard', args: rest }; }
+function currentRoute() { const h = location.hash.replace(/^#\/?/, ''); const [r, ...rest] = h.split('/'); return { r: r || 'home', args: rest }; }
 let renderQueued = false;
 function render() {
   if (renderQueued) return; renderQueued = true;
@@ -184,8 +187,8 @@ function renderNow() {
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
   let { r, args } = currentRoute();
   if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
-  if (!PAGES[r] || PAGES[r].auth === false) r = 'dashboard';
-  if (PAGES[r].manager && !isManager()) r = 'dashboard';
+  if (!PAGES[r] || PAGES[r].auth === false) r = 'home';
+  if (PAGES[r].manager && !isManager()) r = 'home';
   const keepScroll = UI._lastRoute === r ? window.scrollY : 0;
   const active = document.activeElement; const focusKey = active && active.dataset ? active.dataset.focus : null;
   app.innerHTML = shell(r, PAGES[r].render(args));
@@ -234,7 +237,7 @@ function monthNav(key, mk) {
     <b style="min-width:130px;text-align:center">${monthLabel(mk)}</b>
     <button class="btn icon sm" data-act="ui" data-key="${key}" data-val="${addMonths(mk, 1)}" aria-label="Mois suivant">${ico('chevR')}</button></div>`;
 }
-function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (!location.hash) location.hash = '#/dashboard'; render(); }
+function login(user) { ME = user; safeLS.set(SESSION_KEY, user.id); UI._lastRoute = null; if (!location.hash) location.hash = '#/home'; render(); }
 async function logout() { ME = null; safeLS.del(SESSION_KEY); if (backend.mode === 'firebase') await backend.signOut(); render(); }
 
 // Telechargement d'un fichier genere
