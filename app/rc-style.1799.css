@@ -12262,7 +12262,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ps-t-p{fill:var(--orange);stroke:#0b0b0b;stroke-width:1;vector-effect:non-scaling-stroke}
 .ps-t-p.ps-t-in{fill:var(--green)}
 .ps-t-s{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px}
-.ps-carte .ps-rdv{display:flex;align-items:center;gap:6px;margin:12px 0 0;font-size:var(--fs-2xs);color:var(--sub);
+.ps-carte .ps-rdv{display:flex;align-items:center;gap:6px;margin:12px 0 0;font-size:var(--fs-xs);color:var(--sub);
   text-transform:none;letter-spacing:0;font-weight:600}
 .ps-carte .ps-rdv select{width:auto;min-height:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
   border-radius:var(--r-2);padding:4px 8px;font:inherit;font-weight:700}
