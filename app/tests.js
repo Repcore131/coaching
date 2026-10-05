@@ -40870,6 +40870,28 @@ async function testExercices(){
           if(String(_rendrePointSemaine).indexOf("_htmlCroixAccueil('point'")<0||String(_rendreCarteWrapped).indexOf("_htmlCroixAccueil('wrapped-'+p.cle")<0) return _echec('une carte a perdu sa croix');
           return true;
         } finally { currentUser=sv; cles.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} }); }})());
+      okA('Le son du record est un coup de tonnerre : claquement, roulement de plus de 2 s, réverbération',async()=>{
+        // 05/10/2026 (Kevin) : « un vrai bruit d’éclair qui résonne ». Rendu hors ligne, sans rien jouer.
+        const OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+        if(!OC) return true;
+        const sv={ctx:_ctxSon,tp:_foudreTampons,st:window.setTimeout};
+        try{
+          const oc=new OC(2,Math.floor(44100*4),44100);
+          _ctxSon=oc; _foudreTampons=null;
+          if(_foudreSon()!==true) return _echec('le son ne se construit pas');
+          const T=_foudreTampons;
+          if(!T||T.roule.duration<2||T.salle.numberOfChannels!==2||T.salle.duration<2) return _echec('tampons : roulement ou réverbération trop courts');
+          const r=await oc.startRendering();
+          const d=r.getChannelData(0), sr=r.sampleRate;
+          const rms=(a,b)=>{ let x=0,n=0; for(let i=Math.floor(a*sr);i<Math.floor(b*sr)&&i<d.length;i++){ x+=d[i]*d[i]; n++; } return Math.sqrt(x/Math.max(1,n)); };
+          let pic=0; for(let i=0;i<d.length;i++) pic=Math.max(pic,Math.abs(d[i]));
+          if(!(pic>0.2)) return _echec('trop faible : pic '+pic.toFixed(3));
+          if(!(pic<=1.2)) return _echec('sature : pic '+pic.toFixed(3));
+          // Encore audible à 1,5 s (l’ancien s’éteignait à 0,46 s), puis il s’éteint.
+          if(!(rms(1.4,1.7)>0.01)) return _echec('plus rien à 1,5 s : '+rms(1.4,1.7).toFixed(4));
+          if(!(rms(0,0.3)>rms(2.2,2.6))) return _echec('le coup n’est pas plus fort que la queue');
+          return rms(3.7,4.0)<rms(0,0.3)/4?true:_echec('il ne s’éteint pas');
+        } finally { _ctxSon=sv.ctx; _foudreTampons=sv.tp; }});
       ok('LA TECHNIQUE D\'INTENSIFICATION : menu pour le coach, lecture pour l\'athlete',(()=>{
         // Regle posee par Kevin le 25/08/2026, et rappelee le 26 : le coach
         // choisit dans une liste, l'athlete qui veut une technique la tape
