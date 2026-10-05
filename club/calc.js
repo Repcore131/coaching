@@ -160,6 +160,12 @@ function targetRange(r, clubId, userId, kpiId) {
 // ── Statistiques ───────────────────────────────────────────────────────────
 const kpiList = (onlyEnabled = true) => Object.values(S.kpis).filter(k => !onlyEnabled || k.enabled).sort((a, b) => a.order - b.order);
 const tierOf = p => { let t = 0; for (const x of TIERS) if (p >= x - 1e-9) t = x; return t; };
+// Objectif moyen d'un KPI sur un mois (objectifs individuels > 0).
+function kpiAvgTarget(kpiId, mk) {
+  return memo(`avgT|${kpiId}|${mk}`, () => { const v = []; Object.values((S.targets || {})[mk] || {}).forEach(t => { const x = Number((t || {})[kpiId]); if (x > 0) v.push(x); }); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; });
+}
+// Calcul continu des points : réglage du KPI, sinon automatique pour les petits objectifs (moyenne < 5).
+function kpiLinear(k, mk) { if (typeof k.linear === 'boolean') return k.linear; const a = kpiAvgTarget(k.id, mk || curMonth()); return a > 0 && a < 5; }
 
 function statsFor(clubId, userId, r, { kpiIds = null, requiredOnly = false } = {}) {
   return memo(`st|${clubId}|${userId}|${r.from}|${r.to}|${r.period}|${kpiIds}|${requiredOnly}|${new Date().getHours()}`, () => {
@@ -173,7 +179,7 @@ function statsFor(clubId, userId, r, { kpiIds = null, requiredOnly = false } = {
       const real = userId ? sumRange(clubId, userId, k.id, r.from, r.to) : Math.round(members.reduce((s, u) => s + sumRange(clubId, u.id, k.id, r.from, r.to), 0) * 100) / 100;
       const target = targetRange(r, clubId, userId, k.id);
       const pct = target > 0 ? real / target : null;
-      const earned = pct == null ? 0 : tierOf(pct) * k.points;
+      const earned = pct == null ? 0 : (kpiLinear(k, r.to.slice(0, 7)) ? Math.min(pct, 1) : tierOf(pct)) * k.points;
       rows.push({ k, real, target, pct, earned, max: target > 0 ? k.points : 0, status: statusOf(pct, exp) });
     }
     const scored = rows.filter(x => x.target > 0 && x.k.points > 0);

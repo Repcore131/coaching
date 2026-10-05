@@ -67,6 +67,8 @@ export const REGLE = `${DEBUT}
       "entries": {
         "$id": {
           ".write": ${j(SAISIE)},
+          "checkedAt": { ".validate": ${j(`data.val() === newData.val() || ${MGR}`)} },
+          "checkedBy": { ".validate": ${j(`data.val() === newData.val() || ${MGR}`)} },
           ".validate": "newData.hasChildren(['userId', 'kpiId', 'date', 'value']) && newData.child('value').isNumber() && newData.child('value').val() > -1000000 && newData.child('value').val() < 1000000 && newData.child('date').isString() && newData.child('date').val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
         }
       },

@@ -1,0 +1,138 @@
+'use strict';
+// ══ FIT PULSE — notifications : cloche, boîte de réception, alertes locales ══
+// Tout passe par notify(). La boîte est gardée sur l'appareil (30 jours, 60
+// messages). Quand l'appli est ouverte en arrière-plan et que l'utilisateur a
+// autorisé les notifications, un message système s'affiche aussi. Un envoi
+// téléphone fermé demande un serveur d'envoi : non branché ici.
+const NOTIF_RULES = {
+  relances_jour: { label: 'Appels du jour, à 10 h', ex: '6 appels à passer aujourd’hui.' },
+  res_new: { label: 'Nouvelle résiliation reçue', ex: 'Nouvelle résiliation reçue. Ouvrez Résiliations pour la prendre.' },
+  res_j7: { label: 'Résiliation à votre nom à J-7', ex: 'Une résiliation à votre nom prend effet dans 5 jours.' },
+  palier: { label: 'Palier d’équipe franchi', ex: 'Palier 2 atteint en Contrats signés pour l’équipe.' },
+  defi: { label: 'Défi flash lancé', ex: 'Défi flash lancé : Rush du midi, 2 h. Ouvrez Défis.' },
+  live: { label: 'Saisies des collègues en direct', ex: 'Hugo Lefèvre : +1 Contrats signés, Fitness Park Niort' },
+  alertes: { label: 'Signaux faibles de l’équipe, à 9 h', ex: '2 signaux faibles à regarder.', manager: true },
+  digest: { label: 'Bilan de la semaine, le lundi', ex: 'Votre bilan de la semaine est prêt.' },
+};
+const notifPrefs = () => { const p = pref('notif', null) || {}; return { rules: p.rules || {}, quiet: { from: '20:30', to: '08:00', sunday: true, ...(p.quiet || {}) }, max: Number(p.max) || 6 }; };
+const ruleOn = id => id === 'live' ? pref('liveBanner', true) !== false : id === 'digest' ? pref('digest', true) !== false : notifPrefs().rules[id] !== false;
+function inQuiet() { const q = notifPrefs().quiet; const d = new Date(); const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`; if (q.sunday && d.getDay() === 0) return true; return q.from > q.to ? (hm >= q.from || hm < q.to) : (hm >= q.from && hm < q.to); }
+
+const inboxKey = () => 'fitpulse.inbox.' + (ME ? ME.id : '');
+function inbox() { try { const L = JSON.parse(safeLS.get(inboxKey()) || '[]'); return Array.isArray(L) ? L.filter(x => x && Date.now() - x.at < 30 * 864e5) : []; } catch (_) { return []; } }
+const saveInbox = L => safeLS.set(inboxKey(), JSON.stringify(L.slice(0, 60)));
+const unread = () => inbox().filter(x => !x.readAt).length;
+
+function notify(kind, text, href = '', { title = 'Fit Pulse', key = '', toastIt = true } = {}) {
+  if (!ME || !ruleOn(kind)) return;
+  const L = inbox(); if (key && L.some(x => x.key === key)) return;
+  title = title === 'Fit Pulse' ? (NOTIF_TITLE[kind] || title) : title;
+  const id = newId(); L.unshift({ id, key, kind, title, body: String(text).slice(0, 200), url: href, at: Date.now() }); saveInbox(L);
+  if (toastIt && !document.hidden) toast(text);
+  sysNotify(title, text, href, key || kind);
+  bellRefresh();
+}
+// Message système : seulement appli en arrière-plan, autorisation donnée, hors heures calmes, plafond du jour.
+function sysNotify(title, body, url, tag) {
+  try {
+    if (!document.hidden || !('Notification' in window) || Notification.permission !== 'granted' || inQuiet()) return;
+    const dk = 'fitpulse.sys.' + today(); const n = Number(safeLS.get(dk) || 0); if (n >= notifPrefs().max) return; safeLS.set(dk, String(n + 1));
+    const opt = { body, tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: url || '#/home' } };
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(r => r.showNotification(title, opt)); else new Notification(title, opt);
+  } catch (_) { /* navigateur sans notifications */ }
+}
+
+// ── Cloche (barre du haut) et badge de l'icône ───────────────────────────
+function bellBtn() { const n = ME ? unread() : 0; queueMicrotask(appBadge); return `<button class="btn ghost icon bell" id="bell" data-act="bell" aria-label="Notifications${n ? ', ' + n + ' non lues' : ''}">${ico('bell')}${n ? `<i class="bell-n">${n > 99 ? '99+' : n}</i>` : ''}</button>`; }
+function bellRefresh() { const b = $('#bell'); if (b) b.outerHTML = bellBtn(); else appBadge(); }
+function appBadge() {
+  try { if (!ME || !CLUB || !('setAppBadge' in navigator)) return; const t = myToDo(); const n = unread() + t.res.length + t.dun.filter(dunDue).length; n ? navigator.setAppBadge(n) : navigator.clearAppBadge(); } catch (_) { /* badge non pris en charge */ }
+}
+ACTIONS.bell = () => {
+  const L = inbox(); const t = today(), y = addDays(t, -1);
+  const day = x => isoOf(new Date(x.at)); const groups = [['Aujourd’hui', L.filter(x => day(x) === t)], ['Hier', L.filter(x => day(x) === y)], ['Plus ancien', L.filter(x => day(x) < y)]];
+  const td = myToDo(); const Q = relQueue(CLUB.id, 'mine');
+  const todo = [[Q.now.length, 'appel à passer', 'appels à passer', '#/relances'], [td.res.length, 'résiliation à votre nom', 'résiliations à votre nom', '#/resiliations'], [td.dun.filter(dunDue).length, 'impayé à relancer', 'impayés à relancer', '#/impayes']].filter(x => x[0]);
+  openModal({ title: 'Notifications', drawer: true, body: `${todo.length ? `<div class="nt-todo">${todo.map(([n, a, b, h]) => `<a href="${h}" data-close>${ico('chevR')}<b>${plur(n, a, b)}</b></a>`).join('')}</div>` : ''}
+    ${L.length ? groups.filter(g => g[1].length).map(([l, g]) => `<div class="nt-g">${l}</div>${g.map(x => `<button class="nt-row ${x.readAt ? '' : 'unread'}" data-act="notifOpen" data-id="${esc(x.id)}"><span class="nt-ico">${ico(NOTIF_ICON[x.kind] || 'bell')}</span><span class="spacer"><b>${esc(x.title)}</b><span>${esc(x.body)}</span><small>${ago(x.at)}</small></span>${x.readAt ? '' : '<i class="nt-dot"></i>'}</button>`).join('')}`).join('') : emptyBox({ art: 'done', title: 'Aucune notification', text: 'Les nouveautés de l’équipe et vos rappels apparaîtront ici.' })}`,
+    foot: `<button class="btn" data-act="notifAllRead">Tout marquer comme lu</button><a class="btn ghost" href="#/profile" data-close data-act="ui" data-key="profTab" data-val="account">Réglages</a>` });
+};
+const NOTIF_TITLE = { relances_jour: 'Appels du jour', res_new: 'Résiliation', res_j7: 'Résiliation à J-7', palier: 'Palier d’équipe', defi: 'Défi flash', live: 'En direct', alertes: 'Signaux faibles', digest: 'Bilan de la semaine' };
+const NOTIF_ICON = { relances_jour: 'phone', res_new: 'door', res_j7: 'door', palier: 'flag', defi: 'bolt', live: 'sparkle', alertes: 'alert', digest: 'chart' };
+ACTIONS.notifOpen = el => { const L = inbox(); const x = L.find(m => m.id === el.dataset.id); if (!x) return; x.readAt = Date.now(); saveInbox(L); closeModal(); bellRefresh(); if (x.url) location.hash = x.url; };
+ACTIONS.notifAllRead = () => { const L = inbox(); L.forEach(x => { x.readAt = x.readAt || Date.now(); }); saveInbox(L); closeModal(); bellRefresh(); };
+
+// ── Rappels calculés sur l'appareil (appli ouverte, même en arrière-plan) ─
+function notifTick() {
+  try {
+    if (!ME || !S || !CLUB || typeof relQueue !== 'function') return;
+    const d = new Date(), h = d.getHours(), t = today();
+    if (!isWorkday(t, CLUB.id)) return;
+    if (h >= 10) { const n = relQueue(CLUB.id, 'mine').now.length; if (n) notify('relances_jour', `${plur(n, 'appel à passer', 'appels à passer')} aujourd’hui.`, '#/relances', { key: 'appels_' + t, toastIt: false }); }
+    myToDo().res.filter(resUrgent).forEach(r => { const n = Math.max(0, daysTo(r.effective)); notify('res_j7', n ? `Une résiliation à votre nom prend effet dans ${plur(n, 'jour', 'jours')}.` : 'Une résiliation à votre nom prend effet aujourd’hui.', '#/resiliations', { key: 'res7_' + r.id, toastIt: false }); });
+    if (isManager() && h >= 9 && typeof alertsFor === 'function') { const n = alertsFor(CLUB.id).filter(a => a.level !== 'info').length; if (n) notify('alertes', `${plur(n, 'signal faible', 'signaux faibles')} à regarder dans Pilotage équipe.`, '#/team', { key: 'alertes_' + t, toastIt: false }); }
+    if (d.getDay() === 1 && h >= 8) notify('digest', 'Votre bilan de la semaine est prêt sur l’accueil.', '#/home', { key: 'digest_' + t, toastIt: false });
+  } catch (_) { /* jamais bloquant */ }
+}
+setInterval(notifTick, 60000); setTimeout(notifTick, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) bellRefresh(); });
+
+// ── Nouveautés de l'équipe (mode partagé, à chaque mise à jour de la base) ─
+let PAL_SNAP = null;
+function palierSnap() { const mk = curMonth(); const o = {}; Object.keys(paliersFor(CLUB.id, mk)).forEach(k => { const s = palierState(CLUB.id, mk, k); if (s) o[k] = s.reached; }); return o; }
+function notifLive(before, after) {
+  if (!ME || !CLUB) return;
+  const mine = id => (ME.clubs || []).includes(id) || ME.role === 'createur';
+  let byMe = false;
+  for (const id of Object.keys(after.entries || {})) {
+    if (before.entries[id]) continue; const e = after.entries[id];
+    if (e.userId === ME.id || e.by === ME.id) { byMe = true; continue; }
+    if (e.source !== 'manual' || Date.now() - e.at > 60000 || !mine(e.clubId)) continue;
+    const u = after.users[e.userId], k = after.kpis[e.kpiId], c = after.clubs[e.clubId];
+    if (u && k) notify('live', `${fullName(u)} : +${fmtV(e.value, k.unit)} ${k.label}${c ? ', ' + c.name : ''}`, '#/feed', { key: 'e_' + id });
+  }
+  for (const id of Object.keys(after.resiliations || {})) {
+    if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];
+    if (!mine(r.clubId) || r.userId === ME.id || r.by === ME.id || (r.at && Date.now() - r.at > 600000)) continue;
+    notify('res_new', 'Nouvelle résiliation reçue. Ouvrez Résiliations pour la prendre.', '#/resiliations', { key: 'resnew_' + id });
+  }
+  for (const id of Object.keys(after.challenges || {})) {
+    if ((before.challenges || {})[id]) continue; const ch = after.challenges[id];
+    if (!mine(ch.clubId) || ch.by === ME.id) continue;
+    notify('defi', `Défi flash lancé : ${ch.title}, ${Math.max(1, Math.round((ch.end - ch.start) / 3600000))} h. Ouvrez Défis.`, '#/challenges', { key: 'defi_' + id });
+  }
+  const snap = palierSnap();
+  if (PAL_SNAP && !byMe) Object.entries(snap).forEach(([k, n]) => { if (n > (PAL_SNAP[k] || 0) && S.kpis[k]) { notify('palier', `Palier ${n} atteint en ${S.kpis[k].label} pour l’équipe.`, '#/home', { key: `pal_${CLUB.id}_${curMonth()}_${k}_${n}`, toastIt: false }); if (!document.hidden) celebrate(`PALIER ${n} ATTEINT`, `${S.kpis[k].label} pour l’équipe`, { kind: 'team' }); } });
+  PAL_SNAP = snap;
+}
+
+// ── Activer sur cet appareil, installer l'appli ──────────────────────────
+let INSTALL_EVT = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALL_EVT = e; });
+addEventListener('appinstalled', () => { INSTALL_EVT = null; toast('Fit Pulse est installée.'); });
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+function notifState() { if (!('Notification' in window)) return ['Non prises en charge par ce navigateur', 'off']; return { granted: ['Activées sur cet appareil', 'on'], denied: ['Bloquées dans le navigateur', 'off'], default: ['Désactivées', 'off'] }[Notification.permission]; }
+function notifCard() {
+  const P = notifPrefs(); const [st] = notifState(); const mgr = isManager();
+  return `<div class="card notif-card"><h3>Notifications</h3>
+    <div class="row wrap" style="gap:8px;margin:6px 0 12px"><span class="tag ${'Notification' in window && Notification.permission === 'granted' ? 'is-ok' : ''}">${st}</span>${'Notification' in window && Notification.permission === 'default' ? '<button class="btn sm primary" data-act="notifEnable">Activer les alertes sur cet appareil</button>' : ''}</div>
+    ${isStandalone() ? '' : INSTALL_EVT ? '<button class="btn sm" data-act="installApp">Installer Fit Pulse</button>' : isIos() ? '<p class="small">Pour recevoir les alertes sur iPhone : touchez Partager, puis Sur l’écran d’accueil, puis ouvrez Fit Pulse depuis l’icône.</p>' : ''}
+    <p class="muted small">Les alertes s’affichent quand Fit Pulse est ouverte, même en arrière-plan. Elles ne contiennent jamais le nom d’un client.</p>
+    <div class="nt-rules">${Object.entries(NOTIF_RULES).filter(([, r]) => !r.manager || mgr).map(([id, r]) => `<label class="row"><input type="checkbox" data-change="notifRule" data-id="${id}" ${ruleOn(id) ? 'checked' : ''}><span class="spacer">${r.label}<small class="muted">${esc(r.ex)}</small></span></label>`).join('')}</div>
+    <div class="form-grid" style="margin-top:10px"><label class="field"><span>Heures calmes : de</span><input class="input" type="time" value="${P.quiet.from}" data-change="notifQuiet" data-k="from"></label><label class="field"><span>à</span><input class="input" type="time" value="${P.quiet.to}" data-change="notifQuiet" data-k="to"></label></div>
+    <label class="row small" style="margin-top:8px"><input type="checkbox" data-change="notifQuiet" data-k="sunday" ${P.quiet.sunday ? 'checked' : ''}> Silence le dimanche</label>
+    <label class="field" style="margin-top:8px"><span>Au plus, par jour</span><select class="input" data-change="notifMax">${[3, 6, 10, 20].map(n => `<option value="${n}" ${P.max === n ? 'selected' : ''}>${n} alertes</option>`).join('')}</select></label></div>`;
+}
+const saveNotif = P => setPref('notif', { rules: P.rules, quiet: P.quiet, max: P.max });
+ACTIONS.notifRule = el => { const id = el.dataset.id; if (id === 'live') return setPref('liveBanner', el.checked); if (id === 'digest') return setPref('digest', el.checked); const P = notifPrefs(); P.rules[id] = el.checked; saveNotif(P); };
+ACTIONS.notifQuiet = el => { const P = notifPrefs(); P.quiet[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; saveNotif(P); };
+ACTIONS.notifMax = el => { const P = notifPrefs(); P.max = Number(el.value) || 6; saveNotif(P); };
+ACTIONS.notifEnable = async () => { try { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Alertes activées sur cet appareil.' : 'Alertes non autorisées.'); render(); } catch (_) { toast('Ce navigateur ne permet pas les alertes.'); } };
+ACTIONS.installApp = async () => { if (!INSTALL_EVT) return; INSTALL_EVT.prompt(); await INSTALL_EVT.userChoice.catch(() => null); INSTALL_EVT = null; render(); };
+
+// Service worker : seulement en ligne (https), jamais en fichier local.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => null));
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'notif-click' && e.data.url) location.hash = e.data.url.replace(/^.*#/, '#'); });
+}

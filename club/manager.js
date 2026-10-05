@@ -227,7 +227,7 @@ ACTIONS.briefCopy = () => { const t = $('.modal').dataset.txt; navigator.clipboa
 ACTIONS.briefChat = () => { sendChat({ text: $('.modal').dataset.txt }); closeModal(); toast('Brief publié dans le chat'); };
 // Lundi : bilan de la semaine (préférence digest), une fois.
 function weekDigestCard() {
-  if (new Date().getDay() !== 1 || !pref('digest', false) || pref('digestSeen', '') === today()) return '';
+  if (new Date().getDay() !== 1 || !pref('digest', true) || pref('digestSeen', '') === today()) return '';
   const r = rangeOf('week', addDays(today(), -7)), r2 = rangeOf('week', addDays(today(), -14));
   const s1 = statsFor(CLUB.id, ME.id, r, { requiredOnly: true }), s2 = statsFor(CLUB.id, ME.id, r2, { requiredOnly: true });
   const c1 = statsFor(CLUB.id, null, r, { kpiIds: ['contrats'] }).rows[0];

@@ -888,3 +888,24 @@ img, svg, video, canvas { max-width: 100%; }
 .team-m th, .team-m td { white-space: nowrap; vertical-align: middle; }
 .team-m td.late-k { white-space: normal; min-width: 180px; max-width: 260px; }
 td.nowrap { white-space: nowrap; }
+td.to-check { background: var(--warn-soft); }
+.chk-v { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: var(--t-11); color: var(--warn); font-weight: 700; margin-top: 2px; white-space: nowrap; }
+.chk-v input { width: 14px; height: 14px; }
+/* Cloche et boîte de notifications */
+.bell { position: relative; }
+.bell-n { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-style: normal; font-size: 10px; font-weight: 800; line-height: 18px; text-align: center; }
+.nt-todo { display: grid; gap: 6px; margin-bottom: 14px; }
+.nt-todo a { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: var(--fp-soft); color: var(--text); text-decoration: none; }
+.nt-g { font-size: var(--t-11); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 4px; }
+.nt-row { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 2px; color: var(--text); font: inherit; cursor: pointer; min-height: 44px; }
+.nt-row .spacer { display: grid; gap: 2px; }
+.nt-row span span { font-size: var(--t-13); }
+.nt-row small { color: var(--muted); font-size: var(--t-11); }
+.nt-row:not(.unread) b { font-weight: 600; color: var(--muted); }
+.nt-ico { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
+.nt-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--fp); margin-top: 6px; }
+.nt-rules label { padding: 8px 0; border-bottom: 1px solid var(--line); align-items: flex-start; gap: 10px; }
+.nt-rules small { display: block; font-size: var(--t-11); }
+.topbar .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .bell { flex: none; }
+@media (max-width: 360px) { .topbar .countdown { display: none; } }

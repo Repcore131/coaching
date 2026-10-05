@@ -177,9 +177,9 @@ function memHistory() {
     const rows = members.filter(u => !q || norm(fullName(u)).includes(q));
     const tot = {};
     return `<div class="row wrap" style="margin-bottom:12px">${seg('histMode', [['month', 'Mois'], ['day', 'Jour par jour']], mode)}${monthNav('histMonth', mk)}<span class="spacer"></span><input class="input sm" style="width:200px" placeholder="Rechercher un membre" data-input="histQ" data-focus="histQ" value="${esc(UI.histQ || '')}"></div>
-      <p class="muted small">Montants TTC. Cliquez sur un membre pour éditer ses saisies jour par jour.</p>
+      <p class="muted small">Montants TTC. Cliquez sur un membre pour éditer ses saisies jour par jour. Un point orange signale un règlement saisi depuis Action Rétention, à valider.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num">${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'}</span></th>`).join('')}</tr></thead><tbody>
-      ${rows.map(u => `<tr><td><a href="javascript:void 0" data-act="histUser" data-id="${u.id}"><b>${esc(fullName(u))}</b></a></td>${kpis.map(k => { const v = sumRange(CLUB.id, u.id, k.id, r.from, r.to); tot[k.id] = (tot[k.id] || 0) + v; return `<td class="num">${v ? fmtV(v, k.unit) : '<span class="muted">0</span>'}</td>`; }).join('')}</tr>`).join('')}
+      ${rows.map(u => `<tr><td><a href="javascript:void 0" data-act="histUser" data-id="${u.id}"><b>${esc(fullName(u))}</b></a></td>${kpis.map(k => { const v = sumRange(CLUB.id, u.id, k.id, r.from, r.to); tot[k.id] = (tot[k.id] || 0) + v; const nChk = Object.values(S.entries).filter(e => e.userId === u.id && e.kpiId === k.id && e.date >= r.from && e.date <= r.to && e.needsCheck && !e.checkedAt && entryCounts(e)).length; return `<td class="num">${v ? fmtV(v, k.unit) : '<span class="muted">0</span>'}${nChk ? ` <i class="hdot h-watch" title="${plur(nChk, 'saisie à valider', 'saisies à valider')}"></i>` : ''}</td>`; }).join('')}</tr>`).join('')}
       <tr class="total"><td>Total</td>${kpis.map(k => { const t = clubMonthTarget(mk, CLUB.id, k.id); return `<td class="num">${fmtV(tot[k.id] || 0, k.unit)}${t ? `<br><span class="muted small">/ ${fmtV(t, k.unit)} · ${fmtP((tot[k.id] || 0) / t)}</span>` : ''}</td>`; }).join('')}</tr></tbody></table></div>`;
   }
   const uid = UI.histUser && S.users[UI.histUser] ? UI.histUser : (members[0] && members[0].id);
@@ -192,10 +192,13 @@ function memHistory() {
   for (let d = 1; d <= n; d++) {
     const date = `${mk}-${pad(d)}`;
     const future = date > today();
-    html += `<tr><td class="nowrap">${JOURS[dateOf(date).getDay()].slice(0, 3)} ${d}</td>${kpis.map(k => { const v = sumRange(CLUB.id, uid, k.id, date, date); return `<td class="num"><input class="cell" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" value="${v ? Math.round(v * 100) / 100 : ''}" placeholder="0" data-change="histCell" data-u="${uid}" data-k="${k.id}" data-d="${date}" ${future ? 'disabled' : ''}></td>`; }).join('')}</tr>`;
+    html += `<tr><td class="nowrap">${JOURS[dateOf(date).getDay()].slice(0, 3)} ${d}</td>${kpis.map(k => { const v = sumRange(CLUB.id, uid, k.id, date, date); const chk = toCheck(uid, k.id, date); return `<td class="num${chk.length ? ' to-check' : ''}"><input class="cell" type="number" min="0" step="${k.unit === 'eur' ? '0.01' : '1'}" value="${v ? Math.round(v * 100) / 100 : ''}" placeholder="0" data-change="histCell" data-u="${uid}" data-k="${k.id}" data-d="${date}" ${future ? 'disabled' : ''}>${chk.length ? `<label class="chk-v" title="Saisi depuis Action Rétention : à valider"><i class="hdot h-watch"></i><input type="checkbox" data-change="entryValid" data-ids="${chk.map(e => e.id).join(',')}"> Validé</label>` : ''}</td>`; }).join('')}</tr>`;
   }
   return html + '</tbody></table></div>';
 }
+// Saisies à valider (« Réglé » depuis la rétention) : comptées, mais signalées tant que le manager n'a pas validé.
+const toCheck = (uid, kpiId, date) => Object.values(S.entries).filter(e => e.userId === uid && e.kpiId === kpiId && e.date === date && e.needsCheck && !e.checkedAt && entryCounts(e));
+ACTIONS.entryValid = el => { const ops = el.dataset.ids.split(',').filter(id => S.entries[id]).flatMap(id => [[['entries', id, 'checkedAt'], Date.now()], [['entries', id, 'checkedBy'], ME.id]]); ops.push([['audit', newId()], { at: Date.now(), by: ME.id, action: 'valide_saisie', club: CLUB.id, ids: el.dataset.ids }]); db.batch(ops); toast('Saisie validée'); };
 ACTIONS.histQ = el => { UI.histQ = el.value; render(); };
 ACTIONS.histUser = el => { UI.histUser = el.dataset.id; UI.histMode = 'day'; render(); };
 ACTIONS.histUserSel = el => { UI.histUser = el.value; render(); };
@@ -344,14 +347,10 @@ function profPerf() {
       ${months.length > 3 && !showAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="profWraps" data-val="all">Voir ${months.length - 3} mois de plus</button>` : ''}</div></div>`;
 }
 function profAccount() {
-  const live = pref('liveBanner', true); const digest = pref('digest', true);
   return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
-    <div class="card"><h3>Notifications</h3>
-      <label class="row" style="margin-top:12px"><input type="checkbox" data-change="prefToggle" data-k="liveBanner" ${live ? 'checked' : ''}> <span>Bandeau en direct quand un collègue saisit</span></label>
-      <label class="row" style="margin-top:10px"><input type="checkbox" data-change="prefToggle" data-k="digest" ${digest ? 'checked' : ''}> <span>Bilan hebdomadaire du club (lundi matin)</span></label>
-      <p class="muted small">Le bandeau ne montre que les saisies de nos clubs.</p></div>
+    ${notifCard()}
     <div class="card"><h3>Sécurité</h3>${`<p class="small">Connexion par e-mail et code d’accès personnel.</p><form id="cc" class="grid"><label class="field"><span>Code actuel</span><input class="input" name="cur" id="cc-cur" placeholder="FP-XXXX-XXXX-XXXX" autocomplete="current-password"></label><button class="btn" type="button" data-act="changeMyCode">${ico('shield')} Générer un nouveau code</button></form><p class="muted small">${backend.mode === 'firebase' ? 'Votre code ouvre la base de l’équipe depuis n’importe quel appareil. Le nouveau code remplace l’ancien partout.' : 'En mode local, les données restent dans ce navigateur : le code protège l’accès à l’écran.'}</p>`}</div></div>`;
 }
 ACTIONS.saveProfile = () => { const f = formData($('#pf')); if (!f.first.trim()) return; db.batch([[['users', ME.id, 'first'], f.first.trim()], [['users', ME.id, 'last'], f.last.trim()]]); toast('Profil enregistré.'); };
