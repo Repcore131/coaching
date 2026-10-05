@@ -22,6 +22,7 @@ const canEdit = u => isCreator() || u.id === ME.id || u.role === 'membre';
 function memberRow(u) {
   return `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)">${avatar(u)}<div class="spacer"><b>${esc(fullName(u))}</b>${u.id === ME.id ? ' <span class="muted small">(vous)</span>' : ''}<div class="muted small">${esc(u.email || 'pas d’e-mail')}</div></div>
     ${u.status === 'pending' ? '<span class="badge warn">En attente</span>' : ''}${u.codeHash ? '' : '<span class="badge bad" title="Sans code, cette personne ne peut pas se connecter">sans code</span>'}<span class="badge ${u.role === 'createur' ? 'fp' : u.role === 'manager' ? 'ok' : ''}">${roleLabel(u.role)}</span>
+    ${u.role !== 'createur' && u.status === 'active' && isManager() ? `<a class="btn ghost sm" href="#/coach/${u.id}">Fiche</a>` : ''}
     ${canEdit(u) ? `<button class="btn ghost icon sm" data-act="editMember" data-id="${u.id}" title="Modifier">${ico('edit')}</button>` : '<span style="width:30px"></span>'}</div>`;
 }
 function memOrg() {

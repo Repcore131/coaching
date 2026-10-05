@@ -104,6 +104,7 @@ const NAV = [
   ['leaderboard', 'Classement', 'trophy'],
   ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
+  ['team', 'Pilotage équipe', 'users', true],
   ['quality', 'Contrôle qualité', 'shield', true],
   ['sep'],
   ['resiliations', 'Résiliations', 'door', true],

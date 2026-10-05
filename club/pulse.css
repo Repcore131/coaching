@@ -448,6 +448,7 @@ h3 { font-size: var(--t-20); line-height: 1.05; }
 .col4 { grid-column: span 4; }
 .col5 { grid-column: span 5; }
 .col6 { grid-column: span 6; }
+.col7 { grid-column: span 7; }
 .col8 { grid-column: span 8; }
 .col12 { grid-column: span 12; }
 .race-h { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
@@ -511,7 +512,7 @@ h3 { font-size: var(--t-20); line-height: 1.05; }
 .auth-card { background: #0d0d0d; border-color: #222; }
 .auth-card .btn.primary { width: 100%; padding: 12px; font-size: var(--t-14); }
 @media (max-width: 1200px) {
-  .col8, .col4, .col6 { grid-column: span 12; }
+  .col8, .col7, .col5, .col4, .col6 { grid-column: span 12; }
   .col5 { grid-column: span 7; }
   .col3 { grid-column: span 5; }
   .col3:nth-last-child(-n+2) { grid-column: span 6; }
@@ -857,3 +858,33 @@ img, svg, video, canvas { max-width: 100%; }
 .tl-ico { width: 30px; height: 30px; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; flex: none; }
 @media (max-width: 600px) { .rel-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } .rel-tiles b { font-size: var(--t-24); } .rel-acts { width: 100%; } .rel-acts .rel-call { flex: 1; justify-content: center; } }
 @media (max-width: 860px) { .home2 .banner .banner-kpis { display: none; } .home2 .banner .banner-meta .muted-l { display: none; } }
+
+/* ── Pilotage équipe, fiche coaching, rituels ── */
+.team-m td.cell { line-height: 1.25; }
+.team-m td.cell small { color: var(--muted); font-size: var(--t-11); }
+.team-m td.cell.h-good b { color: var(--ok); }
+.team-m td.cell.h-watch { background: var(--warn-soft); }
+.team-m td.cell.h-watch b { color: var(--warn); }
+.team-m td.cell.h-alert { background: var(--bad-soft); }
+.team-m td.cell.h-alert b { color: var(--bad); }
+.team-m .sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); white-space: nowrap; }
+.team-m .sticky a { color: inherit; text-decoration: none; }
+.quad { width: 100%; height: auto; display: block; }
+.quad .q-axis { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.quad .q-l { fill: var(--muted); font-size: 11px; font-weight: 700; font-family: var(--font); text-transform: uppercase; letter-spacing: .04em; }
+.quad .q-dot { fill: var(--fp); stroke: var(--fp-ink); stroke-width: 1.5; }
+.quad .q-n { fill: var(--text); font-size: 12px; font-weight: 700; font-family: var(--font); }
+.goal { padding: 10px 0; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.goal:last-child { border-bottom: 0; }
+.act-row { gap: 10px; padding: 10px 0; min-height: 44px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.act-row:last-child { border-bottom: 0; }
+.act-row input { width: 20px; height: 20px; accent-color: var(--fp); flex: none; }
+.act-row input:checked + span { text-decoration: line-through; color: var(--muted); }
+.act-row.late .small { color: var(--bad); font-weight: 700; }
+.brief { white-space: pre-wrap; font-family: var(--font); font-size: var(--t-14); line-height: 1.55; background: var(--surface-2); border-radius: var(--radius); padding: 14px; margin: 0; }
+.ck-rit { gap: 8px; margin: 0 0 12px; }
+.my-plan { margin-bottom: 18px; }
+@media print { body.printing .sidebar, body.printing .tabbar, body.printing .page-head .btn, body.printing .tabs { display: none !important; } }
+.team-m th, .team-m td { white-space: nowrap; vertical-align: middle; }
+.team-m td.late-k { white-space: normal; min-width: 180px; max-width: 260px; }
+td.nowrap { white-space: nowrap; }
