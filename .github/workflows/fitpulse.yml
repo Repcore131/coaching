@@ -1,0 +1,63 @@
+# Mise en ligne de FIT PULSE sur sa propre adresse : https://<site>.web.app
+#
+# Fit Pulse est un SECOND SITE d'hebergement dans le projet Firebase de RepCore
+# (repcore-sync) : meme compte de service (secret FIREBASE_SERVICE_ACCOUNT),
+# mais un site, une adresse et un deploiement a part. Le site de RepCore n'est
+# jamais touche : on ne deploie que `hosting:<site Fit Pulse>`.
+#
+# Le premier passage cree le site. Le nom doit etre libre dans tout Firebase :
+# on essaie les noms de la liste dans l'ordre et on garde le premier obtenu.
+name: Fit Pulse en ligne
+
+on:
+  push:
+    branches: [main, 'claude/eloquent-lamport-0qxwdd']
+    paths:
+      - 'club/**'
+      - '.github/workflows/fitpulse.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fitpulse-hosting
+  cancel-in-progress: true
+
+jobs:
+  deployer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Assembler le site
+        run: |
+          set -e
+          cd club
+          rm -rf _en_ligne && mkdir -p _en_ligne
+          cp -a index.html pulse.css manifest.webmanifest favicon.png icon-192.png icon-512.png apple-touch-icon.png assets ./*.js _en_ligne/
+          rm -f _en_ligne/assets/fitpulse-source.webp
+          test -f _en_ligne/index.html && test -f _en_ligne/app.js
+
+      - name: Creer le site si besoin, puis deployer
+        env:
+          CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          [ -n "$CLE" ] || { echo "Secret FIREBASE_SERVICE_ACCOUNT absent."; exit 1; }
+          npm install -g firebase-tools >/dev/null 2>&1
+          printf '%s' "$CLE" > "$RUNNER_TEMP/cle.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/cle.json"
+          cd club
+          SITE=""
+          for N in fitpulse-niort fitpulse-fpniort fitpulse-fp-niort fitpulse-club-niort fitpulse-niort-79; do
+            if firebase hosting:sites:get "$N" --project repcore-sync --non-interactive >/dev/null 2>&1; then SITE="$N"; break; fi
+            if firebase hosting:sites:create "$N" --project repcore-sync --non-interactive; then SITE="$N"; break; fi
+          done
+          [ -n "$SITE" ] || { echo "::error::Aucun nom de site disponible."; exit 1; }
+          # firebase.json de deploiement : le site Fit Pulse, et rien d'autre
+          node -e "const c=require('./firebase.json'); c.hosting.site=process.argv[1]; delete c.database; require('fs').writeFileSync('firebase.json', JSON.stringify(c,null,2));" "$SITE"
+          firebase deploy --only hosting --project repcore-sync --non-interactive
+          rm -f "$RUNNER_TEMP/cle.json"
+          echo "### Fit Pulse est en ligne : https://$SITE.web.app" >> "$GITHUB_STEP_SUMMARY"
+          echo "FITPULSE_URL=https://$SITE.web.app"
