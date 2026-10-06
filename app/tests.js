@@ -78217,6 +78217,97 @@ async function testExercices(){
         return /À regarder, dans cet ordre/.test(h)
           ?true:_echec('l’ordre de lecture n’est pas rendu');});
 
+      // ── 06/10/2026 (build 1821) — LES DEUX MOTEURS MORPHO SE PARLENT ──
+      // Une analyse anatomique de confiance B : tous les points posés à la
+      // main (A), un cran de moins tant que l'échelle n'est pas confirmée.
+      // `dy` allonge la cuisse et raccourcit le tronc (genoux plus bas,
+      // hanches plus hautes), en fraction de la hauteur de l'image.
+      const _mxAnat=(dy,bil)=>{
+        const pts=anatGabarit(1000,1500,'face'), man={};
+        for(const k in pts) man[k]=pts[k].slice(0,2);
+        for(const s of ['l','r']){
+          man['genou_'+s]=[man['genou_'+s][0],man['genou_'+s][1]+dy];
+          man['hanche_'+s]=[man['hanche_'+s][0],man['hanche_'+s][1]-dy];
+        }
+        const d=Date.now()-10*_mj;
+        return {id:'MX',email:'mx@t.fr',role:'athlete',coachId:'co',gender:'Homme',_evol_height:'180',updatedAt:1,
+          bilans:[Object.assign({date:d,type:'depart','deb-height':'180','deb-bras':'60','deb-epaules':'42'},bil||{})],
+          morphoAnat:{v:ANAT_VERSION,bilan:d,face:{w:1000,h:1500,auto:{pts},man},dos:null,opts:{}}};
+      };
+      ok('Morpho × photo : confiance B et cuisse longue → A1 a une facette photo, et P1 sort sans entrejambe',()=>{
+        const u=_mxAnat(0.02);
+        const j=anatMesures(u.morphoAnat,u,{}).fiches.find(f=>f.cle==='jambes');
+        if(j.conf!=='B') return _echec('la fixture n’est pas de confiance B : '+j.conf);
+        const ax=morphoAxes(u,{calibrage:{}});
+        const a1=ax.find(a=>a.cle==='A1'), a2=ax.find(a=>a.cle==='A2');
+        if(!a1.photo||a1.photo.cle!=='A1photo'||a1.photo.source!=='anat') return _echec('A1 sans facette photo');
+        if(a1.court!=='Fémur / tronc') return _echec('A1 avec la photo s’appelle encore '+a1.court);
+        if(a1.position!=='haut'||a2.position!=='haut') return _echec('A1 '+a1.position+', A2 '+a2.position);
+        if(a1.confiance!==MORPHO_CONF.photo||a1.source!=='photo') return _echec('confiance '+a1.confiance+' / '+a1.source);
+        if(!/il manque l’entrejambe/.test(a1.texte)||!/de Leva/.test(a1.texte)) return _echec('texte : '+a1.texte);
+        if(!morphoProfils(ax).profils.some(p=>p.cle==='P1')) return _echec('P1 ne sort pas');
+        // Sans photo : comportement d'avant, et le nom du ruban.
+        const s=_mxAnat(0); delete s.morphoAnat; s.bilans[0]['deb-entrejambe']='88';
+        const b=morphoAxes(s,{calibrage:{}}).find(a=>a.cle==='A1');
+        if(b.photo||b.court!=='Jambes / taille') return _echec('sans photo : '+b.court+(b.photo?' + photo':''));
+        // La cuisse s'apprend contre entrejambe − rotule ; sans calibration, son biais est doublé.
+        const sg=ANAT_BIAIS_SEGMENTS.find(x=>x.cle==='cuisse');
+        if(!sg||String(sg.metre)!=='deb-entrejambe,deb-rotule') return _echec('pas de segment cuisse');
+        if(anatBiaisDefaut('cuisse')!==2*ANAT_BIAIS_DEFAUT_PCT) return _echec('biais par défaut de la cuisse');
+        const m=anatBiaisMetre(_mxAnat(0,{'deb-entrejambe':'86','deb-rotule':'50'}),sg);
+        return m&&m.cm===36?true:_echec('entrejambe − rotule : '+JSON.stringify(m));});
+      ok('Morpho × photo : ruban et photo en désaccord opposé → A1 suspendu',()=>{
+        // 78 cm d'entrejambe pour 1,80 m : bas au ruban ; la photo dit haut.
+        const a1=morphoAxes(_mxAnat(0.025,{'deb-entrejambe':'78'}),{calibrage:{}}).find(a=>a.cle==='A1');
+        if(a1.position!==null||a1.manque!=='desaccord'||a1.confiance!==0) return _echec(a1.position+' / '+a1.manque+' / '+a1.confiance);
+        return /se contredisent/.test(a1.texte)?true:_echec(a1.texte);});
+      ok('Morpho × photo : morphoPourExercice(« DEVELOPPE COUCHE ») rend une prise en cm, avec sa source',()=>{
+        const u=_mxAnat(0); delete u.morphoAnat;
+        const r=morphoPourExercice(u,'DEVELOPPE COUCHE',{calibrage:{}});
+        const ch=r.chiffre;
+        if(r.schema!=='poussee-horizontale'||!ch) return _echec('pas de consigne : '+JSON.stringify(r));
+        if(!/index à \d+ cm/.test(ch.consigne)||!/bague/.test(ch.consigne)) return _echec(ch.consigne);
+        if(!/Gomo/.test(ch.source)||!/largeur d’épaules au mètre \(42 cm\)/.test(ch.source)) return _echec(ch.source);
+        // Sans largeur d'épaules, rien ; le squat et le soulevé demandent la photo.
+        const v=_mxAnat(0); delete v.morphoAnat; delete v.bilans[0]['deb-epaules'];
+        if(morphoPourExercice(v,'DEVELOPPE COUCHE',{calibrage:{}}).chiffre) return _echec('une prise sans carrure');
+        if(morphoPourExercice(u,{name:'SQUAT'},{calibrage:{}}).chiffre) return _echec('un squat chiffré sans photo');
+        const p=_mxAnat(0.02);
+        const sq=morphoPourExercice(p,{name:'SQUAT'},{calibrage:{}}).chiffre;
+        const sd=morphoPourExercice(p,{name:'SOULEVE DE TERRE'},{calibrage:{}}).chiffre;
+        if(!sq||!/^Barre (haute|basse)/.test(sq.consigne)||!/Fry/.test(sq.source)) return _echec('squat : '+JSON.stringify(sq));
+        if(!sd||!/^Départ (au sol|surélevé de \d+ cm)/.test(sd.consigne)||!/Escamilla/.test(sd.source)) return _echec('soulevé : '+JSON.stringify(sd));
+        // Le coach voit la consigne, sa source et le bouton ; le bouton la pose en réglage du coach.
+        const sauve=currentUser, sauveC=currentClientId, sauveG=getOwnedClient, sauveP=progEx, sauveR=renderProgEx;
+        try{
+          currentUser={id:'co',email:'c@t',role:'coach'}; currentClientId='MX';
+          getOwnedClient=()=>u; renderProgEx=()=>{};
+          progEx=[{name:'DEVELOPPE COUCHE'}];
+          const h=_htmlMorphoExercice(progEx[0]);
+          if(h.indexOf(escapeHtml(ch.consigne))<0||h.indexOf('Source : ')<0) return _echec('bandeau : '+h);
+          if(!/anatEnvoyerConsigne\('levier',0\)/.test(h)) return _echec('pas de bouton');
+          if(!anatEnvoyerConsigne('levier',0)||progEx[0].reglageCoach!==ch.consigne) return _echec('le réglage n’est pas posé');
+          return /Posé en réglage du coach/.test(_htmlMorphoExercice(progEx[0]))?true:_echec('le bandeau ne dit pas qu’il est posé');
+        } finally { currentUser=sauve; currentClientId=sauveC; getOwnedClient=sauveG; progEx=sauveP; renderProgEx=sauveR; _progExDirty=false; }});
+      ok('Morpho × photo : aucune phrase osseuse dans le HTML élève, et la consigne qui descend n’en porte pas',()=>{
+        const p=_mxAnat(0.02);
+        const cs=['DEVELOPPE COUCHE','SQUAT','SOULEVE DE TERRE'].map(n=>morphoPourExercice(p,{name:n},{calibrage:{}}).chiffre);
+        if(cs.some(c=>!c)) return _echec('une consigne manque');
+        const os=cs.filter(c=>ANAT_LEXIQUE_MORPHO.test(c.consigne));
+        if(os.length) return _echec('consigne osseuse : '+os.map(c=>c.consigne).join(' | '));
+        const sauve=currentUser, sauveC=currentClientId;
+        try{
+          currentUser=p; currentClientId='MX';
+          currentUser.sessions_config=[{name:'A',exercises:[{name:'DEVELOPPE COUCHE',reglageCoach:cs[0].consigne}]}];
+          let h=_htmlMorphoExercice({name:'DEVELOPPE COUCHE'});
+          try{ loadClientHome(); h+=document.getElementById('s-client-home').innerHTML||''; }catch(e){}
+          try{ go('s-progress'); renderVolume(); h+=document.getElementById('progress-content').innerHTML||''; }catch(e){}
+          const mots=['Fémur','fémur','Levier fémoral','Cuisse sur tronc','Cuisse sur jambe','Humérus sur avant-bras',
+            'de Leva','Gomo','Pour lui, en chiffres','centre à centre'];
+          const fuites=mots.filter(m=>h.indexOf(m)>=0);
+          return fuites.length?_echec('visible côté élève : '+fuites.join(', ')):true;
+        } finally { currentUser=sauve; currentClientId=sauveC; }});
+
 
       // ══════ L'ÉCRAN RÉPONSES ══════
       ok('Un bilan à moitié rempli ne rend QUE ses réponses',()=>{

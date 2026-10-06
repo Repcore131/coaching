@@ -412,7 +412,10 @@ const MORPHO_AXES=Object.freeze([
   {cle:'A9',lib:'Histoire d’entraînement',court:'Entraînement',nature:'acquis',segment:'global'},
   {cle:'A7',lib:'Amplitude de cheville',court:'Cheville',nature:'fonctionnel',segment:'bas'},
   {cle:'A8',lib:'Amplitudes articulaires',court:'Articulations',nature:'fonctionnel',segment:'global'},
-  {cle:'A1',lib:'Levier fémoral',court:'Fémur / tronc',nature:'osseux',segment:'bas'},
+  // A1 AU RUBAN N'EST PAS UN LEVIER FÉMORAL : entrejambe / taille, c'est la
+  // longueur des jambes. Il ne prend son nom de levier qu'avec la facette
+  // photo, cuisse / tronc (MORPHO_A1_PHOTO).
+  {cle:'A1',lib:'Longueur de jambes',court:'Jambes / taille',nature:'osseux',segment:'bas'},
   {cle:'A2',lib:'Répartition de jambe',court:'Fémur / tibia',nature:'osseux',segment:'bas',calibrable:true},
   {cle:'A3',lib:'Levier brachial',court:'Bras / taille',nature:'osseux',segment:'haut'},
   {cle:'A4',lib:'Répartition de bras',court:'Humérus / avant-bras',nature:'osseux',segment:'haut',calibrable:true},
@@ -515,15 +518,95 @@ function _morphoRepPoignet(sexe,taille){
  * (3 %, perspective et posture ne s'annulent pas dans un rapport) et trois
  * points lus par le moteur. Marge = MORPHO_ET_MARGE × √(disp² + err²).
  */
-function _morphoRepPhoto(sexe,cle){
+function _morphoRepPhoto(sexe,cle,biais){
   const R=ANAT_REF[sexe], D=ANAT_DISP[sexe];
   if(!R||!D) return null;
-  const ref=cle==='A2photo'?R.cuisse/R.jambe:cle==='A4photo'?R.bras/R.avantbras:null;
+  const ref=cle==='A2photo'?R.cuisse/R.jambe:cle==='A4photo'?R.bras/R.avantbras
+    :cle==='A1photo'?R.cuisse/R.tronc:null;
   if(ref==null) return null;
-  const disp=cle==='A2photo'?D.rapportJambes:D.rapportBras;
+  // Cuisse / tronc n'a pas de dispersion publiée en rapport : celle des deux
+  // segments, combinée — plus large que la vraie, jamais plus étroite.
+  const disp=cle==='A2photo'?D.rapportJambes:cle==='A4photo'?D.rapportBras:Math.hypot(D.cuisse,D.tronc);
   const seg=Math.hypot(ANAT_ERR.auto,ANAT_ERR.auto);
-  const err=Math.hypot(ANAT_ERR.echelle,Math.hypot(seg,seg));
+  // `biais` : le biais moteur du segment (en %), quand la facette vient de
+  // l'analyse anatomique — appris, ou le défaut (×2 pour la cuisse).
+  const err=Math.hypot(ANAT_ERR.echelle,Math.hypot(seg,seg),Number(biais)||0);
   return {ref:Math.round(ref*1000)/1000,marge:Math.round(MORPHO_ET_MARGE*Math.hypot(disp,err)/100*ref*1000)/1000};
+}
+/**
+ * LES FACETTES PHOTO DE L'ANALYSE ANATOMIQUE (06/10/2026, build 1821).
+ *
+ * Deux moteurs morpho ne se parlaient pas : les axes, au ruban, et l'analyse
+ * photo (anatMesures), qui lit cuisse, jambe, tronc, humérus et avant-bras.
+ * Quand ses fiches sont de confiance A ou B (anatConfiance), elles alimentent
+ * une facette « photo » de trois axes, rapports de pixels sur la MÊME photo
+ * (l'échelle s'y annule) :
+ *   - A1 : cuisse / tronc, repère de Leva par sexe ;
+ *   - A2 : cuisse / jambe ;
+ *   - A4 : humérus / avant-bras.
+ * ⚠ LE MÈTRE PRIME, LA PHOTO CONFIRME OU SUSPEND (MORPHO_DESACCORD). Sans
+ *   mètre, ou sans repère pour le mètre, la photo situe l'axe seule, avec la
+ *   confiance d'une photo — et dit ce que le ruban viendrait confirmer.
+ * ⚠ AUCUNE DONNÉE PHOTO, AUCUN CHANGEMENT : la facette est null.
+ */
+const MORPHO_A1_PHOTO=Object.freeze({lib:'Levier fémoral',court:'Fémur / tronc'});
+const MORPHO_ANAT_FACETTES=Object.freeze({
+  A1:Object.freeze({cle:'A1photo',lib:'Cuisse sur tronc'}),
+  A2:Object.freeze({cle:'A2photo',lib:'Cuisse sur jambe'}),
+  A4:Object.freeze({cle:'A4photo',lib:'Humérus sur avant-bras'})
+});
+const MORPHO_ANAT_CONF_OK=Object.freeze(['A','B']);
+// L'analyse d'un dossier, calculée une fois par état du dossier.
+const _morphoAnatCache=new WeakMap();
+function _morphoAnatRes(user){
+  const a=user&&user.morphoAnat;
+  if(!a||typeof a!=='object'||!a.face||typeof anatMesures!=='function') return null;
+  const k=[user.updatedAt||'',a.date||'',a.bilan||'',a.v||''].join('|');
+  const c=_morphoAnatCache.get(a);
+  if(c&&c.k===k) return c.res;
+  let res=null;
+  try{
+    let b=null; try{ b=typeof anatBiaisCoach==='function'?anatBiaisCoach():null; }catch(e){ b=null; }
+    res=anatMesures(a,user,{biais:b});
+  }catch(e){ res=null; }
+  _morphoAnatCache.set(a,{k,res});
+  return res;
+}
+/** PURE (au cache près). La facette photo d'un axe, ou null. */
+function _morphoFacetteAnat(user,cle){
+  const d=MORPHO_ANAT_FACETTES[cle];
+  if(!d) return null;
+  const res=_morphoAnatRes(user);
+  if(!res||!Array.isArray(res.fiches)) return null;
+  const par={}; res.fiches.forEach(f=>{ if(f&&f.cle) par[f.cle]=f; });
+  const B=res.biais||null;
+  const sure=f=>!!(f&&f.etat!=='illisible'&&MORPHO_ANAT_CONF_OK.indexOf(f.conf)>=0);
+  const pire=(x,y)=>(x==='B'||y==='B')?'B':'A';
+  const kCu=(B&&B.cuisse)?B.cuisse.k:1;
+  let v=null,conf=null,biais=null;
+  if(cle==='A1'||cle==='A2'){
+    const j=par.jambes, cu=j&&j.mesure&&j.mesure.cu;
+    if(!sure(j)||!(cu&&cu.px>0)) return null;
+    biais=j.mesure.biais!=null?j.mesure.biais:(typeof anatBiaisDefaut==='function'?anatBiaisDefaut('cuisse'):0);
+    if(cle==='A1'){
+      const bu=par.buste, tr=bu&&bu.mesure&&bu.mesure.tr;
+      if(!sure(bu)||!(tr&&tr.px>0)) return null;
+      v=cu.px/kCu/tr.px; conf=pire(j.conf,bu.conf);
+    } else {
+      const ja=j.mesure.ja;
+      if(!(ja&&ja.px>0)) return null;
+      v=cu.px/kCu/ja.px; conf=j.conf;
+    }
+  } else {
+    const br=par.bras, hu=br&&br.mesure&&br.mesure.hu, ab=br&&br.mesure&&br.mesure.abPhoto;
+    if(!sure(br)||!(hu&&hu.px>0&&ab&&ab.px>0)) return null;
+    const kAb=(B&&B.avantbras)?B.avantbras.k:1;
+    v=hu.px/(ab.px/kAb); conf=br.conf;
+    biais=(B&&B.avantbras)?B.avantbras.sd*100:ANAT_BIAIS_DEFAUT_PCT;
+  }
+  if(!(v>0)||!isFinite(v)) return null;
+  const a=user.morphoAnat, dt=Number(a.bilan)>1e9?Number(a.bilan):(Number(a.date)>1e9?Number(a.date):null);
+  return {cle:d.cle,lib:d.lib,valeur:v,date:dt,conf,biais,source:'anat'};
 }
 // La clé de calibrage d'un axe : A2 se calibre PAR PROTOCOLE d'entrejambe.
 function _morphoCalCle(user,cle){
@@ -603,7 +686,15 @@ function morphoCalibrage(athletes,sexe){
  * @returns {{valeur:number|null, erreur:number, unite:string, source:string|null,
  *            date:number|null, conf:number, motif:string|null, aMesurer:string|null}|null}
  */
-function _morphoBrut(user,cle){
+function _morphoBrut(user,cle,o){
+  const r=_morphoBrutRuban(user,cle);
+  // La facette photo de l'analyse anatomique, sur demande : le calibrage, lui,
+  // n'agrège que le ruban.
+  if(!r||!(o&&o.photo)) return r;
+  let f=null; try{ f=_morphoFacetteAnat(user,cle); }catch(e){ f=null; }
+  return f?Object.assign({},r,{photo:f}):r;
+}
+function _morphoBrutRuban(user,cle){
   const E=MORPHO_ERREUR_CM;
   const t=_tailleCm(user);
   const manque=(txt)=>({valeur:null,erreur:0,unite:'',source:null,date:null,conf:0,
@@ -920,7 +1011,7 @@ function morphoAxes(user,opts){
     // ── A1 à A6 · OSSEUX. Rien de tout ceci n'est présenté à un mineur : les
     //    proportions changent pendant la croissance, et une phrase sur le
     //    squelette d'un adolescent ne décrit que son mois de mesure.
-    const r=_morphoBrut(user,d.cle);
+    const r=_morphoBrut(user,d.cle,{photo:true});
     if(mineur){
       a.manque='croissance';
       a.texte='Moins de '+MORPHO_AGE_OSSEUX+' ans : les proportions changent encore. '
@@ -928,7 +1019,13 @@ function morphoAxes(user,opts){
       return a;
     }
     if(!r) return a;
+    const fa=r.photo||null;
+    if(d.cle==='A1'&&fa){ a.lib=MORPHO_A1_PHOTO.lib; a.court=MORPHO_A1_PHOTO.court; }
     a.unite=r.unite; a.aMesurer=r.aMesurer;
+    // SANS MÈTRE, LA PHOTO SITUE L'AXE SEULE — jamais contre un ruban en
+    // désaccord, incohérent ou pris au bout des doigts.
+    if(r.valeur==null&&fa&&sexe&&r.motif!=='desaccord'&&r.motif!=='incoherente'&&r.motif!=='doigts')
+      return _morphoAxePhotoSeule(a,fa,sexe,r);
     if(r.valeur==null){
       a.manque=r.motif||'absente';
       a.texte=r.motif==='desaccord'
@@ -960,13 +1057,16 @@ function morphoAxes(user,opts){
     // repère l'axe rend la main tout de suite, et la photo serait perdue sur
     // le chemin le plus fréquent. Son repère est celui de de Leva, centre à
     // centre, du même sexe (_morphoRepPhoto).
-    const rp=(function(){ try{ return _morphoRapportPhoto(user,d.cle); }catch(e){ return null; } })();
+    // L'analyse anatomique (confiance A ou B) passe avant le rapport lu par
+    // Motion Lab : ses points ont été vus, ou posés, par le coach.
+    const rp=fa||(function(){ try{ return _morphoRapportPhoto(user,d.cle); }catch(e){ return null; } })();
     if(rp){
-      const cp=_morphoRepPhoto(sexe,rp.cle);
+      const cp=_morphoRepPhoto(sexe,rp.cle,fa?fa.biais:undefined);
       a.photo={cle:rp.cle,lib:rp.lib,valeur:rp.valeur,
         position:cp?_morphoPosition(rp.valeur,cp.ref,cp.marge):null,
         repere:cp?cp.ref:null,marge:cp?cp.marge:null,
         dateISO:rp.date?localISODate(new Date(rp.date)):null};
+      if(fa){ a.photo.conf=fa.conf; a.photo.source='anat'; }
     }
 
     // LE REPÈRE, TOUJOURS DU MÊME SEXE : ANSUR II pour A1, A3 et A5, les
@@ -1019,6 +1119,15 @@ function morphoAxes(user,opts){
         // ⚠ PAS DE REPÈRE, DONC PAS DE POSITION. La valeur est montrée — elle
         //   est juste, elle est datée — mais l'app ne dit pas si elle est
         //   haute ou basse, parce qu'elle ne le sait pas.
+        // LA FACETTE ANATOMIQUE SITUE L'AXE quand le ruban n'a pas de repère :
+        // le mètre est montré, la position vient de la photo, avec sa confiance.
+        if(fa&&a.photo&&a.photo.position){
+          const metreTxt=_morphoNb(a.valeur,a.unite)+' au ruban '+_morphoAttribut(r.source,r.date,null)
+            +', en attente d’un repère calibré ('+sexeLib+').';
+          _morphoAxePhotoSeule(a,fa,sexe,r);
+          a.texte=a.texte+' '+metreTxt;
+          return a;
+        }
         a.manque='repere-a-calibrer';
         a.texte=_morphoNb(a.valeur,a.unite)+' '+_morphoAttribut(r.source,r.date,
           Math.round(r.erreur*100)/100+'')
@@ -1061,6 +1170,29 @@ function morphoAxes(user,opts){
     }
     return a;
   });
+}
+
+/**
+ * PURE. Un axe que la photo situe SEULE : sa valeur, son repère de Leva du
+ * même sexe, la confiance d'une photo, et ce que le ruban viendrait confirmer.
+ */
+function _morphoAxePhotoSeule(a,fa,sexe,r){
+  const cp=_morphoRepPhoto(sexe,fa.cle,fa.biais);
+  const v2=x=>_morphoVirgule(Math.round(x*100)/100);
+  a.photo={cle:fa.cle,lib:fa.lib,valeur:fa.valeur,conf:fa.conf,source:'anat',
+    position:cp?_morphoPosition(fa.valeur,cp.ref,cp.marge):null,
+    repere:cp?cp.ref:null,marge:cp?cp.marge:null,
+    dateISO:fa.date?localISODate(new Date(fa.date)):null};
+  if(!cp) return a;
+  const sexeLib=sexe==='F'?'femmes':'hommes';
+  a.valeur=fa.valeur; a.unite=''; a.source='photo'; a.confiance=MORPHO_CONF.photo;
+  a.dateISO=a.photo.dateISO; a.repere=cp.ref; a.marge=cp.marge; a.manque=null;
+  a.position=a.photo.position; a.tolerance=v2(cp.marge);
+  a.repereTexte='repère de '+v2(cp.ref)+' centre à centre ('+sexeLib+', '+ANAT_REF.SOURCE+'), à ± '+v2(cp.marge)+'.';
+  a.texte=fa.lib+' à '+v2(fa.valeur)+' '+_morphoAttribut('photo',fa.date,null)
+    +', confiance '+fa.conf+' : '+a.repereTexte
+    +(r&&r.valeur==null&&r.aMesurer?' Le ruban confirmera : il manque '+r.aMesurer+'.':'');
+  return a;
 }
 
 // ══════════════ MORPHO — LOT M4 : LES QUATORZE FICHES ══════════════
@@ -1736,6 +1868,9 @@ function morphoPourExercice(user,ex,opts){
   const vide={schema:null,lignes:[],variantes:[],reglages:[]};
   let schema=null;
   try{ schema=schemaDe(ex,user); }catch(e){ schema=null; }
+  // « DEVELOPPE COUCHE », « SQUAT BARRE » : un nom tapé à la main, absent de
+  // la banque, garde sa consigne chiffrée par le motif des trois mouvements.
+  if(!schema) schema=_morphoSchemaChiffre((ex&&ex.name)||ex||'');
   if(!schema) return vide;
   let axes=[],res={profils:[]};
   try{ axes=morphoAxes(user,opts); res=morphoProfils(axes); }catch(e){ return vide; }
@@ -1748,12 +1883,145 @@ function morphoPourExercice(user,ex,opts){
     }
   }
   const reglages=morphoReglages(axes,res.profils).filter(r=>r.schemas.indexOf(schema)>=0);
-  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[]};
+  // LA CONSIGNE CHIFFRÉE des modèles anat, pour CET athlète (build 1821).
+  let chiffre=null;
+  try{ chiffre=morphoConsigneChiffree(user,schema,(ex&&ex.name)||ex||''); }catch(e){ chiffre=null; }
+  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[],chiffre};
   let variantes=[];
   // LES VARIANTES CHOISIES PAR LES PROFILS D'ABORD, le catalogue à défaut.
   const pref=[].concat(...lignes.map(l=>l.variantes));
   try{ variantes=_variantesSchema(schema,3,{exclure:(ex&&ex.name)||ex||'',preferees:pref}); }catch(e){}
-  return {schema,lignes,variantes:variantes.slice(0,3),reglages};
+  return {schema,lignes,variantes:variantes.slice(0,3),reglages,chiffre};
+}
+
+/**
+ * LA CONSIGNE CHIFFRÉE D'UN EXERCICE (06/10/2026, build 1821). Les modèles de
+ * l'analyse anatomique (anatSquatModele, anatSouleveModele,
+ * anatDeveloppeModele) calculaient pour CET athlète une prise, un réglage de
+ * barre, un départ — mais ne vivaient que dans l'écran de l'analyse. Le coach
+ * qui pose l'exercice les voit ici, avec leur source en une ligne :
+ *   - poussée horizontale (développé couché barre) : la prise, index à index,
+ *     et sa position par rapport aux bagues ;
+ *   - squat (barre sur le dos) : barre haute ou basse, cale ou pas ;
+ *   - charnière de hanche (soulevé depuis le sol) : départ au sol ou surélevé.
+ * ⚠ G7 : `consigne` est une consigne d'EXÉCUTION, la seule chose qui puisse
+ *   descendre (reglageCoach, par anatEnvoyerConsigne). `detail` et `source`
+ *   restent chez le coach.
+ * ⚠ AUCUNE DONNÉE, AUCUNE CONSIGNE : null. Le développé se calcule aussi au
+ *   mètre (largeur d'épaules et bras) ; squat et soulevé demandent la photo.
+ * @returns {{schema:string,cle:string,consigne:string,detail:string,source:string}|null}
+ */
+const MORPHO_CHIFFRE_EXOS=Object.freeze({
+  'poussee-horizontale':Object.freeze({cle:'developpe',motif:/DEVELOPPE COUCHE|BENCH/,exclu:/HALTERE|MACHINE|POULIE|CABLE|SMITH|PRISE SERREE/}),
+  'squat':Object.freeze({cle:'squat',motif:/SQUAT/,exclu:/GOBLET|BULGARE|SPLIT|HACK|PRESSE|SISSY|BELT|FRONT|DEVANT|SAUT|JUMP|SUMO|HALTERE|KETTLEBELL/}),
+  'charniere-hanche':Object.freeze({cle:'souleve',motif:/SOULEVE DE TERRE|DEADLIFT/,exclu:/ROUMAIN|JAMBES TENDUES|RDL|SUMO|TRAP|HALTERE|UNE JAMBE|UNILATERAL/})
+});
+// Un buste à 5° de la moyenne, au squat, change le réglage ; 3° au soulevé.
+const _morphoNomMaj=nom=>String(nom||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function _morphoSchemaChiffre(nom){
+  const n=_morphoNomMaj(nom);
+  for(const k of Object.keys(MORPHO_CHIFFRE_EXOS)){
+    const d=MORPHO_CHIFFRE_EXOS[k];
+    if(d.motif.test(n)&&!d.exclu.test(n)) return k;
+  }
+  return null;
+}
+const MORPHO_SQUAT_ECART_DEG=5;
+const MORPHO_SOULEVE_ECART_DEG=3;
+const MORPHO_SOULEVE_SURELEVE_MAX=15;
+function morphoConsigneChiffree(user,schema,nom){
+  const d=MORPHO_CHIFFRE_EXOS[schema];
+  if(!d) return null;
+  const n=_morphoNomMaj(nom);
+  if(!d.motif.test(n)||d.exclu.test(n)) return null;
+  const v1=x=>_morphoVirgule(Math.round(x*2)/2);
+  const v0=x=>String(Math.round(x));
+  if(d.cle==='developpe'){
+    const m=_morphoDeveloppeRuban(user);
+    let prise=null,src=null;
+    if(m){ prise=m.prise; src=m.source; }
+    else {
+      const l=_morphoLevierAnat(user,'developpe');
+      if(l&&l.prise){ prise=l.prise; src=l.source; }
+    }
+    if(!prise||!(prise.index>0)) return null;
+    const b=prise.bague;
+    const bagues=Math.abs(b)<0.5?'index sur les bagues'
+      :(v1(Math.abs(b))+'\u00a0cm '+(b>0?'en dedans':'au-delà')+' de chaque bague');
+    return {schema,cle:'developpe',
+      consigne:'Prise\u00a0: index à '+v0(prise.index)+'\u00a0cm l’un de l’autre, '+bagues+'.',
+      detail:'Humérus à '+ANAT_DEV.THETA+'° du tronc en bas, avant-bras vertical\u00a0: '+v0(prise.prise)
+        +'\u00a0cm de milieu de paume à milieu de paume.',
+      source:'Modèle '+ANAT_DEV.SOURCE+' ; '+src+'.'};
+  }
+  if(d.cle==='squat'){
+    const l=_morphoLevierAnat(user,'squat');
+    if(!l||!l.modele||!l.modele.A) return null;
+    const M=l.modele, cfg=(barre,cale)=>anatSquatCalc(M.A,Object.assign({},M.base,{barre,cale})).angle;
+    const ref=anatSquatCalc(M.Rp,M.base).angle;
+    const hs=cfg('haute',false), hc=cfg('haute',true), bs=cfg('basse',false);
+    const e=hs-ref;
+    const consigne=e>=MORPHO_SQUAT_ECART_DEG?'Barre haute, talons sur une cale de 1,5 à 2,5\u00a0cm.'
+      :e<=-MORPHO_SQUAT_ECART_DEG?'Barre basse possible, sans cale.':'Barre haute, sans cale.';
+    const detail='Buste à '+v0(hs)+'° de la verticale barre haute ('+v0(hc)+'° avec une cale, '+v0(bs)
+      +'° barre basse) ; proportions moyennes, même réglage\u00a0: '+v0(ref)+'°.';
+    const tib=M.alphaSrc==='video'?'tibia mesuré en vidéo':M.alphaSrc==='test'?'tibia tiré du test du genou au mur':'tibia à '+ANAT_SQUAT.ALPHA+'°';
+    return {schema,cle:'squat',consigne,detail,
+      source:'Modèle '+ANAT_SQUAT.SOURCE+' ; cuisse, jambe et tronc lus sur la photo ; '+tib+'.'};
+  }
+  const l=_morphoLevierAnat(user,'souleve');
+  const c=l&&l.styles&&l.styles.conventionnel;
+  if(!c||!c.moi||!c.ref||!l.modele||!l.modele.A) return null;
+  let h=null, atteint=true;
+  if(c.moi.tronc<c.ref.tronc-MORPHO_SOULEVE_ECART_DEG){
+    for(let x=1;x<=MORPHO_SOULEVE_SURELEVE_MAX;x++){
+      const m=anatSouleveModele(Object.assign({},l.modele.A,{style:'conventionnel',barreCm:ANAT_SOULEVE.BARRE_CM+x}));
+      if(m&&m.tronc>=c.ref.tronc){ h=x; break; }
+    }
+    // Au-delà de 15 cm, la cale ne suffit plus : on le dit, sans inventer.
+    if(h==null){ h=MORPHO_SOULEVE_SURELEVE_MAX; atteint=false; }
+  }
+  return {schema,cle:'souleve',
+    consigne:h?'Départ surélevé de '+h+'\u00a0cm, disques sur des cales.':'Départ au sol.',
+    detail:'Tronc à '+v0(c.moi.tronc)+'° de l’horizontale au décollage (proportions moyennes\u00a0: '+v0(c.ref.tronc)+'°)'
+      +(h?(atteint?' ; surélevé de '+h+'\u00a0cm, il rejoint la moyenne.':' ; même à '+h+'\u00a0cm, il reste sous la moyenne\u00a0: le sumo ou la trap bar sont à regarder.'):'.')
+      +(l.net&&l.decision?' '+l.decision:''),
+    source:'Modèle '+ANAT_SOULEVE.SOURCE+' ; '+(l.modele.env?'bras tirés de l’envergure, tronc et jambes lus sur la photo':'longueurs lues sur la photo')+'.'};
+}
+/** Un levier de l'analyse anatomique, si la photo de face l'a rendu. */
+function _morphoLevierAnat(user,cle){
+  const res=_morphoAnatRes(user);
+  const l=res&&Array.isArray(res.leviers)?res.leviers.find(x=>x&&x.cle===cle):null;
+  return l||null;
+}
+/**
+ * PURE. La prise du développé au MÈTRE : largeur d'épaules (biacromiale) et
+ * bras. Le bras va de la pointe de l'épaule au poignet ; avec l'avant-bras,
+ * l'humérus est leur différence ; sans lui, le bras se partage selon de Leva.
+ * Sans bras, l'envergure, comme dans anatLeviers.
+ */
+function _morphoDeveloppeRuban(user){
+  const t=_tailleCm(user);
+  const cm=k=>{ const m=mesureMorpho(user,k); return m&&m.cm>0?m.cm:null; };
+  const ep=cm('deb-epaules');
+  if(!t||!ep) return null;
+  let sx=null; try{ sx=sexeMorpho(user); }catch(e){ sx=null; }
+  const S=sx==='F'?'F':'H', R=ANAT_REF[S];
+  const br=cm('deb-bras'), ab=cm('deb-avantbras'), env=cm('deb-envergure');
+  let H=null,A=null,src='';
+  if(br&&br/t<=RATIO_BRAS_DOIGTS){
+    if(ab&&ab<br){ H=br-ab; A=ab; src='bras ('+_morphoVirgule(br)+' cm) et avant-bras ('+_morphoVirgule(ab)+' cm) au mètre'; }
+    else { H=br*R.bras/(R.bras+R.avantbras); A=br-H; src='bras au mètre ('+_morphoVirgule(br)+' cm), partagé humérus / avant-bras selon '+ANAT_REF.SOURCE; }
+  } else if(env){
+    const MR=ANAT_MESURES_REF[S], car=ANAT_LARGEURS[S].biacromial;
+    const k=(env/t-ep/t)/(MR.envergure-car);
+    if(!(k>0)) return null;
+    H=R.bras*k*t; A=R.avantbras*k*t; src='bras tirés de l’envergure au mètre ('+_morphoVirgule(env)+' cm)';
+  }
+  if(!(H>0&&A>0)) return null;
+  const thx=cm('deb-thorax');
+  const prise=anatDeveloppeModele({bi:ep,H,A,main:ANAT_MAIN*t,thorax:thx||ANAT_DEV.THORAX[S]*t,theta:ANAT_DEV.THETA,arche:false});
+  return {prise,source:'largeur d’épaules au mètre ('+_morphoVirgule(ep)+' cm), '+src};
 }
 
 /**
@@ -1769,7 +2037,7 @@ function _htmlMorphoExercice(ex){
   if(!c) return '';
   let r=null;
   try{ r=morphoPourExercice(c,ex,{calibrage:_morphoCalCache()}); }catch(e){ return ''; }
-  if(!r||(!r.lignes.length&&!r.reglages.length)) return '';
+  if(!r||(!r.lignes.length&&!r.reglages.length&&!r.chiffre)) return '';
   const bloc=(titre,corps)=>'<div style="margin-bottom:8px">'
     +'<span style="color:var(--sub);font-weight:800">'+escapeHtml(titre)+' :</span> '
     +'<span style="color:var(--text-dim)">'+corps+'</span></div>';
@@ -1783,6 +2051,18 @@ function _htmlMorphoExercice(ex){
     h+=bloc(x.lib,'<span style="color:var(--text-strong);font-weight:700">'+escapeHtml(x.consigne)
       +'</span> '+escapeHtml(x.pourquoi));
   });
+  if(r.chiffre){
+    const ch=r.chiffre;
+    // Le bouton pose la CONSIGNE en réglage du coach sur cet exercice ; rien
+    // d'autre ne descend (G7).
+    const i=Array.isArray(progEx)?progEx.indexOf(ex):-1;
+    const pose=ex&&ex.reglageCoach===ch.consigne;
+    h+=bloc('Pour lui, en chiffres','<span style="color:var(--text-strong);font-weight:700">'+escapeHtml(ch.consigne)
+      +'</span> '+escapeHtml(ch.detail))
+      +'<div class="mx-chiffre-src" style="color:var(--text-faint);margin:-4px 0 8px">Source : '+escapeHtml(ch.source)+'</div>'
+      +(pose?'<div style="color:var(--green);margin-bottom:8px">Posé en réglage du coach.</div>'
+        :(i>=0?'<button type="button" class="px-b-blanc" style="margin-bottom:8px" onclick="anatEnvoyerConsigne(\'levier\','+i+')">Poser en réglage du coach</button>':''));
+  }
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
       +' : à envisager à côté, jamais à la place.');

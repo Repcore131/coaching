@@ -656,8 +656,11 @@ function anatPoserConsigne(sessions,slugs,consigne){
   }
   return n;
 }
-/** « Envoyer la consigne » d'un aménagement : elle s'attache aux exercices du programme. CÔTÉ COACH. */
+/** « Envoyer la consigne » d'un aménagement : elle s'attache aux exercices du programme. CÔTÉ COACH.
+ *  cle === 'levier' : la consigne chiffrée de l'exercice n° i de l'éditeur de
+ *  séance (morphoPourExercice), posée sur CET exercice — enregistrée avec la séance. */
 function anatEnvoyerConsigne(cle,i){
+  if(cle==='levier') return _anatEnvoyerConsigneLevier(i);
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return false;
   const res=anatMesuresRendu(c.morphoAnat,c);
@@ -672,6 +675,21 @@ function anatEnvoyerConsigne(cle,i){
   d.updatedAt=Date.now(); users[c.email]=d;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' '+ICO.coche,'la consigne est');
+  return true;
+}
+function _anatEnvoyerConsigneLevier(i){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  const c=getOwnedClient(currentClientId);
+  const ex=(c&&Array.isArray(progEx))?progEx[Number(i)]:null;
+  if(!ex) return false;
+  let r=null; try{ r=morphoPourExercice(c,ex,{calibrage:_morphoCalCache()}); }catch(e){ r=null; }
+  const ch=r&&r.chiffre;
+  if(!ch||!ch.consigne){ toast('Pas de consigne chiffrée pour cet exercice.','var(--orange)'); return false; }
+  // ⚠ G7 : SEULE LA CONSIGNE descend, jamais la source ni la raison.
+  ex.reglageCoach=ch.consigne;
+  _progExDirty=true;
+  try{ renderProgEx(); }catch(e){}
+  toast('Réglage posé : il le verra une fois la séance enregistrée '+ICO.coche);
   return true;
 }
 /** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
@@ -2105,7 +2123,7 @@ function _htmlAnat(c){
     +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % : perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
       +' Biais du moteur : '+(res.biais?Object.keys(res.biais).map(k=>(ANAT_BIAIS_SEGMENTS.find(x=>x.cle===k)||{}).lib+' '+_anatSN((res.biais[k].k-1)*100,1)+' % (calibré sur '+res.biais[k].n+' athlètes)').join(', ')+'.'
-        :'non calibré : il faut au moins '+MORPHO_CALIB_MIN+' athlètes avec photo et mesures au mètre ; d’ici là, ±'+ANAT_BIAIS_DEFAUT_PCT+' % de biais possible dans la marge des longueurs.')
+        :'non calibré : il faut au moins '+MORPHO_CALIB_MIN+' athlètes avec photo et mesures au mètre ; d’ici là, ±'+ANAT_BIAIS_DEFAUT_PCT+' % de biais possible dans la marge des longueurs (±'+anatBiaisDefaut('cuisse')+' % pour la cuisse).')
       +(echelle&&echelle.cheveux?' Cheveux volumineux : le sommet du crâne est posé sur l’os, marge d’échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' % au moins.':'')
       +(echelle&&echelle.piedsCoupes?' Pieds coupés : le talon est deviné, l’échelle est estimée.':'')
       +(ver?' Échelle 2, par le genou : '+(ver.source==='metre'
