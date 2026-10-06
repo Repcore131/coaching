@@ -955,6 +955,23 @@ function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
   return (v<0||v>m)?null:v;
 }
+// LA PRESSE, LE HACK, LA BARRE GUIDEE (06/10/2026) : 600 kg a la presse a
+// cuisses existent, et le plafond de 500 les refusait. Ces exercices montent
+// a CHARGE_SAISIE_MAX_MACHINE ; au-dela de 500, la saisie est CONFIRMEE
+// (« 620 kg à la presse ? »), pas refusee. Tout le reste garde 500.
+// PURE. `ex` : le nom de l'exercice, ou l'exercice ({name}). En kilos.
+const CHARGE_SAISIE_MAX_MACHINE=1000;
+const CHARGE_MATERIEL_LOURD=Object.freeze(['PRESSE','HACK','SMITH']);
+function _chargeNomEx(ex){ return String(ex&&typeof ex==='object'?(ex.name||ex.nom||''):(ex||'')); }
+function chargeLourde(ex){
+  const nom=_chargeNomEx(ex);
+  let m=[]; try{ m=materielExercice(nom)||[]; }catch(e){ m=[]; }
+  if(m.some(k=>CHARGE_MATERIEL_LOURD.indexOf(k)>=0)) return m.find(k=>CHARGE_MATERIEL_LOURD.indexOf(k)>=0);
+  const n=nom.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+  return /PRESSE|LEG PRESS/.test(n)?'PRESSE':/HACK/.test(n)?'HACK':null;
+}
+function chargeMaxSaisie(ex){ return chargeLourde(ex)?CHARGE_SAISIE_MAX_MACHINE:CHARGE_SAISIE_MAX; }
+const CHARGE_LIEU_LOURD=Object.freeze({PRESSE:'à la presse',HACK:'au hack squat',SMITH:'à la barre guidée'});
 // La charge qui merite une question : plus de 1,5 fois la meilleure charge
 // deja faite sur l'exercice, et plus de 20 kg. Sans historique, aucune
 // question — il n'y a rien a comparer. En assistance, la « meilleure » charge
@@ -1009,10 +1026,12 @@ function _woChargeSaisie(idx,i,champ,el){
   };
   // VIDER UN CHAMP reste une saisie volontaire, comme avant.
   if(tape===''){ el.value=''; ecrire(''); return; }
-  const v=lireCharge(tape,lb?Math.round(CHARGE_SAISIE_MAX/LB_KG):CHARGE_SAISIE_MAX);
+  const nomEx=woState.exercises[idx]&&woState.exercises[idx].name;
+  const maxKg=chargeMaxSaisie(nomEx);
+  const _max=lb?Math.round(maxKg/LB_KG):maxKg;
+  const v=lireCharge(tape,_max);
   if(v==null){
     el.value=avant;
-    const _max=lb?Math.round(CHARGE_SAISIE_MAX/LB_KG):CHARGE_SAISIE_MAX;
     toast(/^\s*-/.test(tape)?'Charge négative ignorée'
       :/^\d+(?:[.,]\d*)?$/.test(tape)?'Charge hors limites : '+_max+' '+(lb?'lb':'kg')+' au plus'
       :'Charge illisible : tape un nombre, par exemple 82,5','var(--orange)');
@@ -1026,12 +1045,16 @@ function _woChargeSaisie(idx,i,champ,el){
   const val=inchangee&&!lb?String(s[champ]):String(kg);
   // Le champ affiche ce qui a été retenu : deux vérités pour une saisie, jamais.
   el.value=lb?String(v):val;
-  const nomEx=woState.exercises[idx]&&woState.exercises[idx].name;
   const record=inchangee?null:chargeSuspecte(kg,currentUser,nomEx);
-  if(record==null){ ecrire(val); return; }
+  // Au-delà de 500 kg (presse, hack, barre guidée) : une question, même sans
+  // historique. Une seule question si la charge est aussi suspecte.
+  const lourde=!inchangee&&Number(kg)>CHARGE_SAISIE_MAX;
+  if(record==null&&!lourde){ ecrire(val); return; }
   const u=lb?'lb':'kg', aff=x=>String(lb?kgVersAffiche(x,currentUser):x).replace('.',',');
-  return rcConfirm(aff(kg)+' '+u+' ?',
-    'Ta meilleure charge sur cet exercice est '+aff(record)+' '+u+'. Confirme, ou corrige si une virgule a sauté.',
+  const lieu=lourde?CHARGE_LIEU_LOURD[chargeLourde(nomEx)]||'sur cette machine':'';
+  return rcConfirm(aff(kg)+' '+u+(lieu?' '+lieu:'')+' ?',
+    record!=null?'Ta meilleure charge sur cet exercice est '+aff(record)+' '+u+'. Confirme, ou corrige si une virgule a sauté.'
+      :'C’est au-delà de 500 kg. Confirme, ou corrige si une virgule a sauté.',
     'Oui, c’est ça','Corriger').then(ok=>{
       if(ok){ ecrire(val); return true; }
       el.value=avant;

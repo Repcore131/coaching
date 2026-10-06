@@ -69000,6 +69000,55 @@ async function testExercices(){
       } finally { window.rcConfirm=svConf; window.recordsExercice=svRec; _r25Ranger(sU,sW,sSnap,svSave,svToast); }
     });
 
+    // ══ 06/10/2026 — LA PRESSE MONTE À 1 000 KG, CONFIRMÉS AU-DELÀ DE 500 ══
+    ok('chargeMaxSaisie : 1 000 kg pour presse, hack et barre guidée, 500 ailleurs ; lireCharge suit le max',()=>{
+      if(lireCharge('520',1000)!==520) return _echec('lireCharge(520, 1000) = '+lireCharge('520',1000));
+      if(lireCharge('520')!==null) return _echec('520 sans max passé');
+      if(lireCharge('82,5',1000)!==82.5) return _echec('82,5 avec max 1000');
+      const cas=[['PRESSE A CUISSES',1000],['Leg press 45°',1000],['HACK SQUAT',1000],['Squat à la Smith',1000],
+        [{name:'PRESSE INCLINÉE'},1000],['DEVELOPPE COUCHE',500],['SQUAT',500],['LEG EXTENSION',500],['',500]];
+      for(const [e,att] of cas) if(chargeMaxSaisie(e)!==att) return _echec(JSON.stringify(e)+' → '+chargeMaxSaisie(e));
+      return true;});
+    okA('Charges de séance : 620 kg à la presse confirmés puis écrits, 620 au développé couché refusés, 82,5 reste 82,5',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const svConf=window.rcConfirm, svRec=window.recordsExercice;
+      const toasts=[]; let questions=[], reponse=true;
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(m);
+        window.rcConfirm=(t)=>{ questions.push(t); return Promise.resolve(reponse); };
+        window.recordsExercice=()=>null;
+        _r25Monter([{name:'PRESSE A CUISSES',series:2,reps:'10',repos:'2 min'}]);
+        const d0=woState.sessionData[0];
+        // 620 à la presse : une question, puis écrit.
+        const c=_r25Champ(0,0); c.value='620';
+        await _woChargeSaisie(0,0,'weight',c);
+        if(questions[0]!=='620 kg à la presse ?') return _echec('question : '+questions[0]);
+        if(d0.sets[0].weight!=='620') return _echec('620 confirmé mais stocké « '+d0.sets[0].weight+' »');
+        // Refusé → rien n'est écrit.
+        reponse=false;
+        const c2=_r25Champ(0,1); c2.value='700';
+        await _woChargeSaisie(0,1,'weight',c2);
+        if(d0.sets[1].weight==='700') return _echec('700 écrit malgré « Corriger »');
+        // Au-delà de 1 000 : refusé sans question.
+        questions=[];
+        const c3=_r25Champ(0,1); c3.value='1200'; _woChargeSaisie(0,1,'weight',c3);
+        if(d0.sets[1].weight==='1200'||questions.length) return _echec('1200 accepté ou questionné');
+        if(!toasts.some(m=>/1000 kg au plus/.test(m))) return _echec('toast du plafond machine : '+toasts.join(' | '));
+        // « 82,5 » reste 82,5 à la presse.
+        const p=_r25Champ(0,1); p.value='82,5'; const r=_woChargeSaisie(0,1,'weight',p); if(r&&r.then) await r;
+        if(d0.sets[1].weight!=='82.5') return _echec('82,5 à la presse : '+d0.sets[1].weight);
+        // 620 au développé couché : refusé, sans question.
+        _r25Monter([{name:'DEVELOPPE COUCHE',series:2,reps:'8',repos:'2 min'}]);
+        const d1=woState.sessionData[0];
+        const b=_r25Champ(0,0); b.value='620'; _woChargeSaisie(0,0,'weight',b);
+        if(d1.sets[0].weight==='620'||questions.length) return _echec('620 au développé couché accepté ou questionné');
+        if(!toasts.some(m=>/500 kg au plus/.test(m))) return _echec('pas de toast à 500');
+        const q=_r25Champ(0,1); q.value='82,5'; const r2=_woChargeSaisie(0,1,'weight',q); if(r2&&r2.then) await r2;
+        if(d1.sets[1].weight!=='82.5') return _echec('82,5 au développé couché : '+d1.sets[1].weight);
+        return questions.length?_echec('82,5 a posé une question'):true;
+      } finally { window.rcConfirm=svConf; window.recordsExercice=svRec; _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
     // ══ 30/09/2026 — LA VIDÉO FILMÉE EN SÉANCE NE FAIT PLUS QUITTER LA SÉANCE ══
     okA('Vidéo de série en séance : gardée dans la file, badge 🎥 1, aucun changement d’écran',async()=>{
       const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
