@@ -449,6 +449,7 @@ function _libelleJourNut(dateISO){
 // jauges, pas d'emplacement vide qui attend : la rarete EST le dispositif. Une
 // ligne toujours presente serait lue une fois puis jamais plus, et les quatre
 // gardes du calcul n'auraient servi a rien.
+let _microSignalCharge=false;
 function _htmlSignalMicro(user,finISO){
   const u=_dossier(user);
   if(!u) return '';
@@ -458,6 +459,20 @@ function _htmlSignalMicro(user,finISO){
   if(!s) return '';
   let l=[];
   try{ l=alimentsRichesEn(u,s.cle,MICRO_SIGNAL_N_ALIMENTS,finISO); }catch(e){ l=[]; }
+  // LA BASE N'EST PAS ENCORE LÀ (build 1843) : chargée maintenant, puis la
+  // carte seule est repeinte. Aucun indicateur ; hors ligne, la phrase reste.
+  const _vide=!(Array.isArray(_ciqualDB)&&_ciqualDB.length);
+  if(_vide&&!_microSignalCharge){
+    let indispo=false; try{ indispo=ciqualIndisponible(); }catch(e){}
+    if(!indispo){
+      _microSignalCharge=true;
+      Promise.resolve().then(()=>_loadCiqual()).then(()=>{
+        const z=document.getElementById('micro-signal');
+        if(z&&Array.isArray(_ciqualDB)&&_ciqualDB.length){ try{ z.outerHTML=_htmlSignalMicro(user,finISO); }catch(e){} }
+      }).catch(()=>{}).finally(()=>{ _microSignalCharge=false; });
+    }
+  }
+  let _vegeB12=false; try{ _vegeB12=s.cle==='b12'&&_microVege(u); }catch(e){}
   // LES SIENS D'ABORD, ET LA PHRASE LE DIT. « Parmi ce que tu manges deja »
   // n'est pas un ornement : c'est la raison pour laquelle le conseil est
   // suivi, et la taire reviendrait a rendre la liste indistincte d'un
@@ -471,8 +486,9 @@ function _htmlSignalMicro(user,finISO){
               +' que tu manges déjà :'
             : 'Les plus riches en '+s.lib.toLowerCase()+' :'))
     : '';
-  return `<div style="margin-bottom:14px;background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
+  return `<div id="micro-signal" style="margin-bottom:14px;background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;font-weight:600">${escapeHtml(phraseSignalMicro(s))}</div>
+    ${_vegeB12?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">${escapeHtml(MICRO_B12_VEGE)}</div>`:''}
     ${l.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">${escapeHtml(intro)}</div>
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.7;margin-top:4px">${
       l.map(x=>'· '+escapeHtml(x.nom)+' <span style="color:var(--text-faint)">('

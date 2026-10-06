@@ -87884,6 +87884,49 @@ vendredi 78 6h 44m
           'autres='+(s?s.autres:'—'));
       })();
 
+      // ── Build 1843 : régime, évictions, abats crus, B12 ────────────────
+      (()=>{
+        if(!Array.isArray(_ciqualDB)||!_ciqualDB.length){
+          ok('Micro 1843 : base Ciqual absente',false,'la base n’est pas chargée');
+          return;
+        }
+        const fiche=id=>_ciqualDB.find(f=>f.id===id)||{};
+        const vege={email:'vg@t.fr',gender:'F',bilans:[{type:'depart',date:1,'deb-vege':'oui'}],nutrition:{log:{}}};
+        ok('Micro : végétarienne + fer → aucun aliment du groupe viandes/poissons ni d’origine animale',()=>{
+          if(!_microVege(vege)) return _echec('fixture non végétarienne');
+          const l=alimentsRichesEn(vege,'fe',3,FIN);
+          if(!l.length) return _echec('aucune proposition');
+          const mauvais=l.filter(x=>/^viandes/.test(_microNorm(fiche(x.id).g))||/foie|rognon|boeuf|poisson|boudin|moule/.test(_microNorm(x.nom)));
+          return mauvais.length?_echec(mauvais.map(x=>x.nom).join(' | ')):true;});
+        ok('Micro : éviction « foie » → aucun foie proposé depuis la base',()=>{
+          const u={email:'ev@t.fr',gender:'H',nutrition:{log:{}},
+            sante:{evictions:[{niveau:EV_NIVEAUX[0],cible:{type:'motif',valeur:'foie'}}]}};
+          for(const cle of ['fe','b12','zn']){
+            const l=alimentsRichesEn(u,cle,3,FIN);
+            if(l.some(x=>/foie/.test(_microNorm(x.nom)))) return _echec(cle+' : '+l.map(x=>x.nom).join(' | '));
+          }
+          return true;});
+        ok('Micro : B12 + végétarienne → liste vide et phrase dédiée',()=>{
+          if(alimentsRichesEn(vege,'b12',3,FIN).length) return _echec('une liste');
+          return /la B12 ne vient pas des végétaux/.test(MICRO_B12_VEGE)&&!/carence/i.test(MICRO_B12_VEGE)?true:_echec('phrase');});
+        ok('Micro : aucun abat cru proposé depuis la base, quel que soit le nutriment',()=>{
+          const u={email:'ab@t.fr',gender:'H',nutrition:{log:{}}};
+          for(const cle of Object.keys(MICRO_REFS)){
+            const l=alimentsRichesEn(u,cle,3,FIN);
+            const c=l.filter(x=>!x.sien&&/\bcrue?s?\b/.test(_microNorm(x.nom))&&/foie|rognon|coeur|cervelle|langue/.test(_microNorm(x.nom)));
+            if(c.length) return _echec(cle+' : '+c.map(x=>x.nom).join(' | '));
+          }
+          return true;});
+        ok('Micro : un abat que l’athlète journalise lui-même reste proposable (c’est le sien)',()=>{
+          const foie=_ciqualDB.find(f=>/foie/.test(_microNorm(f.n))&&f.fe!=null&&f.fe>5);
+          if(!foie) return _echec('fixture');
+          const u={email:'fo@t.fr',gender:'H',nutrition:{log:{[jr(0)]:{entries:[{kcal:100,alim_id:foie.id,fe:1}]}}}};
+          return alimentsRichesEn(u,'fe',3,FIN).some(x=>x.id===foie.id&&x.sien)?true:_echec('le sien a disparu');});
+        ok('Micro : aTCA → aucun signal (non-régression)',()=>{
+          const u={email:'tc@t.fr',gender:'F',tcaRisque:true,nutrition:{log:{}}};
+          return _htmlSignalMicro(u,FIN)===''?true:_echec('signal sous aTCA');});
+      })();
+
       // ── LES ALIMENTS PROPOSES VIENNENT DES SIENS ───────────────────────
       //
       // ⚠ UN CONSEIL BATI SUR SES PROPRES ALIMENTS EST SUIVI ; une liste

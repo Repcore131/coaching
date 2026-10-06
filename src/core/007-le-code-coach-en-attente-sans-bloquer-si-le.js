@@ -2263,12 +2263,54 @@ function alimentsRichesEn(user,cle,n,finISO){
   if(dedans.length>=combien) return dedans;
   // ── ET SEULEMENT ENSUITE, LA BASE ─────────────────────────────────────
   // Le complement est trie par teneur, mais on ecarte ce qui est deja retenu.
+  // BUILD 1843 : SUR LA BASE SEULEMENT (ce qu'il mange déjà reste proposable),
+  // trois filtres : ce qu'il a déclaré ne pas manger (evictionDe), la viande
+  // et le poisson chez un végétarien, et le cru quand le cuit existe (tout
+  // abat cru, à défaut). La B12 d'un végétarien ne liste rien du tout.
+  const vege=(function(){ try{ return _microVege(u); }catch(e){ return false; } })();
+  if(vege&&cle==='b12') return [];
+  const exclu=_microExclusBase(u,base,vege);
   const pris={}; for(const x of dedans) pris[String(x.id)]=true;
-  const reste=base.filter(f=>mangeable(f)&&!pris[String(f.id)]).sort(trier)
+  const reste=base.filter(f=>mangeable(f)&&!pris[String(f.id)]&&!exclu(f)).sort(trier)
     .slice(0,combien-dedans.length).map(f=>({id:f.id,nom:f.n,
       valeur:Number(f[cle]),unite:r.unite,sien:false}));
   return dedans.concat(reste);
 }
+
+// Les mots qui signent un aliment d'origine animale (chair, abats, poisson),
+// pour un athlète végétarien. Le groupe Ciqual « viandes, oeufs, poissons »
+// est écarté en entier ; ces mots attrapent le reste (plats, charcuterie…).
+const MICRO_MOTS_ANIMAUX=Object.freeze(['viande','abats','abat','foie','rognon','coeur','cervelle','langue',
+  'tripes','poisson','fruits de mer','crustace','mollusque','boeuf','veau','porc','agneau','mouton','poulet',
+  'dinde','canard','oie','lapin','gibier','jambon','saucisse','saucisson','lardon','bacon','thon','saumon',
+  'sardine','maquereau','hareng','anchois','cabillaud','crevette','moule','huitre','calmar','poulpe','escargot',
+  'gelatine','boudin','pate de foie','rillettes','chorizo','merguez','steak','escalope']);
+const MICRO_MOTS_ABATS=Object.freeze(['foie','rognon','coeur','cervelle','langue','tripes','abats','ris de','gesier']);
+// PURE. Le filtre des aliments de la BASE à ne pas proposer.
+function _microExclusBase(u,base,vege){
+  const nrm=s=>_microNorm(s).replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+  const cru=/\bcrue?s?\b/, cuit=/\b(cuite?s?|bouilli|bouillie|grille|grillee|roti|rotie|braise|braisee|poele|poelee|saute|sautee|vapeur)\b/;
+  const cle=n=>nrm(n).replace(cru,' ').replace(cuit,' ').replace(/\s+/g,' ').trim();
+  const cuits={};
+  for(const f of base){ const n=nrm(f&&f.n); if(cuit.test(n)) cuits[cle(f.n)]=true; }
+  const mot=(n,l)=>l.some(m=>(' '+n+' ').indexOf(' '+m+' ')>=0||n.indexOf(m+' ')===0||n.indexOf(' '+m)>=0);
+  return f=>{
+    if(!f) return true;
+    try{ if(evictionDe(u,f)) return true; }catch(e){}
+    const n=nrm(f.n);
+    if(vege){
+      if(_microNorm(f.g||'').indexOf('viandes')===0) return true;
+      if(mot(n,MICRO_MOTS_ANIMAUX)) return true;
+    }
+    if(cru.test(n)){
+      if(cuits[cle(f.n)]) return true;
+      if(mot(n,MICRO_MOTS_ABATS)) return true;
+    }
+    return false;
+  };
+}
+// LA B12 DU VÉGÉTARIEN : pas de liste, une phrase. Registre « apports ».
+const MICRO_B12_VEGE='Chez les végétaliens, la B12 ne vient pas des végétaux : c’est un sujet à voir avec ton coach ou un professionnel de santé.';
 
 // ⚠ LE MOT « CARENCE » N'EST PAS ECRIT ICI, ET IL NE DOIT PAS L'ETRE. L'app
 // parle d'APPORTS ALIMENTAIRES — ce qui est entre dans le journal — et non
