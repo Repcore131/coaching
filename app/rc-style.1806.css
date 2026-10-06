@@ -13361,3 +13361,10 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rr-a:hover,.rr-a:focus-visible{border-color:var(--red)}
 .rr-aucun{padding:10px;font-size:var(--fs-xs);color:var(--sub);display:flex;flex-direction:column;gap:8px}
 .vig-voir{display:block;margin:0 auto}
+
+/* ══ L'ENVOI GROUPÉ DANS L'APP (06/10/2026) : relecture et compte rendu ══ */
+.grp-rel{display:flex;flex-direction:column;gap:8px}
+.grp-n{font-size:var(--fs-md);font-weight:800;color:var(--text)}
+.grp-lib{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.grp-apercu{font-size:var(--fs-sm);color:var(--text);background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-2);padding:10px 12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}

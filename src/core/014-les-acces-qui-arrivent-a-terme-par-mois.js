@@ -1952,6 +1952,8 @@ function _htmlInactifs(liste,maintenant){
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
+    // « Message » (06/10/2026) : tous les inactifs cochés, le texte de relance.
+    +(n>1?'<button type="button" class="btn btn-outline btn-sm" style="margin:0 0 0 auto;min-height:36px;font-size:var(--fs-2xs);letter-spacing:1px" onclick="openWaGroupe(null,'+_attrArg(l.map(c=>String(c.id)))+',_waCorpsGroupe(\'inactif\'))">Message</button>':'')
     +'</div>'
     +'<div style="padding:0 14px">'
     +_crListe(l,c=>{

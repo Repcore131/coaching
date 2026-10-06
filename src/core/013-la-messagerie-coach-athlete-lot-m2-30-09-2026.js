@@ -117,23 +117,36 @@ function msgClientsSansReponse(clients,maintenant){
 }
 
 // ── L'envoi ──────────────────────────────────────────────────────────────
-async function msgEnvoyer(athleteCle,brut){
-  const u=currentUser;
+// `o` (06/10/2026, envoi groupé) : {id} impose l'identifiant — la clé
+// d'idempotence du lot —, {silencieux} tait les toasts (le compte rendu du lot
+// parle à leur place).
+async function msgEnvoyer(athleteCle,brut,o){
+  const u=currentUser, x=o||{};
+  const dire=(t)=>{ if(!x.silencieux) toast(t,'var(--orange)'); };
   const v=msgTexteValide(brut);
-  if(!v.ok){ toast(v.raison,'var(--orange)'); return {ok:false,raison:v.raison}; }
-  if(!_msgEnLigne()){ toast('Pas de réseau : ton message n’est pas parti. Réessaie une fois connecté.','var(--orange)'); return {ok:false,raison:'hors_ligne'}; }
+  if(!v.ok){ dire(v.raison); return {ok:false,raison:v.raison}; }
+  if(!_msgEnLigne()){ dire('Pas de réseau : ton message n’est pas parti. Réessaie une fois connecté.'); return {ok:false,raison:'hors_ligne'}; }
   // Un modèle dont une variable n'est pas résolue ne part jamais tel quel.
-  if(u.role==='coach'&&/\{[^}\s]{2,20}\}/.test(v.texte)){ toast('Une variable du modèle n’est pas complétée','var(--orange)'); return {ok:false,raison:'variable'}; }
+  if(u.role==='coach'&&/\{[^}\s]{2,20}\}/.test(v.texte)){ dire('Une variable du modèle n’est pas complétée'); return {ok:false,raison:'variable'}; }
   const k=_msgCles(u,athleteCle);
-  if(!k){ toast('Ce fil n’est plus accessible','var(--orange)'); return {ok:false,raison:'acces'}; }
+  if(!k){ dire('Ce fil n’est plus accessible'); return {ok:false,raison:'acces'}; }
   const de=u.role==='coach'?'coach':'athlete';
-  const id=msgId();
+  const id=x.id||msgId();
   const m={de,texte:v.texte,at:Date.now(),lu:false};
-  const r=await _fbJson('messages/'+k.coach+'/'+k.athlete+'/'+id,'PUT',m);
-  if(!r||!r.ok){
-    toast(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie','var(--orange)');
-    return {ok:false,raison:'refus'};
+  const chemin='messages/'+k.coach+'/'+k.athlete+'/'+id;
+  let r=await _fbJson(chemin,'PUT',m);
+  // DÉJÀ LÀ ? Un renvoi du même identifiant (réseau coupé après l'écriture,
+  // réponse perdue) est refusé par la règle — un message ne se réécrit pas.
+  // On relit : s'il existe avec ce texte, il est parti, sans doublon.
+  if(x.id&&r&&(r.st===401||r.st===403)){
+    const g=await _fbJson(chemin);
+    if(g&&g.ok&&g.v&&g.v.texte===v.texte) r={ok:true,st:200,v:g.v,deja:true};
   }
+  if(!r||!r.ok){
+    dire(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie');
+    return {ok:false,raison:r&&(r.st===401||r.st===403)?'acces':'refus',st:r?r.st:0};
+  }
+  if(r.deja) return {ok:true,id,deja:true};
   // Le dernier contact du coach (étiquettes et dernier contact).
   if(de==='coach') try{ const _c=getClients().find(x=>_relCle(x)===k.athlete); if(_c) noterContact(_c.id); }catch(e){}
   // La notification : le Worker relit ce message avant de pousser.
@@ -1746,6 +1759,7 @@ function _selMaj(){
     +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersMessage()">Message</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selEtiqueter()">Étiqueter</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'

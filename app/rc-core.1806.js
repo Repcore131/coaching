@@ -20184,6 +20184,7 @@ function _waCorpsGroupe(type){
   if(type==='expiring') return 'ton accès RepCore arrive bientôt à échéance : pense à le renouveler pour garder ton suivi 💪';
   if(type==='bilan') return 'j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'je prépare ton programme, je te l\'envoie très vite 💪';
+  if(type==='inactif') return 'ça fait un moment qu\'on ne t\'a pas vu à l\'entraînement : comment ça va ? 💪';
   return '';
 }
 // Bouton de contact d'une ligne « À traiter ». AU TRAIT, ET NON EN EMOJI :
@@ -20206,8 +20207,10 @@ function _waBoutonTodo(r,idx){
       onclick="event.stopPropagation();rcmCoach('coach_message_envoye');noterContact(${_attrArg(c.id)})" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
       style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
+  // LIGNE GROUPÉE : « Message » ouvre la feuille, ses athlètes cochés et le
+  // texte du signal ; l'envoi part dans l'app (ou sur WhatsApp, en second).
   return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
-    title="Écrire aux ${r.list.length} athlètes de cette ligne" aria-label="Écrire aux ${r.list.length} athlètes de cette ligne"
+    title="Message aux ${r.list.length} athlètes de cette ligne" aria-label="Message aux ${r.list.length} athlètes de cette ligne"
     style="${style}">${icon('message-circle',16)}</button>`;
 }
 // ── Envoi groupé ────────────────────────────────────────────────────────────
@@ -26476,7 +26479,9 @@ async function _crmCopierAdresses(){
   try{ await navigator.clipboard.writeText(a); toast('Adresses copiées','var(--green)'); return true; }
   catch(e){ toast('Copie refusée par le navigateur.','var(--orange)'); return false; }
 }
-function openWaGroupe(rowIdx){
+// `ids` et `corps` (06/10/2026) : la barre de sélection et le cadre
+// « Inactifs » ouvrent la feuille avec leurs athlètes cochés et leur texte.
+function openWaGroupe(rowIdx,ids,corps){
   // RepCore n envoie rien : il ouvre des conversations, une par athlete.
   // Le plafond protege d un geste qu on ne pourrait plus arreter.
   try{
@@ -26494,7 +26499,12 @@ function openWaGroupe(rowIdx){
     ?window._todoRows[rowIdx]:null;
   const tous=getClients().filter(c=>!c._fromCode);
   if(!tous.length){toast('Aucun athlète à contacter.','var(--orange)');return;}
-  const preCoches=new Set((source?source.list:tous).map(c=>c.id));
+  const preCoches=new Set(Array.isArray(ids)?ids.map(String):(source?source.list:tous).map(c=>c.id));
+  const corpsInitial=typeof corps==='string'?corps:(source?_waCorpsGroupe(source.type):'');
+  // UN LOT PAR OUVERTURE : sa clé fait l'identifiant de chaque message
+  // (lot + athlète). Un double appui, un renvoi après coupure, « Réessayer »
+  // retombent sur les mêmes identifiants : jamais deux fois le même message.
+  _grp={lot:Date.now(),faits:new Map(),enCours:false,plan:null,res:null,minuteur:null};
   const lignes=tous.map(c=>{
     const tel=_telAthlete(c);
     const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
@@ -26510,25 +26520,33 @@ function openWaGroupe(rowIdx){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">Message groupé</h2>
-    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
+    <div id="wag-saisie">
+    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Envoie-le dans l'app, dans le fil de chaque athlète. Ou prépare les conversations WhatsApp, une par athlète.</p>
+    ${_htmlCocherEtiquette('wag-liste')}
     <label for="wag-texte" style="margin-top:0">Message : chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
-    <textarea id="wag-texte" rows="3" style="resize:none" placeholder="petit point d'étape cette semaine 💪">${escapeHtml(source?_waCorpsGroupe(source.type):'')}</textarea>
+    <textarea id="wag-texte" rows="3" style="resize:none" placeholder="petit point d'étape cette semaine 💪">${escapeHtml(corpsInitial)}</textarea>
     <div style="display:flex;gap:8px;margin:10px 0 4px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(true)">Tout cocher</button>
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(false)">Tout décocher</button>
     </div>
-    ${_htmlCocherEtiquette('wag-liste')}
-    <div id="wag-liste">${lignes}</div>
-    <div style="display:flex;gap:8px;margin-top:14px">
+    <div id="wag-liste" onchange="_wagCompter()">${lignes}</div>
+    <button id="wag-app" class="btn btn-red btn-sm" style="width:100%;margin:14px 0 0;min-height:44px" onclick="grpRelire()">Envoyer dans l'app (${preCoches.size})</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagPreparer()">Préparer les envois WhatsApp</button>
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagCopierNumeros()">Copier les numéros</button>
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagPreparer()">Préparer les envois</button>
     </div>
     <div id="wag-liens" style="margin-top:12px"></div>
+    </div>
+    <div id="wag-etape" hidden></div>
     <button class="btn btn-outline" style="margin-top:12px" onclick="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
-function _wagTout(v){document.querySelectorAll('.wag-cb').forEach(cb=>cb.checked=v);}
+function _wagTout(v){document.querySelectorAll('.wag-cb').forEach(cb=>cb.checked=v); _wagCompter();}
+function _wagCompter(){
+  const b=document.getElementById('wag-app');
+  if(b) b.textContent='Envoyer dans l’app ('+document.querySelectorAll('.wag-cb:checked').length+')';
+}
 function _wagSelection(){
   return [...document.querySelectorAll('.wag-cb:checked')].map(cb=>({
     id:cb.value,tel:cb.dataset.tel||'',nom:cb.dataset.nom||''
@@ -26543,6 +26561,190 @@ function _wagCopierNumeros(){
       .then(()=>toast(avecTel.length+' numéro'+(avecTel.length>1?'s copiés':' copié'),'var(--green)'))
       .catch(()=>toast('Copie refusée par le navigateur : sélectionne les numéros à la main.','var(--orange)'));
   }catch(e){toast('Copie impossible sur cet appareil.','var(--orange)');}
+}
+// ══ L'ENVOI GROUPÉ DANS L'APP (06/10/2026) ════════════════════════════════
+// Le message groupé fabriquait un lien WhatsApp par athlète : un appui et un
+// changement d'application chacun, et rien dans le fil de l'athlète. Il part
+// maintenant dans la messagerie interne (msgEnvoyer), quatre à la fois, après
+// une relecture ; il s'annule pendant 10 s ; les échecs se relancent.
+//   · personnalisé un par un (« Salut {prénom}, » + texte, moteur de modèles) :
+//     jamais le prénom d'un autre ;
+//   · idempotent : l'identifiant est lot + athlète, et un renvoi retombe sur
+//     le même message ;
+//   · un échec (hors ligne, athlète détaché : 403) ne bloque pas les autres.
+const GRP_PARALLELE=4, GRP_CONFIRMER_AU_DELA=20, GRP_ANNULER_MS=10000;
+let _grp=null;
+function _grpHash(s){ let h=7; for(const ch of String(s)) h=(Math.imul(h,31)+ch.charCodeAt(0))>>>0; return h.toString(36); }
+// L'identifiant d'un message du lot : la règle demande /^m[a-z0-9]{8,20}$/.
+function grpMsgId(lot,athId){ return ('m'+Number(lot).toString(36)+'g'+_grpHash(athId)).slice(0,21); }
+/**
+ * PURE. Les messages d'un envoi groupé.
+ * @param {Array<string|{id:string,cle?:string}>} selection
+ * @param {string} texte  le corps, après « Salut {prénom}, »
+ * @param {Object<string,string>} prenoms  id → prénom
+ * @param {number} [lot]
+ * @returns {{ok:boolean, raison:string|null, lot:number, messages:any[], confirmer:boolean}}
+ */
+function planEnvoiGroupe(selection,texte,prenoms,lot){
+  const L=Number(lot)||Date.now();
+  const non=raison=>({ok:false,raison,lot:L,messages:[],confirmer:false});
+  const v=msgTexteValide(texte);
+  if(!v.ok) return non(v.raison);
+  const vus=new Set(), messages=[];
+  for(const s of (selection||[])){
+    const id=String(s&&typeof s==='object'?s.id:s);
+    if(!id||id==='undefined'||vus.has(id)) continue;
+    vus.add(id);
+    const prenom=String((prenoms||{})[id]||'').trim();
+    const r=templateResoudre('Salut {prénom}, '+v.texte,{prenom});
+    if(r.manquantes.length) return non('Une variable du modèle n’est pas complétée : {'+r.manquantes[0]+'}.');
+    const t=msgTexteValide(r.texte);
+    if(!t.ok) return non(t.raison);
+    messages.push({id,cle:String((s&&s.cle)||''),prenom,texte:t.texte,msgId:grpMsgId(L,id)});
+  }
+  if(!messages.length) return non('Coche au moins un athlète.');
+  return {ok:true,raison:null,lot:L,messages,confirmer:messages.length>GRP_CONFIRMER_AU_DELA};
+}
+/**
+ * Les envois, GRP_PARALLELE à la fois. `faits` (msgId → message) retient ce
+ * qui est parti : un second passage ne renvoie rien de ce qui l'est déjà.
+ * @param {{messages:any[]}} plan
+ * @param {(m:any)=>Promise<any>} envoyer
+ * @param {Map<string,any>} [faits]
+ * @returns {Promise<{envoyes:any[], echecs:any[]}>}
+ */
+async function executerEnvoiGroupe(plan,envoyer,faits){
+  const f=faits||new Map(), l=(plan&&plan.messages)||[];
+  const res={envoyes:[],echecs:[]};
+  let i=0;
+  const travail=async()=>{
+    while(i<l.length){
+      const m=l[i++];
+      if(f.has(m.msgId)){ res.envoyes.push(m); continue; }
+      let r=null; try{ r=await envoyer(m); }catch(e){ r={ok:false,raison:'reseau'}; }
+      if(r&&r.ok){ f.set(m.msgId,m); res.envoyes.push(m); }
+      else res.echecs.push(Object.assign({},m,{raison:(r&&r.raison)||'echec'}));
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(GRP_PARALLELE,l.length)},travail));
+  return res;
+}
+function _grpEtape(html){
+  const a=document.getElementById('wag-saisie'), z=document.getElementById('wag-etape');
+  if(!z) return false;
+  if(a) a.hidden=html!=null;
+  z.hidden=html==null;
+  z.innerHTML=html||'';
+  return true;
+}
+function _grpRaisonLib(r){ return r==='hors_ligne'||r==='reseau'||r==='refus'?'réseau':r==='acces'?'plus rattaché':'refusé'; }
+/** La relecture : combien, le message du premier, les prénoms. */
+function grpRelire(){
+  if(!_grp) _grp={lot:Date.now(),faits:new Map(),enCours:false};
+  const sel=_wagSelection();
+  let cl=[]; try{ cl=getClients(); }catch(e){ cl=[]; }
+  const par={}; for(const c of cl) if(c) par[String(c.id)]=c;
+  const prenoms={};
+  const choix=sel.map(s=>{ const c=par[s.id]; prenoms[s.id]=(c&&c.fname)||s.nom||''; return {id:s.id,cle:c?_relCle(c):''}; });
+  const p=planEnvoiGroupe(choix,(document.getElementById('wag-texte')||{}).value||'',prenoms,_grp.lot);
+  if(!p.ok){ toast(p.raison,'var(--orange)'); return false; }
+  _grp.plan=p;
+  const n=p.messages.length, E=escapeHtml;
+  _grpEtape('<div class="grp-rel">'
+    +'<div class="grp-n">'+n+' destinataire'+(n>1?'s':'')+'</div>'
+    +'<div class="grp-lib">Ce que recevra '+E(p.messages[0].prenom||'le premier')+' :</div>'
+    +'<div class="grp-apercu">'+E(p.messages[0].texte)+'</div>'
+    +'<div class="grp-lib">À : '+E(p.messages.map(m=>m.prenom||'athlète').join(', '))+'</div>'
+    +(p.confirmer?'<label class="grp-lib" for="grp-confirme">Plus de '+GRP_CONFIRMER_AU_DELA+' destinataires : retape le nombre ('+n+') pour confirmer.</label>'
+      +'<input id="grp-confirme" inputmode="numeric" autocomplete="off" style="min-height:44px">':'')
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_grpEtape(null)">Modifier</button>'
+    +'<button id="grp-go" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="grpEnvoyer()">Envoyer à '+n+' athlète'+(n>1?'s':'')+'</button>'
+    +'</div></div>');
+  return true;
+}
+/** L'envoi : un seul lot, même sous un double appui. */
+async function grpEnvoyer(){
+  const g=_grp;
+  if(!g||!g.plan||g.enCours) return false;
+  const p=g.plan;
+  if(p.confirmer){
+    const v=String((document.getElementById('grp-confirme')||{}).value||'').trim();
+    if(v!==String(p.messages.length)){ toast('Retape '+p.messages.length+' pour confirmer l’envoi.','var(--orange)'); return false; }
+  }
+  g.enCours=true;
+  const b=document.getElementById('grp-go'); if(b){ b.disabled=true; b.textContent='Envoi…'; }
+  const res=await executerEnvoiGroupe(p,m=>msgEnvoyer(m.cle,m.texte,{id:m.msgId,silencieux:true}),g.faits);
+  g.enCours=false;
+  try{ rcmCoach('coach_message_envoye'); }catch(e){}
+  g.res=res;
+  _grpAnnulable(res);
+  return true;
+}
+// 10 s pour se raviser : le bouton compte, puis laisse place au compte rendu.
+function _grpAnnulable(res){
+  const g=_grp; if(!g) return;
+  const n=res.envoyes.length;
+  let reste=Math.round(GRP_ANNULER_MS/1000);
+  const peindre=()=>_grpEtape('<div class="grp-rel"><div class="grp-n">'+n+' envoyé'+(n>1?'s':'')+'</div>'
+    +(n?'<button id="grp-annuler" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0;min-height:44px" onclick="grpAnnuler()">Annuler l’envoi ('+reste+' s)</button>':'')
+    +'</div>');
+  peindre();
+  if(g.minuteur) clearInterval(g.minuteur);
+  if(!n){ _grpCompteRendu(); return; }
+  g.minuteur=setInterval(()=>{
+    reste--;
+    if(reste<=0){ clearInterval(g.minuteur); g.minuteur=null; _grpCompteRendu(); return; }
+    const a=document.getElementById('grp-annuler');
+    if(a) a.textContent='Annuler l’envoi ('+reste+' s)';
+  },1000);
+}
+/** Retire ce qui vient d'être posté (la règle laisse 30 s au coach). */
+async function grpAnnuler(){
+  const g=_grp; if(!g||!g.res) return false;
+  if(g.minuteur){ clearInterval(g.minuteur); g.minuteur=null; }
+  const l=g.res.envoyes.slice();
+  let retires=0;
+  await executerEnvoiGroupe({messages:l},async m=>{
+    const k=_msgCles(currentUser,m.cle);
+    if(!k) return {ok:false};
+    const r=await _fbJson('messages/'+k.coach+'/'+k.athlete+'/'+m.msgId,'DELETE');
+    if(r&&r.ok){ retires++; g.faits.delete(m.msgId); }
+    return r;
+  },new Map());
+  g.res={envoyes:[],echecs:[]};
+  _grpEtape('<div class="grp-rel"><div class="grp-n">Envoi annulé</div>'
+    +'<div class="grp-lib">'+retires+' message'+(retires>1?'s':'')+' retiré'+(retires>1?'s':'')
+    +(retires<l.length?' ; '+(l.length-retires)+' n’ont pas pu l’être':'')+'.</div>'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0;min-height:44px" onclick="_grpEtape(null)">Revenir au message</button></div>');
+  return retires;
+}
+// « 57 envoyés, 3 en échec : Réessayer » ; les échecs, par prénom.
+function _grpCompteRendu(){
+  const g=_grp; if(!g||!g.res) return;
+  const n=g.res.envoyes.length, e=g.res.echecs, E=escapeHtml;
+  _grpEtape('<div class="grp-rel"><div class="grp-n">'+n+' envoyé'+(n>1?'s':'')
+    +(e.length?', '+e.length+' en échec':'')+'</div>'
+    +(e.length?'<div class="grp-lib">'+e.map(m=>E(m.prenom||'athlète')+' ('+_grpRaisonLib(m.raison)+')').join(', ')+'</div>'
+      +'<button class="btn btn-red btn-sm" style="width:100%;margin:12px 0 0;min-height:44px" onclick="grpReessayer()">Réessayer</button>':'')
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;min-height:44px" onclick="closeModal()">Fermer</button></div>');
+}
+/** Relance les seuls échecs, avec les mêmes identifiants. */
+async function grpReessayer(){
+  const g=_grp; if(!g||!g.res||g.enCours||!g.res.echecs.length) return false;
+  g.enCours=true;
+  const avant=g.res.envoyes;
+  const r=await executerEnvoiGroupe({messages:g.res.echecs},m=>msgEnvoyer(m.cle,m.texte,{id:m.msgId,silencieux:true}),g.faits);
+  g.enCours=false;
+  g.res={envoyes:avant.concat(r.envoyes),echecs:r.echecs};
+  _grpCompteRendu();
+  return true;
+}
+/** La barre de sélection : la feuille, ses athlètes cochés. */
+function selVersMessage(){
+  if(!SEL_ATHLETES.size) return false;
+  openWaGroupe(null,[...SEL_ATHLETES],'');
+  return true;
 }
 function _wagPreparer(){
   const sel=_wagSelection();
@@ -28932,23 +29134,36 @@ function msgClientsSansReponse(clients,maintenant){
 }
 
 // ── L'envoi ──────────────────────────────────────────────────────────────
-async function msgEnvoyer(athleteCle,brut){
-  const u=currentUser;
+// `o` (06/10/2026, envoi groupé) : {id} impose l'identifiant — la clé
+// d'idempotence du lot —, {silencieux} tait les toasts (le compte rendu du lot
+// parle à leur place).
+async function msgEnvoyer(athleteCle,brut,o){
+  const u=currentUser, x=o||{};
+  const dire=(t)=>{ if(!x.silencieux) toast(t,'var(--orange)'); };
   const v=msgTexteValide(brut);
-  if(!v.ok){ toast(v.raison,'var(--orange)'); return {ok:false,raison:v.raison}; }
-  if(!_msgEnLigne()){ toast('Pas de réseau : ton message n’est pas parti. Réessaie une fois connecté.','var(--orange)'); return {ok:false,raison:'hors_ligne'}; }
+  if(!v.ok){ dire(v.raison); return {ok:false,raison:v.raison}; }
+  if(!_msgEnLigne()){ dire('Pas de réseau : ton message n’est pas parti. Réessaie une fois connecté.'); return {ok:false,raison:'hors_ligne'}; }
   // Un modèle dont une variable n'est pas résolue ne part jamais tel quel.
-  if(u.role==='coach'&&/\{[^}\s]{2,20}\}/.test(v.texte)){ toast('Une variable du modèle n’est pas complétée','var(--orange)'); return {ok:false,raison:'variable'}; }
+  if(u.role==='coach'&&/\{[^}\s]{2,20}\}/.test(v.texte)){ dire('Une variable du modèle n’est pas complétée'); return {ok:false,raison:'variable'}; }
   const k=_msgCles(u,athleteCle);
-  if(!k){ toast('Ce fil n’est plus accessible','var(--orange)'); return {ok:false,raison:'acces'}; }
+  if(!k){ dire('Ce fil n’est plus accessible'); return {ok:false,raison:'acces'}; }
   const de=u.role==='coach'?'coach':'athlete';
-  const id=msgId();
+  const id=x.id||msgId();
   const m={de,texte:v.texte,at:Date.now(),lu:false};
-  const r=await _fbJson('messages/'+k.coach+'/'+k.athlete+'/'+id,'PUT',m);
-  if(!r||!r.ok){
-    toast(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie','var(--orange)');
-    return {ok:false,raison:'refus'};
+  const chemin='messages/'+k.coach+'/'+k.athlete+'/'+id;
+  let r=await _fbJson(chemin,'PUT',m);
+  // DÉJÀ LÀ ? Un renvoi du même identifiant (réseau coupé après l'écriture,
+  // réponse perdue) est refusé par la règle — un message ne se réécrit pas.
+  // On relit : s'il existe avec ce texte, il est parti, sans doublon.
+  if(x.id&&r&&(r.st===401||r.st===403)){
+    const g=await _fbJson(chemin);
+    if(g&&g.ok&&g.v&&g.v.texte===v.texte) r={ok:true,st:200,v:g.v,deja:true};
   }
+  if(!r||!r.ok){
+    dire(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie');
+    return {ok:false,raison:r&&(r.st===401||r.st===403)?'acces':'refus',st:r?r.st:0};
+  }
+  if(r.deja) return {ok:true,id,deja:true};
   // Le dernier contact du coach (étiquettes et dernier contact).
   if(de==='coach') try{ const _c=getClients().find(x=>_relCle(x)===k.athlete); if(_c) noterContact(_c.id); }catch(e){}
   // La notification : le Worker relit ce message avant de pousser.
@@ -30561,6 +30776,7 @@ function _selMaj(){
     +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersMessage()">Message</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selEtiqueter()">Étiqueter</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
@@ -33541,6 +33757,8 @@ function _htmlInactifs(liste,maintenant){
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
+    // « Message » (06/10/2026) : tous les inactifs cochés, le texte de relance.
+    +(n>1?'<button type="button" class="btn btn-outline btn-sm" style="margin:0 0 0 auto;min-height:36px;font-size:var(--fs-2xs);letter-spacing:1px" onclick="openWaGroupe(null,'+_attrArg(l.map(c=>String(c.id)))+',_waCorpsGroupe(\'inactif\'))">Message</button>':'')
     +'</div>'
     +'<div style="padding:0 14px">'
     +_crListe(l,c=>{

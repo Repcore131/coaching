@@ -1932,14 +1932,19 @@
     "garmin_etats": { ".read": false, ".write": false },
     // LOT M2 : LA MESSAGERIE COACH <-> ATHLETE. Un fil par couple : le coach le
     // lit toujours (son historique) ; l athlete tant qu il est rattache. Chacun
-    // n ecrit que SON role, un message ne se modifie ni ne s efface, et seul le
+    // n ecrit que SON role, un message ne se modifie pas (le coach peut retirer
+    // le sien dans les 30 s : l annulation de l envoi groupe), et seul le
     // destinataire passe `lu` a true.
     "messages": {
       "$coachKey": {
         "$athleteKey": {
           ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
           "$msgId": {
-            ".write": "auth != null && !data.exists() && newData.exists() && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && ((auth.token.email.replace('.', ',') === $coachKey && newData.child('de').val() === 'coach') || (auth.token.email.replace('.', ',') === $athleteKey && newData.child('de').val() === 'athlete'))",
+            // L ENVOI GROUPE (06/10/2026) : « Annuler l envoi » retire ce que le
+            // coach vient de poster. SEULEMENT son message, et pendant 30 s
+            // (10 s a l ecran, plus la marge du reseau). Au-dela, rien ne
+            // s efface, comme avant.
+            ".write": "auth != null && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && ((!data.exists() && newData.exists() && ((auth.token.email.replace('.', ',') === $coachKey && newData.child('de').val() === 'coach') || (auth.token.email.replace('.', ',') === $athleteKey && newData.child('de').val() === 'athlete'))) || (data.exists() && !newData.exists() && auth.token.email.replace('.', ',') === $coachKey && data.child('de').val() === 'coach' && data.child('at').val() > now - 30000))",
             ".validate": "$msgId.matches(/^m[a-z0-9]{8,20}$/) && newData.hasChildren(['de', 'texte', 'at'])",
             "de":    { ".validate": "newData.isString() && newData.val().matches(/^(coach|athlete)$/)" },
             "texte": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000" },

@@ -55875,6 +55875,96 @@ async function testExercices(){
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — LE MESSAGE GROUPÉ PART DANS L'APP ──
+    ok('planEnvoiGroupe : un message par athlète, chacun avec SON prénom ; texte vide refusé ; plafond de confirmation au-delà de 20',()=>{
+      const p=planEnvoiGroupe([{id:'a',cle:'a@t,fr'},{id:'b',cle:'b@t,fr'},'c','a'],'petit point cette semaine 💪',{a:'Léa',b:'Karim'},1759740000000);
+      if(!p.ok||p.messages.length!==3) return _echec(JSON.stringify(p));
+      const t=p.messages.map(m=>m.texte);
+      if(t[0]!=='Salut Léa, petit point cette semaine 💪'||t[1]!=='Salut Karim, petit point cette semaine 💪'||t[2]!=='Salut toi, petit point cette semaine 💪') return _echec(t.join(' | '));
+      if(p.messages.some((m,i)=>p.messages.some((x,j)=>i!==j&&x.texte.indexOf(m.prenom+',')>=0&&m.prenom))) return _echec('le prénom d’un autre');
+      if(!p.messages.every(m=>/^m[a-z0-9]{8,20}$/.test(m.msgId))) return _echec('identifiant hors règle : '+p.messages.map(m=>m.msgId).join());
+      if(new Set(p.messages.map(m=>m.msgId)).size!==3) return _echec('identifiants en double');
+      const p2=planEnvoiGroupe(['a','b','c'],'autre texte',{},1759740000000);
+      if(p2.messages.map(m=>m.msgId).join()!==p.messages.map(m=>m.msgId).join()) return _echec('même lot, même athlète : même identifiant');
+      if(planEnvoiGroupe(['a'],'   ',{}).ok) return _echec('texte vide accepté');
+      if(planEnvoiGroupe([],'x',{}).ok) return _echec('sans destinataire');
+      if(planEnvoiGroupe(['a'],'bravo sur {exercice}',{a:'Léa'}).ok) return _echec('variable non résolue');
+      const pr=planEnvoiGroupe(['a'],'Bravo {prénom} !',{a:'Léa'});
+      if(pr.messages[0].texte!=='Salut Léa, Bravo Léa !') return _echec(pr.messages[0].texte);
+      const ids=n=>Array.from({length:n},(_,i)=>'x'+i);
+      if(planEnvoiGroupe(ids(20),'x',{}).confirmer) return _echec('20 : pas de confirmation');
+      return planEnvoiGroupe(ids(21),'x',{}).confirmer?true:_echec('21 : confirmation exigée');});
+    okA('executerEnvoiGroupe : quatre à la fois, échecs isolés, un second passage ne renvoie rien de ce qui est parti',async()=>{
+      const p=planEnvoiGroupe(Array.from({length:10},(_,i)=>'e'+i),'coucou',{},1759740000000);
+      const appels=[]; let vol=0, max=0, coupe='e3';
+      const envoyer=async m=>{ appels.push(m.id); vol++; max=Math.max(max,vol); await new Promise(r=>setTimeout(r,5)); vol--;
+        return m.id===coupe?{ok:false,raison:'acces'}:{ok:true}; };
+      const faits=new Map();
+      const r1=await executerEnvoiGroupe(p,envoyer,faits);
+      if(max>4||max<2) return _echec('en parallèle : '+max);
+      if(r1.envoyes.length!==9||r1.echecs.length!==1||r1.echecs[0].id!=='e3'||r1.echecs[0].raison!=='acces') return _echec(JSON.stringify(r1.echecs));
+      appels.length=0; coupe=null;
+      const r2=await executerEnvoiGroupe(p,envoyer,faits);
+      if(appels.join()!=='e3') return _echec('renvoyés : '+appels.join());
+      return r2.envoyes.length===10&&!r2.echecs.length?true:_echec('second passage');});
+    okA('Banc (faux réseau) : 8 athlètes reçoivent leur message en 3 gestes, un double appui n’envoie qu’un lot, l’annulation retire tout, un 403 isolé se relance',async()=>{
+      const sv={u:currentUser,g:getClients,f:_fbJson,s:saveUser,d:window.deposerEvenement,t:window.toast,sel:new Set(SEL_ATHLETES)};
+      const base={}, ops=[];
+      let refuse=null;
+      try{
+        const P=['Léa','Karim','Inès','Tom','Zoé','Hugo','Emma','Louis'];
+        const cl=P.map((f,i)=>({id:'g'+i,fname:f,lname:'X',email:'g'+i+'@t.fr',coachEmailKey:'coach,g@t,fr',sessions:[],bilans:[]}));
+        currentUser={id:'cg',email:'coach.g@t.fr',role:'coach',alertStatus:{},contacts:{},journalGroupe:[]};
+        getClients=()=>cl; saveUser=()=>true; window.deposerEvenement=()=>Promise.resolve(); window.toast=()=>{};
+        _fbJson=async(ch,m,corps)=>{
+          ops.push((m||'GET')+' '+ch);
+          await new Promise(r=>setTimeout(r,2));
+          const ath=ch.split('/')[2];
+          if(refuse&&ath===refuse) return {ok:false,st:403,v:null};
+          if(m==='PUT'){ if(base[ch]) return {ok:false,st:403,v:null}; base[ch]=corps; return {ok:true,st:200,v:corps}; }
+          if(m==='DELETE'){ delete base[ch]; return {ok:true,st:200,v:null}; }
+          return {ok:true,st:200,v:base[ch]||null};
+        };
+        // Geste 1 : « Message » dans la barre de sélection.
+        SEL_ATHLETES.clear(); cl.forEach(c=>SEL_ATHLETES.add(c.id));
+        selVersMessage();
+        document.getElementById('wag-texte').value='petit point de la semaine';
+        // Geste 2 : « Envoyer dans l'app (8) ».
+        const app=document.getElementById('wag-app');
+        if(!app||!/\(8\)/.test(app.textContent)) return _echec('bouton : '+(app&&app.textContent));
+        app.click();
+        if(!/8 destinataires/.test(document.getElementById('wag-etape').textContent)) return _echec('relecture');
+        if(!/Salut Léa, petit point de la semaine/.test(document.getElementById('wag-etape').textContent)) return _echec('aperçu du premier');
+        // Geste 3 : « Envoyer à 8 athlètes », tapé deux fois.
+        await Promise.all([grpEnvoyer(),grpEnvoyer()]);
+        const puts=ops.filter(o=>o.startsWith('PUT'));
+        if(puts.length!==8) return _echec(puts.length+' écritures');
+        const recus=Object.entries(base);
+        if(recus.length!==8) return _echec(recus.length+' messages');
+        for(const [ch,m] of recus){ const c=cl.find(x=>ch.indexOf('/'+x.email.replace(/\./g,',')+'/')>0);
+          if(!c||m.texte!=='Salut '+c.fname+', petit point de la semaine'||m.de!=='coach') return _echec(ch+' : '+m.texte); }
+        if(!currentUser.contacts.g0) return _echec('noterContact');
+        // Annuler l'envoi : tout est retiré.
+        const a=document.getElementById('grp-annuler');
+        if(!a) return _echec('pas de bouton Annuler');
+        await grpAnnuler();
+        if(Object.keys(base).length) return _echec(Object.keys(base).length+' messages restent');
+        // Un athlète détaché (403) : compté en échec, les autres partent ; « Réessayer » le relance.
+        _grp.lot=_grp.lot+1; grpRelire(); refuse='g3@t,fr';
+        await grpEnvoyer();
+        clearInterval(_grp.minuteur); _grpCompteRendu();
+        const z=document.getElementById('wag-etape').textContent;
+        if(!/7 envoyés, 1 en échec/.test(z)||!/Tom/.test(z)) return _echec('compte rendu : '+z);
+        refuse=null; await grpReessayer();
+        if(Object.keys(base).length!==8) return _echec('après Réessayer : '+Object.keys(base).length);
+        return /8 envoyés/.test(document.getElementById('wag-etape').textContent)?true:_echec('compte rendu final');
+      } finally {
+        try{ if(_grp&&_grp.minuteur) clearInterval(_grp.minuteur); }catch(e){}
+        try{ closeModal(); }catch(e){}
+        currentUser=sv.u; getClients=sv.g; _fbJson=sv.f; saveUser=sv.s; window.deposerEvenement=sv.d; window.toast=sv.t;
+        SEL_ATHLETES.clear(); sv.sel.forEach(x=>SEL_ATHLETES.add(x));
+      }
+    });
     // ── 06/10/2026 — UN SEUL SIGNAL PRINCIPAL POUR « À TRAITER » ET LE LUNDI ──
     const _SP=(fn)=>{
       const sv={u:currentUser,sg:signauxEntrainement,dr:drapeauQuelconqueActif,fp:finProgramme,g:getClients,ts:_texteSignal,pd:propositionDechargeOuverte,

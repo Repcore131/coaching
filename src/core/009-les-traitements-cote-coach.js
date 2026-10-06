@@ -1297,6 +1297,7 @@ function _waCorpsGroupe(type){
   if(type==='expiring') return 'ton accès RepCore arrive bientôt à échéance : pense à le renouveler pour garder ton suivi 💪';
   if(type==='bilan') return 'j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'je prépare ton programme, je te l\'envoie très vite 💪';
+  if(type==='inactif') return 'ça fait un moment qu\'on ne t\'a pas vu à l\'entraînement : comment ça va ? 💪';
   return '';
 }
 // Bouton de contact d'une ligne « À traiter ». AU TRAIT, ET NON EN EMOJI :
@@ -1319,8 +1320,10 @@ function _waBoutonTodo(r,idx){
       onclick="event.stopPropagation();rcmCoach('coach_message_envoye');noterContact(${_attrArg(c.id)})" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
       style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
+  // LIGNE GROUPÉE : « Message » ouvre la feuille, ses athlètes cochés et le
+  // texte du signal ; l'envoi part dans l'app (ou sur WhatsApp, en second).
   return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
-    title="Écrire aux ${r.list.length} athlètes de cette ligne" aria-label="Écrire aux ${r.list.length} athlètes de cette ligne"
+    title="Message aux ${r.list.length} athlètes de cette ligne" aria-label="Message aux ${r.list.length} athlètes de cette ligne"
     style="${style}">${icon('message-circle',16)}</button>`;
 }
 // ── Envoi groupé ────────────────────────────────────────────────────────────
