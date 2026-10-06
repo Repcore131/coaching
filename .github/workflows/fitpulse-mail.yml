@@ -44,6 +44,10 @@ on:
         description: 'Robot Resamania (repérage : connexion et description des menus)'
         type: boolean
         default: false
+      robot_diag:
+        description: 'Test du lien robot ↔ base (sans Resamania ni code)'
+        type: boolean
+        default: false
 
 concurrency:
   group: fitpulse-mail
@@ -51,7 +55,7 @@ concurrency:
 
 jobs:
   envoyer:
-    if: ${{ !inputs.robot_resamania }}
+    if: ${{ !inputs.robot_resamania && !inputs.robot_diag }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -75,7 +79,7 @@ jobs:
         run: node club/outils/fitpulse-serveur.mjs
 
   robot:
-    if: ${{ inputs.robot_resamania }}
+    if: ${{ inputs.robot_resamania || inputs.robot_diag }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,6 +100,6 @@ jobs:
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
-          ROBOT_MODE: reperage
+          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || 'reperage' }}
           TZ: Europe/Paris
         run: node club/outils/resamania-robot.mjs

@@ -189,7 +189,19 @@ async function reperage(page) {
   } else log('bouton « Tous les exports » introuvable');
 }
 
+// Test isolé du lien avec la base (sans Resamania ni code) : jeton, écriture, lecture.
+async function diagnostic() {
+  const tk = await fbToken();
+  if (!tk) { log('DIAG base : pas de jeton (FIREBASE_SERVICE_ACCOUNT absent ou invalide)'); process.exitCode = 1; return; }
+  log('DIAG base : jeton obtenu');
+  const w = await fb('pulse/rsm/etat.json', { method: 'PUT', body: JSON.stringify({ step: 'diag', at: Date.now() }) });
+  log('DIAG écriture état :', w === null ? 'ÉCHEC' : 'OK');
+  const r = await fb('pulse/rsm/etat.json');
+  log('DIAG relecture état :', r && r.step === 'diag' ? 'OK' : 'ÉCHEC', '(' + JSON.stringify(r) + ')');
+  if (w === null || !(r && r.step === 'diag')) process.exitCode = 1;
+}
 async function main() {
+  if (MODE === 'diag') return diagnostic();
   const { chromium } = require('playwright');
   mkdirSync(SORTIE, { recursive: true });
   const b = await chromium.launch();
