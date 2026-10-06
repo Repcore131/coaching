@@ -861,6 +861,9 @@ function libelleReglePlancher(pl){
     // reste une fois l'entrainement paye.
     return 'sous '+KCAL_PLANCHER_PAR_KG_MM+' kcal par kilo de masse maigre '
       +'une fois l’entraînement payé';
+  if(pl.regle==='masse_maigre_estimee')
+    return 'sous '+KCAL_PLANCHER_PAR_KG_MM+' kcal par kilo de masse maigre, '
+      +'estimée sur ta taille et ton poids, une fois l’entraînement payé';
   if(pl.regle==='poids_total')
     return 'sous '+KCAL_PLANCHER_PAR_KG+' kcal par kilo de poids';
   return 'sous le plancher de '+pl.abs+' kcal';
@@ -1022,10 +1025,18 @@ function plancherEffectif(user,brut){
   // et _depensePourPlafond, et c'est ce que ce plancher doit lire aussi.
   try{ const v=(kcalSportParJour(user)||{}).jour;
     if(isFinite(v)&&v>0) _dexo=v; }catch(e){}
-  const parMM=(mm!=null&&mm>0)?(KCAL_PLANCHER_PAR_KG_MM*mm+_dexo):null;
-  const parPoids=poids!=null?KCAL_PLANCHER_PAR_KG*poids:null;
+  // ⚠ BUILD 1836 : SANS TOURS DE MESURE, LA MÊME RÈGLE. La masse maigre est
+  //   alors ESTIMÉE (Boer, masseMaigreEstimee) et la dépense d'entraînement
+  //   s'ajoute pareil. 22 kcal/kg de poids total, sans l'entraînement, laissait
+  //   passer 1 425 kcal chez une athlète de 50 kg qui en dépense 479 en sport,
+  //   et bloquait à la cible de sèche un homme de 120 kg. parPoids ne sert plus
+  //   que si la taille est inconnue.
+  const _mmE=(mm!=null&&mm>0)?null:(function(){ try{ return masseMaigreEstimee(user); }catch(e){ return null; } })();
+  const mmRetenue=(mm!=null&&mm>0)?mm:(_mmE?_mmE.kg:null);
+  const parMM=(mmRetenue!=null&&mmRetenue>0)?(KCAL_PLANCHER_PAR_KG_MM*mmRetenue+_dexo):null;
+  const parPoids=(parMM==null&&poids!=null)?KCAL_PLANCHER_PAR_KG*poids:null;
   let proportionnel=(parMM!=null)?parMM:parPoids;
-  const regleProp=(parMM!=null)?'masse_maigre':(parPoids!=null?'poids_total':null);
+  const regleProp=(parMM!=null)?((mm!=null&&mm>0)?'masse_maigre':'masse_maigre_estimee'):(parPoids!=null?'poids_total':null);
   // Plafonnement du seul plancher PROPORTIONNEL. L'absolu n'est jamais plafonné :
   // c'est un minimum vital, pas une proportion. Et le plafond s'applique AVANT la
   // majoration TCA, qui reste la DERNIÈRE opération et ne peut donc jamais être
@@ -1043,7 +1054,8 @@ function plancherEffectif(user,brut){
   return {kcal,regle,
     p:poids!=null?Math.round(PROT_PLANCHER_G_KG*poids*maj*10)/10:null,
     l:poids!=null?Math.round(LIP_PLANCHER_G_KG*poids*maj*10)/10:null,
-    poids,masseMaigre:mm,tca,deficit,majoration:maj,abs,plafonne,
+    poids,masseMaigre:mmRetenue,masseMaigreSource:(mm!=null&&mm>0)?'mesuree':(_mmE?'estimee':null),
+    tca,deficit,majoration:maj,abs,plafonne,
     depenseExercice:Math.round(_dexo),
     proportionnel:proportionnel!=null?Math.round(proportionnel*maj):null,
     parKg:parPoids!=null?Math.round(parPoids*maj):null};
@@ -1995,9 +2007,10 @@ function direRegplePlancher(pl){
   if(!pl) return '';
   const nb=v=>String(Math.round(v*10)/10).replace('.',',');
   let coeur;
-  if(pl.regle==='masse_maigre'&&pl.masseMaigre!=null)
+  if((pl.regle==='masse_maigre'||pl.regle==='masse_maigre_estimee')&&pl.masseMaigre!=null)
     coeur=KCAL_PLANCHER_PAR_KG_MM+' kcal/kg de masse maigre pour '
       +nb(pl.masseMaigre)+' kg de masse maigre'
+      +(pl.regle==='masse_maigre_estimee'?' (estimée sur la taille et le poids)':'')
       // N2.9 — le coach doit pouvoir refaire le nombre a la main : la depense
       // d'entrainement en fait partie, et elle est donc ecrite.
       +(pl.depenseExercice>0?', plus '+pl.depenseExercice+' kcal d’entraînement':'');

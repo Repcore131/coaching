@@ -26388,14 +26388,26 @@ async function testExercices(){
     (function(){
       const sauveU=currentUser, sauveCid=currentClientId;
       const sauveUsers=DB.get('users');
-      const _u=(sexe,poids,extra)=>Object.assign({
+      // ⚠ BUILD 1836 : CES CRITÈRES DÉCRIVENT LA RÈGLE « 22 kcal/kg DE POIDS
+      //   TOTAL », qui ne sert plus que quand la TAILLE est inconnue — avec une
+      //   taille, la masse maigre est estimée (Boer) et la règle est celle de
+      //   la disponibilité énergétique (30 kcal/kg de MM + entraînement). Le
+      //   gabarit d'ici n'a donc PLUS de taille : ses chiffres (1320, 1760…)
+      //   restent ceux de la règle qu'ils éprouvent. `avecTaille` la rend.
+      const _u=(sexe,poids,extra)=>{
+        const x=extra||{};
+        const t=x.avecTaille?(sexe==='F'?165:178):null;
+        const r=Object.assign({
         id:'pl',email:'pl@t.fr',fname:'A',lname:'B',role:'athlete',
-        gender:sexe,_evol_gender:sexe,_evol_height:sexe==='F'?165:178,
+        gender:sexe,_evol_gender:sexe,
         exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},sessions_config:[],
-        bilans:poids!=null?[{type:'suivi',date:Date.now()-2*864e5,
-          'deb-weight':String(poids),'deb-height':sexe==='F'?'165':'178',
-          'deb-age':'32','deb-gender':sexe==='F'?'Femme':'Homme'}]:[],
-        nutrition:{}},extra||{});
+        bilans:poids!=null?[Object.assign({type:'suivi',date:Date.now()-2*864e5,
+          'deb-weight':String(poids),
+          'deb-age':'32','deb-gender':sexe==='F'?'Femme':'Homme'},t?{'deb-height':String(t)}:{})]:[],
+        nutrition:{}},x);
+        if(t) r._evol_height=t;
+        delete r.avecTaille;
+        return r;};
 
       // ── Les planchers ──
       ok('Critère : femme 60 kg → plancher 1320 kcal',()=>{
@@ -26417,10 +26429,12 @@ async function testExercices(){
       // depense. C'est exactement la pathologie que ce lot corrige. Le test
       // enonce le nouveau contrat au lieu de disparaitre.
       ok('Le proportionnel protege les grands gabarits, sans les emmurer',()=>{
-        const u=_u('H',100);
+        // Build 1836 : avec une taille, le proportionnel est 30 kcal/kg de
+        // masse maigre ESTIMÉE (sans entraînement ici, aucun créneau).
+        const u=_u('H',100,{avecTaille:true});
         const pl=plancherEffectif(u);
         const dep=_depensePourPlafond(u);
-        const brut=KCAL_PLANCHER_PAR_KG*100;
+        const brut=Math.round(KCAL_PLANCHER_PAR_KG_MM*masseMaigreEstimee(u).kg);
         if(pl.kcal<=KCAL_PLANCHER_ABS.H)
           return _echec('le proportionnel ne joue plus : '+pl.kcal);
         if(!(dep>0)) return _echec('depense incalculable, le plafond ne peut pas etre juge');
@@ -26429,7 +26443,64 @@ async function testExercices(){
             &&pl.kcal===Math.round(dep*PLANCHER_PLAFOND_DEPENSE)
             ?true:_echec('plafond non applique : '+pl.kcal+' pour une depense de '+dep);
         }
-        return pl.kcal===brut?true:_echec(pl.kcal+' au lieu de '+brut);});
+        return pl.kcal===brut&&pl.regle==='masse_maigre_estimee'?true:_echec(pl.kcal+' au lieu de '+brut+' ('+pl.regle+')');});
+      // ── BUILD 1836 : SANS TOURS DE MESURE, LA MÊME RÈGLE (masse maigre estimée) ──
+      const _PF=(kg,cm,sexe,o)=>Object.assign({id:'pf'+kg,email:'pf'+kg+'@t.fr',role:'athlete',gender:sexe,_evol_gender:sexe,
+        _evol_height:String(cm),birthdate:'1996-01-01',
+        bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':String(kg),'deb-height':String(cm),'deb-age':'30','deb-gender':sexe==='F'?'Femme':'Homme'}],
+        weightLog:[{date:localISODate(new Date()),kg}],sessions_config:[],nutrition:{cycle:false,tableur:{}}},o||{});
+      ok('Plancher : F 50 kg / 155 cm, 5 × 75 min de musculation + 4 h de course rapide, sans tours → 1 550 à 1 650 kcal, et 0,70 passe dessous',()=>{
+        const u=_PF(50,155,'F',{phase:{type:'seche',debut:Date.now()-7*864e5},
+          nutrition:{cycle:false,tableur:{sports:{lignes:[{sport:'Musculation',heures:6.25,intensite:'moderee'},
+            {sport:'Course à pied',heures:4,intensite:'haute'}],date:1}}}});
+        if(masseMaigreDuBilan(u)!==null) return _echec('tours présents');
+        const pl=plancherEffectif(u);
+        if(pl.regle!=='masse_maigre_estimee') return _echec('règle '+pl.regle);
+        if(!(pl.depenseExercice>=470&&pl.depenseExercice<=490)) return _echec('sport '+pl.depenseExercice+' kcal/j');
+        if(!(pl.kcal>=1550&&pl.kcal<=1650)) return _echec('plancher '+pl.kcal);
+        const t=cibleTableur(u,{coef:0.70,appliquerPlancher:false});
+        if(t.sousPlancher!==true) return _echec('0,70 → '+t.kcal+' kcal, plancher '+t.plancher);
+        // Le message nomme la règle estimée.
+        return /estimée sur la taille et le poids/.test(direRegplePlancher(pl))?true:_echec(direRegplePlancher(pl));});
+      ok('Plancher : H 120 kg / 175 cm, 3 créneaux, sèche 0,85, peu actif → un −20 de l’athlète est accepté',()=>{
+        // ⚠ « PEU ACTIF » ET NON SÉDENTAIRE, et c'est une limite DITE : en
+        //   sédentaire, 30 × 76,4 kg de masse maigre estimée + 206 kcal de
+        //   sport = 2 498 kcal, au-dessus de la cible de sèche (0,85 × 2 785 =
+        //   2 367) ; le plafond à 85 % de la dépense ramène alors le plancher
+        //   EXACTEMENT sur la cible, et le −20 reste refusé. Le plafond n'est
+        //   pas touché (demande du lot).
+        const h=_PF(120,175,'H',{phase:{type:'seche',debut:Date.now()-7*864e5},
+          sessions_config:Array.from({length:7},(_,i)=>({active:i<3,name:'S'+i,exercises:[{name:'SQUAT',series:3,reps:'8'}]})),
+          nutrition:{cycle:false,tableur:{coef:0.85,naf:'peu'},macros:{origine:'athlete'}}});
+        const pl=plancherEffectif(h), t=cibleTableur(h,{appliquerPlancher:false});
+        if(!(pl.kcal<t.kcal-20)) return _echec('plancher '+pl.kcal+' pour une cible de '+t.kcal);
+        const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast};
+        const toasts=[];
+        try{
+          currentUser=h; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.loadNutrition=()=>{}; toast=m=>toasts.push(String(m));
+          athDelta(-1);
+          if(ajustKcal(h).athlete!==-20) return _echec('−20 refusé : '+toasts.join(' | '));
+          return toasts.some(x=>/plancher/.test(x))?_echec('refus annoncé'):true;
+        } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; }});
+      ok('Plancher : H 80 kg / 180 cm sans sport → 30 × 61,4 kg estimés = 1 842 kcal (ancien : 1 760, +82)',()=>{
+        // ⚠ L'ÉCART EST DE +82 kcal, PAS ±60 : la formule de Boer rend 61,4 kg
+        //   de masse maigre pour ce gabarit, 30 × 61,4 = 1 842 contre
+        //   22 × 80 = 1 760. Tenu ici à ±100, et chiffré.
+        const m=_PF(80,180,'H');
+        const pl=plancherEffectif(m);
+        if(pl.regle!=='masse_maigre_estimee') return _echec('règle '+pl.regle);
+        if(Math.abs(pl.masseMaigre-61.4)>0.1) return _echec('masse maigre '+pl.masseMaigre);
+        return Math.abs(pl.kcal-1760)<=100&&pl.kcal===1842?true:_echec('plancher '+pl.kcal);});
+      ok('Plancher : taille absente → l’ancienne règle ; antécédent → majoration inchangée',()=>{
+        const sans=_PF(80,180,'H'); delete sans._evol_height; sans.bilans[0]['deb-height']='';
+        const p0=plancherEffectif(sans);
+        if(p0.regle!=='poids_total'||p0.kcal!==1760) return _echec('sans taille : '+p0.regle+' '+p0.kcal);
+        if(masseMaigreEstimee(sans)!==null) return _echec('estimée sans taille');
+        const t=_PF(80,180,'H',{tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+          {type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}]});
+        const pt=plancherEffectif(t), pb=plancherEffectif(t,true);
+        return aTCA(t)&&pt.majoration===PLANCHER_MAJORATION_TCA&&pt.kcal===Math.round(pb.kcal*PLANCHER_MAJORATION_TCA)
+          ?true:_echec('majoration : '+pt.kcal+' / '+pb.kcal);});
       ok('Critère : poids inconnu → seul l\'absolu, aucune erreur',()=>{
         const u=_u('F',null);
         const pl=plancherEffectif(u);
@@ -26470,9 +26541,10 @@ async function testExercices(){
 
       // ── Antécédent déclaré : plancher majoré ──
       ok('Critère : antécédent déclaré → plancher majoré de 15 %',()=>{
+        // Sans taille (build 1836) : la règle des 22 kcal/kg, 1760 avant majoration.
         const u=_u('H',80,{tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,
           'deb-tca':'anorexie il y a dix ans'},
-          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80',
            'deb-age':'32','deb-gender':'Homme'}]});
         const pl=plancherEffectif(u);
         return aTCA(u)===true&&pl.tca===true
@@ -26531,7 +26603,8 @@ async function testExercices(){
         currentUser={id:'coPL',email:'copl@t.fr',role:'coach',fname:'K',
           seenBilans:{},alertStatus:{},studentCodes:[]};
         const poser=extra=>{
-          const c=_u('H',80,Object.assign({id:'plc',email:'plc@t.fr',coachId:'coPL'},extra||{}));
+          // Avec une taille : le tableau du coach a besoin du calcul complet.
+          const c=_u('H',80,Object.assign({id:'plc',email:'plc@t.fr',coachId:'coPL',avecTaille:true},extra||{}));
           // SAISIE MANUELLE : tout ce bloc porte sur des chiffres TAPES sous le
           // plancher. En calcul automatique la question ne se pose pas —
           // _relevePlancher releve les journees avant meme de les proposer, et il
@@ -26567,7 +26640,9 @@ async function testExercices(){
         ok('Les violations sont affichées, chiffrées, sous le tableau',()=>{
           const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
           if(!/Sous le plancher/.test(h)) return _echec('le bloc a disparu');
-          if(!/1200 kcal/.test(h)||!/1760 kcal/.test(h)) return _echec('les chiffres ne sont plus là');
+          // Le plancher de ce dossier (masse maigre estimée depuis le build 1836).
+          const _plc=plancherEffectif((DB.get('users')||{})['plc@t.fr']).kcal;
+          if(!/1200 kcal/.test(h)||h.indexOf(_plc+' kcal')<0) return _echec('les chiffres ne sont plus là ('+_plc+')');
           // ⚠ LA CASE A COCHÉ A DISPARU AVEC LE REFUS (24/09/2026) : elle ne
           //   servait qu'à lever un blocage qui n'existe plus. Ce qui la
           //   remplace dit ce qui se passe vraiment.
@@ -26594,7 +26669,7 @@ async function testExercices(){
           if(r!==true||!m) return _echec('enregistrement refusé');
           const cf=m.confirmeSousPlancher;
           return !!cf&&cf.par==='coPL'&&cf.date>0&&Array.isArray(cf.violations)
-            &&cf.violations.length>0&&cf.violations[0].plancher===1760;});
+            &&cf.violations.length>0&&cf.violations[0].plancher===plancherEffectif((DB.get('users')||{})['plc@t.fr']).kcal;});
         ok('Au-dessus du plancher, aucune confirmation n\'est demandée',()=>{
           poser();
           remplir(2600,150,400,80);
@@ -26951,7 +27026,11 @@ async function testExercices(){
         // La formule retenue (Harris-Benedict depuis le 07/09/2026), en FEMME.
         const mbF=mbEstime(48,162,29,'Femme');
         if(mbF===mbEstime(48,162,29,'Homme')) return _echec('fixture muette : la formule ignore le sexe');
-        return bes.mb===mbF&&pl.kcal===Math.max(1200,Math.round(22*48));});
+        // Build 1836 : la masse maigre ESTIMÉE en femme (Boer F), pas en homme.
+        const mmF=Math.round((0.252*48+0.473*162-48.3)*10)/10;
+        const mmE=masseMaigreEstimee(u);
+        if(!mmE||mmE.kg!==mmF) return _echec('masse maigre estimée '+(mmE&&mmE.kg)+' au lieu de '+mmF);
+        return bes.mb===mbF&&pl.regle!=='poids_total'&&pl.kcal>=KCAL_PLANCHER_ABS.F;});
       ok('Le plancher tient même sans taille ni poids connus',()=>{
         const u=_ath('seche',-0.15);
         u._evol_height=null; delete u['init-height'];
@@ -81703,21 +81782,32 @@ async function testExercices(){
             return _echec('la fixture n\'a pas de dépense d\'entraînement');
           return pl.kcal>KCAL_PLANCHER_ABS.F
             ?true:_echec(pl.kcal+' : l\'entraînement n\'a pas relevé le plancher');});
-        ok('Critère : masse maigre incalculable → repli poids total, et il le dit',()=>{
+        ok('Critère : masse maigre non mesurée → masse maigre ESTIMÉE (Boer), et il le dit ; sans taille, repli poids total',()=>{
+          // ⚠ BUILD 1836 : le repli « 22 kcal/kg de poids total » ne sert plus
+          //   que sans TAILLE. Avec une taille, la masse maigre est estimée et
+          //   la même règle de disponibilité s'applique (30 kcal/kg + sport).
+          const e=_athSansMesures(120);
+          if(masseMaigreDuBilan(e)!==null) return _echec('masse maigre calculable, fixture inutile');
+          const pe=plancherEffectif(e);
+          if(pe.regle!=='masse_maigre_estimee'&&pe.regle!=='absolu') return _echec('avec taille : règle '+pe.regle);
+          if(pe.masseMaigreSource!=='estimee') return _echec('source '+pe.masseMaigreSource);
+          if(!/estimée sur ta taille et ton poids/.test(libelleReglePlancher({regle:'masse_maigre_estimee'}))) return _echec('libellé');
           // Même raison qu'au-dessus : sans métier lourd, le plafond de 85 %
           // rendrait 2368 et le repli poids total (2640) ne serait jamais visible.
           const u=_athSansMesures(120);
           u.bilans[0]['deb-job']='Maçon';
+          u.bilans[0]['deb-height']='';
           if(masseMaigreDuBilan(u)!==null) return _echec('masse maigre calculable, fixture inutile');
           const pl=plancherEffectif(u);
           if(pl.regle!=='poids_total') return _echec('règle '+pl.regle);
           return pl.kcal===Math.round(KCAL_PLANCHER_PAR_KG*120)
             ?true:_echec(pl.kcal+' au lieu de 2640');});
-        ok('calcBF impossible (cou ≥ taille) → repli poids total',()=>{
+        ok('calcBF impossible (cou ≥ taille) → masse maigre estimée',()=>{
           const u=_athSansMesures(100);
           u.bilans[0]['deb-waist']='38'; u.bilans[0]['deb-neck']='42';
           if(masseMaigreDuBilan(u)!==null) return _echec('calcBF aurait dû échouer');
-          return plancherEffectif(u).regle==='poids_total'
+          // Build 1836 : la masse maigre mesurée échoue → elle est ESTIMÉE.
+          return plancherEffectif(u).regle==='masse_maigre_estimee'
             ?true:_echec('règle '+plancherEffectif(u).regle);});
         ok('Poids inconnu → seul l\'absolu s\'applique',()=>{
           const u=_athSansMesures(100);
@@ -82002,7 +82092,10 @@ async function testExercices(){
         // ── Le plancher garde le dernier mot ──────────────────────────────
         ok('Critère : une athlète de 48 kg en sèche reste au-dessus du plancher',()=>{
           const u=_ath(48,'seche');
-          const b=besoinsProposes(u);
+          // Sur l'appareil de l'ATHLÈTE (le plancher y est appliqué). Build
+          // 1836 : son plancher compte l'entraînement (1 401 kcal), et le jour
+          // OFF, plus bas que l'absolu d'avant, n'y passait plus de lui-même.
+          const b=besoinsProposes(u,{appliquerPlancher:true});
           const pl=plancherEffectif(u).kcal;
           if(!(pl>0)) return _echec('plancher indisponible');
           return b.off.kcal>=pl&&b.on.kcal>=pl

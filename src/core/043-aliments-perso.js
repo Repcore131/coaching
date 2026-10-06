@@ -1608,6 +1608,26 @@ function masseMaigreDuBilan(user){
   return Math.round((w-mg)*10)/10;
 }
 
+// ══ LA MASSE MAIGRE ESTIMÉE (build 1836) ══════════════════════════════════
+// PURE. Formule de Boer, sur la taille et le poids : H 0,407 × P + 0,267 × T
+// − 19,2 ; F 0,252 × P + 0,473 × T − 48,3 (P en kg, T en cm). Sert quand les
+// tours de mesure manquent : le plancher garde ainsi LA MÊME règle de
+// disponibilité énergétique (30 kcal/kg de masse maigre + l'entraînement), au
+// lieu de 22 kcal/kg de poids total sans l'entraînement. masseMaigreDuBilan
+// (mesurée) reste prioritaire. null sans taille, sans poids, ou ≤ 0.
+function masseMaigreEstimee(user){
+  if(!user) return null;
+  let p=null; try{ p=poidsNutritionnel(user).kg; }catch(e){ p=null; }
+  const bl=((user.bilans)||[]).filter(b=>b&&b.date).slice().sort((x,y)=>x.date-y.date);
+  const b=bl[bl.length-1]||{};
+  const t=parseFloat(user._evol_height||user['init-height']||b['deb-height']||user.height||0)||null;
+  if(!(p>0)||!(t>0)) return null;
+  const sexe=user._evol_gender||user.gender||b['deb-gender']||'';
+  const kg=isFemale(sexe)?(0.252*p+0.473*t-48.3):(0.407*p+0.267*t-19.2);
+  if(!(kg>0)) return null;
+  return {kg:Math.round(kg*10)/10,source:'estimee'};
+}
+
 // ── L'ajustement par les pas ────────────────────────────────────────────────
 // N2.17 — ACT_SEANCES ET facteurActivite SONT PARTIS le 26/08/2026.
 // Le facteur d'activite tire du NOMBRE DE CRENEAUX a ete remplace par
