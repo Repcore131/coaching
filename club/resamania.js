@@ -342,7 +342,7 @@ const RSM_DEFS = [
     sig: has => has('fin d engagement') && has('libelle') && has('contact'),
     parse(c) {
       const iC = c.col('contact'), iL = c.col('libelle'), iFE = c.col('fin d engagement'), iFV = c.col('fin de validite'), iDeb = c.col('debut de validite');
-      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); const name = cleanContact(r[iC]); if (!name || !end) continue; c.clientByName(name, { end, offer: r[iL] || '', start: rsmDate(r[iDeb]), strict: true }); }
+      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); const name = cleanContact(r[iC]); if (!name || !end) continue; c.clientByName(name, { end, offer: r[iL] || '', start: rsmDate(r[iDeb]), strict: true, ...c.contact(r), ...contactFromText(r[iC]) }); }
     },
   },
   {
@@ -463,6 +463,8 @@ const OPTION_RE = /ultimate|acc?es+\s*\+|acc?es+\s*plus|yanga/i;
 // Engagement : CDD (6, 12, 24 mois) = engagé ; CDI ou « sans engagement » = libre ; sinon inconnu.
 function engagementOf(s) { const t = norm(s); if (/sans engagement|\bcdi\b|liberte|flex/.test(t)) return false; if (/\bcdd ?(3|6|12|24)\b|\b(12|24) mois\b|engag/.test(t)) return true; return null; }
 const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
+// Téléphone / e-mail cachés dans un champ « contact » combiné (nom + coordonnées).
+function contactFromText(s) { const t = String(s || ''); const o = {}; const m = t.match(/[^\s@<>"']+@[^\s@<>"']+/); if (m) o.email = m[0].trim().toLowerCase(); const pm = t.match(/\+?\d[\d .\-()/]{7,}\d/); if (pm) { const p = phoneE164(pm[0]); if (p) { o.phone = p; o.phoneSrc = 'rsm'; } } return o; }
 // Fichier non reconnu : l'export connu le plus proche et les colonnes qui
 // manquent, pour corriger l'export (mauvais menu, colonnes masquées, fichier
 // retouché dans Excel) sans deviner.
