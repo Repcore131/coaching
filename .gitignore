@@ -78,4 +78,5 @@ sauvegarde-*/
 sauvegarde-*.tar
 *.tar.enc
 restauration-*/
+_en_ligne/
 _pages/
