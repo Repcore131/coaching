@@ -13,6 +13,7 @@ const RES_STATUS = {
   traitement: { label: 'En traitement', cls: 'info' },
   sauvee: { label: 'Sauvée', cls: 'ok' },
   resiliee: { label: 'Résiliée', cls: 'bad' },
+  rejetee: { label: 'Demande rejetée', cls: 'info' },
 };
 const RES_REASONS = ['Prix', 'Déménagement', 'Santé', 'Manque de temps', 'Insatisfaction', 'Concurrence', 'Autre'];
 const RES_OFFERS = ['Suspension', 'Changement de formule', 'Geste commercial', 'Offre fidélité', 'Rendez-vous coach', 'Aucune'];
@@ -45,9 +46,9 @@ PAGES.resiliations = {
     const enJeu = r => Number(r.enJeu) || valeurEnJeu(r).euros;
     const vSaved = all.filter(r => resStatus(r) === 'sauvee' && ((S.entries['sv_' + r.id] || {}).date || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
     const vLost = all.filter(r => resStatus(r) === 'resiliee' && (r.effective || r.date).slice(0, 7) === mk).reduce((s, r) => s + enJeu(r), 0);
-    const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · chaque demande a un responsable, une échéance et une issue.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
+    const head = `<div class="page-head"><div><h1>Résiliations</h1><p>${esc(CLUB.name)} · uniquement les demandes <b>à arbitrer</b> — les résiliations déjà acceptées partent à l’historique.</p></div><span class="spacer"></span><button class="btn" data-act="resExport">${ico('download')} Exporter</button><button class="btn primary" data-act="resNew">${ico('plus')} Nouvelle demande</button></div>`;
     const kpis = `<div class="stat-row">
-      <div class="stat ${open.length ? 'hot' : ''}"><span>À traiter</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
+      <div class="stat ${open.length ? 'hot' : ''}"><span>À arbitrer</span><b>${open.length}</b><small>${noOwner} sans responsable</small></div>
       <div class="stat ${urgent ? 'alarm' : ''}"><span>Échéance ≤ 7 jours</span><b>${urgent}</b><small>à appeler en priorité</small></div>
       <div class="stat"><span>Sauvées · ${MOIS[Number(mk.slice(5)) - 1].toLowerCase()}</span><b class="ok">${saved}</b><small>taux de sauvetage ${fmtP(saved + lost ? saved / (saved + lost) : null)}</small></div>
       <div class="stat"><span>Valeur sauvée ce mois</span><b class="ok">${fmtE(vSaved)}</b><small>mensualités gardées</small></div>
@@ -55,12 +56,12 @@ PAGES.resiliations = {
       <div class="stat"><span>Prise en charge</span><b>${handledTimes.length ? (handledTimes.reduce((a, b) => a + b, 0) / handledTimes.length).toFixed(1).replace('.', ',') + ' j' : 'n.d.'}</b><small>délai moyen avant le 1er appel</small></div></div>`;
     let body;
     if (tab === 'todo') {
-      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune demande à traiter', text: 'Les nouvelles demandes, saisies ou importées de Resamania, arrivent ici.' })}</div>`;
+      body = open.length ? `<div class="grid">${open.map(resCard).join('')}</div>` : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune demande à arbitrer', text: 'Seules les demandes « À arbitrer » apparaissent ici. Les résiliations acceptées, rejetées ou annulées sont dans l’historique.' })}</div>`;
     } else {
       body = `<div class="row wrap" style="margin-bottom:12px">${monthNav('resMonth', mk)}</div>${resOffersTables(month, enJeu)}
         ${month.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Demande</th><th>Client</th><th>Motif</th><th>Effective</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>${month.sort((a, b) => b.date.localeCompare(a.date)).map(r => `<tr class="click" data-act="resOpen" data-id="${r.id}"><td>${dmy(r.date)}</td><td><b>${esc(r.client)}</b></td><td>${esc(r.reason || 'Non précisé')}</td><td>${r.effective ? dmy(r.effective) : 'n.d.'}</td><td>${r.ownerId ? esc(fullName(S.users[r.ownerId])) : '<span class="muted">n.d.</span>'}</td><td><span class="badge ${RES_STATUS[resStatus(r)].cls}">${RES_STATUS[resStatus(r)].label}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Aucune demande ce mois-ci.</div>'}`;
     }
-    return head + kpis + tabs('resTab', [['todo', `À traiter (${open.length})`], ['all', 'Historique du mois']], tab) + body;
+    return head + kpis + tabs('resTab', [['todo', `À arbitrer (${open.length})`], ['all', 'Historique du mois']], tab) + body;
   },
 };
 function resCard(r) {

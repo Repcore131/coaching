@@ -266,8 +266,11 @@ ACTIONS.rsmCommit = () => {
       const id = 'rs' + hkey(club + '|' + x.key);
       const old = S.resiliations[id];
       const owner = old && old.ownerId ? old.ownerId : pick(x.seller);
-      // le suivi fait dans Fit Pulse (statut, responsable, actions) n'est jamais ecrase
-      const status = x.saved ? 'sauvee' : old && old.status ? old.status : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee';
+      // L'arbitrage Resamania fait foi : à arbitrer => à traiter, acceptée => départ, rejetée/annulée => historique.
+      const arbMap = { submitted: 'nouvelle', accepted: 'resiliee', rejected: 'rejetee', canceled: 'sauvee' };
+      const imported = x.arb ? arbMap[x.arb] : (x.saved ? 'sauvee' : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee');
+      // Une issue déjà tranchée dans Fit Pulse (sauvée ou résiliée) n'est jamais écrasée ; sinon l'import fait foi.
+      const status = old && (old.status === 'sauvee' || old.status === 'resiliee') ? old.status : imported;
       // Un dossier garde la liste de ses imports : annuler l'un ne cache pas ce qu'un autre porte, réimporter le fait réapparaître.
       const { hidden: _h, ...prev } = old || {}; const resImp = { ...(prev.importIds || (prev.importId ? { [prev.importId]: true } : {})), [impId]: true };
       const sameDay = prev.sameDay || (x.nature === 'option' && Object.values(S.clients).some(cc => cc.clubId === club && cc.start === x.date && tokensKey(cc.name || '') === tokensKey(x.client || '')));

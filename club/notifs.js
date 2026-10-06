@@ -106,7 +106,8 @@ function notifLive(before, after) {
   for (const id of Object.keys(after.resiliations || {})) {
     if ((before.resiliations || {})[id]) continue; const r = after.resiliations[id];
     if (!mine(r.clubId) || r.userId === ME.id || r.by === ME.id || (r.at && Date.now() - r.at > 600000)) continue;
-    notify('res_new', 'Nouvelle résiliation reçue. Ouvrez Résiliations pour la prendre.', '#/resiliations', { key: 'resnew_' + id });
+    if (!resOpen(r)) continue; // seules les demandes à arbitrer déclenchent une alerte (pas les acceptées/rejetées déjà classées)
+    notify('res_new', 'Nouvelle demande de résiliation à arbitrer. Ouvrez Résiliations pour la traiter.', '#/resiliations', { key: 'resnew_' + id });
   }
 
   const snap = palierSnap();
