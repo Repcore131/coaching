@@ -126,6 +126,9 @@ export function plan(S, state, now = new Date()) {
       if (hist.length >= 5 && Number(e.value) > 5 * Math.max(median(hist), 0.01) && Number(e.value) > floor) mgrs(club).forEach(u => add(u.id, 'anomalie', `anom_${e.id}`, 'Chiffre à vérifier', `Une saisie de ${((S.kpis || {})[e.kpiId] || {}).label || e.kpiId} sort de l’ordinaire. Contrôlez-la.`, '#/members'));
     });
   }
+  // Resamania : le robot attend le code de connexion saisi dans l'appli → alerte urgente aux managers.
+  const rsmEtat = (S.rsm || {}).etat || {};
+  if (rsmEtat.step === 'code' && rsmEtat.at && now - rsmEtat.at < 15 * 60000) clubs.forEach(club => mgrs(club).forEach(u => add(u.id, 'rsm', `rsmcode_${Math.floor(rsmEtat.at / 60000)}`, 'Resamania : code demandé', 'Ouvrez Fit Pulse et saisissez le code reçu par e-mail pour lancer la mise à jour.', '#/kpimatin', { urgent: true, ttl: 900 })));
   // Records personnels du mois (un par KPI et par jour)
   for (const u of users) for (const k of Object.keys(S.kpis || {})) { if (!((S.kpis[k] || {}).points > 0)) continue;
     const cur = sum(S, e => e.userId === u.id && e.kpiId === k && (e.date || '').slice(0, 7) === mk); if (!cur) continue;
@@ -149,6 +152,8 @@ export function plan(S, state, now = new Date()) {
     if (at('16:00') && !P.dow.startsWith('sam')) clubs.forEach(club => { const silent = team(club).filter(u => u.role === 'membre').filter(u => { const lm = Object.values(S.entries || {}).filter(e => e && e.userId === u.id && e.source === 'manual').reduce((m, e) => (e.date > m ? e.date : m), ''); return !lm || lm < addDays(t, -2); }); silent.forEach(s => mgrs(club).forEach(m => add(m.id, 'mgr_silent', `silent_${s.id}_${t}`, 'Commercial sans saisie', `${s.first || 'Un commercial'} n’a rien saisi depuis 2 jours ou plus.`, '#/team'))); });
     if (at('19:30')) for (const u of users.filter(x => x.role === 'membre')) { const n = Object.values(S.entries || {}).filter(e => e && e.userId === u.id && e.source === 'manual' && e.date === t).length; const club = (u.clubs || [])[0]; const c = sum(S, e => e.clubId === club && e.kpiId === 'contrats' && e.date === t); add(u.id, 'pm_digest', `pm_${t}`, 'Bilan du jour', `${plurFr(n, 'saisie', 'saisies')} aujourd’hui. Équipe : ${plurFr(Math.round(c), 'contrat', 'contrats')}.`, '#/home', { ttl: 12 * 3600 }); }
     if (P.dow.startsWith('lun') && at('09:00', 180)) users.forEach(u => add(u.id, 'digest', `digest_${t}`, 'Bilan de la semaine', 'Votre bilan de la semaine est prêt sur l’accueil.', '#/home', { ttl: 12 * 3600 }));
+    // Rappel du soir : lancer la mise à jour Resamania et garder le code à portée (urgent : passe l'heure calme).
+    if (at('21:30')) clubs.forEach(club => mgrs(club).forEach(u => add(u.id, 'rsm', `rsmsoir_${t}`, 'Mise à jour Resamania', 'C’est l’heure : lancez la mise à jour du soir dans KPI du matin et gardez le code Resamania à portée.', '#/kpimatin', { urgent: true, ttl: 2 * 3600 })));
   }
   // Pause décidée par le manager : la boîte de réception seulement.
   const paused = club => !!((S.clubs || {})[club] || {}).notifPaused;
