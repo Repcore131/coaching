@@ -108,6 +108,47 @@ export async function connecter(page) {
   log('connecté');
 }
 
+// ── Repérage : menu Gestion, formulaire d'export, liste des exports ──────
+// Seuls des libellés d'interface sont écrits (types d'export, intitulés de
+// champs, en-têtes de colonnes) : aucune ligne de données.
+async function reperage(page) {
+  const base = new URL(URL0).origin;
+  await page.goto(URL0, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
+  const gestion = page.getByRole('button', { name: /gestion/i });
+  if (await visible(gestion)) {
+    await gestion.first().click(); await page.waitForTimeout(1500);
+    const items = await page.evaluate(() => [...document.querySelectorAll('a[href*="/management/"]')].filter(e => e.getBoundingClientRect().height > 0).map(e => `${(e.innerText || '').trim()} → ${e.getAttribute('href')}`));
+    log('=== menu GESTION'); items.slice(0, 150).forEach(x => log('  menu', propre(x)));
+    await page.keyboard.press('Escape');
+  }
+  await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
+  const f = await page.evaluate(() => {
+    const vis = e => e.getBoundingClientRect().height > 0;
+    return {
+      labels: [...document.querySelectorAll('label,legend,h1,h2,h3,h4,.mat-form-field-label,mat-label,[class*=label]')].filter(vis).map(e => (e.innerText || '').trim()).filter(t => t && t.length < 80).slice(0, 60),
+      selects: [...document.querySelectorAll('select')].map(s => `${s.name || s.id}: ${[...s.options].map(o => o.text.trim()).slice(0, 80).join(' | ')}`),
+      champs: [...document.querySelectorAll('input,textarea')].filter(vis).map(e => [e.type, e.name || e.id, e.placeholder || ''].join('|')).slice(0, 30),
+      boutons: [...document.querySelectorAll('button,[role=button],[role=option],[role=tab],[role=radio]')].filter(vis).map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length < 80).slice(0, 80),
+    };
+  });
+  log('=== formulaire d’export'); f.labels.forEach(x => log('  libellé', propre(x))); f.selects.forEach(x => log('  liste', court(x, 2000)));
+  f.champs.forEach(x => log('  champ', propre(x))); log('  boutons :', f.boutons.map(propre).join(' · '));
+  // Les listes déroulantes « maison » : on ouvre la première pour lire les types d'export proposés.
+  const combo = page.locator('[role=combobox],mat-select,.select2-selection,.choices,[class*=select]').first();
+  if (await visible(combo)) {
+    await combo.click().catch(() => {}); await page.waitForTimeout(1500);
+    const opts = await page.evaluate(() => [...document.querySelectorAll('[role=option],li.select2-results__option,.choices__item--choice,mat-option')].map(e => (e.innerText || '').trim()).filter(Boolean));
+    log('=== types proposés dans la liste :', opts.length); opts.slice(0, 120).forEach(x => log('  type', propre(x)));
+    await page.keyboard.press('Escape');
+  }
+  const tous = page.getByRole('button', { name: /tous les exports/i }).or(page.getByRole('link', { name: /tous les exports/i }));
+  if (await visible(tous)) {
+    await tous.first().click(); await page.waitForTimeout(5000);
+    const t = await page.evaluate(() => ({ url: location.pathname, tetes: [...document.querySelectorAll('th,[role=columnheader]')].map(e => (e.innerText || '').trim()).filter(Boolean), lignes: document.querySelectorAll('tbody tr,[role=row]').length, actions: [...new Set([...document.querySelectorAll('tbody a,tbody button,[role=row] a,[role=row] button')].map(e => (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '').trim()).filter(x => x && x.length < 30))] }));
+    log(`=== liste des exports : ${t.url} · ${t.lignes} lignes`); log('  colonnes :', t.tetes.map(propre).join(' | ')); log('  actions :', t.actions.map(propre).join(' · '));
+  }
+}
+
 async function main() {
   const { chromium } = require('playwright');
   mkdirSync(SORTIE, { recursive: true });
@@ -116,18 +157,7 @@ async function main() {
   const page = await ctx.newPage();
   try {
     await connecter(page);
-    if (MODE === 'reperage') {
-      await page.goto(URL0, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
-      await decrire(page, 'tableau de bord');
-      // Les menus latéraux se déplient souvent au survol ou au clic : on ouvre chaque entrée de premier niveau.
-      const entrees = page.locator('nav a, nav button, aside a, aside button, [role=navigation] a, [role=navigation] button');
-      const n = Math.min(await entrees.count(), 40);
-      for (let i = 0; i < n; i++) { const e = entrees.nth(i); const t = court(await e.innerText().catch(() => ''), 40); if (!t || /déconnexion|logout/i.test(t)) continue; if (/export/i.test(t)) log('  ★ entrée export :', propre(t)); }
-      for (const p of ['/fitnesspark/-/management/exports', '/fitnesspark/-/management/export', '/fitnesspark/-/management/reports', '/fitnesspark/-/management/statistics']) {
-        await page.goto(new URL(p, URL0).href, { waitUntil: 'domcontentloaded' }).catch(() => null); await page.waitForTimeout(4000);
-        await decrire(page, 'essai ' + p);
-      }
-    }
+    if (MODE === 'reperage') await reperage(page);
   } catch (e) {
     log('ÉCHEC :', court(e.message, 200)); await decrire(page, 'page au moment de l’échec').catch(() => {}); process.exitCode = 1;
   } finally { await b.close(); }
