@@ -102,6 +102,10 @@ async function _genAccessCode(studentName,months,type,extra){
     creatorFree:isCreator,
     grantedBy:isCreator?'creator':'coach'
   };
+  // L'HÉRITAGE (build 1811) : la cadence et le modèle de départ des Réglages
+  // de coaching, pour un code d'athlète. Un modèle choisi à l'invitation passe
+  // devant celui du réglage.
+  if((type||'athlete')==='athlete') Object.assign(payload,heritageCode(currentUser,extra));
   const _mod=extra&&extra.programmeModeleId;
   if(_mod&&RC_MODELE_ID_RE.test(String(_mod))) payload.programmeModeleId=String(_mod);
   // Hors ligne, la generation ne peut PAS aboutir : le code doit exister

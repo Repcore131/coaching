@@ -1144,6 +1144,8 @@ async function createAthlete(){
   // qui refuse au-delà : expiry est donc dans les clous.
   athlete.status='COACHING_SUIVI';
   athlete.accessExpiry=expiry;
+  // La cadence des Réglages de coaching, portée par le code (build 1811).
+  heriterCadence(athlete,payload);
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
   currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now(),etat:'cree',creeLe:new Date().toISOString()});
   if(!currentUser.clients) currentUser.clients=[];

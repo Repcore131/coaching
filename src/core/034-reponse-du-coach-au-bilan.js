@@ -296,7 +296,8 @@ function saveReponseBilan(email,bilanId,taId,_confirme){
   const b=c.bilans.find(x=>_idBilan(x)===bilanId);
   if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
   const _premiere=!b.reponseCoach, _indice=c.bilans.indexOf(b);
-  b.reponseCoach=txt.slice(0,2000);
+  // La signature des Réglages de coaching, en dernière ligne.
+  b.reponseCoach=avecSignature(txt).slice(0,2000);
   b.reponseDate=Date.now();
   // Repasse à false même si la réponse avait déjà été lue : une réponse
   // modifiée est une nouvelle information.
@@ -594,7 +595,9 @@ function brouillonBilan(athlete,bilan,signaux,opts){
 
 // La formule du coach : son réglage, sinon celle par défaut.
 function formulesReponse(coach){
-  const f=(coach&&coach.reponseFormules)||{};
+  // Les Réglages de coaching d'abord (build 1811), l'ancien champ ensuite.
+  const rg=coach&&coach.reglagesCoach&&coach.reglagesCoach.formules;
+  const f=(rg&&typeof rg==='object'?rg:null)||(coach&&coach.reponseFormules)||{};
   return {ouverture:typeof f.ouverture==='string'?f.ouverture:BROUILLON_FORMULES_DEFAUT.ouverture,
     cloture:typeof f.cloture==='string'?f.cloture:BROUILLON_FORMULES_DEFAUT.cloture};
 }
@@ -908,7 +911,8 @@ function ouvrirFormulesReponse(){
 function enregistrerFormulesReponse(){
   if(!currentUser) return false;
   const lire=id=>String(((document.getElementById(id)||{}).value)||'').replace(/\s+/g,' ').trim().slice(0,BROUILLON_FORMULE_MAX);
-  currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
+  // UN SEUL OBJET (build 1811) : la formule vit dans reglagesCoach.
+  reglageEcrire('formules',{ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')},currentUser);
   try{ saveUser(); }catch(e){ rcErreurMuette('enregistrerFormulesReponse',e); }
   closeModal();
   toast('Formule enregistrée '+ICO.coche,'var(--green)');

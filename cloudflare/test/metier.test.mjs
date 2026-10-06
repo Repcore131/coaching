@@ -398,6 +398,17 @@ await test('fuseau : Réunion à 19 h Paris = heures calmes ; Montréal à 14 h 
   for (const x of ['Mars/Olympus', '../etc', 'europe/paris', '', null, 42, 'A'.repeat(70)]) assert.equal(fuseauValide(x), 'Europe/Paris', String(x));
   assert.equal(fuseauValide('America/Argentina/Salta'), 'America/Argentina/Salta');
 });
+await test('heures calmes du coach (pushPrefs.calme) : sa plage remplace 21 h – 8 h, une plage invalide ne change rien', async () => {
+  const t22 = PARIS('2026-10-01T22:00:00'), t7 = PARIS('2026-10-01T07:00:00'), t13 = PARIS('2026-10-01T13:00:00');
+  assert.equal(heuresCalmes(t22, 'Europe/Paris', { de: 23, a: 6 }), false, '22 h avant 23 h');
+  assert.equal(heuresCalmes(t7, 'Europe/Paris', { de: 23, a: 6 }), false, '7 h après 6 h');
+  assert.equal(heuresCalmes(t13, 'Europe/Paris', { de: 12, a: 14 }), true, 'plage de jour');
+  for (const p of [{ de: 5, a: 5 }, { de: 25, a: 3 }, null, { de: '21' }]) assert.equal(heuresCalmes(t22, 'Europe/Paris', p), true, JSON.stringify(p));
+  assert.deepEqual(pushAutorise('message', { calme: { de: 23, a: 6 } }, null, t22, 'Europe/Paris'), { ok: true, raison: null });
+  const cur = ajouterAttente(null, 'n1', { type: 'message' }, 1, 'Europe/Paris', { de: 23, a: 6 });
+  assert.deepEqual(fileAttente(cur)[0].calme, { de: 23, a: 6 }, 'la file garde la plage pour le matin');
+  assert.equal(fileAttente(ajouterAttente(null, 'n2', { type: 'defi' }, 1, 'Europe/Paris'))[0].calme, undefined);
+});
 
 await test('le changement d’heure du 25/10/2026 ne décale pas le jour du plafond', async () => {
   // 00 h 30 et 23 h 30 à Paris le 25 : le même jour, alors que l'écart à UTC passe de 2 h à 1 h.

@@ -94,6 +94,12 @@ await test('/rc_codes : programmeModeleId — un identifiant de modèle, 64 cara
   assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N005', code({ programmeModeleId: '../users' }))).statut, 401);
   assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N006', code({ programmeModeleId: 42 }))).statut, 401);
 });
+await test('/rc_codes : bilanCadence (Réglages de coaching) — 1, 2 ou 4 semaines, un jour de 0 à 6, rien d’autre', async () => {
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N007', code({ bilanCadence: { freq: 1, jour: 1 } }))).statut, 200);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N008', code({ bilanCadence: { freq: 3, jour: 1 } }))).statut, 401);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N009', code({ bilanCadence: { freq: 2, jour: 7 } }))).statut, 401);
+  assert.equal((await appel(KEV, 'PUT', 'rc_codes/RC-KEVI-N010', code({ bilanCadence: { freq: 2, jour: 6, x: 1 } }))).statut, 401);
+});
 await test('users/$u/activation et activite/$k/act : des nombres, un canal de la liste fermée', async () => {
   const b = 'users/' + K(LEA) + '/activation';
   assert.equal((await appel(LEA, 'PUT', b, { inscrit: 1, canal: 'ami', premiereSeance: 2 })).statut, 200);

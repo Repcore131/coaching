@@ -1181,6 +1181,14 @@
         // 05/10/2026) : l identifiant d un de SES modeles, rien d autre. C est
         // le Worker (redeemCode) qui le lit et pose le programme.
         "programmeModeleId": { ".validate": "newData.isString() && newData.val().length <= 64 && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)" },
+        // La cadence de bilan des Reglages de coaching (06/10/2026), donnee au
+        // nouvel athlete : memes bornes que users/bilanCadence.
+        "bilanCadence": {
+          ".validate": "newData.hasChildren(['freq', 'jour'])",
+          "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+          "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+          "$autre": { ".validate": false }
+        },
 
         "coachEmailKey": { ".validate": "!data.exists() || data.val() === newData.val()" },
         "coachId":       { ".validate": "!data.exists() || data.val() === newData.val()" },

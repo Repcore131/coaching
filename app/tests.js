@@ -56009,6 +56009,117 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — LES RÉGLAGES DE COACHING ET L'ACCUEIL PERSONNALISÉ ──
+    const _RG=(fn)=>{
+      const sv={u:currentUser,users:DB.get('users'),push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,conf:window.rcConfirm,
+        f:window.fetch,tok:CLOUD._getToken,sav:saveUser,fc:_filtreClients,rech:(document.getElementById('ch-search')||{}).value};
+      let fini=true;
+      const coach={id:'crg',email:'coach.rg@t.fr',role:'coach',fname:'Kev',lname:'R',alertStatus:{},
+        studentCodes:[{active:true,studentName:'Eve Attente',token:'RC-EVEA-TTEN',coachId:'crg'}]};
+      const mk=(id,prenom,x)=>Object.assign({id,email:id+'.rg@t.fr',fname:prenom,lname:'T',role:'athlete',coachId:'crg',
+        status:'COACHING_SUIVI',sessions:[],bilans:[],createdAt:Date.now()-30*864e5},x||{});
+      const aths=[mk('a1','Ana'),mk('a2','Bob',{bilanCadence:{freq:4,jour:3}}),mk('a3','Cid'),mk('a4','Dan',{suivi:false})];
+      const ranger=()=>{ try{ closeModal(); }catch(e){}
+        DB.set('users',sv.users); currentUser=sv.u; CLOUD.pushOne=sv.push; window.toast=sv.t; window.toastSync=sv.ts;
+        window.rcConfirm=sv.conf; window.fetch=sv.f; CLOUD._getToken=sv.tok; saveUser=sv.sav; _filtreClients=sv.fc;
+        const r=document.getElementById('ch-search'); if(r&&sv.rech!=null) r.value=sv.rech;
+        try{ appliquerAccueilCoach(); }catch(e){} };
+      try{
+        const users={'coach.rg@t.fr':coach}; aths.forEach(a=>{ users[a.email]=a; });
+        DB.set('users',users); currentUser=coach;
+        CLOUD.pushOne=()=>Promise.resolve(true); window.toast=()=>{}; window.toastSync=()=>{};
+        window.rcConfirm=()=>Promise.resolve(true); saveUser=()=>true;
+        const r=fn(coach,aths);
+        if(r&&typeof r.then==='function'){ fini=false; return r.finally(ranger); }
+        return r;
+      } finally { if(fini) ranger(); }
+    };
+    okA('Réglages de coaching : un code créé APRÈS le réglage hérite de la cadence, celui d’avant non ; le dossier qui l’ouvre la prend s’il n’en a pas',async()=>_RG(async(coach)=>{
+      const corps=[];
+      window.fetch=(u,o)=>{ corps.push(JSON.parse(o.body)); return Promise.resolve({ok:true,status:200,json:()=>Promise.resolve({})}); };
+      CLOUD._getToken=()=>Promise.resolve('jeton');
+      const avant=await _genAccessCode('Zoé Avant',3);
+      if(avant.payload.bilanCadence) return _echec('code d’avant : '+JSON.stringify(avant.payload.bilanCadence));
+      if(!/2 semaines/.test(htmlReglagesCoach(coach))) return _echec('la valeur d’origine ne se lit pas');
+      reglageEcrire('cadence',{freq:1,jour:1});
+      if(JSON.stringify(coach.reglagesCoach)!=='{"cadence":{"freq":1,"jour":1}}') return _echec('reglagesCoach : '+JSON.stringify(coach.reglagesCoach));
+      const apres=await _genAccessCode('Yann Après',3);
+      if(JSON.stringify(apres.payload.bilanCadence)!=='{"freq":1,"jour":1}') return _echec('code d’après : '+JSON.stringify(apres.payload));
+      if(JSON.stringify(corps[1].bilanCadence)!=='{"freq":1,"jour":1}') return _echec('pas envoyé au serveur');
+      // Un code de COACH n'emporte rien.
+      if(heritageCode(coach).bilanCadence&&(await _genAccessCode('Coach X',1,'coach')).payload.bilanCadence) return _echec('un code coach hérite');
+      const neuf={}, posee={bilanCadence:{freq:2,jour:6}};
+      if(!heriterCadence(neuf,apres.payload)||neuf.bilanCadence.freq!==1) return _echec('dossier neuf : '+JSON.stringify(neuf));
+      if(heriterCadence(posee,apres.payload)||posee.bilanCadence.freq!==2) return _echec('une cadence posée est remplacée');
+      // Les dossiers existants ne bougent pas.
+      const u=DB.get('users')||{};
+      if(u['a1.rg@t.fr'].bilanCadence||u['a2.rg@t.fr'].bilanCadence.freq!==4) return _echec('un dossier existant a changé');
+      // Pas de calories et signature, réglés une fois.
+      reglageEcrire('pasKcal',50); reglageEcrire('signature','  Kev,   ton coach ');
+      if(reglagePasKcal(coach)!==50||nutPasCoach().join()!=='-100,-50,50,100') return _echec('pas : '+nutPasCoach().join());
+      if(avecSignature('Bravo.')!=='Bravo.\n\nKev, ton coach') return _echec('signature : '+JSON.stringify(avecSignature('Bravo.')));
+      if(avecSignature('Bravo.\n\nKev, ton coach')!=='Bravo.\n\nKev, ton coach') return _echec('signature doublée');
+      // Réinitialiser retire la clé : l'origine revient.
+      reglageReinitialiser('pasKcal');
+      if('pasKcal' in coach.reglagesCoach||reglagePasKcal(coach)!==ATH_DELTA_PAS) return _echec('réinitialiser : '+JSON.stringify(coach.reglagesCoach));
+      return /Réinitialiser/.test(htmlReglagesCoach(coach))?true:_echec('pas de « Réinitialiser » par ligne');
+    }));
+    okA('Réglages de coaching : « Appliquer à tous » liste les athlètes concernés et n’écrit QUE les dossiers laissés cochés',async()=>_RG(async(coach)=>{
+      reglageEcrire('cadence',{freq:1,jour:1});
+      const l=cibleAppliquerCadence(getClients(),coach).map(x=>x.c.id).sort().join();
+      if(l!=='a1,a2,a3,a4') return _echec('concernés : '+l);
+      ouvrirAppliquerCadence();
+      const cases=[...document.querySelectorAll('.rg-cible-c')];
+      if(cases.length!==4||!/Ana/.test(document.getElementById('modal-overlay').textContent)) return _echec('liste : '+cases.length);
+      cases.find(x=>x.value==='a3').checked=false;
+      let confirme=0; window.rcConfirm=(t)=>{ confirme++; return Promise.resolve(/3 athlètes/.test(t)); };
+      const n=await appliquerCadenceConfirmee();
+      if(confirme!==1||n!==3) return _echec('confirmé '+confirme+' fois, '+n+' écrits');
+      const u=DB.get('users')||{};
+      for(const k of ['a1','a2','a4']) if(JSON.stringify(u[k+'.rg@t.fr'].bilanCadence)!=='{"freq":1,"jour":1}') return _echec(k+' : '+JSON.stringify(u[k+'.rg@t.fr'].bilanCadence));
+      if(u['a3.rg@t.fr'].bilanCadence) return _echec('a3, décoché, a été écrit');
+      // Refusée, la confirmation n'écrit rien.
+      ouvrirAppliquerCadence();
+      window.rcConfirm=()=>Promise.resolve(false);
+      return (await appliquerCadenceConfirmee())===0&&!(DB.get('users')||{})['a3.rg@t.fr'].bilanCadence?true:_echec('écrit sans confirmation');
+    }));
+    ok('Personnaliser l’accueil : 5 blocs masqués ne sont plus rendus, un bloc se déplace ; la recherche et « Mes notifications » ne se masquent pas ; retour à l’origine',()=>_RG((coach)=>{
+      const pad=document.querySelector('#ct-dashboard > .pad');
+      const ordreDom=()=>[...pad.children].filter(x=>x.dataset.acc).map(x=>x.dataset.acc).filter((k,i,l)=>l.indexOf(k)===i).join();
+      const origine=ordreDom();
+      if(origine!==ACCUEIL_BLOCS.map(b=>b.cle).join()) return _echec('table et balisage divergent : '+origine);
+      for(const k of ['croissance','kit','recap','chrono','tunnel']) if(!accueilBasculer(k)) return _echec('refusé : '+k);
+      for(const id of ['ch-croissance','ch-kit-btn','ch-chrono']){
+        const e=document.getElementById(id);
+        if(getComputedStyle(e).display!=='none') return _echec(id+' encore rendu');
+      }
+      if(accueilBasculer('liste')!==false||accueilBasculer('todo')!==false) return _echec('un bloc fixe se masque');
+      coach.reglagesCoach.accueil.masques.push('liste','todo'); appliquerAccueilCoach();
+      if(getComputedStyle(document.getElementById('ch-search').parentNode).display==='none'||document.getElementById('ch-todo').classList.contains('acc-masque'))
+        return _echec('la recherche ou « Mes notifications » masquée par la donnée');
+      if(accueilEtat(coach).masques.length!==5) return _echec('masques : '+accueilEtat(coach).masques.join());
+      accueilDeplacer('jamais',-1);
+      const inv=document.getElementById('ch-invitations'), jam=document.getElementById('ch-jamais-demarre');
+      if(!(jam.compareDocumentPosition(inv)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('« Jamais démarré » n’est pas monté');
+      ouvrirPersoAccueil();
+      if(document.querySelectorAll('#acc-corps .acc-l').length!==ACCUEIL_BLOCS.length) return _echec('liste incomplète');
+      if(document.querySelector('[data-acc-l="liste"] input')) return _echec('la recherche a un interrupteur');
+      accueilRetablir();
+      if(coach.reglagesCoach.accueil||ordreDom()!==origine||pad.querySelector('.acc-masque')) return _echec('origine non rétablie');
+      if(pad.lastElementChild.id!=='ch-jamais-demarre'||!(pad.compareDocumentPosition(document.getElementById('ch-perso-accueil'))&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('« Personnaliser » n’est pas sous la page');
+      return true;
+    }));
+    ok('« Tu suis N athlètes » compte exactement la section « Mes athlètes (avec suivi) » de la liste',()=>_RG(()=>{
+      _filtreClients='travail';
+      const r=document.getElementById('ch-search'); if(r) r.value='';
+      renderClientList(getClients());
+      const sec=document.querySelector('#ch-clients-list .sec-suivi');
+      if(!sec) return _echec('pas de section');
+      const m=/Tu suis (\d+) athlète/.exec(_actParagraphe([],[],{},null,null,false));
+      if(!m) return _echec('pas de « Tu suis »');
+      // a1, a2, a3 ; ni Dan (sans suivi) ni Eve (invitation non honorée).
+      return m[1]===sec.textContent.trim()&&m[1]==='3'&&nbAthletesSuivis()===3?true:_echec('Tu suis '+m[1]+' / avec suivi '+sec.textContent);
+    }));
     // ── 06/10/2026 — RÉPONDRE À UN BILAN : RÉPONSES D'EMBLÉE, LA DOULEUR À L'ÉCRAN ──
     const _RB=(fn)=>{
       const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,sg:signauxEntrainement,push:CLOUD.pushOne,dep:window.deposerEvenement,

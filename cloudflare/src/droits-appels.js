@@ -55,6 +55,12 @@ export function finDuCode(code, cleCoach, t) {
 // file /evenements (l'athlète aurait vu « Programme en cours de création » à
 // sa première ouverture). Mêmes règles que _assignerModele dans l'app.
 const ID_MODELE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// PURE. La cadence portée par un code, bornée comme la règle users/bilanCadence.
+export function cadenceValide(x) {
+  if (!x || typeof x !== 'object') return null;
+  const f = Number(x.freq), j = Number(x.jour);
+  return [1, 2, 4].indexOf(f) >= 0 && Number.isInteger(j) && j >= 0 && j <= 6 ? { freq: f, jour: j } : null;
+}
 const listeDe = (x) => (Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : [])).filter(Boolean);
 // PURE. Les séances garnies d'une version (comme _cplSeancesPleines).
 const pleines = (p, g) => listeDe(p && p[g === 'F' ? 'sessions_F' : 'sessions_H'])
@@ -176,6 +182,10 @@ export function creerAppelsDroits(ctx) {
       if (droits) maj['droits/' + cle + '/rattache'] = { coach, le: t };
       if (d.coachId) maj[b + 'coachId'] = String(d.coachId);
       if (d.coachName) maj[b + 'coachName'] = String(d.coachName).slice(0, 120);
+      // LA CADENCE DE BILAN DU COACH (Réglages de coaching, 06/10/2026), sur un
+      // dossier qui n'en a pas : un code ne remplace jamais une cadence posée.
+      const cad = cadenceValide(d.bilanCadence);
+      if (cad && !cadenceValide(await lire(b + 'bilanCadence'))) maj[b + 'bilanCadence'] = cad;
       await db.ref().update(maj);
     }
     // Le programme de départ choisi par le coach, s'il y en a un, et SEULEMENT

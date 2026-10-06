@@ -13427,3 +13427,32 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .pr-resume::-webkit-details-marker{display:none}
 .pr-changer{color:var(--red-text);font-weight:800}
 .pr-repli[open] .pr-resume{margin-bottom:10px}
+
+/* ══ REGLAGES DE COACHING ET ACCUEIL PERSONNALISE (build 1811) ══════════════
+   Une ligne par reglage : intitule, controle, valeur d'origine et
+   « Reinitialiser ». Les blocs masques de l'accueil sortent du rendu. */
+.acc-masque{display:none!important}
+.rg-feuille{max-height:88vh;overflow-y:auto}
+.rg-l{padding:12px 0;border-bottom:1px solid var(--border)}
+.rg-t{font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
+.rg-o{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:var(--fs-2xs);color:var(--text-faint)}
+.rg-reinit{background:none;border:none;color:var(--red-text);font:inherit;font-weight:800;cursor:pointer;min-height:32px;padding:0 4px}
+.rg-in,.rg-sel{width:100%;box-sizing:border-box;min-height:44px;margin-bottom:6px}
+.rg-choix{display:flex;gap:6px}
+.rg-choix .btn{flex:1;margin:0}
+.rg-tous{margin-top:8px;width:100%}
+.rg-cible{display:flex;align-items:center;gap:10px;min-height:44px;font-size:var(--fs-sm);color:var(--text);border-bottom:1px solid var(--border)}
+.rg-cible input{width:18px;height:18px;accent-color:var(--red);flex-shrink:0}
+.rg-cible-a{margin-left:auto;font-size:var(--fs-2xs);color:var(--sub);text-align:right}
+.acc-l{display:flex;align-items:center;gap:8px;min-height:44px;border-bottom:1px solid var(--border)}
+.acc-l-off .acc-lib{color:var(--text-faint)}
+.acc-lib{flex:1;font-size:var(--fs-sm);color:var(--text)}
+.acc-fixe{font-size:var(--fs-2xs);color:var(--sub);width:40px;text-align:center}
+.acc-sw{position:relative;width:40px;height:24px;flex-shrink:0}
+.acc-sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.acc-sw span{position:absolute;inset:0;border-radius:var(--r-3);background:var(--surface-3);transition:background var(--t-1)}
+.acc-sw span::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:var(--r-full);background:var(--text);transition:transform var(--t-1)}
+.acc-sw input:checked+span{background:var(--red)}
+.acc-sw input:checked+span::after{transform:translateX(16px)}
+.acc-fl{width:36px;min-height:36px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);cursor:pointer}
+.acc-fl:disabled{opacity:.3;cursor:default}

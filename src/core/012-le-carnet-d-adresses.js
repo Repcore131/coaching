@@ -585,7 +585,7 @@ function saveReponseRite(email,cycle,taId){
   const r=c.rites.find(x=>x&&Number(x.cycle)===Number(cycle)&&!x.reponseCoach);
   if(!r){ toast('Bilan de cycle introuvable','var(--red)'); return false; }
   const _avant=c.rites.length, _indiceRite=c.rites.indexOf(r);
-  r.reponseCoach=txt.slice(0,2000);
+  r.reponseCoach=avecSignature(txt).slice(0,2000);
   r.reponseDate=Date.now();
   // On ne pousse RIEN dans rites[] : le plafond de 24 ne peut pas bouger.
   if(c.rites.length!==_avant) c.rites.length=_avant;

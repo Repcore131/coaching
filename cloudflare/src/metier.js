@@ -108,8 +108,19 @@ export function semaineAmbassadeur(jours) {
   }
   return o;
 }
-// Les heures calmes DE L'ATHLÈTE (21 h – 8 h dans son fuseau).
-export function heuresCalmes(t, tz) { const h = heureLocale(t, tz).heure; return h >= 21 || h < 8; }
+// Les heures calmes DU DESTINATAIRE (21 h – 8 h dans son fuseau). `plage`
+// {de, a} : celle qu'un coach a réglée (Réglages de coaching, miroir dans
+// pushPrefs.calme, 06/10/2026) ; invalide ou absente, l'origine.
+export const CALME_DEFAUT = Object.freeze({ de: 21, a: 8 });
+export function plageCalme(p) {
+  const ok = (v) => Number.isInteger(v) && v >= 0 && v <= 23;
+  const de = Number(p && p.de), a = Number(p && p.a);
+  return ok(de) && ok(a) && de !== a ? { de, a } : CALME_DEFAUT;
+}
+export function heuresCalmes(t, tz, plage) {
+  const h = heureLocale(t, tz).heure, { de, a } = plageCalme(plage);
+  return de > a ? (h >= de || h < a) : (h >= de && h < a);
+}
 export function lundiParis(t) {
   const p = paris(t);
   const d = new Date(Date.UTC(p.annee, p.mois - 1, p.date));
@@ -161,7 +172,7 @@ export function plafondAtteint(log, jour, prio) {
 export function pushAutorise(type, prefs, log, t, tz, prio) {
   if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: 'type' };
   if (prefs && prefs[type] === false) return { ok: false, raison: 'coupe' };
-  if (heuresCalmes(t, tz)) return { ok: false, raison: 'calme' };
+  if (heuresCalmes(t, tz, prefs && prefs.calme)) return { ok: false, raison: 'calme' };
   // Un humain qui écrit n'entre pas dans le plafond du jour : son plafond à
   // lui est celui du fil (filLibre), pris en transaction par envoyerPush.
   if (estHumain(type)) return { ok: true, raison: null };
@@ -226,16 +237,20 @@ export function fileAttente(cur) {
   const out = [];
   for (const id of Object.keys(cur)) {
     const e = cur[id];
-    if (e && typeof e === 'object' && e.message && typeof e.message === 'object') out.push({ id, message: e.message, at: Number(e.at) || 0, tz: fuseauValide(e.tz) });
+    if (!(e && typeof e === 'object' && e.message && typeof e.message === 'object')) continue;
+    const x = { id, message: e.message, at: Number(e.at) || 0, tz: fuseauValide(e.tz) };
+    if (e.calme && plageCalme(e.calme) !== CALME_DEFAUT) x.calme = plageCalme(e.calme);
+    out.push(x);
   }
   return out.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
 }
 // PURE. La file après l'arrivée de `message` sous `id` : les ATTENTE_FILE
 // plus récentes (objet prêt à écrire).
-export function ajouterAttente(cur, id, message, t, tz) {
-  const l = fileAttente(cur).concat([{ id, message, at: t, tz: fuseauValide(tz) }]).slice(-ATTENTE_FILE);
+export function ajouterAttente(cur, id, message, t, tz, calme) {
+  const p = calme ? plageCalme(calme) : null;
+  const l = fileAttente(cur).concat([p && p !== CALME_DEFAUT ? { id, message, at: t, tz: fuseauValide(tz), calme: p } : { id, message, at: t, tz: fuseauValide(tz) }]).slice(-ATTENTE_FILE);
   const o = {};
-  for (const e of l) o[e.id] = { message: e.message, at: e.at, tz: e.tz };
+  for (const e of l) o[e.id] = e.calme ? { message: e.message, at: e.at, tz: e.tz, calme: e.calme } : { message: e.message, at: e.at, tz: e.tz };
   return o;
 }
 const LIB_RESUME = Object.freeze({ coach: ['message de ton coach', 'messages de ton coach'], message: ['nouveau message', 'nouveaux messages'],
@@ -603,7 +618,7 @@ export function creerMetier(deps) {
     if (!ok.ok) {
       if (ok.raison === 'calme' && (!o || o.attendre !== false)) {
         const id = idFile(t, 'n');
-        await db.ref('push_attente/' + uid).transaction((cur) => ajouterAttente(cur, id, message, t, tz));
+        await db.ref('push_attente/' + uid).transaction((cur) => ajouterAttente(cur, id, message, t, tz, prefs && prefs.calme));
         return { envoye: 0, raison: 'calme', differe: true };
       }
       return { envoye: 0, raison: ok.raison };
@@ -927,7 +942,7 @@ export function creerMetier(deps) {
     for (const uid of Object.keys(tout)) {
       const l = fileAttente(tout[uid]).filter((e) => t - e.at <= ATTENTE_MAX_MS);
       if (!l.length) { maj['push_attente/' + uid] = null; continue; }
-      if (heuresCalmes(t, l[l.length - 1].tz)) continue;
+      if (heuresCalmes(t, l[l.length - 1].tz, l[l.length - 1].calme)) continue;
       maj['push_attente/' + uid] = null;
       taches.push(tachePush(uid, resumeMatin(l), { attendre: false }));
     }

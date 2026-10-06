@@ -910,7 +910,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'etiquettes','etiquettesAth','contacts',
   // Le temps passé par athlète et par semaine (chronoCoach).
   'chrono',
-  'studentCodes','msgTemplates','reponseFormules','relancesAuto','quickComments','protocolesPerso','canalEpingle',
+  'studentCodes','msgTemplates','reponseFormules','reglagesCoach','relancesAuto','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
   // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
   // lien et une image. Du commerce, pas de la sante — mais il DOIT etre classe,

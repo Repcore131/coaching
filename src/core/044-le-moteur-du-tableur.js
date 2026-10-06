@@ -1759,7 +1759,9 @@ function _tbAvis(localOk,envoi,texte){
 function tbkDelta(sens){
   // LE BROUILLON (06/10/2026) : le ±20 du tableau ne pousse plus rien au
   // geste. Il s'ajoute à l'écart en cours ; « Transmettre » l'envoie, une fois.
-  return nutBrouillonAjouter(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
+  // Le pas des Réglages de coaching (build 1811), ±20 d'origine.
+  const pas=reglagePasKcal(currentUser);
+  return nutBrouillonAjouter(sens<0?-pas:pas);
 }
 // L'ancien chemin, écrit et poussé au geste : il ne sert plus qu'à
 // l'historique de ce fichier (aucun appelant).
@@ -1945,7 +1947,7 @@ function _rendreCiblesCoach(c){
     +'<div class="nut-c-t">Cibles</div>'
     +(Number(on.kcal)>0?ligne(cyc?'ON':'Jour',on)+(cyc?ligne('OFF',off):''):'<div class="nut-c-rien">Pas encore de cibles : règle-les avec le calcul ci-dessous.</div>')
     +(d?'<div class="nut-c-e">'+(ecart>0?'+':ecart<0?'−':'±')+Math.abs(ecart)+' kcal par rapport à l’envoyé</div>':'')
-    +(Number(on.kcal)>0?'<div class="nut-c-pas">'+NUT_PAS.map(p=>'<button type="button" class="nut-pas" onclick="nutBrouillonAjouter('+p+')">'+(p>0?'+':'−')+Math.abs(p)+'</button>').join('')+'</div>':'')
+    +(Number(on.kcal)>0?'<div class="nut-c-pas">'+nutPasCoach().map(p=>'<button type="button" class="nut-pas" onclick="nutBrouillonAjouter('+p+')">'+(p>0?'+':'−')+Math.abs(p)+'</button>').join('')+'</div>':'')
     +(d?'<div class="nut-c-b"><button type="button" id="nut-transmettre" class="btn btn-red btn-sm" onclick="nutTransmettre()">Transmettre à '+prenom+'</button>'
         +'<button type="button" class="btn btn-outline btn-sm" onclick="nutJeter()">Jeter</button></div>'
       :a?'<div class="nut-c-b"><button type="button" id="nut-annuler" class="btn btn-outline btn-sm" onclick="nutAnnuler()">Annuler ('+a.reste+' s)</button></div>':'')

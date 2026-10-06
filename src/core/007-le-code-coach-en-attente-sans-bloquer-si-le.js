@@ -317,6 +317,8 @@ function _appliquerPayloadCode(payload){
     // de coach ne doit jamais raccourcir un accès acheté.
     currentUser.accessExpiry=Math.max(Number(currentUser.accessExpiry)||0,
       Number(_exp)||0)||_exp;
+    // La cadence de bilan du coach (Réglages de coaching), si le dossier n'en a pas.
+    heriterCadence(currentUser,payload);
     try{ _appliquerProgrammeDepart(currentUser,payload); }catch(e){ rcErreurMuette('_appliquerProgrammeDepart',e); }
     users[currentUser.email]=currentUser;
     const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);

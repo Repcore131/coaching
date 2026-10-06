@@ -389,7 +389,9 @@ function alertePalier(coach,users){
       texte='Après trois mois d’affilée au-dessus de ta formule, '+k+' athlète'+s+' perdr'+(k>1?'ont leur':'a son')+' accès suivi. '+offre;
     }
     return {type:'montee',palier:suivant.cle,horsQuota:k,coupure:coupure?coupure.getTime():0,
-      titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour une formule qui en '
+      // « ACTIFS » ET NON « Tu suis » (build 1811) : « Tu suis » est le compte de
+      // la liste (nbAthletesSuivis) ; le quota, lui, compte les actifs.
+      titre:n+' athlètes actifs depuis '+c+' mois, pour une formule qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
       texte};
   }
@@ -398,7 +400,7 @@ function alertePalier(coach,users){
   if(inf.length){
     const cible=inf[0];
     return {type:'descente',palier:cible.cle,
-      titre:'Tu suis '+n+' athlète'+(n>1?'s':'')+' : la formule '+cible.titre
+      titre:n+' athlète'+(n>1?'s actifs':' actif')+' : la formule '+cible.titre
         +' te suffirait.',
       texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
         +'Le changement prend effet à la fin de la période déjà réglée, '
@@ -549,11 +551,12 @@ function _renderAbonnementCoach(users){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
+    ${l('Athlètes suivis',texteTuSuis(nbAthletesSuivis()).replace(/^Tu suis |\.$/g,''))}
     ${l('Athlètes',compteur)}
     ${suivant?l('Formule suivante',suivant.titre+', '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
-      Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
+      ${n} athlètes actifs pour une formule qui en prévoit ${_quotaTexte(quota)}.
       Après trois mois d'affilée au-dessus, les athlètes hors de ta formule perdent leur accès suivi gratuit.</div>`:''}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"

@@ -232,6 +232,15 @@ await test('redeemCode : un code de coach enregistré ouvre le suivi, pose coach
   assert.equal(w.F.lire('rc_codes/RC-AAAA-BBBB/redeemed'), true);
   assert.equal(w.F.lire('rc_codes/RC-AAAA-BBBB/athleteEmail'), 'lea@t.fr');
 });
+await test('redeemCode : la cadence des Réglages de coaching passe au dossier neuf, jamais sur une cadence posée', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre', le: 1 } },
+    rc_codes: { 'RC-CCCC-DDDD': CODE({ bilanCadence: { freq: 1, jour: 1 } }), 'RC-EEEE-FFFF': CODE({ bilanCadence: { freq: 4, jour: 3 } }) },
+    users: { 'max@t,fr': { bilanCadence: { freq: 2, jour: 6 } } } });
+  await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-CCCC-DDDD' });
+  assert.deepEqual(w.F.lire('users/lea@t,fr/bilanCadence'), { freq: 1, jour: 1 });
+  await w.appel('redeemCode', 'max@t.fr', { code: 'RC-EEEE-FFFF' });
+  assert.deepEqual(w.F.lire('users/max@t,fr/bilanCadence'), { freq: 2, jour: 6 }, 'la cadence en place reste');
+});
 await test('redeemCode : un code FORGÉ par un compte qui n’est pas coach est refusé, rien n’est écrit', async () => {
   const w = mondeDroits({ rc_codes: { 'RC-FAUX-CODE': CODE({ coachEmailKey: 'pirate@t,fr', coachEmail: 'pirate@t.fr', months: 99, expiry: T0 + 99 * MMS }) } });
   await assert.rejects(() => w.appel('redeemCode', 'pirate2@t.fr', { code: 'RC-FAUX-CODE' }), refusA(403));

@@ -276,7 +276,8 @@ function renderCoachActivite(){
 // ne compare à personne et ne chiffre aucun revenu.
 function _actParagraphe(ath,mois,es,anc,comp,partiel){
   const p=[];
-  p.push('Tu suis '+ath.length+' athlète'+(ath.length>1?'s':'')+'.');
+  // LE MÊME COMPTE QUE « Mes athlètes (avec suivi) » (build 1811).
+  p.push(texteTuSuis(nbAthletesSuivis()));
   if(mois.length>=2){
     const d=mois[mois.length-1].actifs, v=mois[mois.length-2].actifs;
     p.push(d===v?('Autant d\'athlètes actifs ce mois-ci que le mois dernier ('+d+').')
@@ -417,6 +418,8 @@ function loadCoachHome(){
   // renderClientList. Un seul comptage, un seul rendu.
   try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
     if(_e) _texteIco(_e,_av.pose+'/'+_av.total+(_av.pose<_av.total?', à compléter':' '+ICO.coche)); }catch(e){}
+  // L'ORDRE ET LES BLOCS MASQUÉS du coach (Personnaliser l'accueil).
+  try{ appliquerAccueilCoach(); }catch(e){ rcErreurMuette('appliquerAccueilCoach',e); }
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
@@ -901,7 +904,8 @@ function jamaisDemarre(c,maintenant){
   const d=dateRattachement(c);
   const t=Number(maintenant)||0;
   if(!d||!t) return false;
-  return (t-d)>JAMAIS_DEMARRE_DELAI;
+  // Le réglage du coach (Réglages de coaching), 48 h d'origine.
+  return (t-d)>seuilSignal('jamaisDemarreH')*3600e3;
 }
 // ══════════════ QUATRIEME LISTE : « INACTIFS » ═════════════════════════
 //
@@ -955,7 +959,8 @@ function inactif(c,maintenant){
   const d=dernierSigneDeVie(c);
   const t=Number(maintenant)||0;
   if(!d||!t||t<d) return false;
-  return (t-d)>INACTIF_DELAI;
+  // Le réglage du coach (Réglages de coaching), 14 jours d'origine.
+  return (t-d)>seuilSignal('inactifJours')*864e5;
 }
 // PURE. Du plus endormi au moins endormi : celui qu'on n'a pas vu depuis deux
 // mois passe avant celui qui manque depuis quinze jours.
