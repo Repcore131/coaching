@@ -20,6 +20,11 @@ on:
       - 'club/outils/fitpulse-push.mjs'
       - '.github/workflows/fitpulse-mail.yml'
   workflow_dispatch:
+    inputs:
+      essai_mail:
+        description: 'Envoyer un e-mail d’essai à l’adresse d’envoi'
+        type: boolean
+        default: false
 
 concurrency:
   group: fitpulse-mail
@@ -42,4 +47,5 @@ jobs:
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
           FITPULSE_URL: https://fitpulse-niort.web.app
+          ESSAI_MAIL: ${{ inputs.essai_mail }}
         run: node club/outils/fitpulse-serveur.mjs

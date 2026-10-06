@@ -297,6 +297,11 @@ async function main() {
   await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
   // Notifications push (téléphone fermé).
   try { const S = (await (await api(tk, 'pulse.json')).json()) || {}; const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
+  // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
+  if (process.env.ESSAI_MAIL === 'true') {
+    if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');
+    else { try { await smtp(message(UTIL, { objet: 'Fit Pulse : la messagerie fonctionne', texte: 'Les invitations des nouveaux membres partiront de cette adresse.', html: '<p style="font-family:Arial,sans-serif">Les invitations des nouveaux membres partiront de cette adresse.</p>' }), UTIL); console.log('E-mail d’essai : envoyé à ' + UTIL.replace(/(.).+(@.+)/, '$1…$2')); } catch (e) { console.log('E-mail d’essai : ÉCHEC,', e.message); } }
+  }
   const boite = await (await api(tk, 'fitpulse_mail.json')).json() || {};
   const ids = Object.keys(boite).slice(0, MAX_PAR_PASSAGE);
   console.log(`${Object.keys(boite).length} demande(s) en attente`);
