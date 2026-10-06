@@ -1101,6 +1101,9 @@ function _htmlTiroirAthlete(c){
     // de plus qu'une ligne vide, et il ferait croire a une panne.
     +(corps||'<div style="font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.55;margin-top:8px">Aucune mesure encore.</div>')
+    // LE CURSEUR SUIVI (06/10/2026) : il a quitte la ligne du telephone pour
+    // laisser la place au nom ; il vit ici et sur la fiche.
+    +'<div style="margin-top:12px">'+_htmlCurseurSuivi(c,'grand')+'</div>'
     +'<button type="button" class="btn btn-red btn-sm" style="width:100%;margin-top:14px" '
     +'onclick="openClientDetail(\''+String(c.id||'').replace(/'/g,'')+'\',false,true)">Ouvrir la fiche</button>';
 }

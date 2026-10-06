@@ -30342,16 +30342,59 @@ function _triProgres(c){
 // lecture seule, puis nouveau bilan, puis alerte, puis actif. Un ordre
 // different donnerait un badge orange sur un filet rouge — deux signaux
 // contradictoires, et le plus visible serait le faux.
+//
+// LA DOULEUR D'ABORD (06/10/2026). Le badge disait « Actif », en vert, pour un
+// athlete qui declarait une douleur repetee : urgencyScore la classait en
+// tete, la liste la peignait en vert. Le drapeau rouge et la douleur repetee
+// non reportee — LES MEMES CONDITIONS que les rangs 10 et 9 d'urgencyScore —
+// passent donc avant tout le reste, nouveau bilan compris.
+function athleteDouleur(c){
+  if(!c) return false;
+  try{ if(drapeauQuelconqueActif(c)) return true; }catch(e){}
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){ sg=null; }
+  return !!(sg&&sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c));
+}
 function etatAthlete(c){
-  return _enAttenteAbonnement(c)?'attente'
+  return athleteDouleur(c)?'douleur'
+    :_enAttenteAbonnement(c)?'attente'
     :_accesExpire(c)?'lecture'
     :hasNewBilan(c)?'bilan'
     :needsAlert(c)?'alerte'
     :isActive(c)?'actif':'dormant';
 }
 // La couleur du filet, par etat. Meme table pour les trois ecrans.
-const ETAT_FILET=Object.freeze({alerte:ROUGE_MARQUE,bilan:'#f97316',attente:'#f97316',
+const ETAT_FILET=Object.freeze({douleur:ROUGE_MARQUE,alerte:ROUGE_MARQUE,bilan:'#f97316',attente:'#f97316',
   actif:'#22c55e',lecture:'#8a8a8a',dormant:'#666666'});
+// Le badge, par etat : le MEME etat que le filet, donc le meme mot.
+const ETAT_BADGE=Object.freeze({douleur:['badge-red','Douleur'],attente:['badge-orange','Abonnement à souscrire'],
+  lecture:['badge-gray','Lecture seule'],bilan:['badge-orange','Nouveau bilan'],alerte:['badge-red','Alerte'],
+  actif:['badge-green','Actif'],dormant:['badge-gray','Inactif']});
+// LA META DU TELEPHONE (06/10/2026) : une ligne, deux faits au plus, dans cet
+// ordre — la derniere seance, les bilans a lire, le dernier contact. La
+// derniere seance est la PLUS RECENTE (max des dates), jamais la derniere du
+// tableau : sessions n'est pas garanti trie (import, synchro, saisie a
+// posteriori). Un athlete invite par code n'a pas de seance a dire.
+function _crJours(t,maintenant){
+  const j=Math.max(0,Math.floor(((Number(maintenant)||Date.now())-t)/864e5));
+  return j===0?'aujourd’hui':'il y a '+j+' j';
+}
+function crMetaFaits(c,contacts,maintenant){
+  if(!c) return [];
+  // [forme seule, forme courte] : a deux faits, « dernière » tombe — mesure a
+  // 390 px, deux faits complets ne tenaient pas sur la ligne.
+  /** @type {string[][]} */
+  const out=[];
+  if(!c._fromCode){
+    const der=(c.sessions||[]).reduce((m,s)=>Math.max(m,Number(s&&s.date)||0),0);
+    if(der>0){ const j=_crJours(der,maintenant); out.push(['dernière séance '+j,'séance '+j]); }
+  }
+  let nb=0; try{ nb=bilansSansReponse(c); }catch(e){ nb=0; }
+  if(nb>0){ const b=nb+' bilan'+(nb>1?'s':'')+' à lire'; out.push([b,b]); }
+  let ct=0; try{ ct=dernierContact(c,contacts); }catch(e){ ct=0; }
+  if(ct>0){ const j=_crJours(ct,maintenant); out.push(['dernier contact '+j,'contact '+j]); }
+  const deux=out.slice(0,2);
+  return deux.map(f=>f[deux.length>1?1:0]);
+}
 // ══════ N4.13 — COCHER DES ATHLETES SANS QUITTER LA LISTE ═════════════════
 // Les cases a cocher existaient, mais sur deux ecrans separes et mono-usage :
 // l'un pour assigner un programme, l'autre pour la decharge groupee. Toute
@@ -30552,9 +30595,10 @@ function renderClientRow(c){
   // Le `title` porte le texte ENTIER : en mode tableau le badge se coupe a la
   // largeur de sa colonne, et « Abonnement a souscrire » n'y tiendra jamais.
   const _bdg=(cls,txt)=>'<span class="badge '+cls+'" title="'+escapeHtml(txt)+'">'+escapeHtml(txt)+'</span>';
-  const badge=_enAttenteAbonnement(c)?_bdg('badge-orange','Abonnement à souscrire')
-    :_accesExpire(c)?_bdg('badge-gray','Lecture seule')
-    :hasNewBilan(c)?_bdg('badge-orange','Nouveau bilan'):needsAlert(c)?_bdg('badge-red','Alerte'):isActive(c)?_bdg('badge-green','Actif'):_bdg('badge-gray','Inactif');
+  // UN SEUL PREDICAT : le badge, le filet (data-etat) et les autres ecrans
+  // lisent etatAthlete. Ils ne peuvent plus se contredire.
+  const _etat=etatAthlete(c);
+  const badge=_bdg(ETAT_BADGE[_etat][0],ETAT_BADGE[_etat][1]);
   const lastSession=c.sessions?.length?c.sessions[c.sessions.length-1].date:0;
   const lastBilan=c.bilans?.length?c.bilans[c.bilans.length-1].date:0;
   const lastActivity=Math.max(lastSession,lastBilan);
@@ -30594,16 +30638,18 @@ function renderClientRow(c){
   // couleur du filet gauche, et c est ce qui permet de balayer la liste sans
   // lire un seul badge. Le classement suit CELUI DU BADGE, a la lettre — deux
   // regles differentes donneraient une carte rouge a badge vert.
-  const _etat=etatAthlete(c);
   // N4.13 — LA CASE RELIT LE Set A CHAQUE RENDU : c'est ce qui la fait
   // survivre a la reecriture du conteneur toutes les trente secondes.
   const _coche=SEL_ATHLETES.has(c.id)?' checked':'';
-  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  // La meta du telephone : cachee au-dela de 600 px (et en tableau, ou elle
+  // ne doit pas devenir une cellule).
+  let _meta=''; try{ _meta=crMetaFaits(c,currentUser&&currentUser.contacts,Date.now()).map(escapeHtml).join(' · '); }catch(e){ _meta=''; }
+  return `<div class="client-row${_etat!=='douleur'&&!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <input type="checkbox" class="cr-coche"${_coche} value="${c.id}"
       onclick="selAthleteBascule('${c.id}',event)"
       aria-label="Sélectionner ${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète')}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div>${objLine}${asLine}${diLine}${chLine}${biLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom" title="${_nm}">${_nm}</div><div class="cr-meta">${_meta}</div>${objLine}${asLine}${diLine}${chLine}${biLine}</div>
     <!-- ══ LE BOUTON EST DANS LA LIGNE, A COTE DU NOM ═══════════════════
          Demande de Kevin, 08/09/2026 : « je vois Claire Boumar, je peux
          cliquer directement sur ouvrir la fiche a cote de son prenom ».
@@ -30620,7 +30666,7 @@ function renderClientRow(c){
          geste vague, et il merite un apercu. -->
     <button class="btn btn-red btn-sm cr-fiche" onclick="event.stopPropagation();openClientDetail('${c.id}',false,true)"
       title="Ouvrir la fiche de ${_nm}" aria-label="Ouvrir la fiche de ${_nm}"
-      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">Ouvrir la fiche</span><span class="cr-fiche-c">Voir profil</span></button>
+      style="margin:0;flex-shrink:0;letter-spacing:1px;padding:8px 12px;min-height:36px;font-size:var(--fs-2xs);white-space:nowrap"><span class="cr-fiche-l">Ouvrir la fiche</span><span class="cr-fiche-c">Voir profil</span><span class="cr-fiche-f" aria-hidden="true">›</span></button>
     ${_htmlCurseurSuivi(c)}
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}<span class="rq-z" data-rq="${escapeHtml(_relCle(c))}">${_htmlPuceRisqueDe(c)}</span></div>
   </div>`;
@@ -34646,6 +34692,9 @@ function _htmlTiroirAthlete(c){
     // de plus qu'une ligne vide, et il ferait croire a une panne.
     +(corps||'<div style="font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.55;margin-top:8px">Aucune mesure encore.</div>')
+    // LE CURSEUR SUIVI (06/10/2026) : il a quitte la ligne du telephone pour
+    // laisser la place au nom ; il vit ici et sur la fiche.
+    +'<div style="margin-top:12px">'+_htmlCurseurSuivi(c,'grand')+'</div>'
     +'<button type="button" class="btn btn-red btn-sm" style="width:100%;margin-top:14px" '
     +'onclick="openClientDetail(\''+String(c.id||'').replace(/'/g,'')+'\',false,true)">Ouvrir la fiche</button>';
 }

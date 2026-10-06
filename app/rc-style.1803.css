@@ -1390,6 +1390,44 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .badge{font-size:11px;letter-spacing:.6px;padding:4px 8px;border-radius:var(--r-1);
   max-width:112px;white-space:normal;text-align:center;line-height:1.3}
 
+/* ══ LA LIGNE DU TELEPHONE, SUR DEUX RANGEES (06/10/2026) ══════════════════
+   Case, avatar, « Ouvrir la fiche », curseur SUIVI et badge etaient tous en
+   flex-shrink:0 : le nom tombait a 0 px a 360 et 390 px, 19 px a 430. Le
+   coach ne voyait que des initiales.
+   UNE REQUETE DE CONTENEUR, ET NON D'ECRAN : c'est la largeur de la LISTE qui
+   decide, quelle que soit la place que lui laisse la page autour.
+   En haut : avatar, nom complet, badge a droite. Dessous : une meta d'une
+   ligne (deux faits au plus) et la fleche ›, meme hauteur que l'ancien
+   bouton. Le curseur SUIVI quitte la ligne : il vit dans le tiroir d'apercu
+   et sur la fiche. Aucune taille de police ne change. */
+#ch-clients-list{container-type:inline-size;container-name:crl}
+.cr-meta,.cr-fiche-f{display:none}
+#ch-clients-list .client-row[data-etat='douleur']{box-shadow:var(--e1),-3px 0 16px color-mix(in srgb,var(--red) 30%,transparent),inset 5px 0 0 var(--red)}
+@container crl (max-width:599px){
+  #ch-clients-list .client-row{display:grid;grid-template-columns:auto 44px minmax(0,1fr) auto;
+    grid-template-rows:auto auto;column-gap:8px;row-gap:4px;align-items:center}
+  /* Le bloc du nom se dissout : le nom va en haut, a cote de l'avatar ; la
+     meta en dessous, DEPUIS l'avatar jusqu'a la fleche — sa ligne entiere,
+     sinon deux faits ne tiennent pas a 390 px. */
+  #ch-clients-list .client-row>.cr-coche{grid-column:1;grid-row:1/3}
+  #ch-clients-list .client-row>.avatar{grid-column:2;grid-row:1}
+  #ch-clients-list .client-row>div:nth-child(3){display:contents}
+  #ch-clients-list .client-row .cr-nom{grid-column:3;grid-row:1;min-width:0}
+  #ch-clients-list .client-row .cr-obj{grid-column:2/5;grid-row:3;min-width:0;margin-top:0}
+  #ch-clients-list .client-row>div:last-child{grid-column:4;grid-row:1;align-self:start;max-width:96px}
+  #ch-clients-list .client-row>.cr-swi{display:none}
+  #ch-clients-list .client-row>.cr-fiche{grid-column:4;grid-row:2;justify-self:end;align-self:end;
+    min-width:36px;padding:0 10px!important}
+  #ch-clients-list .cr-fiche .cr-fiche-l,#ch-clients-list .cr-fiche .cr-fiche-c{display:none}
+  #ch-clients-list .cr-fiche .cr-fiche-f{display:inline;font-size:var(--fs-md);line-height:1}
+  #ch-clients-list .cr-meta{display:block;grid-column:2/4;grid-row:2;min-width:0;align-self:center;
+    font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #ch-clients-list .cr-meta:empty{display:none}
+  /* LE BADGE NE DEBORDE PLUS : il passe a la ligne dans sa colonne, et ce qui
+     ne tient pas se coupe — le title porte le texte entier. */
+  #ch-clients-list .client-row .badge{max-width:96px;overflow:hidden;text-overflow:ellipsis;overflow-wrap:break-word}
+}
+
 /* ══ « JAMAIS DEMARRE » : DES RECTANGLES, PAS UNE LISTE ════════════════════
    Demande de Kevin, 19/09/2026. En liste, treize personnes faisaient treize
    rangees identiques de trente pixels : on les parcourait sans en distinguer

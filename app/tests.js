@@ -24862,6 +24862,68 @@ async function testExercices(){
       return !/Prise de masse/.test(h)
         ?true:_echec('le libelle de phase est encore sur la ligne');});
 
+    // ── 06/10/2026 — LA LIGNE D'ATHLÈTE DU TÉLÉPHONE : LE NOM SE LIT ──
+    const _CRL=(fn)=>{
+      const sv={u:currentUser,sg:signauxEntrainement,dr:drapeauQuelconqueActif};
+      try{ currentUser={id:'crl',email:'crl@t.fr',role:'coach',alertStatus:{},contacts:{}}; return fn(); }
+      finally{ currentUser=sv.u; signauxEntrainement=sv.sg; drapeauQuelconqueActif=sv.dr; }
+    };
+    ok('Ligne d’athlète à 360 px : huit noms, chacun sur plus de 120 px ; badge dans la ligne ; flèche, curseur dans le tiroir',()=>_CRL(()=>{
+      const L=document.getElementById('ch-clients-list');
+      if(!L) return _echec('#ch-clients-list absent');
+      const J=n=>Date.now()-n*864e5;
+      signauxEntrainement=c=>(c.id==='k2'?{douleur:true,details:{}}:{details:{}});
+      const noms=[['Claire','Boumar'],['Maximilien-Alexandre','de La Tour-Fontaine'],['Léa','Nguyen'],['',''],['Jean','Dupont'],['Inès','Benali'],['Tom','Leroy'],['Zoé','Martin']];
+      const cl=noms.map(([f,l],i)=>({id:'k'+i,email:'k'+i+'@t.fr',fname:f,lname:l,role:'athlete',status:'COACHING_SUIVI',
+        sessions:[{date:J(2)},{date:J(9)}],bilans:i===4?[{date:J(1),type:'suivi'}]:[],sessions_config:[],nutrition:{}}));
+      const par=L.parentNode, suiv=L.nextSibling, html=L.innerHTML;
+      const w=document.createElement('div');
+      w.style.cssText='position:fixed;left:0;top:0;width:360px;z-index:9999;background:var(--bg)';
+      document.body.appendChild(w); w.appendChild(L);
+      try{
+        L.innerHTML=cl.map(renderClientRow).join('');
+        const lignes=[...L.querySelectorAll('.client-row')];
+        if(lignes.length!==8) return _echec(lignes.length+' lignes');
+        for(const r of lignes){
+          const n=r.querySelector('.cr-nom'), bg=r.querySelector('.badge'), f=r.querySelector('.cr-fiche');
+          const wn=n.getBoundingClientRect().width;
+          if(!(wn>120)) return _echec('« '+n.textContent+' » : '+Math.round(wn)+' px');
+          if(n.scrollWidth>n.clientWidth+1&&n.textContent.length<20) return _echec('« '+n.textContent+' » coupé');
+          if(bg.getBoundingClientRect().right>r.getBoundingClientRect().right+0.5) return _echec('le badge « '+bg.textContent+' » déborde');
+          if(getComputedStyle(f.querySelector('.cr-fiche-l')).display!=='none'||getComputedStyle(f.querySelector('.cr-fiche-f')).display==='none') return _echec('pas de flèche sous 600 px');
+          if(f.getBoundingClientRect().height<36) return _echec('la flèche est plus basse que l’ancien bouton');
+          const sw=r.querySelector('.cr-swi');
+          if(sw&&getComputedStyle(sw).display!=='none') return _echec('le curseur SUIVI reste sur la ligne');
+        }
+        if(lignes[3].querySelector('.cr-nom').textContent!=='Profil incomplet') return _echec('nom absent');
+        if(!/dernière séance il y a 2 j/.test(lignes[0].querySelector('.cr-meta').textContent)) return _echec('méta : '+lignes[0].querySelector('.cr-meta').textContent);
+        return /Suivi/.test(_htmlTiroirAthlete(cl[0]))&&/coachBasculerSuivi/.test(_htmlTiroirAthlete(cl[0]))?true:_echec('le curseur SUIVI n’est pas dans le tiroir');
+      } finally { L.innerHTML=html; if(par) par.insertBefore(L,suiv); w.remove(); }
+    }));
+    ok('Ligne d’athlète : une douleur répétée donne « Douleur » en rouge, avant « Nouveau bilan », et le filet dit pareil',()=>_CRL(()=>{
+      const c={id:'d1',email:'d1@t.fr',fname:'A',lname:'B',role:'athlete',status:'COACHING_SUIVI',sessions:[{date:Date.now()-864e5}],bilans:[{date:Date.now()-3600e3,type:'suivi'}],sessions_config:[],nutrition:{}};
+      signauxEntrainement=()=>({douleur:true,details:{}}); drapeauQuelconqueActif=()=>null;
+      const h=renderClientRow(c);
+      if(!/class="badge badge-red" title="Douleur"/.test(h)) return _echec('badge : '+(h.match(/class="badge[^>]*>[^<]*/)||[''])[0]);
+      if(etatAthlete(c)!=='douleur'||!/data-etat="douleur"/.test(h)) return _echec('filet : '+etatAthlete(c));
+      if(ETAT_FILET.douleur!==ROUGE_MARQUE) return _echec('couleur du filet');
+      // Reportée, la douleur rend la main au nouveau bilan — comme urgencyScore.
+      currentUser.alertStatus['douleur-d1']={s:'ignoré',until:Date.now()+7*864e5,at:Date.now(),seenUpTo:Date.now()};
+      const rep=isAlertSnoozed('douleur','d1',0,c);
+      if(rep&&etatAthlete(c)==='douleur') return _echec('reportée mais toujours « Douleur »');
+      // Un drapeau rouge donne aussi « Douleur ».
+      currentUser.alertStatus={}; signauxEntrainement=()=>({details:{}}); drapeauQuelconqueActif=()=>({cases:['thoracique'],zone:null});
+      return /title="Douleur"/.test(renderClientRow(c))?true:_echec('drapeau sans badge Douleur');
+    }));
+    ok('Ligne d’athlète : « dernière séance » prend la plus récente même si sessions n’est pas trié ; rien pour un athlète invité par code',()=>{
+      const J=n=>Date.now()-n*864e5;
+      const f=crMetaFaits({id:'m1',sessions:[{date:J(30)},{date:J(3)},{date:J(12)}],bilans:[]},{},Date.now());
+      if(f[0]!=='dernière séance il y a 3 j') return _echec(JSON.stringify(f));
+      if(crMetaFaits({id:'m2',_fromCode:true,sessions:[{date:J(1)}],bilans:[]},{},Date.now()).some(x=>/séance/.test(x))) return _echec('méta séance pour un invité par code');
+      const g=crMetaFaits({id:'m3',sessions:[{date:J(5)}],bilans:[]},{m3:J(4)},Date.now());
+      if(g.join(' · ')!=='séance il y a 5 j · contact il y a 4 j') return _echec(g.join(' · '));
+      return crMetaFaits({id:'m4',sessions:[],bilans:[]},{},Date.now()).length===0?true:_echec('méta sans données');});
+
     // ── Le contrat entre la phase et la nutrition ──
     // Il a changé avec l'ajustement proposé, et le nouveau s'énonce en trois
     // points plutôt que de laisser tomber l'ancien test.
@@ -41890,7 +41952,9 @@ async function testExercices(){
             if(!rendu||!r) return _echec('la liste ne s\'est pas rendue');
             let n=0;
             for(const e of r.children)
-              n+=(e.tagName==='DIV'&&e.querySelector&&e.querySelector('.cr-nom'))?e.children.length:1;
+              // .cr-meta (06/10/2026) n'existe qu'au telephone : display:none
+              // au-dela de 600 px, elle ne prend aucune piste de la grille.
+              n+=(e.tagName==='DIV'&&e.querySelector&&e.querySelector('.cr-nom'))?[...e.children].filter(x=>!x.classList.contains('cr-meta')).length:1;
             if(!nH) return _echec('en-tete introuvable');
             return n===nH?true:_echec(n+' cellules dans la ligne pour '+nH+' intitules');});
           ok('Le bouton du tableau dit « VOIR PROFIL », et le long reste au telephone',()=>{

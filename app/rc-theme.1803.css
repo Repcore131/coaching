@@ -106,6 +106,8 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] #ch-clients-list .cr-nom{color:var(--text)}
 :root[data-theme="clair"] #ch-clients-list .cr-act{color:#3d3d3d}
 :root[data-theme="clair"] #ch-clients-list .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.09),0 4px 12px rgba(0,0,0,0.175)}
+:root[data-theme="clair"] #ch-clients-list .client-row[data-etat='douleur']{box-shadow:var(--e1),-3px 0 16px color-mix(in srgb,var(--red) 30%,transparent),inset 5px 0 0 var(--red)}
+@container crl (max-width:599px){:root[data-theme="clair"] #ch-clients-list .cr-meta{color:var(--sub)}}
 :root[data-theme="clair"] .jd-carte{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--sub)}
 :root[data-theme="clair"] .jd-date{color:var(--sub)}
 :root[data-theme="clair"] .jd-attendre{color:var(--sub);border:1px dashed var(--border)}
