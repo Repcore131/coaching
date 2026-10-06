@@ -18,7 +18,10 @@ const RES_REASONS = ['Prix', 'Déménagement', 'Santé', 'Manque de temps', 'Ins
 const RES_OFFERS = ['Suspension', 'Changement de formule', 'Geste commercial', 'Offre fidélité', 'Rendez-vous coach', 'Aucune'];
 const RES_CALLS = { noanswer: 'Pas de réponse', message: 'Message laissé', rdv: 'RDV pris', offer: 'Offre proposée', refus: 'Refus' };
 // les anciens dossiers n'avaient que « saved » : on en déduit le statut
-const resStatus = r => r.status || (r.saved ? 'sauvee' : 'resiliee');
+// Une demande dont la date effective est passée (sans sauvetage) = le client
+// est parti : elle n'est plus « à traiter », on ne garde à traiter que les
+// demandes encore récupérables (échéance aujourd'hui ou à venir, ou inconnue).
+const resStatus = r => { const s = r.status || (r.saved ? 'sauvee' : 'resiliee'); return s !== 'sauvee' && r.effective && r.effective < today() ? 'resiliee' : s; };
 const resOpen = r => ['nouvelle', 'traitement'].includes(resStatus(r));
 const daysTo = d => d ? Math.round((dateOf(d) - dateOf(today())) / 86400000) : null;
 function resUrgent(r) { const n = daysTo(r.effective); return resOpen(r) && n != null && n <= 7; }

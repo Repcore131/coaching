@@ -342,7 +342,7 @@ const RSM_DEFS = [
     sig: has => has('fin d engagement') && has('libelle') && has('contact'),
     parse(c) {
       const iC = c.col('contact'), iL = c.col('libelle'), iFE = c.col('fin d engagement'), iFV = c.col('fin de validite'), iDeb = c.col('debut de validite');
-      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); const name = cleanContact(r[iC]); if (!name || !end) continue; c.clientByName(name, { end, offer: r[iL] || '', start: rsmDate(r[iDeb]), strict: true }); }
+      for (const r of c.rows) { const end = rsmDate(r[iFE]) || rsmDate(r[iFV]); const name = cleanContact(r[iC]); if (!name || !end) continue; c.clientByName(name, { end, offer: r[iL] || '', start: rsmDate(r[iDeb]), strict: true, ...c.contact(r), ...contactFromText(r[iC]) }); }
     },
   },
   {
@@ -439,6 +439,19 @@ const RSM_DEFS = [
     parse(c) { c.warn('Fichier de contrôle ou d’agrégat : rien à importer.'); },
   },
 ];
+// Prompt « tout récupérer » pour Claude dans Chrome, à côté de la page Resamania :
+// la liste exacte des exports à télécharger pour un import mensuel complet.
+function rsmImportPrompt() {
+  const mk = typeof curMonth === 'function' ? curMonth() : new Date().toISOString().slice(0, 7);
+  const [yy, mm] = mk.split('-'); const dImax = typeof daysIn === 'function' ? daysIn(mk) : 31;
+  const moisLabel = typeof monthLabel === 'function' ? monthLabel(mk) : mk;
+  const auj = typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10);
+  const fr = s => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '';
+  const debut = fr(`${mk}-01`), fin = fr(`${mk}-${String(dImax).padStart(2, '0')}`), ajd = fr(auj);
+  const defs = RSM_DEFS.filter(d => d.path && !d.silent);
+  const lignes = defs.map((d, i) => `${i + 1}. ${d.label}\n   Chemin : ${d.path}\n   Filtres : ${(d.filters || '').replace(/AAAA-MM-JJ|AAAA-MM/g, '')} → période du ${debut} au ${fin}${/incident|abonnement|sans.?mandat|clients club/i.test(d.label) ? ` (ou situation au ${ajd})` : ''}\n   Puis : ⋮ / Exporter → télécharger le fichier.`);
+  return `Tu es dans l'espace de gestion Resamania de Fitness Park Niort, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
+}
 function linesParse(c, avoir) {
   const iNum = c.find(h => h.startsWith('num facture') || h.startsWith('num avoir')), iDate = c.find(h => h.startsWith('date de')), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iV = c.col('vendeur'), iSt = c.find(h => h.startsWith('statut'));
   const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : c.find(h => h.includes('ttc'));
@@ -463,6 +476,8 @@ const OPTION_RE = /ultimate|acc?es+\s*\+|acc?es+\s*plus|yanga/i;
 // Engagement : CDD (6, 12, 24 mois) = engagé ; CDI ou « sans engagement » = libre ; sinon inconnu.
 function engagementOf(s) { const t = norm(s); if (/sans engagement|\bcdi\b|liberte|flex/.test(t)) return false; if (/\bcdd ?(3|6|12|24)\b|\b(12|24) mois\b|engag/.test(t)) return true; return null; }
 const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
+// Téléphone / e-mail cachés dans un champ « contact » combiné (nom + coordonnées).
+function contactFromText(s) { const t = String(s || ''); const o = {}; const m = t.match(/[^\s@<>"']+@[^\s@<>"']+/); if (m) o.email = m[0].trim().toLowerCase(); const pm = t.match(/\+?\d[\d .\-()/]{7,}\d/); if (pm) { const p = phoneE164(pm[0]); if (p) { o.phone = p; o.phoneSrc = 'rsm'; } } return o; }
 // Fichier non reconnu : l'export connu le plus proche et les colonnes qui
 // manquent, pour corriger l'export (mauvais menu, colonnes masquées, fichier
 // retouché dans Excel) sans deviner.

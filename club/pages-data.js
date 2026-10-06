@@ -70,7 +70,7 @@ PAGES.imports = {
   render() {
     const tab = UI.impTab || 'rsm';
     const body = { rsm: impRsm, new: impNew, history: impHistory, manual: impManual }[tab]();
-    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div></div>
+    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div><span class="spacer"></span><button class="btn" data-act="rsmCopyPrompt" title="Copier un prompt pour Claude dans Chrome : il récupère tous les exports Resamania d’un coup">${ico('copy')} Copier le prompt</button></div>
       ${tabs('impTab', [['rsm', 'Resamania'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
@@ -295,12 +295,18 @@ function impManual() {
     <p class="muted small">Seuls les mois terminés sont modifiables. Une valeur remplace les saisies du mois dans la comparaison annuelle du tableau de bord ; vider une cellule revient aux saisies. Ces chiffres n’entrent ni dans les scores ni dans le classement.</p>`;
 }
 ACTIONS.manCell = el => { const v = el.value === '' ? null : toNum(el.value); db.set(['monthly', CLUB.id, el.dataset.mk, el.dataset.k], v); toast('Enregistré'); };
+// Copie le prompt « tout récupérer » pour Claude dans Chrome (à côté de Resamania).
+ACTIONS.rsmCopyPrompt = async () => {
+  const t = rsmImportPrompt();
+  try { await navigator.clipboard.writeText(t); toast('Prompt copié : collez-le dans Claude, à côté de votre page Resamania.'); }
+  catch (e) { openModal({ title: 'Prompt à copier', body: `<p class="muted small">Sélectionnez tout et copiez, puis collez dans Claude à côté de Resamania.</p><textarea class="input" rows="16" style="width:100%" onclick="this.select()">${esc(t)}</textarea>`, foot: '<button class="btn primary" data-close>Fermer</button>' }); }
+};
 
 // ── Action Retention ──────────────────────────────────────────────────────
 PAGES.loyalty = {
   title: 'Action Rétention',
   render() {
-    const tab = UI.loyTab || 'tasks';
+    const tab = UI.loyTab || 'fins';
     const tasks = loyaltyTasks(CLUB.id);
     const todo = tasks.filter(t => t.state === 'todo');
     const clients = Object.values(S.clients).filter(c => c.clubId === CLUB.id);
@@ -310,10 +316,10 @@ PAGES.loyalty = {
       if (!clients.some(c => c.birth)) alerts.push(['Aucune date de naissance', 'Les anniversaires ne remonteront pas : vérifiez la colonne date de naissance de l’export « Résumé clients ».']);
       if (!Object.values(S.imports).some(i => i.clubId === CLUB.id && i.type === 'soldes' && i.active !== false) && !clients.some(c => Number(c.balance) > 0)) alerts.push(['Aucun solde importé', 'Les impayés n’apparaîtront pas tant que l’export « Solde clients » n’est pas importé.']);
     }
-    const body = tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'upsell' ? loyUpsell() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
-    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · ${plur(todo.length, 'tâche', 'tâches')} à traiter · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
+    const body = tab === 'fins' ? loyFins() : tab === 'tasks' ? loyTasks(todo) : tab === 'perf' ? loyPerf() : tab === 'anciens' ? loyAnciens() : loyLost(tasks.filter(t => t.state === 'lost'));
+    return `<div class="page-head"><div><h1>Action Rétention</h1><p>${esc(CLUB.name)} · fins d’engagement à relancer · ${plur(clients.length, 'client', 'clients')} en base</p></div><span class="spacer"></span><button class="btn" data-act="loyHistory">${ico('history')} Historique</button>${isManager() ? `<button class="btn" data-act="addClient">${ico('plus')} Client</button>` : ''}</div>
       ${alerts.map(([t, d]) => `<div class="alert" style="margin-bottom:10px">${ico('info')}<div><b>${t}</b>${d}</div></div>`).join('')}
-      ${tabs('loyTab', [['tasks', `Tâches (${todo.length})`], ['upsell', 'Montée en gamme'], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
+      ${tabs('loyTab', [['fins', 'Fins d’engagement'], ['tasks', `Autres tâches (${todo.length})`], ['anciens', 'Anciens membres'], ['perf', 'Performance'], ['lost', 'Perdus']], tab)}${body}`;
   },
 };
 function loyTasks(todo) {
@@ -327,7 +333,7 @@ function loyTasks(todo) {
   return `<div class="row wrap" style="margin-bottom:12px">${seg('loyType', [['all', `Tous ${cnt('all')}`], ...Object.entries(LOYALTY_TYPES).map(([k, v]) => [k, `${v.label} ${cnt(k)}`])], f)}<span class="spacer"></span>
     <input class="input sm" style="width:180px" placeholder="Rechercher un client" data-input="loyQ" data-focus="loyQ" value="${esc(UI.loyQ || '')}">
     <select class="input sm" style="width:auto" data-change="loySort"><option value="due" ${sort === 'due' ? 'selected' : ''}>Tri : échéance</option><option value="prio" ${sort === 'prio' ? 'selected' : ''}>Tri : pertinence</option><option value="amount" ${sort === 'amount' ? 'selected' : ''}>Tri : montant</option></select></div>
-    ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.type === 'suivi' && typeof hasShop === 'function' && !hasShop(t.client) ? ` <span class="small muted">Aucun achat boutique depuis l’inscription</span> <button class="btn sm ghost" data-act="qEur" data-k="nutrition">Vente boutique faite</button>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
+    ${list.length ? `<div class="grid">${list.slice(0, UI.loyMax || 100).map(t => { const ty = LOYALTY_TYPES[t.type]; return `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico(ty.icon)}</span><div class="spacer"><b>${esc(t.client.name)}</b> <span class="badge">${ty.label}</span>${t.type === 'renouvellement' && t.amount ? ` <span class="badge warn">en jeu ${fmtE(t.amount)}</span>` : ''}${t.failed ? ` <span class="badge warn">${t.failed}/${plur(MAX_ATTEMPTS, 'tentative', 'tentatives')}</span>` : ''}
       <div class="muted small">${ico('phone')} ${esc(t.client.phone || 'pas de téléphone')} · ${t.type === 'impaye' ? `<b class="bad">${fmtE(t.amount)} dus</b>${t.client.incidents ? ` · ${plur(t.client.incidents, 'incident', 'incidents')}` : ''}` : t.type === 'mandat' ? 'abonné sans mandat de prélèvement : faire signer le mandat' : t.type === 'anniversaire' ? `anniversaire le ${dm(t.due)}` : t.type === 'renouvellement' ? `fin de contrat le ${dmy(t.due)}` : `adhérent depuis le ${dmy(t.client.start)}`}${t.client.offer ? ' · ' + esc(t.client.offer) : ''}</div></div>
       <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => t.type === 'impaye' || k !== 'paid').map(([k, o]) => `<button class="btn sm" data-act="loyAct" data-c="${t.client.id}" data-t="${t.type}" data-o="${k}">${o.label}</button>`).join('')}</div></div>`; }).join('')}</div>`
       : `<div class="card">${emptyBox({ art: 'done', title: 'Tout est traité', text: 'Rien à faire sur cette vue pour le moment.' })}</div>`}`;
@@ -339,13 +345,38 @@ ACTIONS.loyAct = el => {
   const save = (note = '') => {
     const id = newId(); const ops = [[['loyalty', id], { id, clientId: c, type: t, outcome: o, userId: ME.id, note, at: Date.now() }]];
     if (o === 'paid') { const cl = S.clients[c]; ops.push(...markPaidOps(cl, Number(cl.balance) || 0, 'equipe', ME.id, 'retention')); }
-    db.batch(ops); toast(o === 'paid' ? 'Réglé : ajouté à vos impayés récupérés' : 'Action enregistrée');
+    if (o === 'ok' && t === 'renouvellement') ops.push([['clients', c, 'renewedAt'], today()]);
+    if (o === 'maintien') ops.push([['clients', c, 'maintienAt'], today()]);
+    db.batch(ops); toast(o === 'paid' ? 'Réglé : ajouté à vos impayés récupérés' : o === 'maintien' ? 'Maintien 8 semaines noté' : 'Action enregistrée');
   };
   if (o === 'lost' || o === 'rdv') {
     openModal({ title: OUTCOMES[o].label, body: `<label class="field"><span>Note (facultatif)</span><textarea class="input" id="ln" placeholder="${o === 'lost' ? 'Motif du refus…' : 'Date et heure du RDV…'}"></textarea></label>`,
       foot: '<button class="btn" data-close>Annuler</button><button class="btn primary" id="lok">Enregistrer</button>', onMount: m => $('#lok', m).addEventListener('click', () => { const n = $('#ln').value; closeModal(); save(n); }) });
   } else save();
 };
+// Fins d'engagement du mois : toutes les personnes (CDD, CDI) dont le contrat
+// arrive à échéance, à relancer avant leur date de fin.
+function loyFins() {
+  const mk = UI.loyMonth || curMonth();
+  const from = mk + '-01', to = `${mk}-${pad(daysIn(mk))}`;
+  const acts = Object.values(S.loyalty).filter(a => a.type === 'renouvellement');
+  const list = Object.values(S.clients).filter(c => c.clubId === CLUB.id && c.end && c.end >= from && c.end <= to && !/ancien|perdu|prospect|exclu|temporaire/.test(norm(c.status || ''))).sort((a, b) => (a.end || '').localeCompare(b.end || ''));
+  const stateOf = c => {
+    if (c.renewedAt && c.renewedAt >= from) return { k: 'ok', label: 'Renouvelé', cls: 'ok' };
+    if (c.maintienAt && c.maintienAt >= from) return { k: 'ok', label: 'Maintien 8 sem.', cls: 'ok' };
+    const a = acts.filter(x => x.clientId === c.id && x.at >= dateOf(addDays(c.end, -45)).getTime()).sort((x, y) => y.at - x.at)[0];
+    if (a && OUTCOMES[a.outcome]) return OUTCOMES[a.outcome].lost ? { k: 'perdu', label: 'Ne renouvelle pas', cls: 'bad' } : OUTCOMES[a.outcome].done ? { k: 'ok', label: OUTCOMES[a.outcome].label, cls: 'ok' } : { k: 'relance', label: `Relancé · ${OUTCOMES[a.outcome].label}`, cls: 'warn' };
+    return { k: 'todo', label: 'À relancer', cls: 'warn' };
+  };
+  const rows = list.map(c => ({ c, s: stateOf(c) }));
+  const appeles = rows.filter(r => r.s.k !== 'todo').length; const todo = rows.filter(r => r.s.k === 'todo').length;
+  return `<div class="row wrap" style="margin-bottom:10px">${monthNav('loyMonth', mk)}<span class="spacer"></span><span class="muted small">${plur(rows.length, 'fin d’engagement', 'fins d’engagement')} · ${appeles} relancé${appeles > 1 ? 's' : ''} · ${todo} à faire</span></div>
+    <p class="muted small" style="margin-top:-4px">Toutes les personnes qui arrivent en fin d’engagement (CDD, CDI) ce mois-ci. Appelez-les avant leur date de fin pour faire le point et proposer le renouvellement ou le maintien 8 semaines.</p>
+    ${rows.length ? `<div class="grid">${rows.map(({ c, s }) => `<div class="card row wrap" style="padding:12px 14px"><span class="kpi-ico">${ico('clock')}</span><div class="spacer"><b>${esc(c.name)}</b> <span class="badge ${s.cls}">${s.label}</span>
+      <div class="muted small">${ico('phone')} ${esc(c.phone || 'pas de téléphone')} · fin d’engagement le <b>${dmy(c.end)}</b>${c.offer ? ' · ' + esc(c.offer) : ''}</div></div>
+      <div class="row wrap" style="gap:6px">${Object.entries(OUTCOMES).filter(([k]) => k !== 'paid').map(([k, o]) => `<button class="btn sm ${s.k === 'todo' ? '' : 'ghost'}" data-act="loyAct" data-c="${c.id}" data-t="renouvellement" data-o="${k}">${o.label}</button>`).join('')}</div></div>`).join('')}</div>`
+      : `<div class="card">${emptyBox({ art: 'done', title: 'Aucune fin d’engagement ce mois-ci', text: 'Déposez l’export Abonnements (fins d’engagement) dans Imports, ou changez de mois.' })}</div>`}`;
+}
 function loyPerf() {
   const mk = UI.loyMonth || curMonth();
   const from = dateOf(mk + '-01').getTime(), to = dateOf(addMonths(mk, 1) + '-01').getTime();
