@@ -13368,3 +13368,9 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .grp-lib{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
 .grp-apercu{font-size:var(--fs-sm);color:var(--text);background:var(--surface-1);border:1px solid var(--border);
   border-radius:var(--r-2);padding:10px 12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* La boîte du coach, hors ligne : la dernière liste connue, dite comme telle. */
+.msg-hl{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--sub);
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;margin-bottom:8px}
+.msg-hl-b{background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;
+  font-size:var(--fs-xs);font-weight:700;min-height:36px;padding:0 10px;cursor:pointer}

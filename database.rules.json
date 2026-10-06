@@ -1958,6 +1958,25 @@
         }
       }
     },
+    // L INDEX DES FILS (06/10/2026) : un resume par fil, pour que la boite du
+    // coach se lise en un appel. Le coach lit tout son index ; l athlete ne
+    // lit que SON fil, tant qu il est rattache. L un ou l autre l ecrit.
+    "messagesIndex": {
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$athleteKey": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          ".write": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
+          ".validate": "newData.hasChildren(['de', 'at'])",
+          "dernierTexte":  { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "de":            { ".validate": "newData.isString() && newData.val().matches(/^(coach|athlete)$/)" },
+          "at":            { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
+          "nonLusCoach":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "nonLusAthlete": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
     "coach_paiement": {
       "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
     },

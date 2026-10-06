@@ -75,12 +75,13 @@ function _msgCles(u,athleteCle){
 }
 function _msgEnLigne(){ return !(typeof navigator!=='undefined'&&navigator.onLine===false); }
 // Une page du fil : les 50 derniers, ou les 50 d'avant `avant` (exclu).
-async function msgChargerPage(k,avant){
+// `limite` (06/10/2026) : le repli de la liste des fils n'en lit qu'un.
+async function msgChargerPage(k,avant,limite){
   if(!k) return {ok:false,st:0,liste:[]};
   let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
   if(!tok) return {ok:false,st:0,liste:[]};
   let url=CLOUD._fbUrl.replace('users.json','messages/'+k.coach+'/'+k.athlete+'.json')+'?auth='+tok+'&orderBy=%22%24key%22';
-  url+=avant?'&endAt='+encodeURIComponent(JSON.stringify(avant))+'&limitToLast='+(MSG_PAGE+1):'&limitToLast='+MSG_PAGE;
+  url+=avant?'&endAt='+encodeURIComponent(JSON.stringify(avant))+'&limitToLast='+(MSG_PAGE+1):'&limitToLast='+(Number(limite)>0?Number(limite):MSG_PAGE);
   try{
     const r=await fetch(url);
     if(!r.ok) return {ok:false,st:r.status,liste:[]};
@@ -89,25 +90,104 @@ async function msgChargerPage(k,avant){
     return {ok:true,st:200,liste:l,complet:l.length<MSG_PAGE};
   }catch(e){ return {ok:false,st:0,liste:[]}; }
 }
-// Les fils du coach : un résumé par athlète (une page chacun), gardé 10 min.
-let _msgFils=null;            // {t, fils:[{cle, id, nom, dernier, nonLus}]}
+// ══ L'INDEX DES FILS (06/10/2026) ═══════════════════════════════════════
+// La liste des fils lançait UNE requête par athlète, l'une après l'autre,
+// chacune de cinquante messages, pour n'en garder que le dernier et le compte
+// des non-lus : plusieurs secondes à soixante athlètes. Et si elles
+// échouaient, l'écran disait « Aucun athlète rattaché ».
+//
+// messagesIndex/<coach>/<athlète> = {dernierTexte (80 car.), de, at,
+// nonLusCoach, nonLusAthlete}, écrit à chaque envoi (msgEnvoyer : le compteur
+// de l'autre monte, par incrément serveur) et à chaque lecture
+// (_msgMarquerLus : recalculé depuis la page lue). La liste le lit en UN
+// appel ; les fils sans index (d'avant) se lisent au plus six à la fois, un
+// message chacun. Le même index sert aux deux appareils du coach.
+const MSG_FILS_CACHE_MS=60e3, MSG_REPLI_PARALLELE=6, MSG_INDEX_TEXTE=80, MSG_INDEX_LOCAL='rc_msg_index_';
+// PURE. Ce que l'index retient d'un message.
+function msgIndexEntree(m){
+  return {dernierTexte:String((m&&m.texte)||'').replace(/\s+/g,' ').trim().slice(0,MSG_INDEX_TEXTE),
+    de:m&&m.de==='athlete'?'athlete':'coach',at:Number(m&&m.at)||Date.now()};
+}
+// PURE. L'index d'un fil recalculé depuis sa dernière page (null : fil vide).
+function msgIndexDepuisListe(liste){
+  const l=Array.isArray(liste)?liste:[];
+  if(!l.length) return null;
+  return Object.assign(msgIndexEntree(l[l.length-1]),{
+    nonLusCoach:l.filter(m=>m.de==='athlete'&&!m.lu).length,
+    nonLusAthlete:l.filter(m=>m.de==='coach'&&!m.lu).length});
+}
+// PURE. Le fil d'un athlète, vu du coach, depuis son entrée d'index.
+function msgFilDepuisIndex(c,cle,e){
+  const ini=((c&&c.lname)||'').charAt(0);
+  return {cle,id:c&&c.id,nom:(((c&&c.fname)||'')+(ini?' '+ini+'.':'')).trim()||'Athlète',
+    dernier:e&&e.at?{de:e.de,at:Number(e.at),texte:String(e.dernierTexte||'')}:null,
+    nonLus:Math.max(0,Number(e&&e.nonLusCoach)||0)};
+}
+const _msgIndexChemin=k=>'messagesIndex/'+k.coach+'/'+k.athlete;
+/** Recalcule l'index d'un fil depuis sa dernière page (message retiré…). */
+async function msgIndexRecalculer(k){
+  if(!k) return false;
+  const p=await msgChargerPage(k);
+  if(!p.ok) return false;
+  const e=msgIndexDepuisListe(p.liste);
+  const r=await _fbJson(_msgIndexChemin(k),e?'PUT':'DELETE',e||undefined);
+  return !!(r&&r.ok);
+}
+/** Le détachement : le fil sort de l'index du coach. */
+function msgIndexRetirer(athleteCle){
+  const k=_msgCles(currentUser,athleteCle);
+  if(!k) return Promise.resolve(false);
+  return _fbJson(_msgIndexChemin(k),'DELETE').then(r=>!!(r&&r.ok)).catch(()=>false);
+}
+function _msgIndexLocalLire(coach){
+  try{ const o=JSON.parse(localStorage.getItem(MSG_INDEX_LOCAL+coach)||'null'); return o&&o.index&&typeof o.index==='object'?o:null; }catch(e){ return null; }
+}
+function _msgIndexLocalEcrire(coach,index){
+  try{ localStorage.setItem(MSG_INDEX_LOCAL+coach,JSON.stringify({t:Date.now(),index})); }catch(e){}
+}
+// Les fils du coach : l'index en un appel, le repli six à la fois. 60 s.
+let _msgFils=null;            // {t, fils:[{cle, id, nom, dernier, nonLus}], horsLigne?, erreur?}
 async function msgChargerFils(force){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||u.role!=='coach') return null;
-  if(!force&&_msgFils&&Date.now()-_msgFils.t<MSG_CACHE_MS) return _msgFils;
-  if(!_msgEnLigne()) return _msgFils;
+  if(!force&&_msgFils&&!_msgFils.erreur&&!_msgFils.horsLigne&&Date.now()-_msgFils.t<MSG_FILS_CACHE_MS) return _msgFils;
   let clients=[]; try{ clients=getClients().filter(c=>c&&c.email&&!c._fromCode); }catch(e){ clients=[]; }
-  const fils=[];
-  for(const c of clients){
-    const k=_msgCles(u,_relCle(c));
-    const p=await msgChargerPage(k);
-    if(!p.ok) continue;
-    const r=msgResume(p.liste,'coach');
-    const ini=(c.lname||'').charAt(0);
-    fils.push({cle:k.athlete,id:c.id,nom:((c.fname||'')+(ini?' '+ini+'.':'')).trim()||'Athlète',dernier:r.dernier,nonLus:r.nonLus});
+  const coach=String(u.email||'').replace(/\./g,',');
+  const construire=(index)=>clients.map(c=>{ const cle=_relCle(c); return msgFilDepuisIndex(c,cle,index&&index[cle]); });
+  const r=_msgEnLigne()?await _fbJson('messagesIndex/'+coach):{ok:false,st:0};
+  if(!r||!r.ok){
+    // LA VRAIE RAISON, ET LA DERNIÈRE LISTE CONNUE. Hors ligne, on montre
+    // l'index d'avant, marqué ; on ne dit jamais « aucun athlète » faute de
+    // réseau.
+    const raison=(!r||r.st===0)?'hors_ligne':(r.st===401||r.st===403)?'acces':'erreur';
+    const cache=_msgIndexLocalLire(coach);
+    _msgFils=cache?{t:Date.now(),fils:construire(cache.index),horsLigne:true,raison,depuis:cache.t}
+      :{t:Date.now(),fils:[],erreur:raison};
+    return _msgFils;
   }
+  const index=(r.v&&typeof r.v==='object')?r.v:{};
+  const fils=construire(index);
+  // LE REPLI : les fils sans index (d'avant), six à la fois, un message chacun.
+  const sans=fils.filter(f=>!index[f.cle]);
+  let i=0;
+  const travail=async()=>{
+    while(i<sans.length){
+      const f=sans[i++];
+      const p=await msgChargerPage(_msgCles(u,f.cle),null,1);
+      if(!p.ok||!p.liste.length) continue;
+      const d=p.liste[p.liste.length-1];
+      f.dernier=d; f.nonLus=(d.de==='athlete'&&!d.lu)?1:0;
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(MSG_REPLI_PARALLELE,sans.length)},travail));
+  _msgIndexLocalEcrire(coach,index);
   _msgFils={t:Date.now(),fils};
   return _msgFils;
+}
+function msgFilsReessayer(){
+  _msgFils=null; _rendreFils();
+  msgChargerFils(true).then(()=>{ if(!_msgFil) _rendreFils(); try{ renderEntreeMessages(); }catch(e){} }).catch(()=>{});
+  return true;
 }
 // La ligne « Message sans réponse » du tableau de bord : lue dans le cache.
 function msgClientsSansReponse(clients,maintenant){
@@ -147,6 +227,10 @@ async function msgEnvoyer(athleteCle,brut,o){
     return {ok:false,raison:r&&(r.st===401||r.st===403)?'acces':'refus',st:r?r.st:0};
   }
   if(r.deja) return {ok:true,id,deja:true};
+  // L'INDEX DU FIL : le dernier message, et le compteur de l'AUTRE qui monte
+  // (incrément serveur : deux appareils n'écrasent pas leurs comptes).
+  try{ await _fbJson(_msgIndexChemin(k),'PATCH',Object.assign(msgIndexEntree(m),
+    {[de==='coach'?'nonLusAthlete':'nonLusCoach']:{'.sv':{increment:1}}})); }catch(e){}
   // Le dernier contact du coach (étiquettes et dernier contact).
   if(de==='coach') try{ const _c=getClients().find(x=>_relCle(x)===k.athlete); if(_c) noterContact(_c.id); }catch(e){}
   // La notification : le Worker relit ce message avant de pousser.
@@ -163,7 +247,13 @@ async function _msgMarquerLus(k,liste,role){
   if(!aLire.length) return 0;
   const maj={}; for(const m of aLire) maj[m.id+'/lu']=true;
   const r=await _fbJson('messages/'+k.coach+'/'+k.athlete,'PATCH',maj);
-  if(r&&r.ok){ aLire.forEach(m=>{ m.lu=true; }); return aLire.length; }
+  if(r&&r.ok){
+    aLire.forEach(m=>{ m.lu=true; });
+    // L'index, recalculé depuis la page lue : il se répare au passage (fil
+    // d'avant l'index, message retiré).
+    try{ const e=msgIndexDepuisListe(liste); if(e) await _fbJson(_msgIndexChemin(k),'PUT',e); }catch(e){}
+    return aLire.length;
+  }
   return 0;
 }
 
@@ -179,11 +269,19 @@ function ouvrirMessages(){
 function _rendreFils(){
   const z=document.getElementById('msg-corps');
   if(!z) return;
+  // TROIS CAS, ET CHACUN DIT SA VRAIE RAISON (06/10/2026).
+  let n=0; try{ n=getClients().filter(c=>c&&c.email&&!c._fromCode).length; }catch(e){ n=0; }
+  if(!n){ z.innerHTML=emptyState('users','Aucun athlète rattaché pour l’instant.'); return; }
   if(!_msgFils){ z.innerHTML=etatChargement(3); return; }
+  if(_msgFils.erreur){
+    z.innerHTML=etatErreur(_msgFils.erreur==='hors_ligne'?'Pas de réseau : la liste s’affichera une fois connecté.'
+      :_msgFils.erreur==='acces'?'La liste n’a pas pu être chargée : reconnecte-toi.':'La liste n’a pas pu être chargée.','Réessayer','msgFilsReessayer()');
+    return;
+  }
   const l=msgFilsTries(_msgFils.fils);
-  if(!l.length){ z.innerHTML=emptyState('users','Aucun athlète rattaché pour l’instant.'); return; }
   const t=Date.now();
-  z.innerHTML=l.map(f=>{
+  z.innerHTML=(_msgFils.horsLigne?'<div class="msg-hl">Hors ligne : dernière liste connue. <button type="button" class="msg-hl-b" onclick="msgFilsReessayer()">Réessayer</button></div>':'')
+    +l.map(f=>{
     const d=f.dernier;
     const ap=d?(d.de==='coach'?'Toi : ':'')+String(d.texte||'').replace(/\s+/g,' ').slice(0,80):'Aucun message';
     return '<button type="button" class="msg-fil'+(f.nonLus?' msg-fil-nl':'')+'" onclick="msgOuvrirFil('+_attrArg(f.cle)+')">'
@@ -303,7 +401,9 @@ function renderEntreeMessages(){
   z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirMessages()"><span class="rel-entree-t">Messages'
     +(nl?' <span class="msg-pastille">'+nl+'</span>':'')+'</span>'
     +'<span class="rel-entree-e">'+(nl?nl+' non lu'+(nl>1?'s':''):attente?attente+' sans réponse':'un fil privé par athlète')+'</span></button>';
-  if(!_msgFils) msgChargerFils().then(()=>{ try{ renderEntreeMessages(); renderTodoBlock(getClients()); }catch(e){} }).catch(()=>{});
+  // L'INDEX SE RELIT TOUTES LES 60 S (un appel) : le signal « sans réponse »
+  // de l'accueil ne dépend plus d'un cache de dix minutes.
+  if(!_msgFils||Date.now()-_msgFils.t>MSG_FILS_CACHE_MS) msgChargerFils().then(()=>{ try{ renderEntreeMessages(); renderTodoBlock(getClients()); }catch(e){} }).catch(()=>{});
   return true;
 }
 let _msgAth=null;             // {t, nonLus}

@@ -1739,6 +1739,8 @@ async function confirmDeleteClient(){
       envoi=CLOUD.pushOne(athlete.email,athlete);
       // Et il sort de la liste du coach : plus de suppression de ses médias.
       try{ CLOUD.inscrireClientCoach(athlete.email,false).catch(()=>{}); }catch(e){}
+      // Et son fil sort de l'index des messages (06/10/2026).
+      try{ msgIndexRetirer(_relCle(athlete)); }catch(e){}
     }
     // Le serveur a accepté : la liste du coach peut suivre. Sans cette ligne,
     // getClients recréerait l’élève fantôme au prochain rendu.

@@ -55875,6 +55875,75 @@ async function testExercices(){
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — L'INDEX DES FILS : LA BOÎTE EN UN APPEL ──
+    const _MXI=async(fn)=>{
+      const sv={u:currentUser,g:getClients,f:window.fetch,tok:CLOUD._getToken,fils:_msgFils,fil:_msgFil,s:saveUser,d:window.deposerEvenement,t:window.toast};
+      const t=Date.now();
+      const cl=Array.from({length:60},(_,i)=>({id:'x'+i,fname:'Ath'+i,lname:'Z',email:'x'+i+'@t.fr',coachEmailKey:'coach,x@t,fr',sessions:[],bilans:[]}));
+      const n={appels:0,vol:0,max:0,urls:[],corps:[]};
+      const rep=(st,v)=>({ok:st<400,status:st,json:async()=>v});
+      try{
+        currentUser={id:'cx',email:'coach.x@t.fr',role:'coach',alertStatus:{},contacts:{}};
+        getClients=()=>cl; saveUser=()=>true; window.deposerEvenement=()=>Promise.resolve(); window.toast=()=>{};
+        CLOUD._getToken=async()=>'tok'; _msgFil=null; _msgFils=null;
+        try{ localStorage.removeItem(MSG_INDEX_LOCAL+'coach,x@t,fr'); }catch(e){}
+        return await fn({cl,t,n,rep,poser:(f)=>{ window.fetch=async(url,init)=>{ n.appels++; n.vol++; n.max=Math.max(n.max,n.vol); n.urls.push(String(url)); n.corps.push(init&&init.body);
+          try{ await new Promise(r=>setTimeout(r,3)); return await f(String(url),init||{}); } finally { n.vol--; } }; }});
+      } finally {
+        currentUser=sv.u; getClients=sv.g; window.fetch=sv.f; CLOUD._getToken=sv.tok; _msgFils=sv.fils; _msgFil=sv.fil; saveUser=sv.s; window.deposerEvenement=sv.d; window.toast=sv.t;
+        try{ localStorage.removeItem(MSG_INDEX_LOCAL+'coach,x@t,fr'); }catch(e){}
+      }
+    };
+    okA('Index des fils : 60 athlètes indexés → un seul appel ; sans index → au plus 6 requêtes à la fois, un message chacune',async()=>_MXI(async({cl,t,n,rep,poser})=>{
+      const index={}; cl.forEach((c,i)=>{ index[_relCle(c)]={dernierTexte:'msg '+i,de:i%2?'athlete':'coach',at:t-i*60e3,nonLusCoach:i%2,nonLusAthlete:0}; });
+      poser(async u=>u.indexOf('/messagesIndex/')>=0?rep(200,index):rep(200,null));
+      const r=await msgChargerFils(true);
+      if(n.appels!==1) return _echec(n.appels+' appels avec l’index');
+      if(r.fils.length!==60||r.fils.reduce((a,f)=>a+f.nonLus,0)!==30) return _echec('fils : '+r.fils.length);
+      if(r.fils.find(f=>f.cle==='x1@t,fr').dernier.texte!=='msg 1') return _echec('dernier texte');
+      // Sans index (fils d'avant) : le repli.
+      n.appels=0; n.max=0; n.urls.length=0;
+      poser(async u=>u.indexOf('/messagesIndex/')>=0?rep(200,null):rep(200,{m00000001aa:{de:'athlete',texte:'yo',at:t-3*864e5,lu:false}}));
+      const r2=await msgChargerFils(true);
+      const pages=n.urls.filter(u=>u.indexOf('/messages/')>=0);
+      if(pages.length!==60) return _echec(pages.length+' pages');
+      if(!pages.every(u=>/limitToLast=1(&|$)/.test(u))) return _echec('limitToLast : '+pages[0]);
+      if(n.max>6) return _echec(n.max+' requêtes simultanées');
+      if(r2.fils.filter(f=>f.dernier&&f.nonLus===1).length!==60) return _echec('repli : dernier et non-lu');
+      return msgClientsSansReponse(cl,t).length===60?true:_echec('signal sans réponse');
+    }));
+    okA('Index des fils : réseau coupé → « Pas de réseau », jamais « Aucun athlète » ; dernière liste connue marquée hors ligne',async()=>_MXI(async({cl,t,rep,poser})=>{
+      const z=document.getElementById('msg-corps');
+      if(!z) return _echec('#msg-corps absent');
+      const avant=z.innerHTML;
+      try{
+        poser(async()=>{ throw new TypeError('Failed to fetch'); });
+        await msgChargerFils(true); _rendreFils();
+        if(!/Pas de réseau/.test(z.textContent)) return _echec('texte : '+z.textContent.slice(0,80));
+        if(/Aucun athlète/.test(z.textContent)) return _echec('« Aucun athlète » hors ligne');
+        // Une liste déjà vue : elle s'affiche, marquée.
+        poser(async u=>u.indexOf('/messagesIndex/')>=0?rep(200,{'x0@t,fr':{dernierTexte:'déjà vu',de:'athlete',at:t,nonLusCoach:1,nonLusAthlete:0}}):rep(200,null));
+        await msgChargerFils(true);
+        poser(async()=>{ throw new TypeError('Failed to fetch'); });
+        await msgChargerFils(true); _rendreFils();
+        if(!/Hors ligne/.test(z.textContent)||!/déjà vu/.test(z.textContent)) return _echec('cache hors ligne : '+z.textContent.slice(0,80));
+        // Vraiment aucun athlète : là, et là seulement, on le dit.
+        getClients=()=>[]; _rendreFils();
+        return /Aucun athlète rattaché/.test(z.textContent)?true:_echec('sans athlète');
+      } finally { z.innerHTML=avant; }
+    }));
+    okA('Index des fils : msgEnvoyer l’écrit (dernier texte, compteur de l’autre par incrément) ; la lecture le recalcule',async()=>_MXI(async({rep,poser,n})=>{
+      poser(async()=>rep(200,{}));
+      const r=await msgEnvoyer('x5@t,fr','  Bravo pour   ta séance '+'!'.repeat(100));
+      if(!r.ok) return _echec('envoi');
+      const i=n.urls.findIndex(u=>u.indexOf('/messagesIndex/coach,x@t,fr/x5@t,fr.json')>=0);
+      if(i<0) return _echec('index non écrit : '+n.urls.join(' | '));
+      const c=JSON.parse(n.corps[i]);
+      if(c.de!=='coach'||c.dernierTexte.length>80||!/^Bravo pour ta séance/.test(c.dernierTexte)) return _echec(JSON.stringify(c));
+      if(!c.nonLusAthlete||!c.nonLusAthlete['.sv']||c.nonLusAthlete['.sv'].increment!==1||'nonLusCoach' in c) return _echec('compteur : '+JSON.stringify(c));
+      const e=msgIndexDepuisListe([{de:'athlete',texte:'a',at:1,lu:true},{de:'athlete',texte:'b',at:2,lu:false},{de:'coach',texte:'c',at:3,lu:false}]);
+      return e.nonLusCoach===1&&e.nonLusAthlete===1&&e.de==='coach'&&e.dernierTexte==='c'?true:_echec(JSON.stringify(e));
+    }));
     // ── 06/10/2026 — LE MESSAGE GROUPÉ PART DANS L'APP ──
     ok('planEnvoiGroupe : un message par athlète, chacun avec SON prénom ; texte vide refusé ; plafond de confirmation au-delà de 20',()=>{
       const p=planEnvoiGroupe([{id:'a',cle:'a@t,fr'},{id:'b',cle:'b@t,fr'},'c','a'],'petit point cette semaine 💪',{a:'Léa',b:'Karim'},1759740000000);

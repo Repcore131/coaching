@@ -297,6 +297,9 @@ async function grpAnnuler(){
     if(r&&r.ok){ retires++; g.faits.delete(m.msgId); }
     return r;
   },new Map());
+  // L'INDEX DES FILS suit : recalculé depuis la dernière page de chacun.
+  try{ await executerEnvoiGroupe({messages:l.map(m=>Object.assign({},m,{msgId:'idx'+m.msgId}))},
+    m=>msgIndexRecalculer(_msgCles(currentUser,m.cle)).then(ok=>({ok})),new Map()); }catch(e){}
   g.res={envoyes:[],echecs:[]};
   _grpEtape('<div class="grp-rel"><div class="grp-n">Envoi annulé</div>'
     +'<div class="grp-lib">'+retires+' message'+(retires>1?'s':'')+' retiré'+(retires>1?'s':'')
