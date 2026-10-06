@@ -70,7 +70,7 @@ PAGES.imports = {
   render() {
     const tab = UI.impTab || 'rsm';
     const body = { rsm: impRsm, new: impNew, history: impHistory, manual: impManual }[tab]();
-    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div></div>
+    return `<div class="page-head"><div><h1>Imports</h1><p>Déposez vos exports Resamania : Fit Pulse les reconnaît et alimente les KPI, la rétention et les impayés.</p></div><span class="spacer"></span><button class="btn" data-act="rsmCopyPrompt" title="Copier un prompt pour Claude dans Chrome : il récupère tous les exports Resamania d’un coup">${ico('copy')} Copier le prompt</button></div>
       ${tabs('impTab', [['rsm', 'Resamania'], ['new', 'Import libre'], ['history', 'Historique'], ['manual', 'Saisie manuelle mensuelle']], tab)}${body}`;
   },
   mount() {
@@ -295,6 +295,12 @@ function impManual() {
     <p class="muted small">Seuls les mois terminés sont modifiables. Une valeur remplace les saisies du mois dans la comparaison annuelle du tableau de bord ; vider une cellule revient aux saisies. Ces chiffres n’entrent ni dans les scores ni dans le classement.</p>`;
 }
 ACTIONS.manCell = el => { const v = el.value === '' ? null : toNum(el.value); db.set(['monthly', CLUB.id, el.dataset.mk, el.dataset.k], v); toast('Enregistré'); };
+// Copie le prompt « tout récupérer » pour Claude dans Chrome (à côté de Resamania).
+ACTIONS.rsmCopyPrompt = async () => {
+  const t = rsmImportPrompt();
+  try { await navigator.clipboard.writeText(t); toast('Prompt copié : collez-le dans Claude, à côté de votre page Resamania.'); }
+  catch (e) { openModal({ title: 'Prompt à copier', body: `<p class="muted small">Sélectionnez tout et copiez, puis collez dans Claude à côté de Resamania.</p><textarea class="input" rows="16" style="width:100%" onclick="this.select()">${esc(t)}</textarea>`, foot: '<button class="btn primary" data-close>Fermer</button>' }); }
+};
 
 // ── Action Retention ──────────────────────────────────────────────────────
 PAGES.loyalty = {
