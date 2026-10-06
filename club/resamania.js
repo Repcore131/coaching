@@ -363,8 +363,8 @@ const RSM_DEFS = [
     },
   },
   {
-    id: 'resil', label: 'Résiliations', family: 'liste', feeds: 'Résiliations · sauvetages (Etat = canceled) · motifs techniques écartés',
-    path: 'Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter', filters: 'Date de création = le mois, tous statuts', file: 'RSM_resiliations_AAAA-MM.csv',
+    id: 'resil', label: 'Résiliations', family: 'liste', feeds: 'Demandes à arbitrer (à traiter) · acceptées/rejetées/annulées (historique) · motifs techniques écartés',
+    path: 'Clients > Résiliations > FILTRER (Date de création = le mois) > ⋮ > Exporter', filters: 'Date de création = le mois, TOUS les statuts (À arbitrer, Acceptée, Rejetée, Annulée)', file: 'RSM_resiliations_AAAA-MM.csv',
     sig: has => has('motif') && (has('createur') || has('commercial actuel')) && (has('etat') || has('statut')),
     parse(c) {
       const iD = c.find(h => h === 'date creation' || h === 'date de creation') >= 0 ? c.find(h => h === 'date creation' || h === 'date de creation') : c.find(h => h === 'date' || h.startsWith('date'));
@@ -374,10 +374,17 @@ const RSM_DEFS = [
       for (const r of c.rows) {
         const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
         const motif = r[iM] || ''; if (TECH_MOTIFS.some(t => norm(motif).includes(t))) { tech++; c.skip('motif technique (changement de formule, pack option, transfert, migration)'); continue; }
-        const etat = norm(r[iE]); const saved = /cancel|annul/.test(etat); if (/reject|rejet/.test(etat)) { c.skip('demande rejetée'); continue; }
+        // Statut d'arbitrage Resamania : seules les demandes « À arbitrer » sont à traiter.
+        // Acceptée = départ validé (préavis en cours) · Rejetée/Annulée = la personne reste · tout le reste = historique.
+        const etat = norm(r[iE]);
+        const arb = /arbitr|soumis|submit|pending|attente|a traiter/.test(etat) ? 'submitted'
+          : /accept|valid/.test(etat) ? 'accepted'
+            : /rejet|reject|refus/.test(etat) ? 'rejected'
+              : /annul|cancel/.test(etat) ? 'canceled' : null;
+        const saved = arb === 'canceled';
         const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
         const seller = resolveSeller(r[iCr]);
-        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, seller });
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, arb, seller });
       }
       if (tech) c.warn(`${plur(tech, 'résiliation technique écartée', 'résiliations techniques écartées')} : elles gonfleraient le churn.`);
     },
