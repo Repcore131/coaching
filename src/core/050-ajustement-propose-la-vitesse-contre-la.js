@@ -171,6 +171,16 @@ function appliquerAjustement(retour){
   n.macros[a.jour]=Object.assign({},cible,{
     kcal:a.apres.kcal,g:a.apres.g,p:cible.p,l:cible.l,
     f:Math.round(FIBRES_PAR_1000*a.apres.kcal/1000)});
+  // SANS COACH (build 1833), l'ajustement est aussi gardé DANS le calcul de
+  // la carte : il s'ajoute à la part athlète du ±20 partagé (ajustKcal), pour
+  // qu'un prochain recalcul (objectif, g/kg, ±20) ne l'efface pas. Les
+  // journées, elles, restent celles qu'il vient d'écrire (jour visé seulement) :
+  // la carte les lit telles quelles tant que l'origine est 'ajustement'.
+  if(sansCoach(currentUser)){
+    const tb=n.tableur=Object.assign({},n.tableur||{});
+    const aj=tb.ajust=Object.assign({},tb.ajust||{});
+    aj.athlete=(Math.round(Number(aj.athlete))||0)+(Number(a.kcalDelta)||0);
+  }
   n.macros.origine='ajustement';
   n.macros.origineDate=Date.now();
   _ajustJournaliser(a,'applique');

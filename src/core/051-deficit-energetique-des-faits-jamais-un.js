@@ -1277,8 +1277,9 @@ function _htmlChoixPhase(){
   return `<div id="ph-choix-zone">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta phase</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
-      Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros :
-      ça change la façon dont l'app lit tes chiffres.
+      ${sansCoach(currentUser)
+        ?'Ce que tu cherches en ce moment. Ça change ta cible calorique et tes protéines.'
+        :'Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros : ça change la façon dont l’app lit tes chiffres.'}
       ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué : à toi de confirmer.':''}
     </div>
     ${opts}
@@ -1300,6 +1301,15 @@ function confirmerPhase(){
   const t=_phChoix;
   if(!changerPhase(currentUser,t,null,'athlete')) return;
   currentUser.phaseRefusee=null;
+  // SANS COACH, LA PHASE EST AUSSI L'OBJECTIF NUTRITION (build 1833) : recomp
+  // et peak, sans bouton, se lisent « maintien ».
+  if(sansCoach(currentUser)){
+    const k=objectifDePhase(t);
+    if(!currentUser.nutrition) currentUser.nutrition={};
+    currentUser.nutrition.perso=Object.assign({},currentUser.nutrition.perso||{},{objectif:k,objectifLe:Number(currentUser.phase&&currentUser.phase.debut)||Date.now()});
+    currentUser.nutrition.tableur=Object.assign({},currentUser.nutrition.tableur||{},{coef:objCoefDefaut(k)});
+    try{ _athEcrireCiblesLocal(); }catch(e){}
+  }
   _phChoix=null;
   const ok=saveUser();
   closeModal();

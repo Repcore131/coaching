@@ -1284,6 +1284,15 @@ function loadNutrition(dateAff,dateCaff){
   try{
     if(currentUser&&!(currentUser.coachEmailKey||currentUser.coachId)&&_ajustMigrer(currentUser)) saveUser();
   }catch(e){}
+  // SANS COACH (build 1833) : phase et objectif réconciliés, puis les cibles
+  // réécrites si le calcul s'écarte de plus de 20 kcal de ce qui est stocké.
+  // Une seule écriture, sans toast ; hors ligne, la copie locale suffit.
+  try{
+    let ch=false;
+    if(syncPhaseObjectif(currentUser)) ch=true;
+    if(resyncCiblesAthlete(currentUser)) ch=true;
+    if(ch){ currentUser.updatedAt=Date.now(); saveUser(); CLOUD.pushOne(currentUser.email,currentUser); }
+  }catch(e){}
   // ⚠ PREMIER CALCUL DE CHARGE : l'ecran de nutrition est celui qui calcule
   // les reperes energetiques — mbEstime a besoin de l'age ET du genre, et
   // sans eux il rend null, c'est-a-dire un ecran de chiffres absents sans

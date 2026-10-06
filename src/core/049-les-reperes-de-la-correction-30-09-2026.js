@@ -2312,8 +2312,81 @@ const PHASE_SEMAINES_RELANCE=20;
 // version future du champ ne doit pas casser une version ancienne de l'app.
 function phaseCourante(user){
   const p=user&&user.phase;
-  if(!p||!p.type||!PHASES[p.type]||!p.debut) return null;
+  if(!p||!p.type||!PHASES[p.type]||!p.debut) return _phaseDeLObjectif(user);
   return p;
+}
+// ══ UNE SEULE SOURCE DE VÉRITÉ CHEZ L'ATHLÈTE SANS COACH (build 1833) ══════
+// Deux réglages coexistaient : user.phase (carte « Ta phase ») et
+// nutrition.perso.objectif (« Mon objectif » en Nutrition). cibleTableur lit la
+// phase d'abord : « Sèche » ne changeait rien sous une phase « masse », et un
+// objectif seul laissait l'ajustement et le point de la semaine sans phase.
+// Désormais, sans coach, les deux gestes écrivent les deux champs ; un dossier
+// d'avant se répare au chargement (syncPhaseObjectif) ; et tant qu'aucune
+// phase n'est écrite, l'objectif EN TIENT LIEU ici.
+function sansCoach(u){ return !!(u&&u.role!=='coach'&&!u.coachId&&!u.coachEmailKey); }
+// L'objectif de l'athlète correspondant à une phase : recomp et peak n'ont pas
+// de bouton, ils se lisent « maintien ».
+function objectifDePhase(type){
+  return (typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(o=>o.k===type))?type:'maintien';
+}
+function _phaseDeLObjectif(user){
+  if(!sansCoach(user)) return null;
+  // Des cibles posées par un coach (tableur, historique) : son calcul, pas l'objectif.
+  const _or=(((user.nutrition||{}).macros)||{}).origine;
+  if(_or==='tableur'||_or==='histo') return null;
+  const per=((user.nutrition||{}).perso)||{};
+  const k=per.objectif;
+  if(!k||!PHASES[k]||typeof ATH_OBJECTIFS==='undefined'||!ATH_OBJECTIFS.some(o=>o.k===k)) return null;
+  return {type:k,debut:_debutObjectif(user),finPrevue:null,definiPar:'athlete',historique:[],depuisObjectif:true};
+}
+// Depuis quand l'objectif tient : sa date quand elle est écrite ; sinon (un
+// dossier d'avant ce build) la plus ancienne pesée ou le plus ancien bilan —
+// une date « maintenant » couperait la série de poids (serieVitesse) et ferait
+// taire l'ajustement et le point de la semaine.
+function _debutObjectif(u){
+  const per=((u&&u.nutrition)||{}).perso||{};
+  if(Number(per.objectifLe)>0) return Number(per.objectifLe);
+  let t=Infinity;
+  for(const e of ((u&&u.weightLog)||[])){ const x=e&&(typeof e.date==='number'?e.date:Date.parse(e.date)); if(x>0&&x<t) t=x; }
+  for(const b of ((u&&u.bilans)||[])){ const x=b&&(typeof b.date==='number'?b.date:Date.parse(b.date)); if(x>0&&x<t) t=x; }
+  return isFinite(t)?t:Date.now();
+}
+// Les gardes d'une sèche, SANS toast (la migration est silencieuse).
+function _secheRefusee(u){
+  try{ if(grossesseSuspend(u)) return true; }catch(e){}
+  try{ if(aTCA(u)) return true; }catch(e){}
+  try{ if(redsSuspend(u)) return true; }catch(e){}
+  return false;
+}
+// ÉCRIT. Recopie l'objectif dans la phase ou l'inverse quand ils divergent,
+// chez l'athlète sans coach : le plus récent gagne (phase.debut contre
+// perso.objectifLe ; un objectif sans date perd). Rend true si le dossier a
+// changé. Sans toast : l'appelant enregistre.
+function syncPhaseObjectif(u){
+  if(!sansCoach(u)) return false;
+  const p=u.phase;
+  const ph=(p&&p.type&&PHASES[p.type]&&p.debut)?p:null;
+  const n=u.nutrition||{};
+  const per=n.perso||{};
+  const obj=(typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(o=>o.k===per.objectif))?per.objectif:null;
+  if(!ph&&!obj) return false;
+  if(ph&&obj===objectifDePhase(ph.type)) return false;
+  const objLe=Number(per.objectifLe)||0;
+  if(obj&&(!ph||objLe>Number(ph.debut))){
+    // L'objectif gagne : il devient la phase (sauf une sèche refusée).
+    if(obj==='seche'&&_secheRefusee(u)) return false;
+    const hist=((p&&p.historique)||[]).slice();
+    if(ph) hist.push({type:ph.type,debut:ph.debut,fin:Date.now()});
+    u.phase={type:obj,debut:_debutObjectif(u),finPrevue:null,definiPar:'athlete',
+      historique:hist.slice(-PHASE_HIST_MAX)};
+    return true;
+  }
+  // La phase gagne : elle devient l'objectif.
+  const k=objectifDePhase(ph.type);
+  if(!u.nutrition) u.nutrition={};
+  u.nutrition.perso=Object.assign({},per,{objectif:k,objectifLe:Number(ph.debut)||Date.now()});
+  try{ u.nutrition.tableur=Object.assign({},u.nutrition.tableur||{},{coef:objCoefDefaut(k)}); }catch(e){}
+  return true;
 }
 function typePhase(user){ const p=phaseCourante(user); return p?p.type:null; }
 function libPhase(user){ const p=phaseCourante(user); return p?PHASES[p.type].lib:null; }

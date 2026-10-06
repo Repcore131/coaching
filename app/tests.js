@@ -22798,6 +22798,114 @@ async function testExercices(){
         if(!demandes||!/déficit d’environ \d+ kcal par jour/.test(texte)) return _echec('confirmation : '+texte);
         return JSON.stringify(u.nutrition)===avant?true:_echec('refus de confirmer : écrit quand même');
       } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; window.rcConfirm=sv.c; }});
+    // ══ BUILD 1833 — UNE SEULE SOURCE : PHASE ET OBJECTIF DE L'ATHLÈTE SANS COACH ══
+    const _UOj=n=>localISODate(new Date(Date.now()-n*864e5));
+    const _UO=(o)=>Object.assign({id:'uo',email:'uo@t.fr',role:'athlete',gender:'Homme',_evol_gender:'Homme',
+      _evol_height:'178',birthdate:'1996-01-01',sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'178','deb-age':'30','deb-gender':'Homme'}],
+      // Trente-six pesées stagnantes : 35 jours à 80 kg.
+      weightLog:Array.from({length:36},(_,i)=>({date:_UOj(35-i),kg:80})),
+      nutrition:{cycle:false,tableur:{}}},o||{});
+    const _UOmac=()=>({on:{kcal:3200,p:190,l:90,g:408},off:{kcal:3200,p:190,l:90,g:408},origine:'athlete'});
+    okA('Objectif unique : sans coach, phase « masse » puis « Sèche » → la phase devient sèche, coefficient 0,85',async()=>{
+      // Le gabarit du plancher (50 kg, 155 cm) : la sèche y pose un vrai déficit,
+      // donc une confirmation.
+      const u=_PLa({phase:{type:'masse',debut:Date.now()-20*864e5},nutrition:{cycle:false,tableur:{}}});
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast,c:window.rcConfirm};
+      let demandes=0;
+      try{
+        currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true);
+        window.loadNutrition=()=>{}; toast=()=>{};
+        window.rcConfirm=async()=>{ demandes++; await new Promise(r=>setTimeout(r,20)); return true; };
+        // Double clic : une seule confirmation.
+        await Promise.all([athObjectif('seche'),athObjectif('seche')]);
+        if(demandes!==1) return _echec(demandes+' confirmations');
+        if(phaseCourante(u).type!=='seche') return _echec('phase : '+phaseCourante(u).type);
+        if(u.nutrition.perso.objectif!=='seche') return _echec('objectif : '+u.nutrition.perso.objectif);
+        const c=ciblesAthlete(u);
+        if(c.coef!==0.85) return _echec('coef '+c.coef);
+        // La phase quittée est gardée dans l'historique.
+        return (u.phase.historique||[]).some(h=>h.type==='masse')?true:_echec('historique');
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; window.rcConfirm=sv.c; }});
+    ok('Objectif unique : « Sèche » seul (sans phase) + pesées stagnantes sur 35 jours → ajustementPropose propose',(()=>{
+      const u=_UO({nutrition:{cycle:false,tableur:{},perso:{objectif:'seche'},macros:_UOmac()}});
+      const p=phaseCourante(u);
+      if(!p||p.type!=='seche') return _echec('phase lue : '+JSON.stringify(p));
+      const a=ajustementPropose(u);
+      if(!a) return _echec('aucune proposition');
+      if(a.sens!=='baisse') return _echec('sens '+a.sens);
+      // AVEC un coach, l'objectif seul ne tient pas lieu de phase : comportement d'avant.
+      return ajustementPropose(Object.assign(_UO({nutrition:{cycle:false,tableur:{},perso:{objectif:'seche'},macros:_UOmac()}}),{coachId:'c1'}))===null
+        ?true:_echec('avec coach, une proposition sans phase');})());
+    ok('Objectif unique : après appliquerAjustement sans coach, rien n’est verrouillé et la carte ne parle pas de coach',(()=>{
+      const u=_UO({nutrition:{cycle:false,tableur:{},perso:{objectif:'seche'},macros:_UOmac()}});
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast};
+      try{
+        currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.loadNutrition=()=>{}; toast=()=>{};
+        if(!ajustementPropose(u)) return _echec('fixture : aucune proposition');
+        appliquerAjustement();
+        if(u.nutrition.macros.origine!=='ajustement') return _echec('origine '+u.nutrition.macros.origine);
+        if(ciblesPoseesParCoach(u)!==false) return _echec('verrouillé');
+        const h=_htmlCiblesAthlete(u);
+        if(/coach/i.test(h)) return _echec('« coach » dans la carte');
+        if(!/Tes cibles suivent ton poids/.test(h)) return _echec('note absente');
+        // L'ajustement est dans le calcul : la cible recalculée ne l'efface pas.
+        if(resyncCiblesAthlete(u)) return _echec('la resynchronisation réécrit après l’ajustement');
+        // AVEC un coach, l'origine 'ajustement' garde son comportement d'avant.
+        const c=Object.assign(_UO({nutrition:{manuel:true,macros:Object.assign(_UOmac(),{origine:'ajustement'})}}),{coachId:'c1'});
+        return ciblesPoseesParCoach(c)===true?true:_echec('avec coach');
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; }})());
+    ok('Objectif unique : avec coach, la phase du coach gagne et rien n’est recopié',(()=>{
+      const u=Object.assign(_UO({phase:{type:'masse',debut:Date.now()-20*864e5,definiPar:'coach'},
+        nutrition:{cycle:false,tableur:{},perso:{objectif:'seche',objectifLe:Date.now()},macros:_UOmac()}}),{coachEmailKey:'coach@t,fr'});
+      const avant=JSON.stringify(u);
+      if(syncPhaseObjectif(u)) return _echec('migration chez un athlète suivi');
+      if(JSON.stringify(u)!==avant) return _echec('dossier modifié');
+      if(phaseCourante(u).type!=='masse') return _echec('phase');
+      const t=cibleTableur(u,{});
+      return t.phase==='masse'?true:_echec('cibleTableur lit '+t.phase);})());
+    ok('Objectif unique : migration douce — la plus récente gagne, recomp se lit « maintien », une seule fois',(()=>{
+      // Phase plus récente que l'objectif : la phase gagne.
+      const a=_UO({phase:{type:'masse',debut:Date.now()-2*864e5},nutrition:{cycle:false,tableur:{},perso:{objectif:'seche',objectifLe:Date.now()-30*864e5}}});
+      if(!syncPhaseObjectif(a)||a.nutrition.perso.objectif!=='masse'||a.phase.type!=='masse') return _echec('phase récente : '+JSON.stringify(a.nutrition.perso));
+      if(syncPhaseObjectif(a)) return _echec('deuxième passage');
+      // Objectif plus récent : il devient la phase.
+      const b=_UO({phase:{type:'masse',debut:Date.now()-30*864e5},nutrition:{cycle:false,tableur:{},perso:{objectif:'seche',objectifLe:Date.now()-864e5}}});
+      if(!syncPhaseObjectif(b)||b.phase.type!=='seche') return _echec('objectif récent : '+b.phase.type);
+      // Objectif seul : la phase est créée, datée de la plus ancienne pesée.
+      const c=_UO({nutrition:{cycle:false,tableur:{},perso:{objectif:'masse'}}});
+      if(!syncPhaseObjectif(c)||c.phase.type!=='masse'||!(c.phase.debut<Date.now()-30*864e5)) return _echec('objectif seul : '+JSON.stringify(c.phase));
+      // Sèche refusée (antécédent alimentaire) : rien n'est écrit.
+      const d=_UO({tcaRisque:true,nutrition:{cycle:false,tableur:{},perso:{objectif:'seche',objectifLe:Date.now()}}});
+      if(aTCA(d)&&(syncPhaseObjectif(d)||d.phase)) return _echec('sèche refusée écrite');
+      // Recomp : l'objectif est « maintien », et le bouton actif le dit.
+      const r=_UO({phase:{type:'recomp',debut:Date.now()-864e5}});
+      if(!syncPhaseObjectif(r)||r.nutrition.perso.objectif!=='maintien') return _echec('recomp : '+JSON.stringify(r.nutrition.perso));
+      const sv=currentUser;
+      try{
+        currentUser=r;
+        const h=_htmlCiblesAthlete(r);
+        if(!/class="rc-obj-b actif" aria-pressed="true" onclick="athObjectif\('maintien'\)"/.test(h)) return _echec('bouton actif');
+      } finally { currentUser=sv; }
+      // Le texte du choix de phase, sans coach.
+      const sv2=currentUser;
+      try{ currentUser=r; const t=_htmlChoixPhase(); if(!/Ça change ta cible calorique et tes protéines/.test(t)) return _echec('texte du choix'); }
+      finally{ currentUser=sv2; _phChoix=null; }
+      return true;})());
+    ok('Objectif unique : à l’ouverture, une cible recalculée à plus de 20 kcal est écrite (sans coach seulement)',(()=>{
+      const u=_UO({nutrition:{cycle:false,tableur:{},perso:{objectif:'maintien'},macros:{on:{kcal:1000,p:100,l:30,g:82},off:{kcal:1000,p:100,l:30,g:82},origine:'athlete'}}});
+      const sv=currentUser;
+      try{
+        currentUser=u;
+        if(!resyncCiblesAthlete(u)) return _echec('rien écrit');
+        const c=ciblesAthlete(u), m=u.nutrition.macros;
+        if(m.on.kcal!==c.kcal||m.off.kcal!==c.kcal) return _echec(m.on.kcal+' / '+c.kcal);
+        if(resyncCiblesAthlete(u)) return _echec('deuxième écriture');
+        // Suivi par un coach : rien.
+        const k=Object.assign(_UO({nutrition:{cycle:false,tableur:{},macros:{on:{kcal:1000,p:100,l:30,g:82},off:{kcal:1000,p:100,l:30,g:82},origine:'athlete'}}}),{coachId:'c1'});
+        currentUser=k;
+        return resyncCiblesAthlete(k)===false&&k.nutrition.macros.on.kcal===1000?true:_echec('athlète suivi : écrit');
+      } finally { currentUser=sv; }})());
     ok('Plancher : une cible de l’athlète restée dessous (d’avant ce build) remonte quand elle change son g/kg ; celle du coach, non',(()=>_PLavec(
       _PLa({nutrition:{cycle:false,tableur:{coef:0.70,protGkg:2},macros:{on:{kcal:1000,p:100,l:40,g:30},off:{kcal:1000,p:100,l:40,g:30},origine:'athlete'}}}),()=>{
         const u=currentUser, pl=plancherAthlete(u);

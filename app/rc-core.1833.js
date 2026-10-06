@@ -48787,6 +48787,8 @@ function loadClientHome(){
   // LA DÉCHARGE D'UN CRÉNEAU EST DATÉE (06/10/2026) : un ancien `deload:true`
   // reçoit sa fin de semaine à la première lecture ; une décharge échue
   // s'efface. Même chemin d'écriture que la bascule de bloc.
+  // Phase et objectif nutrition réconciliés chez l'athlète sans coach (build 1833).
+  try{ if(currentUser&&syncPhaseObjectif(currentUser)){ currentUser.updatedAt=Date.now(); saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
   try{ if(currentUser&&currentUser.role!=='coach'&&migrerDechargesCreneaux(currentUser,Date.now())){ currentUser.updatedAt=Date.now(); saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
@@ -98471,6 +98473,9 @@ function ciblesPoseesParCoach(u){
   // `'histo'` : le coach a remis une ancienne cible en place — c'est lui qui
   // decide, au meme titre que s'il venait de la calculer.
   if(((n.macros||{}).origine)==='tableur'||((n.macros||{}).origine)==='histo') return true;
+  // L'AJUSTEMENT NE VERROUILLE QU'AVEC UN COACH (build 1833). Sans coach, c'est
+  // l'athlète qui l'a accepté : il se lit comme 'athlete'.
+  if(((n.macros||{}).origine)==='ajustement'&&sansCoach(u)) return false;
   // Le drapeau explicite gagne ensuite : un coach qui a LEVE l'interrupteur a
   // dit ce qu'il voulait, et un dossier ou l'athlete avait pris la main avant
   // ce lot se repare au premier enregistrement du coach.
@@ -98580,14 +98585,39 @@ function _athEcrireCibles(){
   if(ciblesPoseesParCoach(currentUser)) return false;
   const c=ciblesAthlete(currentUser);
   if(!c||(c.manque&&c.manque.length)) return false;
+  if(!_athEcrireCiblesLocal()) return false;
+  saveUser();
+  CLOUD.pushOne(currentUser.email,currentUser);
+  return true;
+}
+// La part d'écriture SANS enregistrement : l'appelant enregistre.
+function _athEcrireCiblesLocal(){
+  if(ciblesPoseesParCoach(currentUser)) return false;
+  const c=ciblesAthlete(currentUser);
+  if(!c||(c.manque&&c.manque.length)) return false;
   if(!currentUser.nutrition) currentUser.nutrition={};
   const bloc={kcal:c.kcal,p:c.p,g:c.g,l:c.l};
   const m=currentUser.nutrition.macros||{};
   currentUser.nutrition.macros=Object.assign({},m,{on:Object.assign({},m.on,bloc),
     off:Object.assign({},m.off,bloc),origine:'athlete'});
-  saveUser();
-  CLOUD.pushOne(currentUser.email,currentUser);
   return true;
+}
+// ÉCRIT (build 1833), sur l'appareil de l'athlète SANS coach seulement : quand
+// la cible recalculée s'écarte de plus de 20 kcal de nutrition.macros, la
+// nouvelle cible est écrite — la carte et les anneaux montrent alors le même
+// chiffre. Rend true si le dossier a changé (l'appelant enregistre).
+const ATH_RESYNC_KCAL=20;
+function resyncCiblesAthlete(u){
+  if(!u||u!==currentUser||!sansCoach(u)||ciblesPoseesParCoach(u)) return false;
+  // Un ajustement accepté a écrit SES journées (le jour visé seulement) : elles
+  // sont la cible en vigueur, et la carte les lit (_htmlCiblesAthlete).
+  if((((u.nutrition||{}).macros)||{}).origine==='ajustement') return false;
+  const c=ciblesAthlete(u);
+  if(!c||(c.manque&&c.manque.length)||!(c.kcal>0)) return false;
+  const m=((u.nutrition||{}).macros)||{};
+  const ecart=j=>Math.abs((Number((m[j]||{}).kcal)||0)-_bloc(c.p,c.l,c.g).kcal);
+  if(ecart('on')<=ATH_RESYNC_KCAL&&ecart('off')<=ATH_RESYNC_KCAL) return false;
+  return _athEcrireCiblesLocal();
 }
 // LE GARDE DES TROIS BOUTONS, EN TETE ET NON AU MOMENT D'ECRIRE LES CIBLES.
 // athObjectif ecrit `nutrition.tableur.coef` — LA GRILLE DU COACH — avant
@@ -98606,9 +98636,17 @@ function _athVerrouille(){
 }
 // Le refus du déficit en un clic : le MÊME texte que utiliserBesoinsProposes.
 const ATH_REFUS_DEFICIT_TCA='Vu ce que tu as déclaré, RepCore ne pose pas de déficit tout seul. Passe par ton coach.';
+// UN SEUL CLIC À LA FOIS (build 1833) : un double clic sur « Sèche » ouvrait
+// deux confirmations.
+let _athObjEnCours=false;
 async function athObjectif(k){
+  if(_athObjEnCours) return;
   if(_athVerrouille()) return;
   if(!ATH_OBJECTIFS.some(o=>o.k===k)) return;
+  _athObjEnCours=true;
+  try{ await _athObjectif(k); }finally{ _athObjEnCours=false; }
+}
+async function _athObjectif(k){
   // UNE SÈCHE NE S'ÉCRIT PAS D'UN CLIC (30/09/2026). Refusée avec un
   // antécédent alimentaire déclaré ou pendant une grossesse ; sinon, le
   // déficit est annoncé en kcal par jour et doit être confirmé.
@@ -98618,16 +98656,24 @@ async function athObjectif(k){
     try{ gro=grossesseSuspend(currentUser); }catch(e){}
     if(tca){ toast(ATH_REFUS_DEFICIT_TCA,'var(--orange)'); return; }
     if(gro){ toast(GROSSESSE_REFUS_SECHE,'var(--orange)'); return; }
-    let t=null; try{ t=cibleTableur(currentUser,{coef:objCoefDefaut('seche'),objectif:'seche',appliquerPlancher:true}); }catch(e){ t=null; }
+    // Sans coach, la phase en cours (« masse ») passerait devant l'objectif
+    // visé dans cibleTableur : le déficit annoncé se calcule SANS elle.
+    const _uPrev=sansCoach(currentUser)?Object.assign({},currentUser,{phase:null}):currentUser;
+    let t=null; try{ t=cibleTableur(_uPrev,{coef:objCoefDefaut('seche'),objectif:'seche',appliquerPlancher:true}); }catch(e){ t=null; }
     const deficit=(t&&!(t.manque&&t.manque.length))?Math.round((t.avecSport||0)-(t.kcal||0)):0;
     if(deficit>0&&!await rcConfirm('La sèche pose un déficit d’environ '+deficit
       +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.'
       +String.fromCharCode(10)+String.fromCharCode(10)
       +'Tu peux revenir en arrière à tout moment. Continuer ?',null,'Confirmer')) return;
   }
+  // SANS COACH, L'OBJECTIF EST AUSSI LA PHASE (build 1833) : mêmes refus
+  // (grossesse, antécédent alimentaire, vigilance énergétique), dits par
+  // changerPhase. Refusée, rien n'est écrit.
+  if(sansCoach(currentUser)&&!changerPhase(currentUser,k,null,'athlete')) return;
   if(!currentUser.nutrition) currentUser.nutrition={};
   const p=currentUser.nutrition.perso||{};
-  p.objectif=k; currentUser.nutrition.perso=p;
+  p.objectif=k; p.objectifLe=(sansCoach(currentUser)&&currentUser.phase&&Number(currentUser.phase.debut))||Date.now();
+  currentUser.nutrition.perso=p;
   // ET DANS nutrition.tableur, LA OU LE COACH LIT. cibleTableur prend son
   // coefficient dans u.nutrition.tableur.coef : sans cette ligne, l'athlete
   // aurait choisi « seche » et le tableau du coach serait reste sur le
@@ -98861,8 +98907,14 @@ function _htmlCiblesAthlete(u){
       +'le voit sur sa grille, et ce qu’il change, tu le vois ici.</div>'
       +'</div>';
   }
-  const c=ciblesAthlete(u);
+  let c=ciblesAthlete(u);
   if(!c) return '';
+  // SANS COACH, APRÈS UN AJUSTEMENT ACCEPTÉ (build 1833) : la carte montre les
+  // journées qu'il a écrites (celles des anneaux), pas un recalcul.
+  if(!(c.manque&&c.manque.length)&&sansCoach(u)&&((((u.nutrition||{}).macros)||{}).origine==='ajustement')){
+    const v=ciblesEnVigueur(u);
+    if(v) c=Object.assign({},c,{kcal:v.kcal,p:v.p,l:v.l,g:v.g});
+  }
   if(c.manque&&c.manque.length){
     return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
       +'padding:14px 14px;margin-bottom:20px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'
@@ -98870,8 +98922,10 @@ function _htmlCiblesAthlete(u){
       +escapeHtml(c.manque.join(', '))+'. Complète ton bilan.</div>';
   }
   const per=_athPerso(u);
-  const bouton=(o)=>'<button type="button" class="rc-obj-b'+(c.objectif===o.k?' actif':'')
-    +'" aria-pressed="'+(c.objectif===o.k?'true':'false')
+  // Recomp et peak n'ont pas de bouton : « Maintien » est actif (build 1833).
+  const _actif=objectifDePhase(c.objectif);
+  const bouton=(o)=>'<button type="button" class="rc-obj-b'+(_actif===o.k?' actif':'')
+    +'" aria-pressed="'+(_actif===o.k?'true':'false')
     +'" onclick="athObjectif(\''+o.k+'\')">'+o.lib+'</button>';
   // +1e-9 : 0,6 + 9 × 0,1 vaut 1,5000000000000002, et la borne 1,5 sautait.
   const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut+1e-9;x+=0.1) o.push(Math.round(x*10)/10); return o; };
@@ -98906,7 +98960,9 @@ function _htmlCiblesAthlete(u){
     +'</div>'
     // Le poids de référence, les glucides très bas, le total dépassé : dits, jamais tus.
     +_htmlAlertesMacros(c,'athlete')
-    +'<div class="rc-obj-note">Ton coach voit ces cibles : elles remplacent celles de sa grille.</div>'
+    +'<div class="rc-obj-note">'+(sansCoach(u)
+      ?'Tes cibles suivent ton poids : elles se mettent à jour à chaque pesée.'
+      :'Ton coach voit ces cibles : elles remplacent celles de sa grille.')+'</div>'
     +'</div>';
 }
 function _getEffectiveMacros(nut,isOn,dateStr,porteur){
@@ -108136,6 +108192,15 @@ function loadNutrition(dateAff,dateCaff){
   // qu'un même dossier ne soit pas corrigé deux fois.
   try{
     if(currentUser&&!(currentUser.coachEmailKey||currentUser.coachId)&&_ajustMigrer(currentUser)) saveUser();
+  }catch(e){}
+  // SANS COACH (build 1833) : phase et objectif réconciliés, puis les cibles
+  // réécrites si le calcul s'écarte de plus de 20 kcal de ce qui est stocké.
+  // Une seule écriture, sans toast ; hors ligne, la copie locale suffit.
+  try{
+    let ch=false;
+    if(syncPhaseObjectif(currentUser)) ch=true;
+    if(resyncCiblesAthlete(currentUser)) ch=true;
+    if(ch){ currentUser.updatedAt=Date.now(); saveUser(); CLOUD.pushOne(currentUser.email,currentUser); }
   }catch(e){}
   // ⚠ PREMIER CALCUL DE CHARGE : l'ecran de nutrition est celui qui calcule
   // les reperes energetiques — mbEstime a besoin de l'age ET du genre, et
@@ -123072,8 +123137,81 @@ const PHASE_SEMAINES_RELANCE=20;
 // version future du champ ne doit pas casser une version ancienne de l'app.
 function phaseCourante(user){
   const p=user&&user.phase;
-  if(!p||!p.type||!PHASES[p.type]||!p.debut) return null;
+  if(!p||!p.type||!PHASES[p.type]||!p.debut) return _phaseDeLObjectif(user);
   return p;
+}
+// ══ UNE SEULE SOURCE DE VÉRITÉ CHEZ L'ATHLÈTE SANS COACH (build 1833) ══════
+// Deux réglages coexistaient : user.phase (carte « Ta phase ») et
+// nutrition.perso.objectif (« Mon objectif » en Nutrition). cibleTableur lit la
+// phase d'abord : « Sèche » ne changeait rien sous une phase « masse », et un
+// objectif seul laissait l'ajustement et le point de la semaine sans phase.
+// Désormais, sans coach, les deux gestes écrivent les deux champs ; un dossier
+// d'avant se répare au chargement (syncPhaseObjectif) ; et tant qu'aucune
+// phase n'est écrite, l'objectif EN TIENT LIEU ici.
+function sansCoach(u){ return !!(u&&u.role!=='coach'&&!u.coachId&&!u.coachEmailKey); }
+// L'objectif de l'athlète correspondant à une phase : recomp et peak n'ont pas
+// de bouton, ils se lisent « maintien ».
+function objectifDePhase(type){
+  return (typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(o=>o.k===type))?type:'maintien';
+}
+function _phaseDeLObjectif(user){
+  if(!sansCoach(user)) return null;
+  // Des cibles posées par un coach (tableur, historique) : son calcul, pas l'objectif.
+  const _or=(((user.nutrition||{}).macros)||{}).origine;
+  if(_or==='tableur'||_or==='histo') return null;
+  const per=((user.nutrition||{}).perso)||{};
+  const k=per.objectif;
+  if(!k||!PHASES[k]||typeof ATH_OBJECTIFS==='undefined'||!ATH_OBJECTIFS.some(o=>o.k===k)) return null;
+  return {type:k,debut:_debutObjectif(user),finPrevue:null,definiPar:'athlete',historique:[],depuisObjectif:true};
+}
+// Depuis quand l'objectif tient : sa date quand elle est écrite ; sinon (un
+// dossier d'avant ce build) la plus ancienne pesée ou le plus ancien bilan —
+// une date « maintenant » couperait la série de poids (serieVitesse) et ferait
+// taire l'ajustement et le point de la semaine.
+function _debutObjectif(u){
+  const per=((u&&u.nutrition)||{}).perso||{};
+  if(Number(per.objectifLe)>0) return Number(per.objectifLe);
+  let t=Infinity;
+  for(const e of ((u&&u.weightLog)||[])){ const x=e&&(typeof e.date==='number'?e.date:Date.parse(e.date)); if(x>0&&x<t) t=x; }
+  for(const b of ((u&&u.bilans)||[])){ const x=b&&(typeof b.date==='number'?b.date:Date.parse(b.date)); if(x>0&&x<t) t=x; }
+  return isFinite(t)?t:Date.now();
+}
+// Les gardes d'une sèche, SANS toast (la migration est silencieuse).
+function _secheRefusee(u){
+  try{ if(grossesseSuspend(u)) return true; }catch(e){}
+  try{ if(aTCA(u)) return true; }catch(e){}
+  try{ if(redsSuspend(u)) return true; }catch(e){}
+  return false;
+}
+// ÉCRIT. Recopie l'objectif dans la phase ou l'inverse quand ils divergent,
+// chez l'athlète sans coach : le plus récent gagne (phase.debut contre
+// perso.objectifLe ; un objectif sans date perd). Rend true si le dossier a
+// changé. Sans toast : l'appelant enregistre.
+function syncPhaseObjectif(u){
+  if(!sansCoach(u)) return false;
+  const p=u.phase;
+  const ph=(p&&p.type&&PHASES[p.type]&&p.debut)?p:null;
+  const n=u.nutrition||{};
+  const per=n.perso||{};
+  const obj=(typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(o=>o.k===per.objectif))?per.objectif:null;
+  if(!ph&&!obj) return false;
+  if(ph&&obj===objectifDePhase(ph.type)) return false;
+  const objLe=Number(per.objectifLe)||0;
+  if(obj&&(!ph||objLe>Number(ph.debut))){
+    // L'objectif gagne : il devient la phase (sauf une sèche refusée).
+    if(obj==='seche'&&_secheRefusee(u)) return false;
+    const hist=((p&&p.historique)||[]).slice();
+    if(ph) hist.push({type:ph.type,debut:ph.debut,fin:Date.now()});
+    u.phase={type:obj,debut:_debutObjectif(u),finPrevue:null,definiPar:'athlete',
+      historique:hist.slice(-PHASE_HIST_MAX)};
+    return true;
+  }
+  // La phase gagne : elle devient l'objectif.
+  const k=objectifDePhase(ph.type);
+  if(!u.nutrition) u.nutrition={};
+  u.nutrition.perso=Object.assign({},per,{objectif:k,objectifLe:Number(ph.debut)||Date.now()});
+  try{ u.nutrition.tableur=Object.assign({},u.nutrition.tableur||{},{coef:objCoefDefaut(k)}); }catch(e){}
+  return true;
 }
 function typePhase(user){ const p=phaseCourante(user); return p?p.type:null; }
 function libPhase(user){ const p=phaseCourante(user); return p?PHASES[p.type].lib:null; }
@@ -123426,6 +123564,16 @@ function appliquerAjustement(retour){
   n.macros[a.jour]=Object.assign({},cible,{
     kcal:a.apres.kcal,g:a.apres.g,p:cible.p,l:cible.l,
     f:Math.round(FIBRES_PAR_1000*a.apres.kcal/1000)});
+  // SANS COACH (build 1833), l'ajustement est aussi gardé DANS le calcul de
+  // la carte : il s'ajoute à la part athlète du ±20 partagé (ajustKcal), pour
+  // qu'un prochain recalcul (objectif, g/kg, ±20) ne l'efface pas. Les
+  // journées, elles, restent celles qu'il vient d'écrire (jour visé seulement) :
+  // la carte les lit telles quelles tant que l'origine est 'ajustement'.
+  if(sansCoach(currentUser)){
+    const tb=n.tableur=Object.assign({},n.tableur||{});
+    const aj=tb.ajust=Object.assign({},tb.ajust||{});
+    aj.athlete=(Math.round(Number(aj.athlete))||0)+(Number(a.kcalDelta)||0);
+  }
   n.macros.origine='ajustement';
   n.macros.origineDate=Date.now();
   _ajustJournaliser(a,'applique');
@@ -126925,8 +127073,9 @@ function _htmlChoixPhase(){
   return `<div id="ph-choix-zone">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta phase</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
-      Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros :
-      ça change la façon dont l'app lit tes chiffres.
+      ${sansCoach(currentUser)
+        ?'Ce que tu cherches en ce moment. Ça change ta cible calorique et tes protéines.'
+        :'Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros : ça change la façon dont l’app lit tes chiffres.'}
       ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué : à toi de confirmer.':''}
     </div>
     ${opts}
@@ -126948,6 +127097,15 @@ function confirmerPhase(){
   const t=_phChoix;
   if(!changerPhase(currentUser,t,null,'athlete')) return;
   currentUser.phaseRefusee=null;
+  // SANS COACH, LA PHASE EST AUSSI L'OBJECTIF NUTRITION (build 1833) : recomp
+  // et peak, sans bouton, se lisent « maintien ».
+  if(sansCoach(currentUser)){
+    const k=objectifDePhase(t);
+    if(!currentUser.nutrition) currentUser.nutrition={};
+    currentUser.nutrition.perso=Object.assign({},currentUser.nutrition.perso||{},{objectif:k,objectifLe:Number(currentUser.phase&&currentUser.phase.debut)||Date.now()});
+    currentUser.nutrition.tableur=Object.assign({},currentUser.nutrition.tableur||{},{coef:objCoefDefaut(k)});
+    try{ _athEcrireCiblesLocal(); }catch(e){}
+  }
   _phChoix=null;
   const ok=saveUser();
   closeModal();
