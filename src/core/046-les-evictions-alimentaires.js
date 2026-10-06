@@ -1510,6 +1510,10 @@ const SUPP_ICO_REGLES=Object.freeze([
   [/\balpha ?gpc\b|\bcholine\b/,'alpha-gpc',null],
   [/\bhmb\b/,'hmb',null],
   [/\bspirulin|\bchlorella\b/,'spiruline','algue'],
+  // Build 1847 : les nitrates (jus de betterave) prennent la case générique
+  // des plantes ; le bicarbonate passe par « sodium » (potassium, minéral).
+  [/\bnitrate|\bbetterave\b/,'adaptogenes','plante'],
+  [/\bbicarbonate\b/,'potassium','mineral'],
   [/\badaptogene|\bmaca\b|\bginseng\b/,'adaptogenes','plante']
 ]);
 // PURE. Le nom reduit a ce qui se compare.
@@ -1828,7 +1832,7 @@ function _renderSuppTable(list, isCoach, editFn){
     else der.items.push(e);
   });
 
-  return _htmlSuppInteractions(list)
+  return _htmlSuppInteractions(list,(function(){ try{ return isCoach?getOwnedClient(currentClientId):currentUser; }catch(e){ return null; } })())
     +sections.map(panneau).join('')
     +_htmlSuppLegende(isCoach);
 }

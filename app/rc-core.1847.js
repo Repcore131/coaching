@@ -114366,6 +114366,39 @@ const SUPPLEMENTS_LIST=Object.freeze([
   {nom:'Probiotiques',dose:'1',unite:'gélule(s)',momentsRecommandes:['jeun','matin'],preuve:'C',
    note:"Les souches et les quantités changent énormément d'un produit à l'autre : rien de général à en dire.",
    interactions:[]},
+  // ── BUILD 1847 : huit fiches de plus, dans le même registre prudent ──────
+  // Jamais « carence », jamais de dose hors fourchette usuelle, et « à voir
+  // avec un professionnel de santé » dès que c'est médical.
+  {nom:'Vitamine B12',dose:'25 à 250',unite:'µg',momentsRecommandes:['matin'],preuve:'A',
+   note:"Indispensable en alimentation végétalienne, à voir avec un professionnel de santé pour la forme et la dose.",
+   interactions:[]},
+  {nom:'Fer',dose:'14 à 28',unite:'mg',momentsRecommandes:['jeun','matin'],preuve:'B',
+   note:"Uniquement après un bilan sanguin (ferritine). Avec de la vitamine C, loin du café, du thé et du calcium.",
+   interactions:[
+     {avec:'Calcium',message:"Fer et calcium au même moment : le calcium gêne l'absorption du fer. Espace-les de deux heures."},
+     {avec:'Magnésium',message:"Fer et magnésium au même moment : ils se gênent à l'absorption. Espace-les de deux heures."},
+     {avec:'ZMA',message:"Fer et ZMA au même moment : le zinc et le magnésium gênent l'absorption du fer. Espace-les de deux heures."},
+     {avec:'Multivitamines',message:"Fer et multivitamines au même moment : le calcium et le zinc qu'elles contiennent gênent le fer. Espace-les de deux heures."},
+     {avec:'Vitamine C',positif:true,message:"Fer et vitamine C au même moment : bonne association, la vitamine C aide à absorber le fer."}]},
+  {nom:'Électrolytes / Boisson d\'effort',dose:'1',unite:'dose(s)',momentsRecommandes:['intra'],preuve:'B',
+   note:"Utile sur les séances longues ou par forte chaleur, quand on transpire beaucoup.",
+   interactions:[]},
+  {nom:'Nitrates (jus de betterave)',dose:'6 à 8',unite:'mmol',momentsRecommandes:['avant-entrainement'],preuve:'A',
+   note:"Deux à trois heures avant l'effort. L'effet est plus net en endurance qu'en musculation.",
+   interactions:[]},
+  {nom:'Bicarbonate de sodium',dose:'0,2 à 0,3',unite:'g/kg',momentsRecommandes:['avant-entrainement'],preuve:'A',
+   note:"Les troubles digestifs sont fréquents : fractionner les prises et l'essayer hors compétition d'abord.",
+   interactions:[]},
+  {nom:'Caséine',dose:'30 à 40',unite:'g',momentsRecommandes:['coucher'],preuve:'B',
+   note:"Une protéine qui se digère lentement : pratique le soir quand le total de la journée n'est pas atteint.",
+   interactions:[]},
+  {nom:'Vitamine C',dose:'200 à 500',unite:'mg',momentsRecommandes:['matin','midi'],preuve:'C',
+   note:"Une alimentation qui contient des fruits et des légumes en apporte déjà assez dans la plupart des cas.",
+   interactions:[]},
+  {nom:'Calcium',dose:'500',unite:'mg',momentsRecommandes:['soir'],preuve:'C',
+   note:"Seulement si les produits laitiers ou les eaux riches en calcium manquent : à voir avec un professionnel de santé.",
+   interactions:[
+     {avec:'ZMA',message:"Calcium et ZMA au même moment : le calcium gêne l'absorption du zinc. Espace-les de deux heures."}]},
 ]);
 
 // Ce que valent A, B et C, en une phrase et sans jargon. Affiché en permanence
@@ -114421,7 +114454,8 @@ function _suppEcartMoment(s){
 
 // Deux produits en interaction connue QUI PARTAGENT un moment. Sur des moments
 // différents, rien : c'est justement la solution qu'on suggère.
-function _suppInteractions(list){
+// Les paires qui partagent un moment, avec le message de l'un ou l'autre côté.
+function _suppPaires(list,positif){
   const out=[];
   const actifs=(list||[]).filter(s=>s&&s.active!==false);
   for(let i=0;i<actifs.length;i++){
@@ -114432,20 +114466,53 @@ function _suppInteractions(list){
       const fa=_suppFiche(a.name),fb=_suppFiche(b.name);
       if(!fa||!fb||fa===fb) continue;
       // Le message est déclaré d'UN seul côté de la paire : on regarde les deux.
-      const m=(fa.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fb.nom))
-            ||fb.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fa.nom))||{}).message;
+      const x=(fa.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fb.nom))
+            ||fb.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fa.nom))||{});
+      if(!!x.positif!==!!positif) continue;
+      const m=x.message;
       if(m&&out.indexOf(m)<0) out.push(m);
     }
   }
   return out;
 }
-function _htmlSuppInteractions(list){
-  const l=_suppInteractions(list);
-  if(!l.length) return '';
-  return `<div style="background:color-mix(in srgb,var(--amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
+// LE FER ET LE CAFÉ (build 1847) : un complément « Fer » actif dont un moment
+// coïncide avec une prise de caféine notée le jour même (caffeine.days, heure).
+const SUPP_FER_CAFE="Fer et café au même moment : le café réduit l'absorption du fer.";
+function _suppMomentsDeHeure(hhmm){
+  const h=parseInt(String(hhmm||'').split(':')[0],10);
+  if(!isFinite(h)) return [];
+  if(h>=5&&h<11) return ['matin','jeun'];
+  if(h>=11&&h<14) return ['midi'];
+  if(h>=14&&h<18) return ['apres-midi'];
+  if(h>=18&&h<22) return ['soir'];
+  return ['coucher'];
+}
+function _suppFerCafe(list,user,dateISO){
+  const fer=(list||[]).filter(s=>s&&s.active!==false&&_suppFiche(s.name)&&_suppFiche(s.name).nom==='Fer');
+  if(!fer.length||!user) return false;
+  const d=dateISO||localISODate(new Date());
+  const j=((((user.nutrition)||{}).caffeine||{}).days||{})[d];
+  if(!Array.isArray(j)||!j.length) return false;
+  const moments={}; for(const e of j) for(const m of _suppMomentsDeHeure(e&&e.time)) moments[m]=true;
+  return fer.some(s=>(s.timings||[]).some(t=>moments[t]));
+}
+function _suppInteractions(list,user,dateISO){
+  const out=_suppPaires(list,false);
+  try{ if(_suppFerCafe(list,user,dateISO)) out.push(SUPP_FER_CAFE); }catch(e){}
+  return out;
+}
+// Les BONNES associations (fer + vitamine C) : dites, sur un fond neutre.
+function _suppAssociations(list){ return _suppPaires(list,true); }
+function _htmlSuppInteractions(list,user){
+  const l=_suppInteractions(list,user), p=_suppAssociations(list);
+  if(!l.length&&!p.length) return '';
+  return (l.length?`<div style="background:color-mix(in srgb,var(--amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:6px">Au même moment</div>
     ${l.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
-  </div>`;
+  </div>`:'')
+    +(p.length?`<div class="supp-assoc" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
+    ${p.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(m)}</div>`).join('')}
+  </div>`:'');
 }
 function _htmlSuppLegende(isCoach){
   // EMPILÉE, UNE LIGNE PAR NIVEAU. Demande de Kevin le 21/08/2026.
@@ -116041,6 +116108,10 @@ const SUPP_ICO_REGLES=Object.freeze([
   [/\balpha ?gpc\b|\bcholine\b/,'alpha-gpc',null],
   [/\bhmb\b/,'hmb',null],
   [/\bspirulin|\bchlorella\b/,'spiruline','algue'],
+  // Build 1847 : les nitrates (jus de betterave) prennent la case générique
+  // des plantes ; le bicarbonate passe par « sodium » (potassium, minéral).
+  [/\bnitrate|\bbetterave\b/,'adaptogenes','plante'],
+  [/\bbicarbonate\b/,'potassium','mineral'],
   [/\badaptogene|\bmaca\b|\bginseng\b/,'adaptogenes','plante']
 ]);
 // PURE. Le nom reduit a ce qui se compare.
@@ -116359,7 +116430,7 @@ function _renderSuppTable(list, isCoach, editFn){
     else der.items.push(e);
   });
 
-  return _htmlSuppInteractions(list)
+  return _htmlSuppInteractions(list,(function(){ try{ return isCoach?getOwnedClient(currentClientId):currentUser; }catch(e){ return null; } })())
     +sections.map(panneau).join('')
     +_htmlSuppLegende(isCoach);
 }

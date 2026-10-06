@@ -74727,9 +74727,10 @@ async function testExercices(){
         'Oméga-3','Vitamine D3','Magnésium','ZMA','Multivitamines',
         'Glutamine','Bêta-alanine','Citrulline malate','Ashwagandha',
         'Collagène','Probiotiques'];
-      ok('Critère : les 15 noms sont identiques au caractère près',()=>{
+      // Build 1847 : huit fiches de plus, APRÈS les quinze historiques (23).
+      ok('Critère : les 15 noms historiques sont identiques au caractère près, en tête',()=>{
         const a=SUPPLEMENTS_LIST.map(f=>f.nom);
-        if(a.length!==15) return _echec(a.length+' entrées au lieu de 15');
+        if(a.length!==23) return _echec(a.length+' entrées au lieu de 23');
         for(let i=0;i<15;i++)
           if(a[i]!==NOMS_HISTORIQUES[i])
             return _echec('rang '+i+' : «'+a[i]+'» au lieu de «'+NOMS_HISTORIQUES[i]+'»');
@@ -74737,7 +74738,7 @@ async function testExercices(){
       ok('La liste est bien figée',()=>{
         if(!Object.isFrozen(SUPPLEMENTS_LIST)) return _echec('tableau non figé');
         try{ SUPPLEMENTS_LIST.push({nom:'X'}); }catch(e){}
-        return SUPPLEMENTS_LIST.length===15;});
+        return SUPPLEMENTS_LIST.length===23;});
       ok('Critère : chaque entrée porte un niveau de preuve A, B ou C',()=>{
         const faux=SUPPLEMENTS_LIST.filter(f=>['A','B','C'].indexOf(f.preuve)<0);
         return faux.length?_echec(faux.map(f=>f.nom+':'+f.preuve).join(', ')):true;});
@@ -74745,9 +74746,9 @@ async function testExercices(){
         const faux=SUPPLEMENTS_LIST.filter(f=>!f.dose||!f.unite||!f.note
           ||!Array.isArray(f.momentsRecommandes)||!Array.isArray(f.interactions));
         return faux.length?_echec(faux.map(f=>f.nom).join(', ')):true;});
-      ok('Seule la créatine est classée A',()=>{
+      ok('Classées A : la créatine, la B12 (végétalien), les nitrates et le bicarbonate — et elles seules',()=>{
         const a=SUPPLEMENTS_LIST.filter(f=>f.preuve==='A').map(f=>f.nom);
-        return a.length===1&&a[0]==='Créatine monohydrate'?true:_echec(a.join(', '));});
+        return a.join('|')==='Créatine monohydrate|Vitamine B12|Nitrates (jus de betterave)|Bicarbonate de sodium'?true:_echec(a.join(', '));});
       ok('La caféine n\'est pas dupliquée ici : elle a son écran',
         !SUPPLEMENTS_LIST.some(f=>/caf[eé]/i.test(f.nom)));
       ok('Tous les moments recommandés existent dans TIMINGS_LIST',()=>{
@@ -74773,7 +74774,31 @@ async function testExercices(){
         // Sans quoi deux fiches se répondraient pour un même nom saisi.
         const v=SUPPLEMENTS_LIST.map(f=>_suppNorm(f.nom));
         const dbl=v.filter((x,i)=>v.indexOf(x)!==i);
-        return dbl.length?_echec('doublons : '+dbl.join(', ')):v.length===15;});
+        return dbl.length?_echec('doublons : '+dbl.join(', ')):(v.length===23||_echec(v.length+' formes'));});
+      ok('Compléments 1847 : B12, Fer, Nitrates trouvés ; Fer + Calcium au même moment → message, à des moments différents → rien',()=>{
+        if(!_suppFiche('Vitamine B12')||_suppFiche('Vitamine B12').nom!=='Vitamine B12') return _echec('B12');
+        if(!_suppFiche('Nitrates')||!_suppFiche('Électrolytes')) return _echec('nitrates / électrolytes');
+        const S=(n,t)=>({name:n,dosage_quantity:1,dosage_unit:'mg',timings:t,active:true});
+        const a=_suppInteractions([S('Fer',['matin']),S('Calcium',['matin'])]);
+        if(a.length!==1||!/Espace-les de deux heures/.test(a[0])) return _echec('même moment : '+JSON.stringify(a));
+        if(_suppInteractions([S('Fer',['matin']),S('Calcium',['soir'])]).length) return _echec('moments différents');
+        if(!_suppInteractions([S('Fer',['coucher']),S('Magnésium',['coucher'])]).length) return _echec('fer + magnésium au coucher');
+        return _suppInteractions([S('Calcium',['soir']),S('ZMA',['soir'])]).length===1?true:_echec('calcium + ZMA');});
+      ok('Compléments 1847 : Fer + Vitamine C → bonne association, sur un fond neutre (pas ambre)',()=>{
+        const S=(n,t)=>({name:n,dosage_quantity:1,dosage_unit:'mg',timings:t,active:true});
+        const l=[S('Fer',['matin']),S('Vitamine C',['matin'])];
+        if(_suppInteractions(l).length) return _echec('rangé en avertissement');
+        const p=_suppAssociations(l);
+        if(p.length!==1||!/bonne association/.test(p[0])) return _echec(JSON.stringify(p));
+        const h=_htmlSuppInteractions(l);
+        return /supp-assoc/.test(h)&&!/--amber/.test(h)?true:_echec('style');});
+      ok('Compléments 1847 : fer et café le même matin → une ligne « Au même moment »',()=>{
+        const S=(n,t)=>({name:n,dosage_quantity:1,dosage_unit:'mg',timings:t,active:true});
+        const d=localISODate(new Date());
+        const u={nutrition:{caffeine:{days:{[d]:[{name:'Café',mg:80,time:'08:15'}]}}}};
+        const l=_suppInteractions([S('Fer',['jeun'])],u);
+        if(l.indexOf(SUPP_FER_CAFE)<0) return _echec(JSON.stringify(l));
+        return _suppInteractions([S('Fer',['soir'])],u).indexOf(SUPP_FER_CAFE)<0?true:_echec('à un autre moment');});
       ok('« Whey » seul retrouve la fiche de la whey',()=>{
         const f=_suppFiche('Whey');
         return f&&f.nom==='Whey / Protéine en poudre'?true:_echec(f?f.nom:'introuvable');});
@@ -75086,7 +75111,9 @@ async function testExercices(){
         // La spécification interdit de toucher à un niveau de preuve sans
         // justification écrite. Les quinze valeurs sont recopiées ici : la
         // prochaine main qui en change une devra passer par ce test.
-        const att='A,B,C,C,B,B,B,C,C,C,B,B,C,C,C';
+        // Build 1847 : les huit fiches ajoutées à la suite (B12 A, Fer B,
+        // Électrolytes B, Nitrates A, Bicarbonate A, Caséine B, Vit. C C, Calcium C).
+        const att='A,B,C,C,B,B,B,C,C,C,B,B,C,C,C,A,B,B,A,A,B,C,C';
         const a=SUPPLEMENTS_LIST.map(f=>f.preuve).join(',');
         return a===att?true:_echec(a);});
       ok('Les six messages d\'interaction sont inchangés, au caractère près',()=>{
@@ -75097,9 +75124,11 @@ async function testExercices(){
           "Vitamine D3 et multivitamines au même moment : la plupart des multivitamines en contiennent déjà. Regarde l'étiquette avant de cumuler.",
           "Magnésium et ZMA au même moment : le ZMA contient déjà du magnésium, les doses s'additionnent. Espace-les de deux heures, ou n'en garde qu'un.",
           "ZMA et multivitamines au même moment : le zinc s'additionne. Espace-les de deux heures."];
+        // Build 1847 : les six d'origine restent EN TÊTE, au caractère près ;
+        // celles du fer et du calcium viennent après.
         const a=[];
         SUPPLEMENTS_LIST.forEach(f=>f.interactions.forEach(x=>a.push(x.message)));
-        if(a.length!==6) return _echec(a.length+' interactions au lieu de 6');
+        if(a.length!==12) return _echec(a.length+' interactions au lieu de 12');
         for(let i=0;i<6;i++) if(a[i]!==att[i]) return _echec('rang '+i+' : '+a[i]);
         return true;});
 
@@ -75221,7 +75250,9 @@ async function testExercices(){
           window.saveUser=()=>true;
           const S=(id,n,q,u,tm,x)=>Object.assign({id:id,name:n,dosage_quantity:q,dosage_unit:u,timings:tm,active:true},x||{});
           currentUser={email:'t1380@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},
-            nutrition:{supplements:[S(1,'Vitamine C',1,'comprimé(s)',['matin']),S(2,'Whey / Protéine en poudre',2,'scoop(s)',['matin','coucher']),
+            // « Vitamine K2 » et non plus « Vitamine C » : depuis le build 1847 la
+            // vitamine C a sa fiche, et sa référence s'écrit sous la dose.
+            nutrition:{supplements:[S(1,'Vitamine K2',1,'comprimé(s)',['matin']),S(2,'Whey / Protéine en poudre',2,'scoop(s)',['matin','coucher']),
               S(3,'ZMA',2,'gélule(s)',['coucher'],{active:false}),S(4,'Truc maison',3,'g',[])]}};
           const l=currentUser.nutrition.supplements;
           const d=document.createElement('div');
@@ -75718,8 +75749,8 @@ async function testExercices(){
           const dc=document.getElementById('ccd-supp-name-list');
           if(!dc) return _echec('datalist coach absente du DOM');
           const vc=Array.from(dc.querySelectorAll('option')).map(o=>o.value);
-          if(va.length!==15) return _echec('athlète : '+va.length+' options');
-          if(vc.length!==15) return _echec('coach : '+vc.length+' options');
+          if(va.length!==23) return _echec('athlète : '+va.length+' options');
+          if(vc.length!==23) return _echec('coach : '+vc.length+' options');
           // [object Object] : exactement ce que produirait un .map(n=>…) laissé
           // en place après le passage aux objets.
           const sale=va.concat(vc).filter(x=>/object/i.test(x));
