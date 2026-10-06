@@ -1636,7 +1636,7 @@ function _mlTempoPrescrit(){
   try{
     if(!_ml) return '';
     const users=DB.get('users')||{}, c=users[_ml.email];
-    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===_ml.videoId);
+    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===/** @type {EtatMl} */(_ml).videoId);
     const lien=v&&v.lien;
     if(!lien||!lien.exerciceCle) return '';
     if(lien.tempo) return String(lien.tempo);
@@ -12820,7 +12820,7 @@ function _mlAnatMasque(m,w,h,z){
 
 const MLC_HP_MAX=15;
 const MLC_TOL_AMPL_M=0.015, MLC_TOL_AMPL_PART=0.03, MLC_TOL_V=0.05, MLC_TOL_PD=3;
-const _mlcMed=(l)=>{ const v=l.filter((x)=>isFinite(x)).slice().sort((a,b)=>a-b); if(!v.length) return null; const k=Math.floor(v.length/2); return v.length%2?v[k]:(v[k-1]+v[k])/2; };
+const _mlcMed=(/** @type {any[]} */ l)=>{ const v=l.filter((/** @type {any} */ x)=>isFinite(x)).slice().sort((/** @type {any} */ a,/** @type {any} */ b)=>a-b); if(!v.length) return null; const k=Math.floor(v.length/2); return v.length%2?v[k]:(v[k-1]+v[k])/2; };
 
 /**
  * PURE. Une trajectoire ramenée à la même échelle : origine au point le plus
@@ -12858,7 +12858,7 @@ function mlcPointDurPct(Y,i){
 function mlcResume(v){
   const segs=(typeof segmentsVideo==='function')?segmentsVideo(v):[];
   const lignes=mlTableauSerie(segs);
-  const exc=[], con=[], pau=[], pd=[], amp=[], hp=[], fps=[], trace=[];
+  const /** @type {any[]} */ exc=[], /** @type {any[]} */ con=[], /** @type {any[]} */ pau=[], /** @type {any[]} */ pd=[], /** @type {any[]} */ amp=[], /** @type {any[]} */ hp=[], /** @type {any[]} */ fps=[], /** @type {any[]} */ trace=[];
   let echelleOk=true, aplombOk=true, sens='', mode='vertical', n=0;
   segs.forEach((s,k)=>{
     const l=lignes[k], b=s.barre;
@@ -12900,7 +12900,7 @@ function mlcResume(v){
  */
 function mlcComparabilite(a,b){
   const r=[];
-  const jour=(x)=>{ try{ return new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
+  const jour=(/** @type {any} */ x)=>{ try{ return new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
   for(const x of [a,b]){
     if(x.horsPlan==null) r.push('le hors-plan de la vidéo du '+jour(x)+' n’est pas connu (articulations non analysées)');
     else if(x.horsPlan>MLC_HP_MAX) r.push('hors-plan de '+Math.round(x.horsPlan)+'° sur la vidéo du '+jour(x)+' (15° au plus)');
@@ -12910,7 +12910,7 @@ function mlcComparabilite(a,b){
   const cotes=a.sens&&b.sens&&a.sens!==b.sens&&a.sens!=='mixte'&&b.sens!=='mixte';
   return {cm:r.length===0,raisons:r,memeCote:!cotes};
 }
-function _mlcEcart(avant,apres,tol,fmt,unite){
+function _mlcEcart(/** @type {number|null} */ avant,/** @type {number|null} */ apres,/** @type {number} */ tol,/** @type {(x:number)=>string} */ fmt,/** @type {string} */ unite){
   if(avant==null||apres==null) return {avant,apres,ecart:null,tol,etat:'absent',texte:'mesure absente sur l’une des deux'};
   const d=apres-avant;
   const stable=Math.abs(d)<=tol;
@@ -12921,27 +12921,27 @@ function _mlcEcart(avant,apres,tol,fmt,unite){
  * PURE. Le tableau : trois à cinq lignes, chacune avec son écart et sa
  * tolérance, ou le refus motivé. a = la plus ancienne, b = la plus récente.
  */
-function mlcComparer(a,b){
+function mlcComparer(/** @type {any} */ a,/** @type {any} */ b){
   const cmp=mlcComparabilite(a,b);
   const fps=Math.min(a.fpsMin||30,b.fpsMin||30)||30;
   const tolMs=Math.round(2*1000/fps);
-  const s=(x)=>(Math.round(x/100)/10).toLocaleString('fr-FR')+' s';
-  const f1=(x)=>(Math.round(x*10)/10).toLocaleString('fr-FR');
+  const s=(/** @type {number} */ x)=>(Math.round(x/100)/10).toLocaleString('fr-FR')+' s';
+  const f1=(/** @type {number} */ x)=>(Math.round(x*10)/10).toLocaleString('fr-FR');
   const lignes=[];
   lignes.push(Object.assign({cle:'tempo',lib:'Tempo : descente, remontée',
     valeurs:[a,b].map((x)=>(x.excMs!=null&&x.conMs!=null)?s(x.excMs)+' puis '+s(x.conMs):'non mesuré')},
-    _mlcEcart(a.excMs!=null&&a.conMs!=null?a.excMs+a.conMs:null,b.excMs!=null&&b.conMs!=null?b.excMs+b.conMs:null,tolMs,(x)=>f1(x/1000),' s')));
+    _mlcEcart(a.excMs!=null&&a.conMs!=null?a.excMs+a.conMs:null,b.excMs!=null&&b.conMs!=null?b.excMs+b.conMs:null,tolMs,(/** @type {number} */ x)=>f1(x/1000),' s')));
   const tut=Math.max(1,((a.excMs||0)+(a.conMs||0)+(b.excMs||0)+(b.conMs||0))/2);
   lignes.push(Object.assign({cle:'lente',lib:'Part de la phase lente',valeurs:[a,b].map((x)=>x.partLente!=null?f1(x.partLente)+' %':'non mesurée')},
     _mlcEcart(a.partLente,b.partLente,Math.max(1,Math.round(tolMs/tut*1000)/10),f1,' %')));
   lignes.push(Object.assign({cle:'pointdur',lib:'Point dur, en % de la course',valeurs:[a,b].map((x)=>x.pointDurPct!=null?x.pointDurPct+' %':'aucun')},
-    _mlcEcart(a.pointDurPct,b.pointDurPct,MLC_TOL_PD,(x)=>String(Math.round(x)),' %')));
+    _mlcEcart(a.pointDurPct,b.pointDurPct,MLC_TOL_PD,(/** @type {number} */ x)=>String(Math.round(x)),' %')));
   if(cmp.cm){
     const tA=Math.max(MLC_TOL_AMPL_M,MLC_TOL_AMPL_PART*Math.max(a.amplitudeM||0,b.amplitudeM||0));
     lignes.push(Object.assign({cle:'amplitude',lib:'Amplitude',valeurs:[a,b].map((x)=>x.amplitudeM!=null?f1(x.amplitudeM*100)+' cm':'non mesurée')},
       _mlcEcart(a.amplitudeM!=null?a.amplitudeM*100:null,b.amplitudeM!=null?b.amplitudeM*100:null,tA*100,f1,' cm')));
     lignes.push(Object.assign({cle:'vitesse',lib:'Vitesse moyenne de la remontée',valeurs:[a,b].map((x)=>x.vConMoy!=null?(Math.round(x.vConMoy*100)/100).toLocaleString('fr-FR')+' m/s':'non mesurée')},
-      _mlcEcart(a.vConMoy,b.vConMoy,MLC_TOL_V,(x)=>(Math.round(x*100)/100).toLocaleString('fr-FR'),' m/s')));
+      _mlcEcart(a.vConMoy,b.vConMoy,MLC_TOL_V,(/** @type {number} */ x)=>(Math.round(x*100)/100).toLocaleString('fr-FR'),' m/s')));
   } else {
     lignes.push({cle:'centimetres',lib:'Amplitude et vitesse',valeurs:['non comparées','non comparées'],avant:null,apres:null,ecart:null,tol:null,
       etat:'refuse',texte:'Pas comparées en centimètres : '+cmp.raisons.join(' ; ')+'.'});
@@ -12950,16 +12950,16 @@ function mlcComparer(a,b){
 }
 
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
-let _mlcEtat=null;
-function _mlcAnalysesDe(c,cle){
-  return ((c&&c.videos)||[]).filter((v)=>v&&v.lien&&v.lien.exerciceCle===cle
-    &&segmentsVideo(v).some((s)=>s.barre)).sort((a,b)=>Number(a.date)-Number(b.date));
+/** @type {any} */ let _mlcEtat=null;
+function _mlcAnalysesDe(/** @type {any} */ c,/** @type {string} */ cle){
+  return ((c&&c.videos)||[]).filter((/** @type {any} */ v)=>v&&v.lien&&v.lien.exerciceCle===cle
+    &&segmentsVideo(v).some((s)=>s.barre)).sort((/** @type {any} */ a,/** @type {any} */ b)=>Number(a.date)-Number(b.date));
 }
-function _mlcSvg(a,b){
+function _mlcSvg(/** @type {any} */ a,/** @type {any} */ b){
   const W=320,H=220,M=14;
   // Centré dans le cadre : une trajectoire presque verticale ne colle pas au bord gauche.
   const mx=Math.max(0,...a.trace.x.filter(isFinite),...b.trace.x.filter(isFinite)), dx=(1-mx)/2*(H-2*M);
-  const pts=(t)=>t.x.map((x,i)=>(isFinite(x)&&isFinite(t.y[i]))?((W-(H-2*M))/2+dx+x*(H-2*M)).toFixed(1)+','+(H-M-t.y[i]*(H-2*M)).toFixed(1):null).filter(Boolean).join(' ');
+  const pts=(/** @type {any} */ t)=>t.x.map((/** @type {number} */ x,/** @type {number} */ i)=>(isFinite(x)&&isFinite(t.y[i]))?((W-(H-2*M))/2+dx+x*(H-2*M)).toFixed(1)+','+(H-M-t.y[i]*(H-2*M)).toFixed(1):null).filter(Boolean).join(' ');
   return '<svg class="mlc-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Les deux trajectoires, à la même échelle">'
     +'<rect x="0" y="0" width="'+W+'" height="'+H+'" rx="10" fill="#101012"/>'
     +'<polyline points="'+pts(a.trace)+'" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linejoin="round"/>'
@@ -12969,12 +12969,12 @@ function _mlcRendre(){
   const z=document.getElementById('mlc-corps');
   if(!z||!_mlcEtat) return;
   const E=escapeHtml;
-  const liste=_mlcEtat.liste, a=liste.find((v)=>v.id===_mlcEtat.autre), b=liste.find((v)=>v.id===_mlcEtat.id);
+  const liste=_mlcEtat.liste, a=liste.find((/** @type {any} */ v)=>v.id===_mlcEtat.autre), b=liste.find((/** @type {any} */ v)=>v.id===_mlcEtat.id);
   if(!a||!b){ z.innerHTML='<p class="mlc-p">Choisis une autre analyse de cet exercice.</p>'; return; }
   const [ancien,recent]=Number(a.date)<=Number(b.date)?[a,b]:[b,a];
   const ra=mlcResume(ancien), rb=mlcResume(recent), r=mlcComparer(ra,rb);
-  _mlcEtat.dernier={ra,rb,r};
-  const jour=(v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  _mlcEtat.dernier={ra,rb,r,ancien,recent,email:_mlcEtat.email};
+  const jour=(/** @type {any} */ v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
   z.innerHTML='<div class="mlc-leg"><span class="mlc-a">'+E(jour(ancien))+'</span><span class="mlc-b">'+E(jour(recent))+'</span></div>'
     +_mlcSvg(ra,rb)
     +'<table class="mlc-t"><tr><th></th><th>'+E(jour(ancien))+'</th><th>'+E(jour(recent))+'</th></tr>'
@@ -12982,13 +12982,13 @@ function _mlcRendre(){
       +'<tr class="mlc-e mlc-'+l.etat+'"><td colspan="3">'+E(l.texte)+'</td></tr>').join('')+'</table>'
     +'<p class="mlc-p">Deux mesures et leur écart, rien d’autre : ni note, ni verdict.'+(r.comparabilite.memeCote?'':' Les deux vidéos ne sont pas filmées du même côté.')+'</p>';
 }
-function mlOuvrirComparaison(email,videoId){
+function mlOuvrirComparaison(/** @type {string} */ email,/** @type {string} */ videoId){
   const users=(DB.get('users')||{});
   const c=users[email];
-  const v=c&&(c.videos||[]).find((x)=>x&&x.id===videoId);
+  const v=c&&(c.videos||[]).find((/** @type {any} */ x)=>x&&x.id===videoId);
   if(!v||!v.lien||!v.lien.exerciceCle){ toast('Cette vidéo n’est rattachée à aucun exercice.','var(--orange)'); return false; }
   const liste=_mlcAnalysesDe(c,v.lien.exerciceCle);
-  const autres=liste.filter((x)=>x.id!==videoId);
+  const autres=liste.filter((/** @type {any} */ x)=>x.id!==videoId);
   if(!autres.length){ toast('Aucune autre analyse de cet exercice à comparer.','var(--orange)'); return false; }
   _mlcEtat={email,id:videoId,autre:autres[0].id,liste};
   const E=escapeHtml;
@@ -12998,14 +12998,14 @@ function mlOuvrirComparaison(email,videoId){
     +'<h2 style="margin-bottom:4px">Comparer deux analyses</h2>'
     +'<p class="mlc-p">'+E(v.lien.exerciceNom||'')+' · la plus ancienne est proposée d’abord.</p>'
     +'<label class="mlc-l" for="mlc-choix">Comparer avec</label><select id="mlc-choix" onchange="mlChoisirComparaison(this.value)">'
-    +autres.map((x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
+    +autres.map((/** @type {any} */ x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
     +'<div id="mlc-corps"></div>'
     +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlFermerComparaison()">Fermer</button>'
     +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlExporterComparaison()">Exporter l’image</button></div></div></div>');
   _mlcRendre();
   return true;
 }
-function mlChoisirComparaison(id){ if(_mlcEtat){ _mlcEtat.autre=id; _mlcRendre(); } }
+function mlChoisirComparaison(/** @type {string} */ id){ if(_mlcEtat){ _mlcEtat.autre=id; _mlcRendre(); } }
 function mlFermerComparaison(){ document.getElementById('modal-overlay')?.remove(); _mlcEtat=null; }
 // L'IMAGE : les deux tracés et le tableau, dessinés sur un canevas, à joindre à
 // la correction vidéo. Rien n'est envoyé : le fichier se télécharge.
@@ -13014,9 +13014,28 @@ function mlExporterComparaison(){
   const W=1080, H=1350, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d'); if(!g) return false;
   g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H);
-  g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,100);
-  const trace=(t,coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
-    t.x.forEach((x,i)=>{ if(!isFinite(x)||!isFinite(t.y[i])){ p=false; return; } const X=90+x*900, Y=720-t.y[i]*560; if(p) g.lineTo(X,Y); else { g.moveTo(X,Y); p=true; } }); g.stroke(); };
+  g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,88);
+  // LES DEUX DATES ET L'EXERCICE, que l'écran affichait et que l'image taisait
+  // (05/10/2026), chacune dans la couleur de son tracé.
+  try{
+    const jour=(/** @type {any} */ v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const exo=String(((d.recent||{}).lien||{}).exerciceNom||((d.ancien||{}).lien||{}).exerciceNom||'');
+    g.font='600 24px Montserrat,sans-serif';
+    let x=60;
+    if(d.ancien){ g.fillStyle='#8a8a8a'; const t=jour(d.ancien); g.fillText(t,x,122); x+=g.measureText(t).width+26; }
+    if(d.recent){ g.fillStyle='#E02020'; const t=jour(d.recent); g.fillText(t,x,122); x+=g.measureText(t).width+26; }
+    if(exo){ g.fillStyle='#a1a1aa'; g.fillText(exo.slice(0,40),x,122); }
+  }catch(e){}
+  // LA SIGNATURE, en pied : RepCore, le coach, l'athlète, la date. Ce document
+  // lui est destiné et ne se publie pas : son nom y a sa place.
+  try{
+    const dossier=((DB.get('users')||{})[d.email])||null;
+    const sig=(typeof signatureDocument==='function')?signatureDocument(dossier||currentUser):'RepCore';
+    g.fillStyle='#71717a'; g.font='600 22px Montserrat,sans-serif'; g.textAlign='center';
+    g.fillText(sig,W/2,H-36,W-120); g.textAlign='left';
+  }catch(e){}
+  const trace=(/** @type {any} */ t,/** @type {string} */ coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
+    t.x.forEach((/** @type {number} */ x,/** @type {number} */ i)=>{ if(!isFinite(x)||!isFinite(t.y[i])){ p=false; return; } const X=90+x*900, Y=720-t.y[i]*560; if(p) g.lineTo(X,Y); else { g.moveTo(X,Y); p=true; } }); g.stroke(); };
   g.fillStyle='#161618'; g.fillRect(60,130,960,620);
   trace(d.ra.trace,'#8a8a8a'); trace(d.rb.trace,'#E02020');
   let y=820; g.font='600 30px Montserrat,sans-serif';

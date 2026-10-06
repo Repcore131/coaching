@@ -10,6 +10,43 @@
 // tests.js n’est PAS dans ASSETS du service worker : l’y mettre reviendrait
 // à le télécharger quand même, ce que cette séparation évite.
 //
+// ── SUR LE MIROIR MINIFIÉ, LE TEXTE DU CODE EST CELUI D'ORIGINE (05/10/2026) ──
+//
+// Le fichier mis en ligne est minifié (scripts/minifier.mjs) : plus de
+// commentaires, des noms internes raccourcis. La suite est rejouée dessus
+// (scripts/miroir_minifie.mjs), et c'est bien le code minifié qui S'EXÉCUTE.
+// Mais des centaines d'assertions ne jugent pas un comportement : elles
+// relisent le TEXTE d'une fonction, ou du fichier. Ce texte-là, le miroir le
+// garde dans app/_origine/. Quand ce dossier existe :
+//   - String(fn) rend le texte d'origine de la fonction (retrouvée par
+//     IDENTITÉ, pas par nom : une fonction remplacée par un test garde son
+//     propre texte) ;
+//   - une lecture de rc-core.<build>.js ou de rc-style.<build>.css rend le
+//     fichier d'origine.
+// Dans le dépôt, _origine/ n'existe pas : la requête répond 404, rien n'est posé.
+(function(){
+  try{
+    const x=new XMLHttpRequest(); x.open('GET','./_origine/fonctions.json',false); x.send(null);
+    if(x.status!==200) return;
+    const T=JSON.parse(x.responseText), M=new Map();
+    for(const k in T){ try{ const f=(0,eval)(k); if(typeof f==='function'&&!M.has(f)) M.set(f,T[k]); }catch(e){} }
+    const natif=Function.prototype.toString;
+    Function.prototype.toString=function(){ const s=M.get(this); return s!=null?s:natif.call(this); };
+    const vers=u=>{ const s=String(u);
+      if(/rc-core\.\d+\.js/.test(s)) return './_origine/rc-core.js';
+      if(/rc-style\.\d+\.css/.test(s)) return './_origine/rc-style.css';
+      return u; };
+    const f0=window.fetch;
+    const f1=function(u,o){ return f0.call(this,(typeof u==='string')?vers(u):u,o); };
+    // Le produit pose des marques sur fetch (suivi des écritures) : on les garde.
+    try{ Object.assign(f1,f0); }catch(e){}
+    window.fetch=f1;
+    const o0=XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open=function(m,u){ arguments[1]=vers(u); return o0.apply(this,arguments); };
+    window.RC_SUITE_MINIFIEE=M.size;
+  }catch(e){}
+})();
+//
 // ── LA SOURCE DE PRODUCTION ─────────────────────────────────────────────
 //
 // Une trentaine d’assertions lisent le fichier pour vérifier ce qu’il
@@ -1292,7 +1329,11 @@ async function testExercices(){
       for(const v of Object.values(EX_GUIDE_BRUT||{}))
         String(v).split('~').forEach(x=>{x=x.trim(); if(x) noms.push(x);});
       if(noms.length<300) return _echec('catalogue illisible : '+noms.length+' noms');
-      const sans=noms.filter(n=>!_slugIllustre(exSlug(n)));
+      // Sauf ceux que le guide n'a jamais illustrés (EX_SANS_ILLUSTRATION,
+      // 05/10/2026) : la liste ne cache rien, chacun y est vraiment sans dessin.
+      const sans=noms.filter(n=>!_slugIllustre(exSlug(n))&&EX_SANS_ILLUSTRATION.indexOf(n)<0);
+      const faux=EX_SANS_ILLUSTRATION.filter(n=>_slugIllustre(exSlug(n)));
+      if(faux.length) return _echec('marqués sans dessin, mais illustrés : '+faux.join(' | '));
       return sans.length?_echec(sans.length+' sans image, dont '+sans.slice(0,4).join(' | ')):true;})());
     ok('La liste des mots d\'agres ne contient AUCUNE precision d\'execution',(()=>{
       // Y glisser « prise », « large » ou « incline » viderait la regle de
@@ -8247,7 +8288,11 @@ async function testExercices(){
           // Les <meta> vivent APRÈS un premier <script> dans le head :
           // découper à partir de <script> ne les excluait pas. On les retire
           // explicitement — c est le seul cas légitime d URL absolue.
-          const js=prod.replace(/<meta[^>]*>/gi,'');
+          // LE RENVOI DE L'ANCIENNE ADRESSE (05/10/2026) nomme l'ancien hote pour
+          // le RECONNAITRE et en partir : ce n'est pas un lien construit en dur.
+          // Ce bloc-la, et lui seul, est retire avant le controle.
+          const js=prod.replace(/<meta[^>]*>/gi,'')
+            .replace(/<script>\(function\(\)\{try\{if\(location\.hostname!=='repcore131\.github\.io'\)return;[^<]*<\/script>/,'');
           if(js.length<100000) return _echec('production trop courte');
           if(/repcore131\.github\.io/i.test(js))
             return _echec('URL de dépôt codée en dur dans le JS');
@@ -12274,7 +12319,9 @@ async function testExercices(){
           // Les aliments de l'ANSES seuls (id > 0) : les génériques RepCore (ids négatifs) n'en sont pas.
           const reel=(_ciqualDB||[]).filter(f=>f&&f.id>0).length;
           if(!reel) return _echec('base non chargée : appeler _loadCiqual() avant la suite');
-          return annonce===reel
+          // « Près de 3 500 » (05/10/2026) : un arrondi, plus un compte exact. Il
+          // doit rester honnête : à moins de cinquante aliments du fichier.
+          return Math.abs(annonce-reel)<=50
             ?true:_echec('annoncé '+annonce+', réel '+reel);})());
         ok('AUCUN argument ne vend une fonction éteinte',(()=>{
           // « Programme papier importé en une photo » est resté à l'écran
@@ -20471,7 +20518,9 @@ async function testExercices(){
                                      // depuis l'arrivee et depuis les ecrans
                                      // fermes (lots 2 et 4). RepCore n'y envoie
                                      // rien : la ligne de la politique le dit.
-            'w3.org','repcore131.github.io'];
+            // repcore-sync.web.app est l'adresse de l'app elle-meme : le renvoi
+            // depuis l'ancienne adresse y mene (05/10/2026), rien n'y est envoye.
+            'w3.org','repcore131.github.io','repcore-sync.web.app'];
           // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
           //
           // Il cherchait dans le source BRUT. Une adresse citée en commentaire —
@@ -21784,10 +21833,13 @@ async function testExercices(){
         currentUser=u;
         const h=_htmlDepartAthlete(u.nutrition);
         if(!h) return _echec('la carte ne se rend pas');
-        if(h.indexOf('Harris-Benedict')<0||/Mifflin/.test(h)) return _echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
+        // (05/10/2026) L'athlète lit le LIBELLÉ MAISON de la formule qui a calculé,
+        // jamais son nom réel ; les deux méthodes gardent deux libellés distincts.
+        if(/Harris|Mifflin|Katch/.test(h)) return _echec('le nom réel d’une formule est affiché à l’athlète');
+        if(h.indexOf(MB_NOMS_MAISON.harris)<0||h.indexOf(MB_NOMS_MAISON.mifflin)>=0) return _echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
         u.nutrition.tableur.formuleMB='mifflin';
         const h2=_htmlDepartAthlete(u.nutrition);
-        return (h2.indexOf('Mifflin-St Jeor')>=0&&!/Harris/.test(h2))?true:_echec('en Mifflin');
+        return (h2.indexOf(MB_NOMS_MAISON.mifflin)>=0&&h2.indexOf(MB_NOMS_MAISON.harris)<0&&!/Harris|Mifflin/.test(h2))?true:_echec('en Mifflin');
       } finally { currentUser=sv; }})());
     ok('Tableau du coach : le sélecteur « Formule du métabolisme » et l’écart entre les deux formules',(()=>{
       const c=_MBa(80,180,{nutrition:{cycle:false}});
@@ -21799,10 +21851,37 @@ async function testExercices(){
       // L'explication dit D'ABORD la formule réellement calculée (05/10/2026).
       const tk={poids:80,taille:180,age:30,sexe:'M',mbSource:'katch',mbBrut:1850};
       const ek=_htmlEcartFormules(tk), em=_htmlEcartFormules(Object.assign({},tk,{mbSource:'mifflin'})), eh=_htmlEcartFormules(Object.assign({},tk,{mbSource:'harris'}));
-      if(!/^Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée \(1.850 kcal\)/.test(ek)||!/ne servira que sans masse maigre/.test(ek)) return _echec('masse maigre : '+ek);
-      if(em.indexOf('Calcul actuel : Mifflin-St Jeor, ')!==0||!/Harris-Benedict donnerait/.test(em)||/masse maigre/.test(em)) return _echec('Mifflin : '+em);
-      if(eh.indexOf('Calcul actuel : Harris-Benedict, ')!==0||!/Mifflin-St Jeor donnerait/.test(eh)) return _echec('Harris : '+eh);
-      return /écart de \d+ kcal/.test(e)&&/Formule du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
+      if(!/^Calcul actuel : méthode RepCore, sur sa masse maigre mesurée \(1.850 kcal\)/.test(ek)||!/ne servira que sans masse maigre/.test(ek)) return _echec('masse maigre : '+ek);
+      if(em.indexOf('Calcul actuel : méthode prudente, ')!==0||!/La méthode standard donnerait/.test(em)||/masse maigre/.test(em)) return _echec('prudente : '+em);
+      if(eh.indexOf('Calcul actuel : méthode standard, ')!==0||!/La méthode prudente donnerait/.test(eh)) return _echec('standard : '+eh);
+      if(/Harris|Mifflin|Katch/.test(ek+em+eh+d.textContent)) return _echec('le nom réel d’une formule est affiché au coach');
+      if(d.querySelector('#tbk-noms-reels')) return _echec('le réglage des noms réels est montré à un autre que le créateur');
+      return /écart de \d+ kcal/.test(e)&&/Méthode de calcul du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
+    ok('NOMS RÉELS DES FORMULES : réservés au compte du créateur, et seulement quand il les demande ; les calculs ne bougent pas',(()=>{
+      if(typeof nomsReels!=='function'||typeof nr!=='function'||typeof mbNom!=='function') return _echec('nomsReels / nr / mbNom n’existent pas');
+      const sU=currentUser, sK=localStorage.getItem(NOMS_REELS_CLE);
+      const tk={poids:80,taille:180,age:30,sexe:'M',mbSource:'katch',mbBrut:1850};
+      try{
+        // Un compte quelconque, même avec la clé posée à la main : libellés maison.
+        currentUser={email:'quelquun@t.fr',role:'coach'};
+        localStorage.setItem(NOMS_REELS_CLE,'1');
+        if(nomsReels()||mbNom('harris')!==MB_NOMS_MAISON.harris||nr('a','b')!=='b') return _echec('un autre compte lit les noms réels');
+        if(basculerNomsReels(true)!==false) return _echec('un autre compte peut basculer le réglage');
+        // Le créateur, réglage éteint : libellés maison aussi.
+        currentUser={email:CREATOR_EMAIL,role:'coach'};
+        localStorage.removeItem(NOMS_REELS_CLE);
+        if(nomsReels()||/Katch/.test(_htmlEcartFormules(tk))) return _echec('noms réels sans les avoir demandés');
+        const avant=cibleTableur(_MBa(80,180,{nutrition:{cycle:false}}),{appliquerPlancher:false}).kcal;
+        // Réglage allumé : les noms réels reviennent, partout où ils étaient.
+        localStorage.setItem(NOMS_REELS_CLE,'1');
+        if(!nomsReels()||mbNom('katch')!=='Katch-McArdle'||mbNom('mifflin')!=='Mifflin-St Jeor') return _echec('le créateur ne retrouve pas les noms réels');
+        const ek=_htmlEcartFormules(tk);
+        if(!/^Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée/.test(ek)||!/Harris-Benedict 1.\d{3}/.test(ek)||!/Mifflin-St Jeor 1.\d{3}/.test(ek)) return _echec('explication du créateur : '+ek);
+        if(!/Mifflin-St Jeor donnerait/.test(_htmlEcartFormules(Object.assign({},tk,{mbSource:'harris'})))) return _echec('Harris, vu du créateur');
+        // ET PAS UN CHIFFRE NE BOUGE.
+        const apres=cibleTableur(_MBa(80,180,{nutrition:{cycle:false}}),{appliquerPlancher:false}).kcal;
+        return avant===apres&&avant>0?true:_echec('le réglage a changé un calcul : '+avant+' → '+apres);
+      } finally { currentUser=sU; if(sK===null) localStorage.removeItem(NOMS_REELS_CLE); else localStorage.setItem(NOMS_REELS_CLE,sK); }})());
     // ── L'OBJECTIF DE L'ATHLÈTE CHANGE VRAIMENT SES CIBLES ──
     const _OBJa=(obj,o)=>Object.assign({id:'objA',email:'obja@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:'180','init-age':30,sessions_config:[],
@@ -26030,9 +26109,18 @@ async function testExercices(){
         return h.filter(x=>/non reconnue/.test(x)).length===1
           ?true:_echec(JSON.stringify(h));})());
       ok('Le facteur s\'écrit à deux décimales',(()=>{
-        const h=besoinsProposes(_ath()).hypotheses.join(' | ');
-        if(/NEAT × 1,2\b/.test(h)) return _echec('facteur tronqué : '+h);
-        return /NEAT × 1,20/.test(h)?true:_echec(h);})());
+        // (05/10/2026) Le coefficient n'est plus montré : le mot NEAT reste, le
+        // chiffre ne revient que pour le créateur qui demande les noms réels.
+        const h0=besoinsProposes(_ath()).hypotheses.join(' | ');
+        if(/NEAT ×|× 1,2/.test(h0)) return _echec('le coefficient est affiché : '+h0);
+        if(!/NEAT/.test(h0)) return _echec('le NEAT n’est plus nommé : '+h0);
+        const sU=currentUser, sK=localStorage.getItem(NOMS_REELS_CLE);
+        try{
+          currentUser={email:CREATOR_EMAIL,role:'coach'}; localStorage.setItem(NOMS_REELS_CLE,'1');
+          const h=besoinsProposes(_ath()).hypotheses.join(' | ');
+          if(/NEAT × 1,2\b/.test(h)) return _echec('facteur tronqué : '+h);
+          return /NEAT × 1,20/.test(h)?true:_echec(h);
+        } finally { currentUser=sU; if(sK===null) localStorage.removeItem(NOMS_REELS_CLE); else localStorage.setItem(NOMS_REELS_CLE,sK); }})());
       ok('La ligne de musculation déclarée ne redit pas le mot deux fois',(()=>{
         const u=_ath({sessions_config:[],
           bilans:[_bil(2,{'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
@@ -26131,7 +26219,8 @@ async function testExercices(){
           const h=bMetier('deb-job');
           bilData={};
           // Le facteur annoncé est celui que le calcul applique (échelle du tableur).
-          return /facteur 1,6(?!\d)/.test(h)&&/Effort physique continu/.test(h);})());
+          // (05/10/2026) Le niveau est dit, le facteur ne l'est plus.
+          return /Niveau d’activité : effort physique continu/.test(h)&&!/facteur/.test(h);})());
         ok('Un métier inconnu prévient au lieu de faire semblant',(()=>{
           bilData['deb-job']='Dresseur de licornes';
           const h=bMetier('deb-job');
@@ -26418,12 +26507,14 @@ async function testExercices(){
           const txt=(z&&z.textContent)||'';
           const t=cibleTableur(c,_tbOptsDe(c));
           if(!t||!t.mbSource) return _echec('aucun calcul');
-          const nom=t.mbSource==='katch'?'Katch-McArdle'
-            :(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
-          if(txt.indexOf('Estimation basée sur la méthode '+nom)<0)
+          // (05/10/2026) Sous son libellé maison, et le niveau d'activité sans son coefficient.
+          const nom=mbNom(t.mbSource);
+          if(/Harris|Mifflin|Katch/.test(nom)) return _echec('nom réel : '+nom);
+          if(txt.indexOf('Estimation : '+nom)<0)
             return _echec('la formule '+nom+' n\'est pas nommée');
-          const naf='base × '+String(t.naf.f).replace('.',',');
-          return txt.indexOf(naf)>=0?true:_echec('le facteur « '+naf+' » n\'est pas écrit');})());
+          const naf='niveau d’activité : '+t.naf.lib.toLowerCase();
+          if(/base × \d/.test(txt)) return _echec('le coefficient d’activité est affiché');
+          return txt.indexOf(naf)>=0?true:_echec('le niveau « '+naf+' » n\'est pas écrit');})());
         ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
           poser();
           proposerPointDepart();
@@ -34576,8 +34667,8 @@ async function testExercices(){
           return _echec('l’étiquette « Estimation » manque');
         const s=(bes.querySelector('.tbk-cap-s')||{}).textContent||'';
         const premiere=(bes.querySelector('tbody tr .tbk-aide')||{}).textContent||'';
-        const formule=(s.match(/méthode (.+)$/)||[])[1]||'';
-        if(!formule||premiere.indexOf(formule)<0)
+        const formule=((s.match(/^Estimation : (.+)$/)||[])[1]||'').toLowerCase();
+        if(!formule||premiere.toLowerCase().indexOf(formule)<0)
           return _echec('le sous-titre nomme « '+formule+' », la ligne dit « '+premiere+' »');
         if(!/estimations/.test((bes.querySelector('tfoot .tbk-note')||{}).textContent||''))
           return _echec('la note des estimations manque');
@@ -36527,6 +36618,53 @@ async function testExercices(){
         // palierDe, qui ne compare rien quand l’échéance vaut zéro.
         const c3=accesCalcul('ouvrir',{etat:'absent'},{maintenant:now,mois:0,palier:'ultime'});
         return c3.echeance===0?true:_echec('sans fin vaut '+c3.echeance);})());
+
+      // ORDRE DE FERMETURE, ÉTAPE 1 (05/10/2026) : compter ce que le dossier ouvre seul, sans rien décider.
+      ok('DROITS, ÉTAPE 1 — droitsEcarts nomme les portes que seul le dossier tient, ne change aucun accès, et l’interrupteur redescend',(()=>{
+        if(typeof droitsEcarts!=='function'||typeof droitsEcartsCompter!=='function') return _echec('droitsEcarts n’existe pas');
+        const mail='test-droits-ecarts@t.fr', now=Date.now();
+        const sauve=localStorage.getItem(DROITS_CLE), sauveS=localStorage.getItem(DROITS_SERVEUR_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE), sauveJ=localStorage.getItem(DROITS_ECART_CLE);
+        const sR=window.rcm, vus=[];
+        try{
+          localStorage.removeItem(PAIEMENT_RECENT_CLE); localStorage.removeItem(DROITS_SERVEUR_CLE);
+          const suivi={email:mail,role:'athlete',status:'COACHING_SUIVI'};
+          const abo={email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',abonnement:{formule:'ultime'}};
+          const essai={email:mail,role:'athlete',status:'FREE',essai:{ouvertLe:now-864e5,finit:now+20*864e5}};
+          // Le serveur n'a jamais répondu : on ne juge pas.
+          const brut=JSON.parse(localStorage.getItem(DROITS_CLE)||'{}'); delete brut[mail]; delete brut[mail.replace(/\./g,',')];
+          if(droitsDe(suivi).etat==='inconnu'&&droitsEcarts(suivi).length) return _echec('jugé sans réponse du serveur');
+          // Nœud lu et vide : chaque porte du dossier est nommée, et l'accès N'A PAS BOUGÉ.
+          _droitsPoser(mail,null,true);
+          const avant=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
+          if(droitsEcarts(suivi).join()!=='suivi') return _echec('suivi : '+droitsEcarts(suivi).join());
+          if(droitsEcarts(abo).join()!=='abo') return _echec('abonnement : '+droitsEcarts(abo).join());
+          if(droitsEcarts(essai).join()!=='essai') return _echec('essai : '+droitsEcarts(essai).join());
+          const apres=[palierDe(suivi),palierDe(abo),essaiActif(essai)];
+          if(avant.join()!==apres.join()||avant[0]!=='suivi'||avant[1]!=='ultime'||!avant[2]) return _echec('compter a changé un accès : '+avant.join()+' → '+apres.join());
+          // Ce que le serveur atteste n'est pas un écart.
+          _droitsPoser(mail,{palier:'ultime',echeance:0,source:'paypal'},false);
+          if(droitsEcarts(abo).length) return _echec('un abonnement attesté est compté : '+droitsEcarts(abo).join());
+          _droitsPoser(mail,{palier:'aucun',echeance:0,source:'paiement_coach',suiviJusqu:now+864e5},false);
+          if(droitsEcarts(suivi).length) return _echec('un suivi attesté est compté');
+          _droitsPoser(mail,{palier:'ultime',echeance:now+864e5,source:'essai',essaiFinit:now+864e5},false);
+          if(droitsEcarts(essai).length) return _echec('un essai attesté est compté');
+          if(droitsEcarts({email:mail,role:'coach'}).length) return _echec('un coach est compté');
+          // Le compteur : une fois par jour et par appareil, des noms de la liste fermée, rien d'autre.
+          window.rcm=n=>{ vus.push(n); };
+          _droitsPoser(mail,null,true); localStorage.removeItem(DROITS_ECART_CLE);
+          const sU=currentUser;
+          if(!droitsEcartsCompter(suivi)||droitsEcartsCompter(suivi)) return _echec('pas une fois par jour');
+          if(vus.join()!=='droits_ecart_vu,droits_ecart_suivi') return _echec('compteurs : '+vus.join());
+          for(const n of vus) if(RCM_EVENEMENTS.indexOf(n)<0) return _echec(n+' hors de la liste fermée');
+          // L'interrupteur redescend quand le serveur RÉPOND qu'il n'existe plus.
+          const src=String(rafraichirDroitsServeur);
+          if(src.indexOf('removeItem(DROITS_SERVEUR_CLE)')<0||/droitsServeurActif\(\)\) return/.test(src)) return _echec('l’interrupteur reste posé pour toujours');
+          return true;
+        } finally {
+          window.rcm=sR;
+          const remet=(k,v)=>{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); };
+          remet(DROITS_CLE,sauve); remet(DROITS_SERVEUR_CLE,sauveS); remet(PAIEMENT_RECENT_CLE,sauveP); remet(DROITS_ECART_CLE,sauveJ);
+        }})());
 
       ok('1614 — DROITS PORTÉS PAR LE SERVEUR : effacer accessExpiry ou s’écrire abonné dans son dossier n’ouvre rien',(()=>{
         const mail='test-droits-1614@t.fr', now=Date.now();
@@ -43944,7 +44082,10 @@ async function testExercices(){
       // 408 depuis le 30/09/2026 : quatre exercices sont passés au cardio.
       // 407 depuis le 01/10/2026 : « LEG EXTENSION » était écrit deux fois, dont
       // une avec une faute ; les deux lignes n'en font plus qu'une.
-      return 407+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
+      // 430 depuis le 05/10/2026 : vingt-trois exercices filmés dans le guide et
+      // non référencés ajoutés (les deux que Kevin citait existaient sous un
+      // autre nom : voir BQ_LIBELLES).
+      return 430+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
@@ -43953,6 +44094,34 @@ async function testExercices(){
         const sans=[...n].filter(x=>!schemaDe({name:x}));
         return n.size+' noms pour '+_guideAttendu()+' attendus'
           +(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
+    ok('Exercices non référencés (05/10/2026) : classés, trouvables en banque, « rdl » compris, vidéos rattachées',(()=>{
+      for(const [n,p,sch] of [['ELEVATION LATERALE POULIE BASSE UNILATERAL','DELT_LAT','isolation-epaule'],
+        ['RDL MACHINE GUIDEE','ISCHIOS','charniere-hanche'],['HIGH ROW HAMMER STRENGTH','DORSAUX','tirage-horizontal'],['SQUAT AU BELT SQUAT VERSION FESSIER','FESSIERS','squat']]){
+        const g=_exGuide().get(n); if(!g||g.p[0]!==p) return _echec(n+' : muscles '+JSON.stringify(g));
+        if(schemaDe({name:n})!==sch) return _echec(n+' : schéma '+schemaDe({name:n}));
+      }
+      // Une banque en ligne qui ne les a pas : l'app les ajoute, sans doublon.
+      const b=_indexerBanque(_bqCompleter([{slug:'elevation-laterale-poulie',nom:'ELEVATION LATERALE POULIE',muscles:['DELT_LAT']}]));
+      const f=b.parSlug['rdl-machine-guidee'];
+      if(!f||f.muscles[0]!=='ISCHIOS'||!/poignées basses/.test(f.execution)||f.repos!=='02 min'||f.materiel!=='machine guidee'||!f.videos.length) return _echec('fiche ajoutée : '+JSON.stringify(f));
+      if(b.liste.filter(x=>x.slug==='elevation-laterale-poulie').length!==1) return _echec('doublon d’une fiche déjà en ligne');
+      if(_bqCompleter([]).length!==0) return _echec('une banque vide se remplit toute seule');
+      // Les deux noms de Kevin (05/10/2026) : « hauteur de hanche », « rdl belt ».
+      const h=_indexerBanque([{slug:'elevation-laterale-poulie-elastique-unilateral',nom:'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL'}]).parSlug['elevation-laterale-poulie-elastique-unilateral'];
+      if(!h||scoreBanque(h,'elevation laterale hauteur de hanche',[])<=0) return _echec('hauteur de hanche introuvable à la recherche');
+      if(videosPour(h.nom).length!==1) return _echec('la vidéo à hauteur de hanche');
+      if(scoreBanque(f,'rdl belt',[])<=0||scoreBanque(f,'rdl',[])<=0) return _echec('« rdl » ne trouve pas le soulevé roumain');
+      // Une vidéo rangée sous un nom raccourci revient à son exercice.
+      if(!videosPour('ABDUCTION DEBOUT POULIE ELASTIQUE').length||videosPour('TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET').length!==1) return _echec('vidéos rattachées');
+      // Le RDL à la belt squat a SA photo (celle du guide), et un exercice à la
+      // belt squat sans photo ne prend pas celui de sa version à la barre.
+      if(_exoIndex&&_exoIndex.size){
+        if(_slugIllustre('rdl-machine-guidee')!=='rdl-machine-guidee') return _echec('photo du RDL belt squat');
+        if(_slugIllustre(exSlug('GOBELET SQUAT A LA BELT SQUAT'))) return _echec('une image d’un autre agrès');
+      }
+      // Aucune fiche ajoutée n'invente un texte : celui de BQ_TEXTES_APP, l'intro d'une variante, ou rien.
+      const inv=bqFichesApp([]).filter(x=>x.execution&&!BQ_TEXTES_APP[x.nom]&&!(EX_VARIANTES[x.nom]&&EX_VARIANTES[x.nom].intro===x.execution));
+      return inv.length?_echec('texte inventé : '+inv[0].nom):true;})());
     ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
     ok('Chaque schéma porte son libellé, son effectif et ses exemples',
        Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
@@ -47249,6 +47418,94 @@ async function testExercices(){
       // Au mètre : la hauteur de rotule du bilan, réutilisée par l'échelle du lot 7.
       const m=anatMesures(_anatGab(),_anatDossier({bilans:[{type:'depart',date:1,'deb-rotule':'50'}]})).echelle.verif;
       if(!m||m.source!=='metre'||m.statut!=='confirmee') return _echec('au mètre : '+(m&&m.source)+' / '+(m&&m.statut)+' / '+(m&&m.ecart));
+      return true;})());
+    // Une hauteur de rotule invraisemblable est écartée, pas crue (05/10/2026).
+    ok('ANALYSE MORPHO : UNE ROTULE SAISIE INVRAISEMBLABLE EST ÉCARTÉE, L’ÉCHELLE RESTE VÉRIFIÉE PAR L’ESTIMATION',(()=>{
+      if(typeof anatRotuleInvraisemblable!=='function') return _echec('anatRotuleInvraisemblable n’existe pas');
+      if(anatRotuleInvraisemblable(50,178)||anatRotuleInvraisemblable(45,178)) return _echec('une rotule normale est écartée');
+      const e=anatRotuleInvraisemblable(68,178);
+      if(!e||!(e.min<50&&e.max>50)||e.cm!==68) return _echec('68 cm pour 178 : '+JSON.stringify(e));
+      if(anatRotuleInvraisemblable(68,null)!==null) return _echec('sans taille, rien à dire');
+      const base=_anatDossier();
+      const taille=_tailleCm(base);
+      const fausse=String(Math.min(74,Math.round(taille*0.39)));
+      const r=anatMesures(_anatGab(),_anatDossier({bilans:[{type:'depart',date:1,'deb-rotule':fausse}]}));
+      const v=r.echelle.verif;
+      if(!v||!v.mesureEcartee) return _echec('la mesure fausse ('+fausse+' cm pour '+taille+') n’est pas écartée : '+JSON.stringify(v));
+      if(v.source!=='estimation'||v.statut!=='confirmee') return _echec('après écart : '+v.source+' / '+v.statut);
+      if(r.fiches.find(x=>x.cle==='jambes').grise) return _echec('les longueurs restent en gris malgré des points justes');
+      const h=String(_htmlAnat);
+      if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
+      return true;})());
+    // ══ LA SIGNATURE DES EXPORTS (05/10/2026) ═════════════════════════════════
+    ok('EXPORTS SIGNÉS : RepCore, le coach, l’athlète destinataire, la date, sur chaque document ; le coach et la date sur les visuels',(()=>{
+      if(typeof signatureDocument!=='function'||typeof htmlSignatureDocument!=='function'||typeof _recSignatureLigne2!=='function') return _echec('signatureDocument n’existe pas');
+      const jour=new Date(2026,9,6,12).getTime();
+      const a={role:'athlete',fname:'Léa',lname:'Martin',coachName:'Kevin Guellec'};
+      const s=signatureDocument(a,{date:jour});
+      if(s!=='RepCore · Coach Kevin Guellec · pour Léa Martin · 6 octobre 2026') return _echec('athlète : « '+s+' »');
+      if(/\/\d\d/.test(s)) return _echec('une date en chiffres se lit comme une note : '+s);
+      if(signatureDocument(a,{date:jour,athlete:false})!=='RepCore · Coach Kevin Guellec · 6 octobre 2026') return _echec('sans le nom de l’athlète');
+      if(signatureDocument({role:'athlete',fname:'Léa'},{date:jour})!=='RepCore · pour Léa · 6 octobre 2026') return _echec('sans coach : un morceau vide est resté');
+      if(signatureDocument({role:'coach',fname:'Kevin',lname:'Guellec',teamName:'Team KG'},{date:jour})!=='RepCore · Coach Team KG · 6 octobre 2026') return _echec('dossier de coach');
+      if(signatureDocument(null,{date:jour})!=='RepCore · 6 octobre 2026') return _echec('sans dossier');
+      // Le texte sort brut, le pied l'échappe.
+      const h=htmlSignatureDocument({role:'athlete',fname:'<img src=x onerror=1>',coachName:'<b>x</b>'},{date:jour});
+      if(/<img|<b>/.test(h)||h.indexOf('class="doc-sign"')<0) return _echec('pied non échappé : '+h);
+      // CHAQUE DOCUMENT LE PORTE.
+      const pp=htmlProgrammePrint(Object.assign({sessions_config:[]},a));
+      if(pp.indexOf('class="doc-sign"')<0||pp.indexOf('pour Léa Martin')<0) return _echec('fiche programme sans signature');
+      for(const [nom,f,motif] of [
+        ['rapport de la période (données)',rapportPeriode,'signatureDocument(u,'],
+        ['rapport de la période (rendu)',htmlRapport,'r.signature'],
+        ['bilan de bloc',bilanBlocExportHtml,'htmlSignatureDocument(c)'],
+        ['analyse morpho',anatExportHtml,'htmlSignatureDocument(c)'],
+        ['fiche alimentaire (données)',ficheAlimDonnees,'edite:Date.now()'],
+        ['fiche alimentaire (rendu)',htmlFicheAlim,'fa-pied-pour']])
+        if(String(f).indexOf(motif)<0) return _echec(nom+' : pas de signature');
+      if((String(anatExportHtml).match(/htmlSignatureDocument\(c\)/g)||[]).length<2) return _echec('une des deux versions morpho (coach, athlète) n’est pas signée');
+      if(String(anatExportHtml).indexOf('Préparé par ton coach<br>')>=0) return _echec('les consignes de l’athlète ne nomment pas le coach');
+      // LES VISUELS : le coach et la date, sous « NOM · REPCORE » ; le nom de l'athlète suit toujours son réglage.
+      if(_recSignatureLigne2(a,jour)!=='COACH KEVIN GUELLEC · 06/10/2026') return _echec('visuel : « '+_recSignatureLigne2(a,jour)+' »');
+      if(_recSignatureLigne2({role:'athlete'},jour)!=='06/10/2026') return _echec('visuel sans coach');
+      if(/fname|lname|pseudo/.test(String(_recSignatureLigne2))) return _echec('la seconde ligne écrit le nom de l’athlète sans passer par son réglage');
+      return String(_recSignature).indexOf('_recSignatureLigne2(currentUser)')>=0?true:_echec('les cartes ne dessinent pas la seconde ligne');})());
+    // La photo prise en plongée : dite à l'envoi, et dite au coach (05/10/2026).
+    ok('PHOTO EN PLONGÉE : REFUSÉE À L’ENVOI QUAND ELLE EST NETTE, ET LE COACH LIT LA VRAIE CAUSE, PAS « VÉRIFIE LES POINTS »',(()=>{
+      if(typeof priseDeVue!=='function') return _echec('priseDeVue n’existe pas');
+      const n=priseDeVue(0.25,0.52,0.90);
+      if(!n||n.sens!==null) return _echec('une photo d’aplomb est signalée : '+JSON.stringify(n));
+      const pl=priseDeVue(325,498,680);   // la fiche de Kevin : 1,05
+      if(!pl||pl.sens!=='plongee'||!pl.net) return _echec('la fiche de Kevin : '+JSON.stringify(pl));
+      if(priseDeVue(0.25,0.45,0.90).sens!=='contre') return _echec('contre-plongée non vue');
+      if(priseDeVue(0.5,0.5,0.9)!==null) return _echec('un tronc nul ne se lit pas');
+      // À L'ENVOI, sur les points du moteur.
+      const brut=()=>{ const pts=Array.from({length:33},()=>[0.5,0.1,1]);
+        const P={0:[0.5,0.12],11:[0.42,0.25],12:[0.58,0.25],13:[0.38,0.38],14:[0.62,0.38],15:[0.36,0.5],16:[0.64,0.5],
+          23:[0.45,0.56],24:[0.55,0.56],25:[0.45,0.74],26:[0.55,0.74],27:[0.45,0.88],28:[0.55,0.88],29:[0.45,0.93],30:[0.55,0.93],31:[0.44,0.95],32:[0.56,0.95]};
+        for(const i in P) pts[i]=[P[i][0],P[i][1],1];
+        return {ok:true,w:1000,h:1500,pts,z:Array(33).fill(0),lum:120}; };
+      const v=photoControle(brut(),'face');
+      if(v.etat!=='rouge'||v.codes.indexOf('plongee')<0) return _echec('à l’envoi : '+JSON.stringify(v));
+      if(!/hauteur de hanche/.test(v.raisons.join(' '))) return _echec('la consigne ne dit pas où poser le téléphone');
+      if(/jambe|court|morpho/i.test(PHOTO_CTL.MSG.plongee+PHOTO_CTL.MSG.contre)) return _echec('la consigne parle du corps, pas de la prise de vue');
+      // CÔTÉ COACH : le bas du corps écrasé de 38 %, comme vu d'en haut.
+      const pts=anatGabarit(1000,1500,'face');
+      const sol=pts.talon_l[1], ecr={};
+      for(const k of ['hanche','genou','cheville']) for(const c of ['_l','_r']){
+        const q=pts[k+c]; ecr[k+c]=[q[0],sol-(sol-q[1])*0.62,1]; }
+      const r=anatMesures(_anatGab(ecr),_anatDossier());
+      const ver=r.echelle.verif;
+      if(!ver||ver.statut!=='divergence') return _echec('la plongée ne fait pas diverger : '+JSON.stringify(ver));
+      if(!ver.prise||ver.prise.sens!=='plongee') return _echec('la cause n’est pas lue : '+JSON.stringify(ver.prise));
+      const tj=anatTexte(r.fiches.find(x=>x.cle==='jambes'),r);
+      if(!/plongée/.test(tj.court)||/genoux à vérifier/.test(tj.court)||!/hauteur de hanche/.test(tj.verifier)) return _echec('la fiche accuse encore les points : '+tj.court);
+      const h=String(_htmlAnat);
+      if(h.indexOf('Les points ne sont pas en cause')<0) return _echec('le bandeau ne disculpe pas les points');
+      // Des genoux mal placés sur une photo d'aplomb : toujours l'ancien bandeau.
+      const dy=0.05*ANAT_ROTULE.part*0.86;
+      const r2=anatMesures(_anatGab({genou_l:[pts.genou_l[0],pts.genou_l[1]-dy,1],genou_r:[pts.genou_r[0],pts.genou_r[1]-dy,1]}),_anatDossier());
+      if(r2.echelle.verif.prise) return _echec('un genou mal placé passe pour une plongée');
       return true;})());
     ok('ANALYSE MORPHO : GENOUX DÉPLACÉS DE 5 % : BANDEAU, LONGUEURS EN GRIS',(()=>{
       const pts=anatGabarit(1000,1500,'face');
@@ -53668,7 +53925,8 @@ async function testExercices(){
       // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
       // La vitrine a grandi (formules et « Ça m'intéresse », lot C6, 29/09/2026) : 16 Ko,
       // toujours sans ressource externe ; le tableau des offres (tarifs.json) se lit en parallèle.
-      if(p.length>20000||c.length>16000) return _echec('pages trop lourdes');
+      // + 200 octets chacune le 05/10/2026 : le renvoi depuis l'ancienne adresse.
+      if(p.length>20200||c.length>16200) return _echec('pages trop lourdes');
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',
@@ -58706,7 +58964,7 @@ async function testExercices(){
         if((det.querySelector('summary')||{}).textContent!=='Comment ces objectifs sont calculés')
           return _echec('intitulé : « '+(det.querySelector('summary')||{}).textContent+' »');
         const contenu=det.querySelector('div');
-        const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
+        const nom=mbNom(b.source);
         const attendu=nom+' · dépense estimée '+b.depense+' kcal : '+b.hypotheses.join(' · ')+'.';
         const cl=contenu.cloneNode(true); cl.querySelectorAll('.rc-i').forEach(x=>x.remove());
         if(cl.textContent!==attendu) return _echec('le texte a changé : « '+cl.textContent+' »');
@@ -79678,7 +79936,10 @@ vendredi 78 6h 44m
         const paires=[['--arc-attack',ARC.attack],['--arc-strike',ARC.strike],
           ['--arc-release',ARC.release],['--arc-afterglow',ARC.afterglow],
           ['--arc-ambient',ARC.ambient],['--arc-plat',ARC.plat]];
-        const faux=paires.filter(([n,j])=>_v(n)!==j+'ms')
+        // ⚠ ON COMPARE LA DURÉE, PAS SON ÉCRITURE : une feuille minifiée écrit
+        // « .12s » là où la source écrit « 120ms ». C'est la même durée.
+        const ms=s=>{ const m=/^\s*(-?\d*\.?\d+)(ms|s)\s*$/.exec(String(s)); return m?Number(m[1])*(m[2]==='s'?1000:1):NaN; };
+        const faux=paires.filter(([n,j])=>!(Math.abs(ms(_v(n))-j)<0.001))
           .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j+'ms');
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('Les trois courbes ARC sont les mêmes en CSS et en JS',(()=>{
@@ -79742,7 +80003,9 @@ vendredi 78 6h 44m
           ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],
           ['--arc-flash-peak',ARC.flashPeak],['--arc-translate',ARC.translate+'px'],
           ['--arc-glow-radius',ARC.glowRadius+'px'],['--arc-glow-rest',ARC.glowRest+'px']];
-        const faux=paires.filter(([n,j])=>_v(n)!==String(j))
+        // Même règle : « .94 » et « 0.94 » sont le même nombre ; l'unité, elle, doit suivre.
+        const nu=s=>{ const m=/^\s*(-?\d*\.?\d+)([a-z%]*)\s*$/.exec(String(s)); return m?[Number(m[1]),m[2]]:[NaN,String(s)]; };
+        const faux=paires.filter(([n,j])=>{ const a=nu(_v(n)), b=nu(j); return !(Math.abs(a[0]-b[0])<1e-9&&a[1]===b[1]); })
           .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j);
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('L\'objet ARC est gelé : aucune valeur ne se corrige à chaud',(()=>{

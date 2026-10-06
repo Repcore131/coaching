@@ -62,15 +62,9 @@ echo "== build app=$B  sw=$S =="
 # et non sur la racine : le depot porte des choses qui n'ont rien a faire en
 # ligne — la planche de badges d'origine, les notes, les scripts de verif.
 echo "== assemblage =="
-rm -rf _site && mkdir -p _site                                      || exit 1
-cp -a app blog i maj p c a _site/                                         || exit 1
-cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html _site/ || exit 1
-cp -a logo.png og-image.png robots.txt sitemap.xml _site/           || exit 1
-# ⚠ well-known/ S'APPELLE SANS POINT DANS LE DEPOT, et DOIT arriver en
-#   _site/.well-known/. Sans lui, Firebase sert un assetlinks.json VIDE
-#   (« [] », constate le 28/09/2026) : Android ne relie plus le site a l'APK,
-#   et la TWA s'ouvre AVEC LA BARRE D'ADRESSE.
-mkdir -p _site/.well-known && cp -a well-known/. _site/.well-known/  || exit 1
+# (05/10/2026) Le MEME assemblage que les deux workflows : fichiers de travail
+# ecartes, rc-core et rc-style minifies. Une seule liste : scripts/fabriquer_site.mjs.
+node scripts/fabriquer_site.mjs _site                               || exit 1
 grep -q '"com.repcore.app"' _site/.well-known/assetlinks.json       || { echo "!! assetlinks.json absent ou vide"; exit 1; }
 
 # LE GARDE-FOU. Un cp qui echoue a moitie donne un site amputé, et Firebase

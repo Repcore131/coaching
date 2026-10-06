@@ -465,6 +465,10 @@ function lienWhatsApp(texte){
 const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
+  // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
+  // comptes ne tiennent leur accès que par une porte que le serveur n'atteste
+  // pas. Voir droitsEcarts. Mêmes noms dans la liste fermée des règles.
+  'droits_ecart_vu','droits_ecart_essai','droits_ecart_suivi','droits_ecart_abo',
   'first_workout_started','first_workout_completed','first_bilan_completed',
   // ── LE TRAFIC QUI ARRIVE PAR UN NAVIGATEUR INTEGRE ──────────────────
   // Un compteur par application, et non un seul « iab_detecte » : savoir que
@@ -8506,17 +8510,71 @@ function _palierHerite(u,etat){
 //   remplir-paiements.mjs n'a pas écrit droits/ pour les abonnés d'avant (et
 //   posé reglages_publics/droitsServeur), un nœud vide ne prouve rien : ce
 //   sont eux, justement, qui n'en ont pas. Le dossier décide alors comme avant.
-//   Lu une fois par session avec droits/, et gardé : un réglage qui passe à
-//   vrai n'a pas de raison de revenir en arrière.
+//   Lu une fois par session avec droits/, et gardé entre deux sessions.
+// ⚠ ET IL REDESCEND (05/10/2026, ordre de fermeture, étape 1d). Il restait à
+//   '1' pour toujours sur l'appareil : retirer le réglage dans la base (le
+//   seul retour arrière prévu si la bascule coupait un payeur) n'atteignait
+//   donc aucun téléphone. Il est maintenant relu à chaque session, et retiré
+//   quand le serveur RÉPOND qu'il n'existe plus. Une lecture qui échoue ne
+//   change rien : hors ligne, l'appareil garde ce qu'il savait.
 const DROITS_SERVEUR_CLE='rc_droits_serveur';
 function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
 let _droitsServeurLu=false;
 async function rafraichirDroitsServeur(){
-  if(_droitsServeurLu||droitsServeurActif()) return;
+  if(_droitsServeurLu) return;
   const v=await CLOUD.pullDroitsServeur().catch(()=>null);
   if(v===null) return;
   _droitsServeurLu=true;
-  if(v){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
+  try{ if(v) localStorage.setItem(DROITS_SERVEUR_CLE,'1'); else localStorage.removeItem(DROITS_SERVEUR_CLE); }catch(e){}
+}
+// ══ CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, étape 1c, 05/10/2026) ══
+//
+// Trois portes s'ouvrent encore par une simple écriture dans son propre
+// dossier : l'essai (essai.finit), le suivi (status COACHING_SUIVI) et, tant
+// que la bascule n'est pas posée, l'abonnement (status + paymentStatus). Avant
+// de les fermer une à une, il faut savoir COMBIEN de comptes légitimes ne
+// tiennent leur accès que par là : ce sont eux qu'une fermeture couperait.
+//
+// droitsEcarts ne DÉCIDE RIEN : aucun écran ne la lit, aucun accès n'en
+// dépend. Elle compare ce que l'app accorde aujourd'hui à ce que le serveur
+// atteste seul (droits/), et nomme les portes que seul le dossier tient.
+// PURE (le dossier et le cache local). [] quand le serveur n'a jamais répondu :
+// on ne juge pas sans lui.
+function droitsEcarts(u,maintenant){
+  if(!u||u.role==='coach') return [];
+  const d=droitsDe(u);
+  if(d.etat==='inconnu') return [];
+  const t=Number(maintenant)||Date.now(), rang=p=>PALIERS_ORDRE.indexOf(p);
+  // Le palier que le serveur atteste, sans rien lire du dossier.
+  let strict='aucun';
+  if(d.etat==='serveur'){
+    strict=(d.echeance>0&&t>=d.echeance)?'aucun':d.palier;
+    if(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>t&&rang(strict)<rang('ultime')) strict='ultime';
+    if((Number(d.suiviJusqu)||0)>t) strict='suivi';
+  }
+  const out=[];
+  let accorde='aucun'; try{ accorde=palierDe(u); }catch(e){ accorde='aucun'; }
+  if(rang(accorde)>rang(strict)) out.push(accorde==='suivi'?'suivi':'abo');
+  // L'essai : ouvert par le dossier, pas attesté par le serveur.
+  let essai=false; try{ essai=essaiActif(u); }catch(e){ essai=false; }
+  if(essai&&!((Number(d.essaiFinit)||0)>t)&&rang(strict)<rang('ultime')) out.push('essai');
+  return out;
+}
+// Un passage par jour et par appareil, dans les compteurs agrégés (aucun nom,
+// aucun identifiant : un entier par jour). `droits_ecart_vu` est le
+// dénominateur : les comptes jugés ce jour-là.
+const DROITS_ECART_CLE='rc_droits_ecart_jour';
+function droitsEcartsCompter(u){
+  try{
+    if(!u||!u.email||u.role==='coach') return false;
+    if(droitsDe(u).etat==='inconnu') return false;
+    const jour=localISODate(new Date()), marque=jour+'|'+String(u.email).toLowerCase();
+    if(localStorage.getItem(DROITS_ECART_CLE)===marque) return false;
+    localStorage.setItem(DROITS_ECART_CLE,marque);
+    rcm('droits_ecart_vu');
+    for(const e of droitsEcarts(u)) rcm('droits_ecart_'+e);
+    return true;
+  }catch(e){ return false; }
 }
 // LA PREUVE LOCALE D'UN PAIEMENT QUI VIENT D'ABOUTIR, pour 72 heures : posée
 // par onApprove (abonnement) et par l'achat d'un programme, sur l'appareil qui
@@ -8565,6 +8623,8 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  // Le serveur vient de répondre : c'est le moment de compter (étape 1c).
+  if(cible===currentUser) droitsEcartsCompter(cible);
   return true;
 }
 // ══════════════════════════════════════════════════════════════════════════
@@ -18510,6 +18570,38 @@ function marqueCoachDe(user,usrs){
   const c=coachAffichable(user,usrs);
   if(!c) return '';
   return String(c.logo||c.signature||'');
+}
+// ══ LA SIGNATURE D'UN EXPORT (Kevin, 05/10/2026) ════════════════════════════
+//
+// « Chaque export doit porter une signature : RepCore, le coach, l'athlète
+// destinataire, la date. Discrète en pied de page pour les documents, intégrée
+// au visuel pour les images. » Aucun document ne portait les quatre : chacun
+// composait son en-tête à la main.
+//
+// PURE. Elle lit le dossier qu'on IMPRIME (jamais currentUser : quand le coach
+// imprime pour un athlète, ce n'est pas le même). Chaque morceau absent est
+// sauté. Le texte sort BRUT : chaque document l'échappe.
+//   o.date     : la date à écrire (défaut : maintenant) ;
+//   o.athlete  : false pour ne pas nommer l'athlète (visuels où un test l'interdit).
+function signatureCoachNom(u){
+  if(!u) return '';
+  const net=x=>String(x==null?'':x).replace(/\s+/g,' ').trim();
+  if(u.role==='coach') return net(u.teamName)||net((u.fname||'')+' '+(u.lname||''));
+  let c=null; try{ c=coachAffichable(u)||null; }catch(e){ c=null; }
+  return net(c&&c.teamName)||net(((c&&c.fname)||'')+' '+((c&&c.lname)||''))||net(u.coachName);
+}
+function signatureDocument(u,o){
+  const opt=o||{};
+  const coach=signatureCoachNom(u);
+  const ath=(u&&u.role!=='coach'&&opt.athlete!==false)?String(((u.fname||'')+' '+(u.lname||''))).replace(/\s+/g,' ').trim():'';
+  // La date en toutes lettres : « 6 octobre 2026 ». En chiffres, « 06/10/2026 »
+  // se lisait « /10 » dans un document qui s'interdit toute note.
+  let d=''; try{ d=new Date(opt.date||Date.now()).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ d=''; }
+  return ['RepCore',coach?'Coach '+coach:'',ath?'pour '+ath:'',d].filter(Boolean).join(' · ');
+}
+// Le pied d'un document imprimé, déjà échappé.
+function htmlSignatureDocument(u,o){
+  return '<p class="doc-sign">'+escapeHtml(signatureDocument(u,o))+'</p>';
 }
 
 // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
@@ -34562,6 +34654,7 @@ const EX_RENOMMAGES=Object.freeze({
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE':'CURL LARRY SCOTT MACHINE GUIDEE',
   'DEVELOPPE MACHINE HAUT DE PECS OU A LA SMITH':'DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS',
   'HIP THRUST MACHINE OU A LA BARRE':'HIP THRUST MACHINE',
+  'HIP THRUST MACHINE CONVERGENTE':'HIP THRUST MACHINE',
   // LE CAS SIGNALE. Debout, barre accrochee au cable : c'est ce que le fichier
   // « curl barre poulie elastique » montre, et c'est ce que la consigne decrit.
   'CURL A LA POULIE':'CURL BARRE POULIE',
@@ -34629,6 +34722,16 @@ function _cleRenommee(k,glob){
 //     élastique) : 'TRICEPS,PECTORAUX,DELT_ANT'. Les dips à la machine et
 //     les dips au banc (TRICEPS DIPS) restent aux triceps seuls ;
 //   • SIDE TRICEPS est une pose : EX_GUIDE_POSING.
+// LES EXERCICES NON RÉFÉRENCÉS (Kevin, 05/10/2026 : « l'élévation latérale
+// hauteur de hanche, ou même le RDL à la belt squat »). Vingt-trois exercices
+// filmés dans le guide n'avaient pas de ligne ici : sans ligne, pas de
+// muscles, pas de schéma, et le remplissage de la banque les écartait. Ils
+// sont classés sur leur plus proche voisin (même agrès, même geste). Les deux
+// que Kevin a nommés EXISTAIENT sous un autre nom (vérifié sur ses captures du
+// guide) : « ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL » est l'élévation à
+// hauteur de hanche, « RDL MACHINE GUIDEE » le RDL à la belt squat. Ils se
+// retrouvent par ces mots-là (BQ_LIBELLES). La banque en ligne, copie figée,
+// est complétée par l'app (bqFichesApp) : rien à republier.
 const EX_GUIDE_BRUT={
   'PECTORAUX,DELT_ANT,TRICEPS':'CHEST PRESS DEBOUT~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS BAS DE PECS~DIPS MACHINE BAS DE PECS~FLOOR PRESS~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES',
   // LES PULL-OVERS, BRAS TENDUS (Kevin, 27/09/2026, vérifié sur les photos) :
@@ -34641,7 +34744,7 @@ const EX_GUIDE_BRUT={
   // LES TIRAGES VERTICAUX : pas de rétraction de l'omoplate.
   'DORSAUX,BICEPS':'ISO LATERAL FRONT LAT PULLDOWN~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TIRAGE UNILATERAL SUR BANC~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION',
   'QUADRICEPS,FESSIERS,ISCHIOS,LOMBAIRES':'SOULEVE DE TERRE TRAP BARRE',
-  'TRICEPS':'BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BODYWEIGHT SKULL CRUSHER~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE COUCHE PRISE SERREE~DIPS MACHINE~DIPS MACHINE GUIDEE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~KICKBACK HALTERE~KICKBACK POULIE~POMPES SERREES~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS DIPS~TRICEPS EXTENSION MACHINE',
+  'TRICEPS':'BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BODYWEIGHT SKULL CRUSHER~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE COUCHE PRISE SERREE~DIPS MACHINE~DIPS MACHINE GUIDEE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~EXTENSIONS POULIE BASSE TRICEPS~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~FRENCH PRESS MACHINR~KICKBACK HALTERE~KICKBACK POULIE~POMPES SERREES~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS DIPS~TRICEPS EXTENSION MACHINE',
   'TRICEPS,PECTORAUX,DELT_ANT':'DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS ELASTIQUE~DIPS LESTE~DIPS SUR BARRE~DIPS SUR BARRE ELASTIQUE~DIPS SUR BARRE LESTE',
   'ABDOS':'AB CRUNCH BENCH~ABS ROLLER~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH AU SOL AVEC POIDS~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LE VACUUM~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~V SIT UP',
   // Les SHRUGS elevent l'omoplate : trapeze SUPERIEUR, et lui seul.
@@ -34658,17 +34761,17 @@ const EX_GUIDE_BRUT={
   // TOUS LES ROWINGS, uni- ou bilatéraux (revue du 27/09/2026) : quinze
   // d'entre eux, dont le rowing haltère, ne créditaient pas le trapèze médian,
   // alors que la règle de repli, plus bas, le fait pour tout rowing.
-  'DORSAUX,TRAP_MED,BICEPS':'RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING PLANCHE BARRE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING SAC UNILATERAL SUR BANC~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC',
+  'DORSAUX,TRAP_MED,BICEPS':'HIGH ROW HAMMER STRENGTH~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING PLANCHE BARRE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING SAC UNILATERAL SUR BANC~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE NEUTRE~TIRAGE HORIZONTAL MACHINE CONVERGENTE PRONATION~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE SUPINATION~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE~TIRAGE HORIZONTAL MACHINE UNILATERAL SUPINATION~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC',
   'BICEPS,AVANT_BRAS':'BICEPS BRAS EN CROIX~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRACTION PRISE SERREE',
   // LES « TIRAGES VERTICAUX » DU GUIDE SONT DES TIRAGES MENTON : debout, la
   // barre monte le long du buste, coudes hauts (vérifié sur les trois photos).
   // Ils étaient rangés avec les rowings, en dorsaux. Deltoïde latéral, et le
   // trapèze supérieur qui finit l'élévation ; même chose pour les tirages menton.
   'DELT_LAT,TRAP_SUP':'TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE',
-  'DELT_ANT,TRICEPS':'DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~HANDSTAND PUSH UP~PIKE PUSH UP~POWER SMITH EPAULES~SHOULDER PRESS',
+  'DELT_ANT,TRICEPS':'DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~HANDSTAND PUSH UP~PIKE PUSH UP~POWER SMITH EPAULES~SHOULDER PRESS~SHOULDER PRESS PURE METEOR~VIKING PRESS PRISE NEUTRE',
   'DELT_ANT':'ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE',
-  'FESSIERS':'BOOTYMIZER~DONKEY KICK SMITH MACHINE~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~HIP THRUST~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE',
-  'DELT_LAT':'ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~LATERAL RAISE',
+  'FESSIERS':'BOOTYMIZER~DONKEY KICK SMITH MACHINE~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~HIP THRUST~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE',
+  'DELT_LAT':'ELEVATION LATERALE ASSIS SUR BANC~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE BASSE UNILATERAL~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~LATERAL RAISE',
   'MOLLETS':'CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION',
   // L'ÉLÉVATION Y : bras en Y, pouces en haut, le milieu et le bas du trapèze
   // font le geste ; l'arrière d'épaule accompagne.
@@ -34690,10 +34793,10 @@ const EX_GUIDE_BRUT={
   // tiennent verrouillé en haut.
   'LOMBAIRES,FESSIERS,ISCHIOS,TRAP_SUP':'RACK POOL',
   'ISCHIOS,LOMBAIRES':'SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE',
-  'ISCHIOS':'ISO LATERAL CURL~LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE',
-  'QUADRICEPS,FESSIERS':'CHUTE DE BOX SAUT~DEEP SQUAT~FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS EN BAS~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC SAC~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SAUTE~SQUAT SAUTE SUR BOX~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE',
-  'ISCHIOS,FESSIERS,LOMBAIRES':'GOOD MORNING~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL',
-  'ISCHIOS,FESSIERS':'HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~MONTER SUR BANC~RELEVE FESSIER BANC A LOMBAIRE~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES',
+  'ISCHIOS':'ISO LATERAL CURL~LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ALLONGE HALTERE~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE',
+  'QUADRICEPS,FESSIERS':'CHUTE DE BOX SAUT~DEEP SQUAT~FENTE BULGARE A LA BELT SQUAT~FENTE BULGARE MACHINE~FENTES A LA V SQUAT~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~GOBELET SQUAT A LA BELT SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS EN BAS~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AU BELT SQUAT VERSION QUADS~SQUAT AVEC HALTERES~SQUAT AVEC SAC~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SAUTE~SQUAT SAUTE SUR BOX~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT FACE AU SIEGE',
+  'ISCHIOS,FESSIERS,LOMBAIRES':'GOOD MORNING~RDL MACHINE GUIDEE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL',
+  'ISCHIOS,FESSIERS':'HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~MONTER SUR BANC~RELEVE FESSIER BANC A LOMBAIRE~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES',
   'QUADRICEPS':'GAINAGE CHAISE~HACKSQUAT~LEG EXTENSION~LEG EXTENSION HALTERE~PENDULUM SQUAT~PRESSE A CUISSE ISO LATERALE~SISSY SQUAT~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~V SQUAT',
   'AVANT_BRAS':'BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER',
   'ABDUCTEURS':'3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~COPENHAGEN PLANK',
@@ -34722,7 +34825,10 @@ const EX_GUIDE_BRUT={
   'FESSIERS,ABDUCTEURS':'FIRE HYDRANT',
   'ABDUCTEURS,FESSIERS':'ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~STANDING ADUCTOR',
   'FESSIERS,ISCHIOS,QUADRICEPS':'PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE INCLINE PIEDS EN HAUT',
-  'QUADRICEPS,ADDUCTEURS,FESSIERS':'PRESSE A CUISSE INCLINE PIEDS ECARTES'
+  'QUADRICEPS,ADDUCTEURS,FESSIERS':'PRESSE A CUISSE INCLINE PIEDS ECARTES',
+  // LA VERSION FESSIER DU BELT SQUAT (05/10/2026) : buste penché, hanches
+  // reculées, le fessier mène et le quadriceps suit.
+  'FESSIERS,QUADRICEPS':'SQUAT AU BELT SQUAT VERSION FESSIER'
 };
 const EX_GUIDE_CARDIO='BATTLE ROPE~CORDE A SAUTER~ESCALIERS~JUMPING JACK~LE SKIERG~MONTE DE GENOUX~POWER RUN~QUAD STOMP~RAMEUR~TAPIS DE COURSE~TAPIS DE COURSE COURIR~TAPIS DE COURSE MARCHE AVEC PENTE~VELO D INTERIEUR~VELO ELLIPTIQUE';
 // Les exercices tenus sans mouvement : leur technique est l'isométrie par défaut
@@ -34779,12 +34885,12 @@ const EX_GUIDE_POSING='ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BIC
 // classique. Elle est donc versee dans la description au seeding, et retiree
 // du libelle de la pastille.
 const EX_PRECISIONS=Object.freeze({
-  'BATTLE ROPE':'Cordes alternées, une main après l\'autre.',
-  'CURL LARRY SCOTT':'À la barre EZ.',
+  'BATTLE ROPE':'Cordes alternées,​ une main après l\'autre.',
+  'CURL LARRY SCOTT':'À la barre⁠ EZ.',
   'DEVELOPPE COUCHE MACHINE':'Prise en pronation, pouces à l\'intérieur.',
   'ELEVATION FRONTALE POULIE':'À la poulie.',
   'ELEVATION LATERALE HALTERE':'Aux haltères.',
-  'ESCALIERS':'Une marche à la fois.',
+  'ESCALIERS':'Une marche à la fois, sans sauter de palier.',
   'EXTENSION TRICEPS POULIE BASSE':'Sur banc incliné.',
   'FENTES ARRIERES BARRE':'Grand pas vers l\'arrière.',
   'MARCHE DU FERMIER':'Aux haltères.',
@@ -34797,7 +34903,7 @@ const EX_PRECISIONS=Object.freeze({
 
 const EX_VARIANTES=Object.freeze({
   'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
-  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
+  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
   'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES : UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
   'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
@@ -35362,9 +35468,25 @@ function videosPour(nom){
   return _videosDeCle(resoudreAlias(exKey(nom)));
 }
 // PURE. Les videos du guide pour une clef DEJA resolue.
+// LA VIDÉO RANGÉE SOUS UN AUTRE NOM (05/10/2026). Le guide écrit parfois le
+// lien sous un nom raccourci : « ABDUCTION DEBOUT POULIE » pour l'exercice
+// « ABDUCTION DEBOUT POULIE ELASTIQUE ». La vidéo existait, la fiche ne la
+// trouvait jamais. Exercice → clef de la vidéo, quand l'exercice n'en a pas.
+const EX_VIDEOS_SOUS={
+  'ABDUCTION DEBOUT POULIE ELASTIQUE':'ABDUCTION DEBOUT POULIE',
+  'ADDUCTION DEBOUT POULIE ELASTIQUE':'ADDUCTION DEBOUT POULIE',
+  'DEVELOPPE COUCHE PRISE SERREE':'DEVELOPPE COUCHE PRISE SEREE',
+  'ELEVATION FRONTALE POULIE ELASTIQUE':'ELEVATION FRONTALE POULIE',
+  'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL':'ELEVATION LATERALE POULIE UNILATERAL',
+  'EXTENSION DE BUSTE SUR BANC':'EXTENSION DE BUSTE SUR BANC 1',
+  'FLEXION LATERAL DE BUSTE POULIE ELASTIQUE':'FLEXION LATERAL DE BUSTE POULIE',
+  'OISEAUX BUSTE PENCHE POULIE ELASTIQUE':'OISEAUX BUSTE PENCHE POULIE',
+  'ROTATION DE BUSTE POULIE ELASTIQUE HAUTE':'ROTATION DE BUSTE POULIE HAUTE',
+  'TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET':'TIRAGE MENTON POULIE'
+};
 function _videosDeCle(k){
   if(!k) return [];
-  const brut=EX_VIDEOS[k];
+  const brut=EX_VIDEOS[k]||EX_VIDEOS[EX_VIDEOS_SOUS[k]];
   if(!brut) return [];
   return brut.split('~').map(v=>{
     const [id,lbl]=v.split('|');
@@ -37479,7 +37601,7 @@ function bilanBlocExportHtml(c,b){
     +'.bb-phrase{font-size:12pt;font-weight:700;margin:6px 0 4px}.bb-vide,.bb-s{font-size:8.5pt;color:#52525b}td small{display:block;font-size:7.5pt;color:#71717a}'
     +'</style></head><body><div class="ex-t"><div><h1>Bilan <span>de bloc</span></h1><p>'+escapeHtml(nom)+'</p></div>'
     +'<div class="ex-m">Édité le '+escapeHtml(_bbJour(Date.now()))+'</div></div>'+_htmlBilanBlocCorps(b)
-    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p></body></html>';
+    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p>'+htmlSignatureDocument(c)+'</body></html>';
 }
 // La feuille, depuis le bloc de la fiche coach : lire, puis exporter.
 function ouvrirBilanBloc(){
@@ -39393,7 +39515,16 @@ const EX_MOTS_AGRES=new Set(['poulie','poulies','machine','guidee','guide',
   'haltere','halteres','barre','smith','kettlebell','elastique','elastiques',
   'trx','sangle','sangles','disque','disques','sac','corde','pupitre','banc',
   'gym80','presse','chaise','cadre','roulette','ballon','swiss','bulgare',
-  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo']);
+  'landmine','hack','pendlay','sol','tapis','velo','rameur','ergo',
+  // La belt squat est un agrès (05/10/2026) : un exercice à la belt squat ne
+  // prend pas le dessin de sa version à la barre.
+  'belt']);
+// LES EXERCICES DU GUIDE SANS DESSIN (05/10/2026) : filmés, mais le guide ne
+// leur donne pas d'illustration, et aucune autre ne les montre fidèlement.
+// Leur fiche dit « Aucune illustration » plutôt que l'image d'un autre geste.
+const EX_SANS_ILLUSTRATION=Object.freeze(['HIGH ROW HAMMER STRENGTH','EXTENSION DE HANCHE POULIE CROISE',
+  'EXTENSION DE HANCHE POULIE PIEDS HAUT','EXTENSION DE HANCHE POULIE SUR BANC','LEG CURL ALLONGE HALTERE',
+  'FENTE BULGARE A LA BELT SQUAT','FENTES A LA V SQUAT','GOBELET SQUAT A LA BELT SQUAT']);
 function _slugIllustre(sl){
   if(!sl||!_exoIndex) return null;
   if(_exoIndex.has(sl)) return sl;
@@ -39557,6 +39688,12 @@ function _musclesAJour(f){
   try{
     const g=_exGuide().get(k);
     if(g) f.muscles=g.p.concat(g.s);
+    // Le nom du terrain, pour la recherche (BQ_LIBELLES), s'il manque.
+    if(!f.libelle&&BQ_LIBELLES[k]) f.libelle=BQ_LIBELLES[k];
+    // La vidéo du guide, quand la fiche en ligne n'en porte pas (05/10/2026).
+    if(!(Array.isArray(f.videos)&&f.videos.length)){
+      const vv=_videosDeCle(k); if(vv.length) f.videos=vv.map(x=>({id:x.id,lib:x.lbl||''}));
+    }
     const tag=_exGuideEstPosing(k)?'posing':(_exGuideEstCardio(k)?'cardio':'');
     if(tag){
       const t=Array.isArray(f.tags)?f.tags:[];
@@ -39564,6 +39701,66 @@ function _musclesAJour(f){
     }
   }catch(e){}
   return f;
+}
+// ── LES FICHES QUE LA BANQUE EN LIGNE N'A PAS (05/10/2026) ──────────────
+// La banque est une copie figée du guide au jour de son remplissage : un
+// exercice ajouté depuis à la table du guide (EX_GUIDE_BRUT) ou à ses
+// variantes n'y est pas, donc introuvable pour le coach. L'app fabrique sa
+// fiche à partir de ce qu'elle sait : muscles, schéma, matériel déduit du nom
+// (les mêmes règles que scripts/seed_exercices.py), vidéos du guide, et un
+// texte seulement quand il est écrit (BQ_TEXTES_APP). Rien n'est inventé.
+// Le texte du guide, recopié tel quel (capture de Kevin, 05/10/2026).
+const BQ_TEXTES_APP=Object.freeze({
+  'RDL MACHINE GUIDEE':'En face de la machine, se pencher le buste et garder les jambes légèrement fléchies et le dos droit. Prendre les poignées basses, puis se redresser en utilisant un mouvement de bassin et garder les poignées près de ses jambes.',
+  'ELEVATION LATERALE POULIE BASSE UNILATERAL':'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation d\'un seul côté vers l\'extérieur jusqu\'à ce que le bras soit parallèle au sol et se tenir à la structure pour pencher son corps sur le côté. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.'
+});
+const BQ_REPOS_APP=Object.freeze({'RDL MACHINE GUIDEE':'02 min','ELEVATION LATERALE POULIE BASSE UNILATERAL':'02 min'});
+// LES NOMS DU TERRAIN (Kevin, 05/10/2026) : ce que le coach tape pour les
+// trouver. Le libellé s'ajoute au nom pour la recherche, la clef ne change
+// pas (historiques de charge, programmes déjà écrits).
+const BQ_LIBELLES=Object.freeze({
+  'ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL':'ÉLÉVATION LATÉRALE POULIE UNILATÉRALE, À HAUTEUR DE HANCHE',
+  'RDL MACHINE GUIDEE':'RDL À LA BELT SQUAT (SOULEVÉ DE TERRE ROUMAIN, MACHINE GUIDÉE)'
+});
+function _bqMateriel(k){
+  const R=[['cardio',/\bTAPIS\b|\bVELO\b|\bRAMEUR\b|\bCORDE A SAUTER\b|\bESCALIERS\b|\bSKIERG\b|\bBATTLE ROPE\b|\bELLIPTIQUE\b|\bPOWER RUN\b/],
+    ['smith',/\bSMITH\b|\bHYPTRUST\b/],
+    ['poulie',/\bPOULIE\b|\bCABLE\b|\bCROSSOVER\b|\bFACE PULL\b|\bPULL OVER\b|\bCHEST PRESS DEBOUT\b|\bTIRAGE\b(?!.*\bBARRE\b)|\bPULLDOWN\b/],
+    ['elastique',/\bELASTIQUE\b|\bBANDE\b/],['kettlebell',/\bKETTLEBELL\b/],
+    ['machine convergente',/\bCONVERGENTE\b|\bISO LATERAL\b|\bHAMMER STRENGTH\b/],
+    ['machine guidee',/\bMACHINES?\b|\bBELT SQUAT\b|\bV SQUAT\b|\bHACKSQUAT\b|\bPRESSE\b|\bPENDULUM\b|\bLEG (EXTENSION|CURL)\b|\bPURE\b/],
+    ['halteres',/\bHALTERE|\bCURL\b|\bELEVATION (LATERALE|FRONTALE|Y|ARRIERE)\b|\bOISEAU\b|\bSUR BANC\b/],
+    ['barre',/\bBARRE\b|\bLANDMINE\b|\bSOULEVE DE TERRE\b|\bSQUAT\b|\bDEVELOPPE COUCHE\b|\bHIP THRUST\b|\bROWING\b|\bVIKING\b/],
+    ['poids du corps',/\bPOMPE|\bTRACTION|\bDIPS\b|\bGAINAGE\b|\bCRUNCH\b|\bAU SOL\b|\bFENTE/]];
+  for(const [c,r] of R) if(r.test(k)) return c;
+  return null;
+}
+function _bqFicheApp(k){
+  const g=_exGuide().get(k); if(!g&&!EX_VARIANTES[k]) return null;
+  const v=EX_VARIANTES[k]||null;
+  const gm=g||(v&&_exGuide().get(v.base))||null;
+  let sch=null; try{ sch=schemaDe({name:k}); }catch(e){ sch=null; }
+  const tags=_exGuideEstPosing(k)?['posing']:(_exGuideEstCardio(k)?['cardio']:[]);
+  return {slug:exSlug(k),nom:k,libelle:(v&&v.nom)||BQ_LIBELLES[k]||undefined,muscles:gm?gm.p.concat(gm.s):[],schema:sch,
+    materiel:_bqMateriel(k),niveau:/\bSOULEVE DE TERRE\b(?!.*(MACHINE|BELT))/.test(k)?'avance':(/\bBARRE\b|\bHALTERE|\bSQUAT\b|\bFENTE/.test(k)?'intermediaire':'debutant'),
+    unilateral:/\bUNILATERAL|\bALTERNE/.test(k),tags,
+    execution:BQ_TEXTES_APP[k]||(v&&v.intro)||'',repos:BQ_REPOS_APP[k]||'',
+    videos:_videosDeCle(k).map(x=>({id:x.id,lib:x.lbl||''})),image:null,erreurs:[],consignes:[],app:true};
+}
+// PURE. Les fiches à ajouter : tout nom du guide (variantes comprises) qui
+// n'a pas de fiche dans la liste reçue.
+function bqFichesApp(liste){
+  const vus=new Set();
+  for(const f of (liste||[])){ if(f&&f.nom){ try{ vus.add(exKey(_nomBanqueCorrige(f.nom))); }catch(e){} } if(f&&f.slug) vus.add(String(f.slug).replace(/-/g,' ').toUpperCase()); }
+  const noms=new Set([..._exGuide().keys(),...Object.keys(EX_VARIANTES)]);
+  const out=[];
+  for(const k of noms){ if(vus.has(k)) continue; const f=_bqFicheApp(k); if(f) out.push(f); }
+  return out;
+}
+// La banque reçue (non vide) est complétée ; une banque vide reste vide.
+function _bqCompleter(liste){
+  const l=Array.isArray(liste)?liste:[];
+  return l.length?l.concat(bqFichesApp(l)):l;
 }
 function _indexerBanque(liste){
   const parSlug={};
@@ -39585,7 +39782,7 @@ async function chargerBanque(force){
       if(brut){
         const d=JSON.parse(brut);
         if(d&&Array.isArray(d.exercices)&&(Date.now()-(d.at||0))<BANQUE_TTL_MS){
-          _banque=_indexerBanque(d.exercices);
+          _banque=_indexerBanque(_bqCompleter(d.exercices));
           return _banque;
         }
       }
@@ -39605,7 +39802,7 @@ async function chargerBanque(force){
     const d=t?JSON.parse(t):null;
     const liste=(d&&Array.isArray(d.exercices))?d.exercices:null;
     if(!liste) return _banque;
-    _banque=_indexerBanque(liste);
+    _banque=_indexerBanque(_bqCompleter(liste));
     try{ localStorage.setItem(BANQUE_CLE,JSON.stringify({at:Date.now(),exercices:liste})); }catch(e){}
   }catch(e){}
   return _banque;
@@ -40187,7 +40384,7 @@ function _normRech(s){
 // Les clefs brutes (TRICEPS, DELT_ANT) sont ajoutees automatiquement plus bas
 // avec les libelles de MUSCLES : inutile de les repeter ici.
 const MUSCLE_SYNONYMES=Object.freeze({
-  TRICEPS   :['triceps'],
+  TRICEPS   :['triceps','tricipital'],
   BICEPS    :['biceps'],
   PECTORAUX :['pecs','pectoraux','poitrine','pec'],
   DORSAUX   :['dos','dorsaux','lats','grand dorsal','dorsal'],
@@ -40312,6 +40509,8 @@ function _passeFiltres(f,ft){
 // successifs donnent le meme ordre.
 //
 // Ce bareme sera relu et ajuste. Les nombres sont ronds pour ca.
+// Ce que le coach tape, et ce que le guide écrit en toutes lettres (05/10/2026).
+const BQ_ABREVIATIONS=Object.freeze({rdl:'souleve de terre roumain',sdt:'souleve de terre'});
 const BQ_SCORE=Object.freeze({
   primaire:100, secondaire:40, nom:30, partie:20, exact:15, debut:10, horsSujet:-200
 });
@@ -40337,7 +40536,9 @@ function scoreBanque(f,q,muscles,user){
     return sc;
   }
   const mots=n.split(' ').filter(Boolean);
-  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0)) sc+=BQ_SCORE.nom;
+  // Les abréviations du terrain : « rdl » trouve le soulevé de terre roumain.
+  const ab=m=>{ const x=BQ_ABREVIATIONS[m]; return !!x&&(nom.indexOf(x)>=0||lib.indexOf(x)>=0); };
+  if(mots.every(m=>nom.indexOf(m)>=0||lib.indexOf(m)>=0||ab(m))) sc+=BQ_SCORE.nom;
   if(f.partie_specifique){
     const ps=_normRech(f.partie_specifique);
     if(mots.every(m=>ps.indexOf(m)>=0)) sc+=BQ_SCORE.partie;
@@ -49605,6 +49806,26 @@ function _recSignature(g,o,sig,y,LARG){
     g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
+  // LE COACH ET LA DATE, en petit, sous la signature (05/10/2026). Le nom de
+  // l'athlète, lui, reste celui de son réglage « Nom affiché sur mes visuels » :
+  // c'est `sig`, et « rien » reste rien.
+  try{
+    const l2=_recSignatureLigne2(currentUser);
+    if(l2){
+      g.save();
+      g.textAlign='center'; g.textBaseline='alphabetic';
+      g.font="600 17px Montserrat,'Segoe UI',sans-serif";
+      g.fillStyle='rgba(255,255,255,.55)';
+      g.fillText(l2,cx,y+27,LARG);
+      g.restore();
+    }
+  }catch(e){}
+}
+// PURE. « COACH <NOM> · 05/10/2026 », ou la date seule sans coach.
+function _recSignatureLigne2(u,maintenant){
+  let coach=''; try{ coach=signatureCoachNom(u); }catch(e){ coach=''; }
+  let d=''; try{ d=new Date(maintenant||Date.now()).toLocaleDateString('fr-FR'); }catch(e){ d=''; }
+  return [(coach&&u&&u.role!=='coach')?'COACH '+coach.toLocaleUpperCase('fr-FR'):'',d].filter(Boolean).join(' · ');
 }
 // PURE. Le sur-titre de la carte d'un record.
 function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
@@ -57978,7 +58199,7 @@ function dbRapports(u,ref){
     const der=vals.length?vals[vals.length-1]:null;
     const base=vals.length>1?(ref==='debut'?vals[0]:vals[vals.length-2]):null;
     return Object.assign({},df,{valeur:der,ecart:(der!=null&&base!=null)?der-base:null,
-      formule:df.cle==='mb'?(comp.length?'Katch-McArdle':MB_NOMS[mbFormuleDe(u)]):''});
+      formule:df.cle==='mb'?mbNom(comp.length?'katch':mbFormuleDe(u)):''});
   });
 }
 // La composition par zone. `tours` : l'écart du ruban depuis la première
@@ -58246,7 +58467,7 @@ const DB_ICONES={
 };
 function _dbCarteRapports(u,neutre){
   const info=_dbInfo('rk','IMC : poids / taille². Ratio taille / hanches : tour de taille divisé par tour de hanches. Ratio masse maigre : part du poids qui n’est pas du gras. '
-    +'Métabolisme : dépense au repos, par Katch-McArdle (masse maigre) ou, à défaut, la formule retenue pour ce dossier (Harris-Benedict ou Mifflin-St Jeor). Écarts comparés à la mesure précédente ou à la première.');
+    +'Métabolisme : dépense au repos, par la méthode RepCore : sur la masse maigre quand elle est mesurée, sinon sur le poids, la taille, l’âge et le sexe. Écarts comparés à la mesure précédente ou à la première.');
   const sel='<select class="db-sel" onchange="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
   const masquer=new Set(neutre?['imc','maigre','mb']:[]);
   const t=dbRapports(u,_dbRef).filter(r=>!masquer.has(r.cle)).map(r=>{
@@ -58640,6 +58861,24 @@ const ANAT_ERR=Object.freeze({echelle:3,main:1,auto:2,estime:4});
  */
 const ANAT_ROTULE=Object.freeze({part:0.278,disp:3.2,source:'0,278 × taille, ANSUR II, ±3,2 %'});
 const ANAT_ECHELLE_CONFIRMEE=0.02;
+// UNE HAUTEUR DE ROTULE INVRAISEMBLABLE EST ÉCARTÉE (Kevin, 05/10/2026). Une
+// fiche affichait « 42,9 % d'écart » avec des points bien placés : c'était la
+// mesure du bilan qui était fausse (prise à la hanche, ou au mauvais repère),
+// et le bandeau envoyait le coach déplacer des points justes. La rotule est à
+// 0,278 × la taille, ±3,2 % (ANSUR II) : à plus de 15 % de cette part, soit
+// près de cinq écarts-types, ce n'est plus une morphologie, c'est une saisie.
+// On ne s'en sert alors pas : l'échelle est vérifiée par l'estimation, et le
+// bandeau nomme le chiffre fautif et la fourchette attendue.
+const ANAT_ROTULE_TOLERANCE=0.15;
+/** PURE. null si la mesure est plausible pour cette taille, sinon ce qu'il faut en dire. */
+function anatRotuleInvraisemblable(genouCm,tailleCm){
+  const g=Number(genouCm), t=Number(tailleCm);
+  if(!(g>0)||!(t>0)) return null;
+  const att=ANAT_ROTULE.part*t;
+  if(Math.abs(g/att-1)<=ANAT_ROTULE_TOLERANCE) return null;
+  return {cm:g,taille:t,min:Math.round(att*(1-ANAT_ROTULE_TOLERANCE)),
+    max:Math.round(att*(1+ANAT_ROTULE_TOLERANCE))};
+}
 const ANAT_ECHELLE_A_VERIFIER_PCT=5;
 /**
  * PURE. Les deux échelles d'une vue de face, et leur accord.
@@ -58657,14 +58896,35 @@ function anatVerifEchelle(u,F,kGenou){
   const e1=F.cmPx||null;
   // Le mètre d'abord : l'échelle du lot 7, sur la même hauteur de genou.
   const m=_anatSafe(()=>morphoEchellePhoto(u,{genou:hG}));
+  let ecartee=null;
   if(m&&m.cmPx&&e1){
     const ratio=m.cmPx/e1;
-    return _anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    const v=_anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+    // La mesure ne colle pas avec la photo ET ne colle pas avec la taille :
+    // c'est elle qui est fausse, pas les points. On passe à l'estimation.
+    if(v.statut==='divergence') ecartee=anatRotuleInvraisemblable(m.genouCm,_anatSafe(()=>_tailleCm(u)));
+    if(!ecartee) return v;
   }
   // Sinon l'estimation : l'écart ne dépend alors pas de la taille (0,278 × la
   // hauteur du corps sur la photo, comparé à la hauteur du genou).
   const ratio=ANAT_ROTULE.part*F.stature/hG;
-  return _anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  const r=_anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+  if(ecartee) r.mesureEcartee=ecartee;
+  // LA CAUSE, QUAND ÇA DIVERGE : une photo en plongée écrase les jambes, et le
+  // genou tombe trop bas. Les points n'y sont pour rien.
+  if(r.statut==='divergence'){
+    const pv=_anatSafe(()=>anatPriseDeVue(F));
+    if(pv&&pv.sens) r.prise=pv;
+  }
+  return r;
+}
+/** PURE. La prise de vue d'une vue de face (épaules, hanches, chevilles posées). */
+function anatPriseDeVue(F){
+  if(!F||!F.P2) return null;
+  const m=k=>{ const g=F.P2(k,'g'),d=F.P2(k,'d'); return (g&&d)?(g.y+d.y)/2:null; };
+  const e=m('epaule'),h=m('hanche'),c=m('cheville');
+  if(e==null||h==null||c==null) return null;
+  return priseDeVue(e,h,c);
 }
 function _anatStatutEchelle(o){
   const ecart=Math.abs(o.ratio-1);
@@ -60531,6 +60791,14 @@ function _anatTexteBrut(f,res){
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
     return T;
   }
+  if(f.grise&&res&&res.echelle&&res.echelle.verif&&res.echelle.verif.prise){
+    const pl=res.echelle.verif.prise.sens==='plongee';
+    T.court='Longueurs en gris : photo prise '+(pl?'en plongée (téléphone trop haut ou trop près)':'en contre-plongée (téléphone trop bas)')+', à refaire.';
+    T.lecture='Sur cette photo, les jambes paraissent environ '+res.echelle.verif.prise.pct+' % plus '+(pl?'courtes':'longues')+' qu’elles ne sont par rapport au buste : c’est la perspective, pas la morphologie, et aucun déplacement de point ne la corrige. Aucune longueur n’est classée.'
+      +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
+    T.verifier='Refaire la photo : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.';
+    return T;
+  }
   if(f.grise){
     T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure (sommet du crâne, talons et genoux à vérifier).';
     T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
@@ -61258,7 +61526,8 @@ function _anatExportCss(){
     +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
     +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
     +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:4px}.ex-z ul{margin:4px 0 0 16px;padding:0}'
-    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}'
+    +'.doc-sign{font-size:7.5pt;color:#71717a;text-align:center;letter-spacing:.4px;margin-top:10px}';
 }
 /** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
 function _anatExportPhoto(a,pb,vue,legende){
@@ -61306,12 +61575,12 @@ function anatExportHtml(c,mode){
 
   if(mode==='athlete'){
     const cs=anatConsignesExport(prios);
-    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par '+escapeHtml(signatureCoachNom(c)||'ton coach')+'<br>le '+dJour)
       +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
       +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
       +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
         :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
-      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>'+htmlSignatureDocument(c);
     return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
   }
 
@@ -61346,7 +61615,7 @@ function anatExportHtml(c,mode){
     +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
     +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
   // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
-  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+  return doc('Analyse · '+nom+' · '+dBilan,corps+htmlSignatureDocument(c),'ex-coach');
 }
 /**
  * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression
@@ -61401,7 +61670,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
@@ -62934,8 +63203,29 @@ function _htmlAnat(c){
   // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
   // PHOTO. Kevin : « pas un bouton, plutôt un menu déroulant du haut vers le
   // bas ; que tout cet espace prenne la même place que la photo ».
-  const alerteEch=(ver&&ver.statut==='divergence')
-    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.</span></div>':'';
+  // LA MESURE FAUTIVE D'ABORD (05/10/2026) : quand la hauteur de rotule du
+  // bilan a été écartée, le bandeau le dit, avec le chiffre et la fourchette,
+  // et propose de la redemander à l'athlète (le chemin des mesures demandées).
+  const alerteRotule=(ver&&ver.mesureEcartee)?(function(){
+    const e=ver.mesureEcartee;
+    const dem=_anatSafe(()=>demandeMesurePour('deb-rotule',getOwnedClient(currentClientId)));
+    const coach=_anatSafe(()=>!!getOwnedClient(currentClientId));
+    return '<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Hauteur de rotule du bilan écartée</b> : '
+      +_anatN(e.cm,1)+' cm pour '+_anatN(e.taille,0)+' cm de taille, on attend entre '+e.min+' et '+e.max
+      +' cm. Elle ne sert pas : l’échelle est vérifiée par l’estimation à la place. À remesurer debout, pieds nus, du sol au milieu de la rotule.'
+      +(coach?(dem?' <i>Mesure déjà redemandée.</i>'
+        :' <button type="button" class="ccd-out-r" onclick="demanderMesure(\'deb-rotule\')">Redemander la mesure</button>'):'')
+      +'</span></div>';
+  })():'';
+  const alertePrise=(ver&&ver.statut==='divergence'&&ver.prise)
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Photo prise '+(ver.prise.sens==='plongee'?'en plongée':'en contre-plongée')+'</b> : le téléphone était trop '
+      +(ver.prise.sens==='plongee'?'haut ou trop près':'bas')+'. Les jambes y paraissent environ '+ver.prise.pct+' % plus '
+      +(ver.prise.sens==='plongee'?'courtes':'longues')+' qu’elles ne sont, par rapport au buste. <b>Les points ne sont pas en cause</b>, inutile de les déplacer : '
+      +'les longueurs restent en gris sur cette photo. À refaire : téléphone posé à hauteur de hanche, bien droit, à 2 ou 3 m, le corps en entier dans le cadre.</span></div>':'';
+  const alerteEch=alerteRotule+(alertePrise?alertePrise:(ver&&ver.statut==='divergence')
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.'
+      +((ver.source==='metre'&&ver.mesureCm)?' La hauteur de rotule saisie est de '+_anatN(ver.mesureCm,1)+' cm : si les points sont bien placés, c’est elle ou la taille du dossier qu’il faut vérifier.':'')
+      +'</span></div>':'');
   const alertePieds=(echelle&&echelle.piedsCoupes)
     ?'<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Pieds coupés : l’échelle est estimée.</b> Les orteils sortent du cadre ou ne se lisent pas : le talon, bout bas de l’échelle, est deviné. Au prochain bilan, photo en pied avec un peu de sol sous les pieds.</span></div>':'';
   const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch+alertePieds
@@ -67492,6 +67782,8 @@ function rapportPeriode(u,debut,fin,opts){
     periode:{debut,fin,libelle:rapLibellePeriode(debut,fin)},
     athlete:{prenom:(u&&u.fname)||''},
     coach:(()=>{ try{ return _nomCoachAffiche()||''; }catch(e){ return ''; } })(),
+    // Le pied du document, lu sur le dossier IMPRIMÉ (signatureDocument).
+    signature:(()=>{ try{ return signatureDocument(u,{date:now}); }catch(e){ return ''; } })(),
     nSeances:ss.length,
     suffisant:ss.length>=RAP_MIN_SEANCES,
     assiduite:rapAssiduite(u,debut,fin),
@@ -67808,6 +68100,9 @@ function htmlRapport(r){
   if(B.mot) h+=`<section class="rap-bloc"><h2>Mot du coach</h2>
     <div class="rap-mot" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mot du coach"></div>
     <p class="rap-note rap-noprint">Écris ici avant d'imprimer. Rien n'est enregistré : ce texte vit le temps de l'impression.</p></section>`;
+  // LA SIGNATURE, HORS DE TOUTE CASE : en-tête décoché, le document sortait
+  // sans rien qui dise d'où il vient ni pour qui.
+  if(r.signature) h+=`<p class="doc-sign">${escapeHtml(r.signature)}</p>`;
   return h;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────
@@ -68023,6 +68318,7 @@ function ficheAlimDonnees(user,chercher){
     return n||String(u.coachName||'').trim()||'';
   })();
   return {ok:true,
+    edite:Date.now(),
     athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
     kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
     jourOn:isOn,
@@ -68068,7 +68364,7 @@ function htmlFicheAlim(user,chercher){
     </div>`;
   const pied=`<footer class="fa-pied">
       <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
-      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
+      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
 
@@ -68376,7 +68672,8 @@ function htmlProgrammePrint(u){
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
   </header>`;
-  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>';
+  const sign=htmlSignatureDocument(u);
+  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>'+sign;
   const cols=_ppColonnes(seances);
   return tete+seances.map(x=>{
     const s=x.s;
@@ -68395,7 +68692,7 @@ function htmlProgrammePrint(u){
       +_ppBloc('Retour au calme',cd)
       +_ppBloc('Notes',s.notes)
       +'</section>';
-  }).join('');
+  }).join('')+sign;
 }
 let _ppCible=null;
 // Sur le modèle d’ouvrirRapport : la cible est passée, et le défaut est le
@@ -75212,6 +75509,31 @@ function posesGenre(prefix){
 //   placement. Aucune mesure, aucune lecture du corps ; la photo passe par le
 //   moteur de pose SUR L'APPAREIL, et rien d'autre n'est gardé que le verdict
 //   (vert / orange) et les codes des consignes, pour le coach.
+// LA PHOTO PRISE EN PLONGÉE (Kevin, 05/10/2026). Téléphone tenu trop haut et
+// trop près : les jambes, plus loin de l'objectif que le buste, sortent
+// écrasées. Sur la fiche qui a révélé le défaut, elles faisaient 38 % de la
+// hauteur du corps au lieu de 50 %, le genou tombait à 19 % au lieu de 28 %,
+// et l'analyse accusait les points (« 42,9 % d'écart ») alors qu'ils étaient
+// justes. On le lit sur un rapport que la distance ne change pas : hauteur
+// hanches → chevilles sur hauteur épaules → hanches. Il vaut 1,6 sur un corps
+// d'aplomb (de Leva), 1,4 sur les points bruts du moteur ; sous 1,25 la photo
+// est en plongée, sous 1,12 elle n'est plus mesurable. Au-dessus de 2,1, le
+// téléphone était trop bas (contre-plongée).
+const PRISE_VUE=Object.freeze({PLONGEE:1.25,PLONGEE_NETTE:1.12,CONTRE:2.1,REF:1.6});
+/**
+ * PURE. @param {number} yEp @param {number} yHa @param {number} yCh hauteurs
+ * (y vers le bas) du milieu des épaules, des hanches et des chevilles.
+ * @returns {null|{r:number,sens:'plongee'|'contre'|null,net:boolean,pct:number}}
+ */
+function priseDeVue(yEp,yHa,yCh){
+  const tr=Number(yHa)-Number(yEp), ja=Number(yCh)-Number(yHa);
+  if(!(tr>0)||!(ja>0)) return null;
+  const r=ja/tr, P=PRISE_VUE;
+  return {r:Math.round(r*100)/100,
+    sens:r<P.PLONGEE?'plongee':(r>P.CONTRE?'contre':null),
+    net:r<P.PLONGEE_NETTE,
+    pct:Math.round(Math.abs(1-r/P.REF)*100)};
+}
 const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,ROT_ORANGE:8,ROT_ROUGE:25,PROFIL_MIN:35,
   CLES:Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28]),
   MSG:Object.freeze({
@@ -75223,13 +75545,15 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
     rotation:'Tourne-toi bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     rotationDos:'Dos bien face au téléphone : épaules et bassin parallèles à l’objectif.',
     profil:'Mets-toi bien de profil : l’épaule vers le téléphone.',
+    plongee:'Le téléphone est trop haut ou trop près : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
+    contre:'Le téléphone est trop bas ou penché vers le haut : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
     sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
     clair:'Photo trop claire : évite le soleil direct ou le flash.',
     ok:'Photo exploitable : tout est dans le cadre.'})});
 /** Les six consignes illustrées de chaque vue (E1). */
 const PHOTO_CONSIGNES=Object.freeze({
   face:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Face à la lumière, fond clair et uni','Bras relâchés, légèrement écartés du corps','Bien face au téléphone, pieds à largeur de hanches','Tenue près du corps, pieds nus'],
-  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
+  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
   side:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, mains contre les cuisses','Bien de profil, épaule vers le téléphone, regard droit devant','Pieds joints, tenue près du corps, pieds nus']});
 const PHOTO_ICONES=['M4 4h16v16H4zM12 7v10','M7 21h10M12 17v4M9 3h6v14H9z','M12 3v2M5 12H3m18 0h-2M6 6l1.5 1.5M18 6l-1.5 1.5M8 12a4 4 0 0 0 8 0','M12 5v7m-5 8 3-8h4l3 8M5 10l4 1m10-1-4 1','M12 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-4 18 2-9h4l2 9','M8 4h8l2 5-3 1v10H9V10L6 9z'];
 /**
@@ -75275,6 +75599,16 @@ function photoControle(raw,vue){
       // ⚠ JAMAIS ROUGE : la profondeur du moteur est bruitée — une photo de face
       //   sortait « à reprendre ». Au-delà de 8°, une réserve, pas un refus.
       else if(rot>C.ROT_ORANGE) dire(vue==='back'?'rotationDos':'rotation',false);
+    }
+  }
+  // La prise de vue : plongée ou contre-plongée. Rouge quand elle est nette,
+  // la photo ne se mesure plus ; une réserve sinon.
+  {
+    const hg=P(23), hd=P(24), cg=P(27), cd=P(28);
+    if(eg&&ed&&hg&&hd&&cg&&cd&&[eg,ed,hg,hd,cg,cd].every(q=>q.v>=0.5)){
+      const pv=priseDeVue((eg.y+ed.y)/2,(hg.y+hd.y)/2,(cg.y+cd.y)/2);
+      if(pv&&pv.sens==='plongee') dire('plongee',pv.net);
+      else if(pv&&pv.sens==='contre') dire('contre',false);
     }
   }
   // La lumière.
@@ -75363,7 +75697,7 @@ function bMetier(id){
       value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
     <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 var(--r-3) var(--r-3);max-height:210px;overflow:auto"></div>
     <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:6px;color:${n?'var(--success)':'var(--text-faint)'}">${
-      n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
+      n?nr(escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',','),'Niveau d’activité : '+escapeHtml(n.lib).toLowerCase())
        :(v?'Métier non reconnu : le calcul utilisera le nombre de séances.':'')}</div>
   </div>`;
 }
@@ -75384,7 +75718,7 @@ function _bMetierSaisie(id,val){
   if(zn){
     const n=facteurProfession(val);
     zn.style.color=n?'var(--success)':'var(--text-faint)';
-    zn.textContent=n?(n.lib+' → facteur '+String(n.f).replace('.',','))
+    zn.textContent=n?nr(n.lib+' → facteur '+String(n.f).replace('.',','),'Niveau d’activité : '+n.lib.toLowerCase())
       :(val?'Métier non reconnu : le calcul utilisera le nombre de séances.':'');
   }
 }
@@ -76740,16 +77074,16 @@ function renderContraintesAthlete(){
 // séparés par ~.
 const ZONES_ARTICULAIRES=Object.freeze(["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche","genou","cheville"]);
 const SCHEMAS_META=Object.freeze({
-  "charniere-hanche":{lib:"Charnière de hanche",nb:32,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
-  "squat":{lib:"Squat",nb:31,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
-  "fente":{lib:"Fente",nb:12,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
-  "poussee-verticale":{lib:"Poussée verticale",nb:15,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
+  "charniere-hanche":{lib:"Charnière de hanche",nb:37,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
+  "squat":{lib:"Squat",nb:35,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
+  "fente":{lib:"Fente",nb:14,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
+  "poussee-verticale":{lib:"Poussée verticale",nb:17,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
   "poussee-horizontale":{lib:"Poussée horizontale",nb:64,ex:["butterfly","chest crossover dual","chest press debout"],hors:["rachis-cervical","hanche","genou","cheville"]},
   "tirage-vertical":{lib:"Tirage vertical",nb:27,ex:["fessier a la machine de traction","iso lateral front lat pulldown","muscle up"],hors:["hanche","genou","cheville"]},
-  "tirage-horizontal":{lib:"Tirage horizontal",nb:53,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
-  "isolation-epaule":{lib:"Isolation épaule",nb:24,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
-  "isolation-coude":{lib:"Isolation coude",nb:64,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
-  "isolation-genou":{lib:"Isolation genou",nb:10,ex:["leg curl allonge","leg curl allonge en unilateral","leg curl assis"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","cheville"]},
+  "tirage-horizontal":{lib:"Tirage horizontal",nb:59,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
+  "isolation-epaule":{lib:"Isolation épaule",nb:26,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
+  "isolation-coude":{lib:"Isolation coude",nb:65,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
+  "isolation-genou":{lib:"Isolation genou",nb:11,ex:["leg curl allonge","leg curl allonge en unilateral","leg curl assis"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","cheville"]},
   "isolation-hanche":{lib:"Isolation hanche",nb:11,ex:["3d abductor","abducteur a la machine","abducteur assis avec elastique"],hors:["rachis-cervical","epaule","coude","poignet","genou","cheville"]},
   "mollets-cheville":{lib:"Mollets et cheville",nb:12,ex:["calf extension machine","donkey calf raise machine","mollets a la hacksquat en unilateral"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche"]},
   "gainage-tronc":{lib:"Gainage et tronc",nb:37,ex:["ab crunch bench","abs roller","copenhagen plank"],hors:["coude","genou","cheville"]},
@@ -76767,20 +77101,20 @@ const SCHEMAS_BRUT={
   "isolation-hanche":"3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~ADDUCTEUR A LA MACHINE~ADDUCTION DEBOUT POULIE ELASTIQUE~DONKEY KICK SMITH MACHINE~FIRE HYDRANT~STANDING ADUCTOR",
   "gainage-tronc":"AB CRUNCH BENCH~ABS ROLLER~COPENHAGEN PLANK~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH AU SOL AVEC POIDS~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE CHAISE~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~ROWING PLANCHE BARRE~SUPERMAN~V SIT UP",
   "posing":"ABDOMINALS AND THIGHS~SIDE TRICEPS~BACK DOUBLE BICEPS~FRONT DOUBLE BICEPS~FRONT LAT SPREAD~ICARUS POSE~LE VACUUM~MOON POSE~MOST MUSCULAR POSE~PRIEST MANTIS POSE~QUARTER TURN~REAR LAT SPREAD~SIDE CHEST~THE CHRISTMAS THREE~THE KNEEL~VACUUM POSE~ZYZZ POSE",
-  "isolation-epaule":"ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~ELEVATION Y~LATERAL RAISE~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE",
+  "isolation-epaule":"ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~ELEVATION LATERALE ASSIS SUR BANC~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE BASSE UNILATERAL~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~ELEVATION Y~LATERAL RAISE~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE",
   "pliometrie":"BARBELL THUSTERS~BURPEES~CHUTE DE BOX SAUT~JUMPING JACK~MONTE DE GENOUX~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES~POWER RUN~QUAD STOMP~RENVERSEMENT DE PNEU~SAUT SUR LES COTES~SAUTS SUR PLACE AVEC ELASTIQUE~SLEDGE~SQUAT SAUTE~SQUAT SAUTE SUR BOX~WALL BALL",
-  "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~REVERSE CURL HALTERE ALTERNE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
+  "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~EXTENSIONS POULIE BASSE TRICEPS~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~REVERSE CURL HALTERE ALTERNE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
   "poignet-avant-bras":"BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER",
-  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
+  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RDL MACHINE GUIDEE~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
   "poussee-horizontale":"BUTTERFLY~BUTTERFLY UNILATERAL~CHEST CROSSOVER DUAL~CHEST PRESS DEBOUT~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE PRISE SERREE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS BAS DE PECS~DIPS ELASTIQUE~DIPS LESTE~DIPS MACHINE~DIPS MACHINE BAS DE PECS~DIPS MACHINE GUIDEE~DIPS SUR BARRE~DIPS SUR BARRE ELASTIQUE~DIPS SUR BARRE LESTE~ECARTE HALTERE SUR BANC~ECARTE HALTERE SUR BANC DECLINE~ECARTE HALTERE SUR BANC INCLINE~ECARTE MACHINE~ECARTE MACHINE HAUT DE PEC~ECARTE POULIE BASSE~ECARTE POULIE BASSE EN UNILATERAL~ECARTE POULIE BASSE SUR BANC~ECARTE POULIE HAUT EN UNILATERAL~ECARTE POULIE HAUTE~ECARTE POULIE HAUTE BUSTE PENCHE~ECARTE POULIE HAUTE CONTRE BANC~ECARTE POULIE SUR BANC~ECARTE POULIE SUR BANC INCLINE~FLOOR PRESS~PIKE PUSH UP~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SERREES~TRICEPS DIPS",
   "mollets-cheville":"CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION",
   "halterophilie":"CLEAN AND JERK~POWER CLEAN~SNATCH",
-  "squat":"DEEP SQUAT~HACKSQUAT~PENDULUM SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS ECARTES~PRESSE A CUISSE INCLINE PIEDS EN BAS~PRESSE A CUISSE INCLINE PIEDS EN HAUT~PRESSE A CUISSE ISO LATERALE~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES~SQUAT AVEC SAC~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT",
-  "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS",
-  "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE",
-  "fente":"FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
+  "squat":"DEEP SQUAT~GOBELET SQUAT A LA BELT SQUAT~HACKSQUAT~PENDULUM SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE ASSISE PIEDS EN BAS~PRESSE A CUISSE ASSISE PIEDS EN HAUT~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE INCLINE PIEDS ECARTES~PRESSE A CUISSE INCLINE PIEDS EN BAS~PRESSE A CUISSE INCLINE PIEDS EN HAUT~PRESSE A CUISSE ISO LATERALE~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AU BELT SQUAT VERSION FESSIER~SQUAT AU BELT SQUAT VERSION QUADS~SQUAT AVEC HALTERES~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES~SQUAT AVEC SAC~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT~V SQUAT FACE AU SIEGE",
+  "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS~SHOULDER PRESS PURE METEOR~VIKING PRESS PRISE NEUTRE",
+  "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~HIGH ROW HAMMER STRENGTH~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE NEUTRE~TIRAGE HORIZONTAL MACHINE CONVERGENTE PRONATION~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE SUPINATION~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE~TIRAGE HORIZONTAL MACHINE UNILATERAL SUPINATION~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE",
+  "fente":"FENTE BULGARE A LA BELT SQUAT~FENTE BULGARE MACHINE~FENTES A LA V SQUAT~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
   "tirage-vertical":"FESSIER A LA MACHINE DE TRACTION~ISO LATERAL FRONT LAT PULLDOWN~MUSCLE UP~PULL OVER~PULL OVER CORDE~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TRACTION PRISE SERREE~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION",
-  "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~LEG EXTENSION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
+  "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ALLONGE HALTERE~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~LEG EXTENSION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
   "port-de-charge":"MARCHE DU FERMIER~MONTEE DE CORDE~MONTEE DE CORDE SANS LES JAMBES"
 };
 // Index nom d'exercice → schéma, construit une fois.
@@ -92027,7 +92361,7 @@ function _htmlDepartAthlete(nut){
   const b=besoinsProposes(currentUser);
   if(!b||b.source===null) return '';
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
-  const nom=MB_NOMS[b.source]||'Mifflin-St Jeor';
+  const nom=mbNom(b.source);
   const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
@@ -97972,7 +98306,7 @@ function htmlRepartitionProt(u,entrees,jour){
       +'<span class="rp-piste">'+(r.seuil!=null?'<i class="rp-seuil" style="left:'+pc(r.seuil)+'%"></i>':'')
       +'<b class="rp-b'+(x.prise?' rp-plein':'')+'" style="width:'+pc(x.g)+'%"></b></span>'
       +'<span class="rp-g">'+escapeHtml(String(Math.round(x.g)))+' g</span></div>').join('')+'</div>'
-    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g (0,4 g par kilo), le repère qui profite le mieux au muscle.</div>':'')
+    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g'+nr(' (0,4 g par kilo)','')+', le repère qui profite le mieux au muscle.</div>':'')
     +(ph?'<div class="rp-phrase">'+escapeHtml(ph)+'</div>':'')
     +'</div>';
 }
@@ -101446,7 +101780,7 @@ function poidsMacros(u){
 function libPoidsMacros(pm){
   if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
   return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
-    +(pm.type==='maigre'?'poids sec (masse maigre × 1,15)':'poids ajusté');
+    +(pm.type==='maigre'?nr('poids sec (masse maigre × 1,15)','poids sec'):'poids ajusté');
 }
 // Les deux alertes, dites à l'écran (coach et athlète).
 function _htmlAlertesMacros(x,vu){
@@ -101574,6 +101908,35 @@ function mbEstime(poids,taille,age,sexe,u){
 }
 const MB_FORMULES=Object.freeze(['harris','mifflin']);
 const MB_NOMS=Object.freeze({katch:'Katch-McArdle',harris:'Harris-Benedict',mifflin:'Mifflin-St Jeor'});
+// ══ LES NOMS QU'ON MONTRE (05/10/2026) ═════════════════════════════════════
+//
+// Les écrans de calcul des besoins ne nomment plus les formules ni leurs
+// coefficients : ils disent « Méthode RepCore, sur la masse maigre », « niveau
+// d'activité : moyennement actif ». LES CALCULS NE CHANGENT PAS D'UN CHIFFRE :
+// seul le libellé change, et MB_NOMS garde les noms réels.
+//
+// UN RÉGLAGE, RÉSERVÉ AU COMPTE DU CRÉATEUR, les réaffiche (« Noms réels des
+// formules », dans le tableau « Facteurs » de la fiche nutrition) : Kevin doit
+// pouvoir relire ce que l'app calcule vraiment. Il vit sur l'appareil, et ne
+// vaut que pour ce compte : pour tout autre, nomsReels() rend faux quoi qu'il
+// y ait dans le stockage.
+//   nr(reel, maison) : le texte à montrer, selon ce réglage.
+//   mbNom(cle)       : le nom de la formule du métabolisme.
+const NOMS_REELS_CLE='rc_noms_reels';
+const MB_NOMS_MAISON=Object.freeze({katch:'Méthode RepCore, sur la masse maigre',harris:'Méthode RepCore standard',mifflin:'Méthode RepCore prudente'});
+function nomsReels(){
+  try{ return !!(currentUser&&currentUser.email===CREATOR_EMAIL)&&localStorage.getItem(NOMS_REELS_CLE)==='1'; }catch(e){ return false; }
+}
+function nr(reel,maison){ return nomsReels()?reel:maison; }
+function mbNom(cle){
+  return nomsReels()?(MB_NOMS[cle]||'Mifflin-St Jeor'):(MB_NOMS_MAISON[cle]||'Méthode RepCore');
+}
+function basculerNomsReels(on){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+  try{ if(on) localStorage.setItem(NOMS_REELS_CLE,'1'); else localStorage.removeItem(NOMS_REELS_CLE); }catch(e){}
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
 const MB_IMC_MIFFLIN=30;
 // PURE. La formule d'estimation du metabolisme pour CE dossier :
 //   1. le reglage du coach (nutrition.tableur.formuleMB) ;
@@ -101940,7 +102303,7 @@ function besoinsProposes(user,opts){
     // a la place de Mifflin, sur decision de Kevin — et un athlete dont la
     // proposition monte de 137 kcal a le droit de savoir pourquoi.
     hypotheses.push('tours de mesure absents : estimation '
-      +(MB_NOMS[source]||'Mifflin-St Jeor')
+      +mbNom(source)
       +' sur poids, taille, âge et sexe'); }
   if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
   // AVANT le facteur d'activité, et sur le métabolisme de repos seul. Ce
@@ -101988,12 +102351,12 @@ function besoinsProposes(user,opts){
   // ── Le NEAT, nommé et chiffré ──
   if(neat.source==='profession')
     hypotheses.push(metier.toLowerCase()+' : '+neat.lib.toLowerCase()
-      +' → NEAT × '+_vf(neat.f));
+      +nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else if(neat.source==='pas')
     hypotheses.push(neat.pas.toLocaleString('fr-FR')
-      +' pas par jour en moyenne → NEAT × '+_vf(neat.f));
+      +' pas par jour en moyenne'+nr(' → NEAT × '+_vf(neat.f),' (NEAT)'));
   else
-    hypotheses.push('ni profession reconnue ni relevé de pas → NEAT × '+_vf(neat.f));
+    hypotheses.push('ni profession reconnue ni relevé de pas'+nr(' → NEAT × '+_vf(neat.f),' : NEAT de base'));
   // Dire « déduit des pas » sans aucun relevé de pas était faux. La phrase
   // suit ce qui a RÉELLEMENT servi.
   if(metier&&neat.source==='pas')
@@ -102007,7 +102370,7 @@ function besoinsProposes(user,opts){
   if(_naf.source==='declare'&&nafIncoherent(user)) hypotheses.push(NAF_ALERTE_METIER);
   // Le poids qui chiffre le sport (MET nets).
   if(sport.semaine>0)
-    hypotheses.push('sport chiffré en MET nets sur '+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
+    hypotheses.push(nr('sport chiffré en MET nets sur ','sport chiffré sur un poids de ')+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
       +(sport.poidsDefaut?' (poids inconnu : valeur par défaut)':''));
   if(sport.source==='coach')
     hypotheses.push('sports réglés à la main par le coach → '+sport.semaine
@@ -103272,14 +103635,16 @@ function _htmlEcartFormules(t){
   // maigre mesuree, c'est Katch-McArdle, quel que soit le choix du menu : la
   // phrase le disait en dernier, apres deux chiffres qui ne servaient pas, et
   // le menu « Mifflin-St Jeor » se lisait comme la formule en cours.
+  const nH=nr('Harris-Benedict','méthode standard'), nM=nr('Mifflin-St Jeor','méthode prudente');
+  const cap=x=>x.charAt(0).toUpperCase()+x.slice(1);
   if(t.mbSource==='katch')
-    return 'Calcul actuel : Katch-McArdle, sur sa masse maigre mesurée'
+    return 'Calcul actuel : '+nr('Katch-McArdle','méthode RepCore')+', sur sa masse maigre mesurée'
       +(t.mbBrut>0?' ('+_tbNb(t.mbBrut)+' kcal)':'')
-      +'. Ce choix ne servira que sans masse maigre : Harris-Benedict '+_tbNb(hb)
-      +', Mifflin-St Jeor '+_tbNb(mf)+', écart de '+e+' kcal.';
+      +'. Ce choix ne servira que sans masse maigre : '+nH+' '+_tbNb(hb)
+      +', '+nM+' '+_tbNb(mf)+', écart de '+e+' kcal.';
   const harris=t.mbSource==='harris';
-  return 'Calcul actuel : '+(harris?'Harris-Benedict':'Mifflin-St Jeor')+', '
-    +_tbNb(harris?hb:mf)+' kcal. '+(harris?'Mifflin-St Jeor':'Harris-Benedict')
+  return 'Calcul actuel : '+(harris?nH:nM)+', '
+    +_tbNb(harris?hb:mf)+' kcal. '+nr(harris?'Mifflin-St Jeor':'Harris-Benedict',cap('la '+(harris?nM:nH)))
     +' donnerait '+_tbNb(harris?mf:hb)+' kcal : écart de '+e+' kcal.';
 }
 function majTableauTableur(quoi,val){
@@ -103763,7 +104128,7 @@ function _htmlTableauxTableur(c){
     +li('Taille',vb(_tbNb(t.taille)+' cm'),'premier bilan',false,'taille')
     +li('Âge',vb(_tbNb(t.age)+' ans'),_srcAge,false,'calendar')
     +li('Niveau d’activité hors sport',
-        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
+        sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+nr(' (×'+String(x.f).replace('.',',')+')','')})),
           t.naf.cle),
         t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' ⚠ '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
@@ -103771,13 +104136,19 @@ function _htmlTableauxTableur(c){
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
               :'aucune profession renseignée, choisis le niveau')),false,'course')
     // LA FORMULE DU METABOLISME, choisie ici (30/09/2026), l'ecart dit a cote.
-    +li('Formule du métabolisme',
+    +li(nr('Formule du métabolisme','Méthode de calcul du métabolisme'),
         sel('tbk-formule','formuleMB',[
-          {v:'',lib:'Auto · '+({harris:'Harris',mifflin:'Mifflin'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
-          {v:'harris',lib:'Harris-Benedict'},{v:'mifflin',lib:'Mifflin-St Jeor'}],
+          {v:'',lib:'Auto · '+(nomsReels()?{harris:'Harris',mifflin:'Mifflin'}:{harris:'standard',mifflin:'prudente'})[(function(){ const x=Object.assign({},c,{nutrition:Object.assign({},c.nutrition||{},{tableur:Object.assign({},(c.nutrition||{}).tableur||{},{formuleMB:undefined})})}); return mbFormuleDe(x); })()]},
+          {v:'harris',lib:mbNom('harris')},{v:'mifflin',lib:mbNom('mifflin')}],
           (((c.nutrition||{}).tableur||{}).formuleMB)||''),
         _htmlEcartFormules(t),false,'calc')
-    +li('Coefficient d’objectif',
+    +((currentUser&&currentUser.email===CREATOR_EMAIL)
+      ?li('Noms réels des formules',
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
+            +(nomsReels()?' checked':'')+'> Afficher</label>',
+          'Réservé à ton compte : les autres voient les libellés RepCore, jamais le nom des formules ni les coefficients.',false,'calc')
+      :'')
+    +li(nr('Coefficient d’objectif','Ajustement selon l’objectif'),
         sel('tbk-coef','coef',(OBJ_COEF_ECHELLE[t.phase]||[1]).map(v=>({v:v,
           lib:Math.round(v*100)+' % de la dépense'})),t.coef),
         (PHASES[t.phase]?PHASES[t.phase].lib:'Maintien')
@@ -103852,20 +104223,20 @@ function _htmlTableauxTableur(c){
     +_tbNb(t.sportJour)+' kcal</td></tr></tbody></table>';
 
   // ── TABLEAU 3 — LES BESOINS, LIGNE A LIGNE ──────────────────────────
-  const libMB=t.mbSource==='katch'?'masse maigre mesurée (Katch-McArdle)'
-    :(t.mbSource==='harris'?'Harris-Benedict, poids taille âge sexe'
-      :'Mifflin-St Jeor, poids taille âge sexe');
+  const libMB=t.mbSource==='katch'?nr('masse maigre mesurée (Katch-McArdle)','méthode RepCore, sur la masse maigre mesurée')
+    :(t.mbSource==='harris'?nr('Harris-Benedict, poids taille âge sexe','méthode RepCore standard, poids taille âge sexe')
+      :nr('Mifflin-St Jeor, poids taille âge sexe','méthode RepCore prudente, poids taille âge sexe'));
   // Le sous-titre NOMME LA FORMULE QUI A CALCULE, lue au meme endroit que la
   // premiere ligne : une maquette qui dirait « Harris-Benedict » pour un
   // calcul fait en Katch-McArdle mentirait.
-  const nomMB=t.mbSource==='katch'?'Katch-McArdle':(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+  const nomMB=mbNom(t.mbSource);
   let hBesoins='<table class="tbk">'+_tbkCap('flame','Besoins caloriques',
-      'Estimation basée sur la méthode '+nomMB,'Estimation')+'<tbody>'
+      nr('Estimation basée sur la méthode '+nomMB,'Estimation : '+nomMB),'Estimation')+'<tbody>'
     +li('Besoins de base',_tbNb(t.mb)+' kcal',libMB
         +(t.correction!==1?' · corrigé de '+(t.correction>1?'+':'')
           +Math.round((t.correction-1)*100)+' % sur ta décision':''),false,'calc')
     +li('Besoins selon l’activité hors sport',_tbNb(t.horsSport)+' kcal',
-        'base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),false,'canape')
+        nr('base × '+String(t.naf.f).replace('.',',')+' : '+t.naf.lib.toLowerCase(),'niveau d’activité : '+t.naf.lib.toLowerCase()),false,'canape')
     +li('Besoins selon l’activité sportive',_tbNb(t.avecSport)+' kcal',
         '+ '+_tbNb(t.sportJour)+' kcal de sport par jour',false,'haltere')
     // ⚠ CETTE LIGNE N'EST PAS CE QUE L'ATHLETE MANGE UN JOUR D'ENTRAINEMENT,
@@ -103876,7 +104247,7 @@ function _htmlTableauxTableur(c){
     // Un total qui ne dit pas qu'il est un total AVANT cyclage se fait
     // comparer a des chiffres d'apres.
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
-        '× '+String(t.coef).replace('.',',')
+        nr('× '+String(t.coef).replace('.',','),Math.round(t.coef*100)+' % de la dépense')
         +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
     // LA LIGNE « SOUS LE PLANCHER DE SÉCURITÉ » EST RETIRÉE (Kevin, 27/09/2026) :
     //   « ça sert à rien comme indication, je veux pas avoir ça sous les yeux ».
@@ -129791,6 +130162,10 @@ async function _pfUtiliser(slug){
 async function chargerTests(){
   // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
   window._rcEnTests=true;
+  // tests.js D'ABORD (05/10/2026). Sur le miroir minifié, son en-tête pose de
+  // quoi relire le texte d'origine du code : il doit être en place AVANT que
+  // les lectures ci-dessous partent.
+  await _chargerScriptTests();
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
@@ -129882,14 +130257,45 @@ async function chargerTests(){
       window._RC_RULES=r.ok?await r.text():null;
     }catch(e){ window._RC_RULES=null; }
   }
-  if(typeof testExercices!=='function'){
-    await new Promise((res,rej)=>{
-      const s=document.createElement('script');
-      s.src='./tests.js';
-      s.onload=res;
-      s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
-      document.head.appendChild(s);
-    });
-  }
   return testExercices();
 }
+async function _chargerScriptTests(){
+  if(typeof testExercices==='function') return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='./tests.js';
+    s.onload=res;
+    s.onerror=()=>rej(new Error('tests.js introuvable : il n\'est pas mis en cache, il faut être en ligne.'));
+    document.head.appendChild(s);
+  });
+}
+
+// ══ L'ANCIENNE ADRESSE : LE BANDEAU DU COMPTE OUVERT (05/10/2026) ══════════
+//
+// repcore-sync.web.app devient l'adresse unique ; l'ancienne (GitHub Pages) va
+// s'arreter. Qui n'a pas de compte ouvert est renvoye des l'arrivee
+// (app/index.html). Qui en a un ne l'est pas : il arriverait deconnecte, et ce
+// que son appareil n'a pas encore envoye resterait derriere. On le lui dit, et
+// c'est lui qui passe, une fois sa synchronisation faite.
+(function(){
+  let dest=null;
+  try{ dest=window.RC_ANCIENNE_ADRESSE||null; }catch(e){ dest=null; }
+  if(!dest) return;
+  const poser=()=>{
+    try{
+      if(document.getElementById('rc-anc-adr')) return;
+      const d=document.createElement('div');
+      d.id='rc-anc-adr'; d.setAttribute('role','status');
+      d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#1a0000;border-bottom:1px solid #E02020;color:#fff;font:600 13px/1.45 Montserrat,sans-serif;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;text-align:center';
+      const t=document.createElement('span');
+      t.textContent='RepCore change d’adresse : celle-ci va s’arrêter. Ouvre la nouvelle, connecte-toi avec les mêmes identifiants et installe l’app, tes données te suivent. ';
+      const a=document.createElement('a');
+      a.href=dest.replace(/[?#].*$/,''); a.target='_blank'; a.rel='noopener';
+      a.textContent='Ouvrir repcore-sync.web.app';
+      a.style.cssText='color:#fff;text-decoration:underline;font-weight:800;white-space:nowrap';
+      d.appendChild(t); d.appendChild(a);
+      document.body.appendChild(d);
+    }catch(e){}
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',poser); else poser();
+})();
