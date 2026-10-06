@@ -96,18 +96,18 @@ jobs:
       # Sur le planning : ne rien faire tant que personne n'a appuyé sur « Lancer » dans l'appli.
       - name: Une mise à jour est-elle demandée ?
         id: chk
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'schedule' || inputs.robot_maj }}
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node club/outils/resamania-robot.mjs besoin
       - name: Installer le navigateur du robot
-        if: ${{ inputs.robot_resamania || inputs.robot_diag || inputs.robot_maj || steps.chk.outputs.go == '1' }}
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         run: |
           mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
           npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - name: Robot Resamania
-        if: ${{ inputs.robot_resamania || inputs.robot_diag || inputs.robot_maj || steps.chk.outputs.go == '1' }}
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         env:
           RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
