@@ -628,7 +628,7 @@ function signalPrincipal(c,ctx){
   if(sg.douleurDiffuse&&!rep('douleurdiff')) return r('douleur','Douleurs diffuses');
   // 2. Ce qu'une personne attend.
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,Number(b&&b.date)||0),0);
-  if(!enAccueil&&ok(()=>hasNewBilan(c))&&!rep('bilan',lt)) return r('bilan','Bilan sans réponse',lt);
+  if(!x.sansBilan&&!enAccueil&&ok(()=>hasNewBilan(c))&&!rep('bilan',lt)) return r('bilan','Bilan sans réponse',lt);
   const msg=x.messages?x.messages.has(id):ok(()=>msgClientsSansReponse([c],t).length>0);
   if(msg&&!rep('message')) return r('message','Message sans réponse');
   if(!c._fromCode&&ok(()=>needsAlert(c))&&!rep('overdue')) return r('retard','Bilan en retard');

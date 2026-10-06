@@ -779,7 +779,7 @@ function _majBoutonBilan(c){
              catch(e){ quand=''; } }
   }
   z.innerHTML='<div class="ccd-tete-a">'
-    +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans()">'
+    +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans('+(neuf?'{reponses:true}':'')+')">'
     +(neuf?'<span class="ccd-tete-pt"></span>':'')
     +'<span class="ccd-tete-bt">'+(neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
     +(quand?('<small>reçu le '+escapeHtml(quand)+'</small>'):'')
@@ -1860,7 +1860,12 @@ function evoTab(t){
     if(actif) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current');
   });
 }
-function viewClientBilans(){
+// `opts` (06/10/2026) : {reponses:true} depuis la file des bilans ou le
+// bouton « Nouveau bilan à checker ». Un bilan à lire ouvre sur RÉPONSES, le
+// plus récent sans réponse déplié, le curseur à la fin du brouillon : le
+// coach n'a plus à toucher « Réponses ». « Voir le dernier bilan », sans
+// nouveauté, garde « Mesures ».
+function viewClientBilans(opts){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
@@ -1871,6 +1876,29 @@ function viewClientBilans(){
   // rappele par le rafraichissement periodique sans rien ecrire.
   try{ _ecrireTailleDeduite(); }catch(e){}
   go('s-coach-bilan-evo');
+  let neuf=false; try{ neuf=hasNewBilan(c); }catch(e){ neuf=false; }
+  if((opts&&opts.reponses)||neuf){
+    evoTab('reponses');
+    const b=bilanARepondre(c);
+    if(b) bilanOuvrirReponse(_idBilan(b));
+  }
+}
+// PURE. Le bilan auquel répondre : le plus récent de suivi, sans réponse et
+// non marqué traité.
+function bilanARepondre(c){
+  return ((c&&c.bilans)||[]).filter(b=>b&&b.date&&b.type!=='depart'&&!bilanRepondu(b)&&!b.traite)
+    .sort((x,y)=>(Number(y.date)||0)-(Number(x.date)||0))[0]||null;
+}
+// Le déplie, et pose le curseur à la fin de son brouillon.
+function bilanOuvrirReponse(id){
+  try{ _bnVoir(id); }catch(e){}
+  try{ _renderQuickCommentChips('bilan'); }catch(e){}
+  const ta=document.getElementById(_taIdBilan(id));
+  if(!ta) return false;
+  try{ ta.focus({preventScroll:true}); const n=ta.value.length; ta.setSelectionRange(n,n); ta.scrollTop=ta.scrollHeight; }catch(e){}
+  try{ delete ta.dataset.brouillon; }catch(e){}
+  try{ (ta.closest('.bn-bilan')||ta).scrollIntoView({block:'start'}); }catch(e){}
+  return true;
 }
 
 function addBilanPhoto(bilanDate,bilanType,view,inputEl){
@@ -2364,6 +2392,7 @@ function renderBilanEvolution(c){
       ${buildFatSection()}
     </div>
     <div data-evo-pane="reponses" style="display:none">
+      ${(()=>{ try{ return htmlBandeauBilan(c); }catch(e){ return ''; } })()}
       ${renderReponsesBilans(bilans,c)}
     </div>
   </div>`;

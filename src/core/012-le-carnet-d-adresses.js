@@ -2266,7 +2266,13 @@ function _entrerFileBilans(idx){
   const l=(r&&r.list)||[];
   _fileBilans=l.map(c=>c&&c.id).filter(Boolean);
   if(!_fileBilans.length) return;
-  openClientDetail(_fileBilans[0]);
+  // DIRECTEMENT SUR LA RÉPONSE (06/10/2026) : le volet Réponses porte
+  // désormais la douleur, la dernière séance et le poids (le bandeau) ; la
+  // fiche n'est plus un passage obligé. Un geste ici, un pour envoyer.
+  try{ _retenirPositionAccueil(_fileBilans[0]); }catch(e){}
+  currentClientId=_fileBilans[0];
+  try{ const c=getOwnedClient(_fileBilans[0]); tplContexte({prenom:c&&c.fname},null); }catch(e){}
+  viewClientBilans({reponses:true});
 }
 // PURE-ish : elle ne fait que regarder. Les athlètes de la file placés APRÈS
 // celui qu’on vient de traiter, et qui ont ENCORE un bilan sans réponse.
@@ -2322,7 +2328,7 @@ function _bilanSuivantCorps(id,_z,_tb){
     const c=getOwnedClient(id);
     tplContexte({prenom:c&&c.fname},null);
   }catch(e){}
-  try{ viewClientBilans(); }catch(e){ return false; }
+  try{ viewClientBilans({reponses:true}); }catch(e){ return false; }
   if(_z){
     _z.classList.remove('cx-sort');
     _z.classList.add('cx-entre');

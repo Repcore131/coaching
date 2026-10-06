@@ -55875,6 +55875,106 @@ async function testExercices(){
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — RÉPONDRE À UN BILAN : RÉPONSES D'EMBLÉE, LA DOULEUR À L'ÉCRAN ──
+    const _RB=(fn)=>{
+      const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,sg:signauxEntrainement,push:CLOUD.pushOne,dep:window.deposerEvenement,
+        t:window.toast,ts:window.toastSync,c3:window.rcConfirm3,od:openClientDetail,sav:saveUser,r:localStorage.getItem(RB_CONFIRME_PRE)};
+      const t=Date.now(), J=864e5;
+      let fini=true;
+      const coach={id:'crb',email:'coach.rb@t.fr',role:'coach',alertStatus:{},contacts:{}};
+      const ath={id:'arb',email:'karim.rb@t.fr',fname:'Karim',lname:'B',role:'athlete',coachId:'crb',status:'COACHING_SUIVI',createdAt:t-90*J,
+        sessions:[{id:'s1',date:t-9*J,name:'Haut A'},{id:'s2',date:t-2*J,name:'Bas B',noteAthlete:'genou un peu sensible'},{id:'s3',date:t-5*J,name:'Haut A'}],
+        bilans:[{id:'b1',type:'suivi',date:t-15*J,'bil-weight':'62'},{id:'b2',type:'suivi',date:t-J,'bil-weight':'61.4'}],sessions_config:[],nutrition:{}};
+      try{
+        DB.set('users',{'coach.rb@t.fr':coach,'karim.rb@t.fr':ath});
+        currentUser=coach; currentClientId='arb';
+        signauxEntrainement=c=>({douleur:true,details:{douleur:{painMax:5,nom:'SQUAT',seances:2,dates:[t-6*J]}}});
+        CLOUD.pushOne=()=>Promise.resolve(true); window.deposerEvenement=()=>Promise.resolve(); window.toast=()=>{}; window.toastSync=()=>{};
+        saveUser=()=>true; openClientDetail=()=>{};
+        const r=fn(ath,t,J);
+        if(r&&typeof r.then==='function'){ const p=r.finally(ranger); fini=false; return p; }
+        return r;
+      } finally { if(fini) ranger(); }
+      function ranger(){
+        DB.set('users',sv.users); currentUser=sv.u; currentClientId=sv.cid; signauxEntrainement=sv.sg; CLOUD.pushOne=sv.push;
+        window.deposerEvenement=sv.dep; window.toast=sv.t; window.toastSync=sv.ts; window.rcConfirm3=sv.c3; openClientDetail=sv.od; saveUser=sv.sav;
+        try{ if(sv.r==null) localStorage.removeItem(RB_CONFIRME_PRE); else localStorage.setItem(RB_CONFIRME_PRE,sv.r); }catch(e){}
+        try{ rbOublierBrouillon('karim.rb@t.fr','b1'); rbOublierBrouillon('karim.rb@t.fr','b2'); }catch(e){}
+      }
+    };
+    ok('Bilan à lire : viewClientBilans ouvre sur Réponses, le dernier sans réponse déplié ; le bandeau montre la douleur, la séance, son mot, le poids',()=>_RB((ath)=>{
+      viewClientBilans();
+      const tab=document.querySelector('#evo-content [data-evo-tab="reponses"]');
+      if(!tab||tab.getAttribute('aria-current')!=='true') return _echec('onglet actif : '+((document.querySelector('#evo-content [aria-current]')||{}).dataset||{}).evoTab);
+      const vis=[...document.querySelectorAll('#evo-content .bn-bilan')].filter(x=>!x.hidden).map(x=>x.getAttribute('data-bn'));
+      if(vis.join()!==_idBilan(ath.bilans[1])) return _echec('déplié : '+vis.join());
+      const band=document.querySelector('#evo-content [data-evo-pane="reponses"] .bb-faits');
+      if(!band) return _echec('pas de bandeau');
+      const tx=band.textContent;
+      if(!/Douleur répétée/.test(tx)||!/dernière séance il y a 2 j \(Bas B\)/.test(tx)||!/genou un peu sensible/.test(tx)||!/poids 61,4 kg le /.test(tx)) return _echec('bandeau : '+tx);
+      if(!/bilanVersFiche\(&quot;arb&quot;,&quot;douleur&quot;\)/.test(band.innerHTML)&&!/bilanVersFiche\("arb","douleur"\)/.test(band.innerHTML)) return _echec('lien de la douleur : '+band.innerHTML.slice(0,200));
+      if(!/Envoyer à Karim/.test(document.getElementById('evo-content').textContent)) return _echec('bouton « Envoyer à Karim »');
+      // Sans nouveauté : Mesures, comme avant.
+      ath.bilans.forEach(x=>{ x.reponseCoach='ok'; x.reponseDate=Date.now(); });
+      DB.set('users',{'coach.rb@t.fr':currentUser,'karim.rb@t.fr':ath});
+      viewClientBilans();
+      const pr=document.querySelector('#evo-content [data-evo-pane="reponses"]');
+      return pr&&pr.style.display==='none'?true:_echec('sans nouveauté : le volet Réponses s’ouvre');
+    }));
+    ok('Après la réponse au dernier bilan, l’ancien sans réponse est proposé ; « le marquer traité » le retire de bilansSansReponse, et c’est réversible',()=>_RB((ath)=>{
+      viewClientBilans({reponses:true});
+      const id2=_idBilan(ath.bilans[1]), id1=_idBilan(ath.bilans[0]);
+      const ta=document.getElementById(_taIdBilan(id2));
+      ta.value='Bien reçu, on ajuste le volume jambes.';
+      saveReponseBilan('karim.rb@t.fr',id2,_taIdBilan(id2));
+      const z=document.getElementById('bilans-anciens');
+      if(!z||!/1 bilan plus ancien sans réponse/.test(z.textContent)) return _echec('pas de proposition : '+(z&&z.textContent));
+      const pane=document.querySelector('#evo-content [data-evo-pane="reponses"]');
+      if(pane.firstElementChild!==z) return _echec('la proposition n’est pas en tête');
+      const c0=(DB.get('users')||{})['karim.rb@t.fr'];
+      if(bilansSansReponse(c0)!==1) return _echec('avant : '+bilansSansReponse(c0));
+      z.querySelector('[data-a="traite"]').click();
+      const c1=(DB.get('users')||{})['karim.rb@t.fr'];
+      if(bilansSansReponse(c1)!==0||!c1.bilans.find(x=>_idBilan(x)===id1).traite) return _echec('après « traité » : '+bilansSansReponse(c1));
+      if(c1.bilans.find(x=>_idBilan(x)===id1).reponseCoach) return _echec('un texte est parti');
+      bilanMarquerTraite('karim.rb@t.fr',id1,false);
+      const c2=(DB.get('users')||{})['karim.rb@t.fr'];
+      return bilansSansReponse(c2)===1?true:_echec('« Annuler » ne rend pas le bilan');
+    }));
+    ok('Depuis « Mes notifications », la ligne des bilans ouvre la réponse : Réponses actif, la douleur à l’écran',()=>_RB((ath)=>{
+      const sv=window._todoRows;
+      try{
+        window._todoRows=[{type:'bilan',label:'Nouveau bilan à lire',list:[ath]}];
+        _entrerFileBilans(0);
+        if((document.querySelector('.screen.active')||{}).id!=='s-coach-bilan-evo') return _echec('écran : '+(document.querySelector('.screen.active')||{}).id);
+        const tab=document.querySelector('#evo-content [data-evo-tab="reponses"]');
+        if(!tab||tab.getAttribute('aria-current')!=='true') return _echec('Réponses non actif');
+        const band=document.querySelector('#evo-content .bb-faits');
+        if(!band||!/Douleur répétée/.test(band.textContent)) return _echec('douleur absente');
+        return document.activeElement&&document.activeElement.id===_taIdBilan(_idBilan(ath.bilans[1]))?true:_echec('curseur : '+(document.activeElement&&document.activeElement.id));
+      } finally { window._todoRows=sv; try{ go('s-coach-home'); }catch(e){} }
+    }));
+    okA('Brouillon pré-écrit envoyé sans y toucher : une confirmation la première fois, « ne plus demander » mémorisé',async()=>{
+      let q=0;
+      const r=await _RB(async(ath)=>{
+        try{ localStorage.removeItem(RB_CONFIRME_PRE); }catch(e){}
+        viewClientBilans({reponses:true});
+        const id2=_idBilan(ath.bilans[1]);
+        const ta=document.getElementById(_taIdBilan(id2));
+        const pre=ta.value.trim();
+        if(!pre) return 'pas de brouillon pré-écrit';
+        window.rcConfirm3=()=>{ q++; return Promise.resolve(null); };
+        const r1=await saveReponseBilan('karim.rb@t.fr',id2,_taIdBilan(id2));
+        if(q!==1||r1!==false) return 'Relire : '+q+' / '+r1;
+        if((DB.get('users')||{})['karim.rb@t.fr'].bilans[1].reponseCoach) return 'parti malgré « Relire »';
+        window.rcConfirm3=()=>{ q++; return Promise.resolve('milieu'); };
+        await saveReponseBilan('karim.rb@t.fr',id2,_taIdBilan(id2));
+        if((DB.get('users')||{})['karim.rb@t.fr'].bilans[1].reponseCoach!==pre) return 'non envoyé après confirmation';
+        if(localStorage.getItem(RB_CONFIRME_PRE)!=='1') return '« ne plus demander » non mémorisé';
+        return true;
+      });
+      return r===true?true:_echec(r);
+    });
     // ── 06/10/2026 — L'INDEX DES FILS : LA BOÎTE EN UN APPEL ──
     const _MXI=async(fn)=>{
       const sv={u:currentUser,g:getClients,f:window.fetch,tok:CLOUD._getToken,fils:_msgFils,fil:_msgFil,s:saveUser,d:window.deposerEvenement,t:window.toast};
@@ -72787,7 +72887,8 @@ async function testExercices(){
     ok('Côté coach : le formulaire est présent',()=>{
       const b=_rbB(2,{'bil-motivation':'8'});
       const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
-      return /rb-texte/.test(h)&&/Envoyer ma réponse/.test(h)
+      // Le bouton nomme le destinataire (06/10/2026) : « Envoyer à Léa ».
+      return /rb-texte/.test(h)&&/Envoyer à Léa/.test(h)
         &&/Ce que tu retiens de ce bilan, et ce qu'on ajuste\./.test(h.replace(/&#39;/g,"'"));});
     ok('Côté coach : aucune consigne technique dans les chips de bilan',()=>{
       // Le cloisonnement qui comptait n'etait pas un partage etanche mais

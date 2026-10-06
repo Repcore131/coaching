@@ -137,8 +137,96 @@ function openBilanNotes(id){
 // Un bilan « sans réponse » est un bilan auquel le coach n'a pas écrit. Ce
 // n'est plus « pas encore ouvert » : ouvrir ne suffit plus à éteindre le
 // signal, il faut répondre.
+// Un bilan MARQUÉ TRAITÉ (b.traite, 06/10/2026) n'en est plus : le coach l'a
+// lu et a choisi de ne pas y répondre par écrit. Réversible.
 function bilansSansReponse(c){
-  return ((c&&c.bilans)||[]).filter(b=>b&&!bilanRepondu(b)).length;
+  return ((c&&c.bilans)||[]).filter(b=>b&&!bilanRepondu(b)&&!b.traite).length;
+}
+// PURE. Les bilans de suivi plus anciens restés sans réponse (ni traités),
+// du plus récent au plus ancien.
+function bilansAnciensSansReponse(c){
+  const l=((c&&c.bilans)||[]).filter(b=>b&&b.date&&b.type!=='depart');
+  const der=l.reduce((m,b)=>Math.max(m,Number(b.date)||0),0);
+  return l.filter(b=>(Number(b.date)||0)<der&&!bilanRepondu(b)&&!b.traite)
+    .sort((x,y)=>(Number(y.date)||0)-(Number(x.date)||0));
+}
+// « Marquer traité » : aucun texte n'est envoyé ; l'indicateur se retire.
+function bilanMarquerTraite(email,bilanId,oui){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return false;
+  const b=c.bilans.find(x=>_idBilan(x)===bilanId);
+  if(!b) return false;
+  if(oui===false){ delete b.traite; delete b.traiteLe; }
+  else { b.traite=true; b.traiteLe=Date.now(); }
+  users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  toastSync(ok,envoi,oui===false?'Bilan de nouveau sans réponse':'Bilan marqué traité. « Annuler » sous le bilan pour revenir.','le marquage est');
+  try{ renderBilanEvolution(c); evoTab('reponses'); _renderQuickCommentChips('bilan'); }catch(e){}
+  try{ if(oui!==false) _proposerAnciensBilans(c); }catch(e){}
+  return ok;
+}
+// ══ LE BANDEAU DU VOLET RÉPONSES (06/10/2026) ═════════════════════════════
+// Le coach répondait sans voir ni la douleur, ni la dernière séance, ni le
+// poids. Une ou deux lignes en --fs-xs, chaque élément un lien vers la section
+// de la fiche (la même cible que le point du lundi, LUNDI_CIBLE).
+function bandeauBilanFaits(c,maintenant){
+  const t=Number(maintenant)||Date.now(), out=[];
+  if(!c) return out;
+  // Le signal principal, hors « bilan sans réponse » : c'est l'écran même.
+  let sp=null; try{ sp=signalPrincipal(c,{maintenant:t,sansBilan:true}); }catch(e){ sp=null; }
+  if(sp&&sp.cat!=='rien') out.push({cle:'signal',cat:sp.cat,texte:sp.libelle});
+  const ss=(c.sessions||[]).filter(s=>s&&Number(s.date)>0);
+  if(ss.length){
+    const der=ss.reduce((a,b)=>Number(b.date)>Number(a.date)?b:a);
+    const j=Math.max(0,Math.floor((t-Number(der.date))/864e5));
+    const nom=String(der.name||der.sessionName||der.nom||'').trim();
+    out.push({cle:'seance',cat:'absence',texte:'dernière séance '+(j===0?'aujourd’hui':'il y a '+j+' j')+(nom?' ('+nom+')':'')});
+    const mot=String(der.noteAthlete||'').trim();
+    if(mot) out.push({cle:'mot',cat:'absence',texte:'son mot : « '+mot.slice(0,60)+(mot.length>60?'…':'')+' »'});
+  }
+  let p=null; try{ const l=serieWeight(c)||[]; p=l.reduce((a,b)=>(!a||String(b.date)>String(a.date))?b:a,null); }catch(e){ p=null; }
+  if(p&&p.kg){
+    let q=''; try{ q=new Date(p.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ q=''; }
+    out.push({cle:'poids',cat:'poids',texte:'poids '+String(Math.round(p.kg*10)/10).replace('.',',')+' kg'+(q?' le '+q:'')});
+  }
+  return out;
+}
+function htmlBandeauBilan(c){
+  const f=bandeauBilanFaits(c,Date.now());
+  if(!f.length) return '';
+  const id=_attrArg(String(c.id||''));
+  return '<div class="bb-faits">'+f.map(x=>'<button type="button" class="bb-fait'+(x.cle==='signal'&&(x.cat==='douleur'||x.cat==='drapeau')?' bb-fait-sante':'')+'" onclick="bilanVersFiche('+id+','+_attrArg(x.cat)+')">'
+    +escapeHtml(x.texte)+'</button>').join('<span class="bb-sep" aria-hidden="true">·</span>')+'</div>';
+}
+// Le lien : la fiche, à la section (comme le point du lundi).
+function bilanVersFiche(id,cat){
+  if(cat==='poids'){
+    try{ openClientDetail(id,false,true); }catch(e){ return false; }
+    setTimeout(()=>{ try{ const el=document.getElementById('ccd-poids'); if(el) (el.closest('section')||el).scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} },350);
+    return true;
+  }
+  return lundiOuvrir(id,cat);
+}
+// APRÈS UNE RÉPONSE : les bilans plus anciens restés sans réponse, proposés
+// AVANT « Athlète suivant → ».
+function _proposerAnciensBilans(c){
+  const l=bilansAnciensSansReponse(c);
+  const pane=document.querySelector('#evo-content [data-evo-pane="reponses"]');
+  const avant=document.getElementById('bilans-anciens'); if(avant) avant.remove();
+  if(!l.length||!pane) return false;
+  const b=l[0], id=_idBilan(b), n=l.length;
+  const z=document.createElement('div');
+  z.id='bilans-anciens'; z.className='bb-anciens';
+  const em=String(c.email||'');
+  z.innerHTML='<span>'+n+' bilan'+(n>1?'s':'')+' plus ancien'+(n>1?'s':'')+' sans réponse : </span>'
+    +'<button type="button" class="rb-lien" data-a="repondre">y répondre</button> / '
+    +'<button type="button" class="rb-lien" data-a="traite">le marquer traité</button>';
+  z.querySelector('[data-a="repondre"]').onclick=()=>{ z.remove(); bilanOuvrirReponse(id); };
+  z.querySelector('[data-a="traite"]').onclick=()=>{ bilanMarquerTraite(em,id,true); };
+  pane.insertBefore(z,pane.firstChild);
+  return true;
 }
 // PURE. Une vidéo attend-elle encore la correction du coach ?
 //
@@ -164,7 +252,19 @@ function videoNonCorrigee(v){
 // `taId` EST L IDENTIFIANT DU CHAMP SOUS LE BOUTON QU ON VIENT DE TOUCHER.
 // Le bouton le passe ; le repli sur l ancien identifiant fixe ne sert qu aux
 // appels qui ne le connaissent pas encore.
-function saveReponseBilan(email,bilanId,taId){
+// LE BROUILLON PRÉ-ÉCRIT, ENVOYÉ SANS Y TOUCHER (06/10/2026) : la première
+// fois, une confirmation courte ; « Ne plus demander » est mémorisé.
+const RB_CONFIRME_PRE='rc_rb_confirme_pre';
+function _rbPreNonTouche(email,bilanId,txt){
+  try{ if(localStorage.getItem(RB_CONFIRME_PRE)==='1') return false; }catch(e){}
+  if(rbBrouillon(email,bilanId)) return false;
+  const c=(DB.get('users')||{})[email];
+  const b=c&&Array.isArray(c.bilans)?c.bilans.find(x=>_idBilan(x)===bilanId):null;
+  if(!b||bilanRepondu(b)) return false;
+  const pre=String(_brouillonPourChamp(b,c)||'').trim();
+  return !!pre&&pre===txt;
+}
+function saveReponseBilan(email,bilanId,taId,_confirme){
   const _ta=taId||_taIdBilan(bilanId||'');
   // Même garde-fou, et `false` comme tous les autres refus de cette fonction :
   // ses appelants lisent cette valeur.
@@ -172,6 +272,15 @@ function saveReponseBilan(email,bilanId,taId){
   const ta=document.getElementById(_ta);
   const txt=((ta&&ta.value)||'').trim();
   if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
+  if(!_confirme&&_rbPreNonTouche(email,bilanId,txt)){
+    const qui=((DB.get('users')||{})[email]||{}).fname||'ton athlète';
+    return rcConfirm3('Envoyer le brouillon tel quel ?','Tu n’as pas modifié le texte pré-écrit. Il partira à '+qui+' tel quel.',
+      'Envoyer','Envoyer, ne plus demander','Relire').then(r=>{
+        if(!r) return false;
+        if(r==='milieu') try{ localStorage.setItem(RB_CONFIRME_PRE,'1'); }catch(e){}
+        return saveReponseBilan(email,bilanId,taId,true);
+      });
+  }
   const users=DB.get('users')||{};
   const c=users[email];
   // N3.13 — LE MEME CONTROLE D'APPARTENANCE QUE LES SOIXANTE-NEUF AUTRES
@@ -225,9 +334,19 @@ function saveReponseBilan(email,bilanId,taId){
   //
   // File vide, athlète hors file, ou volet introuvable : on retombe sur le
   // retour à la fiche, c’est-à-dire exactement le comportement d’avant.
+  // LES ANCIENS D'ABORD (06/10/2026) : un bilan plus ancien resté sans
+  // réponse est proposé, AVANT « Athlète suivant → ».
+  let anciens=false;
   try{
-    if(_proposerBilanSuivant(_fileBilansSuivants(c.id))) return true;
+    if(bilansAnciensSansReponse(c).length){
+      renderBilanEvolution(c); evoTab('reponses'); _renderQuickCommentChips('bilan');
+      anciens=true;
+    }
   }catch(e){}
+  let suivant=false;
+  try{ suivant=_proposerBilanSuivant(_fileBilansSuivants(c.id)); }catch(e){}
+  if(anciens){ try{ _proposerAnciensBilans(c); }catch(e){} return true; }
+  if(suivant) return true;
   try{ openClientDetail(c.id,true); }catch(e){}
   return true;
 }
@@ -838,8 +957,9 @@ function blocReponseBilan(b,c){
             <div id="rb-ia_${ide}" class="rb-ia" aria-live="polite"></div>`
           :'');
     })()}
+    ${(b.traite&&!bilanRepondu(b))?`<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:4px">Marqué traité, sans réponse écrite. <button type="button" class="rb-lien" onclick="bilanMarquerTraite('${escapeHtml(c.email||'')}','${escapeHtml(id)}',false)">Annuler</button></div>`:''}
     <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
-      style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
+      style="margin-top:8px;letter-spacing:1px">Envoyer à ${escapeHtml(String(c.fname||'').trim()||'ton athlète')}</button>
     ${_rvHtml(b,c)}
   </div>`;
 }

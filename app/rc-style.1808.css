@@ -13374,3 +13374,13 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
   background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;margin-bottom:8px}
 .msg-hl-b{background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;
   font-size:var(--fs-xs);font-weight:700;min-height:36px;padding:0 10px;cursor:pointer}
+
+/* ══ LE VOLET RÉPONSES D'UN BILAN (06/10/2026) : le bandeau des faits, et
+   les bilans plus anciens restés sans réponse. Rien n'est agrandi. */
+.bb-faits{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px}
+.bb-fait{background:none;border:0;padding:0;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
+  text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px;cursor:pointer;text-align:left}
+.bb-fait-sante{color:var(--red-text);font-weight:800}
+.bb-sep{color:var(--text-faint)}
+.bb-anciens{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-2);padding:8px 12px;margin-bottom:12px}

@@ -785,7 +785,8 @@ function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
   const der=dernierBilan(c);
   // Répondu par écrit OU de vive voix (bilanRepondu).
-  return !!der&&!bilanRepondu(der);
+  // Marqué traité (06/10/2026) : lu, sans réponse écrite voulue.
+  return !!der&&!bilanRepondu(der)&&!der.traite;
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
