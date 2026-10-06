@@ -13470,3 +13470,9 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 
 /* ══ L'EN-TETE DE L'ANALYSE : QUAND, ET SUR QUELLE PHOTO (build 1815) ══════ */
 .an-quand{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:2px}
+
+/* ══ LA PHOTO GARDEE MALGRE LE CONTROLE (build 1816) ═══════════════════════
+   Le lien est un lien texte, pas un bouton : il ne doit pas inviter à forcer. */
+.bil-ctl-v[data-e="rouge-force"]{border-color:color-mix(in srgb,var(--amber) 60%,transparent);color:var(--orange)}
+.bil-ctl-forcer{align-self:flex-start;background:none;border:none;padding:2px 0;margin:0;font:inherit;font-size:var(--fs-2xs);color:var(--text);text-decoration:underline;cursor:pointer;text-align:left}
+.an-forcee{margin:8px 0 0;font-size:var(--fs-xs);line-height:1.5;color:var(--orange)}

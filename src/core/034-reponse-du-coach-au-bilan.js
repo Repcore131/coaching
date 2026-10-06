@@ -1610,7 +1610,10 @@ function saveBilanFinal(){
   //   migration ne remplace JAMAIS une chaine avant que la reference soit
   //   valide : une photo ne peut plus etre perdue par un quota. Le « ✓ » ne
   //   depend donc plus que de l'ecriture du dossier, qui est ce qu'il annonce.
-  if(enregistre) toast(' Bilan n°'+n+' enregistré !');
+  // LE PLAN B EST DIT (06/10/2026) : une vue manque, on rappelle où l'ajouter.
+  let _rappel=''; try{ _rappel=rappelPhotosManquantes(bi); }catch(e){ _rappel=''; }
+  if(enregistre&&_rappel) toast(' Bilan n°'+n+' enregistré. '+_rappel,'var(--orange)',6500);
+  else if(enregistre) toast(' Bilan n°'+n+' enregistré !');
   else toast('Stockage plein : bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
   // LA SORTIE PROPRE. Vérifié : plus rien ne lit `bilData` en dessous — les

@@ -2336,10 +2336,12 @@ function renderBilanEvolution(c){
       //   pour qui juge une photo : « version transmise » n'est pas « haute
       //   definition, cet appareil ».
       const ref=photoBilanRef(b,t);
-      if(ref&&ref.url) return {src:ref.url,locale:false};
+      // Gardée malgré le contrôle (06/10/2026) : le coach le voit sur la miniature.
+      let fc=null; try{ fc=photoForcee(b,t); }catch(e){ fc=null; }
+      if(ref&&ref.url) return {src:ref.url,locale:false,forcee:fc};
       const src=photoBilanSrc(b,t);
-      if(src) return {src:src,locale:!ref};
-      if(ref&&ref.cle) return {src:'',cle:ref.cle,locale:true};
+      if(src) return {src:src,locale:!ref,forcee:fc};
+      if(ref&&ref.cle) return {src:'',cle:ref.cle,locale:true,forcee:fc};
       return null;
     };
     const VIEWS=[
@@ -2361,11 +2363,12 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid ${_p.forcee?'var(--orange)':'var(--border)'};width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:var(--surface-1)">
               <div style="padding:6px 6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
+              ${_p.forcee?`<div class="ph-forcee" style="padding:0 6px 6px;font-size:var(--fs-2xs);color:var(--orange);text-align:center;line-height:1.3">Gardée malgré le contrôle${_p.forcee.length?' : '+escapeHtml(_p.forcee.map(x=>PHOTO_CTL.MSG[x]||x).join(' ; ')):''}</div>`:''}
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">

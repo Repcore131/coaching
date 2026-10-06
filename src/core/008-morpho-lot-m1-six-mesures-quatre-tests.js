@@ -1847,6 +1847,11 @@ async function lireMorphoPhoto(email){
     if(p){ src=p; dateBilan=b.date; break; }
   }
   if(!src){ toast('Aucune photo de face dans les bilans.','var(--orange)'); return false; }
+  // ⚠ JAMAIS DE RAPPORTS SUR UNE PHOTO GARDÉE MALGRÉ LE CONTRÔLE (06/10/2026).
+  if(_morphoPhotoForcee(c,{date:dateBilan})){
+    toast('Rien de lu : '+MORPHO_RAISON_FORCEE+'. Elle reste visible pour le suivi.','var(--orange)');
+    return false;
+  }
   toast('Lecture de la photo…');
   try{ await chargerMotionLab(); }catch(e){ toast(e.message||'Motion Lab indisponible','var(--orange)'); return false; }
   const lire=/** @type {any} */(window).mlMorphoPhoto;
@@ -2216,6 +2221,8 @@ function morphoPhotoInitiale(u,rang){
 function morphoInitialeDe(u,r,photo,essais){
   const n=Math.max(1,Number(essais)||1);
   const attente=(raison)=>({etat:'attente',date:Date.now(),raison:String(raison||''),essais:n});
+  // ⚠ JAMAIS DE CENTIMÈTRES SUR UNE PHOTO GARDÉE MALGRÉ LE CONTRÔLE.
+  if(_morphoPhotoForcee(u,photo)) return attente(MORPHO_RAISON_FORCEE);
   if(!r||!r.ok) return attente((r&&r.code==='personne')?'aucune silhouette reconnue'
     :(r&&r.code==='moteur')?'le moteur de pose ne s’est pas chargé':'la photo n’a pas pu être lue');
   const pr=r.prise||{};
@@ -2248,6 +2255,13 @@ function morphoInitialeDe(u,r,photo,essais){
     photoRef:{bilan:(photo&&photo.date)||0,vue:'face',depart:!!(photo&&photo.depart)},
     essais:n};
 }
+const MORPHO_RAISON_FORCEE='photo gardée malgré le contrôle';
+// PURE. La photo de face du bilan lu a-t-elle été gardée malgré le contrôle ?
+function _morphoPhotoForcee(u,photo){
+  const d=Number(photo&&photo.date)||0;
+  const b=d?((u&&u.bilans)||[]).find(x=>x&&Number(x.date)===d):null;
+  try{ return !!(b&&photoForcee(b,'face')); }catch(e){ return false; }
+}
 /**
  * L'analyse elle-meme : elle lit une photo, et n'ecrit rien.
  * @returns {Promise<any>} l'objet morphoInitiale a poser, ou null si rien a faire
@@ -2259,6 +2273,8 @@ async function morphoAnalyserInitiale(u,rang){
     raison:'aucun bilan ne porte les trois photos',essais:(((u.morphoInitiale||{}).essais)||0)+1};
   const bilan=((u.bilans||[]).find(b=>b&&Number(b.date)===Number(photo.date)))||null;
   const emp=empreinteMorpho(bilan);
+  // Photo gardée malgré le contrôle : on ne charge même pas le moteur.
+  if(_morphoPhotoForcee(u,photo)) return Object.assign(morphoInitialeDe(u,null,photo,(((u.morphoInitiale||{}).essais)||0)+1),{empreinte:emp});
   // `moteur` : l'échec ne vient pas de la photo (hors ligne) ; on retentera.
   try{ await chargerMotionLab(); }catch(e){
     return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',

@@ -18237,6 +18237,11 @@ async function lireMorphoPhoto(email){
     if(p){ src=p; dateBilan=b.date; break; }
   }
   if(!src){ toast('Aucune photo de face dans les bilans.','var(--orange)'); return false; }
+  // ⚠ JAMAIS DE RAPPORTS SUR UNE PHOTO GARDÉE MALGRÉ LE CONTRÔLE (06/10/2026).
+  if(_morphoPhotoForcee(c,{date:dateBilan})){
+    toast('Rien de lu : '+MORPHO_RAISON_FORCEE+'. Elle reste visible pour le suivi.','var(--orange)');
+    return false;
+  }
   toast('Lecture de la photo…');
   try{ await chargerMotionLab(); }catch(e){ toast(e.message||'Motion Lab indisponible','var(--orange)'); return false; }
   const lire=/** @type {any} */(window).mlMorphoPhoto;
@@ -18606,6 +18611,8 @@ function morphoPhotoInitiale(u,rang){
 function morphoInitialeDe(u,r,photo,essais){
   const n=Math.max(1,Number(essais)||1);
   const attente=(raison)=>({etat:'attente',date:Date.now(),raison:String(raison||''),essais:n});
+  // ⚠ JAMAIS DE CENTIMÈTRES SUR UNE PHOTO GARDÉE MALGRÉ LE CONTRÔLE.
+  if(_morphoPhotoForcee(u,photo)) return attente(MORPHO_RAISON_FORCEE);
   if(!r||!r.ok) return attente((r&&r.code==='personne')?'aucune silhouette reconnue'
     :(r&&r.code==='moteur')?'le moteur de pose ne s’est pas chargé':'la photo n’a pas pu être lue');
   const pr=r.prise||{};
@@ -18638,6 +18645,13 @@ function morphoInitialeDe(u,r,photo,essais){
     photoRef:{bilan:(photo&&photo.date)||0,vue:'face',depart:!!(photo&&photo.depart)},
     essais:n};
 }
+const MORPHO_RAISON_FORCEE='photo gardée malgré le contrôle';
+// PURE. La photo de face du bilan lu a-t-elle été gardée malgré le contrôle ?
+function _morphoPhotoForcee(u,photo){
+  const d=Number(photo&&photo.date)||0;
+  const b=d?((u&&u.bilans)||[]).find(x=>x&&Number(x.date)===d):null;
+  try{ return !!(b&&photoForcee(b,'face')); }catch(e){ return false; }
+}
 /**
  * L'analyse elle-meme : elle lit une photo, et n'ecrit rien.
  * @returns {Promise<any>} l'objet morphoInitiale a poser, ou null si rien a faire
@@ -18649,6 +18663,8 @@ async function morphoAnalyserInitiale(u,rang){
     raison:'aucun bilan ne porte les trois photos',essais:(((u.morphoInitiale||{}).essais)||0)+1};
   const bilan=((u.bilans||[]).find(b=>b&&Number(b.date)===Number(photo.date)))||null;
   const emp=empreinteMorpho(bilan);
+  // Photo gardée malgré le contrôle : on ne charge même pas le moteur.
+  if(_morphoPhotoForcee(u,photo)) return Object.assign(morphoInitialeDe(u,null,photo,(((u.morphoInitiale||{}).essais)||0)+1),{empreinte:emp});
   // `moteur` : l'échec ne vient pas de la photo (hors ligne) ; on retentera.
   try{ await chargerMotionLab(); }catch(e){
     return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',
@@ -36959,10 +36975,12 @@ function renderBilanEvolution(c){
       //   pour qui juge une photo : « version transmise » n'est pas « haute
       //   definition, cet appareil ».
       const ref=photoBilanRef(b,t);
-      if(ref&&ref.url) return {src:ref.url,locale:false};
+      // Gardée malgré le contrôle (06/10/2026) : le coach le voit sur la miniature.
+      let fc=null; try{ fc=photoForcee(b,t); }catch(e){ fc=null; }
+      if(ref&&ref.url) return {src:ref.url,locale:false,forcee:fc};
       const src=photoBilanSrc(b,t);
-      if(src) return {src:src,locale:!ref};
-      if(ref&&ref.cle) return {src:'',cle:ref.cle,locale:true};
+      if(src) return {src:src,locale:!ref,forcee:fc};
+      if(ref&&ref.cle) return {src:'',cle:ref.cle,locale:true,forcee:fc};
       return null;
     };
     const VIEWS=[
@@ -36984,11 +37002,12 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid ${_p.forcee?'var(--orange)':'var(--border)'};width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:var(--surface-1)">
               <div style="padding:6px 6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
+              ${_p.forcee?`<div class="ph-forcee" style="padding:0 6px 6px;font-size:var(--fs-2xs);color:var(--orange);text-align:center;line-height:1.3">Gardée malgré le contrôle${_p.forcee.length?' : '+escapeHtml(_p.forcee.map(x=>PHOTO_CTL.MSG[x]||x).join(' ; ')):''}</div>`:''}
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
@@ -63674,6 +63693,26 @@ const ANAT_ECHELLE_CHEVEUX_PCT=4;
  * PURE. Tout ce que les deux photos disent, région par région, avec les
  * chiffres, leurs repères et leurs marges.
  */
+/**
+ * PURE. Les vues dont aucune mesure ne sort : photo gardée malgré le contrôle
+ * (morphoAnat.forcees), tant que le coach n'a pas vérifié ses points.
+ */
+function anatVuesForcees(anat){
+  const l=(anat&&Array.isArray(anat.forcees))?anat.forcees:[];
+  return l.filter(v=>!(anat[v]&&(anat[v].verifie||anat[v].man)));
+}
+// ⚠ AUCUN CENTIMÈTRE D'UNE PHOTO FORCÉE (06/10/2026) : les fiches de ses vues
+//   sont retirées, et une face forcée retire l'échelle et les leviers. La photo
+//   reste affichée pour le suivi visuel. Appelée par anatMesures, à son retour.
+function _anatSansForcees(anat,r){
+  const bloq=anatVuesForcees(anat);
+  if(!bloq.length) return r;
+  r.fiches=r.fiches.filter(f=>bloq.indexOf(f.vue)<0);
+  if(bloq.indexOf('face')>=0){ r.echelle=null; r.leviers=[]; r.photoCm={bras:null,avantbras:null,rotule:null}; }
+  try{ r.posture=anatMesuresPosture({fiches:r.fiches}); }catch(e){}
+  r.forcees=bloq;
+  return r;
+}
 function anatMesures(anat,u,o){
   // o.brut : la photo seule, sans correction ni mètre (c'est ce que la
   // calibration apprend) ; o.biais : le biais appris (anatBiaisCoach).
@@ -64322,8 +64361,9 @@ function anatMesures(anat,u,o){
   const fb=fiches.find(f=>f.cle==='bras');
   const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
     rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
-  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts,
-    posture:anatMesuresPosture({fiches})};
+  // ⚠ Les vues gardées malgré le contrôle n'en sortent pas (_anatSansForcees).
+  return _anatSansForcees(anat,{photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts,
+    posture:anatMesuresPosture({fiches})});
 }
 
 /**
@@ -65691,7 +65731,7 @@ function _htmlAnatExport(){
 function _anatCtlEnvoi(b){
   if(!b) return '';
   const pre=(b.type==='depart'?'deb':'bil')+'-photo-';
-  const lib={face:'face',back:'dos',side:'profil'}, mot={vert:'contrôle passé',orange:'envoyée avec réserve',rouge:'à reprendre'};
+  const lib={face:'face',back:'dos',side:'profil'}, mot={vert:'contrôle passé',orange:'envoyée avec réserve',rouge:'à reprendre','rouge-force':'gardée malgré le contrôle, à vérifier'};
   const l=['face','back','side'].map(v=>{
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
@@ -66324,7 +66364,8 @@ async function anatAnalyser(email,force){
       if(!w||!h){ const d=await _anatDimensions(src); if(!d) return null; w=d.w; h=d.h; }
       // Rien de lu : un gabarit à caler, marqué comme tel.
       if(!auto) auto={pts:anatGabarit(w,h,nom),telephone:null,miroir:false,triangles:null,gabarit:true};
-      return {w,h,auto,man:(!remplacee(nom)&&ancien&&ancien[nom]&&ancien[nom].man)||null};
+      const garde=!remplacee(nom)&&ancien&&ancien[nom];
+      return Object.assign({w,h,auto,man:(garde&&ancien[nom].man)||null},(garde&&ancien[nom].verifie)?{verifie:true}:{});
     };
     const face=await vue('face',pb.face);
     const dos=await vue('dos',pb.dos);
@@ -66333,6 +66374,10 @@ async function anatAnalyser(email,force){
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
       face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{}),
       empreinte:empreinteMorpho(pb.bilan),empreintes:vuesEmp};
+    // LES PHOTOS GARDÉES MALGRÉ LE CONTRÔLE (06/10/2026) : montrées, jamais
+    // mesurées tant que le coach n'a pas vérifié leurs points (anatVuesForcees).
+    const fz=[['face','face'],['dos','back'],['profil','side']].filter(([,v])=>{ try{ return !!photoForcee(pb.bilan,v); }catch(e){ return false; } }).map(([k])=>k);
+    if(fz.length) res.forcees=fz;
     // La date du remplacement : celle de la correction du bilan (modifieLe).
     if(unePhotoRemplacee) res.remplacee=Number(pb.bilan&&pb.bilan.modifieLe)||Date.now();
     else if(ancien&&ancien.remplacee) res.remplacee=ancien.remplacee;
@@ -66539,6 +66584,9 @@ function anatEnregistrerPoints(silencieux){
   const a=c.morphoAnat;
   const v=a[e.vue];
   if(!v){ _anatEdit=null; return; }
+  // « Analyser avec ces points » VAUT VÉRIFICATION : une photo gardée malgré
+  // le contrôle se mesure à partir de là (anatVuesForcees).
+  v.verifie=true;
   if(e.reinit&&!_anatBouge(e.pts,v.auto&&v.auto.pts)) v.man=null;
   else {
     // ⚠ SEULS LES POINTS TOUCHÉS SONT « À LA MAIN ». Les autres restent
@@ -66972,6 +67020,14 @@ function _htmlAnatChoixBilan(c,pb,fige){
   return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
     +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
 }
+// PURE. Le bandeau d'une analyse dont une photo a été gardée malgré le contrôle.
+function _htmlAnatForcees(a){
+  const l=anatVuesForcees(a);
+  if(!l.length) return '';
+  const lib={face:'de face',dos:'de dos',profil:'de profil'};
+  return '<p class="an-forcee">Photo '+l.map(v=>lib[v]).join(', ')+' gardée malgré le contrôle : aucune mesure n’en est tirée. '
+    +'Vérifie les points (Ajuster les points, puis Analyser avec ces points) ou relance la détection.</p>';
+}
 // PURE. La ligne discrète de l'en-tête : quand l'analyse a été faite, sur la
 // photo de quand, et si la photo a été remplacée depuis la première lecture.
 function _htmlAnatQuand(a,pb){
@@ -66995,7 +67051,7 @@ function _htmlAnat(c){
   const grise=manque.length>0;
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
-    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+'</div>'
+    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+_htmlAnatForcees(a)+'</div>'
     +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
@@ -80167,14 +80223,75 @@ async function _bilControlerPhoto(src,vue){
     return photoControle(r,vue);
   }catch(e){ return null; }
 }
-/** Le verdict affiché sous la carte : la couleur et, en clair, ce qu'il faut refaire. */
-function _htmlPhotoVerdict(ctl){
+// ══ LE CONTRÔLE NE BLOQUE JAMAIS (06/10/2026) ══════════════════════════════
+// Le moteur peut se tromper sur une photo correcte : en rouge, l'élève ne
+// pouvait que recommencer, et finissait par valider son bilan sans photo. Au
+// DEUXIÈME refus de la même vue dans le même bilan, un lien texte lui permet
+// de la garder quand même : '<vue>-ctl' vaut alors 'rouge-force|<codes>'. Le
+// coach le voit (liseré orange, raison), et aucune analyse n'en tire de
+// centimètres tant qu'il ne l'a pas vérifiée.
+const BIL_REFUS_AVANT_FORCER=2;
+let _bilRefus={gen:-1,n:{},photo:{}};
+function _bilRefusDu(){
+  if(_bilRefus.gen!==_bilGen) _bilRefus={gen:_bilGen,n:{},photo:{}};
+  return _bilRefus;
+}
+/** PURE. Les codes du contrôle si la photo a été gardée malgré un refus, sinon null. */
+function photoForcee(b,vue){
+  if(!b) return null;
+  for(const p of BILP_PREFIXES){
+    const c=b[p+vue+'-ctl'];
+    if(typeof c==='string'&&c.indexOf('rouge-force')===0) return (c.split('|')[1]||'').split(',').filter(Boolean);
+  }
+  return null;
+}
+/** Le verdict affiché sous la carte : la couleur et, en clair, ce qu'il faut refaire.
+ *  `forcer` : la clé de la photo refusée, quand le lien « Garder quand même » est offert. */
+function _htmlPhotoVerdict(ctl,forcer){
   if(!ctl) return '';
   const [etat,cs]=String(ctl).split('|'), codes=(cs||'').split(',').filter(Boolean);
-  const lib={vert:'Photo exploitable',orange:'Envoyable, mais à améliorer',rouge:'À reprendre'}[etat]||'';
-  const raisons=etat==='vert'?[]:codes.map(c=>PHOTO_CTL.MSG[c]).filter(Boolean);
+  const lib={vert:'Photo exploitable',orange:'Envoyable, mais à améliorer',rouge:'À reprendre',
+    'rouge-force':'Gardée à ta demande : ton coach la vérifiera.'}[etat]||'';
+  const raisons=(etat==='vert'||etat==='rouge-force')?[]:codes.map(c=>PHOTO_CTL.MSG[c]).filter(Boolean);
   return '<div class="bil-ctl-v" data-e="'+escapeHtml(etat)+'"><b>'+escapeHtml(lib)+'</b>'+raisons.map(r=>'<span>'+escapeHtml(r)+'</span>').join('')
-    +(etat==='orange'?'<small>Elle est gardée : tu peux l’envoyer telle quelle, ou la reprendre.</small>':'')+'</div>';
+    +(etat==='orange'?'<small>Elle est gardée : tu peux l’envoyer telle quelle, ou la reprendre.</small>':'')
+    +(etat==='rouge'&&forcer?'<button type="button" class="bil-ctl-forcer" onclick="bilGarderQuandMeme('+_attrArg(forcer)+')">Garder quand même, ton coach vérifiera</button>':'')
+    +'</div>';
+}
+// Un refus rouge de plus pour cette vue. Rend le HTML du verdict, avec le lien
+// à partir du deuxième.
+function _bilRefusRouge(key,data,codes){
+  const R=_bilRefusDu();
+  R.n[key]=(R.n[key]||0)+1;
+  R.photo[key]={data,codes:(codes||[]).slice()};
+  return _htmlPhotoVerdict('rouge|'+(codes||[]).join(','),R.n[key]>=BIL_REFUS_AVANT_FORCER?key:null);
+}
+/** « Garder quand même » : la dernière photo refusée de cette vue est gardée. */
+function bilGarderQuandMeme(key){
+  const R=_bilRefusDu(), p=R.photo[key];
+  if(!p||!p.data||(R.n[key]||0)<BIL_REFUS_AVANT_FORCER) return false;
+  bilData[key]=p.data;
+  bilData[key+'-ctl']='rouge-force|'+p.codes.join(',');
+  const z=document.getElementById('bil-ctl-'+key);
+  if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
+  if(!_bilEdition) _setPhotoLS('rc_pendingphoto_'+key,p.data);
+  _bilSaveDraft();
+  const input=document.querySelector('input[type=file][onchange*="\''+key+'\'"]');
+  const lbl=input&&input.closest('label');
+  if(lbl){ lbl.style.background='#001a00'; lbl.style.borderColor='#22c55e'; lbl.style.color='#22c55e'; lbl.innerHTML=' Ajoutée'; }
+  delete R.photo[key];
+  return true;
+}
+/** PURE. La phrase de validation quand une vue manque : le plan B est dit. */
+function rappelPhotosManquantes(b){
+  if(!b) return '';
+  const pre=(b.type==='depart'?'deb':'bil')+'-photo-';
+  const lib={face:'de face',back:'de dos',side:'de profil'};
+  const manque=['face','back','side'].filter(v=>!b[pre+v]&&!(()=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } })());
+  if(!manque.length) return '';
+  const l=manque.map(v=>lib[v]);
+  const quoi=l.length===1?'Photo '+l[0]+' manquante':'Photos '+l.slice(0,-1).join(', ')+' et '+l[l.length-1]+' manquantes';
+  return quoi+' : tu pourras '+(l.length===1?'l’':'les ')+'ajouter depuis Historique des bilans → Modifier.';
 }
 /**
  * LE MINUTEUR 10 S (E1). La caméra de l'appareil, la silhouette à caler en
@@ -80252,7 +80369,8 @@ function loadBilPhoto(input,key){
     if(_gen!==_bilGen) return;
     const z=document.getElementById('bil-ctl-'+key);
     if(ctl&&ctl.etat==='rouge'){
-      if(z) z.innerHTML=_htmlPhotoVerdict(ctl.etat+'|'+ctl.codes.join(','));
+      const _v=_bilRefusRouge(key,data,ctl.codes);
+      if(z) z.innerHTML=_v;
       if(lbl){ lbl.style.color=lblCoul; lbl.innerHTML=lblHtml; }
       return;
     }
@@ -83681,7 +83799,10 @@ function saveBilanFinal(){
   //   migration ne remplace JAMAIS une chaine avant que la reference soit
   //   valide : une photo ne peut plus etre perdue par un quota. Le « ✓ » ne
   //   depend donc plus que de l'ecriture du dossier, qui est ce qu'il annonce.
-  if(enregistre) toast(' Bilan n°'+n+' enregistré !');
+  // LE PLAN B EST DIT (06/10/2026) : une vue manque, on rappelle où l'ajouter.
+  let _rappel=''; try{ _rappel=rappelPhotosManquantes(bi); }catch(e){ _rappel=''; }
+  if(enregistre&&_rappel) toast(' Bilan n°'+n+' enregistré. '+_rappel,'var(--orange)',6500);
+  else if(enregistre) toast(' Bilan n°'+n+' enregistré !');
   else toast('Stockage plein : bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
   // LA SORTIE PROPRE. Vérifié : plus rien ne lit `bilData` en dessous — les

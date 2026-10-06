@@ -56014,6 +56014,60 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — LE CONTRÔLE DES PHOTOS NE BLOQUE JAMAIS L'ÉLÈVE ──
+    okA('Contrôle photo : un seul rouge → pas de lien ; deux rouges sur la même vue → « Garder quand même » ; le clic garde la photo en « rouge-force »',async()=>{
+      const sv={bd:bilData,ed:_bilEdition,ci:compressImage,ctl:_bilControlerPhoto,sd:_bilSaveDraft,ls:_setPhotoLS};
+      const zs=[];
+      try{
+        bilData={}; _bilEdition=null; _bilGen++;
+        _bilSaveDraft=()=>{}; _setPhotoLS=()=>{};
+        let pr=null, n=0;
+        compressImage=(f,w,q,cb)=>{ pr=cb('data:image/jpeg;base64,PHOTO'+(++n)); };
+        _bilControlerPhoto=async()=>({etat:'rouge',codes:['pieds']});
+        for(const k of ['deb-photo-side','deb-photo-face']){
+          const z=document.createElement('div'); z.id='bil-ctl-'+k; document.body.appendChild(z); zs.push(z);
+        }
+        const charger=async k=>{ loadBilPhoto({files:[{}],closest:()=>null},k); await pr; };
+        const zS=document.getElementById('bil-ctl-deb-photo-side'), zF=document.getElementById('bil-ctl-deb-photo-face');
+        await charger('deb-photo-side');
+        if(zS.querySelector('.bil-ctl-forcer')) return _echec('un lien dès le premier refus');
+        if(bilData['deb-photo-side']) return _echec('la photo rouge est gardée');
+        await charger('deb-photo-face');
+        if(zF.querySelector('.bil-ctl-forcer')) return _echec('un seul rouge sur la face, et le lien apparaît');
+        await charger('deb-photo-side');
+        const lien=zS.querySelector('.bil-ctl-forcer');
+        if(!lien||lien.textContent!=='Garder quand même, ton coach vérifiera') return _echec('pas de lien au deuxième refus : '+zS.innerHTML);
+        if(lien.tagName!=='BUTTON'||lien.classList.contains('btn')) return _echec('le lien est un gros bouton');
+        lien.click();
+        if(bilData['deb-photo-side']!=='data:image/jpeg;base64,PHOTO3') return _echec('photo gardée : '+String(bilData['deb-photo-side']).slice(0,40));
+        if(bilData['deb-photo-side-ctl']!=='rouge-force|pieds') return _echec('ctl : '+bilData['deb-photo-side-ctl']);
+        if(!/Gardée à ta demande : ton coach la vérifiera\./.test(zS.textContent)) return _echec('verdict : '+zS.textContent);
+        // Un nouveau bilan repart de zéro refus.
+        _bilGen++;
+        await charger('deb-photo-side');
+        return zS.querySelector('.bil-ctl-forcer')?_echec('le compte survit au bilan suivant'):true;
+      } finally {
+        zs.forEach(z=>z.remove());
+        bilData=sv.bd; _bilEdition=sv.ed; compressImage=sv.ci; _bilControlerPhoto=sv.ctl; _bilSaveDraft=sv.sd; _setPhotoLS=sv.ls;
+      }});
+    ok('Photo forcée : morphoInitialeDe rend « attente » avec la raison ; anatMesures n’en tire rien tant que le coach n’a pas vérifié ; le coach la voit',()=>{
+      const d=Date.now()-5*864e5;
+      const b={type:'depart',date:d,'deb-photo-face':{cle:'k',url:'https://res.t/f.jpg'},'deb-photo-face-ctl':'rouge-force|pieds,rotation'};
+      const u={id:'afz',email:'fz@t.fr',role:'athlete',gender:'H',bilans:[b]};
+      const lu={ok:true,prise:{verdict:'ok',raisons:[]},pixels:{genou:100},rapports:[]};
+      const m=morphoInitialeDe(u,lu,{src:'https://res.t/f.jpg',date:d,depart:true},1);
+      if(m.etat!=='attente'||m.raison!=='photo gardée malgré le contrôle') return _echec(JSON.stringify(m));
+      if(JSON.stringify(photoForcee(b,'face'))!=='["pieds","rotation"]'||photoForcee(b,'back')!==null) return _echec('photoForcee');
+      const a={forcees:['face'],face:{}};
+      if(anatVuesForcees(a).join()!=='face') return _echec('vue forcée non bloquée');
+      a.face.verifie=true;
+      if(anatVuesForcees(a).length) return _echec('vérifiée par le coach, encore bloquée');
+      return /gardée malgré le contrôle/.test(_anatCtlEnvoi(b))?true:_echec('le coach ne le lit pas : '+_anatCtlEnvoi(b));});
+    ok('Validation : une vue manque → la phrase dit où l’ajouter',()=>{
+      const r=rappelPhotosManquantes({type:'depart',date:1,'deb-photo-face':'data:x','deb-photo-back':'data:y'});
+      if(r!=='Photo de profil manquante : tu pourras l’ajouter depuis Historique des bilans → Modifier.') return _echec(r);
+      if(rappelPhotosManquantes({type:'coaching',date:1,'bil-photo-face':'a','bil-photo-back':'b','bil-photo-side':'c'})!=='') return _echec('rappel sans manque');
+      return /^Photos de face, de dos et de profil manquantes : tu pourras les ajouter/.test(rappelPhotosManquantes({type:'coaching',date:1}))?true:_echec(rappelPhotosManquantes({type:'coaching',date:1}));});
     // ── 06/10/2026 — L'EMPREINTE MORPHO : UNE CORRECTION DE BILAN RELANCE LES ANALYSES ──
     const _EMP=()=>{
       const t=Date.now(), d=t-40*864e5;

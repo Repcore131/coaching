@@ -1102,6 +1102,26 @@ const ANAT_ECHELLE_CHEVEUX_PCT=4;
  * PURE. Tout ce que les deux photos disent, région par région, avec les
  * chiffres, leurs repères et leurs marges.
  */
+/**
+ * PURE. Les vues dont aucune mesure ne sort : photo gardée malgré le contrôle
+ * (morphoAnat.forcees), tant que le coach n'a pas vérifié ses points.
+ */
+function anatVuesForcees(anat){
+  const l=(anat&&Array.isArray(anat.forcees))?anat.forcees:[];
+  return l.filter(v=>!(anat[v]&&(anat[v].verifie||anat[v].man)));
+}
+// ⚠ AUCUN CENTIMÈTRE D'UNE PHOTO FORCÉE (06/10/2026) : les fiches de ses vues
+//   sont retirées, et une face forcée retire l'échelle et les leviers. La photo
+//   reste affichée pour le suivi visuel. Appelée par anatMesures, à son retour.
+function _anatSansForcees(anat,r){
+  const bloq=anatVuesForcees(anat);
+  if(!bloq.length) return r;
+  r.fiches=r.fiches.filter(f=>bloq.indexOf(f.vue)<0);
+  if(bloq.indexOf('face')>=0){ r.echelle=null; r.leviers=[]; r.photoCm={bras:null,avantbras:null,rotule:null}; }
+  try{ r.posture=anatMesuresPosture({fiches:r.fiches}); }catch(e){}
+  r.forcees=bloq;
+  return r;
+}
 function anatMesures(anat,u,o){
   // o.brut : la photo seule, sans correction ni mètre (c'est ce que la
   // calibration apprend) ; o.biais : le biais appris (anatBiaisCoach).
@@ -1750,8 +1770,9 @@ function anatMesures(anat,u,o){
   const fb=fiches.find(f=>f.cle==='bras');
   const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
     rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
-  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts,
-    posture:anatMesuresPosture({fiches})};
+  // ⚠ Les vues gardées malgré le contrôle n'en sortent pas (_anatSansForcees).
+  return _anatSansForcees(anat,{photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts,
+    posture:anatMesuresPosture({fiches})});
 }
 
 /**

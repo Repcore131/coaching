@@ -579,7 +579,7 @@ function _htmlAnatExport(){
 function _anatCtlEnvoi(b){
   if(!b) return '';
   const pre=(b.type==='depart'?'deb':'bil')+'-photo-';
-  const lib={face:'face',back:'dos',side:'profil'}, mot={vert:'contrôle passé',orange:'envoyée avec réserve',rouge:'à reprendre'};
+  const lib={face:'face',back:'dos',side:'profil'}, mot={vert:'contrôle passé',orange:'envoyée avec réserve',rouge:'à reprendre','rouge-force':'gardée malgré le contrôle, à vérifier'};
   const l=['face','back','side'].map(v=>{
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
@@ -1212,7 +1212,8 @@ async function anatAnalyser(email,force){
       if(!w||!h){ const d=await _anatDimensions(src); if(!d) return null; w=d.w; h=d.h; }
       // Rien de lu : un gabarit à caler, marqué comme tel.
       if(!auto) auto={pts:anatGabarit(w,h,nom),telephone:null,miroir:false,triangles:null,gabarit:true};
-      return {w,h,auto,man:(!remplacee(nom)&&ancien&&ancien[nom]&&ancien[nom].man)||null};
+      const garde=!remplacee(nom)&&ancien&&ancien[nom];
+      return Object.assign({w,h,auto,man:(garde&&ancien[nom].man)||null},(garde&&ancien[nom].verifie)?{verifie:true}:{});
     };
     const face=await vue('face',pb.face);
     const dos=await vue('dos',pb.dos);
@@ -1221,6 +1222,10 @@ async function anatAnalyser(email,force){
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
       face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{}),
       empreinte:empreinteMorpho(pb.bilan),empreintes:vuesEmp};
+    // LES PHOTOS GARDÉES MALGRÉ LE CONTRÔLE (06/10/2026) : montrées, jamais
+    // mesurées tant que le coach n'a pas vérifié leurs points (anatVuesForcees).
+    const fz=[['face','face'],['dos','back'],['profil','side']].filter(([,v])=>{ try{ return !!photoForcee(pb.bilan,v); }catch(e){ return false; } }).map(([k])=>k);
+    if(fz.length) res.forcees=fz;
     // La date du remplacement : celle de la correction du bilan (modifieLe).
     if(unePhotoRemplacee) res.remplacee=Number(pb.bilan&&pb.bilan.modifieLe)||Date.now();
     else if(ancien&&ancien.remplacee) res.remplacee=ancien.remplacee;
@@ -1427,6 +1432,9 @@ function anatEnregistrerPoints(silencieux){
   const a=c.morphoAnat;
   const v=a[e.vue];
   if(!v){ _anatEdit=null; return; }
+  // « Analyser avec ces points » VAUT VÉRIFICATION : une photo gardée malgré
+  // le contrôle se mesure à partir de là (anatVuesForcees).
+  v.verifie=true;
   if(e.reinit&&!_anatBouge(e.pts,v.auto&&v.auto.pts)) v.man=null;
   else {
     // ⚠ SEULS LES POINTS TOUCHÉS SONT « À LA MAIN ». Les autres restent
@@ -1860,6 +1868,14 @@ function _htmlAnatChoixBilan(c,pb,fige){
   return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
     +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
 }
+// PURE. Le bandeau d'une analyse dont une photo a été gardée malgré le contrôle.
+function _htmlAnatForcees(a){
+  const l=anatVuesForcees(a);
+  if(!l.length) return '';
+  const lib={face:'de face',dos:'de dos',profil:'de profil'};
+  return '<p class="an-forcee">Photo '+l.map(v=>lib[v]).join(', ')+' gardée malgré le contrôle : aucune mesure n’en est tirée. '
+    +'Vérifie les points (Ajuster les points, puis Analyser avec ces points) ou relance la détection.</p>';
+}
 // PURE. La ligne discrète de l'en-tête : quand l'analyse a été faite, sur la
 // photo de quand, et si la photo a été remplacée depuis la première lecture.
 function _htmlAnatQuand(a,pb){
@@ -1883,7 +1899,7 @@ function _htmlAnat(c){
   const grise=manque.length>0;
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
-    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+'</div>'
+    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+_htmlAnatForcees(a)+'</div>'
     +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
