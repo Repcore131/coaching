@@ -82,8 +82,11 @@ jobs:
           APERCU_MATIN: ${{ inputs.apercu_matin }}
         run: node club/outils/fitpulse-serveur.mjs
 
+  # Le robot ne tourne plus sur le planning GitHub (fortement ralenti, et un
+  # démarrage à une heure imprévue afficherait une erreur « code non saisi »).
+  # Il est lancé par le déclencheur fiable « robot_maj » (routine à la demi-heure) ou à la main.
   robot:
-    if: ${{ inputs.robot_resamania || inputs.robot_diag || inputs.robot_maj || github.event_name == 'schedule' }}
+    if: ${{ inputs.robot_resamania || inputs.robot_diag || inputs.robot_maj }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -96,7 +99,7 @@ jobs:
       # Sur le planning : ne rien faire tant que personne n'a appuyé sur « Lancer » dans l'appli.
       - name: Une mise à jour est-elle demandée ?
         id: chk
-        if: ${{ github.event_name == 'schedule' || inputs.robot_maj }}
+        if: ${{ inputs.robot_maj }}
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node club/outils/resamania-robot.mjs besoin

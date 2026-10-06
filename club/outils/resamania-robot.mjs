@@ -212,7 +212,8 @@ async function besoin() {
   const { appendFileSync } = await import('node:fs');
   const dem = await fb('pulse/rsm/demande.json').catch(() => null);
   const handled = (await fb('pulse/rsm/handledAt.json').catch(() => null)) || 0;
-  const go = dem && dem.at && Date.now() - dem.at < 30 * 60000 && dem.at > Number(handled);
+  // Fenêtre large (75 min) : le manager arme la mise à jour dans l'après-midi/soir, le démarrage a lieu au créneau suivant (toutes les heures à la demi-heure).
+  const go = dem && dem.at && Date.now() - dem.at < 75 * 60000 && dem.at > Number(handled);
   log('besoin :', go ? 'oui (demande en attente)' : 'non');
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `go=${go ? 1 : 0}\n`);
 }
@@ -223,7 +224,7 @@ async function main() {
   if (MODE === 'auto') {
     const dem = await fb('pulse/rsm/demande.json').catch(() => null);
     const handled = (await fb('pulse/rsm/handledAt.json').catch(() => null)) || 0;
-    if (!(dem && dem.at && Date.now() - dem.at < 30 * 60000 && dem.at > Number(handled))) { log('auto : pas de demande en attente'); return; }
+    if (!(dem && dem.at && Date.now() - dem.at < 75 * 60000 && dem.at > Number(handled))) { log('auto : pas de demande en attente'); return; }
     await fb('pulse/rsm/handledAt.json', { method: 'PUT', body: JSON.stringify(dem.at) }).catch(() => {});
   }
   const { chromium } = require('playwright');

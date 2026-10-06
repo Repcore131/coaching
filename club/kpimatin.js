@@ -210,26 +210,41 @@ async function kmRead(files) {
 // Mise à jour depuis Resamania : le robot (serveur) se connecte le soir ; comme
 // Resamania envoie un code à chaque connexion, le manager le saisit ici — il
 // n'est jamais lu automatiquement. Le robot le relit, l'efface et poursuit.
+// Heure du prochain créneau de démarrage du robot (toutes les heures à la demi-heure, de 12 h à 23 h, heure de Paris = heure locale du club).
+function kmProchainCreneau() {
+  const d = new Date(); d.setSeconds(0, 0);
+  if (d.getMinutes() >= 29) d.setHours(d.getHours() + 1);
+  d.setMinutes(29);
+  if (d.getHours() < 12) d.setHours(12);
+  else if (d.getHours() > 23) { d.setDate(d.getDate() + 1); d.setHours(12); }
+  return d;
+}
 function kmSyncCard() {
   const sy = deepGet(S, ['rsm', 'etat']) || {}; const srv = deepGet(S, ['serveur', 'rsm']) || {};
+  const dem = deepGet(S, ['rsm', 'demande']) || {}; const handledAt = Number(deepGet(S, ['rsm', 'handledAt']) || 0);
   const maj = srv.at ? `${dmy(isoOf(new Date(srv.at)))} à ${new Date(srv.at).toTimeString().slice(0, 5)}` : null;
   const frais = sy.at && Date.now() - sy.at < 20 * 60000;
+  const actif = frais && ['connexion', 'code', 'maj'].includes(sy.step);
+  // Mise à jour « armée » : demande récente, pas encore prise par le robot et robot pas déjà en train de tourner.
+  const armee = dem.at && Date.now() - dem.at < 75 * 60000 && dem.at > handledAt && !actif;
+  const creneau = kmProchainCreneau().toTimeString().slice(0, 5).replace(':', ' h ');
   // État en direct du robot (quand il tourne).
   const etatLigne = frais && sy.step === 'connexion' ? '<p class="small">Connexion à Resamania en cours…</p>'
     : frais && sy.step === 'code' ? `<p class="small" style="color:var(--warn)"><b>Resamania attend le code ci-dessous.</b></p>`
       : frais && sy.step === 'maj' ? '<p class="small">Récupération des exports en cours…</p>'
         : frais && sy.step === 'ok' ? '<p class="small ok">Mise à jour terminée.</p>'
           : frais && sy.step === 'erreur' ? `<p class="small bad">${esc(sy.msg || 'Échec de la mise à jour.')}</p>` : '';
+  const armeeLigne = armee ? `<p class="small" style="color:var(--warn)"><b>Mise à jour armée.</b> Le robot démarre vers <b>${creneau}</b> — restez sur cette page à ce moment et tenez le code Resamania prêt.</p>` : '';
   const attente = frais && sy.step === 'code';
   return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('clock')}<h3>Mise à jour depuis Resamania</h3></div>
-    <p class="muted small" style="margin-top:-6px">Chaque soir à 21 h 30, le robot récupère les exports de la journée et met l’appli à jour pour le lendemain.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>
+    <p class="muted small" style="margin-top:-6px">Appuyez sur « Lancer la mise à jour » pour armer la récupération des exports du jour. Le robot démarre au créneau suivant (toutes les heures à la demi-heure, de 12 h à 23 h) : soyez présent à ce moment pour saisir le code Resamania.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>
     <div class="row wrap" style="gap:8px;margin:4px 0 10px"><button class="btn sm primary" data-act="rsmSync">${ico('upload')} Lancer la mise à jour</button></div>
-    ${etatLigne}
+    ${armeeLigne}${etatLigne}
     <div style="padding:10px 12px;border:1px solid ${attente ? 'var(--warn)' : 'var(--line)'};border-radius:10px;${attente ? 'background:var(--warn-soft)' : ''}">
-      <b>Code Resamania</b> <span class="muted small">— dès que Resamania vous envoie le code par e-mail, tapez-le ici et validez <b>dans les 2 minutes</b> (après, il expire).</span>
+      <b>Code Resamania</b> <span class="muted small">— dès que le robot démarre, Resamania vous envoie le code par e-mail : tapez-le ici et validez <b>sous 10 minutes</b>.</span>
       <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:180px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div></div>`;
 }
-ACTIONS.rsmSync = () => { if (!isManager()) return; db.batch([[['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }], [['rsm', 'etat'], { step: 'connexion', at: Date.now() }]]); toast('Mise à jour lancée : gardez l’e-mail du code Resamania à portée, tapez-le dès réception.'); };
+ACTIONS.rsmSync = () => { if (!isManager()) return; const c = kmProchainCreneau().toTimeString().slice(0, 5).replace(':', ' h '); db.set(['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }); toast(`Mise à jour armée : le robot démarre vers ${c}. Restez sur cette page et gardez le code Resamania à portée.`); };
 ACTIONS.rsmCode = () => { if (!isManager()) return; const f = formData($('#rsmf')); const c = (f.code || '').replace(/\s/g, ''); if (c.length < 4) { toast('Code incomplet.'); return; } db.set(['rsm', 'code'], { v: c, at: Date.now(), by: ME.id }); toast('Code transmis au robot.'); };
 ACTIONS.kmDay = el => { const K = kmState(); K.day = el.value || addDays(today(), -1); K.vals = {}; K.step = 0; render(); };
 ACTIONS.kmSet = el => { const K = kmState(); K.vals[el.dataset.k] = el.value; if (K.step === 2) K.step = 0; const lab = el.closest('.field'); if (lab) { lab.classList.toggle('km-todo', !el.value); const s = $('small', lab); if (s) s.textContent = 'modifié à la main'; } };
