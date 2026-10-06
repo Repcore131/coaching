@@ -112,7 +112,13 @@ export async function connecter(page) {
     await cliquerSuite(page); await page.waitForTimeout(6000);
     await decrire(page, 'après code');
   }
-  if (await visible(page.locator('input[type=password]'))) throw new Error('toujours sur la page de connexion (identifiants ou code refusés ?)');
+  // Succès = on est bien dans l'espace de gestion. Sinon : code expiré/refusé ou identifiants.
+  const u = page.url();
+  const dansGestion = /\/-\/management\//.test(u) && !/\/2fa/.test(u) && await visible(page.getByRole('button', { name: /gestion/i }));
+  if (!dansGestion) {
+    const erreur = /2fa_check|bad request|error/i.test(u + ' ' + await page.title().catch(() => ''));
+    throw new Error(erreur ? 'code refusé ou expiré — saisissez-le dans les 2 minutes qui suivent la demande' : 'connexion non aboutie (identifiants ou code)');
+  }
   log('connecté');
 }
 

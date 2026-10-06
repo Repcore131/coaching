@@ -226,7 +226,7 @@ function kmSyncCard() {
     <div class="row wrap" style="gap:8px;margin:4px 0 10px"><button class="btn sm primary" data-act="rsmSync">${ico('upload')} Lancer la mise à jour</button></div>
     ${etatLigne}
     <div style="padding:10px 12px;border:1px solid ${attente ? 'var(--warn)' : 'var(--line)'};border-radius:10px;${attente ? 'background:var(--warn-soft)' : ''}">
-      <b>Code Resamania</b> <span class="muted small">— dès que Resamania vous envoie le code par e-mail, tapez-le ici et validez.</span>
+      <b>Code Resamania</b> <span class="muted small">— dès que Resamania vous envoie le code par e-mail, tapez-le ici et validez <b>dans les 2 minutes</b> (après, il expire).</span>
       <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:180px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div></div>`;
 }
 ACTIONS.rsmSync = () => { if (!isManager()) return; db.batch([[['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }], [['rsm', 'etat'], { step: 'connexion', at: Date.now() }]]); toast('Mise à jour lancée : gardez l’e-mail du code Resamania à portée, tapez-le dès réception.'); };
