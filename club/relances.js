@@ -413,13 +413,13 @@ function relBadge() { try { return relQueue(CLUB.id, 'mine').now.length; } catch
 PAGES.equipe = {
   title: 'Équipe',
   render() {
-    const t = UI.eqTab === 'chat' ? 'chat' : 'fil';
+    const t = 'fil';
     const strip = h => h.replace(/^<div class="page-head">[\s\S]*?<\/div>\s*(<span class="spacer"><\/span>[\s\S]*?)?<\/div>/, '');
-    const body = t === 'chat' ? PAGES.chat.render() : PAGES.feed.render();
-    return `<div class="page-head"><div><h1>Équipe</h1><p>Le fil des ventes et le chat du club.</p></div></div>
-      ${tabs('eqTab', [['fil', `Fil d’équipe${unseenFeed() ? ' · ' + unseenFeed() : ''}`], ['chat', `Chat${unseenChat() ? ' · ' + unseenChat() : ''}`]], t)}${strip(body)}`;
+    const body = PAGES.feed.render();
+    return `<div class="page-head"><div><h1>Équipe</h1><p>Le fil des ventes du club.</p></div></div>
+      ${tabs('eqTab', [['fil', `Fil d’équipe${unseenFeed() ? ' · ' + unseenFeed() : ''}`]], t)}${strip(body)}`;
   },
-  mount() { const t = UI.eqTab || 'fil'; if (t === 'chat' && PAGES.chat.mount) PAGES.chat.mount(); if (t === 'fil' && PAGES.feed.mount) PAGES.feed.mount(); },
+  mount() { if (PAGES.feed.mount) PAGES.feed.mount(); },
 };
 
 // ── Répartir les relances non attribuées entre les membres actifs ─────────

@@ -58,7 +58,15 @@ const formData = root => { const o = {}; $$('[name]', root).forEach(el => { if (
 
 // ── Avatars ───────────────────────────────────────────────────────────────
 // Mascotte du tableau de bord : 4 silhouettes, l'humeur suit le rythme.
-function avatar(u, cls = '') { return `<span class="avatar ${cls}" title="${esc(fullName(u))}">${esc(initials(u))}</span>`; }
+// Photo ou couleur choisies dans Mon profil (préférences de la personne).
+const PROFIL_COLORS = ['#FFD600', '#F97316', '#EF4444', '#EC4899', '#A855F7', '#3B82F6', '#06B6D4', '#22C55E', '#F5F5F3', '#6B7280'];
+const profilOf = u => (u && S && S.prefs && S.prefs[u.id] && S.prefs[u.id].profil) || {};
+function avatar(u, cls = '') {
+  const p = profilOf(u); const name = esc(fullName(u));
+  if (p.photo && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.photo)) return `<span class="avatar ${cls}" title="${name}"><img src="${p.photo}" alt=""></span>`;
+  const col = PROFIL_COLORS.includes(p.color) ? p.color : null;
+  return `<span class="avatar ${cls}" title="${name}"${col ? ` style="background:${col};color:${['#FFD600', '#F5F5F3', '#06B6D4', '#22C55E', '#F97316'].includes(col) ? '#0B0B0C' : '#fff'}"` : ''}>${esc(initials(u))}</span>`;
+}
 
 // ── Graphiques SVG ────────────────────────────────────────────────────────
 function barChart({ labels, series, height = 220, fmt = fmtN }) {
@@ -110,26 +118,23 @@ function brandBlock(big = false) {
 const NAV = [
   ['home', 'Accueil', 'dashboard'],
   ['kpimatin', 'KPI du matin', 'send'],
-  ['opportunites', 'Opportunités', 'coins'],
   ['dashboard', 'Mes objectifs', 'target'],
   ['relances', 'Relances', 'phone'],
   ['leaderboard', 'Classement', 'trophy'],
   ['equipe', 'Équipe', 'users', 'm'],
   ['recap', 'Récap du mois', 'chart', true],
   ['team', 'Pilotage équipe', 'users', true],
-  ['b2b', 'Entreprises', 'briefcase'],
-  ['quality', 'Contrôle qualité', 'shield', true],
+  ['b2b', 'Entreprise', 'briefcase'],
   ['sep'],
   ['resiliations', 'Résiliations', 'door', true],
   ['impayes', 'Impayés', 'euro', true],
   ['loyalty', 'Rétention', 'heart', true],
-  ['chat', 'Chat', 'chat', true],
   ['feed', 'Fil d’équipe', 'feed', true],
   ['sep'],
   ['imports', 'Imports Resamania', 'upload', true],
-  ['members', 'Équipe & paliers', 'users', true],
-  ['clubs', 'Mes clubs', 'building', true],
 ];
+// Anciennes pages regroupées : l'adresse reste valable et ouvre le bon onglet.
+const ROUTE_ALIAS = { opportunites: ['dashboard', 'dashTab', 'opportunites'], members: ['team', 'teamTab', 'membres'], quality: ['b2b', 'bizTab', 'qualite'], clubs: ['b2b', 'bizTab', 'clubs'], chat: ['equipe', 'eqTab', 'fil'] };
 function unseenFeed() {
   const seen = pref('feedSeen', 0);
   const clubs = ME.clubs || [];
@@ -145,11 +150,10 @@ function shell(route, inner) {
     if (id === 'sep') return '<div class="nav-sep"></div>';
     if (mgr === true && !isManager()) return '';
     if (mgr === 'm' && isManager()) return '';
-    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? unseenFeed() + unseenChat() : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
+    const n = id === 'feed' ? unseenFeed() : id === 'chat' ? unseenChat() : id === 'equipe' ? unseenFeed() : id === 'relances' ? relBadge() : id === 'loyalty' ? loyaltyTasks(CLUB.id).filter(t => t.state === 'todo').length : id === 'resiliations' ? resToHandle(CLUB.id).length : id === 'impayes' ? dunRows(CLUB.id).filter(dunDue).length : 0;
     return `<a href="#/${id}" class="${route === id ? 'on' : ''}">${ico(icon)}<span>${label}</span>${n ? `<span class="pill">${n > 99 ? '99+' : n}</span>` : ''}</a>`;
   }).join('');
   const clubs = myClubs();
-  const theme = curTheme();
   return `<div class="shell" id="shell">
     <aside class="side">
       ${brandBlock()}
@@ -158,8 +162,6 @@ function shell(route, inner) {
       <nav class="nav">${nav}</nav>
       <div class="side-foot nav">
         <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>Mon profil</span></a>
-        <a href="javascript:void 0" data-act="theme">${ico(theme === 'dark' ? 'sun' : 'moon')}<span>Thème ${theme === 'dark' ? 'clair' : 'sombre'}</span></a>
-        <a href="javascript:void 0" data-act="logout">${ico('logout')}<span>Se déconnecter</span></a>
         <a href="#/legal" class="${route === 'legal' ? 'on' : ''}">${ico('shield')}<span>Informations légales</span></a>
         <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${roleLabel(ME.role)}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
       </div>
@@ -208,6 +210,7 @@ function renderNowInner() {
   if (!CLUB) { app.innerHTML = `<div class="auth"><div class="auth-card"><h2>Aucun club</h2><p class="muted">Votre compte n'est rattaché à aucun club. Demandez à un manager de vous ajouter.</p><button class="btn primary" data-act="logout">Se déconnecter</button></div></div>`; return; }
   let { r, args } = currentRoute();
   if (r === 'wrap') { app.innerHTML = PAGES.wrap.render(args); PAGES.wrap.mount(args); return; }
+  if (ROUTE_ALIAS[r]) { const [to, k, v] = ROUTE_ALIAS[r]; if (UI._aliasFrom !== location.hash) { UI[k] = v; UI._aliasFrom = location.hash; } r = to; } else UI._aliasFrom = null;
   if (!PAGES[r] || PAGES[r].auth === false) r = 'home';
   if (PAGES[r].manager && !isManager()) r = 'home';
   const keepScroll = UI._lastRoute === r ? window.scrollY : 0;
@@ -224,6 +227,9 @@ function renderNowInner() {
   if (focusKey) { const el = $(`[data-focus="${focusKey}"]`); if (el) { el.focus(); if (el.setSelectionRange && el.value) el.setSelectionRange(el.value.length, el.value.length); } }
 }
 window.addEventListener('hashchange', () => { UI._lastRoute = null; render(); });
+
+// Page intégrée dans l'onglet d'une autre : son propre en-tête est retiré.
+const subPage = html => String(html).replace(/^\s*<div class="page-head">[\s\S]*?<\/div>\s*(<span class="spacer"><\/span>[\s\S]*?)?<\/div>/, m => { const acts = m.match(/<span class="spacer"><\/span>([\s\S]*)<\/div>\s*$/); return acts ? `<div class="row wrap sub-acts">${acts[1]}</div>` : ''; });
 
 // ── Delegation d'evenements ────────────────────────────────────────────────
 document.addEventListener('click', e => {

@@ -331,7 +331,10 @@ PAGES.profile = {
       <div style="text-align:right"><div class="title t-28">${fmtN(pts)} pts</div><div class="muted small">${lv.next ? `${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}` : 'Niveau maximum'}</div></div></div>
       <div class="lvl-row">${LEVELS.map((l, i) => { const got = pts >= l.min, nxt = lv.next && lv.next.id === l.id; const pr = nxt ? clamp((pts - LEVELS[i - 1].min) / (l.min - LEVELS[i - 1].min), 0, 1) : 0; return `<div class="lv ${nxt ? 'next' : ''}">${levelBadge(l, 40, { dim: !got && !nxt })}${nxt ? `<div class="lvl-prog"><i style="width:${Math.round(pr * 100)}%"></i></div>` : ''}<span>${fmtN(l.min)}</span></div>`; }).join('')}</div>
       ${lv.next ? `<p class="muted small" style="margin:8px 0 0">${fmtN(lv.next.min - pts)} pts avant ${lv.next.label}${(() => { const w = weeklyPace(ME.id); return w > 0 ? `, soit environ ${plur(Math.ceil((lv.next.min - pts) / w), 'semaine', 'semaines')} au rythme actuel` : ''; })()}.</p>` : ''}</div>`;
-    return head + tabs('profTab', [['perf', 'Performances'], ['account', 'Compte']], tab) + (tab === 'perf' ? profPerf() : profAccount());
+    const pr = profilOf(ME);
+    const about = pr.poste || pr.bio ? `<div class="card prof-about" style="margin-bottom:14px">${pr.poste ? `<b>${esc(pr.poste)}</b>` : ''}${pr.bio ? `<p class="muted" style="margin:4px 0 0">${esc(pr.bio)}</p>` : ''}</div>` : '';
+    return head + about + `<div class="row wrap prof-quick"><button class="btn sm" data-act="theme">${ico(curTheme() === 'dark' ? 'sun' : 'moon')} Thème ${curTheme() === 'dark' ? 'clair' : 'sombre'}</button><button class="btn sm" data-act="ui" data-key="profTab" data-val="account">${ico('edit')} Personnaliser mon profil</button><span class="spacer"></span><button class="btn sm danger" data-act="logout">${ico('logout')} Se déconnecter</button></div>`
+      + tabs('profTab', [['perf', 'Performances'], ['account', 'Mon compte']], tab) + (tab === 'perf' ? profPerf() : profAccount());
   },
 };
 function profPerf() {
@@ -350,8 +353,30 @@ function profPerf() {
     <div class="card"><h3>Mes bilans mensuels</h3>${months.length ? (showAll ? months : months.slice(0, 3)).map((m, i) => `<a class="row" style="padding:10px 0;border-bottom:1px solid var(--line);text-decoration:none" href="#/wrap/${m}/${ME.id}">${ico('chart')}<b class="spacer">${monthLabel(m)}</b>${i === 0 ? '<span class="badge fp">Dernier bilan, à revoir</span>' : ''}${ico('chevR')}</a>`).join('') : '<p class="muted">Votre premier bilan apparaîtra à la fin du mois.</p>'}
       ${months.length > 3 && !showAll ? `<button class="btn sm" style="margin-top:10px" data-act="ui" data-key="profWraps" data-val="all">Voir ${months.length - 3} mois de plus</button>` : ''}</div></div>`;
 }
+function profPersonal() {
+  const p = profilOf(ME); const th = curTheme();
+  return `<div class="card"><h3>Mon profil</h3><p class="muted small" style="margin-top:-4px">Visible par l’équipe : photo ou couleur, poste, une phrase.</p>
+    <div class="row wrap" style="gap:14px;align-items:center;margin:8px 0">${avatar(ME, 'lg')}<div class="row wrap" style="gap:8px"><label class="btn sm">${ico('upload')} ${p.photo ? 'Changer la photo' : 'Ajouter une photo'}<input type="file" accept="image/*" hidden data-change="profPhoto"></label>${p.photo ? '<button class="btn sm ghost" data-act="profPhotoDel">Retirer la photo</button>' : ''}</div></div>
+    <div class="field"><span>Ma couleur</span><div class="prof-colors">${PROFIL_COLORS.map(c => `<button class="prof-color ${p.color === c ? 'on' : ''}" style="background:${c}" data-act="profColor" data-c="${c}" aria-label="Couleur ${c}"></button>`).join('')}</div></div>
+    <form id="ppf2" class="grid"><label class="field"><span>Poste</span><input class="input" name="poste" maxlength="60" value="${esc(p.poste || '')}" placeholder="Conseiller commercial, coach, manager…"></label>
+      <label class="field"><span>Téléphone professionnel</span><input class="input" name="tel" type="tel" maxlength="20" value="${esc(p.tel || '')}" placeholder="Facultatif"></label>
+      <label class="field"><span>Ma devise ou une phrase sur moi</span><input class="input" name="bio" maxlength="140" value="${esc(p.bio || '')}" placeholder="Ex. Toujours partant pour un défi !"></label>
+      <button class="btn primary" type="button" data-act="profSave">Enregistrer mon profil</button></form>
+    <div class="field" style="margin-top:12px"><span>Thème</span><div class="row" style="gap:6px">${[['dark', 'Sombre'], ['light', 'Clair']].map(([k, l]) => `<button class="btn sm ${th === k ? 'primary' : ''}" data-act="themeSet" data-t="${k}">${ico(k === 'dark' ? 'moon' : 'sun')} ${l}</button>`).join('')}</div></div>
+    <button class="btn danger" style="margin-top:14px" data-act="logout">${ico('logout')} Se déconnecter</button></div>`;
+}
+const profPatch = patch => setPref('profil', { ...profilOf(ME), ...patch });
+ACTIONS.profColor = el => { profPatch({ color: el.dataset.c, photo: null }); toast('Couleur enregistrée'); };
+ACTIONS.profPhotoDel = () => profPatch({ photo: null });
+ACTIONS.profPhoto = async el => {
+  const f = el.files && el.files[0]; if (!f) return; if (!/^image\//.test(f.type)) { toast('Choisissez une image.'); return; }
+  const data = await shrinkImage(f, 256); if (!data || data.length > 120000) { toast('Image trop lourde : choisissez-en une plus petite.'); return; }
+  profPatch({ photo: data }); toast('Photo enregistrée');
+};
+ACTIONS.profSave = () => { const f = formData($('#ppf2')); profPatch({ poste: (f.poste || '').trim().slice(0, 60) || null, tel: (f.tel || '').trim().slice(0, 20) || null, bio: (f.bio || '').trim().slice(0, 140) || null }); toast('Profil enregistré'); };
+ACTIONS.themeSet = el => { document.documentElement.dataset.theme = el.dataset.t; safeLS.set('parkpulse.theme', el.dataset.t); render(); };
 function profAccount() {
-  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px, 100%), 1fr))">${profPersonal()}
     <div class="card"><h3>Mes informations</h3><form id="pf" class="grid" style="margin-top:10px"><div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" value="${esc(ME.first)}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(ME.last)}"></label></div>
       <p class="muted small" style="margin:0">Rôle : ${roleLabel(ME.role)} · membre depuis le ${dmy(isoOf(new Date(ME.createdAt || Date.now())))}</p><button class="btn primary" data-act="saveProfile" type="button">Enregistrer</button></form></div>
     ${notifCard()}

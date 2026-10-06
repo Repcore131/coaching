@@ -12,9 +12,9 @@ Dans l'application : **#/legal** (lisible sans connexion), liens en pied de chaq
 
 Acceptation : à la première connexion sur la base partagée, chaque utilisateur coche les conditions et la politique de confidentialité. L'acceptation est gardée dans ses préférences (`cguVersion`, `cguAt`) et dans le journal d'audit (`cgu_acceptees`). Changer `LEGAL.version` dans `club/legal.js` redemande l'acceptation à tous.
 
-## À compléter (club/legal.js, objet `LEGAL`)
+## Éditeur (vérifié au registre national des entreprises, le 6 octobre 2026)
 
-Forme juridique et capital de FPN Gestion, RCS, SIRET, adresse du siège, téléphone : ils s'affichent « à compléter » tant qu'ils sont vides.
+FPN GESTION (FPNG), SASU au capital de 150 000 €, RCS Saint-Malo 934 823 055, TVA FR36934823055, siège Centre commercial Super U, 1 route de Saint-Cast, 22550 Matignon ; établissement de Niort : zone commerciale Mendès-France, 1 rue Jean-Baptiste Colbert, 79000 Niort, SIRET 934 823 055 00025 ; présidente HOLDING EROS (représentée par Mme Maria BORISOVA). Valeurs dans `club/legal.js`, objet `LEGAL`.
 
 ## Protections contre la copie
 
@@ -26,11 +26,15 @@ Forme juridique et capital de FPN Gestion, RCS, SIRET, adresse du siège, télé
 
 Limite : aucun moyen technique n'empêche totalement de copier le code d'une page web ; la protection repose sur le droit (preuve d'antériorité, mentions, poursuites) et sur la fermeture des données.
 
-## Recommandations à faire hors de l'application
+## Documents prêts (club/docs/legal/)
 
-1. **Rendre le dépôt GitHub privé** (aujourd'hui public : le code source y est lisible). Attention : en privé, les minutes gratuites de GitHub Actions sont limitées (2 000 par mois) ; le passage du serveur toutes les 5 minutes les dépasserait. Passer alors le serveur à toutes les 30 minutes.
-2. **Restreindre la clé Firebase** aux adresses du site (Google Cloud Console > API et services > Identifiants > clé du navigateur > Restrictions HTTP).
-3. **Preuve d'antériorité** : dépôt du code et des écrans (enveloppe e-Soleau à l'INPI, ou dépôt chez un huissier ou à l'APP) au nom de Kévin GUELLEC et FPN Gestion.
-4. **Contrat** entre Kévin GUELLEC et FPN Gestion précisant la copropriété des droits (ou la cession) et l'usage par le club.
-5. **Information des salariés** : remettre la charte (onglet Conditions) aux commerciaux et, s'il existe, informer et consulter le CSE avant la mise en service (art. L2312-38 C. trav.).
-6. **Registre RGPD** : `club/docs/rgpd/registre-traitement.md` et l'analyse de risques sont à jour ; les garder avec les documents du club.
+| Document | Usage |
+|---|---|
+| `convention-droits-fit-pulse.md` | Copropriété à parts égales Kévin GUELLEC / FPN GESTION, usage illimité par le club, accord des deux pour tout tiers. À imprimer et signer en deux exemplaires. |
+| `information-salaries.md` | Note d'information à remettre et faire signer à chaque commercial ; paragraphe CSE si 11 salariés et plus. |
+| `depot-anteriorite.md` | Dépôt e-Soleau à l'INPI (15 €). Le paquet se génère avec `node club/outils/paquet-anteriorite.mjs`. |
+
+## Décisions
+
+- **Dépôt GitHub laissé public** : il héberge aussi le site RepCore par GitHub Pages, qui s'arrêterait en privé sur l'offre gratuite. Le code mis en ligne est compressé, la licence est propriétaire et l'antériorité se prouve par l'e-Soleau.
+- **Clé Firebase non restreinte** : elle est partagée avec RepCore (même projet) ; la restreindre au seul site Fit Pulse couperait RepCore. Les données restent protégées par les règles d'accès.

@@ -11,7 +11,9 @@ const LEGAL = {
   version: '1.0', date: '6 octobre 2026',
   auteur: 'Kévin GUELLEC',
   societe: 'FPN Gestion', club: 'Fitness Park Niort',
-  forme: '', capital: '', rcs: '', siret: '', adresse: '', tel: '',
+  forme: 'SASU (société par actions simplifiée unipersonnelle)', capital: '150 000 €', rcs: '934 823 055 R.C.S. Saint-Malo', siret: '934 823 055 00025 (établissement de Niort)', tva: 'FR36934823055',
+  adresse: 'Centre commercial Super U, 1 route de Saint-Cast, 22550 Matignon', president: 'HOLDING EROS (SAS), présidente',
+  etablissement: 'Zone commerciale Mendès-France, 1 rue Jean-Baptiste Colbert, 79000 Niort', tel: '',
   email: 'kevinguellec.pro@gmail.com',
   site: 'https://fitpulse-niort.web.app',
   domaines: ['fitpulse-niort.web.app', 'fitpulse-niort.firebaseapp.com', 'localhost', '127.0.0.1'],
@@ -27,8 +29,8 @@ function legalBody(tab) {
     mentions: `<h2>Mentions légales</h2>
       <p class="muted small">Loi n° 2004-575 du 21 juin 2004 pour la confiance dans l’économie numérique (LCEN), article 6-III.</p>
       <h3>Éditeur</h3>
-      <p><b>${esc(LEGAL.societe)}</b>, exploitant du club ${esc(LEGAL.club)}<br>Forme juridique : ${lv(LEGAL.forme)} · Capital social : ${lv(LEGAL.capital)}<br>RCS : ${lv(LEGAL.rcs)} · SIRET : ${lv(LEGAL.siret)}<br>Siège : ${lv(LEGAL.adresse)}<br>Téléphone : ${lv(LEGAL.tel)} · E-mail : <a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a></p>
-      <h3>Directeur de la publication</h3><p>${esc(LEGAL.auteur)}</p>
+      <p><b>${esc(LEGAL.societe)}</b> (FPNG), exploitant du club ${esc(LEGAL.club)}<br>${lv(LEGAL.forme)} au capital de ${lv(LEGAL.capital)}<br>${lv(LEGAL.rcs)} · TVA intracommunautaire ${lv(LEGAL.tva)}<br>Siège social : ${lv(LEGAL.adresse)}<br>Club : ${lv(LEGAL.etablissement)} · SIRET ${lv(LEGAL.siret)}<br>Représentant légal : ${lv(LEGAL.president)}<br>Contact : <a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a>${LEGAL.tel ? ' · ' + esc(LEGAL.tel) : ' · accueil du club'}</p>
+      <h3>Responsable de la publication</h3><p>${esc(LEGAL.auteur)}, désigné par ${esc(LEGAL.societe)}.</p>
       <h3>Conception et développement</h3><p>${esc(LEGAL.auteur)}, auteur de l’application Fit Pulse.</p>
       <h3>Hébergement</h3>
       <p>Site : Firebase Hosting, <b>Google Ireland Limited</b>, Gordon House, Barrow Street, Dublin 4, Irlande.<br>Base de données et authentification : Firebase, <b>Google LLC</b>, 1600 Amphitheatre Parkway, Mountain View, CA 94043, États-Unis.</p>
@@ -70,11 +72,11 @@ function legalBody(tab) {
       <p>Tout manquement à cette charte peut entraîner la suspension immédiate de l’accès et, le cas échéant, des sanctions disciplinaires prévues par le règlement intérieur, sans préjudice d’actions en justice (notamment pour violation de la confidentialité ou contrefaçon).</p>
       <h3>8. Disponibilité et responsabilité</h3>
       <p>L’application est fournie pour l’usage interne du club, sans garantie de disponibilité permanente. Les chiffres affichés dépendent des saisies et des exports importés : en cas d’écart, les données du logiciel de gestion du club font foi.</p>
-      <h3>9. Droit applicable</h3><p>Ces conditions sont soumises au droit français. Tout litige relève des tribunaux compétents du ressort du siège de ${esc(LEGAL.societe)}.</p>`,
+      <h3>9. Droit applicable</h3><p>Ces conditions sont soumises au droit français. Tout litige relève des juridictions compétentes de Niort, lieu d’exécution du travail, sauf règle impérative contraire.</p>`,
     confidentialite: `<h2>Politique de confidentialité</h2>
       <p class="muted small">Règlement (UE) 2016/679 (RGPD) et loi n° 78-17 du 6 janvier 1978 « Informatique et libertés ». Version ${esc(LEGAL.version)} du ${esc(LEGAL.date)}.</p>
       <h3>Responsable du traitement</h3>
-      <p><b>${esc(LEGAL.societe)}</b>, exploitant du club ${esc(LEGAL.club)}, représentée par ${esc(LEGAL.auteur)}. Contact pour toute question ou demande : <a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a>.</p>
+      <p><b>${esc(LEGAL.societe)}</b>, ${esc(LEGAL.forme)}, ${esc(LEGAL.rcs)}, exploitant du club ${esc(LEGAL.club)} (${esc(LEGAL.etablissement)}). Interlocuteur pour la protection des données : ${esc(LEGAL.auteur)}. Contact pour toute question ou demande : <a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a>.</p>
       <h3>Personnes concernées et données</h3>
       <div class="table-wrap"><table class="t"><thead><tr><th>Personnes</th><th>Données</th><th>Origine</th></tr></thead><tbody>
         <tr><td>Utilisateurs (salariés, managers)</td><td>Nom, prénom, e-mail, rôle, club, empreinte du code (jamais le code en clair), saisies, objectifs, résultats, relances, préférences, date de dernière connexion, messages du chat</td><td>Le manager, l’utilisateur</td></tr>

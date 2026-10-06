@@ -1078,3 +1078,10 @@ select.input { text-overflow: ellipsis; }
 .cgu-card { background: var(--surface); color: var(--text); border-radius: 18px; max-width: 560px; width: 100%; padding: 22px; display: grid; gap: 10px; box-shadow: var(--shadow); }
 .cgu-card h2 { margin: 0; }
 .cgu-card ul { padding-left: 20px; margin: 0; line-height: 1.55; }
+.group-tabs { margin-bottom: 14px; }
+.sub-acts { gap: 8px; margin: 10px 0; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.prof-quick { gap: 8px; margin-bottom: 12px; }
+.prof-colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-color { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.prof-color.on { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--fp); }

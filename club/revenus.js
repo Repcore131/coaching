@@ -368,7 +368,7 @@ const companiesOf = clubId => Object.values(S.companies || {}).filter(c => c && 
 function coPotentiel(co) { if (!(Number(co.effectif) > 0)) return null; const cfg = S.clubs[co.clubId] || {}; const taux = Number(cfg.b2bTaux) || 0.08; const prix = Number(cfg.b2bPrix) || prixMoyen(co.clubId); return Math.round(Number(co.effectif) * taux * prix * 12); }
 function coMrr(co) { const I = clientIndex(co.clubId); return Math.round((co.nums || []).map(n => I.byNum[String(n)]).filter(c => c && !CLIENT_INACTIF.test(norm(c.status || ''))).reduce((s, c) => s + mensualite(c), 0) * 100) / 100; }
 PAGES.b2b = {
-  title: 'Entreprises',
+  title: 'Entreprise',
   render() {
     const L = companiesOf(CLUB.id); const pond = L.reduce((s, co) => s + (CO_WEIGHT[co.statut] && coPotentiel(co) ? coPotentiel(co) * CO_WEIGHT[co.statut] : 0), 0);
     const clients = L.filter(co => co.statut === 'signe').sort((a, b) => coMrr(b) - coMrr(a));
