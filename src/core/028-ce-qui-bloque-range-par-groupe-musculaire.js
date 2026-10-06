@@ -316,12 +316,14 @@ function renderTendancesCoach(c){
   if(!z) return;
   let l=[];
   try{ l=[phraseChargeHebdo(c),phraseExercicesEnProgres(c)].filter(Boolean); }catch(e){ l=[]; }
-  z.innerHTML=l.length
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px">`
+  // LES PROJECTIONS (build 1830) : une carte par exercice principal, ou rien.
+  let proj=''; try{ proj=htmlProjectionsCoach(c,Date.now()); }catch(e){ proj=''; }
+  z.innerHTML=(l.length
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:8px">`
       +l.map(x=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(x)}</div>`).join('')
       +`</div>`
-    :'';
-  z.style.display=l.length?'':'none';
+    :'')+proj;
+  z.style.display=(l.length||proj)?'':'none';
 }
 // Message de fin de séance. Il dit ce qui vient de se passer, pas une formule
 // de politesse identique pour tout le monde.

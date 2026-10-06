@@ -2392,7 +2392,7 @@ const NOTE_POST_PARTUM='Reprise post-partum : valide avec ton coach ou ta sage-f
 function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   const u=user||currentUser;
   if(!ex||!ex.name) return null;
-  const prev=getPrevPerf(ex.name,slot,progName);
+  const prev=getPrevPerf(ex.name,slot,progName,u);
   if(!prev) return null;
   let ps=[]; try{ ps=prevSeries(ex.name,slot,progName,u).filter(Boolean); }catch(e){ ps=[]; }
   // LE FREIN (build 1827) : gêne, « J'allège », contrainte, grossesse.
@@ -2503,10 +2503,13 @@ function _rirBandeChoisir(idx,i,v){
   woPersist();
   return true;
 }
-function getPrevPerf(name,slot,progName){
-  if(!currentUser.sessions?.length) return null;
-  for(let i=currentUser.sessions.length-1;i>=0;i--){
-    const sess=currentUser.sessions[i];if(!sess||!sess.data) continue;
+function getPrevPerf(name,slot,progName,user){
+  // `user` facultatif (build 1830) : le record à portée lit le dossier qu'on
+  // lui passe, pas forcément celui qui est connecté.
+  const _u=user||currentUser;
+  if(!_u||!_u.sessions?.length) return null;
+  for(let i=_u.sessions.length-1;i>=0;i--){
+    const sess=_u.sessions[i];if(!sess||!sess.data) continue;
     // LA DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026). La suggestion d'après
     // repart de la dernière séance NORMALE — avec sa date, donc avec la
     // décote de reprise (decoteReprise) si elle a plus de 28 jours.

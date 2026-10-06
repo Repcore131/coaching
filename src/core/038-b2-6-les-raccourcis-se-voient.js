@@ -540,7 +540,7 @@ function tendanceLineaire(vals){
   return {pente,projection:my+pente*(n-mx)};
 }
 /** PURE. L'objectif d'UN exercice, ou null. */
-function recordAPorteeExo(u,nomEx,reps,maintenant){
+function recordAPorteeExo(u,nomEx,reps,maintenant,ex){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const r=Math.round(Number(reps));
   if(!u||!nomEx||!(r>=1&&r<=PERF_REPS_MAX_E1RM)) return null;
@@ -557,33 +557,22 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
       if(w>recKg) recKg=w;
     }
   }
-  // LA TENDANCE : les six dernières séances mesurables, hors décharges et
-  // saisies aberrantes (_serieRecords les écarte déjà).
-  let pts=[];
-  try{ pts=_serieRecords(Object.assign({},u,{sessions:ses}),nomEx).filter(p=>!p.aberrant); }catch(e){ pts=[]; }
-  const vals=[];
-  for(const p of pts){
-    const d=p.sess&&p.sess.data&&p.sess.data[p.nom];
-    const x=_rapE1rm(d&&d.sets,u);
-    if(x.v>0) vals.push({v:x.v,rir:x.rir,date:p.date});
-  }
-  const der=vals.slice(-RAP_SEANCES);
-  if(der.length<RAP_MIN_POINTS||!(recKg>0)) return null;
-  if(t-der[der.length-1].date>RAP_FRAICHEUR_J*864e5) return null;
-  const tr=tendanceLineaire(der.map(x=>x.v));
-  if(!(tr.pente>0)) return null;
-  // L'e1RM projeté, ramené à une charge aux répétitions visées — avec le RIR
-  // médian des séances retenues : le modèle e1rm() en tient compte, la
-  // conversion inverse aussi.
-  const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
-  const rirRef=rirs[Math.floor(rirs.length/2)]||0;
-  // La réciproque exacte de e1rm(), en un seul endroit : chargePourReps.
-  const tendance=chargePourReps(tr.projection,r,rirRef);
-  const plafond=recKg*(1+RAP_PLAFOND);
-  const charge=arrondiAuPas(Math.min(tendance,plafond));
-  if(!(charge>recKg)) return null;
-  return {nm:nomEx,charge,reps:r,record:recKg,serie:0,
-    e1rm:Math.round(tr.projection*10)/10,pente:Math.round(tr.pente*100)/100,
+  // LA MÊME FONCTION QUE LA SUGGESTION (build 1830). Il y avait trois calculs
+  // de la charge « suivante » : la suggestion (progressionCharge), la tendance
+  // de l'e1RM ici, et l'échauffement. Le record à portée est désormais la
+  // SUGGESTION elle-même quand elle bat le record de charge : la dernière
+  // séance normale de l'exercice (son créneau), sa raison, ses répétitions.
+  let der=null;
+  for(const s of ses){ if(!s.deload&&_dataDeSeance(s,nomEx)&&(!der||s.date>der.date)) der=s; }
+  if(!der||!(recKg>0)) return null;
+  if(t-der.date>RAP_FRAICHEUR_J*864e5) return null;
+  const exo=(ex&&typeof ex==='object')?ex:{name:nomEx,reps:String(r)};
+  let sug=null;
+  try{ sug=suggestionDepuisHistorique(exo,der.slot!=null?der.slot:null,der.name||null,1,Object.assign({},u,{sessions:ses})); }catch(e){ sug=null; }
+  if(!sug||!(sug.kg>recKg)) return null;
+  const charge=sug.kg, rv=sug.repsVisees||r;
+  if(!(rv>=1&&rv<=PERF_REPS_MAX_E1RM)) return null;
+  return {nm:nomEx,charge,reps:rv,record:recKg,serie:0,raison:sug.raison,
     gain:Math.round((charge-recKg)*100)/100};
 }
 /**
@@ -609,7 +598,7 @@ function recordAPortee(u,seancePrevue,maintenant){
     try{ if(isCardio(ex)) continue; }catch(e){ continue; }
     // UN FREIN SUR L'EXERCICE (gêne, « J'allège », contrainte) : pas d'objectif.
     try{ if(freinProgression(u,ex.name)) continue; }catch(e){}
-    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
+    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t,ex); }catch(e){ o=null; }
     // MOINS DE 18 ANS : pas de record visé au-delà du poids de corps (build 1829).
     try{ if(o&&profilEntrainement(u).jeune){ const pdc=poidsReference(u); if(!(pdc>0)||o.charge>pdc) o=null; } }catch(e){}
     if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
@@ -673,6 +662,9 @@ function _rapIndexSeance(){
 function _eclairObjectif(idx,i){
   const o=woState&&woState.objectif;
   if(!o||i!==o.serie||_rapIndexSeance()!==idx) return '';
+  // S'ILS DIVERGENT, ON N'AFFICHE QUE LA SUGGESTION (build 1830).
+  const sg=woState.suggestions&&woState.suggestions[exKey(o.nm)];
+  if(sg!=null&&Math.abs(Number(sg)-Number(o.charge))>1e-9) return '';
   const d=woState.sessionData&&woState.sessionData[idx];
   if(d&&d.sets&&d.sets[i]&&d.sets[i].done) return '';
   return '<span class="rpo-eclair" title="'+escapeHtml(texteRecordAPortee(o))+'">'+_ECLAIR_SVG+'</span>';

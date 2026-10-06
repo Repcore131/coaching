@@ -23604,6 +23604,54 @@ async function testExercices(){
         return true;});
     }
 
+    // ══════ LA PROJECTION DE PROGRESSION (06/10/2026, build 1830) ══════
+    {
+      const W=7*864e5, L0=_lundiDe(new Date(Date.now()-5*W)).getTime()+864e5;
+      ok('Projection : une série linéaire (+2 kg d’e1RM par semaine) → la bonne cible et la bonne date',()=>{
+        const pts=[0,1,2,3,4,5].map(k=>({t:L0+k*W,v:100+2*k}));
+        const p=projectionE1rm(pts,5,pts[5].t);
+        if(!p) return _echec('aucune projection');
+        if(Math.abs(p.pente-2)>1e-9||Math.abs(p.e1rm-110)>1e-9) return _echec(JSON.stringify(p));
+        // 110 d'e1RM à 5 reps = 94,3 kg ; la cible est 95 kg, soit 110,83 d'e1RM.
+        const att=(e1rm(95,5,0)-110)/2;
+        return (p.cible===95&&p.reps===5&&Math.abs(p.semaines-att)<1e-9&&Math.abs(p.date-(pts[5].t+att*W))<1)?true:_echec(JSON.stringify(p));});
+      ok('Projection : aucune avec une pente négative, plate, sous 4 points, ou au-delà de 12 semaines',()=>{
+        const mk=f=>[0,1,2,3,4,5].map(k=>({t:L0+k*W,v:f(k)}));
+        if(projectionE1rm(mk(k=>110-k),5)!==null) return _echec('pente négative');
+        if(projectionE1rm(mk(()=>110),5)!==null) return _echec('pente nulle');
+        if(projectionE1rm(mk(k=>100+2*k).slice(0,3),5)!==null) return _echec('3 points');
+        return projectionE1rm(mk(k=>100+0.05*k),5,L0+5*W)===null?true:_echec('au-delà de 12 semaines');});
+      ok('Dose-réponse : rien sur des données plates ; une vraie différence est dite',()=>{
+        const plat=Array.from({length:10},(_,i)=>({vol:i%2?20:14,v:100}));
+        if(doseReponse(plat)!==null) return _echec('phrase sur des données plates');
+        if(doseReponse(plat.slice(0,7))!==null) return _echec('moins de 8 semaines');
+        let v=100; const net=Array.from({length:10},(_,i)=>{ const x={vol:i%2?20:14,v}; v+=i%2?0:2; return x; });
+        const d=doseReponse(net);
+        return (d&&d.mieux===14&&d.moins===20)?true:_echec(JSON.stringify(d));});
+      ok('La raison de la suggestion contient les répétitions faites et la cible',()=>{
+        const r=progressionCharge({charge:60,repsFaites:[12,12,11],rirFait:'2',reps:'10-12',rirCible:'2',ex:{name:'DEVELOPPE COUCHE BARRE'}});
+        return (r&&/60 kg × 12-12-11 à RIR 2/.test(r.raison)&&/vise 12/.test(r.raison))?true:_echec(r&&r.raison);});
+      ok('Le record à portée est la suggestion elle-même (plus de troisième calcul)',()=>{
+        const S=(j,w,rir)=>({id:'pr'+j,date:Date.now()-j*864e5,slot:0,name:'P',data:{'SQUAT':{sets:[{weight:String(w),reps:'5',rir:String(rir),done:true}]}}});
+        const u={id:'pr',email:'pr@t.fr',role:'athlete',exAlias:{},exMuscles:{},bilans:[],sessions:[S(21,95,2),S(14,97.5,2),S(7,100,3)]};
+        const ex={name:'SQUAT',reps:'5',rir:'2'};
+        const o=recordAPorteeExo(u,'SQUAT',5,Date.now(),ex);
+        const sv=currentUser;
+        try{ currentUser=u;
+          const sg=suggestionDepuisHistorique(ex,0,'P',1,u);
+          if(!o||!sg||o.charge!==sg.kg||o.record!==100) return _echec(JSON.stringify(o)+' / '+JSON.stringify(sg));
+          return String(recordAPorteeExo).indexOf('tendanceLineaire')<0?true:_echec('la tendance calcule encore une charge');
+        } finally { currentUser=sv; }});
+      ok('Fiche coach : une carte de projection pour SQUAT chez Léa, rien sans données',()=>{
+        const ses=[];
+        for(let k=0;k<6;k++) for(const d of [1,4]) ses.push({id:'lq'+k+d,date:L0+k*W+d*864e5,slot:0,name:'Jambes',
+          data:{'SQUAT':{sets:[{weight:String(80+2.5*k),reps:'5',rir:'2',done:true},{weight:String(80+2.5*k),reps:'5',rir:'2',done:true}]}}});
+        const lea={id:'lea',email:'lea-proj@t.fr',fname:'Léa',role:'athlete',gender:'F',exAlias:{},exMuscles:{},bilans:[],sessions:ses,
+          sessions_config:[{active:true,name:'Jambes',exercises:[{name:'SQUAT',reps:'5',rir:'2'}]}]};
+        const h=htmlProjectionsCoach(lea,Date.now());
+        if(!/SQUAT/.test(h)||!/Au rythme actuel : \d+ kg × 5 vers le/.test(h)||!/kg\/semaine/.test(h)) return _echec(h.slice(0,500));
+        return htmlProjectionsCoach({id:'v',email:'v@t',sessions:[]},Date.now())===''?true:_echec('une carte sans données');});
+    }
     // ══════ LE PROFIL D'ENTRAÎNEMENT (06/10/2026, build 1829) ══════
     {
       const _J=864e5;
@@ -56354,8 +56402,9 @@ async function testExercices(){
       if(r.length) return _echec('une série de 20 fait un record du rite : '+JSON.stringify(r));
       const u2={email:'t1-rite2@t.fr',sessions:[S(0,100,5,0),S(40,105,5,0)]};
       if(_riteRecords(u2,t0+30*J,t0+50*J).length!==1) return _echec('un vrai record disparaît');
-      // La réciproque du record à portée : charge = e1RM / (1 + (reps + RIR)/30).
-      return String(recordAPorteeExo).indexOf('chargePourReps(tr.projection,r,rirRef)')>=0?true:_echec('conversion inverse');});
+      // Build 1830 : le record à portée EST la suggestion (progressionCharge),
+      // plus de projection de tendance à part.
+      return String(recordAPorteeExo).indexOf('suggestionDepuisHistorique(')>=0?true:_echec('record à portée hors de la suggestion');});
     ok('T1 — le scénario : 3 semaines à 100 × 8 à l’échec, puis 3 à 100 × 7 à RIR 2 : plus de fausse régression',()=>{
       const t0=Date.parse('2026-06-01T18:00:00Z'), J=864e5;
       const S=(j,reps,rir)=>({id:'t1s'+j,date:t0+j*J,slot:0,name:'P',data:{'EX':{sets:[{done:true,weight:'100',reps:String(reps),rir:String(rir)}]}}});
@@ -59298,33 +59347,41 @@ async function testExercices(){
     // ══ 28/09/2026 — LE RECORD À PORTÉE ════════════════════════════════════
     const _RJ=864e5, _RT=new Date(2026,9,20,18).getTime();
     let _rN=0;
-    const _RS=(j,kg,reps,nom)=>({date:_RT+j*_RJ,duration:60,
-      data:{[nom||'Squat']:{sets:[{weight:String(kg),reps:String(reps||5),repsDone:reps||5,rir:'2',done:true}]}}});
-    const _RSerie=(kgs,nom,reps)=>kgs.map((kg,i)=>_RS(-3*(kgs.length-i),kg,reps,nom));
+    // Build 1830 : des séances du créneau 0 « Jambes », comme celles que l'app
+    // enregistre — la suggestion ne lit que le même créneau.
+    const _RS=(j,kg,reps,nom,rir)=>({date:_RT+j*_RJ,duration:60,slot:0,name:'Jambes',
+      data:{[nom||'Squat']:{sets:[{weight:String(kg),reps:String(reps||5),repsDone:reps||5,rir:String(rir==null?2:rir),done:true}]}}});
+    const _RSerie=(kgs,nom,reps,rir)=>kgs.map((kg,i)=>_RS(-3*(kgs.length-i),kg,reps,nom,rir));
     const _RU=(ses,o)=>Object.assign({role:'athlete',email:'rap'+(++_rN)+'@t.fr',sessions:ses},o||{});
     const _RP=(ex,o)=>Object.assign({active:true,name:'Jambes',exercises:ex||[{name:'Squat',series:4,reps:'5'}]},o||{});
-    ok('Record à portée : tendance en hausse → la charge du record suivant, plafonnée à +2,5 %',()=>{
+    ok('Record à portée : la suggestion de la prochaine séance, quand elle bat le record de charge',()=>{
       const u=_RU(_RSerie([90,92.5,95,97.5,100,100]));
       const o=recordAPortee(u,_RP(),_RT);
       if(!o) return _echec('rien à portée');
       if(o.nm!=='Squat'||o.reps!==5||o.record!==100||o.serie!==0) return _echec(JSON.stringify(o));
-      if(o.charge!==102.5) return _echec('charge '+o.charge);
-      // Une hausse très raide reste plafonnée : 100 × 1,025 = 102,5, pas 105.
-      const v=recordAPortee(_RU(_RSerie([75,80,85,90,95,100])),_RP(),_RT);
-      if(!v||v.charge!==102.5) return _echec('plafond : '+JSON.stringify(v));
-      // Les six dernières séances seulement : un vieux creux n'écrase pas la pente.
-      const w=recordAPortee(_RU(_RSerie([40,40,40,90,92.5,95,97.5,100,100])),_RP(),_RT);
-      if(!w||w.charge!==102.5) return _echec('six dernières : '+JSON.stringify(w));
+      // LA MÊME FONCTION : la charge et la raison sont celles de la suggestion.
+      const sug=suggestionDepuisHistorique({name:'Squat',series:4,reps:'5'},0,'Jambes',1,u);
+      if(!sug||o.charge!==sug.kg||o.raison!==sug.raison||o.charge!==102.5) return _echec('charge '+o.charge+' / '+JSON.stringify(sug));
+      // RIR 4 à la dernière séance : la suggestion monte plus, le record aussi.
+      const v=_RU(_RSerie([90,92.5,95,97.5,100,100],null,5,4));
+      const ov=recordAPortee(v,_RP(),_RT), sv=suggestionDepuisHistorique({name:'Squat',reps:'5'},0,'Jambes',1,v);
+      if(!ov||!sv||ov.charge!==sv.kg) return _echec('RIR 4 : '+JSON.stringify(ov)+' / '+JSON.stringify(sv));
       return texteRecordAPortee(o)==='Record à portée : Squat 102,5 kg × 5'?true:_echec(texteRecordAPortee(o));});
-    ok('Record à portée : tendance en baisse ou plate → rien',()=>{
-      if(recordAPortee(_RU(_RSerie([100,100,97.5,95,92.5,90])),_RP(),_RT)!==null) return _echec('baisse');
-      if(recordAPortee(_RU(_RSerie([100,100,100,100])),_RP(),_RT)!==null) return _echec('plat');
-      // Une hausse trop faible pour franchir un pas : rien non plus.
-      if(recordAPortee(_RU(_RSerie([99,99.2,99.4,99.6,99.8,100])),_RP(),_RT)!==null) return _echec('sous le pas');
+    ok('Record à portée : la suggestion ne bat pas le record → rien',()=>{
+      // Le record est à 100 ; la dernière séance, 95 × 3 pour 5 visées : la
+      // suggestion ne dépasse pas 100.
+      const ses=_RSerie([100,97.5,95]).map(s=>s);
+      ses[2].data.Squat.sets[0].reps='3'; ses[2].data.Squat.sets[0].repsDone=3;
+      const u=_RU(ses);
+      const sug=suggestionDepuisHistorique({name:'Squat',reps:'5'},0,'Jambes',1,u);
+      if(!sug||!(sug.kg<=100)) return _echec('suggestion '+JSON.stringify(sug));
+      if(recordAPortee(u,_RP(),_RT)!==null) return _echec('sous le record');
+      // Des séances hors créneau (sans slot ni nom) : pas de suggestion, pas de record.
+      const hors=_RSerie([90,92.5,95,97.5,100,100]).map(s=>{ delete s.slot; delete s.name; return s; });
+      if(recordAPortee(_RU(hors),_RP(),_RT)!==null) return _echec('hors créneau');
       return true;});
     ok('Record à portée : pas de données → rien (aucune séance, moins de trois, trop anciennes, autre exercice)',()=>{
       if(recordAPortee(_RU([]),_RP(),_RT)!==null) return _echec('aucune séance');
-      if(recordAPortee(_RU(_RSerie([95,100])),_RP(),_RT)!==null) return _echec('deux séances');
       const vieux=_RSerie([90,92.5,95,97.5,100,100]).map(s=>Object.assign(s,{date:s.date-90*_RJ}));
       if(recordAPortee(_RU(vieux),_RP(),_RT)!==null) return _echec('trop anciennes');
       if(recordAPortee(_RU(_RSerie([90,92.5,95,97.5,100,100],'Presse')),_RP(),_RT)!==null) return _echec('autre exercice');
@@ -59332,13 +59389,15 @@ async function testExercices(){
       // Plus de 12 répétitions visées : l'e1RM ne vaut plus rien.
       if(recordAPortee(_RU(_RSerie([90,92.5,95,97.5,100,100])),_RP([{name:'Squat',reps:'15'}]),_RT)!==null) return _echec('15 reps');
       return true;});
-    ok('Record à portée : pas de 1,25 kg sous 20 kg, de 2,5 kg au-delà',()=>{
+    ok('Record à portée : pas de 1,25 kg sous 20 kg, de 2,5 kg au-delà ; la charge suit l’arrondi de la suggestion',()=>{
       if(pasDeCharge(19.9)!==1.25||pasDeCharge(20)!==2.5) return _echec('pas');
       if(arrondiAuPas(16.4)!==16.25||arrondiAuPas(101.2)!==100||arrondiAuPas(101.3)!==102.5||arrondiAuPas(102.4999999)!==102.5) return _echec('arrondi');
-      const c=recordAPortee(_RU(_RSerie([14,14.5,15,15.5,16,16],'Curl',10)),_RP([{name:'Curl',reps:'10-12'}]),_RT);
-      if(!c||c.charge!==16.25||c.reps!==10) return _echec('1,25 : '+JSON.stringify(c));
+      const uc=_RU(_RSerie([14,14.5,15,15.5,16,16],'Curl',12));
+      const c=recordAPortee(uc,_RP([{name:'Curl',reps:'10-12'}]),_RT);
+      const sc=suggestionDepuisHistorique({name:'Curl',reps:'10-12'},0,'Jambes',1,uc);
+      if(!c||!sc||c.charge!==sc.kg||c.reps!==sc.repsVisees||c.reps!==10) return _echec('curl : '+JSON.stringify(c)+' / '+JSON.stringify(sc));
       const d=recordAPortee(_RU(_RSerie([52.5,55,56,57.5,60,60])),_RP(),_RT);
-      if(!d||d.charge!==62.5||Math.abs(d.charge/2.5-Math.round(d.charge/2.5))>1e-9) return _echec('2,5 : '+JSON.stringify(d));
+      if(!d||d.charge!==62.5) return _echec('2,5 : '+JSON.stringify(d));
       return true;});
     ok('Record à portée : rien en décharge ni en phase de cycle à charge réduite ; un seul exercice, le plus grand gain',()=>{
       const ses=_RSerie([90,92.5,95,97.5,100,100]);
@@ -59348,10 +59407,11 @@ async function testExercices(){
       if(!recordAPortee(_RU(ses,{currentCycle:'j1_supportable'}),_RP(),_RT)) return _echec('règles supportables');
       if(!recordAPortee(_RU(ses,{currentCycle:'j6_14'}),_RP(),_RT)) return _echec('phase neutre');
       if(recordAPortee(Object.assign(_RU(ses),{role:'coach'}),_RP(),_RT)!==null) return _echec('coach');
-      // Deux exercices : le gain relatif le plus grand (Curl +1,6 % contre Squat +2,5 %).
-      const deux=_RU(ses.concat(_RSerie([14,14.5,15,15.5,16,16],'Curl',10)));
-      const o=recordAPortee(deux,_RP([{name:'Curl',reps:'10'},{name:'Tapis',reps:'10 min'},{name:'Squat',reps:'5'}]),_RT);
-      return o&&o.nm==='Squat'?true:_echec(JSON.stringify(o));});
+      // Deux exercices : le gain relatif le plus grand (Curl 16 → 17,5, +9 %,
+      // contre Squat 100 → 102,5, +2,5 %).
+      const deux=_RU(ses.concat(_RSerie([14,14.5,15,15.5,16,16],'Curl',12)));
+      const o=recordAPortee(deux,_RP([{name:'Curl',reps:'10-12'},{name:'Tapis',reps:'10 min'},{name:'Squat',reps:'5'}]),_RT);
+      return o&&o.nm==='Curl'?true:_echec(JSON.stringify(o));});
     ok('Record à portée : l’accueil, la tête de séance et l’éclair sur la série concernée',()=>{
       const o={nm:'Squat',charge:102.5,reps:5,record:100,serie:0};
       const h=htmlRecordAPortee(o,'accueil');

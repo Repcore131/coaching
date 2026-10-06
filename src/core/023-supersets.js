@@ -744,6 +744,9 @@ function _blocExo(idx,estSS){
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
   // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
   const sug=plafondDecharge(sugAjustee||_sugArr,_prevW,isCW,!!woState.deload);
+  // La charge proposée, gardée pour l'éclair du record à portée : s'ils
+  // divergent, seule la suggestion s'affiche (_eclairObjectif).
+  try{ if(!woState.suggestions) woState.suggestions={}; if(sug>0) woState.suggestions[exKey(ex.name)]=sug; else delete woState.suggestions[exKey(ex.name)]; }catch(e){}
   // ⚠ LA PREMIÈRE SÉRIE REÇOIT LA CHARGE SUGGÉRÉE (30/09/2026), comme la
   //   consigne du coach pose sa charge : isAuto, bordure verte, « proposé ».
   //   Elle était affichée au-dessus du tableau et la case restait vide : il

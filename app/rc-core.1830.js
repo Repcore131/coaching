@@ -56548,6 +56548,9 @@ function _blocExo(idx,estSS){
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
   // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
   const sug=plafondDecharge(sugAjustee||_sugArr,_prevW,isCW,!!woState.deload);
+  // La charge proposée, gardée pour l'éclair du record à portée : s'ils
+  // divergent, seule la suggestion s'affiche (_eclairObjectif).
+  try{ if(!woState.suggestions) woState.suggestions={}; if(sug>0) woState.suggestions[exKey(ex.name)]=sug; else delete woState.suggestions[exKey(ex.name)]; }catch(e){}
   // ⚠ LA PREMIÈRE SÉRIE REÇOIT LA CHARGE SUGGÉRÉE (30/09/2026), comme la
   //   consigne du coach pose sa charge : isAuto, bordure verte, « proposé ».
   //   Elle était affichée au-dessus du tableau et la case restait vide : il
@@ -68757,12 +68760,14 @@ function renderTendancesCoach(c){
   if(!z) return;
   let l=[];
   try{ l=[phraseChargeHebdo(c),phraseExercicesEnProgres(c)].filter(Boolean); }catch(e){ l=[]; }
-  z.innerHTML=l.length
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px">`
+  // LES PROJECTIONS (build 1830) : une carte par exercice principal, ou rien.
+  let proj=''; try{ proj=htmlProjectionsCoach(c,Date.now()); }catch(e){ proj=''; }
+  z.innerHTML=(l.length
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:8px">`
       +l.map(x=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(x)}</div>`).join('')
       +`</div>`
-    :'';
-  z.style.display=l.length?'':'none';
+    :'')+proj;
+  z.style.display=(l.length||proj)?'':'none';
 }
 // Message de fin de séance. Il dit ce qui vient de se passer, pas une formule
 // de politesse identique pour tout le monde.
@@ -75583,7 +75588,7 @@ const NOTE_POST_PARTUM='Reprise post-partum : valide avec ton coach ou ta sage-f
 function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   const u=user||currentUser;
   if(!ex||!ex.name) return null;
-  const prev=getPrevPerf(ex.name,slot,progName);
+  const prev=getPrevPerf(ex.name,slot,progName,u);
   if(!prev) return null;
   let ps=[]; try{ ps=prevSeries(ex.name,slot,progName,u).filter(Boolean); }catch(e){ ps=[]; }
   // LE FREIN (build 1827) : gêne, « J'allège », contrainte, grossesse.
@@ -75694,10 +75699,13 @@ function _rirBandeChoisir(idx,i,v){
   woPersist();
   return true;
 }
-function getPrevPerf(name,slot,progName){
-  if(!currentUser.sessions?.length) return null;
-  for(let i=currentUser.sessions.length-1;i>=0;i--){
-    const sess=currentUser.sessions[i];if(!sess||!sess.data) continue;
+function getPrevPerf(name,slot,progName,user){
+  // `user` facultatif (build 1830) : le record à portée lit le dossier qu'on
+  // lui passe, pas forcément celui qui est connecté.
+  const _u=user||currentUser;
+  if(!_u||!_u.sessions?.length) return null;
+  for(let i=_u.sessions.length-1;i>=0;i--){
+    const sess=_u.sessions[i];if(!sess||!sess.data) continue;
     // LA DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026). La suggestion d'après
     // repart de la dernière séance NORMALE — avec sa date, donc avec la
     // décote de reprise (decoteReprise) si elle a plus de 28 jours.
@@ -94955,7 +94963,7 @@ function tendanceLineaire(vals){
   return {pente,projection:my+pente*(n-mx)};
 }
 /** PURE. L'objectif d'UN exercice, ou null. */
-function recordAPorteeExo(u,nomEx,reps,maintenant){
+function recordAPorteeExo(u,nomEx,reps,maintenant,ex){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const r=Math.round(Number(reps));
   if(!u||!nomEx||!(r>=1&&r<=PERF_REPS_MAX_E1RM)) return null;
@@ -94972,33 +94980,22 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
       if(w>recKg) recKg=w;
     }
   }
-  // LA TENDANCE : les six dernières séances mesurables, hors décharges et
-  // saisies aberrantes (_serieRecords les écarte déjà).
-  let pts=[];
-  try{ pts=_serieRecords(Object.assign({},u,{sessions:ses}),nomEx).filter(p=>!p.aberrant); }catch(e){ pts=[]; }
-  const vals=[];
-  for(const p of pts){
-    const d=p.sess&&p.sess.data&&p.sess.data[p.nom];
-    const x=_rapE1rm(d&&d.sets,u);
-    if(x.v>0) vals.push({v:x.v,rir:x.rir,date:p.date});
-  }
-  const der=vals.slice(-RAP_SEANCES);
-  if(der.length<RAP_MIN_POINTS||!(recKg>0)) return null;
-  if(t-der[der.length-1].date>RAP_FRAICHEUR_J*864e5) return null;
-  const tr=tendanceLineaire(der.map(x=>x.v));
-  if(!(tr.pente>0)) return null;
-  // L'e1RM projeté, ramené à une charge aux répétitions visées — avec le RIR
-  // médian des séances retenues : le modèle e1rm() en tient compte, la
-  // conversion inverse aussi.
-  const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
-  const rirRef=rirs[Math.floor(rirs.length/2)]||0;
-  // La réciproque exacte de e1rm(), en un seul endroit : chargePourReps.
-  const tendance=chargePourReps(tr.projection,r,rirRef);
-  const plafond=recKg*(1+RAP_PLAFOND);
-  const charge=arrondiAuPas(Math.min(tendance,plafond));
-  if(!(charge>recKg)) return null;
-  return {nm:nomEx,charge,reps:r,record:recKg,serie:0,
-    e1rm:Math.round(tr.projection*10)/10,pente:Math.round(tr.pente*100)/100,
+  // LA MÊME FONCTION QUE LA SUGGESTION (build 1830). Il y avait trois calculs
+  // de la charge « suivante » : la suggestion (progressionCharge), la tendance
+  // de l'e1RM ici, et l'échauffement. Le record à portée est désormais la
+  // SUGGESTION elle-même quand elle bat le record de charge : la dernière
+  // séance normale de l'exercice (son créneau), sa raison, ses répétitions.
+  let der=null;
+  for(const s of ses){ if(!s.deload&&_dataDeSeance(s,nomEx)&&(!der||s.date>der.date)) der=s; }
+  if(!der||!(recKg>0)) return null;
+  if(t-der.date>RAP_FRAICHEUR_J*864e5) return null;
+  const exo=(ex&&typeof ex==='object')?ex:{name:nomEx,reps:String(r)};
+  let sug=null;
+  try{ sug=suggestionDepuisHistorique(exo,der.slot!=null?der.slot:null,der.name||null,1,Object.assign({},u,{sessions:ses})); }catch(e){ sug=null; }
+  if(!sug||!(sug.kg>recKg)) return null;
+  const charge=sug.kg, rv=sug.repsVisees||r;
+  if(!(rv>=1&&rv<=PERF_REPS_MAX_E1RM)) return null;
+  return {nm:nomEx,charge,reps:rv,record:recKg,serie:0,raison:sug.raison,
     gain:Math.round((charge-recKg)*100)/100};
 }
 /**
@@ -95024,7 +95021,7 @@ function recordAPortee(u,seancePrevue,maintenant){
     try{ if(isCardio(ex)) continue; }catch(e){ continue; }
     // UN FREIN SUR L'EXERCICE (gêne, « J'allège », contrainte) : pas d'objectif.
     try{ if(freinProgression(u,ex.name)) continue; }catch(e){}
-    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
+    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t,ex); }catch(e){ o=null; }
     // MOINS DE 18 ANS : pas de record visé au-delà du poids de corps (build 1829).
     try{ if(o&&profilEntrainement(u).jeune){ const pdc=poidsReference(u); if(!(pdc>0)||o.charge>pdc) o=null; } }catch(e){}
     if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
@@ -95088,6 +95085,9 @@ function _rapIndexSeance(){
 function _eclairObjectif(idx,i){
   const o=woState&&woState.objectif;
   if(!o||i!==o.serie||_rapIndexSeance()!==idx) return '';
+  // S'ILS DIVERGENT, ON N'AFFICHE QUE LA SUGGESTION (build 1830).
+  const sg=woState.suggestions&&woState.suggestions[exKey(o.nm)];
+  if(sg!=null&&Math.abs(Number(sg)-Number(o.charge))>1e-9) return '';
   const d=woState.sessionData&&woState.sessionData[idx];
   if(d&&d.sets&&d.sets[i]&&d.sets[i].done) return '';
   return '<span class="rpo-eclair" title="'+escapeHtml(texteRecordAPortee(o))+'">'+_ECLAIR_SVG+'</span>';
@@ -139519,4 +139519,182 @@ function poserProfilCoach(niveau){
   try{ rendreFaitsCles(c); }catch(e){}
   toastSync(ok,envoi,'Profil : '+(niveau?PROFIL_LIB[niveau]:'automatique'),'le profil est');
   return true;
+}
+// ══ LA PROJECTION DE PROGRESSION (06/10/2026, build 1830) ════════════════
+//
+// La fiche coach disait « en progression », « plateau » — un état, jamais un
+// rythme. Pour les trois exercices principaux de l'athlète, une carte compacte :
+// l'e1RM des six dernières semaines (la sparkline des états), sa pente en
+// kg/semaine, « au rythme actuel : 100 kg × 5 vers le 14 décembre », et le
+// volume hebdomadaire moyen du muscle avec sa zone MEV / MAV / MRV. Au-delà de
+// huit semaines, la DOSE-RÉPONSE : sa progression comparée entre ses semaines
+// à volume haut et à volume bas.
+//
+// RIEN DE NOUVEAU À SAISIR, RIEN QUAND LES DONNÉES MANQUENT : sous quatre
+// points, pas de projection ; une pente nulle ou négative, pas de projection ;
+// au-delà de douze semaines, pas de date ; un écart de pente dans le bruit,
+// pas de phrase de dose-réponse.
+const PROJ_SEMAINES=6;
+const PROJ_POINTS_MIN=4;
+const PROJ_HORIZON_SEM=12;
+const PROJ_PAS_CIBLE=5;            // la cible : le multiple de 5 kg suivant
+const PROJ_EXOS=3;
+const DOSE_SEMAINES_MIN=8, DOSE_SEMAINES_MAX=16, DOSE_GROUPE_MIN=3;
+const _J_MS=864e5, _SEM_MS=7*864e5;
+
+// PURE. Le meilleur e1RM de chaque semaine où l'exercice a été fait, sur les
+// `n` dernières semaines : [{cle, t (lundi), v}], du plus ancien au plus récent.
+function semainesE1rm(u,nomEx,maintenant,n){
+  const t=Number(maintenant)||Date.now();
+  const debut=_lundiDe(new Date(t-((n||PROJ_SEMAINES)-1)*_SEM_MS)).getTime();
+  const par=new Map();
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!s.data||s.deload||!(s.date>=debut&&s.date<=t)) continue;
+    let p=null; try{ p=perfExercice(s,nomEx,u); }catch(e){ p=null; }
+    if(!p||!(p.score>0)) continue;
+    const l=_lundiDe(new Date(s.date)).getTime(), cle=semaineISO(new Date(s.date));
+    const x=par.get(cle);
+    if(!x||p.score>x.v) par.set(cle,{cle,t:l,v:p.score});
+  }
+  return Array.from(par.values()).sort((a,b)=>a.t-b.t);
+}
+// PURE. Les moindres carrés sur des points datés : pente par SEMAINE.
+function _projRegression(points){
+  const n=points.length;
+  if(n<2) return null;
+  const xs=points.map(p=>p.t/_SEM_MS), ys=points.map(p=>p.v);
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num+=(xs[i]-mx)*(ys[i]-my); den+=(xs[i]-mx)*(xs[i]-mx); }
+  if(!den) return null;
+  const pente=num/den;
+  return {pente,a:my-pente*mx};
+}
+/**
+ * PURE. La projection : {pente (kg e1RM/semaine), e1rm (aujourd'hui), cible
+ * (kg), reps, semaines, date}, ou null — moins de 4 points, pente ≤ 0, ou
+ * une cible au-delà de 12 semaines.
+ * La cible : le multiple de 5 kg suivant la charge que l'e1RM permet
+ * aujourd'hui à `reps` répétitions (RIR 0, la réciproque de e1rm()).
+ */
+function projectionE1rm(points,reps,maintenant){
+  const pts=(points||[]).filter(p=>p&&p.v>0&&p.t>0);
+  if(pts.length<PROJ_POINTS_MIN) return null;
+  const r=_projRegression(pts);
+  if(!r||!(r.pente>0)) return null;
+  const t=Number(maintenant)||Date.now();
+  const nRep=Math.max(1,Math.round(Number(reps)||5));
+  const actuel=r.a+r.pente*(t/_SEM_MS);
+  if(!(actuel>0)) return null;
+  const capacite=chargePourReps(actuel,nRep,0);
+  let cible=Math.ceil(capacite/PROJ_PAS_CIBLE)*PROJ_PAS_CIBLE;
+  if(cible-capacite<0.5) cible+=PROJ_PAS_CIBLE;
+  const semaines=(e1rm(cible,nRep,0)-actuel)/r.pente;
+  if(!(semaines>0)||semaines>PROJ_HORIZON_SEM) return null;
+  return {pente:r.pente,e1rm:actuel,cible,reps:nRep,semaines,date:t+semaines*_SEM_MS};
+}
+/**
+ * PURE. LA DOSE-RÉPONSE. `semaines` : [{vol, v}] chronologiques, semaine par
+ * semaine. Le gain d'e1RM d'une semaine à la suivante est attribué au volume
+ * de la première ; les semaines se rangent en « volume haut » et « volume bas »
+ * autour de la médiane. Rend {mieux, moins} (volumes moyens, arrondis) ou
+ * null : moins de 8 semaines, moins de 3 dans un groupe, ou un écart de pente
+ * qui ne dépasse pas DEUX FOIS LE BRUIT (l'erreur type de la différence).
+ */
+function doseReponse(semaines){
+  const l=(semaines||[]).filter(x=>x&&x.v>0&&isFinite(Number(x.vol)));
+  if(l.length<DOSE_SEMAINES_MIN) return null;
+  const d=[];
+  for(let i=0;i<l.length-1;i++) d.push({vol:Number(l[i].vol),gain:l[i+1].v-l[i].v});
+  const vols=d.map(x=>x.vol).slice().sort((a,b)=>a-b);
+  const med=vols[Math.floor(vols.length/2)];
+  const haut=d.filter(x=>x.vol>med), bas=d.filter(x=>x.vol<=med);
+  if(haut.length<DOSE_GROUPE_MIN||bas.length<DOSE_GROUPE_MIN) return null;
+  const moy=a=>a.reduce((s,x)=>s+x,0)/a.length;
+  const gH=moy(haut.map(x=>x.gain)), gB=moy(bas.map(x=>x.gain));
+  const tous=d.map(x=>x.gain), m=moy(tous);
+  const sd=Math.sqrt(tous.reduce((s,x)=>s+(x-m)*(x-m),0)/Math.max(1,tous.length-1));
+  const bruit=sd*Math.sqrt(1/haut.length+1/bas.length);
+  if(!(Math.abs(gH-gB)>2*bruit)) return null;
+  const vH=Math.round(moy(haut.map(x=>x.vol))), vB=Math.round(moy(bas.map(x=>x.vol)));
+  return gH>gB?{mieux:vH,moins:vB,ecart:gH-gB,bruit}:{mieux:vB,moins:vH,ecart:gB-gH,bruit};
+}
+// Les exercices principaux : les plus fréquents sur les 6 dernières semaines,
+// à charge externe, hors cardio. Le muscle primaire suit la classification de
+// l'athlète (resoudreMusclesLecture).
+function exercicesPrincipaux(u,maintenant,n){
+  const t=Number(maintenant)||Date.now(), debut=t-PROJ_SEMAINES*_SEM_MS;
+  const cpt=new Map();
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!s.data||s.deload||!(s.date>=debut&&s.date<=t)) continue;
+    for(const nom of Object.keys(s.data)){
+      try{ if(isCardio({name:nom,reps:''})||typeCharge(_exPourCharge(nom,u))!=='externe') continue; }catch(e){ continue; }
+      const k=exKey(nom), x=cpt.get(k)||{nom,n:0,der:0};
+      x.n++; x.der=Math.max(x.der,s.date); cpt.set(k,x);
+    }
+  }
+  return Array.from(cpt.values()).sort((a,b)=>(b.n-a.n)||(b.der-a.der)).slice(0,n||PROJ_EXOS);
+}
+function _projMuscle(u,nom){
+  try{ const c=resoudreMusclesLecture(nom,{name:nom},u); return (c&&c!==VOL_CARDIO&&(c.p||[])[0])||null; }catch(e){ return null; }
+}
+// Le volume hebdomadaire moyen d'un muscle sur les `n` dernières semaines
+// RÉVOLUES, et sa zone.
+function volumeMoyenMuscle(u,muscle,n){
+  if(!muscle) return null;
+  const vals=[];
+  for(let k=1;k<=(n||PROJ_SEMAINES);k++){
+    let v=null; try{ v=(volumeSemaine(u,_volCleDecalee(k))||{})[muscle]; }catch(e){ v=null; }
+    vals.push(Number(v)||0);
+  }
+  const moy=vals.reduce((a,b)=>a+b,0)/vals.length;
+  if(!(moy>0)) return null;
+  let r=null; try{ r=reperesEffectifs(u,muscle); }catch(e){ r=null; }
+  const zone=!r?null:moy<r.mev?'sous le MEV':moy<r.mavMin?'entre MEV et MAV':moy<=r.mavMax?'dans le MAV':moy<=r.mrv?'haut du MAV':'au-dessus du MRV';
+  return {moy:Math.round(moy*10)/10,zone};
+}
+// Les semaines {vol, v} de la dose-réponse : e1RM et volume du muscle.
+function _doseSemaines(u,nom,muscle,maintenant){
+  const pts=semainesE1rm(u,nom,maintenant,DOSE_SEMAINES_MAX);
+  return pts.map(p=>{ let v=0; try{ v=Number((volumeSemaine(u,p.cle)||{})[muscle])||0; }catch(e){ v=0; } return {vol:v,v:p.v}; });
+}
+const _projDate=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
+const _projKg=v=>String(Math.round(v*10)/10).replace('.',',');
+// Les répétitions de référence : le bas de la fourchette prescrite, sinon 5.
+function _projReps(u,nom){
+  for(const sc of ((u&&u.sessions_config)||[])){
+    for(const ex of ((sc&&sc.exercises)||[])){
+      if(!ex||exKey(ex.name||'')!==exKey(nom)) continue;
+      const f=fourchetteReps(ex.reps); if(f) return f.min;
+      const n=parseInt(ex.reps,10); if(n>0&&n<=12) return n;
+    }
+  }
+  return 5;
+}
+// PURE au rendu près. Les cartes, ou '' quand rien n'a de quoi s'afficher.
+function htmlProjectionsCoach(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const cartes=[];
+  for(const x of exercicesPrincipaux(u,t,PROJ_EXOS)){
+    const pts=semainesE1rm(u,x.nom,t,PROJ_SEMAINES);
+    if(pts.length<2) continue;
+    const reps=_projReps(u,x.nom);
+    const pr=projectionE1rm(pts,reps,t);
+    const reg=_projRegression(pts);
+    const muscle=_projMuscle(u,x.nom);
+    const vol=volumeMoyenMuscle(u,muscle,PROJ_SEMAINES);
+    const dose=muscle?doseReponse(_doseSemaines(u,x.nom,muscle,t)):null;
+    const l=[];
+    l.push('e1RM sur '+PROJ_SEMAINES+' semaines : '+_projKg(pts[0].v)+' → '+_projKg(pts[pts.length-1].v)+' kg'
+      +(reg?' · '+(reg.pente>=0?'+':'')+_projKg(reg.pente)+' kg/semaine':''));
+    if(pr) l.push('Au rythme actuel : '+_projKg(pr.cible)+' kg × '+pr.reps+' vers le '+_projDate(pr.date));
+    if(vol) l.push(_bbMuscle(muscle).replace(/^./,c=>c.toUpperCase())+' : '+_projKg(vol.moy)+' séries / semaine'+(vol.zone?' · '+vol.zone:''));
+    if(dose) l.push('Ses '+_bbMuscle(muscle)+' ont mieux progressé autour de '+dose.mieux+' séries que de '+dose.moins+'.');
+    cartes.push('<div class="proj-carte" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:8px">'
+      +'<div style="font-size:var(--fs-sm);font-weight:800;color:var(--text-strong)">'+escapeHtml(x.nom)+'</div>'
+      +_sparkline(pts.map(p=>p.v),'var(--sub)')
+      +l.map(s=>'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'+escapeHtml(s)+'</div>').join('')
+      +'</div>');
+  }
+  return cartes.join('');
 }
