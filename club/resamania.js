@@ -346,7 +346,7 @@ const RSM_DEFS = [
         const d = rsmDate(r[iD]); if (!d) { c.skip('date illisible'); continue; }
         const key = `pr:${tokensKey(`${r[iN]} ${r[iP]}`)}:${d}`; const seller = resolveSeller(r[iCom]);
         c.entry({ key, kpiId: 'prospects', date: d, value: 1, seller });
-        c.prospect({ key, nom: r[iN] || '', prenom: r[iP] || '', creeLe: d, seller, statut: iSt >= 0 ? r[iSt] || '' : '', valeur: iVal >= 0 ? rsmNum(r[iVal]) || 0 : 0, provenance: iSrc >= 0 ? r[iSrc] || '' : '', ...c.contact(r) });
+        c.prospect({ key, nom: r[iN] || '', prenom: r[iP] || '', creeLe: d, seller, statut: iSt >= 0 ? r[iSt] || '' : '', valeur: iVal >= 0 ? rsmNum(r[iVal]) || 0 : 0, valeurTxt: iVal >= 0 ? String(r[iVal] || '').slice(0, 40) : '', provenance: iSrc >= 0 ? r[iSrc] || '' : '', ...c.contact(r) });
       }
     },
   },

@@ -94,6 +94,7 @@ export const REGLE = `${DEBUT}
       "touches": { ".write": ${j(MEMBRE)} },
       "guests": { ".write": ${j(MEMBRE)} },
       "companies": { ".write": ${j(MEMBRE)} },
+      "prospects": { ".write": ${j(MEMBRE)} },
       "opps": { ".write": ${j(MEMBRE)} },
       "kudos": { "$day": { "$uid": { ".write": ${j(SOIMEME)} } } },
       "audit": { "$id": { ".write": ${j(`${MEMBRE} && !data.exists() && newData.exists()`)} } },

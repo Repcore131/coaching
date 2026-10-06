@@ -1031,3 +1031,34 @@ select.input { text-overflow: ellipsis; }
 .km-progress { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
 .km-progress i { display: block; height: 100%; width: 0; background: var(--fp); border-radius: 99px; transition: width .1s linear; }
 .km-text { font-family: inherit; line-height: 1.45; white-space: pre-wrap; }
+/* Relances prospects */
+.pr-temps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pr-temp-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.pr-temp-tile b { font-family: var(--font-title); font-size: 28px; line-height: 1; }
+.pr-temp-tile span { font-size: 12px; color: var(--muted); }
+.pr-temp-tile.t-chaud .ico { color: var(--bad); } .pr-temp-tile.t-tiede .ico { color: var(--warn); } .pr-temp-tile.t-froid .ico { color: var(--info); }
+.pr-temp-tile.on { border-color: var(--fp); box-shadow: 0 0 0 2px var(--fp-soft); }
+.pr-list { display: grid; gap: 8px; }
+.pr-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 12px; background: var(--surface); }
+.pr-row.t-chaud { border-left-color: var(--bad); } .pr-row.t-tiede { border-left-color: var(--warn); } .pr-row.t-froid { border-left-color: var(--info); }
+.pr-main { flex: 1; min-width: 0; background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; display: grid; gap: 3px; }
+.pr-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pr-acts { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.pr-card { display: grid; gap: 12px; }
+.pr-coords { display: flex; flex-wrap: wrap; gap: 8px; }
+.pr-meta { display: grid; gap: 4px; }
+.pr-meta .muted { display: inline-block; min-width: 130px; }
+.pr-sms { display: flex; flex-wrap: wrap; gap: 6px; }
+.pr-checks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.pr-check { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 600; }
+.pr-check input { width: 20px; height: 20px; accent-color: var(--fp); }
+.pr-check:has(input:checked) { border-color: var(--fp); background: var(--fp-soft); }
+.pr-callbig { width: 100%; justify-content: center; }
+.field-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.pr-count { font-weight: 700; margin: 0; }
+@media (max-width: 640px) {
+  .pr-row { flex-direction: column; align-items: stretch; }
+  .pr-acts { justify-content: flex-end; }
+  .pr-acts .btn.primary { flex: 1; justify-content: center; }
+  .pr-temp-tile b { font-size: 22px; }
+}

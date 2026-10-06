@@ -102,7 +102,7 @@ function relancesFor(clubId) {
     }
     // Prospects (0 à 21 jours) et invités (1 à 10 jours) non encore inscrits : dans la file comme les adhérents.
     if (typeof prospectsOf === 'function') {
-      for (const p of prospectsOf(clubId)) { const a = Math.round((dateOf(t) - dateOf(p.creeLe)) / 864e5); if (a < 0 || a > 21 || prospectConv(p) || (p.statut && /refus|perdu|injoignable definitif/.test(norm(p.statut)))) continue; const nm = `${p.prenom || ''} ${p.nom || ''}`.trim();
+      for (const p of prospectsOf(clubId)) { const a = Math.round((dateOf(t) - dateOf(p.creeLe)) / 864e5); const planned = (deepGet(S, ['relances', relKey('prospect', p.id, p.creeLe)]) || {}).nextAt; if (a < 0 || (a > 21 && !planned) || prospectConv(p) || (p.statut && /refus|perdu|injoignable definitif/.test(norm(p.statut)))) continue; const nm = `${p.prenom || ''} ${p.nom || ''}`.trim();
         add('prospect', { refId: p.id, clientId: null, clientName: nm, pseudo: { id: null, clubId, name: nm, phone: p.phone, email: p.email }, anchor: p.creeLe, due: addDays(p.creeLe, 1), ownerHint: p.commercialId || null, reason: `prospect créé le ${dm(p.creeLe)}${p.provenance ? ' · ' + p.provenance : ''}` }); }
       for (const g of guestsOf(clubId)) { const a = Math.round((dateOf(t) - dateOf(g.date)) / 864e5); if (a < 1 || a > 10 || guestConv(g)) continue; const par = g.parrainId && S.clients[g.parrainId];
         add('invite', { refId: g.id, clientId: null, clientName: g.nom, pseudo: { id: null, clubId, name: g.nom, phone: g.phone }, anchor: g.date, due: addDays(g.date, 1), ownerHint: g.by || null, reason: `séance découverte le ${dm(g.date)}${par ? ' · invité par ' + par.name : ''}` }); }
@@ -233,10 +233,11 @@ PAGES.relances = {
     const seg0 = UI.relSeg || 'file';
     const scope = UI.relScope || (isManager() ? 'all' : 'mine');
     const head = `<div class="page-head"><div><h1>Relances</h1><p>Une seule liste, triée par urgence : appeler, noter, passer au suivant.</p></div><span class="spacer"></span>${seg0 === 'file' ? '<button class="btn primary" data-act="relSession">Démarrer la session</button>' : ''}</div>
-      ${tabs('relSeg', [['file', 'File d’appels'], ['resiliations', 'Résiliations'], ['impayes', 'Impayés'], ['retention', 'Rétention'], ['perf', 'Performance']], seg0)}`;
+      ${tabs('relSeg', [['file', 'File d’appels'], ['prospects', 'Prospects'], ['resiliations', 'Résiliations'], ['impayes', 'Impayés'], ['retention', 'Rétention'], ['perf', 'Performance']], seg0)}`;
     if (seg0 === 'resiliations') return head + PAGES.resiliations.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'impayes') return head + PAGES.impayes.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     if (seg0 === 'perf') return head + relPerf();
+    if (seg0 === 'prospects') return head + prospRender();
     if (seg0 === 'retention') return head + PAGES.loyalty.render().replace(/^<div class="page-head">[\s\S]*?<\/div>\s*<\/div>/, '');
     const Q = relQueue(CLUB.id, scope);
     const kf = UI.relKind || 'all';
@@ -257,7 +258,7 @@ function relRow(r) {
   const L = contactLinks(rl);
   const last = r.lastTouch;
   return `<div class="rel-row ${lock ? 'locked' : ''}">
-    <div class="rel-main"><div class="rel-name"><a href="#/client/${esc(rl.clientId || '')}" ${rl.clientId ? '' : 'onclick="return false"'}><b>${esc(r.name)}</b></a>${kinds.map(k => `<span class="tag ${k === 'resiliation' || k === 'impaye' ? 'is-warn' : ''}">${REL_KINDS[k].label}</span>`).join('')}${r.list.some(x => x.broken) ? '<span class="tag is-bad">Promesse non tenue</span>' : ''}${r.list.some(x => x.reassign) ? '<span class="tag is-info">Réattribuer</span>' : ''}</div>
+    <div class="rel-main"><div class="rel-name"><a href="#/client/${esc(rl.clientId || '')}" ${rl.clientId ? '' : 'onclick="return false"'}><b>${esc(r.name)}</b></a>${kinds.map(k => `<span class="tag ${k === 'resiliation' || k === 'impaye' ? 'is-warn' : ''}">${REL_KINDS[k].label}</span>`).join('')}${rl.kind === 'prospect' && typeof prospTemp === 'function' && S.prospects[rl.refId] ? (x => `<span class="tag ${PR_TEMPS[x].cls}">${PR_TEMPS[x].label}</span>`)(prospTemp(S.prospects[rl.refId])) : ''}${r.list.some(x => x.broken) ? '<span class="tag is-bad">Promesse non tenue</span>' : ''}${r.list.some(x => x.reassign) ? '<span class="tag is-info">Réattribuer</span>' : ''}</div>
       <div class="muted small">${r.list.map(x => esc(x.reason)).join(' · ')}</div>
       <div class="muted small">${owner ? 'Responsable : ' + esc(owner) : 'Non attribuée'}${rl.attempts ? ` · ${plur(rl.attempts, 'tentative', 'tentatives')}` : ''}${last ? ` · dernier contact ${ago(last.at)} : ${esc((TOUCH_OUTCOMES[last.outcome] || {}).label || last.outcome)}` : ''}${r.next > Date.now() ? ` · rappel à ${new Date(r.next).toTimeString().slice(0, 5)}` : ''}${lock ? ` · <b>en cours par ${esc((S.users[lock.claimedBy] || {}).first || 'un collègue')}</b>` : ''}</div></div>
     <div class="rel-acts">
@@ -320,6 +321,8 @@ ACTIONS.relMsgSend = el => {
 // Feuille de résultat : une issue, et toujours une suite datée.
 function relSheet(key, channel = 'call') {
   const rl = relByKey(key); if (!rl) return;
+  // prospect : la feuille dédiée (cases appel 1, appel 2, vocal, SMS, comportement, suite)
+  if (rl.kind === 'prospect' && typeof prospSheet === 'function' && S.prospects[rl.refId]) return prospSheet(rl.refId);
   const outs = ['joint', 'messagerie', 'pasreponse', 'mauvaisnumero', 'rappeler', ...(KIND_OUTCOMES[rl.kind] || []), 'refus', 'stop'];
   const motifs = (REFUS_MOTIFS[rl.kind] || (() => ['Pas intéressé', 'Autre']))();
   openModal({ title: `Résultat · ${rl.name}`, drawer: true, body: `<form id="rsf" class="grid">
