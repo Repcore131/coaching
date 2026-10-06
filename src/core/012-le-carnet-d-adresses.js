@@ -1272,11 +1272,13 @@ function _texteSignal(type,c,sg){
     if(d.plateauMuscle) return d.plateauMuscle.lib.toLowerCase()+' en plateau : '
       +d.plateauMuscle.bloques+' exercices sans nouveau maximum depuis '
       +d.plateauMuscle.semaines+' semaines.';
-    if(d.formeBasse) return 'forme déclarée à '+d.formeBasse.moy+'/10, contre '
-      +d.formeBasse.base+' habituellement.';
+    // Le volume sous le minimum AVANT la forme : même précédence que
+    // libelleEntrainement et signalPrincipal (06/10/2026).
     if(d.sousMEV) return d.sousMEV.lib.toLowerCase()+' sous le volume minimum deux semaines de suite ('
       +volAffiche(d.sousMEV.s1)+' et '+volAffiche(d.sousMEV.s2)+' séries pour un minimum de '
       +volAffiche(d.sousMEV.mev)+').';
+    if(d.formeBasse) return 'forme déclarée à '+d.formeBasse.moy+'/10, contre '
+      +d.formeBasse.base+' habituellement.';
     if(d.volumeHaut) return d.volumeHaut.lib.toLowerCase()+' au-dessus du repère haut depuis 2 semaines ('
       +volAffiche(d.volumeHaut.s1)+' et '+volAffiche(d.volumeHaut.s2)+' séries, repère '
       +volAffiche(d.volumeHaut.mrv)+').';
@@ -1820,6 +1822,15 @@ function ajReporter(){
   return true;
 }
 
+// PURE. Le libellé de la ligne « entraînement » : le signal qu'elle porte.
+function libelleEntrainement(sg){
+  const s=sg||{}, p=(s.details&&s.details.plateauMuscle)||{};
+  if(s.restrictionLongue) return 'Restriction prolongée';
+  if(s.plateauMuscle) return p.regression?'Charges en baisse':'Progression bloquée';
+  if(s.sousMEV) return 'Volume sous le minimum';
+  if(s.formeBasse) return 'Forme en baisse';
+  return 'Volume élevé';
+}
 // Lignes par athlète, dans l'ordre de priorité. Un athlète n'apparaît qu'une
 // fois : son signal le plus grave. Sinon un athlète qui cumule douleur,
 // décrochage et plateau occuperait trois des huit lignes à lui seul.
@@ -1858,9 +1869,10 @@ function _lignesEntrainement(clients){
       // au-dessus du repère haut n'est pas une progression bloquée. Même
       // précédence que _texteSignal, pour que le titre et la phrase parlent
       // toujours du même signal.
-      const lib=n.cle?n.lib
-        :(sg.restrictionLongue?'Restriction prolongée'
-          :((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)?n.lib:'Volume élevé'));
+      // LES LIBELLÉS SÉPARÉS (06/10/2026) : un athlète simplement sous son
+      // minimum de volume était annoncé « Progression bloquée ». Mêmes mots
+      // et même précédence que signalPrincipal ET que _texteSignal.
+      const lib=n.cle?n.lib:libelleEntrainement(sg);
       out.push({type:n.type,icon:n.icon,color:n.color,label:lib,list:[c],
         texte:txt,sante:ALERTES_SANTE.includes(n.type)});
     }

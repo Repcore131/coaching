@@ -27684,11 +27684,13 @@ function _texteSignal(type,c,sg){
     if(d.plateauMuscle) return d.plateauMuscle.lib.toLowerCase()+' en plateau : '
       +d.plateauMuscle.bloques+' exercices sans nouveau maximum depuis '
       +d.plateauMuscle.semaines+' semaines.';
-    if(d.formeBasse) return 'forme déclarée à '+d.formeBasse.moy+'/10, contre '
-      +d.formeBasse.base+' habituellement.';
+    // Le volume sous le minimum AVANT la forme : même précédence que
+    // libelleEntrainement et signalPrincipal (06/10/2026).
     if(d.sousMEV) return d.sousMEV.lib.toLowerCase()+' sous le volume minimum deux semaines de suite ('
       +volAffiche(d.sousMEV.s1)+' et '+volAffiche(d.sousMEV.s2)+' séries pour un minimum de '
       +volAffiche(d.sousMEV.mev)+').';
+    if(d.formeBasse) return 'forme déclarée à '+d.formeBasse.moy+'/10, contre '
+      +d.formeBasse.base+' habituellement.';
     if(d.volumeHaut) return d.volumeHaut.lib.toLowerCase()+' au-dessus du repère haut depuis 2 semaines ('
       +volAffiche(d.volumeHaut.s1)+' et '+volAffiche(d.volumeHaut.s2)+' séries, repère '
       +volAffiche(d.volumeHaut.mrv)+').';
@@ -28232,6 +28234,15 @@ function ajReporter(){
   return true;
 }
 
+// PURE. Le libellé de la ligne « entraînement » : le signal qu'elle porte.
+function libelleEntrainement(sg){
+  const s=sg||{}, p=(s.details&&s.details.plateauMuscle)||{};
+  if(s.restrictionLongue) return 'Restriction prolongée';
+  if(s.plateauMuscle) return p.regression?'Charges en baisse':'Progression bloquée';
+  if(s.sousMEV) return 'Volume sous le minimum';
+  if(s.formeBasse) return 'Forme en baisse';
+  return 'Volume élevé';
+}
 // Lignes par athlète, dans l'ordre de priorité. Un athlète n'apparaît qu'une
 // fois : son signal le plus grave. Sinon un athlète qui cumule douleur,
 // décrochage et plateau occuperait trois des huit lignes à lui seul.
@@ -28270,9 +28281,10 @@ function _lignesEntrainement(clients){
       // au-dessus du repère haut n'est pas une progression bloquée. Même
       // précédence que _texteSignal, pour que le titre et la phrase parlent
       // toujours du même signal.
-      const lib=n.cle?n.lib
-        :(sg.restrictionLongue?'Restriction prolongée'
-          :((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)?n.lib:'Volume élevé'));
+      // LES LIBELLÉS SÉPARÉS (06/10/2026) : un athlète simplement sous son
+      // minimum de volume était annoncé « Progression bloquée ». Mêmes mots
+      // et même précédence que signalPrincipal ET que _texteSignal.
+      const lib=n.cle?n.lib:libelleEntrainement(sg);
       out.push({type:n.type,icon:n.icon,color:n.color,label:lib,list:[c],
         texte:txt,sante:ALERTES_SANTE.includes(n.type)});
     }
@@ -29270,34 +29282,112 @@ function relanceVue(at){
 // ⚠ « DEPUIS QUAND » N'EST JAMAIS INVENTÉ : la date de la première séance ou
 //   semaine qui a levé le signal quand elle existe, sinon « en ce moment ».
 
-const LUNDI_RANGS=Object.freeze(['drapeau','douleur','fatigue','regression','plateau','absence','rien']);
-const LUNDI_CIBLE=Object.freeze({drapeau:'ccd-securite',douleur:'ccd-douleur',fatigue:'ccd-volume',
-  regression:'ccd-plateaux',plateau:'ccd-plateaux',absence:'ccd-sessions-recap',rien:null});
+// ══ LE SIGNAL PRINCIPAL D'UN ATHLÈTE (06/10/2026) ════════════════════════
+// « À traiter » et le point du lundi donnaient des verdicts opposés : Léa
+// (bilan sans réponse, volume sous le minimum), Hugo (bloc terminé), Julie
+// (bilan en retard) et Tom (inscrit, rien fait) étaient « Rien à signaler »
+// le lundi et présents dans les notifications. Le lundi ne lisait que les
+// signaux d'entraînement.
+//
+// UN SEUL ORDRE, LES MÊMES PRÉDICATS, LES MÊMES REPORTS. Chaque signal est
+// lu avec la condition et la clé de report (isAlertSnoozed) de la ligne
+// d'« À traiter » qui le porte : reporté là, il l'est ici, jusqu'à la même
+// échéance. Au-delà des signaux nommés, tout ce qui fait une ligne dans « À
+// traiter » (vidéo, note, accès, programme à écrire…) donne 'autre' : un
+// athlète qui a une ligne n'est jamais « Rien à signaler ».
+const SIGNAL_CATS=Object.freeze(['drapeau','douleur','bilan','message','retard','fatigue','regression','plateau',
+  'volume','forme','absence','bloc','nostart','autre','rien']);
+const LUNDI_RANGS=SIGNAL_CATS;
+const LUNDI_CIBLE=Object.freeze({drapeau:'ccd-securite',douleur:'ccd-douleur',bilan:'bilan',message:'message',retard:null,
+  fatigue:'ccd-volume',regression:'ccd-plateaux',plateau:'ccd-plateaux',volume:'ccd-volume',forme:'ccd-volume',
+  absence:'ccd-sessions-recap',bloc:'bloc',nostart:null,autre:null,rien:null});
 const LUNDI_PAQUET=4;
-
-// PURE. La ligne d'un athlète, depuis ce qui est DÉJÀ calculé.
-//   sg : signauxEntrainement(c) ; o : {drapeau, proposition, maintenant}
-function lundiLigne(c,sg,o){
-  const x=o||{}, s=sg||{}, d=s.details||{};
-  const prenom=String((c&&c.fname)||'').trim()||String((c&&c.email)||'Athlète').split('@')[0];
-  const base={id:c&&c.id,prenom};
-  const le=v=>(Number(v)>0?Number(v):null);
-  if(x.drapeau) return Object.assign(base,{cat:'drapeau',signal:'Drapeau rouge santé',depuis:le(x.drapeau.date)});
-  if(s.douleur){
+/**
+ * PURE (lit le dossier, les signaux en cache et les reports du coach).
+ * @param {any} c
+ * @param {{sg?:any, drapeau?:any, proposition?:any, maintenant?:number, messages?:Set<string>, acc?:any, u?:any}} [ctx]
+ * @returns {{cat:string, libelle:string, depuis:number|null, cible:string|null}}
+ */
+function signalPrincipal(c,ctx){
+  const x=ctx||{}, t=Number(x.maintenant)||Date.now();
+  const id=c&&c.id;
+  const r=(cat,libelle,depuis)=>({cat,libelle,depuis:Number(depuis)>0?Number(depuis):null,cible:LUNDI_CIBLE[cat]||null});
+  if(!c) return r('rien','Rien à signaler');
+  const ok=f=>{ try{ return !!f(); }catch(e){ return false; } };
+  const rep=(type,vu)=>ok(()=>isAlertSnoozed(type,id,vu||0,c));
+  const sg=('sg' in x)?(x.sg||{}):(()=>{ try{ return signauxEntrainement(c)||{}; }catch(e){ return {}; } })();
+  const d=sg.details||{};
+  const dr=('drapeau' in x)?x.drapeau:(()=>{ try{ return drapeauQuelconqueActif(c)||null; }catch(e){ return null; } })();
+  const pr=('proposition' in x)?x.proposition:(()=>{ try{ return propositionDechargeOuverte(c)||null; }catch(e){ return null; } })();
+  const acc=x.acc||(()=>{ try{ return accueilLignesCoach([c],t); }catch(e){ return {prog:[],retour:[],silence:new Set()}; } })();
+  const enAccueil=acc.silence&&acc.silence.has(id);
+  // 1. Santé : le drapeau (jamais reportable), puis la douleur.
+  if(dr) return r('drapeau','Drapeau rouge santé',dr.date);
+  if(sg.douleur&&!rep('douleur')){
     const dates=((d.douleur&&d.douleur.dates)||[]).map(Number).filter(n=>n>0);
-    return Object.assign(base,{cat:'douleur',signal:'Douleur répétée',depuis:dates.length?Math.min(...dates):null});
+    return r('douleur','Douleur répétée',dates.length?Math.min(...dates):null);
   }
-  if(s.douleurDiffuse) return Object.assign(base,{cat:'douleur',signal:'Douleurs diffuses',depuis:null});
-  if(x.proposition) return Object.assign(base,{cat:'fatigue',signal:'Décharge proposée',depuis:le(x.proposition.creeLe)});
-  if(s.plateauMuscle){
+  if(sg.douleurDiffuse&&!rep('douleurdiff')) return r('douleur','Douleurs diffuses');
+  // 2. Ce qu'une personne attend.
+  const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,Number(b&&b.date)||0),0);
+  if(!enAccueil&&ok(()=>hasNewBilan(c))&&!rep('bilan',lt)) return r('bilan','Bilan sans réponse',lt);
+  const msg=x.messages?x.messages.has(id):ok(()=>msgClientsSansReponse([c],t).length>0);
+  if(msg&&!rep('message')) return r('message','Message sans réponse');
+  if(!c._fromCode&&ok(()=>needsAlert(c))&&!rep('overdue')) return r('retard','Bilan en retard');
+  // 3. L'entraînement : même précédence que les libellés d'« À traiter ».
+  if(pr&&!rep('entrainement')) return r('fatigue','Décharge proposée',pr.creeLe);
+  const repEnt=rep('entrainement');
+  if(sg.plateauMuscle&&!repEnt){
     const p=d.plateauMuscle||{};
-    const t=Number(x.maintenant)||Date.now();
     const depuis=Number(p.joursRecord)>0?t-Number(p.joursRecord)*864e5:null;
-    return Object.assign(base,p.regression?{cat:'regression',signal:'Charges en baisse',depuis}:{cat:'plateau',signal:'Progression bloquée',depuis});
+    return p.regression?r('regression','Charges en baisse',depuis):r('plateau','Progression bloquée',depuis);
   }
-  if(s.decrochage) return Object.assign(base,{cat:'absence',signal:'Séances écourtées',depuis:null});
-  if(s.chuteAssiduite) return Object.assign(base,{cat:'absence',signal:'Assiduité en baisse',depuis:null});
-  return Object.assign(base,{cat:'rien',signal:'Rien à signaler',depuis:null});
+  if(sg.sousMEV&&!repEnt) return r('volume','Volume sous le minimum');
+  if(sg.formeBasse&&!repEnt) return r('forme','Forme en baisse');
+  if(sg.decrochage&&!rep('decrochage')) return r('absence','Séances écourtées');
+  if(sg.chuteAssiduite&&!repEnt) return r('absence','Assiduité en baisse');
+  // 4. Le bloc, puis le démarrage.
+  const f=(()=>{ try{ return finProgramme(c,t); }catch(e){ return null; } })();
+  if(f&&!rep('progfin')) return r('bloc',f.fini?'Bloc terminé':'Bloc qui se termine',f.finPrevue);
+  if(sg.blocPrioriteFini&&!rep('blocfini')) return r('bloc','Bloc de priorité terminé');
+  if(!enAccueil&&ok(()=>neverStarted(c))&&!rep('nostart')) return r('nostart','Jamais démarré');
+  // 5. Tout ce qui fait encore une ligne dans « À traiter ».
+  const autre=signalAutre(c,sg,acc,t,rep);
+  if(autre) return r('autre',autre);
+  return r('rien','Rien à signaler');
+}
+// Les lignes d'« À traiter » qui ne sont pas un signal nommé, AVEC LEURS
+// PRÉDICATS (renderTodoBlock) : le libellé de la première qui s'applique.
+function signalAutre(c,sg,acc,t,rep){
+  const id=c.id, ok=f=>{ try{ return !!f(); }catch(e){ return false; } };
+  const enAccueil=acc&&acc.silence&&acc.silence.has(id);
+  if(acc&&(acc.prog||[]).some(a=>a&&a.id===id)&&!rep('accueil_prog')) return 'Programme à écrire';
+  if(acc&&(acc.retour||[]).some(a=>a&&a.id===id)&&!rep('accueil_retour')) return 'Premier point de l’accueil';
+  if(sg.sautDeCharge&&!rep('saut_charge')) return 'Charge en hausse marquée';
+  if((sg.restrictionLongue||sg.volumeHaut)&&!rep('entrainement')) return sg.restrictionLongue?'Restriction prolongée':'Volume élevé';
+  if(ok(()=>(c.videos||[]).some(videoNonCorrigee))&&!rep('videos')) return 'Vidéo à corriger';
+  if(ok(()=>notesEchues(currentUser&&currentUser.coachNotes,id).length)&&!rep('notes')) return 'Note à revoir';
+  if(!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-t)>0&&(c.accessExpiry-t)<14*864e5&&!rep('expiring')) return 'Accès qui expire';
+  if(!c._fromCode){
+    const l=(c.rites||[]).filter(q=>q&&q.date&&String(q.question||'').trim());
+    const der=l[l.length-1], av=l[l.length-2];
+    if(der&&!der.reponseCoach&&!(av&&!av.reponseCoach)) return 'Bilan de 4 semaines';
+  }
+  if(!c._fromCode&&!enAccueil&&ok(()=>!hasProgram(c))&&(c.bilans||[]).some(b=>b&&b.type==='depart')&&!rep('noprog')) return 'Sans programme';
+  if(sg.calibrageDu&&!rep('calibrage')) return 'Calibrage à faire';
+  if(ok(()=>lignesSansContact([c],currentUser&&currentUser.contacts,t,()=>rep('silence')).length)) return 'Sans échange récent';
+  return '';
+}
+// PURE. La ligne d'un athlète, depuis ce qui est DÉJÀ calculé.
+//   sg : signauxEntrainement(c) ; o : {drapeau, proposition, maintenant, messages, acc}
+function lundiLigne(c,sg,o){
+  const x=Object.assign({},o||{},{sg:sg||{}});
+  if(!('drapeau' in x)) x.drapeau=null;
+  if(!('proposition' in x)) x.proposition=null;
+  const prenom=String((c&&c.fname)||'').trim()||String((c&&c.email)||'Athlète').split('@')[0];
+  const sp=signalPrincipal(c,x);
+  return {id:c&&c.id,prenom,cle:(()=>{ try{ return _relCle(c); }catch(e){ return ''; } })(),
+    cat:sp.cat,signal:sp.libelle,depuis:sp.depuis,cible:sp.cible};
 }
 // PURE. L'ordre : le rang du signal, puis le plus ancien d'abord, puis ceux
 // sans date. Jamais un score.
@@ -29313,15 +29403,15 @@ function lundiDepuis(t){
 }
 // La ligne d'un athlète, lue sur son dossier : les signaux (cache), le
 // drapeau et la proposition de décharge (des champs déjà écrits).
-function _lundiLire(c){
+function _lundiLire(c,ctx){
   let sg=null; try{ sg=signauxEntrainement(c); }catch(e){ sg=null; }
   let dr=null; try{ dr=drapeauQuelconqueActif(c)||null; }catch(e){ dr=null; }
   let pr=null; try{ pr=propositionDechargeOuverte(c); }catch(e){ pr=null; }
-  return lundiLigne(c,sg,{drapeau:dr,proposition:pr});
+  return lundiLigne(c,sg,Object.assign({drapeau:dr,proposition:pr},ctx||{}));
 }
 function _htmlLundiLigne(l){
   const E=escapeHtml, id=E(String(l.id||''));
-  return '<button type="button" class="ld-l ld-'+l.cat+'" onclick="lundiOuvrir(\''+id+'\',\''+l.cat+'\')">'
+  return '<button type="button" class="ld-l ld-'+l.cat+'" onclick="lundiOuvrir(\''+id+'\',\''+l.cat+'\','+_attrArg(l.cle||'')+')">'
     +'<b>'+E(l.prenom)+'</b><span class="ld-s">'+E(l.signal)+'</span>'
     +'<span class="ld-d">'+(l.cat==='rien'?'':E(lundiDepuis(l.depuis)))+'</span></button>';
 }
@@ -29332,6 +29422,11 @@ function renderLundi(){
   let clients=[]; try{ clients=getClients().filter(c=>c&&!c._fromCode); }catch(e){ clients=[]; }
   if(!clients.length){ z.innerHTML=emptyState('users','Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.',null,null,''); return true; }
   const jeton=++_lundiJeton, lignes=[];
+  // Ce qui se lit une fois pour tous : l'accueil et les fils sans réponse.
+  const t=Date.now();
+  let acc=null; try{ acc=accueilLignesCoach(clients,t); }catch(e){ acc=null; }
+  let msgs=new Set(); try{ msgs=new Set(msgClientsSansReponse(clients,t).map(c=>c.id)); }catch(e){}
+  const ctx={maintenant:t,messages:msgs,...(acc?{acc}:{})};
   const peindre=fini=>{
     if(jeton!==_lundiJeton) return;
     const l=lundiTrier(lignes);
@@ -29341,7 +29436,7 @@ function renderLundi(){
   let i=0;
   const paquet=()=>{
     if(jeton!==_lundiJeton) return;
-    for(let k=0;k<LUNDI_PAQUET&&i<clients.length;k++,i++) lignes.push(_lundiLire(clients[i]));
+    for(let k=0;k<LUNDI_PAQUET&&i<clients.length;k++,i++) lignes.push(_lundiLire(clients[i],ctx));
     peindre(i>=clients.length);
     if(i<clients.length) setTimeout(paquet,0);
   };
@@ -29350,10 +29445,15 @@ function renderLundi(){
 }
 function ouvrirLundi(){ go('s-coach-lundi'); renderLundi(); }
 // Le clic : la fiche, puis l'onglet qui porte le bloc du signal, et le bloc.
-function lundiOuvrir(id,cat){
+function lundiOuvrir(id,cat,cle){
   if(!id) return false;
-  try{ openClientDetail(id,false,true); }catch(e){ return false; }
   const cible=LUNDI_CIBLE[cat];
+  // LES TROIS GESTES QUI NE SONT PAS UN BLOC DE LA FICHE (06/10/2026) : la
+  // réponse au bilan, le fil de messages, le bilan du bloc.
+  if(cible==='bilan'){ currentClientId=id; try{ viewClientBilans(); evoTab('reponses'); }catch(e){ return false; } return true; }
+  if(cible==='message'){ try{ msgOuvrirFil(cle||_relCle(getOwnedClient(id))); }catch(e){ return false; } return true; }
+  if(cible==='bloc'){ try{ return _ouvrirProgfin(id); }catch(e){ return false; } }
+  try{ openClientDetail(id,false,true); }catch(e){ return false; }
   if(!cible) return true;
   setTimeout(()=>{
     try{

@@ -13097,6 +13097,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ld-drapeau,.ld-douleur{border-left-color:var(--red)}
 .ld-fatigue,.ld-regression{border-left-color:var(--orange)}
 .ld-plateau,.ld-absence{border-left-color:var(--sub)}
+/* 06/10/2026 : les signaux d'« À traiter », mêmes couleurs que leurs lignes. */
+.ld-bilan,.ld-message,.ld-volume,.ld-forme{border-left-color:var(--orange)}
+.ld-retard,.ld-nostart{border-left-color:var(--red)}
+.ld-bloc,.ld-autre{border-left-color:var(--green)}
 .ld-rien{opacity:.7}
 .ld-rien .ld-s{color:var(--sub)}
 .ld-attente{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;padding:10px 2px}

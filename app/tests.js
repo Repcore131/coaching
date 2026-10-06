@@ -29525,12 +29525,14 @@ async function testExercices(){
         currentUser.seenBilans['vh8b@t.fr']=Date.now();
         const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
         return l.length===1&&l[0].label==='Volume élevé';});
-      ok('Un sous-MEV garde l\'intitulé « Progression bloquée »',()=>{
+      // ⚠ CE TEST DISAIT L'INVERSE JUSQU'AU 06/10/2026 : un athlète simplement
+      // sous son minimum de volume était annoncé « Progression bloquée ».
+      ok('Un sous-MEV dit « Volume sous le minimum », jamais « Progression bloquée »',()=>{
         const c=_vhAth('vh8c',2,3,{programPdfLink:'https://exemple.test/p.pdf',
           bilans:[{type:'depart',date:_sgJ(2),reponseCoach:'ok',reponseDate:1,reponseVue:true}]});
         currentUser.seenBilans['vh8c@t.fr']=Date.now();
         const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
-        return l.length===1&&l[0].label==='Progression bloquée';});
+        return l.length===1&&l[0].label==='Volume sous le minimum';});
       ok('Aucune injonction dans le texte : on décrit, on ne prescrit pas',()=>{
         const d={details:{volumeHaut:{lib:'Pectoraux',mrv:22,s1:24,s2:26}}};
         const t=_texteSignal('entrainement',null,d);
@@ -55845,7 +55847,7 @@ async function testExercices(){
     // ══ LOT T8 — LA VUE DU LUNDI MATIN (29/09/2026) ═════════════════════════
     ok('T8 — l’ordre : drapeau, douleur, décharge proposée, régression, plateau, absence, rien',()=>{
       const t=Date.now(), J=864e5;
-      const L=(id,sg,o)=>lundiLigne({id,fname:id},sg,Object.assign({maintenant:t},o||{}));
+      const L=(id,sg,o)=>lundiLigne({id,fname:id,bilans:[],createdAt:t},sg,Object.assign({maintenant:t,messages:new Set()},o||{}));
       const l=[
         L('Rien',{}),
         L('Absent',{decrochage:true}),
@@ -55863,14 +55865,82 @@ async function testExercices(){
       return l.every(x=>x.signal.split(' ').length<=3)?true:_echec('un signal de plus de trois mots');});
     ok('T8 — à égalité, le plus ancien signal d’abord ; sans date, après ; un athlète sans données : « Rien à signaler »',()=>{
       const t=Date.now(), J=864e5;
-      const d=(id,j)=>lundiLigne({id,fname:id},{douleur:true,details:{douleur:{dates:j==null?[]:[t-j*J]}}});
+      const d=(id,j)=>lundiLigne({id,fname:id,bilans:[],createdAt:t},{douleur:true,details:{douleur:{dates:j==null?[]:[t-j*J]}}});
       const o=lundiTrier([d('Recent',2),d('SansDate',null),d('Ancien',9)]).map(x=>x.prenom).join();
       if(o!=='Ancien,Recent,SansDate') return _echec(o);
-      const v=lundiLigne({id:'v'},null);
+      // Un dossier vide mais créé à l'instant : rien à signaler (créé il y a
+      // plus de 3 jours, il serait « Jamais démarré », comme dans « À traiter »).
+      const v=lundiLigne({id:'v',bilans:[],createdAt:Date.now()},null,{messages:new Set()});
       if(v.cat!=='rien'||v.signal!=='Rien à signaler'||v.prenom!=='Athlète') return _echec(JSON.stringify(v));
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — UN SEUL SIGNAL PRINCIPAL POUR « À TRAITER » ET LE LUNDI ──
+    const _SP=(fn)=>{
+      const sv={u:currentUser,sg:signauxEntrainement,dr:drapeauQuelconqueActif,fp:finProgramme,g:getClients,ts:_texteSignal,pd:propositionDechargeOuverte,
+        rows:window._todoRows,dep:_todoDeplie,z:(document.getElementById('ch-todo')||{}).innerHTML};
+      const t=Date.now(), J=864e5;
+      const sgs={
+        lea:{sousMEV:true,details:{sousMEV:{lib:'Dos',s1:4,s2:5,mev:8}}},
+        mev:{sousMEV:true,details:{sousMEV:{lib:'Pectoraux',s1:4,s2:5,mev:8}}},
+        dlb:{douleur:true,details:{douleur:{painMax:5,nom:'SQUAT',seances:2,dates:[t-6*J,t-2*J]}}}};
+      const B=(o)=>Object.assign({role:'athlete',status:'COACHING_SUIVI',sessions:[{date:t-2*J}],sessions_config:[],bilans:[],createdAt:t-60*J},o);
+      const cl=[
+        B({id:'lea',fname:'Léa',email:'lea@t.fr',bilans:[{date:t-2*J,type:'suivi'}]}),
+        B({id:'hugo',fname:'Hugo',email:'hugo@t.fr',bilans:[{date:t-5*J,type:'suivi',reponseCoach:'ok',reponseDate:t-4*J}]}),
+        B({id:'julie',fname:'Julie',email:'julie@t.fr',questionnaireComplete:true}),
+        B({id:'tom',fname:'Tom',email:'tom@t.fr',sessions:[],createdAt:t-J}),
+        B({id:'mev',fname:'Malo',email:'malo@t.fr',bilans:[{date:t-3*J,type:'suivi',reponseCoach:'ok',reponseDate:t-2*J}]}),
+        B({id:'ns',fname:'Nina',email:'nina@t.fr',sessions:[],createdAt:t-20*J}),
+        B({id:'dlb',fname:'Dan',email:'dan@t.fr',bilans:[{date:t-J,type:'suivi'}]}),
+        B({id:'ok',fname:'Oscar',email:'oscar@t.fr',bilans:[{date:t-3*J,type:'suivi',reponseCoach:'ok',reponseDate:t-2*J}]})];
+      try{
+        currentUser={id:'spc',email:'spc@t.fr',role:'coach',alertStatus:{},contacts:Object.fromEntries(cl.map(c=>[c.id,t]))};
+        signauxEntrainement=c=>sgs[c.id]||{details:{}};
+        drapeauQuelconqueActif=()=>null; propositionDechargeOuverte=()=>null;
+        finProgramme=c=>c&&c.id==='hugo'?{joursRestants:-3,fini:true,finPrevue:t-3*J}:null;
+        getClients=()=>cl;
+        return fn(cl,t,J);
+      } finally {
+        currentUser=sv.u; signauxEntrainement=sv.sg; drapeauQuelconqueActif=sv.dr; finProgramme=sv.fp; getClients=sv.g;
+        propositionDechargeOuverte=sv.pd; window._todoRows=sv.rows; _todoDeplie=sv.dep;
+        const z=document.getElementById('ch-todo'); if(z&&sv.z!=null) z.innerHTML=sv.z;
+      }
+    };
+    ok('signalPrincipal : bilan non répondu, bilan en retard, bloc fini, sousMEV seul, jamais démarré, douleur + bilan',()=>_SP((cl,t)=>{
+      const cat=id=>signalPrincipal(cl.find(c=>c.id===id),{maintenant:t,messages:new Set()});
+      const att={lea:'bilan',julie:'retard',hugo:'bloc',mev:'volume',ns:'nostart',dlb:'douleur',ok:'rien'};
+      for(const [id,c] of Object.entries(att)){ const r=cat(id); if(r.cat!==c) return _echec(id+' : '+JSON.stringify(r)); }
+      if(cat('lea').cible!=='bilan'||cat('hugo').cible!=='bloc'||cat('hugo').libelle!=='Bloc terminé') return _echec('cibles');
+      if(cat('mev').libelle!=='Volume sous le minimum') return _echec('libellé sousMEV : '+cat('mev').libelle);
+      // Un message sans réponse passe avant le bilan en retard, après le bilan à lire.
+      if(signalPrincipal(cl.find(c=>c.id==='julie'),{maintenant:t,messages:new Set(['julie'])}).cat!=='message') return _echec('message');
+      // REPORTÉ ICI, REPORTÉ LÀ : la clé et l'échéance de « À traiter ».
+      reporterAlerte('bilan',cl.find(c=>c.id==='lea'));
+      const l=cat('lea');
+      if(l.cat!=='volume') return _echec('bilan reporté : '+JSON.stringify(l));
+      return true;}));
+    ok('Chaque athlète d’une ligne de « À traiter » a un signal dans le point du lundi ; sousMEV seul n’est jamais « Progression bloquée »',()=>_SP((cl,t)=>{
+      _todoDeplie=true;
+      renderTodoBlock(cl);
+      const rows=window._todoRows||[];
+      if(!rows.length) return _echec('aucune ligne');
+      const vus=new Set();
+      for(const r of rows) for(const c of (r.list||[])){
+        if(!c||vus.has(c.id)) continue; vus.add(c.id);
+        const l=_lundiLire(c,{maintenant:t,messages:new Set()});
+        if(l.cat==='rien') return _echec(c.fname+' : « '+r.label+' » dans À traiter, « Rien à signaler » le lundi');
+      }
+      for(const id of ['lea','hugo','julie','mev','ns','dlb']) if(!vus.has(id)) return _echec(id+' absent d’À traiter');
+      const mev=rows.find(r=>(r.list||[]).some(c=>c.id==='mev')&&r.type==='entrainement');
+      if(!mev||mev.label!=='Volume sous le minimum') return _echec('ligne sousMEV : '+(mev&&mev.label));
+      if(rows.some(r=>r.label==='Progression bloquée')) return _echec('« Progression bloquée » sans plateau');
+      if(libelleEntrainement({formeBasse:true})!=='Forme en baisse'||libelleEntrainement({plateauMuscle:true,details:{plateauMuscle:{}}})!=='Progression bloquée')
+        return _echec('libellés');
+      // L'ouverture : bilan → viewClientBilans + réponses ; message → le fil ; bloc → Bilan du bloc.
+      const src=String(lundiOuvrir);
+      return /viewClientBilans\(\);\s*evoTab\('reponses'\)/.test(src)&&/msgOuvrirFil\(/.test(src)&&/_ouvrirProgfin\(id\)/.test(src)
+        ?true:_echec('ouverture');}));
     ok('T8 — la vue ne recalcule rien : cache chaud, zéro calcul complet',()=>{
       const J=864e5, t0=Date.now()-40*J;
       const S=(j,w)=>({id:'t8s'+j,date:t0+j*J,duration:60,sets:3,setsPlanned:3,data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:'5',rir:'2'}]}}});
