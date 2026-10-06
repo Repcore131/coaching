@@ -225,7 +225,7 @@ function kmSyncCard() {
     ${corps}
     <button class="btn sm" data-act="rsmSync">${ico('upload')} Lancer la mise à jour maintenant</button></div>`;
 }
-ACTIONS.rsmSync = () => { if (!isManager()) return; db.batch([[['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }], [['rsm', 'etat'], { step: 'demande', at: Date.now() }]]); toast('Demande envoyée : le robot se connecte et vous demandera le code.'); };
+ACTIONS.rsmSync = () => { if (!isManager()) return; db.set(['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }); toast('Demande enregistrée : le robot se connecte au prochain passage et vous demandera le code ici.'); };
 ACTIONS.rsmCode = () => { if (!isManager()) return; const f = formData($('#rsmf')); const c = (f.code || '').replace(/\s/g, ''); if (c.length < 4) { toast('Code incomplet.'); return; } db.set(['rsm', 'code'], { v: c, at: Date.now(), by: ME.id }); toast('Code transmis au robot.'); };
 ACTIONS.kmDay = el => { const K = kmState(); K.day = el.value || addDays(today(), -1); K.vals = {}; K.step = 0; render(); };
 ACTIONS.kmSet = el => { const K = kmState(); K.vals[el.dataset.k] = el.value; if (K.step === 2) K.step = 0; const lab = el.closest('.field'); if (lab) { lab.classList.toggle('km-todo', !el.value); const s = $('small', lab); if (s) s.textContent = 'modifié à la main'; } };

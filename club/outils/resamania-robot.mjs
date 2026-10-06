@@ -46,7 +46,7 @@ async function fb(chemin, opts = {}) {
 }
 const fbEtat = (step, extra = {}) => fb('pulse/rsm/etat.json', { method: 'PUT', body: JSON.stringify({ step, at: Date.now(), ...extra }) }).catch(() => {});
 // Attend que le manager saisisse le code dans l'appli (6 min au plus).
-async function codeDepuisApp({ essais = 72 } = {}) {
+async function codeDepuisApp({ essais = 120 } = {}) {
   await fb('pulse/rsm/code.json', { method: 'DELETE' }).catch(() => {});
   await fbEtat('code');
   for (let i = 0; i < essais; i++) {
