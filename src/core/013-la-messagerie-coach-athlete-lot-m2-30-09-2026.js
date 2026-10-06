@@ -570,8 +570,9 @@ function lundiOuvrir(id,cat){
 // lignes d'entraînement remplissaient les huit places, la ligne du bilan
 // passait dans « + 2 autres », et « + 2 autres » ne s'ouvrait pas.
 //
-// ⚠ TROIS LIGNES NE COMPTENT JAMAIS DANS LE PLAFOND : le drapeau rouge, le
-//   nouveau bilan à lire, le bilan en retard. Le plafond ne s'applique qu'aux
+// ⚠ SIX LIGNES NE COMPTENT JAMAIS DANS LE PLAFOND : le drapeau rouge, le
+//   nouveau bilan à lire, le bilan en retard, le message sans réponse, le
+//   programme à écrire et le premier point de l'accueil. Le plafond ne s'applique qu'aux
 //   autres, dans leur ordre de gravité. L'ordre de `rows` ne change pas :
 //   `vues` en garde la suite, et window._todoRows reste `vues` (les index de
 //   dismissTodoRow, ouvrirAjustement et des files sont ceux de l'écran).
@@ -582,7 +583,7 @@ function lundiOuvrir(id,cat){
 // ⚠ « + N autres » se déplie (état en mémoire, jamais en localStorage).
 // ⚠ Un report groupé passe par une feuille (une case par athlète), et tout
 //   report s'annule pendant 6 s : alertStatus revient à l'identique.
-const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','overdue']);
+const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','overdue','message','accueil_prog','accueil_retour']);
 const TODO_GROUPE_SEUIL=3;
 const TODO_ANNULER_MS=6000;
 let _todoDeplie=false;
@@ -1207,20 +1208,25 @@ function renderTodoBlock(clients){
       list:[c],sante:true,nonReportable:true,
       texte:_z+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
   });
-  // Puis les signaux d'entrainement : la sante avant l'intendance.
-  // Au-delà de trois athlètes pour un même signal : une ligne, et une file.
-  rows.push.apply(rows,grouperLignesEntrainement(_lignesEntrainement(clients)));
-  // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
-  const _accProg=_acc.prog.filter(c=>!isAlertSnoozed('accueil_prog',c.id)), _accRet=_acc.retour.filter(c=>!isAlertSnoozed('accueil_retour',c.id));
-  if(_accProg.length) rows.push({type:'accueil_prog',icon:icon('clipboard',16),color:'var(--orange)',label:'Programme à écrire',list:_accProg});
-  if(_accRet.length) rows.push({type:'accueil_retour',icon:icon('message-circle',16),color:'var(--orange)',label:'Premier point de l’accueil',list:_accRet});
-  if(noStart.length) rows.push({type:'nostart',icon:icon('user-plus',16),color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
+  // PUIS CE QU'UNE PERSONNE ATTEND (06/10/2026) : le bilan à lire, le bilan
+  // en retard, le message sans réponse, le programme à écrire et le premier
+  // point de l'accueil passent AVANT les signaux d'entraînement, et ne
+  // comptent pas dans le plafond (TODO_TOUJOURS_VISIBLES) : huit plateaux ne
+  // replient plus un athlète qui attend une réponse ou son programme.
   if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
+  if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
   // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.
   const _msgs=msgClientsSansReponse(clients,now).filter(c=>!isAlertSnoozed('message',c.id));
   if(_msgs.length) rows.push({type:'message',icon:icon('message-circle',16),color:'var(--orange)',label:'Message'+(_msgs.length>1?'s':'')+' sans réponse',list:_msgs});
-  if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
+  const _accProg=_acc.prog.filter(c=>!isAlertSnoozed('accueil_prog',c.id)), _accRet=_acc.retour.filter(c=>!isAlertSnoozed('accueil_retour',c.id));
+  if(_accProg.length) rows.push({type:'accueil_prog',icon:icon('clipboard',16),color:'var(--orange)',label:'Programme à écrire',list:_accProg});
+  if(_accRet.length) rows.push({type:'accueil_retour',icon:icon('message-circle',16),color:'var(--orange)',label:'Premier point de l’accueil',list:_accRet});
+  // Puis les signaux d'entrainement : la sante avant l'intendance.
+  // Au-delà de trois athlètes pour un même signal : une ligne, et une file.
+  rows.push.apply(rows,grouperLignesEntrainement(_lignesEntrainement(clients)));
+  // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré.
+  if(noStart.length) rows.push({type:'nostart',icon:icon('user-plus',16),color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   // N6.8 — LES VIDEOS A CORRIGER REMONTENT ICI. La donnee existait,
   // videoNonCorrigee disait deja lesquelles attendent, et agregerPortefeuille
   // les comptait pour le volet « Vue d'ensemble » — un volet ferme a chaque
@@ -1279,8 +1285,8 @@ function renderTodoBlock(clients){
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
   // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
-  // Le drapeau, le nouveau bilan et le bilan en retard ne comptent jamais
-  // dans le plafond ; les autres lignes s'y rangent, dans leur ordre.
+  // Les lignes de TODO_TOUJOURS_VISIBLES ne comptent jamais dans le
+  // plafond ; les autres lignes s'y rangent, dans leur ordre.
   const vues=todoLignesVisibles(rows,TODO_MAX_LIGNES,_todoDeplie);
   const restant=rows.length-vues.length;
   const _repliable=_todoDeplie&&todoLignesVisibles(rows,TODO_MAX_LIGNES,false).length<rows.length;

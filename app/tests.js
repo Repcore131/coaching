@@ -29719,9 +29719,12 @@ async function testExercices(){
             const rows=window._todoRows||[];
             const i=rows.findIndex(r=>r.type==='nostart');
             if(i<0) return _echec('aucune ligne nostart');
-            // AVANT la ligne des bilans — c'est tout l'objet du placement.
+            // EN TÊTE DES LIGNES SOUMISES AU PLAFOND : après ce qu'une personne
+            // attend (bilan, retard, message, accueil — 06/10/2026), jamais après
+            // l'intendance.
             const j=rows.findIndex(r=>r.type==='bilan');
-            if(j>=0&&i>j) return _echec('nostart passe APRÈS les bilans');
+            if(j>=0&&i<j) return _echec('nostart passe AVANT le bilan à lire');
+            if(rows.slice(0,i).some(r=>TODO_TOUJOURS_VISIBLES.indexOf(r.type)<0&&r.type!=='entrainement'&&!r.sante)) return _echec('nostart après une ligne d’intendance');
             if(rows[i].list.length!==1||rows[i].list[0].id!=='a1')
               return _echec('mauvais athlète : '+rows[i].list.map(c=>c.id).join(','));
             if(!/jamais commencé/.test(rows[i].label))
@@ -53928,6 +53931,39 @@ async function testExercices(){
       if(JSON.stringify(currentUser.alertStatus)!==avant) return _echec('après Annuler : '+JSON.stringify(currentUser.alertStatus));
       if(document.getElementById('td-annuler')) return _echec('le bandeau reste');
       return (window._todoRows||[]).some(r=>r.groupe&&r.list.length===9)?true:_echec('la ligne n’est pas revenue');}));
+    ok('À traiter : 10 lignes d’entraînement, un message et un programme à écrire, visibles sans dépliage et dans l’ordre du DOM',()=>_TD((clients,z)=>{
+      const sv={le:_lignesEntrainement,ms:msgClientsSansReponse,acc:accueilLignesCoach};
+      try{
+        hasNewBilan=()=>false;
+        _lignesEntrainement=cl=>cl.slice(0,10).map((c,i)=>({type:'entrainement',icon:'',color:'var(--orange)',label:'Signal '+i,list:[c],sante:false,texte:'x'}));
+        msgClientsSansReponse=cl=>cl.filter(c=>c.id==='b1');
+        accueilLignesCoach=cl=>({silence:new Set(),prog:cl.filter(c=>c.id==='p1'),retour:[]});
+        renderTodoBlock(clients);
+        const rows=window._todoRows||[];
+        const types=rows.map(r=>r.type);
+        if(types.indexOf('message')<0||types.indexOf('accueil_prog')<0) return _echec('repliés : '+types.join());
+        if(types.indexOf('message')!==0||types.indexOf('accueil_prog')!==1) return _echec('ordre : '+types.join());
+        if(rows.filter(r=>r.type==='entrainement').length!==8) return _echec('plafond des signaux : '+types.join());
+        if(z){
+          const grille=z.querySelector('div[style*="grid-template-columns"]');
+          const vus=[];
+          for(const col of [...(grille?grille.children:[])]){
+            let prec=-1;
+            for(const bt of col.querySelectorAll('button[onclick*="dismissTodoRow("]')){
+              const idx=Number((/dismissTodoRow\((\d+)\)/.exec(bt.getAttribute('onclick'))||[])[1]);
+              const r=rows[idx];
+              if(!r) return _echec('index '+idx+' hors de _todoRows');
+              if(bt.parentElement.textContent.indexOf(r.label)<0) return _echec('index '+idx+' : la ligne affichée n’est pas « '+r.label+' »');
+              if(idx<=prec) return _echec('ordre des index dans une colonne');
+              prec=idx; vus.push(idx);
+            }
+          }
+          if(vus.length!==rows.length) return _echec(vus.length+' lignes au DOM pour '+rows.length+' dans _todoRows');
+          if(z.innerHTML.indexOf('todoDeplier(true)')<0) return _echec('le reste n’est plus annoncé');
+        }
+        return true;
+      } finally { _lignesEntrainement=sv.le; msgClientsSansReponse=sv.ms; accueilLignesCoach=sv.acc; }
+    }));
     ok('À traiter : un drapeau rouge reste non reportable',()=>_TD((clients,z)=>{
       drapeauQuelconqueActif=c=>c.id==='p1'?{cases:['thoracique'],zone:null}:null;
       renderTodoBlock(clients);
