@@ -22906,7 +22906,9 @@ async function testExercices(){
         currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.loadNutrition=()=>{}; toast=()=>{};
         if(!ajustementPropose(u)) return _echec('fixture : aucune proposition');
         appliquerAjustement();
-        if(u.nutrition.macros.origine!=='ajustement') return _echec('origine '+u.nutrition.macros.origine);
+        // Build 1837 : plus d'origine 'ajustement' ; le décalage est dans ajust (part automatique).
+        if(u.nutrition.macros.origine!=='athlete') return _echec('origine '+u.nutrition.macros.origine);
+        if(!(ajustAutoJours(u).off<0)) return _echec('part automatique : '+JSON.stringify(ajustAutoJours(u)));
         if(ciblesPoseesParCoach(u)!==false) return _echec('verrouillé');
         const h=_htmlCiblesAthlete(u);
         if(/coach/i.test(h)) return _echec('« coach » dans la carte');
@@ -22917,6 +22919,74 @@ async function testExercices(){
         const c=Object.assign(_UO({nutrition:{manuel:true,macros:Object.assign(_UOmac(),{origine:'ajustement'})}}),{coachId:'c1'});
         return ciblesPoseesParCoach(c)===true?true:_echec('avec coach');
       } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; }})());
+    // ══ BUILD 1837 — L'AJUSTEMENT AUTOMATIQUE DANS LA GRILLE ══
+    // Un jour OFF (nutIsOnDay faux) dans les sept prochains jours.
+    const _UOoff=u=>{ for(let i=0;i<14;i++){ const d=localISODate(new Date(Date.now()+i*864e5)); if(!nutIsOnDay(d,u)) return d; } return null; };
+    ok('Ajustement : athlète suivi en grille, baisse appliquée → fiche en automatique, plan = anneaux du jour OFF',(()=>{
+      const t0=_UO({coachId:'c1',nutrition:{cycle:false,tableur:{naf:'sedentaire'},perso:{objectif:'seche'}}});
+      t0.phase={type:'seche',debut:Date.now()-40*864e5};
+      t0.sessions_config=Array.from({length:7},(_,i)=>({active:i<3,name:'S'+i,exercises:[]}));
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast};
+      try{
+        currentUser=t0; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.loadNutrition=()=>{}; toast=()=>{};
+        // Les cibles de la grille (comme les pose le coach), assez hautes pour qu'une baisse soit permise.
+        t0.nutrition.tableur.ajust={coach:900,athlete:0};
+        const t=cibleTableur(t0,{});
+        const j=_tbJournees(t0,t,dieteCyclee(t0));
+        t0.nutrition.macros={on:j.on,off:j.off,origine:'tableur',origineDate:Date.now()};
+        const a=ajustementPropose(t0);
+        if(!a||a.sens!=='baisse') return _echec('fixture : '+JSON.stringify(a&&a.sens));
+        appliquerAjustement();
+        if(saisieManuelle(t0)!==false) return _echec('la fiche bascule en saisie manuelle');
+        if(t0.nutrition.macros.origine!=='tableur') return _echec('origine '+t0.nutrition.macros.origine);
+        const off=_UOoff(t0);
+        if(!off) return _echec('aucun jour OFF');
+        const pl=planCiblesJour(t0,false), cv=ciblesEnVigueur(t0,off);
+        if(pl.kcal!==cv.kcal) return _echec('plan '+pl.kcal+' / anneaux '+cv.kcal);
+        // Le jour OFF a baissé, le jour ON non.
+        if(!(t0.nutrition.macros.off.kcal<j.off.kcal)||t0.nutrition.macros.on.kcal!==j.on.kcal) return _echec('jours : '+t0.nutrition.macros.on.kcal+' / '+t0.nutrition.macros.off.kcal);
+        return /Ajustement automatique : −\d+ kcal les jours de repos/.test(libelleAjustKcal(t0))?true:_echec('libellé : '+libelleAjustKcal(t0));
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; }})());
+    ok('Ajustement : migration d’un dossier « ajustement » — origine reprise, kcal identiques',(()=>{
+      const u=_UO({coachId:'c1',nutrition:{cycle:false,tableur:{naf:'sedentaire'}}});
+      const t=cibleTableur(u,{});
+      const j=_tbJournees(u,t,false);
+      const off=_bloc(j.off.p,j.off.l,j.off.g-50);
+      u.nutrition.macros={on:j.on,off,origine:'ajustement',origineDate:1};
+      const avant=JSON.stringify({on:u.nutrition.macros.on.kcal,off:u.nutrition.macros.off.kcal});
+      if(!_ajustMigrer(u)) return _echec('rien migré');
+      if(u.nutrition.macros.origine!=='tableur') return _echec('origine '+u.nutrition.macros.origine);
+      if(JSON.stringify({on:u.nutrition.macros.on.kcal,off:u.nutrition.macros.off.kcal})!==avant) return _echec('kcal modifiées');
+      const a=ajustAutoJours(u);
+      if(a.off!==-200||a.on!==0) return _echec('écart reporté : '+JSON.stringify(a));
+      // Et le calcul les retrouve (à l'arrondi des glucides près).
+      const j2=_tbJournees(u,cibleTableur(u,{}),false);
+      if(Math.abs(j2.off.kcal-off.kcal)>2) return _echec('calcul '+j2.off.kcal+' / '+off.kcal);
+      // Sans niveau d'activité posé : 'athlete'. Et une seule fois.
+      const v=_UO({nutrition:{cycle:false,tableur:{},macros:{on:j.on,off:j.on,origine:'ajustement'}}});
+      _ajustMigrer(v);
+      return v.nutrition.macros.origine==='athlete'&&_ajustMigrer(v)===false?true:_echec('athlète / seconde fois');})());
+    ok('Ajustement : annulation par le coach → part automatique à 0, cibles revenues au calcul, tracé',(()=>{
+      const u=_UO({id:'uoA',email:'uoa@t.fr',coachId:'cA',nutrition:{cycle:false,tableur:{naf:'sedentaire'}}});
+      const svU=currentUser, svC=currentClientId, svUsers=DB.get('users');
+      try{
+        const t=cibleTableur(u,{});
+        const j=_tbJournees(u,t,false);
+        u.nutrition.macros={on:j.on,off:j.off,origine:'tableur'};
+        ajouterAjustAuto(u,'off',-200);
+        const j2=_tbJournees(u,cibleTableur(u,{}),false);
+        u.nutrition.macros={on:j2.on,off:j2.off,origine:'tableur'};
+        currentUser={id:'cA',email:'ca@t.fr',role:'coach'};
+        const us={}; us[u.email]=u; us['ca@t.fr']=currentUser; DB.set('users',us); currentClientId=u.id;
+        const h=_htmlTableauxTableur(getOwnedClient(u.id));
+        if(h.indexOf('tbk-auto-annuler')<0) return _echec('bouton Annuler absent');
+        if(!annulerAjustAuto()) return _echec('annulation refusée');
+        const c=(DB.get('users')||{})[u.email];
+        const a=ajustAutoJours(c);
+        if(a.on!==0||a.off!==0||ajustKcal(c).auto!==0) return _echec('part automatique : '+JSON.stringify(a));
+        if(c.nutrition.macros.off.kcal!==j.off.kcal) return _echec('cibles '+c.nutrition.macros.off.kcal+' / '+j.off.kcal);
+        return (c.nutrition.ajustHisto||[]).some(x=>x.decision==='annule'&&x.par==='coach')?true:_echec('non tracé');
+      } finally { currentUser=svU; currentClientId=svC; DB.set('users',svUsers); }})());
     ok('Objectif unique : avec coach, la phase du coach gagne et rien n’est recopié',(()=>{
       const u=Object.assign(_UO({phase:{type:'masse',debut:Date.now()-20*864e5,definiPar:'coach'},
         nutrition:{cycle:false,tableur:{},perso:{objectif:'seche',objectifLe:Date.now()},macros:_UOmac()}}),{coachEmailKey:'coach@t,fr'});
@@ -26938,10 +27008,13 @@ async function testExercices(){
         // Le delta porte à 100 % sur les glucides.
         return ap.off.g===avant.off.g+r.gDelta
           &&ap.off.kcal===Math.round(4*ap.off.p+9*ap.off.l+4*ap.off.g);});
-      ok('L\'application note l\'origine et la date',()=>{
+      ok('L\'application note la décision et le décalage automatique',()=>{
+        // ⚠ BUILD 1837 : l'origine n'est plus 'ajustement' (elle faisait
+        //   basculer la fiche du coach en saisie manuelle). Ce qui est tenu :
+        //   la date de décision (verrou) et la part automatique de la grille.
         const n=currentUser.nutrition;
-        return n.macros.origine==='ajustement'&&n.macros.origineDate>0
-          &&n.dernierAjustement>0;});
+        return n.macros.origine!=='ajustement'&&n.dernierAjustement>0
+          &&ajustAutoJours(currentUser).off<0;});
       ok('L\'historique garde la décision, pour le coach',()=>{
         const h=(currentUser.nutrition.ajustHisto||[]).slice(-1)[0];
         return !!h&&h.decision==='applique'&&h.sens==='baisse'&&h.kcalDelta===-220;});

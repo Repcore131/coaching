@@ -1177,12 +1177,89 @@ const DELTA_KCAL_MAX=Infinity;
 function ajustKcal(u){
   const a=((((u&&u.nutrition)||{}).tableur)||{}).ajust||{};
   const n=v=>{ const x=Math.round(Number(v)); return isFinite(x)?x:0; };
-  return {coach:n(a.coach),athlete:n(a.athlete)};
+  const j=ajustAutoJours(u);
+  return {coach:n(a.coach),athlete:n(a.athlete),auto:n(a.auto),autoOn:j.on,autoOff:j.off,
+    jour:(a.jour==='on'||a.jour==='off')?a.jour:'tous'};
 }
-// PURE. Le ±20 en vigueur : la part du coach plus celle de l'athlète.
+// ══ L'AJUSTEMENT AUTOMATIQUE, UNE TROISIÈME CASE (build 1837) ═════════════
+// appliquerAjustement écrivait directement nutrition.macros[jour] avec
+// l'origine 'ajustement' : saisieManuelle basculait la fiche du coach en
+// manuel, et le plan (planCiblesJour, qui recalcule) ne voyait plus les
+// anneaux (jour OFF 1 707 contre 1 650 kcal). L'ajustement est désormais un
+// DÉCALAGE de la grille, à côté du ±20 du coach et de l'athlète :
+// nutrition.tableur.ajust = {coach, athlete, auto, jour, autoJ:{on,off}}.
+// `auto` est la somme signée, `jour` le jour visé ('on' | 'off' | 'tous'),
+// `autoJ` le détail par jour quand deux ajustements ont visé deux jours.
+// _tbJournees l'applique au SEUL jour visé, en glucides ; tous les chemins de
+// cibles (grille, plan, carte, anneaux) passent par lui.
+// PURE. Le décalage automatique de chaque journée, en kcal.
+function ajustAutoJours(u){
+  const a=((((u&&u.nutrition)||{}).tableur)||{}).ajust||{};
+  const n=v=>{ const x=Math.round(Number(v)); return isFinite(x)?x:0; };
+  if(a.autoJ&&typeof a.autoJ==='object') return {on:n(a.autoJ.on),off:n(a.autoJ.off)};
+  const x=n(a.auto);
+  if(a.jour==='on') return {on:x,off:0};
+  if(a.jour==='off') return {on:0,off:x};
+  return {on:x,off:x};
+}
+// ÉCRIT (sans enregistrer). Ajoute `kcal` au jour visé ; rend le nouveau détail.
+function ajouterAjustAuto(u,jour,kcal){
+  if(!u.nutrition) u.nutrition={};
+  const tb=u.nutrition.tableur=Object.assign({},u.nutrition.tableur||{});
+  const j=ajustAutoJours(u);
+  const d=Math.round(Number(kcal)||0);
+  if(jour==='on'||jour==='tous') j.on+=d;
+  if(jour==='off'||jour==='tous') j.off+=d;
+  const aj=Object.assign({},tb.ajust||{});
+  aj.autoJ={on:j.on,off:j.off};
+  aj.jour=(j.on&&j.off)?(j.on===j.off?'tous':'mixte'):(j.on?'on':(j.off?'off':'tous'));
+  aj.auto=aj.jour==='on'?j.on:(aj.jour==='off'?j.off:(aj.jour==='tous'?j.on:j.on+j.off));
+  aj.maj=Date.now(); aj.dernier='auto';
+  tb.ajust=aj;
+  return j;
+}
+// PURE. Une journée décalée de `kcal`, portés par les glucides seuls.
+function _avecAutoJour(b,kcal){
+  const d=Math.round(Number(kcal)||0);
+  if(!b||!d) return b;
+  const g=Math.max(0,Math.round((Number(b.g)||0)+d/4));
+  return _bloc(Number(b.p)||0,Number(b.l)||0,g);
+}
+// PURE. Le ±20 en vigueur : la part du coach plus celle de l'athlète. La part
+// AUTOMATIQUE n'y entre pas : elle vise un jour, et _tbJournees l'applique.
 function deltaKcalPartage(u){
   const a=ajustKcal(u);
   return a.coach+a.athlete;
+}
+// ÉCRIT, une fois. Un dossier qui porte encore l'origine 'ajustement' (avant
+// le build 1837) : l'origine reprend 'tableur' si le coach a posé son niveau
+// d'activité (tableur.naf), 'athlete' sinon ; l'écart « cibles moins calcul »
+// de chaque journée est reporté dans ajust.autoJ. Les cibles ne bougent pas.
+function _migrerOrigineAjustement(u){
+  const m=(((u||{}).nutrition)||{}).macros;
+  if(!m||m.origine!=='ajustement') return false;
+  const tb=u.nutrition.tableur||{};
+  let base=null;
+  try{
+    const sv=tb.ajust;
+    // Le calcul SANS ajustement automatique : la référence de l'écart.
+    u.nutrition.tableur=Object.assign({},tb,{ajust:Object.assign({},sv||{},{auto:0,jour:'tous',autoJ:{on:0,off:0}})});
+    const t=cibleTableur(u,{});
+    if(t&&!(t.manque&&t.manque.length)) base=_tbJournees(u,t,dieteCyclee(u));
+    u.nutrition.tableur=tb;
+  }catch(e){ u.nutrition.tableur=tb; base=null; }
+  m.origine=tb.naf?'tableur':'athlete';
+  m.origineDate=Date.now();
+  if(base&&base.on&&base.off){
+    const ec=j=>Math.round((Number((m[j]||{}).kcal)||0)-(Number(base[j].kcal)||0));
+    const aj=Object.assign({},tb.ajust||{});
+    aj.autoJ={on:ec('on'),off:ec('off')};
+    aj.jour=(aj.autoJ.on&&aj.autoJ.off)?'mixte':(aj.autoJ.on?'on':(aj.autoJ.off?'off':'tous'));
+    aj.auto=aj.autoJ.on+aj.autoJ.off;
+    aj.maj=Date.now();
+    u.nutrition.tableur=Object.assign({},tb,{ajust:aj});
+  }
+  return true;
 }
 // PURE. L'ancien ajustement encore porté par le dossier (0 s'il n'y en a pas).
 function _ajustAncien(u){
@@ -1205,7 +1282,9 @@ function _ajustAncienPresent(u){
 // cibles ce qu'elle y avait mis. En automatique, rien à défaire : les cibles
 // se recalculent sans elle (_tbReconcilier). Rend true si le dossier a changé.
 function _ajustMigrer(u){
-  if(!u||!_ajustAncienPresent(u)) return false;
+  // Build 1837 : l'origine 'ajustement' d'avant est reprise ici, une fois.
+  let _ch=false; try{ _ch=_migrerOrigineAjustement(u); }catch(e){ _ch=false; }
+  if(!u||!_ajustAncienPresent(u)) return _ch;
   const nut=u.nutrition;
   const d=_ajustAncien(u);
   let manuel=false; try{ manuel=saisieManuelle(u); }catch(e){ manuel=false; }
@@ -1262,7 +1341,8 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente,montant){
   const tb=Object.assign({},nut.tableur||{});
   const aj=Object.assign({coach:0,athlete:0},ajustKcal(u));
   aj[par]+=pas;
-  tb.ajust={coach:aj.coach,athlete:aj.athlete,maj:Date.now(),dernier:par};
+  // La part automatique (build 1837) est gardée telle quelle.
+  tb.ajust=Object.assign({},(nut.tableur||{}).ajust||{},{coach:aj.coach,athlete:aj.athlete,maj:Date.now(),dernier:par});
   nut.tableur=tb;
   const n=deltaKcalPartage(u);
   if(n===avant) return {delta:n,bouge:false};
@@ -1307,7 +1387,7 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente,montant){
   if(!j||!j.on) return {delta:n,bouge:true,manque:['calcul impossible']};
   const m=nut.macros||{};
   const origine=m.origine||origineSiAbsente||'tableur';
-  nut.macros={on:j.on,off:cyc?j.off:j.on,origine,origineDate:Date.now()};
+  nut.macros={on:j.on,off:j.off,origine,origineDate:Date.now()};
   try{ _histoNoter(u,origine==='athlete'?'athlete':'tableur'); }catch(e){}
   return {delta:n,bouge:true,kcal:j.on.kcal,sousPlancher:!!t.sousPlancher};
 }
@@ -1327,7 +1407,52 @@ function libelleAjustKcal(u,vu){
   const l=[];
   if(a.athlete) l.push((moi?'Tu as ':'L’athlète a ')+verbe(a.athlete));
   if(a.coach) l.push((moi?'Ton coach a ':'Le coach a ')+verbe(a.coach));
+  const t=texteAjustAuto(u);
+  if(t) l.push(t);
   return l.join(' · ');
+}
+// PURE. « Ajustement automatique : −210 kcal les jours de repos », ou ''.
+function texteAjustAuto(u){
+  const j=ajustAutoJours(u);
+  const k=v=>(v>0?'+':'−')+Math.abs(v)+' kcal';
+  if(!j.on&&!j.off) return '';
+  let q;
+  if(j.on&&j.off&&j.on===j.off) q=k(j.on)+' par jour';
+  else q=[j.off?k(j.off)+' les jours de repos':'',j.on?k(j.on)+' les jours d’entraînement':''].filter(Boolean).join(', ');
+  return 'Ajustement automatique : '+q;
+}
+// Côté coach : remet la part automatique à 0, le trace, recalcule et envoie.
+function annulerAjustAuto(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!c.nutrition) return false;
+  const j=ajustAutoJours(c);
+  if(!j.on&&!j.off) return false;
+  const n=c.nutrition;
+  let manuel=false; try{ manuel=saisieManuelle(c); }catch(e){ manuel=false; }
+  const tb=n.tableur=Object.assign({},n.tableur||{});
+  tb.ajust=Object.assign({},tb.ajust||{},{auto:0,jour:'tous',autoJ:{on:0,off:0},maj:Date.now(),dernier:'coach'});
+  if(!Array.isArray(n.ajustHisto)) n.ajustHisto=[];
+  n.ajustHisto.push({date:Date.now(),decision:'annule',par:'coach',kcalDeltaOn:-j.on,kcalDeltaOff:-j.off});
+  if(n.ajustHisto.length>12) n.ajustHisto=n.ajustHisto.slice(-12);
+  const m=n.macros||{};
+  if(manuel){
+    // En saisie manuelle, les grammes se décalent en retour (comme le ±20).
+    n.macros=Object.assign({},m,{on:_avecAutoJour(m.on,-j.on)||m.on,off:_avecAutoJour(m.off,-j.off)||m.off});
+  } else {
+    try{
+      const t=cibleTableur(c,_tbOptsDe(c));
+      if(t&&!(t.manque&&t.manque.length)){
+        const jj=_tbJournees(c,t,dieteCyclee(c));
+        n.macros={on:jj.on,off:jj.off,origine:m.origine||'tableur',origineDate:Date.now()};
+      }
+    }catch(e){}
+  }
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Ajustement automatique annulé','l’annulation est');
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
 }
 function _athPerso(u){
   const n=(u&&u.nutrition)||{};
@@ -1510,8 +1635,10 @@ function _athEcrireCiblesLocal(){
   if(!currentUser.nutrition) currentUser.nutrition={};
   const bloc={kcal:c.kcal,p:c.p,g:c.g,l:c.l};
   const m=currentUser.nutrition.macros||{};
-  currentUser.nutrition.macros=Object.assign({},m,{on:Object.assign({},m.on,bloc),
-    off:Object.assign({},m.off,bloc),origine:'athlete'});
+  // L'ajustement automatique (build 1837) : sur le seul jour visé.
+  const aj=ajustAutoJours(currentUser);
+  currentUser.nutrition.macros=Object.assign({},m,{on:Object.assign({},m.on,_avecAutoJour(bloc,aj.on)||bloc),
+    off:Object.assign({},m.off,_avecAutoJour(bloc,aj.off)||bloc),origine:'athlete'});
   return true;
 }
 // ÉCRIT (build 1833), sur l'appareil de l'athlète SANS coach seulement : quand
@@ -1527,7 +1654,8 @@ function resyncCiblesAthlete(u){
   const c=ciblesAthlete(u);
   if(!c||(c.manque&&c.manque.length)||!(c.kcal>0)) return false;
   const m=((u.nutrition||{}).macros)||{};
-  const ecart=j=>Math.abs((Number((m[j]||{}).kcal)||0)-_bloc(c.p,c.l,c.g).kcal);
+  const aj=ajustAutoJours(u);
+  const ecart=j=>Math.abs((Number((m[j]||{}).kcal)||0)-(_avecAutoJour(_bloc(c.p,c.l,c.g),aj[j])||_bloc(c.p,c.l,c.g)).kcal);
   if(ecart('on')<=ATH_RESYNC_KCAL&&ecart('off')<=ATH_RESYNC_KCAL) return false;
   return _athEcrireCiblesLocal();
 }
@@ -1717,7 +1845,7 @@ function _athEcrireGrille(){
     //   c'est elle qui regle les siennes. Marquer 'tableur' l'aurait
     //   verrouillee hors de sa propre carte des le premier menu qu'elle
     //   touche — depuis le 20/09/2026 au soir, cette origine ferme la carte.
-    nut.macros={on:j.on,off:cyc?j.off:j.on,origine:'athlete',origineDate:Date.now()};
+    nut.macros={on:j.on,off:j.off,origine:'athlete',origineDate:Date.now()};
     saveUser();
     CLOUD.pushOne(currentUser.email,currentUser);
     return true;
@@ -1836,7 +1964,8 @@ function _htmlCiblesAthlete(u){
   if(!c) return '';
   // SANS COACH, APRÈS UN AJUSTEMENT ACCEPTÉ (build 1833) : la carte montre les
   // journées qu'il a écrites (celles des anneaux), pas un recalcul.
-  if(!(c.manque&&c.manque.length)&&sansCoach(u)&&((((u.nutrition||{}).macros)||{}).origine==='ajustement')){
+  if(!(c.manque&&c.manque.length)&&sansCoach(u)&&((((u.nutrition||{}).macros)||{}).origine==='ajustement'
+    ||(function(){ const a=ajustAutoJours(u); return !!(a.on||a.off); })())){
     const v=ciblesEnVigueur(u);
     if(v) c=Object.assign({},c,{kcal:v.kcal,p:v.p,l:v.l,g:v.g});
   }

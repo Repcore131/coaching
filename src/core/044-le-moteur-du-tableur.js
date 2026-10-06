@@ -1728,7 +1728,7 @@ function _tbEcrireCibles(c){
   try{ j=_tbJournees(c,t,cyc); }catch(e){ return null; }
   if(!j||!j.on) return null;
   if(!c.nutrition) c.nutrition={};
-  c.nutrition.macros={on:j.on,off:cyc?j.off:j.on,
+  c.nutrition.macros={on:j.on,off:j.off,
     origine:'tableur',origineDate:Date.now()};
   _histoNoter(c,'tableur');
   return j;
@@ -2307,7 +2307,17 @@ const _tbDec=v=>(v==null||!isFinite(v))?'-':String(Math.round(v*100)/100).replac
 // aucune journee ne passe sous le plancher, et le supplement est le meme des
 // deux cotes. Une seconde facon de cycler finirait par donner deux repartitions
 // pour le meme athlete selon le bouton presse.
+// L'AJUSTEMENT AUTOMATIQUE (build 1837) : appliqué ICI, au seul jour visé
+// (ajustAutoJours), sur les journées que rend le calcul. Tous les chemins de
+// cibles passent par cette fonction : grille, plan, carte, anneaux.
 function _tbJournees(user,t,cyclee,appliquer){
+  const j=_tbJourneesBase(user,t,cyclee,appliquer);
+  let a={on:0,off:0}; try{ a=ajustAutoJours(user); }catch(e){}
+  if(!j||(!a.on&&!a.off)) return j;
+  const on=_avecAutoJour(j.on,a.on)||j.on, off=_avecAutoJour(j.off,a.off)||j.off;
+  return Object.assign({},j,{on,off,auto:a});
+}
+function _tbJourneesBase(user,t,cyclee,appliquer){
   // Le plancher suit la decision prise pour le total (t.appliquePlancher).
   const ap=(appliquer!==undefined)?!!appliquer:!!(t&&t.appliquePlancher);
   if(!cyclee){
@@ -2365,7 +2375,7 @@ async function appliquerCiblesTableur(silencieux){
   const reg=Object.assign({},c.nutrition.tableur||{});
   for(const k of ['naf','coef','protGkg','lipGkg']) if(o[k]!==undefined) reg[k]=o[k];
   c.nutrition.tableur=reg;
-  c.nutrition.macros={on:j.on,off:cyc?j.off:j.on,
+  c.nutrition.macros={on:j.on,off:j.off,
     origine:'tableur',origineDate:Date.now()};
   _histoNoter(c,'transmis');
   c.updatedAt=Date.now(); users[c.email]=c;

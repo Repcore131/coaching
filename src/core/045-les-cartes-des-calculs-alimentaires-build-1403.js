@@ -406,6 +406,8 @@ function _htmlTableauxTableur(c){
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +(libelleAjustKcal(c)?'<span class="tbk-d20-l">Mis à jour : '+libelleAjustKcal(c)+'</span>':'')
+    // L'ajustement automatique s'annule en un geste (build 1837), tracé dans ajustHisto.
+    +(texteAjustAuto(c)?'<button type="button" class="tbk-d20-b tbk-auto-annuler" onclick="annulerAjustAuto()">Annuler</button>':'')
     +'</span>';
   h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
     +_tbkCap('utensils','Macronutriments','Répartition de ses apports journaliers')

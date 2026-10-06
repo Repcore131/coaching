@@ -164,25 +164,37 @@ function _ajustRetour(r){
 function appliquerAjustement(retour){
   const a=ajustementPropose(currentUser);
   if(!a){ toast('Cette proposition n\'est plus d\'actualité','var(--orange)'); _ajustRetour(retour); return; }
-  const n=currentUser.nutrition;
-  const cible=n.macros[a.jour]||{};
-  // Seuls les glucides et le total bougent. Protéines et lipides sont recopiés
-  // tels quels, pas recalculés : le contrat est qu'ils ne changent pas.
-  n.macros[a.jour]=Object.assign({},cible,{
-    kcal:a.apres.kcal,g:a.apres.g,p:cible.p,l:cible.l,
-    f:Math.round(FIBRES_PAR_1000*a.apres.kcal/1000)});
-  // SANS COACH (build 1833), l'ajustement est aussi gardé DANS le calcul de
-  // la carte : il s'ajoute à la part athlète du ±20 partagé (ajustKcal), pour
-  // qu'un prochain recalcul (objectif, g/kg, ±20) ne l'efface pas. Les
-  // journées, elles, restent celles qu'il vient d'écrire (jour visé seulement) :
-  // la carte les lit telles quelles tant que l'origine est 'ajustement'.
-  if(sansCoach(currentUser)){
-    const tb=n.tableur=Object.assign({},n.tableur||{});
-    const aj=tb.ajust=Object.assign({},tb.ajust||{});
-    aj.athlete=(Math.round(Number(aj.athlete))||0)+(Number(a.kcalDelta)||0);
+  const u=currentUser, n=u.nutrition;
+  // ⚠ BUILD 1837 : PLUS D'ÉCRITURE DIRECTE NI D'ORIGINE 'ajustement'. Le
+  //   décalage va dans tableur.ajust (part automatique, jour visé), puis les
+  //   cibles se réécrivent par le chemin habituel : la fiche du coach reste
+  //   en automatique, et la grille, le plan, la carte et les anneaux lisent
+  //   le même total.
+  // Saisie manuelle : explicite (nut.manuel===true), ou, avec un coach, les
+  // grammes qu'il a tapés (saisieManuelle). Sans coach, les cibles de
+  // l'athlète se recalculent : ce sont les siennes.
+  // Des grammes sans origine (dossier d'avant les origines) se décalent aussi.
+  let manuel=n.manuel===true;
+  if(!manuel&&!(sansCoach(u)&&((n.macros||{}).origine==='athlete'))){ try{ manuel=saisieManuelle(u); }catch(e){ manuel=false; } }
+  ajouterAjustAuto(u,a.jour,a.kcalDelta);
+  if(manuel){
+    // Saisie manuelle : les grammes se décalent (comme le ±20), glucides seuls.
+    const cible=n.macros[a.jour]||{};
+    n.macros[a.jour]=Object.assign({},cible,{
+      kcal:a.apres.kcal,g:a.apres.g,p:cible.p,l:cible.l,
+      f:Math.round(FIBRES_PAR_1000*a.apres.kcal/1000)});
+  } else if(sansCoach(u)){
+    try{ _athEcrireCiblesLocal(); }catch(e){}
+  } else {
+    try{
+      const t=cibleTableur(u,{});
+      if(t&&!(t.manque&&t.manque.length)){
+        const j=_tbJournees(u,t,dieteCyclee(u));
+        const m=n.macros||{};
+        n.macros={on:j.on,off:j.off,origine:m.origine||'tableur',origineDate:Date.now()};
+      }
+    }catch(e){}
   }
-  n.macros.origine='ajustement';
-  n.macros.origineDate=Date.now();
   _ajustJournaliser(a,'applique');
   const ok=saveUser();
   toastEcriture(ok,'Objectifs ajustés '+ICO.coche,'l\'ajustement est');
