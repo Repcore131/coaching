@@ -599,10 +599,14 @@ function recordAPortee(u,seancePrevue,maintenant){
   try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
   try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}
   try{ if(suspensionEtat(u).actif) return null; }catch(e){}
+  // GROSSESSE OU ALLAITEMENT, DRAPEAU : aucun record à portée (build 1827).
+  try{ if(grossesseSuspend(u)||drapeauQuelconqueActif(u)) return null; }catch(e){}
   let best=null;
   for(const ex of seancePrevue.exercises){
     if(!ex||!ex.name) continue;
     try{ if(isCardio(ex)) continue; }catch(e){ continue; }
+    // UN FREIN SUR L'EXERCICE (gêne, « J'allège », contrainte) : pas d'objectif.
+    try{ if(freinProgression(u,ex.name)) continue; }catch(e){}
     let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
     if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
   }
@@ -1370,6 +1374,9 @@ function _rebatirRecordsVus(){
 }
 function estNouveauRecord(user,nomEx,serie){
   if(!user||!nomEx||!serie||serie.done!==true) return false;
+  // PAS DE CÉLÉBRATION DE RECORD DE CHARGE pendant la grossesse ou
+  // l'allaitement (build 1827).
+  try{ if(grossesseSuspend(user)) return false; }catch(e){}
   const _ex=_exPourCharge(nomEx,user), _t=typeCharge(_ex);
   const w=parseFloat(serie.weight)||0;
   const eff=chargeEffective(serie,_ex,user);

@@ -232,6 +232,12 @@ function finishWorkout(incomplete=false){
   // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
   // case cochée doit rester octet pour octet celle d'avant ce lot.
   if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
+  // « J'ALLÈGE » CHOISI : gardé avec la séance (clés exKey), pour que la
+  // suggestion de la prochaine ne remonte pas (freinProgression).
+  try{
+    const al=Object.keys(woState.douleurChoix||{}).filter(k=>woState.douleurChoix[k]==='allege');
+    if(al.length) sess.douleurAllege=al;
+  }catch(e){}
   // Le fuseau de l'appareil (minutes, comme getTimezoneOffset) : le serveur
   // contrôle les badges secrets horaires à SON heure, lue à l'heure locale.
   try{ sess.tz=new Date(sess.date).getTimezoneOffset(); }catch(e){}

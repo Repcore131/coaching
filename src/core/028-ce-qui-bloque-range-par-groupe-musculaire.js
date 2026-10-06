@@ -1740,6 +1740,8 @@ function _htmlRecompenses(badges,ctx){
 // changer d'ordre entre-temps. Sans clé, pas de bouton : le bloc d'avant.
 const _recordsAffiches={};
 function _htmlRecordsFin(ctx,date,cle){
+  // Pendant la grossesse ou l'allaitement, aucun record de charge n'est fêté.
+  try{ if(grossesseSuspend(currentUser)) return ''; }catch(e){}
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
     .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4)
     // L'objectif de la séance battu : la carte le dira (« OBJECTIF ATTEINT »).

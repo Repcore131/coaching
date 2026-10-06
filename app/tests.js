@@ -23582,6 +23582,64 @@ async function testExercices(){
         return true;});
     }
 
+    // ══════ LE FREIN DE PROGRESSION (06/10/2026, build 1827) ══════
+    {
+      const _J=864e5;
+      const _fs=(j,w,pain,rir,extra)=>Object.assign({id:'fr'+j+'_'+w,date:Date.now()-j*_J,slot:0,name:'P',
+        data:{'SQUAT':{sets:[{weight:String(w),reps:'5',rir:rir==null?'3':String(rir),pain:pain==null?'':String(pain),done:true}]}}},extra||{});
+      const _fu=(sessions,extra)=>Object.assign({id:'fu',email:'fu@t.fr',role:'athlete',exAlias:{},exMuscles:{},bilans:[],contraintesSante:[],sessions},extra||{});
+      const _fx={name:'SQUAT',reps:'5',rir:'2'};
+      const _sug=u=>{ const sv=currentUser; try{ currentUser=u; _viderCachePlateau(); return suggestionDepuisHistorique(_fx,0,'P',1,u); } finally { currentUser=sv; } };
+      ok('Frein : 100 kg à RIR 3 avec une gêne de 5 → 100 kg, « on garde la charge » ; sans gêne → hausse',()=>{
+        const sans=_sug(_fu([_fs(7,100,null)]));
+        if(!(sans&&sans.kg>100)) return _echec('sans gêne : '+JSON.stringify(sans));
+        const r=_sug(_fu([_fs(7,100,5)]));
+        if(!r||r.kg!==100||!/on garde la charge/.test(r.raison)) return _echec(JSON.stringify(r));
+        // Une gêne saisie par erreur puis corrigée : on lit la valeur finale.
+        const c=_sug(_fu([_fs(7,100,2)]));
+        return c&&c.kg>100?true:_echec('gêne corrigée à 2 : '+JSON.stringify(c));});
+      ok('Frein : une gêne ≥ 4 deux séances de suite → −10 %, 90 kg',()=>{
+        const r=_sug(_fu([_fs(14,100,4),_fs(7,100,5)]));
+        return (r&&r.kg===90&&/baisse de 10/.test(r.raison))?true:_echec(JSON.stringify(r));});
+      ok('Frein : « J’allège » choisi la dernière fois (clé exKey) → pas de hausse',()=>{
+        const r=_sug(_fu([_fs(7,100,null,3,{douleurAllege:[exKey('squat')]})]));
+        return (r&&r.kg===100)?true:_echec(JSON.stringify(r));});
+      ok('Frein : grossesse → aucune hausse, RIR 2 au moins, pas de record à portée ; retirée, le frein disparaît ; post-partum → hausse normale',()=>{
+        const u=_fu([_fs(21,90,null),_fs(14,95,null),_fs(7,100,null)],{grossesse:{etat:'enceinte'},sessions_config:[{active:true,name:'P',exercises:[_fx]}]});
+        const f=freinProgression(u,'SQUAT');
+        if(!f||f.niveau!=='maintien'||f.rirMin!==2||!f.pasDeRecord) return _echec('frein : '+JSON.stringify(f));
+        const r=_sug(u);
+        if(!r||r.kg>100) return _echec('hausse pendant la grossesse : '+JSON.stringify(r));
+        if(recordAPortee(u,u.sessions_config[0],Date.now())!==null) return _echec('record à portée pendant la grossesse');
+        if(estNouveauRecord(u,'SQUAT',{weight:'200',reps:'5',done:true})) return _echec('record célébré pendant la grossesse');
+        u.grossesse={etat:null};
+        if(freinProgression(u,'SQUAT')!==null) return _echec('grossesse retirée, le frein reste');
+        const pp=_sug(Object.assign({},u,{grossesse:{etat:'post_partum'}}));
+        return (pp&&pp.kg>100)?true:_echec('post-partum : '+JSON.stringify(pp));});
+      ok('Frein : drapeau rouge → rien n’est proposé ; contrainte avertissante sur la zone → maintien',()=>{
+        const sv=drapeauQuelconqueActif;
+        try{ drapeauQuelconqueActif=()=>true;
+          const f=freinProgression(_fu([_fs(7,100,null)]),'SQUAT');
+          if(!f||f.niveau!=='arret') return _echec('drapeau : '+JSON.stringify(f));
+          const r=_sug(_fu([_fs(7,100,null)]));
+          if(!r||r.kg!==null) return _echec('une charge est proposée sous drapeau : '+JSON.stringify(r));
+        } finally { drapeauQuelconqueActif=sv; }
+        const fi=ficheExercice({name:'SQUAT'});
+        const z=fi&&fi.contraintes?Object.keys(fi.contraintes).find(k=>fi.contraintes[k]>=SEUIL_CONTRAINTE_EX):null;
+        if(!z) return true;   // la fiche du squat ne note aucune zone : rien à vérifier ici
+        const u=_fu([_fs(7,100,null)],{contraintesSante:[{id:'c1',zone:z,niveau:'douleur',actif:true}]});
+        const f=freinProgression(u,'SQUAT');
+        return (f&&f.niveau==='maintien')?true:_echec('contrainte : '+JSON.stringify(f));});
+      ok('Frein : au banc, la carte de séance dit « on garde la charge » après une gêne de 5 la semaine passée',()=>{
+        const sU=currentUser, sW=woState;
+        try{
+          currentUser=_fu([_fs(7,100,5)]);
+          woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),exercises:[Object.assign({series:3},_fx)],sessionData:{}};
+          _viderCachePlateau();
+          const h=_blocExo(0,false).html;
+          return (/on garde la charge/.test(h)&&/100kg/.test(h))?true:_echec(h.slice(0,400));
+        } finally { currentUser=sU; woState=sW; }});
+    }
     // ══════ UNE SEULE UNITÉ POUR LES ÉTATS : L'e1RM (06/10/2026, build 1826) ══════
     {
       const _J=864e5, _t0=Date.now()-40*_J;

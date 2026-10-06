@@ -706,7 +706,13 @@ function _blocExo(idx,estSS){
   // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
   // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
   const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
-  const _rawSug=_prog?_prog.kg:null;
+  // UN DRAPEAU ROUGE : rien n'est proposé, comme l'écran d'arrêt.
+  const _arret=!!(_prog&&_prog.frein&&_prog.frein.niveau==='arret');
+  // LE POST-PARTUM : règles normales, et une ligne, UNE FOIS par séance (sur le
+  // premier exercice chargé).
+  const _notePP=(()=>{ try{ if(etatGrossesse(currentUser)!=='post_partum') return false;
+    const i0=(woState.exercises||[]).findIndex(e=>e&&!isCardio(e)); return i0===idx; }catch(e){ return false; } })();
+  const _rawSug=(_prog&&!_arret)?_prog.kg:null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
@@ -806,6 +812,7 @@ function _blocExo(idx,estSS){
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
+      :_arret?''
       :_abandon?
       `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">
         Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
@@ -815,7 +822,8 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        ${_notePP?`<div class="s-note" style="margin-top:6px">${escapeHtml(NOTE_POST_PARTUM)}</div>`:''}
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
@@ -1760,6 +1768,12 @@ function renderSets(ex,data,idx,opts){
   const enCartes=isDeg||_seriesEnCartes(data);
 
   const _isCW=isCounterweightEx(ex.name);
+  // Le frein de la série à série : celui de l'exercice (freinProgression), ou
+  // « J'allège » choisi dans CETTE séance (clé exKey : un remplacement décale
+  // les index, pas les noms).
+  let _freinSerie=null;
+  try{ _freinSerie=freinProgression(currentUser,ex.name); }catch(e){ _freinSerie=null; }
+  try{ if(!_freinSerie&&((woState&&woState.douleurChoix)||{})[exKey(ex.name)]==='allege') _freinSerie={niveau:'maintien'}; }catch(e){}
   const _parMain=chargeParMain(ex);
 
   // ── Auto-fill série suivante par paliers fixes ────────────────────
@@ -1781,7 +1795,14 @@ function renderSets(ex,data,idx,opts){
       let _pr=null;
       try{ _pr=progressionCharge({mode:'serie',charge:w,repsFaites:[repsFaitesSerie(s)],rirFait:s.rir,
         reps:s.reps||ex.reps,rirCible:_rirPrescrit(ex),contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
-      const nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
+      // LE FREIN (build 1827) : la gêne de la dernière séance, « J'allège »
+      // choisi aujourd'hui, une gêne ≥ 4 sur la série qu'on vient de faire, une
+      // contrainte, la grossesse : la série suivante ne monte pas.
+      let nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
+      if(nextW!=null){
+        if(_freinSerie&&_freinSerie.niveau==='arret') nextW=null;
+        else if(_freinSerie||parseInt(s.pain,10)>=DLR_SEANCE_SEUIL) nextW=_isCW?Math.max(nextW,w):Math.min(nextW,w);
+      }
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;

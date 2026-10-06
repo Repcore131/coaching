@@ -56490,7 +56490,13 @@ function _blocExo(idx,estSS){
   // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
   // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
   const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
-  const _rawSug=_prog?_prog.kg:null;
+  // UN DRAPEAU ROUGE : rien n'est proposé, comme l'écran d'arrêt.
+  const _arret=!!(_prog&&_prog.frein&&_prog.frein.niveau==='arret');
+  // LE POST-PARTUM : règles normales, et une ligne, UNE FOIS par séance (sur le
+  // premier exercice chargé).
+  const _notePP=(()=>{ try{ if(etatGrossesse(currentUser)!=='post_partum') return false;
+    const i0=(woState.exercises||[]).findIndex(e=>e&&!isCardio(e)); return i0===idx; }catch(e){ return false; } })();
+  const _rawSug=(_prog&&!_arret)?_prog.kg:null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
@@ -56590,6 +56596,7 @@ function _blocExo(idx,estSS){
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
+      :_arret?''
       :_abandon?
       `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">
         Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
@@ -56599,7 +56606,8 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        ${_notePP?`<div class="s-note" style="margin-top:6px">${escapeHtml(NOTE_POST_PARTUM)}</div>`:''}
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
@@ -57544,6 +57552,12 @@ function renderSets(ex,data,idx,opts){
   const enCartes=isDeg||_seriesEnCartes(data);
 
   const _isCW=isCounterweightEx(ex.name);
+  // Le frein de la série à série : celui de l'exercice (freinProgression), ou
+  // « J'allège » choisi dans CETTE séance (clé exKey : un remplacement décale
+  // les index, pas les noms).
+  let _freinSerie=null;
+  try{ _freinSerie=freinProgression(currentUser,ex.name); }catch(e){ _freinSerie=null; }
+  try{ if(!_freinSerie&&((woState&&woState.douleurChoix)||{})[exKey(ex.name)]==='allege') _freinSerie={niveau:'maintien'}; }catch(e){}
   const _parMain=chargeParMain(ex);
 
   // ── Auto-fill série suivante par paliers fixes ────────────────────
@@ -57565,7 +57579,14 @@ function renderSets(ex,data,idx,opts){
       let _pr=null;
       try{ _pr=progressionCharge({mode:'serie',charge:w,repsFaites:[repsFaitesSerie(s)],rirFait:s.rir,
         reps:s.reps||ex.reps,rirCible:_rirPrescrit(ex),contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
-      const nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
+      // LE FREIN (build 1827) : la gêne de la dernière séance, « J'allège »
+      // choisi aujourd'hui, une gêne ≥ 4 sur la série qu'on vient de faire, une
+      // contrainte, la grossesse : la série suivante ne monte pas.
+      let nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
+      if(nextW!=null){
+        if(_freinSerie&&_freinSerie.niveau==='arret') nextW=null;
+        else if(_freinSerie||parseInt(s.pain,10)>=DLR_SEANCE_SEUIL) nextW=_isCW?Math.max(nextW,w):Math.min(nextW,w);
+      }
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -58490,6 +58511,12 @@ function finishWorkout(incomplete=false){
   // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
   // case cochée doit rester octet pour octet celle d'avant ce lot.
   if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
+  // « J'ALLÈGE » CHOISI : gardé avec la séance (clés exKey), pour que la
+  // suggestion de la prochaine ne remonte pas (freinProgression).
+  try{
+    const al=Object.keys(woState.douleurChoix||{}).filter(k=>woState.douleurChoix[k]==='allege');
+    if(al.length) sess.douleurAllege=al;
+  }catch(e){}
   // Le fuseau de l'appareil (minutes, comme getTimezoneOffset) : le serveur
   // contrôle les badges secrets horaires à SON heure, lue à l'heure locale.
   try{ sess.tz=new Date(sess.date).getTimezoneOffset(); }catch(e){}
@@ -70123,6 +70150,8 @@ function _htmlRecompenses(badges,ctx){
 // changer d'ordre entre-temps. Sans clé, pas de bouton : le bloc d'avant.
 const _recordsAffiches={};
 function _htmlRecordsFin(ctx,date,cle){
+  // Pendant la grossesse ou l'allaitement, aucun record de charge n'est fêté.
+  try{ if(grossesseSuspend(currentUser)) return ''; }catch(e){}
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
     .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4)
     // L'objectif de la séance battu : la carte le dira (« OBJECTIF ATTEINT »).
@@ -75425,6 +75454,82 @@ function progressionCharge(o){
     +(vise?', vise '+vise:'');
   return {kg,repsVisees:vise,raison:(serie?'':tete+', ')+verdict+' → '+action};
 }
+// ══ LE FREIN DE PROGRESSION (06/10/2026, build 1827) ═════════════════════
+//
+// La suggestion de charge et le record à portée ne lisaient ni la gêne de la
+// séance précédente (s.pain, 1 à 6), ni « J'allège », ni les contraintes
+// déclarées, ni la grossesse. Une gêne de 5 notée la semaine passée faisait
+// monter la charge comme une séance normale.
+//
+// PURE. null, ou {niveau, rirMin, raison, pasDeRecord} :
+//   'arret'    drapeau rouge actif : rien n'est proposé (l'écran d'arrêt) ;
+//   'baisse'   gêne ≥ 4 sur cet exercice deux séances de suite : −10 % ;
+//   'maintien' gêne ≥ 4 la dernière fois, ou « J'allège » choisi, ou une
+//              contrainte avertissante sur sa zone, ou grossesse / allaitement
+//              (RIR 2 au moins, ni record à portée ni célébration).
+// La gêne lue est la valeur FINALE de la série (une saisie corrigée compte
+// corrigée) ; l'exercice se reconnaît par exKey, alias compris, même remplacé
+// en cours de séance. Le post-partum garde les règles normales.
+const FREIN_BAISSE=0.90;
+const FREIN_RIR_GROSSESSE=2;
+function _freinGeneSeance(sess,cle,user){
+  if(!sess||!sess.data) return null;
+  for(const nom of Object.keys(sess.data)){
+    let k=''; try{ k=_aliasPour(exKey(nom),user)||exKey(nom); }catch(e){ k=exKey(nom); }
+    if(k!==cle) continue;
+    const d=sess.data[nom];
+    const sets=(d&&Array.isArray(d.sets))?d.sets:[];
+    const gene=sets.some(s=>s&&s.done===true&&parseInt(s.pain,10)>=DLR_SEANCE_SEUIL);
+    const allege=Array.isArray(sess.douleurAllege)&&sess.douleurAllege.some(x=>{
+      let a=''; try{ a=_aliasPour(exKey(x),user)||exKey(x); }catch(e){ a=exKey(x); } return a===cle; });
+    return {gene,allege};
+  }
+  return null;
+}
+function freinProgression(user,exNom,prev){
+  if(!user||!exNom) return null;
+  try{ if(drapeauQuelconqueActif(user)) return {niveau:'arret',rirMin:null,pasDeRecord:true,
+    raison:'Un signe d’alerte est déclaré : aucune charge n’est proposée.'}; }catch(e){}
+  let cle=''; try{ cle=_aliasPour(exKey(exNom),user)||exKey(exNom); }catch(e){ cle=String(exNom); }
+  // Les deux dernières séances qui portent cet exercice, quel que soit le
+  // créneau (`prev`, la référence de la suggestion, n'en change pas l'ordre).
+  const l=((user.sessions)||[]).filter(s=>s&&s.date).slice().sort((a,b)=>b.date-a.date);
+  const vues=[];
+  for(const s of l){ const g=_freinGeneSeance(s,cle,user); if(g){ vues.push(g); if(vues.length>=2) break; } }
+  let f=null;
+  if(vues[0]&&vues[0].gene&&vues[1]&&vues[1].gene)
+    f={niveau:'baisse',raison:'Gêne les deux dernières fois : on baisse de 10 %.'};
+  else if(vues[0]&&(vues[0].gene||vues[0].allege))
+    f={niveau:'maintien',raison:'Gêne la dernière fois : on garde la charge.'};
+  else {
+    let c=[]; try{ c=contraintesPourExercice({name:exNom},user); }catch(e){ c=[]; }
+    if(c.length) f={niveau:'maintien',raison:'Gêne signalée '+(()=>{ try{ return 'au '+libZone(c[0].zone); }catch(e){ return 'sur cette zone'; } })()+' : on garde la charge.'};
+  }
+  let g=false; try{ g=grossesseSuspend(user); }catch(e){ g=false; }
+  if(g){
+    const lib=etatGrossesse(user)==='allaitement'?'Allaitement':'Grossesse';
+    if(!f) f={niveau:'maintien',raison:lib+' : on garde la charge, avec au moins '+FREIN_RIR_GROSSESSE+' répétitions en réserve.'};
+    f.rirMin=FREIN_RIR_GROSSESSE; f.pasDeRecord=true;
+  }
+  if(!f) return null;
+  if(f.rirMin==null) f.rirMin=null;
+  if(f.pasDeRecord==null) f.pasDeRecord=false;
+  return f;
+}
+// Le frein appliqué à une charge proposée `kg`, à partir de la charge de
+// référence `w`. maintien : pas de hausse ; baisse : −10 % au pas inférieur.
+function appliquerFrein(kg,w,frein,contrepoids,ex,user){
+  if(!frein||!(Number(w)>0)) return kg;
+  if(frein.niveau==='arret') return null;
+  if(frein.niveau==='baisse'){
+    const t=contrepoids?w/FREIN_BAISSE:w*FREIN_BAISSE;
+    return _progArrondi(t,contrepoids?'haut':'bas',ex,user)||kg;
+  }
+  if(kg==null) return kg;
+  return contrepoids?Math.max(kg,w):Math.min(kg,w);
+}
+// La note du post-partum, UNE FOIS par séance : sur le premier exercice chargé.
+const NOTE_POST_PARTUM='Reprise post-partum : valide avec ton coach ou ta sage-femme.';
 // La suggestion de la première série, d'après la dernière séance NORMALE du
 // créneau : ses séries de travail, le RIR de sa dernière série, et la
 // consigne d'aujourd'hui. Une seule porte pour _blocExo et l'échauffement.
@@ -75434,10 +75539,25 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   const prev=getPrevPerf(ex.name,slot,progName);
   if(!prev) return null;
   let ps=[]; try{ ps=prevSeries(ex.name,slot,progName,u).filter(Boolean); }catch(e){ ps=[]; }
+  // LE FREIN (build 1827) : gêne, « J'allège », contrainte, grossesse.
+  let frein=null; try{ frein=freinProgression(u,ex.name,prev); }catch(e){ frein=null; }
+  if(frein&&frein.niveau==='arret') return {prev,kg:null,repsVisees:null,raison:frein.raison,frein};
+  const cw=isCounterweightEx(ex.name);
+  let rc=_rirPrescrit(ex);
+  if(frein&&frein.rirMin!=null) rc=String(Math.max(rc===''?PROG_RIR_CIBLE_DEFAUT:Number(rc),frein.rirMin));
   const res=progressionCharge({charge:prev.weight,repsFaites:ps.map(p=>p.reps).filter(n=>n>0),
-    rirFait:prev.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),contrepoids:isCounterweightEx(ex.name),
+    rirFait:prev.rir,reps:ex.reps,rirCible:rc,contrepoids:cw,
     decote,ex,user:u});
-  return res?Object.assign({prev},res):null;
+  if(!res) return null;
+  if(frein){
+    // Après la décote, avant l'arrondi de l'appelant : jamais au-dessus de la
+    // charge de référence décotée, et la raison du frein remplace l'autre.
+    const dc=(decote==null)?1:Number(decote);
+    const w=cw?parseFloat(prev.weight)/dc:parseFloat(prev.weight)*dc;
+    const kg=appliquerFrein(res.kg,w,frein,cw,ex,u);
+    return Object.assign({prev},res,{kg,raison:frein.raison,frein});
+  }
+  return Object.assign({prev},res);
 }
 
 // ══ LA SÉRIE PRÉCÉDENTE, PAR INDEX (30/09/2026) ═════════════════════════
@@ -94712,10 +94832,14 @@ function recordAPortee(u,seancePrevue,maintenant){
   try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
   try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}
   try{ if(suspensionEtat(u).actif) return null; }catch(e){}
+  // GROSSESSE OU ALLAITEMENT, DRAPEAU : aucun record à portée (build 1827).
+  try{ if(grossesseSuspend(u)||drapeauQuelconqueActif(u)) return null; }catch(e){}
   let best=null;
   for(const ex of seancePrevue.exercises){
     if(!ex||!ex.name) continue;
     try{ if(isCardio(ex)) continue; }catch(e){ continue; }
+    // UN FREIN SUR L'EXERCICE (gêne, « J'allège », contrainte) : pas d'objectif.
+    try{ if(freinProgression(u,ex.name)) continue; }catch(e){}
     let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
     if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
   }
@@ -95483,6 +95607,9 @@ function _rebatirRecordsVus(){
 }
 function estNouveauRecord(user,nomEx,serie){
   if(!user||!nomEx||!serie||serie.done!==true) return false;
+  // PAS DE CÉLÉBRATION DE RECORD DE CHARGE pendant la grossesse ou
+  // l'allaitement (build 1827).
+  try{ if(grossesseSuspend(user)) return false; }catch(e){}
   const _ex=_exPourCharge(nomEx,user), _t=typeCharge(_ex);
   const w=parseFloat(serie.weight)||0;
   const eff=chargeEffective(serie,_ex,user);

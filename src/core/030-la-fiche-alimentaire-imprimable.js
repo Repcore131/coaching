@@ -2294,6 +2294,82 @@ function progressionCharge(o){
     +(vise?', vise '+vise:'');
   return {kg,repsVisees:vise,raison:(serie?'':tete+', ')+verdict+' → '+action};
 }
+// ══ LE FREIN DE PROGRESSION (06/10/2026, build 1827) ═════════════════════
+//
+// La suggestion de charge et le record à portée ne lisaient ni la gêne de la
+// séance précédente (s.pain, 1 à 6), ni « J'allège », ni les contraintes
+// déclarées, ni la grossesse. Une gêne de 5 notée la semaine passée faisait
+// monter la charge comme une séance normale.
+//
+// PURE. null, ou {niveau, rirMin, raison, pasDeRecord} :
+//   'arret'    drapeau rouge actif : rien n'est proposé (l'écran d'arrêt) ;
+//   'baisse'   gêne ≥ 4 sur cet exercice deux séances de suite : −10 % ;
+//   'maintien' gêne ≥ 4 la dernière fois, ou « J'allège » choisi, ou une
+//              contrainte avertissante sur sa zone, ou grossesse / allaitement
+//              (RIR 2 au moins, ni record à portée ni célébration).
+// La gêne lue est la valeur FINALE de la série (une saisie corrigée compte
+// corrigée) ; l'exercice se reconnaît par exKey, alias compris, même remplacé
+// en cours de séance. Le post-partum garde les règles normales.
+const FREIN_BAISSE=0.90;
+const FREIN_RIR_GROSSESSE=2;
+function _freinGeneSeance(sess,cle,user){
+  if(!sess||!sess.data) return null;
+  for(const nom of Object.keys(sess.data)){
+    let k=''; try{ k=_aliasPour(exKey(nom),user)||exKey(nom); }catch(e){ k=exKey(nom); }
+    if(k!==cle) continue;
+    const d=sess.data[nom];
+    const sets=(d&&Array.isArray(d.sets))?d.sets:[];
+    const gene=sets.some(s=>s&&s.done===true&&parseInt(s.pain,10)>=DLR_SEANCE_SEUIL);
+    const allege=Array.isArray(sess.douleurAllege)&&sess.douleurAllege.some(x=>{
+      let a=''; try{ a=_aliasPour(exKey(x),user)||exKey(x); }catch(e){ a=exKey(x); } return a===cle; });
+    return {gene,allege};
+  }
+  return null;
+}
+function freinProgression(user,exNom,prev){
+  if(!user||!exNom) return null;
+  try{ if(drapeauQuelconqueActif(user)) return {niveau:'arret',rirMin:null,pasDeRecord:true,
+    raison:'Un signe d’alerte est déclaré : aucune charge n’est proposée.'}; }catch(e){}
+  let cle=''; try{ cle=_aliasPour(exKey(exNom),user)||exKey(exNom); }catch(e){ cle=String(exNom); }
+  // Les deux dernières séances qui portent cet exercice, quel que soit le
+  // créneau (`prev`, la référence de la suggestion, n'en change pas l'ordre).
+  const l=((user.sessions)||[]).filter(s=>s&&s.date).slice().sort((a,b)=>b.date-a.date);
+  const vues=[];
+  for(const s of l){ const g=_freinGeneSeance(s,cle,user); if(g){ vues.push(g); if(vues.length>=2) break; } }
+  let f=null;
+  if(vues[0]&&vues[0].gene&&vues[1]&&vues[1].gene)
+    f={niveau:'baisse',raison:'Gêne les deux dernières fois : on baisse de 10 %.'};
+  else if(vues[0]&&(vues[0].gene||vues[0].allege))
+    f={niveau:'maintien',raison:'Gêne la dernière fois : on garde la charge.'};
+  else {
+    let c=[]; try{ c=contraintesPourExercice({name:exNom},user); }catch(e){ c=[]; }
+    if(c.length) f={niveau:'maintien',raison:'Gêne signalée '+(()=>{ try{ return 'au '+libZone(c[0].zone); }catch(e){ return 'sur cette zone'; } })()+' : on garde la charge.'};
+  }
+  let g=false; try{ g=grossesseSuspend(user); }catch(e){ g=false; }
+  if(g){
+    const lib=etatGrossesse(user)==='allaitement'?'Allaitement':'Grossesse';
+    if(!f) f={niveau:'maintien',raison:lib+' : on garde la charge, avec au moins '+FREIN_RIR_GROSSESSE+' répétitions en réserve.'};
+    f.rirMin=FREIN_RIR_GROSSESSE; f.pasDeRecord=true;
+  }
+  if(!f) return null;
+  if(f.rirMin==null) f.rirMin=null;
+  if(f.pasDeRecord==null) f.pasDeRecord=false;
+  return f;
+}
+// Le frein appliqué à une charge proposée `kg`, à partir de la charge de
+// référence `w`. maintien : pas de hausse ; baisse : −10 % au pas inférieur.
+function appliquerFrein(kg,w,frein,contrepoids,ex,user){
+  if(!frein||!(Number(w)>0)) return kg;
+  if(frein.niveau==='arret') return null;
+  if(frein.niveau==='baisse'){
+    const t=contrepoids?w/FREIN_BAISSE:w*FREIN_BAISSE;
+    return _progArrondi(t,contrepoids?'haut':'bas',ex,user)||kg;
+  }
+  if(kg==null) return kg;
+  return contrepoids?Math.max(kg,w):Math.min(kg,w);
+}
+// La note du post-partum, UNE FOIS par séance : sur le premier exercice chargé.
+const NOTE_POST_PARTUM='Reprise post-partum : valide avec ton coach ou ta sage-femme.';
 // La suggestion de la première série, d'après la dernière séance NORMALE du
 // créneau : ses séries de travail, le RIR de sa dernière série, et la
 // consigne d'aujourd'hui. Une seule porte pour _blocExo et l'échauffement.
@@ -2303,10 +2379,25 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   const prev=getPrevPerf(ex.name,slot,progName);
   if(!prev) return null;
   let ps=[]; try{ ps=prevSeries(ex.name,slot,progName,u).filter(Boolean); }catch(e){ ps=[]; }
+  // LE FREIN (build 1827) : gêne, « J'allège », contrainte, grossesse.
+  let frein=null; try{ frein=freinProgression(u,ex.name,prev); }catch(e){ frein=null; }
+  if(frein&&frein.niveau==='arret') return {prev,kg:null,repsVisees:null,raison:frein.raison,frein};
+  const cw=isCounterweightEx(ex.name);
+  let rc=_rirPrescrit(ex);
+  if(frein&&frein.rirMin!=null) rc=String(Math.max(rc===''?PROG_RIR_CIBLE_DEFAUT:Number(rc),frein.rirMin));
   const res=progressionCharge({charge:prev.weight,repsFaites:ps.map(p=>p.reps).filter(n=>n>0),
-    rirFait:prev.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),contrepoids:isCounterweightEx(ex.name),
+    rirFait:prev.rir,reps:ex.reps,rirCible:rc,contrepoids:cw,
     decote,ex,user:u});
-  return res?Object.assign({prev},res):null;
+  if(!res) return null;
+  if(frein){
+    // Après la décote, avant l'arrondi de l'appelant : jamais au-dessus de la
+    // charge de référence décotée, et la raison du frein remplace l'autre.
+    const dc=(decote==null)?1:Number(decote);
+    const w=cw?parseFloat(prev.weight)/dc:parseFloat(prev.weight)*dc;
+    const kg=appliquerFrein(res.kg,w,frein,cw,ex,u);
+    return Object.assign({prev},res,{kg,raison:frein.raison,frein});
+  }
+  return Object.assign({prev},res);
 }
 
 // ══ LA SÉRIE PRÉCÉDENTE, PAR INDEX (30/09/2026) ═════════════════════════
