@@ -2088,15 +2088,59 @@ const GLUC_MIN_G_KG=2, GLUC_MIN_G_JOUR=100;
 // maigre ». Les deux règles sont RETIRÉES. Si un dossier demande moins de
 // protéines, le coach baisse le g/kg : c'est son réglage, et il se lit.
 // La fonction reste, avec sa forme, pour ses appelants (macros, eau).
+//
+// ══ LE POIDS AJUSTÉ REVIENT, ÉCRIT DANS LA CASE (build 1835) ══════════════
+// Le reproche du 05/10 portait sur un calcul que l'écran ne montrait PAS à
+// l'endroit du chiffre. Le poids du corps reste le défaut ; un IMC ≥ 30 passe
+// au POIDS AJUSTÉ (25 × taille² + 0,25 × (poids − 25 × taille²)), et la base
+// est écrite DANS la case des protéines et des lipides, chez le coach comme
+// chez l'athlète. Au banc, sans lui : H 120 kg / 175 cm en sèche à 2,4 g/kg →
+// 288 g de protéines (50 % des kcal) et 75 g de glucides.
+// Réglage par dossier : nutrition.tableur.baseGkg ∈ {'total','ajuste'} ; le
+// choix du coach est respecté, et le libellé le dit.
+const MACROS_IMC_AJUSTE=30, MACROS_BASES=Object.freeze(['total','ajuste']);
 function poidsMacros(u){
   let poids=null; try{ poids=poidsNutritionnel(u).kg; }catch(e){ poids=null; }
-  return {kg:poids,type:'total',lib:''};
+  const reg=((((u&&u.nutrition)||{}).tableur)||{}).baseGkg;
+  const choisi=MACROS_BASES.indexOf(reg)>=0?reg:null;
+  let imc=null; try{ imc=_imcPourFormule(u); }catch(e){ imc=null; }
+  const total={kg:poids,type:'total',lib:'',choisi:!!choisi,imc};
+  if(!(poids>0)||imc==null) return total;            // taille inconnue → total
+  const base=choisi||(imc>=MACROS_IMC_AJUSTE?'ajuste':'total');
+  if(base==='total') return total;
+  const t2=poids/imc;                                  // taille² en m²
+  const ideal=25*t2;
+  const kg=Math.round((ideal+0.25*(poids-ideal))*10)/10;
+  if(!(kg>0)||kg>=poids) return total;
+  return {kg,type:'ajuste',lib:'',choisi:!!choisi,imc};
 }
-// La phrase : « protéines sur 87 kg de poids ajusté », vide au poids total.
+// LE PLAFOND DES 40 % (build 1835). Un IMC ≥ 30 sans choix explicite du
+// coach : les protéines ne dépassent jamais 40 % des kcal du jour. Le g/kg
+// retenu est abaissé d'autant, et la case le DIT (plafond40).
+const PROT_PART_MAX_IMC=0.40;
+function protPlafonnee(pm,kcal,gk){
+  const g=Number(gk);
+  if(!pm||!(pm.kg>0)||pm.choisi||pm.imc==null||pm.imc<MACROS_IMC_AJUSTE||!(Number(kcal)>0)||!(g>0)) return {gk,pm};
+  const max=Math.floor(PROT_PART_MAX_IMC*Number(kcal)/4)/pm.kg;
+  if(g<=max) return {gk,pm};
+  return {gk:max,pm:Object.assign({},pm,{plafond40:true})};
+}
+// La phrase : « calculé sur 87 kg (poids ajusté) ». Au poids du corps, vide —
+// sauf quand le coach l'a CHOISI malgré un IMC ≥ 30 : alors on le dit.
 function libPoidsMacros(pm){
-  if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
-  return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
-    +(pm.type==='maigre'?nr('poids sec (masse maigre × 1,15)','poids sec'):'poids ajusté');
+  if(!pm||!(pm.kg>0)) return '';
+  const kg=String(Math.round(pm.kg)).replace('.',',');
+  const pl=pm.plafond40?', protéines plafonnées à 40 % des kcal':'';
+  if(pm.type==='ajuste') return 'calculé sur '+kg+' kg (poids ajusté)'+pl;
+  if(pm.type==='total'&&pm.choisi&&pm.imc!=null&&pm.imc>=MACROS_IMC_AJUSTE)
+    return 'calculé sur '+kg+' kg (poids du corps, choix du coach)';
+  return '';
+}
+// La base, en une courte mention pour la case : « × 87 kg ajustés ».
+function baseGkgCourte(pm){
+  if(!pm||!(pm.kg>0)) return '';
+  return '× '+String(Math.round(pm.kg)).replace('.',',')+' kg'+(pm.type==='ajuste'?' ajustés':'')
+    +(pm.plafond40?' · 40 % des kcal max':'');
 }
 // Les deux alertes, dites à l'écran (coach et athlète).
 function _htmlAlertesMacros(x,vu){

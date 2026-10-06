@@ -22376,10 +22376,13 @@ async function testExercices(){
     // ── L'EAU : UN REPÈRE PLAUSIBLE POUR TOUS LES GABARITS, ET CE QUE L'ATHLÈTE BOIT ──
     const _eauU=(kg,cm,x)=>Object.assign({id:'EAU'+kg,email:'eau'+kg+'@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:cm?String(cm):undefined,weightLog:[{date:localISODate(new Date()),kg}],nutrition:{}},x||{});
-    ok('besoinEau : 120 kg / 175 cm un jour OFF = 4,0 L (le plafond), 60 kg ≈ 2,1 L',()=>{
+    ok('besoinEau : 120 kg / 175 cm un jour OFF = 3,1 L (poids ajusté), 60 kg ≈ 2,1 L',()=>{
       const gros=besoinEau(_eauU(120,175),false);
-      // 05/10/2026 : le poids du corps, sans poids « ajusté ». 120 × 35 = 4,2 L, ramené au plafond.
-      if(gros!==4.0) return _echec('120 kg : '+gros+' au lieu de 4,0');
+      // ⚠ BUILD 1835 : l'eau lit poidsMacros, qui passe au POIDS AJUSTÉ dès
+      //   l'IMC 30 (87,4 kg ici) : 87,4 × 35 ml = 3,1 L, sous le plafond. Le
+      //   repère reste plausible pour ce gabarit (le test des 4 L le figeait
+      //   sur le poids du corps).
+      if(gros!==3.1) return _echec('120 kg : '+gros+' au lieu de 3,1');
       const v60=besoinEau(_eauU(60,175),false);
       if(Math.abs(v60-2.1)>0.05) return _echec('60 kg : '+v60);
       // Le jour ON ajoute 0,5 L.
@@ -22578,18 +22581,77 @@ async function testExercices(){
       if(poidsMacros(cap).kg!==85||poidsMacros(cap).type!=='total') return _echec('85 kg : '+JSON.stringify(poidsMacros(cap)));
       const tc=cibleTableur(cap,{appliquerPlancher:false});
       if(tc.p!==187||tc.l!==85) return _echec('85 kg à 2,2 et 1 g/kg : p = '+tc.p+', l = '+tc.l);
+      // ⚠ BUILD 1835 : l'IMC 39 passe au POIDS AJUSTÉ (25 × t² + 0,25 × l'excès),
+      //   et la base est écrite dans la case. 120 kg / 175 cm → 87,4 kg. Avant :
+      //   288 g de protéines, la moitié des kcal. Le coach peut forcer 'total'.
       const gros=_PMa('H',120,175);
-      if(poidsMacros(gros).kg!==120) return _echec('IMC 39 : '+poidsMacros(gros).kg+' kg au lieu de 120');
+      const pg=poidsMacros(gros);
+      if(pg.type!=='ajuste'||Math.abs(pg.kg-87.4)>0.15) return _echec('IMC 39 : '+JSON.stringify(pg));
+      const force=_PMa('H',120,175,{nutrition:{cycle:false,tableur:{protGkg:2.4,baseGkg:'total'}}});
+      if(poidsMacros(force).kg!==120||poidsMacros(force).type!=='total') return _echec('baseGkg total : '+JSON.stringify(poidsMacros(force)));
+      if(!/choix du coach/.test(libPoidsMacros(poidsMacros(force)))) return _echec('le libellé ne dit pas le choix du coach');
+      if(cibleTableur(force,{appliquerPlancher:false}).p!==288) return _echec('forcé : 120 kg à 2,4');
       const t=cibleTableur(gros,{appliquerPlancher:false});
-      if(t.p!==288) return _echec('120 kg à 2,4 : p = '+t.p);
+      if(t.p!==Math.round(2.4*pg.kg)) return _echec('87,4 kg à 2,4 : p = '+t.p);
       const b=besoinsProposes(gros,{appliquerPlancher:false});
-      if(b.hypotheses.some(h=>/poids ajusté|poids sec|masse maigre ×/.test(h))) return _echec('une hypothèse parle encore d’un autre poids : '+b.hypotheses.join(' | '));
+      if(!b.hypotheses.some(h=>/calculé sur 87 kg \(poids ajusté\)/.test(h))) return _echec('la base n’est pas dite : '+b.hypotheses.join(' | '));
+      if(b.hypotheses.some(h=>/poids sec|masse maigre ×/.test(h))) return _echec('une hypothèse parle encore de masse maigre');
       const mince=_PMa('H',80,180);
       if(poidsMacros(mince).type!=='total') return _echec('80 kg : '+poidsMacros(mince).type);
       const t2=cibleTableur(mince,{appliquerPlancher:false});
       if(t2.p!==192) return _echec('80 kg : p = '+t2.p);
       if(Math.round(_repartition(2000,100,2,1,80).p)!==160) return _echec('_repartition sur le poids de référence');
       return true;});
+    ok('Base des g/kg : H 80 kg → 192 g, F 50 kg → 120 g (inchangés) ; H 120 kg / 175 cm en sèche → 190 à 230 g, glucides ≥ 150 g, protéines ≤ 40 % des kcal',()=>{
+      if(cibleTableur(_PMa('H',80,180),{appliquerPlancher:false}).p!==192) return _echec('H 80 kg');
+      const f=_PMa('F',50,160);
+      if(poidsMacros(f).type!=='total'||cibleTableur(f,{appliquerPlancher:false}).p!==120) return _echec('F 50 kg : '+cibleTableur(f,{appliquerPlancher:false}).p);
+      const g=_PMa('H',120,175);
+      const t=cibleTableur(g,{appliquerPlancher:true});
+      if(!(t.p>=190&&t.p<=230)) return _echec('p = '+t.p);
+      if(!(t.g>=150)) return _echec('g = '+t.g);
+      if(!(4*t.p<=0.40*t.kcal)) return _echec('protéines '+Math.round(400*t.p/t.kcal)+' % des kcal');
+      // F 95 kg / 160 cm (IMC 37) : des glucides de nouveau, aucun dépassement.
+      const f95=cibleTableur(_PMa('F',95,160),{appliquerPlancher:true});
+      if(!(f95.g>0)||f95.depasse>0||4*f95.p>0.40*f95.kcal) return _echec('F 95 kg : '+JSON.stringify({p:f95.p,g:f95.g,dep:f95.depasse,kcal:f95.kcal}));
+      // Cas limites : taille inconnue → total ; IMC exactement 30 → ajusté.
+      const sansT=_PMa('H',120,175); delete sansT._evol_height; sansT.bilans[0]['deb-height']='';
+      if(poidsMacros(sansT).type!=='total') return _echec('taille inconnue : '+poidsMacros(sansT).type);
+      const i30=_PMa('H',91.875,175);
+      if(Math.abs(_imcPourFormule(i30)-30)>1e-9||poidsMacros(i30).type!=='ajuste') return _echec('IMC 30 : '+_imcPourFormule(i30)+' / '+poidsMacros(i30).type);
+      // L'eau lit le même poids, et reste plausible (1,5 à 4 L).
+      const e=besoinEau(g,false);
+      return e>=2.5&&e<=4?true:_echec('eau : '+e+' L');});
+    ok('Base des g/kg : la carte de l’athlète et le tableau du coach écrivent la base DANS la case',()=>{
+      const sv=currentUser;
+      try{
+        const g=_PMa('H',120,175,{nutrition:{cycle:false,tableur:{protGkg:2.4},macros:{origine:'athlete'}}});
+        const m=_PMa('H',80,180,{nutrition:{cycle:false,tableur:{protGkg:2.4},macros:{origine:'athlete'}}});
+        currentUser=g;
+        const hg=_htmlCiblesAthlete(g);
+        if(!/ajusté/.test(hg)) return _echec('carte : « ajusté » absent');
+        if(!/× 87 kg ajustés/.test(hg)) return _echec('carte : la base n’est pas dans la case');
+        currentUser=m;
+        const hm=_htmlCiblesAthlete(m);
+        if(/ajusté/.test(hm)) return _echec('carte : « ajusté » au poids du corps');
+        if(!/× 80 kg/.test(hm)) return _echec('carte : la base au poids du corps manque');
+        currentUser={id:'pmC',email:'pmc@t.fr',role:'coach'};
+        const d=document.createElement('div'); d.innerHTML=_htmlTableauxTableur(g);
+        if(!/2,4 g\/kg × 87 kg ajustés/.test(d.textContent)) return _echec('tableau du coach : '+d.textContent.slice(0,0));
+        const s=d.querySelector('#tbk-base');
+        if(!s||s.value!=='ajuste') return _echec('sélecteur de base : '+(s&&s.value));
+        return [...s.options].map(o=>o.textContent).join('|')==='Base : poids du corps|Base : poids ajusté'?true:_echec('options');
+      } finally { currentUser=sv; }});
+    okA('Base des g/kg : la confirmation de la sèche dit les glucides bas en une phrase',async()=>{
+      const u=_PMa('F',50,160,{phase:null,nutrition:{cycle:false,tableur:{protGkg:2.4,lipGkg:1.5,coef:0.70}}});
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast,c:window.rcConfirm};
+      let texte='';
+      try{
+        currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.loadNutrition=()=>{}; toast=()=>{};
+        window.rcConfirm=async(m)=>{ texte=String(m); return false; };
+        await athObjectif('seche');
+        return /Glucides à \d+ g\/j : séances moins énergiques\.|glucides à \d+ g\/j, séances moins énergiques\./.test(texte)?true:_echec('confirmation : '+texte);
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; window.rcConfirm=sv.c; }});
     ok('F 50 kg, lipides 1,5, coefficient 0,70 : le total dépassé et les glucides bas sont DITS (tableau du coach et carte de l’athlète)',()=>{
       const u=_PMa('F',50,160,{nutrition:{cycle:false,tableur:{protGkg:2.4,lipGkg:1.5,coef:0.70}}});
       // Côté coach (sans plancher) : protéines et lipides dépassent la cible.
@@ -45567,7 +45629,8 @@ async function testExercices(){
           if(lApres!==96) return _echec('1,2 g/kg sur 80 kg donne '+lApres+' g au lieu de 96');
           // ET LA LIGNE ANNONCE LE REGLAGE RETENU : des grammes qui bougent
           // sous un libelle reste a l'ancienne valeur seraient pires que rien.
-          return /1,8 g par kilo/.test(_tbkLigne(_tbkMacro(),'Protéines'))
+          // Build 1835 : la base est écrite dans la case (« 1,8 g/kg × 80 kg »).
+          return /1,8 g\/kg × 80 kg/.test(_tbkLigne(_tbkMacro(),'Protéines'))
             ?true:_echec('la ligne n\'annonce pas 1,8 g par kilo : « '
               +_tbkLigne(_tbkMacro(),'Protéines')+' »');});
 

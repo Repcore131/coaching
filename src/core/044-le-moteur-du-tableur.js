@@ -395,8 +395,10 @@ function cibleTableur(user,opts){
   //   (`plancher`, `sousPlancher`), il ne corrige plus.
   const kcal=appliquer?Math.max(ajuste,pl):ajuste;
   // Proteines et lipides sur le POIDS DE REFERENCE (poidsMacros).
-  const _pm=poidsMacros(u);
-  const rep=_repartition(kcal,poids,protGkg,lipGkg,_pm.kg);
+  // Le plafond des 40 % (IMC ≥ 30, sans choix du coach) : protPlafonnee.
+  const _pc=protPlafonnee(poidsMacros(u),kcal,protGkg);
+  const _pm=_pc.pm;
+  const rep=_repartition(kcal,poids,_pc.gk,lipGkg,_pm.kg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
   return {
@@ -632,8 +634,9 @@ function besoinsProposes(user,opts){
   }
   const deltaRetenu=cible-depense;
   // Le poids de reference des proteines et des lipides, et il est DIT.
-  const _pm=poidsMacros(user);
-  const r=_repartition(cible,poids,gParKg,lipKg,_pm.kg);
+  const _pc=protPlafonnee(poidsMacros(user),cible,gParKg);
+  const _pm=_pc.pm;
+  const r=_repartition(cible,poids,_pc.gk,lipKg,_pm.kg);
   { const _lr=libPoidsMacros(_pm); if(_lr) hypotheses.push(_lr); }
   if(r.depasse>0) hypotheses.push('protéines et lipides dépassent la cible de '+r.depasse+' kcal');
   if(r.glucidesBas) hypotheses.push('glucides très bas : performance en séance compromise');
@@ -1993,6 +1996,7 @@ function majTableauTableur(quoi,val){
   const o=_tbOptsDe(c);
   if(quoi==='naf') o.naf=String(val||'')||undefined;
   else if(quoi==='formuleMB') o.formuleMB=MB_FORMULES.indexOf(val)>=0?val:null;
+  else if(quoi==='baseGkg') o.baseGkg=MACROS_BASES.indexOf(val)>=0?val:null;
   else{
     const v=parseFloat(String(val).replace(',','.'));
     o[quoi]=isFinite(v)?v:undefined;
@@ -2025,6 +2029,8 @@ function majTableauTableur(quoi,val){
   for(const k of ['naf','coef','protGkg','lipGkg']) if(o[k]!==undefined) reg[k]=o[k];
   // La formule : un choix explicite, ou « automatique » (le champ retiré).
   if(quoi==='formuleMB'){ if(o.formuleMB) reg.formuleMB=o.formuleMB; else delete reg.formuleMB; }
+  // La base des g/kg (build 1835) : un choix explicite du coach.
+  if(quoi==='baseGkg'){ if(o.baseGkg) reg.baseGkg=o.baseGkg; else delete reg.baseGkg; }
   c.nutrition.tableur=reg;
   const manuel=(function(){ try{ return saisieManuelle(c); }catch(e){ return false; } })();
   const j=_tbEcrireCibles(c);

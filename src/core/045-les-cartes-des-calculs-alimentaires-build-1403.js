@@ -335,6 +335,8 @@ function _htmlTableauxTableur(c){
   // Le suffixe des lipides les distingue des proteines dans le meme ecran :
   // deux listes de « g/kg » cote a cote ne se departagent pas autrement.
   const _phS=(function(){ try{ return typePhase(c); }catch(e){ return null; } })();
+  // Le poids sur lequel les g/kg s'appliquent (poidsMacros) : écrit dans la case.
+  const _pmT=(t.poidsRefObj&&t.poidsRefObj.kg>0)?t.poidsRefObj:(function(){ try{ return poidsMacros(c); }catch(e){ return {kg:t.poids,type:'total'}; } })();
   const _sugProt=(function(){ try{ return protSuggeree(c,_phS); }catch(e){ return undefined; } })();
   const echProt=_optionsEchelle(protEchelle(c),t.protGkg,' g/kg',_sugProt);
   const echLip=_optionsEchelle(LIP_ECHELLE,t.lipGkg,' g/kg lip.',
@@ -424,16 +426,19 @@ function _htmlTableauxTableur(c){
     // c'est voir de combien on s'ecarte du calcul.
     +liC('#ff2d3f','Protéines',
         selEch('tbk-prot','protGkg',echProt)
+          // LA BASE DES g/kg, À CÔTÉ DU g/kg (build 1835).
+          +sel('tbk-base','baseGkg',[{v:'total',lib:'Base : poids du corps'},{v:'ajuste',lib:'Base : poids ajusté'}],_pmT.type)
           +(_man?mi(_in('ccd-on-p',_mOn.p)):mv(_tbNb(t.p)+' g')),
-        _man?('le calcul donnerait '+_tbNb(t.p)+' g : tes chiffres priment')
-            :(String(t.protGkg).replace('.',',')+' g par kilo de poids de corps'),
+        (_man?('le calcul donnerait '+_tbNb(t.p)+' g : tes chiffres priment · ')
+            :'')+String(t.protGkg).replace('.',',')+' g/kg '+baseGkgCourte(_pmT)
+          +(libPoidsMacros(_pmT)?' · '+libPoidsMacros(_pmT):''),
         false,_in('ccd-off-p',_mOff.p),'p',t.p,'viande')
     +liC('#22c55e','Lipides',
         selEch('tbk-lip','lipGkg',echLip)
           +(_man?mi(_in('ccd-on-l',_mOn.l)):mv(_tbNb(t.l)+' g')),
-        _man?('le calcul donnerait '+_tbNb(t.l)+' g : tes chiffres priment')
-            :(String(t.lipGkg).replace('.',',')+' g par kilo, plancher '
-              +String(LIP_PLANCHER_G_KG).replace('.',',')+' g/kg'),
+        (_man?('le calcul donnerait '+_tbNb(t.l)+' g : tes chiffres priment · ')
+            :'')+String(t.lipGkg).replace('.',',')+' g/kg '+baseGkgCourte(_pmT)+', plancher '
+              +String(LIP_PLANCHER_G_KG).replace('.',',')+' g/kg',
         false,_in('ccd-off-l',_mOff.l),'l',t.l,'droplet')
     +liC('#f5c518','Glucides',_man?_in('ccd-on-g',_mOn.g):mv(_tbNb(t.g)+' g'),
         _man?('en grammes, écrits par toi · le calcul donnerait '+_tbNb(t.g)+' g')

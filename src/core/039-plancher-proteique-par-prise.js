@@ -1572,10 +1572,17 @@ async function _athObjectif(k){
     // visé dans cibleTableur : le déficit annoncé se calcule SANS elle.
     const _uPrev=sansCoach(currentUser)?Object.assign({},currentUser,{phase:null}):currentUser;
     let t=null; try{ t=cibleTableur(_uPrev,{coef:objCoefDefaut('seche'),objectif:'seche',appliquerPlancher:true}); }catch(e){ t=null; }
-    const deficit=(t&&!(t.manque&&t.manque.length))?Math.round((t.avecSport||0)-(t.kcal||0)):0;
-    if(deficit>0&&!await rcConfirm('La sèche pose un déficit d’environ '+deficit
-      +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.'
-      +String.fromCharCode(10)+String.fromCharCode(10)
+    const _ok=t&&!(t.manque&&t.manque.length);
+    const deficit=_ok?Math.round((t.avecSport||0)-(t.kcal||0)):0;
+    // CE QUE LA SÈCHE FAIT AUX GLUCIDES (build 1835), en une phrase.
+    const _alerte=!_ok?'':(Number(t.depasse)>0
+      ?'Protéines et lipides dépassent la cible de '+Math.round(t.depasse)+' kcal : glucides à '+Math.round(t.g)+' g/j, séances moins énergiques.'
+      :(t.glucidesBas?'Glucides à '+Math.round(t.g)+' g/j : séances moins énergiques.':''));
+    const NL=String.fromCharCode(10);
+    if((deficit>0||_alerte)&&!await rcConfirm((deficit>0?'La sèche pose un déficit d’environ '+deficit
+      +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.':'')
+      +(_alerte?(deficit>0?NL+NL:'')+_alerte:'')
+      +NL+NL
       +'Tu peux revenir en arrière à tout moment. Continuer ?',null,'Confirmer')) return;
   }
   // SANS COACH, L'OBJECTIF EST AUSSI LA PHASE (build 1833) : mêmes refus
@@ -1739,6 +1746,11 @@ function _athEcrireGrille(){
   CLOUD.pushOne(currentUser.email,currentUser);
   return true;
 }
+// La base des g/kg dans la case de la carte : le même composant que « le reste ».
+function _baseCase(pm){
+  const t=baseGkgCourte(pm);
+  return t?'<span class="rc-obj-reste">'+escapeHtml(t)+'</span>':'';
+}
 function _htmlCiblesAthlete(u){
   // ══ LA FORME VERROUILLEE PASSE DEVANT TOUT LE RESTE ══════════════════════
   // Quand le coach a pose les chiffres, la carte MONTRE LES SIENS — pris a la
@@ -1805,8 +1817,9 @@ function _htmlCiblesAthlete(u){
       +'</div>'
       +(_dl?'<div class="rc-obj-ajust">Mis à jour : '+_dl+'</div>':'')
       +'<div class="rc-obj-macros">'
-        +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
-        +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
+        // LA BASE DES g/kg, DANS LA CASE (build 1835).
+        +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6)+_baseCase(_gr.poidsRefObj):'')
+        +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4)+_baseCase(_gr.poidsRefObj):'')
         +l('Glucides',v.g,'<span class="rc-obj-reste">le reste</span>')
       +'</div>'
       +'<div class="rc-obj-note">'
@@ -1866,8 +1879,9 @@ function _htmlCiblesAthlete(u){
     +'<div class="rc-obj-macros">'
       // La plage s'élargit jusqu'à la valeur en vigueur : un menu qui n'a pas
       // l'option affiche la première, et ment sur le réglage (1,5 lu « 0,6 »).
-      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,Math.max(2.6,Number(c.protGkg)||0)))
-      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,Math.max(1.4,Number(c.lipGkg)||0)))
+      // LA BASE DES g/kg, DANS LA CASE (build 1835) : « × 87 kg ajustés ».
+      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,Math.max(2.6,Number(c.protGkg)||0))+_baseCase(c.poidsRefObj))
+      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,Math.max(1.4,Number(c.lipGkg)||0))+_baseCase(c.poidsRefObj))
       +ligne('Glucides',c.g,' g','<span class="rc-obj-reste">le reste</span>')
     +'</div>'
     // Le poids de référence, les glucides très bas, le total dépassé : dits, jamais tus.

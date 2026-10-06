@@ -98660,10 +98660,17 @@ async function _athObjectif(k){
     // visé dans cibleTableur : le déficit annoncé se calcule SANS elle.
     const _uPrev=sansCoach(currentUser)?Object.assign({},currentUser,{phase:null}):currentUser;
     let t=null; try{ t=cibleTableur(_uPrev,{coef:objCoefDefaut('seche'),objectif:'seche',appliquerPlancher:true}); }catch(e){ t=null; }
-    const deficit=(t&&!(t.manque&&t.manque.length))?Math.round((t.avecSport||0)-(t.kcal||0)):0;
-    if(deficit>0&&!await rcConfirm('La sèche pose un déficit d’environ '+deficit
-      +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.'
-      +String.fromCharCode(10)+String.fromCharCode(10)
+    const _ok=t&&!(t.manque&&t.manque.length);
+    const deficit=_ok?Math.round((t.avecSport||0)-(t.kcal||0)):0;
+    // CE QUE LA SÈCHE FAIT AUX GLUCIDES (build 1835), en une phrase.
+    const _alerte=!_ok?'':(Number(t.depasse)>0
+      ?'Protéines et lipides dépassent la cible de '+Math.round(t.depasse)+' kcal : glucides à '+Math.round(t.g)+' g/j, séances moins énergiques.'
+      :(t.glucidesBas?'Glucides à '+Math.round(t.g)+' g/j : séances moins énergiques.':''));
+    const NL=String.fromCharCode(10);
+    if((deficit>0||_alerte)&&!await rcConfirm((deficit>0?'La sèche pose un déficit d’environ '+deficit
+      +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.':'')
+      +(_alerte?(deficit>0?NL+NL:'')+_alerte:'')
+      +NL+NL
       +'Tu peux revenir en arrière à tout moment. Continuer ?',null,'Confirmer')) return;
   }
   // SANS COACH, L'OBJECTIF EST AUSSI LA PHASE (build 1833) : mêmes refus
@@ -98827,6 +98834,11 @@ function _athEcrireGrille(){
   CLOUD.pushOne(currentUser.email,currentUser);
   return true;
 }
+// La base des g/kg dans la case de la carte : le même composant que « le reste ».
+function _baseCase(pm){
+  const t=baseGkgCourte(pm);
+  return t?'<span class="rc-obj-reste">'+escapeHtml(t)+'</span>':'';
+}
 function _htmlCiblesAthlete(u){
   // ══ LA FORME VERROUILLEE PASSE DEVANT TOUT LE RESTE ══════════════════════
   // Quand le coach a pose les chiffres, la carte MONTRE LES SIENS — pris a la
@@ -98893,8 +98905,9 @@ function _htmlCiblesAthlete(u){
       +'</div>'
       +(_dl?'<div class="rc-obj-ajust">Mis à jour : '+_dl+'</div>':'')
       +'<div class="rc-obj-macros">'
-        +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
-        +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
+        // LA BASE DES g/kg, DANS LA CASE (build 1835).
+        +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6)+_baseCase(_gr.poidsRefObj):'')
+        +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4)+_baseCase(_gr.poidsRefObj):'')
         +l('Glucides',v.g,'<span class="rc-obj-reste">le reste</span>')
       +'</div>'
       +'<div class="rc-obj-note">'
@@ -98954,8 +98967,9 @@ function _htmlCiblesAthlete(u){
     +'<div class="rc-obj-macros">'
       // La plage s'élargit jusqu'à la valeur en vigueur : un menu qui n'a pas
       // l'option affiche la première, et ment sur le réglage (1,5 lu « 0,6 »).
-      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,Math.max(2.6,Number(c.protGkg)||0)))
-      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,Math.max(1.4,Number(c.lipGkg)||0)))
+      // LA BASE DES g/kg, DANS LA CASE (build 1835) : « × 87 kg ajustés ».
+      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,Math.max(2.6,Number(c.protGkg)||0))+_baseCase(c.poidsRefObj))
+      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,Math.max(1.4,Number(c.lipGkg)||0))+_baseCase(c.poidsRefObj))
       +ligne('Glucides',c.g,' g','<span class="rc-obj-reste">le reste</span>')
     +'</div>'
     // Le poids de référence, les glucides très bas, le total dépassé : dits, jamais tus.
@@ -108997,15 +109011,59 @@ const GLUC_MIN_G_KG=2, GLUC_MIN_G_JOUR=100;
 // maigre ». Les deux règles sont RETIRÉES. Si un dossier demande moins de
 // protéines, le coach baisse le g/kg : c'est son réglage, et il se lit.
 // La fonction reste, avec sa forme, pour ses appelants (macros, eau).
+//
+// ══ LE POIDS AJUSTÉ REVIENT, ÉCRIT DANS LA CASE (build 1835) ══════════════
+// Le reproche du 05/10 portait sur un calcul que l'écran ne montrait PAS à
+// l'endroit du chiffre. Le poids du corps reste le défaut ; un IMC ≥ 30 passe
+// au POIDS AJUSTÉ (25 × taille² + 0,25 × (poids − 25 × taille²)), et la base
+// est écrite DANS la case des protéines et des lipides, chez le coach comme
+// chez l'athlète. Au banc, sans lui : H 120 kg / 175 cm en sèche à 2,4 g/kg →
+// 288 g de protéines (50 % des kcal) et 75 g de glucides.
+// Réglage par dossier : nutrition.tableur.baseGkg ∈ {'total','ajuste'} ; le
+// choix du coach est respecté, et le libellé le dit.
+const MACROS_IMC_AJUSTE=30, MACROS_BASES=Object.freeze(['total','ajuste']);
 function poidsMacros(u){
   let poids=null; try{ poids=poidsNutritionnel(u).kg; }catch(e){ poids=null; }
-  return {kg:poids,type:'total',lib:''};
+  const reg=((((u&&u.nutrition)||{}).tableur)||{}).baseGkg;
+  const choisi=MACROS_BASES.indexOf(reg)>=0?reg:null;
+  let imc=null; try{ imc=_imcPourFormule(u); }catch(e){ imc=null; }
+  const total={kg:poids,type:'total',lib:'',choisi:!!choisi,imc};
+  if(!(poids>0)||imc==null) return total;            // taille inconnue → total
+  const base=choisi||(imc>=MACROS_IMC_AJUSTE?'ajuste':'total');
+  if(base==='total') return total;
+  const t2=poids/imc;                                  // taille² en m²
+  const ideal=25*t2;
+  const kg=Math.round((ideal+0.25*(poids-ideal))*10)/10;
+  if(!(kg>0)||kg>=poids) return total;
+  return {kg,type:'ajuste',lib:'',choisi:!!choisi,imc};
 }
-// La phrase : « protéines sur 87 kg de poids ajusté », vide au poids total.
+// LE PLAFOND DES 40 % (build 1835). Un IMC ≥ 30 sans choix explicite du
+// coach : les protéines ne dépassent jamais 40 % des kcal du jour. Le g/kg
+// retenu est abaissé d'autant, et la case le DIT (plafond40).
+const PROT_PART_MAX_IMC=0.40;
+function protPlafonnee(pm,kcal,gk){
+  const g=Number(gk);
+  if(!pm||!(pm.kg>0)||pm.choisi||pm.imc==null||pm.imc<MACROS_IMC_AJUSTE||!(Number(kcal)>0)||!(g>0)) return {gk,pm};
+  const max=Math.floor(PROT_PART_MAX_IMC*Number(kcal)/4)/pm.kg;
+  if(g<=max) return {gk,pm};
+  return {gk:max,pm:Object.assign({},pm,{plafond40:true})};
+}
+// La phrase : « calculé sur 87 kg (poids ajusté) ». Au poids du corps, vide —
+// sauf quand le coach l'a CHOISI malgré un IMC ≥ 30 : alors on le dit.
 function libPoidsMacros(pm){
-  if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
-  return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
-    +(pm.type==='maigre'?nr('poids sec (masse maigre × 1,15)','poids sec'):'poids ajusté');
+  if(!pm||!(pm.kg>0)) return '';
+  const kg=String(Math.round(pm.kg)).replace('.',',');
+  const pl=pm.plafond40?', protéines plafonnées à 40 % des kcal':'';
+  if(pm.type==='ajuste') return 'calculé sur '+kg+' kg (poids ajusté)'+pl;
+  if(pm.type==='total'&&pm.choisi&&pm.imc!=null&&pm.imc>=MACROS_IMC_AJUSTE)
+    return 'calculé sur '+kg+' kg (poids du corps, choix du coach)';
+  return '';
+}
+// La base, en une courte mention pour la case : « × 87 kg ajustés ».
+function baseGkgCourte(pm){
+  if(!pm||!(pm.kg>0)) return '';
+  return '× '+String(Math.round(pm.kg)).replace('.',',')+' kg'+(pm.type==='ajuste'?' ajustés':'')
+    +(pm.plafond40?' · 40 % des kcal max':'');
 }
 // Les deux alertes, dites à l'écran (coach et athlète).
 function _htmlAlertesMacros(x,vu){
@@ -109483,8 +109541,10 @@ function cibleTableur(user,opts){
   //   (`plancher`, `sousPlancher`), il ne corrige plus.
   const kcal=appliquer?Math.max(ajuste,pl):ajuste;
   // Proteines et lipides sur le POIDS DE REFERENCE (poidsMacros).
-  const _pm=poidsMacros(u);
-  const rep=_repartition(kcal,poids,protGkg,lipGkg,_pm.kg);
+  // Le plafond des 40 % (IMC ≥ 30, sans choix du coach) : protPlafonnee.
+  const _pc=protPlafonnee(poidsMacros(u),kcal,protGkg);
+  const _pm=_pc.pm;
+  const rep=_repartition(kcal,poids,_pc.gk,lipGkg,_pm.kg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
   return {
@@ -109720,8 +109780,9 @@ function besoinsProposes(user,opts){
   }
   const deltaRetenu=cible-depense;
   // Le poids de reference des proteines et des lipides, et il est DIT.
-  const _pm=poidsMacros(user);
-  const r=_repartition(cible,poids,gParKg,lipKg,_pm.kg);
+  const _pc=protPlafonnee(poidsMacros(user),cible,gParKg);
+  const _pm=_pc.pm;
+  const r=_repartition(cible,poids,_pc.gk,lipKg,_pm.kg);
   { const _lr=libPoidsMacros(_pm); if(_lr) hypotheses.push(_lr); }
   if(r.depasse>0) hypotheses.push('protéines et lipides dépassent la cible de '+r.depasse+' kcal');
   if(r.glucidesBas) hypotheses.push('glucides très bas : performance en séance compromise');
@@ -111081,6 +111142,7 @@ function majTableauTableur(quoi,val){
   const o=_tbOptsDe(c);
   if(quoi==='naf') o.naf=String(val||'')||undefined;
   else if(quoi==='formuleMB') o.formuleMB=MB_FORMULES.indexOf(val)>=0?val:null;
+  else if(quoi==='baseGkg') o.baseGkg=MACROS_BASES.indexOf(val)>=0?val:null;
   else{
     const v=parseFloat(String(val).replace(',','.'));
     o[quoi]=isFinite(v)?v:undefined;
@@ -111113,6 +111175,8 @@ function majTableauTableur(quoi,val){
   for(const k of ['naf','coef','protGkg','lipGkg']) if(o[k]!==undefined) reg[k]=o[k];
   // La formule : un choix explicite, ou « automatique » (le champ retiré).
   if(quoi==='formuleMB'){ if(o.formuleMB) reg.formuleMB=o.formuleMB; else delete reg.formuleMB; }
+  // La base des g/kg (build 1835) : un choix explicite du coach.
+  if(quoi==='baseGkg'){ if(o.baseGkg) reg.baseGkg=o.baseGkg; else delete reg.baseGkg; }
   c.nutrition.tableur=reg;
   const manuel=(function(){ try{ return saisieManuelle(c); }catch(e){ return false; } })();
   const j=_tbEcrireCibles(c);
@@ -111795,6 +111859,8 @@ function _htmlTableauxTableur(c){
   // Le suffixe des lipides les distingue des proteines dans le meme ecran :
   // deux listes de « g/kg » cote a cote ne se departagent pas autrement.
   const _phS=(function(){ try{ return typePhase(c); }catch(e){ return null; } })();
+  // Le poids sur lequel les g/kg s'appliquent (poidsMacros) : écrit dans la case.
+  const _pmT=(t.poidsRefObj&&t.poidsRefObj.kg>0)?t.poidsRefObj:(function(){ try{ return poidsMacros(c); }catch(e){ return {kg:t.poids,type:'total'}; } })();
   const _sugProt=(function(){ try{ return protSuggeree(c,_phS); }catch(e){ return undefined; } })();
   const echProt=_optionsEchelle(protEchelle(c),t.protGkg,' g/kg',_sugProt);
   const echLip=_optionsEchelle(LIP_ECHELLE,t.lipGkg,' g/kg lip.',
@@ -111884,16 +111950,19 @@ function _htmlTableauxTableur(c){
     // c'est voir de combien on s'ecarte du calcul.
     +liC('#ff2d3f','Protéines',
         selEch('tbk-prot','protGkg',echProt)
+          // LA BASE DES g/kg, À CÔTÉ DU g/kg (build 1835).
+          +sel('tbk-base','baseGkg',[{v:'total',lib:'Base : poids du corps'},{v:'ajuste',lib:'Base : poids ajusté'}],_pmT.type)
           +(_man?mi(_in('ccd-on-p',_mOn.p)):mv(_tbNb(t.p)+' g')),
-        _man?('le calcul donnerait '+_tbNb(t.p)+' g : tes chiffres priment')
-            :(String(t.protGkg).replace('.',',')+' g par kilo de poids de corps'),
+        (_man?('le calcul donnerait '+_tbNb(t.p)+' g : tes chiffres priment · ')
+            :'')+String(t.protGkg).replace('.',',')+' g/kg '+baseGkgCourte(_pmT)
+          +(libPoidsMacros(_pmT)?' · '+libPoidsMacros(_pmT):''),
         false,_in('ccd-off-p',_mOff.p),'p',t.p,'viande')
     +liC('#22c55e','Lipides',
         selEch('tbk-lip','lipGkg',echLip)
           +(_man?mi(_in('ccd-on-l',_mOn.l)):mv(_tbNb(t.l)+' g')),
-        _man?('le calcul donnerait '+_tbNb(t.l)+' g : tes chiffres priment')
-            :(String(t.lipGkg).replace('.',',')+' g par kilo, plancher '
-              +String(LIP_PLANCHER_G_KG).replace('.',',')+' g/kg'),
+        (_man?('le calcul donnerait '+_tbNb(t.l)+' g : tes chiffres priment · ')
+            :'')+String(t.lipGkg).replace('.',',')+' g/kg '+baseGkgCourte(_pmT)+', plancher '
+              +String(LIP_PLANCHER_G_KG).replace('.',',')+' g/kg',
         false,_in('ccd-off-l',_mOff.l),'l',t.l,'droplet')
     +liC('#f5c518','Glucides',_man?_in('ccd-on-g',_mOn.g):mv(_tbNb(t.g)+' g'),
         _man?('en grammes, écrits par toi · le calcul donnerait '+_tbNb(t.g)+' g')
