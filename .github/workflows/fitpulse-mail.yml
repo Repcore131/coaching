@@ -79,7 +79,7 @@ jobs:
         run: node club/outils/fitpulse-serveur.mjs
 
   robot:
-    if: ${{ inputs.robot_resamania || inputs.robot_diag }}
+    if: ${{ inputs.robot_resamania || inputs.robot_diag || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -89,17 +89,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # Sur le planning : ne rien faire tant que personne n'a appuyé sur « Lancer » dans l'appli.
+      - name: Une mise à jour est-elle demandée ?
+        id: chk
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node club/outils/resamania-robot.mjs besoin
       - name: Installer le navigateur du robot
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         run: |
           mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
           npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - name: Robot Resamania
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         env:
           RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
-          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || 'reperage' }}
+          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || (github.event_name == 'schedule' && 'auto' || 'reperage') }}
           TZ: Europe/Paris
         run: node club/outils/resamania-robot.mjs

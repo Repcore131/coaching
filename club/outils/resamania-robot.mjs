@@ -206,8 +206,26 @@ async function diagnostic() {
   log('DIAG relecture état :', r && r.step === 'diag' ? 'OK' : 'ÉCHEC', '(' + JSON.stringify(r) + ')');
   if (w === null || !(r && r.step === 'diag')) process.exitCode = 1;
 }
+// Y a-t-il une demande de mise à jour en attente (bouton « Lancer » de l'appli) ?
+// Écrit go=1/0 dans la sortie du workflow, sans installer le navigateur.
+async function besoin() {
+  const { appendFileSync } = await import('node:fs');
+  const dem = await fb('pulse/rsm/demande.json').catch(() => null);
+  const handled = (await fb('pulse/rsm/handledAt.json').catch(() => null)) || 0;
+  const go = dem && dem.at && Date.now() - dem.at < 30 * 60000 && dem.at > Number(handled);
+  log('besoin :', go ? 'oui (demande en attente)' : 'non');
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `go=${go ? 1 : 0}\n`);
+}
 async function main() {
   if (MODE === 'diag') return diagnostic();
+  if (MODE === 'besoin') return besoin();
+  // En mode automatique, on ne tourne que si une demande est en attente, et on la marque traitée.
+  if (MODE === 'auto') {
+    const dem = await fb('pulse/rsm/demande.json').catch(() => null);
+    const handled = (await fb('pulse/rsm/handledAt.json').catch(() => null)) || 0;
+    if (!(dem && dem.at && Date.now() - dem.at < 30 * 60000 && dem.at > Number(handled))) { log('auto : pas de demande en attente'); return; }
+    await fb('pulse/rsm/handledAt.json', { method: 'PUT', body: JSON.stringify(dem.at) }).catch(() => {});
+  }
   const { chromium } = require('playwright');
   mkdirSync(SORTIE, { recursive: true });
   const b = await chromium.launch();
