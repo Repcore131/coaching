@@ -439,6 +439,19 @@ const RSM_DEFS = [
     parse(c) { c.warn('Fichier de contrôle ou d’agrégat : rien à importer.'); },
   },
 ];
+// Prompt « tout récupérer » pour Claude dans Chrome, à côté de la page Resamania :
+// la liste exacte des exports à télécharger pour un import mensuel complet.
+function rsmImportPrompt() {
+  const mk = typeof curMonth === 'function' ? curMonth() : new Date().toISOString().slice(0, 7);
+  const [yy, mm] = mk.split('-'); const dImax = typeof daysIn === 'function' ? daysIn(mk) : 31;
+  const moisLabel = typeof monthLabel === 'function' ? monthLabel(mk) : mk;
+  const auj = typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10);
+  const fr = s => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '';
+  const debut = fr(`${mk}-01`), fin = fr(`${mk}-${String(dImax).padStart(2, '0')}`), ajd = fr(auj);
+  const defs = RSM_DEFS.filter(d => d.path && !d.silent);
+  const lignes = defs.map((d, i) => `${i + 1}. ${d.label}\n   Chemin : ${d.path}\n   Filtres : ${(d.filters || '').replace(/AAAA-MM-JJ|AAAA-MM/g, '')} → période du ${debut} au ${fin}${/incident|abonnement|sans.?mandat|clients club/i.test(d.label) ? ` (ou situation au ${ajd})` : ''}\n   Puis : ⋮ / Exporter → télécharger le fichier.`);
+  return `Tu es dans l'espace de gestion Resamania de Fitness Park Niort, dans l'onglet à côté. Objectif : télécharger TOUS les exports ci-dessous pour ${moisLabel}, afin de les importer d'un coup dans Fit Pulse. Pour chacun : ouvre le chemin indiqué, applique les filtres (période du ${debut} au ${fin} ; pour les listes « à l'instant T », prends la situation du ${ajd}), lance l'export puis télécharge le fichier (CSV, ZIP ou Excel selon le cas). Ne modifie aucune donnée dans Resamania, ne fais que consulter et exporter. Si un export dépasse 2 000 lignes, découpe par semaine ou par lettre et télécharge chaque partie. À la fin, laisse tous les fichiers dans les téléchargements et liste ce que tu as récupéré.\n\nExports à télécharger :\n\n${lignes.join('\n\n')}\n\nQuand tout est téléchargé, je dépose les fichiers dans Fit Pulse (page Imports) : l'appli les reconnaît et met la base à jour.`;
+}
 function linesParse(c, avoir) {
   const iNum = c.find(h => h.startsWith('num facture') || h.startsWith('num avoir')), iDate = c.find(h => h.startsWith('date de')), iProd = c.col('nom du produit'), iCode = c.col('code du produit'), iV = c.col('vendeur'), iSt = c.find(h => h.startsWith('statut'));
   const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : c.find(h => h.includes('ttc'));
