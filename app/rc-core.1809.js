@@ -10389,6 +10389,8 @@ function go(id){
   try{ setTimeout(_chronoTick,0); }catch(e){}
   // La recherche rapide suit l'ecran (rrPlacer) : apres le changement.
   try{ setTimeout(rrPlacer,0); }catch(e){}
+  // Des cibles non transmises, et le coach quitte la fiche : le bandeau.
+  try{ if(id!=='s-coach-client') nutBrouillonAvertir(); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
@@ -34921,6 +34923,21 @@ let _ccdVue='entrainement';
 // On neutralise le comportement le temps du saut plutot que de passer
 // behavior:'instant', que les navigateurs anciens ignorent silencieusement —
 // ils feraient alors le defilement anime qu'on cherche a eviter.
+function _ccdVersCibles(){
+  _ccdRemonter();
+  try{
+    const z=document.getElementById('ccd-cibles');
+    if(!z||!z.firstElementChild) return false;
+    const barre=document.getElementById('ccd-ancres');
+    const sous=barre?Math.max(0,barre.getBoundingClientRect().bottom):0;
+    const y=z.getBoundingClientRect().top+window.scrollY-sous-8;
+    if(y>0){
+      const h=document.documentElement, av=h.style.scrollBehavior;
+      h.style.scrollBehavior='auto'; window.scrollTo(0,y); h.style.scrollBehavior=av;
+    }
+    return true;
+  }catch(e){ return false; }
+}
 function _ccdRemonter(){
   try{
     const h=document.documentElement;
@@ -35020,6 +35037,8 @@ function _majBoutonBilan(c){
 // pixels d'ecart, pour dire la meme chose. Voir _majBoutonBilan.
 function ccdVue(nom){
   const v=CCD_VUES.indexOf(nom)>=0?nom:'entrainement';
+  // Quitter Nutrition avec des cibles non transmises : le bandeau le dit.
+  if(v!=='nutrition') try{ nutBrouillonAvertir(); }catch(e){}
   // LE RAFRAICHISSEMENT DE FOND NE DOIT PAS RAMENER LE COACH EN HAUT.
   // openClientDetail repasse ici toutes les 30 s avec l'onglet DEJA ouvert :
   // remonter a chaque passage arracherait la page sous ses yeux pendant
@@ -35049,7 +35068,9 @@ function ccdVue(nom){
     if(ec) ec.dataset.vue=v;
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
-    if(_change) _ccdRemonter();
+    // NUTRITION (06/10/2026) : on arrive SUR la carte « Cibles », calée sous la
+    // barre d'onglets — le geste courant (−100, Transmettre) sans défiler.
+    if(_change) (v==='nutrition'?_ccdVersCibles():_ccdRemonter());
   }catch(e){}
   // E4 : le moteur de l'analyse morpho ne part qu'ici, à l'arrivée sur Données.
   if(_change&&v==='donnees'){ try{ const c=getOwnedClient(currentClientId); if(c) _anatLancerFond(c); }catch(e){} }
@@ -95974,7 +95995,9 @@ function _ajustMigrer(u){
 // absent, pour que l'appelant puisse toujours dire ce qui s'est passe.
 // L'AUTEUR : 'athlete' quand c'est l'athlète qui clique (origineSiAbsente
 // 'athlete'), le coach sinon. Chacun ne bouge que SA case.
-function appliquerDeltaKcal(u,sens,origineSiAbsente){
+// `montant` (06/10/2026) : le brouillon du coach applique son écart en UNE
+// fois (−100, +50…) ; sans lui, le pas de vingt, comme avant.
+function appliquerDeltaKcal(u,sens,origineSiAbsente,montant){
   if(!u) return null;
   if(!u.nutrition) u.nutrition={};
   try{ _ajustMigrer(u); }catch(e){}
@@ -95990,7 +96013,8 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente){
   }
   const _tbAvant=nut.tableur, _macrosAvant=nut.macros;
   const avant=deltaKcalPartage(u);
-  const pas=(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
+  const _m=Number(montant)>0?Math.round(Number(montant)):ATH_DELTA_PAS;
+  const pas=(sens<0?-_m:_m);
   const tb=Object.assign({},nut.tableur||{});
   const aj=Object.assign({coach:0,athlete:0},ajustKcal(u));
   aj[par]+=pas;
@@ -108393,6 +108417,13 @@ function _tbAvis(localOk,envoi,texte){
  *   le coach ait a trouver un bouton d'envoi.
  */
 function tbkDelta(sens){
+  // LE BROUILLON (06/10/2026) : le ±20 du tableau ne pousse plus rien au
+  // geste. Il s'ajoute à l'écart en cours ; « Transmettre » l'envoie, une fois.
+  return nutBrouillonAjouter(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
+}
+// L'ancien chemin, écrit et poussé au geste : il ne sert plus qu'à
+// l'historique de ce fichier (aucun appelant).
+function _tbkDeltaDirect(sens){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
@@ -108418,6 +108449,178 @@ function tbkDelta(sens){
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
+// ══ LES CIBLES EN BROUILLON (06/10/2026) ══════════════════════════════════
+// Le total calorique était à 3 600 px du haut de l'onglet, et chaque −20
+// écrivait et poussait le dossier : cinq appuis, cinq écritures distantes.
+//
+// LE BROUILLON NE GARDE QU'UN ÉCART (en kcal), pas une copie du dossier :
+// l'aperçu rejoue cet écart sur un CLONE du dossier tel qu'il est, si bien
+// qu'un réglage du calculateur fait entre-temps reste pris en compte.
+// « Transmettre » l'applique une fois (appliquerDeltaKcal, montant entier),
+// note l'historique et pousse UNE fois. « Annuler », dix secondes.
+const NUT_PAS=Object.freeze([-100,-50,50,100]);
+const NUT_ANNULER_MS=10000;
+let _nutBrouillon=null;       // {cid, delta}
+let _nutAnnulable=null;       // {cid, email, avant:{macros, tableur}, minuteur, reste}
+let _nutEnvoi=false;
+/** PURE. Le dossier tel qu'il serait avec l'écart `delta` (un clone). */
+function nutApercu(c,delta){
+  if(!c) return null;
+  const k=JSON.parse(JSON.stringify(c));
+  k._apercu=true;
+  const d=Math.round(Number(delta)||0);
+  if(d){ try{ appliquerDeltaKcal(k,d<0?-1:1,'tableur',Math.abs(d)); }catch(e){} }
+  return k;
+}
+function _nutClient(){
+  const users=DB.get('users')||{};
+  const id=(_nutBrouillon&&_nutBrouillon.cid)||currentClientId;
+  return {users,c:(()=>{ try{ return getOwnedClient(id,users); }catch(e){ return null; } })()};
+}
+/** Un pas du coach : l'écart grandit, rien n'est écrit ni poussé. */
+function nutBrouillonAjouter(kcal){
+  const c=(()=>{ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
+  if(!c) return false;
+  if(!_nutBrouillon||_nutBrouillon.cid!==c.id) _nutBrouillon={cid:c.id,delta:0};
+  _nutBrouillon.delta+=Math.round(Number(kcal)||0);
+  if(!_nutBrouillon.delta) _nutBrouillon=null;
+  _nutFinAnnulable();
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
+function nutBrouillonDelta(cid){ return (_nutBrouillon&&_nutBrouillon.cid===cid)?_nutBrouillon.delta:0; }
+/** « Jeter » : les cibles envoyées restent ce qu'elles sont. */
+function nutJeter(){
+  const cid=_nutBrouillon&&_nutBrouillon.cid;
+  _nutBrouillon=null;
+  _nutBandeauRetirer();
+  const c=cid?(()=>{ try{ return getOwnedClient(cid); }catch(e){ return null; } })():null;
+  if(c) try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
+/** « Transmettre à <prénom> » : une écriture, un envoi, sous un double appui. */
+async function nutTransmettre(){
+  if(_nutEnvoi||!_nutBrouillon||!_nutBrouillon.delta) return false;
+  const {users,c}=_nutClient();
+  if(!c){ _nutBrouillon=null; return false; }
+  const d=_nutBrouillon.delta;
+  _nutEnvoi=true;
+  try{
+    // SOUS LE PLANCHER : le coach peut, mais il le confirme.
+    const ap=nutApercu(c,d);
+    const m=(ap&&ap.nutrition&&ap.nutrition.macros)||{};
+    const min=Math.min(Number((m.on||{}).kcal)||Infinity,Number((m.off||m.on||{}).kcal)||Infinity);
+    let pl=0; try{ pl=plancherAthlete(c); }catch(e){ pl=0; }
+    if(d<0&&pl>0&&min<pl){
+      const oui=await rcConfirm('Sous son plancher',(c.fname||'Ton athlète')+' passerait à '+_tbNb(min)+' kcal, sous son plancher de '+_tbNb(pl)+' kcal.','Transmettre quand même','Revenir');
+      if(!oui) return false;
+    }
+    const nut=c.nutrition||(c.nutrition={});
+    const avant={macros:JSON.parse(JSON.stringify(nut.macros||null)),tableur:JSON.parse(JSON.stringify(nut.tableur||null))};
+    const r=appliquerDeltaKcal(c,d<0?-1:1,'tableur',Math.abs(d));
+    if(!r||(r.manque&&r.manque.length)){ toast('Calcul incomplet : '+((r&&r.manque)||[]).join(', '),'var(--orange)'); return false; }
+    try{ _histoNoter(c,'transmis'); }catch(e){}
+    c.updatedAt=Date.now(); users[c.email]=c;
+    const ok=DB.set('users',users);
+    const envoi=CLOUD.pushOne(c.email,c);
+    try{ toastSync(ok,envoi,(c.fname||'Ton athlète')+' est sur '+_tbNb(r.kcal)+' kcal.','la cible est'); }catch(e){}
+    _nutBrouillon=null;
+    _nutBandeauRetirer();
+    _nutFinAnnulable();
+    _nutAnnulable={cid:c.id,email:c.email,avant,reste:Math.round(NUT_ANNULER_MS/1000),minuteur:null};
+    _nutAnnulable.minuteur=setInterval(()=>{
+      const a=_nutAnnulable; if(!a) return;
+      a.reste--;
+      const b=document.getElementById('nut-annuler');
+      if(a.reste<=0){ _nutFinAnnulable(); const cc=(()=>{ try{ return getOwnedClient(a.cid); }catch(e){ return null; } })(); if(cc) try{ _rendreCiblesCoach(cc); }catch(e){} return; }
+      if(b) b.textContent='Annuler ('+a.reste+' s)';
+    },1000);
+    try{ renderCoachNutriSection(c); }catch(e){}
+    return true;
+  } finally { _nutEnvoi=false; }
+}
+function _nutFinAnnulable(){
+  if(_nutAnnulable&&_nutAnnulable.minuteur) clearInterval(_nutAnnulable.minuteur);
+  _nutAnnulable=null;
+}
+/** « Annuler » (10 s) : les cibles d'avant, exactes ; l'historique le dit. */
+function nutAnnuler(){
+  const a=_nutAnnulable;
+  if(!a) return false;
+  _nutFinAnnulable();
+  const users=DB.get('users')||{};
+  const c=(()=>{ try{ return getOwnedClient(a.cid,users); }catch(e){ return null; } })();
+  if(!c) return false;
+  const nut=c.nutrition||(c.nutrition={});
+  if(a.avant.macros) nut.macros=a.avant.macros; else delete nut.macros;
+  if(a.avant.tableur) nut.tableur=a.avant.tableur; else delete nut.tableur;
+  try{
+    const m=nut.macros;
+    if(m&&m.on&&Number(m.on.kcal)>0){
+      const l=histoCibles(c);
+      l.push({d:Date.now(),src:'annule',on:_histoBloc(m.on),off:_histoBloc(m.off||m.on)});
+      while(l.length>HISTO_MAX) l.shift();
+      nut.histo=l;
+    }
+  }catch(e){}
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  try{ toastSync(ok,envoi,'Envoi annulé : les cibles d’avant sont revenues.','l’annulation est'); }catch(e){}
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
+// QUITTER AVEC UN BROUILLON : un bandeau, Transmettre ou Jeter.
+function nutBrouillonAvertir(){
+  if(!_nutBrouillon||!_nutBrouillon.delta) return false;
+  if(document.getElementById('nut-bandeau')) return true;
+  const z=document.createElement('div');
+  z.id='nut-bandeau'; z.className='nut-bandeau'; z.setAttribute('role','alert');
+  const d=_nutBrouillon.delta;
+  z.innerHTML='<span>Modifs non transmises ('+(d>0?'+':'−')+Math.abs(d)+' kcal) : </span>'
+    +'<button type="button" class="btn btn-red btn-sm" onclick="nutTransmettre()">Transmettre</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="nutJeter()">Jeter</button>';
+  document.body.appendChild(z);
+  return true;
+}
+function _nutBandeauRetirer(){ const z=document.getElementById('nut-bandeau'); if(z) z.remove(); }
+// LA CARTE « CIBLES », en tête de l'onglet Nutrition (#ccd-cibles) : ce qui
+// est envoyé, ce qui le serait, l'écart, les pas et un seul envoi.
+function _rendreCiblesCoach(c){
+  const z=document.getElementById('ccd-cibles');
+  if(!z) return false;
+  if(!c||c._fromCode){ z.innerHTML=''; return false; }
+  const d=nutBrouillonDelta(c.id);
+  const k=d?nutApercu(c,d):c;
+  const m=(k&&k.nutrition&&k.nutrition.macros)||{}, env=(c.nutrition&&c.nutrition.macros)||{};
+  const cyc=(()=>{ try{ return dieteCyclee(c); }catch(e){ return false; } })();
+  const n=v=>(Number(v)>0?_tbNb(Number(v)):'–');
+  const ligne=(lib,o)=>'<div class="nut-c-l"><span class="nut-c-j">'+lib+'</span>'
+    +'<span><b>'+n(o.kcal)+'</b> kcal</span><span>P '+n(o.p)+'</span><span>G '+n(o.g)+'</span><span>L '+n(o.l)+'</span></div>';
+  const on=m.on||{}, off=m.off||m.on||{};
+  const ecart=d?Math.round((Number(on.kcal)||0)-(Number((env.on||{}).kcal)||0)):0;
+  const prenom=escapeHtml(String(c.fname||'').trim()||'ton athlète');
+  const a=_nutAnnulable&&_nutAnnulable.cid===c.id?_nutAnnulable:null;
+  z.innerHTML='<div class="nut-cibles">'
+    +'<div class="nut-c-t">Cibles</div>'
+    +(Number(on.kcal)>0?ligne(cyc?'ON':'Jour',on)+(cyc?ligne('OFF',off):''):'<div class="nut-c-rien">Pas encore de cibles : règle-les avec le calcul ci-dessous.</div>')
+    +(d?'<div class="nut-c-e">'+(ecart>0?'+':ecart<0?'−':'±')+Math.abs(ecart)+' kcal par rapport à l’envoyé</div>':'')
+    +(Number(on.kcal)>0?'<div class="nut-c-pas">'+NUT_PAS.map(p=>'<button type="button" class="nut-pas" onclick="nutBrouillonAjouter('+p+')">'+(p>0?'+':'−')+Math.abs(p)+'</button>').join('')+'</div>':'')
+    +(d?'<div class="nut-c-b"><button type="button" id="nut-transmettre" class="btn btn-red btn-sm" onclick="nutTransmettre()">Transmettre à '+prenom+'</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" onclick="nutJeter()">Jeter</button></div>'
+      :a?'<div class="nut-c-b"><button type="button" id="nut-annuler" class="btn btn-outline btn-sm" onclick="nutAnnuler()">Annuler ('+a.reste+' s)</button></div>':'')
+    +'</div>';
+  return true;
+}
+// LE CALCULATEUR DÉTAILLÉ, REPLIÉ une fois des cibles posées ; l'état est
+// gardé par coach (localStorage, try/catch).
+function _nutCalcCle(){ return 'rc_nut_calc_'+String((currentUser&&currentUser.email)||'').replace(/\./g,','); }
+function nutCalcOuvert(c){
+  try{ const v=localStorage.getItem(_nutCalcCle()); if(v==='1') return true; if(v==='0') return false; }catch(e){}
+  const m=c&&c.nutrition&&c.nutrition.macros;
+  return !(m&&m.on&&Number(m.on.kcal)>0);
+}
+function nutCalcMemoriser(ouvert){ try{ localStorage.setItem(_nutCalcCle(),ouvert?'1':'0'); }catch(e){} return true; }
 // L'écart entre les deux formules, pour ce dossier : ce qu'on gagne ou perd en changeant.
 function _htmlEcartFormules(t){
   const hb=mbHarrisBenedict(t.poids,t.taille,t.age,t.sexe), mf=mbMifflin(t.poids,t.taille,t.age,t.sexe);
@@ -108585,7 +108788,7 @@ function sportsTableurAuto(){
 const HISTO_MAX=25;
 const HISTO_FUSION_MS=600000;   // 10 min
 const HISTO_LIB=Object.freeze({tableur:'réglage du tableau',coach:'saisie manuelle',
-  transmis:'transmis à l’athlète',auto:'calcul automatique',histo:'remise en place',
+  transmis:'transmis à l’athlète',auto:'calcul automatique',histo:'remise en place',annule:'annulé',
   reinit:'remise au point de départ'});
 function _histoBloc(b){
   const n=v=>Math.round(Number(v)||0);
@@ -108662,6 +108865,8 @@ function _confirmerTransmission(c,localOk,envoi){
 async function enregistrerEtTransmettre(malgrePlancher){
   const c0=getOwnedClient(currentClientId);
   if(!c0){ toast('Aucun athlète ouvert','var(--orange)'); return false; }
+  // Un écart en brouillon (06/10/2026) : c'est LUI que le coach transmet.
+  if(nutBrouillonDelta(c0.id)) return nutTransmettre();
   const manuel=(function(){ try{ return saisieManuelle(c0); }catch(e){ return false; } })();
   if(manuel){
     const ok=saveClientNutriMacros(malgrePlancher,true);
@@ -109518,7 +109723,8 @@ function renderCoachNutriSection(c){
   // LES ANCIENS CLICS DU ±20 NE COMPTENT PLUS (voir ajustKcal) : retirés une
   // fois, ici, sur la fiche du coach, puis envoyés. Avant la réconciliation,
   // qui recalcule ensuite les cibles posées par la grille sans eux.
-  try{
+  // (06/10/2026) Jamais sur un APERÇU (clone du brouillon) : rien n'en part.
+  if(c&&!c._apercu) try{
     if(_ajustMigrer(c)){
       const users=DB.get('users')||{};
       c.updatedAt=Date.now(); users[c.email]=c;
@@ -109529,7 +109735,11 @@ function renderCoachNutriSection(c){
   // ⚠ AVANT LE RENDU, PAS APRES : les tableaux qu'on peint juste en dessous
   //   doivent montrer ce que l'athlete a REELLEMENT dans son dossier, pas ce
   //   qu'elle aurait si on reconciliait une fois l'ecran deja dessine.
-  try{ _tbReconcilier(c); }catch(e){}
+  if(c&&!c._apercu) try{ _tbReconcilier(c); }catch(e){}
+  // LA CARTE « CIBLES » (en tête de l'onglet), puis, s'il y a un brouillon,
+  // tout l'onglet se peint sur l'APERÇU : le tableau suit l'écart en cours.
+  try{ _rendreCiblesCoach(c); }catch(e){}
+  if(c&&!c._apercu&&nutBrouillonDelta(c.id)){ try{ c=nutApercu(c,nutBrouillonDelta(c.id)); }catch(e){} }
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
@@ -109727,6 +109937,9 @@ function renderCoachNutriSection(c){
     // quatre tableaux sur deux colonnes des que la fenetre le permet — ils
     // s'etiraient sur toute la longueur de l'ecran, et il fallait defiler
     // pour comparer deux chiffres qui se repondent.
+    // LE CALCULATEUR, REPLIÉ une fois des cibles posées (06/10/2026) : la
+    // carte « Cibles » en tête suffit au geste courant. L'état est gardé.
+    + '<details class="nut-calc"'+(nutCalcOuvert(c)?' open':'')+' ontoggle="nutCalcMemoriser(this.open)"><summary class="nut-calc-t">Calcul détaillé : facteurs, sports, méthodes</summary>'
     + '<div class="tbk-serre">'
       // ⚠ LE BANDEAU « RÉGLÉ PAR L'ATHLÈTE » ET LE « POIDS DE RÉFÉRENCE » ONT
       //   ÉTÉ RETIRÉS le 22/09/2026 (build 1402), sur demande de Kevin :
@@ -109735,7 +109948,7 @@ function renderCoachNutriSection(c){
       //   (poidsNutritionnel). Seuls les deux encadrés qui le disaient
       //   au-dessus des tableaux ont disparu, avec leurs fonctions.
       + (()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()
-      + '</div>'
+      + '</div></details>'
     // ⚠ « RÉGLER LES OBJECTIFS » N'EST PLUS UN MENU DÉROULANT (build 1404).
     //   Kevin, 22/09/2026 : « mets pas de menu déroulant mais laisse le bouton
     //   en rouge ». Le contenu est rendu A DECOUVERT, sans titre ni repli :

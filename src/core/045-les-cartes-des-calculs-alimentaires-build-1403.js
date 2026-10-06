@@ -694,7 +694,8 @@ function renderCoachNutriSection(c){
   // LES ANCIENS CLICS DU ±20 NE COMPTENT PLUS (voir ajustKcal) : retirés une
   // fois, ici, sur la fiche du coach, puis envoyés. Avant la réconciliation,
   // qui recalcule ensuite les cibles posées par la grille sans eux.
-  try{
+  // (06/10/2026) Jamais sur un APERÇU (clone du brouillon) : rien n'en part.
+  if(c&&!c._apercu) try{
     if(_ajustMigrer(c)){
       const users=DB.get('users')||{};
       c.updatedAt=Date.now(); users[c.email]=c;
@@ -705,7 +706,11 @@ function renderCoachNutriSection(c){
   // ⚠ AVANT LE RENDU, PAS APRES : les tableaux qu'on peint juste en dessous
   //   doivent montrer ce que l'athlete a REELLEMENT dans son dossier, pas ce
   //   qu'elle aurait si on reconciliait une fois l'ecran deja dessine.
-  try{ _tbReconcilier(c); }catch(e){}
+  if(c&&!c._apercu) try{ _tbReconcilier(c); }catch(e){}
+  // LA CARTE « CIBLES » (en tête de l'onglet), puis, s'il y a un brouillon,
+  // tout l'onglet se peint sur l'APERÇU : le tableau suit l'écart en cours.
+  try{ _rendreCiblesCoach(c); }catch(e){}
+  if(c&&!c._apercu&&nutBrouillonDelta(c.id)){ try{ c=nutApercu(c,nutBrouillonDelta(c.id)); }catch(e){} }
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
@@ -903,6 +908,9 @@ function renderCoachNutriSection(c){
     // quatre tableaux sur deux colonnes des que la fenetre le permet — ils
     // s'etiraient sur toute la longueur de l'ecran, et il fallait defiler
     // pour comparer deux chiffres qui se repondent.
+    // LE CALCULATEUR, REPLIÉ une fois des cibles posées (06/10/2026) : la
+    // carte « Cibles » en tête suffit au geste courant. L'état est gardé.
+    + '<details class="nut-calc"'+(nutCalcOuvert(c)?' open':'')+' ontoggle="nutCalcMemoriser(this.open)"><summary class="nut-calc-t">Calcul détaillé : facteurs, sports, méthodes</summary>'
     + '<div class="tbk-serre">'
       // ⚠ LE BANDEAU « RÉGLÉ PAR L'ATHLÈTE » ET LE « POIDS DE RÉFÉRENCE » ONT
       //   ÉTÉ RETIRÉS le 22/09/2026 (build 1402), sur demande de Kevin :
@@ -911,7 +919,7 @@ function renderCoachNutriSection(c){
       //   (poidsNutritionnel). Seuls les deux encadrés qui le disaient
       //   au-dessus des tableaux ont disparu, avec leurs fonctions.
       + (()=>{ try{ return _htmlTableauxTableur(c); }catch(e){ return ''; } })()
-      + '</div>'
+      + '</div></details>'
     // ⚠ « RÉGLER LES OBJECTIFS » N'EST PLUS UN MENU DÉROULANT (build 1404).
     //   Kevin, 22/09/2026 : « mets pas de menu déroulant mais laisse le bouton
     //   en rouge ». Le contenu est rendu A DECOUVERT, sans titre ni repli :

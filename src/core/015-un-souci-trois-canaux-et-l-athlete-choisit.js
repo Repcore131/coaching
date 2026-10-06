@@ -696,6 +696,21 @@ let _ccdVue='entrainement';
 // On neutralise le comportement le temps du saut plutot que de passer
 // behavior:'instant', que les navigateurs anciens ignorent silencieusement —
 // ils feraient alors le defilement anime qu'on cherche a eviter.
+function _ccdVersCibles(){
+  _ccdRemonter();
+  try{
+    const z=document.getElementById('ccd-cibles');
+    if(!z||!z.firstElementChild) return false;
+    const barre=document.getElementById('ccd-ancres');
+    const sous=barre?Math.max(0,barre.getBoundingClientRect().bottom):0;
+    const y=z.getBoundingClientRect().top+window.scrollY-sous-8;
+    if(y>0){
+      const h=document.documentElement, av=h.style.scrollBehavior;
+      h.style.scrollBehavior='auto'; window.scrollTo(0,y); h.style.scrollBehavior=av;
+    }
+    return true;
+  }catch(e){ return false; }
+}
 function _ccdRemonter(){
   try{
     const h=document.documentElement;
@@ -795,6 +810,8 @@ function _majBoutonBilan(c){
 // pixels d'ecart, pour dire la meme chose. Voir _majBoutonBilan.
 function ccdVue(nom){
   const v=CCD_VUES.indexOf(nom)>=0?nom:'entrainement';
+  // Quitter Nutrition avec des cibles non transmises : le bandeau le dit.
+  if(v!=='nutrition') try{ nutBrouillonAvertir(); }catch(e){}
   // LE RAFRAICHISSEMENT DE FOND NE DOIT PAS RAMENER LE COACH EN HAUT.
   // openClientDetail repasse ici toutes les 30 s avec l'onglet DEJA ouvert :
   // remonter a chaque passage arracherait la page sous ses yeux pendant
@@ -824,7 +841,9 @@ function ccdVue(nom){
     if(ec) ec.dataset.vue=v;
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
-    if(_change) _ccdRemonter();
+    // NUTRITION (06/10/2026) : on arrive SUR la carte « Cibles », calée sous la
+    // barre d'onglets — le geste courant (−100, Transmettre) sans défiler.
+    if(_change) (v==='nutrition'?_ccdVersCibles():_ccdRemonter());
   }catch(e){}
   // E4 : le moteur de l'analyse morpho ne part qu'ici, à l'arrivée sur Données.
   if(_change&&v==='donnees'){ try{ const c=getOwnedClient(currentClientId); if(c) _anatLancerFond(c); }catch(e){} }

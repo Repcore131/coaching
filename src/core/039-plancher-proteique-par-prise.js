@@ -1239,7 +1239,9 @@ function _ajustMigrer(u){
 // absent, pour que l'appelant puisse toujours dire ce qui s'est passe.
 // L'AUTEUR : 'athlete' quand c'est l'athlète qui clique (origineSiAbsente
 // 'athlete'), le coach sinon. Chacun ne bouge que SA case.
-function appliquerDeltaKcal(u,sens,origineSiAbsente){
+// `montant` (06/10/2026) : le brouillon du coach applique son écart en UNE
+// fois (−100, +50…) ; sans lui, le pas de vingt, comme avant.
+function appliquerDeltaKcal(u,sens,origineSiAbsente,montant){
   if(!u) return null;
   if(!u.nutrition) u.nutrition={};
   try{ _ajustMigrer(u); }catch(e){}
@@ -1255,7 +1257,8 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente){
   }
   const _tbAvant=nut.tableur, _macrosAvant=nut.macros;
   const avant=deltaKcalPartage(u);
-  const pas=(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
+  const _m=Number(montant)>0?Math.round(Number(montant)):ATH_DELTA_PAS;
+  const pas=(sens<0?-_m:_m);
   const tb=Object.assign({},nut.tableur||{});
   const aj=Object.assign({coach:0,athlete:0},ajustKcal(u));
   aj[par]+=pas;

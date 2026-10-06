@@ -13384,3 +13384,26 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .bb-sep{color:var(--text-faint)}
 .bb-anciens{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;background:var(--surface-1);border:1px solid var(--border);
   border-radius:var(--r-2);padding:8px 12px;margin-bottom:12px}
+
+/* ══ LA CARTE « CIBLES » EN TÊTE DE L'ONGLET NUTRITION (06/10/2026) ══════
+   Les tailles existantes, rien de plus grand : deux lignes de chiffres, les
+   pas, un seul envoi. */
+.nut-cibles{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px;box-shadow:var(--e1)}
+.nut-c-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.nut-c-l{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:10px;align-items:baseline;font-size:var(--fs-sm);color:var(--text);padding:3px 0}
+.nut-c-l b{font-weight:800}
+.nut-c-j{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:var(--sub);min-width:28px}
+.nut-c-e{font-size:var(--fs-xs);color:var(--orange-text, var(--sub));margin-top:6px}
+.nut-c-rien{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.nut-c-pas{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.nut-pas{min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer}
+.nut-pas:hover,.nut-pas:focus-visible{border-color:var(--red)}
+.nut-c-b{display:flex;gap:8px;margin-top:10px}
+.nut-c-b .btn{flex:1;margin:0;min-height:44px}
+.nut-calc{margin-bottom:12px}
+.nut-calc-t{cursor:pointer;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--sub);padding:10px 0;min-height:44px;display:flex;align-items:center}
+.nut-bandeau{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:var(--z-modal);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--red);border-radius:var(--r-3);
+  padding:10px 12px;font-size:var(--fs-xs);color:var(--text);box-shadow:var(--e3)}
+.nut-bandeau .btn{margin:0;min-height:40px}

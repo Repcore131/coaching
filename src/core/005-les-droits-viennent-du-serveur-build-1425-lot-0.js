@@ -1113,6 +1113,8 @@ function go(id){
   try{ setTimeout(_chronoTick,0); }catch(e){}
   // La recherche rapide suit l'ecran (rrPlacer) : apres le changement.
   try{ setTimeout(rrPlacer,0); }catch(e){}
+  // Des cibles non transmises, et le coach quitte la fiche : le bandeau.
+  try{ if(id!=='s-coach-client') nutBrouillonAvertir(); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}

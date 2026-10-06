@@ -22794,7 +22794,10 @@ async function testExercices(){
         if(!r||!r.bouge||r.refus) return _echec('le coach est bloqué : '+JSON.stringify(r));
         if(!r.sousPlancher) return _echec('pas d’avertissement');
         if(!(Number(c.nutrition.macros.on.kcal)<plancherKcal(c))) return _echec('la valeur a été remontée');
-        return String(tbkDelta).indexOf('r.sousPlancher')>=0?true:_echec('tbkDelta n’affiche pas l’avertissement');
+        // Depuis le brouillon (06/10/2026), le −20 n'écrit plus : le plancher se
+        // confirme EXPLICITEMENT à la transmission (nutTransmettre).
+        return /nutBrouillonAjouter/.test(String(tbkDelta))&&/plancherAthlete/.test(String(nutTransmettre))&&/rcConfirm/.test(String(nutTransmettre))
+          ?true:_echec('le plancher n’est plus confirmé à la transmission');
       } finally { currentUser=sv.u; _plConfirme=sv.pc; }});
     // ── LE CYCLE NE TOUCHE LA CHARGE QUE SI ELLE L'A DIT ; LE VOLUME DE MAINTIEN ──
     ok('Cycle : phase menstruelle calculée, rien déclaré → charge inchangée (1) ; ajusterAuto → 0,95 ; j1_difficile → 0,80',()=>{
@@ -55875,6 +55878,65 @@ async function testExercices(){
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — LES CIBLES EN BROUILLON : UN SEUL ENVOI ──
+    const _NB=(fn)=>{
+      const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,conf:window.rcConfirm,br:_nutBrouillon};
+      let fini=true;
+      const coach={id:'cnb',email:'coach.nb@t.fr',role:'coach',alertStatus:{}};
+      const ath={id:'anb',email:'lea.nb@t.fr',fname:'Léa',role:'athlete',coachId:'cnb',status:'COACHING_SUIVI',sessions:[],bilans:[],
+        nutrition:{macros:{on:{kcal:2200,p:150,g:250,l:70,f:30},off:{kcal:2000,p:150,g:200,l:70,f:30},origine:'coach'},manuel:true,histo:[]}};
+      const pushes=[];
+      const ranger=()=>{ try{ _nutFinAnnulable(); }catch(e){} _nutBrouillon=sv.br; try{ _nutBandeauRetirer(); }catch(e){}
+        DB.set('users',sv.users); currentUser=sv.u; currentClientId=sv.cid; CLOUD.pushOne=sv.push; window.toast=sv.t; window.toastSync=sv.ts; window.rcConfirm=sv.conf; };
+      try{
+        DB.set('users',{'coach.nb@t.fr':coach,'lea.nb@t.fr':ath});
+        currentUser=coach; currentClientId='anb'; _nutBrouillon=null;
+        CLOUD.pushOne=(e,c)=>{ pushes.push(JSON.parse(JSON.stringify(c.nutrition.macros))); return Promise.resolve(true); };
+        window.toast=()=>{}; window.toastSync=()=>{}; window.rcConfirm=()=>Promise.resolve(true);
+        const r=fn(pushes);
+        if(r&&typeof r.then==='function'){ fini=false; return r.finally(ranger); }
+        return r;
+      } finally { if(fini) ranger(); }
+    };
+    const _nbMac=()=>JSON.parse(JSON.stringify(((DB.get('users')||{})['lea.nb@t.fr'].nutrition||{}).macros));
+    okA('Cibles en brouillon : 5 appuis −20 puis Transmettre → un seul envoi ; un double appui ne double rien',async()=>_NB(async(pushes)=>{
+      const avant=_nbMac();
+      for(let i=0;i<5;i++) tbkDelta(-1);
+      if(pushes.length) return _echec(pushes.length+' envois avant Transmettre');
+      if(_nbMac().on.kcal!==avant.on.kcal) return _echec('le dossier a bougé avant Transmettre');
+      if(nutBrouillonDelta('anb')!==-100) return _echec('écart : '+nutBrouillonDelta('anb'));
+      const ap=nutApercu((DB.get('users')||{})['lea.nb@t.fr'],-100);
+      if(ap.nutrition.macros.on.kcal!==2100||ap.nutrition.macros.off.kcal!==1900) return _echec('aperçu : '+JSON.stringify(ap.nutrition.macros));
+      await Promise.all([nutTransmettre(),nutTransmettre()]);
+      if(pushes.length!==1) return _echec(pushes.length+' envois');
+      if(pushes[0].on.kcal!==2100||pushes[0].off.kcal!==1900||pushes[0].on.g!==avant.on.g-25) return _echec('envoyé : '+JSON.stringify(pushes[0]));
+      const h=histoCibles((DB.get('users')||{})['lea.nb@t.fr']);
+      return h.length&&h[h.length-1].src==='transmis'&&h[h.length-1].on.kcal===2100?true:_echec('historique : '+JSON.stringify(h));
+    }));
+    okA('Cibles en brouillon : « Annuler » restaure les macros exactes, l’historique garde la transmission et note « annulé »',async()=>_NB(async(pushes)=>{
+      const avant=_nbMac();
+      nutBrouillonAjouter(-100);
+      await nutTransmettre();
+      if(!_nutAnnulable) return _echec('pas d’annulation offerte');
+      nutAnnuler();
+      const apres=_nbMac();
+      if(JSON.stringify(apres.on)!==JSON.stringify(avant.on)||JSON.stringify(apres.off)!==JSON.stringify(avant.off)) return _echec('restauré : '+JSON.stringify(apres));
+      if(pushes.length!==2) return _echec(pushes.length+' envois (transmettre + annuler)');
+      const h=histoCibles((DB.get('users')||{})['lea.nb@t.fr']).map(e=>e.src);
+      return h.join()==='transmis,annule'?true:_echec('historique : '+h.join());
+    }));
+    ok('Cibles en brouillon : quitter avec des modifs non transmises affiche « Transmettre / Jeter » ; Jeter ne touche à rien',()=>_NB((pushes)=>{
+      const avant=_nbMac();
+      nutBrouillonAjouter(-50);
+      go('s-coach-home');
+      const z=document.getElementById('nut-bandeau');
+      if(!z||!/Modifs non transmises/.test(z.textContent)||!/Transmettre/.test(z.textContent)||!/Jeter/.test(z.textContent)) return _echec('bandeau : '+(z&&z.textContent));
+      nutJeter();
+      if(document.getElementById('nut-bandeau')) return _echec('bandeau resté');
+      if(pushes.length||JSON.stringify(_nbMac())!==JSON.stringify(avant)) return _echec('Jeter a écrit');
+      // Sous le plancher : une confirmation explicite.
+      return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
+    }));
     // ── 06/10/2026 — RÉPONDRE À UN BILAN : RÉPONSES D'EMBLÉE, LA DOULEUR À L'ÉCRAN ──
     const _RB=(fn)=>{
       const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,sg:signauxEntrainement,push:CLOUD.pushOne,dep:window.deposerEvenement,
