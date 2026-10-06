@@ -1022,7 +1022,10 @@ function _synMeilleurE1rm(user,debut,fin){
     for(const nom of Object.keys(s.data)){
       let p=null;
       try{ p=perfExercice(s,nom,user); }catch(e){ p=null; }
-      if(!p||p.metrique!=='e1RM'||p.mixte||!(p.score>0)) continue;
+      // Au-delà de 12 répétitions potentielles le modèle ne vaut plus : la
+      // meilleure série doit être FIABLE (build 1826 : il n'y a plus de métrique
+      // « volume » pour le dire).
+      if(!p||!p.fiable||!(p.score>0)) continue;
       let k=nom; try{ k=exKey(nom)||nom; }catch(e){}
       const e=par.get(k)||{nom,points:[]};
       e.points.push({date:s.date,score:p.score});

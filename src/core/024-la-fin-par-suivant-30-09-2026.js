@@ -971,10 +971,28 @@ function _perfReps(s){
 // LECTURE DE DECISION quand `user` est fourni : c'est ce score qui alimente
 // l'etat d'exercice, donc la detection de plateau. Sans dossier, elle reste
 // exactement ce qu'elle etait.
+// ══ UNE SEULE UNITÉ : L'e1RM, TOUJOURS EN KG (06/10/2026, build 1826) ══
+// Le score prenait, série par série, l'e1RM ou le tonnage-série w × r selon
+// que reps + RIR tenaient sous 12, puis le MAX des deux unités — et
+// _calculEtat coupait la série à chaque changement. Au banc : un e1RM de 96 à
+// 100 lu « en recul », un 60 × 10/11/12 à RIR 2 « pas assez de recul » pour
+// toujours, 700 « volume » une semaine et 120 « e1RM » la suivante.
+// Désormais : le max des e1RM des séries faites, répétitions potentielles
+// plafonnées à 20 (au-delà, la série compte avec 20). `fiable` dit si la
+// MEILLEURE série tient dans e1rmFiable ; `metrique` vaut toujours 'e1RM'
+// (gardé pour compatibilité). `score0` : le même calcul avec RIR 0, la borne
+// basse cohérente quand les RIR manquent.
+const PERF_REPS_POTENTIELLES_MAX=20;
+function e1rmPlafonne(poids,reps,rir){
+  const r=parseFloat(reps)||0, i=Math.max(0,parseFloat(rir)||0);
+  if(r+i<=PERF_REPS_POTENTIELLES_MAX) return e1rm(poids,r,i);
+  return r>=PERF_REPS_POTENTIELLES_MAX?e1rm(poids,PERF_REPS_POTENTIELLES_MAX,0)
+    :e1rm(poids,r,PERF_REPS_POTENTIELLES_MAX-r);
+}
 function perfExercice(sess,exNom,user){
   const d=_dataDeSeance(sess,exNom);
   if(!d||!Array.isArray(d.sets)) return null;
-  let score=0, metrique=null, vus={}, retenues=0, sansRir=0;
+  let score=0, score0=0, fiable=false, retenues=0, sansRir=0;
   // LA CHARGE EFFECTIVE (typeCharge) : le poids du corps, le lest, l'assistance.
   const _ex=_exPourCharge(exNom,user);
   for(const s of d.sets){
@@ -987,16 +1005,16 @@ function perfExercice(sess,exNom,user){
     if(!(r>0)) continue;
     retenues++;
     if(s.rir===''||s.rir==null) sansRir++;
-    const m=e1rmFiable(r,_perfRir(s,user))?'e1RM':'volume-serie';
-    vus[m]=true;
-    const v=m==='e1RM'?e1rm(w,r,_perfRir(s,user)):w*r;
-    if(v>score){ score=v; metrique=m; }
+    const i=_perfRir(s,user);
+    const v=e1rmPlafonne(w,r,i);
+    if(v>score){ score=v; fiable=e1rmFiable(r,i); }
+    const v0=e1rmPlafonne(w,r,0);
+    if(v0>score0) score0=v0;
   }
   if(!retenues) return null;
-  return {score,metrique,
-    // Séries des deux régimes dans le même exercice : le score reste le max,
-    // mais la comparaison d'une séance à l'autre devient douteuse.
-    mixte:!!(vus['e1RM']&&vus['volume-serie']),
+  return {score,score0,fiable,metrique:'e1RM',
+    // Gardé pour compatibilité : il n'y a plus deux régimes à mélanger.
+    mixte:false,
     sansRirDominant:sansRir/retenues>PART_RIR_MANQUANT};
 }
 
@@ -1012,7 +1030,7 @@ function _serieExercice(seances,exNom,slot,progName,user){
     if(!_memeCreneau(sess,slot,progName)) continue;
     const p=perfExercice(sess,exNom,user);
     if(!p||!(p.score>0)) continue;
-    out.push({date:sess.date,score:p.score,metrique:p.metrique,
+    out.push({date:sess.date,score:p.score,score0:p.score0,fiable:p.fiable,metrique:p.metrique,
               mixte:p.mixte,sansRirDominant:p.sansRirDominant,id:sess.id});
   }
   out.sort((a,b)=>a.date-b.date);
@@ -1056,26 +1074,29 @@ function _calculEtat(seances,exNom,slot,progName,user){
   let serie=_serieExercice(seances,exNom,slot,progName,user);
   if(!serie.length) return rendre({etat:'insuffisant',n:0,T:0});
 
-  // Un changement de métrique COUPE la série : comparer un e1RM à un volume de
-  // série n'a pas de sens. On repart de la dernière rupture.
-  const metrique=serie[serie.length-1].metrique;
-  let debut=serie.length-1;
-  while(debut>0&&serie[debut-1].metrique===metrique) debut--;
-  const metriqueChangee=debut>0;
-  serie=serie.slice(debut);
+  // UNE SEULE UNITÉ, PLUS DE COUPURE (build 1826) : tous les points sont des
+  // e1RM en kg. Quand TOUTES les séances ont leurs RIR majoritairement vides,
+  // on compare les e1RM à RIR 0 — une borne basse, la même d'une séance à
+  // l'autre — et le résultat le dit (sansRir).
+  const sansRir=serie.every(p=>p.sansRirDominant);
+  if(sansRir) serie=serie.map(p=>Object.assign({},p,{score:p.score0}));
+  const metrique='e1RM', metriqueChangee=false;
   _marquerAberrations(serie);
 
   const n=serie.length;
   const T=Math.round((serie[n-1].date-serie[0].date)/86400000);
-  const base={n,T,metrique,metriqueChangee,
-              mixte:serie.some(p=>p.mixte),
+  const base={n,T,metrique,metriqueChangee,sansRir,
+              mixte:false,
               aberrants:serie.filter(p=>p.aberrant).length};
   if(n<MIN_SEANCES||T<MIN_JOURS) return rendre(Object.assign({etat:'insuffisant'},base));
 
   // Écartés du MAXIMUM seulement : ces séances restent dans la série (elles
-  // comptent pour n et T), mais ne peuvent pas fixer un record.
-  const utilisable=p=>!p.aberrant&&!p.sansRirDominant;
-  const maxDe=(t)=>{const v=t.filter(utilisable).map(p=>p.score);
+  // comptent pour n et T), mais ne peuvent pas fixer un record. Une séance
+  // NON FIABLE (meilleure série au-delà de 12 répétitions potentielles) ne
+  // fixe le record que s'il n'existe aucune séance fiable dans la fenêtre.
+  const utilisable=p=>!p.aberrant&&(sansRir||!p.sansRirDominant);
+  const retenus=t=>{ const u=t.filter(utilisable); const f=u.filter(p=>p.fiable); return f.length?f:u; };
+  const maxDe=(t)=>{const v=retenus(t).map(p=>p.score);
                     return v.length?Math.max(...v):-Infinity;};
 
   const recents=serie.slice(-FENETRE_RECENTE);
@@ -1084,7 +1105,7 @@ function _calculEtat(seances,exNom,slot,progName,user){
   const maxRecent=maxDe(recents);
   const maxGlobal=Math.max(maxHist,maxRecent);
   const perfCur=serie[n-1].score;
-  const porteur=serie.filter(utilisable).reduce((a,p)=>(!a||p.score>a.score)?p:a,null);
+  const porteur=retenus(serie).reduce((a,p)=>(!a||p.score>a.score)?p:a,null);
   const joursDepuisRecord=porteur
     ? Math.round((serie[n-1].date-porteur.date)/86400000) : 0;
 
@@ -1158,6 +1179,8 @@ function etatMuscle(user,m,slot,progName){
 
 let _cachePlateau={};
 function _viderCachePlateau(){ _cachePlateau={}; }
+// « charge × reps » ne sert plus qu'à l'affichage d'un record de volume : le
+// score ne compare plus jamais un e1RM à un tonnage-série.
 const PERF_METRIQUE_LIB={'e1RM':'e1RM estimé','volume-serie':'charge × reps'};
 const PERF_ETAT_LIB={
   progression:'en progression', ralentissement:'ça ralentit',
@@ -1263,7 +1286,8 @@ function _listeEtats(user){
   for(const [nom,ref] of vus){
     const e=etatExercice(user,nom,ref.slot,ref.name);
     const serie=_serieExercice(user.sessions||[],nom,ref.slot,ref.name,user);
-    out.push({nom,...e,points:serie.map(p=>p.score)});
+    // La courbe suit la même unité que le verdict : RIR 0 quand il est « sans RIR ».
+    out.push({nom,...e,points:serie.map(p=>e.sansRir?p.score0:p.score)});
   }
   // Les exercices sans recul suffisant ferment la liste : ils n'ont rien à dire.
   return out.sort((a,b)=>{
@@ -1288,7 +1312,7 @@ function _ligneEtat(x,info){
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${detail}</div>
     ${x.etat!=='insuffisant'?_sparkline(x.points,c):''}
-    <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${PERF_METRIQUE_LIB[x.metrique]||''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
+    <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${PERF_METRIQUE_LIB[x.metrique]||''}${x.sansRir?' · estimation sans RIR':''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
   </div>`;
 }
 

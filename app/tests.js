@@ -22311,12 +22311,14 @@ async function testExercices(){
        Math.abs(_pf(60,10,'1').score-60*(1+11/30))<1e-9
        &&_pf(60,10,'1').metrique==='e1RM',
        _pf(60,10,'1').score+' / '+_pf(60,10,'1').metrique);
-    ok('Critère 5 : 40 kg × 20 reps → 800 en volume-serie',
-       _pf(40,20,'2').score===800&&_pf(40,20,'2').metrique==='volume-serie',
+    // Build 1826 : UNE SEULE UNITÉ. Au-delà de 12 répétitions potentielles, la
+    // série reste un e1RM — marqué non fiable —, plafonné à 20 répétitions.
+    ok('Critère 5 : 40 kg × 20 reps à RIR 2 → e1RM plafonné à 20 répétitions, non fiable',
+       Math.abs(_pf(40,20,'2').score-40*(1+20/30))<1e-9&&_pf(40,20,'2').metrique==='e1RM'&&_pf(40,20,'2').fiable===false,
        _pf(40,20,'2').score+' / '+_pf(40,20,'2').metrique);
-    ok('Bascule de métrique à 12 reps : encore e1RM',_pf(60,12,'0').metrique==='e1RM');
-    ok('Bascule de métrique à 13 reps : volume-serie',_pf(60,13,'0').metrique==='volume-serie');
-    ok('r=13 vaut charge × reps',_pf(60,13,'0').score===780);
+    ok('À 12 reps : e1RM fiable',_pf(60,12,'0').metrique==='e1RM'&&_pf(60,12,'0').fiable===true);
+    ok('À 13 reps : toujours un e1RM, non fiable',_pf(60,13,'0').metrique==='e1RM'&&_pf(60,13,'0').fiable===false);
+    ok('r=13 vaut son e1RM, jamais charge × reps',Math.abs(_pf(60,13,'0').score-e1rm(60,13,0))<1e-9);
     ok('r=1 reste en e1RM, et vaut sa charge',_pf(100,1,'0').metrique==='e1RM'&&_pf(100,1,'0').score===100);
     // Depuis le 30/09/2026 : une série à 0 répétition n'est pas une mesure (essai raté).
     ok('r=0 : la série est ignorée, pas de score',_pf(100,0,'0')===null);
@@ -22325,7 +22327,7 @@ async function testExercices(){
     ok('RIR vide compte comme 0',_pf(60,10,'').score===_pf(60,10,'0').score);
     ok('T1 — RIR 2 élève l’e1RM (il abaissait avec l’ancienne formule)',_pf(60,10,'2').score>_pf(60,10,'0').score&&_pf(60,10,'2').metrique==='e1RM');
     ok('T1 — RIR 2 : 60 × (1 + 12/30)',Math.abs(_pf(60,10,'2').score-60*(1+12/30))<1e-9);
-    ok('T1 — reps + RIR au-delà de 12 : volume-serie',_pf(60,10,'3').metrique==='volume-serie'&&_pf(60,10,'3').score===600);
+    ok('T1 — reps + RIR au-delà de 12 : e1RM non fiable',_pf(60,10,'3').metrique==='e1RM'&&_pf(60,10,'3').fiable===false&&Math.abs(_pf(60,10,'3').score-e1rm(60,10,3))<1e-9);
     // Séries non éligibles
     ok('Série non validée : ignorée',_pf(60,10,'1')&&
        perfExercice({data:{'X':{sets:[{done:false,weight:'60',reps:'10',rir:'1'}]}}},'X')===null);
@@ -22343,7 +22345,8 @@ async function testExercices(){
     const _pfMix=perfExercice({data:{'X':{sets:[
       {done:true,weight:'60',reps:'10',rir:'0'},
       {done:true,weight:'40',reps:'20',rir:'0'}]}}},'X');
-    ok('Régimes mélangés : signalés',_pfMix.mixte===true);
+    // Build 1826 : il n'y a plus deux régimes ; le score est le meilleur e1RM.
+    ok('Plus de régimes mélangés : le meilleur e1RM des séries',_pfMix.mixte===false&&Math.abs(_pfMix.score-e1rm(60,10,0))<1e-9,JSON.stringify(_pfMix));
 
     // ── LOT T1 : la formule, et calcSug supprimée ──
     ok('T1 — 100 kg × 8 : RIR 0 → 126,7 ; RIR 2 → 133,3 ; RIR 4 → 140,0',
@@ -23166,7 +23169,7 @@ async function testExercices(){
     const _plRir=[_plSeance(0,90),_plSansRir(7,300),_plSeance(14,90),_plSeance(21,90),
                   _plSeance(28,90),_plSeance(35,90)];
     ok('Séance à plus de 50 % de RIR vides : écartée du maximum',
-       _plEtat(_plRir).maxGlobal===90,String(_plEtat(_plRir).maxGlobal));
+       Math.abs(_plEtat(_plRir).maxGlobal-perfExercice(_plSeance(0,90),'EX').score)<1e-9,String(_plEtat(_plRir).maxGlobal));
 
     // ── Coupure au changement de métrique ──
     const _plMetr=[_plSeance(0,100),_plSeance(7,100),_plSeance(14,100),
@@ -23175,10 +23178,12 @@ async function testExercices(){
       {id:'m2',date:_plJ(28),slot:0,name:'P',
        data:{'EX':{sets:[{done:true,weight:'62',reps:'10',rir:'2'}]}}}];
     const _rMetr=_plEtat(_plMetr);
-    ok('Un changement de métrique coupe la série',_rMetr.n===2,String(_rMetr.n));
-    ok('La coupure est signalée',_rMetr.metriqueChangee===true);
-    ok('La métrique retenue est celle de la fin',_rMetr.metrique==='e1RM',_rMetr.metrique);
-    ok('Série trop courte après coupure → insuffisant',_rMetr.etat==='insuffisant');
+    // Build 1826 : une seule unité, donc PLUS DE COUPURE. 20 répétitions et
+    // 10 répétitions se comparent en e1RM.
+    ok('Changer de format de séries ne coupe plus la série',_rMetr.n===5,String(_rMetr.n));
+    ok('Aucune coupure signalée',_rMetr.metriqueChangee===false);
+    ok('La métrique est l’e1RM',_rMetr.metrique==='e1RM',_rMetr.metrique);
+    ok('Un verdict est rendu sur toute la série',_rMetr.etat!=='insuffisant',_rMetr.etat);
 
     // ── etatMuscle ──
     const _plMU=(etats)=>{
@@ -23575,6 +23580,43 @@ async function testExercices(){
           if(!ok_) return _echec('cas '+i+' : '+w+' → '+r.kg+' ('+ex.name+', '+reps+', '+R.join('-')+', '+(mode||'séance')+')');
         }
         return true;});
+    }
+
+    // ══════ UNE SEULE UNITÉ POUR LES ÉTATS : L'e1RM (06/10/2026, build 1826) ══════
+    {
+      const _J=864e5, _t0=Date.now()-40*_J;
+      const _se=(j,w,reps,rir)=>({id:'pe'+j+'_'+w+'_'+reps.join(''),date:_t0+j*_J,slot:0,name:'P',
+        data:{'SQUAT':{sets:reps.map(r=>({weight:String(w),reps:String(r),rir:rir==null?'':String(rir),done:true}))}}});
+      const _et=l=>_calculEtat(l,'SQUAT',0,'P');
+      ok('États (a) : 3 × (60 × 10-12-14-15) puis 65 × 10-11-12-13 à RIR 3 → progression (e1RM de 96 à 100)',()=>{
+        const l=[_se(0,60,[10,12,14,15],3),_se(7,60,[10,12,14,15],3),_se(14,60,[10,12,14,15],3),_se(28,65,[10,11,12,13],3)];
+        const p0=perfExercice(l[0],'SQUAT'), p3=perfExercice(l[3],'SQUAT');
+        if(Math.round(p0.score)!==96||Math.round(p3.score)!==100) return _echec('e1RM '+p0.score+' → '+p3.score);
+        if(p0.metrique!=='e1RM'||p0.fiable) return _echec('métrique ou fiabilité : '+JSON.stringify(p0));
+        const e=_et(l);
+        return e.etat==='progression'?true:_echec(e.etat);});
+      ok('États (b) : 60 × 10-11-12 à RIR 2 sur 4 séances et 21 jours → un verdict rendu',()=>{
+        const l=[0,7,14,21].map(j=>_se(j,60,[10,11,12],2));
+        const e=_et(l);
+        return (e.etat!=='insuffisant'&&e.n===4&&e.metriqueChangee===false)?true:_echec(JSON.stringify(e));});
+      ok('États (c) : 100 × 5 à RIR 1 et 70 × 10 à RIR 3 → le score est l’e1RM de la série lourde',()=>{
+        const s=_se(0,100,[5],1); s.data.SQUAT.sets.push({weight:'70',reps:'10',rir:'3',done:true});
+        const p=perfExercice(s,'SQUAT');
+        return (p.score===e1rm(100,5,1)&&p.score===120&&p.metrique==='e1RM'&&p.fiable)?true:_echec(JSON.stringify(p));});
+      ok('États (d) : RIR vides, 100 × 8 → 100 × 10 → progression, « estimation sans RIR »',()=>{
+        const l=[_se(0,100,[8]),_se(7,100,[8]),_se(14,100,[9]),_se(21,100,[10])];
+        const e=_et(l);
+        if(e.etat!=='progression'||e.sansRir!==true||!isFinite(e.maxGlobal)) return _echec(JSON.stringify(e));
+        return /estimation sans RIR/.test(_ligneEtat(Object.assign({nom:'SQUAT',points:[1,2]},e)))?true:_echec('l’écran ne le dit pas');});
+      ok('États : une vraie baisse (100 × 8 → 90 × 8 à RIR 2, répétée) reste « en recul » ; plafond à 20 répétitions potentielles',()=>{
+        const l=[_se(0,100,[8,8],2),_se(7,100,[8,8],2),_se(14,90,[8,8],2),_se(21,90,[8,8],2)];
+        const e=_et(l);
+        if(e.etat!=='regression') return _echec(e.etat);
+        const p=perfExercice(_se(0,50,[30],5),'SQUAT');
+        return p.score===e1rm(50,20,0)?true:_echec('plafond : '+p.score);});
+      ok('États : plus aucune comparaison entre un e1RM et un charge × reps',()=>{
+        const src=String(perfExercice)+String(_calculEtat);
+        return (/w\*r\b/.test(src)||/'volume-serie'/.test(src))?_echec('le tonnage-série entre encore dans le score'):true;});
     }
 
     // ══════ INDICE DE FORME DÉCLARÉE ══════
