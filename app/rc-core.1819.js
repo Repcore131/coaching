@@ -16361,12 +16361,68 @@ function positionBras(user){
 
 // Exercices du même schéma moteur, à titre de VARIANTES POSSIBLES. Ce lot
 // n'écarte rien : ces noms sont proposés à côté, jamais à la place.
-function _variantesSchema(schema,combien){
+//
+// ⚠ PLUS LES N PREMIERS PAR ORDRE ALPHABÉTIQUE (06/10/2026) : « FESSIER A LA
+//   MACHINE DE TRACTION, MUSCLE UP » sortaient en variantes de tirage. Dans
+//   l'ordre :
+//   1. la liste CHOISIE par les profils (`opts.preferees`, champ `variantes`
+//      des aménagements), quand elle existe ;
+//   2. à défaut, le catalogue du schéma, SANS la famille de l'exercice courant
+//      (`opts.exclure`), sans les exercices dont le groupe principal n'est pas
+//      celui du schéma, sans les mouvements avancés, et trié par fréquence
+//      d'usage dans les programmes du coach.
+const VARIANTES_EXCLUES_AVANCEES=Object.freeze(['MUSCLE UP','HANDSTAND PUSH UP','SQUAT PISTOL',
+  'SNATCH','CLEAN AND JERK','POWER CLEAN','DIPS AUX ANNEAUX','POMPE AUX ANNEAUX','MONTEE DE CORDE SANS LES JAMBES']);
+// « TRACTIONS PRISE NEUTRE » → « TRACTION PRISE » : les deux premiers mots, au singulier.
+function _familleEx(k){
+  const m=String(k||'').split(' ').filter(Boolean).slice(0,2).map(w=>w.replace(/S$/,''));
+  return m.join(' ');
+}
+function _principalEx(k){
+  try{ const g=_exGuide().get(k); return (g&&g.p&&g.p[0])||null; }catch(e){ return null; }
+}
+const _principalSchemaCache={};
+// Le groupe principal le plus fréquent parmi les exercices du schéma.
+function _principalSchema(schema){
+  if(schema in _principalSchemaCache) return _principalSchemaCache[schema];
+  const n={};
+  for(const k in _SCHEMA_INDEX) if(_SCHEMA_INDEX[k]===schema){ const p=_principalEx(k); if(p) n[p]=(n[p]||0)+1; }
+  let best=null; for(const p in n) if(!best||n[p]>n[best]) best=p;
+  return (_principalSchemaCache[schema]=best);
+}
+// La fréquence d'usage : combien de fois chaque exercice figure dans les
+// programmes des athlètes en cache et dans les modèles du coach.
+let _freqExos={t:0,m:{}};
+function _frequencesExercices(){
+  const t=Date.now();
+  if(t-_freqExos.t<30000) return _freqExos.m;
+  const m={};
+  const compter=l=>{ for(const s of (Array.isArray(l)?l:[])) for(const ex of ((s&&s.exercises)||[])){
+    if(!ex||!ex.name) continue; let k=''; try{ k=exKey(ex.name); }catch(e){ continue; } m[k]=(m[k]||0)+1; } };
+  try{ Object.values(DB.get('users')||{}).forEach(u=>{ if(u) compter(u.sessions_config); }); }catch(e){}
+  try{ ((currentUser&&currentUser.coachPrograms)||[]).forEach(p=>{ compter(p&&p.sessions_config); compter(p&&p.H); compter(p&&p.F); }); }catch(e){}
+  _freqExos={t,m};
+  return m;
+}
+function _variantesSchema(schema,combien,opts){
+  const o=opts||{}, n=combien||4;
+  let cur=''; try{ cur=o.exclure?exKey(o.exclure):''; }catch(e){ cur=''; }
   const out=[];
-  for(const k in _SCHEMA_INDEX){
-    if(_SCHEMA_INDEX[k]===schema){ out.push(k); if(out.length>=(combien||4)) break; }
+  for(const v of (o.preferees||[])){
+    let k=''; try{ k=exKey(v); }catch(e){ continue; }
+    if(!k||k===cur||!_SCHEMA_INDEX[k]||out.indexOf(k)>=0) continue;
+    out.push(k);
+    if(out.length>=n) return out;
   }
-  return out;
+  const fam=cur?_familleEx(cur):'';
+  const princ=_principalSchema(schema);
+  const freq=_frequencesExercices();
+  const cand=Object.keys(_SCHEMA_INDEX).filter(k=>_SCHEMA_INDEX[k]===schema&&k!==cur&&out.indexOf(k)<0
+    &&(!fam||_familleEx(k)!==fam)
+    &&VARIANTES_EXCLUES_AVANCEES.indexOf(k)<0
+    &&(!princ||_principalEx(k)===princ));
+  cand.sort((a,b)=>(freq[b]||0)-(freq[a]||0)||(a<b?-1:a>b?1:0));
+  return out.concat(cand).slice(0,n);
 }
 
 // Rapport des volumes quadriceps / ischios sur les dernières semaines
@@ -17416,8 +17472,8 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Moins de ~10 cm au test du genou au mur. En vidéo : talons qui décollent au fond, buste qui plonge d’un coup, ou genoux qui rentrent : les trois compensations classiques d’une amplitude qu’on n’a pas.',
    mecanique:'Un squat complet demande de l’ordre de 35–40° de flexion dorsale. Sans elle, le corps emprunte l’amplitude ailleurs. La cause n’est pas toujours la souplesse : elle peut être articulaire. Le test dit qu’il manque de l’amplitude, pas pourquoi.',
    privilegier:'Presse à cuisses, hack squat, extension de jambes : le quadriceps se charge sans exiger la cheville. Squat talons surélevés : la méta-analyse montre un gain d’amplitude de cheville et de genou à partir d’environ 2,5 cm d’élévation, avec un effet dose.',
-   amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat'},
-     {quoi:'Fentes avant',reglage:'fentes arrière ou bulgares, qui demandent moins de flexion dorsale à l’avant',schema:'fente'}],
+   amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat',variante:/SERRE/,variantes:['PRESSE A CUISSE INCLINE PIEDS ECARTES','HACKSQUAT']},
+     {quoi:'Fentes avant',reglage:'fentes arrière ou bulgares, qui demandent moins de flexion dorsale à l’avant',schema:'fente',variante:/^(?!.*ARRIERE).*FENTE/,variantes:['FENTES ARRIERE HALTERE','FENTE BULGARE MACHINE']}],
    accent:'Deux voies en parallèle : la cale pour s’entraîner aujourd’hui, le travail d’amplitude pour ne plus en avoir besoin. L’app doit dire lequel des deux elle propose : une cale est un contournement, pas un traitement.',
    specificite:'La cale n’est pas gratuite : la même méta-analyse montre qu’une élévation importante réduit l’amplitude de hanche et de tronc. On déplace le travail vers le quadriceps, on ne l’ajoute pas. À assumer explicitement.',
    piege:'Attribuer à la morphologie ce qui vient de la cheville. Le test du genou au mur prend trente secondes et doit être fait avant toute conclusion sur les leviers.'},
@@ -17427,9 +17483,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Flexion de hanche qui bute franchement, avec bascule du bassin, et un arrêt net plutôt qu’élastique. Souvent une nette asymétrie entre rotation interne et externe. En squat : profondeur limitée quel que soit le stance, ou pincement à l’aine.',
    mecanique:'La structure de hanche varie énormément d’une personne à l’autre : l’orientation du col du fémur s’étale sur une trentaine de degrés, celle du cotyle autant. Concrètement, l’un squatte pointes presque droites et descend loin, l’autre bute tôt et a besoin d’ouvrir. Ce n’est pas de la souplesse à gagner.',
    privilegier:'La recherche du stance, méthodiquement : écartement et rotation des pointes testés par paliers, à charge légère, en notant la profondeur confortable. Puis les machines qui contournent l’amplitude : presse avec pieds hauts, hack, leg curl, extension.',
-   amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat'},
-     {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat'},
-     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat',variantes:['HACKSQUAT','PRESSE A CUISSE INCLINE']},
+     {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat',variante:/SERRE/,variantes:['SQUAT SUMO','PRESSE A CUISSE INCLINE PIEDS ECARTES']},
+     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche',variante:/SUMO/,variantes:['SOULEVE DE TERRE TRAP BARRE','SOULEVE DE TERRE ROUMAIN']}],
    accent:'Amplitude utile plutôt qu’amplitude maximale. Le travail en position longue se cherche sur des exercices où la hanche n’est pas la butée : leg curl allongé, fentes, presse.',
    specificite:'Distinguer butée osseuse et raideur demande une imagerie que personne n’ira faire. RepCore décrit le test et se tait sur la cause : « l’arrêt est net et s’accompagne d’une bascule du bassin » est un constat.',
    piege:'Prescrire des mois d’étirements de hanche contre une butée qui ne cédera pas. On n’allonge pas un os ; on irrite une articulation.'},
@@ -17439,10 +17495,10 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Bras qui ne montent pas au mur sans décoller les lombaires ; main dans le dos limitée d’un côté. En vidéo : compensation lombaire au développé militaire, épaules qui montent aux oreilles en élévation.',
    mecanique:'L’amplitude manquante est empruntée à la colonne ou à la scapula. Ce n’est pas un défaut de force : c’est une contrainte de course.',
    privilegier:'Développés assis à dossier (le dossier empêche l’emprunt lombaire et le rend visible), haltères plutôt que barre (la trajectoire s’adapte), prise neutre, poulies pour les élévations.',
-   amenager:[{quoi:'Développé nuque',reglage:'devant, ou à la machine : la trajectoire reste guidée et les lombaires n’ont plus à combler l’amplitude qui manque',schema:'poussee-verticale'},
-     {quoi:'Tirage nuque',reglage:'devant : le dos travaille autant, et l’épaule n’a plus à aller chercher une rotation qu’elle n’a pas',schema:'tirage-vertical'},
-     {quoi:'Prise très large au développé couché',reglage:'revenir vers 180 % de la largeur d’épaules',schema:'poussee-horizontale'},
-     {quoi:'Dips profonds',reglage:'limiter la descente au point où l’épaule reste devant, sans chercher le fond',schema:'poussee-horizontale'}],
+   amenager:[{quoi:'Développé nuque',reglage:'devant, ou à la machine : la trajectoire reste guidée et les lombaires n’ont plus à combler l’amplitude qui manque',schema:'poussee-verticale',variante:/NUQUE/,variantes:['DEVELOPPE MILITAIRE HALTERES','DEVELOPPE MILITAIRE MACHINE']},
+     {quoi:'Tirage nuque',reglage:'devant : le dos travaille autant, et l’épaule n’a plus à aller chercher une rotation qu’elle n’a pas',schema:'tirage-vertical',variante:/NUQUE/,variantes:['TIRAGE POITRINE PRISE NEUTRE','TIRAGE POITRINE LARGEUR EPAULE']},
+     {quoi:'Prise très large au développé couché',reglage:'revenir vers 180 % de la largeur d’épaules',schema:'poussee-horizontale',variante:/DEVELOPPE COUCHE|FLOOR PRESS/,variantes:['DEVELOPPE COUCHE HALTERE','DEVELOPPE A LA MACHINE CONVERGENTE']},
+     {quoi:'Dips profonds',reglage:'limiter la descente au point où l’épaule reste devant, sans chercher le fond',schema:'poussee-horizontale',variante:/DIPS/,variantes:['DEVELOPPE DECLINE HALTERE','DIPS MACHINE GUIDEE']}],
    accent:'Amplitude d’épaule travaillée à part, hors des séries lourdes, et réévaluée tous les deux mois. Tant qu’elle manque, la charge reste sur des trajectoires guidées.',
    specificite:'C’est le profil le plus évolutif du document : un athlète reconnu en janvier peut ne plus l’être en mai. Le profil porte donc une date de péremption.',
    piege:'Figer l’aménagement. Un exercice écarté pour cause d’amplitude et jamais rouvert devient un interdit permanent né d’un test de trente secondes.'},
@@ -17452,9 +17508,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Dos qui s’enroule tôt en flexion avant jambes tendues. Au soulevé : lombaires arrondies dès le départ, pas seulement sous fatigue.',
    mecanique:'Ce n’est pas un problème de levier : c’est une amplitude manquante. La différence est décisive parce que les deux réponses sont opposées : un levier défavorable se contourne par la variante, une raideur se travaille.',
    privilegier:'Départ surélevé (soulevé aux blocs, trap bar) pour charger dans l’amplitude disponible ; soulevé roumain à amplitude partielle, augmentée progressivement ; leg curl pour les ischios sans contrainte lombaire.',
-   amenager:[{quoi:'Soulevé au sol lourd',reglage:'surélever la barre jusqu’à ce que le dos tienne',schema:'charniere-hanche'},
-     {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche'},
-     {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Soulevé au sol lourd',reglage:'surélever la barre jusqu’à ce que le dos tienne',schema:'charniere-hanche',variante:/SOULEVE DE TERRE(?! ROUMAIN)|DEADLIFT/,variantes:['SOULEVE DE TERRE TRAP BARRE','HIP THRUST']},
+     {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche',variante:/GOOD MORNING/,variantes:['SOULEVE DE TERRE ROUMAIN','EXTENSION DE BUSTE SUR BANC']},
+     {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche',variante:/ROUMAIN|RDL|JAMBES TENDUES/,variantes:['RDL MACHINE GUIDEE','EXTENSION DE BUSTE SUR BANC']}],
    accent:'Amplitude d’abord, charge ensuite. Et une réévaluation datée : ce profil doit disparaître en quelques mois si le travail est fait.',
    specificite:'À ne pas confondre avec un tronc long, qui produit la même image (un dos qui souffre au soulevé) pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
    piege:'L’envoyer en sumo « parce que son dos s’arrondit ». Le sumo demande plus de rotation de hanche et ne règle pas une raideur postérieure ; il la cache.'},
@@ -17464,9 +17520,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Entrejambe au-delà de ~49 % de la taille, et rapport fémur/tibia élevé. Sur la photo de profil : assis, les genoux montent au-dessus des hanches. En vidéo : le buste plonge dès le premier tiers de la descente.',
    mecanique:'Pour garder la charge au-dessus du milieu du pied, un fémur long oblige le bassin à reculer davantage, donc le buste à s’incliner. L’inclinaison raccourcit le bras de levier du genou et allonge celui de la hanche : à charge égale, ce squat sollicite les extenseurs de hanche plus qu’un squat droit. Ce n’est pas une faute technique, c’est la solution que la géométrie impose.',
    privilegier:'Tout ce qui découple genou et hanche (presse à cuisses, hack squat, squat bulgare, extension de jambes) parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
-   amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat'},
-     {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat'},
-     {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente'}],
+   amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat',variante:/^(DEEP )?SQUAT( SMITH MACHINE)?$|^SAFETY SQUAT BARRE$/,variantes:['HACKSQUAT','SQUAT BARRE DEVANT']},
+     {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat',variante:/FRONT|BARRE DEVANT/,variantes:['HACKSQUAT','SQUAT AU BELT SQUAT VERSION QUADS']},
+     {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente',variantes:['FENTE BULGARE MACHINE','MONTER SUR BANC']}],
    accent:'Quadriceps par les machines et le travail unilatéral, pas par le squat libre. La charnière devient l’exercice fort : la programmer comme telle plutôt que de s’acharner sur un squat qui ne sera jamais son terrain.',
    specificite:'Ces athlètes sont systématiquement corrigés à tort sur « le buste trop penché ». Motion Lab tranche la question : si le bras de levier de hanche reste stable pendant la descente, l’inclinaison est structurelle ; si elle s’aggrave sous fatigue, c’est technique.',
    piege:'Lui vendre de la mobilité de cheville pendant six mois pour « redresser » son squat. Une cale règle en une séance ce qu’un fémur long ne lâchera jamais. Vérifier la cheville avant d’attribuer au fémur.'},
@@ -17476,8 +17532,8 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Entrejambe sous ~43 % de la taille. Assis, la tête dépasse celle des autres ; debout, non. Photo de profil : tronc visuellement long par rapport aux jambes.',
    mecanique:'Le squat devient confortable : buste plus droit, profondeur peu chère. En revanche, en charnière de hanche, un tronc long est un long bras de levier horizontal : le soulevé de terre conventionnel coûte davantage aux lombaires à charge égale.',
    privilegier:'Squat sous toutes ses formes, y compris front squat et gobelet : c’est son terrain. Fentes, bulgares, travail de profondeur.',
-   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche'},
-     {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche',variante:/^SOULEVE DE TERRE( PIEDS SURELEVE)?$|DEADLIFT/,variantes:['SOULEVE DE TERRE TRAP BARRE','HIP THRUST']},
+     {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche',variante:/GOOD MORNING/,variantes:['SOULEVE DE TERRE ROUMAIN HALTERES','REVERSE HYPER MACHINE']}],
    accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court (hip thrust, leg curl, extension lombaire réglée) plutôt que par le soulevé lourd.',
    specificite:'Le rapport tronc/membres compte plus que la taille absolue. Un grand athlète à tronc long et jambes courtes est un profil conventionnel ; c’est la proportion qui décide, pas le mètre.',
    piege:'Le pousser au soulevé conventionnel lourd parce qu’il squatte bien et qu’on suppose qu’il « devrait » tout bien faire. C’est exactement le mouvement où son levier joue contre lui.'},
@@ -17497,9 +17553,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Longueur de bras, de l’épaule au poignet, au-delà de ~36 % de la taille (repère autour de 34 %). Envergure nettement supérieure à la taille. Photo de face : mains au-dessous de la mi-cuisse, bras le long du corps.',
    mecanique:'En poussée, un bras long allonge l’amplitude et le bras de levier à franchir : plus de travail mécanique pour la même charge, et une contrainte d’épaule plus longue. En tirage, la même longueur devient un avantage : plus d’amplitude utile, plus de temps sous tension pour le dos.',
    privilegier:'Tous les tirages : rowing, tirage horizontal, tirage vertical, pull-over. Et les poussées à amplitude bornée par la machine : développé convergent, presse à pectoraux, où la course n’est pas dictée par son bras.',
-   amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale'},
-     {quoi:'Tractions lestées',reglage:'coûteuses (long bras de levier) : privilégier le tirage vertical guidé pour le volume',schema:'tirage-vertical'},
-     {quoi:'Dips profonds',reglage:'limiter la descente : l’amplitude coûte déjà plus cher qu’aux autres, la chercher en plus n’ajoute rien',schema:'poussee-horizontale'}],
+   amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale',variante:/DEVELOPPE COUCHE (BARRE|LARSEN|SMITH|POWER)/,variantes:['DEVELOPPE COUCHE HALTERE','DEVELOPPE A LA MACHINE CONVERGENTE']},
+     {quoi:'Tractions lestées',reglage:'coûteuses (long bras de levier) : privilégier le tirage vertical guidé pour le volume',schema:'tirage-vertical',variante:/TRACTION/,variantes:['TIRAGE POITRINE MACHINE CONVERGENTE','TRACTIONS MACHINE ASSISTE']},
+     {quoi:'Dips profonds',reglage:'limiter la descente : l’amplitude coûte déjà plus cher qu’aux autres, la chercher en plus n’ajoute rien',schema:'poussee-horizontale',variante:/DIPS/,variantes:['DEVELOPPE DECLINE HALTERE','DIPS MACHINE GUIDEE']}],
    accent:'Construire le haut du corps par le dos, qui est son terrain, et traiter les pectoraux par des machines et des écartés où l’amplitude est réglée plutôt que subie.',
    specificite:'C’est le profil pour lequel Motion Lab apporte le plus : la largeur de prise se règle en mesurant le bras de levier réel sur trois largeurs, plutôt qu’en appliquant un pourcentage.',
    piege:'Lire sa faiblesse au développé comme un manque de pectoraux et ajouter du volume de poussée. Il fait déjà plus de travail que les autres à charge égale : le problème est l’amplitude, pas le volume.'},
@@ -17510,7 +17566,7 @@ const MORPHO_PROFILS=Object.freeze([
    mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue (la position qui compte le plus pour l’hypertrophie).',
    privilegier:'Poussées lourdes : développé couché, incliné, militaire. Et les tractions, où un bras court est un levier favorable.',
    amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude (planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré) pour compenser la course courte',schema:'poussee-horizontale'},
-     {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal'}],
+     {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal',variantes:['ROWING HALTERE UNILATERAL','HIGH ROW HAMMER STRENGTH']}],
    accent:'Amplitude avant charge. C’est le seul profil où le compteur de charge trompe : les kilos montent vite, le stimulus ne suit pas forcément. La position longue doit être recherchée exercice par exercice.',
    specificite:'Attention au dos : un bras court raccourcit aussi l’amplitude des tirages. C’est souvent le profil qui « ne sent pas son dos », pas par manque de connexion, par manque de course.',
    piege:'Le féliciter sur ses charges et ne jamais regarder son amplitude. Deux ans plus tard, un développé énorme et des pectoraux moyens.'},
@@ -17521,7 +17577,7 @@ const MORPHO_PROFILS=Object.freeze([
    mecanique:'Moins de largeur osseuse au départ. Le V ne viendra pas de la charpente, donc il viendra du deltoïde latéral et de la largeur du grand dorsal : deux muscles qui répondent bien au volume et aux profils de résistance adaptés.',
    privilegier:'Élévations latérales à haute fréquence, sous plusieurs profils de résistance (poulie pour la position longue, haltère pour la position courte). Tirages prise large et pull-over pour la largeur de dos.',
    amenager:[{quoi:'Rien à écarter',reglage:'mais on hiérarchise : le développé militaire lourd construit moins de largeur visuelle que trois fois par semaine d’élévations bien placées',schema:'isolation-epaule'},
-     {quoi:'Obliques chargés',reglage:'lever le pied : ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc'}],
+     {quoi:'Obliques chargés',reglage:'lever le pied : ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc',variante:/OBLIQU|FLEXION.*LATERAL|ROTATION|PALLOF/,variantes:['PALLOF PRESS','GAINAGE LATERAL']}],
    accent:'Deltoïde latéral en priorité absolue, puis largeur de dos, puis gestion du tour de taille. Dans cet ordre.',
    specificite:'C’est le profil où l’écart entre « mesure » et « photo » est le plus grand : le tour de bras peut stagner pendant que la silhouette change complètement. Suivre la photo, pas seulement le mètre.',
    piege:'Confondre charpente étroite et taille épaisse, et mettre l’athlète en déficit pour « faire ressortir le V » alors que le rapport osseux ne bougera pas d’un millimètre.'},
@@ -17772,6 +17828,18 @@ function _revueSpecificite(quoi,nom){
  * @param opts       {schemaDe: ex → schéma} pour les tests ; schemaDe sinon
  * @returns {{exercice,seance,profil,quoi,reglage,schema,source,nature,suspendu,amplitudesManquantes}[]}
  */
+/**
+ * PURE. Cet aménagement concerne-t-il CET exercice ? Un aménagement qui nomme
+ * une VARIANTE (`variante`, regex sur le nom normalisé par exKey : sumo,
+ * front, nuque, serré, dips…) ne vaut que pour elle ; un aménagement générique
+ * (sans `variante`) vaut pour tout le schéma, comme avant.
+ */
+function amenagementVise(am,nom){
+  if(!am) return false;
+  if(!(am.variante instanceof RegExp)) return true;
+  let k=''; try{ k=exKey(nom); }catch(e){ k=String(nom||'').toUpperCase(); }
+  return am.variante.test(k);
+}
 function revueMorpho(programme,profils,amplitudes,opts){
   const o=opts||{};
   const sch=(typeof o.schemaDe==='function')?o.schemaDe:(ex=>schemaDe(ex,o.user));
@@ -17788,8 +17856,10 @@ function revueMorpho(programme,profils,amplitudes,opts){
       if(!k) continue;
       let m=null;
       P.forEach((p,ip)=>{ for(const am of p.amenager){
-        if(!am||am.schema!==k) continue;
-        const sc=_revueSpecificite(am.quoi,nom);
+        if(!am||am.schema!==k||!amenagementVise(am,nom)) continue;
+        // Un aménagement qui VISE cette variante (et la reconnaît) passe devant
+        // les aménagements génériques du même schéma.
+        const sc=_revueSpecificite(am.quoi,nom)+(am.variante instanceof RegExp?10:0);
         if(!m||sc>m.sc||(sc===m.sc&&ip<m.ip)) m={sc,ip,p,am};
       }});
       if(!m) continue;
@@ -18031,15 +18101,17 @@ function morphoPourExercice(user,ex,opts){
   const lignes=[];
   for(const p of res.profils){
     for(const am of (p.amenager||[])){
-      if(am.schema!==schema) continue;
+      if(am.schema!==schema||!amenagementVise(am,(ex&&ex.name)||ex||'')) continue;
       lignes.push({profil:p.cle,lib:p.lib,quoi:am.quoi,reglage:am.reglage,
-        suspendu:!!p.suspendu,avant:p.avant||null});
+        suspendu:!!p.suspendu,avant:p.avant||null,variantes:am.variantes||[]});
     }
   }
   const reglages=morphoReglages(axes,res.profils).filter(r=>r.schemas.indexOf(schema)>=0);
   if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[]};
   let variantes=[];
-  try{ variantes=_variantesSchema(schema,4).filter(n=>exKey(n)!==exKey((ex&&ex.name)||ex||'')); }catch(e){}
+  // LES VARIANTES CHOISIES PAR LES PROFILS D'ABORD, le catalogue à défaut.
+  const pref=[].concat(...lignes.map(l=>l.variantes));
+  try{ variantes=_variantesSchema(schema,3,{exclure:(ex&&ex.name)||ex||'',preferees:pref}); }catch(e){}
   return {schema,lignes,variantes:variantes.slice(0,3),reglages};
 }
 
@@ -81549,12 +81621,12 @@ function renderContraintesAthlete(){
 // séparés par ~.
 const ZONES_ARTICULAIRES=Object.freeze(["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche","genou","cheville"]);
 const SCHEMAS_META=Object.freeze({
-  "charniere-hanche":{lib:"Charnière de hanche",nb:37,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
+  "charniere-hanche":{lib:"Charnière de hanche",nb:38,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
   "squat":{lib:"Squat",nb:35,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
   "fente":{lib:"Fente",nb:14,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
   "poussee-verticale":{lib:"Poussée verticale",nb:17,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
   "poussee-horizontale":{lib:"Poussée horizontale",nb:64,ex:["butterfly","chest crossover dual","chest press debout"],hors:["rachis-cervical","hanche","genou","cheville"]},
-  "tirage-vertical":{lib:"Tirage vertical",nb:27,ex:["fessier a la machine de traction","iso lateral front lat pulldown","muscle up"],hors:["hanche","genou","cheville"]},
+  "tirage-vertical":{lib:"Tirage vertical",nb:26,ex:["tractions","tirage poitrine prise neutre","iso lateral front lat pulldown"],hors:["hanche","genou","cheville"]},
   "tirage-horizontal":{lib:"Tirage horizontal",nb:59,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
   "isolation-epaule":{lib:"Isolation épaule",nb:26,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
   "isolation-coude":{lib:"Isolation coude",nb:65,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
@@ -81572,6 +81644,9 @@ const SCHEMA_LIB=Object.freeze({"charniere-hanche":"Charnière de hanche","squat
 // prise serree reste une flexion de coude : la variante change le
 // recrutement, pas le geste. Sans elles ici, schemaDe() rendrait null et
 // l'ecran de repartition par schema moteur les laisserait de cote.
+// ⚠ « FESSIER A LA MACHINE DE TRACTION » EST UNE EXTENSION DE HANCHE
+//   (06/10/2026) : rangée en tirage vertical par son nom de machine, elle sortait
+//   en variante de tirage. Elle vit en charnière de hanche, avec les FESSIERS.
 const SCHEMAS_BRUT={
   "isolation-hanche":"3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~ADDUCTEUR A LA MACHINE~ADDUCTION DEBOUT POULIE ELASTIQUE~DONKEY KICK SMITH MACHINE~FIRE HYDRANT~STANDING ADUCTOR",
   "gainage-tronc":"AB CRUNCH BENCH~ABS ROLLER~COPENHAGEN PLANK~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH AU SOL AVEC POIDS~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE CHAISE~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~ROWING PLANCHE BARRE~SUPERMAN~V SIT UP",
@@ -81580,7 +81655,7 @@ const SCHEMAS_BRUT={
   "pliometrie":"BARBELL THUSTERS~BURPEES~CHUTE DE BOX SAUT~JUMPING JACK~MONTE DE GENOUX~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES~POWER RUN~QUAD STOMP~RENVERSEMENT DE PNEU~SAUT SUR LES COTES~SAUTS SUR PLACE AVEC ELASTIQUE~SLEDGE~SQUAT SAUTE~SQUAT SAUTE SUR BOX~WALL BALL",
   "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE~CURL BARRE PRISE LARGE~CURL BARRE PRISE SERREE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT HALTERES UNILATERALE~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE~CURL LARRY SCOTT POULIE BASSE~CURL LARRY SCOTT POULIE BASSE UNILATERALE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU A L INTERIEUR~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ALTERNE~CURL ROTATION ASSIS~CURL ROTATION ASSIS ALTERNE~CURL SUR BANC INCLINE~CURL SUR BANC INCLINE ALTERNE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSION TRICEPS POULIE BASSE~EXTENSION TRICEPS SUR BANC~EXTENSION TRICEPS SUR BANC ALTERNE~EXTENSION TRICEPS SUR BANC UNILATERALE~EXTENSIONS POULIE BASSE TRICEPS~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~REVERSE CURL HALTERE ALTERNE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
   "poignet-avant-bras":"BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER",
-  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RDL MACHINE GUIDEE~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
+  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~EXTENSION DE HANCHE POULIE CROISE~EXTENSION DE HANCHE POULIE PIEDS HAUT~EXTENSION DE HANCHE POULIE SUR BANC~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RDL MACHINE GUIDEE~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
   "poussee-horizontale":"BUTTERFLY~BUTTERFLY UNILATERAL~CHEST CROSSOVER DUAL~CHEST PRESS DEBOUT~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE PRISE SERREE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS BAS DE PECS~DIPS ELASTIQUE~DIPS LESTE~DIPS MACHINE~DIPS MACHINE BAS DE PECS~DIPS MACHINE GUIDEE~DIPS SUR BARRE~DIPS SUR BARRE ELASTIQUE~DIPS SUR BARRE LESTE~ECARTE HALTERE SUR BANC~ECARTE HALTERE SUR BANC DECLINE~ECARTE HALTERE SUR BANC INCLINE~ECARTE MACHINE~ECARTE MACHINE HAUT DE PEC~ECARTE POULIE BASSE~ECARTE POULIE BASSE EN UNILATERAL~ECARTE POULIE BASSE SUR BANC~ECARTE POULIE HAUT EN UNILATERAL~ECARTE POULIE HAUTE~ECARTE POULIE HAUTE BUSTE PENCHE~ECARTE POULIE HAUTE CONTRE BANC~ECARTE POULIE SUR BANC~ECARTE POULIE SUR BANC INCLINE~FLOOR PRESS~PIKE PUSH UP~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SERREES~TRICEPS DIPS",
   "mollets-cheville":"CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION",
   "halterophilie":"CLEAN AND JERK~POWER CLEAN~SNATCH",
@@ -81588,7 +81663,7 @@ const SCHEMAS_BRUT={
   "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS~SHOULDER PRESS PURE METEOR~VIKING PRESS PRISE NEUTRE",
   "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~HIGH ROW HAMMER STRENGTH~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE NEUTRE~TIRAGE HORIZONTAL MACHINE CONVERGENTE PRONATION~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE SUPINATION~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL NEUTRE~TIRAGE HORIZONTAL MACHINE UNILATERAL SUPINATION~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE",
   "fente":"FENTE BULGARE A LA BELT SQUAT~FENTE BULGARE MACHINE~FENTES A LA V SQUAT~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
-  "tirage-vertical":"FESSIER A LA MACHINE DE TRACTION~ISO LATERAL FRONT LAT PULLDOWN~MUSCLE UP~PULL OVER~PULL OVER CORDE~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TRACTION PRISE SERREE~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION",
+  "tirage-vertical":"ISO LATERAL FRONT LAT PULLDOWN~MUSCLE UP~PULL OVER~PULL OVER CORDE~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TRACTION PRISE SERREE~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION",
   "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ALLONGE HALTERE~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENSION ALLONGE ELASTIQUE~LEG EXTENSION ALLONGE HALTERE~LEG EXTENSION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
   "port-de-charge":"MARCHE DU FERMIER~MONTEE DE CORDE~MONTEE DE CORDE SANS LES JAMBES"
 };

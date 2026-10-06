@@ -56014,6 +56014,33 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — CHAQUE LIGNE DE LA REVUE CONCERNE L'EXERCICE AFFICHÉ ──
+    ok('Revue : P10 et « SOULEVE DE TERRE » → aucune ligne « Soulevé sumo » ; « SOULEVE DE TERRE SUMO » → la ligne sort ; un aménagement générique vaut toujours pour le schéma',()=>{
+      const p10=MORPHO_PROFILS.find(p=>p.cle==='P10');
+      const prog=noms=>[{name:'A',day:'Lundi',active:true,exercises:noms.map(n=>({name:n,sets:'3',reps:'5'}))}];
+      const conv=revueMorpho(prog(['SOULEVE DE TERRE']),[p10],[],{});
+      if(conv.some(l=>l.quoi==='Soulevé sumo')) return _echec('« Soulevé sumo » sous un soulevé conventionnel');
+      const sumo=revueMorpho(prog(['SOULEVE DE TERRE SUMO']),[p10],[],{});
+      if(!sumo.some(l=>l.quoi==='Soulevé sumo'&&l.exercice==='SOULEVE DE TERRE SUMO')) return _echec('la ligne sumo ne sort pas : '+JSON.stringify(sumo.map(l=>l.quoi)));
+      // « Squat pieds serrés » ne vaut que pour le squat serré ; « Squat profond imposé », générique, pour tout squat.
+      const sq=revueMorpho(prog(['HACKSQUAT']),[p10],[],{});
+      if(sq.some(l=>l.quoi==='Squat pieds serrés')) return _echec('pieds serrés sous un hack squat');
+      if(!sq.some(l=>l.quoi==='Squat profond imposé')) return _echec('l’aménagement générique a disparu');
+      if(!revueMorpho(prog(['SQUAT SERRE']),[p10],[],{}).some(l=>l.quoi==='Squat pieds serrés')) return _echec('pieds serrés ne sort plus sur le squat serré');
+      // Toutes les regex `variante` des fiches reconnaissent au moins un exercice du catalogue.
+      const morts=[];
+      MORPHO_PROFILS.forEach(p=>(p.amenager||[]).forEach(a=>{ if(a.variante&&!Object.keys(_SCHEMA_INDEX).some(k=>_SCHEMA_INDEX[k]===a.schema&&a.variante.test(k))) morts.push(p.cle+' '+a.quoi); }));
+      return morts.length?_echec('variantes sans exercice : '+morts.join(', ')):true;});
+    ok('Variantes : tirage-vertical sans FESSIER ni MUSCLE UP ; la liste choisie passe d’abord ; la famille de l’exercice courant est exclue ; le fessier n’est plus un tirage',()=>{
+      const tv=_variantesSchema('tirage-vertical',12);
+      if(tv.some(k=>/FESSIER|MUSCLE UP/.test(k))) return _echec(tv.join(', '));
+      if(schemaDe('FESSIER A LA MACHINE DE TRACTION')==='tirage-vertical') return _echec('fessier en tirage vertical');
+      if(schemaDe('FESSIER A LA MACHINE DE TRACTION')!=='charniere-hanche') return _echec('fessier : '+schemaDe('FESSIER A LA MACHINE DE TRACTION'));
+      const pref=_variantesSchema('poussee-horizontale',3,{exclure:'DEVELOPPE COUCHE BARRE',preferees:['DEVELOPPE COUCHE HALTERE','DEVELOPPE A LA MACHINE CONVERGENTE']});
+      if(pref[0]!=='DEVELOPPE COUCHE HALTERE'||pref[1]!=='DEVELOPPE A LA MACHINE CONVERGENTE') return _echec('préférées : '+pref.join(', '));
+      const cat=_variantesSchema('poussee-horizontale',6,{exclure:'DEVELOPPE COUCHE BARRE'});
+      if(cat.some(k=>/^DEVELOPPE COUCHE/.test(k))) return _echec('même famille : '+cat.join(', '));
+      return cat.length===6?true:_echec(cat.length+' variantes');});
     // ── 06/10/2026 — LES LONGUEURS DU DÉPART SE CONTRÔLENT À LA SAISIE ──
     ok('Longueurs : attenduMesure(entrejambe, 165) contient 77 et pas 770 ; « 72 à 86 cm » ; les tours gardent leurs bornes',()=>{
       const a=attenduMesure('deb-entrejambe',165);

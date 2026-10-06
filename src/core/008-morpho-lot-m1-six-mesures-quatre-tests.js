@@ -1026,8 +1026,8 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Moins de ~10 cm au test du genou au mur. En vidéo : talons qui décollent au fond, buste qui plonge d’un coup, ou genoux qui rentrent : les trois compensations classiques d’une amplitude qu’on n’a pas.',
    mecanique:'Un squat complet demande de l’ordre de 35–40° de flexion dorsale. Sans elle, le corps emprunte l’amplitude ailleurs. La cause n’est pas toujours la souplesse : elle peut être articulaire. Le test dit qu’il manque de l’amplitude, pas pourquoi.',
    privilegier:'Presse à cuisses, hack squat, extension de jambes : le quadriceps se charge sans exiger la cheville. Squat talons surélevés : la méta-analyse montre un gain d’amplitude de cheville et de genou à partir d’environ 2,5 cm d’élévation, avec un effet dose.',
-   amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat'},
-     {quoi:'Fentes avant',reglage:'fentes arrière ou bulgares, qui demandent moins de flexion dorsale à l’avant',schema:'fente'}],
+   amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat',variante:/SERRE/,variantes:['PRESSE A CUISSE INCLINE PIEDS ECARTES','HACKSQUAT']},
+     {quoi:'Fentes avant',reglage:'fentes arrière ou bulgares, qui demandent moins de flexion dorsale à l’avant',schema:'fente',variante:/^(?!.*ARRIERE).*FENTE/,variantes:['FENTES ARRIERE HALTERE','FENTE BULGARE MACHINE']}],
    accent:'Deux voies en parallèle : la cale pour s’entraîner aujourd’hui, le travail d’amplitude pour ne plus en avoir besoin. L’app doit dire lequel des deux elle propose : une cale est un contournement, pas un traitement.',
    specificite:'La cale n’est pas gratuite : la même méta-analyse montre qu’une élévation importante réduit l’amplitude de hanche et de tronc. On déplace le travail vers le quadriceps, on ne l’ajoute pas. À assumer explicitement.',
    piege:'Attribuer à la morphologie ce qui vient de la cheville. Le test du genou au mur prend trente secondes et doit être fait avant toute conclusion sur les leviers.'},
@@ -1037,9 +1037,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Flexion de hanche qui bute franchement, avec bascule du bassin, et un arrêt net plutôt qu’élastique. Souvent une nette asymétrie entre rotation interne et externe. En squat : profondeur limitée quel que soit le stance, ou pincement à l’aine.',
    mecanique:'La structure de hanche varie énormément d’une personne à l’autre : l’orientation du col du fémur s’étale sur une trentaine de degrés, celle du cotyle autant. Concrètement, l’un squatte pointes presque droites et descend loin, l’autre bute tôt et a besoin d’ouvrir. Ce n’est pas de la souplesse à gagner.',
    privilegier:'La recherche du stance, méthodiquement : écartement et rotation des pointes testés par paliers, à charge légère, en notant la profondeur confortable. Puis les machines qui contournent l’amplitude : presse avec pieds hauts, hack, leg curl, extension.',
-   amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat'},
-     {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat'},
-     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat',variantes:['HACKSQUAT','PRESSE A CUISSE INCLINE']},
+     {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat',variante:/SERRE/,variantes:['SQUAT SUMO','PRESSE A CUISSE INCLINE PIEDS ECARTES']},
+     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche',variante:/SUMO/,variantes:['SOULEVE DE TERRE TRAP BARRE','SOULEVE DE TERRE ROUMAIN']}],
    accent:'Amplitude utile plutôt qu’amplitude maximale. Le travail en position longue se cherche sur des exercices où la hanche n’est pas la butée : leg curl allongé, fentes, presse.',
    specificite:'Distinguer butée osseuse et raideur demande une imagerie que personne n’ira faire. RepCore décrit le test et se tait sur la cause : « l’arrêt est net et s’accompagne d’une bascule du bassin » est un constat.',
    piege:'Prescrire des mois d’étirements de hanche contre une butée qui ne cédera pas. On n’allonge pas un os ; on irrite une articulation.'},
@@ -1049,10 +1049,10 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Bras qui ne montent pas au mur sans décoller les lombaires ; main dans le dos limitée d’un côté. En vidéo : compensation lombaire au développé militaire, épaules qui montent aux oreilles en élévation.',
    mecanique:'L’amplitude manquante est empruntée à la colonne ou à la scapula. Ce n’est pas un défaut de force : c’est une contrainte de course.',
    privilegier:'Développés assis à dossier (le dossier empêche l’emprunt lombaire et le rend visible), haltères plutôt que barre (la trajectoire s’adapte), prise neutre, poulies pour les élévations.',
-   amenager:[{quoi:'Développé nuque',reglage:'devant, ou à la machine : la trajectoire reste guidée et les lombaires n’ont plus à combler l’amplitude qui manque',schema:'poussee-verticale'},
-     {quoi:'Tirage nuque',reglage:'devant : le dos travaille autant, et l’épaule n’a plus à aller chercher une rotation qu’elle n’a pas',schema:'tirage-vertical'},
-     {quoi:'Prise très large au développé couché',reglage:'revenir vers 180 % de la largeur d’épaules',schema:'poussee-horizontale'},
-     {quoi:'Dips profonds',reglage:'limiter la descente au point où l’épaule reste devant, sans chercher le fond',schema:'poussee-horizontale'}],
+   amenager:[{quoi:'Développé nuque',reglage:'devant, ou à la machine : la trajectoire reste guidée et les lombaires n’ont plus à combler l’amplitude qui manque',schema:'poussee-verticale',variante:/NUQUE/,variantes:['DEVELOPPE MILITAIRE HALTERES','DEVELOPPE MILITAIRE MACHINE']},
+     {quoi:'Tirage nuque',reglage:'devant : le dos travaille autant, et l’épaule n’a plus à aller chercher une rotation qu’elle n’a pas',schema:'tirage-vertical',variante:/NUQUE/,variantes:['TIRAGE POITRINE PRISE NEUTRE','TIRAGE POITRINE LARGEUR EPAULE']},
+     {quoi:'Prise très large au développé couché',reglage:'revenir vers 180 % de la largeur d’épaules',schema:'poussee-horizontale',variante:/DEVELOPPE COUCHE|FLOOR PRESS/,variantes:['DEVELOPPE COUCHE HALTERE','DEVELOPPE A LA MACHINE CONVERGENTE']},
+     {quoi:'Dips profonds',reglage:'limiter la descente au point où l’épaule reste devant, sans chercher le fond',schema:'poussee-horizontale',variante:/DIPS/,variantes:['DEVELOPPE DECLINE HALTERE','DIPS MACHINE GUIDEE']}],
    accent:'Amplitude d’épaule travaillée à part, hors des séries lourdes, et réévaluée tous les deux mois. Tant qu’elle manque, la charge reste sur des trajectoires guidées.',
    specificite:'C’est le profil le plus évolutif du document : un athlète reconnu en janvier peut ne plus l’être en mai. Le profil porte donc une date de péremption.',
    piege:'Figer l’aménagement. Un exercice écarté pour cause d’amplitude et jamais rouvert devient un interdit permanent né d’un test de trente secondes.'},
@@ -1062,9 +1062,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Dos qui s’enroule tôt en flexion avant jambes tendues. Au soulevé : lombaires arrondies dès le départ, pas seulement sous fatigue.',
    mecanique:'Ce n’est pas un problème de levier : c’est une amplitude manquante. La différence est décisive parce que les deux réponses sont opposées : un levier défavorable se contourne par la variante, une raideur se travaille.',
    privilegier:'Départ surélevé (soulevé aux blocs, trap bar) pour charger dans l’amplitude disponible ; soulevé roumain à amplitude partielle, augmentée progressivement ; leg curl pour les ischios sans contrainte lombaire.',
-   amenager:[{quoi:'Soulevé au sol lourd',reglage:'surélever la barre jusqu’à ce que le dos tienne',schema:'charniere-hanche'},
-     {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche'},
-     {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Soulevé au sol lourd',reglage:'surélever la barre jusqu’à ce que le dos tienne',schema:'charniere-hanche',variante:/SOULEVE DE TERRE(?! ROUMAIN)|DEADLIFT/,variantes:['SOULEVE DE TERRE TRAP BARRE','HIP THRUST']},
+     {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche',variante:/GOOD MORNING/,variantes:['SOULEVE DE TERRE ROUMAIN','EXTENSION DE BUSTE SUR BANC']},
+     {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche',variante:/ROUMAIN|RDL|JAMBES TENDUES/,variantes:['RDL MACHINE GUIDEE','EXTENSION DE BUSTE SUR BANC']}],
    accent:'Amplitude d’abord, charge ensuite. Et une réévaluation datée : ce profil doit disparaître en quelques mois si le travail est fait.',
    specificite:'À ne pas confondre avec un tronc long, qui produit la même image (un dos qui souffre au soulevé) pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
    piege:'L’envoyer en sumo « parce que son dos s’arrondit ». Le sumo demande plus de rotation de hanche et ne règle pas une raideur postérieure ; il la cache.'},
@@ -1074,9 +1074,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Entrejambe au-delà de ~49 % de la taille, et rapport fémur/tibia élevé. Sur la photo de profil : assis, les genoux montent au-dessus des hanches. En vidéo : le buste plonge dès le premier tiers de la descente.',
    mecanique:'Pour garder la charge au-dessus du milieu du pied, un fémur long oblige le bassin à reculer davantage, donc le buste à s’incliner. L’inclinaison raccourcit le bras de levier du genou et allonge celui de la hanche : à charge égale, ce squat sollicite les extenseurs de hanche plus qu’un squat droit. Ce n’est pas une faute technique, c’est la solution que la géométrie impose.',
    privilegier:'Tout ce qui découple genou et hanche (presse à cuisses, hack squat, squat bulgare, extension de jambes) parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
-   amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat'},
-     {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat'},
-     {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente'}],
+   amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat',variante:/^(DEEP )?SQUAT( SMITH MACHINE)?$|^SAFETY SQUAT BARRE$/,variantes:['HACKSQUAT','SQUAT BARRE DEVANT']},
+     {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat',variante:/FRONT|BARRE DEVANT/,variantes:['HACKSQUAT','SQUAT AU BELT SQUAT VERSION QUADS']},
+     {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente',variantes:['FENTE BULGARE MACHINE','MONTER SUR BANC']}],
    accent:'Quadriceps par les machines et le travail unilatéral, pas par le squat libre. La charnière devient l’exercice fort : la programmer comme telle plutôt que de s’acharner sur un squat qui ne sera jamais son terrain.',
    specificite:'Ces athlètes sont systématiquement corrigés à tort sur « le buste trop penché ». Motion Lab tranche la question : si le bras de levier de hanche reste stable pendant la descente, l’inclinaison est structurelle ; si elle s’aggrave sous fatigue, c’est technique.',
    piege:'Lui vendre de la mobilité de cheville pendant six mois pour « redresser » son squat. Une cale règle en une séance ce qu’un fémur long ne lâchera jamais. Vérifier la cheville avant d’attribuer au fémur.'},
@@ -1086,8 +1086,8 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Entrejambe sous ~43 % de la taille. Assis, la tête dépasse celle des autres ; debout, non. Photo de profil : tronc visuellement long par rapport aux jambes.',
    mecanique:'Le squat devient confortable : buste plus droit, profondeur peu chère. En revanche, en charnière de hanche, un tronc long est un long bras de levier horizontal : le soulevé de terre conventionnel coûte davantage aux lombaires à charge égale.',
    privilegier:'Squat sous toutes ses formes, y compris front squat et gobelet : c’est son terrain. Fentes, bulgares, travail de profondeur.',
-   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche'},
-     {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche'}],
+   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche',variante:/^SOULEVE DE TERRE( PIEDS SURELEVE)?$|DEADLIFT/,variantes:['SOULEVE DE TERRE TRAP BARRE','HIP THRUST']},
+     {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche',variante:/GOOD MORNING/,variantes:['SOULEVE DE TERRE ROUMAIN HALTERES','REVERSE HYPER MACHINE']}],
    accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court (hip thrust, leg curl, extension lombaire réglée) plutôt que par le soulevé lourd.',
    specificite:'Le rapport tronc/membres compte plus que la taille absolue. Un grand athlète à tronc long et jambes courtes est un profil conventionnel ; c’est la proportion qui décide, pas le mètre.',
    piege:'Le pousser au soulevé conventionnel lourd parce qu’il squatte bien et qu’on suppose qu’il « devrait » tout bien faire. C’est exactement le mouvement où son levier joue contre lui.'},
@@ -1107,9 +1107,9 @@ const MORPHO_PROFILS=Object.freeze([
    signatureTexte:'Longueur de bras, de l’épaule au poignet, au-delà de ~36 % de la taille (repère autour de 34 %). Envergure nettement supérieure à la taille. Photo de face : mains au-dessous de la mi-cuisse, bras le long du corps.',
    mecanique:'En poussée, un bras long allonge l’amplitude et le bras de levier à franchir : plus de travail mécanique pour la même charge, et une contrainte d’épaule plus longue. En tirage, la même longueur devient un avantage : plus d’amplitude utile, plus de temps sous tension pour le dos.',
    privilegier:'Tous les tirages : rowing, tirage horizontal, tirage vertical, pull-over. Et les poussées à amplitude bornée par la machine : développé convergent, presse à pectoraux, où la course n’est pas dictée par son bras.',
-   amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale'},
-     {quoi:'Tractions lestées',reglage:'coûteuses (long bras de levier) : privilégier le tirage vertical guidé pour le volume',schema:'tirage-vertical'},
-     {quoi:'Dips profonds',reglage:'limiter la descente : l’amplitude coûte déjà plus cher qu’aux autres, la chercher en plus n’ajoute rien',schema:'poussee-horizontale'}],
+   amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale',variante:/DEVELOPPE COUCHE (BARRE|LARSEN|SMITH|POWER)/,variantes:['DEVELOPPE COUCHE HALTERE','DEVELOPPE A LA MACHINE CONVERGENTE']},
+     {quoi:'Tractions lestées',reglage:'coûteuses (long bras de levier) : privilégier le tirage vertical guidé pour le volume',schema:'tirage-vertical',variante:/TRACTION/,variantes:['TIRAGE POITRINE MACHINE CONVERGENTE','TRACTIONS MACHINE ASSISTE']},
+     {quoi:'Dips profonds',reglage:'limiter la descente : l’amplitude coûte déjà plus cher qu’aux autres, la chercher en plus n’ajoute rien',schema:'poussee-horizontale',variante:/DIPS/,variantes:['DEVELOPPE DECLINE HALTERE','DIPS MACHINE GUIDEE']}],
    accent:'Construire le haut du corps par le dos, qui est son terrain, et traiter les pectoraux par des machines et des écartés où l’amplitude est réglée plutôt que subie.',
    specificite:'C’est le profil pour lequel Motion Lab apporte le plus : la largeur de prise se règle en mesurant le bras de levier réel sur trois largeurs, plutôt qu’en appliquant un pourcentage.',
    piege:'Lire sa faiblesse au développé comme un manque de pectoraux et ajouter du volume de poussée. Il fait déjà plus de travail que les autres à charge égale : le problème est l’amplitude, pas le volume.'},
@@ -1120,7 +1120,7 @@ const MORPHO_PROFILS=Object.freeze([
    mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue (la position qui compte le plus pour l’hypertrophie).',
    privilegier:'Poussées lourdes : développé couché, incliné, militaire. Et les tractions, où un bras court est un levier favorable.',
    amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude (planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré) pour compenser la course courte',schema:'poussee-horizontale'},
-     {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal'}],
+     {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal',variantes:['ROWING HALTERE UNILATERAL','HIGH ROW HAMMER STRENGTH']}],
    accent:'Amplitude avant charge. C’est le seul profil où le compteur de charge trompe : les kilos montent vite, le stimulus ne suit pas forcément. La position longue doit être recherchée exercice par exercice.',
    specificite:'Attention au dos : un bras court raccourcit aussi l’amplitude des tirages. C’est souvent le profil qui « ne sent pas son dos », pas par manque de connexion, par manque de course.',
    piege:'Le féliciter sur ses charges et ne jamais regarder son amplitude. Deux ans plus tard, un développé énorme et des pectoraux moyens.'},
@@ -1131,7 +1131,7 @@ const MORPHO_PROFILS=Object.freeze([
    mecanique:'Moins de largeur osseuse au départ. Le V ne viendra pas de la charpente, donc il viendra du deltoïde latéral et de la largeur du grand dorsal : deux muscles qui répondent bien au volume et aux profils de résistance adaptés.',
    privilegier:'Élévations latérales à haute fréquence, sous plusieurs profils de résistance (poulie pour la position longue, haltère pour la position courte). Tirages prise large et pull-over pour la largeur de dos.',
    amenager:[{quoi:'Rien à écarter',reglage:'mais on hiérarchise : le développé militaire lourd construit moins de largeur visuelle que trois fois par semaine d’élévations bien placées',schema:'isolation-epaule'},
-     {quoi:'Obliques chargés',reglage:'lever le pied : ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc'}],
+     {quoi:'Obliques chargés',reglage:'lever le pied : ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc',variante:/OBLIQU|FLEXION.*LATERAL|ROTATION|PALLOF/,variantes:['PALLOF PRESS','GAINAGE LATERAL']}],
    accent:'Deltoïde latéral en priorité absolue, puis largeur de dos, puis gestion du tour de taille. Dans cet ordre.',
    specificite:'C’est le profil où l’écart entre « mesure » et « photo » est le plus grand : le tour de bras peut stagner pendant que la silhouette change complètement. Suivre la photo, pas seulement le mètre.',
    piege:'Confondre charpente étroite et taille épaisse, et mettre l’athlète en déficit pour « faire ressortir le V » alors que le rapport osseux ne bougera pas d’un millimètre.'},
@@ -1382,6 +1382,18 @@ function _revueSpecificite(quoi,nom){
  * @param opts       {schemaDe: ex → schéma} pour les tests ; schemaDe sinon
  * @returns {{exercice,seance,profil,quoi,reglage,schema,source,nature,suspendu,amplitudesManquantes}[]}
  */
+/**
+ * PURE. Cet aménagement concerne-t-il CET exercice ? Un aménagement qui nomme
+ * une VARIANTE (`variante`, regex sur le nom normalisé par exKey : sumo,
+ * front, nuque, serré, dips…) ne vaut que pour elle ; un aménagement générique
+ * (sans `variante`) vaut pour tout le schéma, comme avant.
+ */
+function amenagementVise(am,nom){
+  if(!am) return false;
+  if(!(am.variante instanceof RegExp)) return true;
+  let k=''; try{ k=exKey(nom); }catch(e){ k=String(nom||'').toUpperCase(); }
+  return am.variante.test(k);
+}
 function revueMorpho(programme,profils,amplitudes,opts){
   const o=opts||{};
   const sch=(typeof o.schemaDe==='function')?o.schemaDe:(ex=>schemaDe(ex,o.user));
@@ -1398,8 +1410,10 @@ function revueMorpho(programme,profils,amplitudes,opts){
       if(!k) continue;
       let m=null;
       P.forEach((p,ip)=>{ for(const am of p.amenager){
-        if(!am||am.schema!==k) continue;
-        const sc=_revueSpecificite(am.quoi,nom);
+        if(!am||am.schema!==k||!amenagementVise(am,nom)) continue;
+        // Un aménagement qui VISE cette variante (et la reconnaît) passe devant
+        // les aménagements génériques du même schéma.
+        const sc=_revueSpecificite(am.quoi,nom)+(am.variante instanceof RegExp?10:0);
         if(!m||sc>m.sc||(sc===m.sc&&ip<m.ip)) m={sc,ip,p,am};
       }});
       if(!m) continue;
@@ -1641,15 +1655,17 @@ function morphoPourExercice(user,ex,opts){
   const lignes=[];
   for(const p of res.profils){
     for(const am of (p.amenager||[])){
-      if(am.schema!==schema) continue;
+      if(am.schema!==schema||!amenagementVise(am,(ex&&ex.name)||ex||'')) continue;
       lignes.push({profil:p.cle,lib:p.lib,quoi:am.quoi,reglage:am.reglage,
-        suspendu:!!p.suspendu,avant:p.avant||null});
+        suspendu:!!p.suspendu,avant:p.avant||null,variantes:am.variantes||[]});
     }
   }
   const reglages=morphoReglages(axes,res.profils).filter(r=>r.schemas.indexOf(schema)>=0);
   if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[]};
   let variantes=[];
-  try{ variantes=_variantesSchema(schema,4).filter(n=>exKey(n)!==exKey((ex&&ex.name)||ex||'')); }catch(e){}
+  // LES VARIANTES CHOISIES PAR LES PROFILS D'ABORD, le catalogue à défaut.
+  const pref=[].concat(...lignes.map(l=>l.variantes));
+  try{ variantes=_variantesSchema(schema,3,{exclure:(ex&&ex.name)||ex||'',preferees:pref}); }catch(e){}
   return {schema,lignes,variantes:variantes.slice(0,3),reglages};
 }
 

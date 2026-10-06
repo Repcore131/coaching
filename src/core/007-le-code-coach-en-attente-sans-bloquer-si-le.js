@@ -2519,12 +2519,68 @@ function positionBras(user){
 
 // Exercices du même schéma moteur, à titre de VARIANTES POSSIBLES. Ce lot
 // n'écarte rien : ces noms sont proposés à côté, jamais à la place.
-function _variantesSchema(schema,combien){
+//
+// ⚠ PLUS LES N PREMIERS PAR ORDRE ALPHABÉTIQUE (06/10/2026) : « FESSIER A LA
+//   MACHINE DE TRACTION, MUSCLE UP » sortaient en variantes de tirage. Dans
+//   l'ordre :
+//   1. la liste CHOISIE par les profils (`opts.preferees`, champ `variantes`
+//      des aménagements), quand elle existe ;
+//   2. à défaut, le catalogue du schéma, SANS la famille de l'exercice courant
+//      (`opts.exclure`), sans les exercices dont le groupe principal n'est pas
+//      celui du schéma, sans les mouvements avancés, et trié par fréquence
+//      d'usage dans les programmes du coach.
+const VARIANTES_EXCLUES_AVANCEES=Object.freeze(['MUSCLE UP','HANDSTAND PUSH UP','SQUAT PISTOL',
+  'SNATCH','CLEAN AND JERK','POWER CLEAN','DIPS AUX ANNEAUX','POMPE AUX ANNEAUX','MONTEE DE CORDE SANS LES JAMBES']);
+// « TRACTIONS PRISE NEUTRE » → « TRACTION PRISE » : les deux premiers mots, au singulier.
+function _familleEx(k){
+  const m=String(k||'').split(' ').filter(Boolean).slice(0,2).map(w=>w.replace(/S$/,''));
+  return m.join(' ');
+}
+function _principalEx(k){
+  try{ const g=_exGuide().get(k); return (g&&g.p&&g.p[0])||null; }catch(e){ return null; }
+}
+const _principalSchemaCache={};
+// Le groupe principal le plus fréquent parmi les exercices du schéma.
+function _principalSchema(schema){
+  if(schema in _principalSchemaCache) return _principalSchemaCache[schema];
+  const n={};
+  for(const k in _SCHEMA_INDEX) if(_SCHEMA_INDEX[k]===schema){ const p=_principalEx(k); if(p) n[p]=(n[p]||0)+1; }
+  let best=null; for(const p in n) if(!best||n[p]>n[best]) best=p;
+  return (_principalSchemaCache[schema]=best);
+}
+// La fréquence d'usage : combien de fois chaque exercice figure dans les
+// programmes des athlètes en cache et dans les modèles du coach.
+let _freqExos={t:0,m:{}};
+function _frequencesExercices(){
+  const t=Date.now();
+  if(t-_freqExos.t<30000) return _freqExos.m;
+  const m={};
+  const compter=l=>{ for(const s of (Array.isArray(l)?l:[])) for(const ex of ((s&&s.exercises)||[])){
+    if(!ex||!ex.name) continue; let k=''; try{ k=exKey(ex.name); }catch(e){ continue; } m[k]=(m[k]||0)+1; } };
+  try{ Object.values(DB.get('users')||{}).forEach(u=>{ if(u) compter(u.sessions_config); }); }catch(e){}
+  try{ ((currentUser&&currentUser.coachPrograms)||[]).forEach(p=>{ compter(p&&p.sessions_config); compter(p&&p.H); compter(p&&p.F); }); }catch(e){}
+  _freqExos={t,m};
+  return m;
+}
+function _variantesSchema(schema,combien,opts){
+  const o=opts||{}, n=combien||4;
+  let cur=''; try{ cur=o.exclure?exKey(o.exclure):''; }catch(e){ cur=''; }
   const out=[];
-  for(const k in _SCHEMA_INDEX){
-    if(_SCHEMA_INDEX[k]===schema){ out.push(k); if(out.length>=(combien||4)) break; }
+  for(const v of (o.preferees||[])){
+    let k=''; try{ k=exKey(v); }catch(e){ continue; }
+    if(!k||k===cur||!_SCHEMA_INDEX[k]||out.indexOf(k)>=0) continue;
+    out.push(k);
+    if(out.length>=n) return out;
   }
-  return out;
+  const fam=cur?_familleEx(cur):'';
+  const princ=_principalSchema(schema);
+  const freq=_frequencesExercices();
+  const cand=Object.keys(_SCHEMA_INDEX).filter(k=>_SCHEMA_INDEX[k]===schema&&k!==cur&&out.indexOf(k)<0
+    &&(!fam||_familleEx(k)!==fam)
+    &&VARIANTES_EXCLUES_AVANCEES.indexOf(k)<0
+    &&(!princ||_principalEx(k)===princ));
+  cand.sort((a,b)=>(freq[b]||0)-(freq[a]||0)||(a<b?-1:a>b?1:0));
+  return out.concat(cand).slice(0,n);
 }
 
 // Rapport des volumes quadriceps / ischios sur les dernières semaines
