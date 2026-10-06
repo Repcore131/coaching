@@ -236,6 +236,14 @@ async function bootKeyOf(email, code) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(email || '').trim().toLowerCase() + '|' + normCode(code)));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
 }
+// Clé « code seul » : retrouve le compte même si l'e-mail tapé n'est pas celui du compte
+// (autre adresse, faute de frappe). Elle pointe vers la clé de connexion (e-mail + code).
+async function codeKeyOf(code) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('code|' + normCode(code)));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+}
+// Adresse saisie : sans espaces, en minuscules, et les fautes de clavier courantes corrigées.
+const cleanEmail = e => String(e || '').replace(/\s+/g, '').toLowerCase().replace(/[,;]/g, '.').replace(/\.+$/, '').replace(/@gmail\.(fr|con|cm|om)$/, '@gmail.com');
 class LoginError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
 const firebaseBackend = {
   mode: 'firebase', fb: null, root: null, user: null, userId: null, denied: false,
@@ -271,9 +279,14 @@ const firebaseBackend = {
   },
   async codeLogin(email, code) {
     if (!navigator.onLine) throw new LoginError('offline', 'Pas de connexion internet.');
-    const key = await bootKeyOf(email, code);
-    const id = await this.readBoot(key);
-    if (!id) throw new LoginError('bad', 'E-mail ou code incorrect.');
+    let key = await bootKeyOf(email, code);
+    let id = await this.readBoot(key);
+    // E-mail différent de celui du compte : le code seul retrouve la clé.
+    if (!id) {
+      const via = await this.readBoot(await codeKeyOf(code));
+      if (via && /^[0-9a-f]{40}$/.test(via)) { const id2 = await this.readBoot(via); if (id2) { key = via; id = id2; } }
+    }
+    if (!id) throw new LoginError('bad', 'Code incorrect. Vérifiez le code reçu par e-mail (FP-XXXX-XXXX-XXXX), sans confondre les lettres et les chiffres. Code perdu : votre manager vous en génère un nouveau en un clic.');
     const auth = this.fb.auth(), mail = 'fp-' + key + AUTH_DOMAIN_FP, pass = normCode(code);
     try { await auth.signInWithEmailAndPassword(mail, pass); }
     catch (e) {

@@ -107,7 +107,7 @@ export const REGLE = `${DEBUT}
       ".read": ${j(MANAGER)},
       "$k": {
         ".read": true,
-        ".write": ${j(`${MEMBRE} && ((${MANAGER}) || newData.val() === ${SOI} || (!newData.exists() && data.val() === ${SOI}))`)},
+        ".write": ${j(`${MEMBRE} && ((${MANAGER}) || newData.val() === ${SOI} || (newData.isString() && newData.parent().child(newData.val()).val() === ${SOI}) || (!newData.exists() && (data.val() === ${SOI} || (data.isString() && data.parent().child(data.val()).val() === ${SOI}))))`)},
         ".validate": "$k.matches(/^[0-9a-f]{40}$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
       }
     },
@@ -182,13 +182,13 @@ async function assurerRegle(tk) {
 // connexion est posee si elle manque.
 async function assurerComptes(tk) {
   const src = readFileSync(new URL('../config.js', import.meta.url), 'utf8');
-  const comptes = [...src.matchAll(/id: '([^']+)'[^\n]*?bootKey: '([0-9a-f]{40})'/g)].map(m => ({ id: m[1], cle: m[2] }));
+  const comptes = [...src.matchAll(/id: '([^']+)'[^\n]*?bootKey: '([0-9a-f]{40})'(?:, codeKey: '([0-9a-f]{40})')?/g)].map(m => ({ id: m[1], cle: m[2], ck: m[3] }));
   const faits = [];
   for (const c of comptes) {
     const v = await (await api(tk, `pulse_boot/${c.cle}.json`)).json();
-    if (v === c.id) continue;
-    if (!DRY) await api(tk, `pulse_boot/${c.cle}.json`, { method: 'PUT', body: JSON.stringify(c.id) });
-    faits.push(c.id);
+    if (v !== c.id) { if (!DRY) await api(tk, `pulse_boot/${c.cle}.json`, { method: 'PUT', body: JSON.stringify(c.id) }); faits.push(c.id); }
+    // clé « code seul » : connexion possible même avec une autre adresse e-mail
+    if (c.ck && (await (await api(tk, `pulse_boot/${c.ck}.json`)).json()) !== c.cle) { if (!DRY) await api(tk, `pulse_boot/${c.ck}.json`, { method: 'PUT', body: JSON.stringify(c.cle) }); faits.push(c.id + ' (code seul)'); }
   }
   return faits.length ? 'posées : ' + faits.join(', ') : `${comptes.length} déjà en place`;
 }

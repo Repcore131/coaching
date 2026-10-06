@@ -71,7 +71,7 @@ ACTIONS.saveMember = async el => {
   if (email && Object.values(S.users).some(x => x.id !== id && x.status !== 'archived' && (x.email || '') === email && x.role === f.role)) { toast('Cette adresse a déjà un compte ' + roleLabel(f.role) + '.'); return; }
   // Nouveau membre, ou e-mail change (la cle de connexion en depend) : nouveau code.
   let code = null;
-  if (!old || (old.email !== email && old.codeHash)) { const c = await issueCode(u, email); code = c.code; Object.assign(u, { salt: c.salt, codeHash: c.codeHash, bootKey: c.bootKey }); await backend.setBoot(c.boot); }
+  if (!old || (old.email !== email && old.codeHash)) { const c = await issueCode(u, email); code = c.code; Object.assign(u, { salt: c.salt, codeHash: c.codeHash, bootKey: c.bootKey, codeKey: c.codeKey }); await backend.setBoot(c.boot); }
   const ops = [[['users', id], u]];
   if (email) ops.push([['team', email.replace(/\./g, ',')], true]);
   if (old && old.email && old.email !== email) ops.push([['team', old.email.replace(/\./g, ',')], null]);
@@ -82,11 +82,12 @@ ACTIONS.saveMember = async el => {
 // L'ancienne cle est effacee dans le meme envoi : l'ancien code est coupe net.
 async function issueCode(u, email) {
   const c = await newCodeRecord();
-  const key = await bootKeyOf(email || u.email, c.code);
+  const key = await bootKeyOf(email || u.email, c.code); const ck = await codeKeyOf(c.code);
   await backend.precreate(key, c.code);
-  const boot = { [key]: u.id };
+  const boot = { [key]: u.id, [ck]: key };
   if (u.bootKey && u.bootKey !== key) boot[u.bootKey] = null;
-  return { ...c, bootKey: key, boot };
+  if (u.codeKey && u.codeKey !== ck) boot[u.codeKey] = null;
+  return { ...c, bootKey: key, codeKey: ck, boot };
 }
 // Invitation : un e-mail pret a partir (ouvert dans la messagerie du manager,
 // marche partout, tout de suite). Si l'envoi automatique est active
@@ -146,7 +147,7 @@ ACTIONS.regenCode = async el => {
   if (!u.email) { toast('Ajoutez d’abord un e-mail à ce membre : c’est son identifiant.'); return; }
   const c = await issueCode(u);
   await backend.setBoot(c.boot);
-  db.batch([[['users', u.id, 'salt'], c.salt], [['users', u.id, 'codeHash'], c.codeHash], [['users', u.id, 'bootKey'], c.bootKey]]);
+  db.batch([[['users', u.id, 'salt'], c.salt], [['users', u.id, 'codeHash'], c.codeHash], [['users', u.id, 'bootKey'], c.bootKey], [['users', u.id, 'codeKey'], c.codeKey]]);
   closeModal(); showCode(S.users[u.id], c.code, { mail: true });
 };
 ACTIONS.archiveMember = async el => {
@@ -498,13 +499,13 @@ ACTIONS.changeMyCode = async () => {
   if (ME.codeHash && await hashCode(ME.salt, cur) !== ME.codeHash) { toast('Code actuel incorrect.'); return; }
   if (!ME.email) { toast('Ajoutez d’abord un e-mail à votre profil.'); return; }
   const c = await issueCode(ME);
-  const old = ME.bootKey;
+  const old = ME.bootKey, oldCk = ME.codeKey;
   // Mode partage : la nouvelle cle d'abord, on bascule la session dessus, puis
   // on efface l'ancienne (sinon on se couperait soi-meme l'acces).
-  await backend.setBoot({ [c.bootKey]: ME.id });
-  db.batch([[['users', ME.id, 'salt'], c.salt], [['users', ME.id, 'codeHash'], c.codeHash], [['users', ME.id, 'bootKey'], c.bootKey]]);
+  await backend.setBoot({ [c.bootKey]: ME.id, [c.codeKey]: c.bootKey });
+  db.batch([[['users', ME.id, 'salt'], c.salt], [['users', ME.id, 'codeHash'], c.codeHash], [['users', ME.id, 'bootKey'], c.bootKey], [['users', ME.id, 'codeKey'], c.codeKey]]);
   if (backend.mode === 'firebase') {
-    try { await backend.codeLogin(ME.email, c.code); if (old && old !== c.bootKey) await backend.setBoot({ [old]: null }); }
+    try { await backend.codeLogin(ME.email, c.code); const del = {}; if (old && old !== c.bootKey) del[old] = null; if (oldCk && oldCk !== c.codeKey) del[oldCk] = null; if (Object.keys(del).length) await backend.setBoot(del); }
     catch (e) { toast('Nouveau code enregistré : reconnectez-vous avec lui.'); }
   }
   showCode(S.users[ME.id], c.code);

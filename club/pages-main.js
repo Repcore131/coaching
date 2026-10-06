@@ -93,7 +93,7 @@ document.addEventListener('submit', async e => {
   if (e.target.id !== 'lgc') return;
   e.preventDefault();
   const f = formData(e.target);
-  const email = (f.email || '').trim().toLowerCase();
+  const email = cleanEmail(f.email);
   const code = (f.code || '').trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { loginMsg('Saisissez votre adresse e-mail complète.'); $('#lg-email').focus(); return; }
   if (normCode(code).replace(/[^A-Z0-9]/g, '').length !== 14) { loginMsg('Le code fait 12 caractères : FP-XXXX-XXXX-XXXX.'); $('#lg-code').focus(); return; }

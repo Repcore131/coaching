@@ -34,8 +34,8 @@ window.PARKPULSE_MAIL_AUTO = false;
 // profil > Securite, ou un createur depuis Membres.
 window.PARKPULSE_CLUB = { id: 'niort', name: 'Fitness Park Niort', address: '600 Av. de Paris', city: '79000 Niort' };
 window.PARKPULSE_ACCOUNTS = [
-  { id: 'kg-createur', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'createur', salt: 'c1e2c0f885e88133', codeHash: '18c5a02277b8bab8d72fa5eb511ae202b15025f066067d09208c3c4210c7b358', bootKey: 'bcb94d3b291bacdcdff6c95889640de19eca876a' },
-  { id: 'kg-manager', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'manager', salt: 'd8a29558ba1fbce4', codeHash: '223ecb32cf76b5fe1560af2119eaf86285531e09858aee8b5f59c862142e7440', bootKey: 'b6b8b10beaaa9ffe3dd08b5d97efe10de1c6fd04' },
+  { id: 'kg-createur', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'createur', salt: 'c1e2c0f885e88133', codeHash: '18c5a02277b8bab8d72fa5eb511ae202b15025f066067d09208c3c4210c7b358', bootKey: 'bcb94d3b291bacdcdff6c95889640de19eca876a', codeKey: '1c293626e1688b3928e389927280ac6f85fad62e' },
+  { id: 'kg-manager', first: 'Kévin', last: 'GUELLEC', email: 'guellec.coachingpro@gmail.com', role: 'manager', salt: 'd8a29558ba1fbce4', codeHash: '223ecb32cf76b5fe1560af2119eaf86285531e09858aee8b5f59c862142e7440', bootKey: 'b6b8b10beaaa9ffe3dd08b5d97efe10de1c6fd04', codeKey: '5368636c980e2b8a61e205a08b155b36efca0a4e' },
 ];
 
 // ══ VISUELS ═══════════════════════════════════════════════════════════════

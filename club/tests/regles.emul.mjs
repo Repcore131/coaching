@@ -31,6 +31,11 @@ await check('membre ne saisit pas pour un collègue', await req('PUT', 'pulse/en
 await check('saisie invalide refusée (date)', await req('PUT', 'pulse/entries/e3', E('mem', { date: 'hier' }), who('mem')), false);
 await check('membre ne valide pas sa saisie', await req('PUT', 'pulse/entries/e1/checkedAt', 123, who('mem')), false);
 await check('manager valide une saisie', await req('PUT', 'pulse/entries/e1/checkedAt', 123, who('mgr')), true);
+const ckMem = key('code-mem'), ckX = key('code-x');
+await check('membre pose sa clé « code seul »', await req('PUT', `pulse_boot/${ckMem}`, key('mem'), who('mem')), true);
+await check('membre ne pose pas une clé vers un collègue', await req('PUT', `pulse_boot/${ckX}`, key('mem2'), who('mem')), false);
+await check('membre efface sa clé « code seul »', await req('DELETE', `pulse_boot/${ckMem}`, undefined, who('mem')), true);
+await check('anonyme lit une clé de connexion', await req('GET', `pulse_boot/${key('mem')}`), true);
 await check('membre ne change pas de rôle', await req('PUT', 'pulse/users/mem/role', 'manager', who('mem')), false);
 await check('membre crée et relance un prospect', await req('PUT', 'pulse/prospects/pm1', { id: 'pm1', clubId: 'niort', prenom: 'Julie', temp: 'chaud' }, who('mem')), true);
 await check('membre planifie une relance', await req('PATCH', 'pulse/relances/prospect_pm1_x', { ownerId: 'mem', nextAt: 1, kind: 'prospect' }, who('mem')), true);
