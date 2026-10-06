@@ -42798,6 +42798,20 @@ async function testExercices(){
           // Le remplissage est bien lancé (appel à _animerJauges).
           return String(renderVolumePrescrit).indexOf('_animerJauges(z)')>=0?true:_echec('le remplissage n’est pas lancé');
         } finally { z.innerHTML=av; }});
+        // LES ABDUCTEURS NE SONT PAS LES ADDUCTEURS (06/10/2026, build 1822).
+        // L'ancienne vignette teintait la face interne des cuisses : celle-ci
+        // montre la face latérale de la hanche (moyen fessier, TFL), vue de
+        // trois quarts arrière. Le hash différent est un garde-fou contre une copie.
+        okA('Volume : la vignette Abducteurs existe, fait 128×128, et n’est pas celle des adducteurs',async()=>{
+          if(_volIllus('ABDUCTEURS')!=='./img/muscles/abducteurs.webp') return _echec('chemin : '+_volIllus('ABDUCTEURS'));
+          const lire=async n=>{ const r=await fetch('./img/muscles/'+n+'.webp',{cache:'no-store'}); if(!r.ok) throw new Error(n+' : '+r.status); return r.arrayBuffer(); };
+          const hex=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(x=>x.toString(16).padStart(2,'0')).join('');
+          let ab,ad;
+          try{ ab=await lire('abducteurs'); ad=await lire('adducteurs'); }catch(e){ return _echec(e.message); }
+          if(await hex(ab)===await hex(ad)) return _echec('abducteurs.webp est une copie d’adducteurs.webp');
+          const dim=await new Promise(ok=>{ const i=new Image(); i.onload=()=>ok([i.naturalWidth,i.naturalHeight]); i.onerror=()=>ok(null);
+            i.src=URL.createObjectURL(new Blob([ab],{type:'image/webp'})); });
+          return dim&&dim[0]===128&&dim[1]===128?true:_echec('dimensions : '+JSON.stringify(dim));});
 
       ok('Éditeur du coach : bannière rouge, nom en blanc à côté du numéro, « Remplacer » et « Mettre à jour » en blanc dans la bannière',()=>{
         // Kevin, 01/10/2026.
