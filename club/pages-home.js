@@ -195,7 +195,6 @@ PAGES.home = {
           <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${plur(acc.streak, 'jour', 'jours')} de suite</small></a>` : ''}</div></div></section>
       ${weekDigestCard()}
-      ${challengeBanner()}
       ${manager ? saisonBanner() : ''}
       ${wrapBanner()}
       ${manager ? '' : myPlanCard()}
@@ -321,13 +320,6 @@ ACTIONS.openSaisiesFromPad = () => { closeModal(); ACTIONS.openSaisies(); };
 ACTIONS.goTargets = () => { UI.memTab = 'targets'; location.hash = '#/members'; };
 
 // Bandeau du defi flash en cours : visible sans defiler, avec mon rang.
-function challengeBanner() {
-  const now = Date.now(); const ch = Object.values(S.challenges || {}).filter(c => c.clubId === CLUB.id && c.start <= now && c.end > now).sort((a, b) => a.end - b.end)[0];
-  if (!ch) return '';
-  const rk = challengeRanking(ch); const me = rk.findIndex(x => x.u.id === ME.id); const h = Math.floor((ch.end - now) / 3600000), m = Math.floor((ch.end - now) / 60000) % 60;
-  return `<a class="chal-banner" href="#/${isManager() ? 'challenges' : 'equipe'}" data-act="goDefis">${ico('bolt')}<div><b>Défi en cours : ${esc(ch.title)}</b><span>${h} h ${pad(m)} restantes${me >= 0 ? ` · vous êtes ${me + 1}${me === 0 ? 'er' : 'e'}` : ''}${ch.reward ? ' · ' + esc(ch.reward) : ''}</span></div>${ico('chevR')}</a>`;
-}
-ACTIONS.goDefis = () => { UI.eqTab = 'defis'; location.hash = isManager() ? '#/challenges' : '#/equipe'; };
 // Actions de la semaine (relances notees et issues positives).
 function weekActions(uid) {
   const from = dateOf(weekStart(today())).getTime();

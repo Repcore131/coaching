@@ -9,7 +9,6 @@ const NOTIF_RULES = {
   res_new: { label: 'Nouvelle résiliation reçue', ex: 'Nouvelle résiliation reçue. Ouvrez Résiliations pour la prendre.' },
   res_j7: { label: 'Résiliation à votre nom à J-7', ex: 'Une résiliation à votre nom prend effet dans 5 jours.' },
   palier: { label: 'Palier d’équipe franchi', ex: 'Palier 2 atteint en Contrats signés pour l’équipe.' },
-  defi: { label: 'Défi flash lancé', ex: 'Défi flash lancé : Rush du midi, 2 h. Ouvrez Défis.' },
   live: { label: 'Saisies des collègues en direct', ex: 'Hugo Lefèvre : +1 Contrats signés, Fitness Park Niort' },
   alertes: { label: 'Signaux faibles de l’équipe, à 9 h', ex: '2 signaux faibles à regarder.', manager: true },
   digest: { label: 'Bilan de la semaine, le lundi', ex: 'Votre bilan de la semaine est prêt.' },
@@ -108,11 +107,7 @@ function notifLive(before, after) {
     if (!mine(r.clubId) || r.userId === ME.id || r.by === ME.id || (r.at && Date.now() - r.at > 600000)) continue;
     notify('res_new', 'Nouvelle résiliation reçue. Ouvrez Résiliations pour la prendre.', '#/resiliations', { key: 'resnew_' + id });
   }
-  for (const id of Object.keys(after.challenges || {})) {
-    if ((before.challenges || {})[id]) continue; const ch = after.challenges[id];
-    if (!mine(ch.clubId) || ch.by === ME.id) continue;
-    notify('defi', `Défi flash lancé : ${ch.title}, ${Math.max(1, Math.round((ch.end - ch.start) / 3600000))} h. Ouvrez Défis.`, '#/challenges', { key: 'defi_' + id });
-  }
+
   const snap = palierSnap();
   if (PAL_SNAP && !byMe) Object.entries(snap).forEach(([k, n]) => { if (n > (PAL_SNAP[k] || 0) && S.kpis[k]) { notify('palier', `Palier ${n} atteint en ${S.kpis[k].label} pour l’équipe.`, '#/home', { key: `pal_${CLUB.id}_${curMonth()}_${k}_${n}`, toastIt: false }); if (!document.hidden) celebrate(`PALIER ${n} ATTEINT`, `${S.kpis[k].label} pour l’équipe`, { kind: 'team' }); } });
   PAL_SNAP = snap;

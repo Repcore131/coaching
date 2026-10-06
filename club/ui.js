@@ -108,6 +108,7 @@ function brandBlock(big = false) {
 // tient en 6 entrees : les pages detaillees sont dans les poles Relances et Equipe).
 const NAV = [
   ['home', 'Accueil', 'dashboard'],
+  ['kpimatin', 'KPI du matin', 'send'],
   ['opportunites', 'Opportunités', 'coins'],
   ['dashboard', 'Mes objectifs', 'target'],
   ['relances', 'Relances', 'phone'],
@@ -121,7 +122,6 @@ const NAV = [
   ['resiliations', 'Résiliations', 'door', true],
   ['impayes', 'Impayés', 'euro', true],
   ['loyalty', 'Rétention', 'heart', true],
-  ['challenges', 'Défis flash', 'bolt', true],
   ['chat', 'Chat', 'chat', true],
   ['feed', 'Fil d’équipe', 'feed', true],
   ['sep'],

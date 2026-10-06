@@ -209,7 +209,9 @@ const RSM_DEFS = [
           continue;
         }
         if (PRODUCT_EXCLUDE.some(x => norm(prod).includes(x))) { c.skip('accès employé, VIP, transfert ou reconduction'); continue; }
-        c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: resolveSeller(gName(r), gCode(r)) });
+        const sel = resolveSeller(gName(r), gCode(r));
+        // offre et vente en ligne : utilisées par le KPI du matin (Ultimate / Access+, inscriptions en ligne)
+        c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: sel, offer: prod.trim(), online: sel.status === 'system' || KM_ONLINE_CANAL.test(r[iCanal] || '') });
         const parrain = /parrain/.test(norm(`${prod} ${r[iCanal] || ''}`));
         if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), sellerObj: resolveSeller(gName(r), gCode(r)), source: parrain ? 'parrainage' : null, status: 'Client', ...c.contact(r) });
       }
@@ -443,6 +445,7 @@ function linesParse(c, avoir) {
 }
 
 // Nom de contact sans civilité, parenthèses ni e-mail entre chevrons.
+const KM_ONLINE_CANAL = /web|en ligne|internet|site|online/i;
 const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
 // Fichier non reconnu : l'export connu le plus proche et les colonnes qui
 // manquent, pour corriger l'export (mauvais menu, colonnes masquées, fichier

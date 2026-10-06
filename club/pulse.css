@@ -1022,3 +1022,12 @@ body:has(#modal-root .overlay) { overflow: hidden; }
 /* Un nom très long dans une liste déroulante ne fait plus déborder la page sur téléphone */
 select.input, .input { max-width: 100%; }
 select.input { text-overflow: ellipsis; }
+/* KPI du matin */
+.km-docs { display: grid; gap: 8px; margin-top: 12px; }
+.km-doc { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.km-doc.ok { border-color: var(--ok); }
+.km-grid .field small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; }
+.km-todo .input { border-color: var(--fp); background: var(--fp-soft); }
+.km-progress { height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.km-progress i { display: block; height: 100%; width: 0; background: var(--fp); border-radius: 99px; transition: width .1s linear; }
+.km-text { font-family: inherit; line-height: 1.45; white-space: pre-wrap; }

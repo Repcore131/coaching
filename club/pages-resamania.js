@@ -181,7 +181,7 @@ ACTIONS.rsmCommit = () => {
       const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), ...(batchImp[id] || {}), [impId]: true }; batchImp[id] = importIds;
       // B2B : l'entreprise reste comptée à sa première facture, chez le commercial d'origine.
       const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
-      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}) }]);
+      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}) }]);
     }
     // Export de gestion qui couvre une periode complete : une vente deja importee
     // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)

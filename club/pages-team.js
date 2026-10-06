@@ -36,7 +36,7 @@ function memOrg() {
   <div class="card" style="margin-top:14px"><h3>Accès et rôles</h3>
     <div class="table-wrap" style="margin-top:10px"><table class="t"><thead><tr><th>Ce que l’on peut faire</th><th>Créateur</th><th>Manager</th><th>Membre</th></tr></thead><tbody>
     ${[['Saisir ses KPI, voir son tableau de bord, le classement, le feed, le chat', 1, 1, 1], ['Traiter les relances (Action Rétention) et les résiliations', 1, 1, 1],
-       ['Vue club, saisir pour un membre, fixer les objectifs', 1, 1, 0], ['Imports CSV, planning des tâches, défis flash', 1, 1, 0], ['Ajouter un membre et lui générer un code', 1, 1, 0],
+       ['Vue club, saisir pour un membre, fixer les objectifs', 1, 1, 0], ['Imports CSV, planning des tâches', 1, 1, 0], ['Ajouter un membre et lui générer un code', 1, 1, 0],
        ['Nommer un manager ou un créateur, modifier un manager', 1, 0, 0], ['Créer un club, régler les KPI et les points', 1, 0, 0], ['Sauvegarde, restauration, tout effacer', 1, 0, 0], ['Classé et soumis à objectifs', 0, 1, 1]]
       .map(([l, ...v]) => `<tr><td>${l}</td>${v.map(x => `<td>${x ? `<b class="ok">${ico('check', 'ico ico-xs')}</b>` : '<span class="muted">n.d.</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
     <p class="muted small" style="margin-bottom:0">Le compte Créateur administre l’outil : il voit tous nos clubs mais n’apparaît ni au classement ni dans les objectifs. Une même adresse e-mail peut avoir un accès Créateur et un accès Manager : c’est le code qui choisit le compte.</p></div>`;
@@ -336,7 +336,7 @@ PAGES.profile = {
 function profPerf() {
   const acc = accomplishments(ME.id);
   const tr = trophies(ME.id);
-  const groups = [['season', 'Saisons'], ['month', 'Mois'], ['perso', 'Records et régularité'], ['week', 'Semaines'], ['flash', 'Défis flash']];
+  const groups = [['season', 'Saisons'], ['month', 'Mois'], ['perso', 'Records et régularité'], ['week', 'Semaines']];
   const months = pastMonths().filter(m => m < curMonth()).reverse();
   const showAll = UI.profWraps === 'all';
   return `<div class="grid">
