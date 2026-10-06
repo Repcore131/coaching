@@ -952,7 +952,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // cloudinaryAPurger : des identifiants de fichiers a supprimer chez
   // l'hebergeur, rien d'autre. Aucun contenu, aucune mesure, aucun nom : de
   // la comptabilite de menage, classee avec les videos qu'elle designe.
-  'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions',
+  // programmeSuivant et programmeHisto (06/10/2026) : le bloc suivant préparé
+  // par le coach, et le journal des bascules — des séances et des dates.
+  'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions','programmeSuivant','programmeHisto',
   'athletePhoto','objective','badges','habitudes','sonRepos','ecranAllume',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.

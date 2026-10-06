@@ -443,6 +443,8 @@ function _repeindreSiJourChange(){
 }
 function loadClientHome(){
   try{ _majRappelVerification(); }catch(e){}
+  // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
+  try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par

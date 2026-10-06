@@ -7869,7 +7869,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // cloudinaryAPurger : des identifiants de fichiers a supprimer chez
   // l'hebergeur, rien d'autre. Aucun contenu, aucune mesure, aucun nom : de
   // la comptabilite de menage, classee avec les videos qu'elle designe.
-  'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions',
+  // programmeSuivant et programmeHisto (06/10/2026) : le bloc suivant préparé
+  // par le coach, et le journal des bascules — des séances et des dates.
+  'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions','programmeSuivant','programmeHisto',
   'athletePhoto','objective','badges','habitudes','sonRepos','ecranAllume',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
@@ -29674,7 +29676,7 @@ function signalPrincipal(c,ctx){
   if(sg.chuteAssiduite&&!repEnt) return r('absence','Assiduité en baisse');
   // 4. Le bloc, puis le démarrage.
   const f=(()=>{ try{ return finProgramme(c,t); }catch(e){ return null; } })();
-  if(f&&!rep('progfin')) return r('bloc',f.fini?'Bloc terminé':'Bloc qui se termine',f.finPrevue);
+  if(f&&!rep('progfin')) return r('bloc',f.suivant?'Bloc suivant prêt':f.fini?'Bloc terminé':'Bloc qui se termine',f.finPrevue);
   if(sg.blocPrioriteFini&&!rep('blocfini')) return r('bloc','Bloc de priorité terminé');
   if(!enAccueil&&ok(()=>neverStarted(c))&&!rep('nostart')) return r('nostart','Jamais démarré');
   // 5. Tout ce qui fait encore une ligne dans « À traiter ».
@@ -30015,6 +30017,13 @@ const PROGFIN_AVANT_J=7, PROGFIN_APRES_J=21;
 // PURE. null, ou {joursRestants (négatif une fois le bloc passé), fini, finPrevue (ms, minuit du dernier jour)}.
 function finProgramme(c,maintenant){
   if(!c||c._fromCode) return null;
+  // LE BLOC SUIVANT (06/10/2026). Démarré (sa date est passée, la bascule ne
+  // s'est peut-être pas encore faite sur cet appareil) : c'est LUI qui se lit,
+  // et un bloc qui vient de commencer ne se termine pas. Préparé, pas encore
+  // démarré : la fin se signale, avec sa date (« bloc suivant prêt »).
+  const _t=typeof maintenant==='number'?maintenant:Date.now();
+  const ps=blocSuivantDe(c);
+  if(ps&&_t>=ps.debut) return finProgramme(Object.assign({},c,{programme:{debut:ps.debut,semaines:ps.semaines},programmeSuivant:null}),_t);
   let p=null; try{ p=programmeDe(c); }catch(e){ p=null; }
   if(!p) return null;
   const fin=new Date(p.debut); fin.setHours(0,0,0,0);
@@ -30022,22 +30031,71 @@ function finProgramme(c,maintenant){
   const j=new Date(typeof maintenant==='number'?maintenant:Date.now()); j.setHours(0,0,0,0);
   const restants=Math.round((fin.getTime()-j.getTime())/864e5);
   if(!isFinite(restants)||restants>PROGFIN_AVANT_J||restants<-PROGFIN_APRES_J) return null;
-  return {joursRestants:restants,fini:restants<0,finPrevue:fin.getTime()};
+  return Object.assign({joursRestants:restants,fini:restants<0,finPrevue:fin.getTime()},ps?{suivant:ps.debut}:{});
 }
 // PURE. Les lignes « À traiter » : une pour les blocs qui se terminent, une
 // pour les blocs terminés (deux libellés, un seul type).
 function lignesFinProgramme(clients,maintenant,reporte){
-  const bientot=[], finis=[];
+  const bientot=[], finis=[], prets=[];
   for(const c of (clients||[])){
     const f=finProgramme(c,maintenant);
     if(!f||(reporte&&reporte(c))) continue;
-    (f.fini?finis:bientot).push(c);
+    (f.suivant?prets:f.fini?finis:bientot).push({c,f});
   }
-  const ligne=(l,lib)=>({type:'progfin',icon:icon('flag',16),color:'var(--green)',label:lib,list:l});
+  const ligne=(l,lib,coul)=>({type:'progfin',icon:icon('flag',16),color:coul||'var(--green)',label:lib,list:l.map(x=>x.c||x)});
   const out=[];
+  // LE BLOC SUIVANT EST PRÊT : la ligne le dit, avec sa date, et passe en gris.
+  for(const x of prets) out.push(ligne([x],'Bloc suivant prêt, démarre le '+_jourCourt(x.f.suivant),'var(--sub)'));
   if(bientot.length) out.push(ligne(bientot,'Bloc qui se termine'));
   if(finis.length) out.push(ligne(finis,'Bloc terminé'));
   return out;
+}
+function _jourCourt(t){ try{ return new Date(Number(t)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return ''; } }
+// ══ LE BLOC SUIVANT (06/10/2026) ══════════════════════════════════════════
+// Il n'existait pas de bloc suivant programmé : à la fin d'un bloc, le coach
+// reconduisait à la main, ou l'athlète restait sur l'ancien. Le dossier porte
+// désormais programmeSuivant {debut, semaines, sessions_config}, une COPIE
+// PROFONDE (le bloc courant modifié ensuite ne le touche pas), modifiable et
+// supprimable jusqu'à son lundi. Ce lundi-là, il devient le programme courant
+// (basculerBlocSuivant), côté athlète et côté coach, et c'est journalisé.
+const BLOC_HISTO_MAX=12;
+// PURE. Le lundi de la semaine qui suit `t`.
+function lundiSuivant(t){ const d=_lundiDe(Number(t)||Date.now()); d.setDate(d.getDate()+7); return d.getTime(); }
+// PURE. Le lundi où le bloc courant se termine (le lendemain de son dernier
+// dimanche) ; sans bloc, le lundi suivant.
+function finBlocLundi(c,t){
+  let p=null; try{ p=programmeDe(c); }catch(e){ p=null; }
+  if(!p) return lundiSuivant(t);
+  const d=new Date(p.debut); d.setDate(d.getDate()+p.semaines*7);
+  return _lundiDe(d).getTime();
+}
+// PURE. Le bloc suivant d'un dossier, normalisé, ou null.
+function blocSuivantDe(c){
+  const ps=c&&c.programmeSuivant;
+  if(!ps||typeof ps!=='object') return null;
+  const debut=Number(ps.debut), n=Math.round(Number(ps.semaines));
+  if(!(debut>0)||!(n>=PROG_SEMAINES_MIN&&n<=PROG_SEMAINES_MAX)) return null;
+  return {debut:_lundiDe(debut).getTime(),semaines:n,sessions_config:ps.sessions_config};
+}
+/**
+ * ÉCRIT (le dossier `u`, rien d'autre). Au lundi prévu, et pas avant, le bloc
+ * suivant devient le courant : séances, début, semaines ; l'ancien bloc va à
+ * l'historique (programmeHisto). Rend true si la bascule a eu lieu.
+ */
+function basculerBlocSuivant(u,t){
+  const ps=blocSuivantDe(u);
+  const now=Number(t)||Date.now();
+  if(!ps||now<ps.debut) return false;
+  let ancien=null; try{ ancien=programmeDe(u); }catch(e){ ancien=null; }
+  try{ if(typeof _pushSessionsHistory==='function') _pushSessionsHistory(u); }catch(e){}
+  const sc=ps.sessions_config;
+  u.sessions_config=JSON.parse(JSON.stringify(Array.isArray(sc)?sc:Object.values(sc||{})));
+  u.programme={debut:ps.debut,semaines:ps.semaines,decharges:[],ecarts:{}};
+  u.programmeHisto=(Array.isArray(u.programmeHisto)?u.programmeHisto:[]).concat([{
+    le:now,de:ancien?{debut:ancien.debut,semaines:ancien.semaines}:null,a:{debut:ps.debut,semaines:ps.semaines}}]).slice(-BLOC_HISTO_MAX);
+  delete u.programmeSuivant;
+  u.updatedAt=now;
+  return true;
 }
 // ── La file : un athlète après l'autre ──────────────────────────────────
 let _fileProgfin=[];
@@ -30067,6 +30125,17 @@ function _fileProgfinSuivants(idApres){
 }
 // La fin de la feuille « Bilan du bloc » : le bloc suivant, et l'athlète suivant.
 function _htmlSuiteBilanBloc(c){
+  // RECONDUIRE ET PRÉPARER (06/10/2026), EN TÊTE : le cas le plus fréquent est
+  // de garder le programme de l'athlète, pas d'en prendre un autre.
+  const ps=blocSuivantDe(c);
+  const tete='<div class="bb-suite"><div class="bb-suite-t">Le bloc suivant</div><div class="bb-progs">'
+    +'<button type="button" class="bb-prog bb-prog-1" onclick="progfinReconduire()">Reconduire ce bloc</button>'
+    +(ps?'<button type="button" class="bb-prog" onclick="progfinOuvrirSuivant()">Bloc suivant prêt, démarre le '+escapeHtml(_jourCourt(ps.debut))+' · modifier</button>'
+      :'<button type="button" class="bb-prog" onclick="progfinPreparerSuivant()">Préparer le bloc suivant</button>')
+    +'</div></div>';
+  return tete+_htmlSuiteBilanBlocBiblio(c);
+}
+function _htmlSuiteBilanBlocBiblio(c){
   const progs=((currentUser&&currentUser.coachPrograms)||[]).map((p,i)=>({p,i})).filter(x=>x.p);
   const enCours=c&&c.assignedProgramId;
   const suivants=_fileProgfinSuivants(c&&c.id);
@@ -35406,6 +35475,13 @@ function _signalerLigneAthlete(id){
   }catch(e){}
 }
 function openClientDetail(cid,_refresh,_force){
+  // LE BLOC SUIVANT DÉMARRE (06/10/2026) : la bascule se fait aussi d'ici.
+  try{
+    const _u=DB.get('users')||{}, _c=Object.values(_u).find(x=>x&&x.id===cid);
+    if(_c&&!_c._fromCode&&_estMonAthlete(_c,currentUser)&&basculerBlocSuivant(_c,Date.now())){
+      _u[_c.email]=_c; DB.set('users',_u); CLOUD.pushOne(_c.email,_c);
+    }
+  }catch(e){}
   // B2.F1 — AU-DELA DE 1440 PX, LE PREMIER CLIC REMPLIT LE TIROIR et ne quitte
   // pas la liste. Le bouton « Ouvrir la fiche » du tiroir rappelle cette meme
   // fonction avec _force : c'est le second clic, celui qui decide vraiment.
@@ -40399,7 +40475,145 @@ function renderCoachSessionsBloc(){
   const z=document.getElementById('csm-bloc');
   if(!z) return;
   const c=getOwnedClient(currentClientId);
-  z.innerHTML=c?htmlBlocProgramme(c):'';
+  const e=_coachEditClient&&c&&_coachEditClient.id===c.id?_coachEditClient:null;
+  // L'ONGLET « BLOC SUIVANT » (06/10/2026), s'il y en a un ; et le bloc
+  // reconduit en brouillon se lit dans la copie de travail, pas au dossier.
+  z.innerHTML=(e&&e.programmeSuivant?_htmlOngletsBloc(e):'')
+    +(e&&e._ongletSuivant?_htmlBlocSuivantCarte(e)
+      :e&&e._reconduit?_htmlBlocReconduit(e)
+      :(c?htmlBlocProgramme(c):''));
+}
+// ══ RECONDUIRE, PRÉPARER LE SUIVANT (06/10/2026) ══════════════════════════
+const _fmtJour=t=>{ try{ return new Date(Number(t)).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){ return ''; } };
+function _htmlBlocReconduit(e){
+  const p=e.programme||{};
+  return '<div class="csm-bloc-c bl-carte"><div class="bl-t">Bloc reconduit · non publié</div>'
+    +'<div class="bl-l">Les mêmes séances, à partir du '+escapeHtml(_fmtJour(p.debut))+', pour '
+    +'<input type="number" inputmode="numeric" class="bl-n" min="'+PROG_SEMAINES_MIN+'" max="'+PROG_SEMAINES_MAX+'" value="'+(Number(p.semaines)||4)+'" onchange="blocReconduitSemaines(this.value)" aria-label="Nombre de semaines"> semaines.</div>'
+    +'<div class="bl-s">Touche PUBLIER pour l’appliquer.</div></div>';
+}
+function _htmlOngletsBloc(e){
+  const s=!!e._ongletSuivant;
+  return '<div class="bl-onglets" role="tablist">'
+    +'<button type="button" role="tab" aria-selected="'+(!s)+'" class="bl-onglet'+(!s?' actif':'')+'" onclick="csmOnglet(\'courant\')">Bloc en cours</button>'
+    +'<button type="button" role="tab" aria-selected="'+s+'" class="bl-onglet'+(s?' actif':'')+'" onclick="csmOnglet(\'suivant\')">Bloc suivant</button></div>';
+}
+function _htmlBlocSuivantCarte(e){
+  const ps=e.programmeSuivant||{};
+  const iso=t=>{ const d=new Date(Number(t)); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  return '<div class="csm-bloc-c bl-carte"><div class="bl-t">Bloc suivant · démarre le '+escapeHtml(_fmtJour(ps.debut))+'</div>'
+    +'<div class="bl-l">Début <input type="date" class="bl-d" value="'+iso(ps.debut)+'" onchange="blocSuivantDebut(this.value)" aria-label="Date de début"> · '
+    +'<input type="number" inputmode="numeric" class="bl-n" min="'+PROG_SEMAINES_MIN+'" max="'+PROG_SEMAINES_MAX+'" value="'+(Number(ps.semaines)||4)+'" onchange="blocSuivantSemaines(this.value)" aria-label="Nombre de semaines"> semaines</div>'
+    +'<div class="bl-s">Ces séances deviendront son programme ce lundi-là. Le bloc en cours, modifié d’ici là, ne les touche pas.</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="margin:8px 0 0" onclick="blocSuivantSupprimer()">Supprimer le bloc suivant</button></div>';
+}
+/** « Reconduire ce bloc » : les séances, au lundi suivant, en brouillon. */
+function progfinReconduire(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  let p=null; try{ p=programmeDe(c); }catch(e){ p=null; }
+  try{ closeModal(); }catch(e){}
+  if(!_seancesCoachPreparer()) return false;
+  _coachEditClient.programme={debut:lundiSuivant(Date.now()),semaines:p?p.semaines:4,decharges:p?p.decharges.slice():[],ecarts:{}};
+  _coachEditClient._reconduit=true;
+  _seancesCoachRendre();
+  return true;
+}
+function blocReconduitSemaines(v){
+  const n=Math.round(Number(v));
+  if(!_coachEditClient||!_coachEditClient._reconduit) return false;
+  if(!(n>=PROG_SEMAINES_MIN&&n<=PROG_SEMAINES_MAX)){ toast('Entre '+PROG_SEMAINES_MIN+' et '+PROG_SEMAINES_MAX+' semaines.','var(--orange)'); renderCoachSessionsBloc(); return false; }
+  _coachEditClient.programme.semaines=n;
+  _coachEditClient.programme.decharges=(_coachEditClient.programme.decharges||[]).filter(x=>x<n);
+  renderCoachSessionsBloc();
+  return true;
+}
+/** « Préparer le bloc suivant » : une copie profonde, au lundi de fin, écrite. */
+function progfinPreparerSuivant(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  let p=null; try{ p=programmeDe(c); }catch(e){ p=null; }
+  if(!c.programmeSuivant){
+    c.programmeSuivant={debut:finBlocLundi(c,Date.now()),semaines:p?p.semaines:4,
+      sessions_config:JSON.parse(JSON.stringify(c.sessions_config||[])),creeLe:Date.now()};
+    c.updatedAt=Date.now(); users[c.email]=c;
+    const ok=DB.set('users',users);
+    toastSync(ok,CLOUD.pushOne(c.email,c),'Bloc suivant préparé : il démarre le '+_fmtJour(c.programmeSuivant.debut)+'.','le bloc suivant est');
+  }
+  return progfinOuvrirSuivant();
+}
+function progfinOuvrirSuivant(){
+  try{ closeModal(); }catch(e){}
+  if(!_seancesCoachPreparer()) return false;
+  _seancesCoachRendre();
+  csmOnglet('suivant');
+  return true;
+}
+// L'ONGLET : la grille de l'écran édite l'un OU l'autre. On échange les
+// tableaux, on ne recopie rien : chaque fonction de l'éditeur continue de
+// lire sessions_config.
+function csmOnglet(nom){
+  const e=_coachEditClient;
+  if(!e||!e.programmeSuivant) return false;
+  const veut=nom==='suivant';
+  if(veut&&!e._ongletSuivant){
+    if(!Array.isArray(e.programmeSuivant.sessions_config)) e.programmeSuivant.sessions_config=Object.values(e.programmeSuivant.sessions_config||{});
+    e._scCourant=e.sessions_config; e.sessions_config=e.programmeSuivant.sessions_config; e._ongletSuivant=true;
+  } else if(!veut&&e._ongletSuivant){
+    e.programmeSuivant.sessions_config=e.sessions_config; e.sessions_config=e._scCourant; delete e._scCourant; e._ongletSuivant=false;
+  }
+  try{ loadCoachSessionSlots(); }catch(err){}
+  return true;
+}
+// La copie de travail, remise à plat le temps d'un enregistrement.
+function _csmSansOnglet(e){
+  if(!e||!e._ongletSuivant) return false;
+  e.programmeSuivant.sessions_config=e.sessions_config; e.sessions_config=e._scCourant; delete e._scCourant; e._ongletSuivant=false;
+  return true;
+}
+function blocSuivantDebut(v){
+  const e=_coachEditClient; if(!e||!e.programmeSuivant) return false;
+  const d=new Date(String(v||'')+'T00:00:00');
+  if(!isFinite(d.getTime())){ toast('Date illisible.','var(--orange)'); return false; }
+  const l=_lundiDe(d).getTime();
+  if(l<_lundiDe(Date.now()).getTime()){ toast('Le bloc suivant commence au plus tôt ce lundi.','var(--orange)'); renderCoachSessionsBloc(); return false; }
+  e.programmeSuivant.debut=l; e._suivantModifie=true;
+  loadCoachSessionSlots();
+  return true;
+}
+function blocSuivantSemaines(v){
+  const e=_coachEditClient; if(!e||!e.programmeSuivant) return false;
+  const n=Math.round(Number(v));
+  if(!(n>=PROG_SEMAINES_MIN&&n<=PROG_SEMAINES_MAX)){ toast('Entre '+PROG_SEMAINES_MIN+' et '+PROG_SEMAINES_MAX+' semaines.','var(--orange)'); renderCoachSessionsBloc(); return false; }
+  e.programmeSuivant.semaines=n; e._suivantModifie=true;
+  loadCoachSessionSlots();
+  return true;
+}
+async function blocSuivantSupprimer(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(!await rcConfirm('Supprimer le bloc suivant ?','Ses séances préparées sont perdues. Le bloc en cours ne change pas.','Supprimer','Garder')) return false;
+  delete c.programmeSuivant; c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Bloc suivant supprimé','la suppression est');
+  if(_coachEditClient){ _csmSansOnglet(_coachEditClient); delete _coachEditClient.programmeSuivant; }
+  try{ loadCoachSessionSlots(); }catch(e){}
+  return true;
+}
+// QUITTER AVEC DES MODIFICATIONS NON PUBLIÉES : Publier, Jeter ou Rester.
+async function csmQuitter(){
+  const e=_coachEditClient;
+  const sale=!!(e&&(e._reconduit||e._suivantModifie||_htmlBandeauBrouillon()));
+  if(sale){
+    const r=await rcConfirm3('Modifications non publiées','Ton athlète ne les voit pas encore.','Publier','Jeter','Rester');
+    if(!r) return false;
+    if(r==='ok') saveCoachSessions();
+    else { _coachEditClient=null; }
+  }
+  retourDe('s-coach-sessions','s-coach-client');
+  return true;
 }
 function _boutonsCopieJour(fn,i){
   return `<div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -40573,11 +40787,22 @@ function cptRenameSession(i,val){
 // et `photo2` disparaissent : plus rien ne peut en charger. Ils ne sont pas
 // supprimes du fichier — l enregistrement les lit encore, et c est ce qui
 // PROTEGE les photos deja deposees, voir savePlanCoach et ses jumelles.
+// La ligne repliée des protocoles : « Échauffement : … · changer ».
+function _prResumeMaj(){
+  const z=document.getElementById('pr-resume'); if(!z) return '';
+  const w=String((document.getElementById('prog-warmup')||{}).value||'').replace(/\s+/g,' ').trim();
+  const c=String((document.getElementById('prog-cooldown')||{}).value||'').replace(/\s+/g,' ').trim();
+  const court=x=>x.length>40?x.slice(0,40)+'…':x;
+  const t=w?'Échauffement : '+court(w):c?'Retour au calme : '+court(c):'Échauffement et retour au calme : aucun';
+  z.textContent=t;
+  return t;
+}
 function _prepProgEditor({name='',notes='',warmup='',cooldown=''}={}){
   document.getElementById('prog-name').value=name||'';
   document.getElementById('prog-notes').value=notes||'';
   document.getElementById('prog-warmup').value=warmup||'';
   document.getElementById('prog-cooldown').value=cooldown||'';
+  try{ const d=document.getElementById('pr-repli'); if(d) d.open=false; _prResumeMaj(); }catch(e){}
   progPhotoData=null;
   progPhoto2Data=null;
   _pdfVideoLinks=null;
@@ -41813,7 +42038,8 @@ function _htmlBandeauBrouillon(){
   const c=_coachEditClient;
   if(!c||!c.id) return '';
   const users=DB.get('users')||{};
-  const publie=(Object.values(users).find(u=>u&&u.id===c.id)||{}).sessions_config||[];
+  const _st=Object.values(users).find(u=>u&&u.id===c.id)||{};
+  const publie=(c._ongletSuivant?((_st.programmeSuivant||{}).sessions_config):_st.sessions_config)||[];
   if(!brouillonDiffere({sessions_config:c.sessions_config},publie)) return '';
   return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
     +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
@@ -41852,6 +42078,8 @@ function saveCoachSessions(){
   // jetée à chaque sauvegarde, et la liste de rollback du coach ne grossissait
   // jamais. On archive la version stockée, puis on REPORTE l'historique sur la
   // copie qui va être écrite.
+  // L'ONGLET « BLOC SUIVANT » OUVERT : on remet la copie à plat (06/10/2026).
+  const _surSuivant=_csmSansOnglet(c);
   _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
   c.sessions_config_history=users[emailKey].sessions_config_history;
   // Le coach publie : ce n'est plus un repli, même s'il valide la Fondation
@@ -41862,6 +42090,11 @@ function saveCoachSessions(){
   // est le dossier RELU à l’instant, avec ce que l’athlète y a écrit depuis
   // l’ouverture de l’éditeur.
   const stocke=_reporterSeances(users[emailKey],c);
+  // LE BLOC RECONDUIT ET LE BLOC SUIVANT (06/10/2026) : publiés avec le reste.
+  if(c._reconduit&&c.programme){ stocke.programme=JSON.parse(JSON.stringify(c.programme)); delete c._reconduit; }
+  if(c.programmeSuivant&&(stocke.programmeSuivant||c._suivantModifie||_surSuivant)){
+    stocke.programmeSuivant=JSON.parse(JSON.stringify(c.programmeSuivant)); delete c._suivantModifie; }
+  if(_surSuivant) try{ csmOnglet('suivant'); }catch(e){}
   // ⚠ LE PROGRAMME ECRIT POUR QUELQU'UN EST DATE ICI (lot 9), une seule fois.
   //   C'est ce qui ouvre la revision a 40 € chez lui : reviser un plan qu'on
   //   n'a pas ne veut rien dire, et cette date est le seul endroit du produit
@@ -47523,6 +47756,8 @@ function _repeindreSiJourChange(){
 }
 function loadClientHome(){
   try{ _majRappelVerification(); }catch(e){}
+  // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
+  try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par

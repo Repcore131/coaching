@@ -55878,6 +55878,78 @@ async function testExercices(){
       if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
       const h=_htmlLundiLigne(v);
       return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);});
+    // ── 06/10/2026 — RECONDUIRE UN BLOC, PRÉPARER LE SUIVANT ──
+    const _BLS=(fn)=>{
+      const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,ed:_coachEditClient};
+      const J=864e5, t=Date.now();
+      const sc=[{day:'Lundi',name:'DOS',active:true,exercises:[{name:'TIRAGE',sets:'3',reps:'10'},{name:'ROWING',sets:'3',reps:'12'}]},{day:'Mardi',name:'',active:false,exercises:[]}];
+      const coach={id:'cbl',email:'coach.bl@t.fr',role:'coach',alertStatus:{}};
+      const ath={id:'abl',email:'tom.bl@t.fr',fname:'Tom',role:'athlete',coachId:'cbl',status:'COACHING_SUIVI',sessions:[],bilans:[],
+        sessions_config:JSON.parse(JSON.stringify(sc)),programme:{debut:_lundiDe(t-7*7*J).getTime(),semaines:6,decharges:[5],ecarts:{}}};
+      try{
+        DB.set('users',{'coach.bl@t.fr':coach,'tom.bl@t.fr':ath}); currentUser=coach; currentClientId='abl';
+        CLOUD.pushOne=()=>Promise.resolve(true); window.toast=()=>{}; window.toastSync=()=>{};
+        return fn(ath,t,J,sc);
+      } finally { try{ closeModal(); }catch(e){} _coachEditClient=sv.ed; DB.set('users',sv.users); currentUser=sv.u; currentClientId=sv.cid; CLOUD.pushOne=sv.push; window.toast=sv.t; window.toastSync=sv.ts; try{ go('s-coach-home'); }catch(e){} }
+    };
+    ok('Reconduire ce bloc : début au lundi suivant, mêmes séances (copie profonde), publié par PUBLIER',()=>_BLS((ath,t,J,sc)=>{
+      if(!/Reconduire ce bloc/.test(_htmlSuiteBilanBloc(ath))) return _echec('pas de « Reconduire » dans le bilan du bloc');
+      if(_htmlSuiteBilanBloc(ath).indexOf('Reconduire ce bloc')>_htmlSuiteBilanBloc(ath).indexOf('Assigner le bloc suivant')&&_htmlSuiteBilanBloc(ath).indexOf('Assigner le bloc suivant')>=0) return _echec('« Reconduire » n’est pas en tête');
+      progfinReconduire();
+      const e=_coachEditClient;
+      const lundi=lundiSuivant(Date.now());
+      if(!e||e.programme.debut!==lundi||new Date(lundi).getDay()!==1) return _echec('début : '+(e&&new Date(e.programme.debut).toString()));
+      if(e.programme.semaines!==6) return _echec('semaines : '+e.programme.semaines);
+      const stocke=(DB.get('users')||{})['tom.bl@t.fr'];
+      const sig=l=>JSON.stringify((l||[]).filter(x=>x&&(x.active||x.name||(x.exercises||[]).length)).map(x=>[x.name||'',!!x.active,(x.exercises||[]).map(y=>[y.name,y.sets,y.reps])]));
+      if(sig(e.sessions_config)!==sig(stocke.sessions_config)) return _echec('séances différentes : '+sig(e.sessions_config)+' / '+sig(stocke.sessions_config));
+      if(e.sessions_config===stocke.sessions_config||e.sessions_config[0].exercises===stocke.sessions_config[0].exercises) return _echec('copie superficielle');
+      if((document.querySelector('.screen.active')||{}).id!=='s-coach-sessions') return _echec('écran');
+      if(!/Bloc reconduit/.test((document.getElementById('csm-bloc')||{}).textContent||'')) return _echec('carte du bloc reconduit');
+      saveCoachSessions();
+      const apres=(DB.get('users')||{})['tom.bl@t.fr'];
+      return apres.programme.debut===lundi&&apres.programme.semaines===6?true:_echec('publié : '+JSON.stringify(apres.programme));
+    }));
+    ok('Bloc suivant : il devient le programme au lundi prévu (horloge simulée), pas avant ; le bloc courant modifié ne le touche pas',()=>{
+      const J=864e5, lundi=_lundiDe(Date.UTC(2026,9,12,12)).getTime();
+      const u={id:'x',sessions_config:[{day:'Lundi',name:'A',active:true,exercises:[{name:'SQUAT'}]}],programme:{debut:lundi-42*J,semaines:6}};
+      u.programmeSuivant={debut:lundi,semaines:4,sessions_config:JSON.parse(JSON.stringify(u.sessions_config))};
+      u.programmeSuivant.sessions_config[0].name='B';
+      u.sessions_config[0].exercises[0].name='PRESSE';
+      if(u.programmeSuivant.sessions_config[0].exercises[0].name!=='SQUAT') return _echec('le suivant suit le courant');
+      if(basculerBlocSuivant(u,lundi-60e3)) return _echec('bascule avant le lundi');
+      if(u.sessions_config[0].name!=='A') return _echec('changé avant');
+      if(!basculerBlocSuivant(u,lundi+3600e3)) return _echec('pas de bascule au lundi');
+      if(u.sessions_config[0].name!=='B'||u.programme.debut!==lundi||u.programme.semaines!==4||u.programmeSuivant) return _echec('après : '+JSON.stringify(u.programme));
+      if(!Array.isArray(u.programmeHisto)||u.programmeHisto.length!==1||!u.programmeHisto[0].de) return _echec('journal');
+      return basculerBlocSuivant(u,lundi+7*J)===false?true:_echec('seconde bascule');});
+    ok('finProgramme : plus de « Bloc terminé » quand le suivant a démarré ; préparé, la ligne dit « bloc suivant prêt » en gris',()=>{
+      const J=864e5, now=Date.now(), l=_lundiDe(now).getTime();
+      const base=()=>({id:'f1',fname:'Zoé',sessions_config:[],programme:{debut:l-42*J,semaines:6}});
+      const a=base();
+      const f0=finProgramme(a,now);
+      if(!f0||!f0.fini) return _echec('fixture : bloc non terminé');
+      a.programmeSuivant={debut:l,semaines:4,sessions_config:[]};
+      if(finProgramme(a,now)) return _echec('« Bloc terminé » alors que le suivant a démarré : '+JSON.stringify(finProgramme(a,now)));
+      const b=base(); b.programmeSuivant={debut:l+7*J,semaines:4,sessions_config:[]};
+      const fb=finProgramme(b,now);
+      if(!fb||fb.suivant!==l+7*J) return _echec('suivant préparé : '+JSON.stringify(fb));
+      const lg=lignesFinProgramme([b],now);
+      return lg.length===1&&/^Bloc suivant prêt, démarre le /.test(lg[0].label)&&lg[0].color==='var(--sub)'?true:_echec(JSON.stringify(lg.map(x=>[x.label,x.color])));});
+    ok('Éditeur de séance : le premier champ est le nom de la séance, puis le premier exercice ; les protocoles, repliés, viennent après',()=>_BLS(()=>{
+      _seancesCoachPreparer(); _seancesCoachRendre();
+      openCoachSessionExercises(0);
+      const ecran=document.getElementById('s-coach-program');
+      if(!ecran||(document.querySelector('.screen.active')||{}).id!=='s-coach-program') return _echec('éditeur non ouvert');
+      const vis=[...ecran.querySelectorAll('input,textarea,select')].filter(x=>x.offsetParent!==null&&x.type!=='hidden'&&x.type!=='file');
+      if(!vis.length||vis[0].id!=='prog-name') return _echec('premier : '+(vis[0]&&(vis[0].id||vis[0].outerHTML.slice(0,80))));
+      const cartes=document.getElementById('prog-exercises');
+      if(!vis[1]||!cartes.contains(vis[1])) return _echec('second : '+(vis[1]&&(vis[1].id||vis[1].outerHTML.slice(0,80))));
+      const rep=document.getElementById('pr-repli');
+      if(!rep||rep.open) return _echec('protocoles non repliés');
+      if(rep.compareDocumentPosition(cartes)&Node.DOCUMENT_POSITION_FOLLOWING) return _echec('les protocoles précèdent les exercices');
+      return /Échauffement|retour au calme/.test(document.getElementById('pr-resume').textContent)?true:_echec('résumé : '+document.getElementById('pr-resume').textContent);
+    }));
     // ── 06/10/2026 — LES CIBLES EN BROUILLON : UN SEUL ENVOI ──
     const _NB=(fn)=>{
       const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,conf:window.rcConfirm,br:_nutBrouillon};

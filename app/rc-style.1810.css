@@ -13407,3 +13407,23 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--red);border-radius:var(--r-3);
   padding:10px 12px;font-size:var(--fs-xs);color:var(--text);box-shadow:var(--e3)}
 .nut-bandeau .btn{margin:0;min-height:40px}
+
+/* ══ LE BLOC RECONDUIT, LE BLOC SUIVANT (06/10/2026) ═══════════════════════ */
+.bl-onglets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.bl-onglet{min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer}
+.bl-onglet.actif{color:var(--text);border-color:var(--red)}
+.bl-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px}
+.bl-t{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin-bottom:6px}
+.bl-l{font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8}
+.bl-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:4px}
+.bl-n{width:64px;display:inline-block;margin:0 4px;min-height:36px;padding:4px 8px}
+.bl-d{width:auto;display:inline-block;margin:0 4px;min-height:36px;padding:4px 8px}
+.bb-prog-1{border-color:var(--red)}
+/* Les protocoles, sous les exercices, repliés en une ligne. */
+.pr-repli{margin:16px 0}
+.pr-resume{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--sub);
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 12px;list-style:none}
+.pr-resume::-webkit-details-marker{display:none}
+.pr-changer{color:var(--red-text);font-weight:800}
+.pr-repli[open] .pr-resume{margin-bottom:10px}

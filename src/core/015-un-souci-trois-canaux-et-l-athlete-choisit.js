@@ -1179,6 +1179,13 @@ function _signalerLigneAthlete(id){
   }catch(e){}
 }
 function openClientDetail(cid,_refresh,_force){
+  // LE BLOC SUIVANT DÉMARRE (06/10/2026) : la bascule se fait aussi d'ici.
+  try{
+    const _u=DB.get('users')||{}, _c=Object.values(_u).find(x=>x&&x.id===cid);
+    if(_c&&!_c._fromCode&&_estMonAthlete(_c,currentUser)&&basculerBlocSuivant(_c,Date.now())){
+      _u[_c.email]=_c; DB.set('users',_u); CLOUD.pushOne(_c.email,_c);
+    }
+  }catch(e){}
   // B2.F1 — AU-DELA DE 1440 PX, LE PREMIER CLIC REMPLIT LE TIROIR et ne quitte
   // pas la liste. Le bouton « Ouvrir la fiche » du tiroir rappelle cette meme
   // fonction avec _force : c'est le second clic, celui qui decide vraiment.

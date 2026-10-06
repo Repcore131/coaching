@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1809';
+window.RC_BUILD='1810';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-06';
@@ -723,13 +723,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1809.css">
+<link rel="stylesheet" href="./rc-style.1810.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1809.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1810.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3044,7 +3044,8 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH SESSION MANAGER -->
 <div id="s-coach-sessions" class="screen ecran-coach">
   <div class="topbar">
-    <button class="back-btn" onclick="retourDe('s-coach-sessions','s-coach-client')">←</button>
+    <!-- R21 — csmQuitter : des modifications non publiées demandent Publier / Jeter / Rester, puis retourDe('s-coach-sessions','s-coach-client'). -->
+    <button class="back-btn" onclick="csmQuitter()">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
     <!-- N5.10 — DEUX ACTIONS PRIMAIRES QUI NE RESSEMBLAIENT A AUCUN .btn de
          la charte. Elles sont stylees en attribut, avec leur propre fond,
@@ -3266,51 +3267,6 @@ const COACH_PHOTO='icons/coach.jpg';
            Le coach composait sa seance en regardant une capture de son Google
            Sheet ; c est le guide qui tient ce role desormais, et il porte deja
            la video et l illustration de chaque mouvement. -->
-      <!-- PROTOCOLES DE SÉANCE -->
-      <!-- « Ça fait enfant et pas classe », Kevin, 25/08/2026. Le bloc était un
-           aplat gris posé sur une page qui, partout ailleurs, a du grain et du
-           relief. Il reprend ici le langage des cartes de séance : trame
-           diagonale, dégradé, ombre portée, filet intérieur — voir .pr-* dans
-           la feuille de style.
-           LES QUATRE ÉMOJIS DISPARAISSENT (📖 💾 🔥 🧘). Un émoji se rend
-           différemment sur chaque système, ne suit pas la couleur du texte et
-           casse l'alignement des lignes ; c'est aussi lui qui donnait l'air
-           enfantin. Ils passent aux icônes au trait du jeu, inlinées telles que
-           icon() les rendrait — ce gabarit est statique, il n'a pas de JS. -->
-      <div class="pr-bloc">
-        <div class="pr-tete">
-          <div class="pr-titre">Protocoles de séance</div>
-          <div class="pr-cmds">
-          <!-- Consultation des 20 protocoles, les deux phases mêlées et sans
-               champ à remplir. Les liens « Voir tous les protocoles » plus bas
-               ouvrent le même écran, mais filtré sur une phase et prêt à
-               écrire dans le champ correspondant. -->
-          <button type="button" class="pr-cmd" onclick="ouvrirProtocoles('',null,'s-coach-program')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Bibliothèque</button>
-          <button type="button" class="pr-cmd" onclick="saveWarmupTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Enregistrer comme modèle</button>
-          </div>
-        </div>
-        <!-- La couleur de la phase se pose UNE FOIS, sur --c, et redescend sur
-             la pastille et le halo de l'icône : deux orange écrits à la main
-             finiraient par diverger. -->
-        <div class="pr-phase" style="--c:var(--orange)">
-          <div class="pr-sect">
-            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
-            <label class="pr-lbl" for="prog-warmup">Échauffement</label>
-          </div>
-          <div id="proto-type-seance" class="pr-type"></div>
-          <div id="proto-sug-warmup"></div>
-          <textarea id="prog-warmup" class="pr-champ" rows="2" placeholder="Ex: 10 min vélo léger, 2×10 squats vide, rotations épaules..."></textarea>
-        </div>
-        <div class="pr-phase" style="--c:#3b82f6">
-          <div class="pr-sect">
-            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-            <label class="pr-lbl" for="prog-cooldown">Étirements / Retour au calme</label>
-          </div>
-          <div id="proto-sug-cooldown"></div>
-          <textarea id="prog-cooldown" class="pr-champ" rows="2" placeholder="Ex: 3×30s quadriceps, 2×30s ischio, 5 min marche..."></textarea>
-        </div>
-      </div>
-
       <div style="margin:20px 0 12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <h3>Exercices</h3>
@@ -3356,6 +3312,54 @@ const COACH_PHOTO='icons/coach.jpg';
         <nav id="prog-sommaire" class="pe-sommaire" aria-label="Sommaire de la séance"></nav>
         <div id="prog-exercises"></div>
       </div>
+      <!-- LES PROTOCOLES PASSENT SOUS LES EXERCICES (06/10/2026), repliés en une
+           ligne : ~1 000 px de cartes précédaient la liste qu'on vient éditer. -->
+      <details id="pr-repli" class="pr-repli"><summary class="pr-resume"><span id="pr-resume">Échauffement et retour au calme</span> · <span class="pr-changer">changer</span></summary>
+      <!-- PROTOCOLES DE SÉANCE -->
+      <!-- « Ça fait enfant et pas classe », Kevin, 25/08/2026. Le bloc était un
+           aplat gris posé sur une page qui, partout ailleurs, a du grain et du
+           relief. Il reprend ici le langage des cartes de séance : trame
+           diagonale, dégradé, ombre portée, filet intérieur — voir .pr-* dans
+           la feuille de style.
+           LES QUATRE ÉMOJIS DISPARAISSENT (📖 💾 🔥 🧘). Un émoji se rend
+           différemment sur chaque système, ne suit pas la couleur du texte et
+           casse l'alignement des lignes ; c'est aussi lui qui donnait l'air
+           enfantin. Ils passent aux icônes au trait du jeu, inlinées telles que
+           icon() les rendrait — ce gabarit est statique, il n'a pas de JS. -->
+      <div class="pr-bloc">
+        <div class="pr-tete">
+          <div class="pr-titre">Protocoles de séance</div>
+          <div class="pr-cmds">
+          <!-- Consultation des 20 protocoles, les deux phases mêlées et sans
+               champ à remplir. Les liens « Voir tous les protocoles » plus bas
+               ouvrent le même écran, mais filtré sur une phase et prêt à
+               écrire dans le champ correspondant. -->
+          <button type="button" class="pr-cmd" onclick="ouvrirProtocoles('',null,'s-coach-program')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Bibliothèque</button>
+          <button type="button" class="pr-cmd" onclick="saveWarmupTemplate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>Enregistrer comme modèle</button>
+          </div>
+        </div>
+        <!-- La couleur de la phase se pose UNE FOIS, sur --c, et redescend sur
+             la pastille et le halo de l'icône : deux orange écrits à la main
+             finiraient par diverger. -->
+        <div class="pr-phase" style="--c:var(--orange)">
+          <div class="pr-sect">
+            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
+            <label class="pr-lbl" for="prog-warmup">Échauffement</label>
+          </div>
+          <div id="proto-type-seance" class="pr-type"></div>
+          <div id="proto-sug-warmup"></div>
+          <textarea id="prog-warmup" class="pr-champ" oninput="_prResumeMaj()" rows="2" placeholder="Ex: 10 min vélo léger, 2×10 squats vide, rotations épaules..."></textarea>
+        </div>
+        <div class="pr-phase" style="--c:#3b82f6">
+          <div class="pr-sect">
+            <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+            <label class="pr-lbl" for="prog-cooldown">Étirements / Retour au calme</label>
+          </div>
+          <div id="proto-sug-cooldown"></div>
+          <textarea id="prog-cooldown" class="pr-champ" oninput="_prResumeMaj()" rows="2" placeholder="Ex: 3×30s quadriceps, 2×30s ischio, 5 min marche..."></textarea>
+        </div>
+      </div>
+      </details>
       <div><label for="prog-notes">Notes pour l'athlète</label><textarea id="prog-notes" rows="3" placeholder="Conseils, focus, intensité..."></textarea></div>
       <div style="height:30px"></div>
     </div>
@@ -6165,5 +6169,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1809.js"></script>
+<script src="./rc-core.1810.js"></script>
 </body></html>
