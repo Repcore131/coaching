@@ -626,7 +626,7 @@ function _cplHtmlApercu(){
   // la meme journee.
   const _cycA=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
   const bandeauCycle=_cycA
-    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent de ${cycleGlucides(c,100).pctOff} %, pour que la semaine garde la cible. Le total « avant cyclage » est celui de sa fiche.</div>`
+    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${cycleGlucides(c,100).cycle?cycleGlucides(c,100).pctOn:Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent de ${cycleGlucides(c,100).pctOff} %, pour que la semaine garde la cible. Le total « avant cyclage » est celui de sa fiche.</div>`
     : '';
   // ⚠ LE BANDEAU DE PALIER A ETE REMPLACE le 08/09/2026. Il expliquait un
   // multiplicateur qui n'existe plus ; ce qui compte maintenant, c'est de dire

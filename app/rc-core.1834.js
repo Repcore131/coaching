@@ -102510,7 +102510,7 @@ function _cplHtmlApercu(){
   // la meme journee.
   const _cycA=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
   const bandeauCycle=_cycA
-    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent de ${cycleGlucides(c,100).pctOff} %, pour que la semaine garde la cible. Le total « avant cyclage » est celui de sa fiche.</div>`
+    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${cycleGlucides(c,100).cycle?cycleGlucides(c,100).pctOn:Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent de ${cycleGlucides(c,100).pctOff} %, pour que la semaine garde la cible. Le total « avant cyclage » est celui de sa fiche.</div>`
     : '';
   // ⚠ LE BANDEAU DE PALIER A ETE REMPLACE le 08/09/2026. Il expliquait un
   // multiplicateur qui n'existe plus ; ce qui compte maintenant, c'est de dire
@@ -108915,15 +108915,29 @@ const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides ; OFF : ce qui g
 //   nOn / nOff, pour que (nOn × gOn + nOff × gOff) / 7 = g. nOn = créneaux
 //   actifs (sessions_config) ; à 0 ou à 7, il n'y a pas de cycle.
 // PURE.
+// ⚠ LE JOUR OFF NE DESCEND PLUS SOUS 70 % (build 1834). Avec 6 créneaux,
+//   −15 % × 6 / 1 donnait −90 % : 20 g de glucides le jour de repos, que le
+//   plancher relevait ensuite en reportant le même lift sur le jour ON — la
+//   moyenne de la semaine dépassait la cible de plus de 300 kcal. La baisse du
+//   jour OFF est plafonnée à CYCLE_GLUC_OFF_MAX, et c'est la hausse du jour ON
+//   qui s'en déduit (xOn = xOff × nOff / nOn ≤ CYCLE_GLUC) : la semaine garde
+//   la cible à ±1 g. pctOn / pctOff sont les pourcentages RÉELS.
+const CYCLE_GLUC_OFF_MAX=0.30;
 function cycleGlucides(user,g){
   const sc=(user&&user.sessions_config)||[];
   const l=Array.isArray(sc)?sc:(typeof sc==='object'?Object.values(sc):[]);
   const nOn=Math.min(7,l.filter(x=>x&&x.active).length), nOff=7-nOn;
-  const G=Number(g)||0;
+  const G=Math.max(0,Number(g)||0);
   if(nOn<=0||nOff<=0) return {cycle:false,nOn,nOff,gOn:Math.round(G),gOff:Math.round(G),pctOn:0,pctOff:0};
-  const xOff=CYCLE_GLUC*nOn/nOff;
-  return {cycle:true,nOn,nOff,gOn:Math.round(G*(1+CYCLE_GLUC)),gOff:Math.round(G*(1-xOff)),
-    pctOn:Math.round(CYCLE_GLUC*100),pctOff:Math.round(xOff*100)};
+  const brutOff=CYCLE_GLUC*nOn/nOff, plafonne=brutOff>CYCLE_GLUC_OFF_MAX;
+  const xOff=plafonne?CYCLE_GLUC_OFF_MAX:brutOff;
+  const xOn=xOff*nOff/nOn;
+  // Plafonné, le jour OFF s'arrondit VERS LE HAUT (jamais sous 70 %) ; le jour
+  // ON prend alors ce qui garde la semaine à la cible.
+  const gOff=plafonne?Math.ceil(G*(1-xOff)-1e-9):Math.round(G*(1-xOff));
+  const gOn=Math.max(0,Math.round((7*G-nOff*gOff)/nOn));
+  return {cycle:true,nOn,nOff,gOn,gOff,
+    pctOn:Math.round(xOn*100),pctOff:Math.round(xOff*100)};
 }
 
 // ── Point de départ calorique, dérivé de la vitesse visée ───────────────────
@@ -109046,6 +109060,25 @@ function plancherAthlete(user){
   const bl=(u.bilans||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
   const sexe=u._evol_gender||u.gender||((bl[bl.length-1]||{})['deb-gender'])||'';
   return isFemale(sexe)?KCAL_PLANCHER_ABS.F:KCAL_PLANCHER_ABS.H;
+}
+// PURE (build 1834). Les deux journées cyclées, relevées au plancher CHACUNE
+// pour elle-même : le jour OFF au plancher, le jour ON inchangé s'il est déjà
+// au-dessus. Le lift n'est reporté sur le jour ON que si le jour ON passerait
+// sous le jour OFF. Rend aussi la moyenne de la semaine SERVIE et son écart à
+// la journée de base (elle-même relevée), en kcal par jour.
+const CYCLE_ECART_DIT_KCAL=50;
+function journeesCyclees(user,p,l,g,cg,appliquer){
+  const offRel=_relevePlancher(_bloc(p,l,cg.gOff),user,appliquer);
+  let on=_relevePlancher(_bloc(p,l,cg.gOn),user,appliquer);
+  if(on.g<offRel.g) on=_bloc(p,l,offRel.g);
+  const base=_relevePlancher(_bloc(p,l,g),user,appliquer);
+  const moyenneServie=(cg.nOn*on.kcal+cg.nOff*offRel.kcal)/7;
+  return {on,off:offRel,moyenneServie,cible:base.kcal,ecartCible:Math.round(moyenneServie-base.kcal)};
+}
+// La phrase, ou '' sous CYCLE_ECART_DIT_KCAL.
+function texteEcartPlancher(ecart){
+  const x=Math.round(Number(ecart)||0);
+  return x>CYCLE_ECART_DIT_KCAL?'le plancher du jour de repos ajoute '+x+' kcal par jour en moyenne':'';
 }
 // Sur quel appareil sommes-nous ? Celui du coach ne borne jamais les cibles
 // d'un athlete : il les voit, il est averti, il decide.
@@ -109699,7 +109732,7 @@ function besoinsProposes(user,opts){
   // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
   // plancher peut les relever, et c'est le total servi qui décide de la
   // vitesse réelle.
-  let on,off;
+  let on,off,_ecartCycle=0,_moyServie=null;
   if(!cycle){
     const j=_relevePlancher(_bloc(r.p,r.l,r.g),user,_appl);
     on=j; off=Object.assign({},j);
@@ -109718,11 +109751,11 @@ function besoinsProposes(user,opts){
     // supplément est le même des deux côtés. Le total servi monte d'autant,
     // mais c'est déjà ce que la ligne « kcal servies » annonce, et le
     // commentaire de deltaServi juste en dessous le dit depuis toujours.
-    const gOn=_cg.gOn, gOff=_cg.gOff;
-    const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user,_appl);
-    const lift=offRel.g-gOff;                 // 0 quand le plancher ne mord pas
-    off=offRel;
-    on=_relevePlancher(_bloc(r.p,r.l,gOn+lift),user,_appl);
+    // ⚠ BUILD 1834 : chaque journée relevée pour elle-même (journeesCyclees).
+    //   Reporter le lift du jour OFF sur le jour ON faisait dépasser la cible
+    //   à la semaine entière ; le jour ON ne suit que s'il passerait dessous.
+    const _jc=journeesCyclees(user,r.p,r.l,r.g,_cg,_appl);
+    on=_jc.on; off=_jc.off; _ecartCycle=_jc.ecartCible; _moyServie=_jc.moyenneServie;
   }
   // La vitesse ANNONCÉE est celle que produit le total RÉELLEMENT servi — pas
   // celle visée, pas même celle retenue après plafond. Quand le plancher relève
@@ -109750,12 +109783,14 @@ function besoinsProposes(user,opts){
     :(o.cycle!==false&&!_cg.cycle
       ?(_cg.nOn>=7?'sept créneaux sur sept':'aucun créneau actif')+' : pas de cycle, même total tous les jours'
       :'même total tous les jours'));
+  { const _te=cycle?texteEcartPlancher(_ecartCycle):''; if(_te) hypotheses.push(_te); }
   // delta reste le delta de CIBLE, avant plancher : c'est lui qui décide si
   // l'athlète pose un déficit d'un clic, et le garde-fou TCA s'y adosse.
   // Le remplacer par deltaServi ouvrirait ce chemin dès que le plancher
   // ramène la journée au niveau de la dépense.
   // La moyenne de la SEMAINE servie (nOn jours ON, nOff jours OFF), non arrondie.
   return {moyenne:cycle?(_cg.nOn*on.kcal+_cg.nOff*off.kcal)/7:on.kcal,nOn:_cg.nOn,nOff:_cg.nOff,
+    moyenneServie:cycle?_moyServie:on.kcal,ecartCible:cycle?_ecartCycle:0,
     poidsRef:_pm.kg,poidsRefObj:_pm,glucidesBas:r.glucidesBas,depasse:r.depasse,source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
     poids,deltaServi,hypotheses};
 }
@@ -111367,10 +111402,9 @@ function _tbJournees(user,t,cyclee,appliquer){
     const j=_relevePlancher(_bloc(t.p,t.l,t.g),user,ap);
     return {on:j,off:j,cycle:false,nOn:cg.nOn,nOff:cg.nOff};
   }
-  const gOn=cg.gOn, gOff=cg.gOff;
-  const offRel=_relevePlancher(_bloc(t.p,t.l,gOff),user,ap);
-  const lift=offRel.g-gOff;
-  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user,ap),
+  // Build 1834 : chaque journée relevée pour elle-même (journeesCyclees).
+  const jc=journeesCyclees(user,t.p,t.l,t.g,cg,ap);
+  return {off:jc.off,on:jc.on,moyenneServie:jc.moyenneServie,ecartCible:jc.ecartCible,
     cycle:true,nOn:cg.nOn,nOff:cg.nOff,pctOn:cg.pctOn,pctOff:cg.pctOff};
 }
 
@@ -111688,7 +111722,8 @@ function _htmlTableauxTableur(c){
   let hJournees='<table class="tbk tbk-jr">'+_tbkCap('calendar','Journées',
       'Ajustement de la répartition des glucides')+'<tbody>'
     +li('Cycler les glucides',_optCyc,
-        '+'+Math.round(CYCLE_GLUC*100)
+        // Le pourcentage RÉEL (cycleGlucides, build 1834) : il suit les créneaux.
+        '+'+(function(){ const x=cycleGlucides(c,100); return x.cycle?x.pctOn:Math.round(CYCLE_GLUC*100); })()
         +' % de glucides les jours d’entraînement, les jours de repos compensent : la semaine garde la cible',false,'refresh-cw')
     +(function(){
       // ⚠ LA JOURNEE ECRITE, PAS LE TOTAL AVANT ARRONDI. Mesure au banc a deux
@@ -111708,7 +111743,17 @@ function _htmlTableauxTableur(c){
       return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
           _tbNb(j.on.g)+' g de glucides, soit +'+j.pctOn+' % ('+j.nOn+' j)',true,'zap')
         +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
-          _tbNb(j.off.g)+' g de glucides, soit −'+j.pctOff+' % ('+j.nOff+' j)',true,'moon');
+          _tbNb(j.off.g)+' g de glucides, soit −'+j.pctOff+' % ('+j.nOff+' j)',true,'moon')
+        // SOUS LE PLANCHER (build 1834) : le coach n'est jamais borné, il est
+        // averti — le chiffre du plancher, en une ligne.
+        +(function(){
+          let pl=0; try{ pl=plancherAthlete(c); }catch(e){ pl=0; }
+          const al=(pl>0&&j.off.kcal<pl)
+            ?'<div class="mac-alerte tbk-off-plancher" style="color:var(--red)">Le jour OFF passe sous le plancher de '+_tbNb(pl)+' kcal.</div>':'';
+          const te=texteEcartPlancher(j.ecartCible);
+          const ec=te?'<div class="mac-alerte">'+escapeHtml(te.charAt(0).toUpperCase()+te.slice(1))+'.</div>':'';
+          return (al||ec)?'<tr><td colspan="2">'+al+ec+'</td></tr>':'';
+        })();
     })()
     +'</tbody></table>';
   // ── L'ASSEMBLAGE ────────────────────────────────────────────────────

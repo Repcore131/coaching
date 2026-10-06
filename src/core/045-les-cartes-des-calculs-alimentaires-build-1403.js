@@ -262,7 +262,8 @@ function _htmlTableauxTableur(c){
   let hJournees='<table class="tbk tbk-jr">'+_tbkCap('calendar','Journées',
       'Ajustement de la répartition des glucides')+'<tbody>'
     +li('Cycler les glucides',_optCyc,
-        '+'+Math.round(CYCLE_GLUC*100)
+        // Le pourcentage RÉEL (cycleGlucides, build 1834) : il suit les créneaux.
+        '+'+(function(){ const x=cycleGlucides(c,100); return x.cycle?x.pctOn:Math.round(CYCLE_GLUC*100); })()
         +' % de glucides les jours d’entraînement, les jours de repos compensent : la semaine garde la cible',false,'refresh-cw')
     +(function(){
       // ⚠ LA JOURNEE ECRITE, PAS LE TOTAL AVANT ARRONDI. Mesure au banc a deux
@@ -282,7 +283,17 @@ function _htmlTableauxTableur(c){
       return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
           _tbNb(j.on.g)+' g de glucides, soit +'+j.pctOn+' % ('+j.nOn+' j)',true,'zap')
         +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
-          _tbNb(j.off.g)+' g de glucides, soit −'+j.pctOff+' % ('+j.nOff+' j)',true,'moon');
+          _tbNb(j.off.g)+' g de glucides, soit −'+j.pctOff+' % ('+j.nOff+' j)',true,'moon')
+        // SOUS LE PLANCHER (build 1834) : le coach n'est jamais borné, il est
+        // averti — le chiffre du plancher, en une ligne.
+        +(function(){
+          let pl=0; try{ pl=plancherAthlete(c); }catch(e){ pl=0; }
+          const al=(pl>0&&j.off.kcal<pl)
+            ?'<div class="mac-alerte tbk-off-plancher" style="color:var(--red)">Le jour OFF passe sous le plancher de '+_tbNb(pl)+' kcal.</div>':'';
+          const te=texteEcartPlancher(j.ecartCible);
+          const ec=te?'<div class="mac-alerte">'+escapeHtml(te.charAt(0).toUpperCase()+te.slice(1))+'.</div>':'';
+          return (al||ec)?'<tr><td colspan="2">'+al+ec+'</td></tr>':'';
+        })();
     })()
     +'</tbody></table>';
   // ── L'ASSEMBLAGE ────────────────────────────────────────────────────

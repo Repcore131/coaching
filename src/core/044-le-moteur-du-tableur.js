@@ -644,7 +644,7 @@ function besoinsProposes(user,opts){
   // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
   // plancher peut les relever, et c'est le total servi qui décide de la
   // vitesse réelle.
-  let on,off;
+  let on,off,_ecartCycle=0,_moyServie=null;
   if(!cycle){
     const j=_relevePlancher(_bloc(r.p,r.l,r.g),user,_appl);
     on=j; off=Object.assign({},j);
@@ -663,11 +663,11 @@ function besoinsProposes(user,opts){
     // supplément est le même des deux côtés. Le total servi monte d'autant,
     // mais c'est déjà ce que la ligne « kcal servies » annonce, et le
     // commentaire de deltaServi juste en dessous le dit depuis toujours.
-    const gOn=_cg.gOn, gOff=_cg.gOff;
-    const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user,_appl);
-    const lift=offRel.g-gOff;                 // 0 quand le plancher ne mord pas
-    off=offRel;
-    on=_relevePlancher(_bloc(r.p,r.l,gOn+lift),user,_appl);
+    // ⚠ BUILD 1834 : chaque journée relevée pour elle-même (journeesCyclees).
+    //   Reporter le lift du jour OFF sur le jour ON faisait dépasser la cible
+    //   à la semaine entière ; le jour ON ne suit que s'il passerait dessous.
+    const _jc=journeesCyclees(user,r.p,r.l,r.g,_cg,_appl);
+    on=_jc.on; off=_jc.off; _ecartCycle=_jc.ecartCible; _moyServie=_jc.moyenneServie;
   }
   // La vitesse ANNONCÉE est celle que produit le total RÉELLEMENT servi — pas
   // celle visée, pas même celle retenue après plafond. Quand le plancher relève
@@ -695,12 +695,14 @@ function besoinsProposes(user,opts){
     :(o.cycle!==false&&!_cg.cycle
       ?(_cg.nOn>=7?'sept créneaux sur sept':'aucun créneau actif')+' : pas de cycle, même total tous les jours'
       :'même total tous les jours'));
+  { const _te=cycle?texteEcartPlancher(_ecartCycle):''; if(_te) hypotheses.push(_te); }
   // delta reste le delta de CIBLE, avant plancher : c'est lui qui décide si
   // l'athlète pose un déficit d'un clic, et le garde-fou TCA s'y adosse.
   // Le remplacer par deltaServi ouvrirait ce chemin dès que le plancher
   // ramène la journée au niveau de la dépense.
   // La moyenne de la SEMAINE servie (nOn jours ON, nOff jours OFF), non arrondie.
   return {moyenne:cycle?(_cg.nOn*on.kcal+_cg.nOff*off.kcal)/7:on.kcal,nOn:_cg.nOn,nOff:_cg.nOff,
+    moyenneServie:cycle?_moyServie:on.kcal,ecartCible:cycle?_ecartCycle:0,
     poidsRef:_pm.kg,poidsRefObj:_pm,glucidesBas:r.glucidesBas,depasse:r.depasse,source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
     poids,deltaServi,hypotheses};
 }
@@ -2312,10 +2314,9 @@ function _tbJournees(user,t,cyclee,appliquer){
     const j=_relevePlancher(_bloc(t.p,t.l,t.g),user,ap);
     return {on:j,off:j,cycle:false,nOn:cg.nOn,nOff:cg.nOff};
   }
-  const gOn=cg.gOn, gOff=cg.gOff;
-  const offRel=_relevePlancher(_bloc(t.p,t.l,gOff),user,ap);
-  const lift=offRel.g-gOff;
-  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user,ap),
+  // Build 1834 : chaque journée relevée pour elle-même (journeesCyclees).
+  const jc=journeesCyclees(user,t.p,t.l,t.g,cg,ap);
+  return {off:jc.off,on:jc.on,moyenneServie:jc.moyenneServie,ecartCible:jc.ecartCible,
     cycle:true,nOn:cg.nOn,nOff:cg.nOff,pctOn:cg.pctOn,pctOff:cg.pctOff};
 }
 

@@ -45268,21 +45268,80 @@ async function testExercices(){
           }
           return true;});
 
-        ok('L\'ECART VOULU EST CONSERVE, pas seulement un ecart quelconque',()=>{
-          // Le report ajoute le MEME nombre de grammes aux deux journees :
-          // l'ecart doit donc rester exactement celui du cycle, deux fois
-          // CYCLE_GLUC des glucides de base. Un ecart qui retrecirait quand le
-          // plancher mord serait un cycle a moitie applique.
+        ok('L\'ECART VOULU EST CONSERVE hors plancher ; sous le plancher, le jour ON ne passe jamais sous le OFF',()=>{
+          // ⚠ CONTRAT CHANGÉ (build 1834). Avant, le lift du jour OFF était
+          //   reporté gramme pour gramme sur le jour ON : l'écart restait
+          //   exactement celui du cycle, mais la moyenne de la SEMAINE servie
+          //   dépassait la cible (2 463 kcal pour 2 128 au banc, 6 créneaux).
+          //   Désormais chaque journée est relevée pour elle-même : hors
+          //   plancher, l'écart vaut gOn − gOff de cycleGlucides ; quand le
+          //   plancher mord, l'écart peut rétrécir, jamais devenir négatif.
           const c=poser('maintien');
           const b=besoinsProposes(c,{cycle:true});
           const s=poser('seche');
           const bs=besoinsProposes(s,{cycle:true});
-          // Sur les deux phases, l'ecart vaut round(g*1,15) - round(g*0,85).
-          // On ne recalcule pas g ici — on verifie que l'ecart survit au
-          // plancher, ce qui est le fond de l'affaire.
           if(!(b.on.g-b.off.g>0)) return _echec('aucun ecart hors plancher');
-          if(!(bs.on.g-bs.off.g>0)) return _echec('l\'ecart disparait quand le plancher mord');
+          if(bs.on.g<bs.off.g) return _echec('le jour ON passe sous le OFF quand le plancher mord');
           return true;});
+        // ── BUILD 1834 : LE JOUR OFF PLAFONNÉ, LA SEMAINE À LA CIBLE ──
+        const _CG=n=>({sessions_config:Array.from({length:7},(_,i)=>({active:i<n}))});
+        const _moyG=cg=>(cg.nOn*cg.gOn+cg.nOff*cg.gOff)/7;
+        ok('Cycle : 6 créneaux, g = 196 → jour OFF ≥ 70 % de 196, moyenne de la semaine à ±1 g',()=>{
+          const cg=cycleGlucides(_CG(6),196);
+          if(!cg.cycle) return _echec('pas de cycle');
+          if(!(cg.gOff>=0.70*196)) return _echec('OFF '+cg.gOff);
+          if(Math.abs(_moyG(cg)-196)>1) return _echec('moyenne '+_moyG(cg));
+          // Les pourcentages RÉELS : −30 % le jour OFF, +5 % les jours ON.
+          return cg.pctOff===30&&cg.pctOn===5?true:_echec(cg.pctOn+' / '+cg.pctOff);});
+        ok('Cycle : 3, 4 et 5 créneaux → moyenne de la semaine à ±1 g ; 0 et 7 → pas de cycle ; g = 0 → 0',()=>{
+          for(const n of [1,2,3,4,5,6]) for(const g of [80,196,333]){
+            const cg=cycleGlucides(_CG(n),g);
+            if(Math.abs(_moyG(cg)-g)>1) return _echec(n+' créneaux, '+g+' g : '+_moyG(cg));
+            if(cg.gOff<0.70*g-0.5) return _echec(n+' créneaux : OFF '+cg.gOff);
+            if(cg.pctOn>Math.round(CYCLE_GLUC*100)) return _echec(n+' créneaux : ON +'+cg.pctOn+' %');
+          }
+          // 3 créneaux : le cycle d'origine, intact (+15 % / −11 %).
+          const c3=cycleGlucides(_CG(3),200);
+          if(c3.pctOn!==15||c3.pctOff!==11) return _echec('3 créneaux : '+c3.pctOn+' / '+c3.pctOff);
+          if(cycleGlucides(_CG(0),200).cycle||cycleGlucides(_CG(7),200).cycle) return _echec('0 ou 7 : cycle');
+          const z=cycleGlucides(_CG(4),0);
+          return z.gOn===0&&z.gOff===0?true:_echec('g = 0 : '+z.gOn+' / '+z.gOff);});
+        ok('Cycle : H 80 kg, 180 cm, 30 ans, 6 créneaux, sèche, plancher appliqué → moyenne servie ≤ cible + 50 kcal',()=>{
+          const u={id:'cy6',email:'cy6@t.fr',role:'athlete',gender:'Homme',_evol_gender:'Homme',_evol_height:'180',
+            birthdate:'1996-01-01',bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}],
+            weightLog:[{date:localISODate(new Date()),kg:80}],
+            sessions_config:Array.from({length:7},(_,i)=>({active:i<6,name:'S'+i,exercises:[]})),
+            phase:{type:'seche',debut:Date.now()-7*864e5},nutrition:{cycle:true,tableur:{coef:0.85}}};
+          const t=cibleTableur(u,{appliquerPlancher:true});
+          if(!t||(t.manque&&t.manque.length)) return _echec('calcul : '+JSON.stringify(t&&t.manque));
+          const j=_tbJournees(u,t,true,true);
+          if(!j.cycle) return _echec('pas de cycle');
+          const moy=(j.nOn*j.on.kcal+j.nOff*j.off.kcal)/7;
+          if(Math.abs(moy-j.moyenneServie)>0.01) return _echec('moyenneServie '+j.moyenneServie+' / '+moy);
+          if(!(moy<=t.kcal+50)) return _echec('moyenne '+Math.round(moy)+' pour une cible de '+t.kcal);
+          if(j.on.g<j.off.g) return _echec('ON sous OFF');
+          // Même règle côté proposition.
+          const b=besoinsProposes(u,{cycle:true});
+          if(b&&b.cycle&&!(b.ecartCible<=50)) return _echec('besoinsProposes : écart '+b.ecartCible);
+          // La phrase n'apparaît qu'au-delà de 50 kcal.
+          return texteEcartPlancher(50)===''&&/ajoute 51 kcal par jour en moyenne/.test(texteEcartPlancher(51))?true:_echec('phrase');});
+        ok('Cycle, côté coach : F 55 kg, coefficient 0,75, 6 créneaux → l’alerte de plancher du jour OFF dans le tableau',()=>{
+          const svU=currentUser;
+          try{
+            currentUser={id:'cyC',email:'cyc@t.fr',role:'coach'};
+            const c={id:'cyF',email:'cyf@t.fr',role:'athlete',gender:'Femme',_evol_gender:'Femme',_evol_height:'155',
+              birthdate:'1980-01-01',bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'55','deb-height':'155','deb-age':'46','deb-gender':'Femme'}],
+              weightLog:[{date:localISODate(new Date()),kg:55}],
+              sessions_config:Array.from({length:7},(_,i)=>({active:i<6,name:'S'+i,exercises:[]})),
+              phase:{type:'seche',debut:Date.now()-7*864e5},nutrition:{cycle:true,tableur:{coef:0.75}}};
+            const t=cibleTableur(c,_tbOptsDe(c));
+            const j=_tbJournees(c,t,true);
+            const pl=plancherAthlete(c);
+            if(!(j.off.kcal<pl)) return _echec('fixture : OFF '+j.off.kcal+' au-dessus du plancher '+pl);
+            const h=_htmlTableauxTableur(c);
+            if(h.indexOf('tbk-off-plancher')<0) return _echec('alerte absente');
+            return h.indexOf('sous le plancher de '+_tbNb(pl)+' kcal')>=0?true:_echec('chiffre du plancher absent');
+          } finally { currentUser=svU; }});
 
         ok('CHANGER DE PHASE RECALCULE LES CIBLES',()=>{
           // Signale par Kevin le 25/08/2026 : « je viens de cliquer sur prise de
