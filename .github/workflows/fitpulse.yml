@@ -35,9 +35,17 @@ jobs:
           set -e
           cd club
           rm -rf _en_ligne && mkdir -p _en_ligne
-          cp -a index.html pulse.css fonts.css fonts vendor manifest.webmanifest favicon.png icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png assets ./*.js _en_ligne/
+          cp -a index.html pulse.css fonts.css fonts vendor manifest.webmanifest favicon.png icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png robots.txt assets ./*.js _en_ligne/
           rm -f _en_ligne/assets/fitpulse-source.webp
           test -f _en_ligne/index.html && test -f _en_ligne/app.js
+
+      # Code mis en ligne compressé et illisible (les mentions de copyright /*! */ restent).
+      - name: Compresser le code
+        run: |
+          set -e
+          cd club/_en_ligne
+          for f in ./*.js; do npx -y terser@5 "$f" -c -m --comments '/^!/' -o "$f.min" && mv "$f.min" "$f"; done
+          test -s app.js && grep -q 'Tous droits' core.js
 
       # Les regles d'acces (base partagee /pulse, cles de connexion, boite
       # d'envoi des invitations) AVANT la page qui s'en sert.

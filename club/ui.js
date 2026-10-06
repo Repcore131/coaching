@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — interface commune : session, routes, coque, modales ══════
 
@@ -159,6 +160,7 @@ function shell(route, inner) {
         <a href="#/profile" class="${route === 'profile' ? 'on' : ''}">${ico('user')}<span>Mon profil</span></a>
         <a href="javascript:void 0" data-act="theme">${ico(theme === 'dark' ? 'sun' : 'moon')}<span>Thème ${theme === 'dark' ? 'clair' : 'sombre'}</span></a>
         <a href="javascript:void 0" data-act="logout">${ico('logout')}<span>Se déconnecter</span></a>
+        <a href="#/legal" class="${route === 'legal' ? 'on' : ''}">${ico('shield')}<span>Informations légales</span></a>
         <div class="me" style="margin-top:8px">${avatar(ME, 'xs')}<div class="small"><b>${esc(fullName(ME))}</b><div class="muted">${roleLabel(ME.role)}${backend.mode === 'local' ? ' · mode local' : ''}</div></div></div>
       </div>
     </aside>
@@ -166,7 +168,7 @@ function shell(route, inner) {
       <div class="topbar"><button class="btn ghost icon burger" data-act="burger" aria-label="Menu">${ico('menu')}</button>${(window.PARKPULSE_ASSETS || {}).icon ? `<img class="top-icon" src="${window.PARKPULSE_ASSETS.icon}" alt="">` : ''}
         <b class="title t-16">${esc(PAGES[route] ? PAGES[route].title : '')}</b>
         <div class="countdown" id="countdown"></div><button class="btn ghost icon" data-act="search" aria-label="Rechercher un client">${ico('search')}</button>${bellBtn()}<button class="btn primary top-cta" data-act="tbSaisir">${ico('plus')} Saisir</button></div>
-      <div class="page page-${route}">${inner}</div>
+      <div class="page page-${route}">${inner}${typeof legalFooter === 'function' ? legalFooter() : ''}</div>
     </main>
     ${tabBar(route)}
   </div>`;
@@ -193,7 +195,9 @@ function render() {
 const PERF_ON = /[?&]perf\b/.test(location.search);
 function renderNow() { const t0 = performance.now(); renderNowInner(); if (PERF_ON) { const ms = performance.now() - t0; let el = $('#perf-hud'); if (!el) { el = document.createElement('div'); el.id = 'perf-hud'; el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99;background:#000;color:#ffd600;font:12px monospace;padding:6px 8px;border-radius:6px'; document.body.appendChild(el); } el.textContent = `rendu ${ms.toFixed(1)} ms · ${(location.hash || '#/home').slice(2)} · ${Object.keys(S && S.entries || {}).length} saisies`; } }
 function renderNowInner() {
-  const app = $('#app');
+  const app = $('#app'); if (!app) return;
+  // Pages légales : lisibles sans être connecté
+  if (currentRoute().r === 'legal' && ((backend.mode === 'firebase' && !backend.user) || !S || !ME)) { app.innerHTML = legalStandalone(currentRoute().args[0]); window.scrollTo(0, 0); return; }
   if (backend.mode === 'firebase' && !backend.user) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
   if (!S) { app.innerHTML = PAGES.onboarding.render(); return; }
   if (!ME) { app.innerHTML = PAGES.login.render(); if (PAGES.login.mount) PAGES.login.mount(); return; }
@@ -211,6 +215,7 @@ function renderNowInner() {
   app.innerHTML = shell(r, PAGES[r].render(args));
   UI._lastRoute = r;
   if (PAGES[r].mount) PAGES[r].mount(args);
+  if (typeof cguGate === 'function') cguGate();
   // Lecteurs d'écran : boutons icône nommés par leur infobulle, pastilles de santé lisibles.
   $$('button[title]:not([aria-label]),a[title]:not([aria-label])', app).forEach(b => { if (!b.textContent.trim()) b.setAttribute('aria-label', b.title); });
   $$('.hdot[title]:not([role])', app).forEach(i => { i.setAttribute('role', 'img'); i.setAttribute('aria-label', i.title); });

@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — KPI du matin ═════════════════════════════════════════════
 // Le message « Résultat du jour » du groupe WhatsApp, prêt en un clic :

@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 // Base de test volumineuse pour mesurer Fit Pulse : 10 clubs, 50 000 saisies, 30 000 clients,
 // 5 000 relances notées, 2 000 messages. Produit un fichier de sauvegarde à restaurer en mode
 // local (Mes clubs > Réglages > Restaurer une sauvegarde), puis ouvrir l'appli avec ?perf.

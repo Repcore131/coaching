@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 'use strict';
 // ══ FIT PULSE — visuels sur mesure (vectoriels, charte Fitness Park) ═══════
 // Jaune #FFD600, noir #0A0A0A, blanc, gris. Formes inclinees de 8 degres

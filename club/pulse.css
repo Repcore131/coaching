@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 /* ══ FIT PULSE : une seule feuille de styles. 1 Jetons (sombre, puis clair), 2 Base et composants, 3 Pages, 4 Responsive. Jaune unique #FFD600, titres Barlow Condensed, texte Montserrat. ══ */
 :root { --t-11: 11px; --t-12: 12px; --t-13: 13px; --t-14: 14px; --t-16: 16px; --t-18: 18px; --t-20: 20px; --t-24: 24px; --t-28: 28px; --t-32: 32px; --t-40: 40px; --t-48: 48px; --t-56: 56px; --t-64: 64px; --t-88: 88px; --fp-ink: #0B0B0C; --info: #2F6FDB; --accent-text: var(--fp); --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark; --fp: #FFD600; --fp-soft: rgba(255,214,0,.14); --fp-yellow: #FFD600; --fp-yellow-press: #E6C200; --fp-black: #0A0A0A; --info-soft: rgba(59,130,246,.14); --d-1: var(--fp); --d-2: #F5F5F3; --d-3: #8C8C8C; --d-4: #5C5C5C; --d-5: #3A3A3A; --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px; --r-pill: 999px; --font-title: 'Barlow Condensed', Impact, sans-serif; --font: 'Montserrat', 'Inter', system-ui, sans-serif; --ok: #22C55E; --warn: #F59E0B; --bad: #EF4444; --ok-soft: rgba(34,197,94,.14); --warn-soft: rgba(245,158,11,.16); --bad-soft: rgba(239,68,68,.15); --bg: #0A0A0A; --surface: #141414; --surface-2: #1D1D1D; --line: #262626; --text: #F5F5F3; --muted: #9B9B9B; --radius: 16px; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --accent-text: #7A5F00; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 6px 20px rgba(0,0,0,.06); color-scheme: light; --bg: #F3F3F0; --surface: #FFFFFF; --surface-2: #F1F1EE; --line: #E4E4DE; --text: #0E0E0E; --muted: #66666B; --d-2: #0E0E0E; --d-4: #BDBDBD; --d-5: #DADADA; --ok: #16A34A; --warn: #D97706; --bad: #DC2626; } }
@@ -1062,3 +1063,18 @@ select.input { text-overflow: ellipsis; }
   .pr-acts .btn.primary { flex: 1; justify-content: center; }
   .pr-temp-tile b { font-size: 22px; }
 }
+/* Partie légale */
+.legal-doc h2 { margin-top: 0; }
+.legal-doc h3 { margin: 18px 0 6px; font-size: 15px; }
+.legal-doc p, .legal-doc li { line-height: 1.6; }
+.legal-doc ul { padding-left: 20px; }
+.legal-tabs { margin-bottom: 12px; }
+.legal-tabs a { text-decoration: none; color: inherit; }
+.legal-todo { background: var(--warn-soft); color: var(--warn); padding: 0 6px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+.legal-solo { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+.legal-foot { margin: 28px 0 8px; text-align: center; font-size: 11px; color: var(--muted); line-height: 1.7; }
+.legal-foot a { color: var(--muted); }
+.cgu-gate { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.cgu-card { background: var(--surface); color: var(--text); border-radius: 18px; max-width: 560px; width: 100%; padding: 22px; display: grid; gap: 10px; box-shadow: var(--shadow); }
+.cgu-card h2 { margin: 0; }
+.cgu-card ul { padding-left: 20px; margin: 0; line-height: 1.55; }

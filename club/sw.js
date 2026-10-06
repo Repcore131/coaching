@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 // Fit Pulse : service worker minimal. Pages et scripts toujours pris sur le
 // réseau d'abord (une mise à jour passe au chargement suivant), icônes et
 // polices en cache. Au clic sur une alerte : ouvre la bonne page.

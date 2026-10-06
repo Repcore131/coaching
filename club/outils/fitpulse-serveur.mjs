@@ -1,3 +1,4 @@
+/*! Fit Pulse © 2026 Kévin GUELLEC et FPN Gestion (Fitness Park Niort). Tous droits réservés. Logiciel protégé (CPI art. L111-1, L112-2, L335-2) : toute reproduction, même partielle, est interdite. */
 // ══ FIT PULSE — serveur : règles d'accès + e-mails d'invitation ═══════════════
 //
 // Lance par .github/workflows/fitpulse-mail.yml (toutes les 5 minutes).
