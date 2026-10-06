@@ -1053,7 +1053,21 @@ function _libFrequence(user,cle,muscle){
 // arbitrer : un repere de reference et un repere mesure se lisent pareil, et
 // il ne sait pas lequel il a le droit de contredire.
 function reperesEffectifs(user,muscle){
-  const d=REPERES_VOLUME[muscle];
+  // AU DÉPART, ×0,8 POUR UN DÉBUTANT OU UN SENIOR (profilEntrainement, build
+  // 1829) — sur la TABLE seulement : la boucle de retour (reperesAuto) et le
+  // coach (reperesVolume) l'ajustent ensuite. Un muscle PRIORITAIRE (bloc de
+  // priorité) ne descend jamais sous le MEV de la table.
+  const d0=REPERES_VOLUME[muscle];
+  let d=d0;
+  try{
+    const f=d0&&user?facteurVolumeProfil(user):1;
+    if(f!==1){
+      d=Object.assign({},d0);
+      for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof d[b]==='number') d[b]=Math.round(d[b]*f);
+      let prio=false; try{ const bp=blocPriorite(user); prio=!!(bp&&bp.hauts.indexOf(muscle)>=0); }catch(e){}
+      if(prio) d.mev=Math.max(d.mev,d0.mev);
+    }
+  }catch(e){ d=d0; }
   const a=user&&user.reperesAuto&&user.reperesAuto[muscle];
   const o=user&&user.reperesVolume&&user.reperesVolume[muscle];
   if(!d&&!a&&!o) return null;
@@ -1066,7 +1080,7 @@ function reperesEffectifs(user,muscle){
   // Un etage superieur qui ne fait que RECOPIER la valeur du dessous ne change
   // rien : l'annoncer « ajuste » ferait lire une mesure la ou il n'y en a pas.
   const bouge=(src)=>!!src&&['mev','mavMin','mavMax','mrv']
-    .some(b=>typeof src[b]==='number'&&(!d||src[b]!==d[b]));
+    .some(b=>typeof src[b]==='number'&&(!d0||src[b]!==d0[b]));
   r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
   return r;
 }

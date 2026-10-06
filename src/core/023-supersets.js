@@ -698,7 +698,7 @@ function _blocExo(idx,estSS){
   // Reprise après coupure. Sans _refDate — ancienne signature, ou séance sans
   // date — on ne décote rien et le comportement reste l'actuel.
   const _joursRef=prev?joursDepuisRef(prev._refDate):null;
-  let _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  let _decote=_joursRef==null?1:decoteReprise(_joursRef,currentUser);
   // La reprise en douceur acceptée : -10 %, sans cumuler avec la décote de
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
@@ -1774,6 +1774,8 @@ function renderSets(ex,data,idx,opts){
   // La cible du jour, série à série : un RIR de plus si la récupération est
   // orange ou rouge, ou « c'est dur » déclaré (effetDispoDuJour).
   let _rirSerieJour=_rirPrescrit(ex);
+  // Moins de 18 ans : la série suivante ne vise jamais l'échec (profilEntrainement).
+  try{ if(profilEntrainement(currentUser).jeune&&_rirSerieJour!==''&&Number(_rirSerieJour)<PROFIL_RIR_MIN_JEUNE) _rirSerieJour=String(PROFIL_RIR_MIN_JEUNE); }catch(e){}
   try{ const _ef=effetDispoDuJour(currentUser); if(_ef&&_ef.rirPlus) _rirSerieJour=String(Math.min(5,(_rirSerieJour===''?PROG_RIR_CIBLE_DEFAUT:Number(_rirSerieJour))+_ef.rirPlus)); }catch(e){}
   let _freinSerie=null;
   try{ _freinSerie=freinProgression(currentUser,ex.name); }catch(e){ _freinSerie=null; }

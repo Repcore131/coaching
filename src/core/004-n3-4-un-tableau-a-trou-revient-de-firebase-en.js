@@ -820,6 +820,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
   'pointJour',
+  // Le profil d'entraînement posé par le coach (06/10/2026) : débutant,
+  // intermédiaire ou avancé — un réglage de coaching, pas une mesure.
+  'niveauEntrainement',
   // Le fuseau horaire de l'appareil (« Europe/Paris ») : le serveur s'en sert
   // pour n'envoyer de notification qu'entre 8 h et 21 h CHEZ l'athlete. Un
   // reglage, pas une mesure.

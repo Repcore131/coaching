@@ -23604,6 +23604,67 @@ async function testExercices(){
         return true;});
     }
 
+    // ══════ LE PROFIL D'ENTRAÎNEMENT (06/10/2026, build 1829) ══════
+    {
+      const _J=864e5;
+      const _ps=(j,w,reps,rir)=>({id:'pp'+j+'_'+w,date:Date.now()-j*_J,slot:0,name:'P',
+        data:{'SQUAT':{sets:[{weight:String(w),reps:String(reps||5),rir:String(rir==null?2:rir),done:true}]}}});
+      const _pu=(sessions,extra)=>Object.assign({id:'pu',email:'pu'+Math.random()+'@t.fr',role:'athlete',gender:'H',exAlias:{},exMuscles:{},bilans:[],
+        sessions},extra||{});
+      ok('Profil : deux mois d’historique → débutant ; le coach pose « avancé » → avancé (source coach)',()=>{
+        const u=_pu([_ps(60,100),_ps(30,100),_ps(2,100)]);
+        const p=profilEntrainement(u);
+        if(p.niveau!=='debutant'||p.source!=='auto') return _echec(JSON.stringify(p));
+        const v=_pu([_ps(60,100)],{niveauEntrainement:'avance'});
+        const q=profilEntrainement(v);
+        if(q.niveau!=='avance'||q.source!=='coach'||q.seuils.joursPlateau!==49) return _echec(JSON.stringify(q));
+        // Un an d'historique, aucun grand mouvement mesuré : intermédiaire ; sans dossier : intermédiaire.
+        const w=_pu([_ps(365,100),_ps(2,100)].map(s=>{ s.data={'CURL':s.data.SQUAT}; return s; }));
+        if(profilEntrainement(w).niveau!=='intermediaire') return _echec('un an : '+profilEntrainement(w).niveau);
+        return profilEntrainement(undefined).niveau==='intermediaire'?true:_echec('sans dossier');});
+      ok('Profil : 16 ans → jeune, et la suggestion ne vise jamais l’échec',()=>{
+        const bd=new Date(); bd.setFullYear(bd.getFullYear()-16); bd.setMonth(0,1);
+        const u=_pu([_ps(7,60,5,0)],{birthdate:localISODate(bd)});
+        const p=profilEntrainement(u);
+        if(!p.jeune||p.age!==16) return _echec(JSON.stringify(p));
+        const ex={name:'SQUAT',reps:'5',rir:'0'};
+        const sv=currentUser;
+        try{
+          currentUser=u;
+          const r=suggestionDepuisHistorique(ex,0,'P',1,u);
+          if(!r||!/pour 1 visé/.test(r.raison)||r.kg!==60) return _echec('jeune : '+JSON.stringify(r));
+          currentUser=_pu([_ps(7,60,5,0)]);
+          const a=suggestionDepuisHistorique(ex,0,'P',1,currentUser);
+          return (a&&a.kg>60)?true:_echec('adulte : '+JSON.stringify(a));
+        } finally { currentUser=sv; }});
+      ok('Profil : senior → decoteReprise(30) = 0,9 et −20 % dès 42 jours ; adulte → 1',()=>{
+        const bd=new Date(); bd.setFullYear(bd.getFullYear()-65);
+        const s=_pu([_ps(2,60)],{birthdate:localISODate(bd)});
+        if(!profilEntrainement(s).senior) return _echec('pas senior');
+        if(decoteReprise(30,s)!==0.9||decoteReprise(42,s)!==0.8||decoteReprise(20,s)!==1) return _echec(decoteReprise(30,s)+' / '+decoteReprise(42,s)+' / '+decoteReprise(20,s));
+        // L'adulte : rien avant 28 jours, −10 % jusqu'à 56.
+        const a=_pu([_ps(2,60)]);
+        return (decoteReprise(25,a)===1&&decoteReprise(25,s)===0.9&&decoteReprise(45,a)===0.9&&decoteReprise(45,s)===0.8)?true:_echec('adulte : '+decoteReprise(25,a)+' / '+decoteReprise(45,a));});
+      ok('Profil : avancé avec un record il y a 35 jours → pas « plateau » ; intermédiaire → plateau',()=>{
+        const l=[_ps(35,105),_ps(28,103),_ps(21,103),_ps(14,103),_ps(7,103),_ps(0,103)];
+        const av=_calculEtat(l,'SQUAT',0,'P',_pu(l,{niveauEntrainement:'avance'}));
+        if(av.etat==='plateau'||av.joursPlateau!==49) return _echec('avancé : '+JSON.stringify(av));
+        const it=_calculEtat(l,'SQUAT',0,'P',_pu(l,{niveauEntrainement:'intermediaire'}));
+        return it.etat==='plateau'?true:_echec('intermédiaire : '+it.etat);});
+      ok('Profil : volume de départ ×0,8 pour un débutant, jamais sous le MEV de la table pour un muscle prioritaire',()=>{
+        const t=REPERES_VOLUME.PECTORAUX;
+        const d=_pu([_ps(7,60)]);
+        const r=reperesEffectifs(d,'PECTORAUX');
+        if(r.mrv!==Math.round(t.mrv*0.8)||r.mev!==Math.round(t.mev*0.8)||r.source!=='table') return _echec(JSON.stringify(r));
+        const p=_pu([_ps(7,60)],{blocPriorite:{debut:Date.now(),semaines:6,hauts:['PECTORAUX'],bas:[]}});
+        if(reperesEffectifs(p,'PECTORAUX').mev!==t.mev) return _echec('prioritaire sous le MEV : '+reperesEffectifs(p,'PECTORAUX').mev);
+        const i=_pu([_ps(7,60)],{niveauEntrainement:'intermediaire'});
+        return reperesEffectifs(i,'PECTORAUX').mrv===t.mrv?true:_echec('intermédiaire réduit');});
+      ok('Profil : la fiche coach dit « Profil : … (auto) · modifier »',()=>{
+        const h=ligneProfilCoach(_pu([_ps(7,60)]));
+        if(!(/Profil : débutant \(auto\)/.test(h)&&/ouvrirProfilCoach\(\)/.test(h)&&/>modifier</.test(h))) return _echec(h);
+        return /Profil : avancé \(coach\)/.test(ligneProfilCoach(_pu([_ps(7,60)],{niveauEntrainement:'avance'})))?true:_echec('source coach');});
+    }
     // ══════ UN SEUL VERDICT DE RÉCUPÉRATION PAR JOUR (06/10/2026, build 1828) ══════
     {
       const _J=864e5, _iso=j=>localISODate(new Date(Date.now()-j*_J));

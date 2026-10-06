@@ -1091,10 +1091,15 @@ function _calculEtat(seances,exNom,slot,progName,user){
 
   const n=serie.length;
   const T=Math.round((serie[n-1].date-serie[0].date)/86400000);
-  const base={n,T,metrique,metriqueChangee,sansRir,
+  // LES SEUILS VIENNENT DU PROFIL (build 1829) : débutant 14 / 14 jours,
+  // intermédiaire 21 / 28, avancé 28 / 49 (profilEntrainement). Sans dossier,
+  // ceux de l'intermédiaire — les constantes d'avant.
+  const _seuils=profilEntrainement(user).seuils;
+  const minJours=_seuils.minJours, joursPlateau=_seuils.joursPlateau;
+  const base={n,T,metrique,metriqueChangee,sansRir,minJours,joursPlateau,
               mixte:false,
               aberrants:serie.filter(p=>p.aberrant).length};
-  if(n<MIN_SEANCES||T<MIN_JOURS) return rendre(Object.assign({etat:'insuffisant'},base));
+  if(n<MIN_SEANCES||T<minJours) return rendre(Object.assign({etat:'insuffisant'},base));
 
   // Écartés du MAXIMUM seulement : ces séances restent dans la série (elles
   // comptent pour n et T), mais ne peuvent pas fixer un record. Une séance
@@ -1127,7 +1132,7 @@ function _calculEtat(seances,exNom,slot,progName,user){
     : perfCur>maxDe(serie.slice(0,-1));
   if(progresse) etat='progression';
   else if(perfCur<SEUIL_REGRESSION*maxGlobal) etat='regression';
-  else if(joursDepuisRecord>=JOURS_PLATEAU) etat='plateau';
+  else if(joursDepuisRecord>=joursPlateau) etat='plateau';
   else etat='ralentissement';
 
   // ══ LA PROGRESSION APPARENTE ═════════════════════════════════════════
@@ -1213,11 +1218,11 @@ function etatsChanges(user,sess){
   const avant=toutes.filter(s=>s!==sess&&s.id!==sess.id);
   const out=[];
   for(const nom of Object.keys(sess.data)){
-    const ap=_calculEtat(toutes,nom,sess.slot,sess.name);
+    const ap=_calculEtat(toutes,nom,sess.slot,sess.name,user);
     // Aucun message quand ça progresse ou qu'on ne sait pas : on ne parle que
     // de ce qui mérite d'être dit.
     if(ap.etat==='progression'||ap.etat==='insuffisant') continue;
-    const av=_calculEtat(avant,nom,sess.slot,sess.name);
+    const av=_calculEtat(avant,nom,sess.slot,sess.name,user);
     if(av.etat===ap.etat) continue;
     out.push({nom,...ap});
   }
@@ -1308,7 +1313,7 @@ function _ligneEtat(x,info){
   const c=PERF_ETAT_COULEUR[x.etat]||'var(--sub)';
   const detail=x.etat==='insuffisant'
     ? (x.n<MIN_SEANCES?x.n+' séance'+(x.n>1?'s':'')+' sur ce créneau : pas encore de quoi juger'
-       :'suivi trop récent : encore '+(MIN_JOURS-x.T)+' jour'+((MIN_JOURS-x.T)>1?'s':'')+' à attendre')
+       :'suivi trop récent : encore '+((x.minJours||MIN_JOURS)-x.T)+' jour'+(((x.minJours||MIN_JOURS)-x.T)>1?'s':'')+' à attendre')
     : (x.joursDepuisRecord>0?'dernier record il y a '+x.joursDepuisRecord+' jour'+(x.joursDepuisRecord>1?'s':'')
        :'record sur la dernière séance');
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${c};border-radius:var(--r-3);padding:12px 12px;margin-bottom:10px">

@@ -2038,8 +2038,18 @@ const SUG_NOTE_REPERE='Repère de terrain, pas une mesure.';
 // référence est trop vieille pour qu'on propose quoi que ce soit.
 // Une date de référence dans le futur (horloge décalée) arrive ici à 0 jour et
 // ne décote donc rien.
-function decoteReprise(joursEcoules){
+// SENIOR (profilEntrainement, build 1829) : −10 % dès 21 jours, −20 % dès 42
+// — la force se perd plus vite après 60 ans. L'abandon reste à 112 jours.
+const SUG_DECOTES_SENIOR=Object.freeze([{jours:21,part:0.90},{jours:42,part:0.80}]);
+function decoteReprise(joursEcoules,user){
   const j=Number(joursEcoules);
+  let senior=false; try{ senior=!!(user&&profilEntrainement(user).senior); }catch(e){ senior=false; }
+  if(senior&&isFinite(j)){
+    if(j>SUG_JOURS_ABANDON) return null;
+    let part=1;
+    for(const d of SUG_DECOTES_SENIOR) if(j>=d.jours) part=d.part;
+    return part;
+  }
   if(!isFinite(j)||j<=SUG_JOURS_PERIME) return 1;
   if(j>SUG_JOURS_ABANDON) return null;
   for(const d of SUG_DECOTES) if(j<=d.jours) return d.part;
@@ -2148,7 +2158,7 @@ function chargeSuivante(charge,rir,contrepoids,decote,exNom){
 //      de la fourchette ; au-delà, un lest ou une variante plus dure.
 // La décote de reprise s'applique au résultat ; le cycle, la consigne du
 // coach (_cons.kg) et la programmation (s.rpeCible) restent chez l'appelant.
-const PROG_PLAFOND_SEANCE=0.10;
+const PROG_PLAFOND_SEANCE=0.10;          // l'intermédiaire ; le profil le règle (o.plafondSeance)
 const PROG_PLAFOND_SERIE=0.05;
 const PROG_RIR_CIBLE_DEFAUT=2;
 const PROG_SERIE_ECART_MIN=2;
@@ -2242,7 +2252,13 @@ function progressionCharge(o){
   } else if(rf&&rf.echec&&cible>=1){
     dir=-1; fac=SUG_MULTIPLICATEURS.echec; verdict='échec pour RIR '+cible+' visé'; vise=B?B.a:null;
   } else if(B&&R.length){
-    if(mn<B.a){
+    // DÉBUTANT (profilEntrainement) : la double progression monte dès que le
+    // haut de la fourchette est atteint sur la DERNIÈRE série.
+    const deb=x.niveau==='debutant'&&R[R.length-1]>=B.b&&(!rf||rf.n>=cible)&&mn>=B.a;
+    if(deb&&mn<B.b){
+      dir=1; accomplie=true; vise=B.a; verdict='haut de '+fTxt+' atteint sur la dernière série';
+      fac=Math.max(multiplicateurRir(String(Math.max(0,d||0))),(w+pas)/w);
+    } else if(mn<B.a){
       verdict='sous '+fTxt; vise=B.a;
       if(rf&&rf.n<cible-1){ dir=-1; pasPlein=true; }
     } else if(mn>=B.b&&(!rf||rf.n>=cible)){
@@ -2271,7 +2287,7 @@ function progressionCharge(o){
   else kg=_progArrondi(t,t>w?'haut':'bas',ex,user);
   if(kg==null) kg=w;
   if(gain>0&&dir===1){
-    const rel=serie?PROG_PLAFOND_SERIE:PROG_PLAFOND_SEANCE;
+    const rel=serie?PROG_PLAFOND_SERIE:(Number(x.plafondSeance)>0?Number(x.plafondSeance):PROG_PLAFOND_SEANCE);
     if(!cw){
       let cap=w*(1+rel);
       const capKg=plafondPas(ex.name); if(capKg) cap=Math.min(cap,w+capKg);
@@ -2389,9 +2405,13 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   // déclaré → un RIR de plus sur toutes les suggestions du jour.
   let eff=null; try{ eff=effetDispoDuJour(u); }catch(e){ eff=null; }
   if(eff&&eff.rirPlus) rc=String(Math.min(5,(rc===''?PROG_RIR_CIBLE_DEFAUT:Number(rc))+eff.rirPlus));
+  // LE PROFIL (build 1829) : un jeune ne vise jamais l'échec (RIR 1 au moins) ;
+  // le niveau règle la double progression et le plafond par séance.
+  let prof=null; try{ prof=profilEntrainement(u); }catch(e){ prof=null; }
+  if(prof&&prof.jeune&&rc!==''&&Number(rc)<PROFIL_RIR_MIN_JEUNE) rc=String(PROFIL_RIR_MIN_JEUNE);
   const res=progressionCharge({charge:prev.weight,repsFaites:ps.map(p=>p.reps).filter(n=>n>0),
     rirFait:prev.rir,reps:ex.reps,rirCible:rc,contrepoids:cw,
-    decote,ex,user:u});
+    decote,ex,user:u,niveau:prof?prof.niveau:undefined,plafondSeance:prof?prof.seuils.plafondSeance:undefined});
   if(!res) return null;
   if(frein){
     // Après la décote, avant l'arrondi de l'appelant : jamais au-dessus de la

@@ -90,7 +90,9 @@ function rendreFaitsCles(c){
     w.title=pe?((pe.source==='bilan'?'Bilan du ':'Pesée du ')+_fcJour(pe.date,true)):'';
   }
   if(z){
-    const h=(c&&!c._fromCode)?htmlFaitsCles(c,currentUser,Date.now()):'';
+    // Et, dessous, le profil d'entraînement (build 1829), modifiable en un clic.
+    const h=(c&&!c._fromCode)?htmlFaitsCles(c,currentUser,Date.now())
+      +(()=>{ try{ return ligneProfilCoach(c); }catch(e){ return ''; } })():'';
     z.innerHTML=h;
     z.hidden=!h;
   }

@@ -610,6 +610,8 @@ function recordAPortee(u,seancePrevue,maintenant){
     // UN FREIN SUR L'EXERCICE (gêne, « J'allège », contrainte) : pas d'objectif.
     try{ if(freinProgression(u,ex.name)) continue; }catch(e){}
     let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
+    // MOINS DE 18 ANS : pas de record visé au-delà du poids de corps (build 1829).
+    try{ if(o&&profilEntrainement(u).jeune){ const pdc=poidsReference(u); if(!(pdc>0)||o.charge>pdc) o=null; } }catch(e){}
     if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
   }
   return best;
