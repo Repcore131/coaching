@@ -56014,6 +56014,61 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — LES LONGUEURS DU DÉPART SE CONTRÔLENT À LA SAISIE ──
+    ok('Longueurs : attenduMesure(entrejambe, 165) contient 77 et pas 770 ; « 72 à 86 cm » ; les tours gardent leurs bornes',()=>{
+      const a=attenduMesure('deb-entrejambe',165);
+      if(!a||!(a.min<=77&&77<=a.max)||(a.min<=770&&770<=a.max)) return _echec(JSON.stringify(a));
+      if(a.min!==72||a.max!==86) return _echec('fourchette '+a.min+'–'+a.max);
+      const p=attenduMesure('deb-poignet',165);
+      if(!p||p.min!==10||p.max!==26) return _echec('poignet : '+JSON.stringify(p));
+      if(!/attendu pour 165 cm\u00a0: 72 à 86 cm/.test(htmlAttenduMesure('deb-entrejambe','77',165))) return _echec(htmlAttenduMesure('deb-entrejambe','77',165));
+      if(/lg-hors/.test(htmlAttenduMesure('deb-entrejambe','77',165))) return _echec('77 cm signalé hors fourchette');
+      // Virgule, point, « cm » collé, vide.
+      if(lireLongueur('77,5')!==77.5||lireLongueur('77.5')!==77.5||lireLongueur(' 77 cm')!==77||lireLongueur('')!==null) return _echec('lecture');
+      return isNaN(lireLongueur('abc'))?true:_echec('illisible accepté');});
+    ok('Longueurs : 770 → ligne orange et suggestion « 77,0 cm ? » ; le tap remplace la valeur ; champ vidé = suppression ; incohérences dites',()=>{
+      const sv={bd:bilData};
+      const hote=document.createElement('div');
+      try{
+        bilData={'deb-height':'165','deb-entrejambe':'770'};
+        hote.innerHTML=bLongueurs(); document.body.appendChild(hote);
+        const z=document.getElementById('lg-h-deb-entrejambe');
+        if(!z||!/lg-hors/.test(z.innerHTML)) return _echec('pas de ligne orange : '+(z&&z.innerHTML));
+        const b=z.querySelector('.lg-sugg');
+        if(!b||b.textContent!=='77 cm ?'&&b.textContent!=='77,0 cm ?') return _echec('suggestion : '+(b&&b.textContent));
+        b.click();
+        if(bilData['deb-entrejambe']!=='77'||document.getElementById('deb-entrejambe').value!=='77') return _echec('le tap ne remplace pas : '+bilData['deb-entrejambe']);
+        if(/lg-hors/.test(document.getElementById('lg-h-deb-entrejambe').innerHTML)) return _echec('encore orange après correction');
+        // Pas de suggestion quand /10 ne tombe pas dans la fourchette.
+        if(/lg-sugg/.test(htmlAttenduMesure('deb-entrejambe','120',165))) return _echec('suggestion absurde');
+        // Saisie avec « cm » et virgule ; champ vidé.
+        bLgSaisie('deb-bras','56,5 cm');
+        if(bilData['deb-bras']!=='56.5') return _echec('bras : '+bilData['deb-bras']);
+        bLgSaisie('deb-bras','');
+        if('deb-bras' in bilData) return _echec('le champ vidé garde sa valeur');
+        // Incohérence : genou plus haut que l'entrejambe.
+        bLgSaisie('deb-genou','80');
+        if(!/plus bas que le pubis/.test(document.getElementById('lg-h-deb-genou').innerHTML)) return _echec('incohérence genou non dite');
+        bLgSaisie('deb-avantbras','30'); bLgSaisie('deb-bras','25');
+        return /plus long que le bras/.test(document.getElementById('lg-h-deb-avantbras').innerHTML)?true:_echec('incohérence avant-bras non dite');
+      } finally { hote.remove(); bilData=sv.bd; }});
+    ok('Longueurs : les 4 champs clés hors du <details>, les 8 autres dedans, « à deux » sur épaules, bassin, thorax ; aucune étape ajoutée',()=>{
+      const sv={bd:bilData};
+      try{
+        bilData={};
+        const d=document.createElement('div'); d.innerHTML=bLongueurs();
+        const det=d.querySelector('details.lg-plus');
+        if(!det||det.hasAttribute('open')||!/Pour aller plus loin \(à faire à deux\)/.test(det.querySelector('summary').textContent)) return _echec('details');
+        for(const k of ['deb-rotule','deb-entrejambe','deb-bras','deb-poignet']){
+          const i=d.querySelector('#'+k); if(!i) return _echec(k+' absent');
+          if(i.closest('details')) return _echec(k+' est replié');
+        }
+        const dedans=MORPHO_MESURES.filter(m=>['deb-rotule','deb-entrejambe','deb-bras','deb-poignet'].indexOf(m.cle)<0);
+        if(dedans.length!==8||dedans.some(m=>!det.querySelector('#'+m.cle))) return _echec('les 8 autres ne sont pas dans le <details>');
+        for(const k of ['deb-epaules','deb-bassin','deb-thorax'])
+          if(!/à deux/.test(det.querySelector('#'+k).closest('div[style]').parentNode.textContent)) return _echec(k+' sans « à deux »');
+        return DEB_STEPS.length===5?true:_echec(DEB_STEPS.length+' étapes');
+      } finally { bilData=sv.bd; }});
     // ── 06/10/2026 — LE CONTRÔLE DES PHOTOS NE BLOQUE JAMAIS L'ÉLÈVE ──
     okA('Contrôle photo : un seul rouge → pas de lien ; deux rouges sur la même vue → « Garder quand même » ; le clic garde la photo en « rouge-force »',async()=>{
       const sv={bd:bilData,ed:_bilEdition,ci:compressImage,ctl:_bilControlerPhoto,sd:_bilSaveDraft,ls:_setPhotoLS};

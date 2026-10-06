@@ -13489,3 +13489,12 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .mo-susp{color:var(--orange);font-weight:700}
 .rvm-lien{margin-bottom:6px}
 .rvm-voir{background:none;border:none;padding:0;font:inherit;color:var(--text);text-decoration:underline;cursor:pointer;text-transform:none;letter-spacing:0}
+
+/* ══ LES LONGUEURS DU DÉPART, CONTRÔLÉES À LA SAISIE (build 1818) ═══════════ */
+.lg-hs:empty{display:none}
+.lg-h{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:4px}
+.lg-h.lg-hors{color:var(--orange)}
+.lg-sugg{background:none;border:none;padding:0 0 0 4px;font:inherit;color:var(--text);text-decoration:underline;cursor:pointer}
+.lg-deux{text-transform:none;letter-spacing:0;font-weight:700;color:var(--text-dim)}
+.lg-plus{margin-top:4px;border-top:1px solid var(--border);padding-top:10px}
+.lg-plus>summary{cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
