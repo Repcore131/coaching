@@ -10387,6 +10387,8 @@ function go(id){
   try{ setTimeout(_majIndicAttente,0); }catch(e){}
   // Le temps du coach : relu APRÈS le changement d'écran (segment fermé ou ouvert).
   try{ setTimeout(_chronoTick,0); }catch(e){}
+  // La recherche rapide suit l'ecran (rrPlacer) : apres le changement.
+  try{ setTimeout(rrPlacer,0); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
@@ -27174,6 +27176,18 @@ function _rendreVignettesAthletes(vus){
   const z=document.getElementById('ch-vignettes');
   if(!z) return false;
   if(!vus||!vus.length){ z.innerHTML=''; return false; }
+  // REPLIEES AU-DELA DE DOUZE (06/10/2026) : soixante ronds faisaient plus de
+  // 7 000 px au-dessus de la recherche. Un bouton les rouvre, l'etat se garde.
+  const _rep=vus.length>VIG_REPLI_SEUIL;
+  if(_rep&&!vignettesOuvertes()){
+    z.innerHTML='<button type="button" class="btn btn-blanc btn-sm vig-voir" onclick="vignettesBasculer(true)">Voir les '+vus.length+' visages</button>';
+    return true;
+  }
+  if(_rep){
+    z.innerHTML='<button type="button" class="btn btn-blanc btn-sm vig-voir" onclick="vignettesBasculer(false)">Replier les visages</button>'
+      +'<div class="vig-grille">'+_htmlSectionsSuivi(vus,htmlVignetteAthlete)+'</div>';
+    return true;
+  }
   // Les titres de section sont poses EN GRILLE (grid-column:1/-1) : la grille
   // les traite comme une ligne pleine largeur, sans casser les colonnes.
   z.innerHTML='<div class="vig-grille">'+_htmlSectionsSuivi(vus,htmlVignetteAthlete)+'</div>';
@@ -31279,6 +31293,198 @@ async function envoyerRelanceIA(k){
   delete _relIA[k];
   toast(r.ok?'Message envoyé '+ICO.coche:'Pas parti : '+((RELANCE_RAISONS&&RELANCE_RAISONS[r.raison])||'notification impossible'),r.ok?'var(--green)':'var(--orange)');
   _relChargerJournal(true).then(()=>{ try{ renderRelancesCoach(); }catch(e){} }).catch(()=>{});
+  return true;
+}
+// ══ LA RECHERCHE RAPIDE (06/10/2026) ══════════════════════════════════════
+// Mesure de Kevin, 60 athletes a 390 x 844 : un accueil de 16 068 px, la
+// recherche a 9 066 px, plus de 7 000 px de vignettes au-dessus. Ouvrir un
+// athlete precis demandait treize ecrans de defilement.
+//
+// UNE BARRE FIXE sous l'en-tete (onglet Athletes, et les ecrans coach qui
+// reviennent a l'accueil), meme hauteur que #ch-search. La saisie ouvre huit
+// resultats au plus, en surimpression, chacun avec quatre gestes directs.
+// #ch-search reste plus bas et filtre la liste ; les deux champs partagent la
+// meme valeur. Rien de tout cela n'est dans #ch-clients-list : le
+// rafraichissement periodique ne le touche pas.
+const RR_MAX=8, RR_APPROCHE_MIN=5;
+// PURE. Distance de Levenshtein, bornee : on ne veut savoir que « 0, 1 ou
+// plus ». Au-dela de `max`, rend max+1 sans finir le calcul.
+function _rrDistance(a,b,max){
+  const m=a.length, n=b.length;
+  if(Math.abs(m-n)>max) return max+1;
+  let prec=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){
+    const cour=[i];
+    let mini=i;
+    for(let j=1;j<=n;j++){
+      cour[j]=Math.min(prec[j]+1,cour[j-1]+1,prec[j-1]+(a[i-1]===b[j-1]?0:1));
+      if(cour[j]<mini) mini=cour[j];
+    }
+    if(mini>max) return max+1;
+    prec=cour;
+  }
+  return prec[n];
+}
+/**
+ * PURE. Les athletes trouves par `q`, du plus sur au plus lointain :
+ *   0. prenom exact ;
+ *   1. debut du prenom, du nom, du nom complet ou de l'e-mail ;
+ *   2. libelle d'une etiquette posee sur l'athlete ;
+ *   3. contenu ailleurs dans le nom ou l'e-mail ;
+ *   4. approche : une lettre de difference sur le prenom ou le nom, des que
+ *      la saisie depasse quatre lettres (« karym » trouve Karim).
+ * Meme normalisation que norm() : accents et casse ne comptent pas.
+ * @param {any[]} clients
+ * @param {string} q
+ * @param {any} [etiquettes]  l'objet qui porte etiquettes et etiquettesAth (currentUser)
+ * @returns {string[]} les identifiants, dans l'ordre
+ */
+function rechercheAthletes(clients,q,etiquettes){
+  const s=norm(q);
+  if(!s) return [];
+  const libs={};
+  try{ for(const e of etiquettesDe(etiquettes)) libs[e.id]=norm(e.lib); }catch(e){}
+  const out=[];
+  for(const c of (clients||[])){
+    if(!c||c.id==null) continue;
+    const f=norm(c.fname), l=norm(c.lname), full=(f+' '+l).trim(), mail=norm(c.email);
+    const mots=full.split(/\s+/).filter(Boolean);
+    const jetons=s.split(/\s+/).filter(Boolean);
+    let rang=-1;
+    if(f&&f===s) rang=0;
+    else if((f&&f.startsWith(s))||(l&&l.startsWith(s))||full.startsWith(s)||(mail&&mail.startsWith(s))
+      ||(jetons.length>1&&jetons.every(j=>mots.some(m=>m.startsWith(j))))) rang=1;
+    else {
+      let et=[]; try{ et=etiquettesAthlete(etiquettes,c.id); }catch(e){ et=[]; }
+      if(et.some(id=>libs[id]&&libs[id].includes(s))) rang=2;
+      else if(full.includes(s)||(mail&&mail.split('@')[0].includes(s))) rang=3;
+      else if(s.length>=RR_APPROCHE_MIN&&mots.some(m=>m.length>=RR_APPROCHE_MIN-1&&_rrDistance(m,s,1)<=1)) rang=4;
+    }
+    if(rang>=0) out.push({id:String(c.id),rang,cle:full||mail});
+  }
+  out.sort((a,b)=>a.rang-b.rang||a.cle.localeCompare(b.cle,'fr'));
+  return out.map(x=>x.id);
+}
+// PURE. Le fait qu'on lit d'un coup d'oeil : la douleur d'abord, puis le
+// bilan a lire, puis la derniere seance.
+function rrFait(c,maintenant){
+  try{ if(athleteDouleur(c)) return 'douleur'; }catch(e){}
+  let nb=0; try{ nb=bilansSansReponse(c); }catch(e){ nb=0; }
+  if(nb>0) return nb>1?nb+' bilans à lire':'bilan à lire';
+  const f=crMetaFaits(Object.assign({},c,{bilans:[]}),null,maintenant);
+  return f[0]||'';
+}
+let _rrResultats=[];
+function _rrChamp(){ return document.getElementById('ch-rech'); }
+function _rrFermer(){
+  const z=document.getElementById('ch-rech-res');
+  if(z){ z.innerHTML=''; z.hidden=true; }
+  const c=_rrChamp(); if(c) c.setAttribute('aria-expanded','false');
+  return true;
+}
+function _rrHtml(c){
+  const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Profil incomplet';
+  const id=String(c.id).replace(/'/g,'');
+  let fait=''; try{ fait=rrFait(c,Date.now()); }catch(e){ fait=''; }
+  const b=(lib,js)=>'<button type="button" class="rr-a" onclick="event.stopPropagation();_rrFermer();'+js+'">'+lib+'</button>';
+  return '<li class="rr-l" role="option"><button type="button" class="rr-nom" onclick="_rrFermer();openClientDetail(\''+id+'\',false,true)">'
+    +'<span class="rr-n">'+escapeHtml(nom)+'</span>'+(fait?'<span class="rr-f'+(fait==='douleur'?' rr-f-d':'')+'">'+escapeHtml(fait)+'</span>':'')+'</button>'
+    +'<span class="rr-actions">'
+    +b('Fiche','openClientDetail(\''+id+'\',false,true)')
+    +b('Bilan','rrOuvrirBilan(\''+id+'\')')
+    +b('Message','msgOuvrirFil('+_attrArg(_relCle(c))+')')
+    +b('Programme','rrOuvrirProgramme(\''+id+'\')')
+    +'</span></li>';
+}
+function rrOuvrirBilan(id){
+  currentClientId=id;
+  try{ viewClientBilans(); evoTab('reponses'); }catch(e){ return false; }
+  return true;
+}
+function rrOuvrirProgramme(id){
+  currentClientId=id;
+  try{ return ouvrirSeancesSansBrouillon(); }catch(e){ return false; }
+}
+// Aucun resultat : les codes en attente, la ou vivent ceux qui ne sont pas
+// encore inscrits.
+function rrChercherCodes(){
+  const q=norm((_rrChamp()||{}).value||'');
+  _rrFermer();
+  try{ coachTab('codes'); }catch(e){}
+  setTimeout(()=>{
+    const z=document.getElementById('ct-codes');
+    if(!z||!q) return;
+    const n=[...z.querySelectorAll('div,li,span')].find(x=>x.children.length===0&&norm(x.textContent).includes(q));
+    if(n){ try{ n.scrollIntoView({block:'center'}); }catch(e){} }
+    else toast('Aucun code en attente ne correspond','var(--orange)');
+  },60);
+  return true;
+}
+/** La saisie : la liste plus bas suit, la surimpression s'ouvre. */
+function rrSaisie(v){
+  const val=String(v==null?'':v);
+  const bas=document.getElementById('ch-search');
+  if(bas&&bas.value!==val) bas.value=val;
+  try{ renderClientList(); }catch(e){}
+  const z=document.getElementById('ch-rech-res');
+  if(!z) return [];
+  if(!norm(val)){ _rrResultats=[]; _rrFermer(); return []; }
+  let tous=[]; try{ tous=getClients(); }catch(e){ tous=[]; }
+  const par={}; for(const c of tous) if(c) par[String(c.id)]=c;
+  _rrResultats=rechercheAthletes(tous,val,currentUser).slice(0,RR_MAX).map(id=>par[id]).filter(Boolean);
+  z.innerHTML=_rrResultats.length?_rrResultats.map(_rrHtml).join('')
+    :'<li class="rr-aucun">Aucun athlète trouvé. <button type="button" class="rr-a" onclick="rrChercherCodes()">Rechercher dans les codes en attente</button></li>';
+  z.hidden=false;
+  const c=_rrChamp(); if(c) c.setAttribute('aria-expanded','true');
+  return _rrResultats.map(c=>String(c.id));
+}
+/** Entree ouvre la fiche du premier, Echap ferme. */
+function rrTouche(ev){
+  if(!ev) return;
+  if(ev.key==='Escape'){ _rrFermer(); try{ ev.target.blur(); }catch(e){} return; }
+  if(ev.key==='Enter'){
+    ev.preventDefault();
+    const p=_rrResultats[0];
+    if(p){ _rrFermer(); openClientDetail(String(p.id),false,true); }
+  }
+}
+/** #ch-search, plus bas, renvoie sa valeur au champ du haut. */
+function rrSynchroBas(v){
+  const c=_rrChamp();
+  if(c&&c.value!==v) c.value=v;
+}
+// OU VIT LA BARRE. Un seul element, deplace plutot que recopie : la saisie
+// survit au changement d'ecran. Sur l'accueil, sous l'en-tete, et seulement
+// sur l'onglet Athletes ; ailleurs, dans un ecran coach qui a un retour vers
+// l'accueil, sous l'element qui porte ce retour.
+function rrPlacer(){
+  const bar=document.getElementById('ch-rech-barre');
+  if(!bar) return false;
+  const act=document.querySelector('.screen.active');
+  if(!act||!act.classList.contains('ecran-coach')){ bar.hidden=true; return false; }
+  if(act.id==='s-coach-home'){
+    const h=document.getElementById('ch-mobile-header');
+    if(h&&bar.previousElementSibling!==h) h.after(bar);
+    const d=document.getElementById('ct-dashboard');
+    bar.hidden=!!(d&&getComputedStyle(d).display==='none');
+    return !bar.hidden;
+  }
+  const r=act.querySelector('[onclick*="s-coach-home"]');
+  if(!r){ bar.hidden=true; return false; }
+  let tete=r; while(tete.parentElement&&tete.parentElement!==act) tete=tete.parentElement;
+  if(tete.parentElement===act){ if(bar.previousElementSibling!==tete) tete.after(bar); }
+  else act.prepend(bar);
+  bar.hidden=false;
+  _rrFermer();
+  return true;
+}
+// LES VIGNETTES SE REPLIENT au-dela de douze athletes. L'etat est memorise :
+// un coach qui les veut ouvertes les retrouve ouvertes.
+const VIG_REPLI_SEUIL=12, VIG_CLE='rc_vignettes_ouvertes';
+function vignettesOuvertes(){ try{ return localStorage.getItem(VIG_CLE)==='1'; }catch(e){ return false; } }
+function vignettesBasculer(oui){
+  try{ if(oui) localStorage.setItem(VIG_CLE,'1'); else localStorage.removeItem(VIG_CLE); }catch(e){}
+  try{ renderClientList(); }catch(e){}
   return true;
 }
 // ══ LES ACCES QUI ARRIVENT A TERME, PAR MOIS ═══════════════════════════
@@ -91329,7 +91535,7 @@ const RACCOURCIS_COACH=Object.freeze([
   {ecran:'s-coach-program', touche:'s', bouton:'cp-sauver',    dit:'Enregistrer'},
   {ecran:'s-coach-sessions',touche:'p', bouton:'csm-publier',  dit:'Publier'},
   {ecran:'s-coach-program', touche:'e', action:'addExercise',  dit:'Ajouter un exercice'},
-  {ecran:'s-coach-home',    touche:'/', champ:'ch-search',     dit:'Rechercher'},
+  {ecran:'s-coach-home',    touche:'/', champ:'ch-rech',       dit:'Rechercher'},
   // B2.6 — LA TOUCHE QUI MONTRE LES AUTRES. Sans `ecran` : elle vaut partout
   // dans l'espace coach, y compris la ou aucun autre raccourci n'existe — c'est
   // la seule facon d'apprendre qu'il n'y en a pas ici.
@@ -91464,7 +91670,7 @@ function _rcAnnoncerRaccourcis(){
     if(av.indexOf('('+r.touche.toUpperCase()+')')>=0) continue;
     b.setAttribute('title',(av?av+' ':r.dit+' ')+'('+r.touche.toUpperCase()+')');
   }
-  const c=document.getElementById('ch-search');
+  const c=document.getElementById('ch-rech');
   if(c&&(c.getAttribute('title')||'').indexOf('/')<0)
     c.setAttribute('title','Rechercher un athlète (touche /)');
   // B2.13 — CHAQUE DESTINATION PORTE SA FORME. Les neuf boutons reservaient
@@ -130125,6 +130331,8 @@ function _majBarreCoach(){
   }catch(e){}
 }
 function coachTab(tab){
+  // La recherche rapide ne vit que sur l'onglet Athletes.
+  setTimeout(()=>{ try{ rrPlacer(); }catch(e){} },0);
   try{
     const act=document.querySelector('.screen.active');
     if(!act||act.id!=='s-coach-home'){

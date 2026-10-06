@@ -764,6 +764,18 @@ function _rendreVignettesAthletes(vus){
   const z=document.getElementById('ch-vignettes');
   if(!z) return false;
   if(!vus||!vus.length){ z.innerHTML=''; return false; }
+  // REPLIEES AU-DELA DE DOUZE (06/10/2026) : soixante ronds faisaient plus de
+  // 7 000 px au-dessus de la recherche. Un bouton les rouvre, l'etat se garde.
+  const _rep=vus.length>VIG_REPLI_SEUIL;
+  if(_rep&&!vignettesOuvertes()){
+    z.innerHTML='<button type="button" class="btn btn-blanc btn-sm vig-voir" onclick="vignettesBasculer(true)">Voir les '+vus.length+' visages</button>';
+    return true;
+  }
+  if(_rep){
+    z.innerHTML='<button type="button" class="btn btn-blanc btn-sm vig-voir" onclick="vignettesBasculer(false)">Replier les visages</button>'
+      +'<div class="vig-grille">'+_htmlSectionsSuivi(vus,htmlVignetteAthlete)+'</div>';
+    return true;
+  }
   // Les titres de section sont poses EN GRILLE (grid-column:1/-1) : la grille
   // les traite comme une ligne pleine largeur, sans casser les colonnes.
   z.innerHTML='<div class="vig-grille">'+_htmlSectionsSuivi(vus,htmlVignetteAthlete)+'</div>';

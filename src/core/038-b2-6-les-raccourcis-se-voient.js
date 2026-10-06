@@ -70,7 +70,7 @@ function _rcAnnoncerRaccourcis(){
     if(av.indexOf('('+r.touche.toUpperCase()+')')>=0) continue;
     b.setAttribute('title',(av?av+' ':r.dit+' ')+'('+r.touche.toUpperCase()+')');
   }
-  const c=document.getElementById('ch-search');
+  const c=document.getElementById('ch-rech');
   if(c&&(c.getAttribute('title')||'').indexOf('/')<0)
     c.setAttribute('title','Rechercher un athlète (touche /)');
   // B2.13 — CHAQUE DESTINATION PORTE SA FORME. Les neuf boutons reservaient

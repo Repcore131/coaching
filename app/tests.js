@@ -24862,6 +24862,82 @@ async function testExercices(){
       return !/Prise de masse/.test(h)
         ?true:_echec('le libelle de phase est encore sur la ligne');});
 
+    // ── 06/10/2026 — LA RECHERCHE RAPIDE : UN ATHLÈTE EN DEUX GESTES ──
+    const _RRC=[
+      {id:'r1',fname:'Inès',lname:'Benali',email:'ines.b@t.fr'},
+      {id:'r2',fname:'Karim',lname:'Haddad',email:'k.haddad@t.fr'},
+      {id:'r3',fname:'Kara',lname:'Ines',email:'kara@t.fr'},
+      {id:'r4',fname:'Paul',lname:'Inesta',email:'paul@t.fr'},
+      {id:'r5',fname:'Zoé',lname:'Martin',email:'zoe@t.fr'},
+      {id:'r6',fname:'Léo',lname:'Durand',email:'leo@t.fr'}];
+    const _RRU={etiquettes:{e0:{lib:'Sèche',couleur:'#22c55e'},e1:{lib:'Compétition',couleur:'#3b82f6'}},etiquettesAth:{r5:['e0'],r6:['e0'],r2:['e1']}};
+    ok('rechercheAthletes : prénom exact > début de nom > étiquette > approché ; accents et casse ignorés',()=>{
+      const a=rechercheAthletes(_RRC,'ines',_RRU);
+      if(a[0]!=='r1') return _echec('« ines » : '+a.join());
+      if(a.join()!=='r1,r3,r4') return _echec('ordre : '+a.join()+' (attendu r1 prénom exact, puis r3 et r4 en début de nom)');
+      if(rechercheAthletes(_RRC,'INÈS',_RRU)[0]!=='r1') return _echec('casse et accent');
+      const k=rechercheAthletes(_RRC,'karym',_RRU);
+      if(k.join()!=='r2') return _echec('« karym » : '+k.join());
+      if(rechercheAthletes(_RRC,'kary',_RRU).length) return _echec('approché sous cinq lettres');
+      const s=rechercheAthletes(_RRC,'seche',_RRU);
+      if(s.join()!=='r6,r5') return _echec('étiquette « Sèche » : '+s.join());
+      // Ordre entre familles : un début de nom passe avant une étiquette, l'étiquette avant l'approché.
+      const C=_RRC.concat([{id:'r7',fname:'Compton',lname:'X'},{id:'r8',fname:'Competiton',lname:'Y'}]);
+      const m=rechercheAthletes(C,'compe',_RRU);
+      if(m[0]!=='r8'||m.indexOf('r2')<0) return _echec('compe : '+m.join());
+      const e=rechercheAthletes(C,'competition',_RRU);
+      if(e.join()!=='r2,r8') return _echec('étiquette puis approché : '+e.join());
+      if(rechercheAthletes(_RRC,'k.haddad',_RRU)[0]!=='r2') return _echec('e-mail');
+      if(rechercheAthletes(_RRC,'ines ben',_RRU).join()!=='r1') return _echec('deux mots');
+      return rechercheAthletes(_RRC,'   ',_RRU).length===0?true:_echec('saisie vide');});
+    ok('Recherche rapide : 8 résultats au plus, 4 gestes chacun, Entrée ouvre la fiche, Échap ferme, valeur partagée, « / » la vise',()=>{
+      const champ=document.getElementById('ch-rech'), res=document.getElementById('ch-rech-res'), bas=document.getElementById('ch-search');
+      if(!champ||!res||!bas) return _echec('champ, résultats ou #ch-search absents');
+      if(document.getElementById('ch-clients-list').contains(champ)) return _echec('le champ est dans #ch-clients-list');
+      const sv={u:currentUser,g:getClients,o:openClientDetail,r:renderClientList,v:champ.value,b:bas.value};
+      const ouverts=[];
+      try{
+        const cl=Array.from({length:12},(_,i)=>({id:'q'+i,fname:'Ines'+i,lname:'Test',email:'q'+i+'@t.fr',sessions:[],bilans:[]}));
+        currentUser={id:'rrc',email:'rrc@t.fr',role:'coach',alertStatus:{}};
+        getClients=()=>cl; renderClientList=()=>{}; openClientDetail=(id,a,f)=>ouverts.push([id,f]);
+        const ids=rrSaisie('ines');
+        if(ids.length!==8||res.querySelectorAll('.rr-l').length!==8||res.hidden) return _echec(ids.length+' résultats');
+        if(bas.value!=='ines') return _echec('#ch-search ne suit pas');
+        const l=res.querySelector('.rr-l');
+        const libs=[...l.querySelectorAll('.rr-a')].map(x=>x.textContent).join();
+        if(libs!=='Fiche,Bilan,Message,Programme') return _echec('gestes : '+libs);
+        if(!/openClientDetail\('q0',false,true\)/.test(l.innerHTML)||!/rrOuvrirBilan\('q0'\)/.test(l.innerHTML)
+          ||!/msgOuvrirFil\(/.test(l.innerHTML)||!/rrOuvrirProgramme\('q0'\)/.test(l.innerHTML)) return _echec('cibles des gestes');
+        rrTouche({key:'Enter',preventDefault(){},target:champ});
+        if(ouverts.length!==1||ouverts[0][0]!=='q0'||ouverts[0][1]!==true) return _echec('Entrée : '+JSON.stringify(ouverts));
+        rrSaisie('ines'); rrTouche({key:'Escape',target:champ});
+        if(!res.hidden) return _echec('Échap ne ferme pas');
+        bas.value='zz'; rrSynchroBas('zz');
+        if(champ.value!=='zz') return _echec('le champ du haut ne suit pas #ch-search');
+        rrSaisie('xqzw');
+        if(!/codes en attente/.test(res.textContent)) return _echec('aucun résultat sans proposition');
+        const r=RACCOURCIS_COACH.find(x=>x.touche==='/');
+        return r&&r.champ==='ch-rech'?true:_echec('« / » vise '+(r&&r.champ));
+      } finally { currentUser=sv.u; getClients=sv.g; openClientDetail=sv.o; renderClientList=sv.r; champ.value=sv.v; bas.value=sv.b; _rrFermer(); }
+    });
+    ok('Vignettes : repliées au-delà de 12 athlètes (« Voir les 13 visages »), l’état est gardé',()=>{
+      const z=document.getElementById('ch-vignettes');
+      if(!z) return _echec('#ch-vignettes absent');
+      const sv={h:z.innerHTML,o:(()=>{ try{ return localStorage.getItem(VIG_CLE); }catch(e){ return null; } })(),r:renderClientList};
+      try{
+        try{ localStorage.removeItem(VIG_CLE); }catch(e){}
+        renderClientList=()=>{};
+        const vus=Array.from({length:13},(_,i)=>({id:'v'+i,fname:'V'+i,lname:'X',sessions:[],bilans:[]}));
+        _rendreVignettesAthletes(vus);
+        if(!/Voir les 13 visages/.test(z.textContent)||z.querySelector('.vig-grille')) return _echec('pas replié : '+z.textContent.slice(0,60));
+        vignettesBasculer(true); _rendreVignettesAthletes(vus);
+        if(!z.querySelector('.vig-grille')||!/Replier/.test(z.textContent)) return _echec('pas rouvert');
+        _rendreVignettesAthletes(vus.slice(0,12));
+        if(!z.querySelector('.vig-grille')||/visages/.test(z.textContent)) return _echec('douze : rien à replier');
+        vignettesBasculer(false); _rendreVignettesAthletes(vus);
+        return z.querySelector('.vig-grille')?_echec('reste ouvert'):true;
+      } finally { z.innerHTML=sv.h; renderClientList=sv.r; try{ if(sv.o==null) localStorage.removeItem(VIG_CLE); else localStorage.setItem(VIG_CLE,sv.o); }catch(e){} }
+    });
     // ── 06/10/2026 — LA LIGNE D'ATHLÈTE DU TÉLÉPHONE : LE NOM SE LIT ──
     const _CRL=(fn)=>{
       const sv={u:currentUser,sg:signauxEntrainement,dr:drapeauQuelconqueActif};

@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1803';
+window.RC_BUILD='1804';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-06';
@@ -723,13 +723,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1803.css">
+<link rel="stylesheet" href="./rc-style.1804.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1803.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1804.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1761,6 +1761,17 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
+    <!-- LA RECHERCHE RAPIDE (06/10/2026) : fixe sous l'en-tete, sur l'onglet
+         Athletes et dans les ecrans coach qui reviennent a l'accueil
+         (rrPlacer la deplace). Meme hauteur et meme police que #ch-search,
+         dont elle partage la valeur. HORS de #ch-clients-list : le
+         rafraichissement ne la touche pas. -->
+    <div id="ch-rech-barre" class="rr-barre" role="search">
+      <input type="search" id="ch-rech" placeholder="Rechercher un athlète, une étiquette…" autocomplete="off"
+        aria-label="Rechercher un athlète" aria-controls="ch-rech-res" aria-expanded="false"
+        oninput="rrSaisie(this.value)" onkeydown="rrTouche(event)" onfocus="if(this.value)rrSaisie(this.value)">
+      <ul id="ch-rech-res" class="rr-res" role="listbox" hidden></ul>
+    </div>
     <!-- Mobile tabs (hidden on desktop) -->
     <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:var(--bg)">
       <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">ATHLÈTES</button>
@@ -1893,7 +1904,7 @@ const COACH_PHOTO='icons/coach.jpg';
              qu'aucun etat n'ait besoin d'etre memorise ailleurs. -->
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
           <input type="search" id="ch-search" placeholder="Rechercher un athlète"
-            oninput="renderClientList()" autocomplete="off"
+            oninput="rrSynchroBas(this.value);renderClientList()" autocomplete="off"
             style="width:100%;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);min-height:44px">
           <!-- N1.11 — LES TROIS PUCES DE FILTRE ONT DISPARU. Elles ouvraient
                « Tous », « A traiter » et « En attente d inscription » sans
@@ -6152,5 +6163,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1803.js"></script>
+<script src="./rc-core.1804.js"></script>
 </body></html>

@@ -13332,3 +13332,28 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
   margin:14px 0 0;padding-top:8px;border-top:1px solid var(--border)}
 @media print{ .doc-sign{color:#52525b;border-top-color:#d4d4d8;font-size:7.5pt} }
 .fa-pied-pour{display:block;margin-top:5px;font-size:.72em;font-weight:600;letter-spacing:1.2px;opacity:.75}
+
+/* ══ LA RECHERCHE RAPIDE (06/10/2026) ═══════════════════════════════════════
+   Fixe sous l'en-tete coach, meme hauteur (44 px) et meme police que
+   #ch-search : rien n'est agrandi. Les resultats se posent PAR-DESSUS la
+   page, huit au plus, chacun avec quatre gestes. */
+.rr-barre{position:sticky;top:0;z-index:30;background:var(--bg);padding:8px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.rr-barre[hidden]{display:none}
+#ch-rech{width:100%;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);min-height:44px}
+.rr-res{position:absolute;left:12px;right:12px;top:100%;margin:4px 0 0;padding:4px;list-style:none;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--r-3);box-shadow:var(--e3);max-height:70vh;overflow-y:auto;z-index:31}
+.rr-res[hidden]{display:none}
+.rr-l{display:flex;flex-direction:column;gap:6px;padding:8px;border-bottom:1px solid var(--border)}
+.rr-l:last-child{border-bottom:0}
+.rr-nom{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;background:none;border:0;color:var(--text);
+  text-align:left;padding:0;cursor:pointer;font-family:Montserrat,sans-serif;min-height:36px}
+.rr-n{font-weight:800;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.rr-f{font-size:var(--fs-xs);color:var(--sub);flex:none}
+.rr-f-d{color:var(--red-text);font-weight:800}
+.rr-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rr-a{min-height:36px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;padding:0 6px}
+.rr-a:hover,.rr-a:focus-visible{border-color:var(--red)}
+.rr-aucun{padding:10px;font-size:var(--fs-xs);color:var(--sub);display:flex;flex-direction:column;gap:8px}
+.vig-voir{display:block;margin:0 auto}

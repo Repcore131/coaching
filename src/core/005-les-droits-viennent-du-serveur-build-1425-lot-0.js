@@ -1111,6 +1111,8 @@ function go(id){
   try{ setTimeout(_majIndicAttente,0); }catch(e){}
   // Le temps du coach : relu APRÈS le changement d'écran (segment fermé ou ouvert).
   try{ setTimeout(_chronoTick,0); }catch(e){}
+  // La recherche rapide suit l'ecran (rrPlacer) : apres le changement.
+  try{ setTimeout(rrPlacer,0); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}

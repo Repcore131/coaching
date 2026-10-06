@@ -2487,6 +2487,8 @@ function _majBarreCoach(){
   }catch(e){}
 }
 function coachTab(tab){
+  // La recherche rapide ne vit que sur l'onglet Athletes.
+  setTimeout(()=>{ try{ rrPlacer(); }catch(e){} },0);
   try{
     const act=document.querySelector('.screen.active');
     if(!act||act.id!=='s-coach-home'){

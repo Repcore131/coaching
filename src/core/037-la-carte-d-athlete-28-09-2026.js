@@ -2449,7 +2449,7 @@ const RACCOURCIS_COACH=Object.freeze([
   {ecran:'s-coach-program', touche:'s', bouton:'cp-sauver',    dit:'Enregistrer'},
   {ecran:'s-coach-sessions',touche:'p', bouton:'csm-publier',  dit:'Publier'},
   {ecran:'s-coach-program', touche:'e', action:'addExercise',  dit:'Ajouter un exercice'},
-  {ecran:'s-coach-home',    touche:'/', champ:'ch-search',     dit:'Rechercher'},
+  {ecran:'s-coach-home',    touche:'/', champ:'ch-rech',       dit:'Rechercher'},
   // B2.6 — LA TOUCHE QUI MONTRE LES AUTRES. Sans `ecran` : elle vaut partout
   // dans l'espace coach, y compris la ou aucun autre raccourci n'existe — c'est
   // la seule facon d'apprendre qu'il n'y en a pas ici.
