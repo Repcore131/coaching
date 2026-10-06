@@ -2005,7 +2005,7 @@ function _htmlCouvertureMicro(user,ref,opts){
     const larg=Math.max(0,Math.min(100,pct));
     const fiab=c.partDocumentee<MICRO_FIABILITE_DITE
       ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.3;margin:1px 0 0">calculé sur '+Math.round(c.partDocumentee*100)+' % du journal</div>':'';
-    return '<div class="micro-l" style="padding:3px 0">'
+    return '<div class="micro-l" style="padding:2px 0">'
       +'<div style="display:flex;align-items:center;gap:8px">'
       +'<span style="flex:0 0 92px;font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(c.lib)+'</span>'
       +'<span aria-hidden="true" style="flex:1;height:4px;background:var(--border);border-radius:var(--r-1);overflow:hidden"><span style="display:block;height:100%;width:'+larg+'%;background:var(--sub)"></span></span>'
