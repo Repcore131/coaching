@@ -22706,7 +22706,9 @@ async function testExercices(){
     ok('Le nom affiché est celui de la formule qui a calculé (Harris-Benedict, pas Mifflin)',()=>{
       const sv=currentUser;
       try{
-        const u=_MBa(75,180,{nutrition:{cycle:false,tableur:{formuleMB:'harris'}}});
+        // manuel:true : le point de départ ne se rend plus sous la carte
+        // réglable (build 1838) ; il reste quand le coach a levé l'interrupteur.
+        const u=_MBa(75,180,{nutrition:{cycle:false,manuel:true,tableur:{formuleMB:'harris'}}});
         currentUser=u;
         const h=_htmlDepartAthlete(u.nutrition);
         if(!h) return _echec('la carte ne se rend pas');
@@ -28555,11 +28557,36 @@ async function testExercices(){
         &&macrosRemplies({macros:{on:{},off:{}}})===false
         &&macrosRemplies({macros:{on:{kcal:0,p:0,g:0,l:0}}})===false
         &&macrosRemplies({macros:{off:{kcal:2000}}})===true);
-      ok('Sans macros, la carte de proposition s\'affiche',()=>{
-        currentUser=_ath({nutrition:{dietType:'flexible'}});
+      ok('Sans macros, la carte de proposition s\'affiche — quand « Mon objectif » n’est pas réglable',()=>{
+        // ⚠ BUILD 1838 : quand la carte « Mon objectif » se rend réglable, elle
+        //   EST la proposition chiffrée, et le point de départ se tait (deux
+        //   chiffres différents pour la même personne). Il reste quand le
+        //   coach a levé l'interrupteur sans poser de cibles (manuel:true).
+        currentUser=_ath({nutrition:{dietType:'flexible',manuel:true}});
         const h=_htmlDepartAthlete(currentUser.nutrition);
-        return /Point de départ proposé/.test(h)&&/Enregistrer ces objectifs/.test(h)
-          &&/JOUR ON/.test(h)&&/JOUR OFF/.test(h);});
+        if(!(/Point de départ proposé/.test(h)&&/Enregistrer ces objectifs/.test(h)
+          &&/JOUR ON/.test(h)&&/JOUR OFF/.test(h))) return _echec('point de départ absent');
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        return _htmlDepartAthlete(currentUser.nutrition)===''?true:_echec('point de départ sous la carte réglable');});
+      ok('Athlète sans coach, flexible, sans macros : « Mon objectif » et pas « Point de départ proposé »',()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        delete currentUser.coachId; delete currentUser.coachEmailKey;
+        const z=document.createElement('div');
+        z.innerHTML=(function(){ try{ return _htmlCiblesAthlete(currentUser); }catch(e){ return ''; } })()+_htmlDepartAthlete(currentUser.nutrition);
+        const t=z.textContent;
+        if(!/Mon objectif/.test(t)) return _echec('carte absente');
+        if(/Point de départ proposé/.test(t)) return _echec('deux propositions');
+        return /Choisis ton objectif : tes cibles s’enregistrent tout de suite/.test(t)?true:_echec('ligne d’invitation absente');});
+      ok('besoinsProposes : objectif « sèche » sans phase → déficit et 2,4 g/kg',()=>{
+        const u=_ath({nutrition:{dietType:'flexible',perso:{objectif:'seche'}}});
+        delete u.phase; delete u.coachId; delete u.coachEmailKey;
+        const b=besoinsProposes(u,{});
+        if(!b||b.source===null) return _echec('aucune proposition');
+        if(!(b.delta<0)) return _echec('delta '+b.delta);
+        if(b.gParKg!==2.4) return _echec('g/kg '+b.gParKg);
+        // Avec une phase posée, la phase gagne (masse).
+        const v=_ath({nutrition:{dietType:'flexible',perso:{objectif:'seche'}},phase:{type:'masse',debut:Date.now()-864e5}});
+        return besoinsProposes(v,{}).delta>0?true:_echec('la phase ne gagne plus');});
       ok('Aucune carte quand le calcul est impossible',()=>{
         const u=_ath({nutrition:{dietType:'flexible'},_evol_height:null,height:null,
           bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}]});
@@ -28581,7 +28608,7 @@ async function testExercices(){
         const m=currentUser.nutrition.macros;
         return m.on.kcal===2500&&m.origine===undefined;});
       ok('La carte porte le disclaimer santé',()=>{
-        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        currentUser=_ath({nutrition:{dietType:'flexible',manuel:true}});
         const h=_htmlDepartAthlete(currentUser.nutrition);
         return h.indexOf(DISCLAIMER_SANTE)>=0;});
 
@@ -63983,6 +64010,8 @@ async function testExercices(){
       const sU=currentUser;
       try{
         currentUser=_r10Ath();
+        // Build 1838 : le point de départ ne se rend que hors de la carte réglable.
+        currentUser.nutrition=Object.assign({},currentUser.nutrition||{},{manuel:true});
         const b=besoinsProposes(currentUser);
         if(!b||b.source===null) return _echec('le décor ne produit pas de point de départ');
         const d=document.createElement('div'); d.innerHTML=_htmlDepartAthlete(currentUser.nutrition);

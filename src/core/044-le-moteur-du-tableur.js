@@ -423,6 +423,17 @@ function cibleTableur(user,opts){
     poidsRef:_pm.kg, poidsRefObj:_pm, glucidesBas:rep.glucidesBas, depasse:rep.depasse
   };
 }
+// PURE. L'objectif de l'athlète lu comme une phase : opts.objectif d'abord,
+// puis nutrition.perso.objectif — sauf sur des cibles posées par le coach
+// (origine 'tableur' ou 'histo'), où son calcul fait foi.
+function _objectifCommePhase(user,o){
+  const ok=k=>(typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(x=>x.k===k))?k:null;
+  if(o&&o.objectif) return ok(o.objectif);
+  const nu=(user&&user.nutrition)||{};
+  const or=(nu.macros||{}).origine;
+  if(or==='tableur'||or==='histo') return null;
+  return ok((nu.perso||{}).objectif);
+}
 function besoinsProposes(user,opts){
   const o=opts||{};
   // Le chemin AUTOMATIQUE borne au plancher sur l'appareil de l'athlete (30/09/2026).
@@ -565,7 +576,11 @@ function besoinsProposes(user,opts){
     hypotheses.push(sport.inconnus.join(', ')+' : sport'+(sport.inconnus.length>1?'s':'')
       +' non reconnu'+(sport.inconnus.length>1?'s':'')+', non compté'
       +(sport.inconnus.length>1?'s':''));
-  const phase=typePhase(user);
+  // L'OBJECTIF DE L'ATHLÈTE TIENT LIEU DE PHASE (build 1838), comme dans
+  // cibleTableur : sans phase posée, « Mon objectif » décide du coefficient et
+  // du g/kg. Le point de départ ne propose plus 100 % de la dépense à 1,8 g/kg
+  // pendant que la carte affiche une sèche.
+  const phase=typePhase(user)||_objectifCommePhase(user,o);
   const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
     ? o.protGparKg
     // Une SUGGESTION qui ne serait pas appliquée quand le coach n'a rien réglé

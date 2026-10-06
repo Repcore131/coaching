@@ -99103,6 +99103,8 @@ function _htmlCiblesAthlete(u){
     +'</div>'
     // Le poids de référence, les glucides très bas, le total dépassé : dits, jamais tus.
     +_htmlAlertesMacros(c,'athlete')
+    // TANT QU'AUCUNE CIBLE N'EST ENREGISTRÉE (build 1838) : le premier geste suffit.
+    +(macrosRemplies((u&&u.nutrition)||{})?'':'<div class="rc-obj-note">Choisis ton objectif : tes cibles s’enregistrent tout de suite.</div>')
     +'<div class="rc-obj-note">'+(sansCoach(u)
       ?'Tes cibles suivent ton poids : elles se mettent à jour à chaque pesée.'
       :'Ton coach voit ces cibles : elles remplacent celles de sa grille.')+'</div>'
@@ -99525,9 +99527,20 @@ function _premierNeatInfo(h){
   const i=String(h).indexOf('NEAT');
   return i<0?h:h.slice(0,i+4)+rcInfo('neat')+h.slice(i+4);
 }
+// La carte « Mon objectif » rend-elle sa forme RÉGLABLE ? (build 1838) Alors
+// elle est LA proposition chiffrée : le point de départ ne s'y ajoute pas.
+function carteObjectifReglable(u){
+  try{
+    if(ciblesPoseesParCoach(u)) return false;
+    const c=ciblesAthlete(u);
+    return !!(c&&!(c.manque&&c.manque.length));
+  }catch(e){ return false; }
+}
 function _htmlDepartAthlete(nut){
   if(macrosRemplies(nut)) return '';
-  const b=besoinsProposes(currentUser);
+  if(carteObjectifReglable(currentUser)) return '';
+  // La même phase que la carte (et que cibleTableur) : l'objectif de l'athlète.
+  const b=besoinsProposes(currentUser,{objectif:((nut&&nut.perso)||{}).objectif});
   if(!b||b.source===null) return '';
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
   const nom=mbNom(b.source);
@@ -99560,7 +99573,7 @@ async function utiliserBesoinsProposes(){
   // l'affichage de la carte et le clic, une synchronisation a pu apporter les
   // macros du coach. On ne les écrase pas.
   if(macrosRemplies(nut)){ toast('Ton coach a fixé tes objectifs entre-temps','var(--orange)'); loadNutrition(); return; }
-  const b=besoinsProposes(currentUser);
+  const b=besoinsProposes(currentUser,{objectif:((nut&&nut.perso)||{}).objectif});
   if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return; }
   // Un DÉFICIT ne s'écrit pas d'un clic. Ce chemin-ci n'est relu par personne :
   // l'athlète appuie et les objectifs sont posés. Le chemin coach, lui, reste
@@ -109718,6 +109731,17 @@ function cibleTableur(user,opts){
     poidsRef:_pm.kg, poidsRefObj:_pm, glucidesBas:rep.glucidesBas, depasse:rep.depasse
   };
 }
+// PURE. L'objectif de l'athlète lu comme une phase : opts.objectif d'abord,
+// puis nutrition.perso.objectif — sauf sur des cibles posées par le coach
+// (origine 'tableur' ou 'histo'), où son calcul fait foi.
+function _objectifCommePhase(user,o){
+  const ok=k=>(typeof ATH_OBJECTIFS!=='undefined'&&ATH_OBJECTIFS.some(x=>x.k===k))?k:null;
+  if(o&&o.objectif) return ok(o.objectif);
+  const nu=(user&&user.nutrition)||{};
+  const or=(nu.macros||{}).origine;
+  if(or==='tableur'||or==='histo') return null;
+  return ok((nu.perso||{}).objectif);
+}
 function besoinsProposes(user,opts){
   const o=opts||{};
   // Le chemin AUTOMATIQUE borne au plancher sur l'appareil de l'athlete (30/09/2026).
@@ -109860,7 +109884,11 @@ function besoinsProposes(user,opts){
     hypotheses.push(sport.inconnus.join(', ')+' : sport'+(sport.inconnus.length>1?'s':'')
       +' non reconnu'+(sport.inconnus.length>1?'s':'')+', non compté'
       +(sport.inconnus.length>1?'s':''));
-  const phase=typePhase(user);
+  // L'OBJECTIF DE L'ATHLÈTE TIENT LIEU DE PHASE (build 1838), comme dans
+  // cibleTableur : sans phase posée, « Mon objectif » décide du coefficient et
+  // du g/kg. Le point de départ ne propose plus 100 % de la dépense à 1,8 g/kg
+  // pendant que la carte affiche une sèche.
+  const phase=typePhase(user)||_objectifCommePhase(user,o);
   const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
     ? o.protGparKg
     // Une SUGGESTION qui ne serait pas appliquée quand le coach n'a rien réglé
