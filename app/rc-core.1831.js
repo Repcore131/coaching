@@ -75132,8 +75132,9 @@ function arrondiCharge125(cible,depart){
 // LES RÉPÉTITIONS DESCENDENT QUAND LA CHARGE MONTE (30/09/2026). Chaque
 // palier porte les siennes, tirées de la répétition prescrite R (bas de la
 // fourchette, sinon le premier nombre) : jusqu'à 50 % de la charge, R dans la
-// limite de 10 ; jusqu'à 65 %, 6 ; jusqu'à 80 %, 4 ; au-delà, 2. Jamais plus
-// que R, jamais zéro. L'échauffement prépare sans fatiguer : dix répétitions
+// limite de 10 ; jusqu'à 65 %, 6 ; jusqu'à 80 %, 4 ; au-delà, 2. Jamais zéro ;
+// depuis le build 1831, un plancher par palier et R ne borne que le dernier
+// (voir repsApproche). L'échauffement prépare sans fatiguer : dix répétitions
 // à 90 % d'une série de douze useraient la série de travail.
 // Rien de tout ceci n'existe en donnée : aucune ligne dans le tableau, aucune
 // case à valider, rien dans woState.sessionData, donc rien dans le tonnage, le
@@ -75161,7 +75162,13 @@ const MONTEE_POURCENTS=Object.freeze({
 // arrondiCharge125 est appelée avec la charge de travail comme point de DÉPART :
 // la rampe descend donc vers l'inférieur, et aucun palier ne peut dépasser —
 // ni même atteindre — la charge visée. C'est le seul arrondi appliqué.
-function seriesApproche(chargeTravail,repsPrescrites,ex){
+// UN SEUL PALIER (build 1831) quand une rampe complète est de trop :
+//   · le muscle primaire est DÉJÀ ÉCHAUFFÉ par un exercice précédent de la
+//     séance (au moins une série faite) → ~70 % × min(R, 5) ;
+//   · une isolation (schéma « isolation-… ») sous 15 kg → 50 %.
+const MONTEE_ECHAUFFE_PCT=0.70, MONTEE_ECHAUFFE_REPS=5;
+const MONTEE_ISOLATION_KG=15, MONTEE_ISOLATION_PCT=0.50;
+function seriesApproche(chargeTravail,repsPrescrites,ex,opts){
   const w=Number(chargeTravail);
   if(!isFinite(w)||!(w>0)) return [];
   // Sous ces trois formes l'échauffement en charge n'a pas de sens : le cardio
@@ -75173,8 +75180,14 @@ function seriesApproche(chargeTravail,repsPrescrites,ex){
   // à écrire en face de chaque palier.
   const R=repsApprocheBase(repsPrescrites);
   if(!R) return [];
+  const o=opts||{};
+  if(o.dejaEchauffe) return [{pct:MONTEE_ECHAUFFE_PCT,charge:arrondiCharge125(w*MONTEE_ECHAUFFE_PCT,w),
+    reps:Math.max(1,Math.min(R,MONTEE_ECHAUFFE_REPS))}];
+  let sch=null; try{ sch=ex?schemaDe(ex,o.user):null; }catch(e){ sch=null; }
+  if(sch&&/^isolation/.test(sch)&&w<MONTEE_ISOLATION_KG)
+    return [{pct:MONTEE_ISOLATION_PCT,charge:arrondiCharge125(w*MONTEE_ISOLATION_PCT,w),reps:repsApproche(MONTEE_ISOLATION_PCT,R,true)}];
   const pcts=MONTEE_POURCENTS[_nbSeriesApproche(w)]||MONTEE_POURCENTS[3];
-  return pcts.map(pct=>({pct,charge:arrondiCharge125(w*pct,w),reps:repsApproche(pct,R)}));
+  return pcts.map((pct,i)=>({pct,charge:arrondiCharge125(w*pct,w),reps:repsApproche(pct,R,i===pcts.length-1)}));
 }
 // PURE. La répétition prescrite de référence : le bas d'une fourchette
 // (fourchetteReps), sinon le premier nombre (« 10 par jambe » → 10). 0 si rien.
@@ -75186,14 +75199,38 @@ function repsApprocheBase(reps){
   return n>0?n:0;
 }
 // PURE. Les répétitions d'un palier à `pct` de la charge de travail.
-function repsApproche(pct,R){
+// UN PLANCHER (build 1831) : sur une série de travail lourde et courte
+// (200 kg × 1), « jamais plus que R » donnait 1 répétition à chaque palier —
+// une rampe qui n'échauffe rien. Chaque palier vise min(R, plafond), relevé à
+// son plancher : 5 jusqu'à 50 %, 3 jusqu'à 65 %, 2 jusqu'à 80 %, 1 au-delà.
+// R ne borne plus que le DERNIER palier (`dernier`), celui qui touche la
+// charge de travail.
+function _plafondApproche(pct){ return pct<=0.5?10:(pct<=0.65?6:(pct<=0.8?4:2)); }
+function _plancherApproche(pct){ return pct<=0.5?5:(pct<=0.65?3:(pct<=0.8?2:1)); }
+function repsApproche(pct,R,dernier){
   const r=Math.max(1,Math.round(Number(R))||0);
-  const plafond=pct<=0.5?10:(pct<=0.65?6:(pct<=0.8?4:2));
-  return Math.max(1,Math.min(r,plafond));
+  const n=Math.max(_plancherApproche(pct),Math.min(r,_plafondApproche(pct)));
+  return Math.max(1,dernier?Math.min(n,r):n);
+}
+// PURE. Le muscle primaire de l'exercice `idx` a-t-il déjà travaillé dans la
+// séance : un exercice PRÉCÉDENT, même muscle primaire (resoudreMusclesLecture),
+// au moins une série faite.
+function muscleDejaEchauffe(exercises,sessionData,idx,user){
+  if(!Array.isArray(exercises)||!(idx>0)) return false;
+  const prim=e=>{ try{ const c=resoudreMusclesLecture(e&&e.name,e,user); return (c&&c!==VOL_CARDIO&&(c.p||[])[0])||null; }catch(x){ return null; } };
+  const m=prim(exercises[idx]);
+  if(!m) return false;
+  for(let j=0;j<idx;j++){
+    const sets=(sessionData&&sessionData[j]&&sessionData[j].sets)||[];
+    if(sets.some(st=>st&&st.done)&&prim(exercises[j])===m) return true;
+  }
+  return false;
 }
 function _fmtChargeMontee(v){ return String(v).replace('.',','); }
 function _htmlMonteeCharge(chargeTravail,ex,idx){
-  const paliers=seriesApproche(chargeTravail,ex&&ex.reps,ex);
+  let deja=false;
+  try{ deja=typeof woState!=='undefined'&&woState&&muscleDejaEchauffe(woState.exercises,woState.sessionData,idx,currentUser); }catch(e){ deja=false; }
+  const paliers=seriesApproche(chargeTravail,ex&&ex.reps,ex,{dejaEchauffe:deja,user:currentUser});
   if(!paliers.length) return '';
   const masque=!!(currentUser&&currentUser.monteeChargeMasquee);
   // L'UNITÉ ET LES RÉPÉTITIONS SORTENT DU GROUPE quand elles sont les mêmes

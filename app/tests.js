@@ -29767,10 +29767,51 @@ async function testExercices(){
       ok('Jamais plus que R, jamais zéro ; une fourchette part de son bas',()=>{
         if(seriesApproche(80,'5').map(p=>p.reps).join()!=='5,4,2') return _echec('80 × 5 : '+seriesApproche(80,'5').map(p=>p.reps).join());
         if(seriesApproche(120,'8-12').map(p=>p.reps).join()!=='8,6,4,2') return _echec('fourchette');
-        if(seriesApproche(180,'3').map(p=>p.reps).join()!=='3,3,3,2') return _echec('180 × 3');
-        if(seriesApproche(150,'1').map(p=>p.reps).join()!=='1,1,1,1') return _echec('single');
+        // Build 1831 : un plancher par palier (5/3/2/1) ; R ne borne que le dernier.
+        if(seriesApproche(180,'3').map(p=>p.reps).join()!=='5,3,3,2') return _echec('180 × 3 : '+seriesApproche(180,'3').map(p=>p.reps).join());
+        if(seriesApproche(150,'1').map(p=>p.reps).join()!=='5,3,2,1') return _echec('single : '+seriesApproche(150,'1').map(p=>p.reps).join());
         if(seriesApproche(90,'10 par jambe').map(p=>p.reps).join()!=='10,4,2') return _echec('unilatéral');
         return seriesApproche(80,'0').length===0?true:_echec('R = 0');});
+      // ── Build 1831 : un plancher par palier, un seul palier quand c'est assez ──
+      const _mcTxt=t=>t.map(p=>p.charge+'×'+p.reps).join(' ');
+      ok('Montée en charge : 200 kg × 1 → 80×5, 120×3, 150×2, 180×1 (le plancher)',()=>{
+        const t=_mcTxt(seriesApproche(200,'1',{name:'SQUAT',reps:'1'}));
+        return t==='80×5 120×3 150×2 180×1'?true:_echec(t);});
+      ok('Montée en charge : 100 kg × 12 → 50×10, 70×4, 85×2 (inchangé)',()=>{
+        const t=_mcTxt(seriesApproche(100,'12',{name:'SQUAT',reps:'12'}));
+        if(t!=='50×10 70×4 85×2') return _echec(t);
+        // R ne borne que le dernier palier ; les autres gardent leur plancher.
+        if(repsApproche(0.4,1)!==5||repsApproche(0.6,1)!==3||repsApproche(0.75,1)!==2||repsApproche(0.9,1)!==1) return _echec('plancher');
+        if(repsApproche(0.5,2,true)!==2||repsApproche(0.9,12,true)!==2) return _echec('dernier palier');
+        return true;});
+      ok('Montée en charge : 2e exercice de pectoraux après le développé → un seul palier à ~70 % × min(R, 5)',()=>{
+        const u={role:'athlete',email:'mc@t.fr',sessions:[]};
+        const ex=[{name:'DEVELOPPE COUCHE BARRE',reps:'8'},{name:'ECARTE MACHINE',reps:'12'},{name:'SQUAT',reps:'5'}];
+        const sd={0:{sets:[{done:true,weight:'80',reps:'8'}]},1:{sets:[]}};
+        if(muscleDejaEchauffe(ex,sd,1,u)!==true) return _echec('écarté après développé');
+        if(muscleDejaEchauffe(ex,sd,2,u)!==false) return _echec('squat : autre muscle');
+        if(muscleDejaEchauffe(ex,sd,0,u)!==false) return _echec('premier exercice');
+        // Aucune série faite au développé : le muscle n'est pas échauffé.
+        if(muscleDejaEchauffe(ex,{0:{sets:[{done:false}]}},1,u)!==false) return _echec('sans série faite');
+        const t=seriesApproche(40,'12',ex[1],{dejaEchauffe:true});
+        if(t.length!==1||t[0].pct!==0.7||t[0].reps!==5||!(t[0].charge<40)) return _echec(JSON.stringify(t));
+        // L'affichage le lit dans la séance en cours.
+        const sv=woState, svU=currentUser;
+        try{
+          currentUser=u; woState={exercises:ex,sessionData:sd};
+          const h=_htmlMonteeCharge(40,ex[1],1);
+          // 27,5 kg, arrondi au pas de la machine à l'affichage.
+          if(!/ : \d+(,\d+)? kg × 5<\/span>/.test(h)||/·/.test(h)) return _echec('rampe : '+h);
+        }finally{ woState=sv; currentUser=svU; }
+        return true;});
+      ok('Montée en charge : isolation sous 15 kg → un seul palier à 50 % ; contrepoids et isométrie → []',()=>{
+        const t=seriesApproche(12,'12',{name:'LEG EXTENSION',reps:'12'});
+        if(t.length!==1||t[0].pct!==0.5) return _echec('isolation : '+JSON.stringify(t));
+        if(seriesApproche(20,'12',{name:'LEG EXTENSION',reps:'12'}).length!==2) return _echec('isolation à 20 kg');
+        if(seriesApproche(80,'8',{name:'TRACTIONS MACHINE ASSISTE',reps:'8'},{dejaEchauffe:true}).length!==0) return _echec('contrepoids');
+        if(seriesApproche(80,'30',{name:'GAINAGE LESTE',reps:'30',technique:'isometrie'},{dejaEchauffe:true}).length!==0) return _echec('isométrie');
+        // Un pense-bête : la rampe n'écrit rien dans la séance.
+        return String(_htmlMonteeCharge).indexOf('sessionData[')<0&&String(muscleDejaEchauffe).indexOf('.push(')<0?true:_echec('écriture');});
 
       // ── Les charges ──
       ok('Les paliers sont des multiples de 1,25',
@@ -29837,7 +29878,8 @@ async function testExercices(){
         return /Échauffement/.test(h)&&/8 kg × 10/.test(h)&&h.split('·').length===1;});
       ok('Une charge lourde en affiche quatre',()=>{
         const h=_htmlMonteeCharge(140,{name:'SOULEVE DE TERRE',reps:'3'},0);
-        return /55 kg × 3 · 83,75 kg × 3 · 105 kg × 3 · 125 kg × 2/.test(h);});
+        // Build 1831 : le premier palier remonte à son plancher de 5.
+        return /55 kg × 5 · 83,75 kg × 3 · 105 kg × 3 · 125 kg × 2/.test(h);});
       ok('Aucun bouton de validation, aucune case, aucune ligne de tableau',()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         return !/<input/i.test(h)&&!/<td/i.test(h)&&!/<tr/i.test(h)
