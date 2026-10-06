@@ -20,6 +20,7 @@ import { pathToFileURL } from 'node:url';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { passagePush } from './fitpulse-push.mjs';
 import { passageRapport } from './fitpulse-rapport.mjs';
+import { passageMatin } from './fitpulse-matin.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -302,6 +303,8 @@ async function main() {
   try { const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
   // Rapport du lundi 15 h au directeur (et « Envoyer maintenant » depuis l'appli).
   if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
+  // KPI du matin, 8 h 45 : e-mail à l'accueil avec le bouton « Envoyer sur WhatsApp ».
+  if (MDP || DRY) { try { console.log('KPI du matin :', await passageMatin(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) KPI → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ KPI du matin → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); }, { force: process.env.APERCU_MATIN === 'true' })); } catch (e) { console.log('KPI du matin : échec,', e.message); } }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');

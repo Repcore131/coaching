@@ -179,6 +179,7 @@ PAGES.kpimatin = {
       ${mgr ? `<details class="card"><summary><b>Modèle du message</b> <span class="muted small">(manager)</span></summary>
         <p class="muted small">Le texte envoyé chaque matin. Les mots entre accolades sont remplacés : ${['mois', 'date', ...KM_FIELDS.map(f => f[0])].map(k => `<code>{${k}}</code>`).join(' ')}</p>
         <form id="kmf" class="grid"><label class="field"><span>Nom du groupe WhatsApp (rappel affiché au moment d’envoyer)</span><input class="input" name="group" maxlength="80" value="${esc(cfg.group || '')}" placeholder="FITNESS PARK Niort KPI"></label>
+          <label class="field"><span>E-mail du récap automatique de 8 h 45 (avec bouton « Envoyer sur WhatsApp »)</span><input class="input" name="email" type="email" maxlength="120" value="${esc(cfg.email || '')}" placeholder="accueil du club (sinon : e-mail de copie du Plan)"></label>
         <label class="field"><span>Modèle</span><textarea class="input km-text" name="template" rows="16">${esc(kmTemplate())}</textarea></label></form>
         <div class="row" style="gap:8px"><button class="btn primary" data-act="kmCfgSave">Enregistrer le modèle</button><button class="btn ghost" data-act="kmCfgReset">Rétablir le modèle d’origine</button></div></details>` : ''}`;
   },
@@ -224,5 +225,5 @@ const kmText = () => { const ta = $('#km-text'); return ta ? ta.value : kmState(
 ACTIONS.kmSend = () => { const t = kmText(); window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank', 'noopener'); };
 ACTIONS.kmShare = async () => { try { await navigator.share({ text: kmText() }); } catch (e) { /* partage annulé */ } };
 ACTIONS.kmCopy = async () => { const t = kmText(); try { await navigator.clipboard.writeText(t); toast('Message copié'); } catch (e) { const ta = $('#km-text'); if (ta) { ta.select(); document.execCommand('copy'); toast('Message copié'); } } };
-ACTIONS.kmCfgSave = () => { if (!isManager()) return; const f = formData($('#kmf')); db.set(['clubs', CLUB.id, 'kpiMatin'], { template: (f.template || '').trim() === KM_DEFAULT ? null : (f.template || '').slice(0, 4000), group: (f.group || '').trim().slice(0, 80) || null }); kmState().step = 0; toast('Modèle enregistré pour tout le club'); };
+ACTIONS.kmCfgSave = () => { if (!isManager()) return; const f = formData($('#kmf')); db.set(['clubs', CLUB.id, 'kpiMatin'], { template: (f.template || '').trim() === KM_DEFAULT ? null : (f.template || '').slice(0, 4000), group: (f.group || '').trim().slice(0, 80) || null, email: (f.email || '').trim().slice(0, 120) || null }); kmState().step = 0; toast('Modèle enregistré pour tout le club'); };
 ACTIONS.kmCfgReset = async () => { if (!isManager()) return; if (await confirmDlg('Rétablir le modèle d’origine du message ?', { ok: 'Rétablir' })) { db.set(['clubs', CLUB.id, 'kpiMatin', 'template'], null); kmState().step = 0; render(); } };

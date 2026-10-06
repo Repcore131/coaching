@@ -162,7 +162,7 @@ ${mensuel ? bloc('Point mensuel : impayés de 6 mois et plus', `<div style="font
 }
 
 // ── Planification : lundi 15 h pile, une fois par semaine ─────────────────
-const paris = (d = new Date()) => { const f = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit', hourCycle: 'h23' }).formatToParts(d); const g = k => (f.find(x => x.type === k) || {}).value; return { j: g('weekday'), h: Number(g('hour')), m: Number(g('minute')), s: Number(g('second')), date: `${g('year')}-${g('month')}-${g('day')}` }; };
+export const paris = (d = new Date()) => { const f = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit', hourCycle: 'h23' }).formatToParts(d); const g = k => (f.find(x => x.type === k) || {}).value; return { j: g('weekday'), h: Number(g('hour')), m: Number(g('minute')), s: Number(g('second')), date: `${g('year')}-${g('month')}-${g('day')}` }; };
 export function quandEnvoyer(now = new Date()) {
   const p = paris(now); if (!/^lun/i.test(p.j)) return { action: 'non' };
   const avant = ((HEURE - p.h) * 3600 - p.m * 60 - p.s) * 1000;

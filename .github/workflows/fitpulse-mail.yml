@@ -20,6 +20,7 @@ on:
       - 'club/outils/fitpulse-serveur.mjs'
       - 'club/outils/fitpulse-push.mjs'
       - 'club/outils/fitpulse-rapport.mjs'
+      - 'club/outils/fitpulse-matin.mjs'
       - '.github/workflows/fitpulse-mail.yml'
   workflow_dispatch:
     inputs:
@@ -33,6 +34,10 @@ on:
         default: false
       rapport:
         description: 'Lancement de 14 h 50 le lundi : attendre 15 h pile puis envoyer le rapport au directeur'
+        type: boolean
+        default: false
+      apercu_matin:
+        description: 'Envoyer tout de suite le KPI du matin (e-mail avec bouton WhatsApp)'
         type: boolean
         default: false
       robot_resamania:
@@ -66,6 +71,7 @@ jobs:
           RAPPORT_ATTENTE_MIN: ${{ inputs.rapport && '12' || '4' }}
           TZ: Europe/Paris
           APERCU_RAPPORT: ${{ inputs.apercu_rapport }}
+          APERCU_MATIN: ${{ inputs.apercu_matin }}
         run: node club/outils/fitpulse-serveur.mjs
 
   robot:
