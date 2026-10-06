@@ -1978,20 +1978,45 @@ function phraseCouvertureMicro(c){
     s+=' Sexe non renseigné : la référence la plus élevée est retenue.';
   return s;
 }
-function _htmlCouvertureMicro(user,ref){
+// ══ LA CARTE, REFONDUE (build 1842) ═══════════════════════════════════════
+// Huit lignes compactes « libellé · mini-barre neutre · NN % », dans l'ordre
+// FIXE de MICRO_REFS ; la barre plafonne à 100 % à l'œil, la valeur réelle
+// reste écrite. Aucune couleur d'alerte. La fiabilité ne se dit que sous 90 %
+// documentés (« calculé sur 69 % du journal »), le sexe inconnu UNE fois en
+// pied de carte, et le rappel médical une seule fois par écran
+// (opts.sansDisclaimer quand le signal d'apport l'affiche déjà).
+// ⚠ SOUS aTCA, RIEN : même garde que _htmlSignalMicro. Le coach garde son
+//   accès par risquesMicro.
+const MICRO_FIABILITE_DITE=0.90;
+function _htmlCouvertureMicro(user,ref,opts){
+  try{ if(aTCA(_dossier(user))) return ''; }catch(e){}
+  const o=opts||{};
   const jours=_microDerniersJours(ref);
-  const lignes=[];
+  const cs=[];
   for(const cle in MICRO_REFS){
     const c=couvertureMicro(user,cle,jours);
-    if(c) lignes.push(phraseCouvertureMicro(c));
+    // Un nutriment SANS AUCUNE donnée sur la fenêtre : ligne absente.
+    if(c&&c.partDocumentee>0) cs.push(c);
   }
-  if(!lignes.length) return '';
-  // Aucune couleur d'alerte, aucun tri par « manque », aucun total : huit
-  // phrases dans l'ordre de la table, et le rappel qui les encadre.
-  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
-    ${lignes.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;padding:4px 0;border-bottom:1px solid #161616">${escapeHtml(t)}</div>`).join('')}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+  if(!cs.length) return '';
+  const sexeInconnu=cs.some(c=>!c.sexeConnu);
+  const ligne=c=>{
+    const pct=Math.round(c.part*100);
+    const larg=Math.max(0,Math.min(100,pct));
+    const fiab=c.partDocumentee<MICRO_FIABILITE_DITE
+      ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.3;margin:1px 0 0">calculé sur '+Math.round(c.partDocumentee*100)+' % du journal</div>':'';
+    return '<div class="micro-l" style="padding:3px 0">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="flex:0 0 92px;font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(c.lib)+'</span>'
+      +'<span aria-hidden="true" style="flex:1;height:4px;background:var(--border);border-radius:var(--r-1);overflow:hidden"><span style="display:block;height:100%;width:'+larg+'%;background:var(--sub)"></span></span>'
+      +'<span style="flex:0 0 auto;min-width:38px;text-align:right;font-size:var(--fs-xs);color:var(--text-strong);font-variant-numeric:tabular-nums">'+pct+' %</span>'
+      +'</div>'+fiab+'</div>';
+  };
+  return `<div class="micro-carte" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
+    ${cs.map(ligne).join('')}
+    ${sexeInconnu?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Sexe non renseigné : la référence la plus élevée est retenue.</div>':''}
+    ${o.sansDisclaimer?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">${escapeHtml(MICRO_DISCLAIMER)}</div>`}
   </div>`;
 }
 

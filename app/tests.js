@@ -81740,6 +81740,37 @@ async function testExercices(){
             &&!/carence/i.test(sansDisc)
             ?true:_echec('« carence » hors disclaimer');});
 
+        // ── Build 1842 : la carte refondue ────────────────────────────────
+        ok('Carte micro : aTCA vrai → rien ; tcaRisque repassé à faux → la carte revient',()=>{
+          const u=_ath('H',7,'fe',7.48,500,0);
+          u.tcaRisque=true;
+          if(!aTCA(u)) return _echec('fixture : aTCA faux');
+          if(_htmlCouvertureMicro(u)!=='') return _echec('des pourcentages sous aTCA');
+          u.tcaRisque=false;
+          return _htmlCouvertureMicro(u)!==''?true:_echec('la carte ne revient pas');});
+        ok('Carte micro : 97 % documentés → aucune mention de fiabilité ; 69 % → « calculé sur 69 % du journal »',()=>{
+          const a=_htmlCouvertureMicro(_ath('H',7,'fe',7.48,970,30));
+          if(/calculé sur/.test(a)) return _echec('mention à 97 %');
+          const b=_htmlCouvertureMicro(_ath('H',7,'fe',7.48,690,310));
+          return /calculé sur 69 % du journal/.test(b)?true:_echec('mention absente à 69 %');});
+        ok('Carte micro : un seul rappel médical quand le signal d’apport est rendu',()=>{
+          const u=_ath('H',7,'fe',3,300,700);
+          const avec=_htmlCouvertureMicro(u), sans=_htmlCouvertureMicro(u,undefined,{sansDisclaimer:true});
+          const d=escapeHtml(MICRO_DISCLAIMER);
+          if(avec.split(d).length-1!==1) return _echec('carte seule : '+(avec.split(d).length-1));
+          if(sans.indexOf(d)>=0) return _echec('rappel répété');
+          return /_htmlCouvertureMicro\(currentUser,undefined,\{sansDisclaimer:_sigMicro\}\)/.test(String(_renderFjDaySummary))?true:_echec('le journal ne passe pas le drapeau');});
+        ok('Carte micro : aucune couleur d’alerte, ordre fixe, sexe inconnu dit une seule fois, plus courte qu’avant',()=>{
+          const u=_ath('',7,'fe',3,300,700); u.gender='';
+          for(const k of ['ca','mg','zn']) for(const j in u.nutrition.log) u.nutrition.log[j].entries[0][k]=1;
+          const h=_htmlCouvertureMicro(u);
+          if(/var\(--red|var\(--amber|var\(--orange/.test(h)) return _echec('couleur d’alerte');
+          if((h.match(/Sexe non renseigné/g)||[]).length!==1) return _echec('mention du sexe répétée');
+          const ordre=[...h.matchAll(/text-overflow:ellipsis">([^<]+)</g)].map(m=>m[1]);
+          const att=Object.keys(MICRO_REFS).map(k=>MICRO_REFS[k].lib).filter(l=>ordre.indexOf(l)>=0);
+          if(ordre.join('|')!==att.join('|')) return _echec('ordre : '+ordre.join(', '));
+          // Plus courte : une ligne par nutriment, sans phrase.
+          return !/de la référence sur 7 jours/.test(h)?true:_echec('les phrases longues sont restées');});
         // ── L'ENREGISTREMENT réel, pas une fixture écrite à la main ───────
         ok('Critère : l\'ajout au journal enregistre bien les micronutriments',()=>{
           // Toutes les fixtures ci-dessus fabriquent leurs entrées à la main :

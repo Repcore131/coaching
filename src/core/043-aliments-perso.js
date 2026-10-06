@@ -984,7 +984,10 @@ function _renderFjDaySummary(date){
   // une seconde ici, que plus rien ne lit, c est se preparer a la voir diverger
   // le jour ou quelqu un la modifie sans modifier l autre. Il ne reste de ce
   // rendu qu une LISTE : ce que l athlete a mange, repas par repas.
-  const _microHtml=_htmlCouvertureMicro(currentUser);
+  // UN SEUL RAPPEL MÉDICAL PAR ÉCRAN (build 1842) : le signal d'apport, rendu
+  // au-dessus pour la même journée, porte déjà le sien.
+  const _sigMicro=(function(){ try{ return !!_htmlSignalMicro(currentUser,date); }catch(e){ return false; } })();
+  const _microHtml=_htmlCouvertureMicro(currentUser,undefined,{sansDisclaimer:_sigMicro});
   // Le repère de répartition ne se rend NULLE PART sur l'écran de l'athlète.
   // Il est parti d'ici d'abord, parce qu'il sortait deux fois dès que le
   // journal était visible ; la carte des objectifs, qui le gardait, ne le rend
