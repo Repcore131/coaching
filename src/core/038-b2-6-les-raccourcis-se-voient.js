@@ -123,10 +123,10 @@ try{
 function _htmlBoutonDecharge(c){
   const actifs=((c&&c.sessions_config)||[]).filter(x=>x&&x.active);
   if(!actifs.length) return '';
-  const dejaTout=actifs.every(x=>x.deload);
-  const enDecharge=actifs.some(x=>x.deload);
+  const dejaTout=actifs.every(x=>creneauEnDecharge(x));
+  const enDecharge=actifs.some(x=>creneauEnDecharge(x));
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    ${dejaTout?`<div style="font-size:var(--fs-xs);color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs. Les séances de décharge sortent de la détection de plateau. À toi de la retirer quand elle est passée.</div>`:''}
+    ${dejaTout?`<div style="font-size:var(--fs-xs);color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs, jusqu’à dimanche soir. Les séances de décharge sortent de la détection de plateau. Tu peux la retirer avant.</div>`:''}
     <!-- N4.3 : LE RETRAIT EST A COTE DE LA POSE. Il n avait qu un seul point
          d ecriture dans tout le fichier : la case a cocher d un creneau, dans
          l editeur de seances. Sept clics par athlete pour defaire un geste qui
@@ -170,7 +170,7 @@ function _preparerDechargeGroupee(ids,users,pose){
     // on ne vise que ceux qui portent EFFECTIVEMENT une decharge : un athlete
     // qui n'en a pas est un echec nomme, pas une ecriture silencieuse.
     const vises=((c.sessions_config)||[]).map((x,i)=>({x,i}))
-      .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+      .filter(o=>o.x&&o.x.active&&(_p?!creneauEnDecharge(o.x):creneauEnDecharge(o.x)));
     if(!vises.length){ echecs.push({nom:_nomAthlete(c),
       raison:_p?'aucun créneau actif à charger':'aucune décharge à retirer'}); continue; }
     cibles.push({c,nom:_nomAthlete(c),n:vises.length,index:vises.map(o=>o.i)});
@@ -186,7 +186,7 @@ async function appliquerDechargeGroupee(ids,pose){
   const {cibles,echecs}=_preparerDechargeGroupee(ids,users,_p);
   const faits=[];
   for(const cible of cibles){
-    cible.index.forEach(i=>{ cible.c.sessions_config[i].deload=_p; });
+    cible.index.forEach(i=>{ poserDechargeCreneau(cible.c.sessions_config[i],_p); });
     cible.c.updatedAt=Date.now();
     users[cible.c.email]=cible.c;
     const localOk=DB.set('users',users);
@@ -343,15 +343,15 @@ async function programmerDecharge(pose){
   // portent deja une decharge au retrait. Rien n'est ecrit sur un creneau
   // inactif, ni dans un sens ni dans l'autre.
   const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i}))
-    .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+    .filter(o=>o.x&&o.x.active&&(_p?!creneauEnDecharge(o.x):creneauEnDecharge(o.x)));
   if(!actifs.length){ toast(_p?'Aucun créneau actif':'Aucune décharge à retirer','var(--orange)'); return; }
   if(!await rcConfirm((_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')
     +String.fromCharCode(10)+String.fromCharCode(10)
     +(_p?('Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
-        +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.')
+        +String.fromCharCode(10)+'Elle s\'arrête d\'elle-même dimanche soir ; tu peux la retirer avant.')
        :('Les '+actifs.length+' séances en décharge repassent en séances normales et rentrent à nouveau dans la détection de plateau.')),
     null,_p?'Programmer':'Retirer')) return;
-  actifs.forEach(o=>{ c.sessions_config[o.i].deload=_p; });
+  actifs.forEach(o=>{ poserDechargeCreneau(c.sessions_config[o.i],_p); });
   // HORODATÉ. Sans ça, _mergeUser n'applique pas le dossier distant sur
   // l'appareil de l'athlète, et son envoi suivant écrase la décharge. C'était
   // la seule écriture coach→athlète du fichier à l’omettre.
@@ -594,7 +594,7 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
 function recordAPortee(u,seancePrevue,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   if(!u||u.role==='coach'||!seancePrevue||!Array.isArray(seancePrevue.exercises)) return null;
-  if(seancePrevue.deload) return null;
+  if(creneauEnDecharge(seancePrevue,t)) return null;
   try{ if(semaineEstDecharge(u,new Date(t))) return null; }catch(e){}
   try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
   try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}

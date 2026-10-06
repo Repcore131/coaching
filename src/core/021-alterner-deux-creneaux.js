@@ -1039,7 +1039,10 @@ function _apercuOuSeance(idx,sess){
   const saute=_apercuSaute; _apercuSaute=false;
   if(!saute&&ouvrirApercuSeance(idx)) return true;
   const cfg=currentUser.sessions_config||initSessionsConfig();
-  demarrerSeance(sess||cfg[idx],idx);
+  // LA SÉANCE DU JOUR, pas le gabarit : la semaine du bloc et ses écarts
+  // (décharge comprise) arrivent jusqu'à la séance. Une copie.
+  let jour=null; try{ jour=seanceDuJour(currentUser,idx,Date.now()); }catch(e){ jour=null; }
+  demarrerSeance(jour||sess||cfg[idx],idx);
   return false;
 }
 function startWorkoutSession(idx,o){
@@ -2020,8 +2023,10 @@ function commencerDepuisApercu(){
   const idx=_apIdx;
   if(idx==null) return false;
   const cfg=currentUser.sessions_config||initSessionsConfig();
-  const sess=cfg[idx];
-  if(!sess) return false;
+  if(!cfg[idx]) return false;
+  // Même séance que l'aperçu qu'on vient de lire : celle du jour, en copie.
+  let sess=null; try{ sess=seanceDuJour(currentUser,idx,Date.now()); }catch(e){ sess=null; }
+  if(!sess) sess=cfg[idx];
   _apIdx=null;
   _apAnime=false;
   // LE SEUIL. arcDecharge peint sur #arc-calque (position:fixed,
@@ -2128,8 +2133,11 @@ function _renderApercu(){
   const z=document.getElementById('ap-contenu');
   if(!z||_apIdx==null) return false;
   const cfg=currentUser.sessions_config||[];
-  const sess=cfg[_apIdx];
-  if(!sess) return false;
+  if(!cfg[_apIdx]) return false;
+  // L'APERÇU DIT CE QUE LA SÉANCE FERA : semaine du bloc, écarts, et
+  // l'allègement d'une décharge posée sur le créneau.
+  let sess=null; try{ sess=seanceDuJourAffichee(currentUser,_apIdx,Date.now()); }catch(e){ sess=null; }
+  if(!sess) sess=cfg[_apIdx];
   const t=document.getElementById('ap-titre');
   if(t) t.textContent=_nomSeance(sess,_apIdx);
   const r=resumeSeance(sess);
@@ -2215,6 +2223,12 @@ function launchWorkout(sessConfig,slotIdx){
   // sessConfig alleg erait tous les mardis suivants : le programme du coach
   // n'est pas la memoire d'une mauvaise nuit.
   const _slotAl=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
+  // LA DÉCHARGE DU CRÉNEAU (hors bloc) ALLÈGE LA COPIE, par les règles du
+  // bloc. La migration en lecture date un ancien `deload:true` au passage.
+  try{ migrerDechargesCreneaux(currentUser); }catch(e){}
+  let _dechCreneau=false;
+  try{ _dechCreneau=creneauEnDecharge(sessConfig); }catch(e){}
+  try{ if(dechargeCreneauAAlleger(currentUser,sessConfig,Date.now())) allegerExercicesDecharge(exercises); }catch(e){}
   try{ _dispoConsommerAllegement(exercises,_slotAl); }catch(e){}
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
@@ -2225,7 +2239,7 @@ function launchWorkout(sessConfig,slotIdx){
     // dans la détection de plateau.
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
-    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    deload:_dechCreneau||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
     // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
     repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à

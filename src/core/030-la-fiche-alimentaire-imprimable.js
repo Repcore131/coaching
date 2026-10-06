@@ -425,9 +425,14 @@ function _rirPrescrit(ex){
 // PURE. Les créneaux actifs, avec leur INDICE de jour conservé : filtrer
 // d’abord perdrait la correspondance avec DAYS, et la fiche annoncerait le
 // mauvais jour dès qu’un créneau est éteint.
+// LA FICHE DIT LA SEMAINE EN COURS (06/10/2026) : la séance du jour —
+// écarts du bloc et décharge du créneau compris —, comme l'aperçu et la
+// séance. Une copie : le gabarit n'est pas touché.
 function _ppSeancesActives(u){
   const cfg=(u&&Array.isArray(u.sessions_config))?u.sessions_config:[];
-  return cfg.map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active===true);
+  const t=Date.now();
+  return cfg.map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active===true)
+    .map(x=>{ let j=null; try{ j=seanceDuJourAffichee(u,x.i,t); }catch(e){ j=null; } return {s:j||x.s,i:x.i}; });
 }
 // LES COLONNES VIDES SAUTENT — pas de « — » ni de « 0 », c’est la règle de
 // l’application : une absence de consigne n’est pas une consigne.

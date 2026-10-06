@@ -573,7 +573,7 @@ function _poserBrouillonSessions(dest,cfg){
       nom:dest.fname||'',
       sessions_config:cfg.map(sc=>({
         day:sc.day, name:sc.name||'', active:!!sc.active, notes:sc.notes||'',
-        warmup:sc.warmup||'', cooldown:sc.cooldown||'', deload:!!sc.deload,
+        warmup:sc.warmup||'', cooldown:sc.cooldown||'', ...(_dechargeBrouillon(sc)),
         exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
       }))
     };
@@ -2219,7 +2219,7 @@ function loadCoachSessionSlots(){
           <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
         <label class="hit44" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
-          <input type="checkbox" ${s.deload?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+          <input type="checkbox" ${creneauEnDecharge(s)?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
           Séance de décharge : elle ne comptera pas dans la détection de plateau
         </label>
         <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
@@ -2319,9 +2319,11 @@ function _reporterSeances(stocke,edite){
 //
 // loadCoachSessionSlots redessine le bandeau : sans lui, le coach cocherait
 // la case sans voir apparaître le « Non publié » qui l’attend.
+// DATÉE (06/10/2026) : cochée, la décharge vaut jusqu'à dimanche 23:59 ;
+// décochable à tout moment.
 function coachToggleDeload(i,val){
   const c=_coachEditClient; if(!c?.sessions_config?.[i]) return;
-  c.sessions_config[i].deload=!!val;
+  poserDechargeCreneau(c.sessions_config[i],!!val);
   _viderCachePlateau();
   _viderCacheSignaux();
   loadCoachSessionSlots();
@@ -2432,7 +2434,7 @@ function enregistrerBrouillon(user){
       // `deload` était absent : un brouillon repris effaçait la décharge en
       // silence, et brouillonDiffere aurait comparé un champ que le brouillon
       // ne savait pas transporter.
-      deload:!!sc.deload,
+      ...(_dechargeBrouillon(sc)),
       exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
     }))
   };
@@ -2446,6 +2448,13 @@ function oublierBrouillon(athleteId,user){
   delete b[athleteId];
   return true;
 }
+// La décharge d'un créneau, telle qu'un brouillon la transporte : sa date de
+// fin, ou l'ancien booléen tant qu'il n'est pas migré. Rien sinon.
+function _dechargeBrouillon(sc){
+  const j=Number(sc&&sc.deloadJusqua);
+  if(isFinite(j)&&j>0) return {deloadJusqua:j};
+  return (sc&&sc.deload===true)?{deload:true}:{};
+}
 // PURE. Le brouillon diffère-t-il de ce qui est publié ? Sert au bandeau : un
 // brouillon identique au publié n'a rien à annoncer, et l'annoncer quand même
 // apprendrait au coach à ignorer le bandeau.
@@ -2455,7 +2464,7 @@ function brouillonDiffere(b,publie){
     // `dl` : sans lui, cocher « Séance de décharge » ne déclenchait aucun
     // bandeau — le coach quittait l’écran en croyant n’avoir rien modifié.
     d:s.day,n:s.name||'',a:!!s.active,no:s.notes||'',w:s.warmup||'',c:s.cooldown||'',
-    dl:!!s.deload,
+    dl:creneauEnDecharge(s),
     e:(s.exercises||[]).map(x=>({n:x.name||'',s:x.series,r:x.reps,p:x.repos,
       d:x.description||'',ss:!!x.ss,t:x.methode||null}))
   })));

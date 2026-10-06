@@ -15500,6 +15500,80 @@ function reporterDecharge(user){
 // constantes techniques.
 const DECHARGE_FACTEUR_SERIES=0.6;   // 60 % du volume du gabarit
 const DECHARGE_RIR_PLUS=1;           // une repetition de plus en reserve
+// ══════ LA DÉCHARGE PAR CRÉNEAU EST DATÉE (06/10/2026, build 1823) ══════
+//
+// Hors bloc, la décharge était un booléen `deload` posé sur les créneaux, SANS
+// DATE : il valait jusqu'à ce que le coach pense à le retirer — une semaine
+// de décharge oubliée devenait un mois. Et il n'allégeait rien : la séance
+// partait avec le gabarit (4 séries RIR 2), seul le bandeau changeait.
+//
+// DÉSORMAIS `deloadJusqua` : le dimanche 23:59 de la semaine où elle est
+// posée, en ms. launchWorkout allège la COPIE de travail par les mêmes règles
+// que le bloc (séries × DECHARGE_FACTEUR_SERIES, au moins 1 ; RIR + 1,
+// plafonné à 5). La case du coach reste décochable à tout moment.
+//
+// ⚠ MIGRATION EN LECTURE. Un ancien `deload:true` sans date vaut jusqu'à la
+//   fin de la semaine où il est lu pour la première fois
+//   (migrerDechargesCreneaux, à la porte des dossiers), puis s'efface.
+/** PURE. Le dimanche 23:59:59,999 (heure locale) de la semaine de `t`, en ms. */
+function finDeSemaineMs(t){
+  const l=_lundiDe(new Date(Number(t)||Date.now()));
+  return new Date(l.getFullYear(),l.getMonth(),l.getDate()+6,23,59,59,999).getTime();
+}
+/** PURE. Ce créneau est-il en décharge à cet instant ? Un ancien `deload:true`
+ *  sans date l'est encore, jusqu'à sa migration. */
+function creneauEnDecharge(sc,maintenant){
+  if(!sc||typeof sc!=='object') return false;
+  const j=Number(sc.deloadJusqua);
+  if(isFinite(j)&&j>0) return (Number(maintenant)||Date.now())<=j;
+  return sc.deload===true;
+}
+/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT. */
+function poserDechargeCreneau(sc,pose,maintenant){
+  if(!sc||typeof sc!=='object') return false;
+  delete sc.deload;
+  if(pose===false) delete sc.deloadJusqua;
+  else sc.deloadJusqua=finDeSemaineMs(maintenant);
+  return true;
+}
+/** ÉCRIT. La migration en lecture : date l'ancien booléen, efface l'échu.
+ *  Rend le nombre de créneaux touchés. */
+function migrerDechargesCreneaux(u,maintenant){
+  const cfg=u&&Array.isArray(u.sessions_config)?u.sessions_config:[];
+  const t=Number(maintenant)||Date.now();
+  let n=0;
+  for(const sc of cfg){
+    if(!sc||typeof sc!=='object') continue;
+    const j=Number(sc.deloadJusqua);
+    if(isFinite(j)&&j>0){
+      if(t>j){ delete sc.deloadJusqua; delete sc.deload; n++; }
+      else if('deload' in sc){ delete sc.deload; n++; }
+    } else if(sc.deload===true){
+      sc.deloadJusqua=finDeSemaineMs(t); delete sc.deload; n++;
+    } else if('deload' in sc||'deloadJusqua' in sc){
+      delete sc.deload; delete sc.deloadJusqua; n++;
+    }
+  }
+  return n;
+}
+/** ÉCRIT SUR LA COPIE. Les règles de la décharge du bloc, appliquées aux
+ *  exercices d'une séance : séries × 0,6 arrondi (au moins 1), RIR + 1
+ *  plafonné à 5. Un exercice sans consigne de RIR n'en reçoit pas. */
+function allegerExercicesDecharge(exercises){
+  for(const ex of (exercises||[])){
+    if(!ex||typeof ex!=='object') continue;
+    const n0=parseInt(ex.series,10)||0;
+    if(n0) ex.series=Math.max(1,Math.round(n0*DECHARGE_FACTEUR_SERIES));
+    const r0=_rirPrescrit(ex);
+    if(r0!==''){
+      const r=String(Math.min(5,Number(r0)+DECHARGE_RIR_PLUS));
+      // Le champ LU par _rirPrescrit : rirCible passe devant rir.
+      if(ex.rirCible!=null&&String(ex.rirCible).trim()!=='') ex.rirCible=r;
+      else ex.rir=r;
+    }
+  }
+  return exercises;
+}
 function appliquerDecharge(user,semaine){
   const u=_dossier(user);
   if(!u) return false;
@@ -15537,7 +15611,8 @@ function appliquerDecharge(user,semaine){
     const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
     const actifs=cfg.filter(x=>x&&x.active);
     if(!actifs.length) return false;
-    actifs.forEach(x=>{ x.deload=true; });
+    // DATÉE : jusqu'à dimanche soir, plus un booléen sans fin.
+    actifs.forEach(x=>{ poserDechargeCreneau(x,true); });
     fait=true;
   }
   if(!fait) return false;
@@ -41031,7 +41106,7 @@ function _poserBrouillonSessions(dest,cfg){
       nom:dest.fname||'',
       sessions_config:cfg.map(sc=>({
         day:sc.day, name:sc.name||'', active:!!sc.active, notes:sc.notes||'',
-        warmup:sc.warmup||'', cooldown:sc.cooldown||'', deload:!!sc.deload,
+        warmup:sc.warmup||'', cooldown:sc.cooldown||'', ...(_dechargeBrouillon(sc)),
         exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
       }))
     };
@@ -42677,7 +42752,7 @@ function loadCoachSessionSlots(){
           <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
         <label class="hit44" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
-          <input type="checkbox" ${s.deload?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+          <input type="checkbox" ${creneauEnDecharge(s)?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
           Séance de décharge : elle ne comptera pas dans la détection de plateau
         </label>
         <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
@@ -42777,9 +42852,11 @@ function _reporterSeances(stocke,edite){
 //
 // loadCoachSessionSlots redessine le bandeau : sans lui, le coach cocherait
 // la case sans voir apparaître le « Non publié » qui l’attend.
+// DATÉE (06/10/2026) : cochée, la décharge vaut jusqu'à dimanche 23:59 ;
+// décochable à tout moment.
 function coachToggleDeload(i,val){
   const c=_coachEditClient; if(!c?.sessions_config?.[i]) return;
-  c.sessions_config[i].deload=!!val;
+  poserDechargeCreneau(c.sessions_config[i],!!val);
   _viderCachePlateau();
   _viderCacheSignaux();
   loadCoachSessionSlots();
@@ -42890,7 +42967,7 @@ function enregistrerBrouillon(user){
       // `deload` était absent : un brouillon repris effaçait la décharge en
       // silence, et brouillonDiffere aurait comparé un champ que le brouillon
       // ne savait pas transporter.
-      deload:!!sc.deload,
+      ...(_dechargeBrouillon(sc)),
       exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
     }))
   };
@@ -42904,6 +42981,13 @@ function oublierBrouillon(athleteId,user){
   delete b[athleteId];
   return true;
 }
+// La décharge d'un créneau, telle qu'un brouillon la transporte : sa date de
+// fin, ou l'ancien booléen tant qu'il n'est pas migré. Rien sinon.
+function _dechargeBrouillon(sc){
+  const j=Number(sc&&sc.deloadJusqua);
+  if(isFinite(j)&&j>0) return {deloadJusqua:j};
+  return (sc&&sc.deload===true)?{deload:true}:{};
+}
 // PURE. Le brouillon diffère-t-il de ce qui est publié ? Sert au bandeau : un
 // brouillon identique au publié n'a rien à annoncer, et l'annoncer quand même
 // apprendrait au coach à ignorer le bandeau.
@@ -42913,7 +42997,7 @@ function brouillonDiffere(b,publie){
     // `dl` : sans lui, cocher « Séance de décharge » ne déclenchait aucun
     // bandeau — le coach quittait l’écran en croyant n’avoir rien modifié.
     d:s.day,n:s.name||'',a:!!s.active,no:s.notes||'',w:s.warmup||'',c:s.cooldown||'',
-    dl:!!s.deload,
+    dl:creneauEnDecharge(s),
     e:(s.exercises||[]).map(x=>({n:x.name||'',s:x.series,r:x.reps,p:x.repos,
       d:x.description||'',ss:!!x.ss,t:x.methode||null}))
   })));
@@ -46873,7 +46957,7 @@ function chargeMethodesSemaine(user){
     // UNE SEMAINE DE DECHARGE N'EST PAS UNE SEMAINE CHARGEE. Le creneau porte
     // deja le drapeau : le compter reviendrait a signaler comme lourde une
     // semaine dont tout le propos est d'alleger.
-    if(sc.deload) continue;
+    if(creneauEnDecharge(sc)) continue;
     for(const e of (sc.exercises||[])){
       const r=regleMethode(e,u);
       if(!r) continue;
@@ -48680,6 +48764,10 @@ function loadClientHome(){
   try{ _majRappelVerification(); }catch(e){}
   // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
   try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
+  // LA DÉCHARGE D'UN CRÉNEAU EST DATÉE (06/10/2026) : un ancien `deload:true`
+  // reçoit sa fin de semaine à la première lecture ; une décharge échue
+  // s'efface. Même chemin d'écriture que la bascule de bloc.
+  try{ if(currentUser&&currentUser.role!=='coach'&&migrerDechargesCreneaux(currentUser,Date.now())){ currentUser.updatedAt=Date.now(); saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
   // ⚠ LES DEUX ACCUEILS DE NOUVEL INSCRIT NE SONT PLUS ICI. Ils y ont vecu
   // quelques heures le 15/09/2026, et c'etait la mauvaise couche :
   // loadClientHome est un RENDU, appele par la boucle de synchronisation, par
@@ -51731,7 +51819,10 @@ function _apercuOuSeance(idx,sess){
   const saute=_apercuSaute; _apercuSaute=false;
   if(!saute&&ouvrirApercuSeance(idx)) return true;
   const cfg=currentUser.sessions_config||initSessionsConfig();
-  demarrerSeance(sess||cfg[idx],idx);
+  // LA SÉANCE DU JOUR, pas le gabarit : la semaine du bloc et ses écarts
+  // (décharge comprise) arrivent jusqu'à la séance. Une copie.
+  let jour=null; try{ jour=seanceDuJour(currentUser,idx,Date.now()); }catch(e){ jour=null; }
+  demarrerSeance(jour||sess||cfg[idx],idx);
   return false;
 }
 function startWorkoutSession(idx,o){
@@ -52712,8 +52803,10 @@ function commencerDepuisApercu(){
   const idx=_apIdx;
   if(idx==null) return false;
   const cfg=currentUser.sessions_config||initSessionsConfig();
-  const sess=cfg[idx];
-  if(!sess) return false;
+  if(!cfg[idx]) return false;
+  // Même séance que l'aperçu qu'on vient de lire : celle du jour, en copie.
+  let sess=null; try{ sess=seanceDuJour(currentUser,idx,Date.now()); }catch(e){ sess=null; }
+  if(!sess) sess=cfg[idx];
   _apIdx=null;
   _apAnime=false;
   // LE SEUIL. arcDecharge peint sur #arc-calque (position:fixed,
@@ -52820,8 +52913,11 @@ function _renderApercu(){
   const z=document.getElementById('ap-contenu');
   if(!z||_apIdx==null) return false;
   const cfg=currentUser.sessions_config||[];
-  const sess=cfg[_apIdx];
-  if(!sess) return false;
+  if(!cfg[_apIdx]) return false;
+  // L'APERÇU DIT CE QUE LA SÉANCE FERA : semaine du bloc, écarts, et
+  // l'allègement d'une décharge posée sur le créneau.
+  let sess=null; try{ sess=seanceDuJourAffichee(currentUser,_apIdx,Date.now()); }catch(e){ sess=null; }
+  if(!sess) sess=cfg[_apIdx];
   const t=document.getElementById('ap-titre');
   if(t) t.textContent=_nomSeance(sess,_apIdx);
   const r=resumeSeance(sess);
@@ -52907,6 +53003,12 @@ function launchWorkout(sessConfig,slotIdx){
   // sessConfig alleg erait tous les mardis suivants : le programme du coach
   // n'est pas la memoire d'une mauvaise nuit.
   const _slotAl=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
+  // LA DÉCHARGE DU CRÉNEAU (hors bloc) ALLÈGE LA COPIE, par les règles du
+  // bloc. La migration en lecture date un ancien `deload:true` au passage.
+  try{ migrerDechargesCreneaux(currentUser); }catch(e){}
+  let _dechCreneau=false;
+  try{ _dechCreneau=creneauEnDecharge(sessConfig); }catch(e){}
+  try{ if(dechargeCreneauAAlleger(currentUser,sessConfig,Date.now())) allegerExercicesDecharge(exercises); }catch(e){}
   try{ _dispoConsommerAllegement(exercises,_slotAl); }catch(e){}
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
@@ -52917,7 +53019,7 @@ function launchWorkout(sessConfig,slotIdx){
     // dans la détection de plateau.
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
-    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    deload:_dechCreneau||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
     // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
     repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
@@ -73405,9 +73507,14 @@ function _rirPrescrit(ex){
 // PURE. Les créneaux actifs, avec leur INDICE de jour conservé : filtrer
 // d’abord perdrait la correspondance avec DAYS, et la fiche annoncerait le
 // mauvais jour dès qu’un créneau est éteint.
+// LA FICHE DIT LA SEMAINE EN COURS (06/10/2026) : la séance du jour —
+// écarts du bloc et décharge du créneau compris —, comme l'aperçu et la
+// séance. Une copie : le gabarit n'est pas touché.
 function _ppSeancesActives(u){
   const cfg=(u&&Array.isArray(u.sessions_config))?u.sessions_config:[];
-  return cfg.map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active===true);
+  const t=Date.now();
+  return cfg.map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active===true)
+    .map(x=>{ let j=null; try{ j=seanceDuJourAffichee(u,x.i,t); }catch(e){ j=null; } return {s:j||x.s,i:x.i}; });
 }
 // LES COLONNES VIDES SAUTENT — pas de « — » ni de « 0 », c’est la règle de
 // l’application : une absence de consigne n’est pas une consigne.
@@ -76073,6 +76180,49 @@ function getSemaineEffective(user,date){
     // Le nombre de séances RÉELLEMENT prévues cette semaine-là : c'est lui
     // qui change entre une semaine normale et une décharge.
     seancesPrevues:creneaux.filter(c=>c&&c.active).length};
+}
+// ══════ LA SÉANCE DU JOUR (06/10/2026, build 1823) ══════════════════════
+//
+// getSemaineEffective calculait bien la semaine — décharge du bloc et écarts
+// compris —, mais l'athlète lançait sa séance avec le GABARIT BRUT :
+// _apercuOuSeance et commencerDepuisApercu passaient sessions_config[idx] à
+// demarrerSeance. Constat au banc : semaine de décharge = 2 séries RIR 3 dans
+// la grille du coach, 4 séries RIR 2 dans la séance.
+//
+// PURE. Le créneau tel qu'il vaut À CETTE DATE : celui de la semaine effective
+// si le bloc en rend une, le gabarit sinon. TOUJOURS UNE COPIE — l'aperçu, la
+// séance et la fiche imprimée en lisent une ; sessions_config n'est jamais
+// touché. null si le créneau n'existe pas.
+function seanceDuJour(user,idx,date){
+  const u=_dossier(user);
+  const cfg=(u&&u.sessions_config)||[];
+  const base=cfg[idx];
+  if(!base||typeof base!=='object') return null;
+  let sem=null;
+  try{ sem=getSemaineEffective(u,date==null?Date.now():date); }catch(e){ sem=null; }
+  const src=(sem&&Array.isArray(sem.creneaux)&&sem.creneaux[idx])||base;
+  const copie=Object.assign({},src);
+  copie.exercises=((src&&src.exercises)||[]).map(x=>(x&&typeof x==='object')?JSON.parse(JSON.stringify(x)):x);
+  return copie;
+}
+// La séance du jour telle que l'athlète la FERA : avec, en plus, l'allègement
+// d'une décharge posée sur le créneau (hors bloc). C'est ce que montrent
+// l'aperçu et la fiche ; launchWorkout applique la même règle à sa copie.
+function seanceDuJourAffichee(user,idx,date){
+  const s=seanceDuJour(user,idx,date);
+  if(!s) return null;
+  const t=date==null?Date.now():Number(date instanceof Date?date.getTime():date);
+  try{ if(dechargeCreneauAAlleger(user,s,t)) allegerExercicesDecharge(s.exercises); }catch(e){}
+  return s;
+}
+// PURE. La décharge du CRÉNEAU allège-t-elle cette séance ? Pas quand la
+// semaine du bloc est déjà une décharge : son écart l'a déjà allégée, et la
+// règle ne s'applique pas deux fois.
+function dechargeCreneauAAlleger(user,sc,t){
+  if(!creneauEnDecharge(sc,t)) return false;
+  let blocDech=false;
+  try{ const sem=getSemaineEffective(user,t); blocDech=!!(sem&&sem.decharge); }catch(e){ blocDech=false; }
+  return !blocDech;
 }
 // ══════ B3.2 — ECRIRE UN ECART, ET NON SEULEMENT LE LIRE ═══════════════
 //
@@ -93808,10 +93958,10 @@ try{
 function _htmlBoutonDecharge(c){
   const actifs=((c&&c.sessions_config)||[]).filter(x=>x&&x.active);
   if(!actifs.length) return '';
-  const dejaTout=actifs.every(x=>x.deload);
-  const enDecharge=actifs.some(x=>x.deload);
+  const dejaTout=actifs.every(x=>creneauEnDecharge(x));
+  const enDecharge=actifs.some(x=>creneauEnDecharge(x));
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    ${dejaTout?`<div style="font-size:var(--fs-xs);color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs. Les séances de décharge sortent de la détection de plateau. À toi de la retirer quand elle est passée.</div>`:''}
+    ${dejaTout?`<div style="font-size:var(--fs-xs);color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs, jusqu’à dimanche soir. Les séances de décharge sortent de la détection de plateau. Tu peux la retirer avant.</div>`:''}
     <!-- N4.3 : LE RETRAIT EST A COTE DE LA POSE. Il n avait qu un seul point
          d ecriture dans tout le fichier : la case a cocher d un creneau, dans
          l editeur de seances. Sept clics par athlete pour defaire un geste qui
@@ -93855,7 +94005,7 @@ function _preparerDechargeGroupee(ids,users,pose){
     // on ne vise que ceux qui portent EFFECTIVEMENT une decharge : un athlete
     // qui n'en a pas est un echec nomme, pas une ecriture silencieuse.
     const vises=((c.sessions_config)||[]).map((x,i)=>({x,i}))
-      .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+      .filter(o=>o.x&&o.x.active&&(_p?!creneauEnDecharge(o.x):creneauEnDecharge(o.x)));
     if(!vises.length){ echecs.push({nom:_nomAthlete(c),
       raison:_p?'aucun créneau actif à charger':'aucune décharge à retirer'}); continue; }
     cibles.push({c,nom:_nomAthlete(c),n:vises.length,index:vises.map(o=>o.i)});
@@ -93871,7 +94021,7 @@ async function appliquerDechargeGroupee(ids,pose){
   const {cibles,echecs}=_preparerDechargeGroupee(ids,users,_p);
   const faits=[];
   for(const cible of cibles){
-    cible.index.forEach(i=>{ cible.c.sessions_config[i].deload=_p; });
+    cible.index.forEach(i=>{ poserDechargeCreneau(cible.c.sessions_config[i],_p); });
     cible.c.updatedAt=Date.now();
     users[cible.c.email]=cible.c;
     const localOk=DB.set('users',users);
@@ -94028,15 +94178,15 @@ async function programmerDecharge(pose){
   // portent deja une decharge au retrait. Rien n'est ecrit sur un creneau
   // inactif, ni dans un sens ni dans l'autre.
   const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i}))
-    .filter(o=>o.x&&o.x.active&&(_p?!o.x.deload:!!o.x.deload));
+    .filter(o=>o.x&&o.x.active&&(_p?!creneauEnDecharge(o.x):creneauEnDecharge(o.x)));
   if(!actifs.length){ toast(_p?'Aucun créneau actif':'Aucune décharge à retirer','var(--orange)'); return; }
   if(!await rcConfirm((_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')
     +String.fromCharCode(10)+String.fromCharCode(10)
     +(_p?('Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
-        +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.')
+        +String.fromCharCode(10)+'Elle s\'arrête d\'elle-même dimanche soir ; tu peux la retirer avant.')
        :('Les '+actifs.length+' séances en décharge repassent en séances normales et rentrent à nouveau dans la détection de plateau.')),
     null,_p?'Programmer':'Retirer')) return;
-  actifs.forEach(o=>{ c.sessions_config[o.i].deload=_p; });
+  actifs.forEach(o=>{ poserDechargeCreneau(c.sessions_config[o.i],_p); });
   // HORODATÉ. Sans ça, _mergeUser n'applique pas le dossier distant sur
   // l'appareil de l'athlète, et son envoi suivant écrase la décharge. C'était
   // la seule écriture coach→athlète du fichier à l’omettre.
@@ -94279,7 +94429,7 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
 function recordAPortee(u,seancePrevue,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   if(!u||u.role==='coach'||!seancePrevue||!Array.isArray(seancePrevue.exercises)) return null;
-  if(seancePrevue.deload) return null;
+  if(creneauEnDecharge(seancePrevue,t)) return null;
   try{ if(semaineEstDecharge(u,new Date(t))) return null; }catch(e){}
   try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
   try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}

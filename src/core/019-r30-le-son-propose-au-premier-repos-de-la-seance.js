@@ -695,7 +695,7 @@ function chargeMethodesSemaine(user){
     // UNE SEMAINE DE DECHARGE N'EST PAS UNE SEMAINE CHARGEE. Le creneau porte
     // deja le drapeau : le compter reviendrait a signaler comme lourde une
     // semaine dont tout le propos est d'alleger.
-    if(sc.deload) continue;
+    if(creneauEnDecharge(sc)) continue;
     for(const e of (sc.exercises||[])){
       const r=regleMethode(e,u);
       if(!r) continue;

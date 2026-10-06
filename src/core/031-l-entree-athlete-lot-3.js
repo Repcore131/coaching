@@ -673,6 +673,49 @@ function getSemaineEffective(user,date){
     // qui change entre une semaine normale et une décharge.
     seancesPrevues:creneaux.filter(c=>c&&c.active).length};
 }
+// ══════ LA SÉANCE DU JOUR (06/10/2026, build 1823) ══════════════════════
+//
+// getSemaineEffective calculait bien la semaine — décharge du bloc et écarts
+// compris —, mais l'athlète lançait sa séance avec le GABARIT BRUT :
+// _apercuOuSeance et commencerDepuisApercu passaient sessions_config[idx] à
+// demarrerSeance. Constat au banc : semaine de décharge = 2 séries RIR 3 dans
+// la grille du coach, 4 séries RIR 2 dans la séance.
+//
+// PURE. Le créneau tel qu'il vaut À CETTE DATE : celui de la semaine effective
+// si le bloc en rend une, le gabarit sinon. TOUJOURS UNE COPIE — l'aperçu, la
+// séance et la fiche imprimée en lisent une ; sessions_config n'est jamais
+// touché. null si le créneau n'existe pas.
+function seanceDuJour(user,idx,date){
+  const u=_dossier(user);
+  const cfg=(u&&u.sessions_config)||[];
+  const base=cfg[idx];
+  if(!base||typeof base!=='object') return null;
+  let sem=null;
+  try{ sem=getSemaineEffective(u,date==null?Date.now():date); }catch(e){ sem=null; }
+  const src=(sem&&Array.isArray(sem.creneaux)&&sem.creneaux[idx])||base;
+  const copie=Object.assign({},src);
+  copie.exercises=((src&&src.exercises)||[]).map(x=>(x&&typeof x==='object')?JSON.parse(JSON.stringify(x)):x);
+  return copie;
+}
+// La séance du jour telle que l'athlète la FERA : avec, en plus, l'allègement
+// d'une décharge posée sur le créneau (hors bloc). C'est ce que montrent
+// l'aperçu et la fiche ; launchWorkout applique la même règle à sa copie.
+function seanceDuJourAffichee(user,idx,date){
+  const s=seanceDuJour(user,idx,date);
+  if(!s) return null;
+  const t=date==null?Date.now():Number(date instanceof Date?date.getTime():date);
+  try{ if(dechargeCreneauAAlleger(user,s,t)) allegerExercicesDecharge(s.exercises); }catch(e){}
+  return s;
+}
+// PURE. La décharge du CRÉNEAU allège-t-elle cette séance ? Pas quand la
+// semaine du bloc est déjà une décharge : son écart l'a déjà allégée, et la
+// règle ne s'applique pas deux fois.
+function dechargeCreneauAAlleger(user,sc,t){
+  if(!creneauEnDecharge(sc,t)) return false;
+  let blocDech=false;
+  try{ const sem=getSemaineEffective(user,t); blocDech=!!(sem&&sem.decharge); }catch(e){ blocDech=false; }
+  return !blocDech;
+}
 // ══════ B3.2 — ECRIRE UN ECART, ET NON SEULEMENT LE LIRE ═══════════════
 //
 // `programme.ecarts` etait documente, lu par getSemaineEffective — donc par

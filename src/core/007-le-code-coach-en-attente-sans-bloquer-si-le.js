@@ -1658,6 +1658,80 @@ function reporterDecharge(user){
 // constantes techniques.
 const DECHARGE_FACTEUR_SERIES=0.6;   // 60 % du volume du gabarit
 const DECHARGE_RIR_PLUS=1;           // une repetition de plus en reserve
+// ══════ LA DÉCHARGE PAR CRÉNEAU EST DATÉE (06/10/2026, build 1823) ══════
+//
+// Hors bloc, la décharge était un booléen `deload` posé sur les créneaux, SANS
+// DATE : il valait jusqu'à ce que le coach pense à le retirer — une semaine
+// de décharge oubliée devenait un mois. Et il n'allégeait rien : la séance
+// partait avec le gabarit (4 séries RIR 2), seul le bandeau changeait.
+//
+// DÉSORMAIS `deloadJusqua` : le dimanche 23:59 de la semaine où elle est
+// posée, en ms. launchWorkout allège la COPIE de travail par les mêmes règles
+// que le bloc (séries × DECHARGE_FACTEUR_SERIES, au moins 1 ; RIR + 1,
+// plafonné à 5). La case du coach reste décochable à tout moment.
+//
+// ⚠ MIGRATION EN LECTURE. Un ancien `deload:true` sans date vaut jusqu'à la
+//   fin de la semaine où il est lu pour la première fois
+//   (migrerDechargesCreneaux, à la porte des dossiers), puis s'efface.
+/** PURE. Le dimanche 23:59:59,999 (heure locale) de la semaine de `t`, en ms. */
+function finDeSemaineMs(t){
+  const l=_lundiDe(new Date(Number(t)||Date.now()));
+  return new Date(l.getFullYear(),l.getMonth(),l.getDate()+6,23,59,59,999).getTime();
+}
+/** PURE. Ce créneau est-il en décharge à cet instant ? Un ancien `deload:true`
+ *  sans date l'est encore, jusqu'à sa migration. */
+function creneauEnDecharge(sc,maintenant){
+  if(!sc||typeof sc!=='object') return false;
+  const j=Number(sc.deloadJusqua);
+  if(isFinite(j)&&j>0) return (Number(maintenant)||Date.now())<=j;
+  return sc.deload===true;
+}
+/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT. */
+function poserDechargeCreneau(sc,pose,maintenant){
+  if(!sc||typeof sc!=='object') return false;
+  delete sc.deload;
+  if(pose===false) delete sc.deloadJusqua;
+  else sc.deloadJusqua=finDeSemaineMs(maintenant);
+  return true;
+}
+/** ÉCRIT. La migration en lecture : date l'ancien booléen, efface l'échu.
+ *  Rend le nombre de créneaux touchés. */
+function migrerDechargesCreneaux(u,maintenant){
+  const cfg=u&&Array.isArray(u.sessions_config)?u.sessions_config:[];
+  const t=Number(maintenant)||Date.now();
+  let n=0;
+  for(const sc of cfg){
+    if(!sc||typeof sc!=='object') continue;
+    const j=Number(sc.deloadJusqua);
+    if(isFinite(j)&&j>0){
+      if(t>j){ delete sc.deloadJusqua; delete sc.deload; n++; }
+      else if('deload' in sc){ delete sc.deload; n++; }
+    } else if(sc.deload===true){
+      sc.deloadJusqua=finDeSemaineMs(t); delete sc.deload; n++;
+    } else if('deload' in sc||'deloadJusqua' in sc){
+      delete sc.deload; delete sc.deloadJusqua; n++;
+    }
+  }
+  return n;
+}
+/** ÉCRIT SUR LA COPIE. Les règles de la décharge du bloc, appliquées aux
+ *  exercices d'une séance : séries × 0,6 arrondi (au moins 1), RIR + 1
+ *  plafonné à 5. Un exercice sans consigne de RIR n'en reçoit pas. */
+function allegerExercicesDecharge(exercises){
+  for(const ex of (exercises||[])){
+    if(!ex||typeof ex!=='object') continue;
+    const n0=parseInt(ex.series,10)||0;
+    if(n0) ex.series=Math.max(1,Math.round(n0*DECHARGE_FACTEUR_SERIES));
+    const r0=_rirPrescrit(ex);
+    if(r0!==''){
+      const r=String(Math.min(5,Number(r0)+DECHARGE_RIR_PLUS));
+      // Le champ LU par _rirPrescrit : rirCible passe devant rir.
+      if(ex.rirCible!=null&&String(ex.rirCible).trim()!=='') ex.rirCible=r;
+      else ex.rir=r;
+    }
+  }
+  return exercises;
+}
 function appliquerDecharge(user,semaine){
   const u=_dossier(user);
   if(!u) return false;
@@ -1695,7 +1769,8 @@ function appliquerDecharge(user,semaine){
     const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
     const actifs=cfg.filter(x=>x&&x.active);
     if(!actifs.length) return false;
-    actifs.forEach(x=>{ x.deload=true; });
+    // DATÉE : jusqu'à dimanche soir, plus un booléen sans fin.
+    actifs.forEach(x=>{ poserDechargeCreneau(x,true); });
     fait=true;
   }
   if(!fait) return false;

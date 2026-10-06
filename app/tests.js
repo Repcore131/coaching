@@ -831,8 +831,11 @@ async function testExercices(){
           {active:true,exercises:[{name:'DC',series:3}]},
           {active:false,exercises:[]}]};
         if(!appliquerDecharge(u)) return _echec('la decharge hors bloc ne s\'applique plus');
-        if(u.sessions_config[0].deload!==true) return _echec('le drapeau deload n\'est plus pose');
-        return u.sessions_config[1].deload===undefined
+        // DATÉE depuis le build 1823 : jusqu'à dimanche 23:59, plus un booléen.
+        if(!creneauEnDecharge(u.sessions_config[0])||u.sessions_config[0].deloadJusqua!==finDeSemaineMs(Date.now()))
+          return _echec('la decharge n\'est pas datee a dimanche soir : '+JSON.stringify(u.sessions_config[0]));
+        if('deload' in u.sessions_config[0]) return _echec('le booleen permanent est encore pose');
+        return (u.sessions_config[1].deload===undefined&&u.sessions_config[1].deloadJusqua===undefined)
           ?true:_echec('un creneau inactif a recu le drapeau');});
 
       ok('B3.2 — le geste existe, et il passe par le chemin d\'ecriture de la fiche',()=>{
@@ -14280,9 +14283,9 @@ async function testExercices(){
             coachToggleDeload(0,true);
             if(envois!==0) return _echec('la décharge a été envoyée à l\'athlète');
             if(ecritures!==0) return _echec('la décharge a été écrite dans le magasin');
-            if(magasin.users['a@t'].sessions_config[0].deload)
+            if(creneauEnDecharge(magasin.users['a@t'].sessions_config[0]))
               return _echec('le dossier publié porte déjà la décharge');
-            if(!_coachEditClient.sessions_config[0].deload)
+            if(!creneauEnDecharge(_coachEditClient.sessions_config[0]))
               return _echec('la case n\'a rien posé sur le brouillon');
             // Et le bandeau « Non publié » doit maintenant se déclencher.
             if(!brouillonDiffere({sessions_config:_coachEditClient.sessions_config},
@@ -17183,9 +17186,9 @@ async function testExercices(){
           if(JSON.stringify(u.sessions_config)!==avant)
             return _echec('ÉVALUER a écrit sur les créneaux');
           if(!appliquerDecharge(u,pr.semaineIndex)) return _echec('l\'application échoue');
-          if(u.sessions_config[0].deload!==true||u.sessions_config[2].deload!==true)
+          if(!creneauEnDecharge(u.sessions_config[0])||!creneauEnDecharge(u.sessions_config[2]))
             return _echec('un créneau actif n\'est pas déchargé');
-          if(u.sessions_config[1].deload!==undefined)
+          if(u.sessions_config[1].deload!==undefined||u.sessions_config[1].deloadJusqua!==undefined)
             return _echec('un créneau INACTIF a été touché');
           if(propositionDechargeOuverte(u)) return _echec('la proposition reste ouverte');
           // Aucun créneau actif : on refuse, on ne fait pas semblant.
@@ -17230,7 +17233,9 @@ async function testExercices(){
           // Sans programme : ni exception, ni décharge inventée.
           if(semaineEstDecharge({email:'x@t'},new Date())) return _echec('sans bloc, décharge inventée');
           // Et le démarrage de séance lit bien les DEUX sources.
-          return /deload:!!sessConfig\.deload\|\|semaineEstDecharge/.test(String(launchWorkout))
+          // Build 1823 : la décharge du créneau est datée (creneauEnDecharge).
+          return /deload:_dechCreneau\|\|semaineEstDecharge/.test(String(launchWorkout))
+            &&/_dechCreneau=creneauEnDecharge\(sessConfig\)/.test(String(launchWorkout))
             ?true:_echec('le démarrage de séance ne lit pas le bloc');});
         ok('Reprise après vingt-cinq jours : les compteurs repartent de zéro',()=>{
           // Règle 7. Ce n'est pas de la fatigue accumulée, c'est un retour.
@@ -28700,6 +28705,101 @@ async function testExercices(){
       currentUser=sauveU; woState=sauveW;
     })();
 
+    // ══════ LA SÉANCE DU JOUR ET LA DÉCHARGE DATÉE (06/10/2026, build 1823) ══════
+    // Constat au banc : semaine de décharge = 2 séries RIR 3 dans
+    // getSemaineEffective, 4 séries RIR 2 dans woState.exercises.
+    (()=>{
+      const sauveU=currentUser, sauveW=woState, sauveSnap=localStorage.getItem('rc_wo_state'), sauveAp=_apIdx;
+      const _gab=()=>[{active:true,name:'Push',exercises:[
+        {name:'SQUAT',series:4,reps:'5',rir:'2'},
+        {name:'GAINAGE',series:1,reps:'30 s'},
+        {name:'DEVELOPPE COUCHE',series:3,reps:'8',rir:'5'}]},{active:false,name:'',exercises:[]}];
+      const _ath=(extra)=>Object.assign({id:'sdj',email:'sdj@t.fr',fname:'A',lname:'B',role:'athlete',
+        exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],
+        sessions_config:_gab()},extra||{});
+      // Un bloc de quatre semaines qui commence cette semaine, décharge en S1.
+      const _bloc=()=>{ const u=_ath({programme:{debut:Date.now(),semaines:4,decharges:[],ecarts:{}}});
+        appliquerDecharge(u,0); return u; };
+      const _fin=()=>{ try{ clearInterval(woState.timerInterval); }catch(e){} _woTimerZero(); localStorage.removeItem('rc_wo_state'); };
+      const _ex=l=>l.map(e=>e.series+'/'+(_rirPrescrit(e)||'-')).join(' ');
+      try{
+        ok('seanceDuJour : semaine de décharge du bloc → la copie du créneau de la semaine, le gabarit intact',()=>{
+          const u=_bloc();
+          const sem=getSemaineEffective(u,Date.now());
+          if(!sem||!sem.decharge) return _echec('la fixture n’est pas une semaine de décharge');
+          const j=seanceDuJour(u,0,Date.now());
+          if(_ex(j.exercises)!=='2/3 1/- 2/5') return _echec('séance du jour : '+_ex(j.exercises));
+          if(_ex(j.exercises)!==_ex(sem.creneaux[0].exercises)) return _echec('la séance ne dit pas ce que dit la grille');
+          if(_ex(u.sessions_config[0].exercises)!=='4/2 1/- 3/5') return _echec('sessions_config modifié : '+_ex(u.sessions_config[0].exercises));
+          j.exercises[0].series=99; j.name='X';
+          if(u.sessions_config[0].exercises[0].series!==4||u.sessions_config[0].name!=='Push') return _echec('la copie partage le gabarit');
+          // Hors bloc : une copie du gabarit.
+          const h=seanceDuJour(_ath(),0,Date.now());
+          if(_ex(h.exercises)!=='4/2 1/- 3/5'||h.exercises===_gab()[0].exercises) return _echec('hors bloc : '+_ex(h.exercises));
+          return seanceDuJour(_ath(),5,Date.now())===null?true:_echec('un créneau absent rend quelque chose');});
+        ok('Au banc : l’aperçu, la séance lancée par l’aperçu ou directement, et la fiche imprimée disent 2 séries RIR 3',()=>{
+          currentUser=_bloc(); localStorage.removeItem('rc_wo_state');
+          // L'aperçu.
+          _apIdx=0; _apAnime=true;
+          if(!_renderApercu()) return _echec('aperçu non rendu');
+          const tuiles=[...document.querySelectorAll('#ap-contenu .stat-tile .st-val')].map(x=>x.textContent);
+          if(tuiles[1]!=='5') return _echec('séries de l’aperçu : '+tuiles.join(' | '));
+          // Lancée depuis l'aperçu.
+          commencerDepuisApercu();
+          const a=_ex(woState.exercises); _fin();
+          if(a!=='2/3 1/- 2/5') return _echec('depuis l’aperçu : '+a);
+          // Lancée sans aperçu.
+          _apercuSaute=true; _apercuOuSeance(0);
+          const b=_ex(woState.exercises), dl=woState.deload; _fin();
+          if(b!=='2/3 1/- 2/5'||!dl) return _echec('sans aperçu : '+b+' / décharge '+dl);
+          if(_ex(currentUser.sessions_config[0].exercises)!=='4/2 1/- 3/5') return _echec('le gabarit a bougé');
+          const f=_ppSeancesActives(currentUser);
+          return (f.length===1&&_ex(f[0].s.exercises)==='2/3 1/- 2/5')?true:_echec('fiche : '+JSON.stringify(f.map(x=>_ex(x.s.exercises))));});
+        ok('Décharge du créneau : datée à dimanche 23:59, la séance allégée (×0,6, au moins 1 ; RIR +1, plafond 5), décochable',()=>{
+          const u=_ath();
+          appliquerDecharge(u);
+          const sc=u.sessions_config[0], fin=finDeSemaineMs(Date.now()), d=new Date(fin);
+          if(sc.deloadJusqua!==fin||d.getDay()!==0||d.getHours()!==23||d.getMinutes()!==59) return _echec('fin : '+d);
+          if('deload' in sc) return _echec('le booléen permanent est encore posé');
+          if(creneauEnDecharge(sc,fin+1)) return _echec('la décharge survit à dimanche soir');
+          currentUser=u; localStorage.removeItem('rc_wo_state');
+          launchWorkout(seanceDuJour(u,0,Date.now()),0);
+          const a=_ex(woState.exercises), dl=woState.deload; _fin();
+          if(a!=='2/3 1/- 2/5'||!dl) return _echec('séance : '+a+' / décharge '+dl);
+          if(_ex(u.sessions_config[0].exercises)!=='4/2 1/- 3/5') return _echec('le gabarit a bougé');
+          // L'aperçu le dit aussi.
+          if(_ex(seanceDuJourAffichee(u,0,Date.now()).exercises)!==a) return _echec('l’aperçu ne dit pas la même chose');
+          // Une semaine de décharge du bloc ne s'allège pas deux fois.
+          const b=_bloc(); poserDechargeCreneau(b.sessions_config[0],true);
+          if(_ex(seanceDuJourAffichee(b,0,Date.now()).exercises)!=='2/3 1/- 2/5') return _echec('allégée deux fois');
+          // La case du coach se décoche à tout moment.
+          const sv=_coachEditClient, sl=loadCoachSessionSlots;
+          try{
+            _coachEditClient=u; loadCoachSessionSlots=()=>{};
+            coachToggleDeload(0,false);
+            if(creneauEnDecharge(u.sessions_config[0])||'deloadJusqua' in u.sessions_config[0]) return _echec('décochée, elle reste');
+            coachToggleDeload(0,true);
+            if(u.sessions_config[0].deloadJusqua!==finDeSemaineMs(Date.now())) return _echec('recochée sans date');
+          } finally { _coachEditClient=sv; loadCoachSessionSlots=sl; }
+          return true;});
+        ok('Migration : un ancien deload:true vaut jusqu’à la fin de la semaine de sa première lecture, puis s’efface',()=>{
+          const t0=new Date(2026,9,7,10).getTime();                    // mercredi 7 octobre 2026
+          const u=_ath(); u.sessions_config[0].deload=true;
+          if(!creneauEnDecharge(u.sessions_config[0],t0)) return _echec('l’ancien booléen ne vaut plus rien');
+          if(migrerDechargesCreneaux(u,t0)!==1) return _echec('rien de migré');
+          const sc=u.sessions_config[0];
+          if(sc.deloadJusqua!==new Date(2026,9,11,23,59,59,999).getTime()||'deload' in sc) return _echec('migré : '+JSON.stringify(sc));
+          if(!creneauEnDecharge(sc,new Date(2026,9,11,23,0).getTime())) return _echec('éteinte avant dimanche soir');
+          // Relue la semaine suivante : elle ne se prolonge pas, elle s'efface.
+          const t1=new Date(2026,9,13,9).getTime();
+          if(migrerDechargesCreneaux(u,t1)!==1||'deloadJusqua' in sc||creneauEnDecharge(sc,t1)) return _echec('échue, elle reste : '+JSON.stringify(sc));
+          return migrerDechargesCreneaux(u,t1)===0?true:_echec('la migration se rejoue');});
+      } finally {
+        _fin(); if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
+        currentUser=sauveU; woState=sauveW; _apIdx=sauveAp; _apercuSaute=false;
+      }
+    })();
+
     // ══════════════ FILMER : INTENTION ATHLÈTE, DEMANDE COACH ══════════════
     (function(){
       const sauveU=currentUser, sauveW=woState, sauveCid=currentClientId;
@@ -29578,7 +29678,7 @@ async function testExercices(){
         try{
           currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(false);
           await programmerDecharge();
-          return _dchLire().sessions_config.every(s=>!s.deload)
+          return _dchLire().sessions_config.every(s=>!creneauEnDecharge(s))
             ?true:_echec('une décharge a été posée malgré le refus');
         } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 
@@ -29588,24 +29688,25 @@ async function testExercices(){
           currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
           await programmerDecharge();
           const c=_dchLire();
-          if(c.sessions_config[0].deload!==true) return _echec('le premier créneau actif n’est pas en décharge');
-          if(c.sessions_config[2].deload!==true) return _echec('le second créneau actif n’est pas en décharge');
+          if(!creneauEnDecharge(c.sessions_config[0])) return _echec('le premier créneau actif n’est pas en décharge');
+          if(!creneauEnDecharge(c.sessions_config[2])) return _echec('le second créneau actif n’est pas en décharge');
           // LE CRÉNEAU INACTIF N'EST PAS TOUCHÉ, et c'est la même écriture qui
           // le prouve : le vérifier depuis une assertion voisine la rendrait
           // dépendante de l'ordre.
-          if(c.sessions_config[1].deload) return _echec('un créneau inactif a été mis en décharge');
-          // AUCUN CHAMP NOUVEAU EN BASE : seul deload bouge.
+          if(creneauEnDecharge(c.sessions_config[1])) return _echec('un créneau inactif a été mis en décharge');
+          // UN SEUL CHAMP DE DÉCHARGE EN BASE : sa date de fin (build 1823).
           const cles=Object.keys(c.sessions_config[0]).sort().join(',');
-          return cles==='active,deload,exercises,name'
+          return cles==='active,deloadJusqua,exercises,name'
             ?true:_echec('champs du créneau : '+cles);
         } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 
       ok('Critère 6 : un créneau inactif n\'est pas touché',
          String(programmerDecharge).indexOf('active')>=0,
          'programmerDecharge ne filtre plus sur `active`');
-      ok('Aucun champ nouveau en base : seul deload bouge',
-         !/\.(deloadDate|deloadPar|deloadAt)\s*=/.test(String(programmerDecharge)),
-         'un champ de décharge autre que `deload` est écrit');
+      ok('Un seul champ de décharge en base : sa date de fin, par poserDechargeCreneau',
+         !/\.(deloadDate|deloadPar|deloadAt)\s*=/.test(String(programmerDecharge))
+           &&String(programmerDecharge).indexOf('poserDechargeCreneau')>=0,
+         'la décharge s’écrit hors de poserDechargeCreneau');
       ok('Le bouton n\'apparaît pas sans créneau actif',()=>{
         const c=faireClient(); c.sessions_config.forEach(s=>{s.active=false;});
         return _htmlBoutonDecharge(c)==='';});
@@ -29652,7 +29753,7 @@ async function testExercices(){
         const q=_preparerDechargeGroupee([c.id],DB.get('users')||{},false);
         return (!q.cibles.length&&/décharge à retirer/.test((q.echecs[0]||{}).raison||''))
           ?true:_echec('le refus n\'est pas nommé : '+JSON.stringify(q.echecs));});
-      okA('Aucun décochage automatique : rejouer ne remet rien à false',(async()=>{
+      okA('Rejouer la pose ne retire rien : la décharge reste jusqu’à dimanche soir',(async()=>{
         const sU=currentUser, sC=currentClientId, sR=window.rcConfirm;
         try{
           currentUser=_dchCoach(); _dchPreparer(); _poserConfirm(true);
@@ -29662,9 +29763,9 @@ async function testExercices(){
           await programmerDecharge();
           await programmerDecharge();
           const c=_dchLire();
-          if(c.sessions_config[0].deload!==true||c.sessions_config[2].deload!==true)
+          if(!creneauEnDecharge(c.sessions_config[0])||!creneauEnDecharge(c.sessions_config[2]))
             return _echec('rejouer a décoché un créneau');
-          return !c.sessions_config[1].deload
+          return !creneauEnDecharge(c.sessions_config[1])
             ?true:_echec('rejouer a touché le créneau inactif');
         } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 
@@ -35827,10 +35928,10 @@ async function testExercices(){
         // le dossier distant et l'envoi suivant de l'athlète écrase le retrait.
         if(s.indexOf('c.updatedAt=Date.now()')<0) return _echec('l’écriture n’horodate pas');
         if(s.indexOf('CLOUD.pushOne')<0) return _echec('le retrait n’atteint pas l’athlète');
-        // AUCUN DECOCHAGE AUTOMATIQUE : c'est le coach qui decide, et le texte
-        // de confirmation le dit.
-        if(s.indexOf('Aucun décochage automatique')<0)
-          return _echec('la règle du décochage manuel n’est plus dite');
+        // LA FIN EST DITE (build 1823) : elle s'arrête d'elle-même dimanche
+        // soir, et le coach peut la retirer avant. Le texte le dit.
+        if(s.indexOf('dimanche soir')<0||s.indexOf('retirer avant')<0)
+          return _echec('la fin de la décharge n’est pas dite');
         // ET LES DEUX BOUTONS SONT AU MEME ENDROIT, sur la fiche.
         const prod=_prodSrc();
         if(prod.indexOf('programmerDecharge(false)')<0)
@@ -87663,7 +87764,7 @@ async function testNotifs(){
          !_cacheSignaux.has('sentinelle'),'la sentinelle a survécu');
       ok('La décharge groupée marque bien les créneaux actifs',(()=>{
         const ap=DB.get('users')['annaz@t.fr'];
-        return ((ap&&ap.sessions_config)||[]).every(s=>s.deload===true);})(),
+        return ((ap&&ap.sessions_config)||[]).every(s=>!s.active||creneauEnDecharge(s));})(),
         'des créneaux sont restés sans décharge');
       // L'envoi ne peut pas aboutir ici : le bac à sable n'a pas de jeton, donc
       // les deux athlètes synchronisés ressortent en « envoi refusé ». C'est le
