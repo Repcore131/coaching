@@ -81769,6 +81769,38 @@ async function testExercices(){
           const h=refMicro({gender:'H'},'fe'), f=refMicro({gender:'F'},'fe');
           return h.valeur===11&&f.valeur===16
             ?true:_echec(h.valeur+' / '+f.valeur);});
+        ok('Repères 1846 : fer femme — ménopause 11, règles « supportable » 11, « difficile » 16, non renseigné 16',()=>{
+          const F=o=>Object.assign({gender:'F'},o||{});
+          const v=u=>refMicro(u,'fe').valeur;
+          if(v(F({statutHormonal:'menopause'}))!==11) return _echec('ménopause');
+          if(v(F({cycle:{intensiteRegles:'supportable'}}))!==11) return _echec('supportable');
+          if(v(F({cycle:{intensiteRegles:'difficile'}}))!==16) return _echec('difficile');
+          if(v(F({}))!==16) return _echec('non renseigné');
+          // La ménopause prime sur des règles déclarées « difficile ».
+          const m=refMicro(F({statutHormonal:'menopause',cycle:{intensiteRegles:'difficile'}}),'fe');
+          if(m.valeur!==11||m.motifRef!=='après la ménopause') return _echec('ménopause prime : '+JSON.stringify(m));
+          if(v(F({cycle:{contraception:'continue'}}))!==11) return _echec('contraception continue');
+          // Un homme : inchangé.
+          return refMicro({gender:'H'},'fe').valeur===11?true:_echec('homme');});
+        ok('Repères 1846 : calcium 1 000 mg à 22 ans, 950 à 30 ans et âge inconnu',()=>{
+          const an=new Date().getFullYear();
+          if(refMicro({gender:'F',birthdate:(an-22)+'-01-01'},'ca').valeur!==1000) return _echec('22 ans');
+          if(refMicro({gender:'F',birthdate:(an-31)+'-01-01'},'ca').valeur!==950) return _echec('31 ans');
+          return refMicro({gender:'F'},'ca').valeur===950?true:_echec('âge inconnu');});
+        ok('Repères 1846 : grossesse → couvertureMicro null, signalMicro null, une phrase sur la carte',()=>{
+          const u=_ath('F',7,'fe',3,500,0);
+          if(!couvertureMicro(u,'fe',_jours(7))) return _echec('fixture');
+          u.grossesse={etat:'enceinte',date:Date.now()};
+          if(couvertureMicro(u,'fe',_jours(7))!==null) return _echec('couverture');
+          if(signalMicro(u)!==null) return _echec('signal');
+          const h=_htmlCouvertureMicro(u);
+          if(!/Repères suspendus pendant la grossesse : ton suivi médical prime\./.test(h)) return _echec('phrase');
+          return !/%/.test(h.replace(/width:[^;"]+/g,''))?true:_echec('un pourcentage');});
+        ok('Repères 1846 : ménopausée à 12 mg/j de fer → aucune couverture fer sous 70 %',()=>{
+          const u=_ath('F',7,'fe',12,500,0); u.statutHormonal='menopause';
+          const c=couvertureMicro(u,'fe',_jours(7));
+          if(!c||c.ref!==11) return _echec('repère '+(c&&c.ref));
+          return c.part>=MICRO_COUVERTURE_SEUIL?true:_echec('part '+c.part);});
         ok('Critère : sexe inconnu → la référence la PLUS ÉLEVÉE, et on le dit',()=>{
           const r=refMicro({id:'x'},'fe');
           if(r.valeur!==16||r.sexeConnu!==false) return _echec(JSON.stringify(r));

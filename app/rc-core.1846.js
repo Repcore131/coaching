@@ -15728,15 +15728,22 @@ const MICRO_CHAMPS_VEGE=Object.freeze(['deb-allergies','deb-food-hate','deb-heal
 // nutriment absent de cette source aurait été retiré du lot.
 //
 // Trois valeurs demandent un choix explicite, l'Anses en donnant plusieurs
-// selon le contexte :
-//  · FER, femme : 16 mg correspond aux pertes menstruelles ÉLEVÉES (11 mg pour
-//    des pertes faibles ou modérées). On retient 16, la borne prudente — cette
-//    règle sert à ouvrir une conversation, pas à rassurer.
+// selon le contexte (même source, reconsultée le 6 octobre 2026) :
+//  · FER, femme : 16 mg correspond aux pertes menstruelles ÉLEVÉES, 11 mg aux
+//    pertes faibles ou modérées et aux femmes ménopausées. BUILD 1846 : 11 mg
+//    quand la ménopause est déclarée, quand il n'y a pas de cycle (aménorrhée,
+//    contraception continue), ou quand l'intensité des règles est RENSEIGNÉE
+//    et n'est pas « difficile » ; 16 mg sinon — « difficile » ou rien de dit :
+//    la borne prudente reste le défaut. La ménopause prime sur tout le reste.
 //  · ZINC : la RNP dépend de l'acide phytique du régime. On retient la ligne
 //    600 mg/j de phytates (H 11,7 · F 9,3), régime mixte courant. Un régime
 //    très végétal en contient davantage et sa vraie RNP serait plus haute : la
 //    couverture affichée est donc OPTIMISTE pour ces athlètes.
-//  · CALCIUM : 950 mg, valeur adulte à partir de 25 ans.
+//  · CALCIUM : 950 mg à partir de 25 ans, 1 000 mg de 18 à 24 ans (BUILD
+//    1846, âge tiré de la date de naissance ; inconnu → 950).
+//  · GROSSESSE ET ALLAITEMENT : les références changent et le suivi médical
+//    prime. Aucune couverture, aucun signal : « Repères suspendus pendant la
+//    grossesse : ton suivi médical prime. »
 const MICRO_REFS=Object.freeze({
   fe: {lib:'Fer',          unite:'mg', H:11,   F:16},
   ca: {lib:'Calcium',      unite:'mg', H:950,  F:950},
@@ -15753,12 +15760,36 @@ const MICRO_DOC_MINIMALE=0.60;
 // Sexe inconnu : on prend la référence la PLUS ÉLEVÉE des deux, et l'affichage
 // le dit. Sous-estimer la référence gonflerait la couverture et éteindrait la
 // question au moment où elle serait le plus utile.
+const MICRO_FER_F_BAS=11, MICRO_CA_JEUNE=1000, MICRO_CA_AGE=25;
+const MICRO_GROSSESSE='Repères suspendus pendant la grossesse : ton suivi médical prime.';
 function refMicro(user,cle){
   const r=MICRO_REFS[cle];
   if(!r) return null;
   const sexe=(user&&(user._evol_gender||user.gender))||'';
+  // CALCIUM : moins de 25 ans → 1 000 mg, quel que soit le sexe.
+  if(cle==='ca'){
+    let age=null; try{ age=ageActuel(user); }catch(e){ age=null; }
+    if(age!=null&&age>0&&age<MICRO_CA_AGE)
+      return {valeur:MICRO_CA_JEUNE,sexeConnu:!!sexe,lib:r.lib,unite:r.unite,motifRef:'moins de 25 ans'};
+  }
   if(!sexe) return {valeur:Math.max(r.H,r.F),sexeConnu:false,lib:r.lib,unite:r.unite};
-  return {valeur:isFemale(sexe)?r.F:r.H,sexeConnu:true,lib:r.lib,unite:r.unite};
+  const femme=isFemale(sexe);
+  if(cle==='fe'&&femme){
+    let meno=false; try{ meno=menopauseDeclaree(user); }catch(e){}
+    if(meno) return {valeur:MICRO_FER_F_BAS,sexeConnu:true,lib:r.lib,unite:r.unite,motifRef:'après la ménopause'};
+    let sansCycle=false; try{ sansCycle=contraceptionDe(user)==='continue'; }catch(e){}
+    if(sansCycle) return {valeur:MICRO_FER_F_BAS,sexeConnu:true,lib:r.lib,unite:r.unite,motifRef:'sans règles déclarées'};
+    // L'intensité RENSEIGNÉE, pas le défaut de confCycle ('supportable').
+    const c=(user&&user.cycle)||{}, a=((user&&user.nutrition)||{}).cycleAdaptation||{};
+    const intens=c.intensiteRegles!==undefined?c.intensiteRegles:a.intensite_regles;
+    if(intens&&intens!=='difficile') return {valeur:MICRO_FER_F_BAS,sexeConnu:true,lib:r.lib,unite:r.unite,motifRef:'règles modérées'};
+    return {valeur:r.F,sexeConnu:true,lib:r.lib,unite:r.unite,motifRef:intens==='difficile'?'règles abondantes':null};
+  }
+  return {valeur:femme?r.F:r.H,sexeConnu:true,lib:r.lib,unite:r.unite};
+}
+// Grossesse ou allaitement déclarés : les repères sont suspendus.
+function _microSuspendu(user){
+  try{ return grossesseSuspend(_dossier(user)||user); }catch(e){ return false; }
 }
 // PURE. Rend {part, partDocumentee, nJours, ...} ou null.
 //
@@ -15770,6 +15801,7 @@ function refMicro(user,cle){
 function couvertureMicro(user,cle,joursISO){
   const r=MICRO_REFS[cle];
   if(!r||!user) return null;
+  if(_microSuspendu(user)) return null;
   const log=((user.nutrition||{}).log)||{};
   const jours=(joursISO||[]).filter(j=>log[j]&&Array.isArray(log[j].entries)&&log[j].entries.length);
   if(jours.length<MICRO_JOURS_FENETRE) return null;
@@ -15793,7 +15825,7 @@ function couvertureMicro(user,cle,joursISO){
     part:Math.round((apport/jours.length)/ref.valeur*1000)/1000,
     partDocumentee:kcalTotal>0?Math.round(kcalDoc/kcalTotal*1000)/1000:0,
     nJours:jours.length,ref:ref.valeur,unite:ref.unite,lib:ref.lib,
-    sexeConnu:ref.sexeConnu
+    sexeConnu:ref.sexeConnu,motifRef:ref.motifRef||null
   };
 }
 // Les MICRO_JOURS_FENETRE derniers jours calendaires, du plus ancien au plus
@@ -15836,6 +15868,10 @@ const MICRO_FIABILITE_DITE=0.90;
 function _htmlCouvertureMicro(user,ref,opts){
   try{ if(aTCA(_dossier(user))) return ''; }catch(e){}
   const o=opts||{};
+  // Grossesse ou allaitement : une seule phrase, aucun pourcentage (build 1846).
+  if(_microSuspendu(user)) return `<div class="micro-carte" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">${escapeHtml(MICRO_GROSSESSE)}</div></div>`;
   const jours=_microDerniersJours(ref);
   const cs=[];
   for(const cle in MICRO_REFS){
@@ -16054,6 +16090,7 @@ function _microDefauts(user,finISO){
 function signalMicro(user,finISO){
   const u=_dossier(user);
   if(!u) return null;
+  if(_microSuspendu(u)) return null;
   const fin=String(finISO||localISODate(new Date())).slice(0,10);
   const cette=_microDefauts(u,fin);
   if(!cette.length) return null;
@@ -16066,7 +16103,7 @@ function signalMicro(user,finISO){
   persistants.sort((a,b)=>a.part-b.part);
   const g=persistants[0];
   const r=refMicro(u,g.cle);
-  return {cle:g.cle,lib:r.lib,unite:r.unite,ref:r.valeur,sexeConnu:r.sexeConnu,
+  return {cle:g.cle,lib:r.lib,unite:r.unite,ref:r.valeur,sexeConnu:r.sexeConnu,motifRef:r.motifRef||null,
     part:g.part,pct:Math.round(g.part*100),couverture:g.couverture,
     joursRenseignes:g.joursRenseignes,semaines:MICRO_SIGNAL_SEMAINES,
     autres:persistants.length-1};
@@ -16231,7 +16268,7 @@ function phraseSignalMicro(s){
 function phraseSignalMicroCoach(s){
   if(!s) return '';
   return 'Ses apports en '+_microLibMin(s.lib)+' ressortent à '+s.pct
-    +' % du repère sur deux semaines consécutives, calculés sur '
+    +' % du repère'+(s.motifRef?' ('+s.motifRef+')':'')+' sur deux semaines consécutives, calculés sur '
     +Math.round(s.couverture*100)+' % de ce qui a été journalisé ('
     +s.joursRenseignes+' jours sur '+MICRO_JOURS_FENETRE+' la dernière semaine).'
     +(s.autres>0?' '+s.autres+' autre'+(s.autres>1?'s':'')
@@ -16372,7 +16409,7 @@ function risquesMicro(user,ref){
       if(!(_c.partDocumentee>=MICRO_DOC_MINIMALE)) continue;
       out.push({cle:'couverture_'+_cle,lib:'Couverture '+_microLibMin(_c.lib),
         motif:'Ses apports en '+_microLibMin(_c.lib)+' ressortent à '
-          +Math.round(_c.part*100)+' % de la référence sur la dernière semaine'
+          +Math.round(_c.part*100)+' % de la référence'+(_c.motifRef?' ('+_c.motifRef+')':'')+' sur la dernière semaine'
           +' journalisée, sur '+Math.round(_c.partDocumentee*100)
           +' % de ce qui a été journalisé.',
         question:'Un bilan sanguin récent existe-t-il ?'});
