@@ -162,11 +162,31 @@ export function pushAutorise(type, prefs, log, t, tz, prio) {
   if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: 'type' };
   if (prefs && prefs[type] === false) return { ok: false, raison: 'coupe' };
   if (heuresCalmes(t, tz)) return { ok: false, raison: 'calme' };
+  // Un humain qui écrit n'entre pas dans le plafond du jour : son plafond à
+  // lui est celui du fil (filLibre), pris en transaction par envoyerPush.
+  if (estHumain(type)) return { ok: true, raison: null };
   const p = prio === undefined ? (PUSH_PRIORITE[type] || 0) : prio;
   const plein = plafondAtteint(log, heureLocale(t, tz).jour, p);
   if (plein) return { ok: false, raison: plein };
   return { ok: true, raison: null };
 }
+// ── LES PUSH D'UN HUMAIN (06/10/2026) ──────────────────────────────────────
+// Le plafond du jour faisait taire le deuxième message du coach, ou sa
+// réponse à un bilan arrivée après le défi du matin. Un message écrit par
+// une personne — la messagerie (`coach` vers l'athlète, `message` vers le
+// coach) et la réponse au bilan, texte ou vocale (déposée en `coach`) — ne
+// compte pas dans push_log. Son plafond : un push par FIL (le tag,
+// « message-<clé> », qui regroupe aussi côté appareil) toutes les 10 min,
+// push_log_humain/<clé>/<tag> = at. ⚠ `bilan` n'en est pas : c'est le
+// RAPPEL de remplir son bilan (dimanche, accueil), un push de jeu.
+export const PUSH_HUMAINS = Object.freeze(['message', 'coach']);
+export const estHumain = (type) => PUSH_HUMAINS.indexOf(String(type || '')) >= 0;
+export const FIL_HUMAIN_MS = 10 * 60e3;
+// PURE. Le fil est-il libre à `t`, son dernier push datant de `at` ?
+export const filLibre = (at, t) => !(Number(at) > 0 && t - Number(at) < FIL_HUMAIN_MS);
+// La clé du fil dans la base : le tag, sans les caractères qu'elle refuse.
+export const cleFil = (tag) => String(tag || 'rc').replace(/[.#$\[\]\/]/g, '_').slice(0, 120);
+
 // LA RÉSERVATION DU JEUDI : de 8 h à 18 h (Paris), les rappels qui peuvent
 // attendre (accès, santé) se taisent chez un athlète dont la série court et
 // n'est pas encore validée cette semaine : la place du second push est
@@ -177,38 +197,69 @@ export function reserveSerieJeudi(t, streak, streakWeek) {
   return Number(streak) > 0 && streakWeek !== lundiParis(t);
 }
 
-// ── LA NUIT, UN SEUL MESSAGE ATTEND : LE PLUS IMPORTANT ─────────────────────
-// push_attente/<clé> = {message, at, prio, cumul, tz}. Un nouveau message ne
-// remplace l'attendu que si sa priorité est AU MOINS égale : le mot du coach
-// survit au défi de l'équipe. `cumul` compte les messages fusionnés ; au-delà
-// d'un, l'envoi du matin ajoute « + N autres nouvelles ».
+// ── LA NUIT, UNE FILE PAR ATHLÈTE (06/10/2026) ─────────────────────────────
+// push_attente/<clé>/<id> = {message, at, tz} : au plus ATTENTE_FILE
+// entrées, les plus récentes. L'ancienne place unique ({message, at, prio,
+// cumul, tz}, ou le message à plat) écrasait la réponse de 22 h sous le défi
+// de 23 h : la file les garde tous deux, et le matin UN push les résume
+// (« 2 messages de ton coach, 1 défi »).
 export const ATTENTE_MAX_MS = 14 * 3600e3;
+export const ATTENTE_FILE = 5;
+// L'ordre du résumé : le plus important d'abord (c'est lui qui donne au push
+// du matin son type, son lien et ses préférences).
 export const PRIO_PUSH = Object.freeze({ coach: 5, message: 5, acces: 4, prospect: 4, filleul: 3, defi: 2, relance: 2, serie: 2,
   bilan: 2, wrapped: 1, badge: 1, retour: 1, sante: 1 });
 export const prioPush = (type) => PRIO_PUSH[String(type || '')] || 1;
-// PURE. L'entrée d'attente après l'arrivée de `message` (cur : l'actuelle).
-// L'ancien format (le message à plat, avec `at`) est relu tel quel.
-export function fusionAttente(cur, message, t, tz) {
-  const prio = prioPush(message && message.type);
-  const actuelle = normaliserAttente(cur);
-  if (!actuelle) return { message, at: t, prio, cumul: 1, tz: fuseauValide(tz) };
-  const cumul = (Number(actuelle.cumul) || 1) + 1;
-  if (prio >= actuelle.prio) return { message, at: t, prio, cumul, tz: fuseauValide(tz) };
-  return Object.assign({}, actuelle, { cumul });
-}
+// L'ancien format (une place) relu comme une entrée.
 export function normaliserAttente(m) {
   if (!m || typeof m !== 'object') return null;
-  if (m.message && typeof m.message === 'object') return { message: m.message, at: Number(m.at) || 0,
-    prio: Number(m.prio) || prioPush(m.message.type), cumul: Math.max(1, Number(m.cumul) || 1), tz: fuseauValide(m.tz) };
+  if (m.message && typeof m.message === 'object') return { message: m.message, at: Number(m.at) || 0, tz: fuseauValide(m.tz) };
   const message = Object.assign({}, m); delete message.at;
-  return { message, at: Number(m.at) || 0, prio: prioPush(message.type), cumul: 1, tz: TZ_DEFAUT };
+  return { message, at: Number(m.at) || 0, tz: TZ_DEFAUT };
 }
-// PURE. Le message du matin : « + N autres nouvelles » s'il en a absorbé.
-export function messageDuMatin(e) {
-  const m = Object.assign({}, e.message);
-  const n = (Number(e.cumul) || 1) - 1;
-  if (n > 0) m.body = (m.body ? m.body + ' ' : '') + '+ ' + n + ' autre' + (n > 1 ? 's' : '') + ' nouvelle' + (n > 1 ? 's' : '');
-  return m;
+const ancienneAttente = (cur) => !!cur && ((cur.message && typeof cur.message === 'object') || typeof cur.at === 'number');
+// PURE. Les entrées d'une file (ancien format compris), de la plus ancienne
+// à la plus récente : [{id, message, at, tz}].
+export function fileAttente(cur) {
+  if (!cur || typeof cur !== 'object') return [];
+  if (ancienneAttente(cur)) { const e = normaliserAttente(cur); return e ? [Object.assign({ id: 'ancien' }, e)] : []; }
+  const out = [];
+  for (const id of Object.keys(cur)) {
+    const e = cur[id];
+    if (e && typeof e === 'object' && e.message && typeof e.message === 'object') out.push({ id, message: e.message, at: Number(e.at) || 0, tz: fuseauValide(e.tz) });
+  }
+  return out.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+}
+// PURE. La file après l'arrivée de `message` sous `id` : les ATTENTE_FILE
+// plus récentes (objet prêt à écrire).
+export function ajouterAttente(cur, id, message, t, tz) {
+  const l = fileAttente(cur).concat([{ id, message, at: t, tz: fuseauValide(tz) }]).slice(-ATTENTE_FILE);
+  const o = {};
+  for (const e of l) o[e.id] = { message: e.message, at: e.at, tz: e.tz };
+  return o;
+}
+const LIB_RESUME = Object.freeze({ coach: ['message de ton coach', 'messages de ton coach'], message: ['nouveau message', 'nouveaux messages'],
+  defi: ['défi', 'défis'], serie: ['rappel de série', 'rappels de série'], badge: ['badge', 'badges'] });
+// PURE. Le push du matin : une entrée part telle quelle ; plusieurs, un seul
+// push qui les compte, au type, au lien et à la priorité de la plus importante.
+export function resumeMatin(entrees) {
+  const l = (entrees || []).filter((e) => e && e.message);
+  if (!l.length) return null;
+  if (l.length === 1) return Object.assign({}, l[0].message);
+  const tri = l.slice().sort((a, b) => prioPush(b.message.type) - prioPush(a.message.type) || b.at - a.at);
+  const haut = tri[0].message;
+  const n = new Map();
+  for (const e of tri) {
+    const k = LIB_RESUME[e.message.type] ? e.message.type : 'autre';
+    n.set(k, (n.get(k) || 0) + 1);
+  }
+  const morceaux = [];
+  for (const [k, c] of n) {
+    const lib = LIB_RESUME[k] || ['autre nouvelle', 'autres nouvelles'];
+    morceaux.push(c + ' ' + lib[c > 1 ? 1 : 0]);
+  }
+  return Object.assign({ type: haut.type, url: haut.url || './', tag: 'matin', title: 'Pendant la nuit', body: morceaux.join(', ') },
+    haut.prio !== undefined ? { prio: haut.prio } : {});
 }
 function prolonger(echeanceActuelle, ms, t) {
   return Math.max(Number(echeanceActuelle) || 0, t || Date.now()) + (Number(ms) || 0);
@@ -541,7 +592,9 @@ export function creerMetier(deps) {
     // UNE lecture pour le fuseau ET les préférences : la surface du dossier
     // (tz y est en clair ; pushPrefs, objet, n'y vaut que « true » — relu
     // seulement s'il existe, c'est-à-dire si l'athlète a réglé quelque chose).
-    const [surf, log] = urgent ? [null, null] : await Promise.all([_surface(uid), logDonne ? o.log : _val('push_log/' + uid)]);
+    const humain = estHumain(type);
+    // Un push d'humain ne lit pas push_log : il n'y compte pas.
+    const [surf, log] = urgent ? [null, null] : await Promise.all([_surface(uid), (logDonne || humain) ? (humain ? null : o.log) : _val('push_log/' + uid)]);
     const prefs = surf ? await _objet(uid, surf, 'pushPrefs') : null;
     const tz0 = tzDonne ? o.tz : (surf ? surf.tz : null);
     const tz = fuseauValide(tz0);
@@ -549,7 +602,8 @@ export function creerMetier(deps) {
     const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t, tz, prio);
     if (!ok.ok) {
       if (ok.raison === 'calme' && (!o || o.attendre !== false)) {
-        await db.ref('push_attente/' + uid).transaction((cur) => fusionAttente(cur, message, t, tz));
+        const id = idFile(t, 'n');
+        await db.ref('push_attente/' + uid).transaction((cur) => ajouterAttente(cur, id, message, t, tz));
         return { envoye: 0, raison: 'calme', differe: true };
       }
       return { envoye: 0, raison: ok.raison };
@@ -561,7 +615,15 @@ export function creerMetier(deps) {
     // LA PLACE SE PREND EN TRANSACTION : deux envois simultanés ne prennent
     // pas la même. `avant` garde le journal d'avant, rendu si rien ne part.
     let avant = null;
-    if (!urgent) {
+    const fil = 'push_log_humain/' + uid + '/' + cleFil(message.tag || ('rc-' + type));
+    if (!urgent && humain) {
+      const tx = await db.ref(fil).transaction((cur) => {
+        if (!filLibre(cur, t)) return undefined;
+        avant = cur || null;
+        return t;
+      });
+      if (!tx.committed) return { envoye: 0, raison: 'fil' };
+    } else if (!urgent) {
       const tx = await db.ref('push_log/' + uid).transaction((cur) => {
         if (plafondAtteint(cur, jour, prio)) return undefined;
         avant = cur && cur.jour === jour ? cur : null;
@@ -587,7 +649,9 @@ export function creerMetier(deps) {
     }));
     // RIEN N'EST PARTI : la place est rendue — le journal redevient celui
     // d'avant (le premier push du jour reste compté), ou disparaît.
-    if (!envoye && !urgent) {
+    if (!envoye && !urgent && humain) {
+      await db.ref(fil).transaction((cur) => (Number(cur) === t ? avant : undefined));
+    } else if (!envoye && !urgent) {
       await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour && Number(cur.at) === t) ? (avant || null) : undefined);
     }
     if (!envoye && tentes > 0 && passagers === tentes) {
@@ -861,11 +925,11 @@ export function creerMetier(deps) {
     const tout = (await _val('push_attente')) || {};
     const maj = {}, taches = [];
     for (const uid of Object.keys(tout)) {
-      const e = normaliserAttente(tout[uid]);
-      if (!e || t - e.at > ATTENTE_MAX_MS) { maj['push_attente/' + uid] = null; continue; }
-      if (heuresCalmes(t, e.tz)) continue;
+      const l = fileAttente(tout[uid]).filter((e) => t - e.at <= ATTENTE_MAX_MS);
+      if (!l.length) { maj['push_attente/' + uid] = null; continue; }
+      if (heuresCalmes(t, l[l.length - 1].tz)) continue;
       maj['push_attente/' + uid] = null;
-      taches.push(tachePush(uid, messageDuMatin(e), { attendre: false }));
+      taches.push(tachePush(uid, resumeMatin(l), { attendre: false }));
     }
     if (Object.keys(maj).length) await differer(taches, maj);
     return taches.length;

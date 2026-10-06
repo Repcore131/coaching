@@ -6,7 +6,7 @@ import nodeCrypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { chiffrer, jetonVapid, b64uVersOctets, octetsVersB64u, envoyerA } from '../src/push.js';
 import { creerBase } from '../src/base.js';
-import { creerMetier, fusionAttente, messageDuMatin, PRIO_PUSH, PUSH_PRIORITE, pushAutorise, prioDe, reserveSerieJeudi } from '../src/metier.js';
+import { creerMetier, PRIO_PUSH, PUSH_PRIORITE, pushAutorise, prioDe, reserveSerieJeudi } from '../src/metier.js';
 import { MESSAGE_RAPPEL } from '../src/sante.js';
 import { minute, ESSAIS_MAX, consommerLot, travaux } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
@@ -100,35 +100,29 @@ function monde(initial, t) {
 }
 const LEA = 'lea@t,fr', tel = appareil('https://push.test/lea');
 
-await test('deux messages de nuit : le mot du coach survit au défi, et l’envoi du matin dit « + 1 autre nouvelle »', async () => {
+await test('deux messages de nuit : tous deux gardés, et l’envoi du matin les résume', async () => {
   const w = monde({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } } }, PARIS('2026-09-28T23:10:00'));
-  const r1 = await w.M.envoyerPush(LEA, { type: 'coach', title: 'Ton coach a répondu', body: 'Belle séance.' });
+  const r1 = await w.M.envoyerPush(LEA, { type: 'coach', url: './?messages=1', title: 'Ton coach a répondu', body: 'Belle séance.' });
   assert.equal(r1.raison, 'calme'); assert.equal(r1.differe, true);
   w.avance(20 * 60e3);
   await w.M.envoyerPush(LEA, { type: 'defi', title: 'Nouveau défi', body: '12 séances.' });
-  const e = w.F.lire('push_attente/' + LEA);
-  assert.equal(e.message.type, 'coach', 'le défi (2) ne remplace pas le coach (5)');
-  assert.equal(e.prio, PRIO_PUSH.coach); assert.equal(e.cumul, 2);
-  // Et l'inverse : un message d'égale ou de plus haute priorité remplace.
-  assert.equal(fusionAttente({ message: { type: 'defi' }, at: 1, prio: 2, cumul: 1 }, { type: 'coach' }, 2).message.type, 'coach');
-  assert.equal(fusionAttente({ message: { type: 'defi' }, at: 1, prio: 2, cumul: 1 }, { type: 'serie' }, 2).message.type, 'serie', 'égale : la plus récente');
-  // L'ancien format (le message à plat) est relu.
-  assert.equal(fusionAttente({ type: 'coach', title: 'x', at: 1 }, { type: 'defi' }, 2).message.type, 'coach');
-  // Le matin : il part, et dit ce qu'il a absorbé.
+  const l = Object.values(w.F.lire('push_attente/' + LEA));
+  assert.deepEqual(l.map((e) => e.message.type).sort(), ['coach', 'defi']);
+  assert.equal(PRIO_PUSH.coach > PRIO_PUSH.defi, true);
   w.avance(9 * 3600e3);                            // 8 h 30 le lendemain
   await w.minute();
   await w.minute();
   assert.equal(w.F.recus.length, 1, 'un seul push le matin');
   const m = tel.lire(w.F.recus[0].init.body);
-  assert.equal(m.title, 'Ton coach a répondu');
-  assert.equal(m.body, 'Belle séance. + 1 autre nouvelle');
+  assert.equal(m.title, 'Pendant la nuit');
+  assert.equal(m.body, '1 message de ton coach, 1 défi');
+  assert.equal(m.url, './?messages=1', 'le lien du plus important');
   assert.equal(w.F.lire('push_attente/' + LEA), null);
-  assert.equal(messageDuMatin({ message: { body: 'a' }, cumul: 4 }).body, 'a + 3 autres nouvelles');
 });
 
 await test('503 de l’unique appareil : la tâche repart en file avec essais = 1, et le jour n’est pas consommé', async () => {
   const w = monde({ users: { [LEA]: {} }, push: { [LEA]: { a: tel.abonnement } },
-    evenements: { e0000000001: { type: 'tache', quoi: 'push', uid: LEA, par: 'worker', at: 1, message: { type: 'coach', title: 'Bravo' } } } },
+    evenements: { e0000000001: { type: 'tache', quoi: 'push', uid: LEA, par: 'worker', at: 1, message: { type: 'defi', title: 'Bravo' } } } },
     PARIS('2026-09-28T12:00:00'));
   w.F.pushStatut = 503;
   const b = await w.minute();

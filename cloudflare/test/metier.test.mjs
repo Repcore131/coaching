@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, indicateurs, paris, serieDuJour, heureLocale, heuresCalmes, pushAutorise, fuseauValide } from '../src/metier.js';
+import { creerMetier, indicateurs, paris, serieDuJour, heureLocale, heuresCalmes, pushAutorise, fuseauValide, ajouterAttente, fileAttente, resumeMatin } from '../src/metier.js';
 import { minute, BUDGET } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -40,7 +40,8 @@ await test('réponse du coach : le push part, chiffré, avec le bon texte', asyn
   assert.equal(m.title, 'Ton coach a répondu à ton bilan');
   assert.match(m.body, /Belle régularité/);
   assert.equal(w.F.lire('evenements'), null, 'l’événement est consommé');
-  assert.equal(w.F.lire('push_log/' + A1).jour, '2026-09-28');
+  assert.equal(w.F.lire('push_log/' + A1), null, 'une réponse d’humain ne prend pas la place du jour');
+  assert.ok(w.F.lire('push_log_humain/' + A1 + '/coach-bilan-0'), 'elle prend celle de son fil');
 });
 
 await test('réponse VOCALE seule : relue en base, le même push, qui dit sa durée', async () => {
@@ -67,15 +68,18 @@ await test('un événement déposé par quelqu’un qui n’est pas le coach n�
   assert.equal(w.F.lire('evenements'), null);
 });
 
-await test('un push par jour au plus, et rien de parti ne compte pas', async () => {
+await test('un push de jeu par jour au plus, et rien de parti ne compte pas', async () => {
   const w = monde({ users: { [A1]: {} }, push: { [A1]: { a1b2c3: tel.abonnement } } }, PARIS('2026-09-28T12:00:00'));
-  const r1 = await w.M.envoyerPush(A1, { type: 'coach', title: 'a' });
-  const r2 = await w.M.envoyerPush(A1, { type: 'coach', title: 'b' });
+  const r1 = await w.M.envoyerPush(A1, { type: 'defi', title: 'a' });
+  const r2 = await w.M.envoyerPush(A1, { type: 'defi', title: 'b' });
   assert.equal(r1.envoye, 1); assert.equal(r2.raison, 'plafond');
   const w2 = monde({ users: { [A1]: {} }, push: { [A1]: { a1b2c3: tel.abonnement } } }, PARIS('2026-09-28T12:00:00'));
   w2.F.pushStatut = 500;
-  assert.equal((await w2.M.envoyerPush(A1, { type: 'coach', title: 'a' })).envoye, 0);
+  assert.equal((await w2.M.envoyerPush(A1, { type: 'defi', title: 'a' })).envoye, 0);
   assert.equal(w2.F.lire('push_log/' + A1), null, 'la place du jour est rendue');
+  // Même chose pour un fil d'humain : la place du fil est rendue.
+  assert.equal((await w2.M.envoyerPush(A1, { type: 'coach', tag: 'message-x', title: 'a' })).envoye, 0);
+  assert.equal(w2.F.lire('push_log_humain/' + A1), null, 'la place du fil est rendue');
 });
 
 await test('un abonnement mort (410) est supprimé', async () => {
@@ -402,14 +406,57 @@ await test('le changement d’heure du 25/10/2026 ne décale pas le jour du plaf
   assert.equal(paris(soir).jour, '2026-10-25'); assert.equal(paris(soir).heure, 23);
   const log = { jour: paris(matin).jour };
   assert.equal(pushAutorise('coach', null, log, soir).raison, 'calme');
-  assert.equal(pushAutorise('coach', null, log, Date.parse('2026-10-25T18:00:00Z')).raison, 'plafond', '19 h, même jour : plafond');
+  assert.equal(pushAutorise('defi', null, log, Date.parse('2026-10-25T18:00:00Z')).raison, 'plafond', '19 h, même jour : plafond');
+  assert.equal(pushAutorise('coach', null, log, Date.parse('2026-10-25T18:00:00Z')).ok, true, 'un humain ne compte pas le jour');
   assert.deepEqual(pushAutorise('coach', null, log, Date.parse('2026-10-26T08:00:00Z')), { ok: true, raison: null }, 'le lendemain : libre');
   // Bout à bout : un push le 25 au matin, un autre le 25 au soir (après le changement d'heure).
   const w = monde({ users: { [A1]: { tz: 'Europe/Paris' } }, push: { [A1]: { a1b2c3: tel.abonnement } } }, Date.parse('2026-10-25T07:30:00Z'));
-  assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'a' })).envoye, 1);
+  assert.equal((await w.M.envoyerPush(A1, { type: 'defi', title: 'a' })).envoye, 1);
   assert.equal(w.F.lire('push_log/' + A1 + '/jour'), '2026-10-25');
   w.avance(11 * 3600e3);                         // 19 h 30 à Paris, heure d'hiver
-  assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'b' })).raison, 'plafond');
+  assert.equal((await w.M.envoyerPush(A1, { type: 'defi', title: 'b' })).raison, 'plafond');
+});
+
+await test('un défi à 9 h puis un message du coach à 14 h : les deux partent', async () => {
+  const w = monde({ users: { [A1]: { coachEmailKey: C1 } }, push: { [A1]: { a1b2c3: tel.abonnement } },
+    messages: { [C1]: { [A1]: { m1: { de: 'coach', texte: 'Bien joué ce matin !', at: 1, lu: false } } } } }, PARIS('2026-10-06T09:00:00'));
+  assert.equal((await w.M.envoyerPush(A1, { type: 'defi', url: './?canal=1', tag: 'defi-d1', title: 'Nouveau défi', body: '12 séances.' })).envoye, 1);
+  w.avance(5 * 3600e3);
+  assert.equal(await w.M.evenement({ type: 'message', par: C1, coach: C1, dest: A1, i: 'm1' }), 'envoye');
+  assert.equal(w.F.recus.length, 2, 'le défi du matin, puis le mot du coach');
+  assert.equal(tel.lire(w.F.recus[1].init.body).title, 'Ton coach t’a écrit');
+  assert.equal(w.F.lire('push_log/' + A1 + '/n'), 1, 'le message ne prend pas la place du jour');
+  assert.equal(w.F.lire('push_log_humain/' + A1 + '/message-' + C1), w.t);
+  // Et le défi suivant du jour reste plafonné.
+  assert.equal((await w.M.envoyerPush(A1, { type: 'defi', tag: 'defi-d2', title: 'Encore' })).raison, 'plafond');
+});
+
+await test('nuit : la réponse vocale de 22 h et le défi de 23 h sont résumés en UN push à 8 h', async () => {
+  const w = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ reponseAudio: { url: 'https://x/a.webm', duree: 75 } }] } },
+    push: { [A1]: { a1b2c3: tel.abonnement } }, evenements: { e1: { type: 'reponse_bilan', par: C1, dest: A1, i: '0', at: 1 } } }, PARIS('2026-10-06T22:00:00'));
+  await w.minute();
+  w.avance(3600e3);
+  assert.equal((await w.M.envoyerPush(A1, { type: 'defi', url: './?canal=1', tag: 'defi-d1', title: 'Nouveau défi', body: '12 séances.' })).raison, 'calme');
+  assert.equal(w.F.recus.length, 0);
+  assert.equal(Object.keys(w.F.lire('push_attente/' + A1)).length, 2, 'les deux attendent');
+  w.avance(9 * 3600e3 + 5 * 60e3);               // 8 h 05
+  await w.minute(); await w.minute();
+  assert.equal(w.F.recus.length, 1, 'un seul push le matin');
+  const m = tel.lire(w.F.recus[0].init.body);
+  assert.equal(m.body, '1 message de ton coach, 1 défi');
+  assert.equal(m.type, 'coach');
+  assert.equal(w.F.lire('push_attente/' + A1), null, 'file vidée');
+});
+
+await test('la file de nuit garde les 5 plus récents, et l’ancien format se relit', async () => {
+  let cur = null;
+  for (let i = 1; i <= 7; i++) cur = ajouterAttente(cur, 'n' + i, { type: i % 2 ? 'defi' : 'coach', title: 't' + i }, i, 'Europe/Paris');
+  assert.deepEqual(Object.keys(cur), ['n3', 'n4', 'n5', 'n6', 'n7']);
+  assert.equal(resumeMatin(fileAttente(cur)).body, '2 messages de ton coach, 3 défis');
+  const ancien = { message: { type: 'acces', title: 'x' }, at: 5, prio: 4, cumul: 2, tz: 'Indian/Reunion' };
+  assert.deepEqual(fileAttente(ancien).map((e) => [e.id, e.message.type, e.tz]), [['ancien', 'acces', 'Indian/Reunion']]);
+  assert.equal(Object.keys(ajouterAttente(ancien, 'n9', { type: 'defi' }, 6)).length, 2);
+  assert.equal(resumeMatin(fileAttente(ancien)).title, 'x', 'seul : il part tel quel');
 });
 
 await test('fuseau, bout à bout : à la Réunion, le message du soir attend SON 8 h (6 h à Paris), pas celui de Paris', async () => {
@@ -420,7 +467,7 @@ await test('fuseau, bout à bout : à la Réunion, le message du soir attend SON
   assert.equal((await w.M.envoyerPush(A1, { type: 'coach', title: 'a' })).envoye, 1);
   const r = await w.M.envoyerPush(B, { type: 'coach', title: 'b' });
   assert.equal(r.raison, 'calme');
-  assert.equal(w.F.lire('push_attente/' + B + '/tz'), 'Indian/Reunion');
+  assert.equal(Object.values(w.F.lire('push_attente/' + B))[0].tz, 'Indian/Reunion');
   // 6 h 05 à Paris = 8 h 05 à la Réunion : le travail horaire la libère.
   w.avance(10 * 3600e3 + 35 * 60e3);
   await w.minute(); await w.minute();
@@ -434,10 +481,10 @@ await test('un rappel planifié (accès) à 19 h Paris pour la Réunion : dépos
     push: { [B]: { x: appareil('https://push.test/r').abonnement } } }, t);
   await w.M.planifies.acces(B, t);
   assert.equal(w.F.recus.length, 0, 'rien à 21 h à la Réunion');
-  assert.equal(w.F.lire('push_attente/' + B + '/message/type'), 'acces');
+  assert.equal(Object.values(w.F.lire('push_attente/' + B))[0].message.type, 'acces');
   assert.equal(w.F.lire('worker/relances_acces/' + B), t + 2 * 864e5, 'compté comme parti');
   await w.M.planifies.acces(B, t + 864e5);
-  assert.equal(w.F.lire('push_attente/' + B + '/cumul'), 1, 'pas redéposé le lendemain');
+  assert.equal(Object.keys(w.F.lire('push_attente/' + B)).length, 1, 'pas redéposé le lendemain');
 });
 
 // ══ LE QUOTA D'UN COACH, APPLIQUÉ (02/10/2026) ════════════════════════════

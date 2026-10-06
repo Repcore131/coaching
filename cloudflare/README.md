@@ -34,6 +34,14 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
   - **Le samedi 10 h**, `serie_sam` : « Dernier week-end pour ta série de N semaines », pour qui ne
     s'est pas entraîné depuis jeudi 18 h.
   - Le push urgent de l'administrateur (litige PayPal) reste hors plafond.
+- **Un humain qui écrit n'est pas plafonné au jour** (`PUSH_HUMAINS` : `coach`, `message`).
+  - Concernés : la messagerie (`coach` vers l'athlète, `message` vers le coach) et la réponse au
+    bilan, texte ou vocale (déposée en `coach`). `bilan` n'en est pas : c'est le rappel de remplir
+    son bilan, un push de jeu.
+  - Ils n'écrivent pas `push_log`. Leur plafond est celui du **fil** (le tag, `message-<clé>`) :
+    un push toutes les 10 minutes, `push_log_humain/<clé>/<tag>` = `at`, en transaction.
+  - Les préférences (`pushPrefs`) et les heures calmes valent pour eux comme pour les autres.
+  - Les types de jeu (`serie`, `defi`, `badge`…) gardent le plafond du jour.
 - **Rien entre 21 h et 8 h, heure de l'athlète.**
   - Le fuseau, c'est `users/<clé>/tz` : le nom IANA du fuseau de l'appareil (`America/Montreal`),
     écrit par l'app à chaque démarrage s'il a changé.
@@ -43,21 +51,13 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
     l'heure de **Paris**. Ils n'envoient que si l'heure **locale** de l'athlète est entre 8 h et 21 h.
   - Sinon, le message est **déposé** pour son matin, et compté comme parti : il n'est pas redéposé le
     lendemain.
-- **La nuit, un seul message attend : le plus important.**
-  - `push_attente/<clé>` = `{message, at, prio, cumul, tz}`.
-  - Un nouveau message ne remplace l'attendu que si sa priorité est **au moins égale** :
-
-    | priorité | types |
-    |---|---|
-    | 5 | coach, message |
-    | 4 | acces, prospect |
-    | 3 | filleul |
-    | 2 | defi, relance, serie, bilan |
-    | 1 | wrapped, badge, retour, sante |
-
-    Le mot du coach survit donc au défi de l'équipe.
-  - `cumul` compte les messages fusionnés. Au-delà d'un, l'envoi du matin ajoute « + N autres
-    nouvelles » au texte.
+- **La nuit, une file par athlète.**
+  - `push_attente/<clé>/<id>` = `{message, at, tz}` : au plus **5** entrées, les plus récentes.
+  - Au matin, **un seul** push les résume (« 2 messages de ton coach, 1 défi »). Il prend le type,
+    le lien et la priorité du plus important (coach et message, puis acces et prospect, filleul,
+    defi, relance, serie et bilan, le reste). Une entrée seule part telle quelle. La file est vidée
+    dans la même écriture que le dépôt de la sous-tâche.
+  - L'ancienne place unique (`{message, at, prio, cumul, tz}`) se relit comme une entrée.
   - Le travail `attente` passe **chaque heure** : chaque message part quand l'athlète est sorti de
     *ses* heures calmes. 8 h à Montréal, c'est 14 h à Paris. Un message de plus de 14 h est retiré.
 - **Une panne passagère ne perd rien.**

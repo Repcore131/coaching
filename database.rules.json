@@ -2244,6 +2244,7 @@
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
+    "push_log_humain": { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
