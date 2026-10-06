@@ -1059,8 +1059,9 @@ async function testExercices(){
         // d'un palier parce que la precedente etait facile contredirait la
         // consigne qu'on vient d'afficher.
         const s=String(renderSets);
-        const i=s.indexOf('chargeSuivante(');
-        if(i<0) return _echec('la progression par paliers a disparu');
+        // Build 1825 : la progression série à série passe par progressionCharge.
+        const i=s.indexOf('progressionCharge(');
+        if(i<0) return _echec('la progression série à série a disparu');
         return s.lastIndexOf('if(s.rpeCible) continue;',i)>=0
           ?true:_echec('la progression s\'applique aussi aux exercices programmes');});
 
@@ -23350,10 +23351,11 @@ async function testExercices(){
         ok('Elle reprend les répétitions de la précédente',sets[1].reps==='10');
         ok('Elle n\u0027est ni validée ni marquée comme saisie',
            sets[1].done===false&&!sets[1].userEdited);
-        // La charge n'est pas posée par ajouterSerie : renderSets la déduit du
-        // RIR de la série précédente. 80 kg à RIR 2 → +2 paliers → 85 kg.
-        ok('Sa charge est déduite du RIR précédent, comme une série prévue',
-           Number(sets[1].weight)===85&&sets[1].isAuto===true,
+        // La charge n'est pas posée par ajouterSerie : renderSets la déduit de
+        // la série précédente (progressionCharge, build 1825). 80 kg à RIR 2
+        // pour RIR 2 visé : aucune réserve en trop, la charge reste à 80 kg.
+        ok('Sa charge est déduite de la série précédente, comme une série prévue',
+           Number(sets[1].weight)===80&&sets[1].isAuto===true,
            sets[1].weight+' kg');
 
         // Retirer : une série vierge part sans question.
@@ -23501,6 +23503,79 @@ async function testExercices(){
     ok('Charge nulle ou vide : rien',
        chargeSuivante(0,'2',false)===null&&chargeSuivante('','2',false)===null
        &&chargeSuivante(null,'2',false)===null);
+
+    // ══════ LA PROGRESSION DE CHARGE (06/10/2026, build 1825) ══════
+    // Écart au RIR visé, double progression dans la fourchette, arrondi au
+    // pas, plafonds, et la raison en une ligne. multiplicateurRir reste la
+    // grille, testée telle quelle plus haut.
+    {
+      const _H={name:'DEVELOPPE COUCHE HALTERE'}, _BA={name:'DEVELOPPE COUCHE BARRE'}, _EL={name:'ELEVATIONS LATERALES HALTERE'};
+      const _pc=o=>progressionCharge(o)||{};
+      ok('Progression : 20 kg × 7-6-5-5 à RIR 1 pour 8-10 à RIR 2 → 20 kg, et la raison le dit',()=>{
+        const r=_pc({charge:20,repsFaites:[7,6,5,5],rirFait:'1',reps:'8-10',rirCible:'2',ex:_H});
+        if(r.kg!==20||r.repsVisees!==8) return _echec(JSON.stringify(r));
+        return r.raison==='20 kg × 7-6-5-5 à RIR 1, sous ta fourchette 8-10 → on garde 20 kg, vise 8'?true:_echec(r.raison);});
+      ok('Progression : 60 × 10-10-10 à RIR 2 pour 8-10 à RIR 2 → 62,5 (barre), on vise 8',()=>{
+        const r=_pc({charge:60,repsFaites:[10,10,10],rirFait:'2',reps:'8-10',rirCible:'2',ex:_BA});
+        return (r.kg===62.5&&r.repsVisees===8)?true:_echec(JSON.stringify(r));});
+      ok('Progression : 8 kg haltères à RIR 3 pour 12-15 → 8 kg et une répétition de plus ; 10 kg seulement si 15 partout',()=>{
+        const a=_pc({charge:8,repsFaites:[15,13,12],rirFait:'3',reps:'12-15',rirCible:'2',ex:_EL});
+        if(a.kg!==8||a.repsVisees!==13) return _echec('pas partout : '+JSON.stringify(a));
+        const b=_pc({charge:8,repsFaites:[15,15,15],rirFait:'3',reps:'12-15',rirCible:'2',ex:_EL});
+        return (b.kg===10&&b.repsVisees===12)?true:_echec('15 partout : '+JSON.stringify(b));});
+      ok('Progression : un RIR fait égal au RIR visé ne fait plus monter ; l’échec pour une cible ≥ 1 fait baisser',()=>{
+        const a=_pc({charge:60,repsFaites:[],rirFait:'2',reps:'',rirCible:'2',ex:_BA});
+        const b=_pc({charge:60,repsFaites:[],rirFait:'3',reps:'',rirCible:'2',ex:_BA});
+        const c=_pc({charge:60,repsFaites:[8,7],rirFait:'echec',reps:'8-10',rirCible:'2',ex:_BA});
+        if(a.kg!==60) return _echec('d = 0 : '+a.kg);
+        if(!(b.kg>60)) return _echec('d = 1 : '+b.kg);
+        return c.kg<60?true:_echec('échec : '+c.kg);});
+      ok('Progression série à série : 4 × 10 à RIR 3 avec une cible de 3 → la charge reste ; d ≥ 2 au haut de la fourchette → elle monte d’au plus 5 %',()=>{
+        let w=22; const vus=[w];
+        for(let i=0;i<3;i++){ w=_pc({mode:'serie',charge:w,repsFaites:[10],rirFait:'3',reps:'8-10',rirCible:'3',ex:_H}).kg; vus.push(w); }
+        if(vus.join()!=='22,22,22,22') return _echec('série à série : '+vus.join(' → '));
+        const m=_pc({mode:'serie',charge:60,repsFaites:[10],rirFait:'5',reps:'8-10',rirCible:'2',ex:_BA});
+        if(!(m.kg>60&&m.kg<=63)) return _echec('d = 3 : '+m.kg);
+        const n=_pc({mode:'serie',charge:60,repsFaites:[9],rirFait:'5',reps:'8-10',rirCible:'2',ex:_BA});
+        if(n.kg!==60) return _echec('sous le haut de la fourchette : '+n.kg);
+        const o=_pc({mode:'serie',charge:60,repsFaites:[8],rirFait:'0',reps:'8-10',rirCible:'2',ex:_BA});
+        return o.kg<60?true:_echec('RIR 0 pour 2 visé : '+o.kg);});
+      ok('Progression : RIR vide et 10-10-10 pour 8-10 → une hausse d’un pas',()=>{
+        const r=_pc({charge:60,repsFaites:[10,10,10],rirFait:'',reps:'8-10',rirCible:'2',ex:_BA});
+        const h=_pc({charge:20,repsFaites:[10,10,10],rirFait:'',reps:'8-10',rirCible:'2',ex:_H});
+        return (r.kg===62.5&&h.kg===22)?true:_echec(r.kg+' / '+h.kg);});
+      ok('Progression : une hausse sous le demi-pas ne monte pas, on vise une répétition de plus',()=>{
+        // 30 kg d'haltères (pas de 2 kg), une réserve en trop : +0,75 kg.
+        const r=_pc({charge:30,repsFaites:[9,9],rirFait:'3',reps:'',rirCible:'2',ex:_H});
+        return (r.kg===30&&r.repsVisees===10&&/demi-pas/.test(r.raison))?true:_echec(JSON.stringify(r));});
+      ok('Progression : contrepoids inversé, poids du corps borné au haut de la fourchette',()=>{
+        const c=_pc({charge:40,repsFaites:[10,10,10],rirFait:'2',reps:'8-10',rirCible:'2',contrepoids:true,ex:{name:'TRACTIONS MACHINE ASSISTE'}});
+        if(!(c.kg<40)||!/assistance/.test(c.raison)) return _echec('contrepoids : '+JSON.stringify(c));
+        const p=_pc({poidsCorps:true,repsFaites:[15],rirFait:'3',reps:'10-15',rirCible:'2',ex:{name:'POMPES'}});
+        if(p.repsVisees!==15||!/lest ou une variante plus dure/.test(p.raison)) return _echec('poids du corps : '+JSON.stringify(p));
+        const q=_pc({poidsCorps:true,repsFaites:[11],rirFait:'3',reps:'10-15',rirCible:'2',ex:{name:'POMPES'}});
+        return q.repsVisees===12?true:_echec('poids du corps sous le haut : '+JSON.stringify(q));});
+      ok('Progression : aucune hausse de plus de 10 % en 1 000 cas aléatoires (hors double progression accomplie, où un seul pas du matériel est permis)',()=>{
+        let graine=1825; const al=()=>{ graine=(graine*16807)%2147483647; return graine/2147483647; };
+        const exs=[_H,_BA,_EL,{name:'SQUAT'},{name:'LEG EXTENSION'},{name:'TIRAGE POITRINE LARGE'}];
+        const rirs=['','echec','0','1','2','3','4','5'], fourch=['8-10','12-15','6-8','5','','10'];
+        for(let i=0;i<1000;i++){
+          const ex=exs[Math.floor(al()*exs.length)];
+          const w=Math.round((2+al()*198)*4)/4, n=1+Math.floor(al()*5);
+          const reps=fourch[Math.floor(al()*fourch.length)];
+          const R=Array.from({length:n},()=>1+Math.floor(al()*16));
+          const mode=al()<0.5?'serie':undefined;
+          const r=progressionCharge({mode,charge:w,repsFaites:R,rirFait:rirs[Math.floor(al()*rirs.length)],reps,
+            rirCible:rirs[2+Math.floor(al()*4)],ex});
+          if(!r||r.kg==null) continue;
+          const B=fourchetteReps(reps)||(/^\d+$/.test(reps)?{max:+reps}:null);
+          const accomplie=!mode&&B&&Math.min(...R)>=B.max;
+          const pas=pasCharge(w,ex), plaf=mode?0.05:0.10;
+          const ok_=r.kg<=w*(1+plaf)+1e-9||(accomplie&&r.kg<=w+pas+1e-9);
+          if(!ok_) return _echec('cas '+i+' : '+w+' → '+r.kg+' ('+ex.name+', '+reps+', '+R.join('-')+', '+(mode||'séance')+')');
+        }
+        return true;});
+    }
 
     // ══════ INDICE DE FORME DÉCLARÉE ══════
     const _fS=(f,m,s,extra)=>({id:'f'+Math.random(),date:Date.now(),
@@ -28556,14 +28631,15 @@ async function testExercices(){
           {weight:'100',reps:'5',rir:'1',pain:'5',done:true},
           {weight:'',reps:'5',rir:'',pain:'',done:false}]},1:{sets:[]}};
         renderSets(woState.exercises[0],woState.sessionData[0],0);
-        // 100 à RIR 1 → 102,5 posé par le remplissage automatique.
+        // 100 à RIR 1 pour RIR 2 visé → la même charge, posée par le
+        // remplissage automatique (progressionCharge, build 1825).
         const auto=Number(woState.sessionData[0].sets[2].weight);
         document.getElementById('wo-douleur-0')
           .querySelector('.dlr-btn[data-choix="allege"]').click();
         const apres=Number(woState.sessionData[0].sets[2].weight);
         _fin();
-        // 102,5 × 0,80 = 82 → 81,25 au cran inférieur.
-        return auto===102.5&&apres===81.25;});
+        // 100 × 0,80 = 80.
+        return auto===100&&apres===80;});
 
       // ── « Je déclare une gêne » : le formulaire EXISTANT ──
       ok('Critère : le bouton ouvre le formulaire de contrainte existant',()=>{
@@ -56019,9 +56095,13 @@ async function testExercices(){
       // Une baisse (échec) n'est jamais plafonnée, un contrepoids non plus.
       if(chargeSuivante(180,'echec',false,1,sq)!==chargeSuivante(180,'echec',false,1)) return _echec('baisse plafonnée');
       if(chargeSuivante(40,5,true,1,dc)!==chargeSuivante(40,5,true,1)) return _echec('contrepoids plafonné');
-      // Les trois appelants passent le nom de l'exercice.
+      // LA PROGRESSION (build 1825) garde ce plafond : elle le lit sur le nom
+      // de l'exercice, et ses trois appelants lui passent l'exercice.
+      if(String(progressionCharge).indexOf('plafondPas(ex.name)')<0) return _echec('progressionCharge ignore le plafond du pas');
+      const sq2=progressionCharge({charge:180,repsFaites:[],rirFait:'5',reps:'',rirCible:'0',ex:{name:sq}});
+      if(!sq2||sq2.kg!==190) return _echec('progression, squat : '+(sq2&&sq2.kg));
       const src=_prodSrc();
-      return (src.match(/chargeSuivante\([^)]*ex\.name\)/g)||[]).length===3?true:_echec('appelants sans nom d’exercice');});
+      return (src.match(/progressionCharge\(\{[^}]*\bex[,}]/g)||[]).length+(src.match(/suggestionDepuisHistorique\(ex,/g)||[]).length>=3?true:_echec('appelants sans exercice');});
     ok('T1 — records du rite et rapport de progression : la même borne que le reste de l’app',()=>{
       const t0=Date.parse('2026-06-01T12:00:00Z'), J=864e5;
       const S=(j,w,reps,rir)=>({date:t0+j*J,data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:String(reps),rir:String(rir)}]}}});
@@ -63846,8 +63926,11 @@ async function testExercices(){
           const vu=_r14Vu(d.querySelector('#sets-body-0 tr'));
           if(vu!==(v==='echec'?'Échec':v)) return _echec('après « '+v+' », la case affiche « '+vu+' »');
         }
-        // chargeSuivante lit TOUJOURS le RIR : 2 sur la série 1 remplit la série 2.
-        const att=chargeSuivante(100,'2',isCounterweightEx(_r08Ex.name));
+        // La progression série à série lit TOUJOURS le RIR : 2 sur la série 1
+        // remplit la série 2 (progressionCharge, build 1825 ; RIR 2 pour 2 visé :
+        // la même charge).
+        const att=progressionCharge({mode:'serie',charge:100,repsFaites:[repsFaitesSerie(woState.sessionData[0].sets[0])],rirFait:'2',
+          reps:'10',rirCible:_rirPrescrit(_r08Ex),contrepoids:isCounterweightEx(_r08Ex.name),ex:_r08Ex,user:currentUser}).kg;
         const s2=woState.sessionData[0].sets[1];
         if(Number(s2.weight)!==Number(att)) return _echec('série 2 à '+s2.weight+' au lieu de '+att);
         if(s2.isAuto!==true) return _echec('la charge remplie n’est pas marquée proposée');
@@ -65055,8 +65138,11 @@ async function testExercices(){
         _rirBandeChoisir(0,0,'2');
         if(d.sets[0].rir!=='2'||!bande.hidden) return _echec('le RIR choisi n’est pas noté, ou la bande reste');
         const w0=parseFloat(d.sets[0].weight);
-        const att=arrondiSuggestion(chargeSuivante(w0,'2',false,1,EX),{ex:woState.exercises[0],user:currentUser,depart:w0});
-        if(Number(d.sets[1].weight)!==Number(att)) return _echec('avec RIR, chargeSuivante n’est plus suivi : '+d.sets[1].weight+' pour '+att);
+        // La série 2 suit la progression série à série (build 1825).
+        const _e0=woState.exercises[0];
+        const att=progressionCharge({mode:'serie',charge:w0,repsFaites:[repsFaitesSerie(d.sets[0])],rirFait:'2',reps:d.sets[0].reps||_e0.reps,
+          rirCible:_rirPrescrit(_e0),contrepoids:false,ex:_e0,user:currentUser}).kg;
+        if(Number(d.sets[1].weight)!==Number(att)) return _echec('avec RIR, la progression série à série n’est plus suivie : '+d.sets[1].weight+' pour '+att);
         // 4. Valider une série isAuto garde la charge proposée.
         const prop=d.sets[1].weight;
         toggleSet(1,0); await pause(50);
@@ -70086,7 +70172,10 @@ async function testExercices(){
           const el=_r25Champ(0,i);
           if(document.activeElement!==el) return _echec('série '+(i+1)+' : le focus n’est pas sur sa charge');
           if(i>0){
-            const att=String(chargeSuivante(parseFloat(precedente),'2',false));
+            // La progression série à série (build 1825) : RIR 2 pour 2 visé, la même.
+            const _e0=woState.exercises[0];
+            const att=String(progressionCharge({mode:'serie',charge:parseFloat(precedente),repsFaites:[repsFaitesSerie(d.sets[i-1])],rirFait:'2',
+              reps:d.sets[i-1].reps||_e0.reps,rirCible:_rirPrescrit(_e0),contrepoids:false,ex:_e0,user:currentUser}).kg);
             if(el.value!==att) return _echec('série '+(i+1)+' : proposé « '+el.value+' », attendu « '+att+' »');
             if(d.sets[i].isAuto!==true) return _echec('série '+(i+1)+' : la charge proposée n’est pas marquée auto');
           }
@@ -70102,7 +70191,8 @@ async function testExercices(){
         }
         // AU GRAMME PRÈS : les valeurs connues, et ce que dit le dossier.
         const etat=d.sets.map(s=>s.weight+(s.userEdited?'U':'')+(s.isAuto?'A':'')).join(',');
-        if(etat!=='100U,105A,110U,116.25A,112.5U,118.75A') return _echec('dossier : '+etat);
+        // Build 1825 : RIR 2 pour 2 visé, la série suivante garde la charge.
+        if(etat!=='100U,100A,110U,110A,112.5U,112.5A') return _echec('dossier : '+etat);
         // LE RENDU PARTIEL ÉGALE LE RENDU COMPLET : ce que renderSets repeint de
         // zéro ne change ni une valeur, ni un texte, ni le dossier.
         const lu=()=>[...tb.rows].map(r=>r.textContent.replace(/\s+/g,' ').trim()+'|'+[...r.querySelectorAll('input')].map(x=>x.value+':'+x.getAttribute('enterkeyhint')).join('/')).join('\n');
@@ -70118,7 +70208,8 @@ async function testExercices(){
         const c0=_r25Champ(0,0), c1=_r25Champ(0,1);
         c1.focus(); c0.value='80'; c0.dispatchEvent(new Event('change',{bubbles:true}));
         if(!c1.isConnected||document.activeElement!==c1) return _echec('la case touchée a perdu le focus');
-        if(c1.value!==String(chargeSuivante(80,'2',false))) return _echec('la case touchée affiche « '+c1.value+' »');
+        // Build 1825 : RIR 2 pour 2 visé, la case touchée reçoit la même charge.
+        if(c1.value!=='80') return _echec('la case touchée affiche « '+c1.value+' »');
         // AUCUN RACCOURCI GLOBAL : Enter hors du tableau ne déplace rien.
         if(/document\.addEventListener\(\s*'keydown'[^]{0,200}_woChampSuivant/.test(_prodSrc())) return _echec('un écouteur global enchaîne les charges');
         return true;
@@ -76918,12 +77009,15 @@ async function testExercices(){
         ok('Critère : à 7 jours, la charge affichée est inchangée',()=>{
           const h=_scene(7,100);
           if(/EXCEPTION/.test(h)) return _echec(h);
-          if(!/105kg/.test(h)) return _echec('105kg absent');
+          // 100 × 5 à RIR 2 pour 5 reps à RIR 2 visé : la double progression est
+          // accomplie, un pas de barre (progressionCharge, build 1825).
+          if(!/102[.,]5kg/.test(h)) return _echec('102,5kg absent');
           return !/en dessous/.test(h)?true:_echec('une décote est annoncée à 7 jours');});
         ok('Critère : à 40 jours, la charge est décotée et la phrase le dit',()=>{
           const h=_scene(40,100);
           if(/EXCEPTION/.test(h)) return _echec(h);
-          if(!/93[.,]75kg/.test(h)) return _echec('93,75kg absent');
+          // 102,5 × 0,90 = 92,25 → 91,25 au cran inférieur.
+          if(!/91[.,]25kg/.test(h)) return _echec('91,25kg absent');
           if(!/On repart 10 % en dessous/.test(h)) return _echec('phrase de décote absente');
           if(!/Ta dernière séance de SQUAT date du /.test(h)) return _echec('date absente');
           // En clair, pas via la constante : indexOf('') rend toujours 0, et la
@@ -76948,10 +77042,10 @@ async function testExercices(){
             ?true:_echec('une rampe est affichée sans charge de travail');});
         ok('À 40 jours, la montée en charge part de la charge DÉCOTÉE',()=>{
           const h=_scene(40,100);
-          // La rampe se calcule sur 93,75 et non sur 105 : sinon l'échauffement
+          // La rampe se calcule sur 91,25 et non sur 102,5 : sinon l'échauffement
           // serait plus lourd que la série de travail.
-          const att=seriesApproche(93.75,'5',{name:'SQUAT',reps:'5'});
-          if(!att.length) return _echec('aucune rampe attendue sur 93,75');
+          const att=seriesApproche(91.25,'5',{name:'SQUAT',reps:'5'});
+          if(!att.length) return _echec('aucune rampe attendue sur 91,25');
           const dernier=_fmtChargeMontee(att[att.length-1].charge);
           return h.indexOf(dernier+' kg')>=0
             ?true:_echec('dernier palier attendu '+dernier+' kg');});
@@ -76983,8 +77077,8 @@ async function testExercices(){
         ok('La décote n\'est appliquée qu\'une fois dans le rendu',()=>{
           // Un seul appel décoté, et le facteur de cycle reste distinct.
           const src=String(_blocExo);
-          // (LOT T1 : l'appel passe aussi le nom de l'exercice, pour le plafond du pas.)
-          const n=src.split('chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name)').length-1;
+          // (Build 1825 : la progression passe par suggestionDepuisHistorique.)
+          const n=src.split('suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser)').length-1;
           if(n!==1) return _echec(n+' appels décotés');
           // _decote ne doit pas entrer dans le calcul du facteur de cycle.
           const i=src.indexOf('_facteurCycle=');

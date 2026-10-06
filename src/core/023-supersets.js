@@ -703,12 +703,18 @@ function _blocExo(idx,estSS){
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
-  const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
+  // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
+  // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
+  const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
+  const _rawSug=_prog?_prog.kg:null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
   const _prevPdc=(!prev&&typeCharge(_exPourCharge(ex.name,currentUser))==='poids_corps')?_prevSeriePoidsCorps(ex.name,woState.slot,woState.progName):null;
   const _sugReps=_prevPdc?repsSuivantes(_perfReps(_prevPdc),_prevPdc.rir,_rirPrescrit(ex)):null;
+  // BORNÉ AU HAUT DE LA FOURCHETTE : au-delà, un lest ou une variante plus dure.
+  const _progPdc=_prevPdc?(()=>{ try{ return progressionCharge({poidsCorps:true,repsFaites:[_perfReps(_prevPdc)],rirFait:_prevPdc.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),ex,user:currentUser}); }catch(e){ return null; } })():null;
+  if(_sugReps&&_progPdc&&_progPdc.repsVisees!=null) _sugReps.reps=_progPdc.repsVisees;
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
   // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
@@ -809,7 +815,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
@@ -817,7 +823,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_sugReps.reps} reps</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">Au poids du corps : progresser = une répétition de plus</div></div>
         </div>
-        <div class="s-note">Basée sur ${escapeHtml(creneauRef)} (${_perfReps(_prevPdc)} reps${_sugReps.rir!=null?' à RIR '+_sugReps.rir:', RIR non noté'})${_sugReps.monte?' : il te restait de la réserve, vise une de plus.':' : garde le même nombre, et vise le RIR prévu.'}</div>
+        <div class="s-note">Basée sur ${escapeHtml(creneauRef)} : ${_progPdc&&_progPdc.raison?escapeHtml(_progPdc.raison):(_perfReps(_prevPdc)+' reps'+(_sugReps.rir!=null?' à RIR '+_sugReps.rir:', RIR non noté')+(_sugReps.monte?' : il te restait de la réserve, vise une de plus.':' : garde le même nombre, et vise le RIR prévu.'))}</div>
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
@@ -1770,8 +1776,12 @@ function renderSets(ex,data,idx,opts){
     // le RPE qui est demande, pas le RIR qui est saisi.
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const _nextBrut=chargeSuivante(w,s.rir,_isCW,1,ex.name);
-      const nextW=_nextBrut!=null?plafondDecharge(arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}),w,_isCW,!!(woState&&woState.deload)):null;
+      // SÉRIE À SÉRIE (build 1825) : la suivante ne monte que si celle-ci a
+      // été faite au haut de la fourchette avec deux RIR de plus que visé.
+      let _pr=null;
+      try{ _pr=progressionCharge({mode:'serie',charge:w,repsFaites:[repsFaitesSerie(s)],rirFait:s.rir,
+        reps:s.reps||ex.reps,rirCible:_rirPrescrit(ex),contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
+      const nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;

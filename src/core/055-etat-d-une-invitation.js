@@ -1737,12 +1737,10 @@ function chargeReferenceEchauffement(idx){
     if(c&&c.kg>0) return c.kg;
   }catch(e){}
   try{
-    const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
-    if(prev&&prev.weight){
-      const isCW=isCounterweightEx(ex.name);
-      const s=chargeSuivante(prev.weight,prev.rir,isCW,1,ex.name);
-      if(s>0) return s;
-    }
+    // LA MÊME PROGRESSION QUE LA PREMIÈRE SÉRIE (build 1825) : sinon
+    // l'échauffement annoncerait des kilos que la série contredirait.
+    const p=suggestionDepuisHistorique(ex,woState.slot,woState.progName,1,currentUser);
+    if(p&&p.kg>0) return p.kg;
   }catch(e){}
   return null;
 }

@@ -56487,12 +56487,18 @@ function _blocExo(idx,estSS){
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
-  const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
+  // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
+  // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
+  const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
+  const _rawSug=_prog?_prog.kg:null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
   const _prevPdc=(!prev&&typeCharge(_exPourCharge(ex.name,currentUser))==='poids_corps')?_prevSeriePoidsCorps(ex.name,woState.slot,woState.progName):null;
   const _sugReps=_prevPdc?repsSuivantes(_perfReps(_prevPdc),_prevPdc.rir,_rirPrescrit(ex)):null;
+  // BORNÉ AU HAUT DE LA FOURCHETTE : au-delà, un lest ou une variante plus dure.
+  const _progPdc=_prevPdc?(()=>{ try{ return progressionCharge({poidsCorps:true,repsFaites:[_perfReps(_prevPdc)],rirFait:_prevPdc.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),ex,user:currentUser}); }catch(e){ return null; } })():null;
+  if(_sugReps&&_progPdc&&_progPdc.repsVisees!=null) _sugReps.reps=_progPdc.repsVisees;
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
   // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
@@ -56593,7 +56599,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
@@ -56601,7 +56607,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_sugReps.reps} reps</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">Au poids du corps : progresser = une répétition de plus</div></div>
         </div>
-        <div class="s-note">Basée sur ${escapeHtml(creneauRef)} (${_perfReps(_prevPdc)} reps${_sugReps.rir!=null?' à RIR '+_sugReps.rir:', RIR non noté'})${_sugReps.monte?' : il te restait de la réserve, vise une de plus.':' : garde le même nombre, et vise le RIR prévu.'}</div>
+        <div class="s-note">Basée sur ${escapeHtml(creneauRef)} : ${_progPdc&&_progPdc.raison?escapeHtml(_progPdc.raison):(_perfReps(_prevPdc)+' reps'+(_sugReps.rir!=null?' à RIR '+_sugReps.rir:', RIR non noté')+(_sugReps.monte?' : il te restait de la réserve, vise une de plus.':' : garde le même nombre, et vise le RIR prévu.'))}</div>
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
@@ -57554,8 +57560,12 @@ function renderSets(ex,data,idx,opts){
     // le RPE qui est demande, pas le RIR qui est saisi.
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const _nextBrut=chargeSuivante(w,s.rir,_isCW,1,ex.name);
-      const nextW=_nextBrut!=null?plafondDecharge(arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}),w,_isCW,!!(woState&&woState.deload)):null;
+      // SÉRIE À SÉRIE (build 1825) : la suivante ne monte que si celle-ci a
+      // été faite au haut de la fourchette avec deux RIR de plus que visé.
+      let _pr=null;
+      try{ _pr=progressionCharge({mode:'serie',charge:w,repsFaites:[repsFaitesSerie(s)],rirFait:s.rir,
+        reps:s.reps||ex.reps,rirCible:_rirPrescrit(ex),contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
+      const nextW=(_pr&&_pr.kg!=null)?plafondDecharge(_pr.kg,w,_isCW,!!(woState&&woState.deload)):null;
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -75210,6 +75220,200 @@ function chargeSuivante(charge,rir,contrepoids,decote,exNom){
   const res=arrondiCharge125(contrepoids?w/(m*d):w*m*d,w);
   const cap=contrepoids?null:plafondPas(exNom);
   return (cap&&res!=null&&res-w>cap)?Math.round((w+cap)*100)/100:res;
+}
+
+// ══ LA PROGRESSION DE CHARGE (06/10/2026, build 1825) ═══════════════════
+//
+// chargeSuivante multipliait la dernière charge par multiplicateurRir(RIR
+// fait) — la formule du coach, qu'on GARDE — sans regarder ni les
+// répétitions faites, ni la fourchette, ni le RIR prescrit. Mesures au banc :
+// 20 kg × 7-6-5-5 à RIR 1 pour 4 × 8-10 à RIR 2 → 22 kg ; série à série à
+// RIR 3 : 22 → 24 → 28 → 32 ; un RIR vide ne faisait jamais monter.
+//
+// PURE. progressionCharge rend {kg, repsVisees, raison} :
+//   1. L'ÉCART D'INTENSITÉ d = RIR fait − RIR visé (_rirPrescrit, sinon 2 ;
+//      'echec' = 0) passe par la grille de Kevin : d ≤ 0 → ×1, d = 1 →
+//      ×1,025… Un RIR fait égal au RIR visé ne fait plus monter. L'échec
+//      alors que la cible est ≥ 1 : ×0,95.
+//   2. LA DOUBLE PROGRESSION, avec une fourchette a-b : on ne monte que quand
+//      TOUTES les séries de travail atteignent b (à RIR ≥ visé, ou RIR non
+//      noté), d'au moins un pas, et on vise alors a. Sous a : on garde (on
+//      baisse d'un pas si le RIR fait est sous le visé de plus d'un) et l'on
+//      vise a. Entre les deux : on garde, et l'on vise une répétition de plus.
+//   3. L'ARRONDI au pas du matériel (arrondiSuggestion) ; une hausse plus
+//      petite que la moitié du pas ne monte pas : on garde, une répétition de
+//      plus. Plafonds : +10 % d'une séance à l'autre, +5 % d'une série à la
+//      suivante, en plus du plafond en kg du schéma (plafondPas). ⚠ Une
+//      double progression ACCOMPLIE monte toujours d'un pas, même quand ce
+//      seul pas dépasse 10 % (8 → 10 kg aux haltères) : sinon une charge
+//      légère ne progresserait jamais.
+//   4. SÉRIE À SÉRIE (mode 'serie') : la suivante ne monte que si la
+//      précédente a été faite au haut de la fourchette avec d ≥ 2 ; sinon la
+//      même, ou un pas de moins si le RIR fait est sous le visé de plus d'un.
+//   5. CONTREPOIDS : la même logique, inversée (l'assistance baisse).
+//      POIDS DU CORPS sans lest (poidsCorps) : repsSuivantes, borné au haut
+//      de la fourchette ; au-delà, un lest ou une variante plus dure.
+// La décote de reprise s'applique au résultat ; le cycle, la consigne du
+// coach (_cons.kg) et la programmation (s.rpeCible) restent chez l'appelant.
+const PROG_PLAFOND_SEANCE=0.10;
+const PROG_PLAFOND_SERIE=0.05;
+const PROG_RIR_CIBLE_DEFAUT=2;
+const PROG_SERIE_ECART_MIN=2;
+function _progRir(v){
+  const s=String(v==null?'':v).trim().toLowerCase();
+  if(s==='') return null;
+  if(s==='echec') return {n:0,echec:true};
+  const n=parseInt(s,10);
+  return (isFinite(n)&&n>=0)?{n:Math.min(5,n),echec:false}:null;
+}
+// La fourchette a-b, ou un nombre fixe (a = b), ou null.
+function _progBornes(reps){
+  const f=fourchetteReps(reps);
+  if(f) return {a:f.min,b:f.max,fourchette:true};
+  const t=String(reps==null?'':reps).trim();
+  return /^\d+$/.test(t)&&parseInt(t,10)>0?{a:parseInt(t,10),b:parseInt(t,10),fourchette:false}:null;
+}
+// Le pas du matériel, en kg.
+function _progPas(w,ex,user){
+  try{
+    if(uniteCharge(user)==='lb') return pasCharge(w/LB_KG,ex,user)*LB_KG;
+    return pasCharge(w,ex,user);
+  }catch(e){ return 2.5; }
+}
+// L'arrondi d'une proposition : au pas du matériel quand il est propre à
+// l'exercice, au 1,25 à la barre en kilos (comme chargeSuivante).
+function _progArrondi(kg,sens,ex,user){
+  if(!(kg>0)) return null;
+  try{
+    if(_pasPropreA(ex,user)) return arrondiCharge(kg,{ex,user,sens});
+  }catch(e){}
+  return arrondiCharge(kg,{pas:1.25,sens});
+}
+function _progKgTxt(v,user){
+  const a=kgVersAffiche(v,user);
+  return String(a==null?v:a).replace('.',',')+' '+uniteCharge(user);
+}
+// Les répétitions RÉELLEMENT connues d'une série : repsDone, ou un nombre
+// fixe ; une fourchette sans saisie ne dit pas combien ont été faites.
+function repsFaitesSerie(s){
+  if(!s) return null;
+  if(s.repsDone!=null&&String(s.repsDone).trim()!==''){ const n=Number(s.repsDone); return n>0?n:null; }
+  const t=String(s.reps==null?'':s.reps).trim();
+  return /^\d+$/.test(t)?parseInt(t,10):null;
+}
+/**
+ * PURE. @param {{charge:any,repsFaites?:any,rirFait?:any,reps?:any,rirCible?:any,
+ *   contrepoids?:boolean,decote?:number|null,ex?:any,user?:any,mode?:string,poidsCorps?:boolean}} o
+ * @returns {{kg:number|null,repsVisees:number|null,raison:string}|null}
+ */
+function progressionCharge(o){
+  const x=o||{};
+  const ex=x.ex&&typeof x.ex==='object'?x.ex:{name:String(x.ex||'')};
+  const user=x.user;
+  const serie=x.mode==='serie';
+  const R=(Array.isArray(x.repsFaites)?x.repsFaites:[x.repsFaites]).map(Number).filter(n=>isFinite(n)&&n>0);
+  const B=_progBornes(x.reps);
+  const rc=_progRir(x.rirCible), cible=rc?rc.n:PROG_RIR_CIBLE_DEFAUT;
+  const rf=_progRir(x.rirFait), d=rf?rf.n-cible:null;
+  const rirTxt=rf?(rf.echec?' à l’échec':' à RIR '+rf.n):', RIR non noté';
+  const fTxt=B?(B.fourchette?'ta fourchette '+B.a+'-'+B.b:'tes '+B.a+' reps'):'';
+  // ── 5. Poids du corps sans lest : on progresse en répétitions.
+  if(x.poidsCorps){
+    const last=R.length?R[R.length-1]:null;
+    const rs=repsSuivantes(last,x.rirFait,cible);
+    if(!rs) return null;
+    let v=rs.reps, raison=last+' reps'+rirTxt+(rs.monte?' : il te restait de la réserve, vise '+v:' : garde '+v+' reps, et vise le RIR prévu');
+    if(B&&v>B.b){
+      v=B.b;
+      raison=last+' reps'+rirTxt+', haut de '+fTxt+' atteint → ajoute un lest ou une variante plus dure';
+    }
+    return {kg:null,repsVisees:v,raison};
+  }
+  const w=parseFloat(x.charge);
+  if(!(w>0)) return null;
+  const dec=(x.decote==null)?1:Number(x.decote);
+  if(!isFinite(dec)||dec<=0) return null;
+  const cw=!!x.contrepoids;
+  const pas=_progPas(w,ex,user);
+  const kgTxt=v=>_progKgTxt(v,user);
+  const tete=kgTxt(w)+' × '+(R.length?R.join('-'):'?')+rirTxt;
+  const mn=R.length?Math.min.apply(null,R):null;
+  // dir : +1 progresser, 0 garder, -1 reculer ; `fac` : le facteur de la grille.
+  let dir=0, fac=1, vise=null, verdict='', pasPlein=false, accomplie=false;
+  if(serie){
+    const r=R.length?R[R.length-1]:null;
+    const haut=B?(r!=null&&r>=B.b):true;
+    if(haut&&d!=null&&d>=PROG_SERIE_ECART_MIN){ dir=1; fac=multiplicateurRir(String(d)); verdict=(B?'haut de '+fTxt+', ':'')+'RIR '+rf.n+' pour '+cible+' visé'; }
+    else if(rf&&rf.n<cible-1){ dir=-1; pasPlein=true; verdict='RIR '+rf.n+' pour '+cible+' visé'; }
+    else verdict=rf?('RIR '+rf.n+' pour '+cible+' visé'):'RIR non noté';
+  } else if(rf&&rf.echec&&cible>=1){
+    dir=-1; fac=SUG_MULTIPLICATEURS.echec; verdict='échec pour RIR '+cible+' visé'; vise=B?B.a:null;
+  } else if(B&&R.length){
+    if(mn<B.a){
+      verdict='sous '+fTxt; vise=B.a;
+      if(rf&&rf.n<cible-1){ dir=-1; pasPlein=true; }
+    } else if(mn>=B.b&&(!rf||rf.n>=cible)){
+      dir=1; accomplie=true; vise=B.a; verdict=(R.length>1?B.b+' partout, ':'')+'haut de '+fTxt+' atteint';
+      fac=Math.max(multiplicateurRir(String(Math.max(0,d||0))),(w+pas)/w);
+    } else {
+      vise=Math.min(B.b,mn+1);
+      verdict=mn>=B.b?('haut de '+fTxt+' à RIR '+rf.n+' pour '+cible+' visé'):('dans '+fTxt);
+    }
+  } else if(d!=null&&d>0){
+    dir=1; fac=multiplicateurRir(String(d)); verdict='RIR '+rf.n+' pour '+cible+' visé';
+  } else {
+    verdict=rf?('RIR '+rf.n+' pour '+cible+' visé'):'RIR non noté';
+  }
+  // ── La cible, puis la décote de reprise.
+  let t;
+  if(dir===1) t=cw?w/fac:w*fac;
+  else if(dir===-1) t=pasPlein?(cw?w+pas:w-pas):(cw?w/fac:w*fac);
+  else t=w;
+  t=cw?t/dec:t*dec;
+  // ── 3. L'arrondi, la demi-marche, les plafonds.
+  const gain=cw?w-t:t-w;            // ce que la proposition rend plus DUR
+  let kg, petit=false;
+  if(Math.abs(t-w)<1e-9) kg=w;
+  else if(gain>0&&dir===1&&dec===1&&gain<pas/2){ kg=w; petit=true; }
+  else kg=_progArrondi(t,t>w?'haut':'bas',ex,user);
+  if(kg==null) kg=w;
+  if(gain>0&&dir===1){
+    const rel=serie?PROG_PLAFOND_SERIE:PROG_PLAFOND_SEANCE;
+    if(!cw){
+      let cap=w*(1+rel);
+      const capKg=plafondPas(ex.name); if(capKg) cap=Math.min(cap,w+capKg);
+      if(accomplie) cap=Math.max(cap,w+pas);
+      if(kg>cap+1e-9){ kg=_progArrondi(cap,'bas',ex,user)||w; if(kg<w) kg=w; }
+    } else {
+      let plancher=w*(1-rel);
+      if(accomplie) plancher=Math.min(plancher,w-pas);
+      if(kg<plancher-1e-9){ kg=_progArrondi(plancher,'haut',ex,user)||w; if(kg>w) kg=w; }
+    }
+    if(Math.abs(kg-w)<1e-9) petit=true;
+  }
+  kg=Math.round(kg*1e6)/1e6;
+  if(petit&&R.length) vise=B?Math.min(B.b,Math.max(mn,B.a)+1):mn+1;
+  // ── 6. La raison, en une ligne.
+  const monte=cw?kg<w-1e-9:kg>w+1e-9, baisse=cw?kg>w+1e-9:kg<w-1e-9;
+  const action=(cw?(monte?'on réduit l’assistance à ':baisse?'on remet de l’assistance, ':'on garde l’assistance à ')
+      :(monte?'on monte à ':baisse?'on baisse à ':'on garde '))+kgTxt(kg)
+    +(petit&&gain>0?' (la hausse ne fait pas un demi-pas)':'')
+    +(vise?', vise '+vise:'');
+  return {kg,repsVisees:vise,raison:(serie?'':tete+', ')+verdict+' → '+action};
+}
+// La suggestion de la première série, d'après la dernière séance NORMALE du
+// créneau : ses séries de travail, le RIR de sa dernière série, et la
+// consigne d'aujourd'hui. Une seule porte pour _blocExo et l'échauffement.
+function suggestionDepuisHistorique(ex,slot,progName,decote,user){
+  const u=user||currentUser;
+  if(!ex||!ex.name) return null;
+  const prev=getPrevPerf(ex.name,slot,progName);
+  if(!prev) return null;
+  let ps=[]; try{ ps=prevSeries(ex.name,slot,progName,u).filter(Boolean); }catch(e){ ps=[]; }
+  const res=progressionCharge({charge:prev.weight,repsFaites:ps.map(p=>p.reps).filter(n=>n>0),
+    rirFait:prev.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),contrepoids:isCounterweightEx(ex.name),
+    decote,ex,user:u});
+  return res?Object.assign({prev},res):null;
 }
 
 // ══ LA SÉRIE PRÉCÉDENTE, PAR INDEX (30/09/2026) ═════════════════════════
@@ -137301,12 +137505,10 @@ function chargeReferenceEchauffement(idx){
     if(c&&c.kg>0) return c.kg;
   }catch(e){}
   try{
-    const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
-    if(prev&&prev.weight){
-      const isCW=isCounterweightEx(ex.name);
-      const s=chargeSuivante(prev.weight,prev.rir,isCW,1,ex.name);
-      if(s>0) return s;
-    }
+    // LA MÊME PROGRESSION QUE LA PREMIÈRE SÉRIE (build 1825) : sinon
+    // l'échauffement annoncerait des kilos que la série contredirait.
+    const p=suggestionDepuisHistorique(ex,woState.slot,woState.progName,1,currentUser);
+    if(p&&p.kg>0) return p.kg;
   }catch(e){}
   return null;
 }
