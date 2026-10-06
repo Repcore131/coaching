@@ -40,6 +40,10 @@ on:
         description: 'Envoyer tout de suite le KPI du matin (e-mail avec bouton WhatsApp)'
         type: boolean
         default: false
+      robot_maj:
+        description: 'Robot Resamania — mise à jour réelle maintenant (mode auto, honore la demande du bouton)'
+        type: boolean
+        default: false
       robot_resamania:
         description: 'Robot Resamania (repérage : connexion et description des menus)'
         type: boolean
@@ -55,7 +59,7 @@ concurrency:
 
 jobs:
   envoyer:
-    if: ${{ !inputs.robot_resamania && !inputs.robot_diag }}
+    if: ${{ !inputs.robot_resamania && !inputs.robot_diag && !inputs.robot_maj }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -78,8 +82,11 @@ jobs:
           APERCU_MATIN: ${{ inputs.apercu_matin }}
         run: node club/outils/fitpulse-serveur.mjs
 
+  # Le robot est lancé à la demande via « robot_maj » (déclenchement fiable) ou
+  # à la main ; le planning GitHub sert de filet (souvent ralenti). La porte
+  # « besoin » garantit qu'il ne démarre que si une mise à jour a été armée.
   robot:
-    if: ${{ inputs.robot_resamania || inputs.robot_diag || github.event_name == 'schedule' }}
+    if: ${{ inputs.robot_resamania || inputs.robot_diag || inputs.robot_maj || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -92,7 +99,7 @@ jobs:
       # Sur le planning : ne rien faire tant que personne n'a appuyé sur « Lancer » dans l'appli.
       - name: Une mise à jour est-elle demandée ?
         id: chk
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ inputs.robot_maj || github.event_name == 'schedule' }}
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node club/outils/resamania-robot.mjs besoin
@@ -109,6 +116,6 @@ jobs:
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
-          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || (github.event_name == 'schedule' && 'auto' || 'reperage') }}
+          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || inputs.robot_resamania && 'reperage' || 'auto' }}
           TZ: Europe/Paris
         run: node club/outils/resamania-robot.mjs
