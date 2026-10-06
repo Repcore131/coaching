@@ -21,7 +21,7 @@ import { passagePush } from './fitpulse-push.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
-const UTIL = process.env.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com';
+const UTIL = process.env.MAIL_UTILISATEUR || 'kevinguellec.pro@gmail.com';
 const MDP = process.env.MAIL_MOT_DE_PASSE || '';
 const DRY = process.env.DRY_RUN === '1';
 const MAX_PAR_PASSAGE = 25;
@@ -130,6 +130,7 @@ export const REGLE = `${DEBUT}
         ".validate": "newData.hasChildren(['email', 'first', 'code', 'role', 'club', 'at']) && newData.child('at').val() == now",
         "email": { ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^@ ]+@[^@ ]+[.][a-zA-Z]{2,24}$/)" },
         "first": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+        "last": { ".validate": "newData.isString() && newData.val().length <= 40" },
         "code": { ".validate": "newData.isString() && newData.val().matches(/^FP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)" },
         "role": { ".validate": "newData.val() == 'membre' || newData.val() == 'manager' || newData.val() == 'createur'" },
         "club": { ".validate": "newData.isString() && newData.val().length <= 60" },
@@ -202,9 +203,9 @@ export function emailInvitation(d) {
     `Bonjour ${d.first},`, '',
     `Bienvenue dans Fit Pulse, l'application commerciale de ${d.club}.`,
     `Votre accès : ${role}`, '',
-    `Votre code personnel : ${d.code}`, `Votre identifiant : ${d.email}`, '',
+    `Nom : ${[d.first, d.last].filter(Boolean).join(' ')}`, `Votre identifiant : ${d.email}`, `Votre code personnel : ${d.code}`, '',
     `1. Ouvrez ${lien}`, `2. Connectez-vous avec votre e-mail et votre code`,
-    `3. Installe l'appli : iPhone → Safari > Partager > « Sur l'écran d'accueil » ; Android → Chrome > ⋮ > « Installer l'application »`, '',
+    `3. Installez l'appli : iPhone → Safari > Partager > « Sur l'écran d'accueil » ; Android → Chrome > ⋮ > « Installer l'application »`, '',
     `Votre code est personnel : ne le partagez avec personne.`, '', `À très vite sur le plateau !`, `L'équipe ${d.club}`,
   ].join('\n');
   const Y = '#FFD600';
@@ -226,7 +227,7 @@ export function emailInvitation(d) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000;border:2px dashed ${Y};border-radius:16px;"><tr><td align="center" style="padding:22px 12px;">
       <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#9b9b9b;">Votre code personnel</div>
       <div style="margin-top:8px;font-family:'Courier New',Courier,monospace;font-size:28px;font-weight:700;letter-spacing:3px;color:${Y};">${echap(d.code)}</div>
-      <div style="margin-top:10px;font-size:13px;color:#bdbdbd;">Identifiant : <span style="color:#fff;">${echap(d.email)}</span></div>
+      <div style="margin-top:10px;font-size:13px;color:#bdbdbd;">${d.last ? `${echap(d.first)} ${echap(d.last)} · ` : ''}Identifiant : <span style="color:#fff;">${echap(d.email)}</span></div>
     </td></tr></table>
   </td></tr>
   <tr><td align="center" style="padding:20px 28px 6px;">

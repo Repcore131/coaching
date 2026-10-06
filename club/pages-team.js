@@ -116,12 +116,12 @@ ${ME ? fullName(ME) : ''}`,
 }
 async function sendInvite(u, code) {
   const st = $('#mail-state');
-  const srv = (S && S.serveur) || {}; const auto = window.PARKPULSE_MAIL_AUTO || (srv.mail === true && Date.now() - (Number(srv.at) || 0) < 3600e3);
+  const srv = (S && S.serveur) || {}; const auto = window.PARKPULSE_MAIL_AUTO || srv.mail === true; const late = Date.now() - (Number(srv.at) || 0) > 3600e3;
   if (!auto || backend.mode !== 'firebase' || !u.email) return;
   if (st) st.innerHTML = '<span class="muted">Envoi automatique de l’invitation…</span>';
   try {
-    await backend.queueMail({ email: u.email, first: (u.first || '').slice(0, 40) || 'Bonjour', code: normCode(code), role: u.role, club: (CLUB ? CLUB.name : '').slice(0, 60), by: fullName(ME).slice(0, 60) });
-    if ($('#mail-state')) $('#mail-state').innerHTML = `<span class="ok">${ico('check')} Invitation envoyée à <b>${esc(u.email)}</b></span><br><span class="muted small">Elle arrive en moins de 5 minutes (pensez aux spams).</span>`;
+    await backend.queueMail({ email: u.email, first: (u.first || '').slice(0, 40) || 'Bonjour', last: (u.last || '').slice(0, 40), code: normCode(code), role: u.role, club: (CLUB ? CLUB.name : '').slice(0, 60), by: fullName(ME).slice(0, 60) });
+    if ($('#mail-state')) $('#mail-state').innerHTML = `<span class="ok">${ico('check')} Invitation envoyée à <b>${esc(u.email)}</b></span><br><span class="muted small">${late ? 'Elle part au prochain passage du serveur (en général sous une heure).' : 'Elle arrive en quelques minutes.'} Pensez aux spams. En cas d’urgence : « Envoyer par e-mail ».</span>`;
   } catch (e) {
     if ($('#mail-state')) $('#mail-state').innerHTML = `<span class="bad">Envoi automatique impossible (${esc(e.code || e.message || 'erreur')}).</span> Utilisez « Envoyer par e-mail ».`;
   }

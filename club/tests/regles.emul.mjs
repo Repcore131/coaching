@@ -49,7 +49,7 @@ await check('membre ne lit pas la boîte d’un collègue', await req('GET', 'pu
 await check('membre marque une notification lue', await req('PUT', 'pulse_inbox/mem/n1/readAt', 5, who('mem')), true);
 await check('clé secrète illisible (créateur)', await req('GET', 'fitpulse_secret', undefined, who('crea')), false);
 await check('membre ne dépose pas d’invitation', await req('PUT', 'fitpulse_mail/x1', { email: 'a@b.fr', first: 'A', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mem')), false);
-await check('manager dépose une invitation', await req('PUT', 'fitpulse_mail/x2', { email: 'a@b.fr', first: 'A', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mgr')), true);
+await check('manager dépose une invitation', await req('PUT', 'fitpulse_mail/x2', { email: 'a@b.fr', first: 'A', last: 'MARTIN', code: 'FP-ABCD-EFGH-JKLM', role: 'membre', club: 'Niort', at: { '.sv': 'timestamp' } }, who('mgr')), true);
 await check('le créateur peut tout écrire sous /pulse', await req('PUT', 'pulse/meta/x', 1, who('crea')), true);
 console.log(fails ? `${fails} échec(s)` : 'Toutes les règles se comportent comme attendu.');
 process.exit(fails ? 1 : 0);

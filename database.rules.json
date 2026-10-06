@@ -78,6 +78,7 @@
         ".validate": "newData.hasChildren(['email', 'first', 'code', 'role', 'club', 'at']) && newData.child('at').val() == now",
         "email": { ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^@ ]+@[^@ ]+[.][a-zA-Z]{2,24}$/)" },
         "first": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+        "last": { ".validate": "newData.isString() && newData.val().length <= 40" },
         "code": { ".validate": "newData.isString() && newData.val().matches(/^FP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)" },
         "role": { ".validate": "newData.val() == 'membre' || newData.val() == 'manager' || newData.val() == 'createur'" },
         "club": { ".validate": "newData.isString() && newData.val().length <= 60" },
