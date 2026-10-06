@@ -1,0 +1,88 @@
+FIT PULSE : LES IMPORTS DU MARDI 6 OCTOBRE 2026
+===============================================
+
+Aujourd'hui, deux routines tombent en même temps :
+- le bilan du mois de SEPTEMBRE (prévu le 2 de chaque mois, en retard) ;
+- la routine de la SEMAINE 41 (prévue le lundi 5 octobre).
+
+Temps total : environ 30 minutes.
+Chaque fichier de ce dossier porte déjà le bon nom. Exportez depuis
+Resamania, puis enregistrez l'export sous le nom du modèle (ou remplacez
+le modèle par l'export). Fit Pulse reconnaît chaque fichier par ses
+colonnes et ne compte jamais deux fois la même ligne : les exports qui se
+recouvrent (septembre et 30 derniers jours) ne créent pas de doublon.
+
+
+ÉTAPE 1 : LANCER LES EXPORTS DE GESTION (ils se préparent en fond)
+------------------------------------------------------------------
+Menu : Exports de gestion > Exporter. Lancez-les tous d'abord, le lien
+arrive par e-mail. Les ZIP se déposent tels quels, sans les ouvrir.
+
+[ ] M01  Membres & Ventes > Vente d'abonnements
+         Date de début 01/09/2026, Date de fin 30/09/2026
+[ ] H01  Membres & Ventes > Vente d'abonnements (30 derniers jours)
+         Date de début 06/09/2026, Date de fin 06/10/2026
+[ ] M02  Finance > Factures & avoirs
+         01/09/2026 au 30/09/2026, Entité = FPN GESTION, Club = Niort  (ZIP)
+[ ] M03  Membres & Ventes > Évolution clients
+         01/09/2026 au 30/09/2026, Club = Niort  (ZIP : detail-gain et detail-perte)
+[ ] M04  Membres & Ventes > Taux de transformation par commerciaux
+         01/09/2026 au 30/09/2026
+[ ] M05  Finance > Rapport détaillé des transactions Web
+         Septembre 2026, Club = Niort
+[ ] M06  Spécifiques > Export des performances commerciales
+         Septembre 2026, Club = Niort  (XLSX accepté)
+[ ] H02  Points d'attention > Clients en incident
+         Date de visualisation = 06/10/2026, Club = Niort
+[ ] H03  Points d'attention > Clients abonnés sans prélèvement
+         Club = Niort
+
+Les exports marqués (S) dans Resamania demandent un code reçu par e-mail.
+
+
+ÉTAPE 2 : EXPORTER LES LISTES (menu ⋮ > Exporter, fichier immédiat)
+------------------------------------------------------------------
+Attention : une liste de 2 000 lignes exactement est coupée par
+Resamania. Dans ce cas, refaites l'export sur une période plus courte.
+
+[ ] M07  Données financières > Incidents
+         Statut = Régularisé, Date de régularisation 01/09/2026 au 30/09/2026
+[ ] H04  Données financières > Incidents
+         Statut = Régularisé, Date de régularisation 28/09/2026 au 04/10/2026
+[ ] M08  Clients > Résiliations
+         Date de création 01/09/2026 au 30/09/2026, tous statuts
+[ ] M09  Clients > Prospects
+         Date de création 01/09/2026 au 30/09/2026
+[ ] M10  Données financières > Paiements, une semaine par fichier :
+         S1 = 01/09 au 07/09    S2 = 08/09 au 14/09    S3 = 15/09 au 21/09
+         S4 = 22/09 au 28/09    S5 = 29/09 au 30/09
+[ ] H05  Données financières > Paiements
+         28/09/2026 au 04/10/2026
+[ ] H06  Clients > Abonnements
+         Fin d'engagement 06/10/2026 au 05/11/2026, Masquer les résiliés
+[ ] H07  Clients > Clients club
+         Statut = Client
+
+
+ÉTAPE 3 : DÉPOSER DANS FIT PULSE
+--------------------------------
+Fit Pulse > Imports > onglet Resamania : glissez tous les fichiers
+d'un coup (CSV, ZIP, XLSX). Vérifiez l'écran de contrôle :
+- associez les commerciaux inconnus à un membre de l'équipe (une seule fois) ;
+- lisez les avertissements (liste tronquée, motifs techniques écartés) ;
+- validez.
+
+
+ÉTAPE 4 : LA CONFIGURATION (une seule fois)
+-------------------------------------------
+Dossier 3-configuration-une-fois : à remplir si ce n'est pas déjà fait
+dans l'appli. Commencez par B01 (club Niort déjà prérempli : ajoutez
+l'adresse), B02 (l'équipe, avec le code commercial Resamania de chacun),
+B04 (objectifs d'octobre), B05 (paliers d'octobre). Le reste quand vous
+avez le temps. Renvoyez-moi ces fichiers remplis et je les intègre.
+
+
+CE QUI N'EXISTE PAS DANS RESAMANIA
+----------------------------------
+Avis Google et invités transformés en contrats : saisie manuelle dans
+Fit Pulse, ou fichier B08_saisies-manuelles.csv.
