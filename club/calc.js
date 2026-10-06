@@ -410,18 +410,19 @@ function challengeRanking(ch) {
 const trophyIcon = (t, cls = 'ico') => `<span class="tro ${t.tone || ''}" title="${esc(t.label || '')}">${typeof trophyArt === 'function' ? trophyArt(t, /ico-xs/.test(cls) ? 18 : /ico-xl/.test(cls) ? 56 : 32) : ico(ICONS[t.icon] ? t.icon : 'trophy', cls)}</span>`;
 const LOYALTY_TYPES = {
   suivi: { label: 'Appel de suivi', icon: 'phone', hint: 'Nouvel adhérent : appel à J+15 / J+30' },
-  renouvellement: { label: 'Renouvellement', icon: 'repeat', hint: 'Fin de contrat dans les 30 jours' },
+  renouvellement: { label: 'Fin d’engagement', icon: 'clock', hint: 'Arrive en fin d’engagement : relancer pour le renouvellement' },
   anniversaire: { label: 'Anniversaire', icon: 'cake', hint: 'Anniversaire dans les 7 jours' },
   impaye: { label: 'Impayé', icon: 'coins', hint: 'Solde débiteur' },
   mandat: { label: 'Sans mandat', icon: 'bank', hint: 'Abonné sans mandat de prélèvement' },
 };
 const OUTCOMES = {
-  ok: { label: 'Joint, OK', cls: 'ok', done: true },
+  ok: { label: 'Joint, renouvelle', cls: 'ok', done: true },
+  maintien: { label: 'Maintien 8 sem.', cls: 'ok', done: true },
   rdv: { label: 'RDV pris', cls: 'ok', done: true },
   paid: { label: 'Réglé', cls: 'ok', done: true },
   noanswer: { label: 'Pas de réponse', cls: 'warn', done: false },
   message: { label: 'Message laissé', cls: 'warn', done: false },
-  lost: { label: 'Refus / perdu', cls: 'bad', done: true, lost: true },
+  lost: { label: 'Ne renouvelle pas', cls: 'bad', done: true, lost: true },
 };
 const MAX_ATTEMPTS = 3;
 

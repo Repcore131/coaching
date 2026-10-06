@@ -185,16 +185,21 @@ ACTIONS.rsmCommit = () => {
       const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
       ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}), ...(e.priceHT != null ? { priceHT: e.priceHT } : {}), ...(e.engaged != null ? { engaged: e.engaged } : {}), ...(e.option ? { option: true } : {}) }]);
     }
-    // Export de gestion qui couvre une periode complete : une vente deja importee
-    // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
-    // ne compte plus. Annuler ce nouvel import la fait revenir.
-    if (['ventes', 'factures', 'lignes-factures'].includes(r.def.id) && r.entries.length) {
+    // Export de gestion qui couvre une periode complete : Resamania fait foi sur
+    // cette periode. Une vente deja importee absente du nouveau fichier (annulee
+    // dans Resamania), ET une saisie manuelle de la meme famille de KPI absente
+    // du fichier (erreur de saisie), ne comptent plus. L'historique (relances,
+    // contacts) n'est pas touche. Annuler ce nouvel import les fait revenir.
+    const RSM_KPIS = { ventes: ['contrats'], factures: ['nutrition', 'accessoires'], 'lignes-factures': ['nutrition', 'accessoires'] };
+    if (RSM_KPIS[r.def.id] && r.entries.length) {
       const ds = r.entries.map(e => e.date).sort(); const from = ds[0], to = ds[ds.length - 1];
+      const kset = new Set(RSM_KPIS[r.def.id]);
       summary.removed = 0;
       for (const e of Object.values(S.entries)) {
-        if (e.clubId !== club || e.source !== 'import' || written.has(e.id) || e.date < from || e.date > to || !entryCounts(e)) continue;
-        const ids = Object.keys(e.importIds || (e.importId ? { [e.importId]: 1 } : {}));
-        if (!ids.some(i => S.imports[i] && S.imports[i].defId === r.def.id)) continue;
+        if (e.clubId !== club || written.has(e.id) || e.date < from || e.date > to || !entryCounts(e)) continue;
+        if (e.source === 'import') { const ids = Object.keys(e.importIds || (e.importId ? { [e.importId]: 1 } : {})); if (!ids.some(i => S.imports[i] && S.imports[i].defId === r.def.id)) continue; }
+        else if (e.source === 'manual' && kset.has(e.kpiId) && !e.adjust) { /* saisie manuelle de la periode non confirmee par l'import */ }
+        else continue;
         ops.push([['entries', e.id, 'removedBy'], impId]); summary.removed++;
       }
     }
@@ -240,12 +245,13 @@ ACTIONS.rsmCommit = () => {
     if (r.balances) {
       const listed = new Set();
       r.balances.list.forEach(b0 => { const b = { ...b0, amount: Math.round(b0.amount * 100) / 100 }; const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), ...(b.oldest ? { oldestIncident: b.oldest } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: Math.abs(Number((pendingClients[c0.id] || c0).balance) - b.amount) < 0.005 ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
-      // photo complete : un client absent du fichier n'a plus d'impaye
-      // Seule la photo complete « Clients en incident » solde les absents. Une
-      // liste Incidents partielle ne touche jamais aux autres clients. Sans
-      // regularisation correspondante, le dossier passe « à vérifier », pas
-      // « récupéré ».
-      if (r.balances.src === 'clients-incident') Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
+      // photo complete des impayes en cours : un client absent n'a plus d'impaye.
+      // La photo « Clients en incident » ET la liste des incidents « en cours »
+      // sont toutes deux completes (elles listent qui doit aujourd'hui) : un
+      // client reglé en disparaît, on remet donc son solde a 0 pour ne plus
+      // l'appeler. Avec regularisation correspondante le dossier passe
+      // « récupéré », sinon « à vérifier ».
+      if (['clients-incident', 'incidents'].includes(r.balances.src) && r.balances.list.length) Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
         const rv = lastRecov(club, c.num, B);
         upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: rv ? 'recupere' : 'a_verifier', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
       });
