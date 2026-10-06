@@ -2400,12 +2400,41 @@ function risquesMicro(user,ref){
 //
 // Les valeurs de référence sont des REPÈRES DE POPULATION, pas des seuils et
 // encore moins une norme : la longueur de jambe rapportée à la taille tourne
-// autour de 0,46 et celle du bras autour de 0,45 chez l'adulte, avec une
-// dispersion large. Être en dehors n'est ni un défaut ni un diagnostic — c'est
-// une raison de proposer une variante d'un mouvement, jamais de l'interdire.
+// autour de 0,46 chez l'adulte, avec une dispersion large. Être en dehors
+// n'est ni un défaut ni un diagnostic — c'est une raison de proposer une
+// variante d'un mouvement, jamais de l'interdire.
 const RATIO_JAMBES_REF=0.46;
-const RATIO_BRAS_REF=0.45;
 const RATIO_MARGE=0.03;
+/**
+ * LA LONGUEUR DE BRAS (deb-bras), ACROMION → STYLOÏDE, en fraction de la
+ * taille, PAR SEXE, AVEC SA DISPERSION.
+ *
+ * Source : ANSUR II (Gordon et al., 2014, NATICK/TR-15/007), fichiers publics —
+ * calcul RepCore du 06/10/2026, n = 4 082 hommes / 1 986 femmes. Le rapport
+ * (acromion-radiale + radiale-stylion) / stature est calculé PERSONNE PAR
+ * PERSONNE, puis moyenné ; `et` est son écart-type. Même méthode
+ * qu'ANAT_LARGEURS.
+ *
+ * ⚠ POURQUOI CE N'EST PLUS 0,45. L'ancien repère unique (0,45 ± 0,03)
+ *   supposait une mesure jusqu'au BOUT DES DOIGTS, alors que la mesure est
+ *   définie partout de l'acromion à la styloïde (MORPHO_MESURES, questions,
+ *   biais photo). Acromion → poignet vaut 0,34 de la taille : tout athlète bien
+ *   mesuré sortait « bras courts », et le profil P4 ne pouvait jamais sortir.
+ * ⚠ LA MARGE vaut 1,5 écart-type (RATIO_BRAS_ET_MARGE), et jamais moins que
+ *   l'erreur du ruban rapportée à la taille.
+ * ⚠ POPULATION MILITAIRE : un repère d'adultes actifs, pas une norme. Sur les
+ *   6 068 personnes, aucune ne dépasse 0,382 : au-delà de RATIO_BRAS_DOIGTS
+ *   (0,40), la mesure est allée jusqu'au bout des doigts, et l'app le demande
+ *   au lieu d'en tirer une position.
+ */
+const RATIO_BRAS=Object.freeze({
+  H:Object.freeze({ref:0.3434,et:0.0101}),
+  F:Object.freeze({ref:0.3392,et:0.0108}),
+  SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore du 06/10/2026, n = 4 082 H / 1 986 F'
+});
+const RATIO_BRAS_ET_MARGE=1.5;
+const RATIO_BRAS_DOIGTS=0.40;
+const BRAS_DOIGTS_QUESTION='Mesuré jusqu’au bout des doigts ? La mesure s’arrête à l’os du poignet.';
 // Comparaison au centième : un entrejambe relevé au centimètre près sur une
 // personne de 180 cm ne porte pas plus de précision que ça, et c'est déjà
 // l'arrondi qu'affiche le motif (« 49 % »). La marge est ATTEINTE, pas
@@ -2452,10 +2481,40 @@ function ratioJambes(user){
   const t=_tailleCm(user);
   return (l.cm!=null&&t)?l.cm/t:null;
 }
+// Le rapport BRUT (deb-bras / taille), sans jugement : positionBras le lit.
 function ratioBras(user){
   const l=longueurSegment(user,'deb-bras');
   const t=_tailleCm(user);
   return (l.cm!=null&&t)?l.cm/t:null;
+}
+// PURE. 'H', 'F', ou null quand rien ne le dit (jamais deviné).
+function sexeMorpho(user){
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const s=String((user&&(user._evol_gender||user.gender))||(bl.length?bl[bl.length-1]['deb-gender']:'')||'').trim();
+  if(!s) return null;
+  return isFemale(s)?'F':'H';
+}
+// PURE. Le repère du bras pour CET athlète, ou null sans sexe.
+function repereBras(user){
+  const s=sexeMorpho(user);
+  if(!s) return null;
+  const r=RATIO_BRAS[s], t=_tailleCm(user);
+  const ruban=t?MORPHO_ERREUR_CM/t:0;
+  return {sexe:s,ref:r.ref,et:r.et,marge:Math.max(RATIO_BRAS_ET_MARGE*r.et,ruban)};
+}
+/**
+ * PURE. Où se situe le bras : {ratio, position:'bas'|'neutre'|'haut'|null,
+ * motif:null|'absente'|'doigts'|'sexe', ref, marge}. 'doigts' : rapport au-delà
+ * de RATIO_BRAS_DOIGTS, la mesure n'est pas la bonne ; 'sexe' : sans lui, pas
+ * de repère, donc pas de position.
+ */
+function positionBras(user){
+  const rb=ratioBras(user);
+  if(rb==null) return {ratio:null,position:null,motif:'absente',ref:null,marge:null};
+  if(rb>RATIO_BRAS_DOIGTS) return {ratio:rb,position:null,motif:'doigts',ref:null,marge:null};
+  const rp=repereBras(user);
+  if(!rp) return {ratio:rb,position:null,motif:'sexe',ref:null,marge:null};
+  return {ratio:rb,position:_morphoPosition(rb,rp.ref,rp.marge),motif:null,ref:rp.ref,marge:rp.marge,sexe:rp.sexe};
 }
 
 // Exercices du même schéma moteur, à titre de VARIANTES POSSIBLES. Ce lot

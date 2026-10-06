@@ -220,7 +220,7 @@ function _morphoTexteTest(d,v){
 // relève de la programmation.
 //
 // ⚠ DEUX REPÈRES SEULEMENT SONT IMPORTÉS, ET CE SONT CEUX DU CODE.
-// A1 (0,46 ± 0,03) et A3 (0,45 ± 0,03) existaient avant ce lot. A6 porte le
+// A1 (0,46 ± 0,03) et A3 (0,45 ± 0,03, remplacé le 06/10/2026 par RATIO_BRAS, par sexe) existaient avant ce lot. A6 porte le
 // seul repère chiffré de l'étude qui soit assorti de sa condition — homme de
 // plus de 1,65 m. LES TROIS AUTRES (A2, A4, A5) N'ONT PAS DE REPÈRE :
 // l'étude en cite un pour A2 (« autour de 1,15–1,25 »), mais il porte sur les
@@ -454,6 +454,10 @@ function _morphoBrut(user,cle){
     if(b.motif==='desaccord') return {valeur:null,erreur:0,unite:'× taille',source:null,date:null,
       conf:0,motif:'desaccord',aMesurer:null};
     if(b.cm==null||!t) return manque('la longueur de bras, de la pointe de l’épaule au poignet');
+    // ⚠ AU-DELÀ DE 0,40, LA MESURE EST ALLÉE AU BOUT DES DOIGTS : aucune
+    //   position, aucun profil, et la reprise demandée (RATIO_BRAS_DOIGTS).
+    if(b.cm/t>RATIO_BRAS_DOIGTS) return {valeur:null,erreur:0,unite:'× taille',source:null,date:null,conf:0,
+      motif:'doigts',aMesurer:'la longueur de bras reprise de la pointe de l’épaule à l’os du poignet, pas au bout des doigts'};
     return {valeur:b.cm/t,erreur:E/t,unite:'× taille',source:b.source,date:b.date,conf:b.conf,
       motif:null,aMesurer:null};
   }
@@ -463,6 +467,9 @@ function _morphoBrut(user,cle){
       source:null,date:null,conf:0,motif:'desaccord',aMesurer:null};
     if(a.cm==null) return manque('l’avant-bras, coude plié à angle droit, de l’olécrane à la styloïde');
     if(b.cm==null) return manque('la longueur de bras, de la pointe de l’épaule au poignet');
+    // Un bras mesuré jusqu'au bout des doigts fausse aussi l'humérus : rien dessus.
+    if(t&&b.cm/t>RATIO_BRAS_DOIGTS) return {valeur:null,erreur:0,unite:'',source:null,date:null,conf:0,
+      motif:'doigts',aMesurer:'la longueur de bras reprise de la pointe de l’épaule à l’os du poignet, pas au bout des doigts'};
     if(b.cm<=a.cm) return {valeur:null,erreur:0,unite:'',source:null,date:null,conf:0,
       motif:'incoherente',aMesurer:null};
     const v=(b.cm-a.cm)/a.cm;
@@ -730,6 +737,8 @@ function morphoAxes(user,opts){
           +' % : aucun des deux n’est retenu tant que la mesure n’a pas été reprise.'
         : r.motif==='incoherente'
         ? 'Les deux mesures ne tiennent pas ensemble : aucun rapport n’est calculé dessus.'
+        : r.motif==='doigts'
+        ? BRAS_DOIGTS_QUESTION+' Aucun rapport n’est calculé sur cette mesure.'
         : (r.aMesurer?'Il manque '+r.aMesurer+'.':'Mesure absente.');
       return a;
     }
@@ -751,8 +760,25 @@ function morphoAxes(user,opts){
     // Le repère : celui du code pour A1 et A3, celui de l'étude pour A6 quand
     // sa condition est remplie, celui du coach partout ailleurs.
     let tol=null;
-    if(d.cle==='A1'||d.cle==='A3'){
-      a.repere=d.cle==='A1'?RATIO_JAMBES_REF:RATIO_BRAS_REF; a.marge=RATIO_MARGE;
+    if(d.cle==='A3'){
+      // LE REPÈRE DÉPEND DU SEXE (RATIO_BRAS) : sans lui, la valeur est montrée,
+      // aucune position ne sort, et il est demandé.
+      const rb=repereBras(user);
+      if(!rb){
+        a.manque='sexe';
+        a.aMesurer='le sexe de l’athlète : le repère de longueur de bras en dépend';
+        a.texte='Longueur de bras à '+_morphoVirgule(Math.round(a.valeur*1000)/10)+' % de la taille. '
+          +'Il manque le sexe : le repère de population n’est pas le même pour les hommes et pour les femmes.';
+        return a;
+      }
+      a.repere=rb.ref; a.marge=rb.marge;
+      a.repereTexte='Repère de population autour de '+_morphoVirgule(Math.round(rb.ref*1000)/10)+' % de la taille ('
+        +(rb.sexe==='F'?'femmes':'hommes')+', '+RATIO_BRAS.SOURCE+'), à ± '
+        +_morphoVirgule(Math.round(rb.marge*1000)/10)+' points.';
+      a.position=_morphoPosition(a.valeur,a.repere,a.marge);
+      tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
+    } else if(d.cle==='A1'){
+      a.repere=RATIO_JAMBES_REF; a.marge=RATIO_MARGE;
       a.repereTexte='Repère de population autour de '+Math.round(a.repere*100)+' % de la taille, '
         +'à ± '+Math.round(RATIO_MARGE*100)+' points.';
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
@@ -952,7 +978,7 @@ const MORPHO_PROFILS=Object.freeze([
 
   {cle:'P4',lib:'Bras longs, grande envergure : le tireur',nature:'osseux',segment:'haut',
    axes:['A3'],signature:[{axe:'A3',positions:['haut']}],
-   signatureTexte:'Longueur de bras au-delà de ~48 % de la taille. Envergure nettement supérieure à la taille. Photo de face : mains au-dessous de la mi-cuisse, bras le long du corps.',
+   signatureTexte:'Longueur de bras, de l’épaule au poignet, au-delà de ~36 % de la taille (repère autour de 34 %). Envergure nettement supérieure à la taille. Photo de face : mains au-dessous de la mi-cuisse, bras le long du corps.',
    mecanique:'En poussée, un bras long allonge l’amplitude et le bras de levier à franchir : plus de travail mécanique pour la même charge, et une contrainte d’épaule plus longue. En tirage, la même longueur devient un avantage : plus d’amplitude utile, plus de temps sous tension pour le dos.',
    privilegier:'Tous les tirages : rowing, tirage horizontal, tirage vertical, pull-over. Et les poussées à amplitude bornée par la machine : développé convergent, presse à pectoraux, où la course n’est pas dictée par son bras.',
    amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale'},
@@ -964,7 +990,7 @@ const MORPHO_PROFILS=Object.freeze([
 
   {cle:'P5',lib:'Bras courts, humérus court : le pousseur',nature:'osseux',segment:'haut',
    axes:['A3','A4'],signature:[{axe:'A3',positions:['bas']},{axe:'A4',positions:['bas']}],
-   signatureTexte:'Bras sous ~42 % de la taille, humérus court pour l’avant-bras. Au développé, la barre touche vite et la course paraît courte. Chiffres de charge élevés par rapport au reste du corps.',
+   signatureTexte:'Bras, de l’épaule au poignet, sous ~33 % de la taille (repère autour de 34 %), humérus court pour l’avant-bras. Au développé, la barre touche vite et la course paraît courte. Chiffres de charge élevés par rapport au reste du corps.',
    mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue (la position qui compte le plus pour l’hypertrophie).',
    privilegier:'Poussées lourdes : développé couché, incliné, militaire. Et les tractions, où un bras court est un levier favorable.',
    amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude (planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré) pour compenser la course courte',schema:'poussee-horizontale'},
@@ -2434,13 +2460,22 @@ function questionsMorpho(user){
       question:'Est-ce que '+(longues?'la profondeur au squat':'l\'amplitude en charnière de hanche')
         +' te paraît confortable chez '+(t?'lui':'cet athlète')+' ?'});
   }
-  const rb=ratioBras(user);
-  if(_horsMarge(rb,RATIO_BRAS_REF)){
-    const longs=rb>RATIO_BRAS_REF;
+  // LE BRAS : repère par sexe (RATIO_BRAS), et la mesure au bout des doigts
+  // reconnue pour ce qu'elle est — une question de mesure, pas de morphologie.
+  const pb=positionBras(user);
+  if(pb.motif==='doigts'){
+    out.push({cle:'bras_doigts',lib:'Longueur de bras à reprendre',
+      motif:'Longueur de bras à '+Math.round(pb.ratio*100)+' % de la taille : aucun adulte de la population de '
+        +'référence ne dépasse 38 % de l’épaule au poignet. La mesure s’arrête à l’os du poignet.',
+      // Une question finit par « ? » (règle de risquesMicro) : la consigne passe au motif.
+      question:'Mesuré jusqu’au bout des doigts ?'});
+  } else if(pb.position==='haut'||pb.position==='bas'){
+    const rb=pb.ratio, longs=pb.position==='haut';
     const v=_variantesSchema(longs?'poussee-horizontale':'tirage-vertical',3);
     out.push({cle:'bras',lib:longs?'Bras longs pour la taille':'Bras courts pour la taille',
-      motif:'Longueur de bras à '+Math.round(rb*100)+' % de la taille, pour un repère de population autour de '
-        +Math.round(RATIO_BRAS_REF*100)+' %.'
+      motif:'Longueur de bras, de l’épaule au poignet, à '+_morphoVirgule(Math.round(rb*1000)/10)
+        +' % de la taille, pour un repère de population autour de '
+        +_morphoVirgule(Math.round(pb.ref*1000)/10)+' % ('+(pb.sexe==='F'?'femmes':'hommes')+').'
         +(v.length?' Variantes du même schéma à essayer : '+v.join(', ')+'.':''),
       question:'Est-ce que l\'amplitude '+(longs?'au développé couché':'au tirage')
         +' pose question en séance ?'});

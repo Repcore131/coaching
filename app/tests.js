@@ -76914,16 +76914,48 @@ async function testExercices(){
         dehors.forEach(cm=>{ if(!questionsMorpho(_mo(180,cm,null)).some(q=>q.cle==='jambes'))
           faux.push('dehors '+cm); });
         return faux.length?_echec(faux.join(', ')):true;});
-      ok('Le ratio des bras suit la même règle',()=>{
-        const court=ratioBras(_mo(180,null,70));
-        const long=ratioBras(_mo(180,null,90));
-        if(Math.abs(court-70/180)>1e-9||Math.abs(long-90/180)>1e-9)
-          return _echec(court+' / '+long);
-        const a=questionsMorpho(_mo(180,null,70)).filter(x=>x.cle==='bras');
-        const b=questionsMorpho(_mo(180,null,90)).filter(x=>x.cle==='bras');
-        const c=questionsMorpho(_mo(180,null,81)).filter(x=>x.cle==='bras');  // 0,45
-        return a.length===1&&b.length===1&&c.length===0
+      // ── LE BRAS : ACROMION → STYLOÏDE, REPÈRE PAR SEXE (06/10/2026) ──
+      // Les anciennes valeurs (70 à 90 cm pour 180 cm) n'étaient pas
+      // anatomiques : de l'épaule au poignet, c'est 0,34 de la taille.
+      ok('Bras : le rapport est brut, la position suit le repère du sexe',()=>{
+        const H=g=>Object.assign({},{gender:g});
+        const r=ratioBras(_mo(180,null,60,H('Homme')));
+        if(Math.abs(r-60/180)>1e-9) return _echec('ratio '+r);
+        if(Math.abs(RATIO_BRAS.H.ref-0.34)>0.01||Math.abs(RATIO_BRAS.F.ref-0.34)>0.01) return _echec('repères '+RATIO_BRAS.H.ref+' / '+RATIO_BRAS.F.ref);
+        if(Math.abs(repereBras(_mo(180,null,60,H('Homme'))).marge-1.5*RATIO_BRAS.H.et)>1e-9) return _echec('marge ≠ 1,5 écart-type');
+        if(repereBras(_mo(30,null,null,H('Homme'))).marge<MORPHO_ERREUR_CM/30-1e-12) return _echec('la marge descend sous l’erreur du ruban');
+        const a=questionsMorpho(_mo(180,null,57,H('Homme'))).filter(x=>x.cle==='bras');
+        const b=questionsMorpho(_mo(180,null,66,H('Homme'))).filter(x=>x.cle==='bras');
+        const c=questionsMorpho(_mo(180,null,61,H('Homme'))).filter(x=>x.cle==='bras');
+        return a.length===1&&/courts/.test(a[0].lib)&&b.length===1&&/longs/.test(b[0].lib)&&c.length===0
           ?true:_echec(a.length+' / '+b.length+' / '+c.length);});
+      ok('Bras : homme 180 cm et 60 cm → A3 neutre ; femme 165 cm et 55 cm → neutre ; aucun « Bras courts »',()=>{
+        const h=_mo(180,null,60,{gender:'Homme'}), f=_mo(165,null,55,{gender:'Femme'});
+        const ah=morphoAxes(h).find(a=>a.cle==='A3'), af=morphoAxes(f).find(a=>a.cle==='A3');
+        if(ah.position!=='neutre') return _echec('homme : '+ah.position+' ('+ah.texte+')');
+        if(af.position!=='neutre') return _echec('femme : '+af.position);
+        if(af.repere!==RATIO_BRAS.F.ref||!/femmes/.test(af.repereTexte)) return _echec('repère femme : '+af.repereTexte);
+        const q=questionsMorpho(h).concat(questionsMorpho(f)).filter(x=>/Bras courts/.test(x.lib));
+        return q.length===0?true:_echec('« Bras courts » sur une mesure réaliste');});
+      ok('Bras : 80 cm pour 180 cm → motif « doigts », la question de mesure, aucune position ni « bras courts »',()=>{
+        const u=_mo(180,null,80,{gender:'Homme'});
+        const pb=positionBras(u);
+        if(pb.motif!=='doigts'||pb.position!=null) return _echec(JSON.stringify(pb));
+        const q=questionsMorpho(u);
+        if(q.some(x=>x.cle==='bras')) return _echec('une position sort');
+        const d=q.find(x=>x.cle==='bras_doigts');
+        if(!d||d.question!=='Mesuré jusqu’au bout des doigts ?'||!/La mesure s’arrête à l’os du poignet\./.test(d.motif)) return _echec('question : '+JSON.stringify(d));
+        const a3=morphoAxes(u).find(a=>a.cle==='A3');
+        if(a3.position!=null||a3.valeur!=null||a3.manque!=='doigts') return _echec('A3 : '+a3.manque+' / '+a3.position);
+        const pr=morphoProfils(morphoAxes(u));
+        if(pr.profils.some(p=>p.cle==='P4'||p.cle==='P5')) return _echec('un profil est calculé dessus');
+        return pr.aMesurer.some(t=>/bout des doigts/.test(t))?true:_echec('la reprise n’est pas demandée');});
+      ok('Bras : sans sexe, aucune position A3, et le sexe est demandé',()=>{
+        const u=_mo(180,null,66);
+        const a3=morphoAxes(u).find(a=>a.cle==='A3');
+        if(a3.position!=null||a3.manque!=='sexe') return _echec('A3 : '+a3.position+' / '+a3.manque);
+        if(questionsMorpho(u).some(x=>x.cle==='bras')) return _echec('une question de bras sans sexe');
+        return morphoProfils(morphoAxes(u)).aMesurer.some(t=>/le sexe/.test(t))?true:_echec('« il manque le sexe » absent');});
       ok('Critère : mesure absente → aucune entrée, aucune erreur',()=>{
         try{
           const u=_mo(180,null,null);
@@ -77071,11 +77103,11 @@ async function testExercices(){
           return /ferritine/.test(t)&&/Proportions/.test(t)
             ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,160)+'»');});
         ok('Aucune question : aucun bloc',()=>{
-          renderCoachMicroSection(_mo(180,83,81));
+          renderCoachMicroSection(_mo(180,83,61));
           const el=document.getElementById('ccd-micro');
           // En novembre-mars la saison sort pour tout le monde : on ne teste le
           // vide que si risquesMicro se tait aussi.
-          if(risquesMicro(_mo(180,83,81)).length) return true;
+          if(risquesMicro(_mo(180,83,61)).length) return true;
           return el.style.display==='none'&&!el.innerHTML
             ?true:_echec('bloc rendu sans question');});
         ok('Aucun exercice n\'est retiré, remplacé ni masqué',()=>{
@@ -77206,7 +77238,7 @@ async function testExercices(){
           ?true:_echec('une longueur plus grande que la personne a été acceptée');});
 
       ok('M1 — les deux mesures d’origine passent toujours par longueurSegment',()=>{
-        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'80'});
+        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'60'});
         for(const cle of ['deb-entrejambe','deb-bras'])
           if(JSON.stringify(mesureMorpho(u,cle))!==JSON.stringify(longueurSegment(u,cle)))
             return _echec(cle+' a changé de règle');
@@ -77226,7 +77258,7 @@ async function testExercices(){
           ?true:_echec('une incohérence sort d’une seule mesure');});
 
       ok('M1 — un bilan sans aucune des six se comporte exactement comme avant',()=>{
-        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'80'});
+        const u=_m1(180,{'deb-entrejambe':'88','deb-bras':'60'});
         const neuf=questionsMorpho(u).map(x=>x.cle).sort().join(',');
         const vieux=['jambes'].sort().join(',');
         if(neuf!==vieux) return _echec('entrées : '+neuf);
@@ -77357,12 +77389,12 @@ async function testExercices(){
         return u;
       };
       // Des mesures qui tiennent debout et qui donnent un fémur long.
-      const _M2BASE={'deb-entrejambe':'91','deb-genou':'46','deb-bras':'78',
+      const _M2BASE={'deb-entrejambe':'91','deb-genou':'46','deb-bras':'60',
         'deb-avantbras':'27','deb-epaules':'42','deb-bassin':'30','deb-poignet':'17'};
       // Douze athlètes pour poser un repère local.
       const _m2Pop=()=>{ const l=[];
         for(let i=0;i<12;i++) l.push(_m2({'deb-height':'178','deb-entrejambe':String(82+i%3),
-          'deb-genou':String(48+i%2),'deb-bras':String(79+i%3),'deb-avantbras':String(27+i%2),
+          'deb-genou':String(48+i%2),'deb-bras':String(59+i%3),'deb-avantbras':String(27+i%2),
           'deb-epaules':String(40+i%3),'deb-bassin':String(29+i%2),'deb-poignet':String(17+i%2)}));
         return l; };
       const _m2Cal=()=>morphoCalibrage(_m2Pop());
@@ -77395,9 +77427,10 @@ async function testExercices(){
           if(a[cle].manque!=='repere-a-calibrer') return _echec(cle+' : '+a[cle].manque);
           if(!/calibrera/.test(a[cle].texte)) return _echec(cle+' ne dit pas qu’il attend un repère');
         }
-        // A1 et A3 gardent les repères qui existaient avant ce lot.
-        if(a.A1.repere!==RATIO_JAMBES_REF||a.A3.repere!==RATIO_BRAS_REF)
-          return _echec('les deux repères d’origine ont bougé');
+        // A1 garde son repère ; A3 prend celui de son sexe (RATIO_BRAS, 06/10/2026).
+        if(a.A1.repere!==RATIO_JAMBES_REF||a.A3.repere!==RATIO_BRAS.H.ref)
+          return _echec('les repères ont bougé : '+a.A1.repere+' / '+a.A3.repere);
+        if(a.A3.position!=='neutre') return _echec('un bras de 60 cm pour 180 cm sort '+a.A3.position);
         return a.A1.position==='haut'?true:_echec('A1 : '+a.A1.position);});
 
       ok('M2 — le repère local demande huit athlètes, et pas un de moins',()=>{
@@ -77423,7 +77456,7 @@ async function testExercices(){
         const ko=_m2Ax(u).A1;
         if(ko.position!=null||ko.manque!=='desaccord') return _echec('l’axe survit au désaccord');
         // La photo SEULE vaut moins que le mètre, mais elle vaut.
-        const seul=_m2({'deb-height':'180','deb-bras':'78'});
+        const seul=_m2({'deb-height':'180','deb-bras':'60'});
         seul.morphoPhoto={mesures:{'deb-entrejambe':{cm:91,date:Date.now()}}};
         const p=_m2Ax(seul).A1;
         return (p.source==='photo'&&p.confiance===MORPHO_CONF.photo)
@@ -77617,7 +77650,7 @@ async function testExercices(){
       ok('M5 — la prise se donne en INTERVALLE, et pas sans la mesure qu’elle multiplie',()=>{
         // Bras longs : entrejambe court pour que A1 ne sorte pas, bras long
         // pour que A3 sorte.
-        const u=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'88',
+        const u=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'66',
           'deb-avantbras':'28','deb-epaules':'42','deb-bassin':'30','deb-poignet':'17'});
         const ax=morphoAxes(u,{calibrage:_m2Cal()});
         const pr=morphoProfils(ax);
@@ -77629,7 +77662,7 @@ async function testExercices(){
         if(!/plage, pas un chiffre/.test(r.pourquoi)) return _echec('rien ne dit que c’est une plage');
         // Sans largeur d'épaules, pas de prise : un pourcentage sans sa mesure
         // est une phrase de magazine.
-        const sans=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'88',
+        const sans=_m2({'deb-height':'180','deb-entrejambe':'83','deb-genou':'48','deb-bras':'66',
           'deb-avantbras':'28','deb-poignet':'17'});
         const ax2=morphoAxes(sans,{calibrage:_m2Cal()});
         return morphoReglages(ax2,morphoProfils(ax2).profils).some(x=>x.cle==='prise')
