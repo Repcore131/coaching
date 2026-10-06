@@ -46276,7 +46276,7 @@ async function testExercices(){
             // ── 3. LE CAS DE KEVIN ────────────────────────────────────────
             const k=mk({manuel:false,tableur:{naf:'modere',protGkg:1.9},
               macros:JSON.parse(JSON.stringify(sien))});
-            if(_tbReconcilier(k)!==true)
+            if(!_tbReconcilier(k)) // build 1840 : {avant, apres, cause}
               return _echec('la grille du coach ne reprend pas la main');
             if(((k.nutrition.macros||{}).origine)!=='tableur')
               return _echec('l’origine reste « '+(k.nutrition.macros||{}).origine+' »');
@@ -46344,7 +46344,7 @@ async function testExercices(){
             const t=mk({manuel:false,tableur:{protGkg:2.4},macros:JSON.parse(JSON.stringify(perime))});
             // TEMOIN : sans NAF, sinon le cas redevient celui du test precedent.
             if(grilleCoachPosee(t)) return _echec('témoin : le NAF est posé, le cas ne teste plus rien');
-            if(_tbReconcilier(t)!==true) return _echec('des cibles de la grille restent sur l’ancien calcul');
+            if(!_tbReconcilier(t)) /* build 1840 : un objet */ return _echec('des cibles de la grille restent sur l’ancien calcul');
             const att=cibleTableur(t,{email:t.email});
             if(Number(t.nutrition.macros.on.p)!==att.p)
               return _echec('protéines '+t.nutrition.macros.on.p+' g au lieu des '+att.p+' de la grille');
@@ -55948,6 +55948,69 @@ async function testExercices(){
         return true;
       } finally { currentUser=sv.u; window.saveUser=sv.s; window._appAuPremierPlan=sv.p; }});
 
+    // ══ BUILD 1840 — LA CIBLE NE CHANGE PLUS SANS LE DIRE ══════════════════
+    const _RCj=n=>localISODate(new Date(Date.now()-n*864e5));
+    const _RCc=kgs=>({id:'rcA',email:'rca@t.fr',role:'athlete',coachId:'rcC',gender:'Homme',_evol_gender:'Homme',
+      _evol_height:'178',birthdate:'1996-01-01',sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'66','deb-height':'178','deb-age':'30','deb-gender':'Homme'}],
+      weightLog:kgs.map((kg,i)=>({date:_RCj(kgs.length-1-i),kg})),
+      phase:{type:'seche',debut:Date.now()-30*864e5},
+      nutrition:{cycle:false,dietType:'flexible',tableur:{naf:'sedentaire'}}});
+    const _RCposer=c=>{ const us={}; us[c.email]=c; us['rcc@t.fr']={id:'rcC',email:'rcc@t.fr',role:'coach'};
+      DB.set('users',us); currentUser=us['rcc@t.fr']; currentClientId=c.id; };
+    ok('Réconciliation : pesée −4 kg → cause « poids », bandeau « Cibles mises à jour » sur la fiche',()=>{
+      const svU=currentUser, svC=currentClientId, svD=DB.get('users');
+      try{
+        const c=_RCc([66]);
+        _RCposer(c);
+        if(!_tbEcrireCibles(c)) return _echec('premier calcul');
+        if(!((c.nutrition.tableur.dernierCalcul||{}).kg===66)) return _echec('dernierCalcul : '+JSON.stringify(c.nutrition.tableur.dernierCalcul));
+        c.weightLog.push({date:localISODate(new Date()),kg:62});
+        const r=_tbReconcilier(c);
+        if(!r||r.cause!=='poids') return _echec('retour : '+JSON.stringify(r&&r.cause));
+        if(!(Math.abs(r.apres.on.kcal-r.avant.on.kcal)>30)) return _echec('écart '+(r.apres.on.kcal-r.avant.on.kcal));
+        const t=texteReconcil(reconcilEnCours(c));
+        if(!/^Cibles mises à jour \(poids 66 → 6\d(,\d)? kg\) : .+ → .+ kcal\.$/.test(t)) return _echec('phrase : '+t);
+        renderCoachNutriSection(c);
+        const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+        if(h.indexOf('Cibles mises à jour')<0) return _echec('bandeau absent de la fiche');
+        // Une seconde ouverture ne réécrit rien et garde UN bandeau.
+        if(_tbReconcilier(c)!==false) return _echec('seconde réconciliation');
+        renderCoachNutriSection(c);
+        const n=((document.getElementById('ccd-nutrition')||{}).innerHTML||'').split('Cibles mises à jour').length-1;
+        if(n!==1) return _echec(n+' bandeaux');
+        // Côté athlète : une ligne, 7 jours.
+        const ha=_htmlCiblesAthlete(c);
+        return /Tes cibles ont suivi ta pesée : −\d+ kcal\./.test(ha)?true:_echec('ligne athlète absente');
+      } finally { currentUser=svU; currentClientId=svC; DB.set('users',svD); }});
+    ok('Réconciliation : « Annuler » remet les cibles d’avant (origine « histo »), et la réouverture ne réécrit rien',()=>{
+      const svU=currentUser, svC=currentClientId, svD=DB.get('users');
+      try{
+        const c=_RCc([66]);
+        _tbEcrireCibles(c);
+        const avant=JSON.stringify({on:c.nutrition.macros.on,off:c.nutrition.macros.off});
+        c.weightLog.push({date:localISODate(new Date()),kg:62});
+        _RCposer(c);
+        _tbReconcilier(c);
+        const us=DB.get('users'); us[c.email]=c; DB.set('users',us);
+        if(!annulerReconcil()) return _echec('annulation refusée');
+        const k=(DB.get('users')||{})[c.email];
+        if(JSON.stringify({on:k.nutrition.macros.on,off:k.nutrition.macros.off})!==avant) return _echec('macros différentes');
+        if(k.nutrition.macros.origine!=='histo') return _echec('origine '+k.nutrition.macros.origine);
+        if(_tbReconcilier(k)!==false) return _echec('la réouverture réécrit');
+        return _htmlReconcilCoach(k)===''?true:_echec('bandeau après annulation');
+      } finally { currentUser=svU; currentClientId=svC; DB.set('users',svD); }});
+    ok('Réconciliation : écart ≤ 30 kcal → pas de bandeau',()=>{
+      const svU=currentUser, svC=currentClientId, svD=DB.get('users');
+      try{
+        const c=_RCc([66]);
+        _RCposer(c);
+        _tbEcrireCibles(c);
+        c.weightLog.push({date:localISODate(new Date()),kg:65.8});
+        const r=_tbReconcilier(c);
+        if(r&&Math.abs(r.apres.on.kcal-r.avant.on.kcal)>30) return _echec('fixture : écart '+(r.apres.on.kcal-r.avant.on.kcal));
+        return _htmlReconcilCoach(c)===''?true:_echec('bandeau pour '+(r?(r.apres.on.kcal-r.avant.on.kcal):0)+' kcal');
+      } finally { currentUser=svU; currentClientId=svC; DB.set('users',svD); }});
     // ══ LOT N8 — LA BANDE D'OBSERVANCE (29/09/2026) ════════════════════════
     const _N8C={kcal:2000,p:150};
     const _N8J=(k,p)=>({entries:[{id:1,nom:'x',repas:'diner',kcal:k,p,c:0,l:0}]});

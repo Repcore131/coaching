@@ -697,15 +697,75 @@ function _tbReconcilier(c){
   const _duTableur=(((c.nutrition||{}).macros||{}).origine)==='tableur';
   if(!grilleCoachPosee(c)&&!_duTableur) return false;
   const chiffres=m=>JSON.stringify(m?{on:m.on,off:m.off,origine:m.origine}:null);
-  const avant=chiffres((c.nutrition||{}).macros);
+  const m0=(c.nutrition||{}).macros||null;
+  const avant=chiffres(m0);
+  const avantM=m0?{on:Object.assign({},m0.on||{}),off:Object.assign({},m0.off||m0.on||{}),origine:m0.origine||null}:null;
+  const dc=((c.nutrition||{}).tableur||{}).dernierCalcul||null;
   if(!_tbEcrireCibles(c)) return false;
   if(chiffres((c.nutrition||{}).macros)===avant) return false;
+  // ⚠ BUILD 1840 : LA CIBLE NE CHANGE PLUS SANS LE DIRE. La cause : le poids
+  //   (comparé au dernier calcul écrit), un bilan plus récent, sinon un
+  //   réglage. Au-delà de RECONCIL_SEUIL_KCAL, un bandeau d'une ligne chez le
+  //   coach (« Annuler » remet l'avant en origine 'histo') et une ligne chez
+  //   l'athlète pendant 7 jours.
+  const m1=c.nutrition.macros;
+  let kg=null; try{ kg=poidsNutritionnel(c).kg; }catch(e){ kg=null; }
+  const derBilan=Math.max(0,...((c.bilans||[]).map(b=>Number(b&&b.date)||0)));
+  const cause=(dc&&dc.kg>0&&kg>0&&Math.abs(dc.kg-kg)>=0.1)?'poids'
+    :((dc&&derBilan>Number(dc.date||0))?'bilan':'reglage');
+  const r={avant:avantM,apres:{on:Object.assign({},m1.on),off:Object.assign({},m1.off||m1.on)},cause,
+    kgAvant:dc&&dc.kg>0?dc.kg:null,kgApres:kg};
+  if(avantM&&avantM.on&&Math.abs((Number(r.apres.on.kcal)||0)-(Number(avantM.on.kcal)||0))>RECONCIL_SEUIL_KCAL)
+    c.nutrition.reconcil=Object.assign({},r,{date:Date.now()});
   try{
     const users=DB.get('users')||{};
     c.updatedAt=Date.now(); users[c.email]=c;
     DB.set('users',users);
     CLOUD.pushOne(c.email,c);
   }catch(e){}
+  return r;
+}
+const RECONCIL_SEUIL_KCAL=30, RECONCIL_JOURS=7;
+// PURE. La réconciliation encore à dire : moins de 7 jours, et la cible en
+// place est TOUJOURS celle qu'elle a écrite (sinon elle est dépassée).
+function reconcilEnCours(c,maintenant){
+  const r=((c&&c.nutrition)||{}).reconcil;
+  const m=((c&&c.nutrition)||{}).macros||{};
+  if(!r||!r.apres||!r.avant||r.annule) return null;
+  if((Number(maintenant)||Date.now())-Number(r.date||0)>RECONCIL_JOURS*864e5) return null;
+  if(!m.on||Number(m.on.kcal)!==Number(r.apres.on.kcal)) return null;
+  return r;
+}
+// La phrase : « Cibles mises à jour (poids 66 → 64 kg) : 1 650 → 1 610 kcal. »
+function texteReconcil(r){
+  if(!r) return '';
+  const nb=v=>String(Math.round(Number(v)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f');
+  const kg=v=>String(Math.round(Number(v)*10)/10).replace('.',',');
+  const pourquoi=(r.cause==='poids'&&r.kgAvant>0&&r.kgApres>0)?'poids '+kg(r.kgAvant)+' → '+kg(r.kgApres)+' kg'
+    :(r.cause==='bilan'?'nouveau bilan':'réglage du calcul');
+  return 'Cibles mises à jour ('+pourquoi+') : '+nb(r.avant.on.kcal)+' → '+nb(r.apres.on.kcal)+' kcal.';
+}
+function _htmlReconcilCoach(c){
+  const r=reconcilEnCours(c);
+  if(!r) return '';
+  return '<div class="fj-bandeau annule tbk-reconcil"><div class="fj-bandeau-t">'+escapeHtml(texteReconcil(r))+'</div>'
+    +'<div class="fj-bandeau-a"><button type="button" class="fj-bandeau-annuler" onclick="annulerReconcil()">Annuler</button><span></span></div></div>';
+}
+// « Annuler » : les cibles d'avant, en origine 'histo' (build 1408) — elles
+// ne se recalculent plus dans le dos du coach jusqu'à son prochain réglage.
+function annulerReconcil(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  const r=reconcilEnCours(c);
+  if(!c||!r) return false;
+  c.nutrition.macros={on:Object.assign({},r.avant.on),off:Object.assign({},r.avant.off||r.avant.on),
+    origine:'histo',origineDate:Date.now()};
+  c.nutrition.reconcil=Object.assign({},c.nutrition.reconcil,{annule:Date.now()});
+  try{ _histoNoter(c,'histo'); }catch(e){}
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Cibles d’avant remises en place','l’annulation est');
+  try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
 function renderCoachNutriSection(c){
@@ -900,8 +960,10 @@ function renderCoachNutriSection(c){
   // Les deux sont appeles par openClientDetail, comme les autres blocs de
   // l'onglet ; ils ne dependent plus du rendu de celui-ci.
   el.innerHTML=
+    // La cible qui vient de suivre une pesée ou un bilan, dite (build 1840).
+    (function(){ try{ return _htmlReconcilCoach(c); }catch(e){ return ''; } })()
     // ── CE QUI EST CONSTATE ────────────────────────────────────────────────
-    `${_transi}${_pauseHtml}`
+    +`${_transi}${_pauseHtml}`
     // N5.11 — DEUX NIVEAUX ICI AUSSI. Ces cinq sections sont fabriquees par le
     // rendu et non par le balisage : elles echappaient au comptage, et leurs
     // quatre couleurs remettaient l'echelle qu'on venait de retirer. Aucune de

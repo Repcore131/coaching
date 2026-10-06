@@ -1745,6 +1745,13 @@ function _tbEcrireCibles(c){
   if(!c.nutrition) c.nutrition={};
   c.nutrition.macros={on:j.on,off:j.off,
     origine:'tableur',origineDate:Date.now()};
+  // LE DERNIER CALCUL ÉCRIT (build 1840) : le poids et les totaux sur
+  // lesquels il repose. _tbReconcilier s'en sert pour dire POURQUOI une cible
+  // a bougé (« poids 66 → 64 kg »).
+  try{
+    c.nutrition.tableur=Object.assign({},c.nutrition.tableur||{},{dernierCalcul:{
+      kg:poidsNutritionnel(c).kg,kcalOn:j.on.kcal,kcalOff:j.off.kcal,date:Date.now()}});
+  }catch(e){}
   _histoNoter(c,'tableur');
   return j;
 }

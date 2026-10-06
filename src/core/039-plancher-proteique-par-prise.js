@@ -1944,6 +1944,10 @@ function _htmlCiblesAthlete(u){
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
       +(_dl?'<div class="rc-obj-ajust">Mis à jour : '+_dl+'</div>':'')
+      // Les cibles ont suivi la pesée (build 1840) : dit pendant 7 jours.
+      +(function(){ try{ const r=reconcilEnCours(u); if(!r||r.cause!=='poids') return '';
+        const d=Math.round(Number(r.apres.on.kcal)-Number(r.avant.on.kcal));
+        return '<div class="rc-obj-ajust">Tes cibles ont suivi ta pesée : '+(d>0?'+':'−')+Math.abs(d)+' kcal.</div>'; }catch(e){ return ''; } })()
       +'<div class="rc-obj-macros">'
         // LA BASE DES g/kg, DANS LA CASE (build 1835).
         +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6)+_baseCase(_gr.poidsRefObj):'')
