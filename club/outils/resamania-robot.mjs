@@ -113,40 +113,50 @@ export async function connecter(page) {
 // champs, en-têtes de colonnes) : aucune ligne de données.
 async function reperage(page) {
   const base = new URL(URL0).origin;
-  await page.goto(URL0, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
-  const gestion = page.getByRole('button', { name: /gestion/i });
-  if (await visible(gestion)) {
-    await gestion.first().click(); await page.waitForTimeout(1500);
-    const items = await page.evaluate(() => [...document.querySelectorAll('a[href*="/management/"]')].filter(e => e.getBoundingClientRect().height > 0).map(e => `${(e.innerText || '').trim()} → ${e.getAttribute('href')}`));
-    log('=== menu GESTION'); items.slice(0, 150).forEach(x => log('  menu', propre(x)));
-    await page.keyboard.press('Escape');
+  await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(6000);
+  // 1. Chaque catégorie dépliée : titre et description des exports (libellés d'interface).
+  for (const cat of ['Comptabilité', 'Finance', 'Membres & Ventes', "Points d'attention", 'Spécifiques', 'Vie du Club']) {
+    const h = page.getByText(cat, { exact: true });
+    if (!(await visible(h))) { log('catégorie introuvable :', cat); continue; }
+    const avant = await page.evaluate(() => document.body.innerText.length);
+    await h.first().click().catch(() => {}); await page.waitForTimeout(1500);
+    const cartes = await page.evaluate(() => [...document.querySelectorAll('button,[role=button]')].filter(e => e.getBoundingClientRect().height > 0).map(e => (e.innerText || '').trim().replace(/\s+/g, ' ')).filter(t => t.length > 3 && t.length < 160 && !/NOTIFICATION|ALERTE|GESTION|EXPORTER|TOUS LES EXPORTS|VIGILANT/.test(t)));
+    log(`=== ${cat} (${(await page.evaluate(() => document.body.innerText.length)) - avant} car.)`); [...new Set(cartes)].forEach(x => log('  export', propre(x).slice(0, 80), court(x, 160).length > 80 ? '…' : ''));
+    log('  détail :'); [...new Set(cartes)].forEach(x => log('   ·', court(x, 160).replace(/[\w.+-]+@[\w.-]+/g, '‹e-mail›')));
+    await h.first().click().catch(() => {}); await page.waitForTimeout(800);
   }
+  // 2. Essai réel : l'export « Prospects » sur 7 jours, pour voir le formulaire et la façon dont le fichier sort.
+  const carte = page.getByRole('button', { name: /^Prospects/ });
+  if (await visible(carte)) {
+    await carte.first().click(); await page.waitForTimeout(3000);
+    const f = await page.evaluate(() => ({ url: location.pathname + location.search, champs: [...document.querySelectorAll('input,select,textarea')].filter(e => e.getBoundingClientRect().height > 0).map(e => [e.type, e.name || e.id, e.placeholder || '', (e.closest('label,div') || {}).innerText ? e.closest('div').innerText.trim().slice(0, 40) : ''].join('|')), boutons: [...document.querySelectorAll('button')].filter(e => e.getBoundingClientRect().height > 0).map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length < 50) }));
+    log('=== formulaire Prospects :', f.url); f.champs.forEach(x => log('  champ', propre(x))); log('  boutons :', f.boutons.map(propre).join(' · '));
+    const dates = page.locator('input[type=date],input[placeholder*="JJ" i],input[placeholder*="jj/" i],input[name*=date i],input[name*=from i],input[name*=start i]');
+    const nd = await dates.count(); log('  champs date :', nd);
+    const fmt = d => { const p = n => String(n).padStart(2, '0'); return { iso: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, fr: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}` }; };
+    const d1 = fmt(new Date(Date.now() - 7 * 864e5)), d2 = fmt(new Date());
+    for (let i = 0; i < Math.min(nd, 2); i++) { const e = dates.nth(i); const t = await e.getAttribute('type'); const v = (i ? d2 : d1)[t === 'date' ? 'iso' : 'fr']; await e.click().catch(() => {}); await e.fill('').catch(() => {}); await e.pressSequentially(v.replace(/\//g, ''), { delay: 40 }).catch(() => {}); log(`  date ${i + 1} remplie (${t})`); }
+    const go = page.getByRole('button', { name: /^(exporter|lancer|générer|télécharger|valider)/i }).last();
+    if (await visible(go)) {
+      const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null);
+      await go.click(); log('  export lancé');
+      const fichier = await dl;
+      if (fichier) { const nom = fichier.suggestedFilename(); const chemin = `${SORTIE}/${nom}`; await fichier.saveAs(chemin); const { statSync } = await import('node:fs'); log(`  ✓ téléchargement direct : extension .${nom.split('.').pop()} · ${statSync(chemin).size} octets`); }
+      else {
+        await page.waitForTimeout(3000);
+        const msg = await page.evaluate(() => [...document.querySelectorAll('[role=alert],[class*=snackbar],[class*=Snackbar],[class*=toast],[class*=Alert]')].map(e => (e.innerText || '').trim()).filter(Boolean));
+        log('  pas de téléchargement direct ; messages :', msg.map(propre).join(' · ') || 'aucun');
+      }
+    } else log('  bouton de lancement introuvable');
+  }
+  // 3. « Tous les exports » : colonnes et actions (fichiers générés en différé ?).
   await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
-  const f = await page.evaluate(() => {
-    const vis = e => e.getBoundingClientRect().height > 0;
-    return {
-      labels: [...document.querySelectorAll('label,legend,h1,h2,h3,h4,.mat-form-field-label,mat-label,[class*=label]')].filter(vis).map(e => (e.innerText || '').trim()).filter(t => t && t.length < 80).slice(0, 60),
-      selects: [...document.querySelectorAll('select')].map(s => `${s.name || s.id}: ${[...s.options].map(o => o.text.trim()).slice(0, 80).join(' | ')}`),
-      champs: [...document.querySelectorAll('input,textarea')].filter(vis).map(e => [e.type, e.name || e.id, e.placeholder || ''].join('|')).slice(0, 30),
-      boutons: [...document.querySelectorAll('button,[role=button],[role=option],[role=tab],[role=radio]')].filter(vis).map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length < 80).slice(0, 80),
-    };
-  });
-  log('=== formulaire d’export'); f.labels.forEach(x => log('  libellé', propre(x))); f.selects.forEach(x => log('  liste', court(x, 2000)));
-  f.champs.forEach(x => log('  champ', propre(x))); log('  boutons :', f.boutons.map(propre).join(' · '));
-  // Les listes déroulantes « maison » : on ouvre la première pour lire les types d'export proposés.
-  const combo = page.locator('[role=combobox],mat-select,.select2-selection,.choices,[class*=select]').first();
-  if (await visible(combo)) {
-    await combo.click().catch(() => {}); await page.waitForTimeout(1500);
-    const opts = await page.evaluate(() => [...document.querySelectorAll('[role=option],li.select2-results__option,.choices__item--choice,mat-option')].map(e => (e.innerText || '').trim()).filter(Boolean));
-    log('=== types proposés dans la liste :', opts.length); opts.slice(0, 120).forEach(x => log('  type', propre(x)));
-    await page.keyboard.press('Escape');
-  }
   const tous = page.getByRole('button', { name: /tous les exports/i }).or(page.getByRole('link', { name: /tous les exports/i }));
   if (await visible(tous)) {
-    await tous.first().click(); await page.waitForTimeout(5000);
+    await tous.first().click(); await page.waitForTimeout(6000);
     const t = await page.evaluate(() => ({ url: location.pathname, tetes: [...document.querySelectorAll('th,[role=columnheader]')].map(e => (e.innerText || '').trim()).filter(Boolean), lignes: document.querySelectorAll('tbody tr,[role=row]').length, actions: [...new Set([...document.querySelectorAll('tbody a,tbody button,[role=row] a,[role=row] button')].map(e => (e.innerText || e.getAttribute('aria-label') || e.getAttribute('title') || '').trim()).filter(x => x && x.length < 30))] }));
-    log(`=== liste des exports : ${t.url} · ${t.lignes} lignes`); log('  colonnes :', t.tetes.map(propre).join(' | ')); log('  actions :', t.actions.map(propre).join(' · '));
-  }
+    log(`=== tous les exports : ${t.url} · ${t.lignes} lignes`); log('  colonnes :', t.tetes.map(propre).join(' | ')); log('  actions :', t.actions.map(propre).join(' · '));
+  } else log('bouton « Tous les exports » introuvable');
 }
 
 async function main() {
