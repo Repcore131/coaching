@@ -9,11 +9,11 @@
 //   ROBOT_MODE=reperage node club/outils/resamania-robot.mjs
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
+import crypto from 'node:crypto';
 
 const require = createRequire(process.env.ROBOT_MODULES ? process.env.ROBOT_MODULES + '/' : import.meta.url);
 const URL0 = process.env.RESAMANIA_URL || 'https://fr.fitnesspark.app/fitnesspark/-/management/dashboard-v2';
 const ID = process.env.RESAMANIA_IDENTIFIANT || '', MDP = process.env.RESAMANIA_MOT_DE_PASSE || '';
-const BOITE = process.env.MAIL_UTILISATEUR || 'kevinguellec.pro@gmail.com', BOITE_MDP = process.env.MAIL_MOT_DE_PASSE || '';
 const MODE = process.env.ROBOT_MODE || 'reperage';
 const SORTIE = process.env.ROBOT_SORTIE || 'robot-sortie';
 const log = (...a) => console.log('[robot]', ...a);
@@ -21,32 +21,40 @@ const court = (s, n = 60) => String(s || '').replace(/\s+/g, ' ').trim().slice(0
 // Masque tout ce qui ressemble à un e-mail, un téléphone ou un nombre long.
 const propre = s => court(s, 80).replace(/[\w.+-]+@[\w.-]+/g, '‹e-mail›').replace(/\+?\d[\d .-]{6,}\d/g, '‹n°›');
 
-// ── Code de connexion reçu par e-mail ─────────────────────────────────────
-async function codeParEmail(depuis, { essais = 24 } = {}) {
-  const { ImapFlow } = require('imapflow');
+// ── Lien avec Fit Pulse (base) : code de connexion saisi par le manager ────
+// Resamania envoie un code à chaque connexion. Le manager le recopie dans
+// l'appli (page KPI du matin) ; le robot le relit ici, l'efface, et poursuit.
+// Le code n'est JAMAIS lu automatiquement dans une boîte mail.
+const DB = (process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com').replace(/\/$/, '');
+let TOKEN = null;
+async function fbToken() {
+  if (TOKEN) return TOKEN;
+  const c = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  if (!c.client_email || !c.private_key) return null;
+  const b = s => Buffer.from(s).toString('base64url');
+  const iat = Math.floor(Date.now() / 1000);
+  const tete = b(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const corps = b(JSON.stringify({ iss: c.client_email, scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email', aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600 }));
+  const sig = crypto.createSign('RSA-SHA256').update(`${tete}.${corps}`).sign(c.private_key, 'base64url');
+  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${tete}.${corps}.${sig}` });
+  const j = await r.json(); TOKEN = j.access_token || null; return TOKEN;
+}
+async function fb(chemin, opts = {}) {
+  const tk = await fbToken(); if (!tk) return null;
+  const r = await fetch(`${DB}/${chemin}`, { ...opts, headers: { authorization: `Bearer ${tk}`, ...(opts.headers || {}) } });
+  return r.ok ? r.json() : null;
+}
+const fbEtat = (step, extra = {}) => fb('pulse/rsm/etat.json', { method: 'PUT', body: JSON.stringify({ step, at: Date.now(), ...extra }) }).catch(() => {});
+// Attend que le manager saisisse le code dans l'appli (6 min au plus).
+async function codeDepuisApp({ essais = 72 } = {}) {
+  await fb('pulse/rsm/code.json', { method: 'DELETE' }).catch(() => {});
+  await fbEtat('code');
   for (let i = 0; i < essais; i++) {
-    const c = new ImapFlow({ host: 'imap.gmail.com', port: 993, secure: true, auth: { user: BOITE, pass: BOITE_MDP }, logger: false });
-    try {
-      await c.connect();
-      const lock = await c.getMailboxLock('INBOX');
-      try {
-        const ids = await c.search({ since: new Date(depuis - 120000) }, { uid: true });
-        let meilleur = null;
-        for await (const m of c.fetch(ids.slice(-15), { envelope: true, source: true, internalDate: true }, { uid: true })) {
-          if (m.internalDate && m.internalDate.getTime() < depuis - 60000) continue;
-          const de = ((m.envelope.from || [])[0] || {}).address || '';
-          const txt = m.source.toString('utf8');
-          if (!/resamania|fitnesspark|fitness park|xplor/i.test(de + ' ' + (m.envelope.subject || '') + ' ' + txt.slice(0, 4000))) continue;
-          const corps = txt.replace(/=\r?\n/g, '').replace(/<[^>]+>/g, ' ');
-          const k = corps.match(/(?:code|Code|CODE)[^0-9A-Z]{0,80}\b([0-9]{4,8})\b/) || corps.match(/\b([0-9]{6})\b/);
-          if (k && (!meilleur || m.internalDate > meilleur.at)) meilleur = { code: k[1], at: m.internalDate };
-        }
-        if (meilleur) return meilleur.code;
-      } finally { lock.release(); }
-    } catch (e) { log('boîte mail :', court(e.message, 120)); } finally { await c.logout().catch(() => {}); }
+    const c = await fb('pulse/rsm/code.json').catch(() => null);
+    if (c && c.v) { await fb('pulse/rsm/code.json', { method: 'DELETE' }).catch(() => {}); return String(c.v).replace(/\s/g, ''); }
     await new Promise(r => setTimeout(r, 5000));
   }
-  throw new Error('code de connexion non reçu par e-mail après 2 minutes');
+  throw new Error('code non saisi dans l’application (6 min)');
 }
 
 // ── Description d'une page (sans aucune donnée personnelle) ───────────────
@@ -82,6 +90,7 @@ async function cliquerSuite(page) {
 }
 export async function connecter(page) {
   if (!ID || !MDP) throw new Error('secrets RESAMANIA_IDENTIFIANT / RESAMANIA_MOT_DE_PASSE absents');
+  await fbEtat('connexion');
   await page.goto(URL0, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(4000);
   await decrire(page, 'page de connexion', { complet: true });
   const champId = page.locator('input[type=email],input[name*=mail i],input[name*=user i],input[name*=login i],input[id*=mail i],input[id*=user i],input[autocomplete=username]');
@@ -90,15 +99,14 @@ export async function connecter(page) {
   if (!(await visible(champMdp))) { await cliquerSuite(page); await page.waitForTimeout(3500); await decrire(page, 'après identifiant', { complet: true }); champMdp = page.locator('input[type=password]'); }
   if (!(await visible(champMdp))) throw new Error('champ mot de passe introuvable');
   await champMdp.first().fill(MDP); log('mot de passe saisi');
-  const avant = Date.now();
   await cliquerSuite(page); await page.waitForTimeout(5000);
   await decrire(page, 'après mot de passe', { complet: true });
-  // Code à usage unique reçu par e-mail ?
+  // Code à usage unique : le manager le saisit dans l'appli (jamais lu dans un e-mail).
   const champCode = page.locator('input[autocomplete=one-time-code],input[name*=code i],input[id*=code i],input[name*=otp i],input[inputmode=numeric],input[maxlength="1"],input[type=tel],input[type=number]');
   if (await visible(champCode)) {
-    log('code de connexion demandé : lecture de la boîte mail…');
-    const code = await codeParEmail(avant);
-    log('code reçu (masqué)');
+    log('code de connexion demandé : attente de la saisie dans l’application…');
+    const code = await codeDepuisApp();
+    log('code reçu de l’application (masqué)');
     const n = await champCode.count();
     if (n >= 4 && n <= 8) { for (let i = 0; i < n && i < code.length; i++) await champCode.nth(i).fill(code[i]); } else await champCode.first().fill(code);
     await cliquerSuite(page); await page.waitForTimeout(6000);
@@ -190,8 +198,10 @@ async function main() {
   try {
     await connecter(page);
     if (MODE === 'reperage') await reperage(page);
+    await fbEtat('ok');
+    await fb('pulse/serveur/rsm.json', { method: 'PUT', body: JSON.stringify({ at: Date.now() }) }).catch(() => {});
   } catch (e) {
-    log('ÉCHEC :', court(e.message, 200)); await decrire(page, 'page au moment de l’échec').catch(() => {}); process.exitCode = 1;
+    log('ÉCHEC :', court(e.message, 200)); await fbEtat('erreur', { msg: court(e.message, 140) }); await decrire(page, 'page au moment de l’échec').catch(() => {}); process.exitCode = 1;
   } finally { await b.close(); }
 }
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) main();

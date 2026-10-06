@@ -88,14 +88,13 @@ jobs:
       - name: Installer le navigateur du robot
         run: |
           mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
-          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 imapflow@1 >/dev/null
+          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - name: Robot Resamania
         env:
           RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
-          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
-          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
           ROBOT_MODE: reperage
           TZ: Europe/Paris
