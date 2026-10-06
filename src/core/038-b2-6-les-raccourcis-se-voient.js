@@ -601,6 +601,8 @@ function recordAPortee(u,seancePrevue,maintenant){
   try{ if(suspensionEtat(u).actif) return null; }catch(e){}
   // GROSSESSE OU ALLAITEMENT, DRAPEAU : aucun record à portée (build 1827).
   try{ if(grossesseSuspend(u)||drapeauQuelconqueActif(u)) return null; }catch(e){}
+  // RÉCUPÉRATION ORANGE OU ROUGE, « C'EST DUR » : pas de record visé (build 1828).
+  try{ const ef=effetDispoDuJour(u,localISODate(new Date(t))); if(ef&&ef.pasDeRecord) return null; }catch(e){}
   let best=null;
   for(const ex of seancePrevue.exercises){
     if(!ex||!ex.name) continue;

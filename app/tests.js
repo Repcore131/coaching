@@ -2184,7 +2184,10 @@ async function testExercices(){
     // charge suggérée, et ces contrôles empêchent la colonne de revenir.
     const _cySauve={u:currentUser,w:typeof woState!=='undefined'?woState:null};
     const _cyMonter=(genre,phase,reps)=>{
-      currentUser={email:'cy@t',fname:'T',gender:genre,currentCycle:phase,exAlias:{},exMuscles:{},
+      // Build 1828 : « c'est dur » ne retire plus de charge par défaut ; ce
+      // bloc vérifie l'affichage de l'ajustement, donc la préférence coach
+      // qui garde l'ancien réglage (cycleDurMode 'charge80').
+      currentUser={email:'cy@t',fname:'T',gender:genre,currentCycle:phase,cycleDurMode:'charge80',exAlias:{},exMuscles:{},
         programs:{},bilans:[],
         sessions:[{id:'cy',date:Date.now()-604800000,slot:2,name:'P',
           data:{'TIRAGE CY':{sets:[{done:true,weight:'50',reps:'10',rir:'0'}]}}}]};
@@ -2291,7 +2294,9 @@ async function testExercices(){
           // REECRITE : j22_28 rendait [1.00,1]. C'est la quatrieme serrure de
           // l'ancienne amputation, et mon audit l'avait listee sans lire sa
           // table. Les six CHARGES sont inchangees, les six series sont a zero.
-          const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],j6_14:[1.00,0],
+          // Build 1828 : « c'est dur » garde la charge (un RIR de plus,
+          // effetDispoDuJour) ; « ça va » ne change plus rien.
+          const att={j1_difficile:[1.00,0],j1_supportable:[1.00,0],j6_14:[1.00,0],
             j15_21:[1.00,0],j22_28:[1.00,0],ignore:[1.00,0]};
           const rates=[];
           for(const k of Object.keys(att)){
@@ -2502,7 +2507,7 @@ async function testExercices(){
           const _woAvant=(typeof woState!=='undefined')?woState:null;
           const monter=(genre)=>{
             currentUser={email:'cg@t',fname:'T',gender:genre,cycleSuivi:'actif',
-              currentCycle:'j1_difficile',exAlias:{},exMuscles:{},programs:{},bilans:[],
+              currentCycle:'j1_difficile',cycleDurMode:'charge80',exAlias:{},exMuscles:{},programs:{},bilans:[],
               sessions:[{id:'cg',date:Date.now()-604800000,slot:2,name:'P',
                 data:{'TIRAGE CG':{sets:[{done:true,weight:'50',reps:'10',rir:'0'}]}}}]};
             woState={exercises:[{name:'TIRAGE CG',series:3,reps:'10',repos:'02 min',description:''}],
@@ -2735,7 +2740,8 @@ async function testExercices(){
           const u=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28},
             {currentCycle:'j1_difficile'});
           if(phaseCycle(u,AUJ)!=='stable') return _echec('fixture muette');
-          return getCycleFactor(u,AUJ).factor===0.80
+          // Build 1828 : la réponse agit par un RIR de plus, charge gardée.
+          return (getCycleFactor(u,AUJ).factor===1&&effetDispoDuJour(u,AUJ).rirPlus===1)
             ?true:_echec('le calcul a écrasé la réponse');});
         ok('« Je me sens bien » n\'est PAS écrasé par une lutéale tardive',()=>{
           const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28,
@@ -3056,7 +3062,8 @@ async function testExercices(){
           // empecher precisement ce changement. Elle est RETOURNEE, ni
           // supprimee ni commentee. Les six facteurs de CHARGE sont recopies
           // a l'identique — c'est eux que le lot ne doit pas effleurer.
-          const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],
+          // Build 1828 : les deux réponses « règles » gardent la charge par défaut.
+          const att={j1_difficile:[1.00,0],j1_supportable:[1.00,0],
             j6_14:[1.00,0],j15_21:[1.00,0],j22_28:[1.00,0]};
           for(const k of Object.keys(att)){
             const f=getCycleFactor(_ath(null,{currentCycle:k}),AUJ);
@@ -4253,7 +4260,8 @@ async function testExercices(){
         ok('Critère : mais le RESSENTI déclaré agit toujours sur la charge',()=>{
           const u=_ath('cyclique',{u:{currentCycle:'j1_difficile'}});
           const f=getCycleFactor(u,AUJ);
-          return f.factor===0.80?true:_echec(JSON.stringify(f));});
+          // Build 1828 : charge gardée, un RIR de plus sur la séance.
+          return (f.factor===1&&effetDispoDuJour(u,AUJ).rirPlus===1)?true:_echec(JSON.stringify(f));});
         ok('« cyclique » ne suggère aucun complément',
           suggestionCycleSupplements(_ath('cyclique'),AUJ)===null);
         ok('Critère : « cyclique » dit « semaine d\'arrêt », jamais « phase menstruelle »',()=>{
@@ -7090,6 +7098,11 @@ async function testExercices(){
         if(c.nuits){
           for(let i=0;i<c.nuits.n;i++)
             u.sleepLog.push({date:_rj(i),duration:c.nuits.h});
+          // Build 1828 : le sommeil se juge contre la MÉDIANE PERSONNELLE
+          // (_dispoSommeilDetail). Les nuits plus anciennes, à 8 h, donnent la
+          // base ; `base:false` les retire (un petit dormeur à son équilibre).
+          if(c.nuits.base!==false)
+            for(let i=c.nuits.n;i<30;i++) u.sleepLog.push({date:_rj(i),duration:8});
         }
         if(c.stress) u.bilans.push({type:'coaching',date:Date.now()-3*864e5,
           'bil-stress':c.stress});
@@ -7201,24 +7214,25 @@ async function testExercices(){
           u.sessions[i].metrics={fatigue:'2',motivation:'8',sensation:'8'};
           return !scoreRecuperation(u).criteres.some(x=>x.cle==='forme')
             ?true:_echec('le critère tient malgré une bonne séance');});
-        ok('6 nuits à 5 h : le critère sommeil ne compte pas',()=>{
-          const six=_ath({id:'c1',nuits:{n:MICRO_SOMMEIL_MIN_NUITS-1,h:5}});
-          if(scoreRecuperation(six).criteres.some(x=>x.cle==='sommeil'))
-            return _echec('il compte à '+(MICRO_SOMMEIL_MIN_NUITS-1)+' nuits');
-          const sept=_ath({id:'c2',nuits:{n:MICRO_SOMMEIL_MIN_NUITS,h:5}});
-          return scoreRecuperation(sept).criteres.some(x=>x.cle==='sommeil')
-            ?true:_echec('il ne compte pas à '+MICRO_SOMMEIL_MIN_NUITS+' nuits');});
-        ok('Sommeil au-dessus du seuil : le critère ne compte pas',()=>{
-          const u=_ath({id:'c3',nuits:{n:14,h:MICRO_SOMMEIL_SEUIL+0.5}});
+        // Build 1828 : UN SEUL JUGEMENT DU SOMMEIL, contre la médiane perso.
+        ok('Sommeil : deux nuits courtes SOUS SA MÉDIANE comptent ; un petit dormeur à son équilibre, non',()=>{
+          const court=_ath({id:'c1',nuits:{n:2,h:5}});
+          if(!scoreRecuperation(court).criteres.some(x=>x.cle==='sommeil'))
+            return _echec('deux nuits à 5 h pour une médiane de 8 h ne comptent pas');
+          const equilibre=_ath({id:'c2',nuits:{n:30,h:5.5,base:false}});
+          return !scoreRecuperation(equilibre).criteres.some(x=>x.cle==='sommeil')
+            ?true:_echec('un dormeur régulier à 5 h 30 est jugé en dette');});
+        ok('Sommeil proche de sa médiane : le critère ne compte pas',()=>{
+          const u=_ath({id:'c3',nuits:{n:14,h:7.5}});
           return !scoreRecuperation(u).criteres.some(x=>x.cle==='sommeil')
-            ?true:_echec('il compte au-dessus du seuil');});
-        ok('Le seuil de sommeil est CELUI de MICRO_SOMMEIL, pas un doublon',()=>{
-          // Deux constantes de même valeur finissent par diverger.
+            ?true:_echec('il compte près de la médiane');});
+        ok('Le jugement du sommeil est CELUI de la disponibilité, pas un doublon',()=>{
+          // Deux jugements du même sommeil finissent par diverger.
           const src=String(scoreRecuperation)+String(_recupMusclesHauts);
-          if(/RECUP_SOMMEIL|SOMMEIL_HEURES|=\s*6\b/.test(src))
-            return _echec('une constante de sommeil a été recréée');
-          return /MICRO_SOMMEIL_SEUIL/.test(src)
-            ?true:_echec('MICRO_SOMMEIL_SEUIL n\'est plus lu');});
+          if(/RECUP_SOMMEIL|SOMMEIL_HEURES|=\s*6\b|MICRO_SOMMEIL_SEUIL/.test(src))
+            return _echec('un second seuil de sommeil est lu');
+          return /_dispoSommeilDetail/.test(src)
+            ?true:_echec('_dispoSommeilDetail n\'est plus lu');});
         ok('bil-stress « Un peu » : le critère ne compte pas',()=>{
           for(const v of ['Pas du tout','Un peu']){
             const u=_ath({id:'d'+v.length,stress:v});
@@ -7274,17 +7288,19 @@ async function testExercices(){
             ?true:_echec('la fenêtre du volume a changé');});
 
         // ── La restitution ───────────────────────────────────────────────
-        ok('Coach : les critères REMPLIS, avec leurs valeurs',()=>{
+        ok('Coach : le verdict du jour en une ligne, avec sa cause chiffrée',()=>{
           const u=_ath({id:'g1',nuits:{n:14,h:5.3},stress:'Énormément'});
           u.sessions=_seances(8,2,3);
           const h=_htmlRecuperationCoach(u);
           if(!h) return _echec('aucun encart');
           const d=document.createElement('div'); d.innerHTML=h;
           const t=d.textContent||'';
-          if(!/Récupération/.test(t)) return _echec('titre absent');
-          if(!/5 h 18|5 h 1\d/.test(t)) return _echec('la valeur de sommeil manque : '+t);
-          if(!/3 séances/.test(t)) return _echec('la valeur de forme manque');
-          if(!/Énormément/.test(t)) return _echec('la valeur de stress manque');
+          // Build 1828 : UNE LIGNE, le verdict du jour de disponibilite — le
+          // même que l'athlète —, avec sa cause chiffrée.
+          if((t.match(/Récupération/g)||[]).length!==1) return _echec('titre absent ou répété : '+t);
+          const dp=disponibilite(u,localISODate(new Date()));
+          if(t.indexOf('Récupération : '+dp.drapeau)!==0) return _echec('verdict différent de l’athlète : '+t+' / '+dp.drapeau);
+          if(!/sous sa médiane/.test(t)) return _echec('la cause chiffrée manque : '+t);
           // AUCUN score chiffré, aucune couleur d'alerte.
           if(/\b3\s*\/\s*4|\bscore\b|\b3 points?\b/i.test(t))
             return _echec('un score est affiché : '+t);
@@ -12343,9 +12359,11 @@ async function testExercices(){
           // Et la fonction fait bien varier la charge — sinon on vend du vide.
           // getCycleFactor(user,dateISO) lit user.currentCycle : la phase se
           // passe DANS le dossier, pas en premier argument.
+          // Build 1828 : « c'est dur » adapte la séance par un RIR de plus
+          // (la charge proposée suit) ; l'ancien ×0,80 reste un réglage coach.
           const facteurs=['j1_difficile','j1_supportable','j6_14']
-            .map(ph=>getCycleFactor({currentCycle:ph},'2026-08-10'));
-          if(!facteurs.some(f=>f&&f.factor!==1))
+            .map(ph=>getCycleFactor({currentCycle:ph,cycleDurMode:'charge80'},'2026-08-10'));
+          if(!facteurs.some(f=>f&&f.factor!==1)&&effetDispoDuJour({email:'arg@t',currentCycle:'j1_difficile'}).rirPlus!==1)
             return _echec('aucune phase ne modifie la charge : la promesse est creuse');
           // Le volume, lui, ne bouge JAMAIS : c'est ce qui rend la nouvelle
           // formulation exacte.
@@ -20029,7 +20047,8 @@ async function testExercices(){
             const vide=disponibilite({email:'d@t.fr',sessions:[],sleepLog:[]},J(0));
             if(vide.note!==null) return _echec('une note sort de rien : '+vide.note);
             if(vide.drapeau!=='vert') return _echec('drapeau '+vide.drapeau+' sans donnée');
-            if(vide.donneesManquantes.length!==4) return _echec('les quatre absences ne sont pas listées');
+            // Build 1828 : six entrées (cardio et ressenti en plus).
+            if(vide.donneesManquantes.length!==6) return _echec('les six absences ne sont pas listées');
             // UNE seule entrée : toujours null.
             const une=disponibilite({email:'d@t.fr',sessions:[],sleepLog:dort(4)},J(0));
             if(une.note!==null) return _echec('une seule entrée produit une note : '+une.note);
@@ -22820,8 +22839,11 @@ async function testExercices(){
       if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:true})),AUJ).factor!==0.95) return _echec('ajusterAuto');
       if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:true,intensiteRegles:'difficile'})),AUJ).factor!==0.80) return _echec('ajusterAuto, règles difficiles');
       if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:'true'})),AUJ).factor!==1) return _echec('ajusterAuto non booléen accepté');
-      if(getCycleFactor(ath(base,{currentCycle:'j1_difficile'}),AUJ).factor!==0.80) return _echec('j1_difficile');
-      if(getCycleFactor(ath(base,{currentCycle:'j1_supportable'}),AUJ).factor!==0.95) return _echec('j1_supportable');
+      // Build 1828 : déclaré, la charge reste (un RIR de plus) ; préférence coach → ×0,80 / ×0,95.
+      if(getCycleFactor(ath(base,{currentCycle:'j1_difficile'}),AUJ).factor!==1) return _echec('j1_difficile');
+      if(getCycleFactor(ath(base,{currentCycle:'j1_supportable'}),AUJ).factor!==1) return _echec('j1_supportable');
+      if(getCycleFactor(ath(base,{currentCycle:'j1_difficile',cycleDurMode:'charge80'}),AUJ).factor!==0.80) return _echec('j1_difficile, préférence coach');
+      if(getCycleFactor(ath(base,{currentCycle:'j1_supportable',cycleDurMode:'charge80'}),AUJ).factor!==0.95) return _echec('j1_supportable, préférence coach');
       if(confCycle(ath(base)).ajusterAuto!==false) return _echec('défaut');
       if(String(_renderCycleNutSettings).indexOf('id="cycle-ajuster"')<0||String(saveCycleNutSettings).indexOf("g('cycle-ajuster')")<0) return _echec('le réglage');
       return assertNoCycleRuleAltersSeries().ok?true:_echec('assertNoCycleRuleAltersSeries');});
@@ -23582,6 +23604,66 @@ async function testExercices(){
         return true;});
     }
 
+    // ══════ UN SEUL VERDICT DE RÉCUPÉRATION PAR JOUR (06/10/2026, build 1828) ══════
+    {
+      const _J=864e5, _iso=j=>localISODate(new Date(Date.now()-j*_J));
+      // 30 nuits de 8 h, les `n` dernières à `h` heures.
+      const _nuits=(n,h)=>Array.from({length:30},(_,j)=>({date:_iso(j),duration:j<n?h:8}));
+      const _rs=(j,w,rir)=>({id:'rd'+j,date:Date.now()-j*_J,slot:0,name:'P',
+        data:{'SQUAT':{sets:[{weight:String(w),reps:'5',rir:String(rir),done:true}]}}});
+      const _ru=(extra)=>Object.assign({id:'rcu',email:'rcu'+Math.random()+'@t.fr',role:'athlete',exAlias:{},exMuscles:{},bilans:[],
+        sessions_config:[{active:true,name:'P',exercises:[{name:'SQUAT',reps:'5',rir:'2'}]}],sessions:[_rs(3,100,2)]},extra||{});
+      ok('Récupération : deux nuits à −30 % → orange, et un RIR de plus sur la suggestion',()=>{
+        const u=_ru({sleepLog:_nuits(2,5.6)});
+        const d=disponibilite(u,_iso(0));
+        if(d.drapeau!=='orange'||d.cause!=='sommeil') return _echec(JSON.stringify(d));
+        const ef=effetDispoDuJour(u,_iso(0));
+        if(ef.rirPlus!==1||!ef.pasDeRecord) return _echec('effet : '+JSON.stringify(ef));
+        const sv=currentUser;
+        try{
+          currentUser=u;
+          const r=suggestionDepuisHistorique({name:'SQUAT',reps:'5',rir:'2'},0,'P',1,u);
+          // 100 × 5 à RIR 2 : la cible du jour est 3, la double progression n'est pas accomplie.
+          if(!r||r.kg!==100||!/pour 3 visé/.test(r.raison)||!/un RIR de plus/.test(r.raison)) return _echec(JSON.stringify(r));
+          // Les mêmes nuits normales : la charge monte.
+          currentUser=_ru({sleepLog:_nuits(0,8)});
+          const n=suggestionDepuisHistorique({name:'SQUAT',reps:'5',rir:'2'},0,'P',1,currentUser);
+          return (n&&n.kg>100)?true:_echec('sans fatigue : '+JSON.stringify(n));
+        } finally { currentUser=sv; }});
+      ok('Récupération : une VFC 20 % sous sa base sur 3 mesures → entrée cardio sous 100 ; une seule nuit de montre → rien',()=>{
+        const base=Array.from({length:12},(_,j)=>({date:_iso(j+5),ms:60,methode:'rmssd'}));
+        const rec=[0,1,2].map(j=>({date:_iso(j),ms:48,methode:'rmssd'}));
+        const c=_dispoCardio({vfcLog:base.concat(rec)},_iso(0));
+        if(!(c<100)) return _echec('cardio : '+c);
+        const seule=_dispoCardio({vfcLog:[{date:_iso(0),ms:40,methode:'rmssd'}]},_iso(0));
+        return seule===null?true:_echec('une seule mesure : '+seule);});
+      ok('Récupération : « c’est dur » déclaré → charge inchangée et un RIR de plus ; réglage coach « charge80 » → ×0,80',()=>{
+        const u=_ru({currentCycle:'j1_difficile'});
+        if(getCycleFactor(u).factor!==1) return _echec('facteur : '+getCycleFactor(u).factor);
+        if(getCycleFactor(_ru({currentCycle:'j1_supportable'})).factor!==1) return _echec('« ça va » change encore la charge');
+        const ef=effetDispoDuJour(u,_iso(0));
+        if(ef.rirPlus!==1) return _echec('effet : '+JSON.stringify(ef));
+        return getCycleFactor(_ru({currentCycle:'j1_difficile',cycleDurMode:'charge80'})).factor===0.8?true:_echec('préférence coach perdue');});
+      ok('Récupération : 3 jours orange ou rouge sur 7 → motif « recuperation » dans scoreFatigue',()=>{
+        const ses=[];
+        for(let w=0;w<5;w++) for(const j of [1,3,5]) ses.push(_rs(w*7+j,100,2));
+        const u=_ru({sessions:ses,sleepLog:_nuits(6,5)});
+        const h=historiqueDispo(u,_iso(0),7).filter(x=>x.drapeau!=='vert').length;
+        if(h<3) return _echec(h+' jours bas seulement');
+        const f=scoreFatigue(u);
+        const m=f.motifs.find(x=>x.code==='recuperation');
+        return (m&&FATIGUE_POIDS.recuperation===15)?true:_echec(JSON.stringify(f));});
+      ok('Récupération : la fiche coach dit le même verdict en une ligne ; une nuit saisie deux fois garde la dernière',()=>{
+        const u=_ru({sleepLog:_nuits(3,5.6)});
+        const l=ligneRecuperationCoach(u,_iso(0));
+        const d=disponibilite(u,_iso(0));
+        if(!l||l.indexOf('Récupération : '+d.drapeau)!==0||!/sous sa médiane/.test(l)) return _echec(l+' / '+d.drapeau);
+        const h=_htmlRecuperationCoach(u);
+        if((h.match(/Récupération/g)||[]).length!==1) return _echec('plusieurs blocs : '+h);
+        // La même nuit saisie deux fois : la dernière saisie fait foi.
+        const v=_ru({sleepLog:_nuits(0,8).concat([{date:_iso(0),duration:4},{date:_iso(0),duration:8}])});
+        return _dispoSommeil(v,_iso(0))===100?true:_echec('doublon : '+_dispoSommeil(v,_iso(0)));});
+    }
     // ══════ LE FREIN DE PROGRESSION (06/10/2026, build 1827) ══════
     {
       const _J=864e5;
@@ -59201,7 +59283,8 @@ async function testExercices(){
       const ses=_RSerie([90,92.5,95,97.5,100,100]);
       if(recordAPortee(_RU(ses),_RP(null,{deload:true}),_RT)!==null) return _echec('décharge cochée');
       if(recordAPortee(_RU(ses,{currentCycle:'j1_difficile'}),_RP(),_RT)!==null) return _echec('règles difficiles');
-      if(recordAPortee(_RU(ses,{currentCycle:'j1_supportable'}),_RP(),_RT)!==null) return _echec('règles supportables (0,95)');
+      // Build 1828 : « ça va » ne change plus rien, le record reste visé.
+      if(!recordAPortee(_RU(ses,{currentCycle:'j1_supportable'}),_RP(),_RT)) return _echec('règles supportables');
       if(!recordAPortee(_RU(ses,{currentCycle:'j6_14'}),_RP(),_RT)) return _echec('phase neutre');
       if(recordAPortee(Object.assign(_RU(ses),{role:'coach'}),_RP(),_RT)!==null) return _echec('coach');
       // Deux exercices : le gain relatif le plus grand (Curl +1,6 % contre Squat +2,5 %).

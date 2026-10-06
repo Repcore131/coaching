@@ -1209,8 +1209,14 @@ function isCardio(ex){
 function getCycleFactor(user,dateISO){
   const u=user||currentUser||{};
   const p=u.currentCycle||'ignore';
-  if(p==='j1_difficile') return{factor:0.80,seriesReduce:0};
-  if(p==='j1_supportable') return{factor:0.95,seriesReduce:0};
+  // « C'EST DUR » NE RETIRE PLUS 20 % DE LA CHARGE (06/10/2026, build 1828) :
+  // la charge est gardée et la séance prend UN RIR DE PLUS, par le même
+  // mécanisme qu'une disponibilité orange (effetDispoDuJour). « Ça va » ne
+  // change plus rien. Le coach peut garder l'ancien réglage pour un athlète
+  // (cycleDurMode 'charge80' : ×0,80 et ×0,95, comme avant).
+  const ancien=u.cycleDurMode==='charge80';
+  if(p==='j1_difficile') return{factor:ancien?0.80:1.00,seriesReduce:0};
+  if(p==='j1_supportable') return{factor:ancien?0.95:1.00,seriesReduce:0};
   if(p==='j6_14') return{factor:1.00,seriesReduce:0};
   if(p==='j15_21') return{factor:1.00,seriesReduce:0};
   // j22_28 est l'option DÉCLARÉE à la main. Elle retirait une série elle

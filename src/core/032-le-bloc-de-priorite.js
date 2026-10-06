@@ -618,7 +618,12 @@ function _blocSauver(c,libelle){
 // AUCUN VOCABULAIRE MEDICAL. « Disponibilite », pas « recuperation HRV », pas
 // « stress physiologique » : l'application ne mesure aucun de ces deux-la, et
 // leur emprunter le nom serait leur emprunter une autorite qu'elle n'a pas.
-const DISPO_POIDS=Object.freeze({sommeil:40,douleur:25,rir:20,charge:15});
+// SIX ENTREES DEPUIS LE BUILD 1828 (06/10/2026) : la FC de repos et la VFC
+// synchronisees (recupCardio, contre la base de 28 jours de l'athlete), et le
+// ressenti DECLARE du cycle (« c'est dur », j1_difficile) — ce que l'athlete
+// dit de sa journee, pas une phase calculee. Toujours aucune saisie de plus :
+// une entree absente sort du calcul, son poids se redistribue.
+const DISPO_POIDS=Object.freeze({sommeil:40,douleur:25,rir:20,charge:15,cardio:15,ressenti:15});
 const DISPO_SEUIL_VERT=70;
 const DISPO_SEUIL_ORANGE=50;
 const DISPO_ENTREES_MIN=2;      // sous deux entrees : pas de donnee, pas d'avis
@@ -661,9 +666,21 @@ function _dispoRatio(valeur,reference,pentePourCent){
 // un etat. Une seule nuit renseignee suffit pourtant a repondre : refuser de
 // se prononcer parce qu'il manque la seconde ferait taire l'entree la plus
 // lourde exactement les jours ou elle compte.
-function _dispoSommeil(user,dateISO){
-  const log=((user&&user.sleepLog)||[])
-    .filter(e=>e&&e.date&&Number(e.duration)>0);
+// Le journal de sommeil, UNE NUIT PAR DATE : une nuit saisie deux fois le même
+// jour garde la DERNIÈRE saisie (l'ordre du journal fait foi).
+function _dispoSommeilLog(user){
+  const parDate=new Map();
+  for(const e of ((user&&user.sleepLog)||[])){
+    if(!e||!e.date||!(Number(e.duration)>0)) continue;
+    parDate.set(String(e.date),e);
+  }
+  return Array.from(parDate.values());
+}
+// PURE. Le détail du sommeil : {score, moy, ref, ecartPct}, ou null.
+// LE SEUL JUGEMENT DU SOMMEIL DE L'APP : disponibilite et scoreRecuperation
+// le lisent tous deux ici.
+function _dispoSommeilDetail(user,dateISO){
+  const log=_dispoSommeilLog(user);
   if(!log.length) return null;
   const fin=dateISO||localISODate(new Date());
   const debut30=localISODate(_datePlusJours(_dateDeISO(fin),-DISPO_SOMMEIL_JOURS));
@@ -673,9 +690,11 @@ function _dispoSommeil(user,dateISO){
   const deux=log.filter(e=>e.date===fin||e.date===j1||e.date===j2).map(e=>Number(e.duration));
   if(!deux.length||ref==null) return null;
   const moy=deux.reduce((a,b)=>a+b,0)/deux.length;
-  // 30 % SOUS SA MEDIANE = ZERO. Deux nuits a quatre heures pour quelqu'un qui
-  // en dort sept : la note doit s'effondrer, pas glisser.
-  return _dispoRatio(moy,ref,30);
+  return {score:_dispoRatio(moy,ref,30),moy,ref,ecartPct:Math.round((moy/ref-1)*100)};
+}
+function _dispoSommeil(user,dateISO){
+  const d=_dispoSommeilDetail(user,dateISO);
+  return d?d.score:null;
 }
 // PURE. DOULEUR — le nombre de series douloureuses sur sept jours.
 //
@@ -771,6 +790,30 @@ function _dispoEcartRir(user,dateISO){
 // SANS RATIO, PAS DE TERME. ratioCharge rend null sous trois semaines
 // d'historique ou sous deux notes sur trois : l'entree sort alors du calcul
 // et son poids se redistribue, plutot que d'inventer une valeur moyenne.
+// PURE. CARDIO — la FC de repos et la VFC, contre la base de 28 jours de
+// l'athlete (recupCardio). Une FC de repos 15 bpm au-dessus de sa base, ou une
+// VFC 30 % en dessous, valent 0 ; au-dessus de la base, 100. Le pire des deux.
+// Sans journal, ou sans base (une montre portee une seule nuit) : null.
+const DISPO_FC_ZERO_BPM=15, DISPO_VFC_ZERO_PCT=30;
+function _dispoCardioDetail(user,dateISO){
+  const t=_dateDeISO(dateISO||localISODate(new Date())).getTime()+12*3600000;
+  let c=null; try{ c=recupCardio(user,t); }catch(e){ c=null; }
+  if(!c||(!c.fc&&!c.vfc)) return null;
+  const notes=[];
+  if(c.fc) notes.push(c.fc.ecart<=0?100:Math.max(0,Math.round(100-c.fc.ecart*100/DISPO_FC_ZERO_BPM)));
+  if(c.vfc) notes.push(c.vfc.ecart>=0?100:Math.max(0,Math.round(100+c.vfc.ecart*100/DISPO_VFC_ZERO_PCT)));
+  return {score:Math.min.apply(null,notes),fc:c.fc,vfc:c.vfc};
+}
+function _dispoCardio(user,dateISO){
+  const d=_dispoCardioDetail(user,dateISO);
+  return d?d.score:null;
+}
+// PURE. RESSENTI — le cycle DECLARE « c'est dur » (j1_difficile). Une phrase de
+// l'athlete sur sa journee : elle pese comme une entree basse, sans plus.
+const DISPO_RESSENTI_DUR=40;
+function _dispoRessenti(user){
+  return (user&&user.currentCycle==='j1_difficile')?DISPO_RESSENTI_DUR:null;
+}
 const DISPO_CHARGE_RATIO_ZERO=1.6;   // ratio a partir duquel le terme vaut 0
 function _dispoCharge(user,dateISO){
   if(!user||!Array.isArray(user.sessions)) return null;
@@ -798,7 +841,8 @@ function disponibilite(user,dateISO){
   const d=dateISO||localISODate(new Date());
   const sous={};
   const manquantes=[];
-  const calc={sommeil:_dispoSommeil,douleur:_dispoDouleur,rir:_dispoEcartRir,charge:_dispoCharge};
+  const calc={sommeil:_dispoSommeil,douleur:_dispoDouleur,rir:_dispoEcartRir,charge:_dispoCharge,
+    cardio:_dispoCardio,ressenti:_dispoRessenti};
   for(const k of Object.keys(DISPO_POIDS)){
     let v=null; try{ v=calc[k](u,d); }catch(e){ v=null; }
     if(v==null||!isFinite(v)) manquantes.push(k); else sous[k]=v;
@@ -850,6 +894,14 @@ function _dispoMotif(cause,drapeau,user,dateISO){
       ? (n?n+' séances avec douleur cette semaine. ':'')+'Séance légère ou repos : dis-le à ton coach.'
       : 'Des douleurs déclarées cette semaine. Garde la charge, enlève la dernière série.';
   }
+  if(cause==='cardio')
+    return rouge
+      ? 'Ta FC de repos ou ta VFC s’écartent nettement de ta base. Séance légère ou repos : dis-le à ton coach.'
+      : 'Ta FC de repos ou ta VFC s’écartent de ta base. Garde la charge, enlève la dernière série.';
+  if(cause==='ressenti')
+    return rouge
+      ? 'Tu as dit que c’était dur aujourd’hui. Séance légère ou repos : dis-le à ton coach.'
+      : 'Tu as dit que c’était dur aujourd’hui. Garde la charge, un RIR de plus.';
   if(cause==='rir')
     return rouge
       ? 'Tu es allé nettement plus près de l’échec que prévu cette semaine. Séance légère ou repos : dis-le à ton coach.'
@@ -857,6 +909,66 @@ function _dispoMotif(cause,drapeau,user,dateISO){
   return rouge
     ? 'Ta charge a beaucoup augmenté cette semaine. Séance légère ou repos : dis-le à ton coach.'
     : 'Charge en nette hausse cette semaine. Garde la charge, enlève la dernière série.';
+}
+// ══════════ L'EFFET SUR LA SÉANCE (06/10/2026, build 1828) ══════════════
+// 'orange' ou 'rouge' : UN RIR DE PLUS sur toutes les suggestions du jour, et
+// pas de record à portée (le rouge garde en plus sa proposition d'alléger la
+// semaine). Le cycle déclaré « c'est dur » prend le même chemin : charge
+// gardée, un RIR de plus — sauf si le coach a choisi l'ancien réglage
+// (cycleDurMode 'charge80' : ×0,80 sur la charge, voir getCycleFactor).
+const DISPO_RIR_PLUS=1;
+let _dispoEffetCache={cle:'',t:0,val:null};
+function effetDispoDuJour(user,dateISO){
+  const u=(user===undefined)?currentUser:user;
+  const rien={rirPlus:0,pasDeRecord:false,drapeau:'vert',raison:null};
+  if(!u) return rien;
+  const d=dateISO||localISODate(new Date());
+  const cle=[u.email||u.id||'?',d,u.updatedAt||0,(u.sessions||[]).length,(u.sleepLog||[]).length,u.currentCycle||''].join('|');
+  if(_dispoEffetCache.cle===cle&&Date.now()-_dispoEffetCache.t<10000) return _dispoEffetCache.val;
+  let r=rien;
+  let dp=null; try{ dp=disponibilite(u,d); }catch(e){ dp=null; }
+  const dur=u.currentCycle==='j1_difficile'&&u.cycleDurMode!=='charge80';
+  if(dp&&(dp.drapeau==='orange'||dp.drapeau==='rouge'))
+    r={rirPlus:DISPO_RIR_PLUS,pasDeRecord:true,drapeau:dp.drapeau,raison:'récupération en baisse, un RIR de plus aujourd’hui'};
+  else if(dur)
+    r={rirPlus:DISPO_RIR_PLUS,pasDeRecord:true,drapeau:dp?dp.drapeau:'vert',raison:'journée difficile déclarée, charge gardée et un RIR de plus'};
+  _dispoEffetCache={cle,t:Date.now(),val:r};
+  return r;
+}
+// PURE. Les verdicts des `n` derniers jours (le plus récent en premier).
+function historiqueDispo(user,dateISO,n){
+  const fin=_dateDeISO(dateISO||localISODate(new Date()));
+  const out=[];
+  for(let i=0;i<(n||7);i++){
+    const d=localISODate(_datePlusJours(fin,-i));
+    let x=null; try{ x=disponibilite(user,d); }catch(e){ x=null; }
+    out.push({date:d,drapeau:x?x.drapeau:'vert',cause:x?x.cause:null,note:x?x.note:null});
+  }
+  return out;
+}
+// PURE. Le détail chiffré de la cause, pour la ligne du coach.
+function _dispoDetail(cause,user,dateISO){
+  try{
+    if(cause==='sommeil'){ const s=_dispoSommeilDetail(user,dateISO); if(s) return 'sommeil '+(s.ecartPct>0?'+':'')+s.ecartPct+' % sous sa médiane'; }
+    if(cause==='cardio'){ const c=_dispoCardioDetail(user,dateISO);
+      if(c){ const l=[]; if(c.fc&&c.fc.ecart>0) l.push('FC de repos +'+String(c.fc.ecart).replace('.',',')+' bpm'); if(c.vfc&&c.vfc.ecart<0) l.push('VFC '+c.vfc.ecart+' %'); return (l.join(', ')||'FC de repos et VFC')+' contre sa base'; } }
+    if(cause==='douleur') return 'douleurs déclarées sur 7 jours';
+    if(cause==='rir') return 'plus près de l’échec que prévu';
+    if(cause==='charge') return 'charge en nette hausse';
+    if(cause==='ressenti') return 'journée difficile déclarée';
+  }catch(e){}
+  return cause||'';
+}
+// UNE LIGNE, LE MÊME VERDICT QUE CHEZ L'ATHLÈTE : « Récupération : orange
+// depuis 3 jours (sommeil −25 % sous sa médiane) ». '' quand c'est vert.
+function ligneRecuperationCoach(c,dateISO){
+  const h=historiqueDispo(c,dateISO,7);
+  const j=h[0];
+  if(!j||j.drapeau==='vert') return '';
+  let n=0; for(const x of h){ if(x.drapeau==='orange'||x.drapeau==='rouge') n++; else break; }
+  const txt=n<=1?'aujourd’hui':'depuis '+n+' jours';
+  const det=_dispoDetail(j.cause,c,j.date);
+  return 'Récupération : '+j.drapeau+' '+txt+(det?' ('+det+')':'');
 }
 // ══════════ L'EFFET REEL ═══════════════════════════════════════════════
 //

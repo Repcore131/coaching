@@ -1771,6 +1771,10 @@ function renderSets(ex,data,idx,opts){
   // Le frein de la série à série : celui de l'exercice (freinProgression), ou
   // « J'allège » choisi dans CETTE séance (clé exKey : un remplacement décale
   // les index, pas les noms).
+  // La cible du jour, série à série : un RIR de plus si la récupération est
+  // orange ou rouge, ou « c'est dur » déclaré (effetDispoDuJour).
+  let _rirSerieJour=_rirPrescrit(ex);
+  try{ const _ef=effetDispoDuJour(currentUser); if(_ef&&_ef.rirPlus) _rirSerieJour=String(Math.min(5,(_rirSerieJour===''?PROG_RIR_CIBLE_DEFAUT:Number(_rirSerieJour))+_ef.rirPlus)); }catch(e){}
   let _freinSerie=null;
   try{ _freinSerie=freinProgression(currentUser,ex.name); }catch(e){ _freinSerie=null; }
   try{ if(!_freinSerie&&((woState&&woState.douleurChoix)||{})[exKey(ex.name)]==='allege') _freinSerie={niveau:'maintien'}; }catch(e){}
@@ -1794,7 +1798,7 @@ function renderSets(ex,data,idx,opts){
       // été faite au haut de la fourchette avec deux RIR de plus que visé.
       let _pr=null;
       try{ _pr=progressionCharge({mode:'serie',charge:w,repsFaites:[repsFaitesSerie(s)],rirFait:s.rir,
-        reps:s.reps||ex.reps,rirCible:_rirPrescrit(ex),contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
+        reps:s.reps||ex.reps,rirCible:_rirSerieJour,contrepoids:_isCW,ex,user:currentUser}); }catch(e){ _pr=null; }
       // LE FREIN (build 1827) : la gêne de la dernière séance, « J'allège »
       // choisi aujourd'hui, une gêne ≥ 4 sur la série qu'on vient de faire, une
       // contrainte, la grossesse : la série suivante ne monte pas.

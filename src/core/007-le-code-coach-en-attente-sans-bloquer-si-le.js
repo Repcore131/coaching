@@ -1450,8 +1450,12 @@ const FATIGUE_COUPURE_J=21;          // au-delà, les compteurs repartent de zé
 // Les poids, EXPOSÉS et non cachés : c'est ce qui permet au coach de discuter
 // la proposition au lieu de la subir.
 const FATIGUE_POIDS=Object.freeze({
-  volumeHaut:35, regression:25, plateau:15, douleur:15, forme:10
+  volumeHaut:35, regression:25, plateau:15, douleur:15, forme:10,
+  // build 1828 : la disponibilité orange ou rouge 3 jours sur 7 — le feu du
+  // jour et la proposition de décharge racontent la même histoire.
+  recuperation:15
 });
+const FATIGUE_DISPO_JOURS=3;
 // PURE. Le sous-dossier fatigue, quel que soit l'état du document. Un champ
 // corrompu ne doit ni lever d'exception ni faire disparaître l'écran coach.
 function fatigueDe(user){
@@ -1574,6 +1578,13 @@ function scoreFatigue(user,dateRef){
     pousser('forme','Indice de forme sous sa base habituelle',
       d.formeBasse.ecart,'points sous '+d.formeBasse.base,FATIGUE_POIDS.forme);
   }
+  try{
+    const ref=(dateRef instanceof Date)?dateRef:new Date(Number(dateRef||Date.now()));
+    const h=historiqueDispo(user,localISODate(ref),7);
+    const bas=h.filter(x=>x.drapeau==='orange'||x.drapeau==='rouge').length;
+    if(bas>=FATIGUE_DISPO_JOURS)
+      pousser('recuperation','Récupération orange ou rouge '+bas+' jours sur 7',bas,'jours',FATIGUE_POIDS.recuperation);
+  }catch(e){}
   return {score,motifs,exploitable:true,semaines};
 }
 // PURE. La semaine visée : l'index dans le bloc quand F-31 en fournit un, la

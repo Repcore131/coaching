@@ -1235,12 +1235,14 @@ function scoreRecuperation(user){
     return {lib:'Forme en creux',valeur:RECUP_SEANCES_FORME+' séances'};
   });
 
-  // (b) Le sommeil, par _microSommeil et pas autrement.
+  // (b) Le sommeil, par _dispoSommeilDetail et pas autrement (build 1828) :
+  // UN SEUL JUGEMENT DU SOMMEIL DANS L'APP, contre la médiane personnelle,
+  // celui de la disponibilité. Le seuil absolu de 6 h ne juge plus rien ici.
   essai('sommeil',()=>{
-    const s=_microSommeil(u);
-    if(!s||!(s.moyenne<MICRO_SOMMEIL_SEUIL)) return null;
+    const s=_dispoSommeilDetail(u,localISODate(new Date()));
+    if(!s||!(s.score<DISPO_SEUIL_ORANGE)) return null;
     return {lib:'Sommeil court',
-      valeur:_recupHeures(s.moyenne)+' sur '+s.nuits+' nuits'};
+      valeur:_recupHeures(s.moy)+', '+Math.abs(s.ecartPct)+' % sous ta médiane'};
   });
 
   // (c) Le stress DÉCLARÉ au dernier bilan de suivi. Il était affiché au
@@ -1915,15 +1917,14 @@ function csObjectifEnregistrer(){
   toastSync(ok,envoi,'Objectif posé','l\'objectif est');
   return true;
 }
+// UNE LIGNE, LE VERDICT DU JOUR (build 1828) : celui de disponibilite, le
+// même que l'athlète lit sur son aperçu de séance — « Récupération : orange
+// depuis 3 jours (sommeil −25 % sous sa médiane) ». Plus de bloc de critères :
+// la ligne les couvre, et deux lectures du même jour finissaient par diverger.
 function _htmlRecuperationCoach(c){
-  const r=scoreRecuperation(c);
-  if(!r.points) return '';
-  const ligne=r.criteres.map(x=>x.lib.toLowerCase()+' ('+x.valeur+')').join(' · ');
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Récupération</div>
-    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(ligne)}.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Ce qui va dans le même sens en ce moment, d'après ce qu'elle ou il a saisi. Aucun seuil n'est franchi : c'est une conversation à avoir.</div>
-  </div>`;
+  let l=''; try{ l=ligneRecuperationCoach(c,localISODate(new Date())); }catch(e){ l=''; }
+  if(!l) return '';
+  return `<div class="recup-ligne" style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;margin-bottom:20px">${escapeHtml(l)}</div>`;
 }
 // ── Restitution athlète : UNE phrase, à partir du seuil ──────────────────
 // Aucune étiquette, aucun score, aucune couleur. Le chiffre reste dedans.

@@ -2385,6 +2385,10 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
   const cw=isCounterweightEx(ex.name);
   let rc=_rirPrescrit(ex);
   if(frein&&frein.rirMin!=null) rc=String(Math.max(rc===''?PROG_RIR_CIBLE_DEFAUT:Number(rc),frein.rirMin));
+  // LA RÉCUPÉRATION DU JOUR (build 1828) : orange, rouge ou « c'est dur »
+  // déclaré → un RIR de plus sur toutes les suggestions du jour.
+  let eff=null; try{ eff=effetDispoDuJour(u); }catch(e){ eff=null; }
+  if(eff&&eff.rirPlus) rc=String(Math.min(5,(rc===''?PROG_RIR_CIBLE_DEFAUT:Number(rc))+eff.rirPlus));
   const res=progressionCharge({charge:prev.weight,repsFaites:ps.map(p=>p.reps).filter(n=>n>0),
     rirFait:prev.rir,reps:ex.reps,rirCible:rc,contrepoids:cw,
     decote,ex,user:u});
@@ -2397,6 +2401,7 @@ function suggestionDepuisHistorique(ex,slot,progName,decote,user){
     const kg=appliquerFrein(res.kg,w,frein,cw,ex,u);
     return Object.assign({prev},res,{kg,raison:frein.raison,frein});
   }
+  if(eff&&eff.rirPlus) return Object.assign({prev},res,{raison:res.raison+' · '+eff.raison,dispo:eff});
   return Object.assign({prev},res);
 }
 
