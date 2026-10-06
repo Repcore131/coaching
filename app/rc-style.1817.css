@@ -13476,3 +13476,16 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .bil-ctl-v[data-e="rouge-force"]{border-color:color-mix(in srgb,var(--amber) 60%,transparent);color:var(--orange)}
 .bil-ctl-forcer{align-self:flex-start;background:none;border:none;padding:2px 0;margin:0;font:inherit;font-size:var(--fs-2xs);color:var(--text);text-decoration:underline;cursor:pointer;text-align:left}
 .an-forcee{margin:8px 0 0;font-size:var(--fs-xs);line-height:1.5;color:var(--orange)}
+
+/* ══ LA SECTION MORPHO (build 1817) ═════════════════════════════════════════
+   Trois lignes de synthese, puis des <details> replies. Aucune taille de police
+   nouvelle : celles des blocs qu'elle remplace. */
+.mo-syn{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.mo-l{font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5}
+.mo-l b{color:var(--sub);font-weight:800}
+.mo-d{border-top:1px solid var(--border);padding:8px 0}
+.mo-d>summary{cursor:pointer;font-size:var(--fs-sm);font-weight:800;color:var(--text-strong);line-height:1.5;min-height:32px;display:flex;align-items:center}
+.mo-dc{padding:4px 0 6px 12px;border-left:1px solid var(--border)}
+.mo-susp{color:var(--orange);font-weight:700}
+.rvm-lien{margin-bottom:6px}
+.rvm-voir{background:none;border:none;padding:0;font:inherit;color:var(--text);text-decoration:underline;cursor:pointer;text-transform:none;letter-spacing:0}

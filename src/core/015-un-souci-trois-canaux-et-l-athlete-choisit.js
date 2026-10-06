@@ -1528,6 +1528,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderCoachEvictionsSection(c); }catch(e){}
   try{ renderCoachTraitementsSection(c); }catch(e){}
   try{ renderCoachAmplitudesSection(c); }catch(e){}
+  try{ renderMorphoCoach(c); }catch(e){}
   renderCoachCaffeineSection(c);
   try{ renderBatterieCoach(c); }catch(e){}
   try{ renderSommeilCoach(c); }catch(e){}

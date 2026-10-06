@@ -67,9 +67,10 @@ function renderCoachMicroSection(c){
   if(!el) return;
   const def=(function(){ try{ return _htmlDeficitCoach(c); }catch(e){ return ''; } })();
   const l=(function(){ try{ return risquesMicro(c); }catch(e){ return []; } })();
-  // Les proportions vivent dans le même emplacement : deux blocs de questions
-  // au coach, même registre, même disclaimer d'esprit.
-  const morpho=_htmlQuestionsMorpho(c);
+  // LA MORPHO N'EST PLUS ICI (06/10/2026) : elle a sa section dans l'onglet
+  // Données (renderMorphoCoach), en un seul endroit. Les amplitudes n'y sont
+  // donc plus affichées deux fois.
+  const morpho='';
   // Restitution, pas question : elle s'affiche meme sans risque a signaler.
   // Le jour ON se lit sur le planning de L'ATHLETE, pas sur celui du coach :
   // nutIsOnDay lit currentUser, qui est le coach sur cet ecran.

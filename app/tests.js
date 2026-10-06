@@ -77217,12 +77217,17 @@ async function testExercices(){
 
       // ── Le rendu, côté coach SEULEMENT ────────────────────────────────
       try{
+        // DEPUIS LE 06/10/2026, LA MORPHO A SA SECTION DANS L'ONGLET DONNÉES
+        // (#ccd-morpho, renderMorphoCoach) et ne vit plus dans « Signaux faibles ».
         ok('Le bloc s\'affiche sur la fiche coach avec son disclaimer',()=>{
           const c=_mo(180,95,null);
-          renderCoachMicroSection(c);
-          const el=document.getElementById('ccd-micro');
+          const sv=currentUser;
+          try{
+            currentUser={id:'co',email:'co@t',role:'coach'};
+            renderMorphoCoach(c);
+          } finally { currentUser=sv; }
+          const el=document.getElementById('ccd-morpho-coach');
           if(!el) return _echec('emplacement absent');
-          if(el.style.display!=='block') return _echec('emplacement masqué');
           const t=el.textContent||'';
           return /Proportions/.test(t)&&t.indexOf(MORPHO_DISCLAIMER)>=0
             ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,140)+'»');});
@@ -77234,7 +77239,8 @@ async function testExercices(){
               lastPeriodDate:localISODate(new Date(Date.now()-10*864e5)),cycleLength:28}}});
           renderCoachMicroSection(c);
           const t=(document.getElementById('ccd-micro').textContent)||'';
-          return /ferritine/.test(t)&&/Proportions/.test(t)
+          // Les micronutriments restent ; la morpho est partie dans Données.
+          return /ferritine/.test(t)&&!/Proportions/.test(t)
             ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,160)+'»');});
         ok('Aucune question : aucun bloc',()=>{
           renderCoachMicroSection(_mo(180,83,61));
@@ -78014,6 +78020,50 @@ async function testExercices(){
           return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
         } finally { currentUser=sauve; }});
 
+      // ── 06/10/2026 — LA MORPHO EN UN SEUL ENDROIT ──
+      const _moCoach=fn=>{ const sv=currentUser; try{ currentUser={id:'co',email:'co@t',role:'coach'}; return fn(); } finally { currentUser=sv; } };
+      ok('Morpho : #ccd-micro ne porte plus « Profils composés » ; la section vit dans Données, juste avant l’analyse photo',()=>_moCoach(()=>{
+        const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
+        renderCoachMicroSection(u);
+        const mi=document.getElementById('ccd-micro');
+        if(/Profils composés|Proportions|Le piège/.test(mi.innerHTML)) return _echec('la morpho est encore dans Signaux faibles');
+        if(/Amplitudes/.test(mi.innerHTML)) return _echec('les amplitudes sont encore en double');
+        renderMorphoCoach(u);
+        const z=document.getElementById('ccd-morpho-coach');
+        if(!z||!z.innerHTML) return _echec('section vide');
+        const sec=z.closest('section.cc-sect'), anat=document.getElementById('ccd-anat');
+        if(!sec||!/Morpho/.test(sec.querySelector('.cc-sect-t').textContent)) return _echec('titre de section');
+        if(!(sec.compareDocumentPosition(anat)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la section ne précède pas l’analyse photo');
+        if(sec.closest('.ccd-vue')&&sec.closest('.ccd-vue')!==anat.closest('.ccd-vue')) return _echec('pas dans le même onglet que l’analyse');
+        return true;}));
+      ok('Morpho : la synthèse fait trois lignes au plus ; chaque profil est dans un <details> sans « open » ; rien de cliquable dans la lecture',()=>_moCoach(()=>{
+        const u=_m2(Object.assign({},_M2BASE,{'deb-bras':'66'}),{cheville:{cm:7,date:Date.now()-5*_mj}});
+        u.sessions_config=[{day:'Lundi',name:'A',active:true,exercises:[{name:'SQUAT',sets:'3',reps:'8'},{name:'DÉVELOPPÉ COUCHÉ',sets:'3',reps:'8'}]}];
+        const d=document.createElement('div'); d.innerHTML=_htmlQuestionsMorpho(u);
+        const lignes=d.querySelectorAll('.mo-syn .mo-l');
+        if(!lignes.length||lignes.length>3) return _echec(lignes.length+' lignes de synthèse');
+        if(!/^Profils : /.test(lignes[0].textContent)||!/ · /.test(lignes[0].textContent)&&morphoProfils(morphoAxes(u,{calibrage:_morphoCalCache()})).profils.length>1) return _echec('profils : '+lignes[0].textContent);
+        if(!/\d/.test(Array.from(lignes).map(x=>x.textContent).join(' '))) return _echec('aucun réglage chiffré : '+d.querySelector('.mo-syn').textContent);
+        const det=d.querySelectorAll('details');
+        if(det.length<2) return _echec(det.length+' <details>');
+        if(Array.from(det).some(x=>x.hasAttribute('open'))) return _echec('un <details> est ouvert');
+        if(d.querySelector('.mo-syn').textContent.indexOf('Le piège')>=0) return _echec('le piège est dans la synthèse');
+        if(!/Le piège/.test(det[0].textContent)) return _echec('le profil n’est pas dans son <details>');
+        if(d.innerHTML.indexOf('<button')>=0||d.innerHTML.indexOf('onclick')>=0) return _echec('un contrôle dans la zone de lecture');
+        // Mineur : la synthèse le dit.
+        const m=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}},16);
+        const dm=document.createElement('div'); dm.innerHTML=_htmlQuestionsMorpho(m);
+        return /axes osseux non présentés avant 18 ans/.test((dm.querySelector('.mo-syn')||{}).textContent||'')?true:_echec('mineur : '+dm.textContent.slice(0,200));}));
+      ok('Morpho : la revue d’exercices garde sa liste et un lien « voir la morpho » ; le côté athlète ne voit rien',()=>{
+        const h=htmlRevueMorpho({lignes:[],bloques:[],profilsSortis:true});
+        if(!/voir la morpho/.test(h)||!/voirMorphoCoach\(\)/.test(h)) return _echec('pas de lien : '+h);
+        if(/Des réglages à envisager sur ses exercices/.test(h)) return _echec('la revue n’est pas réduite à sa liste');
+        const sv=currentUser;
+        try{
+          currentUser={id:'_a',email:'a@t',role:'athlete',coachId:'co'};
+          return renderMorphoCoach(_m2(_M2BASE))===false&&document.getElementById('ccd-morpho-coach').innerHTML===''
+            ?true:_echec('rendu côté athlète');
+        } finally { currentUser=sv; }});
       ok('M5 — la fiche coach reste une zone de LECTURE, même remplie',()=>{
         const u=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()-5*_mj}});
         const h=_htmlQuestionsMorpho(u);

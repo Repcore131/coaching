@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1816';
+window.RC_BUILD='1817';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-06';
@@ -723,13 +723,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1816.css">
+<link rel="stylesheet" href="./rc-style.1817.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1816.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1817.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -2734,7 +2734,10 @@ const COACH_PHOTO='icons/coach.jpg';
            programme, parce que c'est du programme qu'elles parlent. -->
       <div id="ccd-methodes"></div>
       <!-- LOT T4 : la revue morpho du programme, sous le programme (renderRevueMorphoCoach). -->
-      <div id="ccd-revue-morpho"></div>
+      <section class="cc-sect" style="--cc-accent:var(--border)">
+        <div class="cc-sect-t"><span>À aménager dans son programme</span></div>
+        <div class="cc-sect-c" id="ccd-revue-morpho"></div>
+      </section>
       <template data-ent-ancre="ccd-asymetrie"></template>
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
@@ -2924,6 +2927,13 @@ const COACH_PHOTO='icons/coach.jpg';
              vide — donc masque par .ccd-vue>div:empty — quand il n'y a rien a
              montrer, ou quand une grossesse est declaree. -->
         <div id="ccd-corps"></div>
+        <!-- LA MORPHO, EN UN SEUL ENDROIT (06/10/2026) : synthese de trois lignes,
+             puis un <details> replie par profil (renderMorphoCoach). Masquee
+             quand elle est vide (.cc-sect:has(>.cc-sect-c:empty)). -->
+        <section class="cc-sect" id="ccd-morpho-sect" style="--cc-accent:var(--border)">
+          <div class="cc-sect-t"><span>Morpho</span></div>
+          <div class="cc-sect-c" id="ccd-morpho-coach"></div>
+        </section>
         <!-- L'analyse morpho-anatomique : la photo du premier bilan, detouree,
              et ses recadrages. Reste sur Donnees : _ccdPlacerBlocs ne deplace
              que #ccd-corps. Rempli par renderAnatCoach. -->
@@ -6179,5 +6189,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1816.js"></script>
+<script src="./rc-core.1817.js"></script>
 </body></html>

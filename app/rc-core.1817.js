@@ -17828,8 +17828,9 @@ function htmlRevueMorpho(etat){
   const g=_revueGrouper(e.lignes||[]).slice(0,REVUE_MORPHO_MAX);
   const bloques=Array.isArray(e.bloques)?e.bloques:[];
   if(!g.length&&!bloques.length&&!e.profilsSortis) return '';
-  let h='<div class="rvm"><div class="rvm-t">À aménager dans son programme</div>'
-    +'<div class="rvm-s">Des réglages à envisager sur ses exercices, jamais un exercice à retirer. Dans l’ordre de lecture : le carnet, les amplitudes, puis les leviers.</div>';
+  // RÉDUITE À SA LISTE (06/10/2026) : le reste de la morpho vit dans Données.
+  // Le titre est celui de la section (.cc-sect, index.html).
+  let h='<div class="rvm"><div class="rvm-lien"><button type="button" class="rvm-voir" onclick="voirMorphoCoach()">voir la morpho</button></div>';
   let noteFaite=false;
   for(const l of g){
     if(l.nature==='osseux'&&!noteFaite&&l.amplitudesManquantes&&l.amplitudesManquantes.length){
@@ -18095,7 +18096,32 @@ function _morphoCalCache(){
  * ⚠ Rien de ceci n'est rendu côté athlète — un test le vérifie sur le HTML
  *   produit par l'accueil et l'écran de progression.
  */
-function _htmlMorphoLecture(user,cal){
+// Le corps d'une fiche de profil : sa signature, sa mécanique, ce qu'il faut
+// privilégier et aménager, l'accent et LE PIÈGE (affiché, c'est la partie la
+// plus utile). Partagé par la lecture et par la section Morpho.
+function _htmlProfilCorps(p){
+  const E=escapeHtml;
+  const am=(p.amenager||[]).map(a=>'<div style="margin-top:4px"><span style="color:var(--text-strong);'
+    +'font-weight:700">'+E(a.quoi)+' :</span> <span style="color:var(--text-dim)">'
+    +E(a.reglage)+'</span></div>').join('');
+  return (p.avant?'<div style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6;margin-top:4px;'
+      +'font-weight:600">'+E(p.avant)+'</div>':'')
+    +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:4px">'
+    +E(p.signatureTexte)+'</div>'
+    +'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-top:6px">'
+    +E(p.mecanique)+'</div>'
+    +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px"><span style="color:var(--sub);'
+    +'font-weight:800">Privilégier :</span> <span style="color:var(--text-dim)">'+E(p.privilegier)+'</span></div>'
+    +(am?'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px"><span style="color:var(--sub);'
+      +'font-weight:800">Aménager, jamais retirer :</span>'+am+'</div>':'')
+    +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px"><span style="color:var(--sub);'
+    +'font-weight:800">Accent :</span> <span style="color:var(--text-dim)">'+E(p.accent)+'</span></div>'
+    +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px;background:var(--surface-0);'
+    +'border-radius:var(--r-2);padding:8px 10px"><span style="color:var(--red);font-weight:800">'
+    +'Le piège :</span> <span style="color:var(--text-dim)">'+E(p.piege)+'</span></div>';
+}
+function _htmlMorphoLecture(user,cal,opts){
+  const sansProfils=!!(opts&&opts.sansProfils);
   let axes=[],res=null;
   try{ axes=morphoAxes(user,{calibrage:cal||null}); res=morphoProfils(axes); }catch(e){ return ''; }
   if(!res) return '';
@@ -18114,7 +18140,7 @@ function _htmlMorphoLecture(user,cal){
 
   // LES PROFILS, dans l'ordre de lecture. Chacun porte sa phrase de renvoi
   // avant sa propre matière : « regarde la cheville avant de conclure ».
-  if(res.profils.length){
+  if(res.profils.length&&!sansProfils){
     h+=titre('Profils composés');
     h+=res.profils.map(p=>{
       const am=(p.amenager||[]).map(a=>'<div style="margin-top:4px"><span style="color:var(--text-strong);'
@@ -18143,6 +18169,8 @@ function _htmlMorphoLecture(user,cal){
         +'Le piège :</span> <span style="color:var(--text-dim)">'+E(p.piege)+'</span></div>'
         +'</div>';
     }).join('');
+  } else if(res.profils.length){
+    // Les profils sont rendus ailleurs (la section Morpho, un <details> chacun).
   } else if(res.silence==='moins-de-trois-axes'){
     h+=titre('Profils composés');
     h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Moins de trois axes '
@@ -18778,11 +18806,13 @@ function morphoCalibrageCompte(athletes,cle){
   }
   return n;
 }
-function _htmlMorphoInitiale(u,athletes){
+function _htmlMorphoInitiale(u,athletes,opts){
   const E=escapeHtml;
   const etat=morphoInitialeEtat(u);
   const m=u&&u.morphoInitiale;
-  const bouton='<button type="button" class="btn btn-outline" style="width:100%;margin:8px 0 0" '
+  // La section Morpho est une ZONE DE LECTURE : sans le bouton, qui reste sur
+  // l'écran des amplitudes.
+  const bouton=(opts&&opts.sansBouton)?'':'<button type="button" class="btn btn-outline" style="width:100%;margin:8px 0 0" '
     +'onclick="refaireMorphoInitiale(\''+escapeHtml((u&&u.email)||'')+'\')">Refaire l’analyse</button>';
   if(etat==='absente')
     return '<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin:0">'
@@ -19121,37 +19151,120 @@ function questionsMorpho(user){
 
 // Fiche COACH uniquement. Aucune fonction d'affichage athlète n'appelle ceci —
 // un test le vérifie sur le HTML produit par l'accueil et l'écran progression.
+// ══ LA SECTION MORPHO (06/10/2026) ═════════════════════════════════════════
+// La morpho d'un athlète était dispersée : les profils dans « Signaux
+// faibles » (Nutrition), la revue sous le programme (Entraînement), l'analyse
+// photo et les amplitudes dans Données, les longueurs figées sur un écran à
+// part. Elle tient maintenant EN UN SEUL ENDROIT, onglet Données, juste avant
+// l'analyse photo :
+//   - une SYNTHÈSE de trois lignes au plus : les profils (noms courts), les
+//     réglages chiffrés, la mesure qui débloque le plus ;
+//   - tout le reste dans des <details> REPLIÉS : un par profil (sa fiche, ses
+//     axes), puis le détail de la lecture (questions, ordre de lecture,
+//     amplitudes, longueurs figées, disclaimer).
+// ⚠ ZONE DE LECTURE : aucun bouton, aucun onclick, et RIEN DU TOUT quand il n'y
+//   a rien à dire (aucun profil, rien à regarder, aucune question, aucune
+//   amplitude relevée) — « il manque la hauteur de genou » seul ne fait pas
+//   une section. G7 : rendu côté coach seulement (renderMorphoCoach).
+const MORPHO_SYNTHESE_MAX=3;
+// « Bras longs, grande envergure : le tireur » → « Bras longs ».
+function _morphoNomCourt(p){ return String((p&&p.lib)||'').split(' : ')[0].split(', ')[0].trim(); }
+// PURE. Les réglages chiffrés : morphoReglages, puis les aménagements chiffrés
+// de la revue. « SQUAT : cale d’au moins 2,5 cm sous les talons ».
+function morphoReglagesSynthese(user,axes,profils,lignesRevue){
+  const out=[];
+  let regl=[]; try{ regl=morphoReglages(axes,profils); }catch(e){ regl=[]; }
+  const exos=[];
+  try{ ((user&&user.sessions_config)||[]).forEach(sc=>((sc&&sc.exercises)||[]).forEach(ex=>{ if(ex&&ex.name) exos.push(ex); })); }catch(e){}
+  const sch=ex=>{ try{ return schemaDe(ex,user); }catch(e){ return null; } };
+  const minus=t=>{ const x=String(t||'').trim().replace(/\.$/,''); return x.charAt(0).toLowerCase()+x.slice(1); };
+  for(const r of regl){
+    const noms=[];
+    for(const ex of exos){ if((r.schemas||[]).indexOf(sch(ex))>=0&&noms.indexOf(ex.name)<0) noms.push(ex.name); }
+    out.push((noms.length?noms.slice(0,2).join(', '):r.lib)+' : '+minus(r.consigne));
+  }
+  for(const l of (lignesRevue||[])){
+    const reg=String((l&&l.reglage)||'').split(/ ; |, ou |\. /)[0];
+    if(!/\d/.test(reg)) continue;
+    const t=((l.exercices&&l.exercices[0])||l.quoi)+' : '+minus(reg);
+    if(out.indexOf(t)<0) out.push(t);
+  }
+  return out;
+}
 function _htmlQuestionsMorpho(user){
   const l=(function(){ try{ return questionsMorpho(user); }catch(e){ return []; } })();
   const tests=(function(){ try{ return testsMorpho(user); }catch(e){ return []; } })();
   const faits=tests.filter(t=>t.date&&t.texte);
-  const lecture=(function(){ try{ return _htmlMorphoLecture(user,_morphoCalCache()); }
+  const cal=(function(){ try{ return _morphoCalCache(); }catch(e){ return null; } })();
+  let axes=[], res={profils:[],aRegarder:[],aMesurer:[]};
+  try{ axes=morphoAxes(user,{calibrage:cal}); res=morphoProfils(axes); }catch(e){}
+  const lecture=(function(){ try{ return _htmlMorphoLecture(user,cal,{sansProfils:true}); }
     catch(e){ return ''; } })();
-  // ⚠ ZONE DE LECTURE, ET RIEN D’AUTRE. Aucun bouton ici — ni fermeture, ni
-  // report, ni saisie — et AUCUN bloc du tout quand il n’y a rien à dire :
-  // un cadre qui s’affiche toujours finit par ne plus être lu. Le relevé des
-  // amplitudes se fait dans l’onglet Données, section Amplitudes.
-  if(!l.length&&!faits.length&&!lecture) return '';
-  // LES TESTS, AVEC LEUR DATE ET LEUR PÉREMPTION. Une amplitude relevée il y a
-  // six mois ne décrit plus l'athlète : on la montre quand même, marquée
-  // « périmé », plutôt que de la faire disparaître sans un mot.
+  let revue=[]; try{ revue=_etatRevueMorpho(user,cal,[]).lignes||[]; }catch(e){ revue=[]; }
+  const reglages=morphoReglagesSynthese(user,axes,res.profils,revue);
+  if(!l.length&&!faits.length&&!res.profils.length&&!(res.aRegarder||[]).length&&!reglages.length) return '';
+  const E=escapeHtml;
+  let age=null; try{ age=ageActuel(user); }catch(e){ age=null; }
+  const mineur=age!=null&&age<MORPHO_AGE_OSSEUX;
+
+  // ── LA SYNTHÈSE : trois lignes au plus ───────────────────────────────────
+  const syn=[];
+  const noms=res.profils.map(_morphoNomCourt).filter(Boolean);
+  if(mineur) syn.push('<b>Profils :</b> '+E((noms.length?noms.join(' · ')+' · ':'')+'axes osseux non présentés avant '+MORPHO_AGE_OSSEUX+' ans'));
+  else if(noms.length) syn.push('<b>Profils :</b> '+E(noms.join(' · ')));
+  const mesure=(res.aMesurer||[])[0]||'';
+  const place=MORPHO_SYNTHESE_MAX-syn.length-(mesure?1:0);
+  reglages.slice(0,Math.max(0,place)).forEach(r=>syn.push(E(r)));
+  if(mesure) syn.push('<b>À mesurer :</b> '+E(mesure));
+
+  // ── UN <details> PAR PROFIL, replié ─────────────────────────────────────
+  const par={}; axes.forEach(a=>{ if(a&&a.cle) par[a.cle]=a; });
+  const ligneAxe=a=>'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:4px">'
+    +'<span style="color:var(--sub);font-weight:700">'+E(a.court)+' :</span> '+E(a.texte||'')+'</div>';
+  const det=(titre,corps)=>'<details class="mo-d"><summary>'+titre+'</summary><div class="mo-dc">'+corps+'</div></details>';
+  const profils=res.profils.map(p=>det(E(p.lib)+(p.suspendu?' <span class="mo-susp">· test à refaire</span>':''),
+    _htmlProfilCorps(p)
+    +'<div style="margin-top:8px">'+(p.axes||[]).map(k=>par[k]).filter(Boolean).map(ligneAxe).join('')+'</div>')).join('');
+
+  // ── LE DÉTAIL DE LA LECTURE, replié lui aussi ────────────────────────────
+  // LES TESTS, AVEC LEUR DATE ET LEUR PÉREMPTION : une amplitude relevée il y
+  // a six mois est montrée, marquée « périmé », plutôt que de disparaître.
   const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
-    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
+    ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${E(t.lib)} : ${E(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Proportions</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>
-    ${l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`}
-    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>
-    </div>`).join('')}
-    ${lecture}
-    ${htmlTests}
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px;margin-top:12px">${escapeHtml(MORPHO_DISCLAIMER)}</div>
-  </div>`;
+  const questions=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>`
+    +(l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`)
+    +l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${E(r.lib)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${E(r.motif)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${E(r.question)}</div>
+    </div>`).join('');
+  let longueurs='';
+  try{ if(morphoInitialeEtat(user)==='gelee') longueurs='<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Longueurs figées</div>'
+    +_htmlMorphoInitiale(user,[],{sansBouton:true})+'</div>'; }catch(e){ longueurs=''; }
+  const detail=det('Proportions, ordre de lecture, amplitudes',questions+lecture+htmlTests+longueurs
+    +`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px;margin-top:12px">${E(MORPHO_DISCLAIMER)}</div>`);
+  return '<div class="mo">'
+    +(syn.length?'<div class="mo-syn">'+syn.map(x=>'<div class="mo-l">'+x+'</div>').join('')+'</div>':'')
+    +profils+detail+'</div>';
+}
+// La section Morpho de l'onglet Données. G7 : rien côté athlète.
+function renderMorphoCoach(c){
+  const z=document.getElementById('ccd-morpho-coach');
+  if(!z) return false;
+  if(!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return false; }
+  let h=''; try{ h=_htmlQuestionsMorpho(c); }catch(e){ h=''; }
+  z.innerHTML=h;
+  return !!h;
+}
+// « voir la morpho », depuis la revue d'exercices : l'onglet Données, sur la section.
+function voirMorphoCoach(){
+  try{ ccdVue('donnees'); }catch(e){ return false; }
+  setTimeout(()=>{ const el=document.getElementById('ccd-morpho-coach'); const s=el&&el.closest('section');
+    if(s) s.scrollIntoView({behavior:'smooth',block:'start'}); },60);
+  return true;
 }
 
 // Fiche coach UNIQUEMENT. Rien de tout ceci n'est rendu côté athlète : aucune
@@ -19296,9 +19409,10 @@ function renderCoachMicroSection(c){
   if(!el) return;
   const def=(function(){ try{ return _htmlDeficitCoach(c); }catch(e){ return ''; } })();
   const l=(function(){ try{ return risquesMicro(c); }catch(e){ return []; } })();
-  // Les proportions vivent dans le même emplacement : deux blocs de questions
-  // au coach, même registre, même disclaimer d'esprit.
-  const morpho=_htmlQuestionsMorpho(c);
+  // LA MORPHO N'EST PLUS ICI (06/10/2026) : elle a sa section dans l'onglet
+  // Données (renderMorphoCoach), en un seul endroit. Les amplitudes n'y sont
+  // donc plus affichées deux fois.
+  const morpho='';
   // Restitution, pas question : elle s'affiche meme sans risque a signaler.
   // Le jour ON se lit sur le planning de L'ATHLETE, pas sur celui du coach :
   // nutIsOnDay lit currentUser, qui est le coach sur cet ecran.
@@ -36167,6 +36281,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderCoachEvictionsSection(c); }catch(e){}
   try{ renderCoachTraitementsSection(c); }catch(e){}
   try{ renderCoachAmplitudesSection(c); }catch(e){}
+  try{ renderMorphoCoach(c); }catch(e){}
   renderCoachCaffeineSection(c);
   try{ renderBatterieCoach(c); }catch(e){}
   try{ renderSommeilCoach(c); }catch(e){}
