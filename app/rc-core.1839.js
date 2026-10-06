@@ -113567,24 +113567,41 @@ const OBS_JOURS_NOMS=Object.freeze(['dimanche','lundi','mardi','mercredi','jeudi
  * @param cibles  {kcal, p}, ou une fonction jour → {kcal, p}
  * @param finISO  le dernier jour de la bande
  */
-function observance14(log,cibles,finISO){
+// ⚠ BUILD 1839 : DEUX ÉTATS DE PLUS, JAMAIS DES ÉCARTS.
+//   · 'en_cours' : le jour même (`aujourdhui`, défaut : la date locale). Une
+//     seule saisie du matin le marquait en rouge. Il ne compte ni dans les
+//     tenus, ni dans les écarts, ni dans les moyennes.
+//   · 'incomplet' : un jour passé sous 50 % de la cible ET d'un seul repas
+//     distinct (entries[].repas) — une saisie manifestement partielle. Hors
+//     écarts et hors moyennes ; la phrase dit « (n saisies partielles) ».
+// cibleTenueJour, la série de l'assiette et adherence() ne changent pas.
+const OBS_PART_INCOMPLET=0.5;
+function observance14(log,cibles,finISO,aujourdhui){
   const L=log||{}, jours=[];
-  let n=0, sk=0, sp=0, nc=0, sek=0, sep=0, tenus=0, ecarts=0;
+  const auj=aujourdhui||localISODate(new Date());
+  let n=0, sk=0, sp=0, nc=0, sek=0, sep=0, tenus=0, ecarts=0, incomplets=0;
   for(let i=OBS_JOURS-1;i>=0;i--){
     const date=_jourPlus(finISO,-i);
     const tot=journalTotalJour(L,date);
+    if(date===auj){ jours.push({date,etat:'en_cours',ecartKcal:null,ecartProt:null,saisi:!!tot.n}); continue; }
     if(!tot.n){ jours.push({date,etat:'vide',ecartKcal:null,ecartProt:null}); continue; }
-    n++; sk+=tot.kcal; sp+=tot.p;
     let c=null; try{ c=(typeof cibles==='function')?cibles(date):cibles; }catch(e){ c=null; }
     const ck=Number(c&&c.kcal), cp=Number(c&&c.p);
-    if(!(ck>0&&cp>0)){ jours.push({date,etat:'vide',ecartKcal:null,ecartProt:null,saisi:true}); continue; }
-    const r=cibleTenue(tot,{kcal:ck,p:cp});
+    if(!(ck>0&&cp>0)){ n++; sk+=tot.kcal; sp+=tot.p; jours.push({date,etat:'vide',ecartKcal:null,ecartProt:null,saisi:true}); continue; }
     const ek=Math.round(tot.kcal-ck), ep=Math.round(tot.p-cp);
+    const repas=new Set((((L[date]||{}).entries)||[]).map(x=>x&&x.repas).filter(r=>r!=null&&r!=='')).size;
+    if(tot.kcal<OBS_PART_INCOMPLET*ck&&repas<=1){
+      incomplets++;
+      jours.push({date,etat:'incomplet',ecartKcal:ek,ecartProt:ep});
+      continue;
+    }
+    n++; sk+=tot.kcal; sp+=tot.p;
+    const r=cibleTenue(tot,{kcal:ck,p:cp});
     nc++; sek+=ek; sep+=ep;
     if(r.tenue) tenus++; else ecarts++;
     jours.push({date,etat:r.tenue?'tenu':'ecart',ecartKcal:ek,ecartProt:ep});
   }
-  return {jours,saisis:n,tenus,ecarts,
+  return {jours,saisis:n,tenus,ecarts,incomplets,
     moyennes:n?{kcal:Math.round(sk/n),p:Math.round(sp/n),
       ecartKcal:nc?Math.round(sek/nc):null,ecartProt:nc?Math.round(sep/nc):null}:null};
 }
@@ -113608,8 +113625,11 @@ function motifEcarts(o){
 function phraseObservance(o){
   if(!o) return '';
   const vides=o.jours.filter(j=>j.etat==='vide').length;
-  const base=o.tenus+' jour'+(o.tenus>1?'s':'')+' tenu'+(o.tenus>1?'s':'')+' sur '+OBS_JOURS
-    +(vides?' ('+vides+' sans saisie ou sans cible)':'');
+  const part=o.incomplets||0;
+  const enCours=o.jours.some(j=>j.etat==='en_cours');
+  const base=o.tenus+' jour'+(o.tenus>1?'s':'')+' tenu'+(o.tenus>1?'s':'')+' sur '+(OBS_JOURS-(enCours?1:0))
+    +(vides?' ('+vides+' sans saisie ou sans cible)':'')
+    +(part?' ('+part+' saisie'+(part>1?'s':'')+' partielle'+(part>1?'s':'')+')':'');
   const m=motifEcarts(o);
   return base+(m?', '+m:', aucun écart')+'.';
 }
@@ -113618,6 +113638,8 @@ function _obsTexteJour(j){
   let d=j.date;
   try{ const [a,m,x]=j.date.split('-').map(Number); d=new Date(a,m-1,x,12).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }catch(e){}
   if(j.etat==='vide') return d+' : '+(j.saisi?'pas de cible ce jour-là':'pas de saisie');
+  if(j.etat==='en_cours') return d+' : journée en cours';
+  if(j.etat==='incomplet') return d+' : saisie partielle (un seul repas noté)';
   const s=v=>(v>0?'+':'')+v;
   return d+' : '+s(j.ecartKcal)+' kcal et '+s(j.ecartProt)+' g de protéines par rapport à sa cible'+(j.etat==='tenu'?' (tenu)':'');
 }
@@ -113641,7 +113663,8 @@ function htmlObservanceCoach(c,finISO){
   }).join('');
   return '<div class="obs">'+tete
     +'<div class="obs-bande" role="group" aria-label="14 jours, du plus ancien au plus récent">'+cases+'</div>'
-    +'<div class="obs-leg"><span><i class="obs-tenu"></i>tenu</span><span><i class="obs-ecart"></i>écart</span><span><i class="obs-vide"></i>sans saisie</span></div>'
+    +'<div class="obs-leg"><span><i class="obs-tenu"></i>tenu</span><span><i class="obs-ecart"></i>écart</span><span><i class="obs-vide"></i>sans saisie</span>'
+    +'<span><i class="obs-incomplet"></i>partielle</span><span><i class="obs-en_cours"></i>en cours</span></div>'
     +'<div class="obs-detail" aria-live="polite"></div>'
     +'<p class="obs-phrase">'+escapeHtml(phraseObservance(o))+'</p></div>';
 }

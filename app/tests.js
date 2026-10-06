@@ -55951,7 +55951,26 @@ async function testExercices(){
     // ══ LOT N8 — LA BANDE D'OBSERVANCE (29/09/2026) ════════════════════════
     const _N8C={kcal:2000,p:150};
     const _N8J=(k,p)=>({entries:[{id:1,nom:'x',repas:'diner',kcal:k,p,c:0,l:0}]});
-    const _N8FIN='2026-09-27';                                   // un dimanche
+    const _N8FIN='2026-09-27';                                   // un dimanche
+    // ── Build 1839 : la journée en cours et les saisies partielles ne sont pas des écarts ──
+    ok('N8 — aujourd’hui, 500 kcal pour une cible de 2 000 : « en_cours », aucun écart',()=>{
+      const auj=localISODate(new Date());
+      const o=observance14({[auj]:_N8J(500,30)},_N8C,auj);
+      const d=o.jours[o.jours.length-1];
+      if(d.etat!=='en_cours') return _echec('état '+d.etat);
+      if(o.ecarts!==0||o.tenus!==0||o.moyennes!==null) return _echec(JSON.stringify({e:o.ecarts,t:o.tenus,m:o.moyennes}));
+      // Le paramètre `aujourdhui` décide : un jour passé redevient un écart.
+      return observance14({[_N8FIN]:_N8J(1400,150)},_N8C,_N8FIN,'2026-09-28').jours[13].etat==='ecart'?true:_echec('jour passé');});
+    ok('N8 — hier, un seul repas à 600 / 2 000 : « incomplet » ; trois repas à 1 400 : « écart »',()=>{
+      const hier=_jourPlus(_N8FIN,-1);
+      const a=observance14({[hier]:_N8J(600,40)},_N8C,_N8FIN,'2026-10-30');
+      const ja=a.jours.find(j=>j.date===hier);
+      if(ja.etat!=='incomplet') return _echec('un repas à 600 : '+ja.etat);
+      if(a.ecarts!==0||a.incomplets!==1) return _echec('compte '+a.ecarts+' / '+a.incomplets);
+      if(!/\(1 saisie partielle\)/.test(phraseObservance(a))) return _echec('phrase : '+phraseObservance(a));
+      const trois={entries:[{id:1,repas:'petit_dejeuner',kcal:400,p:30},{id:2,repas:'dejeuner',kcal:500,p:40},{id:3,repas:'diner',kcal:500,p:40}]};
+      const b=observance14({[hier]:trois},_N8C,_N8FIN,'2026-10-30');
+      return b.jours.find(j=>j.date===hier).etat==='ecart'&&b.ecarts===1?true:_echec('trois repas à 1 400');});
     ok('N8 — observance14 : 14 jours pleins, des trous, un jour sans cible, les moyennes des jours saisis seulement',()=>{
       const plein={}; for(let i=0;i<14;i++) plein[_jourPlus(_N8FIN,-i)]=_N8J(2000,150);
       const a=observance14(plein,_N8C,_N8FIN);
@@ -55984,7 +56003,8 @@ async function testExercices(){
       const r={}; for(let i=0;i<14;i++) r[_jourPlus(_N8FIN,-i)]=_N8J(2000,150);
       return phraseObservance(observance14(r,_N8C,_N8FIN))==='14 jours tenus sur 14, aucun écart.'?true:_echec(phraseObservance(observance14(r,_N8C,_N8FIN)));});
     ok('N8 — la fiche : la bande à partir de 3 jours saisis, sinon ce qu’il faut demander ; ni note, ni pourcentage, ni poids',()=>{
-      const fin=localISODate(new Date());
+      // Build 1839 : la journée en cours ne compte plus ; la bande finit HIER.
+      const fin=_jourPlus(localISODate(new Date()),-1);
       const c=log=>({email:'n8@t.fr',role:'athlete',sessions_config:[],weightLog:[{date:fin,kg:80}],
         nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:150,l:60,g:230},off:{kcal:2000,p:150,l:60,g:230}},log}});
       const deux={[fin]:_N8J(2000,150),[_jourPlus(fin,-1)]:_N8J(2000,150)};

@@ -12505,6 +12505,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .obs-leg i.obs-tenu{background:color-mix(in srgb,var(--text) 82%,transparent)}
 .obs-leg i.obs-ecart{border:1.5px solid color-mix(in srgb,var(--text) 70%,transparent);box-sizing:border-box;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--text) 18%,transparent) 0 2px,transparent 2px 4px)}
 .obs-leg i.obs-vide{border:1px dashed color-mix(in srgb,var(--text) 30%,transparent);box-sizing:border-box}
+.obs-j.obs-en_cours{border:1px solid color-mix(in srgb,var(--text) 30%,transparent);background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--text) 10%,transparent) 0 2px,transparent 2px 5px)}
+.obs-j.obs-incomplet{border:1px dotted color-mix(in srgb,var(--text) 45%,transparent);background:color-mix(in srgb,var(--text) 8%,transparent)}
+.obs-leg i.obs-en_cours{border:1px solid color-mix(in srgb,var(--text) 30%,transparent);box-sizing:border-box;background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--text) 10%,transparent) 0 2px,transparent 2px 4px)}
+.obs-leg i.obs-incomplet{border:1px dotted color-mix(in srgb,var(--text) 45%,transparent);box-sizing:border-box;background:color-mix(in srgb,var(--text) 8%,transparent)}
+.obs-leg{flex-wrap:wrap}
 .obs-detail{min-height:1.4em;margin-top:6px;font-size:var(--fs-xs);color:var(--text)}
 .obs-phrase{margin:6px 0 0;font-size:var(--fs-sm);line-height:1.5;color:var(--text)}
 /* ══ LOT T4 : LA REVUE MORPHO DU PROGRAMME (29/09/2026) ══════════════════
