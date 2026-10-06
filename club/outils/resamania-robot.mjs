@@ -120,14 +120,16 @@ async function fermerAlertes(page) {
 }
 async function reperage(page) {
   const base = new URL(URL0).origin;
-  await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(6000);
-  await fermerAlertes(page);
+  await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' });
+  await page.getByText(/Rechercher une catégorie/i).first().waitFor({ timeout: 45000 }).catch(() => log('page des exports lente à charger'));
+  await page.waitForTimeout(2000); await fermerAlertes(page); await page.waitForTimeout(1000); await fermerAlertes(page);
+  log('texte de la page (libellés) :'); (await page.evaluate(() => (document.querySelector('main') || document.body).innerText)).split('\n').map(x => x.trim()).filter(x => x && x.length < 120).slice(0, 80).forEach(x => log('  |', propre(x)));
   // 1. Chaque catégorie dépliée : titre et description des exports (libellés d'interface).
   for (const cat of ['Comptabilité', 'Finance', 'Membres & Ventes', "Points d'attention", 'Spécifiques', 'Vie du Club']) {
     const h = page.getByText(cat, { exact: true });
-    if (!(await visible(h))) { log('catégorie introuvable :', cat); continue; }
+    if (!(await h.count())) { log('catégorie introuvable :', cat); continue; }
     const avant = await page.evaluate(() => document.body.innerText.length);
-    await h.first().click().catch(() => {}); await page.waitForTimeout(1500);
+    await h.first().click({ timeout: 8000 }).catch(e => log('  clic impossible :', court(e.message, 100))); await page.waitForTimeout(1500);
     const cartes = await page.evaluate(() => [...document.querySelectorAll('button,[role=button]')].filter(e => e.getBoundingClientRect().height > 0).map(e => (e.innerText || '').trim().replace(/\s+/g, ' ')).filter(t => t.length > 3 && t.length < 160 && !/NOTIFICATION|ALERTE|GESTION|EXPORTER|TOUS LES EXPORTS|VIGILANT/.test(t)));
     log(`=== ${cat} (${(await page.evaluate(() => document.body.innerText.length)) - avant} car.)`); [...new Set(cartes)].forEach(x => log('  export', propre(x).slice(0, 80), court(x, 160).length > 80 ? '…' : ''));
     log('  détail :'); [...new Set(cartes)].forEach(x => log('   ·', court(x, 160).replace(/[\w.+-]+@[\w.-]+/g, '‹e-mail›')));
