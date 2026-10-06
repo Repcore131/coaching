@@ -71,4 +71,5 @@ android/.kotlin/
 *.apk
 *.aab
 *.idsig
+_en_ligne/
 _pages/

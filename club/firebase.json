@@ -1,0 +1,11 @@
+{
+  "//": "MISE EN LIGNE DE FIT PULSE (projet Firebase propre, separe de RepCore). Lancer : bash club/mettre-en-ligne.sh <nom-du-site>",
+  "hosting": {
+    "public": "_en_ligne",
+    "ignore": ["**/.*"],
+    "headers": [
+      { "source": "**/*.@(html|js|css|webmanifest)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}

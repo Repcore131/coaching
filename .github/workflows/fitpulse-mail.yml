@@ -5,7 +5,8 @@
 #  - remet les regles Fit Pulse si un deploiement de RepCore les a retirees ;
 #  - envoie l'e-mail d'invitation (code + installation) depuis la messagerie
 #    MAIL_UTILISATEUR, puis efface la demande et le code qu'elle porte ;
-#  - envoie les notifications push (club/outils/fitpulse-push.mjs).
+#  - envoie les notifications push (club/outils/fitpulse-push.mjs) ;
+#  - envoie le rapport du lundi 15 h au directeur (club/outils/fitpulse-rapport.mjs).
 # Le planning (cron) ne tourne que depuis la branche principale : ce fichier y
 # est copie, et il lit le code Fit Pulse sur la branche de travail.
 name: Fit Pulse envois
@@ -14,12 +15,39 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   push:
-    branches: [main]
+    branches: [main, 'claude/eloquent-lamport-0qxwdd']
     paths:
       - 'club/outils/fitpulse-serveur.mjs'
       - 'club/outils/fitpulse-push.mjs'
+      - 'club/outils/fitpulse-rapport.mjs'
+      - 'club/outils/fitpulse-matin.mjs'
       - '.github/workflows/fitpulse-mail.yml'
   workflow_dispatch:
+    inputs:
+      essai_mail:
+        description: 'Envoyer un e-mail d’essai à l’adresse d’envoi'
+        type: boolean
+        default: false
+      apercu_rapport:
+        description: 'Envoyer tout de suite un aperçu du rapport à l’adresse en copie'
+        type: boolean
+        default: false
+      rapport:
+        description: 'Lancement de 14 h 50 le lundi : attendre 15 h pile puis envoyer le rapport au directeur'
+        type: boolean
+        default: false
+      apercu_matin:
+        description: 'Envoyer tout de suite le KPI du matin (e-mail avec bouton WhatsApp)'
+        type: boolean
+        default: false
+      robot_resamania:
+        description: 'Robot Resamania (repérage : connexion et description des menus)'
+        type: boolean
+        default: false
+      robot_diag:
+        description: 'Test du lien robot ↔ base (sans Resamania ni code)'
+        type: boolean
+        default: false
 
 concurrency:
   group: fitpulse-mail
@@ -27,8 +55,9 @@ concurrency:
 
 jobs:
   envoyer:
+    if: ${{ !inputs.robot_resamania && !inputs.robot_diag }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,4 +71,44 @@ jobs:
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
           FITPULSE_URL: https://fitpulse-niort.web.app
+          ESSAI_MAIL: ${{ inputs.essai_mail }}
+          RAPPORT_ATTENTE_MIN: ${{ inputs.rapport && '12' || '4' }}
+          TZ: Europe/Paris
+          APERCU_RAPPORT: ${{ inputs.apercu_rapport }}
+          APERCU_MATIN: ${{ inputs.apercu_matin }}
         run: node club/outils/fitpulse-serveur.mjs
+
+  robot:
+    if: ${{ inputs.robot_resamania || inputs.robot_diag || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/eloquent-lamport-0qxwdd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Sur le planning : ne rien faire tant que personne n'a appuyé sur « Lancer » dans l'appli.
+      - name: Une mise à jour est-elle demandée ?
+        id: chk
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node club/outils/resamania-robot.mjs besoin
+      - name: Installer le navigateur du robot
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
+          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Robot Resamania
+        if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
+        env:
+          RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
+          RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ROBOT_MODULES: ${{ runner.temp }}/robot
+          ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || (github.event_name == 'schedule' && 'auto' || 'reperage') }}
+          TZ: Europe/Paris
+        run: node club/outils/resamania-robot.mjs
