@@ -7,7 +7,7 @@ PAGES.members = {
   manager: true,
   render() {
     const tab = UI.memTab || 'org';
-    const all = clubMembers(CLUB.id, { all: true });
+    const all = clubMembers(CLUB.id, { all: true, gestion: true });
     const T = [['org', 'Organigramme'], ['hist', 'Historique des saisies'], ['tasks', 'Tâches'], ['targets', 'Objectifs'], ['recaps', 'Récaps'], ['archived', `Archivés (${all.filter(u => u.status === 'archived').length})`], ['aliases', 'Correspondances Resamania']];
     T.splice(4, 0, ['paliers', 'Paliers collectifs']);
     T.splice(5, 0, ['presences', 'Présences'], ['journal', 'Journal'], ['primes', 'Primes']);
@@ -27,7 +27,7 @@ function memberRow(u) {
     ${canEdit(u) ? `<button class="btn ghost icon sm" data-act="editMember" data-id="${u.id}" title="Modifier">${ico('edit')}</button>` : '<span style="width:30px"></span>'}</div>`;
 }
 function memOrg() {
-  const all = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'archived');
+  const all = clubMembers(CLUB.id, { all: true, gestion: true }).filter(u => u.status !== 'archived');
   const creators = Object.values(S.users).filter(u => u.role === 'createur' && u.status !== 'archived');
   return `<div class="card"><div class="card-head">${ico('building')}<h3>${esc(CLUB.name)}</h3></div>
     <h3 class="muted t-13" style="margin:8px 0 2px">Créateur</h3>${creators.map(memberRow).join('') || '<p class="muted">Aucun.</p>'}
@@ -45,6 +45,7 @@ function memOrg() {
 ACTIONS.addMember = () => memberForm(null);
 ACTIONS.editMember = el => memberForm(S.users[el.dataset.id]);
 function memberForm(u) {
+  if (u && u.virtual) { toast('PSO est un membre automatique (ventes web) : rien à modifier.'); return; }
   const clubs = Object.values(S.clubs);
   openModal({ title: u ? 'Modifier le membre' : 'Ajouter un membre', body: `<form id="mf" class="grid">
     <div class="form-grid"><label class="field"><span>Prénom</span><input class="input" name="first" required value="${esc(u ? u.first : '')}"></label><label class="field"><span>Nom</span><input class="input" name="last" value="${esc(u ? u.last : '')}"></label></div>
@@ -81,6 +82,7 @@ ACTIONS.saveMember = async el => {
 // Nouveau code : empreinte (mode local) + cle de connexion (mode partage).
 // L'ancienne cle est effacee dans le meme envoi : l'ancien code est coupe net.
 async function issueCode(u, email) {
+  if (u && u.virtual) { toast('PSO est automatique : pas de code.'); return; }
   const c = await newCodeRecord();
   const key = await bootKeyOf(email || u.email, c.code); const ck = await codeKeyOf(c.code);
   await backend.precreate(key, c.code);
@@ -162,7 +164,7 @@ ACTIONS.archiveMember = async el => {
   db.batch(ops); toast('Membre archivé.');
 };
 function memArchived() {
-  const list = clubMembers(CLUB.id, { all: true }).filter(u => u.status === 'archived');
+  const list = clubMembers(CLUB.id, { all: true, gestion: true }).filter(u => u.status === 'archived');
   return `<div class="card">${list.map(u => `<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)">${avatar(u)}<div class="spacer"><b>${esc(fullName(u))}</b><div class="muted small">${esc(u.email || '')} · archivé le ${dmy(u.archivedAt)}</div></div><button class="btn sm" data-act="unarchive" data-id="${u.id}">Réactiver</button></div>`).join('') || '<div class="empty">Aucun membre archivé.</div>'}
     <p class="muted small" style="margin-bottom:0">Les membres archivés sortent des calculs du mois mais gardent leur historique (classement all-time, trophées).</p></div>`;
 }
@@ -228,7 +230,7 @@ ACTIONS.histCell = el => {
 // Objectifs du mois : tableau editable, total = membres actifs uniquement.
 function memTargets() {
   const mk = UI.tgMonth || curMonth();
-  const members = clubMembers(CLUB.id, { all: true }).filter(u => u.status !== 'archived');
+  const members = clubMembers(CLUB.id, { all: true, gestion: true }).filter(u => u.status !== 'archived');
   const kpis = kpiList();
   const locked = mk < curMonth();
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('tgMonth', mk)}<span class="spacer"></span>
@@ -245,7 +247,7 @@ ACTIONS.copyTargets = async el => {
   if (!S.targets[prev]) { toast('Aucun objectif le mois précédent.'); return; }
   if (!await confirmDlg(`Copier les objectifs de ${monthLabel(prev)} vers ${monthLabel(mk)} ? Les valeurs déjà saisies seront remplacées.`)) return;
   const ops = [];
-  clubMembers(CLUB.id, { all: true }).forEach(u => { if (S.targets[prev][u.id]) ops.push([['targets', mk, u.id], JSON.parse(JSON.stringify(S.targets[prev][u.id]))]); });
+  clubMembers(CLUB.id, { all: true, gestion: true }).forEach(u => { if (S.targets[prev][u.id]) ops.push([['targets', mk, u.id], JSON.parse(JSON.stringify(S.targets[prev][u.id]))]); });
   db.batch(ops); toast('Objectifs copiés.');
 };
 
@@ -516,7 +518,7 @@ const ABS = { conge: { l: 'Congé', c: 'C' }, maladie: { l: 'Maladie', c: 'M' },
 const ABS_CYCLE = [null, 'conge', 'maladie', 'formation'];
 function memPresences() {
   const mk = UI.presMonth || curMonth(); const n = daysIn(mk); const days = Array.from({ length: n }, (_, i) => `${mk}-${pad(i + 1)}`);
-  const members = clubMembers(CLUB.id);
+  const members = clubMembers(CLUB.id, { gestion: true });
   return `<div class="card"><div class="card-head"><h3>Présences · ${monthLabel(mk)}</h3><span class="spacer"></span>${monthNav('presMonth', mk)}</div>
     <p class="muted small">Un clic fait tourner la case : vide, Congé, Maladie, Formation. Les jours fermés du club sont grisés. Le rythme attendu de chacun ne compte que ses jours travaillés.</p>
     <div class="table-wrap"><table class="t pres"><thead><tr><th>Membre</th>${days.map(d => `<th class="${openDaysOf(CLUB.id).includes(dateOf(d).getDay()) ? '' : 'closed'}">${Number(d.slice(8))}</th>`).join('')}<th class="num">Jours travaillés</th></tr></thead><tbody>

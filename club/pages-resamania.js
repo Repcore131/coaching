@@ -161,7 +161,8 @@ ACTIONS.rsmCommit = () => {
     ops.push([['rsm', 'routine', club, r.def.id], now]);
     // KPI : identifiant derive de la cle de ligne -> reimport sans doublon
     for (const e of r.entries) {
-      const uid = pick(e.seller); if (!uid) continue;
+      // Ventes/prospects du web ou de l'appli, non attribués : au membre virtuel PSO.
+      const uid = pick(e.seller) || (e.seller && e.seller.status === 'system' ? 'pso' : null); if (!uid) continue;
       let id = 'r' + hkey(club + '|' + e.key);
       if (e.legacyKey && S.entries['r' + hkey(club + '|' + e.legacyKey)]) id = 'r' + hkey(club + '|' + e.legacyKey);
       if (S.entries[id] || written.has(id)) summary.updated++; else summary.entries++;
@@ -271,7 +272,7 @@ ACTIONS.rsmCommit = () => {
     // Prospects nominatifs : id stable, reimport sans doublon, suivi Fit Pulse conserve.
     for (const p of r.prospects) {
       const id = 'p' + hkey(club + '|' + p.key); const old = (S.prospects || {})[id] || {};
-      const { key, seller, ...rest } = p; const uid = pick(seller);
+      const { key, seller, ...rest } = p; const uid = pick(seller) || (seller && seller.status === 'system' ? 'pso' : null);
       ops.push([['prospects', id], { ...old, ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== '' && v != null)), id, clubId: club, commercialId: uid || old.commercialId || null, importId: impId, at: old.at || now }]);
     }
     if (r.prospects.length) summary.prospects = (summary.prospects || 0) + r.prospects.length;

@@ -63,7 +63,7 @@ const prefsOf = (S, uid) => ((S.prefs || {})[uid] || {});
 function ruleOn(S, uid, rule) { const p = prefsOf(S, uid); if (rule === 'digest') return p.digest !== false; const n = p.notif || {}; return (n.rules || {})[rule] !== false; }
 function quiet(S, uid, P) { const q = { from: '20:30', to: '08:00', sunday: true, ...((prefsOf(S, uid).notif || {}).quiet || {}) }; if (q.sunday && P.dow.startsWith('dim')) return true; return q.from > q.to ? (P.hm >= q.from || P.hm < q.to) : (P.hm >= q.from && P.hm < q.to); }
 const maxOf = (S, uid) => Number((prefsOf(S, uid).notif || {}).max) || 6;
-const active = u => u && u.status !== 'archived' && u.status !== 'pending';
+const active = u => u && !u.virtual && u.status !== 'archived' && u.status !== 'pending';
 const inClub = (u, c) => (u.clubs || []).includes(c) || u.role === 'createur';
 const resOpen = r => ['nouvelle', 'traitement'].includes(r.status || (r.saved ? 'sauvee' : 'resiliee'));
 const daysTo = (d, today) => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 864e5);

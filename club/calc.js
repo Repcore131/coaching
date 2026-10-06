@@ -136,10 +136,13 @@ const isReached = p => p != null && p >= 1 - 1e-9;
 // ── Objectifs ──────────────────────────────────────────────────────────────
 const isActive = u => u && u.status === 'active';
 const inClub = (u, clubId) => u && (u.clubs || []).includes(clubId);
-function clubMembers(clubId, { all = false } = {}) {
-  // le compte Createur administre : il n'est ni classe ni objective
-  return Object.values(S.users).filter(u => u.role !== 'createur' && inClub(u, clubId) && (all || isActive(u))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
+function clubMembers(clubId, { all = false, gestion = false } = {}) {
+  // le compte Createur administre : il n'est ni classe ni objective.
+  // PSO (membre virtuel des ventes web) figure dans les chiffres et le
+  // classement ; la gestion (objectifs, présence, codes, fiche) l'exclut.
+  return Object.values(S.users).filter(u => u.role !== 'createur' && (!gestion || !u.virtual) && inClub(u, clubId) && (all || isActive(u))).sort((a, b) => fullName(a).localeCompare(fullName(b)));
 }
+const humanMembers = (clubId, o = {}) => clubMembers(clubId, { ...o, gestion: true });
 function monthTarget(mk, userId, kpiId) { return Number(deepGet(S.targets, [mk, userId, kpiId])) || 0; }
 // Perimetre d'un club sur une periode : membres actifs, plus ceux archives
 // pendant la periode (leurs saisies du mois comptent, leur objectif aussi).

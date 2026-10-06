@@ -434,6 +434,11 @@ function normalizeState(st) {
   if (!st.tasks.plan) st.tasks.plan = {};
   if (!st.tasks.done) st.tasks.done = {};
   for (const k of Object.keys(DEFAULT_KPIS)) if (!st.kpis[k]) st.kpis[k] = { ...DEFAULT_KPIS[k], enabled: false };
+  // PSO : « membre » virtuel qui porte les ventes et prospects venus du web ou
+  // de l'application, non attribués à un commercial. Jamais enregistré en base,
+  // jamais invité ni doté d'un code. Recalculé à chaque chargement.
+  const clubIds = Object.keys(st.clubs || {});
+  st.users.pso = { ...(st.users.pso || {}), id: 'pso', first: 'PSO', last: '', role: 'membre', status: 'active', virtual: true, clubs: clubIds, avatar: null, createdAt: 0 };
   return st;
 }
 

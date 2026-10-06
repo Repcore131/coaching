@@ -182,7 +182,7 @@ function primesStats(club = CLUB.id) {
   const vm = sumRange(club, null, 'contrats', r.from, r.to);
   const avisMois = avisNow(P, club).n - avisAt(P, addDays(r.from, -1), club);
   const avisPrime = P.primes.avis.filter(([n]) => avisMois >= n).map(([, e]) => e).pop() || 0;
-  const members = clubMembers(club).filter(u => u.role === 'membre');
+  const members = clubMembers(club).filter(u => u.role === 'membre' && !u.virtual);
   const recov = typeof recovList === 'function' ? recovList(club, r.from, r.to) : [];
   const rank = members.map(u => ({ u, imp: recov.filter(x => x.userId === u.id).length, res: sumRange(club, u.id, 'sauvetage', r.from, r.to) })).map(x => ({ ...x, score: x.imp + x.res })).sort((a, b) => b.score - a.score);
   const mystere = deepGet(S, ['plans', club, P.id, 'mystere', mk]) || {};
@@ -261,7 +261,7 @@ ACTIONS.planBlackFriday = async () => {
   const L = prospectsOf(CLUB.id).filter(p => p.creeLe >= since && !prospectConv(p) && !(p.statut && /ne pas rappeler|perdu definitif/.test(norm(p.statut))));
   if (!L.length) { toast('Aucun prospect non transformé sur les 3 derniers mois.'); return; }
   if (!await confirmDlg(`Poser une relance « Black Friday » sur ${L.length} prospects non transformés des 3 derniers mois, répartie entre les commerciaux, à faire avant le ${dm(P.blackFriday)} ?`, { ok: 'Placer les relances' })) return;
-  const team = clubMembers(CLUB.id).filter(u => u.role === 'membre'); const pool = team.length ? team : clubMembers(CLUB.id);
+  const team = clubMembers(CLUB.id).filter(u => u.role === 'membre' && !u.virtual); const pool = team.length ? team : clubMembers(CLUB.id).filter(u => !u.virtual);
   const due = dateOf(addDays(P.blackFriday, -5)).getTime() + 10 * 3600000; const ops = [];
   L.forEach((p, i) => { const rl = typeof prospRel === 'function' ? prospRel(p) : null; if (!rl) return; ops.push(...relPatch(rl, { ownerId: rl.ownerId || pool[i % pool.length].id, nextAt: Math.min(due, Math.max(Date.now(), rl.nextAt || 0) || due), status: 'todo', campagne: 'blackfriday', plannedBy: ME.id, plannedAt: Date.now() })); });
   ops.push([planPath('missions', 'blackFriday'), { at: Date.now(), n: L.length, by: ME.id }]);
