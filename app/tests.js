@@ -65752,7 +65752,7 @@ async function testExercices(){
       // Chemin : la presse s'éloigne d'abord (excentrique) → -1 ; un écarté → 1.
       const v=[0,0.01,0.3,0.5,0.2,-0.4,-0.1,0];
       if(mlSensConcentrique('Presse à cuisses','chemin',v)!==-1) return _echec('presse depuis le verrouillage');
-      if(mlSensConcentrique('Écarté couché','chemin',v)!==1) return _echec('écarté');
+      if(mlSensConcentrique('Écarté couché','chemin',v)!==0) return _echec('écarté : sens non déterminé attendu');
       if(mlSensConcentrique('Presse à cuisses','chemin',v.map(x=>-x))!==1) return _echec('presse qui commence par revenir');
       const L=(exc,pau,con,o)=>Object.assign({tempo:{excMs:exc,pauseMs:pau,conMs:con,tutMs:exc+pau+con,complet:true},conf:80},o||{});
       const a=mlTempoComparaison('3-0-1-0',[L(2800,0,1100)],-1);
@@ -65760,6 +65760,69 @@ async function testExercices(){
       const c=mlTempoComparaison('3-0-1-0',[L(2800,0,1100,{sc:-1})]);
       if(!/d’excentrique/.test(c)) return _echec('sens lu sur les lignes : '+c);
       return /de descente/.test(mlTempoComparaison('3-0-1-0',[L(2800,0,1100)],1))?true:_echec('sc=1 : les libellés ont changé');});
+    okA('Sens concentrique (06/10/2026) : tirage vertical 1 s / 3 s, squat inchangé, comparaison de deux tirages, sens inconnu sans chiffre',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      // La table lue dans le nom.
+      for(const [n,att] of [['Tirage vertical prise large','bas'],['Lat pulldown','bas'],['Extension triceps poulie haute','bas'],['Crunch à la poulie','bas'],
+        ['Développé militaire','haut'],['Squat','haut'],['Soulevé de terre','haut'],['Écarté couché','inconnu'],['Rowing',  'inconnu'],['','inconnu']])
+        if(sensConcentrique(n)!==att) return _echec('sensConcentrique('+n+') = '+sensConcentrique(n));
+      // Un tirage vertical : la poignée DESCEND vite (1 s), puis REMONTE lentement (3 s).
+      const pas=1000/_L9.FPS, A=0.5/_L9.MPP;
+      const tra=u=>{ const r=0.06; return u<r?0.5*u*u/r:(u>1-r?1-0.5*(1-u)*(1-u)/r:(0.5*r+(u-r))/(1-r)); };
+      const cycle=(t0,dHaut,dBas)=>{ const pts=[]; let t=t0;
+        const pousse=(ms,f)=>{ for(let k=0;k<Math.round(ms/pas);k++){ pts.push({tMs:t,x:640,y:300+f(k*pas/ms)*A,conf:0.9,etat:'ok'}); t+=pas; } };
+        pousse(300,()=>0); pousse(dHaut,u=>tra(u)); pousse(300,()=>1); pousse(dBas,u=>1-tra(u)); pousse(300,()=>0); return pts; };
+      const P=cycle(0,1000,3000);
+      const proche=(a,b)=>Math.abs(a-b)<=200;
+      // La vitesse vers le HAUT, rendue telle quelle : sens 'bas' l'inverse.
+      const S=mlSerieRelue(_L9.barre(P.map(p=>({t:p.tMs,x:p.x,y:p.y}))));
+      const brute=S.sc===-1?S.v.map(x=>-x):S.v;
+      const tb=mlTempo({t:S.t,v:brute},undefined,'bas');
+      if(!tb.complet||!proche(tb.conMs,1000)||!proche(tb.excMs,3000)) return _echec('tirage : '+JSON.stringify(tb));
+      const th=mlTempo({t:S.t,v:brute},undefined,'haut');
+      if(JSON.stringify(th)!==JSON.stringify(mlTempo({t:S.t,v:brute}))) return _echec('squat : le sens haut change le tempo');
+      if(!proche(th.conMs,3000)||!proche(th.excMs,1000)) return _echec('squat : '+JSON.stringify(th));
+      // Sens inconnu : aucun chiffre.
+      const ti=mlTempo({t:S.t,v:brute},undefined,'inconnu');
+      if(ti.complet||ti.conMs||ti.excMs||!ti.inconnu) return _echec('inconnu : '+JSON.stringify(ti));
+      // Bout à bout : mlMetriquesBarre lit le nom, un squat ne bouge pas.
+      const tv=mlMetriquesBarre(P,_L9.MPP,0,{exercice:'Tirage vertical prise large'});
+      if(tv.sc!==-1||!proche(tv.m.tCon,1000)||!proche(tv.m.tExc,3000)) return _echec('tirage, métriques : '+JSON.stringify(tv.m));
+      const sq=mlMetriquesBarre(P,_L9.MPP,0,{exercice:'Squat'}), ss=mlMetriquesBarre(P,_L9.MPP,0,{});
+      if(sq.m.tCon!==ss.m.tCon||sq.m.tExc!==ss.m.tExc||sq.sc!==1) return _echec('squat changé');
+      // Deux tirages à deux dates : la ligne Tempo dit excentrique puis concentrique, justes.
+      const vid=(id,date,dH,dB)=>{ const Q=cycle(0,dH,dB); const m=mlMetriquesBarre(Q,_L9.MPP,0,{exercice:'Tirage vertical'});
+        const bb=mlCompacterBarre({debutMs:Q[0].tMs,finMs:Q[Q.length-1].tMs},m,{disqueM:0.45,sens:'',vw:1280,vh:720,rayonPx:60,fps:_L9.FPS,alertes:[],mpp:_L9.MPP,theta:0});
+        return {id,date,segments:[{id:'s1',debutMs:bb.debutMs,finMs:bb.finMs,barre:bb}]}; };
+      const ra=mlcResume(vid('a',Date.parse('2026-09-01T10:00:00Z'),1000,3000)), rb=mlcResume(vid('b',Date.parse('2026-10-01T10:00:00Z'),1000,2000));
+      if(ra.sc!==-1||rb.sc!==-1) return _echec('résumés : sc '+ra.sc+' / '+rb.sc);
+      const lt=mlcComparer(ra,rb).lignes.find(l=>l.cle==='tempo');
+      if(!lt||lt.lib!=='Tempo : excentrique, concentrique') return _echec('libellé : '+(lt&&lt.lib));
+      if(!proche(ra.excMs,3000)||!proche(ra.conMs,1000)||!proche(rb.excMs,2000)||!proche(rb.conMs,1000)) return _echec('résumés : '+[ra.excMs,ra.conMs,rb.excMs,rb.conMs].join(' / '));
+      if(!/^(2,8|2,9|3|3,1|3,2) s puis (0,8|0,9|1|1,1|1,2) s$/.test(lt.valeurs[0])||!/^(1,8|1,9|2|2,1|2,2) s puis (0,8|0,9|1|1,1|1,2) s$/.test(lt.valeurs[1])) return _echec('valeurs : '+lt.valeurs.join(' / '));
+      if(/descente|remontée/.test(JSON.stringify(mlcComparer(ra,rb)))) return _echec('descente ou remontée dans la comparaison');
+      // Un tirage contre un squat : refus motivé.
+      const rs=Object.assign({},rb,{sc:1});
+      const ref=mlcComparer(ra,rs).lignes;
+      if(ref.length!==1||ref[0].etat!=='refuse'||!/même sens concentrique/.test(ref[0].texte)) return _echec('sens différents : '+JSON.stringify(ref));
+      // Le point dur se lit du début à la fin du concentrique : sur une position qui descend, 0 en haut.
+      if(mlcPointDurPct([-0,-0.2,-0.5,-0.8,-1].map(y=>-y),1)!==20) return _echec('point dur orienté');
+      // Le choix Haut / Bas, gardé sur l'analyse, remesure le tempo.
+      const b0=Object.assign({},_L9.barre(P.map(p=>({t:p.tMs,x:p.x,y:p.y}))),{sc:0}); delete b0.m.tExc; delete b0.m.tPau; delete b0.m.tCon;
+      const v0=segBarreValide(b0,Math.round(b0.debutMs),Math.round(b0.finMs));
+      if(!v0||v0.sc!==0) return _echec('sc=0 perdu à la validation');
+      const l0=mlTableauSerie([{id:'s0',debutMs:v0.debutMs,barre:v0}],{})[0];
+      if(l0.tempo&&l0.tempo.complet) return _echec('un tempo affiché sans sens');
+      const choisi=mlBarreSens(v0,'bas');
+      if(!proche(choisi.m.tCon,1000)||!proche(choisi.m.tExc,3000)) return _echec('choix Bas, tempo rangé : '+JSON.stringify(choisi.m));
+      // Gardé sur l'analyse (relu par segBarreValide), et le tableau remesure dans ce sens.
+      const bb=segBarreValide(choisi,Math.round(v0.debutMs),Math.round(v0.finMs));
+      if(!bb||bb.sch!=='bas'||bb.sc!==-1) return _echec('choix Bas perdu : '+JSON.stringify({sch:bb&&bb.sch,sc:bb&&bb.sc}));
+      const lb=mlTableauSerie([{id:'s0',debutMs:bb.debutMs,barre:bb}],{})[0];
+      if(!lb.tempo||!lb.tempo.complet||!proche(lb.tempo.conMs,1000)||!proche(lb.tempo.excMs,3000)) return _echec('choix Bas, tableau : '+JSON.stringify(lb.tempo));
+      const src=String(_mlMajLecture);
+      return /Sens non déterminé : choisis-le/.test(src)&&/mlChoisirSens\(/.test(src)?true:_echec('pas de sélecteur Haut / Bas');
+    });
     okA('R39 — le tempo se mesure à 0,2 s près, et se tait quand la répétition est tronquée',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       // Un 3 – 1 – 1 de synthèse, à vitesse quasi constante comme un vrai.

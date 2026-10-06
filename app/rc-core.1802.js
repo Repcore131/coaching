@@ -117807,7 +117807,9 @@ function segBarreValide(b,debutMs,finMs){
     // LE SENS CONCENTRIQUE (05/10/2026) : -1 quand le concentrique descend
     // (poulie haute, tirage vertical) ou s'éloigne en excentrique (presse).
     // Absent = 1 : les analyses d'avant ne bougent pas.
-    ...(b.sc===-1?{sc:-1}:{}),
+    ...(b.sc===-1||b.sc===0?{sc:b.sc}:{}),
+    // Le sens CHOISI par le coach (Haut / Bas, 06/10/2026), quand le nom ne le disait pas.
+    ...(b.sch==='haut'||b.sch==='bas'?{sch:b.sch}:{}),
     theta:thB===null?0:Math.round(thB*10)/10,...(etalon?{etalon}:{}),...(act?{act}:{}),
     vw:Math.round(vw),vh:Math.round(vh),rayonPx:Math.round(rayonPx*10)/10,fps:Math.round(fps*100)/100,
     n,t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:b.xy,c:b.c,vy:b.vy,m,ph,av};
