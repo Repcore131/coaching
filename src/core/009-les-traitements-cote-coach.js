@@ -90,11 +90,18 @@ function renderCoachMicroSection(c){
   el.innerHTML=def+`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">À demander en séance</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
-    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>
-    </div>`).join('')}
+    ${(function(){
+      // REGROUPÉS PAR NUTRIMENT (build 1845), la question du bilan sanguin UNE fois en pied.
+      const g=regrouperRisquesMicro(l);
+      return g.blocs.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      ${r.motifs.length>1
+        ?'<ul style="margin:0;padding-left:16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+r.motifs.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul>'
+        :'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+escapeHtml(r.motifs[0]||'')+'</div>'}
+      ${r.question?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>`:''}
+    </div>`).join('')
+      +(g.bilan?`<div class="micro-bilan" style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;font-weight:600;margin-bottom:12px">${escapeHtml(g.bilan.question)} <span style="font-weight:400;color:var(--text-dim)">(${escapeHtml(g.bilan.nutriments.join(', '))})</span></div>`:'');
+    })()}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`+recup+morpho+hydra;
 }

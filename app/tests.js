@@ -76899,10 +76899,41 @@ async function testExercices(){
           if(!el||el.style.display!=='block') return _echec('aucun bloc rendu');
           return el.innerHTML.indexOf(M)<0
             ?true:_echec('le texte de l\'athlète est recopié dans la fiche');});
+        ok('Regroupement : végétarienne + sèche longue + cycle + apports bas → au plus 6 blocs, une seule question de bilan sanguin',()=>{
+          const c=_ath({gender:'Femme',phase:_seche(11),nutrition:_cycle(),sleepLog:_nuits(12,5),
+            bilans:[{type:'depart',date:JUILLET.getTime()-60*864e5,'deb-vege':'oui','deb-water':'Moins de 1 L'}]});
+          const l=risquesMicro(c,JUILLET);
+          if(!l.some(x=>x.cle==='fer')||!l.some(x=>x.cle==='b12_fer_vegetal')) return _echec('fixture : '+l.map(x=>x.cle).join(','));
+          // Des apports bas, ajoutés comme le ferait la couverture (fer et zinc).
+          l.push({cle:'couverture_fe',lib:'Couverture fer',motif:'Fer à 40 %.',question:MICRO_Q_BILAN});
+          l.push({cle:'couverture_zn',lib:'Couverture zinc',motif:'Zinc à 50 %.',question:MICRO_Q_BILAN});
+          const g=regrouperRisquesMicro(l);
+          if(g.blocs.length>6) return _echec(g.blocs.length+' blocs : '+g.blocs.map(b=>b.lib).join(' | '));
+          const fer=g.blocs.filter(b=>/^Fer$/.test(b.lib));
+          if(fer.length!==1||fer[0].motifs.length<3) return _echec('fer : '+JSON.stringify(fer));
+          if(g.blocs[0].motifs.length<2) return _echec('les blocs à plusieurs motifs ne sont pas en tête');
+          if(g.blocs.some(b=>/bilan sanguin/i.test(b.question||''))) return _echec('question répétée dans un bloc');
+          if(!g.bilan||g.bilan.nutriments.join(', ')!=='ferritine, B12, zinc') return _echec('pied : '+JSON.stringify(g.bilan));
+          renderCoachMicroSection(c);
+          const h=(document.getElementById('ccd-micro')||{}).textContent||'';
+          return (h.match(/bilan sanguin récent/g)||[]).length<=1?true:_echec('plusieurs questions de bilan à l’écran');});
+        ok('Coquilles : « vitamine B12 », « 3 autres nutriments sont », « Elle déclare »',()=>{
+          if(_microLibMin('Vitamine B12')!=='vitamine B12') return _echec(_microLibMin('Vitamine B12'));
+          const t=phraseSignalMicroCoach({lib:'Vitamine B12',pct:40,couverture:0.9,joursRenseignes:7,autres:3});
+          if(!/vitamine B12/.test(t)) return _echec(t);
+          if(!/3 autres nutriments sont dans le même cas/.test(t)) return _echec(t);
+          if(!/1 autre nutriment est dans le même cas/.test(phraseSignalMicroCoach({lib:'Fer',pct:40,couverture:0.9,joursRenseignes:7,autres:1}))) return _echec('singulier');
+          const f=_ath({gender:'F',phase:_seche(11),bilans:[{type:'depart',date:JUILLET.getTime()-60*864e5,'deb-water':'Moins de 1 L'}]});
+          const h=(risquesMicro(f,JUILLET)||[]).find(x=>x.cle==='hydratation');
+          if(!h||!/^Elle déclare/.test(h.motif)) return _echec('hydratation : '+(h&&h.motif));
+          const i=_ath({gender:'',_evol_gender:'',phase:_seche(11),bilans:[{type:'depart',date:JUILLET.getTime()-60*864e5,'deb-water':'Moins de 1 L'}]});
+          const hi=(risquesMicro(i,JUILLET)||[]).find(x=>x.cle==='hydratation');
+          return hi&&/^Déclare/.test(hi.motif)?true:_echec('sexe inconnu : '+(hi&&hi.motif));});
         ok('Et l\'échappement reste en place, par précaution',()=>{
           // Le jour où un motif citerait l'athlète, il passera par escapeHtml.
           const src=String(renderCoachMicroSection);
-          const champs=['r.lib','r.motif','r.question'];
+          // Build 1845 : les motifs sont une liste (regrouperRisquesMicro).
+          const champs=['r.lib','m','r.motifs[0]||\'\'','r.question'];
           const nus=champs.filter(c=>src.indexOf('escapeHtml('+c+')')<0);
           return nus.length?_echec('sans escapeHtml : '+nus.join(', ')):true;});
         ok('Critère : rien de tout ceci n\'atteint l\'athlète',()=>{

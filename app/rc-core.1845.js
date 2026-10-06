@@ -16157,6 +16157,62 @@ function _microExclusBase(u,base,vege){
 // LA B12 DU VÉGÉTARIEN : pas de liste, une phrase. Registre « apports ».
 const MICRO_B12_VEGE='Chez les végétaliens, la B12 ne vient pas des végétaux : c’est un sujet à voir avec ton coach ou un professionnel de santé.';
 
+// « Vitamine B12 » → « vitamine B12 » : la seule initiale passe en minuscule
+// (build 1845) ; « vitamine b12 » se lisait comme une coquille.
+function _microLibMin(lib){
+  const s=String(lib||'');
+  return s.charAt(0).toLowerCase()+s.slice(1);
+}
+// ══ LES RISQUES, REGROUPÉS PAR NUTRIMENT (build 1845) ═════════════════════
+// PURE. Les règles de déclenchement ne changent pas ; la LECTURE, si. Le fer
+// apparaissait dans trois blocs, la question « Un bilan sanguin récent
+// existe-t-il ? » finissait six blocs sur neuf. Désormais :
+//   · « Fer » = fer + couverture_fe + la partie fer du régime végétarien ;
+//   · « Vitamine B12 » = couverture_b12 + la partie B12 du régime ;
+//   · la question du bilan sanguin sort de chaque bloc et apparaît UNE fois,
+//     en pied, suivie des nutriments concernés (« ferritine, B12, zinc ») ;
+//   · les blocs à plusieurs motifs d'abord, puis le reste, dans l'ordre.
+// Rend {blocs:[{cle, lib, motifs:[...], question}], bilan:{question, nutriments}}.
+const MICRO_Q_BILAN='Un bilan sanguin récent existe-t-il ?';
+const MICRO_DOSAGE=Object.freeze({fe:'ferritine',fer:'ferritine',b12:'B12',zn:'zinc',ca:'calcium',mg:'magnésium',
+  io:'iode',k_:'potassium',b9:'folates'});
+function regrouperRisquesMicro(liste){
+  const l=(liste||[]).slice();
+  const prends=c=>{ const i=l.findIndex(x=>x&&x.cle===c); return i<0?null:l.splice(i,1)[0]; };
+  const fer=[prends('fer'),prends('couverture_fe')].filter(Boolean);
+  const b12=[prends('couverture_b12')].filter(Boolean);
+  const vege=l.find(x=>x&&x.cle==='b12_fer_vegetal');
+  const blocs=[], dosages=[];
+  const dose=d=>{ if(d&&dosages.indexOf(d)<0) dosages.push(d); };
+  const bilanQ=q=>/bilan sanguin/i.test(String(q||''));
+  const grouper=(cle,lib,items,partVege,dos)=>{
+    const motifs=items.map(x=>x.motif);
+    if(vege&&partVege) motifs.push(partVege);
+    let question=null;
+    for(const x of items) if(!bilanQ(x.question)){ question=x.question; break; }
+    if(items.some(x=>bilanQ(x.question))||(vege&&partVege)) dose(dos);
+    blocs.push({cle,lib,motifs,question});
+  };
+  const vegeDecoupe=vege&&(fer.length||b12.length);
+  if(fer.length||vegeDecoupe) grouper('groupe_fer','Fer',fer,vegeDecoupe?'Régime végétarien ou végétalien déclaré (fer non héminique).':null,'ferritine');
+  if(b12.length||vegeDecoupe) grouper('groupe_b12','Vitamine B12',b12,vegeDecoupe?'Régime végétarien ou végétalien déclaré (la B12 vient des produits animaux).':null,'B12');
+  if(vegeDecoupe) l.splice(l.indexOf(vege),1);
+  for(const x of l){
+    if(!x) continue;
+    let question=x.question;
+    if(bilanQ(question)){
+      question=null;
+      const m=/^couverture_(.+)$/.exec(x.cle);
+      dose(m?(MICRO_DOSAGE[m[1]]||_microLibMin((MICRO_REFS[m[1]]||{}).lib||m[1])):(x.cle==='b12_fer_vegetal'?'B12':null));
+      if(x.cle==='b12_fer_vegetal') dose('ferritine');
+    }
+    blocs.push({cle:x.cle,lib:x.lib,motifs:[x.motif],question});
+  }
+  // Les blocs à plusieurs motifs d'abord (tri stable).
+  const tri=blocs.map((b,i)=>({b,i})).sort((a,c)=>((c.b.motifs.length>1)-(a.b.motifs.length>1))||(a.i-c.i)).map(x=>x.b);
+  return {blocs:tri,bilan:dosages.length?{question:MICRO_Q_BILAN,nutriments:dosages}:null};
+}
+
 // ⚠ LE MOT « CARENCE » N'EST PAS ECRIT ICI, ET IL NE DOIT PAS L'ETRE. L'app
 // parle d'APPORTS ALIMENTAIRES — ce qui est entre dans le journal — et non
 // d'un etat biologique, qu'elle n'a ni les moyens ni la qualite d'etablir. Le
@@ -16164,7 +16220,7 @@ const MICRO_B12_VEGE='Chez les végétaliens, la B12 ne vient pas des végétaux
 // justement que seul un bilan sanguin peut en etablir une.
 function phraseSignalMicro(s){
   if(!s) return '';
-  let t='Tes apports en '+s.lib.toLowerCase()+' sont à '+s.pct
+  let t='Tes apports en '+_microLibMin(s.lib)+' sont à '+s.pct
     +' % du repère depuis deux semaines.';
   if(!s.sexeConnu) t+=' Sexe non renseigné : le repère le plus élevé est retenu.';
   return t;
@@ -16174,12 +16230,12 @@ function phraseSignalMicro(s){
 // professionnel qui la lit et qu'il doit savoir sur quoi elle se fonde.
 function phraseSignalMicroCoach(s){
   if(!s) return '';
-  return 'Ses apports en '+s.lib.toLowerCase()+' ressortent à '+s.pct
+  return 'Ses apports en '+_microLibMin(s.lib)+' ressortent à '+s.pct
     +' % du repère sur deux semaines consécutives, calculés sur '
     +Math.round(s.couverture*100)+' % de ce qui a été journalisé ('
     +s.joursRenseignes+' jours sur '+MICRO_JOURS_FENETRE+' la dernière semaine).'
     +(s.autres>0?' '+s.autres+' autre'+(s.autres>1?'s':'')
-      +' nutriment'+(s.autres>1?'s':'')+' est dans le même cas.':'');
+      +' nutriment'+(s.autres>1?'s sont':' est')+' dans le même cas.':'');
 }
 
 
@@ -16305,7 +16361,7 @@ function risquesMicro(user,ref){
     let _sig=null;
     try{ _sig=signalMicro(user,localISODate(date)); }catch(e){ _sig=null; }
     if(_sig) out.push({cle:'couverture_'+_sig.cle,
-      lib:'Couverture '+_sig.lib.toLowerCase()+' : deux semaines',
+      lib:'Couverture '+_microLibMin(_sig.lib)+' : deux semaines',
       motif:phraseSignalMicroCoach(_sig),
       question:'Un bilan sanguin récent existe-t-il ?'});
     for(const _cle in MICRO_REFS){
@@ -16314,8 +16370,8 @@ function risquesMicro(user,ref){
       if(!_c) continue;
       if(!(_c.part<MICRO_COUVERTURE_SEUIL)) continue;
       if(!(_c.partDocumentee>=MICRO_DOC_MINIMALE)) continue;
-      out.push({cle:'couverture_'+_cle,lib:'Couverture '+_c.lib.toLowerCase(),
-        motif:'Ses apports en '+_c.lib.toLowerCase()+' ressortent à '
+      out.push({cle:'couverture_'+_cle,lib:'Couverture '+_microLibMin(_c.lib),
+        motif:'Ses apports en '+_microLibMin(_c.lib)+' ressortent à '
           +Math.round(_c.part*100)+' % de la référence sur la dernière semaine'
           +' journalisée, sur '+Math.round(_c.partDocumentee*100)
           +' % de ce qui a été journalisé.',
@@ -16334,7 +16390,9 @@ function risquesMicro(user,ref){
     const creneaux=((user.sessions_config)||[]).filter(x=>x&&x.active).length;
     if(basse&&(enSeche||creneaux>=4)){
       out.push({cle:'hydratation',lib:'Hydratation basse déclarée',
-        motif:'Il déclare boire moins d\'un litre par jour.',
+        // Accordé au sexe (build 1845), « Déclare » quand il est inconnu.
+        motif:(function(){ const sx=(user._evol_gender||user.gender)||''; if(!sx) return 'Déclare';
+          try{ return isFemale(sx)?'Elle déclare':'Il déclare'; }catch(e){ return 'Déclare'; } })()+' boire moins d\'un litre par jour.',
         question:'Est-ce que l\'hydratation a été abordée ?'});
     }
   }
@@ -20054,11 +20112,18 @@ function renderCoachMicroSection(c){
   el.innerHTML=def+`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">À demander en séance</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
-    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>
-    </div>`).join('')}
+    ${(function(){
+      // REGROUPÉS PAR NUTRIMENT (build 1845), la question du bilan sanguin UNE fois en pied.
+      const g=regrouperRisquesMicro(l);
+      return g.blocs.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      ${r.motifs.length>1
+        ?'<ul style="margin:0;padding-left:16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+r.motifs.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul>'
+        :'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+escapeHtml(r.motifs[0]||'')+'</div>'}
+      ${r.question?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>`:''}
+    </div>`).join('')
+      +(g.bilan?`<div class="micro-bilan" style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;font-weight:600;margin-bottom:12px">${escapeHtml(g.bilan.question)} <span style="font-weight:400;color:var(--text-dim)">(${escapeHtml(g.bilan.nutriments.join(', '))})</span></div>`:'');
+    })()}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`+recup+morpho+hydra;
 }
