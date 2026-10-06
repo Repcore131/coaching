@@ -394,7 +394,9 @@ function renderWoEx(){
       ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
-        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.'}</span>
+        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':(woState.dechargePar==='athlete'?'Tu as allégé ta semaine. Elle ne comptera pas comme un recul.'
+          :woState.dechargePar==='reprise'?'Semaine allégée pour ta reprise. Elle ne comptera pas comme un recul.'
+          :'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.')}</span>
       </div>`:''}
       ${''/* « RECORD À PORTÉE » RETIRÉ DE LA TÊTE DE SÉANCE (Kevin, 29/09/2026) : l'éclair sur la série et le rappel restent. */}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
@@ -728,7 +730,8 @@ function _blocExo(idx,estSS){
   const _sugArr=_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
   // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
-  const sug=sugAjustee||_sugArr;
+  // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
+  const sug=plafondDecharge(sugAjustee||_sugArr,_prevW,isCW,!!woState.deload);
   // ⚠ LA PREMIÈRE SÉRIE REÇOIT LA CHARGE SUGGÉRÉE (30/09/2026), comme la
   //   consigne du coach pose sa charge : isAuto, bordure verte, « proposé ».
   //   Elle était affichée au-dessus du tableau et la case restait vide : il
@@ -1768,7 +1771,7 @@ function renderSets(ex,data,idx,opts){
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
       const _nextBrut=chargeSuivante(w,s.rir,_isCW,1,ex.name);
-      const nextW=_nextBrut!=null?arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}):null;
+      const nextW=_nextBrut!=null?plafondDecharge(arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}),w,_isCW,!!(woState&&woState.deload)):null;
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;

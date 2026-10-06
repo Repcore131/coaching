@@ -694,6 +694,9 @@ function seanceDuJour(user,idx,date){
   try{ sem=getSemaineEffective(u,date==null?Date.now():date); }catch(e){ sem=null; }
   const src=(sem&&Array.isArray(sem.creneaux)&&sem.creneaux[idx])||base;
   const copie=Object.assign({},src);
+  // LE GABARIT DÉCIDE SI LE CRÉNEAU EST ACTIF : un écart resté sur un créneau
+  // éteint (ou qui porterait `active`) ne le rallume pas.
+  copie.active=base.active;
   copie.exercises=((src&&src.exercises)||[]).map(x=>(x&&typeof x==='object')?JSON.parse(JSON.stringify(x)):x);
   return copie;
 }

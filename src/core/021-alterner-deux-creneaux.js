@@ -1445,6 +1445,7 @@ function woPersist(){
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       deload:!!woState.deload,
+      dechargePar:woState.dechargePar||null,
       // Le record à portée et la reprise en douceur survivent à une pause.
       objectif:woState.objectif||null,
       repriseDouce:!!woState.repriseDouce,
@@ -2240,6 +2241,11 @@ function launchWorkout(sessConfig,slotIdx){
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
     deload:_dechCreneau||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    // QUI L'A VOULUE : le bandeau ne dit « voulue par ton coach » que si
+    // c'est vrai (06/10/2026).
+    dechargePar:_dechCreneau?(sessConfig.deloadPar==='athlete'?'athlete':'coach')
+      :(semaineEstDecharge(currentUser)?'coach'
+      :((repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser))?'reprise':null)),
     // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
     repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à

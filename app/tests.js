@@ -28794,6 +28794,84 @@ async function testExercices(){
           const t1=new Date(2026,9,13,9).getTime();
           if(migrerDechargesCreneaux(u,t1)!==1||'deloadJusqua' in sc||creneauEnDecharge(sc,t1)) return _echec('échue, elle reste : '+JSON.stringify(sc));
           return migrerDechargesCreneaux(u,t1)===0?true:_echec('la migration se rejoue');});
+        // ── Les points 3 à 5 et les erreurs humaines ──
+        const _lun=()=>_lundiDe(new Date()).getTime();
+        const _ses=(jours,kg,dl,rir)=>({id:'s'+jours+'_'+kg,date:Date.now()-jours*864e5,name:'Push',slot:0,deload:dl,
+          data:{'SQUAT':{sets:[{weight:String(kg),reps:'5',rir:rir==null?'1':String(rir),done:true}]}}});
+        ok('Écart +1 série en S2 → 5 séries le jour J ; bloc expiré → le gabarit ; écart sur un créneau éteint → il reste éteint',()=>{
+          const u=_ath({programme:{debut:_lun()-7*864e5,semaines:4,decharges:[],ecarts:{}}});
+          if(indexSemaineBloc(u,Date.now())!==1) return _echec('la fixture n’est pas en S2');
+          if(poserEcartSemaine(u,1,{series:1})<1) return _echec('écart non posé');
+          const j=seanceDuJour(u,0,Date.now());
+          if(j.exercises[0].series!==5) return _echec('séries le jour J : '+j.exercises[0].series);
+          if(seanceDuJour(u,0,Date.now()-7*864e5).exercises[0].series!==4) return _echec('la S1 a pris l’écart de S2');
+          const x=_ath({programme:{debut:_lun()-70*864e5,semaines:4,decharges:[0,1,2,3],ecarts:{'0':{'0':{exercises:[{name:'SQUAT',series:1}]}}}}});
+          if(indexSemaineBloc(x,Date.now())!==null) return _echec('le bloc n’est pas expiré');
+          if(_ex(seanceDuJour(x,0,Date.now()).exercises)!=='4/2 1/- 3/5') return _echec('bloc expiré : '+_ex(seanceDuJour(x,0,Date.now()).exercises));
+          const y=_ath({programme:{debut:_lun(),semaines:4,decharges:[],ecarts:{'0':{'1':{active:true,exercises:[{name:'FENTES',series:3}]}}}}});
+          const i=seanceDuJour(y,1,Date.now());
+          if(!i||i.active!==false) return _echec('l’écart a rallumé un créneau éteint');
+          return seanceDuJour(y,0,Date.now()).active===true?true:_echec('le créneau actif est touché');});
+        ok('deloadJusqua passé → séance normale, sans bandeau ; coché puis décoché dans la minute → aucun effet résiduel',()=>{
+          const u=_ath(); u.sessions_config[0].deloadJusqua=Date.now()-1000; u.sessions_config[0].deloadPar='coach';
+          if(_ex(seanceDuJourAffichee(u,0,Date.now()).exercises)!=='4/2 1/- 3/5') return _echec('l’aperçu reste allégé');
+          currentUser=u; localStorage.removeItem('rc_wo_state');
+          launchWorkout(seanceDuJour(u,0,Date.now()),0);
+          const a=_ex(woState.exercises), dl=woState.deload; _fin();
+          if(a!=='4/2 1/- 3/5'||dl) return _echec('séance : '+a+' / décharge '+dl);
+          if('deloadJusqua' in u.sessions_config[0]||'deloadPar' in u.sessions_config[0]) return _echec('la décharge échue n’est pas effacée au lancement');
+          const v=_ath(), avant=JSON.stringify(v.sessions_config);
+          const sv=_coachEditClient, sl=loadCoachSessionSlots;
+          try{ _coachEditClient=v; loadCoachSessionSlots=()=>{}; coachToggleDeload(0,true); coachToggleDeload(0,false); }
+          finally { _coachEditClient=sv; loadCoachSessionSlots=sl; }
+          return JSON.stringify(v.sessions_config)===avant?true:_echec('effet résiduel : '+JSON.stringify(v.sessions_config[0]));});
+        ok('Bandeau : « voulue par ton coach » seulement si le coach l’a posée ; « Tu as allégé ta semaine » si c’est l’athlète',()=>{
+          const lancer=par=>{ const u=_ath(); appliquerDecharge(u,undefined,par); currentUser=u; localStorage.removeItem('rc_wo_state');
+            launchWorkout(seanceDuJour(u,0,Date.now()),0);
+            const r={par:woState.dechargePar,txt:(document.getElementById('wo-content')||{}).textContent||''}; _fin(); return r; };
+          const a=lancer('athlete'), c=lancer();
+          if(a.par!=='athlete'||!/Tu as allégé ta semaine/.test(a.txt)||/voulue par ton coach/.test(a.txt)) return _echec('athlète : '+a.par+' / '+a.txt.slice(0,200));
+          if(c.par!=='coach'||!/voulue par ton coach/.test(c.txt)) return _echec('coach : '+c.par+' / '+c.txt.slice(0,200));
+          // L'origine est GARDÉE dans le champ du créneau.
+          const u=_ath(); appliquerDecharge(u,undefined,'athlete');
+          return u.sessions_config[0].deloadPar==='athlete'?true:_echec('origine non gardée');});
+        okA('« Alléger la semaine » touché deux fois → une seule décharge, un seul dispo_decharge au journal',async()=>{
+          const sv=currentUser, sR=window.rcConfirm, sS=saveUserOuDire, sP=CLOUD.pushOne, sT=toastSync;
+          try{
+            const u=_ath(); currentUser=u;
+            window.rcConfirm=()=>new Promise(r=>setTimeout(()=>r(true),20));
+            saveUserOuDire=()=>true; CLOUD.pushOne=()=>Promise.resolve(); toastSync=()=>{};
+            const r=await Promise.all([dispoReporterSeance({cause:'fatigue'}),dispoReporterSeance({cause:'fatigue'})]);
+            const r3=await dispoReporterSeance({cause:'fatigue'});
+            const j=(u.journalSeance||[]).filter(e=>e.origine==='dispo_decharge');
+            if(r.filter(Boolean).length!==1||r3!==false) return _echec('résultats : '+JSON.stringify(r)+' / '+r3);
+            if(j.length!==1) return _echec(j.length+' entrées dispo_decharge');
+            return (creneauEnDecharge(u.sessions_config[0])&&u.sessions_config[0].deloadPar==='athlete')?true:_echec('la décharge n’est pas posée par l’athlète');
+          } finally { currentUser=sv; window.rcConfirm=sR; saveUserOuDire=sS; CLOUD.pushOne=sP; toastSync=sT; }});
+        ok('getPrevPerf, prevSeries et le poids du corps sautent la séance de décharge ; décote de reprise si la normale a plus de 28 jours',()=>{
+          currentUser=_ath({sessions:[_ses(10,100,false),_ses(3,60,true)]});
+          const p=getPrevPerf('SQUAT',0,'Push');
+          if(!p||p.weight!=='100') return _echec('getPrevPerf : '+JSON.stringify(p));
+          const q=prevSeries('SQUAT',0,'Push');
+          if(!q[0]||q[0].kg!==100) return _echec('prevSeries : '+JSON.stringify(q));
+          const pc=_ath({sessions:[_ses(10,0,false,3),_ses(3,0,true,5)]});
+          pc.sessions[0].data.SQUAT.sets[0].reps='12'; pc.sessions[1].data.SQUAT.sets[0].reps='6';
+          currentUser=pc;
+          const b=_prevSeriePoidsCorps('SQUAT',0,'Push');
+          if(!b||b.reps!=='12') return _echec('poids du corps : '+JSON.stringify(b));
+          currentUser=_ath({sessions:[_ses(40,100,false),_ses(3,60,true)]});
+          const v=getPrevPerf('SQUAT',0,'Push');
+          return (v&&v.weight==='100'&&decoteReprise(joursDepuisRef(v._refDate))===0.9)?true:_echec('décote : '+JSON.stringify(v));});
+        ok('En décharge, la charge suggérée ne monte pas : min(charge de référence, suggestion)',()=>{
+          if(plafondDecharge(105,100,false,true)!==100||plafondDecharge(95,100,false,true)!==95) return _echec('min');
+          if(plafondDecharge(105,100,false,false)!==105) return _echec('hors décharge, plafonnée');
+          if(plafondDecharge(40,45,true,true)!==45) return _echec('contrepoids : l’assistance a baissé');
+          // Au lancement : dernière normale à 100 kg RIR 3 (×1,075 hors décharge).
+          const u=_ath({sessions:[_ses(5,100,false,3)]}); appliquerDecharge(u);
+          currentUser=u; localStorage.removeItem('rc_wo_state');
+          launchWorkout(seanceDuJour(u,0,Date.now()),0);
+          const w=parseFloat(((woState.sessionData[0]||{}).sets||[{}])[0].weight); _fin();
+          return (w>0&&w<=100)?true:_echec('charge proposée en décharge : '+w);});
       } finally {
         _fin(); if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
         currentUser=sauveU; woState=sauveW; _apIdx=sauveAp; _apercuSaute=false;
@@ -29696,7 +29774,7 @@ async function testExercices(){
           if(creneauEnDecharge(c.sessions_config[1])) return _echec('un créneau inactif a été mis en décharge');
           // UN SEUL CHAMP DE DÉCHARGE EN BASE : sa date de fin (build 1823).
           const cles=Object.keys(c.sessions_config[0]).sort().join(',');
-          return cles==='active,deloadJusqua,exercises,name'
+          return cles==='active,deloadJusqua,deloadPar,exercises,name'
             ?true:_echec('champs du créneau : '+cles);
         } finally { currentUser=sU; currentClientId=sC; window.rcConfirm=sR; }}));
 

@@ -1686,12 +1686,14 @@ function creneauEnDecharge(sc,maintenant){
   if(isFinite(j)&&j>0) return (Number(maintenant)||Date.now())<=j;
   return sc.deload===true;
 }
-/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT. */
-function poserDechargeCreneau(sc,pose,maintenant){
+/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT.
+ *  `par` : 'coach' (défaut) ou 'athlete' — l'ORIGINE est gardée dans
+ *  `deloadPar`, et le bandeau de séance la dit. Retirée, il ne reste rien. */
+function poserDechargeCreneau(sc,pose,maintenant,par){
   if(!sc||typeof sc!=='object') return false;
   delete sc.deload;
-  if(pose===false) delete sc.deloadJusqua;
-  else sc.deloadJusqua=finDeSemaineMs(maintenant);
+  if(pose===false){ delete sc.deloadJusqua; delete sc.deloadPar; }
+  else { sc.deloadJusqua=finDeSemaineMs(maintenant); sc.deloadPar=par==='athlete'?'athlete':'coach'; }
   return true;
 }
 /** ÉCRIT. La migration en lecture : date l'ancien booléen, efface l'échu.
@@ -1704,12 +1706,14 @@ function migrerDechargesCreneaux(u,maintenant){
     if(!sc||typeof sc!=='object') continue;
     const j=Number(sc.deloadJusqua);
     if(isFinite(j)&&j>0){
-      if(t>j){ delete sc.deloadJusqua; delete sc.deload; n++; }
+      if(t>j){ delete sc.deloadJusqua; delete sc.deload; delete sc.deloadPar; n++; }
       else if('deload' in sc){ delete sc.deload; n++; }
     } else if(sc.deload===true){
-      sc.deloadJusqua=finDeSemaineMs(t); delete sc.deload; n++;
+      // L'ancien booléen ne s'écrivait que par le coach, ou par l'athlète via
+      // le même geste : sans trace, on garde la lecture d'avant (le coach).
+      sc.deloadJusqua=finDeSemaineMs(t); sc.deloadPar='coach'; delete sc.deload; n++;
     } else if('deload' in sc||'deloadJusqua' in sc){
-      delete sc.deload; delete sc.deloadJusqua; n++;
+      delete sc.deload; delete sc.deloadJusqua; delete sc.deloadPar; n++;
     }
   }
   return n;
@@ -1732,7 +1736,9 @@ function allegerExercicesDecharge(exercises){
   }
   return exercises;
 }
-function appliquerDecharge(user,semaine){
+// `par` : qui la demande — 'athlete' depuis « Alléger la semaine », le coach
+// sinon. Seule la décharge du créneau le garde (deloadPar).
+function appliquerDecharge(user,semaine,par){
   const u=_dossier(user);
   if(!u) return false;
   const idx=(typeof semaine==='number')?semaine:null;
@@ -1770,7 +1776,7 @@ function appliquerDecharge(user,semaine){
     const actifs=cfg.filter(x=>x&&x.active);
     if(!actifs.length) return false;
     // DATÉE : jusqu'à dimanche soir, plus un booléen sans fin.
-    actifs.forEach(x=>{ poserDechargeCreneau(x,true); });
+    actifs.forEach(x=>{ poserDechargeCreneau(x,true,undefined,par); });
     fait=true;
   }
   if(!fait) return false;

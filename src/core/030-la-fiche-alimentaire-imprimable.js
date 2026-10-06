@@ -1877,6 +1877,9 @@ function _prevSeriePoidsCorps(name,slot,progName){
   const l=(currentUser&&currentUser.sessions)||[];
   for(let i=l.length-1;i>=0;i--){
     const sess=l[i]; if(!sess||!sess.data) continue;
+    // UNE SÉANCE DE DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026) : la suite
+    // repart de la dernière séance normale.
+    if(sess.deload===true) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name); if(!d||!Array.isArray(d.sets)) continue;
     const done=d.sets.filter(s=>s&&s.done&&!(parseFloat(s.weight)>0)&&_perfReps(s)>0);
@@ -2082,6 +2085,14 @@ function plafondPas(exNom){
   let k=null; try{ k=schemaDe(exNom,currentUser); }catch(e){ k=null; }
   return (k&&PAS_PLAFOND_KG[k])||null;
 }
+// PURE. EN DÉCHARGE, LA CHARGE NE MONTE PAS (06/10/2026) : min(charge de
+// référence, suggestion). Sur un contrepoids, monter veut dire RETIRER de
+// l'assistance : c'est donc le max qu'on garde.
+function plafondDecharge(sug,ref,contrepoids,enDecharge){
+  const s=Number(sug), r=parseFloat(ref);
+  if(!enDecharge||!(s>0)||!(r>0)) return sug;
+  return contrepoids?Math.max(s,r):Math.min(s,r);
+}
 function chargeSuivante(charge,rir,contrepoids,decote,exNom){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
@@ -2114,6 +2125,7 @@ function prevSeries(name,slot,progName,user){
   for(let k=l.length-1;k>=0;k--){
     const sess=l[k];
     if(!sess||!sess.data||!_memeCreneau(sess,slot,progName)) continue;
+    if(sess.deload===true) continue;                 // la décharge n'est pas un repère
     const d=_dataDeSeance(sess,name);
     if(!d||!Array.isArray(d.sets)) continue;
     const r=d.sets.map(x=>{
@@ -2184,7 +2196,11 @@ function _rirBandeChoisir(idx,i,v){
 function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
-    const sess=currentUser.sessions[i];if(!sess.data) continue;
+    const sess=currentUser.sessions[i];if(!sess||!sess.data) continue;
+    // LA DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026). La suggestion d'après
+    // repart de la dernière séance NORMALE — avec sa date, donc avec la
+    // décote de reprise (decoteReprise) si elle a plus de 28 jours.
+    if(sess.deload===true) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name);if(!d) continue;
     // `s.weight` était vrai pour la chaîne '0' comme pour '-50' : la dernière

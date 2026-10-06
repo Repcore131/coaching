@@ -15528,12 +15528,14 @@ function creneauEnDecharge(sc,maintenant){
   if(isFinite(j)&&j>0) return (Number(maintenant)||Date.now())<=j;
   return sc.deload===true;
 }
-/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT. */
-function poserDechargeCreneau(sc,pose,maintenant){
+/** Pose (jusqu'à dimanche soir) ou retire la décharge d'un créneau. ÉCRIT.
+ *  `par` : 'coach' (défaut) ou 'athlete' — l'ORIGINE est gardée dans
+ *  `deloadPar`, et le bandeau de séance la dit. Retirée, il ne reste rien. */
+function poserDechargeCreneau(sc,pose,maintenant,par){
   if(!sc||typeof sc!=='object') return false;
   delete sc.deload;
-  if(pose===false) delete sc.deloadJusqua;
-  else sc.deloadJusqua=finDeSemaineMs(maintenant);
+  if(pose===false){ delete sc.deloadJusqua; delete sc.deloadPar; }
+  else { sc.deloadJusqua=finDeSemaineMs(maintenant); sc.deloadPar=par==='athlete'?'athlete':'coach'; }
   return true;
 }
 /** ÉCRIT. La migration en lecture : date l'ancien booléen, efface l'échu.
@@ -15546,12 +15548,14 @@ function migrerDechargesCreneaux(u,maintenant){
     if(!sc||typeof sc!=='object') continue;
     const j=Number(sc.deloadJusqua);
     if(isFinite(j)&&j>0){
-      if(t>j){ delete sc.deloadJusqua; delete sc.deload; n++; }
+      if(t>j){ delete sc.deloadJusqua; delete sc.deload; delete sc.deloadPar; n++; }
       else if('deload' in sc){ delete sc.deload; n++; }
     } else if(sc.deload===true){
-      sc.deloadJusqua=finDeSemaineMs(t); delete sc.deload; n++;
+      // L'ancien booléen ne s'écrivait que par le coach, ou par l'athlète via
+      // le même geste : sans trace, on garde la lecture d'avant (le coach).
+      sc.deloadJusqua=finDeSemaineMs(t); sc.deloadPar='coach'; delete sc.deload; n++;
     } else if('deload' in sc||'deloadJusqua' in sc){
-      delete sc.deload; delete sc.deloadJusqua; n++;
+      delete sc.deload; delete sc.deloadJusqua; delete sc.deloadPar; n++;
     }
   }
   return n;
@@ -15574,7 +15578,9 @@ function allegerExercicesDecharge(exercises){
   }
   return exercises;
 }
-function appliquerDecharge(user,semaine){
+// `par` : qui la demande — 'athlete' depuis « Alléger la semaine », le coach
+// sinon. Seule la décharge du créneau le garde (deloadPar).
+function appliquerDecharge(user,semaine,par){
   const u=_dossier(user);
   if(!u) return false;
   const idx=(typeof semaine==='number')?semaine:null;
@@ -15612,7 +15618,7 @@ function appliquerDecharge(user,semaine){
     const actifs=cfg.filter(x=>x&&x.active);
     if(!actifs.length) return false;
     // DATÉE : jusqu'à dimanche soir, plus un booléen sans fin.
-    actifs.forEach(x=>{ poserDechargeCreneau(x,true); });
+    actifs.forEach(x=>{ poserDechargeCreneau(x,true,undefined,par); });
     fait=true;
   }
   if(!fait) return false;
@@ -42985,7 +42991,7 @@ function oublierBrouillon(athleteId,user){
 // fin, ou l'ancien booléen tant qu'il n'est pas migré. Rien sinon.
 function _dechargeBrouillon(sc){
   const j=Number(sc&&sc.deloadJusqua);
-  if(isFinite(j)&&j>0) return {deloadJusqua:j};
+  if(isFinite(j)&&j>0) return Object.assign({deloadJusqua:j},sc.deloadPar?{deloadPar:sc.deloadPar}:{});
   return (sc&&sc.deload===true)?{deload:true}:{};
 }
 // PURE. Le brouillon diffère-t-il de ce qui est publié ? Sert au bandeau : un
@@ -52225,6 +52231,7 @@ function woPersist(){
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       deload:!!woState.deload,
+      dechargePar:woState.dechargePar||null,
       // Le record à portée et la reprise en douceur survivent à une pause.
       objectif:woState.objectif||null,
       repriseDouce:!!woState.repriseDouce,
@@ -53020,6 +53027,11 @@ function launchWorkout(sessConfig,slotIdx){
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
     deload:_dechCreneau||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    // QUI L'A VOULUE : le bandeau ne dit « voulue par ton coach » que si
+    // c'est vrai (06/10/2026).
+    dechargePar:_dechCreneau?(sessConfig.deloadPar==='athlete'?'athlete':'coach')
+      :(semaineEstDecharge(currentUser)?'coach'
+      :((repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser))?'reprise':null)),
     // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
     repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
@@ -56166,7 +56178,9 @@ function renderWoEx(){
       ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
-        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.'}</span>
+        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':(woState.dechargePar==='athlete'?'Tu as allégé ta semaine. Elle ne comptera pas comme un recul.'
+          :woState.dechargePar==='reprise'?'Semaine allégée pour ta reprise. Elle ne comptera pas comme un recul.'
+          :'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.')}</span>
       </div>`:''}
       ${''/* « RECORD À PORTÉE » RETIRÉ DE LA TÊTE DE SÉANCE (Kevin, 29/09/2026) : l'éclair sur la série et le rappel restent. */}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
@@ -56500,7 +56514,8 @@ function _blocExo(idx,estSS){
   const _sugArr=_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
   // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
-  const sug=sugAjustee||_sugArr;
+  // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
+  const sug=plafondDecharge(sugAjustee||_sugArr,_prevW,isCW,!!woState.deload);
   // ⚠ LA PREMIÈRE SÉRIE REÇOIT LA CHARGE SUGGÉRÉE (30/09/2026), comme la
   //   consigne du coach pose sa charge : isAuto, bordure verte, « proposé ».
   //   Elle était affichée au-dessus du tableau et la case restait vide : il
@@ -57540,7 +57555,7 @@ function renderSets(ex,data,idx,opts){
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
       const _nextBrut=chargeSuivante(w,s.rir,_isCW,1,ex.name);
-      const nextW=_nextBrut!=null?arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}):null;
+      const nextW=_nextBrut!=null?plafondDecharge(arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}),w,_isCW,!!(woState&&woState.deload)):null;
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -74959,6 +74974,9 @@ function _prevSeriePoidsCorps(name,slot,progName){
   const l=(currentUser&&currentUser.sessions)||[];
   for(let i=l.length-1;i>=0;i--){
     const sess=l[i]; if(!sess||!sess.data) continue;
+    // UNE SÉANCE DE DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026) : la suite
+    // repart de la dernière séance normale.
+    if(sess.deload===true) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name); if(!d||!Array.isArray(d.sets)) continue;
     const done=d.sets.filter(s=>s&&s.done&&!(parseFloat(s.weight)>0)&&_perfReps(s)>0);
@@ -75164,6 +75182,14 @@ function plafondPas(exNom){
   let k=null; try{ k=schemaDe(exNom,currentUser); }catch(e){ k=null; }
   return (k&&PAS_PLAFOND_KG[k])||null;
 }
+// PURE. EN DÉCHARGE, LA CHARGE NE MONTE PAS (06/10/2026) : min(charge de
+// référence, suggestion). Sur un contrepoids, monter veut dire RETIRER de
+// l'assistance : c'est donc le max qu'on garde.
+function plafondDecharge(sug,ref,contrepoids,enDecharge){
+  const s=Number(sug), r=parseFloat(ref);
+  if(!enDecharge||!(s>0)||!(r>0)) return sug;
+  return contrepoids?Math.max(s,r):Math.min(s,r);
+}
 function chargeSuivante(charge,rir,contrepoids,decote,exNom){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
@@ -75196,6 +75222,7 @@ function prevSeries(name,slot,progName,user){
   for(let k=l.length-1;k>=0;k--){
     const sess=l[k];
     if(!sess||!sess.data||!_memeCreneau(sess,slot,progName)) continue;
+    if(sess.deload===true) continue;                 // la décharge n'est pas un repère
     const d=_dataDeSeance(sess,name);
     if(!d||!Array.isArray(d.sets)) continue;
     const r=d.sets.map(x=>{
@@ -75266,7 +75293,11 @@ function _rirBandeChoisir(idx,i,v){
 function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
-    const sess=currentUser.sessions[i];if(!sess.data) continue;
+    const sess=currentUser.sessions[i];if(!sess||!sess.data) continue;
+    // LA DÉCHARGE N'EST PAS UN REPÈRE (06/10/2026). La suggestion d'après
+    // repart de la dernière séance NORMALE — avec sa date, donc avec la
+    // décote de reprise (decoteReprise) si elle a plus de 28 jours.
+    if(sess.deload===true) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name);if(!d) continue;
     // `s.weight` était vrai pour la chaîne '0' comme pour '-50' : la dernière
@@ -76202,6 +76233,9 @@ function seanceDuJour(user,idx,date){
   try{ sem=getSemaineEffective(u,date==null?Date.now():date); }catch(e){ sem=null; }
   const src=(sem&&Array.isArray(sem.creneaux)&&sem.creneaux[idx])||base;
   const copie=Object.assign({},src);
+  // LE GABARIT DÉCIDE SI LE CRÉNEAU EST ACTIF : un écart resté sur un créneau
+  // éteint (ou qui porterait `active`) ne le rallume pas.
+  copie.active=base.active;
   copie.exercises=((src&&src.exercises)||[]).map(x=>(x&&typeof x==='object')?JSON.parse(JSON.stringify(x)):x);
   return copie;
 }
@@ -78842,16 +78876,29 @@ function _dispoConsommerAllegement(exercices,slotIdx){
 // LE GESTE ROUGE. Reutilise le mecanisme de decharge plutot que d'en ecrire un
 // second : deux allegements qui ne se ressembleraient pas finiraient par ne
 // plus dire la meme chose de la meme semaine.
+// DEUX TOUCHERS NE FONT QU'UNE DÉCHARGE (06/10/2026) : un verrou pendant la
+// confirmation, et une semaine déjà allégée le dit au lieu de réécrire et de
+// journaliser une seconde fois.
+let _dispoReportEnCours=false;
 async function dispoReporterSeance(d){
   const u=currentUser;
-  if(!u) return false;
+  if(!u||_dispoReportEnCours) return false;
+  const actifs=(Array.isArray(u.sessions_config)?u.sessions_config:[]).filter(x=>x&&x.active);
+  if(actifs.length&&actifs.every(x=>creneauEnDecharge(x))){
+    try{ toast('Ta semaine est déjà allégée.','var(--info)'); }catch(e){}
+    return false;
+  }
+  _dispoReportEnCours=true;
+  try{ return await _dispoReporterSeance(u,d); } finally { _dispoReportEnCours=false; }
+}
+async function _dispoReporterSeance(u,d){
   let ok=false;
   try{ ok=await rcConfirm('Alléger la semaine ?',
     'Tes séances de cette semaine passeront en décharge : moins de séries, plus de réserve. Ton coach le verra.',
     'Alléger','Annuler'); }catch(e){ ok=false; }
   if(!ok) return false;
   let fait=false;
-  try{ fait=appliquerDecharge(u); }catch(e){ fait=false; }
+  try{ fait=appliquerDecharge(u,undefined,'athlete'); }catch(e){ fait=false; }
   if(!fait){ try{ toast('Aucune séance active à alléger.','var(--orange)'); }catch(e){} return false; }
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   saveUserOuDire('Ton report de séance');

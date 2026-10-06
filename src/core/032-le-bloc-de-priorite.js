@@ -948,16 +948,29 @@ function _dispoConsommerAllegement(exercices,slotIdx){
 // LE GESTE ROUGE. Reutilise le mecanisme de decharge plutot que d'en ecrire un
 // second : deux allegements qui ne se ressembleraient pas finiraient par ne
 // plus dire la meme chose de la meme semaine.
+// DEUX TOUCHERS NE FONT QU'UNE DÉCHARGE (06/10/2026) : un verrou pendant la
+// confirmation, et une semaine déjà allégée le dit au lieu de réécrire et de
+// journaliser une seconde fois.
+let _dispoReportEnCours=false;
 async function dispoReporterSeance(d){
   const u=currentUser;
-  if(!u) return false;
+  if(!u||_dispoReportEnCours) return false;
+  const actifs=(Array.isArray(u.sessions_config)?u.sessions_config:[]).filter(x=>x&&x.active);
+  if(actifs.length&&actifs.every(x=>creneauEnDecharge(x))){
+    try{ toast('Ta semaine est déjà allégée.','var(--info)'); }catch(e){}
+    return false;
+  }
+  _dispoReportEnCours=true;
+  try{ return await _dispoReporterSeance(u,d); } finally { _dispoReportEnCours=false; }
+}
+async function _dispoReporterSeance(u,d){
   let ok=false;
   try{ ok=await rcConfirm('Alléger la semaine ?',
     'Tes séances de cette semaine passeront en décharge : moins de séries, plus de réserve. Ton coach le verra.',
     'Alléger','Annuler'); }catch(e){ ok=false; }
   if(!ok) return false;
   let fait=false;
-  try{ fait=appliquerDecharge(u); }catch(e){ fait=false; }
+  try{ fait=appliquerDecharge(u,undefined,'athlete'); }catch(e){ fait=false; }
   if(!fait){ try{ toast('Aucune séance active à alléger.','var(--orange)'); }catch(e){} return false; }
   _journalSeance(u,'dispo_decharge',{cause:(d&&d.cause)||null,note:(d&&d.note)||null});
   saveUserOuDire('Ton report de séance');

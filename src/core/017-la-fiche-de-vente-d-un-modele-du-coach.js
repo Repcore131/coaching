@@ -2452,7 +2452,7 @@ function oublierBrouillon(athleteId,user){
 // fin, ou l'ancien booléen tant qu'il n'est pas migré. Rien sinon.
 function _dechargeBrouillon(sc){
   const j=Number(sc&&sc.deloadJusqua);
-  if(isFinite(j)&&j>0) return {deloadJusqua:j};
+  if(isFinite(j)&&j>0) return Object.assign({deloadJusqua:j},sc.deloadPar?{deloadPar:sc.deloadPar}:{});
   return (sc&&sc.deload===true)?{deload:true}:{};
 }
 // PURE. Le brouillon diffère-t-il de ce qui est publié ? Sert au bandeau : un
