@@ -233,13 +233,18 @@ function memTargets() {
   const members = clubMembers(CLUB.id, { all: true, gestion: true }).filter(u => u.status !== 'archived');
   const kpis = kpiList();
   const locked = mk < curMonth();
+  const r = rangeOf('month', mk);
+  // Ligne PSO (ventes web) : affichée en lecture seule, sans objectif à fixer.
+  const pso = S.users.pso && inClub(S.users.pso, CLUB.id) ? S.users.pso : null;
   return `<div class="row wrap" style="margin-bottom:12px">${monthNav('tgMonth', mk)}<span class="spacer"></span>
     <button class="btn sm" data-act="yearPlan">${ico('cal')} Proposer les objectifs de l’année</button><button class="btn sm" data-act="copyTargets" data-mk="${mk}">${ico('history')} Reprendre les objectifs de ${monthLabel(addMonths(mk, -1))}</button></div>
     ${locked ? '<div class="alert" style="margin-bottom:12px">Mois terminé : les objectifs restent modifiables, mais cela change les scores et trophées déjà calculés.</div>' : ''}
     <div class="table-wrap"><table class="t"><thead><tr><th>Membre</th>${kpis.map(k => `<th class="num" title="${k.required ? 'KPI obligatoire' : ''}">${k.required ? ico('crown', 'ico ico-xs') + ' ' : ''}${esc(k.label)}<br><span class="muted">${k.unit === 'eur' ? '€' : 'Qté'} · ${fmtN(k.points)} pts</span></th>`).join('')}</tr></thead><tbody>
     ${members.map(u => `<tr><td class="nowrap"><b>${esc(fullName(u))}</b>${u.status === 'pending' ? ' <span class="badge warn">en attente</span>' : ''}</td>${kpis.map(k => `<td class="num"><input class="cell" type="number" min="0" value="${monthTarget(mk, u.id, k.id) || ''}" placeholder="0" data-change="tgCell" data-mk="${mk}" data-u="${u.id}" data-k="${k.id}"></td>`).join('')}</tr>`).join('')}
-    <tr class="total"><td>Total club (actifs)</td>${kpis.map(k => `<td class="num">${fmtV(clubMonthTarget(mk, CLUB.id, k.id), k.unit)}</td>`).join('')}</tr></tbody></table></div>
-    <p class="muted small">Couronne = KPI obligatoire du classement global. Points et KPI se règlent dans Mes clubs > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
+    ${pso ? `<tr><td class="nowrap"><b>${esc(fullName(pso))}</b> <span class="badge">web / appli</span></td>${kpis.map(k => { const v = sumRange(CLUB.id, 'pso', k.id, r.from, r.to); return `<td class="num muted" title="Ventes web / appli, sans objectif à fixer">${v ? fmtV(v, k.unit) : '·'}</td>`; }).join('')}</tr>` : ''}
+    <tr class="total"><td>Total des objectifs</td>${kpis.map(k => `<td class="num">${fmtV(members.reduce((s, u) => s + monthTarget(mk, u.id, k.id), 0), k.unit)}</td>`).join('')}</tr>
+    <tr class="total"><td class="muted">dont membres actifs (objectif du club)</td>${kpis.map(k => `<td class="num muted">${fmtV(clubMonthTarget(mk, CLUB.id, k.id), k.unit)}</td>`).join('')}</tr></tbody></table></div>
+    <p class="muted small">« Total des objectifs » = somme de toutes les lignes ci-dessus. L’objectif du club pour les scores ne compte que les membres actifs ; une invitation en attente compte une fois la personne connectée. La ligne PSO (ventes web / appli) n’a pas d’objectif à fixer. Couronne = KPI obligatoire du classement global. Points et KPI se règlent dans Mes clubs > Réglages. Une invitation en attente peut recevoir un objectif, il ne compte qu’une fois la personne active.</p>`;
 }
 ACTIONS.tgCell = el => { const v = parseFloat(String(el.value).replace(',', '.')); db.set(['targets', el.dataset.mk, el.dataset.u, el.dataset.k], v > 0 ? v : null); };
 ACTIONS.copyTargets = async el => {
