@@ -77343,12 +77343,12 @@ async function testExercices(){
       // ── L'écran de séance ──────────────────────────────────────────────
       const _sU2=currentUser, _sW=woState;
       try{
-        const _scene=(jours,poids,nom)=>{
+        const _scene=(jours,poids,nom,serie)=>{
           currentUser={id:'_ds',email:'ds@t.fr',role:'athlete',fname:'A',
             exAlias:{},exMuscles:{},bilans:[],programs:{},videos:[],
             sessions:[{id:'sp',date:Date.now()-jours*864e5,name:'P',slot:0,
               volume:1,duration:60,data:{[nom||'SQUAT']:{sets:[
-                {weight:String(poids),reps:'5',rir:'2',done:true}]}}}]};
+                Object.assign({weight:String(poids),reps:'5',rir:'2',done:true},serie||{})]}}}]};
           woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
             exercises:[{name:nom||'SQUAT',series:3,reps:'5'}],sessionData:{}};
           try{ return _blocExo(0,false).html; }catch(e){ return 'EXCEPTION '+e.message; }};
@@ -77370,8 +77370,11 @@ async function testExercices(){
           // variante qui vidait la constante passait au vert.
           return /Repère de terrain, pas une mesure\./.test(h)
             ?true:_echec('le rappel « repère de terrain » manque');});
-        ok('Critère : à 200 jours, aucune charge et le message d\'abandon',()=>{
-          const h=_scene(200,100);
+        // Build 1832 : au-delà de 112 jours, une charge de départ prudente
+        // quand un e1RM fiable est connu ; le message d'abandon sinon. Ici,
+        // 100 × 12 à RIR 3 (15 répétitions possibles) : aucun e1RM fiable.
+        ok('Critère : à 200 jours sans e1RM connu, aucune charge et le message d\'abandon',()=>{
+          const h=_scene(200,100,null,{reps:'12',rir:'3'});
           if(/EXCEPTION/.test(h)) return _echec(h);
           if(!/Plus de quatre mois sans cette séance/.test(h))
             return _echec('message d\'abandon absent');
@@ -77383,9 +77386,58 @@ async function testExercices(){
         ok('À l\'abandon, aucune montée en charge n\'est proposée',()=>{
           // Pas de charge de travail, donc rien à échauffer : la rampe se tait
           // plutôt que de partir d'un nombre inventé.
-          const h=_scene(200,100);
+          const h=_scene(200,100,null,{reps:'12',rir:'3'});
           return !/Échauffement/.test(h)
             ?true:_echec('une rampe est affichée sans charge de travail');});
+        ok('À 200 jours avec un e1RM connu : la charge de départ prudente et sa raison',()=>{
+          const h=_scene(200,100);
+          if(/EXCEPTION/.test(h)) return _echec(h);
+          // 100 × 5 à RIR 2 → e1RM 123,3 ; 0,7 × e1RM ramené à 5 reps @RIR 3,
+          // arrondi vers le bas (67,5).
+          const kg=arrondiCharge(chargePourReps(0.7*e1rm(100,5,2),5,3),{ex:{name:'SQUAT'},user:currentUser,sens:'bas'});
+          if(!/suggest-box/.test(h)) return _echec('aucune charge proposée');
+          if(h.indexOf(String(kg).replace('.',','))<0&&h.indexOf(String(kg))<0) return _echec(kg+' kg absent');
+          if(!/Reprise après 7 mois : charge de départ prudente, ajuste à la 2e série/.test(h)) return _echec('raison absente');
+          if(/Plus de quatre mois/.test(h)||/% en dessous/.test(h)) return _echec('texte d’abandon ou de décote affiché');
+          return /Échauffement/.test(h)?true:_echec('pas de rampe sur la charge de départ');});
+        ok('Reprise : 150 jours sans squat, ancien e1RM 120 → 0,7 × 120 ramené à 8 reps @RIR 3, arrondi bas',()=>{
+          const J=864e5, now=Date.now();
+          const u={role:'athlete',email:'rl@t.fr',sessions:[{id:'a',date:now-150*J,slot:0,name:'P',
+            data:{SQUAT:{sets:[{weight:'100',reps:'4',rir:'2',done:true}]}}}]};
+          const r=chargeRepriseLongue(u,{name:'SQUAT',reps:'8-10'},150,now);
+          if(!r||r.e1rm!==120||r.reps!==8) return _echec(JSON.stringify(r));
+          const brut=chargePourReps(84,8,3);                 // 61,46
+          if(!(r.kg<=brut)||!(brut-r.kg<pasCharge(brut,{name:'SQUAT'},u))) return _echec('arrondi : '+r.kg+' pour '+brut);
+          if(r.kg!==60) return _echec('60 attendu : '+r.kg);
+          if(r.raison!=='Reprise après 5 mois : charge de départ prudente, ajuste à la 2e série') return _echec(r.raison);
+          // Les 3 dernières séances fiables seulement ; sans e1RM connu, null.
+          if(chargeRepriseLongue(u,{name:'SQUAT',reps:'8'},100,now)!==null) return _echec('sous 112 jours');
+          if(chargeRepriseLongue({role:'athlete',sessions:[]},{name:'SQUAT',reps:'8'},150,now)!==null) return _echec('sans historique');
+          const vieux=Object.assign({},u,{sessions:[{date:now-400*J,data:{SQUAT:{sets:[{weight:'200',reps:'1',rir:'0',done:true}]}}}]
+            .concat([170,160,150].map(j=>({date:now-j*J,data:{SQUAT:{sets:[{weight:'100',reps:'4',rir:'2',done:true}]}}})))});
+          const v=chargeRepriseLongue(vieux,{name:'SQUAT',reps:'8'},150,now);
+          return v&&v.e1rm===120?true:_echec('trois dernières : '+JSON.stringify(v));});
+        ok('Poids de corps à la date : tractions à 80 kg en janvier, 70 kg en mars → l’e1RM de janvier sur 80 kg',()=>{
+          const jan=Date.parse('2026-01-15T12:00:00Z'), mar=Date.parse('2026-03-15T12:00:00Z');
+          const S=d=>({date:d,data:{TRACTIONS:{sets:[{weight:'0',reps:'5',rir:'2',done:true}]}}});
+          const t={role:'athlete',email:'tr@t.fr',weightLog:[{date:'2026-01-14',kg:80},{date:'2026-03-16',kg:70}],
+            sessions:[S(jan),S(mar)]};
+          if(poidsCorpsAu(t,jan)!==80||poidsCorpsAu(t,mar)!==70) return _echec('poidsCorpsAu');
+          // Hors des ±21 jours : le poids actuel.
+          if(poidsCorpsAu(t,Date.parse('2026-02-15T12:00:00Z'))!==70) return _echec('hors fenêtre');
+          // Les bilans, quand aucune pesée n'est assez proche.
+          const tb={weightLog:[],bilans:[{date:'2026-01-10',weight:'82'}],profileWeight:75};
+          if(poidsCorpsAu(tb,jan)!==getBW(tb.bilans[0])) return _echec('bilan : '+poidsCorpsAu(tb,jan));
+          const pj=perfExercice(t.sessions[0],'TRACTIONS',t), pm=perfExercice(t.sessions[1],'TRACTIONS',t);
+          if(Math.abs(pj.score-e1rm(80,5,2))>1e-6) return _echec('janvier : '+pj.score);
+          if(Math.abs(pm.score-e1rm(70,5,2))>1e-6) return _echec('mars : '+pm.score);
+          // Sans date : le comportement d'avant (poids actuel).
+          if(chargeEffective({weight:'0'},{name:'TRACTIONS'},t)!==70) return _echec('sans date');
+          const rec=recordsExercice(t,'TRACTIONS');
+          if(!rec||!rec.meilleurE1rm||rec.meilleurE1rm.valeur!==Math.round(e1rm(80,5,2)*10)/10) return _echec('records : '+JSON.stringify(rec));
+          // e1rmRecordsDeSeance : mars (70 kg) ne bat pas janvier (80 kg).
+          if(e1rmRecordsDeSeance(t.sessions[1],[t.sessions[0]],t).length) return _echec('faux record en mars');
+          return e1rmRecordsDeSeance(t.sessions[0],[t.sessions[1]],t).length===1?true:_echec('janvier bat mars');});
         ok('À 40 jours, la montée en charge part de la charge DÉCOTÉE',()=>{
           const h=_scene(40,100);
           // La rampe se calcule sur 91,25 et non sur 102,5 : sinon l'échauffement

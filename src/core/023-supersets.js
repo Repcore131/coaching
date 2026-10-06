@@ -703,6 +703,9 @@ function _blocExo(idx,estSS){
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
+  // REPRISE APRÈS PLUS DE 112 JOURS (build 1832) : un départ prudent tiré du
+  // meilleur e1RM récent ; sans e1RM connu, le texte d'avant.
+  const _reprise=_abandon?(()=>{ try{ return chargeRepriseLongue(currentUser,ex,_joursRef); }catch(e){ return null; } })():null;
   // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
   // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
   const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
@@ -712,7 +715,7 @@ function _blocExo(idx,estSS){
   // premier exercice chargé).
   const _notePP=(()=>{ try{ if(etatGrossesse(currentUser)!=='post_partum') return false;
     const i0=(woState.exercises||[]).findIndex(e=>e&&!isCardio(e)); return i0===idx; }catch(e){ return false; } })();
-  const _rawSug=(_prog&&!_arret)?_prog.kg:null;
+  const _rawSug=(_prog&&!_arret)?_prog.kg:(_reprise?_reprise.kg:null);
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
@@ -739,7 +742,7 @@ function _blocExo(idx,estSS){
   // et en livres la suggestion tombe sur un multiple de 5 lb. Dans le sens du
   // changement depuis la dernière charge ; la charge du cycle, vers le bas.
   const _prevW=prev?parseFloat(prev.weight):NaN;
-  const _sugArr=_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
+  const _sugArr=_reprise?_reprise.kg:_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
   // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
   // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
@@ -816,7 +819,7 @@ function _blocExo(idx,estSS){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :_arret?''
-      :_abandon?
+      :(_abandon&&!_reprise)?
       `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">
         Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
         <div style="color:var(--text-dim);margin-top:6px">${SUG_NOTE_REPERE}</div>
@@ -825,9 +828,9 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${_reprise?escapeHtml(_reprise.raison):prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
         ${_notePP?`<div class="s-note" style="margin-top:6px">${escapeHtml(NOTE_POST_PARTUM)}</div>`:''}
-        ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
+        ${(_decote!=null&&_decote<1)?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
       _sugReps?`<div class="suggest-box sug-reps">

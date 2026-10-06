@@ -1821,11 +1821,14 @@ function coefPoidsCorps(nom){
  * kg, ou null quand on ne peut pas la dire (pas de poids de corps, ou un
  * mouvement dont on ne connaît pas la part de corps soulevée).
  */
-function chargeEffective(set,ex,user){
+// `dateMs` (build 1832) : la date de la SÉANCE. Le poids de corps est alors
+// celui de cette date (poidsCorpsAu) : des tractions à 80 kg en janvier ne
+// sont pas relues sur les 70 kg de mars. Sans date, le poids actuel (avant).
+function chargeEffective(set,ex,user,dateMs){
   const t=typeCharge(ex);
   const w=Math.max(0,parseFloat(set&&set.weight)||0);
   if(t==='externe') return w>0?w:null;
-  let pc=null; try{ pc=poidsCorpsActuel(user); }catch(e){ pc=null; }
+  let pc=null; try{ pc=(dateMs!=null&&isFinite(Number(dateMs))&&Number(dateMs)>0)?poidsCorpsAu(user,Number(dateMs)):poidsCorpsActuel(user); }catch(e){ pc=null; }
   if(!(pc>0)) return null;
   const k=coefPoidsCorps(ex&&ex.name);
   if(t==='poids_corps') return k==null?null:pc*k+w;
@@ -2093,6 +2096,41 @@ function decoteReprise(joursEcoules,user){
   // La table doit couvrir jusqu'au seuil d'abandon. Si elle ne le fait plus, on
   // ne propose rien plutôt que d'appliquer 1 en silence — un test le vérifie.
   return null;
+}
+// ══ REPRISE APRÈS UNE LONGUE COUPURE (build 1832) ═════════════════════════
+// Au-delà de SUG_JOURS_ABANDON, decoteReprise rend null : la charge d'avant
+// n'est plus un repère. Plutôt qu'un texte sans charge, un départ PRUDENT :
+//   charge = chargePourReps(0,7 × meilleur e1RM des 3 dernières séances
+//            fiables de l'exercice, bas de la fourchette, RIR 3),
+// arrondie VERS LE BAS au pas du matériel. Une charge externe seulement (le
+// poids du corps et les machines assistées gardent le texte). null sans e1RM
+// connu : l'appelant garde alors le texte d'avant.
+const REPRISE_LONGUE_PART=0.7, REPRISE_LONGUE_RIR=3, REPRISE_LONGUE_SEANCES=3;
+function chargeRepriseLongue(user,ex,jours,maintenant){
+  if(!user||!ex||!ex.name) return null;
+  const j=Number(jours);
+  if(!(j>SUG_JOURS_ABANDON)) return null;
+  const _ex=Object.assign({},_exPourCharge(ex.name,user),ex.typeCharge?{typeCharge:ex.typeCharge}:{});
+  if(typeCharge(_ex)!=='externe'||isCounterweightEx(ex.name)) return null;
+  const R=repsApprocheBase(ex.reps);
+  if(!(R>0)) return null;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const ses=((user.sessions)||[]).filter(s=>s&&!s.deload&&Number(s.date)>0&&Number(s.date)<=t)
+    .slice().sort((a,b)=>Number(b.date)-Number(a.date));
+  let best=0, n=0;
+  for(const s of ses){
+    let p=null; try{ p=perfExercice(s,ex.name,user); }catch(e){ p=null; }
+    if(!p||!p.fiable||!(p.score>0)) continue;
+    if(p.score>best) best=p.score;
+    if(++n>=REPRISE_LONGUE_SEANCES) break;
+  }
+  if(!(best>0)) return null;
+  const brut=chargePourReps(REPRISE_LONGUE_PART*best,R,REPRISE_LONGUE_RIR);
+  const kg=arrondiCharge(brut,{ex,user,sens:'bas'});
+  if(!(kg>0)) return null;
+  const mois=Math.max(1,Math.round(j/30.44));
+  return {kg,e1rm:best,reps:R,mois,
+    raison:'Reprise après '+mois+' mois : charge de départ prudente, ajuste à la 2e série'};
 }
 // Date de la séance de référence, en jour local. Rend null sur une date absente
 // ou aberrante : sans date, pas de décote, et le comportement reste l'actuel.

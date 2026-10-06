@@ -56507,6 +56507,9 @@ function _blocExo(idx,estSS){
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
+  // REPRISE APRÈS PLUS DE 112 JOURS (build 1832) : un départ prudent tiré du
+  // meilleur e1RM récent ; sans e1RM connu, le texte d'avant.
+  const _reprise=_abandon?(()=>{ try{ return chargeRepriseLongue(currentUser,ex,_joursRef); }catch(e){ return null; } })():null;
   // LA PROGRESSION (build 1825) : écart au RIR visé, double progression dans
   // la fourchette, arrondi au pas, plafonds — et la RAISON, affichée dessous.
   const _prog=(prev&&!_abandon)?(()=>{ try{ return suggestionDepuisHistorique(ex,woState.slot,woState.progName,_decote,currentUser); }catch(e){ return null; } })():null;
@@ -56516,7 +56519,7 @@ function _blocExo(idx,estSS){
   // premier exercice chargé).
   const _notePP=(()=>{ try{ if(etatGrossesse(currentUser)!=='post_partum') return false;
     const i0=(woState.exercises||[]).findIndex(e=>e&&!isCardio(e)); return i0===idx; }catch(e){ return false; } })();
-  const _rawSug=(_prog&&!_arret)?_prog.kg:null;
+  const _rawSug=(_prog&&!_arret)?_prog.kg:(_reprise?_reprise.kg:null);
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
   // +1 quand la dernière série laissait plus de réserve que le RIR visé.
@@ -56543,7 +56546,7 @@ function _blocExo(idx,estSS){
   // et en livres la suggestion tombe sur un multiple de 5 lb. Dans le sens du
   // changement depuis la dernière charge ; la charge du cycle, vers le bas.
   const _prevW=prev?parseFloat(prev.weight):NaN;
-  const _sugArr=_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
+  const _sugArr=_reprise?_reprise.kg:_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
   // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
   // EN DÉCHARGE, ELLE NE MONTE PAS : min(charge de référence, suggestion).
@@ -56620,7 +56623,7 @@ function _blocExo(idx,estSS){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :_arret?''
-      :_abandon?
+      :(_abandon&&!_reprise)?
       `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">
         Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
         <div style="color:var(--text-dim);margin-top:6px">${SUG_NOTE_REPERE}</div>
@@ -56629,9 +56632,9 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : progresser = réduire l’assistance. ':''}${_reprise?escapeHtml(_reprise.raison):prev?'Basée sur '+escapeHtml(creneauRef)+(_prog&&_prog.raison?' : '+escapeHtml(_prog.raison)+(_prog.frein&&_prog.prev?' '+escapeHtml('('+_aff(_prog.prev.weight)+(_prog.prev.rir!==''&&_prog.prev.rir!=null?(String(_prog.prev.rir)==='echec'?' à l’échec':' à RIR '+_prog.prev.rir):'')+')'):''):' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')'):'Première séance'}</div>
         ${_notePP?`<div class="s-note" style="margin-top:6px">${escapeHtml(NOTE_POST_PARTUM)}</div>`:''}
-        ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
+        ${(_decote!=null&&_decote<1)?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
       _sugReps?`<div class="suggest-box sug-reps">
@@ -59311,7 +59314,7 @@ function perfExercice(sess,exNom,user){
   const _ex=_exPourCharge(exNom,user);
   for(const s of d.sets){
     if(!s||s.done!==true) continue;
-    const w=chargeEffective(s,_ex,user);
+    const w=chargeEffective(s,_ex,user,sess&&sess.date);
     if(!(w>0)) continue;
     // Un essai raté (0 répétition) n'est pas une mesure : il ne devient pas le
     // meilleur score (même règle que recordsExercice).
@@ -69948,11 +69951,12 @@ function recordsParReps(user,nomEx){
 // charge (recordsDeSeance ne le voit pas), mais c'est la meilleure
 // performance jamais faite sur l'exercice.
 function e1rmRecordsDeSeance(sc,anterieures,user){
-  const best=(sets,ex)=>{
+  // La date de la séance : le poids de corps de ce jour-là (poidsCorpsAu).
+  const best=(sets,ex,dt)=>{
     let v=0;
     for(const st of (sets||[])){
       if(!st||st.done!==true) continue;
-      const w=chargeEffective(st,ex,user)||0, r=_perfReps(st);
+      const w=chargeEffective(st,ex,user,dt)||0, r=_perfReps(st);
       if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(st,user))) continue;
       let x=0; try{ x=e1rm(w,r,_perfRir(st,user)); }catch(e){ x=0; }
       if(x>v) v=x;
@@ -69963,12 +69967,12 @@ function e1rmRecordsDeSeance(sc,anterieures,user){
   const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
   for(const nm of Object.keys(data)){
     const _ex=_exPourCharge(nm,user);
-    const cur=best((data[nm]||{}).sets,_ex);
+    const cur=best((data[nm]||{}).sets,_ex,sc&&sc.date);
     if(!(cur>0)) continue;
     let hist=0;
     for(const p of (anterieures||[])){
       let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
-      const v=best(d&&d.sets,_ex); if(v>hist) hist=v;
+      const v=best(d&&d.sets,_ex,p&&p.date); if(v>hist) hist=v;
     }
     if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10,type:'e1rm'});
   }
@@ -75017,11 +75021,14 @@ function coefPoidsCorps(nom){
  * kg, ou null quand on ne peut pas la dire (pas de poids de corps, ou un
  * mouvement dont on ne connaît pas la part de corps soulevée).
  */
-function chargeEffective(set,ex,user){
+// `dateMs` (build 1832) : la date de la SÉANCE. Le poids de corps est alors
+// celui de cette date (poidsCorpsAu) : des tractions à 80 kg en janvier ne
+// sont pas relues sur les 70 kg de mars. Sans date, le poids actuel (avant).
+function chargeEffective(set,ex,user,dateMs){
   const t=typeCharge(ex);
   const w=Math.max(0,parseFloat(set&&set.weight)||0);
   if(t==='externe') return w>0?w:null;
-  let pc=null; try{ pc=poidsCorpsActuel(user); }catch(e){ pc=null; }
+  let pc=null; try{ pc=(dateMs!=null&&isFinite(Number(dateMs))&&Number(dateMs)>0)?poidsCorpsAu(user,Number(dateMs)):poidsCorpsActuel(user); }catch(e){ pc=null; }
   if(!(pc>0)) return null;
   const k=coefPoidsCorps(ex&&ex.name);
   if(t==='poids_corps') return k==null?null:pc*k+w;
@@ -75289,6 +75296,41 @@ function decoteReprise(joursEcoules,user){
   // La table doit couvrir jusqu'au seuil d'abandon. Si elle ne le fait plus, on
   // ne propose rien plutôt que d'appliquer 1 en silence — un test le vérifie.
   return null;
+}
+// ══ REPRISE APRÈS UNE LONGUE COUPURE (build 1832) ═════════════════════════
+// Au-delà de SUG_JOURS_ABANDON, decoteReprise rend null : la charge d'avant
+// n'est plus un repère. Plutôt qu'un texte sans charge, un départ PRUDENT :
+//   charge = chargePourReps(0,7 × meilleur e1RM des 3 dernières séances
+//            fiables de l'exercice, bas de la fourchette, RIR 3),
+// arrondie VERS LE BAS au pas du matériel. Une charge externe seulement (le
+// poids du corps et les machines assistées gardent le texte). null sans e1RM
+// connu : l'appelant garde alors le texte d'avant.
+const REPRISE_LONGUE_PART=0.7, REPRISE_LONGUE_RIR=3, REPRISE_LONGUE_SEANCES=3;
+function chargeRepriseLongue(user,ex,jours,maintenant){
+  if(!user||!ex||!ex.name) return null;
+  const j=Number(jours);
+  if(!(j>SUG_JOURS_ABANDON)) return null;
+  const _ex=Object.assign({},_exPourCharge(ex.name,user),ex.typeCharge?{typeCharge:ex.typeCharge}:{});
+  if(typeCharge(_ex)!=='externe'||isCounterweightEx(ex.name)) return null;
+  const R=repsApprocheBase(ex.reps);
+  if(!(R>0)) return null;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const ses=((user.sessions)||[]).filter(s=>s&&!s.deload&&Number(s.date)>0&&Number(s.date)<=t)
+    .slice().sort((a,b)=>Number(b.date)-Number(a.date));
+  let best=0, n=0;
+  for(const s of ses){
+    let p=null; try{ p=perfExercice(s,ex.name,user); }catch(e){ p=null; }
+    if(!p||!p.fiable||!(p.score>0)) continue;
+    if(p.score>best) best=p.score;
+    if(++n>=REPRISE_LONGUE_SEANCES) break;
+  }
+  if(!(best>0)) return null;
+  const brut=chargePourReps(REPRISE_LONGUE_PART*best,R,REPRISE_LONGUE_RIR);
+  const kg=arrondiCharge(brut,{ex,user,sens:'bas'});
+  if(!(kg>0)) return null;
+  const mois=Math.max(1,Math.round(j/30.44));
+  return {kg,e1rm:best,reps:R,mois,
+    raison:'Reprise après '+mois+' mois : charge de départ prudente, ajuste à la 2e série'};
 }
 // Date de la séance de référence, en jour local. Rend null sur une date absente
 // ou aberrante : sans date, pas de décote, et le comportement reste l'actuel.
@@ -92001,6 +92043,31 @@ function poidsCorpsActuel(u){
   for(const k of ['profileWeight','weight']){ const v=parseFloat(u&&u[k]); if(v>=30&&v<=300) return v; }
   return null;
 }
+/**
+ * PURE (build 1832). Le poids de corps à une DATE : la pesée la plus proche
+ * dans les ±21 jours — pesées (weightLog) d'abord, bilans ensuite —, sinon
+ * poidsCorpsActuel. Une séance de janvier est relue sur le poids de janvier.
+ */
+const PDC_FENETRE_JOURS=21;
+function poidsCorpsAu(u,dateMs){
+  const d=Number(dateMs);
+  if(!u||!isFinite(d)||!(d>0)) return poidsCorpsActuel(u);
+  const fen=PDC_FENETRE_JOURS*864e5;
+  const chercher=liste=>{
+    let best=null;
+    for(const x of liste){
+      const v=parseFloat(x.kg); if(!(v>=30&&v<=300)) continue;
+      const t=typeof x.date==='number'?x.date:Date.parse(x.date);
+      if(!isFinite(t)) continue;
+      const e=Math.abs(t-d);
+      if(e<=fen&&(!best||e<best.e)) best={e,kg:v};
+    }
+    return best;
+  };
+  const p=chercher(((u.weightLog)||[]).filter(Boolean).map(e=>({date:e.date,kg:e.kg})))
+    ||chercher(((u.bilans)||[]).filter(Boolean).map(b=>{ let kg=null; try{ kg=getBW(b); }catch(er){ kg=null; } return {date:b.date,kg}; }));
+  return p?p.kg:poidsCorpsActuel(u);
+}
 /** PURE. Le mouvement de base d'un nom d'exercice, ou null. */
 function carteMouvementDe(nom){
   let k='';
@@ -94932,7 +94999,7 @@ function recordsExercice(user,nomEx){
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
       if(pt.sansRirDominant) continue;
       if(!(r>0)||!e1rmFiable(r,_perfRir(s,user))) continue;
-      const _eff=chargeEffective(s,_ex,user);
+      const _eff=chargeEffective(s,_ex,user,pt.date);
       if(!(_eff>0)) continue;
       const v=e1rm(_eff,r,_perfRir(s,user));
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};

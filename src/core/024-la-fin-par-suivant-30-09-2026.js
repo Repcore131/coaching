@@ -1003,7 +1003,7 @@ function perfExercice(sess,exNom,user){
   const _ex=_exPourCharge(exNom,user);
   for(const s of d.sets){
     if(!s||s.done!==true) continue;
-    const w=chargeEffective(s,_ex,user);
+    const w=chargeEffective(s,_ex,user,sess&&sess.date);
     if(!(w>0)) continue;
     // Un essai raté (0 répétition) n'est pas une mesure : il ne devient pas le
     // meilleur score (même règle que recordsExercice).

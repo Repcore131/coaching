@@ -1504,11 +1504,12 @@ function recordsParReps(user,nomEx){
 // charge (recordsDeSeance ne le voit pas), mais c'est la meilleure
 // performance jamais faite sur l'exercice.
 function e1rmRecordsDeSeance(sc,anterieures,user){
-  const best=(sets,ex)=>{
+  // La date de la séance : le poids de corps de ce jour-là (poidsCorpsAu).
+  const best=(sets,ex,dt)=>{
     let v=0;
     for(const st of (sets||[])){
       if(!st||st.done!==true) continue;
-      const w=chargeEffective(st,ex,user)||0, r=_perfReps(st);
+      const w=chargeEffective(st,ex,user,dt)||0, r=_perfReps(st);
       if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(st,user))) continue;
       let x=0; try{ x=e1rm(w,r,_perfRir(st,user)); }catch(e){ x=0; }
       if(x>v) v=x;
@@ -1519,12 +1520,12 @@ function e1rmRecordsDeSeance(sc,anterieures,user){
   const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
   for(const nm of Object.keys(data)){
     const _ex=_exPourCharge(nm,user);
-    const cur=best((data[nm]||{}).sets,_ex);
+    const cur=best((data[nm]||{}).sets,_ex,sc&&sc.date);
     if(!(cur>0)) continue;
     let hist=0;
     for(const p of (anterieures||[])){
       let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
-      const v=best(d&&d.sets,_ex); if(v>hist) hist=v;
+      const v=best(d&&d.sets,_ex,p&&p.date); if(v>hist) hist=v;
     }
     if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10,type:'e1rm'});
   }

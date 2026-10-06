@@ -83,6 +83,31 @@ function poidsCorpsActuel(u){
   for(const k of ['profileWeight','weight']){ const v=parseFloat(u&&u[k]); if(v>=30&&v<=300) return v; }
   return null;
 }
+/**
+ * PURE (build 1832). Le poids de corps à une DATE : la pesée la plus proche
+ * dans les ±21 jours — pesées (weightLog) d'abord, bilans ensuite —, sinon
+ * poidsCorpsActuel. Une séance de janvier est relue sur le poids de janvier.
+ */
+const PDC_FENETRE_JOURS=21;
+function poidsCorpsAu(u,dateMs){
+  const d=Number(dateMs);
+  if(!u||!isFinite(d)||!(d>0)) return poidsCorpsActuel(u);
+  const fen=PDC_FENETRE_JOURS*864e5;
+  const chercher=liste=>{
+    let best=null;
+    for(const x of liste){
+      const v=parseFloat(x.kg); if(!(v>=30&&v<=300)) continue;
+      const t=typeof x.date==='number'?x.date:Date.parse(x.date);
+      if(!isFinite(t)) continue;
+      const e=Math.abs(t-d);
+      if(e<=fen&&(!best||e<best.e)) best={e,kg:v};
+    }
+    return best;
+  };
+  const p=chercher(((u.weightLog)||[]).filter(Boolean).map(e=>({date:e.date,kg:e.kg})))
+    ||chercher(((u.bilans)||[]).filter(Boolean).map(b=>{ let kg=null; try{ kg=getBW(b); }catch(er){ kg=null; } return {date:b.date,kg}; }));
+  return p?p.kg:poidsCorpsActuel(u);
+}
 /** PURE. Le mouvement de base d'un nom d'exercice, ou null. */
 function carteMouvementDe(nom){
   let k='';

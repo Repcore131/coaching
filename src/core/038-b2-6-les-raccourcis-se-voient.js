@@ -472,7 +472,7 @@ function recordsExercice(user,nomEx){
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
       if(pt.sansRirDominant) continue;
       if(!(r>0)||!e1rmFiable(r,_perfRir(s,user))) continue;
-      const _eff=chargeEffective(s,_ex,user);
+      const _eff=chargeEffective(s,_ex,user,pt.date);
       if(!(_eff>0)) continue;
       const v=e1rm(_eff,r,_perfRir(s,user));
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
