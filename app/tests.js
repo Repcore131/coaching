@@ -74775,6 +74775,41 @@ async function testExercices(){
         const v=SUPPLEMENTS_LIST.map(f=>_suppNorm(f.nom));
         const dbl=v.filter((x,i)=>v.indexOf(x)!==i);
         return dbl.length?_echec('doublons : '+dbl.join(', ')):(v.length===23||_echec(v.length+' formes'));});
+      // ── Build 1848 : l'observance, et la whey au journal ──
+      const _OBj=n=>localISODate(new Date(Date.now()-n*864e5));
+      ok('Observance : les jours sans aucune coche sont exclus ; 12 / 14 ; mention coach dès 4 jours',()=>{
+        const p={};
+        // 14 jours avec au moins une coche ; la créatine (id 1) cochée 12 fois.
+        for(let i=0;i<14;i++) p[_OBj(i)]=i<12?['1@matin','2@matin']:['2@matin'];
+        const u={nutrition:{supplements:[{id:1,name:'Créatine monohydrate',active:true,timings:['matin']},{id:2,name:'Whey',active:true,timings:['matin']}],suppPrises:p}};
+        const o=observanceSupp(u,1,_OBj(0),14);
+        if(o.jours!==14||o.pris!==12) return _echec(JSON.stringify(o));
+        // Des jours sans AUCUNE coche ne comptent pas comme des oublis.
+        const q={}; for(let i=0;i<5;i++) q[_OBj(i)]=['1@matin'];
+        const v={nutrition:{supplements:u.nutrition.supplements,suppPrises:q}};
+        const o2=observanceSupp(v,1,_OBj(0),14);
+        if(o2.jours!==5||o2.pris!==5) return _echec('jours vides : '+JSON.stringify(o2));
+        if(!/^pris 12 j \/ 14 · régularité : \d+ semaines?$/.test(texteObservanceSupp(u,u.nutrition.supplements[0],_OBj(0)))) return _echec(texteObservanceSupp(u,u.nutrition.supplements[0],_OBj(0)));
+        const w={nutrition:{supplements:u.nutrition.supplements,suppPrises:{[_OBj(0)]:['1@matin']}}};
+        return texteObservanceSupp(w,w.nutrition.supplements[0],_OBj(0))===''?true:_echec('mention sous 4 jours');});
+      ok('Whey au journal : un double basculement ne crée qu’une entrée ; diète stricte → aucune proposition',()=>{
+        const sv={u:currentUser,s:window.saveUser};
+        try{
+          window.saveUser=()=>true;
+          currentUser={email:'wj@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},
+            nutrition:{dietType:'flexible',supplements:[{id:7,name:'Whey / Protéine en poudre',dosage_quantity:25,dosage_unit:'g',timings:['matin'],active:true}]}};
+          const a=suppAjouterAuJournal(7,'matin'), b=suppAjouterAuJournal(7,'matin');
+          const es=currentUser.nutrition.log[localISODate(new Date())].entries;
+          if(!a||b||es.length!==1) return _echec('entrées '+es.length);
+          if(es[0].qty!==25||es[0].repas!=='matin'||!(es[0].p>0)) return _echec(JSON.stringify(es[0]));
+          document.querySelectorAll('#supp-action-toast').forEach(x=>x.remove());
+          // Diète stricte : aucune proposition.
+          currentUser.nutrition.dietType='strict';
+          if(_suppProposerJournal(currentUser.nutrition.supplements[0],'soir')!==false) return _echec('proposé en stricte');
+          // Un produit qui n'est ni whey ni caséine : rien.
+          currentUser.nutrition.dietType='flexible';
+          return _suppProposerJournal({id:9,name:'Créatine monohydrate'},'matin')===false?true:_echec('créatine proposée');
+        } finally { currentUser=sv.u; window.saveUser=sv.s; document.querySelectorAll('#supp-action-toast').forEach(x=>x.remove()); }});
       ok('Compléments 1847 : B12, Fer, Nitrates trouvés ; Fer + Calcium au même moment → message, à des moments différents → rien',()=>{
         if(!_suppFiche('Vitamine B12')||_suppFiche('Vitamine B12').nom!=='Vitamine B12') return _echec('B12');
         if(!_suppFiche('Nitrates')||!_suppFiche('Électrolytes')) return _echec('nitrates / électrolytes');
@@ -88188,8 +88223,9 @@ vendredi 78 6h 44m
       (()=>{
         const src=_prodSrc();
         const n=(src.match(/_poserMicros\(/g)||[]).length;
-        ok('Micro : le prorata des micronutriments est écrit une fois et appelé deux',
-          n===3, n+' occurrence(s) — 1 définition + 2 appels attendus');
+        // Build 1848 : la whey cochée qui rejoint le journal passe AUSSI par lui (3 appels).
+        ok('Micro : le prorata des micronutriments est écrit une fois, et tous les ajouts l’appellent',
+          n===4, n+' occurrence(s) — 1 définition + 3 appels attendus');
         const e={};
         _poserMicros(e,{fe:2,ca:100,zn:null},1.5);
         ok('Micro : le prorata pose la clé au prorata, et saute ce qui est absent',

@@ -1627,7 +1627,135 @@ function basculerPriseSupp(id,mid){
   const on=suppPrisesDuJour(currentUser,localISODate(new Date())).indexOf(k)<0;
   _suppPrisesEcrire([k],on);
   _suppMajCoches();
+  // WHEY ET CASÉINE, LA PREMIÈRE FOIS DU JOUR (build 1848) : la prise peut
+  // rejoindre le journal, sur proposition. Jamais en diète stricte.
+  if(on){ try{ _suppProposerJournal(s,mid); }catch(e){} }
   return on;
+}
+// ══ L'OBSERVANCE D'UN COMPLÉMENT (build 1848) ══════════════════════════════
+// PURE. Sur les `n` jours qui finissent à finISO : `jours` = jours où le
+// produit est actif ET où l'athlète a coché au moins une prise de quoi que ce
+// soit (sinon on ne sait pas : jour exclu, jamais compté comme un oubli) ;
+// `pris` = jours où CE produit porte au moins une coche.
+function observanceSupp(user,suppId,finISO,n){
+  const nb=Math.max(1,Math.round(Number(n)||14));
+  const l=(((user&&user.nutrition)||{}).supplements)||[];
+  const s=l.find(x=>x&&String(x.id)===String(suppId));
+  if(!s) return {jours:0,pris:0};
+  const fin=finISO||localISODate(new Date());
+  const desactive=Number(s.desactiveLe)||0;
+  let jours=0, pris=0;
+  for(let i=0;i<nb;i++){
+    const d=localISODate(_datePlusJours(_dateDeISO(fin),-i));
+    if(s.active===false&&!(desactive&&d<localISODate(new Date(desactive)))) continue;
+    const c=suppPrisesDuJour(user,d);
+    if(!c.length) continue;
+    jours++;
+    if(c.some(k=>k.split('@')[0]===String(s.id))) pris++;
+  }
+  return {jours,pris};
+}
+// La régularité, en semaines pleines : jours consécutifs avec une prise de ce
+// produit (les jours sans aucune coche ne cassent pas la suite), jusqu'à finISO.
+function _suppRegulariteSemaines(user,s,finISO){
+  const fin=finISO||localISODate(new Date());
+  let suite=0;
+  for(let i=0;i<SUPP_PRISES_JOURS;i++){
+    const d=localISODate(_datePlusJours(_dateDeISO(fin),-i));
+    const c=suppPrisesDuJour(user,d);
+    if(!c.length){ continue; }
+    if(c.some(k=>k.split('@')[0]===String(s.id))) suite++; else break;
+  }
+  return Math.floor(suite/7);
+}
+const SUPP_OBS_MIN_JOURS=4;
+function texteObservanceSupp(user,s,finISO){
+  const o=observanceSupp(user,s&&s.id,finISO,14);
+  if(o.jours<SUPP_OBS_MIN_JOURS) return '';
+  let t='pris '+o.pris+' j / '+o.jours;
+  const f=_suppFiche(s&&s.name);
+  if(f&&f.dureeAvantJugement){ const w=_suppRegulariteSemaines(user,s,finISO); t+=' · régularité : '+w+' semaine'+(w>1?'s':''); }
+  return t;
+}
+// ── Whey et caséine : « Ajouter 30 g au journal » ──────────────────────────
+const SUPP_REPAS_DU_MOMENT=Object.freeze({jeun:'matin',matin:'matin',midi:'dejeuner','apres-midi':'collation',
+  soir:'diner',coucher:'coucher','avant-entrainement':'collation','apres-entrainement':'collation',intra:'collation','toutes-4h':'collation'});
+const _suppProposeLe={};
+function _suppAlimentDe(s){
+  const f=_suppFiche(s&&s.name);
+  if(!f) return null;
+  if(f.nom==='Caséine') return -3;
+  if(f.nom==='Whey / Protéine en poudre') return /\biso/i.test(String(s.name||''))?-2:-1;
+  return null;
+}
+// PURE. La quantité ajoutée : la dose en g, sinon 30 g.
+function _suppQteJournal(s){
+  const q=_planNb(s&&s.dosage_quantity);
+  return (String((s&&s.dosage_unit)||'').toLowerCase()==='g'&&q>0)?q:30;
+}
+function _suppProposerJournal(s,mid){
+  const idAlim=_suppAlimentDe(s);
+  if(idAlim==null||!currentUser) return false;
+  const nut=currentUser.nutrition||{};
+  try{ if(typeDiete(nut)!=='flexible') return false; }catch(e){ return false; }
+  const iso=localISODate(new Date());
+  const cle=iso+'|'+s.id;
+  if(_suppProposeLe[cle]) return false;
+  _suppProposeLe[cle]=true;
+  const qty=_suppQteJournal(s);
+  _suppActionToast('Ajouter '+String(qty).replace('.',',')+' g au journal ?','Ajouter',()=>suppAjouterAuJournal(s.id,mid));
+  return true;
+}
+// ÉCRIT. Une seule entrée par produit et par jour (un double tap n'en crée
+// pas deux) ; rend l'entrée, ou null.
+function suppAjouterAuJournal(suppId,mid){
+  const s=_suppStore().find(x=>x&&String(x.id)===String(suppId));
+  if(!s) return null;
+  const idAlim=_suppAlimentDe(s);
+  let f=null; try{ f=(Array.isArray(_ciqualDB)?_ciqualDB.find(x=>x&&x.id===idAlim):null); }catch(e){}
+  if(!f) f=SUPP_ALIM_REPLI[idAlim]||null;
+  if(!f) return null;
+  const iso=localISODate(new Date());
+  const n=currentUser.nutrition||(currentUser.nutrition={});
+  if(!n.log) n.log={};
+  if(!n.log[iso]) n.log[iso]={entries:[]};
+  const marque='supp:'+s.id;
+  if(n.log[iso].entries.some(e=>e&&e.origine===marque)) return null;
+  const qty=_suppQteJournal(s), r=qty/100;
+  const entry={id:Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:SUPP_REPAS_DU_MOMENT[mid]||'collation',
+    kcal:Math.round((Number(f.k)||0)*r),
+    p:f.p!=null?parseFloat((f.p*r).toFixed(1)):null,c:f.c!=null?parseFloat((f.c*r).toFixed(1)):null,
+    l:f.l!=null?parseFloat((f.l*r).toFixed(1)):null,fi:f.f!=null?parseFloat((f.f*r).toFixed(1)):null,
+    sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,periSeance:false,origine:marque};
+  try{ _poserMicros(entry,f,r); }catch(e){}
+  n.log[iso].entries.push(entry);
+  saveUser();
+  // « Annuler » pendant 5 s : retire l'entrée par le chemin du journal.
+  _suppActionToast(f.n+' '+String(qty).replace('.',',')+' g ajouté au journal','Annuler',()=>{ try{ deleteFoodEntry(iso,entry.id); }catch(e){} },5000);
+  return entry;
+}
+// Si la base n'est pas chargée : les trois fiches locales, recopiées.
+const SUPP_ALIM_REPLI=Object.freeze({
+  [-1]:{id:-1,n:'Whey concentrée (protéine de lactosérum), poudre',g:'produits pour sportifs',k:390,p:76,c:8,l:6,f:0,e:0.5},
+  [-2]:{id:-2,n:'Whey isolat, poudre',g:'produits pour sportifs',k:370,p:88,c:2,l:1,f:0,e:0.5},
+  [-3]:{id:-3,n:'Caséine micellaire, poudre',g:'produits pour sportifs',k:355,p:78,c:6,l:1.5,f:0,e:0.6}});
+// Un message avec UNE action, posé au-dessus du bas de l'écran.
+function _suppActionToast(texte,lib,fn,duree){
+  let z=document.getElementById('supp-action-toast');
+  if(z) z.remove();
+  z=document.createElement('div');
+  z.id='supp-action-toast';
+  z.setAttribute('role','status');
+  z.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:var(--z-modal);max-width:420px;width:calc(100% - 32px);'
+    +'background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;display:flex;align-items:center;gap:12px;'
+    +'font-size:var(--fs-sm);color:var(--text)';
+  const t=document.createElement('span'); t.style.flex='1'; t.textContent=texte;
+  const b=document.createElement('button'); b.type='button'; b.className='btn btn-sm'; b.style.margin='0'; b.textContent=lib;
+  b.onclick=()=>{ try{ z.remove(); }catch(e){} fn(); };
+  z.appendChild(t); z.appendChild(b);
+  document.body.appendChild(z);
+  setTimeout(()=>{ try{ z.remove(); }catch(e){} },duree||6000);
+  return z;
 }
 function prendreToutSupp(mid){
   if(!demanderConsentementSante('complement',()=>prendreToutSupp(mid))) return false;
@@ -1782,6 +1910,8 @@ function _renderSuppTable(list, isCoach, editFn){
       <div class="supp-txt">
         <div class="supp-nomr"><span class="supp-nom">${escapeHtml(s.name||'')}</span>${x.fiche?_suppPastille(x.fiche.preuve):''}</div>
         <div class="supp-dose"><span>${escapeHtml(dose(x))}</span>${x.fiche?reference(x):''}${depli(s,x)}</div>
+        ${isCoach?(function(){ const t=(function(){ try{ return texteObservanceSupp(getOwnedClient(currentClientId),s); }catch(e){ return ''; } })();
+          return t?'<div class="supp-obs" style="font-size:var(--fs-2xs);color:var(--text-faint)">'+escapeHtml(t)+'</div>':''; })():''}
       </div>${tag}${(!isCoach&&!x.eteint)?coche(s,mid):''}
     </div></div>`;
   };
