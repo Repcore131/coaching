@@ -101688,6 +101688,58 @@ function planRestant(cibles,couv){
   return out;
 }
 
+// ══ RÉDUIRE LE SQUELETTE QUI DÉPASSE (build 1841) ═════════════════════════
+// Quand le squelette couvre déjà plus qu'une cible (restant < 0), les sources
+// libres affichaient 0 et une alerte le disait, sans autre aide. PURE :
+// pour chaque macro négative, les lignes FIXES (ni note, ni fruit, ni source
+// au choix, ni complément, ni recette) qui en apportent le plus sont réduites,
+// dans l'ordre décroissant de contribution, jusqu'à restant ≥ 0. Au pas de
+// l'unité (1 œuf, 5 g, 10 mL), jamais sous 50 % de la quantité d'origine ;
+// au-delà, l'alerte reste. Rend {plan, changements:[{nom, avant, apres, u}]}.
+const PLAN_REDUC_MIN=0.5;
+function _planPasUnite(u){
+  const s=String(u==null?'g':u).trim().toLowerCase();
+  if(s==='g') return 5;
+  if(s==='ml') return 10;
+  return 1;
+}
+function planReduireSquelette(plan,cibles,chercher){
+  if(!plan||!Array.isArray(plan.squelette)) return {plan,changements:[]};
+  const res=_planResolveur(chercher);
+  const p=JSON.parse(JSON.stringify(plan));
+  const orig=new Map(), noms=new Map();
+  const fixe=it=>planLigneRetenue(p,it)&&!it.comp&&!it.recette
+    &&!(it.portion&&PLAN_PORTIONS[it.portion]&&PLAN_PORTIONS[it.portion].comp);
+  for(let tour=0;tour<3;tour++){
+    const couv=planCouverture(p,res);
+    const rest=planRestant(cibles,couv);
+    if(!rest.negatifs.length) break;
+    for(const n of rest.negatifs){
+      let reste=n.ecart;
+      const lignes=planSquelette(p).filter(fixe).map(it=>({it,m:planMacrosItem(it,res)}))
+        .filter(x=>x.m&&x.m[n.macro]>0).sort((a,b)=>b.m[n.macro]-a.m[n.macro]);
+      for(const {it,m} of lignes){
+        if(!(reste>0)) break;
+        const q=_planNb(it.q); if(!(q>0)) continue;
+        if(!orig.has(it)){ orig.set(it,q); noms.set(it,planNomItem(it,res)); }
+        const q0=orig.get(it), pas=_planPasUnite(planUniteItem(it));
+        const parUnite=m[n.macro]/q;                 // g de la macro par unité de quantité
+        const min=Math.ceil(q0*PLAN_REDUC_MIN/pas-1e-9)*pas;
+        if(q<=min) continue;
+        const voulu=q-reste/parUnite;
+        const nq=Math.max(min,Math.floor(voulu/pas+1e-9)*pas);
+        if(nq>=q) continue;
+        reste-=(q-nq)*parUnite;
+        it.q=Math.round(nq*100)/100;
+      }
+    }
+  }
+  const changements=[];
+  for(const [it,q0] of orig) if(_planNb(it.q)!==q0)
+    changements.push({nom:noms.get(it),avant:q0,apres:_planNb(it.q),u:planUniteItem(it)});
+  return {plan:p,changements};
+}
+
 // ══════════════ CE QUE LES DEUX ÉCRANS DU PLAN PARTAGENT ══════════════
 // Le code couleur des tableurs papier : protéines rouge, glucides jaune,
 // fruits vert. C'est ce que le coach et ses athlètes lisent depuis des années.
@@ -102720,10 +102772,31 @@ function _cplHtmlAlertes(){
   let l=[];
   try{ l=planAlertes(_cplPlan,c); }catch(e){ l=['Aperçu indisponible : '+e.message]; }
   if(!l.length) return '';
+  // UN SQUELETTE QUI DÉPASSE SE RÉDUIT EN UN CLIC (build 1841) : le bouton
+  // n'apparaît que si une réduction est possible.
+  let red=null;
+  try{ red=planReduireSquelette(_cplPlan,planCiblesJour(c,true,null)); }catch(e){ red=null; }
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">À regarder</div>
     ${l.map(x=>`<div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
+    ${red&&red.changements.length?'<button class="btn btn-outline btn-sm cpl-ajuster-squelette" style="width:100%;margin:8px 0 0;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjusterSquelette()">Ajuster le squelette</button>':''}
   </div>`;
+}
+// Montre la liste des changements, puis enregistre (savePlanCoach).
+async function cplAjusterSquelette(){
+  const c=_cplAthlete();
+  if(!c||!_cplPlan) return false;
+  const red=planReduireSquelette(_cplPlan,planCiblesJour(c,true,null));
+  if(!red.changements.length){ toast('Rien à réduire','var(--orange)'); return false; }
+  const nb=v=>String(v).replace('.',',');
+  const NL=String.fromCharCode(10);
+  const ok=await rcConfirm('Ajuster le squelette ?',
+    red.changements.map(x=>'• '+x.nom+' : '+nb(x.avant)+' → '+nb(x.apres)+' '+x.u).join(NL),'Ajuster');
+  if(!ok) return false;
+  _cplPlan=red.plan;
+  savePlanCoach();
+  try{ renderPlanCoach(); }catch(e){}
+  return true;
 }
 // Les deux catalogues, dans la mise en forme EXACTE de la fiche de l'athlète —
 // même fonction de tableau, mêmes lignes, mêmes couleurs. Le coach voit ce que

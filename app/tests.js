@@ -55948,6 +55948,45 @@ async function testExercices(){
         return true;
       } finally { currentUser=sv.u; window.saveUser=sv.s; window._appAuPremierPlan=sv.p; }});
 
+    // ══ BUILD 1841 — RÉDUIRE LE SQUELETTE QUI DÉPASSE ═══════════════════════
+    const _PRu=(g,kg,cm,ph)=>({id:'pr'+kg,email:'pr'+kg+'@t.fr',role:'athlete',gender:g,_evol_gender:g,_evol_height:String(cm),
+      birthdate:'1996-01-01',sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':String(kg),'deb-height':String(cm),'deb-age':'30','deb-gender':g==='F'?'Femme':'Homme'}],
+      weightLog:[{date:localISODate(new Date()),kg}],phase:{type:ph,debut:Date.now()-7*864e5},nutrition:{cycle:false,tableur:{}}});
+    const _PRk=(cib,c)=>kcalDesMacros(Math.max(cib.p,c.p),Math.max(cib.c,c.c),Math.max(cib.l,c.l));
+    okA('Squelette : F 50 kg / 155 cm en sèche (seche_F) et H 120 kg / 175 cm → restant ≥ 0, plan ≤ cible × 1,05, rien sous 50 %',async()=>{
+      if(!Array.isArray(_ciqualDB)||!_ciqualDB.length) await _loadCiqual();
+      for(const [g,kg,cm,cle] of [['F',50,155,'seche_F'],['H',120,175,'seche_H']]){
+        const u=_PRu(g,kg,cm,'seche');
+        const plan=planDepuisModele(u,true,cle), cib=planCiblesJour(u,true,null);
+        if(!planRestant(cib,planCouverture(plan)).negatifs.length) return _echec(cle+' : fixture sans excès');
+        const red=planReduireSquelette(plan,cib);
+        const c1=planCouverture(red.plan), r1=planRestant(cib,c1);
+        if(g==='F'&&!(r1.l>=0)) return _echec(cle+' : lipides restants '+r1.l);
+        if(r1.negatifs.length) return _echec(cle+' : '+r1.negatifs.map(n=>n.lib).join(', '));
+        if(!(_PRk(cib,c1)<=cib.kcal*1.05)) return _echec(cle+' : '+Math.round(_PRk(cib,c1))+' kcal pour '+cib.kcal);
+        // Aucune ligne sous 50 % de sa quantité, et le plan d'origine intact.
+        for(const x of red.changements) if(x.apres<x.avant*0.5-1e-9) return _echec(x.nom+' : '+x.avant+' → '+x.apres);
+        if(!red.changements.length) return _echec(cle+' : aucun changement');
+        if(JSON.stringify(plan)===JSON.stringify(red.plan)) return _echec('plan inchangé');
+        // Ni note, ni fruit, ni source, ni complément touchés.
+        const avant=new Map(plan.squelette.map(it=>[it.id,it]));
+        for(const it of red.plan.squelette){
+          const a=avant.get(it.id);
+          if((planLigneTexte(it)||it.comp)&&JSON.stringify(a)!==JSON.stringify(it)) return _echec('ligne interdite modifiée : '+planNomItem(it));
+        }
+      }
+      return true;});
+    okA('Squelette : un plan sans excès revient inchangé',async()=>{
+      if(!Array.isArray(_ciqualDB)||!_ciqualDB.length) await _loadCiqual();
+      const u=_PRu('H',80,180,'masse');
+      const plan=planDepuisModele(u,true,'masse_H');
+      const cib=planCiblesJour(u,true,null);
+      // Une cible large : aucun excès possible.
+      const large={kcal:9000,p:900,c:900,l:400};
+      const red=planReduireSquelette(plan,large);
+      if(red.changements.length) return _echec(red.changements.length+' changements');
+      return JSON.stringify(red.plan)===JSON.stringify(plan)&&cib.kcal>0?true:_echec('plan modifié');});
     // ══ BUILD 1840 — LA CIBLE NE CHANGE PLUS SANS LE DIRE ══════════════════
     const _RCj=n=>localISODate(new Date(Date.now()-n*864e5));
     const _RCc=kgs=>({id:'rcA',email:'rca@t.fr',role:'athlete',coachId:'rcC',gender:'Homme',_evol_gender:'Homme',

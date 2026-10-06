@@ -676,10 +676,31 @@ function _cplHtmlAlertes(){
   let l=[];
   try{ l=planAlertes(_cplPlan,c); }catch(e){ l=['Aperçu indisponible : '+e.message]; }
   if(!l.length) return '';
+  // UN SQUELETTE QUI DÉPASSE SE RÉDUIT EN UN CLIC (build 1841) : le bouton
+  // n'apparaît que si une réduction est possible.
+  let red=null;
+  try{ red=planReduireSquelette(_cplPlan,planCiblesJour(c,true,null)); }catch(e){ red=null; }
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">À regarder</div>
     ${l.map(x=>`<div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
+    ${red&&red.changements.length?'<button class="btn btn-outline btn-sm cpl-ajuster-squelette" style="width:100%;margin:8px 0 0;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjusterSquelette()">Ajuster le squelette</button>':''}
   </div>`;
+}
+// Montre la liste des changements, puis enregistre (savePlanCoach).
+async function cplAjusterSquelette(){
+  const c=_cplAthlete();
+  if(!c||!_cplPlan) return false;
+  const red=planReduireSquelette(_cplPlan,planCiblesJour(c,true,null));
+  if(!red.changements.length){ toast('Rien à réduire','var(--orange)'); return false; }
+  const nb=v=>String(v).replace('.',',');
+  const NL=String.fromCharCode(10);
+  const ok=await rcConfirm('Ajuster le squelette ?',
+    red.changements.map(x=>'• '+x.nom+' : '+nb(x.avant)+' → '+nb(x.apres)+' '+x.u).join(NL),'Ajuster');
+  if(!ok) return false;
+  _cplPlan=red.plan;
+  savePlanCoach();
+  try{ renderPlanCoach(); }catch(e){}
+  return true;
 }
 // Les deux catalogues, dans la mise en forme EXACTE de la fiche de l'athlète —
 // même fonction de tableau, mêmes lignes, mêmes couleurs. Le coach voit ce que
