@@ -185,16 +185,21 @@ ACTIONS.rsmCommit = () => {
       const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
       ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}), ...(e.priceHT != null ? { priceHT: e.priceHT } : {}), ...(e.engaged != null ? { engaged: e.engaged } : {}), ...(e.option ? { option: true } : {}) }]);
     }
-    // Export de gestion qui couvre une periode complete : une vente deja importee
-    // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
-    // ne compte plus. Annuler ce nouvel import la fait revenir.
-    if (['ventes', 'factures', 'lignes-factures'].includes(r.def.id) && r.entries.length) {
+    // Export de gestion qui couvre une periode complete : Resamania fait foi sur
+    // cette periode. Une vente deja importee absente du nouveau fichier (annulee
+    // dans Resamania), ET une saisie manuelle de la meme famille de KPI absente
+    // du fichier (erreur de saisie), ne comptent plus. L'historique (relances,
+    // contacts) n'est pas touche. Annuler ce nouvel import les fait revenir.
+    const RSM_KPIS = { ventes: ['contrats'], factures: ['nutrition', 'accessoires'], 'lignes-factures': ['nutrition', 'accessoires'] };
+    if (RSM_KPIS[r.def.id] && r.entries.length) {
       const ds = r.entries.map(e => e.date).sort(); const from = ds[0], to = ds[ds.length - 1];
+      const kset = new Set(RSM_KPIS[r.def.id]);
       summary.removed = 0;
       for (const e of Object.values(S.entries)) {
-        if (e.clubId !== club || e.source !== 'import' || written.has(e.id) || e.date < from || e.date > to || !entryCounts(e)) continue;
-        const ids = Object.keys(e.importIds || (e.importId ? { [e.importId]: 1 } : {}));
-        if (!ids.some(i => S.imports[i] && S.imports[i].defId === r.def.id)) continue;
+        if (e.clubId !== club || written.has(e.id) || e.date < from || e.date > to || !entryCounts(e)) continue;
+        if (e.source === 'import') { const ids = Object.keys(e.importIds || (e.importId ? { [e.importId]: 1 } : {})); if (!ids.some(i => S.imports[i] && S.imports[i].defId === r.def.id)) continue; }
+        else if (e.source === 'manual' && kset.has(e.kpiId) && !e.adjust) { /* saisie manuelle de la periode non confirmee par l'import */ }
+        else continue;
         ops.push([['entries', e.id, 'removedBy'], impId]); summary.removed++;
       }
     }
