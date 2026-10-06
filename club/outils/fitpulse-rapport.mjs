@@ -174,7 +174,7 @@ const premierLundiDuMois = date => Number(date.slice(8, 10)) <= 7;
 
 // api(tk, chemin, opts), envoyer(dest, {objet,texte,html}) : fournis par le serveur.
 export async function passageRapport(api, tk, S, envoyer, { log = console.log, dormir = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
-  const demande = S.rapport && S.rapport.demande;
+  const demande = (S.rapport && S.rapport.demande) || (process.env.APERCU_RAPPORT === 'true' ? { at: Date.now(), to: 'apercu', manuel: true } : null);
   const q = quandEnvoyer();
   if (!demande && q.action === 'non') return 'pas l’heure';
   const clubs = Object.keys(S.clubs || {}).filter(id => S.clubs[id] && !S.clubs[id].archived);
@@ -182,7 +182,7 @@ export async function passageRapport(api, tk, S, envoyer, { log = console.log, d
   const out = [];
   if (demande) {
     // « Envoyer maintenant » depuis l'appli : aperçu au club, ou envoi réel au directeur.
-    await api(tk, 'pulse/rapport/demande.json', { method: 'DELETE' });
+    if (!demande.manuel) await api(tk, 'pulse/rapport/demande.json', { method: 'DELETE' });
     if (Date.now() - (Number(demande.at) || 0) < 6 * 3600000) {
       const run = chargerAppli(S); const D = chiffres(run, demande.club || cibles[0]);
       const dest = demande.to === 'directeur' ? [D.P.directeur, D.P.copie] : [D.P.copie || D.P.directeur];

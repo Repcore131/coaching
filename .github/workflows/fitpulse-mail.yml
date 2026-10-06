@@ -27,6 +27,10 @@ on:
         description: 'Envoyer un e-mail d’essai à l’adresse d’envoi'
         type: boolean
         default: false
+      apercu_rapport:
+        description: 'Envoyer tout de suite un aperçu du rapport à l’adresse en copie'
+        type: boolean
+        default: false
       rapport:
         description: 'Lancement de 14 h 50 le lundi : attendre 15 h pile puis envoyer le rapport au directeur'
         type: boolean
@@ -56,4 +60,5 @@ jobs:
           ESSAI_MAIL: ${{ inputs.essai_mail }}
           RAPPORT_ATTENTE_MIN: ${{ inputs.rapport && '12' || '4' }}
           TZ: Europe/Paris
+          APERCU_RAPPORT: ${{ inputs.apercu_rapport }}
         run: node club/outils/fitpulse-serveur.mjs
