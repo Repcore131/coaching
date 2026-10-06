@@ -111,12 +111,20 @@ export async function connecter(page) {
 // ── Repérage : menu Gestion, formulaire d'export, liste des exports ──────
 // Seuls des libellés d'interface sont écrits (types d'export, intitulés de
 // champs, en-têtes de colonnes) : aucune ligne de données.
+// Fenêtres d'information (ex. « Alerte sécurité ») qui bloquent les clics.
+async function fermerAlertes(page) {
+  for (const t of [/je reste vigilant/i, /j'ai compris|compris|fermer|ok$/i]) {
+    const b = page.getByRole('button', { name: t });
+    if (await visible(b)) { await b.first().click().catch(() => {}); log('fenêtre d’information fermée'); await page.waitForTimeout(800); }
+  }
+}
 async function reperage(page) {
   const base = new URL(URL0).origin;
   await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(6000);
+  await fermerAlertes(page);
   // 1. Chaque catégorie dépliée : titre et description des exports (libellés d'interface).
   for (const cat of ['Comptabilité', 'Finance', 'Membres & Ventes', "Points d'attention", 'Spécifiques', 'Vie du Club']) {
-    const h = page.getByText(cat, { exact: true });
+    const h = page.locator('[aria-expanded]').filter({ hasText: cat });
     if (!(await visible(h))) { log('catégorie introuvable :', cat); continue; }
     const avant = await page.evaluate(() => document.body.innerText.length);
     await h.first().click().catch(() => {}); await page.waitForTimeout(1500);
@@ -126,7 +134,9 @@ async function reperage(page) {
     await h.first().click().catch(() => {}); await page.waitForTimeout(800);
   }
   // 2. Essai réel : l'export « Prospects » sur 7 jours, pour voir le formulaire et la façon dont le fichier sort.
+  await fermerAlertes(page);
   const carte = page.getByRole('button', { name: /^Prospects/ });
+  if (!(await visible(carte))) log('carte Prospects introuvable');
   if (await visible(carte)) {
     await carte.first().click(); await page.waitForTimeout(3000);
     const f = await page.evaluate(() => ({ url: location.pathname + location.search, champs: [...document.querySelectorAll('input,select,textarea')].filter(e => e.getBoundingClientRect().height > 0).map(e => [e.type, e.name || e.id, e.placeholder || '', (e.closest('label,div') || {}).innerText ? e.closest('div').innerText.trim().slice(0, 40) : ''].join('|')), boutons: [...document.querySelectorAll('button')].filter(e => e.getBoundingClientRect().height > 0).map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length < 50) }));
@@ -151,6 +161,7 @@ async function reperage(page) {
   }
   // 3. « Tous les exports » : colonnes et actions (fichiers générés en différé ?).
   await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(5000);
+  await fermerAlertes(page);
   const tous = page.getByRole('button', { name: /tous les exports/i }).or(page.getByRole('link', { name: /tous les exports/i }));
   if (await visible(tous)) {
     await tous.first().click(); await page.waitForTimeout(6000);
@@ -164,7 +175,7 @@ async function main() {
   mkdirSync(SORTIE, { recursive: true });
   const b = await chromium.launch();
   const ctx = await b.newContext({ locale: 'fr-FR', timezoneId: 'Europe/Paris', acceptDownloads: true, viewport: { width: 1440, height: 900 } });
-  const page = await ctx.newPage();
+  const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   try {
     await connecter(page);
     if (MODE === 'reperage') await reperage(page);
