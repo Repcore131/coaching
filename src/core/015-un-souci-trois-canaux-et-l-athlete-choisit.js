@@ -1416,8 +1416,9 @@ function openClientDetail(cid,_refresh,_force){
   const _tcz=document.getElementById('ccd-taux');
   if(_tcz) _tcz.innerHTML=htmlTauxCompletion(c,false);
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
-  const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
-  document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'-';
+  // LES FAITS CLÉS (build 1812) : dernière séance, pesée, contact, datés, et
+  // le compteur de poids repris de la MÊME source que l'onglet Nutrition.
+  try{ rendreFaitsCles(c); }catch(e){ rcErreurMuette('rendreFaitsCles',e); }
   // Contre-indications du bilan de départ, épinglées en haut de la fiche.
   // Elles viennent de la même déclaration que la liste complète des réponses
   // (BILAN_QUESTIONS.depart, entrées `alerte`) : en ajouter une au

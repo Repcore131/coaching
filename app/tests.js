@@ -56009,6 +56009,62 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — LES FAITS CLÉS EN TÊTE DE FICHE ──
+    const _FC=(fn)=>{
+      const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,sav:saveUser};
+      const J=864e5, t=Date.now();
+      const iso=ms=>localISODate(new Date(ms));
+      const coach={id:'cfc',email:'coach.fc@t.fr',role:'coach',alertStatus:{},contacts:{afc:t-3*J-3600e3}};
+      const ath={id:'afc',email:'lou.fc@t.fr',fname:'Lou',lname:'F',role:'athlete',coachId:'cfc',status:'COACHING_SUIVI',
+        'init-height':168,birthdate:'1995-03-01',gender:'F',
+        // NON TRIÉES : la plus récente au milieu.
+        sessions:[{id:'s1',date:t-9*J,name:'BAS'},{id:'s2',date:t-2*J,name:'HAUT'},{id:'s0',date:t-5*J,name:'FULL'}],
+        bilans:[{date:t-6*J,'bil-weight':'63'}],
+        weightLog:[{date:iso(t-1*J),kg:62.4},{date:iso(t-10*J),kg:64}]};
+      try{
+        DB.set('users',{'coach.fc@t.fr':coach,'lou.fc@t.fr':ath}); currentUser=coach; currentClientId='afc';
+        CLOUD.pushOne=()=>Promise.resolve(true); window.toast=()=>{}; window.toastSync=()=>{}; saveUser=()=>true;
+        return fn(coach,ath,t,J);
+      } finally { DB.set('users',sv.users); currentUser=sv.u; currentClientId=sv.cid; CLOUD.pushOne=sv.push;
+        window.toast=sv.t; window.toastSync=sv.ts; saveUser=sv.sav; try{ go('s-coach-home'); }catch(e){} }
+    };
+    ok('Faits clés : séances NON triées → la dernière séance est la plus récente par date, pas la dernière du tableau ; sans séance, « pas encore de séance »',()=>_FC((coach,ath,t,J)=>{
+      const f=faitsCles(ath,coach,t);
+      if(!f.derniereSeance||f.derniereSeance.nom!=='HAUT'||f.derniereSeance.date!==t-2*J) return _echec(JSON.stringify(f.derniereSeance));
+      if(!f.contact||f.contact.jours!==3) return _echec('contact : '+JSON.stringify(f.contact));
+      const vide={id:'v',sessions:[],bilans:[]};
+      const fv=faitsCles(vide,coach,t);
+      if(fv.derniereSeance||fv.pesee||fv.contact) return _echec('dossier vide : '+JSON.stringify(fv));
+      const h=htmlFaitsCles(vide,coach,t);
+      if(!/Pas encore de séance/.test(h)||!/Aucune pesée/.test(h)) return _echec(h);
+      return htmlFaitsCles({_fromCode:true,id:'x'},coach,t)===''?true:_echec('ligne affichée pour une invitation');
+    }));
+    ok('Faits clés : une pesée du journal plus récente que le bilan → source « journal » ; un bilan plus récent → « bilan »',()=>_FC((coach,ath,t,J)=>{
+      const p=faitsCles(ath,coach,t).pesee;
+      if(!p||p.source!=='journal'||p.kg!==62.4) return _echec(JSON.stringify(p));
+      const a2=Object.assign({},ath,{bilans:[{date:t,'bil-weight':'61.8'}]});
+      const p2=faitsCles(a2,coach,t).pesee;
+      return p2&&p2.source==='bilan'&&p2.kg===61.8?true:_echec(JSON.stringify(p2));
+    }));
+    ok('Faits clés : #ccd-weight porte le MÊME poids que l’onglet Nutrition, daté en title ; la ligne est sous les compteurs, en --fs-xs',()=>_FC((coach,ath)=>{
+      openClientDetail('afc');
+      const w=document.getElementById('ccd-weight');
+      const nut=cibleTableur(ath,_tbOptsDe(ath)).poids;
+      if(Number(String(w.textContent).replace('kg','').replace(',','.'))!==nut) return _echec('fiche '+w.textContent+' / nutrition '+nut);
+      const tab=_htmlTableauxTableur(ath);
+      if(!/Poids[\s\S]{0,400}?62,4 kg/.test(tab)) return _echec('onglet Nutrition : '+tab.slice(0,300));
+      if(!/^Pesée du /.test(w.title)) return _echec('title : '+w.title);
+      const z=document.getElementById('ccd-faits');
+      if(!z||z.hidden) return _echec('ligne absente');
+      const tx=z.textContent;
+      if(!/Dernière séance : /.test(tx)||!/Pesée : 62,4 kg le /.test(tx)||!/Contact : il y a 3 j/.test(tx)) return _echec(tx);
+      if(!(document.querySelector('.ccd-compteurs').compareDocumentPosition(z)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la ligne n’est pas sous les compteurs');
+      if(z.querySelectorAll('button.ccd-fait').length!==3) return _echec('trois liens attendus');
+      const fs=getComputedStyle(z).fontSize, ref=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
+      const sonde=document.createElement('div'); sonde.style.fontSize='var(--fs-xs)'; document.body.appendChild(sonde);
+      const attendu=getComputedStyle(sonde).fontSize; sonde.remove();
+      return fs===attendu?true:_echec('taille '+fs+' au lieu de '+attendu+' ('+ref+')');
+    }));
     // ── 06/10/2026 — LES RÉGLAGES DE COACHING ET L'ACCUEIL PERSONNALISÉ ──
     const _RG=(fn)=>{
       const sv={u:currentUser,users:DB.get('users'),push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,conf:window.rcConfirm,

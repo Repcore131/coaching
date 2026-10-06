@@ -13456,3 +13456,14 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .acc-sw input:checked+span::after{transform:translateX(16px)}
 .acc-fl{width:36px;min-height:36px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);cursor:pointer}
 .acc-fl:disabled{opacity:.3;cursor:default}
+
+/* ══ LES FAITS CLES EN TETE DE FICHE (build 1812) ══════════════════════════
+   Une ligne sous les quatre compteurs : derniere seance, pesee, contact.
+   Chaque fait est un bouton vers sa section ; la ligne passe a la ligne sur
+   mobile plutot que de deborder. */
+.ccd-faits{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;margin-top:8px;font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.ccd-faits[hidden]{display:none}
+.ccd-fait{background:none;border:none;padding:4px 0;min-height:32px;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.ccd-fait strong{color:var(--text);font-weight:700}
+.ccd-fait:hover strong,.ccd-fait:focus-visible strong{text-decoration:underline}
+.ccd-fait-sep{color:var(--text-faint)}
