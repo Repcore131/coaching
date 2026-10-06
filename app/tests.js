@@ -56014,6 +56014,81 @@ async function testExercices(){
       // Sous le plancher : une confirmation explicite.
       return /Sous son plancher/.test(String(nutTransmettre))?true:_echec('pas de confirmation du plancher');
     }));
+    // ── 06/10/2026 — L'EMPREINTE MORPHO : UNE CORRECTION DE BILAN RELANCE LES ANALYSES ──
+    const _EMP=()=>{
+      const t=Date.now(), d=t-40*864e5;
+      const ph=v=>({cle:'bilan/'+d+'/deb-photo-'+v,url:'https://res.t/'+v+'-1.jpg'});
+      const b={type:'depart',date:d,'deb-photo-face':ph('face'),'deb-photo-back':ph('back'),'deb-photo-side':ph('side'),
+        'deb-rotule':'47','deb-height':'175','deb-weight':'70'};
+      const u={id:'aemp',email:'emp@t.fr',role:'athlete',gender:'H',coachId:'cemp',bilans:[b]};
+      u.morphoAnat={v:ANAT_VERSION,date:t-39*864e5,bilan:d,face:{w:1,h:1,auto:{},man:{epaule_l:[0.4,0.3,1]}},dos:{w:1,h:1,auto:{}},
+        profil:{w:1,h:1,auto:{}},profilLu:ph('side').url,empreinte:empreinteMorpho(b),empreintes:empreintePhotos(b)};
+      u.morphoInitiale={etat:'gelee',date:t-39*864e5,cmParPx:0.4,longueurs:{femur:{cm:40,marge:0.5}},rapports:{},
+        photoRef:{bilan:d,vue:'face',depart:true},essais:1,empreinte:empreinteMorpho(b)};
+      return {u,b};
+    };
+    ok('Empreinte : la photo de face remplacée → anatARefaire et morphoInitialeARefaire vrais ; le poids seul → faux',()=>{
+      const {u,b}=_EMP();
+      if(anatARefaire(u,anatPremierBilan(u))) return _echec('anatARefaire avant tout changement');
+      if(morphoInitialeARefaire(u)) return _echec('morphoInitialeARefaire avant tout changement');
+      b['deb-weight']='71.5'; b.modifieLe=Date.now();
+      if(anatARefaire(u,anatPremierBilan(u))||morphoInitialeARefaire(u)) return _echec('le poids relance une analyse');
+      b['deb-photo-face']={cle:'bilan/'+b.date+'/deb-photo-face',url:'https://res.t/face-2.jpg'};
+      if(!anatARefaire(u,anatPremierBilan(u))) return _echec('anatARefaire ne voit pas la photo remplacée');
+      if(!morphoInitialeARefaire(u)) return _echec('morphoInitialeARefaire ne voit pas la photo remplacée');
+      // La rotule corrigée, seule, relance aussi : c'est l'échelle.
+      const r=_EMP(); r.b['deb-rotule']='49';
+      if(!anatARefaire(r.u,anatPremierBilan(r.u))||!morphoInitialeARefaire(r.u)) return _echec('la rotule corrigée ne relance rien');
+      // Une photo encore en base64 compte par son contenu, sans être recopiée.
+      const x=_EMP(); x.b['deb-photo-back']='data:image/jpeg;base64,'+'A'.repeat(500);
+      const e1=empreinteMorpho(x.b); x.b['deb-photo-back']='data:image/jpeg;base64,'+'B'.repeat(500);
+      if(empreinteMorpho(x.b)===e1) return _echec('deux photos base64 différentes, une seule empreinte');
+      return /^[0-9a-z]{1,8}$/.test(e1)?true:_echec('empreinte : '+e1);});
+    ok('Empreinte : photo retirée du bilan analysé → l’analyse gelée repasse en attente, avec la raison',()=>{
+      const {u,b}=_EMP();
+      const sv={users:DB.get('users'),push:CLOUD.pushOne};
+      try{
+        DB.set('users',{'emp@t.fr':u}); CLOUD.pushOne=()=>Promise.resolve(true);
+        delete b['deb-photo-side'];
+        if(morphoInitialePeutEtre(u)!==false) return _echec('une analyse partie sans les trois photos');
+        const m=(DB.get('users')||{})['emp@t.fr'].morphoInitiale;
+        return m.etat==='attente'&&/retirée/.test(m.raison)?true:_echec(JSON.stringify(m));
+      } finally { DB.set('users',sv.users); CLOUD.pushOne=sv.push; }});
+    ok('_bilEnregistrerModif : un bilan de départ qui reçoit ses trois photos appelle morphoInitialePeutEtre ; l’en-tête dit la date de l’analyse et de la photo',()=>{
+      const {u,b}=_EMP();
+      ['deb-photo-face','deb-photo-back','deb-photo-side'].forEach(k=>delete b[k]);
+      delete u.morphoInitiale;
+      const sv={u:currentUser,users:DB.get('users'),push:CLOUD.pushOne,sav:saveUser,mip:morphoInitialePeutEtre,mig:photosBilanMigrer,
+        q:_quitterEcranBilan,oc:openBilanChoice,oh:ouvrirHistoriqueBilans,ed:_bilEdition,bd:bilData,t:window.toast};
+      let appels=0, vu=null;
+      try{
+        DB.set('users',{'emp@t.fr':u}); currentUser=u;
+        saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.toast=()=>{};
+        photosBilanMigrer=()=>Promise.resolve({faites:0});
+        _quitterEcranBilan=()=>{}; openBilanChoice=()=>{}; ouvrirHistoriqueBilans=()=>{};
+        morphoInitialePeutEtre=x=>{ appels++; vu=x; return true; };
+        const h=historiqueBilans(u)[0];
+        _bilEdition={id:h.id,nom:h.nom};
+        bilData={};
+        Object.keys(b).filter(k=>BIL_PREFIXES_REPONSES.test(k)).forEach(k=>{ bilData[k]=b[k]; });
+        const ph=v=>({cle:'bilan/'+b.date+'/deb-photo-'+v,url:'https://res.t/'+v+'-9.jpg'});
+        bilData['deb-photo-face']=ph('face'); bilData['deb-photo-back']=ph('back'); bilData['deb-photo-side']=ph('side');
+        _bilEnregistrerModif();
+        if(appels!==1||vu!==u) return _echec(appels+' appel(s)');
+        // Sans changement : aucun appel.
+        _bilEdition={id:h.id,nom:h.nom};
+        _bilEnregistrerModif();
+        if(appels!==1) return _echec('un enregistrement sans changement relance l’analyse');
+      } finally {
+        currentUser=sv.u; DB.set('users',sv.users); CLOUD.pushOne=sv.push; saveUser=sv.sav; morphoInitialePeutEtre=sv.mip;
+        photosBilanMigrer=sv.mig; _quitterEcranBilan=sv.q; openBilanChoice=sv.oc; ouvrirHistoriqueBilans=sv.oh;
+        _bilEdition=sv.ed; bilData=sv.bd; window.toast=sv.t;
+      }
+      // L'en-tête : une ligne discrète, la date de l'analyse et celle de la photo.
+      const r=_EMP(); r.u.morphoAnat.remplacee=Date.UTC(2026,9,3,12);
+      const l=_htmlAnatQuand(r.u.morphoAnat,anatPremierBilan(r.u));
+      return /^<div class="an-quand">Analyse du \d\d\/\d\d, sur la photo du 03\/10 · photo remplacée par l’élève le 03\/10 : analyse refaite<\/div>$/.test(l)
+        ?true:_echec(l);});
     // ── 06/10/2026 — LES FAITS CLÉS EN TÊTE DE FICHE ──
     const _FC=(fn)=>{
       const sv={u:currentUser,users:DB.get('users'),cid:currentClientId,push:CLOUD.pushOne,t:window.toast,ts:window.toastSync,sav:saveUser};

@@ -13467,3 +13467,6 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .ccd-fait strong{color:var(--text);font-weight:700}
 .ccd-fait:hover strong,.ccd-fait:focus-visible strong{text-decoration:underline}
 .ccd-fait-sep{color:var(--text-faint)}
+
+/* ══ L'EN-TETE DE L'ANALYSE : QUAND, ET SUR QUELLE PHOTO (build 1815) ══════ */
+.an-quand{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.45;margin-top:2px}

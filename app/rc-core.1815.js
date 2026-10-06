@@ -18490,8 +18490,75 @@ function morphoInitialeEtat(u){
   if(!m||typeof m!=='object') return 'absente';
   return (m.etat==='gelee')?'gelee':'attente';
 }
-// PURE. Vrai quand il faut (re)tenter : jamais si c'est gele.
-function morphoInitialeARefaire(u){ return morphoInitialeEtat(u)!=='gelee'; }
+// ══ L'EMPREINTE DES SOURCES (06/10/2026) ═══════════════════════════════════
+// Trois analyses dépendent du bilan de départ — morphoAnat, morphoInitiale,
+// morphoPhoto — et la correction d'un bilan (modifierBilan) garde sa date :
+// remplacer la photo de face ou corriger la rotule ne relançait rien.
+// L'EMPREINTE résume ce que ces analyses LISENT : les trois photos (l'url, la
+// clé de photoBilanRef, ou le contenu d'une photo encore en base64), la hauteur
+// de rotule et la taille. Le poids, les réponses, le reste du bilan n'y
+// entrent pas : les corriger ne relance rien.
+// PURE. Hachage court (FNV-1a 32 bits, base 36) : une signature, pas un secret.
+function _hashMorpho(s){
+  let h=0x811c9dc5;
+  const t=String(s==null?'':s);
+  for(let i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+  return h.toString(36);
+}
+// PURE. La source d'UNE vue d'un bilan, sans rien lire hors du bilan.
+function _empreinteVue(b,vue){
+  if(!b) return '';
+  try{ const r=photoBilanRef(b,vue); if(r) return String(r.url||r.cle||''); }catch(e){}
+  for(const p of BILP_PREFIXES){
+    const v=b[p+vue];
+    if(typeof v==='string'&&v) return v.length>200?'h'+_hashMorpho(v):v;
+  }
+  const ph=b.photos&&b.photos[vue];
+  return (typeof ph==='string'&&ph)?(ph.length>200?'h'+_hashMorpho(ph):ph):'';
+}
+/** PURE. L'empreinte de chaque photo : {face, dos, profil}. */
+function empreintePhotos(b){
+  return {face:_hashMorpho(_empreinteVue(b,'face')),dos:_hashMorpho(_empreinteVue(b,'back')),
+    profil:_hashMorpho(_empreinteVue(b,'side'))};
+}
+/** PURE. L'empreinte d'un bilan pour les analyses morpho : photos, rotule, taille. */
+function empreinteMorpho(b){
+  if(!b||typeof b!=='object') return '';
+  const n=k=>{ const v=b[k]; return (v==null||String(v).trim()==='')?'':String(v).trim().replace(',','.'); };
+  return _hashMorpho(['face','back','side'].map(v=>_empreinteVue(b,v)).concat([n('deb-rotule'),n('deb-height')]).join('|'));
+}
+// PURE. Le bilan d'où vient la photo de l'analyse initiale.
+function _morphoInitialeBilan(u){
+  const m=u&&u.morphoInitiale, d=Number(m&&m.photoRef&&m.photoRef.bilan)||0;
+  if(!d) return null;
+  return ((u&&u.bilans)||[]).find(b=>b&&Number(b.date)===d)||null;
+}
+/**
+ * PURE. Les sources de l'analyse initiale ont-elles changé depuis qu'elle a été
+ * faite ? Une analyse sans empreinte (antérieure à ce lot) n'est pas remise en
+ * cause : on ne sait pas ce qu'elle a lu. Un essai tombé sur le moteur (hors
+ * ligne) se retente, lui, au prochain affichage de l'onglet Données.
+ */
+function morphoInitialeChangee(u){
+  const m=u&&u.morphoInitiale;
+  if(!m||typeof m!=='object') return false;
+  if(m.etat!=='gelee'&&m.moteur) return true;
+  if(!m.empreinte) return false;
+  if(m.etat==='gelee'){
+    const b=_morphoInitialeBilan(u);
+    return !b||empreinteMorpho(b)!==m.empreinte;
+  }
+  // En attente : l'empreinte est celle du bilan qu'on aurait lu.
+  const ph=morphoPhotoInitiale(u,0);
+  const b=ph?((u.bilans||[]).find(x=>x&&Number(x.date)===Number(ph.date))||null):null;
+  return !!b&&empreinteMorpho(b)!==m.empreinte;
+}
+// PURE. Vrai quand il faut (re)tenter. Une analyse gelée ne se refait pas…
+// sauf si ses sources ont changé : une analyse gelée sur une échelle corrigée
+// (ou une photo remplacée) n'est plus gelée.
+function morphoInitialeARefaire(u){
+  return morphoInitialeEtat(u)!=='gelee'||morphoInitialeChangee(u);
+}
 /**
  * PURE. La photo de face sur laquelle lire, et le bilan d'ou elle vient.
  *
@@ -18580,16 +18647,23 @@ async function morphoAnalyserInitiale(u,rang){
   const photo=morphoPhotoInitiale(u,rang);
   if(!photo) return {etat:'attente',date:Date.now(),
     raison:'aucun bilan ne porte les trois photos',essais:(((u.morphoInitiale||{}).essais)||0)+1};
+  const bilan=((u.bilans||[]).find(b=>b&&Number(b.date)===Number(photo.date)))||null;
+  const emp=empreinteMorpho(bilan);
+  // `moteur` : l'échec ne vient pas de la photo (hors ligne) ; on retentera.
   try{ await chargerMotionLab(); }catch(e){
     return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',
-      essais:(((u.morphoInitiale||{}).essais)||0)+1};
+      essais:(((u.morphoInitiale||{}).essais)||0)+1,moteur:true};
   }
   const lire=(typeof window!=='undefined')?window.mlMorphoPhoto:null;
   if(typeof lire!=='function') return {etat:'attente',date:Date.now(),
     raison:'lecture de photo indisponible',essais:(((u.morphoInitiale||{}).essais)||0)+1};
   let r=null;
   try{ r=await lire(photo.src); }catch(e){ r=null; }
-  return morphoInitialeDe(u,r,photo,(((u.morphoInitiale||{}).essais)||0)+1);
+  const m=morphoInitialeDe(u,r,photo,(((u.morphoInitiale||{}).essais)||0)+1);
+  // L'EMPREINTE DE CE QUI A ÉTÉ LU : c'est elle qui dira, plus tard, si la photo
+  // ou la rotule ont changé (morphoInitialeChangee).
+  if(m&&!m.moteur) m.empreinte=emp;
+  return m;
 }
 /**
  * LE DECLENCHEMENT AUTOMATIQUE, a l'enregistrement d'un bilan.
@@ -18601,24 +18675,41 @@ async function morphoAnalyserInitiale(u,rang){
  *   regle demandee.
  * ⚠ ET JAMAIS SUR UNE ANALYSE GELEE. « Aux bilans suivants : rien. »
  */
+function _morphoInitialeEcrire(u,m){
+  const users=DB.get('users')||{};
+  const cle=u.email;
+  const dossier=(cle&&users[cle])||u;
+  dossier.morphoInitiale=m;
+  dossier.updatedAt=Date.now();
+  if(cle){ users[cle]=dossier; DB.set('users',users); CLOUD.pushOne(cle,dossier); }
+  if(currentUser&&currentUser.email===cle) currentUser.morphoInitiale=m;
+  if(u!==dossier) u.morphoInitiale=m;
+}
 function morphoInitialePeutEtre(u){
   if(!u||!morphoInitialeARefaire(u)) return false;
+  // UNE ANALYSE GELÉE DONT LES SOURCES ONT DISPARU (photo retirée, rotule
+  // effacée) ne reste pas affichée comme si de rien n'était : elle repasse en
+  // attente, avec la raison. L'ancienne lecture ne décrit plus le bilan.
+  const gelee=morphoInitialeEtat(u)==='gelee';
+  const essais=(((u.morphoInitiale||{}).essais)||0)+1;
   // La mesure du genou d'abord : sans elle il n'y a pas d'echelle, et charger
   // le moteur de pose pour s'en apercevoir serait plusieurs megaoctets pour
   // rien. Le lot 6 la reclame par ailleurs.
-  if(mesureMorpho(u,MORPHO_ROTULE).cm==null) return false;
-  if(!morphoPhotoInitiale(u,0)) return false;
+  if(mesureMorpho(u,MORPHO_ROTULE).cm==null){
+    if(gelee) _morphoInitialeEcrire(u,{etat:'attente',date:Date.now(),essais,
+      raison:'il manque la hauteur du sol au milieu de la rotule'});
+    return false;
+  }
+  if(!morphoPhotoInitiale(u,0)){
+    if(gelee) _morphoInitialeEcrire(u,{etat:'attente',date:Date.now(),essais,
+      raison:'la photo du bilan analysé a été retirée : aucun bilan ne porte plus les trois photos'});
+    return false;
+  }
   setTimeout(async()=>{
     try{
       const m=await morphoAnalyserInitiale(u,0);
       if(!m) return;
-      const users=DB.get('users')||{};
-      const cle=u.email;
-      const dossier=(cle&&users[cle])||u;
-      dossier.morphoInitiale=m;
-      dossier.updatedAt=Date.now();
-      if(cle){ users[cle]=dossier; DB.set('users',users); CLOUD.pushOne(cle,dossier); }
-      if(currentUser&&currentUser.email===cle) currentUser.morphoInitiale=m;
+      _morphoInitialeEcrire(u,m);
     }catch(e){}
   },0);
   return true;
@@ -66119,6 +66210,10 @@ function anatARefaire(c,pb){
   if(!a||typeof a!=='object') return true;
   if(a.v!==ANAT_VERSION) return true;
   if(Number(a.bilan)!==pb.date) return true;
+  // LA MÊME DATE NE VEUT PAS DIRE LE MÊME BILAN (06/10/2026) : une correction
+  // (modifierBilan) garde la date. L'empreinte dit si les photos, la rotule ou
+  // la taille ont changé ; une analyse sans empreinte (antérieure) est gardée.
+  if(a.empreinte&&pb.bilan&&a.empreinte!==empreinteMorpho(pb.bilan)) return true;
   // Une photo de profil jamais lue (analyse antérieure à A9, ou photo ajoutée
   // depuis) : on relit, une fois — les points posés à la main restent.
   return !!(pb.profil&&!a.profil&&a.profilLu!==pb.profil);
@@ -66210,6 +66305,14 @@ async function anatAnalyser(email,force){
     const cour=c.morphoAnat&&typeof c.morphoAnat==='object'?c.morphoAnat:null;
     const ancien=(cour&&cour.v>=2&&Number(cour.bilan)===pb.date)?cour
       :((cour&&cour.archives&&cour.archives[String(pb.date)])||null);
+    // ⚠ LES POINTS POSÉS À LA MAIN NE SURVIVENT PAS À UNE PHOTO REMPLACÉE : ils
+    //   désignaient des articulations sur une autre image. Vue par vue, ils
+    //   restent si la photo est la même, et partent sinon ; le coach le lit dans
+    //   l'en-tête (« photo remplacée par l'élève le … : analyse refaite »).
+    const vuesEmp=empreintePhotos(pb.bilan);
+    const ancEmp=ancien&&ancien.empreintes;
+    const remplacee=v=>!!(ancEmp&&ancEmp[v]&&ancEmp[v]!==vuesEmp[v]);
+    const unePhotoRemplacee=['face','dos','profil'].some(remplacee);
     const vue=async(nom,src)=>{
       let r=null;
       // LA DÉTECTION LIT LA PHOTO RÉGLÉE : luminosité, contraste et cadre du
@@ -66221,18 +66324,23 @@ async function anatAnalyser(email,force){
       if(!w||!h){ const d=await _anatDimensions(src); if(!d) return null; w=d.w; h=d.h; }
       // Rien de lu : un gabarit à caler, marqué comme tel.
       if(!auto) auto={pts:anatGabarit(w,h,nom),telephone:null,miroir:false,triangles:null,gabarit:true};
-      return {w,h,auto,man:(ancien&&ancien[nom]&&ancien[nom].man)||null};
+      return {w,h,auto,man:(!remplacee(nom)&&ancien&&ancien[nom]&&ancien[nom].man)||null};
     };
     const face=await vue('face',pb.face);
     const dos=await vue('dos',pb.dos);
     const profil=pb.profil?await vue('profil',pb.profil):null;
     if(!face) throw new Error('la photo de face n’a pas pu être lue');
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
-      face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{})};
+      face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{}),
+      empreinte:empreinteMorpho(pb.bilan),empreintes:vuesEmp};
+    // La date du remplacement : celle de la correction du bilan (modifieLe).
+    if(unePhotoRemplacee) res.remplacee=Number(pb.bilan&&pb.bilan.modifieLe)||Date.now();
+    else if(ancien&&ancien.remplacee) res.remplacee=ancien.remplacee;
     // ⚠ LES VERSIONS SAUVEGARDÉES NE PARTENT PLUS À LA DÉTECTION. Avant, « Refaire
     //   la détection » réécrivait morphoAnat sans elles : huit versions perdues
     //   d'un geste. Elles suivent le bilan, comme les points.
-    if(ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
+    // Sauf photo remplacée : leurs points désignaient l'ancienne image.
+    if(!unePhotoRemplacee&&ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
     // Le choix du bilan et ce qui a été mis de côté pour les autres bilans.
     if(cour&&cour.choix) res.choix=cour.choix;
     // Les silhouettes des autres bilans (A13) ne dépendent pas du bilan lu.
@@ -66817,12 +66925,22 @@ function renderAnatCoach(c){
  * une analyse que personne ne regardait. ccdVue les relance à l'arrivée sur
  * Données.
  */
+const _morphoInitRelancees=new Set();
 function _anatLancerFond(c){
   if(!c||_ccdVue!=='donnees') return false;
   // ⚠ L'ONGLET EST RELU AU DÉPART, PAS SEULEMENT AU RENDU. openClientDetail
   //   rend la nouvelle fiche AVANT de repasser sur Entraînement (un minuteur à
   //   0) : au rendu, _ccdVue est encore l'onglet de l'athlète d'avant.
   const surDonnees=()=>_ccdVue==='donnees';
+  // L'ANALYSE INITIALE DONT LES SOURCES ONT CHANGÉ (06/10/2026) — photo
+  // remplacée, rotule corrigée, essai tombé hors ligne : relancée ici, une fois
+  // par session, si l'élève n'a pas pu le faire à l'enregistrement.
+  try{
+    if(morphoInitialeChangee(c)&&!_morphoInitRelancees.has(c.email)){
+      _morphoInitRelancees.add(c.email);
+      setTimeout(()=>{ if(surDonnees()) try{ morphoInitialePeutEtre(c); }catch(e){} },80);
+    }
+  }catch(e){}
   try{
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
@@ -66854,6 +66972,15 @@ function _htmlAnatChoixBilan(c,pb,fige){
   return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
     +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
 }
+// PURE. La ligne discrète de l'en-tête : quand l'analyse a été faite, sur la
+// photo de quand, et si la photo a été remplacée depuis la première lecture.
+function _htmlAnatQuand(a,pb){
+  if(!a||!a.date) return '';
+  const jm=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }catch(e){ return ''; } };
+  const photo=Number(a.remplacee)||Number(pb&&pb.date)||0;
+  return '<div class="an-quand">Analyse du '+jm(a.date)+(photo?', sur la photo du '+jm(photo):'')
+    +(a.remplacee?' · photo remplacée par l’élève le '+jm(a.remplacee)+' : analyse refaite':'')+'</div>';
+}
 function _htmlAnat(c){
   if(!c) return '';
   // Mêmes gardes que la silhouette : une invitation n'a pas de corps, et une
@@ -66868,7 +66995,7 @@ function _htmlAnat(c){
   const grise=manque.length>0;
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
-    +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
+    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+'</div>'
     +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
@@ -79093,6 +79220,10 @@ function _bilEnregistrerModif(){
   try{ consommerDemandesMesure(x.b,currentUser); }catch(e){}
   Object.keys(x.b).filter(k=>k.includes('photo')).forEach(k=>{ try{ localStorage.removeItem('rc_pendingphoto_'+k); }catch(e){} });
   const enregistre=change.length?saveUser():true;
+  // LES ANALYSES MORPHO SUIVENT LA CORRECTION (06/10/2026), comme à l'envoi
+  // (saveBilanFinal) : photos ajoutées ou remplacées, rotule corrigée. Ce qui
+  // ne change pas leur empreinte (poids, réponses) ne relance rien.
+  if(change.length) try{ morphoInitialePeutEtre(currentUser); }catch(e){}
   if(change.length) (async()=>{ try{
     const r=await photosBilanMigrer(currentUser,{max:9});
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }

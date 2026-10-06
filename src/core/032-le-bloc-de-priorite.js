@@ -2148,6 +2148,10 @@ function _bilEnregistrerModif(){
   try{ consommerDemandesMesure(x.b,currentUser); }catch(e){}
   Object.keys(x.b).filter(k=>k.includes('photo')).forEach(k=>{ try{ localStorage.removeItem('rc_pendingphoto_'+k); }catch(e){} });
   const enregistre=change.length?saveUser():true;
+  // LES ANALYSES MORPHO SUIVENT LA CORRECTION (06/10/2026), comme à l'envoi
+  // (saveBilanFinal) : photos ajoutées ou remplacées, rotule corrigée. Ce qui
+  // ne change pas leur empreinte (poids, réponses) ne relance rien.
+  if(change.length) try{ morphoInitialePeutEtre(currentUser); }catch(e){}
   if(change.length) (async()=>{ try{
     const r=await photosBilanMigrer(currentUser,{max:9});
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }

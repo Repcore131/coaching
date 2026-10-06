@@ -1098,6 +1098,10 @@ function anatARefaire(c,pb){
   if(!a||typeof a!=='object') return true;
   if(a.v!==ANAT_VERSION) return true;
   if(Number(a.bilan)!==pb.date) return true;
+  // LA MÊME DATE NE VEUT PAS DIRE LE MÊME BILAN (06/10/2026) : une correction
+  // (modifierBilan) garde la date. L'empreinte dit si les photos, la rotule ou
+  // la taille ont changé ; une analyse sans empreinte (antérieure) est gardée.
+  if(a.empreinte&&pb.bilan&&a.empreinte!==empreinteMorpho(pb.bilan)) return true;
   // Une photo de profil jamais lue (analyse antérieure à A9, ou photo ajoutée
   // depuis) : on relit, une fois — les points posés à la main restent.
   return !!(pb.profil&&!a.profil&&a.profilLu!==pb.profil);
@@ -1189,6 +1193,14 @@ async function anatAnalyser(email,force){
     const cour=c.morphoAnat&&typeof c.morphoAnat==='object'?c.morphoAnat:null;
     const ancien=(cour&&cour.v>=2&&Number(cour.bilan)===pb.date)?cour
       :((cour&&cour.archives&&cour.archives[String(pb.date)])||null);
+    // ⚠ LES POINTS POSÉS À LA MAIN NE SURVIVENT PAS À UNE PHOTO REMPLACÉE : ils
+    //   désignaient des articulations sur une autre image. Vue par vue, ils
+    //   restent si la photo est la même, et partent sinon ; le coach le lit dans
+    //   l'en-tête (« photo remplacée par l'élève le … : analyse refaite »).
+    const vuesEmp=empreintePhotos(pb.bilan);
+    const ancEmp=ancien&&ancien.empreintes;
+    const remplacee=v=>!!(ancEmp&&ancEmp[v]&&ancEmp[v]!==vuesEmp[v]);
+    const unePhotoRemplacee=['face','dos','profil'].some(remplacee);
     const vue=async(nom,src)=>{
       let r=null;
       // LA DÉTECTION LIT LA PHOTO RÉGLÉE : luminosité, contraste et cadre du
@@ -1200,18 +1212,23 @@ async function anatAnalyser(email,force){
       if(!w||!h){ const d=await _anatDimensions(src); if(!d) return null; w=d.w; h=d.h; }
       // Rien de lu : un gabarit à caler, marqué comme tel.
       if(!auto) auto={pts:anatGabarit(w,h,nom),telephone:null,miroir:false,triangles:null,gabarit:true};
-      return {w,h,auto,man:(ancien&&ancien[nom]&&ancien[nom].man)||null};
+      return {w,h,auto,man:(!remplacee(nom)&&ancien&&ancien[nom]&&ancien[nom].man)||null};
     };
     const face=await vue('face',pb.face);
     const dos=await vue('dos',pb.dos);
     const profil=pb.profil?await vue('profil',pb.profil):null;
     if(!face) throw new Error('la photo de face n’a pas pu être lue');
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
-      face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{})};
+      face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{}),
+      empreinte:empreinteMorpho(pb.bilan),empreintes:vuesEmp};
+    // La date du remplacement : celle de la correction du bilan (modifieLe).
+    if(unePhotoRemplacee) res.remplacee=Number(pb.bilan&&pb.bilan.modifieLe)||Date.now();
+    else if(ancien&&ancien.remplacee) res.remplacee=ancien.remplacee;
     // ⚠ LES VERSIONS SAUVEGARDÉES NE PARTENT PLUS À LA DÉTECTION. Avant, « Refaire
     //   la détection » réécrivait morphoAnat sans elles : huit versions perdues
     //   d'un geste. Elles suivent le bilan, comme les points.
-    if(ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
+    // Sauf photo remplacée : leurs points désignaient l'ancienne image.
+    if(!unePhotoRemplacee&&ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
     // Le choix du bilan et ce qui a été mis de côté pour les autres bilans.
     if(cour&&cour.choix) res.choix=cour.choix;
     // Les silhouettes des autres bilans (A13) ne dépendent pas du bilan lu.
@@ -1796,12 +1813,22 @@ function renderAnatCoach(c){
  * une analyse que personne ne regardait. ccdVue les relance à l'arrivée sur
  * Données.
  */
+const _morphoInitRelancees=new Set();
 function _anatLancerFond(c){
   if(!c||_ccdVue!=='donnees') return false;
   // ⚠ L'ONGLET EST RELU AU DÉPART, PAS SEULEMENT AU RENDU. openClientDetail
   //   rend la nouvelle fiche AVANT de repasser sur Entraînement (un minuteur à
   //   0) : au rendu, _ccdVue est encore l'onglet de l'athlète d'avant.
   const surDonnees=()=>_ccdVue==='donnees';
+  // L'ANALYSE INITIALE DONT LES SOURCES ONT CHANGÉ (06/10/2026) — photo
+  // remplacée, rotule corrigée, essai tombé hors ligne : relancée ici, une fois
+  // par session, si l'élève n'a pas pu le faire à l'enregistrement.
+  try{
+    if(morphoInitialeChangee(c)&&!_morphoInitRelancees.has(c.email)){
+      _morphoInitRelancees.add(c.email);
+      setTimeout(()=>{ if(surDonnees()) try{ morphoInitialePeutEtre(c); }catch(e){} },80);
+    }
+  }catch(e){}
   try{
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
@@ -1833,6 +1860,15 @@ function _htmlAnatChoixBilan(c,pb,fige){
   return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
     +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
 }
+// PURE. La ligne discrète de l'en-tête : quand l'analyse a été faite, sur la
+// photo de quand, et si la photo a été remplacée depuis la première lecture.
+function _htmlAnatQuand(a,pb){
+  if(!a||!a.date) return '';
+  const jm=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }catch(e){ return ''; } };
+  const photo=Number(a.remplacee)||Number(pb&&pb.date)||0;
+  return '<div class="an-quand">Analyse du '+jm(a.date)+(photo?', sur la photo du '+jm(photo):'')
+    +(a.remplacee?' · photo remplacée par l’élève le '+jm(a.remplacee)+' : analyse refaite':'')+'</div>';
+}
 function _htmlAnat(c){
   if(!c) return '';
   // Mêmes gardes que la silhouette : une invitation n'a pas de corps, et une
@@ -1847,7 +1883,7 @@ function _htmlAnat(c){
   const grise=manque.length>0;
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
-    +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
+    +_htmlAnatChoixBilan(c,pb,!!edit)+_htmlAnatQuand(a,pb)+'</div>'
     +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
