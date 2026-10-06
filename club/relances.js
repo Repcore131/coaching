@@ -38,6 +38,8 @@ const TOUCH_OUTCOMES = {
   paye: { label: 'Payé', reached: true, win: true },
   sauve: { label: 'Sauvé', reached: true, win: true },
   ok: { label: 'Fait', reached: true, win: true },
+  maintien8: { label: 'Offre de maintien 8 semaines acceptée', reached: true, win: true },
+  reprise: { label: 'Séance de reprise réservée', reached: true, win: true },
   refus: { label: 'Refus', reached: true, lose: true },
   stop: { label: 'Ne plus contacter', reached: true, lose: true },
   envoye: { label: 'Message envoyé', reached: false },
@@ -52,10 +54,11 @@ const REL_KINDS = {
   anniversaire: { label: 'Anniversaire', base: 15, icon: 'cake' },
   prospect: { label: 'Prospect', base: 38, icon: 'magnet' },
   invite: { label: 'Invité', base: 42, icon: 'ticket' },
+  inactif: { label: 'Inactif 21 j', base: 36, icon: 'clock' },
 };
 const KIND_OUTCOMES = {
   impaye: ['promesse', 'paye'], resiliation: ['sauve'], suivi15: ['rdv'], suivi30: ['rdv'],
-  fincontrat: ['ok'], mandat: ['ok'], anniversaire: ['ok'], prospect: ['rdv'], invite: ['rdv'],
+  fincontrat: ['maintien8', 'ok'], inactif: ['reprise'], mandat: ['ok'], anniversaire: ['ok'], prospect: ['rdv'], invite: ['rdv'],
 };
 const REFUS_MOTIFS = {
   resiliation: () => RES_REASONS,
@@ -73,6 +76,7 @@ const CADENCES = {
   anniversaire: [{ d: 0, ch: 'sms' }],
   prospect: [{ d: 0, ch: 'call' }, { d: 1, ch: 'sms' }, { d: 3, ch: 'call' }, { d: 7, ch: 'call' }],
   invite: [{ d: 0, ch: 'call' }, { d: 2, ch: 'sms' }, { d: 5, ch: 'call' }],
+  inactif: [{ d: 0, ch: 'call' }, { d: 0, ch: 'sms' }, { d: 4, ch: 'call' }],
 };
 const relCfg = clubId => ({ lockMinutes: 15, quietFrom: '09:00', quietTo: '20:00', sundayOff: true, ...(deepGet(S, ['relanceCfg', clubId]) || {}) });
 
@@ -93,6 +97,8 @@ function relancesFor(clubId) {
       if (c.end && c.end >= t && c.end <= addDays(t, 45)) add('fincontrat', { clientId: c.id, anchor: c.end, due: addDays(c.end, -30), reason: `fin de contrat le ${dm(c.end)}` });
       if (c.birth) { const y = t.slice(0, 4); let bd = `${y}-${c.birth.slice(-5)}`; if (bd < t) bd = `${Number(y) + 1}-${c.birth.slice(-5)}`; if (bd <= addDays(t, 7)) add('anniversaire', { clientId: c.id, anchor: bd, due: bd, reason: `anniversaire le ${dm(bd)}` }); }
       if (Number(c.balance) > 0) add('impaye', { clientId: c.id, anchor: c.balanceAt || 'x', due: c.balanceAt || t, amount: Number(c.balance), reason: `${fmtE(Number(c.balance))} dus${c.balanceAt ? ' depuis le ' + dm(c.balanceAt) : ''}`, ownerHint: dunOf(c).ownerId || null });
+      // Plan T4 : sans passage depuis 21 jours, appel ou SMS et séance de reprise avec un coach.
+      if (c.lastVisit && (!c.end || c.end >= t)) { const n = Math.round((dateOf(t) - dateOf(c.lastVisit)) / 864e5); if (n >= 21 && n <= 120) add('inactif', { clientId: c.id, anchor: c.lastVisit, due: addDays(c.lastVisit, 21), reason: `aucun passage depuis ${n} jours (dernier le ${dm(c.lastVisit)})` }); }
       if (c.noMandate) add('mandat', { clientId: c.id, anchor: c.noMandateAt || 'x', due: t, reason: 'abonnement sans mandat de prélèvement' });
     }
     const byName = {}; Object.values(S.clients || {}).filter(c => c.clubId === clubId).forEach(c => { byName[tokensKey(c.name || '')] = c; });
@@ -160,6 +166,8 @@ function relQueue(clubId, scope = 'mine') {
 
 // ── Modèles de messages et scripts d'appel ────────────────────────────────
 const TPL_DEFAULT = {
+  inactif: { sms: 'Bonjour {prenom}, on ne vous a pas vu au Fitness Park {club} depuis quelques semaines. Pour reprendre en douceur, je vous offre une séance de reprise avec un coach : quel jour vous arrange ? {commercial}',
+    script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. On ne vous a pas vu depuis quelques semaines, je voulais prendre de vos nouvelles.', 'Qu’est-ce qui vous a éloigné du club : le temps, la motivation, une blessure ?', 'Je vous propose une séance de reprise offerte avec un coach, pour repartir sur un programme adapté. Quel jour vous arrange ?'] },
   prospect: { sms: 'Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Merci pour votre intérêt ! Je vous propose une séance découverte gratuite cette semaine : quel jour vous arrange ? Répondez STOP pour ne plus recevoir ces messages.',
     script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. Vous nous avez laissé vos coordonnées, je vous appelle pour répondre à vos questions.', 'Qu’est-ce qui vous motive aujourd’hui : reprendre le sport, perdre du poids, vous muscler ?', 'Je vous propose une séance découverte gratuite, avec un coach pour vous montrer le club. Plutôt en semaine ou le samedi ?', 'Rendez-vous noté. Je vous envoie l’adresse et l’horaire par SMS.'] },
   invite: { sms: 'Bonjour {prenom}, merci d’être venu découvrir le Fitness Park {club} ! Qu’avez-vous pensé de la séance ? Je peux vous présenter nos offres quand vous voulez. Répondez STOP pour ne plus recevoir ces messages.',
@@ -170,7 +178,7 @@ const TPL_DEFAULT = {
     script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Ça fait un mois que vous êtes avec nous, je voulais faire le point.', 'Vous atteignez ce que vous visiez en vous inscrivant ? Qu’est-ce qui vous aiderait à venir plus souvent ? Vous connaissez quelqu’un qui aimerait essayer ?', 'Je peux lui offrir une séance découverte. Vous me donnez son prénom et son numéro ?'] },
   anniversaire: { sms: 'Joyeux anniversaire {prenom} ! Toute l’équipe du Fitness Park {club} vous souhaite une belle journée. Une petite attention vous attend à l’accueil cette semaine.',
     script: ['Bonjour {prenom}, c’est {commercial} du Fitness Park {club}. On voulait simplement vous souhaiter un bon anniversaire de la part de toute l’équipe.', '', 'Passez nous voir à l’accueil cette semaine, on a une petite attention pour vous.'] },
-  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Renouvelez avant cette date pour garder vos conditions. Je reste disponible pour en parler. {commercial}, Fitness Park {club}',
+  fincontrat: { sms: 'Bonjour {prenom}, votre engagement {offre} se termine le {date_fin}. Avant cette date, je peux vous proposer une offre de maintien de 8 semaines pour continuer dans les meilleures conditions. On en parle ? {commercial}, Fitness Park {club}',
     script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Votre engagement {offre} arrive à échéance le {date_fin}, je voulais anticiper avec vous.', 'Comment s’est passée cette année ? Vous comptez continuer ? Votre formule correspond toujours à votre pratique ?', 'Si vous renouvelez avant le {date_fin}, je vous garde les conditions actuelles. On le fait ensemble à l’accueil ou par téléphone ?'] },
   impaye: { sms: 'Bonjour {prenom}, un prélèvement de {montant} n’a pas pu être effectué sur votre abonnement Fitness Park {club}. Vous pouvez régulariser à l’accueil. Merci, {commercial}',
     script: ['Bonjour {prenom}, {commercial} du Fitness Park {club}. Je vous appelle au sujet d’un prélèvement qui n’est pas passé, pour un montant de {montant}. Ça arrive souvent, je voulais simplement régler ça avec vous.', 'Vous étiez au courant ? Votre carte ou votre compte a changé récemment ?', 'Vous pouvez régler à l’accueil lors de votre prochaine séance. À quelle date je peux noter le règlement ?'] },
@@ -360,6 +368,7 @@ ACTIONS.relSave = el => {
   else if (o === 'paye') { const a = parseMontant(f.paidAmount) || rl.amount || 0; if (rl.client) ops.push(...markPaidOps(rl.client, a, 'equipe', rl.ownerId || ME.id, 'relances')); status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'paye' }; }
   else if (o === 'sauve') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'sauve' }; }
   else if (o === 'ok') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: 'ok' }; }
+  else if (o === 'maintien8' || o === 'reprise') { status = 'gagne'; extra = { closedAt: Date.now(), closedBy: ME.id, result: o }; if (o === 'maintien8' && rl.clientId) ops.push([['clients', rl.clientId, 'maintienAt'], today()]); }
   else if (o === 'refus') { status = 'perdu'; t.reason = f.reason; extra = { closedAt: Date.now(), closedBy: ME.id, lostReason: f.reason }; }
   else if (o === 'stop') { status = 'perdu'; extra = { closedAt: Date.now(), closedBy: ME.id, lostReason: 'Ne plus contacter' }; if (rl.clientId) ops.push([['clients', rl.clientId, 'optOutCall'], true], [['clients', rl.clientId, 'optOutSms'], true], [['clients', rl.clientId, 'optOutAt'], Date.now()]); }
   else if (o === 'mauvaisnumero') { if (rl.clientId) ops.push([['clients', rl.clientId, 'phoneBad'], true]); }

@@ -1085,3 +1085,25 @@ select.input { text-overflow: ellipsis; }
 .prof-colors { display: flex; flex-wrap: wrap; gap: 8px; }
 .prof-color { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
 .prof-color.on { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--fp); }
+/* Plan T4 */
+.plan-head { margin-bottom: 12px; gap: 10px; align-items: flex-end; }
+.plan-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 12px; }
+.plan-g { padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
+.plan-g:last-of-type { border-bottom: 0; }
+.plan-g .row { gap: 6px; align-items: baseline; margin-bottom: 6px; }
+.plan-v { font-family: var(--font-title); font-size: var(--t-24); font-weight: 700; }
+.plan-g.st-ok .plan-v { color: var(--ok); } .plan-g.st-warn .plan-v { color: var(--warn); } .plan-g.st-bad .plan-v { color: var(--bad); }
+.plan-svg { width: 100%; height: auto; display: block; margin: 6px 0; }
+.plan-bar { fill: var(--fp); } .plan-target { stroke: var(--bad); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.plan-lbl { fill: var(--text); font-size: 12px; font-weight: 700; } .plan-ax { fill: var(--muted); font-size: 11px; }
+.plan-camp { padding: 8px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.plan-big { font-family: var(--font-title); font-size: var(--t-40); font-weight: 700; line-height: 1.05; }
+.plan-mission { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plan-mission .row { gap: 8px; margin-bottom: 6px; } .plan-mission.ok b { color: var(--ok); }
+.plan-eq { margin: 6px 0 10px; }
+.plan-rapport { background: var(--surface-2); border-radius: var(--r-md); padding: 14px; display: grid; gap: 10px; }
+.plan-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.plan-kpis > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; }
+.plan-kpis span { color: var(--muted); font-size: var(--t-12); } .plan-kpis b { font-family: var(--font-title); font-size: var(--t-24); } .plan-kpis small { color: var(--muted); }
+.plan-home { display: block; text-decoration: none; color: inherit; margin: 12px 0; }
+.plan-home .plan-kpis { margin-top: 8px; }

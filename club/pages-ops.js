@@ -130,7 +130,10 @@ ACTIONS.resOpen = el => {
     <label class="field"><span>Responsable</span><select class="input" name="owner"><option value="">Aucun</option>${members.map(u => `<option value="${u.id}" ${r.ownerId === u.id ? 'selected' : ''}>${esc(fullName(u))}</option>`).join('')}</select></label>
     <label class="field"><span>Date de la demande</span><input class="input" type="date" name="date" value="${r.date}"></label>
     <label class="field"><span>Date effective</span><input class="input" type="date" name="effective" value="${r.effective || ''}"></label>
-    <label class="field full"><span>Motif</span><select class="input" name="reason">${[...new Set([...(r.reason ? [r.reason] : []), ...RES_REASONS])].map(o => `<option ${o === r.reason ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label></div>
+    <label class="field full"><span>Motif</span><select class="input" name="reason">${[...new Set([...(r.reason ? [r.reason] : []), ...RES_REASONS])].map(o => `<option ${o === r.reason ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>
+    <label class="field"><span>Nature</span><select class="input" name="nature"><option value="abonnement" ${r.nature !== 'option' ? 'selected' : ''}>Abonnement</option><option value="option" ${r.nature === 'option' ? 'selected' : ''}>Option (ULTIMATE, ACCESS+, Yanga…)</option></select></label>
+    <label class="row small" style="align-self:end;gap:8px"><input type="checkbox" name="sameDay" ${r.sameDay ? 'checked' : ''}> Résiliée le jour de la vente</label>
+    <label class="field full"><span>Justification (obligatoire pour une option résiliée le jour de la vente)</span><textarea class="input" name="justif" rows="2" maxlength="300">${esc(r.justif || '')}</textarea></label></div>
     <button class="btn primary" type="button" data-act="resDetailSave" data-id="${r.id}">Enregistrer</button></form>
     <h3 style="margin:20px 0 8px">Historique</h3>${resActions(r).slice().reverse().map(a => `<div style="padding:8px 0;border-bottom:1px solid var(--line)" class="small"><b>${esc(a.label)}</b>${a.note ? '<br><span class="muted">« ' + esc(a.note) + ' »</span>' : ''}<div class="muted">${esc(fullName(S.users[a.by]))} · ${dmy(isoOf(new Date(a.at)))} ${timeOf(a.at)}</div></div>`).join('') || '<p class="muted small">Aucune action pour l’instant.</p>'}
     ${isManager() ? `<button class="btn sm danger" style="margin-top:16px" data-act="resDel" data-id="${r.id}">Supprimer la demande</button>` : ''}` });
@@ -139,7 +142,8 @@ ACTIONS.resDetailSave = el => {
   const r = S.resiliations[el.dataset.id]; const f = formData($('#rdf'));
   // Champ par champ (jamais l'objet entier) : l'historique d'un collegue n'est pas ecrase.
   const P = k => ['resiliations', r.id, k];
-  const ops = [[P('status'), f.status], [P('saved'), f.status === 'sauvee'], [P('ownerId'), f.owner || null], [P('userId'), f.owner || null], [P('date'), f.date || r.date], [P('effective'), f.effective || null], [P('reason'), f.reason]];
+  if (f.nature === 'option' && f.sameDay && !(f.justif || '').trim()) { toast('Option résiliée le jour de la vente : la justification est obligatoire.'); return; }
+  const ops = [[P('nature'), f.nature], [P('sameDay'), !!f.sameDay], [P('justif'), (f.justif || '').trim().slice(0, 300) || null], [P('status'), f.status], [P('saved'), f.status === 'sauvee'], [P('ownerId'), f.owner || null], [P('userId'), f.owner || null], [P('date'), f.date || r.date], [P('effective'), f.effective || null], [P('reason'), f.reason]];
   if (f.status !== resStatus(r)) ops.push(resLogOp(r, 'Statut : ' + RES_STATUS[f.status].label));
   // Déjà sauvé : le point garde sa date (corriger le motif ne déplace pas le sauvetage d'un mois à l'autre).
   const svOld = S.entries['sv_' + r.id]; const keep = resStatus(r) === 'sauvee' && svOld;

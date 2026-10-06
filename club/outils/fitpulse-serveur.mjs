@@ -19,6 +19,7 @@ import tls from 'node:tls';
 import { pathToFileURL } from 'node:url';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { passagePush } from './fitpulse-push.mjs';
+import { passageRapport } from './fitpulse-rapport.mjs';
 
 const DB = process.env.FIREBASE_DB_URL || 'https://repcore-sync-default-rtdb.firebaseio.com';
 const SITE = (process.env.FITPULSE_URL || 'https://fitpulse-niort.web.app').replace(/\/$/, '');
@@ -297,7 +298,10 @@ async function main() {
   await api(tk, 'pulse/serveur/mail.json', { method: 'PUT', body: JSON.stringify(!!MDP) }).catch(e => console.log('état :', e.message));
   await api(tk, 'pulse/serveur/at.json', { method: 'PUT', body: JSON.stringify(Date.now()) }).catch(() => null);
   // Notifications push (téléphone fermé).
-  try { const S = (await (await api(tk, 'pulse.json')).json()) || {}; const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
+  let S = {}; try { S = (await (await api(tk, 'pulse.json')).json()) || {}; } catch (e) { console.log('Lecture : échec,', e.message); }
+  try { const mailer = MDP && !DRY ? (dest, objet, texte) => smtp(message(dest, { objet, texte, html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;white-space:pre-wrap">${texte.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>` }), dest) : null; console.log('Push :', JSON.stringify(await passagePush(api, tk, S, mailer))); } catch (e) { console.log('Push : échec,', e.message); }
+  // Rapport du lundi 15 h au directeur (et « Envoyer maintenant » depuis l'appli).
+  if (MDP || DRY) { try { console.log('Rapport :', await passageRapport(api, tk, S, async (dest, m) => { if (DRY) { console.log(`(essai) rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); return; } await smtp(message(dest, m), dest); console.log(`✓ rapport → ${dest.replace(/(.).+(@.+)/, '$1…$2')}`); })); } catch (e) { console.log('Rapport : échec,', e.message); } }
   // Essai de la messagerie (lancement manuel) : un e-mail à l'adresse d'envoi elle-même.
   if (process.env.ESSAI_MAIL === 'true') {
     if (!MDP) console.log('E-mail d’essai : MAIL_MOT_DE_PASSE absent');

@@ -182,7 +182,7 @@ ACTIONS.rsmCommit = () => {
       const importIds = { ...((old && old.importIds) || (old && old.importId ? { [old.importId]: true } : {})), ...(batchImp[id] || {}), [impId]: true }; batchImp[id] = importIds;
       // B2B : l'entreprise reste comptée à sa première facture, chez le commercial d'origine.
       const keepFirst = e.kpiId === 'b2b' && old && old.date && old.date <= e.date;
-      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}) }]);
+      ops.push([['entries', id], { id, userId: keepFirst ? old.userId || uid : uid, clubId: club, kpiId: e.kpiId, date: keepFirst ? old.date : e.date, value: e.value, source: 'import', importId: impId, importIds, rowKey: e.key, at: now, ...(e.clientNum ? { clientNum: String(e.clientNum) } : {}), ...(e.down ? { down: true } : {}), ...(e.offer ? { offer: String(e.offer).slice(0, 80) } : {}), ...(e.priceHT != null ? { priceHT: e.priceHT } : {}), ...(e.engaged != null ? { engaged: e.engaged } : {}), ...(e.option ? { option: true } : {}) }]);
     }
     // Export de gestion qui couvre une periode complete : une vente deja importee
     // sur cette periode mais absente du nouveau fichier (annulee dans Resamania)
@@ -263,7 +263,8 @@ ACTIONS.rsmCommit = () => {
       const status = x.saved ? 'sauvee' : old && old.status ? old.status : (x.effective || x.date) >= today() ? 'nouvelle' : 'resiliee';
       // Un dossier garde la liste de ses imports : annuler l'un ne cache pas ce qu'un autre porte, réimporter le fait réapparaître.
       const { hidden: _h, ...prev } = old || {}; const resImp = { ...(prev.importIds || (prev.importId ? { [prev.importId]: true } : {})), [impId]: true };
-      ops.push([['resiliations', id], { ...prev, importIds: resImp, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
+      const sameDay = prev.sameDay || (x.nature === 'option' && Object.values(S.clients).some(cc => cc.clubId === club && cc.start === x.date && tokensKey(cc.name || '') === tokensKey(x.client || '')));
+      ops.push([['resiliations', id], { ...prev, importIds: resImp, nature: prev.nature || x.nature || 'abonnement', sameDay, id, clubId: club, client: x.client, date: x.date, effective: x.effective || (old && old.effective) || null, reason: x.reason, type: x.type, status, saved: status === 'sauvee', ownerId: owner || null, userId: owner || null, importId: impId, source: 'resamania', at: (old && old.at) || now }]);
       if (status === 'sauvee' && owner && !S.entries['sv_' + id]) ops.push([['entries', 'sv_' + id], { id: 'sv_' + id, userId: owner, clubId: club, kpiId: 'sauvetage', date: x.date, value: 1, source: 'import', importId: impId, at: now }]);
       summary.resil++;
     }
@@ -289,6 +290,7 @@ ACTIONS.rsmCommit = () => {
       if (k === 'tti' || k === 'perf') { const uid = pick(v.seller) || 'x:' + safeKey(norm(v.seller.label)); ops.push([['rsm', 'controls', club, k, mk, uid], k === 'tti' ? { created: v.created, transformed: v.transformed } : v.contrats]); }
       else if (k === 'web') agg['web|' + v.date] = (agg['web|' + v.date] || 0) + v.amount;
       else if (k === 'payments') agg['payments|' + v.date + '|' + safeKey(v.moyen)] = (agg['payments|' + v.date + '|' + safeKey(v.moyen)] || 0) + v.amount;
+      else if (k === 'ca') ops.push([['rsm', 'controls', club, 'ca', v.month], { total: v.total, abo: v.abo, options: v.options, boutique: v.boutique, at: now }]);
       else if (k === 'lost' || k === 'gained') { ops.push([['rsm', 'controls', club, 'evo', mk, k], v.count]); if (k === 'lost') ops.push([['base', club, mk, 'sortants'], v.count]); }
     }
     Object.entries(agg).forEach(([k, v]) => ops.push([['rsm', 'controls', club, ...k.split('|')], Math.round(v * 100) / 100]));

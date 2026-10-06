@@ -5,7 +5,8 @@
 #  - remet les regles Fit Pulse si un deploiement de RepCore les a retirees ;
 #  - envoie l'e-mail d'invitation (code + installation) depuis la messagerie
 #    MAIL_UTILISATEUR, puis efface la demande et le code qu'elle porte ;
-#  - envoie les notifications push (club/outils/fitpulse-push.mjs).
+#  - envoie les notifications push (club/outils/fitpulse-push.mjs) ;
+#  - envoie le rapport du lundi 15 h au directeur (club/outils/fitpulse-rapport.mjs).
 # Le planning (cron) ne tourne que depuis la branche principale : ce fichier y
 # est copie, et il lit le code Fit Pulse sur la branche de travail.
 name: Fit Pulse envois
@@ -18,11 +19,16 @@ on:
     paths:
       - 'club/outils/fitpulse-serveur.mjs'
       - 'club/outils/fitpulse-push.mjs'
+      - 'club/outils/fitpulse-rapport.mjs'
       - '.github/workflows/fitpulse-mail.yml'
   workflow_dispatch:
     inputs:
       essai_mail:
         description: 'Envoyer un e-mail d’essai à l’adresse d’envoi'
+        type: boolean
+        default: false
+      rapport:
+        description: 'Lancement de 14 h 50 le lundi : attendre 15 h pile puis envoyer le rapport au directeur'
         type: boolean
         default: false
 
@@ -33,7 +39,7 @@ concurrency:
 jobs:
   envoyer:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,4 +54,6 @@ jobs:
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
           FITPULSE_URL: https://fitpulse-niort.web.app
           ESSAI_MAIL: ${{ inputs.essai_mail }}
+          RAPPORT_ATTENTE_MIN: ${{ inputs.rapport && '12' || '4' }}
+          TZ: Europe/Paris
         run: node club/outils/fitpulse-serveur.mjs

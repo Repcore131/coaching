@@ -145,8 +145,8 @@ PAGES.dashboard = {
       ${view === 'perso' && isManager() ? `<select class="input sm" style="width:auto" data-change="dashUser">${members.map(u => `<option value="${u.id}" ${u.id === who ? 'selected' : ''}>${esc(fullName(u))}${u.id === ME.id ? ' (moi)' : ''}</option>`).join('')}</select>` : ''}
       <span class="spacer"></span>${monthNav('dashMonth', mk)}</div>`;
     const head = `<div class="page-head"><div><h1>${view === 'club' ? esc(CLUB.name) : esc(fullName(subject))}</h1><p>${view === 'club' ? 'Objectifs cumulés de l’équipe active' : 'Objectifs individuels'} · ${monthLabel(mk)}</p></div></div>`;
-    return head + filters + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], [isManager() ? 'analyses' : 'historique', isManager() ? 'Analyses' : 'Mon historique'], ['entonnoir', 'Entonnoir'], ['opportunites', 'Opportunités']], tab)}</div>` +
-      (tab === 'opportunites' ? subPage(PAGES.opportunites.render()) : tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : tab === 'historique' || !isManager() ? myHistory(who || ME.id) : dashAnalyses(r, who));
+    return head + (tab === 'plan' ? '' : filters) + `<div style="margin-top:14px">${tabs('dashTab', [['objectifs', 'Objectifs'], [isManager() ? 'analyses' : 'historique', isManager() ? 'Analyses' : 'Mon historique'], ['entonnoir', 'Entonnoir'], ['plan', 'Plan T4'], ['opportunites', 'Opportunités']], tab)}</div>` +
+      (tab === 'plan' ? planPage() : tab === 'opportunites' ? subPage(PAGES.opportunites.render()) : tab === 'objectifs' ? dashObjectives(st, r, subject, who) : tab === 'entonnoir' ? funnelView(mk, who) : tab === 'historique' || !isManager() ? myHistory(who || ME.id) : dashAnalyses(r, who));
   },
   mount() { bindKpiDrag(); },
 };

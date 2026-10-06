@@ -195,6 +195,7 @@ PAGES.home = {
           <h1 class="banner-t">${hello} <span>${esc(ME.first)}</span></h1>
           <div class="row wrap banner-meta"><span class="jtag">J-${daysLeft - 1}</span><span>avant la fin du mois</span>${healthChip(weather)}<span class="muted-l">météo des paliers</span></div>
           <div class="banner-kpis">${bigKpis}${me && me.score != null ? `<a class="bk link" href="#/leaderboard"><span>Mon rang</span><b>#${me.rank}</b><small>sur ${rk.length} · ${plur(acc.streak, 'jour', 'jours')} de suite</small></a>` : ''}</div></div></section>
+      ${typeof planHomeCard === 'function' ? planHomeCard() : ''}
       ${weekDigestCard()}
       ${manager ? saisonBanner() : ''}
       ${wrapBanner()}

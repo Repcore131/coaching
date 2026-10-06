@@ -190,7 +190,7 @@ const RSM_DEFS = [
     path: 'Exports de gestion > Exporter > Membres & Ventes > Vente d’abonnements', filters: 'Date de début = 1er du mois (ou J-30), Date de fin = dernier jour', file: 'RSM_ventes-abonnements_AAAA-MM.csv',
     sig: has => has('numero du client') && has('nom du produit') && has('echeancier'),
     parse(c) {
-      const iNum = c.col('numero du client'), iProd = c.col('nom du produit'), iDate = c.col('date de creation'), iOffre = c.col('nom de l offre'), iEtat = c.col('etat'), iCanal = c.col('canal'), iPrix = c.col('prix toutes taxes'), iPre = c.colAt(2, 'prenom'), iNom = c.colAt(3, 'nom');
+      const iNum = c.col('numero du client'), iProd = c.col('nom du produit'), iDate = c.col('date de creation'), iOffre = c.col('nom de l offre'), iEtat = c.col('etat'), iCanal = c.col('canal'), iPrix = c.col('prix toutes taxes'), iHT = c.col('prix hors taxes'), iPass = c.find(h => h.includes('dernier passage')), iPre = c.colAt(2, 'prenom'), iNom = c.colAt(3, 'nom');
       const iCode = c.find(h => h.includes('code') && h.includes('initial')), iCN = c.find(h => h.includes('nom') && h.includes('initial') && !h.includes('prenom')), iCP = c.find(h => h.includes('prenom') && h.includes('initial'));
       // repli positionnel (colonnes 21-23) si les en-tetes du commercial sont muets
       const pos = k => (k >= 0 ? k : -1);
@@ -212,9 +212,9 @@ const RSM_DEFS = [
         if (PRODUCT_EXCLUDE.some(x => norm(prod).includes(x))) { c.skip('accès employé, VIP, transfert ou reconduction'); continue; }
         const sel = resolveSeller(gName(r), gCode(r));
         // offre et vente en ligne : utilisées par le KPI du matin (Ultimate / Access+, inscriptions en ligne)
-        c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: sel, offer: prod.trim(), online: sel.status === 'system' || KM_ONLINE_CANAL.test(r[iCanal] || '') });
+        c.entry({ key: `sub:${num}:${date}:${norm(r[iProd])}`, kpiId: 'contrats', date, value: 1, seller: sel, offer: prod.trim(), online: sel.status === 'system' || KM_ONLINE_CANAL.test(r[iCanal] || ''), priceHT: iHT >= 0 ? rsmNum(r[iHT]) || 0 : null, engaged: engagementOf(prod), option: OPTION_RE.test(prod) });
         const parrain = /parrain/.test(norm(`${prod} ${r[iCanal] || ''}`));
-        if (num) c.client(num, { num, name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), sellerObj: resolveSeller(gName(r), gCode(r)), source: parrain ? 'parrainage' : null, status: 'Client', ...c.contact(r) });
+        if (num) c.client(num, { num, ...(iPass >= 0 && rsmDate(r[iPass]) ? { lastVisit: rsmDate(r[iPass]) } : {}), name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), start: date, offer: r[iOffre] || r[iProd] || '', canal: r[iCanal] || '', price: rsmNum(r[iPrix]), sellerObj: resolveSeller(gName(r), gCode(r)), source: parrain ? 'parrainage' : null, status: 'Client', ...c.contact(r) });
       }
     },
   },
@@ -228,6 +228,16 @@ const RSM_DEFS = [
       const iTtc = c.find(h => h.includes('ttc') && h.includes('ligne')) >= 0 ? c.find(h => h.includes('ttc') && h.includes('ligne')) : (ttc[1] ?? ttc[0]);
       const iCI = c.find(h => h.includes('code') && h.includes('initial')), iNI = c.find(h => h.includes('nom') && h.includes('initial') && !h.includes('prenom')), iPI = c.find(h => h.includes('prenom') && h.includes('initial'));
       const seen = {}; const b2b = new Set();
+      // Chiffre d'affaires HT du mois (plan T4) : toutes les lignes, reconductions comprises, avoirs déduits.
+      const iHtl = c.find(h => h.includes('ht') && h.includes('ligne')); const ca = {};
+      for (const r of c.rows) {
+        const date = rsmDate(r[iDate]); if (!date || /annul/.test(norm(r[iEtat]))) continue;
+        let ht = iHtl >= 0 ? parseMontant(r[iHtl]) : NaN; if (Number.isNaN(ht)) continue; if (/avoir/.test(norm(r[iNat])) && ht > 0) ht = -ht;
+        const m = date.slice(0, 7); const o = ca[m] = ca[m] || { total: 0, abo: 0, options: 0, boutique: 0 }; o.total += ht;
+        const fam = `${r[iFam] || ''} ${r[iProd] || ''}`;
+        if (isNutrition(r[iFam], r[iCode], r[iProd]) || isAccessory(r[iCode])) o.boutique += ht; else if (OPTION_RE.test(fam)) o.options += ht; else if (/abonnement|adhesion|cotisation|reconduction|frais/.test(norm(fam))) o.abo += ht;
+      }
+      Object.entries(ca).forEach(([m, o]) => c.control('ca', { month: m, total: Math.round(o.total * 100) / 100, abo: Math.round(o.abo * 100) / 100, options: Math.round(o.options * 100) / 100, boutique: Math.round(o.boutique * 100) / 100 }));
       for (const r of c.rows) {
         const date = rsmDate(r[iDate]); if (!date) { c.skip('date illisible'); continue; }
         if (/annul/.test(norm(r[iEtat]))) { c.skip('pièce annulée'); continue; }
@@ -322,7 +332,8 @@ const RSM_DEFS = [
     sig: has => has('date d anniversaire') && has('numero'),
     parse(c) {
       const iNum = c.col('numero'), iBd = c.col('date d anniversaire'), iNom = c.colExact('nom'), iPre = c.col('prenom'), iEtat = c.col('etat'), iCom = c.col('commercial');
-      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: (rsmDate(r[iBd]) || '').slice(5) || null, status: r[iEtat] || '', seller: r[iCom] || '', ...c.contact(r) }); }
+      const iPass = c.find(h => h.includes('dernier passage') || h.includes('derniere visite') || h.includes('derniere entree'));
+      for (const r of c.rows) { if (!r[iNum]) continue; c.client(r[iNum], { num: r[iNum], ...(iPass >= 0 && rsmDate(r[iPass]) ? { lastVisit: rsmDate(r[iPass]) } : {}), name: `${r[iPre] || ''} ${r[iNom] || ''}`.trim(), birth: (rsmDate(r[iBd]) || '').slice(5) || null, status: r[iEtat] || '', seller: r[iCom] || '', ...c.contact(r) }); }
     },
   },
   {
@@ -366,7 +377,7 @@ const RSM_DEFS = [
         const etat = norm(r[iE]); const saved = /cancel|annul/.test(etat); if (/reject|rejet/.test(etat)) { c.skip('demande rejetée'); continue; }
         const client = (iCN >= 0 ? `${r[iCP] || ''} ${r[iCN] || ''}`.trim() : '') || r[iCt] || '';
         const seller = resolveSeller(r[iCr]);
-        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, seller });
+        c.resil({ key: `rs:${tokensKey(client)}:${d}:${norm(motif)}`, nature: OPTION_RE.test(`${r[iT] || ''} ${motif} ${iCt >= 0 ? r[iCt] || '' : ''}`) ? 'option' : 'abonnement', client, date: d, effective: iEff >= 0 ? rsmDate(r[iEff]) : null, reason: motif, type: r[iT] || '', saved, seller });
       }
       if (tech) c.warn(`${plur(tech, 'résiliation technique écartée', 'résiliations techniques écartées')} : elles gonfleraient le churn.`);
     },
@@ -447,6 +458,10 @@ function linesParse(c, avoir) {
 
 // Nom de contact sans civilité, parenthèses ni e-mail entre chevrons.
 const KM_ONLINE_CANAL = /web|en ligne|internet|site|online/i;
+// Options vendues (plan T4) : ULTIMATE, ACCESS+, Yanga.
+const OPTION_RE = /ultimate|acc?es+\s*\+|acc?es+\s*plus|yanga/i;
+// Engagement : CDD (6, 12, 24 mois) = engagé ; CDI ou « sans engagement » = libre ; sinon inconnu.
+function engagementOf(s) { const t = norm(s); if (/sans engagement|\bcdi\b|liberte|flex/.test(t)) return false; if (/\bcdd ?(3|6|12|24)\b|\b(12|24) mois\b|engag/.test(t)) return true; return null; }
 const cleanContact = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\([^)]*\)/g, ' ').replace(/^\s*(m\.|mme|mlle|monsieur|madame|mademoiselle)\s+/i, '').replace(/\s+/g, ' ').trim();
 // Fichier non reconnu : l'export connu le plus proche et les colonnes qui
 // manquent, pour corriger l'export (mauvais menu, colonnes masquées, fichier

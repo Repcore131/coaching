@@ -397,6 +397,7 @@ ACTIONS.coSave = el => {
   const co = { ...old, id, clubId: CLUB.id, nom: f.nom.trim().slice(0, 100), secteur: f.secteur.trim(), effectif: eff > 0 ? eff : null, contact: f.contact.trim(), tel: phoneE164(f.tel) || f.tel.trim(), statut: f.statut, ownerId: f.ownerId || null, prochaineAction: f.prochaineAction || null, offre: f.offre.trim(), notes: f.notes.trim().slice(0, 2000), at: old.at || Date.now() };
   const ops = [[['companies', id], co]];
   // Une entreprise passée « Signé » dans le mois compte une fois dans le KPI Contrat B2B de son responsable.
+  if (['rdv', 'proposition', 'signe'].includes(f.statut) && !old.rdvLe) co.rdvLe = today(); // plan T4 : rendez-vous entreprises du mois
   if (f.statut === 'signe' && old.statut !== 'signe' && co.ownerId) { co.signeLe = today(); ops.push([['entries', 'b2b_' + id], { id: 'b2b_' + id, userId: co.ownerId, clubId: CLUB.id, kpiId: 'b2b', date: today(), value: 1, source: 'manual', at: Date.now(), by: ME.id }]); }
   db.batch(ops); closeModal(); toast(f.statut === 'signe' && old.statut !== 'signe' ? 'Entreprise signée' : 'Enregistré');
 };

@@ -158,8 +158,9 @@ function prospSheet(id) {
     ${ph ? `<div class="cond-sms" hidden><div class="row wrap" style="gap:6px"><select class="input sm" name="tpl" style="width:auto">${sms.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><button type="button" class="btn sm" data-act="prSheetSms" data-id="${p.id}">${ico('chat')} Ouvrir le SMS</button></div></div>` : ''}
     <label class="field"><span>Comportement</span><select class="input" name="comp"><option value="">Choisir…</option>${PR_COMPORTEMENTS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></label>
     <div><div class="field-label">Température</div><div class="row" style="gap:6px">${Object.entries(PR_TEMPS).map(([k, t]) => `<label class="chip-radio"><input type="radio" name="temp" value="${k}" ${temp === k ? 'checked' : ''}><span>${t.label}</span></label>`).join('')}</div></div>
-    <div><div class="field-label">Et ensuite ?</div><div class="out-grid">${[['replan', 'Replanifier'], ['rdv', 'RDV pris'], ['ko', 'KO'], ['stop', 'Ne pas rappeler']].map(([k, l]) => `<label class="out-btn"><input type="radio" name="suite" value="${k}"><span>${l}</span></label>`).join('')}</div></div>
+    <div><div class="field-label">Et ensuite ?</div><div class="out-grid">${[['replan', 'Replanifier'], ['essai', 'Essai réservé'], ['rdv', 'RDV pris'], ['ko', 'KO'], ['stop', 'Ne pas rappeler']].map(([k, l]) => `<label class="out-btn"><input type="radio" name="suite" value="${k}"><span>${l}</span></label>`).join('')}</div></div>
     <div class="cond" data-for="replan"><div class="chips">${[['2h', 'Dans 2 h'], ['soir', 'Ce soir 18 h'], ['demain', 'Demain 10 h'], ['j2', 'Dans 2 jours'], ['j7', 'Dans 1 semaine']].map(([k, l]) => `<button type="button" class="chip-radio" data-act="prQuick" data-q="${k}"><span>${l}</span></button>`).join('')}</div><label class="field"><span>Relancer le</span><input class="input" type="datetime-local" name="nextAt"></label></div>
+    <div class="cond" data-for="essai"><label class="field"><span>Séance d’essai le</span><input class="input" type="datetime-local" name="essaiAt"></label><p class="muted small" style="margin:0">Visite non transformée : la relance de J+2 après l’essai se programme toute seule.</p></div>
     <div class="cond" data-for="rdv"><label class="field"><span>Rendez-vous le</span><input class="input" type="datetime-local" name="rdvAt"></label></div>
     <label class="field"><span>Note</span><textarea class="input" name="note" rows="2" maxlength="280" placeholder="Ce qu’il faut retenir"></textarea></label>
   </form>`, foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" id="pr-ok" data-act="prSave" data-id="${p.id}" disabled>Valider la relance</button>`,
@@ -168,7 +169,7 @@ function prospSheet(id) {
         const did = PR_CHECKS.some(([k]) => f['c_' + k]) || f.comp;
         // Comportement « RDV pris » ou « pas intéressé » : la suite logique est proposée.
         if (f.comp && !f.suite) { const sug = { rdv: 'rdv', pas_interesse: 'ko', trop_cher: 'ko', ailleurs: 'ko' }[f.comp] || 'replan'; const r = $(`input[name=suite][value=${sug}]`, m); if (r) { r.checked = true; return upd(); } }
-        $('#pr-ok', m).disabled = !(did && f.suite && !(f.suite === 'replan' && !f.nextAt) && !(f.suite === 'rdv' && !f.rdvAt)); };
+        $('#pr-ok', m).disabled = !(did && f.suite && !(f.suite === 'replan' && !f.nextAt) && !(f.suite === 'rdv' && !f.rdvAt) && !(f.suite === 'essai' && !f.essaiAt)); };
       m.addEventListener('input', upd); m.addEventListener('change', upd); upd();
     } });
 }
@@ -192,6 +193,7 @@ ACTIONS.prSave = el => {
   UI.prSmsSent = null;
   let patch;
   if (f.suite === 'replan') { const at = new Date(f.nextAt).getTime(); t.callbackAt = at; patch = { status: 'attente', nextAt: at }; if (outcome === 'joint') outcome = 'rappeler'; }
+  else if (f.suite === 'essai') { const e = new Date(f.essaiAt); t.essaiAt = e.getTime(); outcome = 'rdv'; const j2 = new Date(e.getFullYear(), e.getMonth(), e.getDate() + 2, 10).getTime(); patch = { status: 'attente', nextAt: j2, essaiAt: e.getTime() }; }
   else if (f.suite === 'rdv') { t.rdvAt = new Date(f.rdvAt).getTime(); outcome = 'rdv'; patch = { status: 'gagne', nextAt: null, closedAt: now, closedBy: ME.id, result: 'rdv' }; }
   else if (f.suite === 'ko') { outcome = 'refus'; t.reason = comp ? comp[1] : 'KO'; patch = { status: 'perdu', nextAt: null, closedAt: now, closedBy: ME.id, lostReason: t.reason }; }
   else { outcome = 'stop'; patch = { status: 'perdu', nextAt: null, closedAt: now, closedBy: ME.id, lostReason: 'Ne plus contacter' }; }
@@ -200,10 +202,11 @@ ACTIONS.prSave = el => {
   const ops = [touchOp(rl, t), ...relPatch(rl, { ...patch, ownerId: rl.ownerId || ME.id, attempts: (rl.attempts || 0) + (TOUCH_OUTCOMES[outcome] && TOUCH_OUTCOMES[outcome].reached ? 0 : calls), step: (rl.step || 0) + 1, lastAt: now, claimedBy: null })];
   if (f.temp && f.temp !== p.temp) ops.push([['prospects', p.id, 'temp'], f.temp]);
   if (f.suite === 'rdv') ops.push([['prospects', p.id, 'statut'], 'RDV pris']);
+  if (f.suite === 'essai') ops.push([['prospects', p.id, 'statut'], 'Essai réservé']);
   if (f.suite === 'stop') ops.push([['prospects', p.id, 'statut'], 'Ne pas rappeler']);
   if (f.suite === 'ko') ops.push([['prospects', p.id, 'statut'], 'Perdu']);
   db.batch(ops); closeModal();
-  toast(f.suite === 'replan' ? `Relance validée. Prochaine : ${relWhen(patch.nextAt)}` : f.suite === 'rdv' ? 'RDV noté' : f.suite === 'ko' ? 'Prospect passé en KO' : 'Ne plus rappeler : noté');
+  toast(f.suite === 'essai' ? `Essai noté. Relance J+2 : ${relWhen(patch.nextAt)}` : f.suite === 'replan' ? `Relance validée. Prochaine : ${relWhen(patch.nextAt)}` : f.suite === 'rdv' ? 'RDV noté' : f.suite === 'ko' ? 'Prospect passé en KO' : 'Ne plus rappeler : noté');
 };
 
 // ── Nouveau prospect / modifier la fiche ──────────────────────────────────
