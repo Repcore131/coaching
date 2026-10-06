@@ -214,18 +214,22 @@ function kmSyncCard() {
   const sy = deepGet(S, ['rsm', 'etat']) || {}; const srv = deepGet(S, ['serveur', 'rsm']) || {};
   const maj = srv.at ? `${dmy(isoOf(new Date(srv.at)))} à ${new Date(srv.at).toTimeString().slice(0, 5)}` : null;
   const frais = sy.at && Date.now() - sy.at < 20 * 60000;
-  const corps = sy.step === 'code' && frais ? `<div style="margin:8px 0;padding:10px 12px;border:1px solid var(--warn);border-radius:10px;background:var(--warn-soft)"><b>Resamania demande un code.</b> Ouvrez l’e-mail reçu de Resamania et recopiez le code ici :
-      <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:160px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div>`
-    : sy.step === 'connexion' && frais ? '<p class="small">Connexion à Resamania en cours…</p>'
-      : sy.step === 'maj' && frais ? '<p class="small">Récupération des exports en cours…</p>'
-        : sy.step === 'ok' && frais ? '<p class="small ok">Mise à jour terminée.</p>'
-          : sy.step === 'erreur' && frais ? `<p class="small bad">${esc(sy.msg || 'Échec de la mise à jour.')}</p>` : '';
+  // État en direct du robot (quand il tourne).
+  const etatLigne = frais && sy.step === 'connexion' ? '<p class="small">Connexion à Resamania en cours…</p>'
+    : frais && sy.step === 'code' ? `<p class="small" style="color:var(--warn)"><b>Resamania attend le code ci-dessous.</b></p>`
+      : frais && sy.step === 'maj' ? '<p class="small">Récupération des exports en cours…</p>'
+        : frais && sy.step === 'ok' ? '<p class="small ok">Mise à jour terminée.</p>'
+          : frais && sy.step === 'erreur' ? `<p class="small bad">${esc(sy.msg || 'Échec de la mise à jour.')}</p>` : '';
+  const attente = frais && sy.step === 'code';
   return `<div class="card" style="margin-bottom:14px"><div class="card-head">${ico('clock')}<h3>Mise à jour depuis Resamania</h3></div>
-    <p class="muted small" style="margin-top:-6px">Chaque soir à 21 h 30, le robot récupère les exports de la journée et met l’appli à jour pour le lendemain. Resamania envoie un code de connexion : tapez-le ici quand il est demandé.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>
-    ${corps}
-    <button class="btn sm" data-act="rsmSync">${ico('upload')} Lancer la mise à jour maintenant</button></div>`;
+    <p class="muted small" style="margin-top:-6px">Chaque soir à 21 h 30, le robot récupère les exports de la journée et met l’appli à jour pour le lendemain.${maj ? ` Dernière mise à jour : ${maj}.` : ''}</p>
+    <div class="row wrap" style="gap:8px;margin:4px 0 10px"><button class="btn sm primary" data-act="rsmSync">${ico('upload')} Lancer la mise à jour</button></div>
+    ${etatLigne}
+    <div style="padding:10px 12px;border:1px solid ${attente ? 'var(--warn)' : 'var(--line)'};border-radius:10px;${attente ? 'background:var(--warn-soft)' : ''}">
+      <b>Code Resamania</b> <span class="muted small">— dès que Resamania vous envoie le code par e-mail, tapez-le ici et validez.</span>
+      <form id="rsmf" class="row wrap" style="gap:8px;margin-top:8px"><input class="input sm" style="max-width:180px" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="code reçu par e-mail"><button class="btn primary sm" type="button" data-act="rsmCode">Valider le code</button></form></div></div>`;
 }
-ACTIONS.rsmSync = () => { if (!isManager()) return; db.set(['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }); toast('Demande enregistrée : le robot se connecte au prochain passage et vous demandera le code ici.'); };
+ACTIONS.rsmSync = () => { if (!isManager()) return; db.batch([[['rsm', 'demande'], { at: Date.now(), by: ME.id, day: today() }], [['rsm', 'etat'], { step: 'connexion', at: Date.now() }]]); toast('Mise à jour lancée : gardez l’e-mail du code Resamania à portée, tapez-le dès réception.'); };
 ACTIONS.rsmCode = () => { if (!isManager()) return; const f = formData($('#rsmf')); const c = (f.code || '').replace(/\s/g, ''); if (c.length < 4) { toast('Code incomplet.'); return; } db.set(['rsm', 'code'], { v: c, at: Date.now(), by: ME.id }); toast('Code transmis au robot.'); };
 ACTIONS.kmDay = el => { const K = kmState(); K.day = el.value || addDays(today(), -1); K.vals = {}; K.step = 0; render(); };
 ACTIONS.kmSet = el => { const K = kmState(); K.vals[el.dataset.k] = el.value; if (K.step === 2) K.step = 0; const lab = el.closest('.field'); if (lab) { lab.classList.toggle('km-todo', !el.value); const s = $('small', lab); if (s) s.textContent = 'modifié à la main'; } };
