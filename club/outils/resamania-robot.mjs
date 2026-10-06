@@ -14,7 +14,8 @@ import crypto from 'node:crypto';
 const require = createRequire(process.env.ROBOT_MODULES ? process.env.ROBOT_MODULES + '/' : import.meta.url);
 const URL0 = process.env.RESAMANIA_URL || 'https://fr.fitnesspark.app/fitnesspark/-/management/dashboard-v2';
 const ID = process.env.RESAMANIA_IDENTIFIANT || '', MDP = process.env.RESAMANIA_MOT_DE_PASSE || '';
-const MODE = process.env.ROBOT_MODE || 'reperage';
+// Le mode vient d'abord de l'argument de ligne de commande (ex. « besoin »), sinon de ROBOT_MODE.
+const MODE = process.argv[2] || process.env.ROBOT_MODE || 'reperage';
 const SORTIE = process.env.ROBOT_SORTIE || 'robot-sortie';
 const log = (...a) => console.log('[robot]', ...a);
 const court = (s, n = 60) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
