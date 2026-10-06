@@ -55948,6 +55948,41 @@ async function testExercices(){
         return true;
       } finally { currentUser=sv.u; window.saveUser=sv.s; window._appAuPremierPlan=sv.p; }});
 
+    // ══ BUILD 1844 — LES MICRONUTRIMENTS D'UN PLAN ═══════════════════════════
+    const _MPf={9001:{id:9001,n:'Riz test',k:130,p:3,c:28,l:0.3,fe:0.2,b12:0},9002:{id:9002,n:'Poulet test',k:120,p:23,c:0,l:2,fe:0.6,b12:0.4},
+      9003:{id:9003,n:'Pâtes test',k:150,p:5,c:30,l:1,fe:0.5},9004:{id:9004,n:'Sans fer',k:100,p:10,c:5,l:4},
+      9005:{id:9005,n:'Thon test',k:110,p:25,c:0,l:1,fe:1.0,b12:3},9006:{id:9006,n:'Oeuf test',k:140,p:12,c:1,l:10,fe:2.0,b12:1}};
+    const _MPch=id=>_MPf[id]||null;
+    const _MPu=(g,o)=>Object.assign({id:'mp',email:'mp@t.fr',role:'athlete',gender:g,bilans:[],nutrition:{}},o||{});
+    ok('microPlan : trois lignes connues → apports exacts',()=>{
+      const plan={squelette:[{ciqual:9001,q:200,u:'g',repas:'midi'},{ciqual:9002,q:150,u:'g',repas:'midi'},{ciqual:9003,q:100,u:'g',repas:'soir'}],sources:{}};
+      const mp=microPlan(plan,_MPu('H'),_MPch);
+      const fe=0.2*2+0.6*1.5+0.5*1;
+      if(Math.abs(mp.fe.apport-fe)>1e-6) return _echec('fer '+mp.fe.apport+' / '+fe);
+      if(mp.fe.partDocumentee!==1) return _echec('documenté '+mp.fe.partDocumentee);
+      return Math.abs(mp.fe.part-Math.round(fe/11*1000)/1000)<1e-9?true:_echec('part '+mp.fe.part);});
+    ok('microPlan : une ligne sans fer sort de l’apport ET du total (partDocumentee < 1)',()=>{
+      const plan={squelette:[{ciqual:9001,q:200,u:'g',repas:'midi'},{ciqual:9004,q:100,u:'g',repas:'midi'},{libre:'Ligne libre',q:1,u:'pièce',p:5,c:5,l:5,repas:'soir'}],sources:{}};
+      const mp=microPlan(plan,_MPu('H'),_MPch);
+      if(Math.abs(mp.fe.apport-0.4)>1e-6) return _echec('apport '+mp.fe.apport);
+      return mp.fe.partDocumentee<1&&mp.fe.partDocumentee>0?true:_echec('documenté '+mp.fe.partDocumentee);});
+    ok('microPlan : un catalogue de deux sources compte pour leur moyenne',()=>{
+      const u=_MPu('H',{nutrition:{manuel:true,macros:{on:{kcal:2000,p:150,g:200,l:60},off:{kcal:2000,p:150,g:200,l:60}}}});
+      const plan={squelette:[{src:'p',repas:'midi'},{src:'p',repas:'soir'},{ciqual:9001,q:100,u:'g',repas:'midi'}],
+        sources:{proteines:[9005,9006],glucides:[]}};
+      const cib=planCiblesJour(u,true,null), rest=planRestant(cib,planCouverture(plan,_MPch));
+      const src=planSources(plan,rest,_MPch).proteines;
+      if(src.liste.length!==2) return _echec('sources '+src.liste.length);
+      const n=src.nSources;
+      const att=0.2+src.liste.reduce((a,s)=>a+_MPf[s.id].fe*s.q*n/100,0)/2;
+      const mp=microPlan(plan,u,_MPch);
+      return Math.abs(mp.fe.apport-att)<1e-6?true:_echec(mp.fe.apport+' / '+att);});
+    ok('microPlan : le repère est celui de l’athlète (fer F ≠ H) ; « Sous 70 % : fer… »',()=>{
+      const plan={squelette:[{ciqual:9001,q:100,u:'g',repas:'midi'}],sources:{}};
+      const f=microPlan(plan,_MPu('F'),_MPch), h=microPlan(plan,_MPu('H'),_MPch);
+      if(f.fe.ref===h.fe.ref) return _echec('même repère '+f.fe.ref);
+      if(!/^Sous 70 % : fer/.test(syntheseMicroPlan(h))) return _echec(syntheseMicroPlan(h));
+      return microPlan({squelette:[],sources:{}},_MPu('H'),_MPch)===null?true:_echec('plan vide');});
     // ══ BUILD 1841 — RÉDUIRE LE SQUELETTE QUI DÉPASSE ═══════════════════════
     const _PRu=(g,kg,cm,ph)=>({id:'pr'+kg,email:'pr'+kg+'@t.fr',role:'athlete',gender:g,_evol_gender:g,_evol_height:String(cm),
       birthdate:'1996-01-01',sessions_config:[],

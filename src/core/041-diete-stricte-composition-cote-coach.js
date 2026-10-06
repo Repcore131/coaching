@@ -399,6 +399,9 @@ function _cplRafraichirApercu(){
   }catch(e){}
   const z=document.getElementById('cpl-apercu');
   if(z) z.innerHTML=_cplHtmlApercu();
+  // Les micronutriments du plan, recalculés à chaque retouche (build 1844).
+  const mz=document.getElementById('cpl-micro');
+  if(mz){ const o=!!(mz.querySelector('details')||{}).open; mz.innerHTML=_cplHtmlMicro(o); }
   const a=document.getElementById('cpl-alertes');
   if(a) a.innerHTML=_cplHtmlAlertes();
   // Les grammages des sources dépendent du restant : ils doivent se refaire à
@@ -669,6 +672,55 @@ function _cplHtmlImplicites(couv){
   if(h&&h.lipides>0) bouts.push(h.lipides+' g de lipides d\'huile de cuisson');
   if(!bouts.length) return '';
   return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px;padding-top:8px;border-top:1px solid var(--surface-2)">Compté dans le squelette sans ligne dédiée : ${escapeHtml(bouts.join(' · '))}.</div>`;
+}
+// L'ENCART « MICRONUTRIMENTS DU PLAN », replié par défaut (build 1844) : une
+// ligne de synthèse en tête, puis une ligne par nutriment. Rien côté athlète.
+let _cplMicroCharge=false;
+function _cplHtmlMicro(ouvert){
+  const c=_cplAthlete();
+  if(!c||!_cplPlan||!planSquelette(_cplPlan).length) return '';
+  if(!(Array.isArray(_ciqualDB)&&_ciqualDB.length)){
+    // La base arrive : on la charge, puis on repeint l'encart seul.
+    if(!_cplMicroCharge){
+      _cplMicroCharge=true;
+      Promise.resolve().then(()=>_loadCiqual()).then(()=>{
+        const mz=document.getElementById('cpl-micro'); if(mz) mz.innerHTML=_cplHtmlMicro(false);
+      }).catch(()=>{}).finally(()=>{ _cplMicroCharge=false; });
+    }
+    return '';
+  }
+  let mp=null; try{ mp=microPlan(_cplPlan,c); }catch(e){ mp=null; }
+  if(!mp) return '';
+  const cles=Object.keys(MICRO_REFS).filter(k=>mp[k]&&mp[k].partDocumentee>0);
+  if(!cles.length) return '';
+  const ligne=k=>{
+    const x=mp[k], pct=Math.round((x.part||0)*100), larg=Math.max(0,Math.min(100,pct));
+    const voir=(x.part!=null&&x.part<MICRO_COUVERTURE_SEUIL)
+      ?' <button type="button" class="lien-discret" style="background:none;border:none;padding:0;margin:0;font:inherit;color:var(--sub);text-decoration:underline;cursor:pointer" onclick="cplVoirAlimentsMicro(\''+k+'\',this)">Voir 3 aliments</button>':'';
+    return '<div style="padding:2px 0"><div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="flex:0 0 92px;font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap">'+escapeHtml(x.lib)+'</span>'
+      +'<span aria-hidden="true" style="flex:1;height:4px;background:var(--border);border-radius:var(--r-1);overflow:hidden"><span style="display:block;height:100%;width:'+larg+'%;background:var(--sub)"></span></span>'
+      +'<span style="flex:0 0 auto;min-width:38px;text-align:right;font-size:var(--fs-xs);color:var(--text-strong)">'+pct+' %</span></div>'
+      +(x.partDocumentee<0.9?'<div style="font-size:var(--fs-2xs);color:var(--text-faint)">calculé sur '+Math.round(x.partDocumentee*100)+' % du plan</div>':'')
+      +(voir?'<div style="font-size:var(--fs-2xs)">'+voir+'<span class="cpl-micro-al"></span></div>':'')
+      +'</div>';
+  };
+  return '<details class="cpl-micro"'+(ouvert?' open':'')+' style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:14px">'
+    // LA SYNTHÈSE EST DANS L'EN-TÊTE : elle se lit encart fermé, sans clic.
+    +'<summary style="font-size:var(--fs-xs);color:var(--sub);cursor:pointer">Micronutriments du plan (journée type)'
+    +'<div class="cpl-micro-synthese" style="font-size:var(--fs-xs);color:var(--text);margin:4px 0 0">'+escapeHtml(syntheseMicroPlan(mp))+'</div></summary>'
+    +cles.map(ligne).join('')
+    +'</details>';
+}
+// « Voir 3 aliments » : alimentsRichesEn, filtré par le régime et les évictions
+// de l'ATHLÈTE (build 1843).
+function cplVoirAlimentsMicro(cle,btn){
+  const c=_cplAthlete();
+  if(!c) return false;
+  let l=[]; try{ l=alimentsRichesEn(c,cle,3); }catch(e){ l=[]; }
+  const z=btn&&btn.parentNode&&btn.parentNode.querySelector('.cpl-micro-al');
+  if(z) z.textContent=l.length?' : '+l.map(x=>x.nom).join(' · '):' : aucune proposition';
+  return true;
 }
 function _cplHtmlAlertes(){
   const c=_cplAthlete();
@@ -985,6 +1037,7 @@ function renderPlanCoach(){
     <button class="btn btn-outline btn-doigt" style="width:100%;margin-bottom:14px"
       onclick="ouvrirFicheAlim(_cplAthlete())">Fiche alimentaire à imprimer</button>
     <div id="cpl-alertes">${_cplHtmlAlertes()}</div>
+    <div id="cpl-micro">${_cplHtmlMicro(false)}</div>
     <div id="cpl-apercu" style="margin-bottom:16px">${_cplHtmlApercu()}</div>
 
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">

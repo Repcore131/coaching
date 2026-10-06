@@ -2068,6 +2068,84 @@ function planReduireSquelette(plan,cibles,chercher){
   return {plan:p,changements};
 }
 
+// ══ LES MICRONUTRIMENTS D'UN PLAN, JOURNÉE TYPE (build 1844) ═════════════
+// PURE. {cle: {apport, ref, part, partDocumentee}} pour chaque clé de
+// MICRO_REFS. Le squelette se somme ligne à ligne (quantité × valeur / 100) ;
+// chaque catalogue de sources compte pour la MOYENNE de ses aliments, à la
+// portion prévue (grammage × nombre de repas qui la servent). Même règle
+// qu'ailleurs : un aliment sans valeur sort de l'apport ET du total
+// (partDocumentee, en kcal), il n'est jamais compté zéro. Une ligne libre ou
+// une portion sans fiche Ciqual compte dans le « non documenté ». Le repère
+// est celui de l'ATHLÈTE (refMicro sur son dossier).
+function microPlan(plan,user,chercher){
+  if(!plan) return null;
+  const res=_planResolveur(chercher);
+  const lignes=[];      // {kcal, f, g}  f = fiche Ciqual ou null, g = grammes/jour
+  for(const it of planSquelette(plan)){
+    if(!planLigneRetenue(plan,it)) continue;
+    const m=planMacrosItem(it,res);
+    const kcal=m?m.kcal:0;
+    let f=null, g=0;
+    if(it.ciqual!=null&&!planParUnite(planUniteItem(it))){   // en g ou mL (planParUnite : à la pièce)
+      f=_planAlimentLigne(it,res);
+      g=_planNb(it.q)||0;
+    }
+    lignes.push({kcal,f,g});
+  }
+  // Les sources au choix : la moyenne du catalogue, à la portion prévue.
+  let cib=null; try{ cib=planCiblesJour(user,true,null); }catch(e){ cib=null; }
+  const couv=planCouverture(plan,res);
+  const rest=cib?planRestant(cib,couv):null;
+  const srcs=rest?planSources(plan,rest,res):{proteines:{liste:[],nSources:0},glucides:{liste:[],nSources:0}};
+  const moyennes=[];
+  for(const bloc of [srcs.proteines,srcs.glucides]){
+    const l=(bloc.liste||[]).filter(s=>s&&s.id!=null&&s.q>0);
+    if(!l.length) continue;
+    const n=Math.max(1,bloc.nSources||1);
+    moyennes.push(l.map(s=>({f:res(s.id),g:s.q*n})));
+  }
+  if(!lignes.length&&!moyennes.length) return null;
+  const out={};
+  for(const cle in MICRO_REFS){
+    const ref=refMicro(_dossier(user)||user,cle);
+    let apport=0, kDoc=0, kTot=0;
+    for(const x of lignes){
+      kTot+=x.kcal;
+      const v=x.f&&x.f[cle];
+      if(v==null) continue;
+      apport+=Number(v)*x.g/100; kDoc+=x.kcal;
+    }
+    for(const cat of moyennes){
+      // Chaque source pèse 1/n du catalogue ; ses kcal aussi.
+      const n=cat.length;
+      for(const s of cat){
+        const kc=(Number(s.f&&s.f.k)||0)*s.g/100/n;
+        kTot+=kc;
+        const v=s.f&&s.f[cle];
+        if(v==null) continue;
+        apport+=Number(v)*s.g/100/n; kDoc+=kc;
+      }
+    }
+    out[cle]={apport:Math.round(apport*1000)/1000,ref:ref?ref.valeur:null,
+      part:(ref&&ref.valeur>0)?Math.round(apport/ref.valeur*1000)/1000:null,
+      partDocumentee:kTot>0?Math.round(kDoc/kTot*1000)/1000:0,
+      lib:MICRO_REFS[cle].lib,unite:MICRO_REFS[cle].unite};
+  }
+  return out;
+}
+// PURE. « Sous 70 % : fer, B12 » ou « Tous au-dessus de 70 % ».
+function syntheseMicroPlan(mp){
+  if(!mp) return '';
+  const bas=Object.keys(MICRO_REFS).filter(k=>mp[k]&&mp[k].partDocumentee>0&&mp[k].part!=null&&mp[k].part<MICRO_COUVERTURE_SEUIL);
+  if(!bas.length) return 'Tous au-dessus de '+Math.round(MICRO_COUVERTURE_SEUIL*100)+' %';
+  return 'Sous '+Math.round(MICRO_COUVERTURE_SEUIL*100)+' % : '
+    +bas.map(k=>_microLibCourt(mp[k].lib)).join(', ');
+}
+function _microLibCourt(lib){
+  const s=String(lib||'');
+  return s.indexOf('Vitamine ')===0?s.slice(9):s.charAt(0).toLowerCase()+s.slice(1);
+}
+
 // ══════════════ CE QUE LES DEUX ÉCRANS DU PLAN PARTAGENT ══════════════
 // Le code couleur des tableurs papier : protéines rouge, glucides jaune,
 // fruits vert. C'est ce que le coach et ses athlètes lisent depuis des années.
