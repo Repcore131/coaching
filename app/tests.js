@@ -50731,8 +50731,13 @@ async function testExercices(){
         morphoPhoto:{rapports:{A2photo:{v:0.9+i/100,date:t}}}}));
       if(morphoCalibrageCompte(pop,'A2')!==3) return _echec('le compte : '+morphoCalibrageCompte(pop,'A2'));
       const h=_htmlMorphoInitiale(u,pop);
-      if(h.indexOf('repère en cours de calibrage, 3 athlètes sur '+MORPHO_CALIB_MIN)<0)
-        return _echec('le trou ne s’explique pas : '+h);
+      // DEPUIS LE 06/10/2026, LE RAPPORT PHOTO SE SITUE SUR DE LEVA, DU MÊME
+      // SEXE ; sans sexe, il le dit au lieu de se situer.
+      if(h.indexOf('repère de 0,973 centre à centre (hommes, de Leva (1996)), dans la marge')<0)
+        return _echec('le repère n’est pas dit : '+h);
+      const sansSexe=Object.assign({},u); delete sansSexe.gender;
+      if(_htmlMorphoInitiale(sansSexe,pop).indexOf('il manque le sexe pour le situer')<0)
+        return _echec('sans sexe, le trou ne s’explique pas');
       // LES LONGUEURS PORTENT LEUR MARGE ET LEUR SOURCE.
       if(h.indexOf('40 cm, à ± 0,5 cm près')<0) return _echec('une longueur sans marge : '+h);
       if(h.indexOf('milieu de la rotule')<0) return _echec('la source de l’échelle n’est pas dite');
@@ -77397,7 +77402,7 @@ async function testExercices(){
           'deb-genou':String(48+i%2),'deb-bras':String(59+i%3),'deb-avantbras':String(27+i%2),
           'deb-epaules':String(40+i%3),'deb-bassin':String(29+i%2),'deb-poignet':String(17+i%2)}));
         return l; };
-      const _m2Cal=()=>morphoCalibrage(_m2Pop());
+      const _m2Cal=()=>morphoCalibrage(_m2Pop(),'H');
       const _m2Ax=(u,cal)=>{ const o={}; morphoAxes(u,{calibrage:cal||null}).forEach(a=>{o[a.cle]=a;}); return o; };
 
       ok('M2 — neuf axes, toujours, et dans l’ordre de lecture imposé',()=>{
@@ -77421,28 +77426,108 @@ async function testExercices(){
         // n'est pas la tête fémorale. Reprendre 1,20 ici serait un repère
         // inventé.
         const a=_m2Ax(_m2(_M2BASE));
-        for(const cle of ['A2','A4','A5']){
+        // A5 A UN REPÈRE PUBLIÉ PAR SEXE depuis le 06/10/2026 (ANAT_LARGEURS) :
+        // restent A2 et A4 au mètre, sans équivalent publié.
+        for(const cle of ['A2','A4']){
           if(a[cle].valeur==null) return _echec(cle+' ne se calcule pas');
           if(a[cle].position!=null) return _echec(cle+' se positionne sans repère');
           if(a[cle].manque!=='repere-a-calibrer') return _echec(cle+' : '+a[cle].manque);
           if(!/calibrera/.test(a[cle].texte)) return _echec(cle+' ne dit pas qu’il attend un repère');
         }
-        // A1 garde son repère ; A3 prend celui de son sexe (RATIO_BRAS, 06/10/2026).
-        if(a.A1.repere!==RATIO_JAMBES_REF||a.A3.repere!==RATIO_BRAS.H.ref)
+        // A1, A3 et A5 prennent le repère de leur sexe (06/10/2026).
+        if(a.A5.repere!==ANAT_LARGEURS.H.rapport) return _echec('A5 : '+a.A5.repere);
+        if(a.A1.repere!==MORPHO_A1_REF.H.ref||a.A3.repere!==RATIO_BRAS.H.ref)
           return _echec('les repères ont bougé : '+a.A1.repere+' / '+a.A3.repere);
         if(a.A3.position!=='neutre') return _echec('un bras de 60 cm pour 180 cm sort '+a.A3.position);
         return a.A1.position==='haut'?true:_echec('A1 : '+a.A1.position);});
 
       ok('M2 — le repère local demande huit athlètes, et pas un de moins',()=>{
         const pop=_m2Pop();
-        if(Object.keys(morphoCalibrage(pop.slice(0,7))).length!==0)
+        if(Object.keys(morphoCalibrage(pop.slice(0,7),'H')).length!==0)
           return _echec('sept athlètes ont suffi');
-        const c=morphoCalibrage(pop.slice(0,8));
-        if(!c.A2||!(c.A2.n===8)) return _echec('huit n’ont pas suffi');
+        const c=morphoCalibrage(pop.slice(0,8),'H');
+        // Mesures prises avant la consigne du livre : leur repère est « A2ancien ».
+        if(!c.A2ancien||!(c.A2ancien.n===8)) return _echec('huit n’ont pas suffi');
         // La marge ne descend jamais sous deux fois l'erreur propagée : sinon
         // on classerait du bruit de ruban en morphologie.
-        if(!(c.A2.marge>0.02)) return _echec('marge de '+c.A2.marge+' : sous le plancher');
-        return morphoCalibrage([]).A2===undefined?true:_echec('un repère sort de rien');});
+        if(!(c.A2ancien.marge>0.02)) return _echec('marge de '+c.A2ancien.marge+' : sous le plancher');
+        if(morphoCalibrage(pop).A2!==undefined) return _echec('un calibrage sans sexe');
+        return morphoCalibrage([],'H').A2===undefined?true:_echec('un repère sort de rien');});
+
+      // ── 06/10/2026 — AUCUN AXE OSSEUX SANS REPÈRE DU MÊME SEXE ──
+      // Moyennes ANSUR II : épaules / bassin 1,513 (H) et 1,344 (F).
+      const _sxF=(i,x)=>_m2(Object.assign({'deb-height':String(164+i%3),'deb-epaules':'36','deb-bassin':'26.8'},x||{}),null,null);
+      const _sxH=(i,x)=>_m2(Object.assign({'deb-height':String(178+i%3),'deb-epaules':'40.8','deb-bassin':'27'},x||{}),null,null);
+      const _femme=u=>{ u.gender='Femme'; return u; };
+      const _calCoach=pop=>({H:morphoCalibrage(pop,'H'),F:morphoCalibrage(pop,'F')});
+      ok('Sexes : 10 femmes ANSUR-moyennes et un homme moyen → A5 neutre ; l’inverse aussi',()=>{
+        const femmes=Array.from({length:10},(_,i)=>_femme(_sxF(i)));
+        const homme=_sxH(0);
+        const a=_m2Ax(homme,_calCoach(femmes)).A5;
+        if(a.position!=='neutre') return _echec('homme parmi des femmes : '+a.position+' ('+a.texte+')');
+        if(!/hommes/.test(a.repereTexte)) return _echec('le repère ne dit pas le sexe : '+a.repereTexte);
+        const hommes=Array.from({length:10},(_,i)=>_sxH(i));
+        const femme=_femme(_sxF(0));
+        const b=_m2Ax(femme,_calCoach(hommes)).A5;
+        if(b.position!=='neutre') return _echec('femme parmi des hommes : '+b.position);
+        // Le calibrage ne touche plus A5 : rien n'en sort, quel que soit le nombre.
+        return morphoCalibrage(hommes,'H').A5===undefined?true:_echec('A5 encore calibré');});
+      ok('Sexes : homme de 180 cm, entrejambe 86 cm → A1 neutre, au livre comme à l’ancienne',()=>{
+        const livre=_m2({'deb-entrejambe':'86','deb-entrejambe-proto':'livre'});
+        const a=_m2Ax(livre).A1;
+        if(a.position!=='neutre'||a.repere!==MORPHO_A1_REF.H.ref) return _echec('livre : '+a.position+' / '+a.repere);
+        if(Math.abs(a.marge-1.5*MORPHO_A1_REF.H.et)>1e-9) return _echec('marge '+a.marge);
+        if(/avant la consigne du livre/.test(a.repereTexte)) return _echec('le livre est pris pour l’ancienne consigne');
+        const ancien=_m2Ax(_m2({'deb-entrejambe':'86'})).A1;
+        if(ancien.position!=='neutre') return _echec('ancien : '+ancien.position);
+        if(!/avant la consigne du livre/.test(ancien.repereTexte)) return _echec('l’ancienne consigne n’est pas signalée');
+        return /livre serré à l’entrejambe/i.test(MORPHO_MESURES.find(m=>m.cle==='deb-entrejambe').consigne)?true:_echec('consigne');});
+      ok('Sexes : le calibrage du coach est PAR SEXE et par protocole ; sous 8 du même sexe, rien',()=>{
+        const mes={'deb-entrejambe':'84','deb-genou':'48','deb-bras':'60','deb-avantbras':'27'};
+        const pop=Array.from({length:5},(_,i)=>_sxH(i,mes)).concat(Array.from({length:7},(_,i)=>_femme(_sxF(i,mes))));
+        const cal=_calCoach(pop);
+        if(cal.H.A2ancien||cal.F.A2ancien||cal.H.A4||cal.F.A4) return _echec('douze athlètes de deux sexes ont suffi : '+JSON.stringify(cal));
+        const f=_m2Ax(_femme(_sxF(0,mes)),cal).A2;
+        if(f.position!=null||f.manque!=='repere-a-calibrer'||!/femmes/.test(f.texte)) return _echec('A2 femme : '+f.manque+' / '+f.texte);
+        // Huit femmes : leur repère existe, et il ne sert jamais à un homme.
+        const pop2=pop.concat([_femme(_sxF(1,mes))]);
+        const cal2=_calCoach(pop2);
+        if(!cal2.F.A2ancien||cal2.F.A2ancien.n!==8||cal2.F.A2ancien.sexe!=='F') return _echec('huit femmes : '+JSON.stringify(cal2.F));
+        if(_m2Ax(_sxH(0,mes),cal2).A2.position!=null) return _echec('un homme prend le repère des femmes');
+        if(_m2Ax(_sxH(0,mes),cal2.F).A2.position!=null) return _echec('un homme prend le repère des femmes (calibrage seul)');
+        // Les deux protocoles d'entrejambe ne se mélangent pas.
+        const livre=_femme(_sxF(0,Object.assign({'deb-entrejambe-proto':'livre'},mes)));
+        if(_m2Ax(livre,cal2).A2.position!=null) return _echec('le livre prend le repère de l’ancienne consigne');
+        return _m2Ax(_femme(_sxF(2,mes)),cal2).A2.position!=null?true:_echec('la femme n’a pas son repère');});
+      ok('Sexes : sexe absent → aucune position sur A1 à A6, et le sexe est demandé',()=>{
+        const u=_m2(Object.assign({},_M2BASE,{'deb-bras':'66'}));
+        delete u.gender;
+        const ax=_m2Ax(u,_m2Cal());
+        for(const k of ['A1','A2','A3','A4','A5','A6']){
+          if(ax[k].position!=null) return _echec(k+' prend position : '+ax[k].position);
+          if(ax[k].manque!=='sexe') return _echec(k+' : '+ax[k].manque);
+        }
+        const pr=morphoProfils(morphoAxes(u,{calibrage:_m2Cal()}));
+        if(pr.profils.some(p=>p.nature==='osseux')) return _echec('un profil osseux sort sans sexe');
+        return pr.aMesurer.filter(t=>t===MORPHO_SEXE_MANQUE).length===1?true:_echec('aMesurer : '+pr.aMesurer.join(' | '));});
+      ok('Sexes : A6 a un repère pour la femme (tables de poignet, par taille), aucun pour l’homme de 1,65 m ou moins',()=>{
+        const f=(t,p)=>_m2Ax(_femme(_m2({'deb-height':String(t),'deb-poignet':String(p)}))).A6;
+        if(f(170,16.2).position!=='neutre') return _echec('170 / 16,2 : '+f(170,16.2).position);
+        if(f(170,15.5).position!=='bas'||f(170,17).position!=='haut') return _echec('170 cm : '+f(170,15.5).position+' / '+f(170,17).position);
+        if(f(155,14.3).position!=='neutre'||f(155,13.5).position!=='bas') return _echec('155 cm');
+        if(!/MedlinePlus/.test(f(170,16.2).repereTexte)) return _echec('la source n’est pas dite');
+        const h=_m2Ax(_m2({'deb-height':'160','deb-poignet':'17'})).A6;
+        if(h.position!=null||h.manque!=='repere-conditionne') return _echec('homme 1,60 m : '+h.position);
+        return _m2Ax(_m2({'deb-height':'180','deb-poignet':'17'})).A6.position==='neutre'?true:_echec('homme 1,80 m');});
+      ok('Sexes : un entrejambe saisi avec la consigne du livre est marqué ; repris, il garde son protocole',()=>{
+        const neuf={date:3,'deb-entrejambe':'84'};
+        if(marquerProtoEntrejambe(neuf,[])!=='livre'||neuf['deb-entrejambe-proto']!=='livre') return _echec('saisie fraîche non marquée');
+        const repris={date:3,'deb-entrejambe':'84',reprises:['deb-entrejambe']};
+        if(marquerProtoEntrejambe(repris,[{date:1,'deb-entrejambe':'84'}])!==null||repris['deb-entrejambe-proto']) return _echec('reprise d’une ancienne mesure marquée « livre »');
+        const repris2={date:3,'deb-entrejambe':'84',reprises:['deb-entrejambe']};
+        if(marquerProtoEntrejambe(repris2,[{date:1,'deb-entrejambe':'84','deb-entrejambe-proto':'livre'}])!=='livre') return _echec('le protocole repris est perdu');
+        const vide={date:3};
+        return marquerProtoEntrejambe(vide,[])===null&&!('deb-entrejambe-proto' in vide)?true:_echec('un bilan sans entrejambe marqué');});
 
       ok('M2 — le mètre prime sur la photo, et un désaccord efface l’axe',()=>{
         const u=_m2(_M2BASE);
@@ -77716,18 +77801,25 @@ async function testExercices(){
         u.morphoPhoto={rapports:{A2photo:{v:1.02,date:Date.now()}}};
         const r=_morphoRapportPhoto(u,'A2');
         if(!r||r.valeur!==1.02) return _echec('le rapport ne se relit pas');
-        // Un rapport sans repère calibré ne prend pas position, comme le reste.
+        // LE REPÈRE DE LA PHOTO EST CELUI DE DE LEVA, DU MÊME SEXE (06/10/2026) ;
+        // sans sexe, la photo ne prend pas position.
         const a=_m2Ax(u).A2;
-        if(!a.photo||a.photo.position!=null) return _echec('la photo se positionne sans repère');
+        if(!a.photo||a.photo.repere!==Math.round(ANAT_REF.H.cuisse/ANAT_REF.H.jambe*1000)/1000)
+          return _echec('repère photo : '+(a.photo&&a.photo.repere));
+        if(a.photo.position!=='neutre') return _echec('1,02 sort '+a.photo.position);
+        const sans=_m2(_M2BASE); delete sans.gender;
+        sans.morphoPhoto=u.morphoPhoto;
+        const b=_m2Ax(sans).A2;
+        if(b.photo||b.position!=null||b.manque!=='sexe') return _echec('sans sexe : '+b.manque);
         return MORPHO_PHOTO_CONF===0.6?true:_echec('confiance photo : '+MORPHO_PHOTO_CONF);});
 
       ok('M6 — quand la photo contredit le mètre, on ne tranche pas',()=>{
         const pop=_m2Pop();
         // La population reçoit des rapports photo cohérents entre eux, pour
         // qu'un repère local existe.
-        pop.forEach((p,i)=>{ p.morphoPhoto={rapports:{A2photo:{v:0.9+(i%3)*0.01,date:Date.now()}}}; });
-        const cal=morphoCalibrage(pop);
-        if(!cal.A2photo) return _echec('aucun repère photo calibré');
+        // Le repère photo est celui de de Leva (hommes) : plus de calibrage photo.
+        const cal=morphoCalibrage(pop,'H');
+        if(!cal.A2ancien||cal.A2photo) return _echec('calibrage : '+Object.keys(cal).join(','));
         const u=_m2(_M2BASE);            // le mètre dit « fémur dominant »
         u.morphoPhoto={rapports:{A2photo:{v:0.70,date:Date.now()}}};  // la photo dit l'inverse
         const a=_m2Ax(u,cal).A2;
@@ -77735,7 +77827,7 @@ async function testExercices(){
         if(a.manque!=='desaccord') return _echec('motif : '+a.manque);
         if(!/se contredisent/.test(a.texte)) return _echec('le texte : '+a.texte);
         // D'accord, en revanche : la photo confirme et l'axe survit.
-        u.morphoPhoto={rapports:{A2photo:{v:1.02,date:Date.now()}}};
+        u.morphoPhoto={rapports:{A2photo:{v:1.10,date:Date.now()}}};
         const b=_m2Ax(u,cal).A2;
         return (b.position==='haut'&&/confirme/.test(b.texte))
           ?true:_echec('l’accord n’est pas restitué : '+b.position+' / '+b.texte);});

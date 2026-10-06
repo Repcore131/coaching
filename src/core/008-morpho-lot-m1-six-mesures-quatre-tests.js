@@ -23,8 +23,11 @@
  * celui de longueurSegment, qu'on ne réécrit pas.
  */
 const MORPHO_MESURES=Object.freeze([
+  // LA CONSIGNE DU LIVRE (06/10/2026) : celle d'ANSUR II, à qui A1 se compare.
+  // Le pubis est plus haut de plusieurs centimètres. Les bilans saisis avec
+  // elle portent deb-entrejambe-proto:'livre' (MORPHO_ENTREJAMBE_PROTO).
   {cle:'deb-entrejambe',lib:'Entrejambe',court:'Entrejambe',type:'longueur',origine:'M0',
-   consigne:'Du sol au pubis, pieds nus, dos au mur.'},
+   consigne:'Livre serré à l’entrejambe, tranche contre le mur\u00a0: du sol au-dessus du livre. Pieds nus, dos au mur.'},
   {cle:'deb-bras',lib:'Longueur de bras',court:'Bras',type:'longueur',origine:'M0',
    consigne:'Bras tendu le long du corps, de la pointe de l’épaule au poignet.'},
   // Du sol à l'interligne du genou : environ 27 % de la taille, soit 39 cm à
@@ -219,6 +222,10 @@ function _morphoTexteTest(d,v){
 // d'insertions : inverser cet ordre, c'est justifier par la génétique ce qui
 // relève de la programmation.
 //
+// ⚠ DEPUIS LE 06/10/2026, TOUS LES REPÈRES SONT PAR SEXE : A1 et A3 (ANSUR II),
+// A5 (ANAT_LARGEURS), A6 (MedlinePlus), les rapports photo (de Leva), et le
+// calibrage du coach pour A2 et A4 au mètre. Sans sexe, aucune position. Le
+// paragraphe qui suit décrit l'état d'avant.
 // ⚠ DEUX REPÈRES SEULEMENT SONT IMPORTÉS, ET CE SONT CEUX DU CODE.
 // A1 (0,46 ± 0,03) et A3 (0,45 ± 0,03, remplacé le 06/10/2026 par RATIO_BRAS, par sexe) existaient avant ce lot. A6 porte le
 // seul repère chiffré de l'étude qui soit assorti de sa condition — homme de
@@ -251,6 +258,49 @@ const MORPHO_ERREUR_CM=0.5;
 // En dessous de huit athlètes mesurés, aucun repère local : une médiane sur
 // trois personnes n'est pas une population.
 const MORPHO_CALIB_MIN=8;
+// LES REPÈRES PAR SEXE (06/10/2026). Une marge vaut 1,5 écart-type de
+// population, comme pour A3 (RATIO_BRAS_ET_MARGE), et jamais moins que
+// l'erreur de mesure propagée.
+const MORPHO_ET_MARGE=1.5;
+const MORPHO_SEXE_MANQUE='le sexe de l’athlète : les repères de population en dépendent';
+/**
+ * A1 — LA HAUTEUR D'ENTREJAMBE, en fraction de la taille, PAR SEXE.
+ *
+ * Source : ANSUR II (Gordon et al., 2014, NATICK/TR-15/007), fichiers publics —
+ * calcul RepCore du 06/10/2026, n = 4 082 hommes / 1 986 femmes. Le rapport
+ * crotch height / stature est calculé PERSONNE PAR PERSONNE, puis moyenné ;
+ * `et` est son écart-type. Même méthode qu'ANAT_LARGEURS.
+ *
+ * ⚠ ANSUR mesure jusqu'à l'entrejambe, pas jusqu'au pubis, plus haut de
+ *   plusieurs centimètres : d'où la consigne du livre (deb-entrejambe), et le
+ *   marqueur de protocole qui l'accompagne (MORPHO_ENTREJAMBE_PROTO).
+ */
+const MORPHO_A1_REF=Object.freeze({
+  H:Object.freeze({ref:0.4815,et:0.0141}),
+  F:Object.freeze({ref:0.4802,et:0.0151}),
+  SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore du 06/10/2026, n = 4 082 H / 1 986 F'
+});
+// Les bilans saisis avec la consigne du livre portent deb-entrejambe-proto :
+// les deux protocoles ne se mélangent jamais dans un calibrage.
+const MORPHO_ENTREJAMBE_PROTO='livre';
+/**
+ * A6 — LE TOUR DE POIGNET (« frame size »), en cm, PAR SEXE ET PAR TAILLE.
+ *
+ * Source : MedlinePlus (U.S. National Library of Medicine), « Calculating body
+ * frame size », table en pouces convertie au centimètre. Hommes de plus de
+ * 1,65 m : fine sous 16,5 cm, épaisse au-delà de 19 cm (repère d'origine).
+ * Femmes : fine sous 14 cm et épaisse au-delà de 14,6 cm sous 1,57 m ; 15,2 et
+ * 15,9 cm de 1,57 à 1,65 m ; 15,9 et 16,5 cm au-delà. Les tables ne donnent
+ * rien pour l'homme de 1,65 m ou moins : pas de repère, pas de position.
+ */
+const MORPHO_POIGNET_REF=Object.freeze({
+  H:Object.freeze([Object.freeze({tmin:165,fine:16.5,epaisse:19,lib:'Chez l’homme de plus de 1,65 m'})]),
+  F:Object.freeze([
+    Object.freeze({tmax:157.5,fine:14,epaisse:14.6,lib:'Chez la femme de moins de 1,57 m'}),
+    Object.freeze({tmin:157.5,tmax:165,fine:15.2,epaisse:15.9,lib:'Chez la femme de 1,57 à 1,65 m'}),
+    Object.freeze({tmin:165,fine:15.9,epaisse:16.5,lib:'Chez la femme de plus de 1,65 m'})]),
+  SOURCE:'MedlinePlus, Calculating body frame size'
+});
 // Une asymétrie demande un écart FRANC (au-delà du centimètre d'erreur
 // technique sur un tour de membre) et RÉPÉTÉ sur trois bilans consécutifs,
 // toujours du même côté.
@@ -295,8 +345,8 @@ const MORPHO_AXES=Object.freeze([
   {cle:'A2',lib:'Répartition de jambe',court:'Fémur / tibia',nature:'osseux',segment:'bas',calibrable:true},
   {cle:'A3',lib:'Levier brachial',court:'Bras / taille',nature:'osseux',segment:'haut'},
   {cle:'A4',lib:'Répartition de bras',court:'Humérus / avant-bras',nature:'osseux',segment:'haut',calibrable:true},
-  {cle:'A5',lib:'Charpente scapulaire',court:'Épaules / bassin',nature:'osseux',segment:'haut',calibrable:true},
-  {cle:'A6',lib:'Ossature',court:'Poignet',nature:'osseux',segment:'global',calibrable:true}
+  {cle:'A5',lib:'Charpente scapulaire',court:'Épaules / bassin',nature:'osseux',segment:'haut'},
+  {cle:'A6',lib:'Ossature',court:'Poignet',nature:'osseux',segment:'global'}
 ]);
 
 /** PURE. La dernière valeur d'un champ de bilan, AVEC la date du bilan d'où
@@ -353,58 +403,125 @@ function _morphoMediane(l){
 }
 
 /**
- * PURE. LE REPÈRE LOCAL, calculé sur les athlètes réels du coach — la seule
- * réponse honnête pour les axes dont aucun repère de population publié ne
- * décrit ce que le mètre mesure ici.
+ * Écrit dans `bi` le protocole de son entrejambe. Une mesure FRAICHE (pas dans
+ * bi.reprises) a été prise avec la consigne affichée, celle du livre ; une
+ * mesure REPRISE garde le protocole du bilan d'où elle vient.
+ */
+function marquerProtoEntrejambe(bi,anciens){
+  if(!bi) return null;
+  const v=bi['deb-entrejambe'];
+  if(v==null||String(v).trim()===''){ delete bi['deb-entrejambe-proto']; return null; }
+  const repris=Array.isArray(bi.reprises)&&bi.reprises.indexOf('deb-entrejambe')>=0;
+  if(!repris){ bi['deb-entrejambe-proto']=MORPHO_ENTREJAMBE_PROTO; return MORPHO_ENTREJAMBE_PROTO; }
+  const src=(anciens||[]).filter(x=>x&&x.date&&x['deb-entrejambe']!=null&&String(x['deb-entrejambe']).trim()!=='')
+    .sort((x,y)=>y.date-x.date)[0];
+  if(src&&src['deb-entrejambe-proto']===MORPHO_ENTREJAMBE_PROTO) bi['deb-entrejambe-proto']=MORPHO_ENTREJAMBE_PROTO;
+  else delete bi['deb-entrejambe-proto'];
+  return bi['deb-entrejambe-proto']||null;
+}
+/** PURE. Le protocole de l'entrejambe retenu : celui du bilan qui le porte. */
+function _morphoProtoEntrejambe(user){
+  const bl=((user&&user.bilans)||[]).filter(x=>x&&x.date).slice().sort((x,y)=>y.date-x.date);
+  for(const x of bl){
+    const v=x['deb-entrejambe'];
+    if(v!=null&&String(v).trim()!=='') return x['deb-entrejambe-proto']===MORPHO_ENTREJAMBE_PROTO?MORPHO_ENTREJAMBE_PROTO:'ancien';
+  }
+  return null;
+}
+/** PURE. La ligne de la table des poignets pour ce sexe et cette taille, ou null. */
+function _morphoRepPoignet(sexe,taille){
+  const t=Number(taille), l=MORPHO_POIGNET_REF[sexe];
+  if(!l||!(t>0)) return null;
+  const x=l.find(r=>(r.tmin==null||t>r.tmin)&&(r.tmax==null||t<=r.tmax));
+  if(!x) return null;
+  return {fine:x.fine,epaisse:x.epaisse,texte:x.lib+' : ossature fine sous '+_morphoVirgule(x.fine)
+    +' cm de poignet, épaisse au-delà de '+_morphoVirgule(x.epaisse)+' cm'};
+}
+/**
+ * PURE. Le repère d'un rapport lu sur photo (MediaPipe, centres articulaires),
+ * du MÊME SEXE : de Leva (1996) centre à centre (ANAT_REF), la dispersion à
+ * taille égale d'ANAT_DISP, et l'erreur de la photo (ANAT_ERR) — l'échelle
+ * (3 %, perspective et posture ne s'annulent pas dans un rapport) et trois
+ * points lus par le moteur. Marge = MORPHO_ET_MARGE × √(disp² + err²).
+ */
+function _morphoRepPhoto(sexe,cle){
+  const R=ANAT_REF[sexe], D=ANAT_DISP[sexe];
+  if(!R||!D) return null;
+  const ref=cle==='A2photo'?R.cuisse/R.jambe:cle==='A4photo'?R.bras/R.avantbras:null;
+  if(ref==null) return null;
+  const disp=cle==='A2photo'?D.rapportJambes:D.rapportBras;
+  const seg=Math.hypot(ANAT_ERR.auto,ANAT_ERR.auto);
+  const err=Math.hypot(ANAT_ERR.echelle,Math.hypot(seg,seg));
+  return {ref:Math.round(ref*1000)/1000,marge:Math.round(MORPHO_ET_MARGE*Math.hypot(disp,err)/100*ref*1000)/1000};
+}
+// La clé de calibrage d'un axe : A2 se calibre PAR PROTOCOLE d'entrejambe.
+function _morphoCalCle(user,cle){
+  if(cle!=='A2') return cle;
+  return _morphoProtoEntrejambe(user)===MORPHO_ENTREJAMBE_PROTO?'A2':'A2ancien';
+}
+// Le calibrage qui vaut pour cet athlète : {H,F} (morphoCalibrageCoach) ou un
+// seul sexe (morphoCalibrage) — jamais celui de l'autre sexe.
+function _morphoCalPour(cal,user,cle,sexe){
+  if(!cal||!sexe) return null;
+  const parSexe=(cal.H&&!cal.H.ref)||(cal.F&&!cal.F.ref);
+  const c=(parSexe?(cal[sexe]||{}):cal)[_morphoCalCle(user,cle)];
+  return (c&&c.sexe===sexe)?c:null;
+}
+// Un athlète entre-t-il dans le calibrage de cet axe ? Même sexe, même protocole.
+function _morphoCalibrable(u,cle,sexe,calCle){
+  let s=null; try{ s=sexeMorpho(u); }catch(e){ s=null; }
+  if(s!==sexe) return null;
+  if(calCle&&_morphoCalCle(u,cle)!==calCle) return null;
+  let r=null; try{ r=_morphoBrut(u,cle); }catch(e){ r=null; }
+  return (r&&r.valeur!=null&&isFinite(r.valeur))?r:null;
+}
+
+/**
+ * PURE. LE REPÈRE LOCAL, calculé sur les athlètes réels du coach DU MÊME SEXE —
+ * la seule réponse honnête pour A2 et A4 au mètre, dont la définition
+ * (entrejambe − creux du genou, bras − avant-bras) n'a pas d'équivalent
+ * publié. Tous les autres axes osseux ont désormais un repère publié par sexe :
+ * ils ne se calibrent plus.
  *
  * Médiane pour le centre (une faute de frappe ne la déplace pas), écart
  * interquartile ramené à un écart-type robuste pour la dispersion. La marge ne
  * descend jamais sous DEUX fois l'erreur de mesure propagée : sous ce plancher,
  * on classerait du bruit de ruban en morphologie.
  *
+ * ⚠ A2 SE CALIBRE PAR PROTOCOLE : 'A2' pour l'entrejambe pris au livre,
+ *   'A2ancien' pour celui pris au pubis. Les deux ne se mélangent jamais.
+ * ⚠ SOUS MORPHO_CALIB_MIN athlètes du même sexe (et du même protocole), rien.
+ *
  * @param {any[]} athletes
- * @returns {Object<string,{ref:number,marge:number,n:number,date:number}>}
+ * @param {'H'|'F'} sexe
+ * @returns {Object<string,{ref:number,marge:number,n:number,date:number,sexe:string}>}
  */
-function morphoCalibrage(athletes){
+function morphoCalibrage(athletes,sexe){
   const out={};
+  if(sexe!=='H'&&sexe!=='F') return out;
   const l=Array.isArray(athletes)?athletes:[];
+  const groupes={};
   for(const a of MORPHO_AXES){
     if(!a.calibrable) continue;
-    const vals=[],errs=[];
     for(const u of l){
-      let r=null;
-      try{ r=_morphoBrut(u,a.cle); }catch(e){ r=null; }
-      if(r&&r.valeur!=null&&isFinite(r.valeur)){ vals.push(r.valeur); errs.push(r.erreur||0); }
+      const r=_morphoCalibrable(u,a.cle,sexe,null);
+      if(!r) continue;
+      const k=_morphoCalCle(u,a.cle);
+      (groupes[k]=groupes[k]||{vals:[],errs:[]}).vals.push(r.valeur);
+      groupes[k].errs.push(r.erreur||0);
     }
+  }
+  for(const k of Object.keys(groupes)){
+    const {vals,errs}=groupes[k];
     if(vals.length<MORPHO_CALIB_MIN) continue;
     const t=vals.slice().sort((x,y)=>x-y);
     const q=(p)=>t[Math.min(t.length-1,Math.max(0,Math.round(p*(t.length-1))))];
     const sigma=(q(0.75)-q(0.25))/1.349;
     const plancher=2*(_morphoMediane(errs)||0);
     const ref=_morphoMediane(vals);
-    out[a.cle]={ref:Math.round(ref*1000)/1000,
+    out[k]={ref:Math.round(ref*1000)/1000,
       marge:Math.round(Math.max(sigma,plancher)*1000)/1000,
-      n:vals.length,date:Date.now()};
-  }
-  // LES RAPPORTS LUS SUR PHOTO, sur la même population et avec la même
-  // discipline. Leur plancher de marge vient de la tolérance de lecture :
-  // si les deux côtés du MÊME corps peuvent différer de 10 % avant qu'on
-  // refuse la photo, la moitié de ça est le moins qu'on puisse exiger
-  // avant de déclarer DEUX corps différents.
-  for(const d of MORPHO_PHOTO_RAPPORTS){
-    const vals=[];
-    for(const u of l){
-      let r=null;
-      try{ r=_morphoRapportPhoto(u,d.axe); }catch(e){ r=null; }
-      if(r) vals.push(r.valeur);
-    }
-    if(vals.length<MORPHO_CALIB_MIN) continue;
-    const t=vals.slice().sort((x,y)=>x-y);
-    const q=(p)=>t[Math.min(t.length-1,Math.max(0,Math.round(p*(t.length-1))))];
-    const ref=_morphoMediane(vals);
-    out[d.cle]={ref:Math.round(ref*1000)/1000,
-      marge:Math.round(Math.max((q(0.75)-q(0.25))/1.349,ref*0.05)*1000)/1000,
-      n:vals.length,date:Date.now()};
+      n:vals.length,date:Date.now(),sexe};
   }
   return out;
 }
@@ -621,6 +738,7 @@ function morphoAxes(user,opts){
   const tests=(function(){ try{ return testsMorpho(user,now); }catch(e){ return []; } })();
   const parCle={}; tests.forEach(t=>{ parCle[t.cle]=t; });
   const brut=(user&&user.morphoTests&&typeof user.morphoTests==='object')?user.morphoTests:{};
+  const sexe=(function(){ try{ return sexeMorpho(user); }catch(e){ return null; } })();
 
   return MORPHO_AXES.map(d=>{
     /** @type {any} */
@@ -743,74 +861,79 @@ function morphoAxes(user,opts){
       return a;
     }
     a.valeur=r.valeur; a.source=r.source; a.confiance=r.conf;
-    // LA LECTURE PHOTO EST ATTACHÉE AVANT LE REPÈRE, et non après : sans
-    // repère calibré l'axe rend la main tout de suite, et la photo serait
-    // perdue sur le chemin le plus fréquent.
-    const rp=(function(){ try{ return _morphoRapportPhoto(user,d.cle); }catch(e){ return null; } })();
-    if(rp){
-      const cp=cal[rp.cle];
-      a.photo={cle:rp.cle,lib:rp.lib,valeur:rp.valeur,
-        position:cp?_morphoPosition(rp.valeur,cp.ref,cp.marge):null,
-        dateISO:rp.date?localISODate(new Date(rp.date)):null};
-    }
     if(r.epaulesCm!=null) a.epaulesCm=r.epaulesCm;
     if(r.bassinCm!=null) a.bassinCm=r.bassinCm;
     if(r.date) a.dateISO=localISODate(new Date(r.date));
+    // ⚠ AUCUN AXE OSSEUX SANS SEXE (06/10/2026). Tous les repères — ANSUR II,
+    //   de Leva, les tables de poignet, le calibrage du coach — sont PAR SEXE :
+    //   sans lui, la valeur est montrée, aucune position ne sort, et il est
+    //   demandé (aMesurer, une seule ligne pour les six axes).
+    if(!sexe){
+      a.manque='sexe'; a.aMesurer=MORPHO_SEXE_MANQUE;
+      a.texte=_morphoNb(a.valeur,a.unite)+' '+_morphoAttribut(r.source,r.date,null)
+        +'. Il manque le sexe : le repère de population n’est pas le même pour les hommes et pour les femmes.';
+      return a;
+    }
+    const sexeLib=sexe==='F'?'femmes':'hommes';
+    // LA LECTURE PHOTO EST ATTACHÉE AVANT LE REPÈRE, et non après : sans
+    // repère l'axe rend la main tout de suite, et la photo serait perdue sur
+    // le chemin le plus fréquent. Son repère est celui de de Leva, centre à
+    // centre, du même sexe (_morphoRepPhoto).
+    const rp=(function(){ try{ return _morphoRapportPhoto(user,d.cle); }catch(e){ return null; } })();
+    if(rp){
+      const cp=_morphoRepPhoto(sexe,rp.cle);
+      a.photo={cle:rp.cle,lib:rp.lib,valeur:rp.valeur,
+        position:cp?_morphoPosition(rp.valeur,cp.ref,cp.marge):null,
+        repere:cp?cp.ref:null,marge:cp?cp.marge:null,
+        dateISO:rp.date?localISODate(new Date(rp.date)):null};
+    }
 
-    // Le repère : celui du code pour A1 et A3, celui de l'étude pour A6 quand
-    // sa condition est remplie, celui du coach partout ailleurs.
+    // LE REPÈRE, TOUJOURS DU MÊME SEXE : ANSUR II pour A1, A3 et A5, les
+    // tables de poignet pour A6, le calibrage du coach (par sexe) pour A2 et
+    // A4 au mètre, qui n'ont pas d'équivalent publié.
     let tol=null;
+    const pts=v=>{ const n=Math.max(1,Math.ceil(v*100)); return n+' point'+(n>1?'s':'')+' de %'; };
+    const pct=v=>_morphoVirgule(Math.round(v*1000)/10);
     if(d.cle==='A3'){
-      // LE REPÈRE DÉPEND DU SEXE (RATIO_BRAS) : sans lui, la valeur est montrée,
-      // aucune position ne sort, et il est demandé.
       const rb=repereBras(user);
-      if(!rb){
-        a.manque='sexe';
-        a.aMesurer='le sexe de l’athlète : le repère de longueur de bras en dépend';
-        a.texte='Longueur de bras à '+_morphoVirgule(Math.round(a.valeur*1000)/10)+' % de la taille. '
-          +'Il manque le sexe : le repère de population n’est pas le même pour les hommes et pour les femmes.';
-        return a;
-      }
       a.repere=rb.ref; a.marge=rb.marge;
-      a.repereTexte='Repère de population autour de '+_morphoVirgule(Math.round(rb.ref*1000)/10)+' % de la taille ('
-        +(rb.sexe==='F'?'femmes':'hommes')+', '+RATIO_BRAS.SOURCE+'), à ± '
-        +_morphoVirgule(Math.round(rb.marge*1000)/10)+' points.';
+      a.repereTexte='Repère de population autour de '+pct(rb.ref)+' % de la taille ('
+        +sexeLib+', '+RATIO_BRAS.SOURCE+'), à ± '+pct(rb.marge)+' points.';
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
-      tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
+      tol=pts(r.erreur);
     } else if(d.cle==='A1'){
-      a.repere=RATIO_JAMBES_REF; a.marge=RATIO_MARGE;
-      a.repereTexte='Repère de population autour de '+Math.round(a.repere*100)+' % de la taille, '
-        +'à ± '+Math.round(RATIO_MARGE*100)+' points.';
+      const R=MORPHO_A1_REF[sexe];
+      a.repere=R.ref; a.marge=Math.max(MORPHO_ET_MARGE*R.et,r.erreur);
+      a.repereTexte='Repère de population autour de '+pct(R.ref)+' % de la taille ('
+        +sexeLib+', hauteur d’entrejambe, '+MORPHO_A1_REF.SOURCE+'), à ± '+pct(a.marge)+' points.'
+        +(_morphoProtoEntrejambe(user)!==MORPHO_ENTREJAMBE_PROTO
+          ?' Mesure prise avant la consigne du livre : jusqu’au pubis, elle peut être plus haute de quelques centimètres.':'');
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
-      tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
+      tol=pts(r.erreur);
+    } else if(d.cle==='A5'){
+      const L=ANAT_LARGEURS[sexe];
+      a.repere=L.rapport; a.marge=Math.max(MORPHO_ET_MARGE*L.rapport_et,r.erreur);
+      a.repereTexte='Repère de population autour de '+_morphoVirgule(L.rapport)+' ('+sexeLib
+        +', biacromial / bicrêtal, '+ANAT_LARGEURS.SOURCE+'), à ± '+_morphoVirgule(Math.round(a.marge*100)/100)+'.';
+      a.position=_morphoPosition(a.valeur,a.repere,a.marge);
+      tol=_morphoVirgule(Math.round(r.erreur*100)/100);
     } else if(d.cle==='A6'){
-      const sexe=(user&&(user._evol_gender||user.gender))||'';
       const t=r.taille||_tailleCm(user);
-      const c=cal[d.cle];
-      if(!isFemale(sexe)&&t&&t>165){
-        // Le seul repère chiffré de l'étude qui porte sa condition : fine sous
-        // 16,5 cm de poignet, épaisse au-delà de 19, chez l'homme de plus de
-        // 1,65 m. On l'applique là où il vaut, et nulle part ailleurs.
-        a.unite='cm'; a.valeur=r.cm; tol=_morphoVirgule(MORPHO_ERREUR_CM)+' cm';
-        a.repere=17.75; a.marge=1.25;
-        a.repereTexte='Chez l’homme de plus de 1,65 m : ossature fine sous 16,5 cm de poignet, '
-          +'épaisse au-delà de 19 cm.';
-        a.position=_morphoPosition(r.cm,17.75,1.25);
-      } else if(c){
-        a.repere=c.ref; a.marge=c.marge;
-        a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
-          +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
-        a.position=_morphoPosition(a.valeur,a.repere,a.marge);
-        tol=Math.max(1,Math.ceil(r.erreur*100))+' point'+(Math.ceil(r.erreur*100)>1?'s':'')+' de %';
-      } else {
+      const P=_morphoRepPoignet(sexe,t);
+      if(!P){
         a.manque='repere-conditionne';
-        a.texte='Tour de poignet à '+_morphoNb(r.cm,'cm')+' '+_morphoAttribut(r.source,r.date,_morphoVirgule(MORPHO_ERREUR_CM)+' cm')
-          +'. Le seul repère publié vaut pour l’homme de plus de 1,65 m ; ici il ne s’applique pas, '
-          +'et il en faudrait un calibré sur les athlètes suivis.';
+        a.texte='Tour de poignet à '+_morphoNb(r.cm!=null?r.cm:a.valeur,'cm')+' '+_morphoAttribut(r.source,r.date,_morphoVirgule(MORPHO_ERREUR_CM)+' cm')
+          +'. '+(t?'Les tables publiées ne donnent pas de repère pour un homme de 1,65 m ou moins.'
+            :'Il manque la taille : le repère du poignet en dépend.');
         return a;
       }
+      const cm=r.cm!=null?r.cm:a.valeur;
+      a.unite='cm'; a.valeur=cm; tol=_morphoVirgule(MORPHO_ERREUR_CM)+' cm';
+      a.repere=(P.fine+P.epaisse)/2; a.marge=(P.epaisse-P.fine)/2;
+      a.repereTexte=P.texte+' ('+MORPHO_POIGNET_REF.SOURCE+').';
+      a.position=_morphoPosition(cm,a.repere,a.marge);
     } else {
-      const c=cal[d.cle];
+      const c=_morphoCalPour(cal,user,d.cle,sexe);
       if(!c){
         // ⚠ PAS DE REPÈRE, DONC PAS DE POSITION. La valeur est montrée — elle
         //   est juste, elle est datée — mais l'app ne dit pas si elle est
@@ -819,13 +942,16 @@ function morphoAxes(user,opts){
         a.texte=_morphoNb(a.valeur,a.unite)+' '+_morphoAttribut(r.source,r.date,
           Math.round(r.erreur*100)/100+'')
           +'. Aucun repère de population ne décrit ce que le mètre mesure ici : il se calibrera '
-          +'sur les athlètes suivis, à partir de '+MORPHO_CALIB_MIN+' mesurés.'
+          +'sur les athlètes suivis du même sexe ('+sexeLib+'), à partir de '+MORPHO_CALIB_MIN+' mesurés'
+          +(d.cle==='A2'?' avec la même consigne d’entrejambe':'')+'.'
           +(a.photo?' '+a.photo.lib+' à '+_morphoVirgule(Math.round(a.photo.valeur*100)/100)
-            +' '+_morphoAttribut('photo',rp?rp.date:null,null)+'.':'');
+            +' '+_morphoAttribut('photo',rp?rp.date:null,null)
+            +(a.photo.repere!=null?', pour un repère de '+_morphoVirgule(Math.round(a.photo.repere*100)/100)
+              +' centre à centre ('+sexeLib+', '+ANAT_REF.SOURCE+')':'')+'.':'');
         return a;
       }
       a.repere=c.ref; a.marge=c.marge;
-      a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis, le '
+      a.repereTexte='Repère calibré sur '+c.n+' athlètes suivis ('+sexeLib+'), le '
         +dateLocaleDeCle(c.date).toLocaleDateString('fr-FR')+'.';
       a.position=_morphoPosition(a.valeur,a.repere,a.marge);
       tol=_morphoVirgule(Math.round(r.erreur*100)/100);
@@ -1221,7 +1347,8 @@ function _morphoAthletesDuCoach(){
 }
 /** Le calibrage du coach courant, calculé une fois par écran. */
 function morphoCalibrageCoach(){
-  try{ return morphoCalibrage(_morphoAthletesDuCoach()); }catch(e){ return {}; }
+  // UN CALIBRAGE PAR SEXE : morphoAxes prend celui de l'athlète, jamais l'autre.
+  try{ const l=_morphoAthletesDuCoach(); return {H:morphoCalibrage(l,'H'),F:morphoCalibrage(l,'F')}; }catch(e){ return {H:{},F:{}}; }
 }
 // ══ LOT T4 : LA REVUE MORPHO DU PROGRAMME (29/09/2026) ═══════════════════
 // Le programme de l'athlète, passé au crible des aménagements de SES profils
@@ -1351,8 +1478,10 @@ function _etatRevueMorpho(c,cal,athletes,programme){
   let tests=[]; try{ tests=testsMorpho(c); }catch(e){ tests=[]; }
   const lignes=revueMorpho((Array.isArray(programme)?programme:(c&&c.sessions_config))||[],profils,tests,{user:c});
   const l=Array.isArray(athletes)?athletes:[];
+  // Le compte : athlètes du MÊME SEXE (et, pour A2, du même protocole).
+  let sx=null; try{ sx=sexeMorpho(c); }catch(e){ sx=null; }
   const bloques=axes.filter(a=>a&&a.manque==='repere-a-calibrer').map(a=>({court:a.court,
-    n:l.filter(u=>{ try{ const r=_morphoBrut(u,a.cle); return !!(r&&r.valeur!=null&&isFinite(r.valeur)); }catch(e){ return false; } }).length}));
+    n:l.filter(u=>!!_morphoCalibrable(u,a.cle,sx,_morphoCalCle(c,a.cle))).length}));
   return {lignes,bloques,profilsSortis:profils.length>0};
 }
 function renderRevueMorphoCoach(c){
@@ -2181,16 +2310,19 @@ function _htmlMorphoInitiale(u,athletes){
     +', mis à l’échelle par la hauteur du sol au milieu de la rotule'
     +((m.controleEcart!=null)?(', contrôlé à '+E(_synNombre(m.controleEcart*100))+' % près par la taille debout'):'')
     +'. Figé le '+E(jour(m.date))+' : la morphologie d’un adulte ne bouge plus.</p>'
-    // LES RAPPORTS, ET CE QUI LEUR MANQUE POUR ETRE SITUES.
+    // LES RAPPORTS, SITUÉS SUR LE REPÈRE DE LEVA DU MÊME SEXE (06/10/2026) :
+    // centre à centre, comme la photo. Sans sexe, aucun repère n'est pris.
     +MORPHO_PHOTO_RAPPORTS.map(d=>{
       const v=m.rapports&&m.rapports[d.cle];
       if(v==null) return '';
-      const n=morphoCalibrageCompte(athletes,d.axe);
+      let sx=null; try{ sx=sexeMorpho(u); }catch(e){ sx=null; }
+      const R=sx?_morphoRepPhoto(sx,d.cle):null;
+      const pos=R?_morphoPosition(Number(v),R.ref,R.marge):null;
       return '<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin:6px 0 0">'
         +E(d.lib)+' : '+E(String(Math.round(v*100)/100).replace('.',','))
-        +((n<MORPHO_CALIB_MIN)
-          ?(' · repère en cours de calibrage, '+n+' athlète'+(n>1?'s':'')+' sur '+MORPHO_CALIB_MIN)
-          :'')+'</p>';
+        +(R?(' · repère de '+E(String(R.ref).replace('.',','))+' centre à centre ('+(sx==='F'?'femmes':'hommes')
+          +', '+E(ANAT_REF.SOURCE)+'), '+(pos==='neutre'?'dans la marge':pos==='haut'?'au-dessus':'en dessous'))
+          :' · il manque le sexe pour le situer')+'</p>';
     }).join('')
     +(croissance
       ?('<p style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6;margin:8px 0 0">'

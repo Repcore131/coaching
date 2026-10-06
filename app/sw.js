@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1813';
+const CACHE = 'repcore-v1814';
 // ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
 // Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
 // (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
@@ -182,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1813.js', './rc-style.1813.css', './rc-theme.1813.css',
+const ASSETS = ['./index.html', './rc-core.1814.js', './rc-style.1814.css', './rc-theme.1814.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se

@@ -1542,6 +1542,10 @@ function saveBilanFinal(){
   // (La porte de l'article 9 est en tete de fonction : rien de ce qui precede
   //  ne s'ecrit sans l'accord.)
   if(!currentUser.bilans) currentUser.bilans=[];
+  // LE PROTOCOLE DE L'ENTREJAMBE (06/10/2026) : saisi avec la consigne du
+  // livre, il le dit ; repris d'un bilan précédent, il garde le protocole de
+  // ce bilan-là. Les deux protocoles ne se mélangent pas dans un calibrage.
+  try{ marquerProtoEntrejambe(bi,currentUser.bilans); }catch(e){ rcErreurMuette('bilan · protocole entrejambe',e); }
   currentUser.bilans.push(bi);
   try{ bilanMasseGrasseNoter(currentUser,bi,Date.now()); }catch(e){ rcErreurMuette('bilan · masse grasse',e); }
   // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
