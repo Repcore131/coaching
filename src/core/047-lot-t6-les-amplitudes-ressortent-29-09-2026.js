@@ -34,8 +34,15 @@ const AMP_ZONE=Object.freeze({cheville:'la cheville',hanche:'la hanche',epaule:'
 // rien qui se compare). Les mêmes seuils que morphoAxes.
 function ampSousRepere(cle,v){
   if(!v||typeof v!=='object') return null;
-  if(cle==='cheville'){ const q=parseFloat(v.cm); return isFinite(q)?q<10:null; }
-  if(cle==='hanche') return (v.butee==='nette')?true:((v.butee==='elastique')?false:null);
+  // Le côté le plus limité (ampCotes) ; et la hanche n'est « sous son repère »
+  // que si la butée nette arrive avant la fin d'une flexion normale.
+  if(cle==='cheville'){ const q=ampPire(ampCotes('cheville',v)); return q!=null?q<10:null; }
+  if(cle==='hanche'){
+    if(v.butee==='elastique') return false;
+    if(v.butee!=='nette') return null;
+    const fl=ampPire(ampCotes('hanche',v));
+    return fl==null||fl<HANCHE_FLEXION_BUTEE_PRECOCE;
+  }
   if(cle==='epaule') return (v.mur==='non')?true:((v.mur==='oui')?false:null);
   if(cle==='posterieur') return v.niveau?(v.niveau==='bas'):null;
   return null;
@@ -116,8 +123,7 @@ function voirMobilisations(){
 function ampValeur(cle,v){
   if(!v||typeof v!=='object') return null;
   const n=x=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
-  if(cle==='cheville') return n(v.cm);
-  if(cle==='hanche') return n(v.deg);
+  if(cle==='cheville'||cle==='hanche') return ampPire(ampCotes(cle,v));
   if(cle==='epaule'){ const g=n(v.g), d=n(v.d); return (g==null&&d==null)?null:(g!=null&&d!=null?(g+d)/2:(g!=null?g:d)); }
   if(cle==='posterieur') return ({bas:1,milieu:2,haut:3})[v.niveau]||null;
   return null;

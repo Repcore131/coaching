@@ -1310,13 +1310,35 @@ function asymetrieSite(bilans,site,seuilPerso){
     // pas un accident de mesure.
     suite:e.map(x=>Math.round(x.ecart*10)/10)};
 }
+// ── LA MAIN DOMINANTE (06/10/2026) ──────────────────────────────────────
+// Le bras de la main qui écrit est souvent plus gros : ce n'est pas un
+// déséquilibre à corriger. Au bilan de départ, « Tu es droitier, gaucher ? »
+// (deb-lateralite). Quand le côté FORT d'un site du membre supérieur est le
+// côté DOMINANT, le seuil passe à ASYM_SEUIL_DOMINANT et l'asymétrie n'est
+// qu'INFORMATIVE : elle se dit sur la fiche, elle n'entre pas dans « Pourquoi
+// cet athlète est ici ». Côté non dominant plus fort, ou membres inférieurs :
+// seuils d'ASYM_PAIRES.
+const ASYM_SEUIL_DOMINANT=0.05;
+const ASYM_SITES_HAUT=Object.freeze(['bicep','forearm']);
+/** PURE. 'droite', 'gauche' ou null : la main dominante déclarée. */
+function lateraliteDe(user){
+  const u=_dossier(user);
+  const bl=((u&&u.bilans)||[]).filter(b=>b&&b.date&&b['deb-lateralite']).sort((a,b)=>b.date-a.date);
+  const v=bl.length?String(bl[0]['deb-lateralite']):'';
+  return /^droit/i.test(v)?'droite':/^gauch/i.test(v)?'gauche':null;
+}
 // PURE. Toutes les asymetries averees d'un dossier, la plus marquee d'abord.
 function asymetries(user){
   const u=_dossier(user);
   const b=(u&&u.bilans)||[];
+  const dom=lateraliteDe(u);
   const out=[];
   for(const p of ASYM_PAIRES){
-    const a=asymetrieSite(b,p.site);
+    let a=asymetrieSite(b,p.site);
+    if(a&&dom&&ASYM_SITES_HAUT.indexOf(p.site)>=0&&a.fort===dom){
+      a=asymetrieSite(b,p.site,Math.max(p.seuil,ASYM_SEUIL_DOMINANT));
+      if(a) a.informatif=true;
+    }
     if(a) out.push(a);
   }
   return out.sort((x,y)=>y.ecartRelatif-x.ecartRelatif);
@@ -1382,7 +1404,8 @@ function phraseAsymetrie(a){
   // « sur trois bilans » et non « sur 3 bilans » : c'est une phrase, pas un
   // releve, et le chiffre isole y ferait tache.
   const n=({1:'un',2:'deux',3:'trois',4:'quatre'})[a.bilans]||String(a.bilans);
-  return a.lib+' '+cote+' +'+cm+' cm sur '+n+' bilans.';
+  return a.lib+' '+cote+' +'+cm+' cm sur '+n+' bilans.'
+    +(a.informatif?' Côté dominant : à titre d’information.':'');
 }
 function gesteAsymetrie(a,user){
   if(!a) return '';
@@ -1397,8 +1420,10 @@ function gesteAsymetrie(a,user){
 // dans la semaine, et la faire remonter au-dessus d'une douleur serait
 // deplacer le regard du coach au mauvais endroit.
 const ASYM_GRAVITE=3;
-function signalAsymetrie(user){
-  const l=asymetries(user);
+// `opts.tous` : les asymétries informatives (côté dominant) comprises — la
+// fiche les montre ; « Pourquoi cet athlète est ici » ne les reçoit pas.
+function signalAsymetrie(user,opts){
+  const l=asymetries(user).filter(a=>(opts&&opts.tous)||!a.informatif);
   if(!l.length) return null;
   const a=l[0];
   return {code:'asymetrie',gravite:ASYM_GRAVITE,site:a.site,

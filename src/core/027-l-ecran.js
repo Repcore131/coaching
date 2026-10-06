@@ -2418,7 +2418,7 @@ function renderAsymetrieCoach(c){
   const z=document.getElementById('ccd-asymetrie');
   if(!z) return false;
   let s=null;
-  try{ s=signalAsymetrie(c); }catch(e){ s=null; }
+  try{ s=signalAsymetrie(c,{tous:true}); }catch(e){ s=null; }
   if(!s){ z.innerHTML=''; return true; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'

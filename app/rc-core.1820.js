@@ -16591,14 +16591,21 @@ function coherencesMorpho(user){
 // effacé — il est marqué périmé, et reproposé.
 const MORPHO_PEREMPTION_J=90;
 const MORPHO_TESTS=Object.freeze([
-  {cle:'cheville',lib:'Cheville, genou au mur',champ:'cm',unite:'cm',min:0,max:25,
+  // GAUCHE ET DROITE (06/10/2026) : la cheville et la hanche se relèvent des deux
+  // côtés, comme l'épaule. Un ancien relevé à une seule valeur reste lisible :
+  // elle vaut pour les deux côtés, marquée « côté non précisé » (ampCotes).
+  {cle:'cheville',lib:'Cheville, genou au mur',champ:'cmGD',unite:'cm',min:0,max:25,
    protocole:'Pied nu, orteils face à un mur. Avance le genou jusqu’à toucher le mur sans '
      +'décoller le talon, puis recule le pied jusqu’à la distance la plus grande où le genou '
-     +'touche encore. Mesure de l’orteil au mur.'},
-  {cle:'hanche',lib:'Hanche : flexion et rotations',champ:'deg',unite:'°',min:30,max:160,
-   protocole:'Allongé sur le dos, l’autre jambe tendue au sol : monte le genou vers la '
-     +'poitrine jusqu’à ce que le bassin commence à basculer. Note l’angle atteint, et si '
-     +'l’arrêt est net ou élastique.'},
+     +'touche encore. Mesure de l’orteil au mur. Un pied après l’autre.'},
+  {cle:'hanche',lib:'Hanche : flexion et rotation interne',champ:'hanche',unite:'°',min:30,max:160,
+   riMin:0,riMax:90,
+   protocole:'Flexion : allongé sur le dos, l’autre jambe tendue au sol, monte le genou vers '
+     +'la poitrine jusqu’à ce que le bassin commence à basculer. Note l’angle atteint, et si '
+     +'l’arrêt est net ou élastique. Rotation interne : assis au bord d’une table, genoux à '
+     +'90°, laisse le pied partir vers l’extérieur sans que la cuisse ni le bassin bougent ; '
+     +'le téléphone posé à plat sur le tibia, niveau ouvert, donne l’angle. Un côté après '
+     +'l’autre.'},
   {cle:'epaule',lib:'Épaule : au mur et main dans le dos',champ:'paire',unite:'cm',min:0,max:60,
    mur:true,
    protocole:'Dos au mur, lombaires plaquées : monte les bras tendus, note la distance des '
@@ -16629,16 +16636,72 @@ function testsMorpho(user,maintenant){
       perime:jours!=null&&jours>MORPHO_PEREMPTION_J};
   });
 }
+/**
+ * PURE. Les deux côtés d'un test, quel que soit son format. Un ANCIEN relevé à
+ * une valeur (cheville {cm}, hanche {deg}) vaut pour les deux côtés, avec
+ * nonPrecise:true. Hanche : `ri_g`/`ri_d`, la rotation interne assise.
+ * @returns {{g:number|null,d:number|null,nonPrecise:boolean,riG?:number|null,riD?:number|null,butee?:string|null}}
+ */
+function ampCotes(cle,v){
+  const n=(x)=>{ if(x==null||String(x).trim()==='') return null; const q=parseFloat(String(x).replace(',','.')); return isFinite(q)?q:null; };
+  const o={g:null,d:null,nonPrecise:false};
+  if(!v||typeof v!=='object') return o;
+  o.g=n(v.g); o.d=n(v.d);
+  if(o.g==null&&o.d==null){
+    const seul=cle==='cheville'?n(v.cm):cle==='hanche'?n(v.deg):null;
+    if(seul!=null){ o.g=seul; o.d=seul; o.nonPrecise=true; }
+  }
+  if(cle==='hanche'){ o.riG=n(v.ri_g); o.riD=n(v.ri_d); o.butee=(v.butee==='nette'||v.butee==='elastique')?v.butee:null; }
+  return o;
+}
+/**
+ * PURE. Les asymétries de MOBILITÉ : écart gauche / droite d'au moins 4 cm au
+ * genou au mur, 10° en rotation interne de hanche, 5 cm à l'épaule
+ * (MORPHO_ASYM_MOBILITE). Seulement sur des relevés aux deux côtés précisés,
+ * non périmés.
+ * @returns {{cle:string,lib:string,ecart:number,unite:string,phrase:string}[]}
+ */
+function asymetriesMobilite(user,maintenant){
+  const now=Number(maintenant)||Date.now();
+  const src=(user&&user.morphoTests&&typeof user.morphoTests==='object')?user.morphoTests:{};
+  const frais=v=>v&&Number(v.date)>0&&(now-Number(v.date))<=MORPHO_PEREMPTION_J*864e5;
+  const out=[];
+  // `mieuxHaut` : plus la valeur est grande, plus il y a d'amplitude (cm au
+  // mur, degrés) ; à l'épaule c'est une DISTANCE, c'est l'inverse.
+  const pousse=(cle,lib,g,d,seuil,u,mieuxHaut)=>{
+    if(g==null||d==null) return;
+    const e=Math.abs(g-d);
+    if(e+1e-9<seuil) return;
+    const fort=(mieuxHaut?g>d:g<d)?'gauche':'droite';
+    out.push({cle,lib,ecart:Math.round(e*10)/10,unite:u,
+      phrase:lib+' : gauche '+_morphoVirgule(Math.round(g*10)/10)+u+', droite '+_morphoVirgule(Math.round(d*10)/10)+u
+        +' ('+_morphoVirgule(Math.round(e*10)/10)+u+' d’écart, plus d’amplitude à '+fort+')'});
+  };
+  if(frais(src.cheville)){ const c=ampCotes('cheville',src.cheville); if(!c.nonPrecise) pousse('cheville','Cheville, genou au mur',c.g,c.d,MORPHO_ASYM_MOBILITE.cheville,' cm',true); }
+  if(frais(src.hanche)){ const c=ampCotes('hanche',src.hanche); pousse('hanche','Rotation interne de hanche',c.riG,c.riD,MORPHO_ASYM_MOBILITE.hancheRI,'°',true); }
+  if(frais(src.epaule)){ const c=ampCotes('epaule',src.epaule); pousse('epaule','Épaule',c.g,c.d,MORPHO_ASYM_MOBILITE.epaule,' cm',false); }
+  return out;
+}
+// PURE. La valeur retenue d'un côté à l'autre : le côté le plus limité.
+function ampPire(c){ return (c.g==null&&c.d==null)?null:(c.g==null?c.d:c.d==null?c.g:Math.min(c.g,c.d)); }
 /** PURE. Ce qu'un test dit, en une ligne — ou '' s'il n'a pas été fait. */
 function _morphoTexteTest(d,v){
   if(!v||typeof v!=='object') return '';
   const n=(x)=>{ const q=parseFloat(String(x).replace(',','.')); return isFinite(q)?q:null; };
-  if(d.champ==='cm'){ const q=n(v.cm); return q==null?'':Math.round(q)+' cm au mur'; }
-  if(d.champ==='deg'){
-    const q=n(v.deg);
-    if(q==null) return '';
-    const b=v.butee==='nette'?', butée nette':v.butee==='elastique'?', butée élastique':'';
-    return Math.round(q)+'°'+b;
+  const gd=(c,u)=>c.nonPrecise?Math.round(c.g)+u+', côté non précisé'
+    :'gauche '+(c.g==null?'-':Math.round(c.g)+u)+' · droite '+(c.d==null?'-':Math.round(c.d)+u);
+  if(d.champ==='cm'||d.champ==='cmGD'){
+    const c=ampCotes(d.cle,v);
+    if(c.g==null&&c.d==null) return '';
+    return c.nonPrecise?Math.round(c.g)+' cm au mur, côté non précisé':gd(c,' cm')+' au mur';
+  }
+  if(d.champ==='deg'||d.champ==='hanche'){
+    const c=ampCotes('hanche',v);
+    const b=c.butee==='nette'?', butée nette':c.butee==='elastique'?', butée élastique':'';
+    const fl=(c.g==null&&c.d==null)?'':(c.nonPrecise?Math.round(c.g)+'°'+b+' (côté non précisé)':'flexion '+gd(c,'°')+b);
+    const ri=(c.riG==null&&c.riD==null)?'':'rotation interne gauche '+(c.riG==null?'-':Math.round(c.riG)+'°')
+      +' · droite '+(c.riD==null?'-':Math.round(c.riD)+'°');
+    return [fl,ri].filter(Boolean).join(' · ');
   }
   if(d.champ==='paire'){
     const g=n(v.g), dr=n(v.d);
@@ -16750,7 +16813,15 @@ const MORPHO_POIGNET_REF=Object.freeze({
 // Une asymétrie demande un écart FRANC (au-delà du centimètre d'erreur
 // technique sur un tour de membre) et RÉPÉTÉ sur trois bilans consécutifs,
 // toujours du même côté.
-const MORPHO_ASYM_CM=1;
+const MORPHO_ASYM_CM=1;   // historique : le moteur des asymétries est asymetries() (seuils relatifs)
+// L'ASYMÉTRIE DE MOBILITÉ (06/10/2026) : un écart gauche / droite aux tests
+// d'amplitude au-delà de ce que le test laisse au hasard d'un jour.
+const MORPHO_ASYM_MOBILITE=Object.freeze({cheville:4,hancheRI:10,epaule:5});
+// LA BUTÉE DE HANCHE PRÉCOCE (06/10/2026). Une flexion de hanche normale, genou
+// vers la poitrine, atteint environ 120° (repères AAOS et Norkin & White pour
+// l'adulte) ; un arrêt net AU-DELÀ de 115° est la fin d'une amplitude normale,
+// pas une butée précoce. Sous 115°, l'arrêt net garde son sens.
+const HANCHE_FLEXION_BUTEE_PRECOCE=115;
 const MORPHO_ASYM_BILANS=3;
 // Le rapport à partir duquel un couple antagoniste cesse d'être une préférence
 // d'exercices. C'est le seuil déjà retenu pour quadriceps / ischios, généralisé
@@ -17115,25 +17186,15 @@ function _morphoDominances(user){
  * @returns {{cle:string, lib:string, ecart:number, cote:string, bilans:number, date:number}[]}
  */
 function _morphoAsymetries(user){
-  const out=[];
-  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>b.date-a.date);
-  for(const p of MORPHO_PAIRES){
-    const ecarts=[],dates=[];
-    for(const b of bl){
-      const g=getBM(b,p.g), d=getBM(b,p.d);
-      if(g==null||d==null||!(g>0)||!(d>0)) continue;
-      ecarts.push(d-g); dates.push(b.date);
-      if(ecarts.length>=MORPHO_ASYM_BILANS) break;
-    }
-    if(ecarts.length<MORPHO_ASYM_BILANS) continue;
-    const franc=ecarts.every(e=>Math.abs(e)>MORPHO_ASYM_CM+1e-9);
-    const memeCote=ecarts.every(e=>e>0)||ecarts.every(e=>e<0);
-    if(!franc||!memeCote) continue;
-    const moyen=ecarts.reduce((s,e)=>s+e,0)/ecarts.length;
-    out.push({cle:p.cle,lib:p.lib,ecart:Math.round(Math.abs(moyen)*10)/10,
-      cote:moyen>0?'droite':'gauche',bilans:ecarts.length,date:dates[0]});
-  }
-  return out.sort((a,b)=>b.ecart-a.ecart);
+  // UN SEUL MOTEUR (06/10/2026) : asymetries(), seuils RELATIFS par site
+  // (ASYM_PAIRES), trois derniers bilans dans le même sens, latéralité
+  // comprise. Il y en avait deux, avec deux chiffres différents sur la même
+  // fiche (1,5 et 1,6 cm) : celui-ci n'en est plus que la traduction.
+  let l=[]; try{ l=asymetries(user); }catch(e){ l=[]; }
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date);
+  const der=bl.reduce((m,b)=>Math.max(m,Number(b.date)||0),0)||null;
+  return l.map(a=>({cle:a.site,lib:a.lib,ecart:Math.round(a.ecart*10)/10,cote:a.fort,
+    bilans:a.bilans,date:der,informatif:!!a.informatif,phrase:phraseAsymetrie(a)}));
 }
 
 /** PURE. Un nombre écrit en français : la virgule, et pas le point. */
@@ -17198,13 +17259,16 @@ function morphoAxes(user,opts){
     if(d.cle==='A9'){
       const brutDom=(function(){ try{ return _morphoDominances(user); }catch(e){ return null; } })();
       const dom=brutDom||[];
-      const asy=(function(){ try{ return _morphoAsymetries(user); }catch(e){ return []; } })();
-      const lu=(brutDom!==null)||asy.length>0;
+      const asyTout=(function(){ try{ return _morphoAsymetries(user); }catch(e){ return []; } })();
+      // Une asymétrie du côté DOMINANT (bras, sous 5 %) n'est qu'informative :
+      // elle se dit, elle ne fait ni position ni profil.
+      const asy=asyTout.filter(x=>!x.informatif);
+      const lu=(brutDom!==null)||asyTout.length>0;
       a.dominances=dom; a.asymetries=asy;
       a.source=lu?'carnet':null; a.confiance=lu?MORPHO_CONF.carnet:0;
       a.position=(dom.length||asy.length)?'haut':(lu?'neutre':null);
-      a.dateISO=asy.length?localISODate(new Date(asy[0].date)):null;
-      if(!dom.length&&!asy.length){
+      a.dateISO=asyTout.length?localISODate(new Date(asyTout[0].date)):null;
+      if(!dom.length&&!asyTout.length){
         a.manque=lu?'rien-a-signaler':'absente';
         if(!lu) a.aMesurer='assez de séances enregistrées pour que le compteur de volume parle';
         a.texte=lu?'Aucun déséquilibre de volume ni écart gauche / droite soutenu sur ce qui est enregistré.'
@@ -17212,9 +17276,9 @@ function morphoAxes(user,opts){
       } else {
         const p=[];
         dom.forEach(x=>p.push(x.lib.toLowerCase()+' à '+String(x.rapport).replace('.',',')+' pour 1'));
-        asy.forEach(x=>p.push(x.lib.toLowerCase()+' : '+String(x.ecart).replace('.',',')
-          +' cm de plus à '+x.cote+' sur '+x.bilans+' bilans'));
-        a.texte=p.join(' · ')+' '+_morphoAttribut('carnet',asy.length?asy[0].date:null,null);
+        // UNE SEULE PHRASE DANS TOUTE L'APP : celle de phraseAsymetrie.
+        asyTout.forEach(x=>p.push(x.phrase));
+        a.texte=p.join(' · ')+' '+_morphoAttribut('carnet',asyTout.length?asyTout[0].date:null,null);
       }
       return a;
     }
@@ -17223,7 +17287,8 @@ function morphoAxes(user,opts){
     //    doit être fait AVANT toute conclusion sur les leviers.
     if(d.cle==='A7'){
       const t=parCle['cheville'];
-      const v=brut['cheville']&&isFinite(Number(brut['cheville'].cm))?Number(brut['cheville'].cm):null;
+      // LE CÔTÉ LE PLUS LIMITÉ fait la position ; l'écart se lit dans A8.
+      const v=ampPire(ampCotes('cheville',brut['cheville']));
       a.unite='cm'; a.repere=10; a.marge=0;
       a.repereTexte='Un squat complet demande de l’ordre de 35 à 40° de flexion dorsale ; '
         +'sous 10 cm au mur, la contrainte devient visible en séance.';
@@ -17237,7 +17302,7 @@ function morphoAxes(user,opts){
       a.dateISO=localISODate(new Date(t.date));
       a.tolerance='1 cm'; a.perime=!!t.perime;
       a.position=v<10?'bas':'neutre';
-      a.texte=Math.round(v)+' cm au mur '+_morphoAttribut('test',t.date,'1 cm')
+      a.texte=(t.texte||Math.round(v)+' cm au mur')+' '+_morphoAttribut('test',t.date,'1 cm')
         +(t.perime?' : périmé, à refaire':'');
       return a;
     }
@@ -17254,8 +17319,14 @@ function morphoAxes(user,opts){
       // ⚠ « BUTÉE NETTE » EST UN CONSTAT, pas une cause. Ce que cette butée
       //   est — os, capsule, muscle — demande une imagerie que personne n'ira
       //   faire. On décrit, on ne tranche pas.
-      if(th&&th.date&&(bh.butee==='nette'||bh.butee==='elastique'))
-        f.hanche.position=bh.butee==='nette'?'haut':'neutre';
+      // ⚠ BUTÉE NETTE ET FLEXION LIMITÉE, PAS L'UNE SANS L'AUTRE (06/10/2026).
+      //   Un arrêt net à 130° est la fin d'une amplitude normale : neutre.
+      const ch=ampCotes('hanche',bh), fl=ampPire(ch);
+      if(th&&th.date&&(bh.butee==='nette'||bh.butee==='elastique')){
+        const precoce=bh.butee==='nette'&&(fl==null||fl<HANCHE_FLEXION_BUTEE_PRECOCE);
+        f.hanche.position=precoce?'haut':'neutre';
+        if(bh.butee==='nette'&&!precoce) f.hanche.texte=(f.hanche.texte||'')+' : arrêt net en fin d’amplitude normale';
+      }
       const te=parCle['epaule'], be=brut['epaule']||{};
       f.epaule={position:null,texte:te?te.texte:'',dateISO:te&&te.date?localISODate(new Date(te.date)):null,
         perime:!!(te&&te.perime),mur:be.mur||null};
@@ -17266,7 +17337,16 @@ function morphoAxes(user,opts){
         perime:!!(tp&&tp.perime),niveau:bp.niveau||null};
       if(tp&&tp.date&&bp.niveau) f.posterieur.position=bp.niveau==='bas'?'bas':'neutre';
       a.facettes=f;
+      // L'ASYMÉTRIE DE MOBILITÉ : genou au mur, rotation interne de hanche,
+      // épaule. Elle peut seule signer P14, avec la source « test ».
+      a.asymetriesMobilite=asymetriesMobilite(user,now);
       const faites=['hanche','epaule','posterieur'].filter(k=>f[k].dateISO);
+      const lignesAsy=a.asymetriesMobilite.map(x=>x.phrase);
+      if(!faites.length&&lignesAsy.length){
+        a.source='test'; a.confiance=MORPHO_CONF.test;
+        a.texte='Asymétrie de mobilité : '+lignesAsy.join(' · ');
+        return a;
+      }
       if(!faites.length){
         a.manque='absente';
         a.aMesurer='les tests de hanche, d’épaule et de flexion avant';
@@ -17278,7 +17358,8 @@ function morphoAxes(user,opts){
       a.perime=faites.some(k=>f[k].perime);
       a.position=f.hanche.position;
       a.texte=faites.map(k=>({hanche:'Hanche',epaule:'Épaule',posterieur:'Chaîne postérieure'})[k]
-        +' : '+(f[k].texte||'-')+(f[k].perime?' (périmé)':'')).join(' · ');
+        +' : '+(f[k].texte||'-')+(f[k].perime?' (périmé)':'')).join(' · ')
+        +(lignesAsy.length?' · Asymétrie de mobilité : '+lignesAsy.join(' · '):'');
       return a;
     }
 
@@ -17711,12 +17792,18 @@ function morphoProfils(axes){
   for(const f of MORPHO_PROFILS){
     let ok=true, suspendu=false, confMin=1;
     for(const c of f.signature){
-      const a=parCle[c.axe];
+      let a=parCle[c.axe];
+      // P14 : l'asymétrie du carnet (A9), ou à défaut celle des tests de
+      // mobilité (A8, source « test »).
+      if(c.asymetrie&&!(a&&(a.asymetries||[]).length)){
+        const a8=parCle['A8'];
+        if(a8&&(a8.asymetriesMobilite||[]).length) a=a8;
+      }
       if(!a){ ok=false; break; }
       if(c.dominance){
         if(!(a.dominances||[]).some(d=>d.cle===c.dominance)){ ok=false; break; }
       } else if(c.asymetrie){
-        if(!(a.asymetries||[]).length){ ok=false; break; }
+        if(!(a.asymetries||[]).length&&!(a.asymetriesMobilite||[]).length){ ok=false; break; }
       } else {
         const p=_morphoPos(a,c.facette);
         if(p==null||c.positions.indexOf(p)<0){ ok=false; break; }
@@ -19023,13 +19110,15 @@ function ampSaisie(cle,champ,val){
 function _ampEtatTest(d,v){
   const n=(x)=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
   const bornes=[];
-  const champs=d.champ==='paire'?['g','d']:d.champ==='cm'?['cm']:d.champ==='deg'?['deg']:[];
+  const champs=(d.champ==='paire'||d.champ==='cmGD')?['g','d']:d.champ==='hanche'?['g','d','ri_g','ri_d']
+    :d.champ==='cm'?['cm']:d.champ==='deg'?['deg']:[];
   let rempli=false;
   for(const k of champs){
     const q=n(v&&v[k]);
     if(q==null){ if(v&&String(v[k]||'').trim()!=='') bornes.push(k); continue; }
     rempli=true;
-    if(q<d.min||q>d.max) bornes.push(k);
+    const ri=/^ri_/.test(k);
+    if(q<(ri?d.riMin:d.min)||q>(ri?d.riMax:d.max)) bornes.push(k);
   }
   if(d.champ==='niveau') rempli=!!(v&&(d.niveaux||[]).includes(String(v.niveau||'')));
   if(d.mur&&v&&(v.mur==='oui'||v.mur==='non')) rempli=true;
@@ -19073,7 +19162,14 @@ function _ampRendre(){
       const f=faits.find(x=>x.cle===d.cle);
       const etat=_ampEtatTest(d,v);
       let saisie='';
-      if(d.champ==='cm') saisie=num(d.cle,'cm',v.cm,'cm')+'<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700">cm</span>';
+      const lbl=t=>'<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:800">'+t+'</span>';
+      const unite=t=>'<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700">'+t+'</span>';
+      const ligne='<span style="flex-basis:100%;height:0"></span>';
+      if(d.champ==='cm') saisie=num(d.cle,'cm',v.cm,'cm')+unite('cm');
+      else if(d.champ==='cmGD') saisie=lbl('G')+num(d.cle,'g',v.g,'cm')+lbl('D')+num(d.cle,'d',v.d,'cm')+unite('cm');
+      else if(d.champ==='hanche') saisie=unite('Flexion')+lbl('G')+num(d.cle,'g',v.g,'°')+lbl('D')+num(d.cle,'d',v.d,'°')
+        +ligne+bouton(d.cle,'butee',v.butee,'nette','Butée nette')+bouton(d.cle,'butee',v.butee,'elastique','Butée élastique')
+        +ligne+unite('Rotation interne')+lbl('G')+num(d.cle,'ri_g',v.ri_g,'°')+lbl('D')+num(d.cle,'ri_d',v.ri_d,'°');
       else if(d.champ==='deg') saisie=num(d.cle,'deg',v.deg,'°')
         +'<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700">°</span>'
         +bouton(d.cle,'butee',v.butee,'nette','Butée nette')
@@ -19123,10 +19219,22 @@ function enregistrerAmplitudes(){
     const v=_amp.v[d.cle]||{};
     const etat=_ampEtatTest(d,v);
     if(etat.horsBornes){ toast('Une valeur sort des bornes : reprends-la avant d’enregistrer.','var(--orange)'); return false; }
-    if(!etat.rempli) continue;
+    if(!etat.rempli){
+      // UN ANCIEN RELEVÉ À UNE SEULE VALEUR (cheville {cm}, hanche {deg}) que le
+      // coach n'a pas repris des deux côtés reste tel quel : il est lisible,
+      // marqué « côté non précisé », et le perdre en enregistrant serait pire.
+      const vx=avant[d.cle];
+      if(vx&&((d.champ==='cmGD'&&vx.cm!=null)||(d.champ==='hanche'&&vx.deg!=null))) out[d.cle]=vx;
+      continue;
+    }
     const o={};
+    // UN ANCIEN RELEVÉ À UNE VALEUR, non retouché, reste tel quel.
+    if((d.champ==='cmGD'||d.champ==='hanche')&&!etat.rempli) continue;
     if(d.champ==='cm') o.cm=n(v.cm);
     else if(d.champ==='deg'){ o.deg=n(v.deg); if(v.butee==='nette'||v.butee==='elastique') o.butee=v.butee; }
+    else if(d.champ==='cmGD'){ const g=n(v.g), dr=n(v.d); if(g!=null) o.g=g; if(dr!=null) o.d=dr; }
+    else if(d.champ==='hanche'){ for(const k of ['g','d','ri_g','ri_d']){ const q=n(v[k]); if(q!=null) o[k]=q; }
+      if(v.butee==='nette'||v.butee==='elastique') o.butee=v.butee; }
     else if(d.champ==='paire'){ const g=n(v.g), dr=n(v.d); if(g!=null) o.g=g; if(dr!=null) o.d=dr;
       if(v.mur==='oui'||v.mur==='non') o.mur=v.mur; }
     else if(d.champ==='niveau') o.niveau=String(v.niveau||'');
@@ -67757,7 +67865,7 @@ function renderAsymetrieCoach(c){
   const z=document.getElementById('ccd-asymetrie');
   if(!z) return false;
   let s=null;
-  try{ s=signalAsymetrie(c); }catch(e){ s=null; }
+  try{ s=signalAsymetrie(c,{tous:true}); }catch(e){ s=null; }
   if(!s){ z.innerHTML=''; return true; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
@@ -80739,6 +80847,7 @@ const BILAN_QUESTIONS={
     {k:'deb-tca',lbl:'Troubles du comportement alimentaire',ico:'alert-triangle',alerte:true},
     {k:'deb-goals',lbl:'Objectifs principaux',ico:'cible'},
     {k:'deb-job',lbl:'Profession',ico:'user'},
+    {k:'deb-lateralite',lbl:'Main dominante',ico:'user'},
     {k:'deb-naf',lbl:"Niveau d'activité hors sport",ico:'shoe'},
     {k:'deb-work-rhythm',lbl:'Rythme de travail',ico:'clock'},
     {k:'deb-location',lbl:"Lieu d'entraînement",ico:'crosshair'},
@@ -83740,6 +83849,10 @@ const DEB_STEPS=[
     // libelles des deux questionnaires ; les cles et les valeurs ne bougent pas.
     bLbl('Tu es ?')+
     `<div>${bGenderCards('deb-gender')}</div>`+
+    // LA MAIN DOMINANTE (06/10/2026) : le bras qui écrit est souvent plus gros,
+    // et ce n'est pas un déséquilibre à corriger (asymetries).
+    bLbl('Tu es droitier, gaucher ?')+
+    `<div>${bC('deb-lateralite',['Droitier','Gaucher'],false)}</div>`+
     bLbl('Quelle est ta date de naissance ?')+bDate('deb-birthdate')+
     bLbl('Quel est ton poids actuel ? (en kg)')+bQ('deb-weight')+
     bLbl('Quelle est ta taille ? (en cm)')+bQ('deb-height')+
@@ -92022,13 +92135,35 @@ function asymetrieSite(bilans,site,seuilPerso){
     // pas un accident de mesure.
     suite:e.map(x=>Math.round(x.ecart*10)/10)};
 }
+// ── LA MAIN DOMINANTE (06/10/2026) ──────────────────────────────────────
+// Le bras de la main qui écrit est souvent plus gros : ce n'est pas un
+// déséquilibre à corriger. Au bilan de départ, « Tu es droitier, gaucher ? »
+// (deb-lateralite). Quand le côté FORT d'un site du membre supérieur est le
+// côté DOMINANT, le seuil passe à ASYM_SEUIL_DOMINANT et l'asymétrie n'est
+// qu'INFORMATIVE : elle se dit sur la fiche, elle n'entre pas dans « Pourquoi
+// cet athlète est ici ». Côté non dominant plus fort, ou membres inférieurs :
+// seuils d'ASYM_PAIRES.
+const ASYM_SEUIL_DOMINANT=0.05;
+const ASYM_SITES_HAUT=Object.freeze(['bicep','forearm']);
+/** PURE. 'droite', 'gauche' ou null : la main dominante déclarée. */
+function lateraliteDe(user){
+  const u=_dossier(user);
+  const bl=((u&&u.bilans)||[]).filter(b=>b&&b.date&&b['deb-lateralite']).sort((a,b)=>b.date-a.date);
+  const v=bl.length?String(bl[0]['deb-lateralite']):'';
+  return /^droit/i.test(v)?'droite':/^gauch/i.test(v)?'gauche':null;
+}
 // PURE. Toutes les asymetries averees d'un dossier, la plus marquee d'abord.
 function asymetries(user){
   const u=_dossier(user);
   const b=(u&&u.bilans)||[];
+  const dom=lateraliteDe(u);
   const out=[];
   for(const p of ASYM_PAIRES){
-    const a=asymetrieSite(b,p.site);
+    let a=asymetrieSite(b,p.site);
+    if(a&&dom&&ASYM_SITES_HAUT.indexOf(p.site)>=0&&a.fort===dom){
+      a=asymetrieSite(b,p.site,Math.max(p.seuil,ASYM_SEUIL_DOMINANT));
+      if(a) a.informatif=true;
+    }
     if(a) out.push(a);
   }
   return out.sort((x,y)=>y.ecartRelatif-x.ecartRelatif);
@@ -92094,7 +92229,8 @@ function phraseAsymetrie(a){
   // « sur trois bilans » et non « sur 3 bilans » : c'est une phrase, pas un
   // releve, et le chiffre isole y ferait tache.
   const n=({1:'un',2:'deux',3:'trois',4:'quatre'})[a.bilans]||String(a.bilans);
-  return a.lib+' '+cote+' +'+cm+' cm sur '+n+' bilans.';
+  return a.lib+' '+cote+' +'+cm+' cm sur '+n+' bilans.'
+    +(a.informatif?' Côté dominant : à titre d’information.':'');
 }
 function gesteAsymetrie(a,user){
   if(!a) return '';
@@ -92109,8 +92245,10 @@ function gesteAsymetrie(a,user){
 // dans la semaine, et la faire remonter au-dessus d'une douleur serait
 // deplacer le regard du coach au mauvais endroit.
 const ASYM_GRAVITE=3;
-function signalAsymetrie(user){
-  const l=asymetries(user);
+// `opts.tous` : les asymétries informatives (côté dominant) comprises — la
+// fiche les montre ; « Pourquoi cet athlète est ici » ne les reçoit pas.
+function signalAsymetrie(user,opts){
+  const l=asymetries(user).filter(a=>(opts&&opts.tous)||!a.informatif);
   if(!l.length) return null;
   const a=l[0];
   return {code:'asymetrie',gravite:ASYM_GRAVITE,site:a.site,
@@ -114577,8 +114715,15 @@ const AMP_ZONE=Object.freeze({cheville:'la cheville',hanche:'la hanche',epaule:'
 // rien qui se compare). Les mêmes seuils que morphoAxes.
 function ampSousRepere(cle,v){
   if(!v||typeof v!=='object') return null;
-  if(cle==='cheville'){ const q=parseFloat(v.cm); return isFinite(q)?q<10:null; }
-  if(cle==='hanche') return (v.butee==='nette')?true:((v.butee==='elastique')?false:null);
+  // Le côté le plus limité (ampCotes) ; et la hanche n'est « sous son repère »
+  // que si la butée nette arrive avant la fin d'une flexion normale.
+  if(cle==='cheville'){ const q=ampPire(ampCotes('cheville',v)); return q!=null?q<10:null; }
+  if(cle==='hanche'){
+    if(v.butee==='elastique') return false;
+    if(v.butee!=='nette') return null;
+    const fl=ampPire(ampCotes('hanche',v));
+    return fl==null||fl<HANCHE_FLEXION_BUTEE_PRECOCE;
+  }
   if(cle==='epaule') return (v.mur==='non')?true:((v.mur==='oui')?false:null);
   if(cle==='posterieur') return v.niveau?(v.niveau==='bas'):null;
   return null;
@@ -114659,8 +114804,7 @@ function voirMobilisations(){
 function ampValeur(cle,v){
   if(!v||typeof v!=='object') return null;
   const n=x=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
-  if(cle==='cheville') return n(v.cm);
-  if(cle==='hanche') return n(v.deg);
+  if(cle==='cheville'||cle==='hanche') return ampPire(ampCotes(cle,v));
   if(cle==='epaule'){ const g=n(v.g), d=n(v.d); return (g==null&&d==null)?null:(g!=null&&d!=null?(g+d)/2:(g!=null?g:d)); }
   if(cle==='posterieur') return ({bas:1,milieu:2,haut:3})[v.niveau]||null;
   return null;

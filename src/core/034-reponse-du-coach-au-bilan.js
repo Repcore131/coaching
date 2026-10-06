@@ -1257,6 +1257,10 @@ const DEB_STEPS=[
     // libelles des deux questionnaires ; les cles et les valeurs ne bougent pas.
     bLbl('Tu es ?')+
     `<div>${bGenderCards('deb-gender')}</div>`+
+    // LA MAIN DOMINANTE (06/10/2026) : le bras qui écrit est souvent plus gros,
+    // et ce n'est pas un déséquilibre à corriger (asymetries).
+    bLbl('Tu es droitier, gaucher ?')+
+    `<div>${bC('deb-lateralite',['Droitier','Gaucher'],false)}</div>`+
     bLbl('Quelle est ta date de naissance ?')+bDate('deb-birthdate')+
     bLbl('Quel est ton poids actuel ? (en kg)')+bQ('deb-weight')+
     bLbl('Quelle est ta taille ? (en cm)')+bQ('deb-height')+

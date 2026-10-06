@@ -77512,7 +77512,8 @@ async function testExercices(){
         const t=testsMorpho(u);
         if(t.length!==4) return _echec(t.length+' tests');
         const p=Object.fromEntries(t.map(x=>[x.cle,x]));
-        if(p.cheville.perime!==false||p.cheville.texte!=='7 cm au mur')
+        // Un relevé à une seule valeur (avant les deux côtés) est marqué comme tel.
+        if(p.cheville.perime!==false||p.cheville.texte!=='7 cm au mur, côté non précisé')
           return _echec('cheville : '+JSON.stringify(p.cheville));
         if(p.hanche.perime!==true||!/110°, butée nette/.test(p.hanche.texte))
           return _echec('hanche : '+JSON.stringify(p.hanche));
@@ -77790,7 +77791,10 @@ async function testExercices(){
 
       ok('M2 — une asymétrie demande trois bilans ET plus d’un centimètre',()=>{
         const bil=(n,g,d)=>({type:'suivi',date:Date.now()-n*_mj,'bil-bicep-l':String(g),'bil-bicep-r':String(d)});
-        const av=(l)=>{ const u=_m2(_M2BASE); u.bilans=u.bilans.concat(l);
+        // Le bilan de départ, sans tour de bras, est PLUS ANCIEN que les trois
+        // suivis : depuis le 06/10/2026, le moteur unique (asymetries) lit les
+        // trois DERNIERS bilans du dossier, sans trou.
+        const av=(l)=>{ const u=_m2(_M2BASE); u.bilans[0].date=Date.now()-200*_mj; u.bilans=u.bilans.concat(l);
           return _m2Ax(u).A9.asymetries; };
         // Trois bilans, deux centimètres, toujours du même côté : c'est un signal.
         if(av([bil(1,36,38),bil(30,36,38),bil(60,35,37)]).length!==1)
@@ -78102,6 +78106,62 @@ async function testExercices(){
           return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
         } finally { currentUser=sauve; }});
 
+      // ── 06/10/2026 — HANCHE, MOBILITÉ G/D, UN SEUL MOTEUR D'ASYMÉTRIE, LATÉRALITÉ ──
+      ok('Hanche : butée nette à 135° → pas de P10 (fin d’amplitude normale) ; à 105° → P10',()=>{
+        const pr=t=>{ const u=_m2(_M2BASE,{hanche:Object.assign({date:Date.now()-2*_mj},t)}); const ax=morphoAxes(u,{calibrage:_m2Cal()}); return {ax,res:morphoProfils(ax)}; };
+        const a=pr({deg:135,butee:'nette'});
+        if(a.res.profils.some(p=>p.cle==='P10')) return _echec('P10 à 135°');
+        const h=a.ax.find(x=>x.cle==='A8').facettes.hanche;
+        if(h.position!=='neutre'||!/arrêt net en fin d’amplitude normale/.test(h.texte)) return _echec('135° : '+h.position+' / '+h.texte);
+        const b=pr({deg:105,butee:'nette'});
+        if(!b.res.profils.some(p=>p.cle==='P10')) return _echec('pas de P10 à 105°');
+        // Deux côtés : le plus limité décide.
+        const c=pr({g:130,d:110,butee:'nette'});
+        if(!c.res.profils.some(p=>p.cle==='P10')) return _echec('le côté limité ne compte pas');
+        return HANCHE_FLEXION_BUTEE_PRECOCE===115?true:_echec('seuil '+HANCHE_FLEXION_BUTEE_PRECOCE);});
+      ok('Mobilité : cheville g 12 / d 6 → asymétrie de mobilité dans A8, P14 possible avec la source « test » ; l’ancien relevé à une valeur reste lisible',()=>{
+        const u=_m2(_M2BASE,{cheville:{g:12,d:6,date:Date.now()-2*_mj}});
+        const ax=morphoAxes(u,{calibrage:_m2Cal()});
+        const a8=ax.find(x=>x.cle==='A8');
+        if(!(a8.asymetriesMobilite||[]).some(x=>x.cle==='cheville'&&x.ecart===6)) return _echec('asymétrie : '+JSON.stringify(a8.asymetriesMobilite));
+        if(!/Asymétrie de mobilité/.test(a8.texte)) return _echec('A8 : '+a8.texte);
+        if(ax.find(x=>x.cle==='A7').valeur!==6) return _echec('A7 ne prend pas le côté limité');
+        if(!morphoProfils(ax).profils.some(p=>p.cle==='P14')) return _echec('P14 ne sort pas');
+        // Sous les seuils : rien.
+        if(asymetriesMobilite(_m2(_M2BASE,{cheville:{g:10,d:7,date:Date.now()},hanche:{g:120,d:120,ri_g:35,ri_d:28,date:Date.now()}})).length) return _echec('un écart sous le seuil compte');
+        if(!asymetriesMobilite(_m2(_M2BASE,{hanche:{g:120,d:120,ri_g:40,ri_d:28,date:Date.now()}})).some(x=>x.cle==='hanche')) return _echec('rotation interne non vue');
+        // L'ancien format : une valeur, les deux côtés, marquée.
+        const v=_m2(_M2BASE,{cheville:{cm:7,date:Date.now()}});
+        const t=testsMorpho(v).find(x=>x.cle==='cheville').texte;
+        if(t!=='7 cm au mur, côté non précisé') return _echec('ancien format : '+t);
+        return asymetriesMobilite(v).length===0?true:_echec('un ancien relevé fabrique une asymétrie');});
+      ok('Asymétrie : un seul moteur, une seule phrase sur la fiche (A9 et la ligne d’asymétrie disent le même chiffre)',()=>{
+        const b=(i,g,d)=>({type:i?'coaching':'depart',date:Date.now()-(3-i)*14*_mj,'bil-bicep-l':String(g),'bil-bicep-r':String(d)});
+        const u=_m2(_M2BASE); u.bilans[0].date=Date.now()-200*_mj; u.bilans=u.bilans.concat([b(1,38,36),b(2,38.2,36.1),b(3,38.1,36.5)]);
+        const l=asymetries(u);
+        if(!l.length) return _echec('aucune asymétrie');
+        const m=_morphoAsymetries(u);
+        if(m.length!==l.length||m[0].ecart!==Math.round(l[0].ecart*10)/10) return _echec('deux chiffres : '+m[0].ecart+' / '+l[0].ecart);
+        const a9=morphoAxes(u).find(x=>x.cle==='A9');
+        if(a9.texte.indexOf(phraseAsymetrie(l[0]))<0) return _echec('A9 : '+a9.texte);
+        if(/cm de plus à/.test(a9.texte)) return _echec('l’ancienne phrase survit');
+        return /_morphoAsymetries|MORPHO_ASYM_CM/.test(String(asymetries))?_echec('boucle'):true;});
+      ok('Latéralité : droitier, bras droit +1,5 cm sur 3 bilans → pas de signal de priorité ; gaucher → signal',()=>{
+        const fab=lat=>{ const u=_m2(_M2BASE); u.bilans[0]['deb-lateralite']=lat; u.bilans[0].date=Date.now()-200*_mj;
+          for(let i=1;i<=3;i++) u.bilans.push({type:'coaching',date:Date.now()-(4-i)*14*_mj,'bil-bicep-l':'36','bil-bicep-r':'37.5'});
+          return u; };
+        const d=fab('Droitier');
+        if(lateraliteDe(d)!=='droite') return _echec('latéralité : '+lateraliteDe(d));
+        if(signalAsymetrie(d)) return _echec('signal de priorité pour le bras dominant');
+        if(asymetries(d).some(a=>!a.informatif)) return _echec('asymétrie non informative');
+        if(signalAsymetrie(fab('Gaucher'))==null) return _echec('gaucher : le bras droit plus fort n’est plus vu');
+        // Au-delà de 5 % côté dominant : informatif, sur la fiche seulement.
+        const f=_m2(_M2BASE); f.bilans[0]['deb-lateralite']='Droitier'; f.bilans[0].date=Date.now()-200*_mj;
+        for(let i=1;i<=3;i++) f.bilans.push({type:'coaching',date:Date.now()-(4-i)*14*_mj,'bil-bicep-l':'35','bil-bicep-r':'37.5'});
+        const s=signalAsymetrie(f,{tous:true});
+        if(!s||!s.toutes[0].informatif||signalAsymetrie(f)) return _echec('informatif : '+JSON.stringify(s&&s.toutes[0]));
+        if(!/Côté dominant/.test(s.phrase)) return _echec('phrase : '+s.phrase);
+        return /deb-lateralite/.test(String(DEB_STEPS[0]))?true:_echec('la question n’est pas au départ');});
       // ── 06/10/2026 — LA MORPHO EN UN SEUL ENDROIT ──
       const _moCoach=fn=>{ const sv=currentUser; try{ currentUser={id:'co',email:'co@t',role:'coach'}; return fn(); } finally { currentUser=sv; } };
       ok('Morpho : #ccd-micro ne porte plus « Profils composés » ; la section vit dans Données, juste avant l’analyse photo',()=>_moCoach(()=>{
