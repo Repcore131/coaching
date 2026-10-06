@@ -124,7 +124,7 @@ async function reperage(page) {
   await fermerAlertes(page);
   // 1. Chaque catégorie dépliée : titre et description des exports (libellés d'interface).
   for (const cat of ['Comptabilité', 'Finance', 'Membres & Ventes', "Points d'attention", 'Spécifiques', 'Vie du Club']) {
-    const h = page.locator('[aria-expanded]').filter({ hasText: cat });
+    const h = page.getByText(cat, { exact: true });
     if (!(await visible(h))) { log('catégorie introuvable :', cat); continue; }
     const avant = await page.evaluate(() => document.body.innerText.length);
     await h.first().click().catch(() => {}); await page.waitForTimeout(1500);
@@ -141,12 +141,12 @@ async function reperage(page) {
     await carte.first().click(); await page.waitForTimeout(3000);
     const f = await page.evaluate(() => ({ url: location.pathname + location.search, champs: [...document.querySelectorAll('input,select,textarea')].filter(e => e.getBoundingClientRect().height > 0).map(e => [e.type, e.name || e.id, e.placeholder || '', (e.closest('label,div') || {}).innerText ? e.closest('div').innerText.trim().slice(0, 40) : ''].join('|')), boutons: [...document.querySelectorAll('button')].filter(e => e.getBoundingClientRect().height > 0).map(e => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter(t => t && t.length < 50) }));
     log('=== formulaire Prospects :', f.url); f.champs.forEach(x => log('  champ', propre(x))); log('  boutons :', f.boutons.map(propre).join(' · '));
-    const dates = page.locator('input[type=date],input[placeholder*="JJ" i],input[placeholder*="jj/" i],input[name*=date i],input[name*=from i],input[name*=start i]');
+    const dates = page.locator('input[placeholder="DD/MM/YYYY"],input[placeholder*="JJ/MM" i],input[type=date]');
     const nd = await dates.count(); log('  champs date :', nd);
     const fmt = d => { const p = n => String(n).padStart(2, '0'); return { iso: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, fr: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}` }; };
     const d1 = fmt(new Date(Date.now() - 7 * 864e5)), d2 = fmt(new Date());
     for (let i = 0; i < Math.min(nd, 2); i++) { const e = dates.nth(i); const t = await e.getAttribute('type'); const v = (i ? d2 : d1)[t === 'date' ? 'iso' : 'fr']; await e.click().catch(() => {}); await e.fill('').catch(() => {}); await e.pressSequentially(v.replace(/\//g, ''), { delay: 40 }).catch(() => {}); log(`  date ${i + 1} remplie (${t})`); }
-    const go = page.getByRole('button', { name: /^(exporter|lancer|générer|télécharger|valider)/i }).last();
+    const go = page.getByRole('button', { name: /^valider$/i }).last();
     if (await visible(go)) {
       const dl = page.waitForEvent('download', { timeout: 60000 }).catch(() => null);
       await go.click(); log('  export lancé');
@@ -156,6 +156,15 @@ async function reperage(page) {
         await page.waitForTimeout(3000);
         const msg = await page.evaluate(() => [...document.querySelectorAll('[role=alert],[class*=snackbar],[class*=Snackbar],[class*=toast],[class*=Alert]')].map(e => (e.innerText || '').trim()).filter(Boolean));
         log('  pas de téléchargement direct ; messages :', msg.map(propre).join(' · ') || 'aucun');
+        // L'export est peut-être préparé en différé : on regarde « Mes derniers exports » quelques minutes.
+        for (let k = 0; k < 6; k++) {
+          await page.goto(base + '/fitnesspark/-/management/exports/export', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(8000); await fermerAlertes(page);
+          const derniers = await page.evaluate(() => [...document.querySelectorAll('a[href],button,[role=button]')].filter(e => e.getBoundingClientRect().height > 0).map(e => [(e.innerText || e.getAttribute('aria-label') || e.title || '').trim().replace(/\s+/g, ' ').slice(0, 60), (e.getAttribute('href') || '').slice(0, 80)].join(' → ')).filter(t => /télécharg|download|\.csv|\.xls|prospect|en cours|prêt|termin/i.test(t)));
+          log(`  essai ${k + 1} :`, derniers.map(propre).join(' | ') || 'rien');
+          const lien = page.locator('a[href*=".csv"],a[href*=".xls"],a[download],[aria-label*="élécharg" i],[title*="élécharg" i]').first();
+          if (await visible(lien)) { const dl2 = page.waitForEvent('download', { timeout: 30000 }).catch(() => null); await lien.click().catch(() => {}); const f2 = await dl2; if (f2) { const nom = f2.suggestedFilename(); await f2.saveAs(`${SORTIE}/${nom}`); const { statSync } = await import('node:fs'); log(`  ✓ fichier récupéré : .${nom.split('.').pop()} · ${statSync(`${SORTIE}/${nom}`).size} octets`); break; } }
+          await page.waitForTimeout(20000);
+        }
       }
     } else log('  bouton de lancement introuvable');
   }
