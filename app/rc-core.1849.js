@@ -15865,6 +15865,50 @@ function phraseCouvertureMicro(c){
 // ⚠ SOUS aTCA, RIEN : même garde que _htmlSignalMicro. Le coach garde son
 //   accès par risquesMicro.
 const MICRO_FIABILITE_DITE=0.90;
+// ══ LE POISSON GRAS DE LA SEMAINE (build 1849) ═════════════════════════════
+// Aucun suivi des oméga-3 ni de la vitamine D par l'alimentation : le repère
+// PNNS (deux portions de poisson par semaine, dont une de poisson gras) se
+// compte sur le journal. PURE. Les 7 derniers jours jusqu'à finISO : une
+// entrée dont le nom contient l'un de ces poissons vaut une portion à partir
+// de 80 g, deux à partir de 200 g ; dans un plat ou un sandwich (groupe
+// « entrées et plats composés »), une demi-portion.
+const MICRO_POISSONS_GRAS=Object.freeze(['saumon','sardine','maquereau','hareng','truite','anchois','thon rouge']);
+const MICRO_POISSON_PORTION_G=80, MICRO_POISSON_DOUBLE_G=200, MICRO_POISSON_REPERE=2;
+function poissonGrasSemaine(user,finISO){
+  const log=((((user&&user.nutrition)||{}).log)||{});
+  const fin=String(finISO||localISODate(new Date())).slice(0,10);
+  let portions=0, jours=0, saisies=0;
+  for(let i=0;i<7;i++){
+    const d=localISODate(_datePlusJours(_dateDeISO(fin),-i));
+    const es=(log[d]&&Array.isArray(log[d].entries))?log[d].entries:[];
+    if(es.length) saisies++;
+    let p=0;
+    for(const e of es){
+      if(!e) continue;
+      const n=_microNorm(e.nom);
+      if(!MICRO_POISSONS_GRAS.some(m=>n.indexOf(m)>=0)) continue;
+      const q=Number(e.qty)||0;
+      const plat=/plats? composes|entrees/.test(_microNorm(e.groupe))||/\bsandwich|\bwrap\b|\bsalade composee|\bpizza\b|\bquiche\b/.test(n);
+      if(plat) p+=0.5;
+      else if(q>=MICRO_POISSON_DOUBLE_G) p+=2;
+      else if(q>=MICRO_POISSON_PORTION_G) p+=1;
+    }
+    if(p>0){ portions+=p; jours++; }
+  }
+  return {portions,jours,saisies};
+}
+// La ligne de la carte, ou '' : masquée chez un végétarien (remplacée, sans
+// complément oméga-3 actif, par les oméga-3 végétaux).
+function ligneOmega3(user,finISO){
+  let vege=false; try{ vege=_microVege(user); }catch(e){}
+  if(vege){
+    const omega=(((user&&user.nutrition)||{}).supplements||[]).some(x=>x&&x.active!==false&&/omega/i.test(_microNorm(x.name)));
+    return omega?'':'Oméga-3 végétaux : noix, colza, lin';
+  }
+  const p=poissonGrasSemaine(user,finISO);
+  if(!p.saisies) return '';
+  return 'Poisson gras : '+String(p.portions).replace('.',',')+' / '+MICRO_POISSON_REPERE+' cette semaine (repère PNNS)';
+}
 function _htmlCouvertureMicro(user,ref,opts){
   try{ if(aTCA(_dossier(user))) return ''; }catch(e){}
   const o=opts||{};
@@ -15896,6 +15940,8 @@ function _htmlCouvertureMicro(user,ref,opts){
   return `<div class="micro-carte" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
     ${cs.map(ligne).join('')}
+    ${(function(){ const t=(function(){ try{ return ligneOmega3(user,localISODate((ref instanceof Date)?ref:new Date())); }catch(e){ return ''; } })();
+      return t?'<div class="micro-omega3" style="font-size:var(--fs-xs);color:var(--text-strong);padding:2px 0">'+escapeHtml(t)+'</div>':''; })()}
     ${sexeInconnu?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Sexe non renseigné : la référence la plus élevée est retenue.</div>':''}
     ${o.sansDisclaimer?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">${escapeHtml(MICRO_DISCLAIMER)}</div>`}
   </div>`;
@@ -16375,8 +16421,10 @@ function risquesMicro(user,ref){
     &&/vitamine\s*d\b|\bd3\b/i.test(String(x.name||'')));
   if(!_aVitD&&MICRO_MOIS_PEU_SOLEIL.indexOf(date.getMonth())>=0){
     const mois=date.toLocaleDateString('fr-FR',{month:'long'});
+    // Build 1849 : le poisson gras du journal, quand il est renseigné.
+    let _pg=''; try{ const p=poissonGrasSemaine(user,localISODate(date)); if(p.saisies) _pg=' Poisson gras : '+String(p.portions).replace('.',',')+' portion'+(p.portions>1?'s':'')+' sur 7 jours.'; }catch(e){}
     out.push({cle:'vitamineD',lib:'Saison peu ensoleillée',
-      motif:'Nous sommes en '+mois+' : de novembre à mars, l\'ensoleillement est faible sous nos latitudes.',
+      motif:'Nous sommes en '+mois+' : de novembre à mars, l\'ensoleillement est faible sous nos latitudes.'+_pg,
       question:'Le dosage de la vitamine D a-t-il été abordé avec un professionnel de santé ?'});
   }
 

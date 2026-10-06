@@ -81835,6 +81835,23 @@ async function testExercices(){
           const h=refMicro({gender:'H'},'fe'), f=refMicro({gender:'F'},'fe');
           return h.valeur===11&&f.valeur===16
             ?true:_echec(h.valeur+' / '+f.valeur);});
+        ok('Poisson gras : deux saumons de 120 g → 2 ; un sandwich au thon rouge → ½ ; végétarienne → ligne absente ; aTCA → rien',()=>{
+          const fin=_jours(1)[0];
+          const u={gender:'H',nutrition:{log:{[fin]:{entries:[{nom:'Saumon, cuit',qty:120,kcal:200},{nom:'Saumon fumé',qty:120,kcal:150}]}}}};
+          if(poissonGrasSemaine(u,fin).portions!==2) return _echec('saumons : '+poissonGrasSemaine(u,fin).portions);
+          const v={gender:'H',nutrition:{log:{[fin]:{entries:[{nom:'Sandwich au thon rouge',groupe:'entrées et plats composés',qty:200,kcal:400}]}}}};
+          if(poissonGrasSemaine(v,fin).portions!==0.5) return _echec('sandwich : '+poissonGrasSemaine(v,fin).portions);
+          if(ligneOmega3(u,fin)!=='Poisson gras : 2 / 2 cette semaine (repère PNNS)') return _echec(ligneOmega3(u,fin));
+          const s={gender:'F',bilans:[{type:'depart',date:1,'deb-vege':'oui'}],nutrition:{log:u.nutrition.log}};
+          if(/Poisson gras/.test(ligneOmega3(s,fin))) return _echec('poisson chez une végétarienne');
+          if(ligneOmega3(s,fin)!=='Oméga-3 végétaux : noix, colza, lin') return _echec(ligneOmega3(s,fin));
+          s.nutrition.supplements=[{name:'Oméga-3',active:true}];
+          if(ligneOmega3(s,fin)!=='') return _echec('complément actif');
+          if(ligneOmega3({gender:'H',nutrition:{log:{}}},fin)!=='') return _echec('aucune entrée');
+          const t=_ath('H',7,'fe',7.48,500,0); t.nutrition.log[_jours(1)[0]].entries.push({nom:'Sardines à l’huile',qty:100,kcal:200});
+          if(!/Poisson gras : 1 \/ 2/.test(_htmlCouvertureMicro(t))) return _echec('ligne absente de la carte');
+          t.tcaRisque=true;
+          return _htmlCouvertureMicro(t)===''?true:_echec('aTCA');});
         ok('Repères 1846 : fer femme — ménopause 11, règles « supportable » 11, « difficile » 16, non renseigné 16',()=>{
           const F=o=>Object.assign({gender:'F'},o||{});
           const v=u=>refMicro(u,'fe').valeur;
