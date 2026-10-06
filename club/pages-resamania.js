@@ -240,12 +240,13 @@ ACTIONS.rsmCommit = () => {
     if (r.balances) {
       const listed = new Set();
       r.balances.list.forEach(b0 => { const b = { ...b0, amount: Math.round(b0.amount * 100) / 100 }; const c0 = clientIdx['n:' + b.num] || { id: 'c' + hkey(club + '|n:' + b.num), clubId: club, num: b.num, name: b.name }; clientIdx['n:' + b.num] = c0; listed.add(c0.id); upClient(c0, { ...(b.phone ? { phone: b.phone, phoneSrc: 'rsm' } : {}), ...(b.email ? { email: b.email } : {}), ...(b.oldest ? { oldestIncident: b.oldest } : {}), balance: Math.round(b.amount * 100) / 100, incidents: b.count, balanceAt: Math.abs(Number((pendingClients[c0.id] || c0).balance) - b.amount) < 0.005 ? ((pendingClients[c0.id] || c0).balanceAt || today()) : today(), name: c0.name || b.name }); });
-      // photo complete : un client absent du fichier n'a plus d'impaye
-      // Seule la photo complete « Clients en incident » solde les absents. Une
-      // liste Incidents partielle ne touche jamais aux autres clients. Sans
-      // regularisation correspondante, le dossier passe « à vérifier », pas
-      // « récupéré ».
-      if (r.balances.src === 'clients-incident') Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
+      // photo complete des impayes en cours : un client absent n'a plus d'impaye.
+      // La photo « Clients en incident » ET la liste des incidents « en cours »
+      // sont toutes deux completes (elles listent qui doit aujourd'hui) : un
+      // client reglé en disparaît, on remet donc son solde a 0 pour ne plus
+      // l'appeler. Avec regularisation correspondante le dossier passe
+      // « récupéré », sinon « à vérifier ».
+      if (['clients-incident', 'incidents'].includes(r.balances.src) && r.balances.list.length) Object.values(S.clients).filter(c => c.clubId === club && Number(c.balance) > 0 && !listed.has(c.id)).forEach(c => {
         const rv = lastRecov(club, c.num, B);
         upClient(c, { balance: 0, incidents: 0, dunning: { ...(c.dunning || {}), status: rv ? 'recupere' : 'a_verifier', recoveredAt: rv ? rv.date : today(), amount: Number(c.balance), canal: rv ? rv.canal : null, by: rv ? (rv.userId || null) : null, auto: true } });
       });
