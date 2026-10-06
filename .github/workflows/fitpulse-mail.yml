@@ -35,6 +35,10 @@ on:
         description: 'Lancement de 14 h 50 le lundi : attendre 15 h pile puis envoyer le rapport au directeur'
         type: boolean
         default: false
+      robot_resamania:
+        description: 'Robot Resamania (repérage : connexion et description des menus)'
+        type: boolean
+        default: false
 
 concurrency:
   group: fitpulse-mail
@@ -42,6 +46,7 @@ concurrency:
 
 jobs:
   envoyer:
+    if: ${{ !inputs.robot_resamania }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -62,3 +67,30 @@ jobs:
           TZ: Europe/Paris
           APERCU_RAPPORT: ${{ inputs.apercu_rapport }}
         run: node club/outils/fitpulse-serveur.mjs
+
+  robot:
+    if: ${{ inputs.robot_resamania }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/eloquent-lamport-0qxwdd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installer le navigateur du robot
+        run: |
+          mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
+          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 imapflow@1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Robot Resamania
+        env:
+          RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
+          RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          ROBOT_MODULES: ${{ runner.temp }}/robot
+          ROBOT_MODE: reperage
+          TZ: Europe/Paris
+        run: node club/outils/resamania-robot.mjs
