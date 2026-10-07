@@ -95,7 +95,7 @@
 ~^kiwi	fruit	kiwi	kiwis	75	ordre de grandeur RepCore (pas une mesure)
 ~^peche|^nectarine|^brugnon	fruit	pêche	pêches	150	ordre de grandeur RepCore (pas une mesure)
 ~^abricot	fruit	abricot	abricots	45	ordre de grandeur RepCore (pas une mesure)
-~^prune	fruit	prune	prunes	35	ordre de grandeur RepCore (pas une mesure)
+~^prune[ ,]	fruit	prune	prunes	35	ordre de grandeur RepCore (pas une mesure)
 ~^figue, crue	fruit	figue	figues	50	ordre de grandeur RepCore (pas une mesure)
 ~^datte	fruit	datte	dattes	8	ordre de grandeur RepCore (pas une mesure)
 ~^fraise, crue	poignee	poignée	poignées	80	ordre de grandeur RepCore (pas une mesure)

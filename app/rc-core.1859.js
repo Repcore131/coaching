@@ -104282,8 +104282,11 @@ function _fjCorrespond(f,words,lache){
 }
 // PURE. Le filtre en début de mot ; s'il ne rend RIEN, l'ancien filtre par
 // sous-chaîne — la recherche ne rend jamais moins qu'avant.
+// BUILD 1859 : une fiche « cache » (encore sans énergie après le passage des
+// sœurs, scripts/ciqual_soeurs.tsv) ne sort jamais d'une recherche ; _planCiqual
+// la résout toujours par id, pour qu'un plan ancien ne casse pas.
 function _fjFiltrer(liste,words){
-  const l=(liste||[]).filter(Boolean);
+  const l=(liste||[]).filter(f=>f&&!f.cache);
   const strict=l.filter(f=>_fjCorrespond(f,words));
   return strict.length?strict:l.filter(f=>_fjCorrespond(f,words,true));
 }
@@ -104399,6 +104402,12 @@ function _fjAvecCorrection(q,words,res,db){
   if(!c) return null;
   const r=_fjFiltrer(db,c.words);
   return r.length?Object.assign(c,{res:r}):null;
+}
+// PURE. « Valeurs complétées depuis « Poireau, bouilli/cuit à l'eau » (Ciqual) ».
+function texteRepris(f,db){
+  if(!f||f.repris==null) return '';
+  const s=(db||[]).find(x=>x&&x.id===f.repris);
+  return s?'Valeurs complétées depuis « '+s.n+' » (Ciqual)':'';
 }
 // PURE. LES HABITUDES DE L'ATHLÈTE. Celui qui mange toujours du « Riz basmati
 // cuit » doit le voir en premier quand il tape « riz » : +80 favori, +60
@@ -106637,6 +106646,7 @@ function selectCoachFood(id){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
   if(g) g.textContent='Aliment de ton coach';
   const q=document.getElementById('fja-qty');
@@ -107723,6 +107733,7 @@ function selectOffFood(ean){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const _g=document.getElementById('fja-food-group');
   if(_g) _g.textContent=[a._off.marque,a._off.format].filter(Boolean).join(' · ')||'produit de marque';
   const _q=document.getElementById('fja-qty');
@@ -107856,6 +107867,8 @@ function selectFjFood(id){
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=_fjFood.n;
   document.getElementById('fja-food-group').textContent=_fjFood.g||'';
+  const _rp=document.getElementById('fja-repris');
+  if(_rp) _rp.textContent=texteRepris(_fjFood,_ciqualDB);
   document.getElementById('fja-qty').value=100;
   // Le dernier repas choisi tient pour toute la session ; sans choix, on le
   // déduit de l'heure. Forcer « Matin » obligeait à re-sélectionner à chaque
@@ -108279,6 +108292,7 @@ function selectPersoFood(id){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
   if(g) g.textContent='Mon aliment';
   const q=document.getElementById('fja-qty');

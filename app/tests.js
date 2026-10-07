@@ -22804,6 +22804,32 @@ async function testExercices(){
           return trop.length?_echec(trop.length+' ligne(s) débordent'):true;
         } finally { z.remove(); }});
     }
+    // ══ BUILD 1859 : LES FICHES INCOMPLÈTES — SŒURS, PUIS « cache » ══
+    {
+      okA('Incomplètes : aucune fiche visible en recherche n’a k == null',async()=>{
+        await _loadCiqual();
+        const vis=_ciqualDB.filter(f=>!f.cache);
+        const sans=vis.filter(f=>f.k==null);
+        if(sans.length) return _echec(sans.length+' fiches visibles sans énergie : '+sans.slice(0,3).map(f=>f.n).join(' / '));
+        const r=_fjFiltrer(_ciqualDB,['jus']);
+        return r.some(f=>f.cache)?_echec('une fiche cachée sort du filtre'):true;});
+      okA('Incomplètes : les 5 fiches sans macro ne sortent pas sur « chayote », mais _planCiqual les rend',async()=>{
+        await _loadCiqual();
+        for(const id of [20806,20807,20820,20831,11057]){
+          const f=_planCiqual(id);
+          if(!f||f.cache!==1) return _echec('id '+id+' : '+JSON.stringify(f&&f.cache));
+        }
+        const r=_fjFiltrer(_ciqualDB,['chayote']);
+        const cinq=[20806,20807,20820,20831,11057];
+        return !r.some(f=>cinq.indexOf(f.id)>=0)?true:_echec(r.map(f=>f.id).join());});
+      okA('Incomplètes : une fiche « repris » garde ses valeurs Anses d’origine',async()=>{
+        await _loadCiqual();
+        const t=_planCiqual(20343), b=_planCiqual(25505);
+        if(!t||t.repris!==20276||t.c!==2.81||t.l!==0) return _echec('tomate : '+JSON.stringify(t));
+        if(!b||b.p!==20||b.c!==0||b.repris==null||!b.k_calc) return _echec('brochette : '+JSON.stringify(b));
+        return texteRepris(_planCiqual(20040),_ciqualDB)==='Valeurs complétées depuis « Poireau, bouilli/cuit à l\'eau » (Ciqual)'?true:_echec(texteRepris(_planCiqual(20040),_ciqualDB));});
+      ok('Incomplètes : sans « repris », aucune mention',()=>texteRepris({id:1},[])===''?true:_echec('mention'));
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{

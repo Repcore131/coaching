@@ -1106,6 +1106,7 @@ function selectCoachFood(id){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
   if(g) g.textContent='Aliment de ton coach';
   const q=document.getElementById('fja-qty');
@@ -2192,6 +2193,7 @@ function selectOffFood(ean){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const _g=document.getElementById('fja-food-group');
   if(_g) _g.textContent=[a._off.marque,a._off.format].filter(Boolean).join(' · ')||'produit de marque';
   const _q=document.getElementById('fja-qty');
@@ -2325,6 +2327,8 @@ function selectFjFood(id){
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=_fjFood.n;
   document.getElementById('fja-food-group').textContent=_fjFood.g||'';
+  const _rp=document.getElementById('fja-repris');
+  if(_rp) _rp.textContent=texteRepris(_fjFood,_ciqualDB);
   document.getElementById('fja-qty').value=100;
   // Le dernier repas choisi tient pour toute la session ; sans choix, on le
   // déduit de l'heure. Forcer « Matin » obligeait à re-sélectionner à chaque

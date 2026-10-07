@@ -1,0 +1,28 @@
+# id_incomplet<TAB>id_soeur<TAB>justification — lu par scripts/ciqual_convert.py.
+# La sœur ne prête QUE les champs absents (p, c, l, f, sel) : une valeur Anses présente
+# n'est jamais remplacée. L'énergie est alors recalculée (4p + 4c + 9l + 2f, "k_calc"),
+# et la fiche porte "repris": id_soeur. Une fiche encore sans énergie après ce passage
+# est cachée de la recherche ("cache": 1) mais reste résolue par id (plans anciens).
+25504	36003	Brochette de volaille crue : viande de poulet crue, même découpe et même état
+25505	6111	Brochette de boeuf crue : faux-filet cru, morceau à griller maigre
+25400	25547	Croque-monsieur fait maison : le croque-monsieur préemballé porte les glucides
+15030	15029	Graine germée de radis : graine germée de luzerne, même état (fraîche, crue)
+20159	20010	Oronge vraie crue : champignon tout type cru (aliment moyen)
+20161	20010	Rosé des prés cru : champignon tout type cru (aliment moyen)
+20106	20010	Truffe noire crue : champignon tout type cru (aliment moyen), fibres Anses gardées
+20343	20276	Tomate marmande crue : tomate ronde crue
+20344	20276	Tomate noire de Crimée crue : tomate ronde crue
+20835	20276	Tomate entière crue (Martinique) : tomate ronde crue
+20040	20327	Poireau cuit : poireau bouilli/cuit à l'eau
+9107	9104	Riz blanc précuit cuit : riz blanc cuit, même cuisson à l'eau sans sel
+21007	21503	Mouton, gigot rôti : agneau, gigot rôti/cuit au four
+36311	36307	Dinde, haut de cuisse cru : dinde, cuisse, viande crue
+19010	19024	Lait entier cru : lait entier pasteurisé
+12768	12066	Feta à l'huile et aux aromates, égouttée : feta (lipides)
+17800	17180	Huile de cameline : huile de lin (lipides 100 g, même famille d'huiles riches en oméga-3)
+13402	13002	Ananas cru (Martinique) : ananas, chair sans peau, cru
+13430	13026	Melon cru (Martinique) : melon cantaloup cru
+13433	13036	Pastèque crue (Martinique) : pastèque crue
+13431	13034	Orange (Martinique) : orange, chair sans peau, crue
+20808	20210	Concombre sans peau (Martinique) : concombre, chair sans peau, cru
+20809	20019	Concombre avec peau (Martinique) : concombre, chair et peau, cru

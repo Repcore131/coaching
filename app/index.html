@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1858';
+window.RC_BUILD='1859';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -723,13 +723,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1858.css">
+<link rel="stylesheet" href="./rc-style.1859.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1858.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1859.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -5101,6 +5101,9 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="flex:1;min-width:0;font-size:var(--fs-lg);font-weight:800;line-height:1.3" id="fja-food-name">-</div>
           <span id="fja-epingle-slot" style="flex-shrink:0"></span>
         </div>
+        <!-- BUILD 1859 : « Valeurs complétées depuis … » quand une fiche Ciqual
+             incomplète a emprunté des champs à sa sœur (scripts/ciqual_soeurs.tsv). -->
+        <div id="fja-repris" style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px"></div>
       </div>
       <div id="fja-fiabilite" style="margin-bottom:16px"></div>
       <div style="margin-bottom:20px">
@@ -6189,5 +6192,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1858.js"></script>
+<script src="./rc-core.1859.js"></script>
 </body></html>

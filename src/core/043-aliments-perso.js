@@ -179,6 +179,7 @@ function selectPersoFood(id){
   _fjFood=a;
   go('s-food-add');
   document.getElementById('fja-food-name').textContent=a.n;
+  { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
   if(g) g.textContent='Mon aliment';
   const q=document.getElementById('fja-qty');

@@ -1685,8 +1685,11 @@ function _fjCorrespond(f,words,lache){
 }
 // PURE. Le filtre en début de mot ; s'il ne rend RIEN, l'ancien filtre par
 // sous-chaîne — la recherche ne rend jamais moins qu'avant.
+// BUILD 1859 : une fiche « cache » (encore sans énergie après le passage des
+// sœurs, scripts/ciqual_soeurs.tsv) ne sort jamais d'une recherche ; _planCiqual
+// la résout toujours par id, pour qu'un plan ancien ne casse pas.
 function _fjFiltrer(liste,words){
-  const l=(liste||[]).filter(Boolean);
+  const l=(liste||[]).filter(f=>f&&!f.cache);
   const strict=l.filter(f=>_fjCorrespond(f,words));
   return strict.length?strict:l.filter(f=>_fjCorrespond(f,words,true));
 }
@@ -1802,6 +1805,12 @@ function _fjAvecCorrection(q,words,res,db){
   if(!c) return null;
   const r=_fjFiltrer(db,c.words);
   return r.length?Object.assign(c,{res:r}):null;
+}
+// PURE. « Valeurs complétées depuis « Poireau, bouilli/cuit à l'eau » (Ciqual) ».
+function texteRepris(f,db){
+  if(!f||f.repris==null) return '';
+  const s=(db||[]).find(x=>x&&x.id===f.repris);
+  return s?'Valeurs complétées depuis « '+s.n+' » (Ciqual)':'';
 }
 // PURE. LES HABITUDES DE L'ATHLÈTE. Celui qui mange toujours du « Riz basmati
 // cuit » doit le voir en premier quand il tape « riz » : +80 favori, +60

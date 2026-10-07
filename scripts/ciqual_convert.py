@@ -360,6 +360,60 @@ def poser_unites(out):
     print(f'  Unités naturelles : {n} fiches')
     return out
 
+# ── Les fiches incomplètes : scripts/ciqual_soeurs.tsv, puis "cache" ──────
+SOEURS = os.path.join(os.path.dirname(__file__), 'ciqual_soeurs.tsv')
+CHAMPS_SOEUR = ('p', 'c', 'l', 'f', 'e')
+
+def poser_soeurs(base):
+    """Complète les champs ABSENTS depuis la fiche sœur, jamais une valeur
+    présente. Reproductible : ce qu'une passe précédente a prêté est noté dans
+    "rc" et retiré avant de reprêter."""
+    par_id = {e['id']: e for e in base}
+    for e in base:
+        for k in e.pop('rc', []) or []:
+            e.pop(k, None)
+        if e.pop('repris', None) is not None and 'k' not in e:
+            e.pop('k_calc', None)
+        e.pop('cache', None)
+    soeurs, erreurs = [], []
+    if os.path.exists(SOEURS):
+        with open(SOEURS, encoding='utf-8') as fp:
+            for n, ligne in enumerate(fp, 1):
+                if not ligne.strip() or ligne.startswith('#'):
+                    continue
+                cols = ligne.rstrip('\n').split('\t')
+                i, j = int(cols[0]), int(cols[1])
+                if i not in par_id or j not in par_id:
+                    erreurs.append(f'ligne {n} : id absent ({i} ou {j})')
+                    continue
+                soeurs.append((i, j))
+    if erreurs:
+        print('  ✗ ciqual_soeurs.tsv refusé :')
+        for x in erreurs: print('    - ' + x)
+        sys.exit(1)
+    for i, j in soeurs:
+        e, s = par_id[i], par_id[j]
+        pris = [k for k in CHAMPS_SOEUR if e.get(k) is None and s.get(k) is not None]
+        for k in pris:
+            e[k] = s[k]
+        if e.get('k') is None and all(e.get(x) is not None for x in ('p', 'c', 'l')):
+            e['k'] = round(4*e['p'] + 4*e['c'] + 9*e['l'] + 2*(e.get('f') or 0), 1)
+            e['k_calc'] = True
+            pris.append('k')
+        if pris:
+            e['repris'] = j
+            e['rc'] = pris
+    # Encore sans énergie : invisible en recherche, résolu par id.
+    caches = 0
+    for e in base:
+        if e.get('k') is None:
+            e['cache'] = 1
+            caches += 1
+    print(f'  Fiches complétées par une sœur : {sum(1 for e in base if "repris" in e)} ; cachées de la recherche : {caches}')
+    for k in ('k', 'p', 'c', 'l'):
+        print(f'    sans {k} : {sum(1 for e in base if e.get(k) is None)}')
+    return base
+
 def completer(out):
     """Énergie calculée là où elle manque, puis le bloc générique (remplacé
     s'il existait déjà : le script peut repasser sans rien dupliquer), puis
@@ -373,6 +427,7 @@ def completer(out):
             e['k_calc'] = True
             n += 1
     print(f'  Énergie calculée (4p + 4c + 9l + 2f) : {n} aliments')
+    base = poser_soeurs(base)
     base = poser_alias(base)
     g = generiques(base)
     print(f'  Aliments génériques RepCore : {len(g)}')
