@@ -595,11 +595,11 @@ function relanceVue(at){
 // traiter » (vidéo, note, accès, programme à écrire…) donne 'autre' : un
 // athlète qui a une ligne n'est jamais « Rien à signaler ».
 const SIGNAL_CATS=Object.freeze(['drapeau','douleur','bilan','message','retard','fatigue','regression','plateau',
-  'volume','forme','absence','bloc','nostart','autre','rien']);
+  'volume','forme','absence','bloc','nostart','autre','victoire','rien']);
 const LUNDI_RANGS=SIGNAL_CATS;
 const LUNDI_CIBLE=Object.freeze({drapeau:'ccd-securite',douleur:'ccd-douleur',bilan:'bilan',message:'message',retard:null,
   fatigue:'ccd-volume',regression:'ccd-plateaux',plateau:'ccd-plateaux',volume:'ccd-volume',forme:'ccd-volume',
-  absence:'ccd-sessions-recap',bloc:'bloc',nostart:null,autre:null,rien:null});
+  absence:'ccd-sessions-recap',bloc:'bloc',nostart:null,autre:null,victoire:'bravo',rien:null});
 const LUNDI_PAQUET=4;
 /**
  * PURE (lit le dossier, les signaux en cache et les reports du coach).
@@ -677,6 +677,42 @@ function signalAutre(c,sg,acc,t,rep){
   if(ok(()=>lignesSansContact([c],currentUser&&currentUser.contacts,t,()=>rep('silence')).length)) return 'Sans échange récent';
   return '';
 }
+// ══ BUILD 1918 — LA VICTOIRE DE LA SEMAINE ═════════════════════════════════
+// PURE. Ce qu'un athlète a GAGNÉ la semaine écoulée (lundi→dimanche avant
+// `maintenant`), ou null. Deux victoires, dans cet ordre :
+//   1. un record de charge — la plus lourde série d'un exercice dépasse tout
+//      ce qu'il avait soulevé avant cette semaine ;
+//   2. une semaine complète — au moins deux séances, et autant que de jours
+//      actifs au programme.
+// {cle, type, texte, envoye} — cle est le lundi de la semaine (AAAA-MM-JJ), la
+// même que c.bravos, qui retient qu'un bravo est déjà parti.
+function cleSemaineDe(t){
+  const d=new Date(Number(t)||Date.now()); d.setHours(12,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return localISODate(d);
+}
+function victoireSemaine(c,maintenant){
+  if(!c) return null;
+  const t=Number(maintenant)||Date.now();
+  const lundiCourant=dateLocaleDeCle(cleSemaineDe(t)); lundiCourant.setHours(0,0,0,0);
+  const fin=lundiCourant.getTime(), debut=fin-7*864e5;
+  const cle=cleSemaineDe(debut+864e5);
+  const ts=s=>{ const d=s&&s.date; if(!d) return 0; const m=/^\d{4}-\d{2}-\d{2}$/.test(String(d)); return m?dateLocaleDeCle(d).getTime():Number(d)||new Date(d).getTime()||0; };
+  const ss=(Array.isArray(c.sessions)?c.sessions:[]).filter(s=>s&&s.complete!==false);
+  const dans=ss.filter(s=>{ const x=ts(s); return x>=debut&&x<fin; });
+  if(!dans.length) return null;
+  const envoye=!!(c.bravos&&c.bravos[cle]);
+  const maxKg=l=>{ const m={}; l.forEach(s=>Object.entries(s.data||{}).forEach(([nm,d])=>((d&&d.sets)||[]).forEach(x=>{
+    if(!x||!(x.done||x.horsCalcul)) return; const kg=parseFloat(String(x.weight==null?'':x.weight).replace(',','.'))||0;
+    if(kg>(m[nm]||0)) m[nm]=kg; }))); return m; };
+  const avant=maxKg(ss.filter(s=>ts(s)<debut)), semaine=maxKg(dans);
+  let best=null;
+  Object.keys(semaine).forEach(nm=>{ if(avant[nm]>0&&semaine[nm]>avant[nm]){ const g=semaine[nm]-avant[nm]; if(!best||g>best.g) best={nm,kg:semaine[nm],g}; } });
+  if(best) return {cle,type:'record',envoye,texte:'Record sur '+best.nm+' : '+String(best.kg).replace('.',',')+' kg'};
+  const prevues=(Array.isArray(c.sessions_config)?c.sessions_config:[]).filter(x=>x&&x.active).length;
+  if(dans.length>=2&&prevues>0&&dans.length>=prevues) return {cle,type:'assiduite',envoye,texte:'Toutes ses séances : '+dans.length+'/'+prevues};
+  return null;
+}
 // PURE. La ligne d'un athlète, depuis ce qui est DÉJÀ calculé.
 //   sg : signauxEntrainement(c) ; o : {drapeau, proposition, maintenant, messages, acc}
 function lundiLigne(c,sg,o){
@@ -684,7 +720,12 @@ function lundiLigne(c,sg,o){
   if(!('drapeau' in x)) x.drapeau=null;
   if(!('proposition' in x)) x.proposition=null;
   const prenom=String((c&&c.fname)||'').trim()||String((c&&c.email)||'Athlète').split('@')[0];
-  const sp=signalPrincipal(c,x);
+  let sp=signalPrincipal(c,x);
+  // BUILD 1918 : rien à régler, mais une victoire à saluer → la ligne le dit.
+  if(sp.cat==='rien'){
+    let v=null; try{ v=victoireSemaine(c,x.maintenant); }catch(e){ v=null; }
+    if(v&&!v.envoye) sp={cat:'victoire',libelle:v.texte,depuis:null,cible:LUNDI_CIBLE.victoire};
+  }
   return {id:c&&c.id,prenom,cle:(()=>{ try{ return _relCle(c); }catch(e){ return ''; } })(),
     cat:sp.cat,signal:sp.libelle,depuis:sp.depuis,cible:sp.cible};
 }
@@ -712,7 +753,31 @@ function _htmlLundiLigne(l){
   const E=escapeHtml, id=E(String(l.id||''));
   return '<button type="button" class="ld-l ld-'+l.cat+'" onclick="lundiOuvrir(\''+id+'\',\''+l.cat+'\','+_attrArg(l.cle||'')+')">'
     +'<b>'+E(l.prenom)+'</b><span class="ld-s">'+E(l.signal)+'</span>'
-    +'<span class="ld-d">'+(l.cat==='rien'?'':E(lundiDepuis(l.depuis)))+'</span></button>';
+    +'<span class="ld-d">'+(l.cat==='rien'?'':l.cat==='victoire'?'Bravo':E(lundiDepuis(l.depuis)))+'</span></button>';
+}
+// LE BRAVO : une feuille qui montre le message, et un envoi par le fil
+// habituel (msgEnvoyer). Envoyé, il est retenu dans c.bravos[cleSemaine] : la
+// ligne ne le redemande pas.
+function texteBravo(c,v){
+  const p=String((c&&(c.pseudo||c.fname))||'').trim().split(/\s+/)[0];
+  return 'Bravo'+(p?' '+p:'')+' ! '+(v&&v.texte?v.texte+' cette semaine.':'Belle semaine.');
+}
+async function ouvrirBravo(id){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(id,users);
+  if(!c) return false;
+  const v=victoireSemaine(c,Date.now());
+  if(!v) return false;
+  const txt=texteBravo(c,v);
+  const ok=await rcConfirm('Envoyer un bravo',txt,'Envoyer','Annuler');
+  if(!ok) return false;
+  const r=await msgEnvoyer(_relCle(c),txt);
+  if(!r||r.ok===false) return false;
+  c.bravos=Object.assign({},c.bravos||{},{[v.cle]:Date.now()});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  try{ DB.set('users',users); CLOUD.pushOne(c.email,c); }catch(e){ rcErreurMuette('ouvrirBravo',e); }
+  try{ renderLundi(); }catch(e){}
+  return true;
 }
 let _lundiJeton=0;
 function renderLundi(){
@@ -752,6 +817,7 @@ function lundiOuvrir(id,cat,cle){
   if(cible==='bilan'){ currentClientId=id; try{ viewClientBilans(); evoTab('reponses'); }catch(e){ return false; } return true; }
   if(cible==='message'){ try{ msgOuvrirFil(cle||_relCle(getOwnedClient(id))); }catch(e){ return false; } return true; }
   if(cible==='bloc'){ try{ return _ouvrirProgfin(id); }catch(e){ return false; } }
+  if(cible==='bravo'){ try{ ouvrirBravo(id); }catch(e){ return false; } return true; }
   try{ openClientDetail(id,false,true); }catch(e){ return false; }
   if(!cible) return true;
   setTimeout(()=>{

@@ -13691,3 +13691,6 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rb-aa img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:var(--r-2);display:block;background:var(--surface-2)}
 .rb-aa figcaption{font-size:var(--fs-xs);color:var(--sub);text-align:center;margin-top:4px}
 .rb-aa .btn{width:100%}
+/* BUILD 1918 — la victoire de la semaine, sur l'écran du lundi. */
+.ld-victoire{border-left-color:var(--green)}
+.ld-victoire .ld-d{color:var(--green);font-weight:800}

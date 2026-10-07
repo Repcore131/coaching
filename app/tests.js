@@ -74278,6 +74278,58 @@ async function testExercices(){
       if(!/Tes photos manquent/.test(h)) return _echec('phrase');
       return /modifierBilan\([^)]*'photos'\)">Ajouter mes photos/.test(h)?true:_echec('bouton vers ce bilan absent');});
 
+    // ══ BUILD 1918 — LA VICTOIRE DE LA SEMAINE, ET LE BRAVO ═══════════════════
+    const _vsJour=(lundi,dec)=>{ const d=dateLocaleDeCle(lundi); d.setDate(d.getDate()+dec); return localISODate(d); };
+    const _vsSeance=(date,kg)=>({date,complete:true,data:{Squat:{sets:[{done:true,weight:String(kg),reps:'5'}]}}});
+    ok('1918 — victoireSemaine : record de la semaine écoulée, sinon semaine complète, sinon null ; bravos retenus',()=>{
+      const maintenant=dateLocaleDeCle('2026-10-07').getTime();   // mercredi
+      const L='2026-09-28';                                        // lundi de la semaine écoulée
+      const faux=[];
+      const c={fname:'Léa',sessions_config:[{active:true},{active:true},{active:false}],
+        sessions:[_vsSeance('2026-09-20',80),_vsSeance(_vsJour(L,1),85),_vsSeance(_vsJour(L,3),82)]};
+      let v=victoireSemaine(c,maintenant);
+      if(!v||v.type!=='record'||v.cle!==L||!/Record sur Squat : 85 kg/.test(v.texte)) faux.push('record : '+JSON.stringify(v));
+      c.sessions=[_vsSeance('2026-09-20',90),_vsSeance(_vsJour(L,1),85),_vsSeance(_vsJour(L,3),82)];
+      v=victoireSemaine(c,maintenant);
+      if(!v||v.type!=='assiduite'||!/2\/2/.test(v.texte)) faux.push('assiduité : '+JSON.stringify(v));
+      c.sessions=[_vsSeance('2026-09-20',90),_vsSeance(_vsJour(L,1),85)];
+      if(victoireSemaine(c,maintenant)) faux.push('une séance sur deux fêtée');
+      c.sessions=[_vsSeance('2026-09-20',80),_vsSeance(_vsJour(L,1),85),_vsSeance('2026-10-06',99)];
+      v=victoireSemaine(c,maintenant); if(!v||!/85 kg/.test(v.texte)) faux.push('la semaine en cours compte : '+JSON.stringify(v));
+      c.bravos={[L]:Date.now()}; if(!victoireSemaine(c,maintenant).envoye) faux.push('bravo non retenu');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1918 — lundiLigne : rien à signaler + victoire → cat « victoire » ; bravo envoyé → « rien »',()=>{
+      const maintenant=Date.now(); const L=cleSemaineDe(maintenant-7*864e5);
+      const c={id:'v1',fname:'Léa',email:'v1@t.fr',createdAt:Date.now(),sessions_config:[{active:true}],
+        sessions:[_vsSeance('2020-01-06',80),_vsSeance(_vsJour(L,1),85)]};
+      const ctx={drapeau:null,proposition:null,acc:{prog:[],retour:[],silence:new Set()},messages:new Set(),maintenant,sansBilan:true};
+      let l=lundiLigne(c,{},ctx);
+      if(l.cat!=='victoire'||!/Record sur Squat/.test(l.signal)) return _echec('ligne : '+JSON.stringify(l));
+      if(!/Bravo/.test(_htmlLundiLigne(l))) return _echec('pas de « Bravo » sur la ligne');
+      c.bravos={[L]:1}; l=lundiLigne(c,{},ctx);
+      return l.cat!=='victoire'?true:_echec('bravo envoyé, victoire encore proposée');});
+    okA('1918 — ouvrirBravo : feuille, msgEnvoyer, puis c.bravos[cleSemaine]',async()=>{
+      const brut=localStorage.getItem('rc_users'); const cu=currentUser;
+      const _c=window.rcConfirm, _m=window.msgEnvoyer, _p=CLOUD.pushOne, _r=window.renderLundi;
+      const envois=[];
+      try{
+        const L=cleSemaineDe(Date.now()-7*864e5);
+        const A={id:'bv1',email:'bv1@t.fr',role:'athlete',fname:'Léa',coachId:'banc_c',sessions_config:[{active:true}],
+          sessions:[_vsSeance('2020-01-06',80),_vsSeance(_vsJour(L,1),85)]};
+        DB.set('users',{'bv1@t.fr':A}); currentUser=_banCoach();
+        window.rcConfirm=async(t,x)=>{ envois.push('feuille:'+x); return true; };
+        window.msgEnvoyer=async(cle,txt)=>{ envois.push('msg:'+txt); return {ok:true}; };
+        CLOUD.pushOne=()=>Promise.resolve(true); window.renderLundi=()=>true;
+        const r=await ouvrirBravo('bv1');
+        if(r!==true) return _echec('rend '+r+' '+envois.join(' / '));
+        if(!envois.some(e=>/^msg:Bravo Léa ! Record sur Squat : 85 kg cette semaine\./.test(e))) return _echec(envois.join(' / '));
+        const c=(DB.get('users')||{})['bv1@t.fr'];
+        return c&&c.bravos&&c.bravos[L]?true:_echec('bravos : '+JSON.stringify(c&&c.bravos));
+      }finally{
+        window.rcConfirm=_c; window.msgEnvoyer=_m; CLOUD.pushOne=_p; window.renderLundi=_r; currentUser=cu;
+        if(brut==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',brut);
+      }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
