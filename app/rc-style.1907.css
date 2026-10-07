@@ -13655,3 +13655,5 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .ccd-macros-aide{margin-top:8px;font-size:var(--fs-xs);line-height:1.5}
 .ccd-aide-err{color:var(--orange);margin:0 0 4px}
 .ccd-aide-av{color:var(--sub);margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* BUILD 1907 — le mot sous un champ du profil. */
+.atp-aide{color:var(--orange);font-size:var(--fs-xs);line-height:1.5;margin:4px 0 0}

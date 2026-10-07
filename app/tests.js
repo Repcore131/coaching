@@ -73901,6 +73901,47 @@ async function testExercices(){
       }
       return faux.length?_echec(faux.join(' | ')):true;});
 
+    // ══ BUILD 1907 — PROFIL BORNÉ, POIDS FIABLE ═══════════════════════════════
+    ok('1907 — poidsFiable : 30–300, repli sur la dernière pesée valide, sinon estimation signalée',()=>{
+      const faux=[];
+      const t=(u,kg,src,est)=>{ const p=poidsFiable(u); if(p.kg!==kg||p.source!==src||p.estime!==est) faux.push(JSON.stringify(u).slice(0,80)+' → '+JSON.stringify(p)); };
+      t({weight:'72.5'},72.5,'dossier',false);
+      t({weight:'725',profileWeight:71},71,'profil',false);
+      t({weight:'7,5',weightLog:[{date:'2026-10-01',kg:70},{date:'2026-10-05',kg:999},{date:'2026-10-03',kg:69.4}]},69.4,'pesee',false);
+      t({weight:'abc',bilans:[{date:1,'bil-weight':'80'},{date:2,'bil-weight':'9999'}]},80,'bilan',false);
+      t({weight:'-5'},CAFFEINE_POIDS_DEFAUT,'estimation',true);
+      t(null,CAFFEINE_POIDS_DEFAUT,'estimation',true);
+      const c=_poidsCafeine({weight:'725'}); if(!c.estimated||c.weight!==CAFFEINE_POIDS_DEFAUT) faux.push('_poidsCafeine 725 : '+JSON.stringify(c));
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1907 — erreursProfil : prénom vide refusé, poids 30–300 (virgule admise), champ absent ignoré',()=>{
+      const faux=[];
+      if(!erreursProfil({fname:'  ',fnameAvant:'Léa'}).some(x=>x.id==='atp-fname')) faux.push('prénom vide accepté');
+      if(erreursProfil({fname:'',fnameAvant:''}).length) faux.push('dossier sans prénom bloqué');
+      if(erreursProfil({fname:'Léa'}).length) faux.push('Léa refusé');
+      for(const w of ['725','-5','abc','9999','12']) if(!erreursProfil({fname:'L',weight:w}).some(x=>x.id==='atp-weight')) faux.push(w+' accepté');
+      for(const w of ['72,5','72.5','','300']) if(erreursProfil({fname:'L',weight:w}).length) faux.push(w+' refusé');
+      if(erreursProfil({}).length) faux.push('champs absents refusés');
+      const m=erreursProfil({fname:'L',weight:'725'})[0].msg;
+      if(!/725 kg \? Vérifie la virgule/.test(m)) faux.push('message : '+m);
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1907 — saveAthleteProfile : prénom vidé → message sous le champ, rien n’est écrit, l’ancien reste',()=>{
+      const u=_banAth(); u.fname='Camille';
+      let ecrit=0, faux=[];
+      const _su=window.saveUser; window.saveUser=()=>{ ecrit++; return true; };
+      try{
+        _sondeEcran(u,()=>openAthleteProfile(),()=>{
+          const f=document.getElementById('atp-fname'); if(!f){ faux.push('champ prénom absent'); return; }
+          f.value='   ';
+          const r=saveAthleteProfile();
+          if(r!==false) faux.push('rend '+r);
+          if(currentUser.fname!=='Camille') faux.push('prénom écrasé : '+currentUser.fname);
+          if(ecrit) faux.push('saveUser appelé');
+          const z=document.getElementById('atp-fname-aide');
+          if(!z||!/prénom/.test(z.textContent)) faux.push('message absent');
+        });
+      }finally{ window.saveUser=_su; }
+      return faux.length?_echec(faux.join(' | ')):true;});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

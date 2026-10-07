@@ -752,21 +752,29 @@ function _caffeineColor(mg,thr){
 // qui n’avait rempli que « Mon profil ». L’en-tête de la même fiche affichait
 // pourtant son profileWeight, et l’athlète voyait ses vrais seuils : trois
 // surfaces, deux vérités.
-function _poidsCafeine(u){
-  if(!u) return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
-  // Poids du profil (saisi au bilan) puis repli sur l'écran Mon profil
-  const w0=parseFloat(u.weight)||parseFloat(u.profileWeight);
-  if(w0>0) return {weight:w0,estimated:false};
+// ══ BUILD 1907 — UN POIDS FIABLE, OU UNE ESTIMATION QUI SE DIT ═════════════
+// PURE (maintenant est implicite : seules les dates des données comptent).
+// Ordre : poids du dossier (bilan), poids du profil, DERNIÈRE PESÉE VALIDE,
+// dernier bilan ; chaque valeur doit tenir entre 30 et 300 kg — un « 725 »
+// tapé sans virgule, ou un « 7,5 », ne sert plus de base aux seuils de
+// caféine ni à la fiche du coach. Sinon : l'estimation, SIGNALÉE (estime:true).
+const POIDS_FIABLE_MIN=30, POIDS_FIABLE_MAX=300;
+function poidsFiable(u){
+  const lire=v=>{ const l=lireNombreFr(v,{min:POIDS_FIABLE_MIN,max:POIDS_FIABLE_MAX}); return l.ok?l.valeur:null; };
+  if(!u) return {kg:CAFFEINE_POIDS_DEFAUT,source:'estimation',estime:true};
+  let w=lire(u.weight); if(w!=null) return {kg:w,source:'dossier',estime:false};
+  w=lire(u.profileWeight); if(w!=null) return {kg:w,source:'profil',estime:false};
+  const pes=(Array.isArray(u.weightLog)?u.weightLog:[]).filter(e=>e&&e.date)
+    .slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  for(const e of pes){ w=lire(e.kg); if(w!=null) return {kg:w,source:'pesee',estime:false}; }
   // bilan.date est un timestamp (Date.now()) : tri numérique sur une COPIE.
-  // L'ancien localeCompare levait une TypeError des le 2e bilan (les nombres
-  // n'ont pas cette methode), ce qui cassait tout l'ecran Cafeine.
   const bilans=(u.bilans||[]).slice().sort((a,b)=>(b.date||0)-(a.date||0));
-  if(bilans.length){
-    const last=bilans[0];
-    const w1=parseFloat(last['bil-weight']||last['deb-weight']||last.weight||0);
-    if(w1>0) return {weight:w1,estimated:false};
-  }
-  return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
+  for(const b of bilans){ w=lire(b['bil-weight']||b['deb-weight']||b.weight); if(w!=null) return {kg:w,source:'bilan',estime:false}; }
+  return {kg:CAFFEINE_POIDS_DEFAUT,source:'estimation',estime:true};
+}
+function _poidsCafeine(u){
+  const p=poidsFiable(u);
+  return {weight:p.kg,estimated:p.estime,source:p.source};
 }
 // Le dossier courant, et rien d’autre : c’est la seule chose que cette
 // fonction ajoutait à la résolution ci-dessus.

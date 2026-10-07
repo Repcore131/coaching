@@ -1262,7 +1262,39 @@ function ouvrirTrophees(){
   try{ _rendreEntreeParrainage(); }catch(e){}
   return true;
 }
+// BUILD 1907 : le mot sous le champ du profil (prénom vide, poids hors bornes).
+function _atpAide(id,msg){
+  try{
+    const ch=document.getElementById(id); if(!ch) return;
+    let z=document.getElementById(id+'-aide');
+    if(!msg){ if(z) z.remove(); ch.style.borderColor=''; return; }
+    if(!z){ z=document.createElement('p'); z.id=id+'-aide'; z.className='atp-aide'; z.setAttribute('role','status'); ch.insertAdjacentElement('afterend',z); }
+    z.textContent=msg; ch.style.borderColor='var(--orange)';
+  }catch(e){}
+}
+// PURE. Les refus du profil : [{id,msg}]. Le prénom ne se vide pas (il signe
+// chaque message au coach) ; un poids, s'il est saisi, tient entre 30 et 300.
+function erreursProfil(saisie){
+  const s=saisie||{}, out=[];
+  // Seul un prénom EXISTANT ne s'efface pas : un dossier ancien sans prénom
+  // garde le droit d'enregistrer le reste de son profil.
+  if(s.fname!==undefined&&!String(s.fname||'').trim()&&String(s.fnameAvant||'').trim()) out.push({id:'atp-fname',msg:'Ton prénom ne peut pas être vide : ton coach le lit sur chacun de tes messages.'});
+  if(s.weight!==undefined&&String(s.weight||'').trim()){
+    const l=lireNombreFr(s.weight,{min:POIDS_FIABLE_MIN,max:POIDS_FIABLE_MAX});
+    if(!l.ok) out.push({id:'atp-weight',msg:l.raison==='texte'?'« '+String(s.weight).trim()+' » ? Un nombre, avec une virgule si besoin.'
+      :String(l.valeur).replace('.',',')+' kg ? Vérifie la virgule : entre '+POIDS_FIABLE_MIN+' et '+POIDS_FIABLE_MAX+' kg.'});
+  }
+  return out;
+}
 function saveAthleteProfile(){
+  const _fnEl=document.getElementById('atp-fname'), _wEl0=document.getElementById('atp-weight');
+  const _err=erreursProfil({fname:_fnEl?_fnEl.value:undefined,fnameAvant:currentUser&&currentUser.fname,weight:_wEl0?_wEl0.value:undefined});
+  _atpAide('atp-fname',''); _atpAide('atp-weight','');
+  if(_err.length){
+    _err.forEach(x=>_atpAide(x.id,x.msg));
+    try{ const e=document.getElementById(_err[0].id); if(e){ e.focus(); if(e.scrollIntoView) e.scrollIntoView({block:'center'}); } }catch(e){}
+    return false;
+  }
   const _fn=(document.getElementById('atp-fname')?.value||'').trim().slice(0,40);
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
   if(_fn) currentUser.fname=_fn;
@@ -1289,7 +1321,7 @@ function saveAthleteProfile(){
   // sa date de naissance par inadvertance ferait disparaître son âge partout.
   // BUILD 1893 : plus de champ de poids au profil ; sans lui, rien n'est touché.
   const _wEl=document.getElementById('atp-weight');
-  if(_wEl) currentUser.profileWeight=parseFloat(_wEl.value)||undefined;
+  if(_wEl){ const _lw=lireNombreFr(_wEl.value,{min:POIDS_FIABLE_MIN,max:POIDS_FIABLE_MAX}); currentUser.profileWeight=_lw.ok?_lw.valeur:undefined; }
   currentUser.gender=_atpGender||currentUser.gender;
   // Le champ « Objectif » a quitté le profil (28/09/2026 : il est demandé
   // ailleurs). Sans lui, on ne touche pas à l'objectif déjà enregistré.
