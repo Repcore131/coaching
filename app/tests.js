@@ -66103,6 +66103,30 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1879 : LES COURBES ET ANNEAUX DE L'ÉVOLUTION ══
+    ok('couleurCanvas(\'var(--red)\') rend une couleur concrète (# ou rgb) ; couleurAlpha gère hex et rgb',()=>{
+      const c=couleurCanvas('var(--red)');
+      if(!/^(#|rgb)/i.test(c)) return _echec('« '+c+' »');
+      if(couleurAlpha('#ff0000',0.5)!=='rgba(255,0,0,0.5)') return _echec(couleurAlpha('#ff0000',0.5));
+      return couleurAlpha('rgb(1, 2, 3)',0.25)==='rgba(1,2,3,0.25)'?true:_echec(couleurAlpha('rgb(1, 2, 3)',0.25));});
+    ok('drawPie et drawLineChart ne lèvent pas avec var(--red)',()=>{
+      const z=document.createElement('div'); z.style.width='200px';
+      z.innerHTML='<canvas id="t1879-pie"></canvas><canvas id="t1879-l"></canvas>'; document.body.appendChild(z);
+      try{
+        drawPie('t1879-pie',[{val:12,color:'var(--red)'},{val:50,color:'#444'}]);
+        drawLineChart(document.getElementById('t1879-l'),[{data:[70,71,72],color:'var(--red)'},{data:[27,27,27],color:'var(--accent-blue)'}],['1','2','3']);
+        return true;
+      }catch(e){ return _echec(e.message); }
+      finally{ z.remove(); }});
+    ok('Colonne Évolution : 78 → 73 donne −5,0 ; une valeur reportée est ignorée ; une seule mesure → —',()=>{
+      const b=[{date:1,'bil-waist':'78'},{date:2,'bil-waist':'75'},{date:3,'bil-waist':'73'},{date:4,'bil-waist':'73',reprises:['bil-waist']}];
+      if(_fmtEvolution(evolutionMesure(b,'waist'))!=='−5,0') return _echec(_fmtEvolution(evolutionMesure(b,'waist')));
+      const r=[{date:1,'bil-hips':'90'},{date:2,'bil-hips':'95',reprises:['bil-hips']}];
+      return _fmtEvolution(evolutionMesure(r,'hips'))==='—'?true:_echec('reportée comptée');});
+    ok('Tableaux du bilan : la virgule décimale',()=>{
+      const h=renderDataTable(['A','B'],[{label:'x',values:['76.2','31.4%']}],{virgule:true});
+      return h.indexOf('76,2')>=0&&h.indexOf('31,4%')>=0&&h.indexOf('76.2')<0?true:_echec('point resté');});
+
     // ══ BUILD 1878 : LE BILAN CORRIGÉ APRÈS LA RÉPONSE ══
     ok('appliquerModifBilan sur un bilan répondu : modifApresReponse et modifs.cles = ["photos"]',()=>{
       const b={type:'coaching',date:1,reponseCoach:'ok'};

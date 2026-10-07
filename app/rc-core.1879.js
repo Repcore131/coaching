@@ -3759,6 +3759,7 @@ function renderDataTable(columns,rows,opts={}){
     // pas a changer parce que celui des mensurations en avait besoin.
     zebre=false,   // une ligne sur deux legerement eclaircie
     unite='',      // suffixe d affichage, jamais stocke dans la donnee
+    virgule=false, // build 1879 : « 76,2 » et non « 76.2 » (affichage seul)
   }=opts;
   const dp=dataPad||pad;
   const cbS=cellBorderSide==='bottom'?`border-bottom:1px solid ${cellBorder};`:`border:1px solid ${cellBorder};`;
@@ -3777,7 +3778,7 @@ function renderDataTable(columns,rows,opts={}){
     const cells=row.values.map((v,ci)=>{
       const empty=v===null||v===undefined||v===0||v==='0'||v==='';
       // L unite ne s ajoute JAMAIS a une case vide : « — cm » n a pas de sens.
-      const display=empty?emptyVal:(String(v)+(unite?' '+unite:''));
+      const display=empty?emptyVal:((virgule?String(v).replace(/(\d)\.(\d)/g,'$1,$2'):String(v))+(unite?' '+unite:''));
       const color=row.valueStyleFn?row.valueStyleFn(v,ci,empty):(empty?`color:${emptyColor};`:`color:${valueColor};`);
       return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};padding-right:14px;text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;white-space:nowrap;${cbS}${color}${zb?`background-image:linear-gradient(${zb},${zb});`:''}">${display}</td>`;
     }).join('');
@@ -37870,8 +37871,45 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   })();
 }
 
+// ══ BUILD 1879 : UN CANVAS NE LIT PAS LES VARIABLES CSS ════════════════════
+// addColorStop('var(--red)') levait, et la boucle s'arrêtait : aucun anneau,
+// et des courbes grises. couleurCanvas résout la variable (thème courant).
+function couleurCanvas(c){
+  const s=String(c==null?'':c).trim();
+  const m=s.match(/^var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)$/);
+  if(!m) return s||ROUGE_MARQUE;
+  let v='';
+  try{ v=getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim(); }catch(e){ v=''; }
+  if(v&&/^var\(/.test(v)) v=couleurCanvas(v);
+  return v||(m[2]?couleurCanvas(m[2].trim()):'')||ROUGE_MARQUE;
+}
+// La même couleur avec une opacité : hexadécimal (#rgb, #rrggbb) ou rgb()/rgba().
+function couleurAlpha(c,a){
+  const s=couleurCanvas(c);
+  let r,g,b;
+  let m=s.match(/^#([0-9a-f]{3})$/i);
+  if(m){ r=parseInt(m[1][0]+m[1][0],16); g=parseInt(m[1][1]+m[1][1],16); b=parseInt(m[1][2]+m[1][2],16); }
+  else if((m=s.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i))){ r=parseInt(m[1].slice(0,2),16); g=parseInt(m[1].slice(2,4),16); b=parseInt(m[1].slice(4,6),16); }
+  else if((m=s.match(/^rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/i))){ r=+m[1]; g=+m[2]; b=+m[3]; }
+  else return s;
+  return 'rgba('+r+','+g+','+b+','+Math.max(0,Math.min(1,Number(a)||0))+')';
+}
+/** PURE. L'évolution d'une mesure : dernier relevé RÉEL − premier relevé réel. */
+function evolutionMesure(bilans,k){
+  const reels=(bilans||[]).filter(b=>b&&!bmReportee(b,k)&&getBM(b,k)!=null);
+  if(reels.length<2) return null;
+  return Math.round((getBM(reels[reels.length-1],k)-getBM(reels[0],k))*10)/10;
+}
+function _fmtEvolution(d){
+  if(d==null) return '—';
+  const v=Math.abs(d).toFixed(1).replace('.',',');
+  return d>0?'+'+v:d<0?'−'+v:v;
+}
 function drawLineChart(canvas,datasets,labels){
   if(!canvas)return;
+  // Les couleurs sont résolues ici, pour tous les appelants. La série de
+  // marque garde son remplissage, qu'elle arrive en hexadécimal ou en variable.
+  datasets=(datasets||[]).map(d=>Object.assign({},d,{_marque:d.color===ROUGE_MARQUE||/^var\(--red\)$/.test(String(d.color||'')),color:couleurCanvas(d.color)}));
   // MEME DEFAUT que le graphique cafeine, meme correction : le canevas etait
   // dimensionne en pixels CSS puis etire par le navigateur. Sur un ecran a 3x,
   // les courbes de poids et de masse grasse sortaient floues.
@@ -37908,6 +37946,9 @@ function drawLineChart(canvas,datasets,labels){
   // intermediaires en pointilles. Deux graphiques du meme produit ne peuvent
   // pas se lire differemment selon qu'on est coach ou athlete.
   ctx.lineWidth=1;
+  // Courbe plate : une seule graduation (« 27 27 27 27 » ne disait rien).
+  const _plat=mx===mn;
+  let _vu=null;
   for(let i=0;i<=4;i++){
     const y=pad.t+ch*(1-i/4);
     ctx.strokeStyle=(i===0?'#333':'#242424');
@@ -37915,7 +37956,11 @@ function drawLineChart(canvas,datasets,labels){
     ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle='#4a4a4a';ctx.font='600 9px Montserrat,sans-serif';
-    ctx.textAlign='right';ctx.fillText(Math.round(yMin+(yMax-yMin)*i/4),pad.l-3,y+3);
+    const _lib=Math.round(yMin+(yMax-yMin)*i/4);
+    if(_plat&&i!==2) continue;
+    if(_lib===_vu) continue;
+    _vu=_lib;
+    ctx.textAlign='right';ctx.fillText(_lib,pad.l-3,y+3);
   }
   // X labels
   const n=labels.length;
@@ -37935,10 +37980,10 @@ function drawLineChart(canvas,datasets,labels){
     // dit « c'est celle-ci qu'on suit » ; l'appliquer a toutes le dirait de
     // personne. Base = pad.t+ch, le socle de la grille.
     const _ok=pts.filter(p=>p.ok);
-    if(ds.color===ROUGE_MARQUE&&_ok.length>1){
+    if(ds._marque&&_ok.length>1){
       const _hauts=Math.min.apply(null,_ok.map(q=>q.y));
       const _g=ctx.createLinearGradient(0,_hauts,0,pad.t+ch);
-      _g.addColorStop(0,ds.color+'5c');_g.addColorStop(.5,ds.color+'26');_g.addColorStop(1,ds.color+'0a');
+      _g.addColorStop(0,couleurAlpha(ds.color,0.36));_g.addColorStop(.5,couleurAlpha(ds.color,0.15));_g.addColorStop(1,couleurAlpha(ds.color,0.04));
       ctx.beginPath();ctx.moveTo(_ok[0].x,pad.t+ch);
       _ok.forEach(q=>ctx.lineTo(q.x,q.y));
       ctx.lineTo(_ok[_ok.length-1].x,pad.t+ch);ctx.closePath();
@@ -38109,11 +38154,14 @@ function renderBilanEvolution(c){
   const buildMeasTable=()=>{
     // LA COLONNE D'ECART FERME LA TABLE : elle porte le dernier bilan, et
     // c'est la derniere chose qu'on lit apres avoir parcouru la ligne.
-    const columns=['Parties mesurées',...bHeaders,'Écart'];
+    // BUILD 1879 : « Écart » était la différence droite/gauche : elle devient
+    // « D/G », et « Évolution » dit enfin ce qui a bougé (relevés réels).
+    const columns=['Parties mesurées',...bHeaders,'D/G','Évolution'];
     const rows=MEAS.map(m=>({
       label:m.label,labelBg:m.color||'var(--border)',labelColor:'var(--text)',
       values:Array.from({length:maxB},(_,i)=>{const v=bilans[i]?bVal(bilans[i],m.key):0;return v||null;})
-        .concat([(()=>{ try{ return _cellEcartMensuration(bilans,m.key); }catch(e){ return null; } })()]),
+        .concat([(()=>{ try{ return _cellEcartMensuration(bilans,m.key); }catch(e){ return null; } })()])
+        .concat([_fmtEvolution(evolutionMesure(bilans,m.key))]),
       // REPORTÉE, DONC GRISE — cote coach aussi. C'est lui qui lit la
       // stagnation, et il doit distinguer d'un coup d'oeil une mesure reprise
       // d'un relevé du jour.
@@ -38123,7 +38171,7 @@ function renderBilanEvolution(c){
           :('background:var(--dark);color:'
             +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';'))
     }));
-    return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px'})
+    return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px',virgule:true})
       +(bilans.some(b=>b&&MEAS.some(m=>bmReportee(b,m.key)))
         ?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:-20px 0 24px">
            Les valeurs en gris ont été reportées du bilan précédent, sans être
@@ -38162,7 +38210,7 @@ function renderBilanEvolution(c){
         ['Bilan',...bHeaders],
         [{label:'Poids en kg',labelBg:'var(--surface-2)',labelColor:'var(--red)',
           values:Array.from({length:maxB},(_,i)=>bilans[i]?getBW(bilans[i])||null:null)}],
-        {stickyCol0:true,firstColMinWidth:'100px',pad:'5px 6px',dataPad:'4px 6px',mb:'24px',emptyColor:'var(--sub)'}
+        {stickyCol0:true,firstColMinWidth:'100px',pad:'5px 6px',dataPad:'4px 6px',mb:'24px',emptyColor:'var(--sub)',virgule:true}
       )}`;
   };
 
@@ -38191,13 +38239,15 @@ function renderBilanEvolution(c){
       <div style="margin-top:8px;color:var(--sub);font-size:var(--fs-xs);border-top:1px solid var(--border);padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
     </div>`;
     // Pie charts for each bilan (first 3 with data)
-    const pieBilans=bfVals.map((b,i)=>b.mg!==null?{idx:i,mg:b.mg,mm:b.mm}:null).filter(Boolean).slice(0,4);
-    const pies=pieBilans.length?`<div style="display:flex;gap:12px;overflow-x:auto;margin-bottom:16px;justify-content:center">`+
+    // BUILD 1879 : les 4 DERNIERS bilans, et une rangée qui défile depuis la
+    // gauche (centrée, elle coupait le premier anneau à 390 px).
+    const pieBilans=bfVals.map((b,i)=>b.mg!==null?{idx:i,mg:b.mg,mm:b.mm}:null).filter(Boolean).slice(-4);
+    const pies=pieBilans.length?`<div style="display:flex;gap:12px;overflow-x:auto;margin-bottom:16px;justify-content:flex-start;max-width:100%;min-width:0">`+
       pieBilans.map(p=>`<div style="text-align:center;flex-shrink:0">
         <div style="font-size:var(--fs-xs);font-weight:800;margin-bottom:6px">Bilan ${p.idx+1}</div>
         <canvas id="evo-pie-${p.idx}" width="100" height="100"></canvas>
-        <div style="font-size:var(--fs-xs);color:var(--red-text);margin-top:4px">MG: ${p.mg}kg</div>
-        <div style="font-size:var(--fs-xs);color:var(--text-mid);margin-top:1px">MM: ${p.mm}kg</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);margin-top:4px">MG: ${String(p.mg).replace('.',',')}kg</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-mid);margin-top:1px">MM: ${String(p.mm).replace('.',',')}kg</div>
       </div>`).join('')+`</div>`:'';
     return `
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
@@ -38215,7 +38265,7 @@ function renderBilanEvolution(c){
           {label:'Masse maigre en Kg',labelBg:'var(--surface-2)',labelColor:'var(--red)',
             values:bfVals.map(b=>{const v=b.mm;return v!==null&&!isNaN(v)?String(v):null;})},
         ],
-        {stickyCol0:true,firstColMinWidth:'130px',pad:'5px 6px',dataPad:'4px 6px',mb:'24px',emptyColor:'var(--sub)'}
+        {stickyCol0:true,firstColMinWidth:'130px',pad:'5px 6px',dataPad:'4px 6px',mb:'24px',emptyColor:'var(--sub)',virgule:true}
       )}`;
   };
 
@@ -95707,6 +95757,8 @@ function calcBF(waist,neck,hips,height,gender){
 // `opts.max` : le diametre plafond, 120 px par defaut.
 function drawPie(id,slices,opts){
   const o=opts||{};
+  // BUILD 1879 : les variables CSS résolues (un canvas ne les lit pas).
+  slices=(slices||[]).map(x=>Object.assign({},x,{color:couleurCanvas(x.color)}));
   const cv=document.getElementById(id);if(!cv)return;
   const sz=Math.min(cv.parentElement.offsetWidth||120,o.max||120);
   // DENSITÉ D'ÉCRAN, comme _setupCanvas : sans elle, 110 pixels de toile sont
@@ -95733,7 +95785,7 @@ function drawPie(id,slices,opts){
       // Le degrade traverse le disque en diagonale : un aplat de couleur
       // unique est ce qui donne l'aspect imprimé qu'on veut perdre.
       const g=ctx.createLinearGradient(cx-R,cy-R,cx+R,cy+R);
-      g.addColorStop(0,sl.color);g.addColorStop(1,sl.color+'99');
+      g.addColorStop(0,sl.color);g.addColorStop(1,couleurAlpha(sl.color,0.6));
       ctx.strokeStyle=g;ctx.lineWidth=ep;
       // Bouts DROITS : un bout arrondi deborde de la moitie de l'epaisseur
       // et recouvrirait entierement la coupure entre deux parts.

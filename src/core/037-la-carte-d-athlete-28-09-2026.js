@@ -1563,6 +1563,8 @@ function calcBF(waist,neck,hips,height,gender){
 // `opts.max` : le diametre plafond, 120 px par defaut.
 function drawPie(id,slices,opts){
   const o=opts||{};
+  // BUILD 1879 : les variables CSS résolues (un canvas ne les lit pas).
+  slices=(slices||[]).map(x=>Object.assign({},x,{color:couleurCanvas(x.color)}));
   const cv=document.getElementById(id);if(!cv)return;
   const sz=Math.min(cv.parentElement.offsetWidth||120,o.max||120);
   // DENSITÉ D'ÉCRAN, comme _setupCanvas : sans elle, 110 pixels de toile sont
@@ -1589,7 +1591,7 @@ function drawPie(id,slices,opts){
       // Le degrade traverse le disque en diagonale : un aplat de couleur
       // unique est ce qui donne l'aspect imprimé qu'on veut perdre.
       const g=ctx.createLinearGradient(cx-R,cy-R,cx+R,cy+R);
-      g.addColorStop(0,sl.color);g.addColorStop(1,sl.color+'99');
+      g.addColorStop(0,sl.color);g.addColorStop(1,couleurAlpha(sl.color,0.6));
       ctx.strokeStyle=g;ctx.lineWidth=ep;
       // Bouts DROITS : un bout arrondi deborde de la moitie de l'epaisseur
       // et recouvrirait entierement la coupure entre deux parts.

@@ -1926,6 +1926,7 @@ function renderDataTable(columns,rows,opts={}){
     // pas a changer parce que celui des mensurations en avait besoin.
     zebre=false,   // une ligne sur deux legerement eclaircie
     unite='',      // suffixe d affichage, jamais stocke dans la donnee
+    virgule=false, // build 1879 : « 76,2 » et non « 76.2 » (affichage seul)
   }=opts;
   const dp=dataPad||pad;
   const cbS=cellBorderSide==='bottom'?`border-bottom:1px solid ${cellBorder};`:`border:1px solid ${cellBorder};`;
@@ -1944,7 +1945,7 @@ function renderDataTable(columns,rows,opts={}){
     const cells=row.values.map((v,ci)=>{
       const empty=v===null||v===undefined||v===0||v==='0'||v==='';
       // L unite ne s ajoute JAMAIS a une case vide : « — cm » n a pas de sens.
-      const display=empty?emptyVal:(String(v)+(unite?' '+unite:''));
+      const display=empty?emptyVal:((virgule?String(v).replace(/(\d)\.(\d)/g,'$1,$2'):String(v))+(unite?' '+unite:''));
       const color=row.valueStyleFn?row.valueStyleFn(v,ci,empty):(empty?`color:${emptyColor};`:`color:${valueColor};`);
       return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};padding-right:14px;text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;white-space:nowrap;${cbS}${color}${zb?`background-image:linear-gradient(${zb},${zb});`:''}">${display}</td>`;
     }).join('');
