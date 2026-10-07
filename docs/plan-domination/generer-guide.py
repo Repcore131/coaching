@@ -1,5 +1,5 @@
 # Génère le guide RepCore au format portrait (1240 x 1754 px = A4 à 150 dpi)
-import sys, html
+import sys, html, re
 MODE = sys.argv[1] if len(sys.argv) > 1 else 'print'   # 'print' (polices locales) ou 'canva'
 BASE = 'https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/'
 IMG = (BASE if MODE == 'canva' else 'img/')
@@ -144,30 +144,53 @@ page('Partie 1 · La stratégie', f'''
 {task('<b>Piloter chaque lundi</b> sur 6 chiffres, couper ce qui ne marche pas en 3 semaines.','')}
 ''')
 
-page('Partie 1 · La stratégie', f'''
-<div class="kick">02 · Le modèle</div>
-<h1>D'où viennent <em>les 50 000 €</em></h1>
-<p class="lead">Mois 12, scénario ambitieux. Quatre sources, aucune dépendance à une seule.</p>
-<div style="display:flex;height:96px;border-radius:14px;overflow:hidden;margin-top:34px">
- <div style="flex:34500;background:#E02020;color:#fff;display:flex;align-items:center;padding-left:22px;font-family:'Bebas Neue';font-size:48px">34,5 K€</div>
- <div style="flex:6750;background:#9E1414;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:34px">6,75</div>
- <div style="flex:6000;background:#5E0E0E;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:34px">6</div>
- <div style="flex:2800;background:#141416;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:28px">2,8</div></div>
-<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:24px">
- <div class="box r"><span class="tag">69 %</span><h3 style="margin-top:12px">Abonnements athlètes</h3><p class="mut" style="font-size:19px">2 300 payants × 15 € moyen (Essentielle 9,50 € · Ultime 24,90 €)</p></div>
- <div class="box"><span class="tag o">13 %</span><h3 style="margin-top:12px">Abonnements coachs</h3><p class="mut" style="font-size:19px">250 coachs × 27 € moyen (19 € et 39 €)</p></div>
- <div class="box"><span class="tag o">12 %</span><h3 style="margin-top:12px">Coaching de Kevin</h3><p class="mut" style="font-size:19px">40 clients × 150 €, puis une équipe de coachs</p></div>
- <div class="box"><span class="tag o">6 %</span><h3 style="margin-top:12px">Programmes à l'unité</h3><p class="mut" style="font-size:19px">Boutique 14,90 € · programmes personnalisés 99 €</p></div></div>
-<p class="mut" style="font-size:17px;margin-top:14px">Scénario prudent au même mois : 12 000 à 18 000 €. Montants TTC, avant commissions et frais.</p>
-<h2>Les 3 moteurs</h2>
-<div class="box d" style="text-align:center;font-family:'Bebas Neue';font-size:44px;padding:16px">50 K€ / mois au mois 12</div>
-<div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:16px">
- <div class="box"><span class="tag">Mois 1</span><h2 style="margin:14px 0 8px;font-size:40px">Moteur <em>cash</em></h2><p style="font-size:19px">Coaching premium 150 à 600 €. Paie les premières semaines, fabrique les témoignages.</p></div>
- <div class="box r"><span class="tag">Mois 2</span><h2 style="margin:14px 0 8px;font-size:40px">Moteur <em>récurrent</em></h2><p style="font-size:19px">Abonnements 9,50 € et 24,90 €, annuel payé d'avance. Le gros du chiffre.</p></div>
- <div class="box"><span class="tag">Mois 3</span><h2 style="margin:14px 0 8px;font-size:40px">Moteur <em>distribution</em></h2><p style="font-size:19px">Coachs à 19 € et 39 € qui amènent 5 à 30 athlètes chacun.</p></div></div>
-<div class="box" style="margin-top:16px;text-align:center;font-weight:800;font-size:19px;padding:16px">SOCLE · Instagram quotidien · Ambassadrices au résultat · Automatisation par Claude</div>
-''')
+page('Partie 1 · La stratégie', f"""
+<div class="kick">XX · Tes actifs</div>
+<h1>Tu ne pars pas <em>de zéro</em></h1>
+<p class="lead">Avant de chercher de nouveaux clients, on encaisse ce que tu as déjà construit. Chiffres relevés dans tes outils (Instagram au 22/09/2026, EngageFast et Gmail au 07/10/2026).</p>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:28px">
+ <div class="box r"><span class="tag">Instagram</span><div class="big" style="font-size:64px;margin-top:8px">4 665</div><p style="font-size:18px">abonnés sur kevin.gllc · 62 % en France · cœur 25-34 ans · ~2 360 comptes touchés par reel</p></div>
+ <div class="box"><span class="tag">Newsletter</span><div class="big" style="font-size:64px;margin-top:8px">≈ 1 300</div><p style="font-size:18px">contacts sur Systeme.io qui reçoivent tes emails</p></div>
+ <div class="box"><span class="tag o">LinkedIn</span><div class="big" style="font-size:64px;margin-top:8px">4</div><p style="font-size:18px">prospects détectés par EngageFast, 4 commentaires sur 30 jours : canal à construire</p></div>
+ <div class="box"><span class="tag o">Partenaire</span><div class="big" style="font-size:64px;margin-top:8px">Prozis</div><p style="font-size:18px">compte partenaire créé en juillet 2026 : un code à brancher partout</p></div>
+ <div class="box"><span class="tag o">Produit</span><div class="big" style="font-size:64px;margin-top:8px">RepCore</div><p style="font-size:18px">app complète : parrainage, défis, badges, vidéo, paiement, espace coach</p></div>
+ <div class="box"><span class="tag o">B2B</span><div class="big" style="font-size:64px;margin-top:8px">Fit Pulse</div><p style="font-size:18px">outil de pilotage de club déjà construit (exports Resamania)</p></div>
+</div>
+<div class="box d" style="margin-top:24px"><h3>Ce que ça vaut dès ce mois-ci</h3>
+<p style="margin-top:8px">1 300 contacts × 2 à 3 % d'achat de l'Offre Fondateur à 149 € = <b>3 900 à 5 800 € encaissés</b>, sans un euro de pub. <span style="color:#A0A0A8">(hypothèse de conversion, à mesurer)</span></p></div>
+<h2>✎ Mes autres actifs oubliés</h2>
+{lines(3)}
+""")
 
+page('Partie 1 · La stratégie', f"""
+<div class="kick">XX · Le modèle</div>
+<h1>D'où viennent <em>les 50 000 €</em></h1>
+<p class="lead">Huit sources, aucune ne pèse plus de la moitié. Si l'une cale, les autres tiennent. Mois 12, scénario ambitieux.</p>
+<div style="display:flex;height:84px;border-radius:14px;overflow:hidden;margin-top:28px">
+ <div style="flex:22500;background:#E02020;color:#fff;display:flex;align-items:center;padding-left:18px;font-family:'Bebas Neue';font-size:40px">22,5 K€</div>
+ <div style="flex:6400;background:#B01818;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:28px">6,4</div>
+ <div style="flex:6000;background:#9E1414;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:28px">6</div>
+ <div style="flex:4000;background:#7E1414;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:26px">4</div>
+ <div style="flex:3700;background:#5E0E0E;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:26px">3,7</div>
+ <div style="flex:3400;background:#3A1414;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:24px">3,4</div>
+ <div style="flex:3000;background:#2A2A2E;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:24px">3</div>
+ <div style="flex:1000;background:#141416;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:20px">1</div></div>
+<div style="margin-top:22px">{table(['Source','Volume au mois 12','Prix moyen','CA / mois','Démarre'],[
+ ['<b>Abonnements athlètes</b>','1 500 payants','15 €','22 500 €','Mois 1'],
+ ['<b>Coaching Kevin + groupe</b>','30 individuels + 40 en groupe','150 € / 49 €','6 400 €','Mois 1'],
+ ['<b>Fit Pulse</b> (pilotage de clubs)','40 clubs','149 €','6 000 €','Mois 4 *'],
+ ['<b>Coachs</b> (19 € / 39 €)','150 coachs','27 €','4 000 €','Mois 3'],
+ ['<b>Salles partenaires</b> (RepCore Club)','25 salles','149 €','3 700 €','Mois 2'],
+ ['<b>Programmes et défis payants</b>','200 ventes','17 €','3 400 €','Mois 2'],
+ ['<b>Affiliation et sponsors</b> (Prozis…)','codes + défis sponsorisés','—','3 000 €','Mois 2'],
+ ['<b>Entreprises / CSE</b>','330 salariés','3 €','1 000 €','Mois 6']],['2.3fr','1.9fr','1fr','1fr','.9fr'],58)}</div>
+<p class="mut" style="font-size:16px;margin-top:12px">Total ≈ 50 000 € TTC, avant TVA, commissions et frais. Scénario prudent au même mois : 15 000 à 20 000 €. * Fit Pulse seulement si la propriété de l'outil est claire (page Autres revenus).</p>
+<h2>✎ Mes 3 sources prioritaires</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+ <div class="box"><p style="font-size:18px">1. <span class="fl" style="min-width:220px"></span></p></div>
+ <div class="box"><p style="font-size:18px">2. <span class="fl" style="min-width:220px"></span></p></div>
+ <div class="box"><p style="font-size:18px">3. <span class="fl" style="min-width:220px"></span></p></div></div>
+""")
 page('Partie 1 · La stratégie', f'''
 <div class="kick">03 · L'arme que personne n'a</div>
 <h1>La bonne charge,<br><em>même pendant tes règles.</em></h1>
@@ -234,20 +257,40 @@ page('Partie 1 · La stratégie', f'''
 # ───────────── PARTIE 2
 part('Partie 2 · Le lancement')
 rows_ig = [('Abonnés','< 2 000','2 000 – 20 000','> 20 000'),('Comptes touchés / abonnés','< 30 %','30 – 100 %','> 100 %'),('Part non abonnés touchés','< 40 %','40 – 70 %','> 70 %'),('Taux d\'engagement','< 3 %','3 – 6 %','> 6 %'),('Vues moyennes d\'un Reel','< 1 000','1 000 – 10 000','> 10 000'),('Taux d\'enregistrement','< 1 %','1 – 3 %','> 3 %'),('Clics lien en bio','< 50','50 – 500','> 500'),('Messages privés reçus','< 10','10 – 100','> 100'),('Femmes 18-34 ans','< 30 %','30 – 55 %','> 55 %'),('Audience francophone','< 60 %','60 – 85 %','> 85 %')]
-page('Partie 2 · Le lancement', f'''
+page('Partie 2 · Le lancement', f"""
 <div class="box d" style="padding:34px 36px;margin-bottom:34px"><div class="kick" style="margin:0">Partie 2</div><div style="font-family:'Bebas Neue';font-size:70px;line-height:1;margin-top:6px">Le lancement</div></div>
-<div class="kick">06 · Diagnostic Instagram</div>
-<h1>Ton compte, <em>en 10 minutes</em></h1>
-<p class="lead" style="font-size:21px">Instagram → Tableau de bord professionnel → Statistiques, 30 derniers jours. Entoure la colonne où tu tombes.</p>
+<div class="kick">XX · Ton Instagram, en vrai</div>
+<h1>4 665 abonnés, <em>1 post par mois</em></h1>
+<p class="lead" style="font-size:21px">Ce que disent tes données (kevin.gllc, 51 publications, relevé du 22/09/2026).</p>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:22px">
+ <div class="box r"><h3>Ce qui freine</h3><div class="tx" style="font-size:18px;margin-top:8px">
+  · <b>11 publications en 12 mois.</b> Entre deux posts, la portée tombe à 20-40 comptes par jour.<br>
+  · <b>Croissance nette ≈ +2 abonnés</b> sur 30 jours (106 arrivées, ~104 départs).<br>
+  · <b>3 vidéos sur 4 perdent plus de la moitié</b> des gens dans les 3 premières secondes.<br>
+  · <b>Le profil convertit mal :</b> 96 visites de profil → 3 abonnements (3 %).</div></div>
+ <div class="box"><h3>Ce qui marche déjà</h3><div class="tx" style="font-size:18px;margin-top:8px">
+  · <b>« Mon exercice favori pour… »</b> : 2 reels sur 2 au-dessus de la médiane, record d'enregistrements (5,7 / 1 000).<br>
+  · <b>Humour de salle :</b> 3× plus de partages (6,2 / 1 000), PECS à 7 455 comptes.<br>
+  · <b>Événement à plusieurs comptes :</b> HYROX à 7 211 comptes et 21 332 vues.<br>
+  · <b>Les enregistrements ont ×3,8</b> en 90 jours.</div></div></div>
+<div class="box d" style="margin-top:22px"><h3>La règle n° 1</h3><p style="margin-top:6px">Passer de 1 post par mois à <b>4 par semaine</b> dans les familles qui marchent déjà. À médiane constante (~2 400 comptes par reel), la portée mensuelle passe d'environ 5 500 à plus de 35 000.</p></div>
+<h2>Mes objectifs chiffrés</h2>
+{table(['Indicateur','Aujourd\'hui','Cible mois 1','Cible mois 3','✎ Réel M1','✎ Réel M3'],[
+ ['Publications / semaine','≈ 0,25','4','7','',''],['Comptes touchés médians / reel','2 360','2 400','4 000','',''],['Abandon à 3 secondes','> 50 % (3/4 des reels)','< 50 %','< 40 %','',''],['Croissance nette d\'abonnés / mois','≈ +2','+150','+500','',''],['Conversion profil → abonnement','3 %','6 %','10 %','','']],['2fr','1.3fr','1fr','1fr','.9fr','.9fr'],52)}
+""")
+
+page('Partie 2 · Le lancement', f"""
+<div class="kick">XX · Grille mensuelle · à photocopier</div>
+<h1>Mon Instagram, <em>chaque mois</em></h1>
+<p class="lead" style="font-size:21px">Instagram → Tableau de bord professionnel → Statistiques, 30 derniers jours. Entoure la colonne où tu tombes. Mois : __________</p>
 <div style="margin-top:22px">{table(['Indicateur','✎ Ton chiffre','Faible','Correct','Fort'],[[a,'',b,c,d] for a,b,c,d in rows_ig],['2fr','1.2fr','1fr','1.2fr','1fr'],44)}</div>
 <h2>Le profil, à corriger aujourd'hui</h2>
 {task('Nom affiché : « Kevin | Coach muscu & app RepCore »')}
-{task('Bio en 3 lignes : qui tu aides · le résultat · « ↓ 1 mois offert »')}
+{task('Bio en 3 lignes : qui tu aides · la preuve · « ↓ 2 mois offerts »')}
 {task('Lien en bio : repcore-sync.web.app/?src=bio_ig')}
-{task('5 stories à la une : L\'app · Résultats · Cycle & muscu · Coaching · FAQ prix')}
-{task('3 posts épinglés : mon histoire · démo de l\'app · meilleure transformation')}
-''')
-
+{task('5 stories à la une : L\'app · Résultats · Cycle & muscu · Coaching · FAQ')}
+{task('3 posts épinglés : HYROX · exercice favori · meilleure transformation')}
+""")
 page('Partie 2 · Le lancement', f'''
 <div class="kick">07 · Semaine 0</div>
 <h1>Réparer les fuites <em>avant</em> d'ouvrir les vannes</h1>
@@ -290,14 +333,14 @@ page('Partie 2 · Le lancement', f'''
 
 weeks = [
  ('1','Amorcer','50 utilisateurs actifs, 10 témoignages',['Profil refait et bio en place','50 bêta-testeurs recrutés en DM : ___ / 50','10 témoignages vidéo de 20 s récoltés : ___ / 10'],'Utilisateurs actifs'),
- ('2','Cash','10 places Transformation à 350 €',['Annonce des 10 places en story et en Reel','10 DM par jour aux abonnés les plus engagés','Appels découverte réalisés : ___'],'Ventes ___ / 10 · CA'),
- ('3','Offre Fondateur','20 à 50 ventes à 149 €',['Post + Reel d\'annonce de l\'Offre Fondateur','Story compteur de places chaque jour','Relance des inscrits en essai'],'Ventes ___ / 300 · CA'),
- ('4','Communauté','100 participants au 1er défi',['Défi RepCore 30 jours lancé','Affiche QR au vestiaire (accord de la direction)','▲ Porte 1 vérifiée'],'Participants'),
- ('5','Influence','10 premiers « oui »',['15 DM ambassadrices par jour','Kit envoyé à chaque « oui »','Relance J+4 des sans-réponse'],'« Oui » reçus'),
- ('6','Influence','10 ambassadrices actives',['Repartage en story de chaque 1re vidéo','Codes ambassadeur créés et testés','15 DM par jour, toujours'],'Ambassadrices actives'),
- ('7','Défi n°2','Équipes par ambassadrice',['Défi 2 lancé, une équipe par ambassadrice','Classement public chaque vendredi','Nouvelle vague de 15 DM par jour'],'Payants cumulés'),
+ ('2','Cash','10 places Transformation à 350 €',['Annonce des 10 places en story et en Reel','10 DM par jour aux abonnés les plus engagés','Email n° 1 aux 1 300 contacts : « je lance quelque chose »','Appels découverte réalisés : ___'],'Ventes ___ / 10 · CA'),
+ ('3','Offre Fondateur','20 à 50 ventes à 149 €',['Post + Reel d\'annonce de l\'Offre Fondateur','Emails 2 et 3 à la newsletter : ouverture + « il reste X places »','Story compteur de places chaque jour','Code Prozis ajouté en bio et dans les emails'],'Ventes ___ / 300 · CA'),
+ ('4','Communauté','100 participants au 1er défi',['Défi RepCore 30 jours lancé','Email 4 : dernière chance Offre Fondateur','Premier contact Corona Gym (après vérification de ton contrat)','▲ Porte 1 vérifiée'],'Participants'),
+ ('5','Influence','10 premiers « oui »',['15 DM ambassadrices par jour','Kit envoyé à chaque « oui »','Pipeline EngageFast B2B créé, profil LinkedIn refait','Relance J+4 des sans-réponse'],'« Oui » reçus'),
+ ('6','Influence','10 ambassadrices actives',['Repartage en story de chaque 1re vidéo','Codes ambassadeur créés et testés','Démo à 1 salle partenaire (Corona Gym ou locale)','15 DM par jour, toujours'],'Ambassadrices actives'),
+ ('7','Défi n°2','Équipes par ambassadrice',['Défi 2 lancé, une équipe par ambassadrice','Classement public chaque vendredi','Tournage des machines de la 1re salle partenaire','Nouvelle vague de 15 DM par jour'],'Payants cumulés'),
  ('8','Consolider','20 ambassadrices, 150 payants',['Premières commissions payées','Classement des ambassadrices publié','On coupe les 2 formats les plus faibles'],'Payants cumulés'),
- ('9','Coachs','15 coachs inscrits',['Vidéo démo coach de 60 s','10 DM coachs par jour','Offre 3 mois offerts aux 50 premiers'],'Coachs inscrits'),
+ ('9','Coachs','15 coachs inscrits',['Vidéo démo coach de 60 s','10 DM coachs par jour (LinkedIn + Instagram)','Offre 3 mois offerts aux 50 premiers','QR codes posés + Reel Collab avec la salle'],'Coachs inscrits'),
  ('10','Coachs','Coachs actifs avec leurs athlètes',['Appel d\'accueil de 15 min avec chaque coach','Vitrine /c/ en bio de chaque coach','Contrat de sous-traitance RGPD signé'],'Coachs actifs'),
  ('11','Bilan','Doubler ce qui marche',['Top 3 des formats de Reels identifié','Top 5 des ambassadrices identifié','Plan du trimestre suivant écrit'],'CA du mois'),
  ('12','Porte 2','▲ Porte 2 franchie',['20 ambassadrices actives vérifié','Essai → payant ≥ 20 % vérifié','Sinon : plan de correction écrit'],'Porte franchie le'),
@@ -312,7 +355,7 @@ for i in range(0,12,3):
     first = '<div class="kick">09 · Les 90 premiers jours</div><h1 style="font-size:72px;margin-bottom:24px">Semaine par semaine</h1>' if i==0 else ''
     page('Partie 2 · Le lancement', first + ''.join(wk(w) for w in weeks[i:i+3]) + ('' if i else ''))
 
-mois = [('4','Coachs + défis inter-communautés','6 000'),('5','30 coachs payants','7 500'),('6','▲ Porte 3','9 000'),('7','Premiers coachs RepCore','10 000'),('8','SEO : 2 articles par mois','11 000'),('9','Équipe de coaching','12 500'),('10','Résiliation sous 6 %','14 000'),('11','250 coachs en vue','15 500'),('12','Machine en pilote auto','17 000')]
+mois = [('4','Coachs + 3 salles partenaires','6 000'),('5','Fit Pulse : 5 clubs pilotes (si propriété OK)','8 000'),('6','▲ Porte 3 · 1er défi sponsorisé','10 000'),('7','Coaching de groupe lancé','11 500'),('8','Offre Entreprises / CSE','13 000'),('9','10 salles partenaires','14 500'),('10','Résiliation sous 6 %','16 000'),('11','Fit Pulse : 20 clubs','18 000'),('12','Machine en pilote auto','20 000')]
 page('Partie 2 · Le lancement', f'''
 <div class="kick">10 · Mois 4 à 12</div>
 <h1>Le suivi <em>mois par mois</em></h1>
@@ -325,22 +368,52 @@ page('Partie 2 · Le lancement', f'''
 # ───────────── PARTIE 3
 part('Partie 3 · Les machines')
 fmts=[('La charge','« Tu sais pas quoi mettre sur la barre ? Mon app te le dit à chaque série. »'),('Le cycle','« Pourquoi tu es plus faible certaines semaines du mois. »'),('La fiche papier','« J\'ai pris en photo mon vieux programme. 10 secondes plus tard… »'),('Avant / après','« 12 semaines. Même salle. Mêmes horaires. » (accord écrit)'),('Le défi','« 30 jours, 400 personnes, une seule équipe gagne. »'),('Le record','La vidéo exportée par l\'app, telle quelle.')]
-page('Partie 3 · Les machines', f'''
+page('Partie 3 · Les machines', f"""
 <div class="box d" style="padding:34px 36px;margin-bottom:34px"><div class="kick" style="margin:0">Partie 3</div><div style="font-family:'Bebas Neue';font-size:70px;line-height:1;margin-top:6px">Les machines</div></div>
-<div class="kick">11 · La machine Instagram</div>
-<h1>1 Reel par jour, <em>6 formats</em></h1>
-<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:26px">
-{''.join(f'<div class="box{" r" if i==1 else ""}"><span class="tag">{t}</span><p style="font-weight:700;font-size:20px;margin-top:12px">{h}</p></div>' for i,(t,h) in enumerate(fmts))}
+<div class="kick">XX · La machine Instagram</div>
+<h1>4 familles qui ont <em>déjà fait leurs preuves</em></h1>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:24px">
+ <div class="box r"><span class="tag">Enregistrements</span><h3 style="margin-top:10px">« Mon exercice favori pour… »</h3><p class="mut" style="font-size:17px">Promesse en 1 ligne → 3 raisons → « enregistre-le pour ta prochaine séance ».</p></div>
+ <div class="box"><span class="tag">Partages</span><h3 style="margin-top:10px">Humour de salle</h3><p class="mut" style="font-size:17px">Une situation que tout le monde reconnaît → « envoie-le à ton binôme ».</p></div>
+ <div class="box"><span class="tag">Abonnements</span><h3 style="margin-top:10px">Démo RepCore</h3><p class="mut" style="font-size:17px">La charge proposée, le cycle, la fiche papier → mot-clé « REPCORE » en commentaire.</p></div>
+ <div class="box"><span class="tag">Nouvelle audience</span><h3 style="margin-top:10px">Collab et événements</h3><p class="mut" style="font-size:17px">HYROX, salles partenaires, ambassadrices : toujours en <b>Collab</b> (co-auteur), jamais en simple tag.</p></div>
 </div>
-<h2>Les règles</h2>
-{task('7 à 20 secondes, accroche dans les 2 premières secondes','')}
-{task('Sous-titres incrustés, un seul message par vidéo','')}
-{task('Commentaire épinglé : « Écris <b>REPCORE</b> et je t\'envoie 2 mois gratuits »','')}
-{task('Batch du dimanche : 2 heures pour tourner les 7 Reels','')}
-{task('Chaque jour, 3 stories : un sondage, une preuve, une offre','')}
-''')
+<h2>Les règles qui font la différence</h2>
+{task('<b>L\'accroche fait 80 % du résultat.</b> Mouvement dès la 1re image + texte à l\'écran. Objectif : moins de 50 % d\'abandon à 3 s.','')}
+{task('<b>Reprends une accroche qui a déjà marché</b> chez un gros créateur de ta niche (jamais la vidéo, seulement l\'accroche).','')}
+{task('<b>3 sources d\'idées :</b> profils des gros créateurs · page Explorer entraînée sur la muscu · onglet Reels de la recherche (« exercice jambes »…)','')}
+{task('<b>Fais des séries :</b> « Je construis RepCore, épisode 12 ». Le storytelling fait revenir, le viral seul ne fidélise pas.','')}
+{task('<b>Varie l\'appel à l\'action :</b> enregistrer · partager · mot-clé. L\'offre de coaching une publication sur trois seulement.','')}
+<div class="box" style="margin-top:20px"><h3>Créneaux de départ (à tester 4 semaines)</h3><p style="font-size:18px;margin-top:6px">Mardi 18 h 30 tutoriel · Jeudi 12 h 30 carrousel « erreurs » · Vendredi 18 h exercice favori · Dimanche 11 h humour de salle. Seul le créneau 18-20 h a vraiment été mesuré jusqu'ici.</p></div>
+""")
 
-days=[('Lundi','Le cycle'),('Mardi','La charge'),('Mercredi','Avant / après'),('Jeudi','La fiche papier'),('Vendredi','Le record'),('Samedi','Coulisses'),('Dimanche','Récap + appel à l\'action')]
+page('Partie 3 · Les machines', f"""
+<div class="kick">XX · Accroches prêtes</div>
+<h1>18 accroches <em>à adapter</em></h1>
+<p class="lead" style="font-size:20px">Les 12 premières viennent de l'analyse de ton compte, les 6 dernières sont faites pour vendre RepCore. Coche celles que tu as tournées.</p>
+<div style="margin-top:18px">
+{''.join(task(h,'') for h in [
+ "« Mon exercice favori pour [MUSCLE], et pourquoi tu ne le fais pas. »",
+ "« L'erreur que je vois chaque jour au [EXERCICE] (et comment la corriger). »",
+ "« On ne saute jamais [SÉANCE]. Même quand [SITUATION DE SALLE]. »",
+ "« Comment j'ai atteint [RÉSULTAT] au [EXERCICE] : la méthode tient en 3 lignes. »",
+ "« [PUBLIC] : arrête [ERREUR] si tu veux [DÉSIR]. »",
+ "« [MACHINE] ou [MACHINE] pour [MUSCLE] ? Ma réponse va te surprendre. »",
+ "« Mythe : [CROYANCE]. Voilà ce qui marche vraiment. »",
+ "« [PRÉNOM], [DURÉE] de coaching : ce qu'on a changé pour obtenir [RÉSULTAT]. »",
+ "« Envoie ça à ton binôme qui [HABITUDE DE SALLE]. »",
+ "« 3 réglages de [MACHINE] que personne ne fait. »",
+ "« Si tu stagnes au [EXERCICE] depuis [DURÉE], regarde ça avant ta séance. »",
+ "« Ce que ton coach voit quand tu dis “j'ai tout donné”. »",
+ "« Tu sais pas quoi mettre sur la barre ? Mon app te le dit à chaque série. »",
+ "« Pourquoi certaines semaines du mois tout te paraît plus lourd. »",
+ "« J'ai pris en photo mon vieux programme papier. 10 secondes plus tard… »",
+ "« J'ai codé seul une app de muscu. Voilà ce qu'elle fait que les autres ne font pas. »",
+ "« 30 jours, 400 personnes, une seule équipe gagne. »",
+ "« Toutes les machines de [SALLE] expliquées en 20 secondes chacune. »"])}
+</div>
+""")
+days=[('Lundi','Démo RepCore (charge, cycle)'),('Mardi','Tutoriel · 18 h 30'),('Mercredi','Preuve client / avant-après'),('Jeudi','Carrousel erreurs · 12 h 30'),('Vendredi','Exercice favori · 18 h'),('Samedi','Coulisses / défi / salle'),('Dimanche','Humour de salle · 11 h')]
 dr=''.join(f'''<div style="display:grid;grid-template-columns:200px 1fr 120px;border:2px solid var(--n);border-radius:12px;margin-bottom:14px;overflow:hidden">
 <div style="background:{'#E02020' if i==2 else '#141416'};color:#fff;padding:16px 18px"><div style="font-family:'Bebas Neue';font-size:38px;line-height:1">{d}</div><div style="font-size:15px;font-weight:700;margin-top:6px">{f}</div></div>
 <div style="padding:10px 18px"><div style="font-size:15px;color:var(--g);font-weight:700">✎ ACCROCHE / IDÉE</div><div class="ln" style="height:38px"></div><div class="ln" style="height:38px"></div></div>
@@ -399,6 +472,82 @@ page('Partie 3 · Les machines', f'''
 <h2>✎ Suivi des coachs</h2>
 {table(['Coach','Contact le','Démo','Inscrit','Athlètes','Payant le'],[['','',cb('s'),cb('s'),'',''] for _ in range(12)],['2.4fr','1fr','.7fr','.7fr','1fr','1fr'],52)}
 ''')
+
+page('Partie 3 · Les machines', f"""
+<div class="kick">XX · LinkedIn</div>
+<h1>LinkedIn vend <em>ce qui coûte cher</em></h1>
+<p class="lead">Instagram vend l'abonnement à 9,50 €. LinkedIn vend les licences : salles (149 €), Fit Pulse (149 €), coachs (19-39 €), entreprises (3 € par salarié).</p>
+<div class="box" style="margin-top:22px"><h3>Où tu en es (EngageFast, 07/10/2026)</h3><p style="font-size:18px;margin-top:6px">Plan gratuit · 4 prospects détectés, tous « tièdes » et non contactés · 4 commentaires sur 30 jours · pipeline réglé sur les <b>particuliers</b> (musculation, perte de poids) avec Fitness Park exclu.</p></div>
+<h2>La bascule en 4 réglages</h2>
+{task('Créer un 2e pipeline EngageFast <b>B2B</b> : gérants de salles, coachs indépendants, responsables RH / QVT / CSE')}
+{task('Titre de profil : « Coach & créateur de RepCore · l\'app qui fait progresser les membres de ta salle »')}
+{task('Bannière RepCore + section Sélection : démo vidéo de 60 s + page coach')}
+{task('Garder Fitness Park exclu des démarchages (voir garde-fous)')}
+<h2>Le rythme</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+ <div class="box"><div class="big r" style="font-size:60px">2</div><p style="font-size:18px">posts par semaine (mardi et jeudi 8 h) : coulisses du projet, cas client, chiffres de club anonymisés, opinion de métier</p></div>
+ <div class="box"><div class="big r" style="font-size:60px">10</div><p style="font-size:18px">commentaires par jour sous les posts de gérants de salles et de coachs</p></div>
+ <div class="box"><div class="big r" style="font-size:60px">5</div><p style="font-size:18px">invitations ciblées par jour, avec une note personnelle</p></div></div>
+<h2>Le message au gérant de salle</h2>
+<div class="box r"><p style="font-size:19px">« Bonjour [prénom], j'ai vu l'ouverture de [salle], félicitations. Je suis coach et j'ai créé RepCore, une app de musculation. Je propose aux salles de filmer chacune de leurs machines (réglages, exécution, erreurs) et de les mettre dans l'app, avec un QR code sur chaque machine. Vos membres savent quoi faire dès le 1er jour, et vous gagnez du contenu pour vos réseaux. Je peux vous montrer en 10 minutes ? »</p></div>
+""")
+
+page('Partie 3 · Les machines', f"""
+<div class="kick">XX · La newsletter</div>
+<h1>Systeme.io : <em>tu restes</em></h1>
+<p class="lead">Ton problème de réponses ne vient pas de l'outil, mais du rythme, du contenu et de la délivrabilité. Changer d'outil coûterait une migration pour le même résultat.</p>
+<div style="margin-top:22px">{table(['Outil','Gratuit jusqu\'à','Pour tes 1 300 contacts'],[
+ ['<b>Systeme.io</b> (actuel)','2 000 contacts, emails illimités, tunnels et paiements inclus','<b>Suffisant · on reste</b>'],
+ ['Kit (ex-ConvertKit)','10 000 abonnés (automatisations limitées)','Option si tu dépasses 2 000'],
+ ['beehiiv','2 500 abonnés, envois illimités','Bon pour une newsletter pure'],
+ ['Brevo','300 emails par jour','Un envoi prendrait 5 jours : non'],
+ ['MailerLite','250 abonnés (depuis 2026)','Trop petit : non']],['1.4fr','2.4fr','1.6fr'],52)}</div>
+<p class="mut" style="font-size:15px;margin-top:8px">Limites relevées sur des comparatifs publiés en 2026 : à vérifier sur la page tarifs avant toute décision.</p>
+<h2>Faire répondre tes 1 300 contacts</h2>
+{task('<b>Nettoyer :</b> une campagne « tu veux rester ? » aux inactifs depuis 6 mois, puis les retirer')}
+{task('<b>Segmenter</b> par tags : femme / cycle · débutant · confirmé · coach · client')}
+{task('<b>1 email par semaine</b>, même jour : une histoire, un conseil, un lien. 150 à 250 mots, en texte simple, signé Kevin')}
+{task('<b>Demander une réponse</b> (« réponds-moi par un mot : … ») : ça améliore la délivrabilité')}
+{task('<b>Séquence de bienvenue</b> de 5 emails pour chaque nouvel inscrit (Claude l\'écrit)')}
+{task('<b>Domaine perso authentifié</b> (SPF, DKIM, DMARC) : environ 10 € par an, la seule autre dépense utile')}
+<h2>Les 4 premiers envois</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
+ <div class="box"><span class="tag o">S2</span><p style="font-size:17px;margin-top:8px">« Je lance quelque chose, et tu es les premiers »</p></div>
+ <div class="box r"><span class="tag">S3</span><p style="font-size:17px;margin-top:8px">Offre Fondateur ouverte : 300 places</p></div>
+ <div class="box"><span class="tag o">S3</span><p style="font-size:17px;margin-top:8px">« Il reste X places » + un témoignage</p></div>
+ <div class="box"><span class="tag o">S4</span><p style="font-size:17px;margin-top:8px">Dernière chance, fermeture à minuit</p></div></div>
+<p style="font-size:19px;margin-top:20px">✎ Aujourd'hui : ouverture <span class="fl" style="min-width:90px"></span> % · clics <span class="fl" style="min-width:90px"></span> % · Cible après nettoyage : ouverture &gt; 35 %, clics &gt; 3 %</p>
+""")
+
+page('Partie 3 · Les machines', f"""
+<div class="kick">XX · Les salles partenaires</div>
+<h1>Filmer les machines, <em>remplir l'app</em></h1>
+<div class="box r" style="margin-top:22px"><span class="tag">Cible n° 1</span><h3 style="margin-top:10px">Corona Gym · Bordeaux Centre</h3><p style="font-size:18px;margin-top:6px">Inscriptions en ligne ouvertes le 7 octobre 2026 · 29,90 € à 49,90 € par 4 semaines · espace HYROX officiel, corner SBD (powerlifting), boutique Nutrimuscle · <b>aucune application citée</b> sur leur site. Une salle neuve a besoin d'aider ses nouveaux membres à prendre en main les machines : c'est exactement l'offre.</p></div>
+<h2>Le deal gagnant-gagnant</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+ <div class="box"><h3>Ce que la salle reçoit</h3><p style="font-size:18px;margin-top:6px">Chaque machine filmée (20 s : réglage, exécution, erreur) · un QR code sur chaque machine · une page salle dans RepCore · des Reels en Collab pour ses réseaux · le classement des défis de sa salle</p></div>
+ <div class="box"><h3>Ce que RepCore reçoit</h3><p style="font-size:18px;margin-top:6px">Chaque scan = un essai de 2 mois avec le code de la salle · de nouveaux utilisateurs chaque jour sans pub · du contenu filmé pour Instagram · une licence payante</p></div></div>
+{table(['Formule','Prix / mois','Contenu'],[['<b>Partenaire</b>','0 €','QR codes + code salle (pour démarrer, preuve en 30 jours)'],['<b>Club</b>','149 €','Bibliothèque filmée, page salle, défis de la salle, statistiques de scans'],['<b>Club+</b>','299 €','Club + Ultime offert à 50 membres + défi inter-salles']],['1fr','.8fr','3fr'],52)}
+<h2>Les étapes</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+<div>{task('1. Contact (LinkedIn, email, visite)','')}{task('2. Démo de 10 min au gérant','')}{task('3. Tournage : 1 journée, ~40 machines','')}{task('4. Montage et import dans l\'app','')}</div>
+<div>{task('5. QR codes collés sur chaque machine','')}{task('6. Reel Collab « toutes les machines »','')}{task('7. Bilan à 30 jours : scans, essais, payants','')}{task('8. Passage en formule Club','')}</div></div>
+<p style="font-size:16px;margin-top:14px" class="mut">Le même modèle se duplique dans chaque salle indépendante de Brest, Niort, Quimper, Rennes et Bordeaux. Objectif : 25 salles au mois 12.</p>
+""")
+
+page('Partie 3 · Les machines', f"""
+<div class="kick">XX · Autres revenus</div>
+<h1>Chercher <em>chaque euro</em></h1>
+<p class="lead">Six sources qui ne demandent presque pas de code. Elles transforment une app à 9,50 € en entreprise à plusieurs moteurs.</p>
+<div style="margin-top:22px">{table(['Source','Comment','Potentiel / mois','✎ Démarré le'],[
+ ['<b>Prozis</b>','Ton code partenaire dans l\'écran compléments de l\'app, ta bio, la newsletter et chaque programme','300 à 1 500 €',''],
+ ['<b>Sponsors de défis</b>','Une marque (Prozis, Nutrimuscle, SBD…) offre les lots et paie le défi du mois, dès 500 participants','500 à 1 500 €',''],
+ ['<b>Coaching de groupe</b>','Cohorte de 30 jours à 49 € par mois : l\'app + un live par semaine. Dépasse ton plafond de 40 clients','1 000 à 2 000 €',''],
+ ['<b>Défis payants</b>','« 30 jours fessiers » à 19 € avec programme et classement. Les défis gratuits restent pour attirer','1 000 à 2 000 €',''],
+ ['<b>Entreprises / CSE</b>','« RepCore Entreprise » à 3 € par salarié et par mois (minimum 100), vendu sur LinkedIn','300 à 1 000 €',''],
+ ['<b>Fit Pulse</b>','Licence à 149 € par mois aux clubs qui utilisent Resamania','jusqu\'à 6 000 €','']],['1.2fr','3.2fr','1.1fr','1fr'],76)}</div>
+<div class="box r" style="margin-top:22px"><h3>Avant de vendre Fit Pulse</h3><p style="font-size:18px;margin-top:6px">Vérifie à qui il appartient : s'il a été construit pour ton employeur, sur ton temps de travail ou avec ses données, il peut lui revenir. Fais valider par écrit (contrat, direction, juriste) avant la moindre démarche commerciale. N'utilise jamais de données réelles de membres dans une démo.</p></div>
+""")
 
 auto=[('7 scripts de Reels','Samedi','3 h'),('15 DM personnalisés','Chaque matin','3 h'),('Carrousels et stories Canva','Chaque semaine','2 h'),('Rapport du lundi','Lundi','1 h'),('Emails bienvenue / fin d\'essai','Une fois','2 h'),('2 articles SEO','Chaque mois','3 h'),('Récap des commissions','Le 1er du mois','1 h')]
 page('Partie 3 · Les machines', f'''
@@ -501,15 +650,15 @@ page('Partie 4 · Le pilotage', f'''
 {table(['Sem.']+ind,[[f'S{i}']+['']*6 for i in range(1,13)],['.6fr']+['1fr']*6,48)}
 ''')
 
-risks=[('La panne','Un Reel viral sur un plan gratuit saturé : l\'app tombe pour les payants.','Blaze prêt, bascule à 70 %'),('Données de santé','Cycle, photos, mensurations : catégorie sensible RGPD.','Consentement explicite, rien montré sans accord écrit'),('Loi influence','Mention « collaboration commerciale » obligatoire (9 juin 2023).','Dans le kit ambassadrice, contrat d\'une page'),('Engagement 12 mois','Litiges et remboursements PayPal.','Supprimé en semaine 0'),('Coachs tiers','RepCore devient sous-traitant RGPD.','Contrat de sous-traitance signé'),('Mon temps','Coder, coacher 40 clients et prospecter : impossible.','Gel du code, routine 90 min, Claude')]
+risks=[('La panne','Un Reel viral sur un plan gratuit saturé : l\'app tombe pour les payants.','Blaze prêt, bascule à 70 %'),('Données de santé','Cycle, photos, mensurations : catégorie sensible RGPD.','Consentement explicite, rien montré sans accord écrit'),('Loi influence','Mention « collaboration commerciale » obligatoire (9 juin 2023).','Dans le kit ambassadrice, contrat d\'une page'),('Engagement 12 mois','Litiges et remboursements PayPal.','Supprimé en semaine 0'),('Coachs tiers','RepCore devient sous-traitant RGPD.','Contrat de sous-traitance signé'),('Promesse sur le cycle','Effets moyens faibles dans les études (0,01 à 0,14, selon ton audit d\'août).','Vendre la personnalisation, jamais une performance garantie'),('Mon employeur','Tu travailles au Fitness Park de Niort : démarcher une salle concurrente ou vendre Fit Pulse peut poser problème.','Relire le contrat, demander un accord écrit'),('Mon temps','Coder, coacher 40 clients et prospecter : impossible.','Gel du code, routine 90 min, Claude')]
 page('Partie 4 · Le pilotage', f'''
 <div class="kick">23 · Les garde-fous</div>
 <h1>Les risques <em>tenus en laisse</em></h1>
 <div style="margin-top:28px">{''.join(f'<div class="box{" r" if i==5 else ""}" style="margin-bottom:16px;display:grid;grid-template-columns:90px 1fr 60px;gap:16px;align-items:center"><div class="big r" style="font-size:64px">0{i+1}</div><div><h3>{a}</h3><p class="mut" style="font-size:18px">{b}</p><p style="font-size:18px;margin-top:4px"><b>Parade :</b> {c}</p></div>{cb()}</div>' for i,(a,b,c) in enumerate(risks))}</div>
 ''')
 
-ideas=['Offre Fondateur 149 € l\'an, 300 places, compteur public','Transformation 90 jours à 350 €, 10 places puis liste d\'attente','Mensuel sans engagement + annuel à 2 mois offerts','Commentaire épinglé « Écris REPCORE » sur chaque Reel','15 DM ambassadrices par jour','Un défi RepCore par mois, équipes par ambassadrice','Affiche QR code au vestiaire de la salle','50 bêta-testeurs contre un témoignage vidéo','« Thomas t\'invite » : prénom du parrain à l\'arrivée','Légende + #RepCore pré-remplies au partage','Live Instagram de 20 min le jeudi','Story quotidienne « places restantes »','Fiche Google Play (TWA)','Écran de fin d\'essai « Ce que tu as construit »','Parcours des 7 premiers jours','Relance des inactifs J+5, J+10, J+20','Programme « Fessiers 8 semaines » à 14,90 €','Programme « Force débutante » à 14,90 €','Programme « Muscu et cycle » à 14,90 €','Carrousel « Ton cycle, phase par phase »','Série « Je coache ma copine pendant 30 jours »','Reel en collab avec une ambassadrice','Ambassadrices élite à 40 % après 3 mois','Classement mensuel public des ambassadrices','Vitrine coach /c/ en bio de chaque coach','3 mois offerts aux 50 premiers coachs','Démo coach de 60 secondes en vidéo','Partenariat avec 3 salles locales','Défi inter-salles avec classement','Wrapped mensuel en carrousel 4:5','Newsletter mensuelle aux inscrits','Séquence email de bienvenue en 5 messages','Séquence de fin d\'essai (J-5, J-2, J0)','Email de réactivation des anciens essais','2 articles SEO par mois','Page pilier « Muscu et cycle menstruel »','Comparatif « RepCore vs carnet vs Excel »','Écran « Passer au coaching » après 3 mois','Carte cadeau « 3 mois d\'Ultime » pour Noël','Black Friday : annuel à −40 % pendant 72 h','Janvier « Nouvelle année, nouveau programme »','Témoignages clients en stories à la une','Live avec une sage-femme ou une médecin du sport','Kit presse pour les médias fitness','Formation de coachs RepCore en partage de revenus','Paiement Stripe en plus de PayPal','Version anglaise pour l\'international','Pack salle de sport (licence club)','Merch RepCore pour les gagnants des défis','Fit Pulse pour d\'autres clubs (après vérification de la propriété)']
-imp=[3,3,3,3,3,3,2,3,2,2,2,2,3,3,3,3,2,2,3,3,2,3,2,2,2,3,3,2,2,2,1,2,3,2,2,3,1,2,2,3,3,2,2,1,3,2,2,2,1,2]
+ideas=['Offre Fondateur 149 € l\'an, 300 places, compteur public','Transformation 90 jours à 350 €, 10 places puis liste d\'attente','Mensuel sans engagement + annuel à 2 mois offerts','Commentaire épinglé « Écris REPCORE » sur chaque Reel','15 DM ambassadrices par jour','Un défi RepCore par mois, équipes par ambassadrice','Affiche QR code au vestiaire de la salle','50 bêta-testeurs contre un témoignage vidéo','« Thomas t\'invite » : prénom du parrain à l\'arrivée','Légende + #RepCore pré-remplies au partage','Live Instagram de 20 min le jeudi','Story quotidienne « places restantes »','Fiche Google Play (TWA)','Écran de fin d\'essai « Ce que tu as construit »','Parcours des 7 premiers jours','Relance des inactifs J+5, J+10, J+20','Programme « Fessiers 8 semaines » à 14,90 €','Programme « Force débutante » à 14,90 €','Programme « Muscu et cycle » à 14,90 €','Carrousel « Ton cycle, phase par phase »','Série « Je coache ma copine pendant 30 jours »','Reel en collab avec une ambassadrice','Ambassadrices élite à 40 % après 3 mois','Classement mensuel public des ambassadrices','Vitrine coach /c/ en bio de chaque coach','3 mois offerts aux 50 premiers coachs','Démo coach de 60 secondes en vidéo','Partenariat avec 3 salles locales','Défi inter-salles avec classement','Wrapped mensuel en carrousel 4:5','Newsletter mensuelle aux inscrits','Séquence email de bienvenue en 5 messages','Séquence de fin d\'essai (J-5, J-2, J0)','Email de réactivation des anciens essais','2 articles SEO par mois','Page pilier « Muscu et cycle menstruel »','Comparatif « RepCore vs carnet vs Excel »','Écran « Passer au coaching » après 3 mois','Carte cadeau « 3 mois d\'Ultime » pour Noël','Black Friday : annuel à −40 % pendant 72 h','Janvier « Nouvelle année, nouveau programme »','Témoignages clients en stories à la une','Live avec une sage-femme ou une médecin du sport','QR codes sur les machines des salles partenaires','Formation de coachs RepCore en partage de revenus','Paiement Stripe en plus de PayPal','Offre « RepCore Entreprise » pour les CSE','Pack salle de sport (licence club)','Défi du mois sponsorisé par Prozis ou Nutrimuscle','Fit Pulse pour d\'autres clubs (après vérification de la propriété)']
+imp=[3,3,3,3,3,3,2,3,2,2,2,2,3,3,3,3,2,2,3,3,2,3,2,2,2,3,3,2,2,2,1,2,3,2,2,3,1,2,2,3,3,2,2,3,3,2,2,2,2,2]
 def idea_rows(a,b): return [[str(i+1),ideas[i],'★'*imp[i],cb('s')] for i in range(a,b)]
 page('Partie 4 · Le pilotage', f'''
 <div class="kick">24 · Banque d'idées</div>
@@ -543,6 +692,15 @@ page('', f'''
 </div>
 ''', 'cover')
 
+# Numérotation automatique des intercalaires « NN · titre »
+_n = 0
+for _k,(_sec,_body,_cls) in enumerate(pages):
+    _m = re.search(r'<div class="kick">(\d\d|XX) · ([^<]+)</div>', _body)
+    if not _m: continue
+    if '(suite)' in _m.group(2): _num = _n
+    else: _n += 1; _num = _n
+    pages[_k] = (_sec, _body.replace(_m.group(0), f'<div class="kick">{_num:02d} · {_m.group(2)}</div>', 1), _cls)
+
 # Sommaire
 toc_html = '<div class="kick">Sommaire</div><h1 style="margin-bottom:36px">Ce que contient <em>ce guide</em></h1>'
 idx = 0
@@ -554,13 +712,16 @@ items = [('Mode d\'emploi et engagement',2)]
 import re
 for i,(sec,body,cls) in enumerate(pages):
     m = re.search(r'<div class="kick">(\d\d) · ([^<]+)</div>', body)
-    if m and not body.startswith('\n<div class="kick">24 · Banque d\'idées (suite)'):
+    if m and '(suite)' not in m.group(2):
         items.append((f'{m.group(1)} · {m.group(2)}', i+1))
 parts = dict((p,t) for t,p in TOC)
+cols = ['','']; cur = 0; nparts = 0
 for name,pg in items:
     if pg in parts:
-        toc_html += f'<div style="font-family:\'Bebas Neue\';font-size:34px;color:var(--r);margin:18px 0 2px">{parts[pg]}</div>'
-    toc_html += f'<div class="task" style="padding:6px 0;font-size:20px"><div>{name}</div><div class="d" style="font-size:20px;color:var(--n);font-weight:800">p. {pg}</div></div>'
+        nparts += 1; cur = 0 if nparts <= 2 else 1
+        cols[cur] += f'<div style="font-family:\'Bebas Neue\';font-size:34px;color:var(--r);margin:18px 0 2px">{parts[pg]}</div>'
+    cols[cur] += f'<div class="task" style="padding:7px 0;font-size:19px"><div>{name}</div><div class="d" style="font-size:19px;color:var(--n);font-weight:800">p. {pg}</div></div>'
+toc_html += f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:50px">{"<div>"+cols[0]+"</div><div>"+cols[1]+"</div>"}</div>'
 pages[2] = (pages[2][0], toc_html, '')
 
 out = ['<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>RepCore — Le guide</title>']
