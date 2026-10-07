@@ -81891,6 +81891,39 @@ function _bilSansReprises(data,reprises){
   if(reprises&&reprises.size) for(const k of reprises) delete out[k];
   return out;
 }
+// ══ BUILD 1880 : LE POIDS DU BILAN VIENT DES PESÉES ═════════════════════════
+// L'athlète se pèse souvent chaque jour : reprendre le poids du DERNIER BILAN
+// (et le retirer à l'envoi) faisait demander « Valider sans ton poids ? ».
+// Une moyenne de la semaine est une mesure réelle, pas une reprise.
+const BIL_PESEES_JOURS=7, BIL_PESEES_MIN=3, BIL_PESEE_RECENTE_J=3, BIL_PESEE_ECART_MEDIANE=3;
+/** PURE. {kg, source:'pesees', n} ou null. */
+function poidsPourBilan(u,maintenant){
+  if(!u||u.masquerPoids) return null;
+  try{ if(aTCA(u)) return null; }catch(e){}
+  const t=Number(maintenant)||Date.now();
+  const jour=d=>localISODate(new Date(d));
+  const debut=jour(t-(BIL_PESEES_JOURS-1)*864e5), auj=jour(t);
+  const l=((u.weightLog)||[]).filter(e=>e&&e.date&&!e.agrege&&!e.horsCalcul&&e.date>=debut&&e.date<=auj)
+    .map(e=>({date:e.date,kg:parseFloat(e.kg)})).filter(e=>e.kg>=PESEE_MIN&&e.kg<=PESEE_MAX);
+  if(l.length){
+    const tri=l.map(e=>e.kg).sort((a,b)=>a-b);
+    const med=tri.length%2?tri[(tri.length-1)/2]:(tri[tri.length/2-1]+tri[tri.length/2])/2;
+    const ok=l.filter(e=>Math.abs(e.kg-med)<=BIL_PESEE_ECART_MEDIANE);
+    if(ok.length>=BIL_PESEES_MIN)
+      return {kg:Math.round(ok.reduce((s,e)=>s+e.kg,0)/ok.length*10)/10,source:'pesees',n:ok.length};
+  }
+  const lim=jour(t-(BIL_PESEE_RECENTE_J-1)*864e5);
+  const der=((u.weightLog)||[]).filter(e=>e&&e.date&&!e.agrege&&!e.horsCalcul&&e.date>=lim&&e.date<=auj).sort((a,b)=>a.date<b.date?-1:1).pop();
+  const v=der?parseFloat(der.kg):NaN;
+  return (v>=PESEE_MIN&&v<=PESEE_MAX)?{kg:Math.round(v*10)/10,source:'pesees',n:1}:null;
+}
+let _bilPoidsPesees=null;   // {kg,n} : le poids pré-rempli depuis les pesées
+function _htmlPoidsPesees(){
+  const p=_bilPoidsPesees;
+  if(!p||String(bilData['bil-weight']||'')!==String(p.kg)) return '';
+  return '<div class="rc-micro" id="bil-poids-pesees" style="font-size:var(--fs-2xs);color:var(--sub);margin:2px 0 6px">'
+    +(p.n>1?'Moyenne de tes '+p.n+' pesées de la semaine.':'Ta dernière pesée.')+' Corrige si besoin.</div>';
+}
 // PURE. Les mensurations du dernier bilan QUI LES PORTE, clef par clef.
 //
 // Chaque mesure est cherchée séparément : un bilan où seul le poids a été
@@ -81965,6 +81998,8 @@ function _bilMontrerAide(id,msg){
 }
 function bMesureSaisie(id,v){
   const _avantVide=!String(bilData[id]||'').trim();
+  // BUILD 1880 : corrigé à la main, le poids n'est plus « des pesées ».
+  if(id==='bil-weight'&&_bilPoidsPesees){ const _n0=lireDecimal(v); if(_n0==null||_n0!==_bilPoidsPesees.kg){ _bilPoidsPesees=null; try{ const z=document.getElementById('bil-poids-pesees'); if(z) z.remove(); }catch(e){} } }
   // La valeur est rangée NORMALISÉE (point décimal) : « 62,0 » devient « 62 ».
   // Une saisie illisible est gardée telle quelle — l'aide le dit, rien ne se perd.
   const _n=lireDecimal(v);
@@ -82279,7 +82314,7 @@ function modifierBilan(id,etape){
   clearTimeout(_bilDraftTimer); _bilDraftTimer=null;
   _bilGen++;
   _bilEdition={id:x.id,nom:x.nom};
-  bilType=x.depart?'depart':'coaching'; bilStep=0; _bilPhotoLoading=0; _bilReprises=null;
+  bilType=x.depart?'depart':'coaching'; bilStep=0; _bilPhotoLoading=0; _bilReprises=null; _bilPoidsPesees=null;
   bilData={};
   for(const k of Object.keys(x.b)){
     if(!BIL_PREFIXES_REPONSES.test(k)) continue;
@@ -82729,6 +82764,12 @@ async function openBilan(type,forcerReprise){
   // LIMITÉ AUX CLEFS ABSENTES DU BROUILLON. `in` et non une valeur vide : une
   // case que l’athlète a délibérément effacée est une décision, pas un trou —
   // la re-remplir reviendrait à lui rendre ce qu’il vient de retirer.
+  _bilPoidsPesees=null;
+  if(type==='coaching'&&!_bilEdition&&!('bil-weight' in bilData)){
+    // BUILD 1880 : la moyenne des pesées de la semaine, une MESURE (pas une reprise).
+    let _p=null; try{ _p=poidsPourBilan(currentUser); }catch(e){ _p=null; }
+    if(_p){ bilData['bil-weight']=String(_p.kg); _bilPoidsPesees={kg:_p.kg,n:_p.n}; }
+  }
   if(type==='coaching'){
     let _r={};
     try{ _r=mensurationsReprises(currentUser); }catch(e){ _r={}; }
@@ -87133,7 +87174,7 @@ const BIL_STEPS=[
   ()=>bSec('Mensurations ',
     `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
     _htmlNoteReprises()+
-    `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}</div>`+
+    `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}${_htmlPoidsPesees()}</div>`+
     bBodySchema('bil')+
     // LA MASSE GRASSE MESURÉE, FACULTATIVE (05/10/2026) : un chiffre d'appareil,
     // jamais calculé ici. Elle passe devant l'estimation au ruban à ±3 jours
@@ -87358,6 +87399,9 @@ function saveBilanFinal(){
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // BUILD 1880 : le poids vient des pesées de la semaine (non retouché).
+  if(_bilPoidsPesees&&String(bi['bil-weight']||'')===String(_bilPoidsPesees.kg)) bi.bilPoidsSource='pesees';
+  _bilPoidsPesees=null;
   // « Envoyer sans, je les ajoute plus tard » : la promesse reste sur le bilan.
   if(Array.isArray(_bilPhotosAVenir)&&_bilPhotosAVenir.length) bi.photosAVenir=_bilPhotosAVenir.slice();
   _bilPhotosAVenir=null;

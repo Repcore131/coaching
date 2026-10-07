@@ -66103,6 +66103,32 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1880 : LE POIDS DU BILAN VIENT DES PESÉES ══
+    const _ppJ=k=>localISODate(new Date(Date.now()-k*864e5));
+    ok('poidsPourBilan : 5 pesées → moyenne exacte ; une aberrante écartée',()=>{
+      const u={weightLog:[{date:_ppJ(0),kg:63.4},{date:_ppJ(1),kg:63.6},{date:_ppJ(2),kg:63.8},{date:_ppJ(3),kg:64},{date:_ppJ(4),kg:63.2},{date:_ppJ(5),kg:85}]};
+      const p=poidsPourBilan(u);
+      return p&&p.kg===63.6&&p.n===5&&p.source==='pesees'?true:_echec(JSON.stringify(p));});
+    ok('poidsPourBilan : 2 pesées anciennes → null ; masquerPoids → null ; une pesée d’hier → elle',()=>{
+      if(poidsPourBilan({weightLog:[{date:_ppJ(10),kg:63},{date:_ppJ(12),kg:64}]})!==null) return _echec('anciennes');
+      if(poidsPourBilan({masquerPoids:true,weightLog:[{date:_ppJ(0),kg:63},{date:_ppJ(1),kg:63},{date:_ppJ(2),kg:63}]})!==null) return _echec('masqué');
+      const p=poidsPourBilan({weightLog:[{date:_ppJ(1),kg:62.95}]});
+      return p&&p.kg===63&&p.n===1?true:_echec(JSON.stringify(p));});
+    ok('openBilan : la moyenne des pesées n’est pas une reprise, et le poids compte comme saisi',()=>{
+      const sU=currentUser, sD=bilData, sR=_bilReprises, sT=bilType, sG=window.go, sE=_bilEdition;
+      try{
+        window.go=()=>{};
+        _bilEdition=null;
+        currentUser={id:'pp',email:'pp@t.fr',role:'athlete',bilans:[{type:'coaching',date:Date.now()-14*864e5,'bil-weight':'66','bil-waist':'80'}],
+          weightLog:[{date:_ppJ(0),kg:63.4},{date:_ppJ(1),kg:63.6},{date:_ppJ(2),kg:63.8},{date:_ppJ(3),kg:64},{date:_ppJ(4),kg:63.2}]};
+        try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){}
+        openBilan('coaching',true);
+        if(bilData['bil-weight']!=='63.6') return _echec('poids '+bilData['bil-weight']);
+        if(_bilReprises&&_bilReprises.has('bil-weight')) return _echec('compté comme reprise');
+        if(!_bilPoidsSaisi(_bilSansReprises(bilData,_bilReprises))) return _echec('poids non saisi');
+        return /Moyenne de tes 5 pesées de la semaine\. Corrige si besoin\./.test(_htmlPoidsPesees())?true:_echec(_htmlPoidsPesees());
+      } finally { currentUser=sU; bilData=sD; _bilReprises=sR; bilType=sT; window.go=sG; _bilEdition=sE; _bilPoidsPesees=null; try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){} }});
+
     // ══ BUILD 1879 : LES COURBES ET ANNEAUX DE L'ÉVOLUTION ══
     ok('couleurCanvas(\'var(--red)\') rend une couleur concrète (# ou rgb) ; couleurAlpha gère hex et rgb',()=>{
       const c=couleurCanvas('var(--red)');

@@ -1474,7 +1474,7 @@ const BIL_STEPS=[
   ()=>bSec('Mensurations ',
     `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
     _htmlNoteReprises()+
-    `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}</div>`+
+    `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}${_htmlPoidsPesees()}</div>`+
     bBodySchema('bil')+
     // LA MASSE GRASSE MESURÉE, FACULTATIVE (05/10/2026) : un chiffre d'appareil,
     // jamais calculé ici. Elle passe devant l'estimation au ruban à ±3 jours
@@ -1699,6 +1699,9 @@ function saveBilanFinal(){
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // BUILD 1880 : le poids vient des pesées de la semaine (non retouché).
+  if(_bilPoidsPesees&&String(bi['bil-weight']||'')===String(_bilPoidsPesees.kg)) bi.bilPoidsSource='pesees';
+  _bilPoidsPesees=null;
   // « Envoyer sans, je les ajoute plus tard » : la promesse reste sur le bilan.
   if(Array.isArray(_bilPhotosAVenir)&&_bilPhotosAVenir.length) bi.photosAVenir=_bilPhotosAVenir.slice();
   _bilPhotosAVenir=null;
