@@ -1110,7 +1110,7 @@ function _plEmpreinte(saisie){
 // saveClientNutriMacros : une seconde lecture divergerait au premier champ
 // ajoute.
 function _plSaisieCourante(){
-  const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  const g=_ccdNombre;
   const on={kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
   // N2.4 — EN DIETE NON CYCLEE, LE JOUR OFF EST UNE COPIE DU JOUR ON.
   // Les champs ccd-off-* ne sont alors PAS rendus : cette fonction rendait un

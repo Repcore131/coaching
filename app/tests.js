@@ -42728,7 +42728,7 @@ async function testExercices(){
         if(!tb) return _echec('le tableau « Macronutriments » n\'est plus rendu');
         const rs=[...tb.querySelectorAll('tbody tr')];
         const iSwi=rs.findIndex(r=>r.querySelector('input[type=checkbox]'));
-        const iIn=rs.findIndex(r=>r.querySelector('input[type=number]'));
+        const iIn=rs.findIndex(r=>r.querySelector('input.tbk-in')); // texte décimal depuis 1906
         if(iSwi<0) return _echec('l\'interrupteur n\'est pas rendu dans le tableau');
         if(iIn<0) return _echec('aucun champ de saisie en mode manuel');
         if(iSwi>iIn) return _echec('l\'interrupteur est rendu apres les champs');
@@ -73838,6 +73838,68 @@ async function testExercices(){
       if(/then\(g=>\{ if\(g\) g\.update\(\); \}\)/.test(src)) return _echec('g.update() sans garde ni catch');
       if(!/rcEnregistrerSW\(navigator\.serviceWorker/.test(src)) return _echec('rcEnregistrerSW non appelé');
       return h?true:_echec('page vide');});
+
+    // ══ BUILD 1906 — LA SAISIE DES MACROS VALIDÉE (validerMacrosSaisie) ═══════
+    ok('1906 — validerMacrosSaisie : -5, 9999, vide, abc refusés ; 130/230/65 à 2005 kcal accepté ; incohérence avertie',()=>{
+      const faux=[];
+      const j=(kcal,p,g,l,f)=>({on:{kcal,p,g,l,f},off:{}});
+      for(const [nom,s] of [['p -5',j('2000','-5','200','60','30')],['kcal 9999',j('9999','130','230','65','30')],
+        ['kcal vide',j('','130','230','65','30')],['g abc',j('2000','130','abc','65','30')],['f 150',j('2000','130','230','65','150')],
+        ['kcal 500',j('500','10','10','10','5')],['tout vide',{on:{},off:{}}],['emoji',j('💪','130','230','65','')]]){
+        const r=validerMacrosSaisie(s); if(r.ok||!r.erreurs.length||!r.erreurs[0].msg) faux.push(nom+' accepté');
+      }
+      const r=validerMacrosSaisie(j('2005','130','230','65','30'));
+      if(!r.ok||r.avertissements.length) faux.push('2005 : '+JSON.stringify(r));
+      if(r.valeurs.on.kcal!==2005||r.valeurs.on.p!==130) faux.push('valeurs : '+JSON.stringify(r.valeurs));
+      const v=validerMacrosSaisie(j('3000','130','230','65',''));
+      if(!v.ok||v.avertissements.length!==1||v.avertissements[0].calc!==2025) faux.push('incohérence : '+JSON.stringify(v));
+      if(validerMacrosSaisie(j('2005','130,5','230','65','')).valeurs.on.p!==130.5) faux.push('virgule');
+      const off=validerMacrosSaisie({on:{kcal:'2005',p:'130',g:'230',l:'65'},off:{kcal:'-5'}});
+      if(off.ok||off.erreurs[0].jour!=='off') faux.push('jour OFF non contrôlé');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1906 — fiche : champs texte décimal ; invalide → orange + message, rien écrit, pas de toast ; incohérent → « Corriger les kcal »',()=>{
+      const faux=[], brut=localStorage.getItem('rc_users'), cu=currentUser, cid=currentClientId;
+      const _t=window.toast, _ts=window.toastSync, _po=CLOUD.pushOne;
+      const toasts=[];
+      try{
+        window.toast=(m)=>toasts.push(m); window.toastSync=(o,p,m)=>toasts.push(m); CLOUD.pushOne=()=>Promise.resolve(true);
+        const A={id:'A1906',email:'a1906@t.fr',role:'athlete',fname:'T',lname:'X',coachId:'C1906',gender:'H',
+          _evol_height:'178','init-age':30,sessions_config:Array.from({length:7},()=>({active:false})),
+          bilans:[{date:Date.now()-3*864e5,'bil-weight':'80','deb-height':'178','deb-age':30}],
+          nutrition:{manuel:true,cycle:false,macros:{on:{kcal:2500,p:180,g:280,l:70,f:30},off:{kcal:2500,p:180,g:280,l:70,f:30}}}};
+        const C={id:'C1906',email:'c1906@t.fr',role:'coach'};
+        DB.set('users',{'c1906@t.fr':C,'a1906@t.fr':A}); currentUser=C; currentClientId='A1906';
+        if(!document.getElementById('ccd-nutrition')) return _echec('#ccd-nutrition absent');
+        renderCoachNutriSection(getOwnedClient('A1906'));
+        const el=document.getElementById('ccd-on-kcal');
+        if(!el) return _echec('champ ccd-on-kcal absent');
+        if(el.type!=='text'||el.getAttribute('inputmode')!=='decimal') faux.push('type '+el.type+'/'+el.getAttribute('inputmode'));
+        const mettre=(v)=>{ for(const k in v){ const e=document.getElementById('ccd-on-'+k); if(e) e.value=v[k]; } };
+        const macros=()=>JSON.stringify((getOwnedClient('A1906').nutrition||{}).macros);
+        const avant=macros();
+        mettre({kcal:'9999',p:'130',g:'230',l:'65',f:'30'});
+        const r=saveClientNutriMacros();
+        if(r!==false) faux.push('9999 : rend '+r);
+        if(avant!==macros()) faux.push('écrit malgré 9999');
+        if(toasts.length) faux.push('toast : '+toasts[0]);
+        const z=document.getElementById('ccd-macros-aide');
+        if(!z||!/Calories/.test(z.textContent)) faux.push('message : '+(z&&z.textContent));
+        if(document.getElementById('ccd-on-kcal').style.borderColor.indexOf('orange')<0) faux.push('pas orange');
+        mettre({kcal:'3000',p:'130',g:'230',l:'65',f:'30'});
+        const ok2=saveClientNutriMacros(true);
+        const z2=document.getElementById('ccd-macros-aide');
+        if(ok2!==true) faux.push('3000 incohérent : rend '+ok2);
+        else if(!z2||!/Corriger les kcal/.test(z2.textContent)) faux.push('pas de « Corriger les kcal » : '+(z2&&z2.textContent));
+        else { z2.querySelector('button').click(); if(document.getElementById('ccd-on-kcal').value!=='2025') faux.push('corriger : '+document.getElementById('ccd-on-kcal').value); }
+        mettre({kcal:'2005',p:'130,5',g:'230',l:'65',f:'30'});
+        saveClientNutriMacros(true);
+        const m=(getOwnedClient('A1906').nutrition||{}).macros||{};
+        if(!m.on||m.on.p!==130.5||m.on.kcal!==2005) faux.push('130,5 : '+JSON.stringify(m.on));
+      }finally{
+        window.toast=_t; window.toastSync=_ts; CLOUD.pushOne=_po; currentUser=cu; currentClientId=cid;
+        try{ if(brut==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',brut); }catch(e){}
+      }
+      return faux.length?_echec(faux.join(' | ')):true;});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

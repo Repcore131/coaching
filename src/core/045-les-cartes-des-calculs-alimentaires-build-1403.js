@@ -376,8 +376,9 @@ function _htmlTableauxTableur(c){
   // Un champ de saisie de macro. `min` a 0 : une cible negative n'existe pas,
   // et controlerMacros refuserait de toute facon — autant que le clavier du
   // telephone ne propose meme pas le signe.
-  const _in=(id,v)=>'<input class="tbk-in" id="'+id+'" type="number" min="0" inputmode="numeric" '
-    +'value="'+((v===undefined||v===null||v==='')?'':escapeHtml(String(v)))+'">';
+  // BUILD 1906 : texte + clavier décimal, lu par lireNombreFr (« 72,5 » passe).
+  const _in=(id,v)=>'<input class="tbk-in" id="'+id+'" type="text" inputmode="decimal" autocomplete="off" '
+    +'value="'+((v===undefined||v===null||v==='')?'':escapeHtml(String(v).replace('.',',')))+'">';
   // LE COMMUTATEUR EST LA PREMIERE LIGNE DU TABLEAU. C'est lui qui decide de
   // ce que les cinq suivantes montrent : le mettre en dessous obligerait a le
   // chercher apres avoir constate que les champs ne repondent pas.
@@ -2062,17 +2063,93 @@ function saveClientStrictAcces(ouvert){
   renderCoachNutriSection(c);
 }
 
+// ══ BUILD 1906 — LA SAISIE DES MACROS EST VALIDÉE AVANT TOUT ═══════════════
+// PURE. saisie = {on:{kcal,p,g,l,f}, off:{…}} — chaînes telles que tapées, ou
+// nombres. Bornes : kcal 800–8000, protéines/glucides/lipides 0–600, fibres
+// 0–100. Une journée entièrement vide est admise (l'autre la recopie) ; une
+// journée commencée doit porter ses kcal. Rend
+//   {ok, erreurs:[{jour,champ,msg}], avertissements:[{jour,kcal,calc,msg}], valeurs:{on,off}}
+// Un écart de plus de 15 % entre les kcal et 4P+4G+9L AVERTIT sans bloquer.
+const MACROS_BORNES=Object.freeze({kcal:[800,8000],p:[0,600],g:[0,600],l:[0,600],f:[0,100]});
+const MACROS_LIB={kcal:'Calories',p:'Protéines',g:'Glucides',l:'Lipides',f:'Fibres'};
+function validerMacrosSaisie(saisie){
+  const s=saisie||{}, erreurs=[], avertissements=[], valeurs={};
+  const vide=v=>v==null||String(v).trim()==='';
+  ['on','off'].forEach(jour=>{
+    const j=s[jour]||{}, out={};
+    valeurs[jour]=out;
+    if(['kcal','p','g','l','f'].every(k=>vide(j[k]))) return;
+    ['kcal','p','g','l','f'].forEach(k=>{
+      const b=MACROS_BORNES[k], u=k==='kcal'?'kcal':'g';
+      if(vide(j[k])){ if(k==='kcal') erreurs.push({jour,champ:k,msg:'Calories manquantes.'}); return; }
+      const l=lireNombreFr(j[k],{min:b[0],max:b[1],decimales:k==='kcal'?0:1});
+      if(l.ok){ out[k]=l.valeur; return; }
+      const t=String(j[k]).trim();
+      erreurs.push({jour,champ:k,msg:l.raison==='texte'?MACROS_LIB[k]+' : « '+t+' » n’est pas un nombre.'
+        :l.raison==='negatif'?MACROS_LIB[k]+' : pas de valeur négative.'
+        :MACROS_LIB[k]+' : '+String(l.valeur).replace('.',',')+' '+u+' ? Entre '+b[0]+' et '+b[1]+' '+u+'.'});
+    });
+    if(out.kcal>0&&[out.p,out.g,out.l].every(x=>typeof x==='number')){
+      const calc=Math.round(4*out.p+4*out.g+9*out.l);
+      if(Math.abs(out.kcal-calc)>0.15*out.kcal)
+        avertissements.push({jour,kcal:out.kcal,calc,
+          msg:(jour==='off'?'Jour OFF : ':'')+out.kcal+' kcal saisies, les grammes en font '+calc+'.'});
+    }
+  });
+  if(['on','off'].every(j=>!Object.keys(valeurs[j]).length)&&!erreurs.length)
+    erreurs.push({jour:'on',champ:'kcal',msg:'Rien n’est saisi.'});
+  return {ok:!erreurs.length,erreurs,avertissements,valeurs};
+}
+// Lecture brute d'un champ (la chaîne tapée), et lecture chiffrée.
+function _ccdBrut(id){ const e=document.getElementById(id); return e?e.value:undefined; }
+function _ccdNombre(id){ const l=lireNombreFr(_ccdBrut(id)); return l.ok?l.valeur:undefined; }
+// Le mot sous la grille : erreurs en orange (rien n'est écrit), écart kcal
+// avec son bouton « Corriger les kcal ». Pas de toast : le message est là où
+// l'on regarde.
+function _ccdMontrerAide(res){
+  try{
+    ['on','off'].forEach(j=>['kcal','p','g','l','f'].forEach(k=>{
+      const e=document.getElementById('ccd-'+j+'-'+k); if(e) e.style.borderColor='';
+    }));
+    const ref=document.getElementById('ccd-on-kcal');
+    let z=document.getElementById('ccd-macros-aide');
+    if(!res||(!res.erreurs.length&&!res.avertissements.length)){ if(z) z.remove(); return; }
+    if(!z&&ref){ const t=ref.closest('table')||ref.parentNode; z=document.createElement('div'); z.id='ccd-macros-aide';
+      z.setAttribute('role','status'); z.className='ccd-macros-aide'; t.parentNode.insertBefore(z,t.nextSibling); }
+    if(!z) return;
+    res.erreurs.forEach(x=>{ const e=document.getElementById('ccd-'+x.jour+'-'+x.champ); if(e) e.style.borderColor='var(--orange)'; });
+    z.innerHTML=res.erreurs.map(x=>'<p class="ccd-aide-err">'+escapeHtml(x.msg)+'</p>').join('')
+      +res.avertissements.map(x=>'<p class="ccd-aide-av">'+escapeHtml(x.msg)
+        +' <button type="button" class="btn btn-sm btn-outline" onclick="ccdCorrigerKcal(\''+x.jour+'\','+x.calc+')">Corriger les kcal</button></p>').join('');
+  }catch(e){}
+}
+function ccdCorrigerKcal(jour,calc){
+  const e=document.getElementById('ccd-'+jour+'-kcal');
+  if(e){ e.value=String(calc); try{ e.dispatchEvent(new Event('input',{bubbles:true})); }catch(_){} }
+  _ccdMontrerAide(validerMacrosSaisie(_ccdSaisieBrute()));
+}
+function _ccdSaisieBrute(){
+  const col=j=>({kcal:_ccdBrut('ccd-'+j+'-kcal'),p:_ccdBrut('ccd-'+j+'-p'),g:_ccdBrut('ccd-'+j+'-g'),l:_ccdBrut('ccd-'+j+'-l'),f:_ccdBrut('ccd-'+j+'-f')});
+  return {on:col('on'),off:document.getElementById('ccd-off-kcal')?col('off'):{}};
+}
 function saveClientNutriMacros(malgrePlancher,transmettre){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
   if(!c.nutrition) c.nutrition={};
-  const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  const g=_ccdNombre;
   // EN AUTOMATIQUE, ON RECALCULE PLUTOT QUE DE RELIRE L'ECRAN. Les champs
   // portent bien le calcul, mais les relire ferait dependre le dossier de
   // l'etat du DOM — un rendu a moitie remplace, et on ecrirait des cases vides.
   const _auto=!saisieManuelle(c)&&(()=>{ try{ const b=besoinsProposes(c,_propReglages());
     return (b&&b.source!==null)?b:null; }catch(e){ return null; } })();
+  // BUILD 1906 : une saisie manuelle invalide n'écrit RIEN (ni toast) ; le
+  // message est sous la grille.
+  let _val=null;
+  if(!_auto){
+    _val=validerMacrosSaisie(_ccdSaisieBrute());
+    if(!_val.ok){ _ccdMontrerAide(_val); return false; }
+  }
   const _on=_auto?Object.assign({},_auto.on)
     :{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')};
   // DIÈTE NON CYCLÉE : OFF REÇOIT LES MÊMES VALEURS QUE ON. Les champs OFF ne
@@ -2157,6 +2234,7 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
   if(!transmettre) toastSync(ok,envoi,
     viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés '+ICO.coche,'les objectifs sont');
   renderCoachNutriSection(c);
+  if(_val&&_val.avertissements.length) _ccdMontrerAide(_val);
   return true;
 }
 

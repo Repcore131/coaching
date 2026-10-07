@@ -13651,3 +13651,7 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .hb-page .hb-l>summary::-webkit-details-marker{display:none}
 .hb-page .hb-l-b{margin-top:10px;flex-wrap:wrap}
 .hb-page .hb-recap{margin-top:10px}
+/* BUILD 1906 — le mot sous la grille des macros (erreurs, écart kcal). */
+.ccd-macros-aide{margin-top:8px;font-size:var(--fs-xs);line-height:1.5}
+.ccd-aide-err{color:var(--orange);margin:0 0 4px}
+.ccd-aide-av{color:var(--sub);margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
