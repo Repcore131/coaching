@@ -32884,6 +32884,53 @@ async function testExercices(){
       }
     })();
 
+    // ── BUILD 1855 : LES UNITÉS NATURELLES DE LA TABLE (scripts/portions_aliments.tsv) ──
+    {
+      const _f=id=>_ciqualDB.find(f=>f.id===id);
+      const _cles=f=>unitesPour(f).map(u=>u.cle);
+      okA('Unités : whey -2 → dose 30 g ; skyr -6 → pot 150 g',async()=>{
+        await _loadCiqual();
+        const w=unitesPour(_f(-2)).find(u=>u.cle==='dose'), k=unitesPour(_f(-6)).find(u=>u.cle==='pot');
+        if(!w||w.gParUnite!==30) return _echec('whey : '+JSON.stringify(w));
+        return k&&k.gParUnite===150?true:_echec('skyr : '+JSON.stringify(k));});
+      okA('Unités : lait demi-écrémé → verre, mais pas de pot ; emmental → ni pot ni paume',async()=>{
+        await _loadCiqual();
+        const lait=_ciqualDB.find(f=>/^Lait demi-écrémé, UHT$/.test(f.n));
+        const c=_cles(lait);
+        if(c.indexOf('verre')<0||c.indexOf('pot')>=0) return _echec('lait : '+c.join());
+        const em=_ciqualDB.find(f=>/^Emmental ou emmenthal$/.test(f.n));
+        const ce=_cles(em);
+        if(ce.indexOf('pot')>=0) return _echec('emmental : '+ce.join());
+        if(portionsPourGroupe(em.g,em.s).length) return _echec('une paume pour l’emmental');
+        return portionsPourGroupe('viandes, oeufs, poissons','poulet, filet').length?true:_echec('la paume a disparu de la viande');});
+      okA('Unités : jambon cuit supérieur → tranche ; croissant → pièce',async()=>{
+        await _loadCiqual();
+        const j=_cles(_f(28900)), cr=_cles(_ciqualDB.find(f=>/^Croissant, sans précision/.test(f.n)));
+        if(j.indexOf('tranche')<0) return _echec('jambon : '+j.join());
+        return cr.indexOf('piece')>=0?true:_echec('croissant : '+cr.join());});
+      ok('Unités : un aliment sans « u » ni groupe → uniquement g ; « g » toujours en premier',()=>{
+        const l=unitesPour({id:999999,n:'Inconnu',g:''});
+        if(l.length!==1||l[0].cle!=='g') return _echec(l.map(u=>u.cle).join());
+        const m=unitesPour({id:5,g:'',u:[{c:'dose',l:'dose',p:'doses',g:30}]});
+        return m[0].cle==='g'&&m[1].cle==='dose'?true:_echec(m.map(u=>u.cle).join());});
+      ok('Unités : la portion du fabricant passe avant les unités de la table',()=>{
+        const l=unitesPour({id:'off:1',g:'',u:[{c:'pot',l:'pot',p:'pots',g:125}],_off:{ean:'1',portion:140}});
+        return l[1].cle==='portion'&&l[1].fabricant?true:_echec(l.map(u=>u.cle).join());});
+      ok('Unités : l’ancien repli FJ_UNITES_ALIMENT ne sert que sans « u »',()=>{
+        const a=unitesPour({id:22000,g:''}).map(u=>u.cle), b=unitesPour({id:22000,g:'',u:[{c:'oeuf2',l:'œuf',p:'œufs',g:55}]}).map(u=>u.cle);
+        return a.indexOf('oeuf')>=0&&b.indexOf('oeuf')<0&&b.indexOf('oeuf2')>=0?true:_echec(a+' / '+b);});
+      ok('Présélection : unité à 1 ; une quantité déjà saisie l’emporte ; sans unité, rien',()=>{
+        const f={id:-2,g:'produits pour sportifs',u:[{c:'dose',l:'dose',p:'doses',g:30}]};
+        const a=_fjPreselection(f,null);
+        if(!a||a.unite!=='dose'||a.n!==1||a.qty!==30) return _echec(JSON.stringify(a));
+        const b=_fjPreselection(f,45);
+        if(!b||b.unite!=='g'||b.qty!==45) return _echec(JSON.stringify(b));
+        return _fjPreselection({id:1,g:''},null)===null&&_fjPreselection({id:1,g:''},175)===null?true:_echec('présélection sans unité');});
+      ok('Unités : demi-unité acceptée, aller-retour sans dérive',()=>{
+        const u={cle:'dose',lib:'dose',pluriel:'doses',gParUnite:30};
+        const g=qtyDepuisUnite('0,5',u);
+        return g===15&&uniteDepuisQty(g,u)===0.5?true:_echec(g);});
+    }
     // ── Scan de code-barres : les six critères d'acceptation ──
     (function(){
       // Critère 1 : le décodeur est absent du chargement initial ET d'ASSETS.

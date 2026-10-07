@@ -2195,8 +2195,13 @@ function selectFjFood(id){
   if(!_fjRepasChoisi) _fjRepas=repasSelonHeure();
   document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
   // Un favori rouvre sur la quantité réellement utilisée la dernière fois.
+  // Build 1855 : tout aliment DÉJÀ SAISI aussi, quand il porte une unité (la
+  // présélection d'unité ne doit pas écraser l'habitude).
   const _q=document.getElementById('fja-qty');
-  if(_q&&estFavori(_fjFood.id)){ const d=_fjDerniereQty(_fjFood.id); if(d>0) _q.value=d; }
+  const _dq=_fjDerniereQty(_fjFood.id);
+  if(_q&&estFavori(_fjFood.id)&&_dq>0) _q.value=_dq;
+  const _pre=_fjPreselection(_fjFood,_dq);
+  if(_q&&_pre&&_pre.unite==='g') _q.value=_pre.qty;
   const _ep=document.getElementById('fja-epingle-slot');
   if(_ep) _ep.innerHTML=_htmlEpingle(_fjFood.id,true);
   const _po=document.getElementById('fja-portions');
@@ -2207,6 +2212,11 @@ function selectFjFood(id){
   _fjUnite='g';
   const _pu=document.getElementById('fja-unites-slot');
   if(_pu) _pu.innerHTML=_htmlUnites(_fjFood);
+  // Présélection de l'unité de la table, à 1 (sauf quantité déjà connue).
+  if(_pre&&_pre.unite!=='g'){
+    const _sel=document.getElementById('fja-unite'), _n=document.getElementById('fja-unite-n');
+    if(_sel){ _sel.value=_pre.unite; if(_n) _n.value=1; fjaChangerUnite(_pre.unite); }
+  }
   updateFjaCalc();
 }
 

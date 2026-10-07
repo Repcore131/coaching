@@ -104541,9 +104541,14 @@ const FJ_PORTIONS=Object.freeze([
    groupes:['matières grasses']},
 ]);
 const FJ_PORTIONS_NOTE="Repères approximatifs, pas des mesures : ajuste si tu connais le poids.";
-function portionsPourGroupe(groupe){
+// `nom` (f.s, facultatif) : les fromages, le beurre et la crème n'ont pas de
+// paume — « Paume · 120 g » de parmesan n'est pas un repère, c'est une erreur
+// (build 1855). Ils ont désormais leurs unités (portion, tranche, cuillère).
+const FJ_PORTIONS_EXCLUS=/fromage|beurre|creme|emmental|comte|beaufort|gruyere|cantal|mimolette|gouda|edam|tomme|parmesan|raclette|camembert|brie|coulommiers|munster|reblochon|roquefort|feta|mozzarella|morbier|abondance|chevre/;
+function portionsPourGroupe(groupe,nom){
   const g=String(groupe==null?'':groupe).toLowerCase().trim();
   if(!g) return [];
+  if(nom&&FJ_PORTIONS_EXCLUS.test(String(nom))) return [];
   return FJ_PORTIONS.filter(p=>p.groupes.some(x=>x.toLowerCase()===g));
 }
 
@@ -104599,9 +104604,10 @@ const FJ_UNITES_GROUPE=Object.freeze({
     {cle:'cas',lib:'cuillère à soupe',pluriel:'cuillères à soupe',gParUnite:10},
     {cle:'cac',lib:'cuillère à café',pluriel:'cuillères à café',gParUnite:5}],
   'eaux et autres boissons':[
-    {cle:'verre',lib:'verre',pluriel:'verres',gParUnite:200}],
-  'produits laitiers':[
-    {cle:'pot',lib:'pot',pluriel:'pots',gParUnite:125}]
+    {cle:'verre',lib:'verre',pluriel:'verres',gParUnite:200}]
+  // « produits laitiers » N'A PLUS D'UNITÉ DE GROUPE (build 1855) : le lait,
+  // l'emmental et la crème recevaient un « pot de 125 g ». Le pot vit
+  // désormais sur les seules fiches qui en ont un (champ « u » de la table).
 });
 // PURE. Les unités disponibles pour un aliment. « g » vient TOUJOURS en
 // premier : c'est le défaut, et il ne se perd jamais.
@@ -104610,17 +104616,38 @@ const FJ_UNITES_GROUPE=Object.freeze({
 // Ciqual : aucune unité de groupe ne peut donc le toucher. En revanche, quand
 // le FABRICANT déclare une portion, elle vaut mieux que n'importe quelle
 // moyenne — « 1 pot = 140 g » dit par Danone bat une estimation.
+// BUILD 1855 — L'ORDRE : « g », la portion du FABRICANT (Open Food Facts), les
+// unités de la table (champ « u », scripts/portions_aliments.tsv), et seulement
+// à défaut FJ_UNITES_ALIMENT — gardé en repli tant qu'un ancien ciqual.json
+// peut rester en cache —, puis les unités de groupe. Une clé n'apparaît qu'une fois.
+function _uniteDeTable(u){
+  return (u&&u.c&&u.g>0&&u.g<=1500)?{cle:String(u.c),lib:String(u.l||u.c),pluriel:String(u.p||u.l||u.c),gParUnite:Number(u.g)}:null;
+}
 function unitesPour(aliment){
   const out=[FJ_UNITE_G];
   if(!aliment) return out;
-  const parAlim=FJ_UNITES_ALIMENT[aliment.id];
-  if(parAlim) out.push(parAlim);
-  const g=String(aliment.g==null?'':aliment.g).toLowerCase().trim();
-  if(g&&FJ_UNITES_GROUPE[g]) for(const u of FJ_UNITES_GROUPE[g]) out.push(u);
+  const vus=new Set(['g']);
+  const pousser=u=>{ if(u&&!vus.has(u.cle)){ vus.add(u.cle); out.push(u); } };
   const p=aliment._off&&Number(aliment._off.portion);
   if(p>0&&p<=1500)
-    out.push({cle:'portion',lib:'portion',pluriel:'portions',gParUnite:p,fabricant:true});
+    pousser({cle:'portion',lib:'portion',pluriel:'portions',gParUnite:p,fabricant:true});
+  const table=Array.isArray(aliment.u)?aliment.u.map(_uniteDeTable).filter(Boolean):[];
+  if(table.length) table.forEach(pousser);
+  else pousser(FJ_UNITES_ALIMENT[aliment.id]||null);
+  const g=String(aliment.g==null?'':aliment.g).toLowerCase().trim();
+  if(g&&FJ_UNITES_GROUPE[g]) for(const u of FJ_UNITES_GROUPE[g]) pousser(u);
   return out;
+}
+// PURE. LA PRÉSÉLECTION (build 1855). Une fiche qui a une unité s'ouvre sur
+// elle, à 1 — un geste de moins sur la whey, l'œuf, le skyr. SAUF si
+// l'athlète a déjà saisi cet aliment : sa dernière quantité l'emporte.
+// Sans unité de table, rien ne change : la quantité par défaut reste, et seul
+// un favori rouvre sur sa dernière quantité (règle d'avant ce lot).
+function _fjPreselection(f,derniereQty){
+  const l=unitesPour(f).filter(u=>u.cle!=='g');
+  if(!(Array.isArray(f&&f.u)&&f.u.length&&l.length)) return null;
+  if(derniereQty>0) return {unite:'g',qty:derniereQty};
+  return {unite:l[0].cle,n:1,qty:qtyDepuisUnite(1,l[0])};
 }
 // PURE. Une clé d'unité pour un aliment donné, ou null.
 function uniteDe(aliment,cle){
@@ -104749,7 +104776,7 @@ function fjaLibelleUniteChoisie(){
   return String(Math.round(q*100)/100).replace('.',',')+' '+nom;
 }
 function _htmlPortions(f){
-  const l=portionsPourGroupe(f&&f.g);
+  const l=portionsPourGroupe(f&&f.g,f&&(f.s||_fjNorm(f.n)));
   if(!l.length) return '';
   return `<div style="display:flex;gap:8px;margin-top:10px">
     ${l.map(p=>`<button onclick="setFjaQty(${p.g})"
@@ -107576,8 +107603,13 @@ function selectFjFood(id){
   if(!_fjRepasChoisi) _fjRepas=repasSelonHeure();
   document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
   // Un favori rouvre sur la quantité réellement utilisée la dernière fois.
+  // Build 1855 : tout aliment DÉJÀ SAISI aussi, quand il porte une unité (la
+  // présélection d'unité ne doit pas écraser l'habitude).
   const _q=document.getElementById('fja-qty');
-  if(_q&&estFavori(_fjFood.id)){ const d=_fjDerniereQty(_fjFood.id); if(d>0) _q.value=d; }
+  const _dq=_fjDerniereQty(_fjFood.id);
+  if(_q&&estFavori(_fjFood.id)&&_dq>0) _q.value=_dq;
+  const _pre=_fjPreselection(_fjFood,_dq);
+  if(_q&&_pre&&_pre.unite==='g') _q.value=_pre.qty;
   const _ep=document.getElementById('fja-epingle-slot');
   if(_ep) _ep.innerHTML=_htmlEpingle(_fjFood.id,true);
   const _po=document.getElementById('fja-portions');
@@ -107588,6 +107620,11 @@ function selectFjFood(id){
   _fjUnite='g';
   const _pu=document.getElementById('fja-unites-slot');
   if(_pu) _pu.innerHTML=_htmlUnites(_fjFood);
+  // Présélection de l'unité de la table, à 1 (sauf quantité déjà connue).
+  if(_pre&&_pre.unite!=='g'){
+    const _sel=document.getElementById('fja-unite'), _n=document.getElementById('fja-unite-n');
+    if(_sel){ _sel.value=_pre.unite; if(_n) _n.value=1; fjaChangerUnite(_pre.unite); }
+  }
   updateFjaCalc();
 }
 

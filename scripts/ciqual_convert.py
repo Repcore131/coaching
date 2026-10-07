@@ -308,6 +308,58 @@ def poser_references(out):
     print(f'  Fiches de référence : {len(par_id)}')
     return out
 
+# ── Les unités naturelles (champ "u") : scripts/portions_aliments.tsv ─────
+# « dose 30 g » pour la whey, « verre 250 ml » pour le lait, « pot 150 g » pour le
+# skyr. Une ligne vise un id, ou une FAMILLE par un motif « ~regex » sur f.s.
+# Les lignes par id l'emportent : une fiche visée par id ne reçoit aucune unité
+# de motif. Un générique RepCore sans ligne reçoit sa portion du CSV.
+# ⚠ g ≤ 0 ou > 1500 : génération refusée (même borne que l'app).
+PORTIONS = os.path.join(os.path.dirname(__file__), 'portions_aliments.tsv')
+
+def poser_unites(out):
+    par_id, motifs, erreurs = {}, [], []
+    if os.path.exists(PORTIONS):
+        with open(PORTIONS, encoding='utf-8') as fp:
+            for n, ligne in enumerate(fp, 1):
+                if not ligne.strip() or ligne.startswith('#'):
+                    continue
+                cols = ligne.rstrip('\n').split('\t')
+                if len(cols) < 5:
+                    erreurs.append(f'ligne {n} : colonnes manquantes'); continue
+                cle, lib, plur, g = cols[1].strip(), cols[2].strip(), cols[3].strip(), _num(cols[4])
+                if not (g and 0 < g <= 1500):
+                    erreurs.append(f'ligne {n} : g = {cols[4]} hors de ]0 ; 1500]'); continue
+                u = {'c': cle, 'l': lib, 'p': plur, 'g': int(g) if g == int(g) else g}
+                if cols[0].startswith('~'):
+                    motifs.append((re.compile(cols[0][1:]), u))
+                else:
+                    par_id.setdefault(int(cols[0]), []).append(u)
+    ids = {e['id'] for e in out}
+    orph = sorted(i for i in par_id if i not in ids)
+    if orph: erreurs.append(f'ids absents de la table : {orph}')
+    if erreurs:
+        print('  ✗ portions_aliments.tsv refusé :')
+        for x in erreurs: print('    - ' + x)
+        sys.exit(1)
+    n = 0
+    for e in out:
+        e.pop('u', None)
+        if e['id'] in par_id:
+            l = par_id[e['id']]
+        else:
+            l = [u for (r, u) in motifs if r.search(e.get('s') or '')]
+            if not l and e.get('_portion'):
+                lib, g = e['_portion']
+                l = [{'c': 'portion', 'l': 'portion (' + lib + ')', 'p': 'portions (' + lib + ')', 'g': int(g) if g == int(g) else g}]
+        vus, garde = set(), []
+        for u in l:
+            if u['c'] in vus: continue
+            vus.add(u['c']); garde.append(dict(u))
+        if garde:
+            e['u'] = garde; n += 1
+    print(f'  Unités naturelles : {n} fiches')
+    return out
+
 def completer(out):
     """Énergie calculée là où elle manque, puis le bloc générique (remplacé
     s'il existait déjà : le script peut repasser sans rien dupliquer), puis
@@ -324,7 +376,7 @@ def completer(out):
     base = poser_alias(base)
     g = generiques(base)
     print(f'  Aliments génériques RepCore : {len(g)}')
-    return poser_references(poser_alias(base + g, garder_csv=True))
+    return poser_unites(poser_references(poser_alias(base + g, garder_csv=True)))
 
 def ecrire(out):
     """JSON STABLE : même entrée, même sortie, octet pour octet. La base Ciqual
