@@ -66103,6 +66103,37 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1881 : LA RESTITUTION DU BILAN ══
+    const _r81U=(extra)=>{
+      const t=Date.now();
+      return Object.assign({id:'rb',email:'rb@t.fr',coachId:null,bilans:[
+        {type:'depart',date:t-56*864e5,'deb-weight':'70','deb-waist':'78','deb-hips':'100'},
+        {type:'coaching',date:t-28*864e5,'bil-weight':'68','bil-waist':'75','bil-hips':'98'},
+        {type:'coaching',date:t-864e5,'bil-weight':'67','bil-waist':'73','bil-hips':'96'}]},extra||{});
+    };
+    ok('Restitution : toutes les mesures reportées → aucune ligne de mensuration (pas de « stable » inventé)',()=>{
+      const u=_r81U();
+      const der=u.bilans[2];
+      der['bil-waist']='75'; der['bil-hips']='98'; der.reprises=['bil-waist','bil-hips'];
+      const r=restitutionBilan(Object.assign(u,{masquerPoids:true}),Date.now());
+      return !r.lignes.length?true:_echec(JSON.stringify(r.lignes));});
+    ok('Restitution : depuis le début, taille −5 cm (78 → 73) et hanches −4 cm, sur 8 semaines',()=>{
+      const r=restitutionBilan(_r81U(),Date.now());
+      const d=r.depuisDebut;
+      if(!d||d.semaines!==8) return _echec(JSON.stringify(d));
+      const t=d.lignes.find(l=>l.cle==='waist'), h=d.lignes.find(l=>l.cle==='hips');
+      if(!t||t.d!==-5||t.valeur!=='−5 cm') return _echec('taille '+JSON.stringify(t));
+      if(!h||h.d!==-4) return _echec('hanches '+JSON.stringify(h)+' / '+JSON.stringify(d.lignes));
+      const html=_htmlRestitutionBilan(_r81U());
+      return /Depuis le début \(8 semaines\)/.test(html)&&/Taille/.test(html)?true:_echec('bloc absent');});
+    ok('Restitution : masquerPoids retire le poids des deux blocs',()=>{
+      const r=restitutionBilan(_r81U({masquerPoids:true}),Date.now());
+      if(r.lignes.some(l=>l.libelle==='Poids')) return _echec('poids au bilan précédent');
+      return !(r.depuisDebut&&r.depuisDebut.lignes.some(l=>l.cle==='poids'))?true:_echec('poids depuis le début');});
+    ok('Restitution : bilan validé sans photos alors que le précédent en avait → « Ajoute tes photos quand tu peux »',()=>{
+      const u=_r81U(); u.bilans[1].photos={face:'https://x/f.jpg'};
+      return /Ajoute tes photos quand tu peux/.test(_htmlRestitutionBilan(u))?true:_echec('ligne absente');});
+
     // ══ BUILD 1880 : LE POIDS DU BILAN VIENT DES PESÉES ══
     const _ppJ=k=>localISODate(new Date(Date.now()-k*864e5));
     ok('poidsPourBilan : 5 pesées → moyenne exacte ; une aberrante écartée',()=>{

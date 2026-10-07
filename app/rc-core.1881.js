@@ -95387,7 +95387,14 @@ function restitutionBilan(user,now){
     return out;
   }
   const prev=bl[bl.length-2];
-  if(!user.masquerPoids){
+  const _sansPoids=!!user.masquerPoids||(function(){ try{ return aTCA(user); }catch(e){ return false; } })();
+  // BUILD 1881 : DEPUIS LE DÉBUT, et le constat des photos.
+  try{ out.depuisDebut=depuisDebutBilan(user,bl,_sansPoids); }catch(e){ out.depuisDebut=null; }
+  try{
+    const ph=b=>BIL_VUES.filter(v=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } }).length;
+    out.photosOubliees=ph(der)===0&&ph(prev)>0;
+  }catch(e){}
+  if(!_sansPoids){
     const a=getBW(prev), b=getBW(der);
     if(a!=null&&b!=null){
       const e=_synEcart(b-a,'kg',SYN_BRUIT_POIDS);
@@ -95395,8 +95402,12 @@ function restitutionBilan(user,now){
     }
   }
   const mes=[];
+  // BUILD 1881 : une mesure REPORTÉE dans ce bilan n'est pas comparée (pas de
+  // « stable » inventé) ; en face, le dernier relevé RÉEL d'avant.
+  const _reelAvant=k=>{ for(let i=bl.length-2;i>=0;i--){ const b=bl[i]; if(!bmReportee(b,k)&&getBM(b,k)!=null) return getBM(b,k); } return null; };
   MEAS.forEach((m,i)=>{
-    const a=getBM(prev,m.k), b=getBM(der,m.k);
+    if(bmReportee(der,m.k)) return;
+    const a=_reelAvant(m.k), b=getBM(der,m.k);
     if(a==null||b==null) return;
     mes.push({m,i,d:b-a});
   });
@@ -95407,6 +95418,60 @@ function restitutionBilan(user,now){
     out.lignes.push({libelle:_libMesure(x.m.l,true),valeur:e.delta,sens:e.sens,accord:false});
   }
   return out;
+}
+/**
+ * PURE (serieWeight mis à part). Depuis le bilan de départ (ou le premier) :
+ * le poids (moyenne 7 j quand il y a des pesées) et les 2 mensurations qui ont
+ * le plus bougé, premier relevé réel → dernier relevé réel. null sans écart.
+ */
+function depuisDebutBilan(user,bl,sansPoids){
+  const l=bl||bilansOrdonnes(user);
+  if(l.length<2) return null;
+  const prem=l[0], der=l[l.length-1];
+  const sem=Math.max(1,Math.round((Number(der.date)-Number(prem.date))/(7*864e5)));
+  const lignes=[];
+  if(!sansPoids){
+    let a=null,b=null;
+    try{ const s=serieWeight(user); if(s.some(x=>x.source==='pesee')){ a=mm7(s,_jourISO(prem.date)); b=mm7(s,_jourISO(der.date)); } }catch(e){}
+    if(a==null||b==null){ a=getBW(prem); b=getBW(der); }
+    if(a!=null&&b!=null&&Math.abs(b-a)>=SYN_BRUIT_POIDS){
+      const e=_synEcart(b-a,'kg',SYN_BRUIT_POIDS);
+      lignes.push({cle:'poids',libelle:'poids',valeur:e.delta,d:Math.round((b-a)*10)/10,accord:_synPoidsDansLeSens(user,b-a)});
+    }
+  }
+  const mes=[];
+  MEAS.forEach((m,i)=>{
+    const reels=l.filter(b=>!bmReportee(b,m.k)&&getBM(b,m.k)!=null);
+    if(reels.length<2) return;
+    const d=getBM(reels[reels.length-1],m.k)-getBM(reels[0],m.k);
+    if(Math.abs(d)>=SYN_BRUIT_MESURE) mes.push({m,i,d});
+  });
+  mes.sort((x,y)=>(Math.abs(y.d)-Math.abs(x.d))||(x.i-y.i));
+  for(const x of mes.slice(0,2)){
+    const e=_synEcart(x.d,'cm',SYN_BRUIT_MESURE);
+    lignes.push({cle:x.m.k,libelle:String(x.m.l).replace(/^Tour de /i,'').toLowerCase(),valeur:e.delta,d:Math.round(x.d*10)/10,accord:false});
+  }
+  return lignes.length?{semaines:sem,lignes}:null;
+}
+// La vignette avant/après de l'écran de restitution : composée HORS ÉCRAN,
+// premier et dernier bilan, vue de face si possible, visage flouté. Rien ne part.
+function _restitutionVignette(user){
+  const z=document.getElementById('bf-aa');
+  if(!z) return false;
+  let o=null; try{ o=aaDefaut(user); }catch(e){ o=null; }
+  if(!o) return false;
+  const l=aaBilansAvecPhoto(user,o.vue);
+  const av=l[0], ap=l[l.length-1];
+  Promise.all([aaChargerPhoto(av,o.vue),aaChargerPhoto(ap,o.vue)]).then(([a,b])=>{
+    if(!a||!b||!document.getElementById('bf-aa')) return;
+    const cv=_dessinerAvantApres({avant:{img:a,date:Number(av.date),poids:null},apres:{img:b,date:Number(ap.date),poids:null},
+      format:'post',fond:'noir',flou:true,poids:false});
+    const im=document.createElement('img');
+    im.alt='Mon avant/après'; im.src=cv.toDataURL('image/jpeg',0.7);
+    im.style.cssText='display:block;width:120px;border-radius:var(--r-2);margin:0 auto 8px';
+    z.prepend(im);
+  }).catch(()=>{});
+  return true;
 }
 // LA PHRASE DU COACH. « Il te répond sous 48 h » ne s'ecrit que si on peut le
 // tenir : la seule donnee de delai que l'athlete a le droit de lire est celle
@@ -95444,12 +95509,19 @@ function _htmlRestitutionBilan(user){
   } else if(r&&r.lignes.length){
     corps='<div class="rb-carte"><div class="rb-titre-carte">Depuis ton bilan précédent</div>'+r.lignes.map(ligne).join('')+'</div>';
   }
+  // BUILD 1881 : « Depuis le début (N semaines) », et l'oubli des photos.
+  if(r&&!r.depart&&r.depuisDebut)
+    corps+='<div class="rb-carte"><div class="rb-titre-carte">Depuis le début ('+r.depuisDebut.semaines+' semaine'+(r.depuisDebut.semaines>1?'s':'')+')</div>'
+      +r.depuisDebut.lignes.map(l=>ligne({libelle:l.libelle.charAt(0).toUpperCase()+l.libelle.slice(1),valeur:l.valeur,accord:l.accord})).join('')+'</div>';
+  if(r&&r.photosOubliees) corps+='<p class="rb-texte">Ajoute tes photos quand tu peux.</p>';
   return '<h1 class="rb-titre">Bilan enregistré</h1>'
     +corps
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
     +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
     +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>'
-    +_htmlRestitutionCorriger(user);
+    +_htmlRestitutionCorriger(user)
+    +((function(){ try{ return aaDisponible(user); }catch(e){ return false; } })()
+      ?'<div id="bf-aa" style="margin-top:16px;text-align:center"><button type="button" class="btn btn-outline" onclick="ouvrirAvantApres(\'athlete\')">Mon avant/après</button></div>':'');
 }
 // BUILD 1863 : « Ajouter mes photos » si le bilan qu'on vient d'envoyer en
 // promet ou n'en a aucune ; sinon un lien discret « Corriger ce bilan ».
@@ -95477,6 +95549,7 @@ function ouvrirRestitutionBilan(){
   const z=document.getElementById('bf-contenu');
   if(!z||!currentUser) return false;
   z.innerHTML=_htmlRestitutionBilan(currentUser);
+  try{ _restitutionVignette(currentUser); }catch(e){}
   go('s-bilan-fait');
   return true;
 }
