@@ -163,8 +163,8 @@ function _htmlTableauxTableur(c){
       +optSport(String(x.sport))+'</select>'
       +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
       +'</span></span></th>'
-      +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="number" '
-      +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine, '+nom+'" '
+      +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="text" inputmode="decimal" autocomplete="off" data-dec '
+      +'min="0" max="60" aria-label="Heures par semaine, '+nom+'" '
       +'value="'+escapeHtml(String(Number(x.heures)||0))+'" '
       +'onchange="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
       +'<td style="text-align:left"><select class="tbk-sp-n tbk-sp-n-'+escapeHtml(String(x.intensite||'moderee'))+'" '

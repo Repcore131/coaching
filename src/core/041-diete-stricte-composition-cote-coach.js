@@ -372,7 +372,7 @@ function _cplMacroTxt(m){
     +' · '+Math.round(m.kcal)+' kcal';
 }
 function _cplInput(val,oninput,largeur,pas){
-  return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" oninput="${oninput}"
+  return `<input type="text" inputmode="decimal" autocomplete="off" data-dec value="${val==null?'':val}" oninput="${oninput}"
     style="width:${largeur||'62px'};padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
 }
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
@@ -2320,7 +2320,7 @@ function _htmlUnites(f){
         aria-label="Unité de saisie">
         ${l.map(u=>`<option value="${escapeHtml(u.cle)}"${u.cle===_fjUnite?' selected':''}>${escapeHtml(u.cle==='g'?'grammes':u.lib)}</option>`).join('')}
       </select>
-      <input id="fja-unite-n" type="number" min="0.5" step="0.5" value="1"
+      <input id="fja-unite-n" type="text" inputmode="decimal" autocomplete="off" data-dec min="0.5" value="1"
         oninput="fjaMajDepuisUnite()" aria-label="Nombre d'unités"
         style="width:88px;box-sizing:border-box;text-align:center;font-size:var(--fs-lg);font-weight:800;display:none">
     </div>

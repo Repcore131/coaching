@@ -581,7 +581,7 @@ function _htmlPointDuJour(etat){
   if(etat.question==='poids'){
     controle='<div class="pdj-ligne">'
       +'<label class="pes-boite" for="pdj-poids"><span class="pes-duo">'
-      +'<input type="number" id="pdj-poids" inputmode="decimal" step="0.1" '
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec id="pdj-poids" '
       +'min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="-" class="pes-champ">'
       +'<span class="pes-unite">kg</span></span></label>'
       +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPoids()">Enregistrer</button></div>';

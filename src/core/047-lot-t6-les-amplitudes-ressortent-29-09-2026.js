@@ -245,7 +245,7 @@ function renderCoachSuppSection(c){
           </div>
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Qté</div>
-            <input id="ccd-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="5">
+            <input id="ccd-supp-qty" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="5">
           </div>
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Unité</div>
@@ -348,7 +348,7 @@ function openCoachSuppEdit(id){
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;align-items:end">
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">DOSAGE</div>
-        <input id="coach-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="5" value="${s&&s.dosage_quantity?s.dosage_quantity:''}">
+        <input id="coach-supp-qty" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="5" value="${s&&s.dosage_quantity?s.dosage_quantity:''}">
       </div>
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">UNITÉ</div>

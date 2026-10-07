@@ -2969,7 +2969,7 @@ function _ampRendre(){
   const z=document.getElementById('amp-contenu');
   if(!z||!_amp) return;
   const E=_amp;
-  const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
+  const num=(cle,champ,val,ph)=>'<input type="text" inputmode="decimal" autocomplete="off" data-dec value="'
     +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'-')+'" '
     +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
     +'style="width:88px;min-height:44px;background:var(--surface-0);border:1px solid var(--border);'

@@ -701,7 +701,7 @@ function htmlCartePesee(u,maintenant,suffixe){
     <div style="display:flex;gap:8px;align-items:center">
       <label class="pes-boite" for="pesee-input${sx}">
         <span class="pes-duo">
-          <input type="number" id="pesee-input${sx}" inputmode="decimal" step="0.1"
+          <input type="text" inputmode="decimal" autocomplete="off" data-dec id="pesee-input${sx}"
             min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'-'}"
             value="${dujour?dujour.kg:''}" class="pes-champ">
           <span class="pes-unite">kg</span>
@@ -769,7 +769,9 @@ async function savePesee(suffixe){
   const sx=suffixe?String(suffixe):'';
   const inp=document.getElementById('pesee-input'+sx);
   if(!inp) return;
-  const v=parseFloat(String(inp.value).replace(',','.'));
+  // BUILD 1908 : « 62,5 », « 62.5 », « 62,5 kg » — lus pareil (lireNombreFr).
+  const _l=lireNombreFr(inp.value);
+  const v=_l.ok?_l.valeur:(_l.raison==='negatif'?_l.valeur:NaN);
   if(await _enregistrerPesee(v,localISODate(new Date()))){
     renderCartePesee();
     // Depuis Évolution, la courbe suit la pesée.
@@ -1666,7 +1668,7 @@ function _htmlObjectifPoidsAthlete(u){
   return '<div class="evo-carte obj-poids">'
     +'<div class="evo-titre">Objectif de poids</div>'
     +(o?'<div class="obj-poids-v"><b>'+_synNombre(o.kg)+' kg</b><span>fixé '+(o.par==='coach'?'par ton coach':'par toi')+'</span></div>':'')
-    +'<div class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="obj-poids-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<div class="obj-poids-f"><input type="text" inputmode="decimal" autocomplete="off" data-dec id="obj-poids-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
     +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids(\'\')">Retirer</button>':'')
     +'</div></div>';
@@ -1687,7 +1689,7 @@ function _htmlObjectifPoidsCoach(c){
   const o=objectifPoidsDe(c);
   return '<div class="obj-poids obj-poids-coach">'
     +'<span class="obj-poids-l">Objectif de poids'+(o?' : <b>'+_synNombre(o.kg)+' kg</b> ('+(o.par==='coach'?'posé par toi':'posé par l’athlète')+')':'')+'</span>'
-    +'<span class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="ccd-obj-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<span class="obj-poids-f"><input type="text" inputmode="decimal" autocomplete="off" data-dec id="ccd-obj-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
     +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids(\'\')">Retirer</button>':'')
     +'</span></div>';
@@ -2035,7 +2037,7 @@ function _htmlRelectureCapture(plan,type){
       +'<span class="cap-rel-j">'+escapeHtml(fmtJ(l.date))+'</span>'
       +(l.garde
         ?'<span class="cap-rel-g">'+escapeHtml(fmtV(l.actuelle))+' · '+(l.garde==='sync'?'synchronisé, conservé':'saisi il y a moins de 24 h, conservé')+'</span>'
-        :'<input type="number" inputmode="decimal" class="cap-rel-c" aria-label="'+escapeHtml((som?'Durée de la nuit du ':'Pas du ')+fmtJ(l.date))+'" '
+        :'<input type="text" inputmode="decimal" autocomplete="off" data-dec class="cap-rel-c" aria-label="'+escapeHtml((som?'Durée de la nuit du ':'Pas du ')+fmtJ(l.date))+'" '
           +'step="'+(som?'0.1':'1')+'" min="0" max="'+(som?'18':'99999')+'" value="'+escapeHtml(String(l.valeur))+'">'
           +(l.actuelle!=null?'<span class="cap-rel-a">actuel : '+escapeHtml(fmtV(l.actuelle))+'</span>':''))
     +'</div>').join('')+'</div>';

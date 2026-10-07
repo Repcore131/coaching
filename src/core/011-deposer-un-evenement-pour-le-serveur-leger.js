@@ -108,7 +108,7 @@ function openDefiCanal(id){
   +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
     '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
   +'<label for="df-objectif">1 · Le défi</label>'
-  +'<div class="dfm-ligne"><input id="df-objectif" type="number" inputmode="decimal" min="1" step="any" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
+  +'<div class="dfm-ligne"><input id="df-objectif" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
   +'<select id="df-mesure" onchange="_dfApercu()" aria-label="Mesure">'+opt+'</select></div>'
   +'<div class="dfm-seg" role="radiogroup" aria-label="Individuel ou en équipe">'
   +'<button type="button" role="radio" data-coll="0" aria-checked="'+(!coll)+'" onclick="_dfColl(false)">Chacun le sien</button>'
@@ -1557,7 +1557,7 @@ function htmlDefiMoisAdmin(maintenant){
     +'<label class="pp-lab" for="dm-titre">Titre</label><input id="dm-titre" type="text" maxlength="80" placeholder="12 séances en octobre">'
     +'<label class="pp-lab" for="dm-texte">Texte (facultatif)</label><input id="dm-texte" type="text" maxlength="300">'
     +'<label class="pp-lab" for="dm-mesure">Mesure</label><select id="dm-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>'
-    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="number" min="1" inputmode="decimal" placeholder="12">'
+    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" placeholder="12">'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerDefiMois(this)">Publier le défi</button></div>';
 }
 async function enregistrerDefiMois(btn){
@@ -1927,8 +1927,8 @@ function htmlSaisonAdmin(){
     +L('sa-debut','Début','<input id="sa-debut" type="date">')
     +L('sa-fin','Fin','<input id="sa-fin" type="date">')
     +L('sa-mesure','Mesure','<select id="sa-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>')
-    +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
-    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
+    +L('sa-op','Objectif perso','<input id="sa-op" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" placeholder="10">')
+    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" placeholder="1000">')
     +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
     +L('sa-couleur','Couleur',('<input id="sa-couleur" type="color" value="'+ROUGE_MARQUE+'">'))
     +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')

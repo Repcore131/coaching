@@ -32891,7 +32891,8 @@ async function testExercices(){
           return ((u.nutrition.log['2026-08-08']||{entries:[]}).entries||[]).length; };
         ok('Borne basse : 0 g est refusé',poser(0)===0);
         ok('Borne basse : 1 g est accepté',poser(1)===1);
-        ok('Borne haute : 9 999 g est accepté',poser(9999)===1);
+        // BUILD 1908 : au-delà de 2 000 g la quantité se confirme (asynchrone) ; la borne directe est 2 000.
+        ok('Borne haute : 2 000 g est accepté sans question',poser(2000)===1);
         ok('Borne haute : 10 000 g est refusé',poser(10000)===0);
         ok('Une quantité non numérique est refusée',poser('abc')===0);
         ok('Le message de borne existe et n\'a pas bougé',
@@ -73942,6 +73943,47 @@ async function testExercices(){
       }finally{ window.saveUser=_su; }
       return faux.length?_echec(faux.join(' | ')):true;});
 
+    // ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
+    ok('1908 — structure : aucun type="number" décimal (inputmode decimal, step fractionnaire ou any) dans le code servi',()=>{
+      const src=_prodSrc()+'\n'+document.documentElement.outerHTML;
+      const tags=src.match(/<input\b(?:[^>$]|\$\{[^}]*\})*>/g)||[];
+      const faux=tags.filter(t=>/type=\\?"number\\?"/.test(t)&&(/inputmode=\\?"decimal/.test(t)||/step=\\?"(any|0\.\d)/.test(t)));
+      const sansTexte=tags.filter(t=>/\sdata-dec[\s>]/.test(t)&&!/type="text"/.test(t));
+      if(faux.length) return _echec(faux.length+' : '+faux.slice(0,3).map(x=>x.slice(0,90)).join(' | '));
+      return sansTexte.length?_echec('data-dec sans type texte : '+sansTexte[0].slice(0,90)):true;});
+    ok('1908 — la virgule devient un point à la frappe, sur les champs data-dec seulement ; valeurDec lit 62,5',()=>{
+      const a=document.createElement('input'); a.type='text'; a.setAttribute('data-dec','');
+      const b=document.createElement('input'); b.type='text';
+      document.body.append(a,b);
+      try{
+        a.value='62,5'; a.dispatchEvent(new Event('input',{bubbles:true}));
+        b.value='62,5'; b.dispatchEvent(new Event('input',{bubbles:true}));
+        if(a.value!=='62.5') return _echec('data-dec : '+a.value);
+        if(b.value!=='62,5') return _echec('champ ordinaire touché : '+b.value);
+        a.value='62,5 kg';
+        if(valeurDec(a)!==62.5) return _echec('valeurDec : '+valeurDec(a));
+        return isNaN(valeurDec({value:'abc'}))?true:_echec('abc lu');
+      }finally{ a.remove(); b.remove(); }});
+    okA('1908 — savePesee « 62,5 » : la pesée est écrite à 62,5 kg, sans message d’erreur',async()=>{
+      const u=_banAth(); u.weightLog=[];
+      const toasts=[]; const _t=window.toast, _su=window.saveUser, _rc=window.rcConfirm;
+      const cu=currentUser;
+      try{
+        window.toast=(m,c)=>toasts.push(String(m)); window.saveUser=()=>true; window.rcConfirm=async()=>true;
+        currentUser=u;
+        const z=document.createElement('div'); z.innerHTML='<input type="text" inputmode="decimal" autocomplete="off" data-dec id="pesee-input-b1908" value="62,5">';
+        document.body.appendChild(z);
+        try{ await savePesee('-b1908'); }finally{ z.remove(); }
+        const e=(currentUser.weightLog||[]).find(x=>!x.agrege);
+        if(!e||e.kg!==62.5) return _echec('pesée : '+JSON.stringify(currentUser.weightLog)+' toasts '+toasts.join(' / '));
+        const err=toasts.filter(t=>/invalide|entre|nombre/i.test(t));
+        return err.length?_echec('message : '+err[0]):true;
+      }finally{ window.toast=_t; window.saveUser=_su; window.rcConfirm=_rc; currentUser=cu; }});
+    ok('1908 — aliment au-delà de 2000 g : confirmation demandée',()=>{
+      if(!quantiteSuspecte(2500,null,null)) return _echec('2500 g passe');
+      if(quantiteSuspecte(2000,null,500)) return _echec('2000 g demande');
+      return quantiteSuspecte(150,120,300)===false?true:_echec('150 g demande');});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
@@ -86836,7 +86878,7 @@ async function testExercices(){
             if(!w) return _echec('pas de whey dans le modèle de sèche');
             const txt=el=>(el&&el.textContent||'').replace(/\s+/g,' ').trim();
             const reste=lib=>{ const b=[...document.querySelectorAll('#s-coach-plan .cpl-side .cpl-s-b')].find(x=>txt(x.querySelector('.cpl-s-l'))===lib); return txt(b&&b.querySelector('.cpl-s-r')); };
-            const champ=[...document.querySelectorAll('#s-coach-plan input[type=number]')].find(i=>(i.getAttribute('oninput')||'').indexOf("'"+w.id+"','q'")>=0);
+            const champ=[...document.querySelectorAll('#s-coach-plan input[type=number],#s-coach-plan input[data-dec]')].find(i=>(i.getAttribute('oninput')||'').indexOf("'"+w.id+"','q'")>=0);
             if(!champ) return _echec('champ de quantité introuvable');
             const avant={p:reste('Protéines'),l:txt(document.getElementById('cpl-m-'+w.id)),t:txt(document.querySelector('#s-coach-plan .cpl-tot[data-repas="'+w.repas+'"]'))};
             if(!/1 scoop = P 25/.test(avant.l)) return _echec('la ligne ne dit pas ce que vaut un scoop : '+avant.l);

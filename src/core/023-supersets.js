@@ -1005,6 +1005,34 @@ function lireNombreFr(txt,opts){
   if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
   return {ok:true,valeur:x,raison:''};
 }
+// ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
+// Tous les champs à virgule sont <input type="text" inputmode="decimal"
+// autocomplete="off" data-dec> : un type="number" fr-FR lit « 62,5 » comme
+// vide (ou 625), et le message qui suivait accusait l'athlète d'une saisie
+// juste. Les entiers purs (séries, pas, minutes) restent en type="number".
+// LA VIRGULE DEVIENT UN POINT À LA FRAPPE, sur ces champs seulement : chaque
+// lecteur — parseFloat(el.value) compris, une quarantaine d'endroits — reçoit
+// donc une valeur lisible, sans avoir à être réécrit. Le curseur ne bouge pas.
+function _normaliserDec(el){
+  try{
+    const v=String(el.value||'');
+    if(v.indexOf(',')<0) return;
+    const p=el.selectionStart;
+    el.value=v.replace(/,/g,'.');
+    if(p!=null&&el.setSelectionRange) el.setSelectionRange(p,p);
+  }catch(e){}
+}
+try{
+  ['input','change'].forEach(t=>document.addEventListener(t,e=>{
+    const x=e.target;
+    if(x&&x.tagName==='INPUT'&&x.hasAttribute('data-dec')) _normaliserDec(x);
+  },true));
+}catch(e){}
+// La valeur d'un champ décimal (virgule ou point, unité tolérée), ou NaN.
+function valeurDec(el){
+  const l=lireNombreFr(el&&el.value);
+  return l.ok?l.valeur:NaN;
+}
 function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
   return lireDecimal(brut,{min:0,max:m,pas:0.25});

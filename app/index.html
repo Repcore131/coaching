@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1907';
+window.RC_BUILD='1908';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -754,13 +754,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1907.css">
+<link rel="stylesheet" href="./rc-style.1908.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1907.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1908.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3451,7 +3451,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">À partir de ta dernière performance, voici la charge correspondant à chaque nombre de répétitions.</p>
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
       <div class="grid2" style="gap:10px">
-        <div><label for="calc-pw">Charge précédente (kg)</label><input type="number" id="calc-pw" placeholder="100" oninput="updateCalcTable()"></div>
+        <div><label for="calc-pw">Charge précédente (kg)</label><input type="text" inputmode="decimal" autocomplete="off" data-dec id="calc-pw" placeholder="100" oninput="updateCalcTable()"></div>
         <div><label for="calc-pr">Reps réalisées</label><input type="number" id="calc-pr" placeholder="8" oninput="updateCalcTable()"></div>
         <div><label for="calc-prir">RIR réel</label><input type="number" id="calc-prir" placeholder="2" min="0" max="5" oninput="updateCalcTable()"></div>
         <!-- La case à cocher était une TROISIÈME implémentation du cycle, à
@@ -5099,7 +5099,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
           <label class="form-label">Quantité</label>
-          <input class="form-input" id="supp-qty" type="number" min="0" step="any" placeholder="Ex: 5">
+          <input class="form-input" id="supp-qty" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" placeholder="Ex: 5">
         </div>
         <div>
           <label class="form-label">Unité</label>
@@ -5199,7 +5199,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label id="fja-qty-label" style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:8px">Quantité (grammes)</label>
         <div style="display:flex;align-items:center;gap:10px">
           <button onclick="stepFjaQty(-10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">−</button>
-          <input type="number" id="fja-qty" value="100" min="1" max="9999"
+          <input type="text" inputmode="decimal" autocomplete="off" data-dec id="fja-qty" value="100" min="1" max="9999"
             style="flex:1;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xl);font-weight:800;text-align:center"
             oninput="fjaQtyTouchee()">
           <button onclick="stepFjaQty(10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">+</button>
@@ -5266,14 +5266,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <label for="perso-kcal" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Énergie</label>
-            <input type="number" id="perso-kcal" inputmode="decimal" step="any" min="0" placeholder="0"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-kcal" min="0" placeholder="0"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">kcal / 100 g</div>
           </div>
           <div style="flex:1;min-width:0">
             <label for="perso-p" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Protéines</label>
-            <input type="number" id="perso-p" inputmode="decimal" step="any" min="0" placeholder="0"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-p" min="0" placeholder="0"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g</div>
@@ -5282,14 +5282,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <label for="perso-c" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Glucides</label>
-            <input type="number" id="perso-c" inputmode="decimal" step="any" min="0" placeholder="0"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-c" min="0" placeholder="0"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g</div>
           </div>
           <div style="flex:1;min-width:0">
             <label for="perso-l" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Lipides</label>
-            <input type="number" id="perso-l" inputmode="decimal" step="any" min="0" placeholder="0"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-l" min="0" placeholder="0"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g</div>
@@ -5298,14 +5298,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <label for="perso-f" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Fibres</label>
-            <input type="number" id="perso-f" inputmode="decimal" step="any" min="0" placeholder="-"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-f" min="0" placeholder="-"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g (facultatif)</div>
           </div>
           <div style="flex:1;min-width:0">
             <label for="perso-e" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Sel</label>
-            <input type="number" id="perso-e" inputmode="decimal" step="any" min="0" placeholder="-"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-e" min="0" placeholder="-"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g (facultatif)</div>
@@ -5317,7 +5317,7 @@ const COACH_PHOTO='icons/coach.jpg';
                  l'autre. Facultatif, et vide pour presque tout : c'est
                  pourquoi il est en fin de rangee, avec les fibres et le sel. -->
             <label for="perso-alcool" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:6px">Alcool</label>
-            <input type="number" id="perso-alcool" inputmode="decimal" step="any" min="0" placeholder="-"
+            <input type="text" inputmode="decimal" autocomplete="off" data-dec id="perso-alcool" min="0" placeholder="-"
               style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:4px">g / 100 g (facultatif)</div>
@@ -6300,5 +6300,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1907.js"></script>
+<script src="./rc-core.1908.js"></script>
 </body></html>

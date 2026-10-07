@@ -1038,7 +1038,7 @@ function renderEditeurTraitement(){
     'type="text" maxlength="'+TRT_NOM_MAX+'" value="'+v(t&&t.nom)+'" placeholder="Lévothyrox 75 µg"');
 
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    +champ('trte-dq','Dose','type="number" step="any" min="0" value="'
+    +champ('trte-dq','Dose','type="text" inputmode="decimal" autocomplete="off" data-dec value="'
       +v(t&&t.dosage_quantite)+'" placeholder="75"')
     +'<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'

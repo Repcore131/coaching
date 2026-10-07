@@ -701,7 +701,7 @@ async function avertirEviction(user,aliment){
 }
 async function saveFoodEntry(){
   const f=_fjFood;if(!f) return;
-  const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
+  const qty=valeurDec(document.getElementById('fja-qty'))||0;
   if(qty<=0||qty>9999){toast('Quantité invalide (1-9999g)','var(--orange)');return;}
   // BUILD 1867 : un zéro de trop se voit AVANT d'écrire. La décision est
   // synchrone ; on n'attend que si l'on demande.
@@ -1126,6 +1126,8 @@ function _fjEnregistrerCorrection(qty){
 function quantiteSuspecte(qty,derniere,kcal){
   const q=Number(qty)||0;
   if(Number(derniere)>0&&q>4*Number(derniere)&&q>300) return true;
+  // BUILD 1908 : au-delà de 2 kg d'un aliment, on demande toujours.
+  if(q>2000) return true;
   return Number(kcal)>1500;
 }
 function _fjMille(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }

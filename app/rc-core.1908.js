@@ -20087,7 +20087,7 @@ function _ampRendre(){
   const z=document.getElementById('amp-contenu');
   if(!z||!_amp) return;
   const E=_amp;
-  const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
+  const num=(cle,champ,val,ph)=>'<input type="text" inputmode="decimal" autocomplete="off" data-dec value="'
     +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'-')+'" '
     +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
     +'style="width:88px;min-height:44px;background:var(--surface-0);border:1px solid var(--border);'
@@ -25503,7 +25503,7 @@ function openDefiCanal(id){
   +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
     '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
   +'<label for="df-objectif">1 · Le défi</label>'
-  +'<div class="dfm-ligne"><input id="df-objectif" type="number" inputmode="decimal" min="1" step="any" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
+  +'<div class="dfm-ligne"><input id="df-objectif" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
   +'<select id="df-mesure" onchange="_dfApercu()" aria-label="Mesure">'+opt+'</select></div>'
   +'<div class="dfm-seg" role="radiogroup" aria-label="Individuel ou en équipe">'
   +'<button type="button" role="radio" data-coll="0" aria-checked="'+(!coll)+'" onclick="_dfColl(false)">Chacun le sien</button>'
@@ -26952,7 +26952,7 @@ function htmlDefiMoisAdmin(maintenant){
     +'<label class="pp-lab" for="dm-titre">Titre</label><input id="dm-titre" type="text" maxlength="80" placeholder="12 séances en octobre">'
     +'<label class="pp-lab" for="dm-texte">Texte (facultatif)</label><input id="dm-texte" type="text" maxlength="300">'
     +'<label class="pp-lab" for="dm-mesure">Mesure</label><select id="dm-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>'
-    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="number" min="1" inputmode="decimal" placeholder="12">'
+    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" placeholder="12">'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerDefiMois(this)">Publier le défi</button></div>';
 }
 async function enregistrerDefiMois(btn){
@@ -27322,8 +27322,8 @@ function htmlSaisonAdmin(){
     +L('sa-debut','Début','<input id="sa-debut" type="date">')
     +L('sa-fin','Fin','<input id="sa-fin" type="date">')
     +L('sa-mesure','Mesure','<select id="sa-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>')
-    +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
-    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
+    +L('sa-op','Objectif perso','<input id="sa-op" type="text" inputmode="decimal" autocomplete="off" data-dec min="1" placeholder="10">')
+    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" placeholder="1000">')
     +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
     +L('sa-couleur','Couleur',('<input id="sa-couleur" type="color" value="'+ROUGE_MARQUE+'">'))
     +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
@@ -49072,7 +49072,7 @@ function _rendreProgEx(){
     <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1px;
       text-transform:uppercase;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nom)}</div>
     <label style="margin-top:0">Charge maximale sur 1 répétition (kg)</label>
-    <input id="prog-ex-max" type="number" min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}" step="0.5" inputmode="decimal"
+    <input id="prog-ex-max" type="text" inputmode="decimal" autocomplete="off" data-dec min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}"
       value="${b.max===''?'':b.max}" onchange="_progExMax(this.value)" placeholder="Ex : 145">
     ${rec}
     <label>Nombre de semaines</label>
@@ -58381,6 +58381,34 @@ function lireNombreFr(txt,opts){
   if(typeof o.min==='number'&&x<o.min) return {ok:false,valeur:x,raison:'min'};
   if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
   return {ok:true,valeur:x,raison:''};
+}
+// ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
+// Tous les champs à virgule sont <input type="text" inputmode="decimal"
+// autocomplete="off" data-dec> : un type="number" fr-FR lit « 62,5 » comme
+// vide (ou 625), et le message qui suivait accusait l'athlète d'une saisie
+// juste. Les entiers purs (séries, pas, minutes) restent en type="number".
+// LA VIRGULE DEVIENT UN POINT À LA FRAPPE, sur ces champs seulement : chaque
+// lecteur — parseFloat(el.value) compris, une quarantaine d'endroits — reçoit
+// donc une valeur lisible, sans avoir à être réécrit. Le curseur ne bouge pas.
+function _normaliserDec(el){
+  try{
+    const v=String(el.value||'');
+    if(v.indexOf(',')<0) return;
+    const p=el.selectionStart;
+    el.value=v.replace(/,/g,'.');
+    if(p!=null&&el.setSelectionRange) el.setSelectionRange(p,p);
+  }catch(e){}
+}
+try{
+  ['input','change'].forEach(t=>document.addEventListener(t,e=>{
+    const x=e.target;
+    if(x&&x.tagName==='INPUT'&&x.hasAttribute('data-dec')) _normaliserDec(x);
+  },true));
+}catch(e){}
+// La valeur d'un champ décimal (virgule ou point, unité tolérée), ou NaN.
+function valeurDec(el){
+  const l=lireNombreFr(el&&el.value);
+  return l.ok?l.valeur:NaN;
 }
 function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
@@ -79264,9 +79292,9 @@ function _echEditer(n){
     +'<div><label for="ech-glu" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Glucides (g)</label>'
     +'<input type="number" inputmode="numeric" id="ech-glu" value="'+val(f.cibleGlucides)+'" placeholder="-"></div>'
     +'<div><label for="ech-sel" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Sel (g)</label>'
-    +'<input type="number" inputmode="decimal" step="0.1" id="ech-sel" value="'+val(f.cibleSodium)+'" placeholder="-"></div>'
+    +'<input type="text" inputmode="decimal" autocomplete="off" data-dec id="ech-sel" value="'+val(f.cibleSodium)+'" placeholder="-"></div>'
     +'<div><label for="ech-eau" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Eau (L)</label>'
-    +'<input type="number" inputmode="decimal" step="0.1" id="ech-eau" value="'+val(f.cibleEau)+'" placeholder="-"></div>'
+    +'<input type="text" inputmode="decimal" autocomplete="off" data-dec id="ech-eau" value="'+val(f.cibleEau)+'" placeholder="-"></div>'
     +'<div><label for="ech-seance" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Séance</label>'
     +'<input type="text" maxlength="60" id="ech-seance" value="'+escapeHtml(f.seance||'')+'" placeholder="Ex : dos léger, 30 min"></div>'
     +'<label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:10px 0;display:inline-flex;align-items:center;gap:6px">'
@@ -84001,7 +84029,7 @@ function bSports(id){
         style="flex:1.3;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${SPORT_INTENSITES.map(x=>`<option value="${x.cle}"${e.intensite===x.cle?' selected':''}>${x.lib}</option>`).join('')}
       </select>
-      <input type="number" min="0" step="0.5" value="${e.heures!=null?e.heures:''}" placeholder="h/sem"
+      <input type="text" inputmode="decimal" autocomplete="off" data-dec min="0" value="${e.heures!=null?e.heures:''}" placeholder="h/sem"
         oninput="_bSportSet('${id}',${i},'heures',this.value)"
         style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-weight:700;margin:0">
       <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
@@ -85276,7 +85304,7 @@ function loadSante(){
         <select id="an-marqueur" onchange="_majUnites()" style="flex:1;min-width:130px">
           ${MARQUEURS.map(m=>`<option value="${escapeHtml(m.cle)}">${escapeHtml(m.lib)}</option>`).join('')}
         </select>
-        <input id="an-valeur" type="number" step="any" inputmode="decimal" placeholder="valeur" aria-label="Valeur" style="width:92px;text-align:center">
+        <input id="an-valeur" type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="valeur" aria-label="Valeur" style="width:92px;text-align:center">
         <select id="an-unite" style="width:104px"></select>
         <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" onclick="ajouterAnalyse()">Ajouter</button>
       </div>
@@ -90087,7 +90115,7 @@ function _htmlPointDuJour(etat){
   if(etat.question==='poids'){
     controle='<div class="pdj-ligne">'
       +'<label class="pes-boite" for="pdj-poids"><span class="pes-duo">'
-      +'<input type="number" id="pdj-poids" inputmode="decimal" step="0.1" '
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec id="pdj-poids" '
       +'min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="-" class="pes-champ">'
       +'<span class="pes-unite">kg</span></span></label>'
       +'<button class="btn btn-red btn-sm pdj-ok" onclick="pdjValiderPoids()">Enregistrer</button></div>';
@@ -105911,7 +105939,7 @@ function _cplMacroTxt(m){
     +' · '+Math.round(m.kcal)+' kcal';
 }
 function _cplInput(val,oninput,largeur,pas){
-  return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" oninput="${oninput}"
+  return `<input type="text" inputmode="decimal" autocomplete="off" data-dec value="${val==null?'':val}" oninput="${oninput}"
     style="width:${largeur||'62px'};padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
 }
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
@@ -107859,7 +107887,7 @@ function _htmlUnites(f){
         aria-label="Unité de saisie">
         ${l.map(u=>`<option value="${escapeHtml(u.cle)}"${u.cle===_fjUnite?' selected':''}>${escapeHtml(u.cle==='g'?'grammes':u.lib)}</option>`).join('')}
       </select>
-      <input id="fja-unite-n" type="number" min="0.5" step="0.5" value="1"
+      <input id="fja-unite-n" type="text" inputmode="decimal" autocomplete="off" data-dec min="0.5" value="1"
         oninput="fjaMajDepuisUnite()" aria-label="Nombre d'unités"
         style="width:88px;box-sizing:border-box;text-align:center;font-size:var(--fs-lg);font-weight:800;display:none">
     </div>
@@ -108699,11 +108727,11 @@ function _prepRendre(){
       +'background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer">×</button>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px">'
-      +'<input type="number" inputmode="decimal" placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
     +'</div></div>').join('');
   const diviseur=e.mode==='prep'
     ? '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">En combien de repas ?</div>'
@@ -108716,12 +108744,12 @@ function _prepRendre(){
       +'</div>'
       +(e.base==='g'
         ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          +'<input type="number" inputmode="decimal" placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
-          +'<input type="number" inputmode="decimal" placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
           +'</div><div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">'
           +'Poids total vide : on prend la somme des ingrédients. À remplir si le plat a perdu de l\'eau à la cuisson.</div>'
         : '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Quelle part en as-tu mangée ?</div>'
-          +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
@@ -110962,7 +110990,7 @@ function selectRepas(r){
 function stepFjaQty(delta){
   const inp=document.getElementById('fja-qty');
   if(!inp) return;
-  inp.value=Math.max(1,Math.min(9999,(parseFloat(inp.value)||0)+delta));
+  inp.value=Math.max(1,Math.min(9999,(valeurDec(inp)||0)+delta));
   updateFjaCalc();
 }
 
@@ -110973,7 +111001,7 @@ function setFjaQty(v){
 
 function updateFjaCalc(){
   const f=_fjFood;if(!f) return;
-  const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
+  const qty=valeurDec(document.getElementById('fja-qty'))||0;
   const el=document.getElementById('fja-calc');
   if(!el) return;
   if(qty<=0||qty>9999){el.innerHTML='';return;}
@@ -111866,7 +111894,7 @@ async function avertirEviction(user,aliment){
 }
 async function saveFoodEntry(){
   const f=_fjFood;if(!f) return;
-  const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
+  const qty=valeurDec(document.getElementById('fja-qty'))||0;
   if(qty<=0||qty>9999){toast('Quantité invalide (1-9999g)','var(--orange)');return;}
   // BUILD 1867 : un zéro de trop se voit AVANT d'écrire. La décision est
   // synchrone ; on n'attend que si l'on demande.
@@ -112291,6 +112319,8 @@ function _fjEnregistrerCorrection(qty){
 function quantiteSuspecte(qty,derniere,kcal){
   const q=Number(qty)||0;
   if(Number(derniere)>0&&q>4*Number(derniere)&&q>300) return true;
+  // BUILD 1908 : au-delà de 2 kg d'un aliment, on demande toujours.
+  if(q>2000) return true;
   return Number(kcal)>1500;
 }
 function _fjMille(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
@@ -116166,8 +116196,8 @@ function _htmlTableauxTableur(c){
       +optSport(String(x.sport))+'</select>'
       +(aide?'<span class="tbk-aide"'+(kh==null?' style="color:var(--orange)"':'')+'>'+escapeHtml(aide)+'</span>':'')
       +'</span></span></th>'
-      +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="number" '
-      +'min="0" max="60" step="0.5" inputmode="decimal" aria-label="Heures par semaine, '+nom+'" '
+      +'<td style="text-align:left"><span class="tbk-sp-h"><input class="tbk-in tbk-sp-i" type="text" inputmode="decimal" autocomplete="off" data-dec '
+      +'min="0" max="60" aria-label="Heures par semaine, '+nom+'" '
       +'value="'+escapeHtml(String(Number(x.heures)||0))+'" '
       +'onchange="majSportTableur('+i+',\'heures\',this.value)"><span>h</span></span></td>'
       +'<td style="text-align:left"><select class="tbk-sp-n tbk-sp-n-'+escapeHtml(String(x.intensite||'moderee'))+'" '
@@ -119603,7 +119633,7 @@ function renderEditeurTraitement(){
     'type="text" maxlength="'+TRT_NOM_MAX+'" value="'+v(t&&t.nom)+'" placeholder="Lévothyrox 75 µg"');
 
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    +champ('trte-dq','Dose','type="number" step="any" min="0" value="'
+    +champ('trte-dq','Dose','type="text" inputmode="decimal" autocomplete="off" data-dec value="'
       +v(t&&t.dosage_quantite)+'" placeholder="75"')
     +'<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
@@ -121116,7 +121146,7 @@ function renderCoachSuppSection(c){
           </div>
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Qté</div>
-            <input id="ccd-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="5">
+            <input id="ccd-supp-qty" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="5">
           </div>
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Unité</div>
@@ -121219,7 +121249,7 @@ function openCoachSuppEdit(id){
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;align-items:end">
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">DOSAGE</div>
-        <input id="coach-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="5" value="${s&&s.dosage_quantity?s.dosage_quantity:''}">
+        <input id="coach-supp-qty" type="text" inputmode="decimal" autocomplete="off" data-dec min="0" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="5" value="${s&&s.dosage_quantity?s.dosage_quantity:''}">
       </div>
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">UNITÉ</div>
@@ -131489,7 +131519,7 @@ function htmlCartePesee(u,maintenant,suffixe){
     <div style="display:flex;gap:8px;align-items:center">
       <label class="pes-boite" for="pesee-input${sx}">
         <span class="pes-duo">
-          <input type="number" id="pesee-input${sx}" inputmode="decimal" step="0.1"
+          <input type="text" inputmode="decimal" autocomplete="off" data-dec id="pesee-input${sx}"
             min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'-'}"
             value="${dujour?dujour.kg:''}" class="pes-champ">
           <span class="pes-unite">kg</span>
@@ -131557,7 +131587,9 @@ async function savePesee(suffixe){
   const sx=suffixe?String(suffixe):'';
   const inp=document.getElementById('pesee-input'+sx);
   if(!inp) return;
-  const v=parseFloat(String(inp.value).replace(',','.'));
+  // BUILD 1908 : « 62,5 », « 62.5 », « 62,5 kg » — lus pareil (lireNombreFr).
+  const _l=lireNombreFr(inp.value);
+  const v=_l.ok?_l.valeur:(_l.raison==='negatif'?_l.valeur:NaN);
   if(await _enregistrerPesee(v,localISODate(new Date()))){
     renderCartePesee();
     // Depuis Évolution, la courbe suit la pesée.
@@ -132454,7 +132486,7 @@ function _htmlObjectifPoidsAthlete(u){
   return '<div class="evo-carte obj-poids">'
     +'<div class="evo-titre">Objectif de poids</div>'
     +(o?'<div class="obj-poids-v"><b>'+_synNombre(o.kg)+' kg</b><span>fixé '+(o.par==='coach'?'par ton coach':'par toi')+'</span></div>':'')
-    +'<div class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="obj-poids-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<div class="obj-poids-f"><input type="text" inputmode="decimal" autocomplete="off" data-dec id="obj-poids-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
     +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="athleteSetObjectifPoids(\'\')">Retirer</button>':'')
     +'</div></div>';
@@ -132475,7 +132507,7 @@ function _htmlObjectifPoidsCoach(c){
   const o=objectifPoidsDe(c);
   return '<div class="obj-poids obj-poids-coach">'
     +'<span class="obj-poids-l">Objectif de poids'+(o?' : <b>'+_synNombre(o.kg)+' kg</b> ('+(o.par==='coach'?'posé par toi':'posé par l’athlète')+')':'')+'</span>'
-    +'<span class="obj-poids-f"><input type="number" inputmode="decimal" step="0.1" id="ccd-obj-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
+    +'<span class="obj-poids-f"><input type="text" inputmode="decimal" autocomplete="off" data-dec id="ccd-obj-kg" min="'+PESEE_MIN+'" max="'+PESEE_MAX+'" placeholder="kg" aria-label="Objectif de poids en kg" value="'+(o?o.kg:'')+'">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids()">'+(o?'Modifier':'Fixer')+'</button>'
     +(o?'<button type="button" class="btn btn-outline btn-sm" onclick="coachSetObjectifPoids(\'\')">Retirer</button>':'')
     +'</span></div>';
@@ -132823,7 +132855,7 @@ function _htmlRelectureCapture(plan,type){
       +'<span class="cap-rel-j">'+escapeHtml(fmtJ(l.date))+'</span>'
       +(l.garde
         ?'<span class="cap-rel-g">'+escapeHtml(fmtV(l.actuelle))+' · '+(l.garde==='sync'?'synchronisé, conservé':'saisi il y a moins de 24 h, conservé')+'</span>'
-        :'<input type="number" inputmode="decimal" class="cap-rel-c" aria-label="'+escapeHtml((som?'Durée de la nuit du ':'Pas du ')+fmtJ(l.date))+'" '
+        :'<input type="text" inputmode="decimal" autocomplete="off" data-dec class="cap-rel-c" aria-label="'+escapeHtml((som?'Durée de la nuit du ':'Pas du ')+fmtJ(l.date))+'" '
           +'step="'+(som?'0.1':'1')+'" min="0" max="'+(som?'18':'99999')+'" value="'+escapeHtml(String(l.valeur))+'">'
           +(l.actuelle!=null?'<span class="cap-rel-a">actuel : '+escapeHtml(fmtV(l.actuelle))+'</span>':''))
     +'</div>').join('')+'</div>';

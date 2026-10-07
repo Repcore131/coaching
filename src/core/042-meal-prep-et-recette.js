@@ -119,11 +119,11 @@ function _prepRendre(){
       +'background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer">×</button>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:6px">'
-      +'<input type="number" inputmode="decimal" placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
-      +'<input type="number" inputmode="decimal" placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="grammes" value="'+ch(l.g)+'" oninput="prepChamp('+i+',\'g\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="kcal/100g" value="'+ch(l.k)+'" oninput="prepChamp('+i+',\'k\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="P/100g" value="'+ch(l.p)+'" oninput="prepChamp('+i+',\'p\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="G/100g" value="'+ch(l.c)+'" oninput="prepChamp('+i+',\'c\',this.value)">'
+      +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="L/100g" value="'+ch(l.l)+'" oninput="prepChamp('+i+',\'l\',this.value)">'
     +'</div></div>').join('');
   const diviseur=e.mode==='prep'
     ? '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">En combien de repas ?</div>'
@@ -136,12 +136,12 @@ function _prepRendre(){
       +'</div>'
       +(e.base==='g'
         ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          +'<input type="number" inputmode="decimal" placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
-          +'<input type="number" inputmode="decimal" placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="poids total (g)" value="'+ch(e.total_g)+'" oninput="prepDiviseur(\'total_g\',this.value)">'
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="ma part (g)" value="'+ch(e.part_g)+'" oninput="prepDiviseur(\'part_g\',this.value)">'
           +'</div><div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">'
           +'Poids total vide : on prend la somme des ingrédients. À remplir si le plat a perdu de l\'eau à la cuisson.</div>'
         : '<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Quelle part en as-tu mangée ?</div>'
-          +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
+          +'<input type="text" inputmode="decimal" autocomplete="off" data-dec min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
@@ -2382,7 +2382,7 @@ function selectRepas(r){
 function stepFjaQty(delta){
   const inp=document.getElementById('fja-qty');
   if(!inp) return;
-  inp.value=Math.max(1,Math.min(9999,(parseFloat(inp.value)||0)+delta));
+  inp.value=Math.max(1,Math.min(9999,(valeurDec(inp)||0)+delta));
   updateFjaCalc();
 }
 
@@ -2393,7 +2393,7 @@ function setFjaQty(v){
 
 function updateFjaCalc(){
   const f=_fjFood;if(!f) return;
-  const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
+  const qty=valeurDec(document.getElementById('fja-qty'))||0;
   const el=document.getElementById('fja-calc');
   if(!el) return;
   if(qty<=0||qty>9999){el.innerHTML='';return;}

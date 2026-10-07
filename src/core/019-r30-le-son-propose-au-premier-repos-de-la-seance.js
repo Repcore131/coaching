@@ -1650,7 +1650,7 @@ function _rendreProgEx(){
     <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1px;
       text-transform:uppercase;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nom)}</div>
     <label style="margin-top:0">Charge maximale sur 1 répétition (kg)</label>
-    <input id="prog-ex-max" type="number" min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}" step="0.5" inputmode="decimal"
+    <input id="prog-ex-max" type="text" inputmode="decimal" autocomplete="off" data-dec min="${PROG_EX_MAX_MIN}" max="${PROG_EX_MAX_MAX}"
       value="${b.max===''?'':b.max}" onchange="_progExMax(this.value)" placeholder="Ex : 145">
     ${rec}
     <label>Nombre de semaines</label>
