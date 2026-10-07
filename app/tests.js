@@ -22830,6 +22830,29 @@ async function testExercices(){
         return texteRepris(_planCiqual(20040),_ciqualDB)==='Valeurs complétées depuis « Poireau, bouilli/cuit à l\'eau » (Ciqual)'?true:_echec(texteRepris(_planCiqual(20040),_ciqualDB));});
       ok('Incomplètes : sans « repris », aucune mention',()=>texteRepris({id:1},[])===''?true:_echec('mention'));
     }
+    // ══ BUILD 1860 : VITAMINE D ET OMÉGA-3 DEPUIS CIQUAL (lot 12, étape 2) ══
+    {
+      okA('Ciqual : le saumon porte vitamine D (vd) et EPA + DHA (o3) ; une inconnue reste absente',async()=>{
+        await _loadCiqual();
+        const s=_ciqualDB.find(f=>/^Saumon, élevage, cru/.test(f.n));
+        if(!s||!(s.vd>0)||!(s.o3>0)) return _echec(JSON.stringify(s&&[s.vd,s.o3]));
+        if(Math.abs(s.o3-1.5)>0.01||Math.abs(s.vd-4.92)>0.001) return _echec('valeurs : '+s.vd+' / '+s.o3);
+        return _ciqualDB.some(f=>f.id>0&&f.vd===0&&f.o3===undefined)||_ciqualDB.filter(f=>f.id>0&&!('o3' in f)).length>0?true:_echec('aucune inconnue');});
+      ok('o3 hors de MICRO_REFS (aucun signal), mais posé sur l’entrée du journal',()=>{
+        if('o3' in MICRO_REFS) return _echec('o3 déclencherait signalMicro');
+        const e={}; _poserMicros(e,{o3:2,vd:10,fe:1},1.2);
+        return e.o3===2.4&&e.vd===12&&e.fe===1.2?true:_echec(JSON.stringify(e));});
+      ok('omega3Semaine : mg par jour sur 7 jours, sans compter les inconnues comme zéro',()=>{
+        const jours=[]; const log={};
+        for(let i=0;i<7;i++){ const d='2026-09-0'+(i+1); jours.push(d); log[d]={entries:[{id:i,kcal:500,o3:0.35},{id:10+i,kcal:500}]}; }
+        const u={nutrition:{log}};
+        const o=omega3Semaine(u,jours);
+        if(!o||o.mgJour!==350||o.partDocumentee!==0.5) return _echec(JSON.stringify(o));
+        // Part documentée < 60 % : la ligne se tait.
+        if(ligneOmega3Mesure(u,jours)!=='') return _echec('ligne sur un journal peu documenté');
+        for(const d of jours) log[d].entries[1].o3=0.15;
+        return ligneOmega3Mesure(u,jours)==='Oméga-3 EPA + DHA : 500 mg/j · repère 500 mg'?true:_echec(ligneOmega3Mesure(u,jours));});
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{
@@ -82572,9 +82595,10 @@ async function testExercices(){
             return _echec('appelé hors fiche coach par : '+coupables.join(', '));
           return /\brisquesMicro\s*\(/.test(String(renderCoachMicroSection))
             ?true:_echec('la fiche coach ne l\'appelle plus');});
-        ok('MICRO_REFS porte huit nutriments et aucune valeur inventée',()=>{
+        // Build 1860 : la vitamine D (Ciqual 2025, colonne 65) est la neuvième.
+        ok('MICRO_REFS porte neuf nutriments et aucune valeur inventée',()=>{
           const cles=Object.keys(MICRO_REFS);
-          if(cles.length!==8) return _echec(cles.length+' entrées');
+          if(cles.length!==9||!MICRO_REFS.vd||MICRO_REFS.vd.H!==15) return _echec(cles.length+' entrées');
           const mauvais=cles.filter(k=>{const r=MICRO_REFS[k];
             return !(r.H>0)||!(r.F>0)||!r.lib||!r.unite;});
           return mauvais.length?_echec(mauvais.join(',')):true;});

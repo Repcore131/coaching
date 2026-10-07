@@ -15752,8 +15752,19 @@ const MICRO_REFS=Object.freeze({
   io: {lib:'Iode',         unite:'µg', H:150,  F:150},
   k_: {lib:'Potassium',    unite:'mg', H:3500, F:3500},
   b9: {lib:'Folates',      unite:'µg', H:330,  F:330},
-  b12:{lib:'Vitamine B12', unite:'µg', H:4,    F:4}
+  b12:{lib:'Vitamine B12', unite:'µg', H:4,    F:4},
+  // BUILD 1860 : la vitamine D, colonne « Vitamine D (µg/100 g) » de Ciqual
+  // 2025 (clé 'vd'). Repère Anses : apport satisfaisant de 15 µg/j chez l'adulte
+  // (Anses 2021, références nutritionnelles en vitamines et minéraux). ⚠ Il
+  // suppose une synthèse cutanée nulle : par l'assiette seule, la couverture
+  // est presque toujours basse — la carte le montre, sans en tirer de carence.
+  vd: {lib:'Vitamine D',   unite:'µg', H:15,   F:15}
 });
+// Hors repères, pour l'AFFICHAGE seulement : les oméga-3 à longue chaîne
+// (EPA + DHA, g/100 g, clé 'o3'). Hors de MICRO_REFS pour ne déclencher ni
+// signalMicro ni risquesMicro ; repère Anses : 500 mg/j d'EPA + DHA.
+const MICRO_HORS_REFS=Object.freeze(['o3']);
+const MICRO_O3_REPERE_MG=500;
 const MICRO_JOURS_FENETRE=7;
 const MICRO_COUVERTURE_SEUIL=0.70;
 const MICRO_DOC_MINIMALE=0.60;
@@ -15942,6 +15953,8 @@ function _htmlCouvertureMicro(user,ref,opts){
     ${cs.map(ligne).join('')}
     ${(function(){ const t=(function(){ try{ return ligneOmega3(user,localISODate((ref instanceof Date)?ref:new Date())); }catch(e){ return ''; } })();
       return t?'<div class="micro-omega3" style="font-size:var(--fs-xs);color:var(--text-strong);padding:2px 0">'+escapeHtml(t)+'</div>':''; })()}
+    ${(function(){ let t=''; try{ t=ligneOmega3Mesure(user,_microDerniersJours(ref)); }catch(e){ t=''; }
+      return t?'<div class="micro-omega3-mg" style="font-size:var(--fs-xs);color:var(--text-strong);padding:2px 0">'+escapeHtml(t)+'</div>':''; })()}
     ${sexeInconnu?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Sexe non renseigné : la référence la plus élevée est retenue.</div>':''}
     ${o.sansDisclaimer?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">${escapeHtml(MICRO_DISCLAIMER)}</div>`}
   </div>`;
@@ -16001,11 +16014,33 @@ function _fusionnerTraitementsPoussee(distant,localCoach){
 // Trois decimales : l'iode et la B12 se comptent en microgrammes, et un
 // arrondi au centieme y perdrait le dixieme de la reference journaliere.
 function _poserMicros(cible,f,r){
-  for(const _mc in MICRO_REFS){
+  for(const _mc of Object.keys(MICRO_REFS).concat(MICRO_HORS_REFS)){
     const _v=f&&f[_mc];
     if(_v!=null) cible[_mc]=parseFloat((_v*r).toFixed(3));
   }
   return cible;
+}
+// PURE. Les oméga-3 EPA + DHA par jour, sur la fenêtre des micronutriments, en
+// mg — mêmes règles que couvertureMicro : sept jours journalisés, un aliment
+// sans donnée sort de l'apport ET de la part documentée, jamais compté zéro.
+function omega3Semaine(user,joursISO){
+  if(!user||_microSuspendu(user)) return null;
+  const log=((user.nutrition||{}).log)||{};
+  const jours=(joursISO||[]).filter(j=>log[j]&&Array.isArray(log[j].entries)&&log[j].entries.length);
+  if(jours.length<MICRO_JOURS_FENETRE) return null;
+  let g=0,kDoc=0,kTot=0;
+  for(const j of jours) for(const e of log[j].entries){
+    if(!e) continue;
+    const kc=Number(e.kcal)||0; kTot+=kc;
+    if(e.o3==null) continue;
+    g+=Number(e.o3)||0; kDoc+=kc;
+  }
+  return {mgJour:Math.round(g*1000/jours.length),partDocumentee:kTot>0?Math.round(kDoc/kTot*1000)/1000:0};
+}
+function ligneOmega3Mesure(user,joursISO){
+  const o=omega3Semaine(user,joursISO);
+  if(!o||o.partDocumentee<MICRO_DOC_MINIMALE) return '';
+  return 'Oméga-3 EPA + DHA : '+o.mgJour+' mg/j · repère '+MICRO_O3_REPERE_MG+' mg';
 }
 const MICRO_DISCLAIMER="RepCore n'est pas un dispositif médical. Seul un bilan sanguin peut établir une carence.";
 

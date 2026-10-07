@@ -50,6 +50,10 @@ import json, re, os, sys
 
 SRC = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Downloads',
                    'Table Ciqual 2025_FR_2025_11_03.xlsx')
+# --source <chemin> : le xlsx ailleurs que dans ~/Downloads (même nom de fichier :
+# c'est lui qui porte la version).
+if '--source' in sys.argv:
+    SRC = sys.argv[sys.argv.index('--source') + 1]
 # « app/data » et non « data » : le fichier servi est app/data/ciqual.json — c'est
 # lui que fetch('./data/ciqual.json') va chercher depuis app/index.html. L'ancien
 # chemin pointait un cran trop haut et déposait le résultat dans un data/ à la
@@ -503,7 +507,14 @@ COLS_MICRO = {
     'k_':  58,  # Potassium (mg/100 g)
     'b9':  78,  # Vitamine B9, folates totaux, équivalents DFE (µg/100 g)
     'b12': 82,  # Vitamine B12 (µg/100 g)
+    # BUILD 1860 — indices VÉRIFIÉS sur l'en-tête réel du fichier du 03/11/2025 :
+    # 65 « Vitamine D (µg/100 g) » (le total ; 66 et 67 sont D2 et D3).
+    'vd':  65,  # Vitamine D (µg/100 g)
 }
+# Oméga-3 à longue chaîne : EPA (46, « AG 20:5 … (n-3) EPA ») + DHA (47,
+# « AG 22:6 … (n-3) DHA »), en g/100 g, sous la clé 'o3'. La somme n'est écrite
+# que si les DEUX sont connus : une moitié inconnue rendrait un total faux.
+COL_EPA, COL_DHA = 46, 47
 
 cols = list(df.columns)
 out = []
@@ -554,12 +565,16 @@ for _, row in df.iterrows():
         if v is not None:
             entry[cle] = v
             couverture[cle] = couverture.get(cle, 0) + 1
+    epa, dha = parse_micro(row.iloc[COL_EPA]), parse_micro(row.iloc[COL_DHA])
+    if epa is not None and dha is not None:
+        entry['o3'] = round(epa + dha, 3)
+        couverture['o3'] = couverture.get('o3', 0) + 1
 
     out.append(entry)
 
 print(f'  {len(out)} aliments convertis, {skipped} lignes ignorées')
 print('  Couverture des micronutriments (part des aliments ayant une valeur) :')
-for cle in COLS_MICRO:
+for cle in list(COLS_MICRO) + ['o3']:
     n = couverture.get(cle, 0)
     print(f'    {cle:4} {n:5} / {len(out)}  ({100*n/max(1,len(out)):5.1f} %)')
 
