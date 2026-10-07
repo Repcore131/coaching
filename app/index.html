@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1896';
+window.RC_BUILD='1897';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1896.css">
+<link rel="stylesheet" href="./rc-style.1897.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1896.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1897.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -4472,26 +4472,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <h2 style="margin-bottom:6px"> Phase du cycle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Comment tu te sens aujourd'hui ? Ta charge suggérée et ton nombre de séries peuvent être réduits selon ta réponse.</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-options">
-      <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Règles, c'est dur</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Douleurs, fatigue intense, moral bas</div>
-      </div>
-      <div class="obj-opt" onclick="setCyclePhase('j1_supportable',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Règles, ça va</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Légère gêne, entraînement faisable</div>
-      </div>
-      <div class="obj-opt" onclick="setCyclePhase('j6_14',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Je me sens bien</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Bonne énergie, bonne récupération</div>
-      </div>
-      <div class="obj-opt" onclick="setCyclePhase('j15_21',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Rien de particulier</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Entraînement normal</div>
-      </div>
-      <div class="obj-opt" onclick="setCyclePhase('j22_28',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Fatigue, ballonnements</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Volume réduit : une série de moins par exercice</div>
-      </div>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="setCyclePhase('j1_difficile',this)"><span class="cyc-t">Règles, c'est dur</span><span class="cyc-s">Douleurs, fatigue intense, moral bas</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="setCyclePhase('j1_supportable',this)"><span class="cyc-t">Règles, ça va</span><span class="cyc-s">Légère gêne, entraînement faisable</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="setCyclePhase('j6_14',this)"><span class="cyc-t">Je me sens bien</span><span class="cyc-s">Bonne énergie, bonne récupération</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="setCyclePhase('j15_21',this)"><span class="cyc-t">Rien de particulier</span><span class="cyc-s">Entraînement normal</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="setCyclePhase('j22_28',this)"><span class="cyc-t">Fatigue, ballonnements</span><span class="cyc-s">Volume réduit : une série de moins par exercice</span></button>
     </div>
     <button class="btn btn-outline" style="margin-top:16px" onclick="setCyclePhase('ignore',null)">Je ne sais pas / pas aujourd'hui</button>
   </div>
@@ -4505,16 +4490,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <h2 style="margin-bottom:6px">Veux-tu adapter tes séances à ton cycle ?</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Une seule fois. Tu pourras changer d'avis à tout moment dans « Mon profil ».</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-choix-options">
-      <div class="obj-opt" onclick="repondreCycleChoix('actif')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Oui, je l'indiquerai avant mes séances</div>
-      </div>
-      <div class="obj-opt" onclick="repondreCycleChoix('sans_objet')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Non, ça ne s'applique pas à moi</div>
-        <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Ménopause, contraception continue, absence de règles, autre</div>
-      </div>
-      <div class="obj-opt" onclick="repondreCycleChoix('jamais_demander')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">Non, je préfère ne pas suivre ça</div>
-      </div>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="repondreCycleChoix('actif')"><span class="cyc-t">Oui, je l'indiquerai avant mes séances</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="repondreCycleChoix('sans_objet')"><span class="cyc-t">Non, ça ne s'applique pas à moi</span><span class="cyc-s">Ménopause, contraception continue, absence de règles, autre</span></button>
+      <button type="button" class="btn btn-m btn-outline obj-opt cyc-opt" onclick="repondreCycleChoix('jamais_demander')"><span class="cyc-t">Non, je préfère ne pas suivre ça</span></button>
     </div>
     <button class="btn btn-outline" style="margin-top:16px" onclick="reporterCycleChoix()">Plus tard</button>
   </div>
@@ -6292,5 +6270,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1896.js"></script>
+<script src="./rc-core.1897.js"></script>
 </body></html>

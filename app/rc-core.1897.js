@@ -37521,7 +37521,7 @@ function _htmlDemandesVideo(c){
           </select></span>
         <span class="dv-champ-fl" aria-hidden="true">${_DV_ICO_FLECHE}</span>
       </label>
-      <button type="button" class="dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
+      <button type="button" class="btn btn-red dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
     </div>
     <div class="dv-pied">
       <span class="dv-info" aria-hidden="true">${_DV_ICO_INFO}</span>
@@ -70098,8 +70098,8 @@ function renderPlateauxCoach(c){
       <div class="plx-c">${g.exercices.map(ligne).join('')}</div>
     </details>`).join('')}
     <div class="plx-actions">
-      <button type="button" class="btn btn-red" onclick="openCoachSessions()">Modifier le programme</button>
-      <button type="button" class="btn btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
+      <button type="button" class="btn btn-m btn-red" onclick="openCoachSessions()">Modifier le programme</button>
+      <button type="button" class="btn btn-m btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
     </div>
     </div>
     ${PERF_ENCADRE}

@@ -1640,7 +1640,7 @@ function _htmlDemandesVideo(c){
           </select></span>
         <span class="dv-champ-fl" aria-hidden="true">${_DV_ICO_FLECHE}</span>
       </label>
-      <button type="button" class="dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
+      <button type="button" class="btn btn-red dv-btn" onclick="demanderVideo()">${_DV_ICO_ENVOI}<span>Demander la vidéo</span></button>
     </div>
     <div class="dv-pied">
       <span class="dv-info" aria-hidden="true">${_DV_ICO_INFO}</span>

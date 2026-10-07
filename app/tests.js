@@ -25904,7 +25904,8 @@ async function testExercices(){
           if(n.scrollWidth>n.clientWidth+1&&n.textContent.length<20) return _echec('« '+n.textContent+' » coupé');
           if(bg.getBoundingClientRect().right>r.getBoundingClientRect().right+0.5) return _echec('le badge « '+bg.textContent+' » déborde');
           if(getComputedStyle(f.querySelector('.cr-fiche-l')).display!=='none'||getComputedStyle(f.querySelector('.cr-fiche-f')).display==='none') return _echec('pas de flèche sous 600 px');
-          if(f.getBoundingClientRect().height<36) return _echec('la flèche est plus basse que l’ancien bouton');
+          // BUILD 1897 : un S dessiné à 32 px, la cible tient par sa zone de 44 px (.btn-sm::before).
+          if(f.getBoundingClientRect().height<31||(f.classList.contains('btn-sm')&&parseFloat(getComputedStyle(f,'::before').height)<44)) return _echec('la flèche est plus basse que l’ancien bouton');
           const sw=r.querySelector('.cr-swi');
           if(sw&&getComputedStyle(sw).display!=='none') return _echec('le curseur SUIVI reste sur la ligne');
         }
@@ -73536,6 +73537,44 @@ async function testExercices(){
       const l=(src.match(/<label\b[^>]*style=\\?["']display:flex[^"']*/g)||[])
         .filter(x=>!/reg-ligne/.test(x)&&!/text-transform:none/.test(x)&&!/justify-content:center/.test(x));
       return l.length?_echec(l.length+' : '+l[0].slice(0,80)):true;});
+
+    // ══ BUILD 1897 — LES BOUTONS : TROIS TAILLES, UN RAYON ═══════════════════
+    ok('1897 — .btn et .btn-sm ont le même rayon ; .btn-sm ne dépasse pas 32 px et porte la zone 44 px',()=>{
+      const d=document.createElement('div'); d.style.cssText='position:fixed;left:0;top:0;width:300px;visibility:hidden';
+      d.innerHTML='<button class="btn btn-red">L</button><button class="btn btn-m btn-outline">M</button><button class="btn btn-sm btn-outline">S</button>';
+      document.body.appendChild(d);
+      try{
+        const [L,M,S]=[...d.children], cs=x=>getComputedStyle(x);
+        if(cs(L).borderRadius!==cs(S).borderRadius||cs(M).borderRadius!==cs(S).borderRadius) return _echec('rayons '+cs(L).borderRadius+' / '+cs(M).borderRadius+' / '+cs(S).borderRadius);
+        const h=[L,M,S].map(x=>Math.round(x.getBoundingClientRect().height));
+        if(h.join()!=='48,40,32') return _echec('hauteurs '+h.join());
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
+        const mh=[...css.matchAll(/\.btn-sm[^{,]*\{[^}]*min-height:(\d+)px/g)].map(m=>+m[1]);
+        if(mh.some(v=>v>32)) return _echec('un .btn-sm déclare min-height '+Math.max(...mh));
+        const b=getComputedStyle(S,'::before');
+        return b.content!=='none'&&parseFloat(b.height)>=44?true:_echec('.btn-sm sans zone 44 px : '+b.content+' '+b.height);
+      }finally{ d.remove(); }});
+    const _btnFaux=id=>[...document.querySelectorAll('#'+id+' .btn')].filter(b=>b.getClientRects().length&&!b.closest('[style*="display:none"]')).map(b=>{
+      const h=b.getBoundingClientRect().height, f=parseFloat(getComputedStyle(b).fontSize);
+      return ([32,40,48].some(x=>Math.abs(h-x)<=1)&&f<=12)?'':id+' : « '+b.textContent.trim().slice(0,20)+' » '+Math.round(h)+' px / '+f+' px'; }).filter(Boolean);
+    ok('1897 — sonde : tous les .btn visibles font 32, 40 ou 48 px, en 12 px au plus (séances, fiche, nutrition, sommeil, annonces)',()=>{
+      const faux=[];
+      faux.push(..._sondeEcran(_banAth(),()=>loadSessionManager(),()=>_btnFaux('s-session-manager')));
+      faux.push(..._sondeEcran(_banAth(),()=>loadNutrition(),()=>_btnFaux('s-nutrition')));
+      faux.push(..._sondeEcran(_banAth(),()=>loadSleep(),()=>_btnFaux('s-sleep')));
+      faux.push(..._sondeEcran(_banCoach(),()=>loadCanalCoach(),()=>_btnFaux('s-coach-canal')));
+      faux.push(..._avecFiche(()=>_btnFaux('s-coach-client')));
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+    ok('1897 — 5 px au-dessus d’un .btn-sm, le doigt touche encore le bouton',()=>{
+      const d=document.createElement('div'); d.style.cssText='position:fixed;left:40px;top:200px;z-index:2147483000';
+      d.innerHTML='<button class="btn btn-sm btn-outline" style="width:120px">Relancer</button>';
+      document.body.appendChild(d);
+      try{
+        const b=d.firstChild, r=b.getBoundingClientRect();
+        const x=r.left+r.width/2, y=r.top-5;
+        const e=document.elementFromPoint(x,y);
+        return e===b||b.contains(e)?true:_echec('touche '+(e&&(e.tagName+'.'+e.className)));
+      }finally{ d.remove(); }});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

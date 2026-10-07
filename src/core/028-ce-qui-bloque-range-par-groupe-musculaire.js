@@ -108,8 +108,8 @@ function renderPlateauxCoach(c){
       <div class="plx-c">${g.exercices.map(ligne).join('')}</div>
     </details>`).join('')}
     <div class="plx-actions">
-      <button type="button" class="btn btn-red" onclick="openCoachSessions()">Modifier le programme</button>
-      <button type="button" class="btn btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
+      <button type="button" class="btn btn-m btn-red" onclick="openCoachSessions()">Modifier le programme</button>
+      <button type="button" class="btn btn-m btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
     </div>
     </div>
     ${PERF_ENCADRE}

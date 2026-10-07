@@ -30,6 +30,9 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .pe-lien[aria-current="true"]{background:var(--surface-2);color:var(--text);box-shadow:inset 2px 0 0 var(--red)}
 :root[data-theme="clair"] .pe-lien .pe-rang{color:var(--red-text)}
 :root[data-theme="clair"] .brand-bg{background-color:var(--bg)}
+:root[data-theme="clair"] .btn.cyc-opt{border:1px solid color-mix(in srgb,var(--text) 12%,transparent)}
+:root[data-theme="clair"] .btn.cyc-opt.sel{border-color:var(--red);color:var(--red-text)}
+:root[data-theme="clair"] .cyc-s{color:var(--sub)}
 :root[data-theme="clair"] .btn-red{background:var(--red);color:#fff;box-shadow:var(--glow-red)}
 :root[data-theme="clair"] .btn-red:hover{background:color-mix(in srgb,var(--red) 90%,#fbfbfb);box-shadow:var(--glow-red)}
 :root[data-theme="clair"] .btn-red:active{box-shadow:var(--e1),var(--glow-red)}
@@ -847,7 +850,6 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] .dv-champ select{color:var(--text)}
 :root[data-theme="clair"] .dv-champ select option{background:var(--surface-1);color:var(--text)}
 :root[data-theme="clair"] .dv-champ-fl{color:var(--text)}
-:root[data-theme="clair"] .dv-btn{border:1.5px solid var(--red);background:linear-gradient(180deg,color-mix(in srgb,var(--red) 30%,transparent),rgba(110,0,0,.38));color:var(--text);box-shadow:0 0 18px color-mix(in srgb,var(--red) 32%,transparent),inset 0 1px 0 rgba(255,255,255,.08)}
 :root[data-theme="clair"] .dv-btn svg{color:var(--red-texte-clair)}
 :root[data-theme="clair"] .dv-btn:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--red) 42%,transparent),color-mix(in srgb,var(--red-deep) 48%,transparent));box-shadow:0 0 24px color-mix(in srgb,var(--red) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.1)}
 :root[data-theme="clair"] .dv-btn:focus-visible{outline:2px solid #090909}

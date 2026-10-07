@@ -879,7 +879,38 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    pas le CTA de son ecran. L'interlettre de 2,5 px ne va qu'aux capitales : en
    casse phrase il espacerait les mots comme un titre. */
 .btn{width:100%;padding:16px;border:none;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);letter-spacing:.3px;-webkit-tap-highlight-color:transparent}
-.btn.btn-red:not(.btn-sm):not(.btn-casse){text-transform:uppercase;letter-spacing:2.5px}
+.btn.btn-red:not(.btn-sm):not(.btn-casse){text-transform:uppercase;letter-spacing:1.5px}
+/* ══ LES BOUTONS : UNE FAMILLE, TROIS TAILLES, UN RAYON (build 1897) ════════
+   Ne pas gonfler : un bouton trop grand RAPETISSE vers son cran, et la zone
+   tactile d'un petit bouton s'obtient par .hit44 (un ::before invisible de
+   44 px), jamais par une hauteur dessinée plus grande.
+   L  .btn      48 px · 0 20 px · 12 px 800 MAJUSCULES, interlettre 1,5 px
+   M  .btn-m    40 px · 0 16 px · 12 px 700, casse normale, .2 px
+   S  .btn-sm   32 px · 0 12 px · 11 px 700, casse normale, + zone 44 px
+   Un seul rayon : var(--r-3). Couleurs : .btn-red (halo --glow-red sur le
+   seul L), .btn-outline, .btn-blanc.
+   RÈGLE D'USAGE : un seul L par écran (l'action principale) ; les rangées
+   de choix en M ; les actions de ligne (Relancer, Reporter, Démarrer,
+   Chercher) en S. Les tailles sont imposées (!important) : une hauteur ou
+   une police écrite en ligne ne fait plus un quatrième bouton. */
+.btn{min-height:48px!important;height:auto!important;padding:0 20px!important;font-size:var(--fs-sm)!important;
+  font-weight:800;line-height:1.25;border-radius:var(--r-3)!important;
+  display:inline-flex;align-items:center;justify-content:center;text-align:center;gap:8px;box-sizing:border-box}
+/* Les capitales restent au seul CTA rouge (R31, Kevin) : la règle
+   .btn.btn-red:not(.btn-sm):not(.btn-casse) ci-dessus les porte, à 1,5 px. */
+.btn.btn-m{min-height:40px!important;padding:0 16px!important;font-size:var(--fs-sm)!important;font-weight:700;
+  text-transform:none;letter-spacing:.2px}
+.btn.btn-sm{min-height:32px!important;padding:0 12px!important;font-size:var(--fs-xs)!important;font-weight:700;
+  text-transform:none;letter-spacing:.2px;position:relative}
+.btn.btn-sm::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:100%;height:44px;min-width:44px}
+.btn-red.btn-m,.btn-red.btn-sm{box-shadow:none}
+/* Les choix de la feuille du cycle : des M sur deux lignes au plus, le
+   sous-texte à 11 px. obj-opt reste pour la sélection (.sel). */
+.btn.cyc-opt{width:100%;flex-direction:column;gap:1px;background:transparent;border:1px solid color-mix(in srgb,var(--text) 12%,transparent)}
+.btn.cyc-opt.sel{border-color:var(--red);color:var(--red-text)}
+.cyc-t{font-weight:700}
+.cyc-s{font-size:var(--fs-xs);font-weight:400;color:var(--sub);line-height:1.35}
 /* L'ETOILE PLEINE (favori, note) : icon('etoile') est au trait ; dans
    .ico-plein, elle se remplit de sa couleur (01/10/2026). */
 .ico-plein svg{fill:currentColor}
@@ -941,7 +972,7 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
-.btn-sm{padding:10px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-3);letter-spacing:.3px}
+.btn-sm{width:auto}
 /* ── LA TAILLE D'UN DOIGT (build 1414) ──────────────────────────────────────
    .btn-sm dessine des boutons de 34 a 35 px de haut. C'est assez a la souris,
    pas au doigt : 44 px chez Apple, 48 dp chez Android, et la mesure en mode
@@ -4651,12 +4682,7 @@ html{scroll-behavior:smooth}
   cursor:pointer;outline:none;text-overflow:ellipsis}
 .dv-champ select option{background:var(--surface-1);color:var(--text)}
 .dv-champ-fl{color:var(--text);display:flex;flex:0 0 auto}
-.dv-btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:14px;
-  min-width:250px;padding:0 28px;min-height:64px;border-radius:var(--r-3);border:1.5px solid var(--red);
-  background:linear-gradient(180deg,color-mix(in srgb,var(--red) 30%,transparent),rgba(110,0,0,.38));color:var(--text);
-  font-family:var(--pile-titre);font-size:23px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;
-  box-shadow:0 0 18px color-mix(in srgb,var(--red) 32%,transparent),inset 0 1px 0 rgba(255,255,255,.08);
-  transition:background var(--t-1),box-shadow var(--t-1)}
+.dv-btn{flex:0 0 auto;gap:10px}
 .dv-btn svg{color:var(--red)}
 .dv-btn:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--red) 42%,transparent),color-mix(in srgb,var(--red-deep) 48%,transparent));
   box-shadow:0 0 24px color-mix(in srgb,var(--red) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.1)}
