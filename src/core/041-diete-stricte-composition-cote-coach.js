@@ -1110,16 +1110,32 @@ function savePlanCoach(){
   toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré '+ICO.coche,'le plan est');
 }
 async function supprimerPlanCoach(){
-  if(!await rcConfirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
+  const _c0=getOwnedClient(currentClientId);
+  const _qui=_c0?(String(_c0.fname||'').trim()||'cet athlète'):'cet athlète';
+  if(!await rcConfirm('Supprimer le plan alimentaire de '+_qui+' ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
+  // BUILD 1869 : l'objet entier, pour le remettre.
+  const _copie=(c.nutrition&&c.nutrition.plan)?JSON.parse(JSON.stringify(c.nutrition.plan)):null;
   if(c.nutrition) delete c.nutrition.plan;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _cplPlan=_cplCopie(null);
   renderPlanCoach();
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan supprimé','la suppression est');
+  const em=c.email;
+  toastSyncAnnulable(ok,CLOUD.pushOne(c.email,c),'Plan de '+_qui+' supprimé','la suppression est',()=>{
+    if(!_copie) return true;
+    const us=DB.get('users')||{};
+    const a=us[em];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste : rien n’a été remis.';
+    a.nutrition=a.nutrition||{};
+    a.nutrition.plan=JSON.parse(JSON.stringify(_copie));
+    a.updatedAt=Date.now(); us[em]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(em,a).catch(()=>{}); }catch(e){}
+    try{ if(currentClientId===a.id){ _cplPlan=_cplCopie(a.nutrition.plan); renderPlanCoach(); } }catch(e){}
+    return true;
+  });
 }
 
 // ══════════════ DIÈTE STRICTE : CONSULTATION, CÔTÉ ATHLÈTE ════════════════
@@ -2847,8 +2863,16 @@ async function supprimerRecette(id){
   const r=recettesMiennes().find(x=>x.id===id);
   if(!r) return false;
   if(!await rcConfirm('Supprimer « '+r.nom+' » ?','Ce qui est déjà dans un journal reste tel quel. Une ligne de plan garde ses dernières valeurs.','Supprimer')) return false;
+  const _copie=JSON.parse(JSON.stringify(r));
   recetteSupprimerLocal(id);
   renderRecettes();
+  // BUILD 1869 : la recette revient, avec son identifiant.
+  rcAnnulable({message:'« '+r.nom+' » supprimée',defaire:()=>{
+    const res=recetteEnregistrer(Object.assign({},_copie,{id}));
+    try{ recettesSynchroniser().catch(()=>{}); }catch(e){}
+    try{ renderRecettes(); }catch(e){}
+    return res&&res.ok?true:(res&&res.raison)||'La recette n’a pas pu être remise.';
+  }});
   return true;
 }
 function annulerRecette(){ _recEd=null; renderRecettes(); }

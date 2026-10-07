@@ -2065,6 +2065,8 @@ function peutBasculer(){
 // Remise à zéro de tout ce qui n'appartient PAS au compte d'arrivée.
 function _comptesRemiseAZero(){
   currentClientId=null;
+  // BUILD 1869 : l'annulation en attente appartient au compte qui part.
+  try{ _rcAnnulable=null; }catch(e){}
   // N3.10 — LE BROUILLON DE SEANCES PART AVEC LE COMPTE. Il porte le
   // dossier COMPLET d'un athlete, copie profonde prise a l'ouverture de
   // l'editeur : le laisser derriere soi sur un appareil partage, c'est y

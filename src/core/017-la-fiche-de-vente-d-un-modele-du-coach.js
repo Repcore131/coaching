@@ -1830,10 +1830,14 @@ function reporterPropagation(){
   document.querySelectorAll('#c4-prop input[data-a]').forEach(cb=>{ if(cb.checked&&!cb.disabled) (choix[cb.dataset.a]=choix[cb.dataset.a]||[]).push(Number(cb.dataset.o)); });
   const users=DB.get('users')||{};
   const pushes=[];
+  // BUILD 1869 : l'état d'avant de chaque athlète touché, pour « Annuler ».
+  const _avant=[];
   x.lignes.forEach((l,i)=>{
     const k=Object.keys(users).find(kk=>users[kk]&&users[kk].id===l.a.id);
     if(!k) return;
     const a=users[k];
+    _avant.push({k,sc:JSON.parse(JSON.stringify(a.sessions_config||null)),
+      id:a.assignedProgramId,genre:a.assignedProgramGenre,version:a.assignedProgramVersion});
     const ids=(choix[i]||[]).map(n=>l.res[n]&&l.res[n].op.id).filter(Boolean);
     if(ids.length){
       _pushSessionsHistory(a);
@@ -1850,8 +1854,29 @@ function reporterPropagation(){
   closeModal();
   _c4Prop=null;
   try{ renderPropagationEntree(); }catch(e){}
-  toastSync(ok,Promise.all(pushes),' Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est');
+  const _apres={};
+  _avant.forEach(v=>{ _apres[v.k]=JSON.stringify((users[v.k]||{}).sessions_config||null); });
+  toastSyncAnnulable(ok,Promise.all(pushes),'Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est',
+    ()=>defaireReport(_avant,_apres));
   return true;
+}
+// Remet chaque athlète tel qu'avant le report, SAUF celui dont le programme a
+// changé depuis (le coach l'a retouché) : on ne défait pas son travail.
+function defaireReport(avant,apres){
+  const us=DB.get('users')||{};
+  let n=0, saut=0;
+  for(const v of avant||[]){
+    const a=us[v.k];
+    if(!a) continue;
+    if(JSON.stringify(a.sessions_config||null)!==apres[v.k]){ saut++; continue; }
+    a.sessions_config=JSON.parse(JSON.stringify(v.sc));
+    a.assignedProgramId=v.id; a.assignedProgramGenre=v.genre; a.assignedProgramVersion=v.version;
+    a.updatedAt=Date.now(); us[v.k]=a; n++;
+    try{ CLOUD.pushOne(v.k,a).catch(()=>{}); }catch(e){}
+  }
+  DB.set('users',us);
+  try{ renderPropagationEntree(); }catch(e){}
+  return saut?(n+' remis, '+saut+' laissé'+(saut>1?'s':'')+' tel'+(saut>1?'s':'')+' : modifié'+(saut>1?'s':'')+' depuis le report.'):true;
 }
 
 // ── Appliquer un modèle depuis la fiche de l'athlète ────────────────────────

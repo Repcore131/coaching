@@ -2682,9 +2682,15 @@ async function deleteCoachProgTemplate(idx){
   // et ceux qui l'ont achete doivent le garder. On le dit avant, et la fiche
   // reapparait sous « Ma boutique », ou elle se retire de la vente.
   const _enBoutique=_cplEnVente(currentUser.coachPrograms[idx])&&estVendeur();
-  if(!await rcConfirm('Supprimer ce programme ?',
-    _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':null,
+  // BUILD 1869 : la confirmation nomme le modèle et dit qui l'utilise.
+  const _p=currentUser.coachPrograms[idx];
+  if(!_p) return;
+  const _n=athletesSurModele(_p).length;
+  if(!await rcConfirm('Supprimer « '+(_p.name||'Sans nom')+' » ?',
+    [_n?_n+' athlète'+(_n>1?'s l’utilisent':' l’utilise')+' (leur programme ne change pas).':'',
+     _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':''].filter(Boolean).join('\n')||null,
     'Supprimer')) return;
+  const _copie=JSON.parse(JSON.stringify(_p));
   // ⚠ UN PROGRAMME EN VENTE QU'ON SUPPRIME DOIT QUITTER LA VITRINE. Sans cette
   // ligne, la carte restait publiee dans coach_public : les athletes voyaient
   // toujours un bouton d'achat pour un programme qui n'existe plus, et rien du
@@ -2693,6 +2699,23 @@ async function deleteCoachProgTemplate(idx){
   currentUser.coachPrograms.splice(idx,1);
   saveUser();
   if(_vendait) CLOUD.pushProfilCoach(currentUser).catch(()=>{});
-  toast('Programme supprimé.');loadCoachProgramsList();
+  loadCoachProgramsList();
+  rcAnnulable({message:'« '+(_copie.name||'Sans nom')+' » supprimé.',defaire:()=>remettreModele(_copie,idx,_vendait)});
+}
+// PURE (sur la base locale). Les athlètes du coach sur ce modèle.
+function athletesSurModele(p){
+  if(!p||!p.id) return [];
+  const users=DB.get('users')||{};
+  return Object.values(users).filter(u=>u&&u.assignedProgramId===p.id&&(function(){ try{ return _estMonAthlete(u,currentUser); }catch(e){ return false; } })());
+}
+// Remet le modèle À SON INDEX, avec ses versions et son état de vente.
+function remettreModele(copie,idx,vendait){
+  const l=currentUser.coachPrograms=Array.isArray(currentUser.coachPrograms)?currentUser.coachPrograms:[];
+  if(l.some(x=>x&&x.id===copie.id)) return true;
+  l.splice(Math.max(0,Math.min(l.length,idx)),0,JSON.parse(JSON.stringify(copie)));
+  saveUser();
+  if(vendait) CLOUD.pushProfilCoach(currentUser).catch(()=>{});
+  try{ loadCoachProgramsList(); }catch(e){}
+  return true;
 }
 

@@ -1725,7 +1725,13 @@ async function confirmDeleteClient(){
   const _phrase=codes.length
     ? '\nSon code d\'accès sera désactivé : il ne pourra plus s\'en servir pour se rattacher à toi.'
     : '';
-  if(!await rcConfirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase,null,'Retirer')) return;
+  // BUILD 1869 : la confirmation NOMME l'élève.
+  const _nom=nomCompletEleve(cible);
+  if(!await rcConfirm('Retirer '+_nom+' de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase,null,'Retirer')) return;
+  // L'INSTANTANÉ, AVANT TOUTE ÉCRITURE : de quoi tout remettre.
+  const _avant={estCode,clientId:currentClientId,codes:JSON.parse(JSON.stringify(currentUser.studentCodes||[])),
+    clients:Array.isArray(currentUser.clients)?currentUser.clients.slice():undefined,
+    seen:null,athlete:null,tokens:codes.map(c=>c.token).filter(Boolean)};
   // LE SERVEUR D’ABORD. Un code sans jeton n’a pas de nœud à fermer — il date
   // d’avant leur enregistrement — et ne bloque donc rien.
   for(const code of codes){
@@ -1746,6 +1752,8 @@ async function confirmDeleteClient(){
     const users=DB.get('users')||{};
     const athlete=Object.values(users).find(u=>u.id===currentClientId);
     if(athlete){
+      _avant.athlete={email:athlete.email,coachId:athlete.coachId,coachName:athlete.coachName,coachCode:athlete.coachCode,coachEmailKey:athlete.coachEmailKey};
+      if(currentUser.seenBilans&&athlete.email in currentUser.seenBilans) _avant.seen=currentUser.seenBilans[athlete.email];
       athlete.coachId=null;athlete.coachName=null;athlete.coachCode=null;
       // ⚠ coachEmailKey AUSSI, ET C'EST CE QUI MANQUAIT. _estMonAthlete
       // reconnait un athlete par coachId OU par coachEmailKey : effacer le
@@ -1779,7 +1787,42 @@ async function confirmDeleteClient(){
     ok=saveUser()&&ok;
   }
   go('s-coach-home');loadCoachHome();
-  toastSync(ok,envoi,'Élève retiré du suivi','le retrait est');
+  toastSyncAnnulable(ok,envoi,_nom+' retiré de ton suivi','le retrait est',()=>defaireRetraitEleve(_avant));
+}
+// BUILD 1869 : « Retirer Léa Moreau de ton suivi ? » — le nom complet.
+function nomCompletEleve(c){
+  const n=((c&&c.fname||'')+' '+(c&&c.lname||'')).trim()||String(c&&c.studentName||'').trim();
+  return n||'cet élève';
+}
+// Défait un retrait : codes rouverts côté serveur, élève rattaché, listes du
+// coach remises. Un refus du serveur se dit en clair (chaîne rendue).
+async function defaireRetraitEleve(av){
+  if(!av) return false;
+  let refus='';
+  for(const tok of av.tokens||[]){
+    let okc=false; try{ okc=await _majActifDistant(tok,true); }catch(e){ okc=false; }
+    if(!okc) refus='Son code d’accès n’a pas pu être réactivé (réseau ou serveur) : rouvre-le depuis « Codes ».';
+  }
+  currentUser.studentCodes=JSON.parse(JSON.stringify(av.codes||[]));
+  if(av.clients!==undefined) currentUser.clients=av.clients.slice();
+  if(av.athlete){
+    const users=DB.get('users')||{};
+    const a=users[av.athlete.email];
+    if(a){
+      a.coachId=av.athlete.coachId; a.coachName=av.athlete.coachName;
+      a.coachCode=av.athlete.coachCode; a.coachEmailKey=av.athlete.coachEmailKey;
+      a.updatedAt=Date.now();
+      users[a.email]=a; DB.set('users',users);
+      if(av.seen!==null){ currentUser.seenBilans=currentUser.seenBilans||{}; currentUser.seenBilans[a.email]=av.seen; }
+      try{ CLOUD.inscrireClientCoach(a.email,true).catch(()=>{}); }catch(e){}
+      let r=true;
+      try{ r=await CLOUD.pushOne(a.email,a); }catch(e){ r=false; }
+      if(r===false) refus=refus||'Le serveur a refusé le rattachement : '+nomCompletEleve(a)+' devra ressaisir ton code.';
+    }
+  }
+  saveUser();
+  try{ if((document.querySelector('.screen.active')||{}).id==='s-coach-home') loadCoachHome(); }catch(e){}
+  return refus||true;
 }
 // PURE. Un dossier VIDE : ni séance, ni bilan, ni mesure. C'est la coquille
 // d'un profil créé par erreur — un doublon de saisie — et rien d'autre.

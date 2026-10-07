@@ -8985,6 +8985,8 @@ function peutBasculer(){
 // Remise à zéro de tout ce qui n'appartient PAS au compte d'arrivée.
 function _comptesRemiseAZero(){
   currentClientId=null;
+  // BUILD 1869 : l'annulation en attente appartient au compte qui part.
+  try{ _rcAnnulable=null; }catch(e){}
   // N3.10 — LE BROUILLON DE SEANCES PART AVEC LE COMPTE. Il porte le
   // dossier COMPLET d'un athlete, copie profonde prise a l'ouverture de
   // l'editeur : le laisser derriere soi sur un appareil partage, c'est y
@@ -12486,9 +12488,11 @@ function _toastCoachLarge(){
     return !!(a&&a.id==='s-coach-program'&&a.getAttribute('data-ctx')==='coach');
   }catch(e){ return false; }
 }
-function toast(msg,c='var(--green)',duree){
+function toast(msg,c='var(--green)',duree,action){
   const t=document.getElementById('toast');
   _rcToastLe=Date.now();
+  // BUILD 1869 : un nouveau message ferme l'annulable en cours, sans rien défaire.
+  if(!action) _rcAnnulable=null;
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
   // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
   // « var(--red) » héritent du court-circuit sans le savoir.
@@ -12497,6 +12501,17 @@ function toast(msg,c='var(--green)',duree){
   const poser=()=>{
     // Les marqueurs ICO.coche… deviennent des icones (01/10/2026).
     _texteIco(t,msg);
+    // BUILD 1869 : « Annuler » dans le toast. Bouton texte (rb-lien), sans
+    // agrandir la police ; le toast reçoit alors les touchers.
+    if(action&&typeof action.fn==='function'){
+      const b=document.createElement('button');
+      b.type='button'; b.className='rb-lien rc-toast-annuler';
+      b.style.marginLeft='12px'; b.style.font='inherit'; b.style.fontWeight='800';
+      b.textContent=action.lib||'Annuler';
+      b.onclick=(ev)=>{ try{ ev.stopPropagation(); }catch(e){} action.fn(); };
+      t.appendChild(b);
+      t.style.pointerEvents='auto';
+    } else t.style.pointerEvents='none';
     // PAS DE FILET DE COULEUR SUR LE COTE (charte du 26/09/2026) : l'erreur se
     // lit a son fond et a son cadre, le reste du temps le message est neutre.
     t.style.borderLeft='';
@@ -12529,6 +12544,7 @@ function toast(msg,c='var(--green)',duree){
     const _large=_toastCoachLarge();
     _toastMinuteur=setTimeout(()=>{
       t.style.opacity='0';
+      t.style.pointerEvents='none';
       t.style.transform=_large?'translateX(-50%) translateY(-40px)'
                               :'translateX(-50%) translateY(80px)';
       _toastMinuteur=null;
@@ -12551,6 +12567,47 @@ function toast(msg,c='var(--green)',duree){
   } else poser();
 }
 
+// ══ BUILD 1869 : LES GESTES DU COACH SE DÉFONT ══════════════════════════════
+// rcAnnulable({message, defaire, duree=8000}) : le toast porte « Annuler ». Un
+// seul annulable à la fois : un nouveau toast ferme le précédent sans rien
+// défaire. defaire() peut être asynchrone ; s'il rend une chaîne, c'est un
+// refus à dire en clair, sinon « Annulé ». Double appui : un seul defaire().
+let _rcAnnulable=null;
+const RC_ANNULABLE_MS=8000;
+function rcAnnulable(o){
+  const x=o||{};
+  if(typeof x.defaire!=='function'){ toast(x.message||''); return null; }
+  const etat={defaire:x.defaire,fait:false};
+  toast(x.message||'',x.couleur||'var(--green)',x.duree>0?x.duree:RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+  _rcAnnulable=etat;
+  return etat;
+}
+function rcAnnulerDernier(etat){
+  const a=etat||_rcAnnulable;
+  if(!a||a.fait) return Promise.resolve(false);
+  a.fait=true;
+  if(_rcAnnulable===a) _rcAnnulable=null;
+  let r;
+  try{ r=a.defaire(); }catch(e){ toast('Impossible d’annuler : '+(e&&e.message||'erreur'),'var(--red)'); return Promise.resolve(false); }
+  return Promise.resolve(r).then(v=>{
+    if(typeof v==='string'){ toast(v,'var(--orange)',6000); return false; }
+    toast('Annulé'); return true;
+  },e=>{ toast('Impossible d’annuler : '+(e&&e.message||'erreur'),'var(--red)'); return false; });
+}
+// toastSync, avec « Annuler ». Un envoi qui échoue (hors ligne) garde
+// l'annulation : on défait en local, la file de renvoi rejouera.
+function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire){
+  if(!localOk) return toastSync(localOk,promesse,succes,perdu);
+  const etat=rcAnnulable({message:succes,defaire});
+  return Promise.resolve(promesse).then(()=>true,e=>{
+    if(etat&&!etat.fait&&_rcAnnulable===etat){
+      const detail=(e&&e._actionnable)?e.message:null;
+      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+      _rcAnnulable=etat;
+    } else toastSync(localOk,Promise.reject(e),succes,perdu);
+    return false;
+  });
+}
 // ══ LE RETOUR D'ACTION : CHARGEMENT, ÉCHEC, CONFIRMATION ════════════════════
 //
 // LA RÈGLE : quiconque touche un bouton doit savoir, sans deviner, que quelque
@@ -37299,7 +37356,13 @@ async function confirmDeleteClient(){
   const _phrase=codes.length
     ? '\nSon code d\'accès sera désactivé : il ne pourra plus s\'en servir pour se rattacher à toi.'
     : '';
-  if(!await rcConfirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase,null,'Retirer')) return;
+  // BUILD 1869 : la confirmation NOMME l'élève.
+  const _nom=nomCompletEleve(cible);
+  if(!await rcConfirm('Retirer '+_nom+' de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase,null,'Retirer')) return;
+  // L'INSTANTANÉ, AVANT TOUTE ÉCRITURE : de quoi tout remettre.
+  const _avant={estCode,clientId:currentClientId,codes:JSON.parse(JSON.stringify(currentUser.studentCodes||[])),
+    clients:Array.isArray(currentUser.clients)?currentUser.clients.slice():undefined,
+    seen:null,athlete:null,tokens:codes.map(c=>c.token).filter(Boolean)};
   // LE SERVEUR D’ABORD. Un code sans jeton n’a pas de nœud à fermer — il date
   // d’avant leur enregistrement — et ne bloque donc rien.
   for(const code of codes){
@@ -37320,6 +37383,8 @@ async function confirmDeleteClient(){
     const users=DB.get('users')||{};
     const athlete=Object.values(users).find(u=>u.id===currentClientId);
     if(athlete){
+      _avant.athlete={email:athlete.email,coachId:athlete.coachId,coachName:athlete.coachName,coachCode:athlete.coachCode,coachEmailKey:athlete.coachEmailKey};
+      if(currentUser.seenBilans&&athlete.email in currentUser.seenBilans) _avant.seen=currentUser.seenBilans[athlete.email];
       athlete.coachId=null;athlete.coachName=null;athlete.coachCode=null;
       // ⚠ coachEmailKey AUSSI, ET C'EST CE QUI MANQUAIT. _estMonAthlete
       // reconnait un athlete par coachId OU par coachEmailKey : effacer le
@@ -37353,7 +37418,42 @@ async function confirmDeleteClient(){
     ok=saveUser()&&ok;
   }
   go('s-coach-home');loadCoachHome();
-  toastSync(ok,envoi,'Élève retiré du suivi','le retrait est');
+  toastSyncAnnulable(ok,envoi,_nom+' retiré de ton suivi','le retrait est',()=>defaireRetraitEleve(_avant));
+}
+// BUILD 1869 : « Retirer Léa Moreau de ton suivi ? » — le nom complet.
+function nomCompletEleve(c){
+  const n=((c&&c.fname||'')+' '+(c&&c.lname||'')).trim()||String(c&&c.studentName||'').trim();
+  return n||'cet élève';
+}
+// Défait un retrait : codes rouverts côté serveur, élève rattaché, listes du
+// coach remises. Un refus du serveur se dit en clair (chaîne rendue).
+async function defaireRetraitEleve(av){
+  if(!av) return false;
+  let refus='';
+  for(const tok of av.tokens||[]){
+    let okc=false; try{ okc=await _majActifDistant(tok,true); }catch(e){ okc=false; }
+    if(!okc) refus='Son code d’accès n’a pas pu être réactivé (réseau ou serveur) : rouvre-le depuis « Codes ».';
+  }
+  currentUser.studentCodes=JSON.parse(JSON.stringify(av.codes||[]));
+  if(av.clients!==undefined) currentUser.clients=av.clients.slice();
+  if(av.athlete){
+    const users=DB.get('users')||{};
+    const a=users[av.athlete.email];
+    if(a){
+      a.coachId=av.athlete.coachId; a.coachName=av.athlete.coachName;
+      a.coachCode=av.athlete.coachCode; a.coachEmailKey=av.athlete.coachEmailKey;
+      a.updatedAt=Date.now();
+      users[a.email]=a; DB.set('users',users);
+      if(av.seen!==null){ currentUser.seenBilans=currentUser.seenBilans||{}; currentUser.seenBilans[a.email]=av.seen; }
+      try{ CLOUD.inscrireClientCoach(a.email,true).catch(()=>{}); }catch(e){}
+      let r=true;
+      try{ r=await CLOUD.pushOne(a.email,a); }catch(e){ r=false; }
+      if(r===false) refus=refus||'Le serveur a refusé le rattachement : '+nomCompletEleve(a)+' devra ressaisir ton code.';
+    }
+  }
+  saveUser();
+  try{ if((document.querySelector('.screen.active')||{}).id==='s-coach-home') loadCoachHome(); }catch(e){}
+  return refus||true;
 }
 // PURE. Un dossier VIDE : ni séance, ni bilan, ni mesure. C'est la coquille
 // d'un profil créé par erreur — un doublon de saisie — et rien d'autre.
@@ -40803,9 +40903,15 @@ async function deleteCoachProgTemplate(idx){
   // et ceux qui l'ont achete doivent le garder. On le dit avant, et la fiche
   // reapparait sous « Ma boutique », ou elle se retire de la vente.
   const _enBoutique=_cplEnVente(currentUser.coachPrograms[idx])&&estVendeur();
-  if(!await rcConfirm('Supprimer ce programme ?',
-    _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':null,
+  // BUILD 1869 : la confirmation nomme le modèle et dit qui l'utilise.
+  const _p=currentUser.coachPrograms[idx];
+  if(!_p) return;
+  const _n=athletesSurModele(_p).length;
+  if(!await rcConfirm('Supprimer « '+(_p.name||'Sans nom')+' » ?',
+    [_n?_n+' athlète'+(_n>1?'s l’utilisent':' l’utilise')+' (leur programme ne change pas).':'',
+     _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':''].filter(Boolean).join('\n')||null,
     'Supprimer')) return;
+  const _copie=JSON.parse(JSON.stringify(_p));
   // ⚠ UN PROGRAMME EN VENTE QU'ON SUPPRIME DOIT QUITTER LA VITRINE. Sans cette
   // ligne, la carte restait publiee dans coach_public : les athletes voyaient
   // toujours un bouton d'achat pour un programme qui n'existe plus, et rien du
@@ -40814,7 +40920,24 @@ async function deleteCoachProgTemplate(idx){
   currentUser.coachPrograms.splice(idx,1);
   saveUser();
   if(_vendait) CLOUD.pushProfilCoach(currentUser).catch(()=>{});
-  toast('Programme supprimé.');loadCoachProgramsList();
+  loadCoachProgramsList();
+  rcAnnulable({message:'« '+(_copie.name||'Sans nom')+' » supprimé.',defaire:()=>remettreModele(_copie,idx,_vendait)});
+}
+// PURE (sur la base locale). Les athlètes du coach sur ce modèle.
+function athletesSurModele(p){
+  if(!p||!p.id) return [];
+  const users=DB.get('users')||{};
+  return Object.values(users).filter(u=>u&&u.assignedProgramId===p.id&&(function(){ try{ return _estMonAthlete(u,currentUser); }catch(e){ return false; } })());
+}
+// Remet le modèle À SON INDEX, avec ses versions et son état de vente.
+function remettreModele(copie,idx,vendait){
+  const l=currentUser.coachPrograms=Array.isArray(currentUser.coachPrograms)?currentUser.coachPrograms:[];
+  if(l.some(x=>x&&x.id===copie.id)) return true;
+  l.splice(Math.max(0,Math.min(l.length,idx)),0,JSON.parse(JSON.stringify(copie)));
+  saveUser();
+  if(vendait) CLOUD.pushProfilCoach(currentUser).catch(()=>{});
+  try{ loadCoachProgramsList(); }catch(e){}
+  return true;
 }
 
 // ══ LA FICHE DE VENTE D'UN MODELE DU COACH ════════════════════════════════
@@ -42649,10 +42772,14 @@ function reporterPropagation(){
   document.querySelectorAll('#c4-prop input[data-a]').forEach(cb=>{ if(cb.checked&&!cb.disabled) (choix[cb.dataset.a]=choix[cb.dataset.a]||[]).push(Number(cb.dataset.o)); });
   const users=DB.get('users')||{};
   const pushes=[];
+  // BUILD 1869 : l'état d'avant de chaque athlète touché, pour « Annuler ».
+  const _avant=[];
   x.lignes.forEach((l,i)=>{
     const k=Object.keys(users).find(kk=>users[kk]&&users[kk].id===l.a.id);
     if(!k) return;
     const a=users[k];
+    _avant.push({k,sc:JSON.parse(JSON.stringify(a.sessions_config||null)),
+      id:a.assignedProgramId,genre:a.assignedProgramGenre,version:a.assignedProgramVersion});
     const ids=(choix[i]||[]).map(n=>l.res[n]&&l.res[n].op.id).filter(Boolean);
     if(ids.length){
       _pushSessionsHistory(a);
@@ -42669,8 +42796,29 @@ function reporterPropagation(){
   closeModal();
   _c4Prop=null;
   try{ renderPropagationEntree(); }catch(e){}
-  toastSync(ok,Promise.all(pushes),' Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est');
+  const _apres={};
+  _avant.forEach(v=>{ _apres[v.k]=JSON.stringify((users[v.k]||{}).sessions_config||null); });
+  toastSyncAnnulable(ok,Promise.all(pushes),'Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est',
+    ()=>defaireReport(_avant,_apres));
   return true;
+}
+// Remet chaque athlète tel qu'avant le report, SAUF celui dont le programme a
+// changé depuis (le coach l'a retouché) : on ne défait pas son travail.
+function defaireReport(avant,apres){
+  const us=DB.get('users')||{};
+  let n=0, saut=0;
+  for(const v of avant||[]){
+    const a=us[v.k];
+    if(!a) continue;
+    if(JSON.stringify(a.sessions_config||null)!==apres[v.k]){ saut++; continue; }
+    a.sessions_config=JSON.parse(JSON.stringify(v.sc));
+    a.assignedProgramId=v.id; a.assignedProgramGenre=v.genre; a.assignedProgramVersion=v.version;
+    a.updatedAt=Date.now(); us[v.k]=a; n++;
+    try{ CLOUD.pushOne(v.k,a).catch(()=>{}); }catch(e){}
+  }
+  DB.set('users',us);
+  try{ renderPropagationEntree(); }catch(e){}
+  return saut?(n+' remis, '+saut+' laissé'+(saut>1?'s':'')+' tel'+(saut>1?'s':'')+' : modifié'+(saut>1?'s':'')+' depuis le report.'):true;
 }
 
 // ── Appliquer un modèle depuis la fiche de l'athlète ────────────────────────
@@ -104434,16 +104582,32 @@ function savePlanCoach(){
   toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré '+ICO.coche,'le plan est');
 }
 async function supprimerPlanCoach(){
-  if(!await rcConfirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
+  const _c0=getOwnedClient(currentClientId);
+  const _qui=_c0?(String(_c0.fname||'').trim()||'cet athlète'):'cet athlète';
+  if(!await rcConfirm('Supprimer le plan alimentaire de '+_qui+' ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
+  // BUILD 1869 : l'objet entier, pour le remettre.
+  const _copie=(c.nutrition&&c.nutrition.plan)?JSON.parse(JSON.stringify(c.nutrition.plan)):null;
   if(c.nutrition) delete c.nutrition.plan;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _cplPlan=_cplCopie(null);
   renderPlanCoach();
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan supprimé','la suppression est');
+  const em=c.email;
+  toastSyncAnnulable(ok,CLOUD.pushOne(c.email,c),'Plan de '+_qui+' supprimé','la suppression est',()=>{
+    if(!_copie) return true;
+    const us=DB.get('users')||{};
+    const a=us[em];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste : rien n’a été remis.';
+    a.nutrition=a.nutrition||{};
+    a.nutrition.plan=JSON.parse(JSON.stringify(_copie));
+    a.updatedAt=Date.now(); us[em]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(em,a).catch(()=>{}); }catch(e){}
+    try{ if(currentClientId===a.id){ _cplPlan=_cplCopie(a.nutrition.plan); renderPlanCoach(); } }catch(e){}
+    return true;
+  });
 }
 
 // ══════════════ DIÈTE STRICTE : CONSULTATION, CÔTÉ ATHLÈTE ════════════════
@@ -106171,8 +106335,16 @@ async function supprimerRecette(id){
   const r=recettesMiennes().find(x=>x.id===id);
   if(!r) return false;
   if(!await rcConfirm('Supprimer « '+r.nom+' » ?','Ce qui est déjà dans un journal reste tel quel. Une ligne de plan garde ses dernières valeurs.','Supprimer')) return false;
+  const _copie=JSON.parse(JSON.stringify(r));
   recetteSupprimerLocal(id);
   renderRecettes();
+  // BUILD 1869 : la recette revient, avec son identifiant.
+  rcAnnulable({message:'« '+r.nom+' » supprimée',defaire:()=>{
+    const res=recetteEnregistrer(Object.assign({},_copie,{id}));
+    try{ recettesSynchroniser().catch(()=>{}); }catch(e){}
+    try{ renderRecettes(); }catch(e){}
+    return res&&res.ok?true:(res&&res.raison)||'La recette n’a pas pu être remise.';
+  }});
   return true;
 }
 function annulerRecette(){ _recEd=null; renderRecettes(); }

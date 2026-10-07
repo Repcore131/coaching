@@ -66099,6 +66099,60 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1869 : LES GESTES DU COACH SE DÉFONT ══
+    okA('rcAnnulable : double appui sur « Annuler » → defaire appelé une seule fois',async()=>{
+      let n=0;
+      const e=rcAnnulable({message:'Test',defaire:()=>{ n++; return true; }});
+      if(_rcAnnulable!==e) return _echec('pas en attente');
+      await rcAnnulerDernier(e); await rcAnnulerDernier(e); await rcAnnulerDernier();
+      if(n!==1) return _echec(n+' appels');
+      // Un nouveau toast ferme l'annulable sans le défaire.
+      let m=0; rcAnnulable({message:'T2',defaire:()=>{ m++; }}); toast('Autre chose');
+      await rcAnnulerDernier();
+      return m===0?true:_echec('défait par un autre toast');});
+    okA('Retirer un élève puis « Annuler » : même coachEmailKey, codes de nouveau actifs ; la question nomme l’élève',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sC=window.rcConfirm, sM=window._majActifDistant, sP=CLOUD.pushOne, sI=CLOUD.inscrireClientCoach,
+        sG=window.go, sL=window.loadCoachHome, sS=window.saveUser, sCid=currentClientId;
+      try{
+        currentUser={id:'coR',email:'cor@t.fr',role:'coach',clients:['aR'],studentCodes:[{codeId:'k1',token:'TK1',active:true,athleteEmail:'lea@t.fr',studentName:'Léa Moreau'}]};
+        const a={id:'aR',email:'lea@t.fr',role:'athlete',fname:'Léa',lname:'Moreau',coachId:'coR',coachName:'Kev',coachCode:'ABC',coachEmailKey:'cor@t,fr'};
+        const u={}; u[a.email]=a; DB.set('users',u);
+        currentClientId='aR';
+        let q=''; window.rcConfirm=async(t)=>{ q=String(t); return true; };
+        const tok=[]; window._majActifDistant=async(t,v)=>{ tok.push(t+':'+v); return true; };
+        CLOUD.pushOne=()=>Promise.resolve(true); CLOUD.inscrireClientCoach=()=>Promise.resolve(true);
+        window.go=()=>{}; window.loadCoachHome=()=>{}; window.saveUser=()=>true;
+        await confirmDeleteClient();
+        if(!/Retirer Léa Moreau de ton suivi \?/.test(q)) return _echec('question : '+q);
+        if(DB.get('users')['lea@t.fr'].coachEmailKey!==null) return _echec('pas retiré');
+        if(currentUser.studentCodes[0].active!==false) return _echec('code encore actif');
+        const r=await rcAnnulerDernier();
+        if(r!==true) return _echec('annulation : '+r);
+        const b=DB.get('users')['lea@t.fr'];
+        if(b.coachEmailKey!=='cor@t,fr'||b.coachId!=='coR') return _echec(JSON.stringify(b));
+        if(currentUser.studentCodes[0].active!==true) return _echec('code non réactivé');
+        return tok.join()==='TK1:false,TK1:true'?true:_echec(tok.join());
+      } finally {
+        currentUser=sU; if(sUs) DB.set('users',sUs); window.rcConfirm=sC; window._majActifDistant=sM; CLOUD.pushOne=sP; CLOUD.inscrireClientCoach=sI;
+        window.go=sG; window.loadCoachHome=sL; window.saveUser=sS; currentClientId=sCid;
+      }});
+    okA('Supprimer un modèle puis « Annuler » : remis au même index, même id ; la question nomme « PPL » et compte ses athlètes',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sC=window.rcConfirm, sS=window.saveUser, sL=window.loadCoachProgramsList;
+      try{
+        currentUser={id:'coM',email:'com@t.fr',role:'coach',coachPrograms:[{id:'p1',name:'A'},{id:'p2',name:'PPL',versions:[{v:1}]},{id:'p3',name:'C'}]};
+        const u={}; ['x','y','z'].forEach((n,i)=>{ u[n+'@t.fr']={id:n,email:n+'@t.fr',role:'athlete',coachId:'coM',assignedProgramId:i<3?'p2':'p1'}; });
+        DB.set('users',u);
+        let q='', d=''; window.rcConfirm=async(t,x)=>{ q=String(t); d=String(x||''); return true; };
+        window.saveUser=()=>true; window.loadCoachProgramsList=()=>{};
+        await deleteCoachProgTemplate(1);
+        if(q!=='Supprimer « PPL » ?') return _echec('question : '+q);
+        if(!/3 athlètes l’utilisent \(leur programme ne change pas\)/.test(d)) return _echec('détail : '+d);
+        if(currentUser.coachPrograms.some(p=>p.id==='p2')) return _echec('pas supprimé');
+        await rcAnnulerDernier();
+        const l=currentUser.coachPrograms;
+        return l[1]&&l[1].id==='p2'&&l[1].versions&&l.length===3?true:_echec(JSON.stringify(l));
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); window.rcConfirm=sC; window.saveUser=sS; window.loadCoachProgramsList=sL; }});
+
     // ══ BUILD 1868 : LE COACH DEMANDE DE COMPLÉTER UN BILAN ══
     ok('manquesBilan : sans photo → 3 vues ; deux photos → la troisième ; inscription sans poids → deb-weight',()=>{
       const t=Date.now();

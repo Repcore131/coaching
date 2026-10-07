@@ -909,9 +909,11 @@ function _toastCoachLarge(){
     return !!(a&&a.id==='s-coach-program'&&a.getAttribute('data-ctx')==='coach');
   }catch(e){ return false; }
 }
-function toast(msg,c='var(--green)',duree){
+function toast(msg,c='var(--green)',duree,action){
   const t=document.getElementById('toast');
   _rcToastLe=Date.now();
+  // BUILD 1869 : un nouveau message ferme l'annulable en cours, sans rien défaire.
+  if(!action) _rcAnnulable=null;
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
   // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
   // « var(--red) » héritent du court-circuit sans le savoir.
@@ -920,6 +922,17 @@ function toast(msg,c='var(--green)',duree){
   const poser=()=>{
     // Les marqueurs ICO.coche… deviennent des icones (01/10/2026).
     _texteIco(t,msg);
+    // BUILD 1869 : « Annuler » dans le toast. Bouton texte (rb-lien), sans
+    // agrandir la police ; le toast reçoit alors les touchers.
+    if(action&&typeof action.fn==='function'){
+      const b=document.createElement('button');
+      b.type='button'; b.className='rb-lien rc-toast-annuler';
+      b.style.marginLeft='12px'; b.style.font='inherit'; b.style.fontWeight='800';
+      b.textContent=action.lib||'Annuler';
+      b.onclick=(ev)=>{ try{ ev.stopPropagation(); }catch(e){} action.fn(); };
+      t.appendChild(b);
+      t.style.pointerEvents='auto';
+    } else t.style.pointerEvents='none';
     // PAS DE FILET DE COULEUR SUR LE COTE (charte du 26/09/2026) : l'erreur se
     // lit a son fond et a son cadre, le reste du temps le message est neutre.
     t.style.borderLeft='';
@@ -952,6 +965,7 @@ function toast(msg,c='var(--green)',duree){
     const _large=_toastCoachLarge();
     _toastMinuteur=setTimeout(()=>{
       t.style.opacity='0';
+      t.style.pointerEvents='none';
       t.style.transform=_large?'translateX(-50%) translateY(-40px)'
                               :'translateX(-50%) translateY(80px)';
       _toastMinuteur=null;
@@ -974,6 +988,47 @@ function toast(msg,c='var(--green)',duree){
   } else poser();
 }
 
+// ══ BUILD 1869 : LES GESTES DU COACH SE DÉFONT ══════════════════════════════
+// rcAnnulable({message, defaire, duree=8000}) : le toast porte « Annuler ». Un
+// seul annulable à la fois : un nouveau toast ferme le précédent sans rien
+// défaire. defaire() peut être asynchrone ; s'il rend une chaîne, c'est un
+// refus à dire en clair, sinon « Annulé ». Double appui : un seul defaire().
+let _rcAnnulable=null;
+const RC_ANNULABLE_MS=8000;
+function rcAnnulable(o){
+  const x=o||{};
+  if(typeof x.defaire!=='function'){ toast(x.message||''); return null; }
+  const etat={defaire:x.defaire,fait:false};
+  toast(x.message||'',x.couleur||'var(--green)',x.duree>0?x.duree:RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+  _rcAnnulable=etat;
+  return etat;
+}
+function rcAnnulerDernier(etat){
+  const a=etat||_rcAnnulable;
+  if(!a||a.fait) return Promise.resolve(false);
+  a.fait=true;
+  if(_rcAnnulable===a) _rcAnnulable=null;
+  let r;
+  try{ r=a.defaire(); }catch(e){ toast('Impossible d’annuler : '+(e&&e.message||'erreur'),'var(--red)'); return Promise.resolve(false); }
+  return Promise.resolve(r).then(v=>{
+    if(typeof v==='string'){ toast(v,'var(--orange)',6000); return false; }
+    toast('Annulé'); return true;
+  },e=>{ toast('Impossible d’annuler : '+(e&&e.message||'erreur'),'var(--red)'); return false; });
+}
+// toastSync, avec « Annuler ». Un envoi qui échoue (hors ligne) garde
+// l'annulation : on défait en local, la file de renvoi rejouera.
+function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire){
+  if(!localOk) return toastSync(localOk,promesse,succes,perdu);
+  const etat=rcAnnulable({message:succes,defaire});
+  return Promise.resolve(promesse).then(()=>true,e=>{
+    if(etat&&!etat.fait&&_rcAnnulable===etat){
+      const detail=(e&&e._actionnable)?e.message:null;
+      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+      _rcAnnulable=etat;
+    } else toastSync(localOk,Promise.reject(e),succes,perdu);
+    return false;
+  });
+}
 // ══ LE RETOUR D'ACTION : CHARGEMENT, ÉCHEC, CONFIRMATION ════════════════════
 //
 // LA RÈGLE : quiconque touche un bouton doit savoir, sans deviner, que quelque
