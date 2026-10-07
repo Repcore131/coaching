@@ -1697,7 +1697,7 @@ function loadSteps(containerId='steps-content',opts){
       
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Cette semaine</span>
+          <span class="t-section" style="margin:0">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px color-mix(in srgb,var(--red) 90%,transparent)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--text) 5%,transparent)">${bars}</div>
@@ -1710,7 +1710,7 @@ function loadSteps(containerId='steps-content',opts){
       
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 5.5%,transparent);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div class="t-section" style="margin-bottom:8px">Moyenne hebdomadaire</div>
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:var(--halo-3),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">

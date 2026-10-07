@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1893';
+window.RC_BUILD='1894';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1893.css">
+<link rel="stylesheet" href="./rc-style.1894.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1893.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1894.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1601,7 +1601,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Tunnel commercial</h1>
+      <h1 class="t-page">Tunnel commercial</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Relancer les personnes qui n’ont pas encore utilisé RepCore. Quatre relances au plus ; la quatrième ferme l’accès.</p>
       <div id="tun-body"></div>
     </div>
@@ -1620,7 +1620,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Ouvrir, fermer un accès</h1>
+      <h1 class="t-page">Ouvrir, fermer un accès</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Fermer n’efface rien : la personne retrouve ses séances, son programme et son historique dès que tu rouvres.</p>
       <div id="acces-corps"></div>
     </div>
@@ -1654,7 +1654,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Qui regarder cette semaine</h1>
+      <h1 class="t-page">Qui regarder cette semaine</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">La santé d’abord, puis la fatigue, les charges, l’assiduité. À signal égal, le plus ancien d’abord. Touche une ligne pour ouvrir la fiche à cet endroit.</p>
       <div id="ld-corps"></div>
     </div>
@@ -1668,7 +1668,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Les contacts de ma page</h1>
+      <h1 class="t-page">Les contacts de ma page</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Ceux qui ont touché « Ça m’intéresse » sur ta page. Répondre, fixer le premier échange et encaisser restent à toi : sans réponse sous 48 h, c’est toi qu’on relance.</p>
       <div id="pr-corps"></div>
     </div>
@@ -1720,7 +1720,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Relances automatiques</h1>
+      <h1 class="t-page">Relances automatiques</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Ce qui peut partir sans toi, une fois par jour vers 10 h 30. Tout est coupé tant que tu n’allumes pas une ligne.</p>
       <div id="rel-corps"></div>
     </div>
@@ -1734,7 +1734,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">À relancer</h1>
+      <h1 class="t-page">À relancer</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Assiduité seulement. Une douleur ou un drapeau rouge n'arrive jamais ici : il garde sa ligne dans « Mes notifications ».</p>
       <div id="cfr-body"></div>
     </div>
@@ -1749,7 +1749,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Ton portefeuille</h1>
+      <h1 class="t-page">Ton portefeuille</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Treize mois glissants, sur ce qui a été enregistré dans RepCore. Aucun montant, aucune comparaison à d'autres coachs.</p>
       <div id="cact-body"></div>
     </div>
@@ -1770,7 +1770,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px">
         <img src="./icons/logo.webp" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
+          <div class="t-section is-action" style="margin-bottom:2px">COACH</div>
           <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="ch-name"></div>
           <span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;display:block;margin-top:2px"></span>
         </div>
@@ -3193,7 +3193,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Assigner un programme</h1>
+      <h1 class="t-page">Assigner un programme</h1>
       <p class="sub" style="font-size:var(--fs-sm);margin-bottom:4px;line-height:1.6">Sélectionne les athlètes qui recevront ce programme. La version H ou F est choisie automatiquement selon leur genre.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
         <button onclick="cpaSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
@@ -3218,7 +3218,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Décharge groupée</h1>
+      <h1 class="t-page">Décharge groupée</h1>
       <!-- B1.10 — LES DEUX GESTES, ET CE QUI LES DISTINGUE. Le texte annoncait
            « Aucun decochage automatique : c'est toi qui la retires ensuite »,
            alors que le bouton RETIRER pose par N4.3 fait exactement cela, sur
@@ -3667,8 +3667,7 @@ const COACH_PHOTO='icons/coach.jpg';
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
       <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:4px">
-        <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-        <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.05;font-weight:400;letter-spacing:1px"></h1>
+        <h1 id="clh-greeting" class="t-page"></h1>
         <p id="clh-phrase" style="margin-top:2px;font-size:var(--fs-sm);line-height:1.4;color:var(--text-dim)"></p>
         <!-- UNE SEULE LIGNE, SOUS LA CITATION (Kevin, 28/09/2026) : « Un souci ?
              Contacte ton coach » puis « Réglages », côte à côte. -->
@@ -4054,7 +4053,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </label>
       </div>
       <div class="card atp-infos" style="margin-bottom:14px">
-        <div class="atp-bandeau">Mes informations</div>
+        <div class="atp-bandeau t-section">Mes informations</div>
         <div style="display:flex;gap:12px;margin-bottom:14px">
           <div style="flex:1">
             <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Prénom</label>
@@ -4108,7 +4107,7 @@ const COACH_PHOTO='icons/coach.jpg';
            et les montre comme avant. -->
       <details class="card atp-med" id="atp-med" style="margin-bottom:14px">
         <summary class="atp-med-tete">
-          <span class="atp-bandeau">Mes informations médicales</span>
+          <span class="atp-bandeau t-section">Mes informations médicales</span>
           <span class="atp-med-d">Tension, analyses, SOPK, grossesse, produits améliorant la performance</span>
         </summary>
         <div class="atp-med-corps">
@@ -4172,7 +4171,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Un médecin t’a-t-il diagnostiqué l’un de ces états ? (SOPK, thyroïde…)</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
         <div id="atp-hormo-bloc" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px">Statut hormonal</div>
+          <div class="t-section" style="margin-bottom:8px">Statut hormonal</div>
           <div id="atp-hormo-opts" style="display:flex;flex-direction:column;gap:8px"></div>
           <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="atp-hormo-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
@@ -4914,7 +4913,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-bilan-choice" class="screen" style="justify-content:safe center;padding:32px 24px;overflow-y:auto">
   <div class="anim-in">
     <div style="text-align:center;margin-bottom:28px">
-      <h1 style="margin-bottom:0;font-size:var(--fs-2xl);letter-spacing:3px">QUEL BILAN ?</h1>
+      <h1 class="t-page" style="margin-bottom:0">QUEL BILAN ?</h1>
     </div>
 
     <!-- Bilan de départ (1ère visite) -->
@@ -4940,7 +4939,7 @@ const COACH_PHOTO='icons/coach.jpg';
          le bilan coaching, sa frequence et le compte a rebours. -->
     <!-- Sélecteur fréquence -->
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Fréquence des bilans</div>
+      <div class="t-section">Fréquence des bilans</div>
       <div style="display:flex;gap:8px" role="group" aria-label="Fréquence des bilans">
         <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Chaque semaine</button>
         <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2)">Toutes les 2 sem.</button>
@@ -5071,7 +5070,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- COMPLÉMENTS ALIMENTAIRES -->
 <div id="s-supplements" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="retourDe('s-supplements','s-nutrition')">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10.5 20.5 3.5 13.5a5 5 0 1 1 7-7l7 7a5 5 0 1 1-7 7z"/><line x1="14" y1="14" x2="10" y2="10"/></svg>Compléments</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-supplements','s-nutrition')">←</button><span class="topbar-title">Compléments</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="supp-table-content"></div>
@@ -5338,7 +5337,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CAFÉINE JOURNAL -->
 <div id="s-caffeine" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="retourDe('s-caffeine','s-nutrition')">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>Caféine</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-caffeine','s-nutrition')">←</button><span class="topbar-title">Caféine</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="caff-date-nav" style="margin-bottom:12px"></div>
@@ -5450,7 +5449,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <text x="23" y="89" font-family="Montserrat,sans-serif" font-size="7.5" font-weight="800" fill="rgba(255,255,255,.85)" aria-hidden="true">REC</text>
           </svg>
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Nouveau canal</div>
+            <div class="t-section" style="margin-bottom:4px">Nouveau canal</div>
             <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">CORRECTIONS TECHNIQUES</div>
             <p style="font-size:var(--fs-sm);color:rgba(255,255,255,.72);line-height:1.6;margin:0">Envoie tes vidéos ici <strong style="color:var(--text)">plutôt que sur Instagram</strong>. Ton coach te répond avec des repères à la seconde exacte, consultables à tout moment : plus efficace qu'un message perdu dans les DMs.</p>
           </div>
@@ -5927,8 +5926,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- LES EN-TETES DE LA MAQUETTE (Kevin, 24/09/2026) : un trait, le
              titre en deux couleurs, une ligne espacee dessous, et le menu de
              periode a droite — sanRendre le pose dans #ls-per-pas. -->
-        <div class="ls-trait" style="background:var(--red);box-shadow:0 0 12px color-mix(in srgb,var(--red) 90%,transparent)"></div>
-        <div class="ls-titres"><span class="ls-titre">MES <span style="color:#ff2d2d">PAS</span></span><span class="ls-sous">Suivi quotidien</span></div>
+        <div class="ls-titres"><div class="t-page ls-titre">MES <span style="color:#ff2d2d">PAS</span></div><span class="t-section ls-sous">Suivi quotidien</span></div>
         <div class="ls-per" id="ls-per-pas"></div>
       </div>
       <div id="lifestyle-steps-content"></div>
@@ -5936,9 +5934,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="divider ls-sep"></div>
       <section id="ls-sommeil" class="ls-sec">
       <div class="ls-sec-tete">
-        <div class="ls-trait" style="background:#3b82f6;box-shadow:0 0 12px rgba(59,130,246,.9)"></div>
         <span class="ls-lune" style="color:#4f8ff7;filter:drop-shadow(0 0 8px rgba(79,143,247,.8))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-        <div class="ls-titres"><span class="ls-titre">MON <span style="color:#4f8ff7">SOMMEIL</span></span><span class="ls-sous">Récupération &amp; repos</span></div>
+        <div class="ls-titres"><div class="t-page ls-titre">MON <span style="color:#4f8ff7">SOMMEIL</span></div><span class="t-section ls-sous">Récupération &amp; repos</span></div>
         <div class="ls-per" id="ls-per-sommeil"></div>
       </div>
       <div id="lifestyle-sleep-content"></div>
@@ -6307,5 +6304,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1893.js"></script>
+<script src="./rc-core.1894.js"></script>
 </body></html>

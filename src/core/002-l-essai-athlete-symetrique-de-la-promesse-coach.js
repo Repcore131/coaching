@@ -1378,7 +1378,7 @@ function ouvrirEcranAbonnement(){
 function _rendreReglagesSections(){
   const u=currentUser; if(!u) return false;
   const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
-  const tit=x=>'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">'+escapeHtml(x)+'</div>';
+  const tit=x=>'<div class="t-carte" style="margin-bottom:8px">'+escapeHtml(x)+'</div>';
   const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
   const zn=document.getElementById('cr-nutrition');
   if(zn){

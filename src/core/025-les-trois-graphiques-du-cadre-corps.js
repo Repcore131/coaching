@@ -585,7 +585,7 @@ function _htmlCorpsCadre(c,o){
       +' onclick="corpsMode(\''+k+'\')">'+escapeHtml(lib)+'</button>';
   };
   const tete='<div class="cc-corps-h">'
-    +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
+    +'<span class="cc-corps-t t-section">'+escapeHtml(titre)+'</span>'
     +(o.modes===false?''
       :('<span class="cc-corps-vue cc-corps-lec" role="group" aria-label="Ce que dit la teinte">'
         +bMode('evolution','Évolution','Ce que ses tours ont fait depuis leur dernier relevé')

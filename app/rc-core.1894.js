@@ -3211,7 +3211,7 @@ function ouvrirEcranAbonnement(){
 function _rendreReglagesSections(){
   const u=currentUser; if(!u) return false;
   const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
-  const tit=x=>'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">'+escapeHtml(x)+'</div>';
+  const tit=x=>'<div class="t-carte" style="margin-bottom:8px">'+escapeHtml(x)+'</div>';
   const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
   const zn=document.getElementById('cr-nutrition');
   if(zn){
@@ -9165,9 +9165,9 @@ function htmlSelecteurComptes(opts){
   };
   // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le
   // compte coach. Un groupe vide ne s'affiche pas.
-  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe">${titre}</div>`+liste.map(ligne).join('')):'';
+  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe t-section">${titre}</div>`+liste.map(ligne).join('')):'';
   return `<div id="cpt-selecteur">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>
+    <div class="t-section">Mes comptes</div>
     ${groupe('Compte athlète',l.filter(c=>c.role!=='coach'))}
     ${groupe('Compte coach',l.filter(c=>c.role==='coach'))}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>
@@ -21219,7 +21219,7 @@ function _htmlPourquoiIci(c){
   if(!l.length) return '';
   const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Pourquoi cet athlète est ici</div>
+    <div class="t-section">Pourquoi cet athlète est ici</div>
     ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:4px 0">
       <span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:900;color:${x.gravite>=7?'var(--red)':'var(--sub)'};min-width:16px">${x.gravite}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">${escapeHtml(x.motif)}</span>
@@ -26428,8 +26428,8 @@ async function renderEcranAmis(){
     +(mp?'<p class="am-note">Tes potes te trouvent sous <b>@'+escapeHtml(mp)+'</b>.</p>'
         :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
     +'<div id="am-recues"></div>'
-    +'<div class="am-lab">La semaine</div><div id="am-classement"></div>'
-    +'<div class="am-lab">Ceux que tu suis</div><div id="am-liste"></div>';
+    +'<div class="am-lab t-section">La semaine</div><div id="am-classement"></div>'
+    +'<div class="am-lab t-section">Ceux que tu suis</div><div id="am-liste"></div>';
   _rendreListeEcranAmis(amisListe());
   try{ await amisSynchroniser(true); }catch(e){}
   const [l,moi]=await Promise.all([_amisAvecProfils(),_moiClassement(u)]);
@@ -27571,7 +27571,7 @@ function renderPropositionsCanal(){
     +'<div class="cp-x">'+E(x.texte)+'</div><div class="cp-b">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="utiliserProposition('+i+')">Modifier et publier</button>'
     +'<button type="button" class="cp-lien" onclick="utiliserProposition('+i+',true)">Programmer</button></div></div>';
-  z.innerHTML='<div class="cp"><div class="cp-h"><span>Cette semaine, tu peux publier…</span>'
+  z.innerHTML='<div class="cp"><div class="cp-h"><span class="t-section" style="margin:0">Cette semaine, tu peux publier…</span>'
     +'<button type="button" class="cp-lien" onclick="passerPropositions()">Passer</button></div>'
     +carte(p,0)
     +(_cpListe.length>1?'<details class="cp-autres"><summary>'+(_cpListe.length-1)+' autre'+(_cpListe.length>2?'s':'')+' idée'+(_cpListe.length>2?'s':'')+'</summary>'
@@ -30947,7 +30947,7 @@ function _rendreFil(garderPosition){
     +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
       +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
   const ferme=f.erreur==='acces';
-  z.innerHTML=tete+'<div class="msg-fil-titre">'+escapeHtml(f.nom)+'</div>'
+  z.innerHTML=tete+'<div class="msg-fil-titre t-carte">'+escapeHtml(f.nom)+'</div>'
     +'<div class="msg-liste" id="msg-liste">'+corps+'</div>'
     +(ferme?'':'<div class="msg-saisie">'
       +'<textarea id="msg-texte" maxlength="'+MSG_TEXTE_MAX+'" rows="3" placeholder="Ton message" oninput="_msgCompteur()"></textarea>'
@@ -31048,27 +31048,27 @@ function renderRelancesCoach(){
   const sem=_relJournal?relCetteSemaine(_relJournal):null;
   const partis=sem?sem.filter(e=>e.statut==='parti'):[];
   let h='<div class="rel-frein'+(pause?' rel-frein-on':'')+'">'
-    +'<div class="rel-frein-l"><b>Je reprends la main</b><span>'
+    +'<div class="rel-frein-l"><b class="t-carte">Je reprends la main</b><span>'
     +(pause?'Rien ne part. Tes règles sont gardées telles quelles.':'Coupe tout, tout de suite, y compris ce qui allait partir aujourd’hui.')+'</span></div>'
     +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
   // LES ATHLÈTES À RISQUE, avant tout : un message proposé, jamais envoyé seul.
   try{ h+=_htmlRisqueRelances(); }catch(e){}
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
-  h+='<h2 class="rel-h">Cette semaine</h2>';
+  h+='<h2 class="rel-h t-section">Cette semaine</h2>';
   if(!sem) h+=etatChargement(2);
   else if(!sem.length) h+=emptyState('','Rien n’est parti ces sept derniers jours.',null,null,'padding:12px 0');
   else h+='<div class="rel-sem-n">'+partis.length+' message'+(partis.length>1?'s':'')+' parti'+(partis.length>1?'s':'')
     +(sem.length>partis.length?', '+(sem.length-partis.length)+' pas parti'+(sem.length-partis.length>1?'s':''):'')+'</div>'
     +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
   // LES RÈGLES : une ligne par signal, dans l'ordre de « À traiter ».
-  h+='<h2 class="rel-h">Les règles</h2>'
+  h+='<h2 class="rel-h t-section">Les règles</h2>'
     +'<p class="sub rel-p">Un message par athlète sur sept jours au plus, tous signaux confondus. Le texte par défaut est celui de tes relances WhatsApp ; tu peux écrire le tien, il est toujours précédé du prénom. Une ligne que tu reportes dans « Mes notifications » ne part pas.</p>';
   // Les cinq réglables d'abord, puis les onze qui ne le seront jamais : le
   // coach règle en haut, et lit en bas pourquoi le reste n'y est pas.
   const lignes=RELANCE_LIGNES.filter(l=>l.auto).concat(RELANCE_LIGNES.filter(l=>!l.auto));
   for(const l of lignes){
     if(!l.auto){
-      if(l===lignes.find(x=>!x.auto)) h+='<h2 class="rel-h">Jamais automatiques</h2>';
+      if(l===lignes.find(x=>!x.auto)) h+='<h2 class="rel-h t-section">Jamais automatiques</h2>';
       h+='<div class="rel-l rel-l-off"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
         +'<div class="rel-l-r">'+escapeHtml(l.raison)+'</div></div>';
       continue;
@@ -32198,7 +32198,7 @@ function renderTodoBlock(clients){
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
   el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
-      <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
+      <span class="t-section is-action" style="margin:0">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
@@ -33742,7 +33742,7 @@ function _actLibMois(cle){
 }
 function _actCarte(titre,corps,note){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:10px">${escapeHtml(titre)}</div>
+    <div class="t-section">${escapeHtml(titre)}</div>
     ${corps}
     ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${note}</div>`:''}
   </div>`;
@@ -35515,8 +35515,7 @@ function _htmlInactifs(liste,maintenant){
     +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
-    +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
-    +'letter-spacing:2.4px">Inactifs</span>'
+    +'<span class="t-section" style="margin:0">Inactifs</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
@@ -62704,7 +62703,7 @@ function _htmlCorpsCadre(c,o){
       +' onclick="corpsMode(\''+k+'\')">'+escapeHtml(lib)+'</button>';
   };
   const tete='<div class="cc-corps-h">'
-    +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
+    +'<span class="cc-corps-t t-section">'+escapeHtml(titre)+'</span>'
     +(o.modes===false?''
       :('<span class="cc-corps-vue cc-corps-lec" role="group" aria-label="Ce que dit la teinte">'
         +bMode('evolution','Évolution','Ce que ses tours ont fait depuis leur dernier relevé')
@@ -76965,7 +76964,7 @@ function _rendreUniteReglages(){
   const z=document.getElementById('cr-unite');
   if(!z||!currentUser) return false;
   const u=uniteCharge(currentUser);
-  z.innerHTML='<div class="cr-unite"><label for="cr-unite-sel">Unité des charges</label>'
+  z.innerHTML='<div class="cr-unite"><label class="t-carte" for="cr-unite-sel">Unité des charges</label>'
     +'<select id="cr-unite-sel" onchange="choisirUnite(this.value)">'
     +'<option value="kg"'+(u==='kg'?' selected':'')+'>Kilos (kg)</option>'
     +'<option value="lb"'+(u==='lb'?' selected':'')+'>Livres (lb)</option></select>'
@@ -82679,7 +82678,7 @@ function _updateBilanCountdown(){
     :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
   cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,var(--surface-0) 60%);border:1px solid color-mix(in srgb,var(--red) 22%,transparent);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px color-mix(in srgb,var(--red) 7%,transparent),0 6px 20px rgba(0,0,0,.55)">
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 95%,transparent),color-mix(in srgb,var(--red) 15%,transparent),transparent)"></div>
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:4px">Prochain bilan</div>
+    <div class="t-section is-action" style="margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
     <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
@@ -88803,7 +88802,7 @@ function htmlHabitudes(u,opts){
   const auj=localISODate(new Date());
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Aujourd'hui</span>
+      <span class="t-section" style="margin:0">Aujourd'hui</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">un appui, c'est tout</span>
     </div>
     <div style="display:flex;gap:8px">
@@ -97267,7 +97266,7 @@ function _htmlRirMoyen(c){
     }
   }
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité moyenne · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
+    <div class="t-section" style="margin-bottom:4px">Intensité moyenne · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}<span style="color:var(--sub)"> répétition${moy>=2?'s':''} en réserve</span>${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans intensité notée, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }
@@ -103841,7 +103840,7 @@ function _renderStrictDiet(){
          plus en image. -->
     ${!planActif(currentUser)?`
     <div style="margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div class="t-section" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3);padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
@@ -108326,7 +108325,7 @@ function renderRecettes(){
       ?'Tes recettes, partagées à tous tes athlètes. Ajoute-les à un repas du plan, ou laisse-les dans leur recherche d’aliments.'
       :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
     +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
-    +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
+    +'<div class="rct-sec t-section">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
     +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):emptyState('','Aucune recette pour l’instant.',null,null,'padding:12px 0'))
     +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
 }
@@ -114955,7 +114954,7 @@ function _htmlPlanResumeCoach(c){
   });
   if(!planActif(c)){
     return `<div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div class="t-section" style="margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun plan composé. Tu peux poser un squelette de repas et deux catalogues de sources interchangeables : leurs grammages se calculent tout seuls pour retomber sur les macros que tu viens de fixer.</div>
       ${bouton('COMPOSER LE PLAN')}
     </div>`;
@@ -114966,7 +114965,7 @@ function _htmlPlanResumeCoach(c){
   let alertes=[];
   try{ alertes=planAlertes(plan,c); }catch(e){}
   return `<div style="margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+    <div class="t-section" style="margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
     <div style="font-size:var(--fs-xs);color:#ccc;line-height:1.7">
       ${nLignes} ligne${nLignes>1?'s':''} de repas · ${nMarq} source${nMarq>1?'s':''} au choix · catalogues ${nP} protéines / ${nC} glucides${plan.avecComplements?' · avec compléments':''}
     </div>
@@ -120379,7 +120378,7 @@ function _htmlBlocSupplements(list,avant){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px">
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
-        <h3 style="margin:0">Mes compléments</h3>
+        <h3 class="t-section" style="margin:0">Mes compléments</h3>
       </div>
       <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ Ajouter</button>
     </div>
@@ -121988,7 +121987,7 @@ function _renderCaffeineEmbedded(){
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
+      <h3 class="t-section is-action" style="margin:0;--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
     </div>
     ${_bandeauJour('caff-embed-date-input',date,'_caffEmbedAllerJour',{avecFleches:true,prev:auFond?null:prevStr,next:isToday?null:nextStr,retention:CAFF_RETENTION_JOURS,libelle:dateLbl})}
     ${_renderCaffeineBlock(entries,totalMg,thr,'embedded',date,_wEst,isToday,dateLbl,wKg)}
@@ -127288,7 +127287,7 @@ function loadSteps(containerId='steps-content',opts){
       
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Cette semaine</span>
+          <span class="t-section" style="margin:0">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px color-mix(in srgb,var(--red) 90%,transparent)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--text) 5%,transparent)">${bars}</div>
@@ -127301,7 +127300,7 @@ function loadSteps(containerId='steps-content',opts){
       
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 5.5%,transparent);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div class="t-section" style="margin-bottom:8px">Moyenne hebdomadaire</div>
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:var(--halo-3),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
@@ -133678,7 +133677,7 @@ function _svMethodes(u,quoi){
   const nuit=(quoi==='sommeil');
   return '<div class="san-import sv-meth">'
     +'<div class="sv-meth-tete"><span class="sv-meth-ico">'+(nuit?SAN_ICO.dormeur:SAN_ICO.histo)+'</span>'
-      +'<div><h3>'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
+      +'<div><h3 class="t-carte">'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
       +'<span>Choisis la méthode qui te convient</span></div></div>'
     +'<div class="sv-meth-g">'
       +_svTuileSync(u,quoi)
@@ -134801,11 +134800,11 @@ function loadSleep(containerId='sleep-content',user,opts){
           retention:STEPS_RETENTION_JOURS})}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
           <div>
-            <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
+            <div data-legende style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
             <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,var(--bg),var(--bg));border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
-            <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
+            <div data-legende style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
             <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,var(--bg),var(--surface-0));border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
@@ -134821,7 +134820,7 @@ function loadSleep(containerId='sleep-content',user,opts){
       
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Cette semaine</span>
+          <span class="t-section" style="margin:0">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--green);vertical-align:middle;box-shadow:0 0 6px color-mix(in srgb,var(--green) 90%,transparent)"></span> 7-9H</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--text) 5%,transparent)">${bars}</div>
@@ -134834,7 +134833,7 @@ function loadSleep(containerId='sleep-content',user,opts){
       <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 5%,transparent);pointer-events:none"></div>
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
-        <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div class="t-section" style="margin-bottom:8px">Moyenne hebdomadaire</div>
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;--halo-c:${weekAvg?avgColor:'rgba(255,255,255,.4)'};text-shadow:var(--halo-3),0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'-'}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">

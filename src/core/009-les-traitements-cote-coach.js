@@ -802,7 +802,7 @@ function _htmlPourquoiIci(c){
   if(!l.length) return '';
   const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Pourquoi cet athlète est ici</div>
+    <div class="t-section">Pourquoi cet athlète est ici</div>
     ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:4px 0">
       <span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:900;color:${x.gravite>=7?'var(--red)':'var(--sub)'};min-width:16px">${x.gravite}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">${escapeHtml(x.motif)}</span>

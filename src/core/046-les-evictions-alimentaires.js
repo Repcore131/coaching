@@ -2007,7 +2007,7 @@ function _htmlBlocSupplements(list,avant){
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px">
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
-        <h3 style="margin:0">Mes compléments</h3>
+        <h3 class="t-section" style="margin:0">Mes compléments</h3>
       </div>
       <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ Ajouter</button>
     </div>

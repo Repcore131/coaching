@@ -961,7 +961,7 @@ function _renderStrictDiet(){
          plus en image. -->
     ${!planActif(currentUser)?`
     <div style="margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div class="t-section" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3);padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->

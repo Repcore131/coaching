@@ -1477,7 +1477,7 @@ function _htmlPlanResumeCoach(c){
   });
   if(!planActif(c)){
     return `<div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div class="t-section" style="margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun plan composé. Tu peux poser un squelette de repas et deux catalogues de sources interchangeables : leurs grammages se calculent tout seuls pour retomber sur les macros que tu viens de fixer.</div>
       ${bouton('COMPOSER LE PLAN')}
     </div>`;
@@ -1488,7 +1488,7 @@ function _htmlPlanResumeCoach(c){
   let alertes=[];
   try{ alertes=planAlertes(plan,c); }catch(e){}
   return `<div style="margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
+    <div class="t-section" style="margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
     <div style="font-size:var(--fs-xs);color:#ccc;line-height:1.7">
       ${nLignes} ligne${nLignes>1?'s':''} de repas · ${nMarq} source${nMarq>1?'s':''} au choix · catalogues ${nP} protéines / ${nC} glucides${plan.avecComplements?' · avec compléments':''}
     </div>

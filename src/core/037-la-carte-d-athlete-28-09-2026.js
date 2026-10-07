@@ -2219,7 +2219,7 @@ function _htmlRirMoyen(c){
     }
   }
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité moyenne · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
+    <div class="t-section" style="margin-bottom:4px">Intensité moyenne · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}<span style="color:var(--sub)"> répétition${moy>=2?'s':''} en réserve</span>${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans intensité notée, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }

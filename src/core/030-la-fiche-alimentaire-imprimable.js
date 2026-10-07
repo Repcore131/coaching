@@ -1749,7 +1749,7 @@ function _rendreUniteReglages(){
   const z=document.getElementById('cr-unite');
   if(!z||!currentUser) return false;
   const u=uniteCharge(currentUser);
-  z.innerHTML='<div class="cr-unite"><label for="cr-unite-sel">Unité des charges</label>'
+  z.innerHTML='<div class="cr-unite"><label class="t-carte" for="cr-unite-sel">Unité des charges</label>'
     +'<select id="cr-unite-sel" onchange="choisirUnite(this.value)">'
     +'<option value="kg"'+(u==='kg'?' selected':'')+'>Kilos (kg)</option>'
     +'<option value="lb"'+(u==='lb'?' selected':'')+'>Livres (lb)</option></select>'

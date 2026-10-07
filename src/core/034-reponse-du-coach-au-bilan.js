@@ -2442,7 +2442,7 @@ function htmlHabitudes(u,opts){
   const auj=localISODate(new Date());
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Aujourd'hui</span>
+      <span class="t-section" style="margin:0">Aujourd'hui</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">un appui, c'est tout</span>
     </div>
     <div style="display:flex;gap:8px">

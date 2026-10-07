@@ -1,0 +1,434 @@
+{
+ "styles": {
+  "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)": [
+   "s-client-home « Bonsoir, Léa. »",
+   "s-bilan-choice « QUEL BILAN ? »",
+   "s-lifestyle « MES »",
+   "feuille-cycle « Bonsoir, Léa. »",
+   "barre-onglets « Bonsoir, Léa. »",
+   "s-coach-home « MES ATHLÈTES »",
+   "s-coach-lundi « Qui regarder cette semaine »",
+   "s-coach-relances « Relances automatiques »",
+   "s-coach-prospects « Les contacts de ma page »",
+   "s-coach-activite « Ton portefeuille »",
+   "s-coach-file « À relancer »"
+  ],
+  "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)": [
+   "s-client-home « Ton point du jour »",
+   "s-bilan-choice « Prochain bilan »",
+   "s-nutrition « Caféine »",
+   "s-progress « Pesée du jour »",
+   "feuille-cycle « Ton point du jour »",
+   "barre-onglets « Ton point du jour »",
+   "s-coach-home « COACH »",
+   "s-coach-client « Évolution élève numéro 4 »"
+  ],
+  "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)": [
+   "s-bilan-choice « Fréquence des bilans »",
+   "s-nutrition « Mes compléments »",
+   "s-videos « Nouveau canal »",
+   "s-lifestyle « Suivi quotidien »",
+   "s-session-manager « Se motiver »",
+   "s-athlete-profile « Mes informations »",
+   "s-client-reglages « Célébrations »",
+   "s-messages « Note épinglée pour ton coach »",
+   "s-supplements « Mes compléments »",
+   "s-steps « Cette semaine »",
+   "s-sleep « Cette semaine »",
+   "s-recettes « Mes recettes »",
+   "s-client-amis « La semaine »",
+   "s-coach-home « Inactifs »",
+   "s-coach-client « Pourquoi cet athlète est ici »",
+   "s-coach-relances « Cette semaine »",
+   "s-coach-activite « Athlètes actifs par mois »",
+   "s-coach-canal « Cette semaine, tu peux publier… »"
+  ],
+  "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)": [
+   "s-nutrition « Nutrition »",
+   "s-videos « Mes corrections »",
+   "s-lifestyle « Lifestyle »",
+   "s-progress « Évolution »",
+   "s-canal « Annonces »",
+   "s-session-manager « Mes séances »",
+   "s-historique-seances « Mes séances »",
+   "s-charges « Charges articulaires »",
+   "s-athlete-profile « Mon profil »",
+   "s-client-reglages « Réglages »",
+   "s-messages « Mon coach »",
+   "s-supplements « Compléments »",
+   "s-steps « Mes pas »",
+   "s-sleep « Mon sommeil »",
+   "s-recettes « Recettes »",
+   "s-client-amis « Mes amis »",
+   "s-workout « Jambes »",
+   "s-coach-client « Léa »",
+   "s-coach-lundi « Le point du lundi »",
+   "s-coach-messages « Messages »",
+   "s-coach-programs « Mes programmes »",
+   "s-coach-banque « Banque d'exercices »",
+   "s-coach-relances « Relances »",
+   "s-coach-prospects « Ma page »",
+   "s-coach-activite « Activité »",
+   "s-protocoles « Protocoles »",
+   "s-coach-canal « Mes annonces »",
+   "s-coach-file « Reprise »"
+  ],
+  "Montserrat | 14px | 800 | none | normal | rgb(239, 239, 239)": [
+   "s-lifestyle « Nombre de pas »",
+   "s-client-reglages « Approche alimentaire »",
+   "s-messages « Ton coach »",
+   "s-coach-relances « Je reprends la main »"
+  ],
+  "Montserrat | 10px | 800 | uppercase | 1.8px | rgb(10, 0, 0)": [
+   "s-coach-home « Urgent »"
+  ]
+ },
+ "par_ecran": {
+  "s-client-home": [
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Bonsoir, Léa."
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Ton point du jour"
+   ]
+  ],
+  "s-bilan-choice": [
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "QUEL BILAN ?"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Fréquence des bilans"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Prochain bilan"
+   ]
+  ],
+  "s-nutrition": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Nutrition"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Mes compléments"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Caféine"
+   ]
+  ],
+  "s-videos": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes corrections"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Nouveau canal"
+   ]
+  ],
+  "s-lifestyle": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Lifestyle"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "MES"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Suivi quotidien"
+   ],
+   [
+    "Montserrat | 14px | 800 | none | normal | rgb(239, 239, 239)",
+    "Nombre de pas"
+   ]
+  ],
+  "s-progress": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Évolution"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Pesée du jour"
+   ]
+  ],
+  "s-canal": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Annonces"
+   ]
+  ],
+  "s-session-manager": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes séances"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Se motiver"
+   ]
+  ],
+  "s-historique-seances": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes séances"
+   ]
+  ],
+  "s-charges": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Charges articulaires"
+   ]
+  ],
+  "s-athlete-profile": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mon profil"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Mes informations"
+   ]
+  ],
+  "s-client-reglages": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Réglages"
+   ],
+   [
+    "Montserrat | 14px | 800 | none | normal | rgb(239, 239, 239)",
+    "Approche alimentaire"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Célébrations"
+   ]
+  ],
+  "s-messages": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mon coach"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Note épinglée pour ton coach"
+   ],
+   [
+    "Montserrat | 14px | 800 | none | normal | rgb(239, 239, 239)",
+    "Ton coach"
+   ]
+  ],
+  "s-supplements": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Compléments"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Mes compléments"
+   ]
+  ],
+  "s-steps": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes pas"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Cette semaine"
+   ]
+  ],
+  "s-sleep": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mon sommeil"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Cette semaine"
+   ]
+  ],
+  "s-recettes": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Recettes"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Mes recettes"
+   ]
+  ],
+  "s-client-amis": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes amis"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "La semaine"
+   ]
+  ],
+  "s-workout": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Jambes"
+   ]
+  ],
+  "feuille-cycle": [
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Bonsoir, Léa."
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Ton point du jour"
+   ]
+  ],
+  "barre-onglets": [
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Bonsoir, Léa."
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Ton point du jour"
+   ]
+  ],
+  "s-coach-home": [
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "COACH"
+   ],
+   [
+    "Montserrat | 10px | 800 | uppercase | 1.8px | rgb(10, 0, 0)",
+    "Urgent"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Inactifs"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "MES ATHLÈTES"
+   ]
+  ],
+  "s-coach-client": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Léa"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Pourquoi cet athlète est ici"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(255, 90, 74)",
+    "Évolution élève numéro 4"
+   ]
+  ],
+  "s-coach-lundi": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Le point du lundi"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Qui regarder cette semaine"
+   ]
+  ],
+  "s-coach-messages": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Messages"
+   ]
+  ],
+  "s-coach-programs": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes programmes"
+   ]
+  ],
+  "s-coach-banque": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Banque d'exercices"
+   ]
+  ],
+  "s-coach-relances": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Relances"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Relances automatiques"
+   ],
+   [
+    "Montserrat | 14px | 800 | none | normal | rgb(239, 239, 239)",
+    "Je reprends la main"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Cette semaine"
+   ]
+  ],
+  "s-coach-prospects": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Ma page"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Les contacts de ma page"
+   ]
+  ],
+  "s-coach-activite": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Activité"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "Ton portefeuille"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Athlètes actifs par mois"
+   ]
+  ],
+  "s-protocoles": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Protocoles"
+   ]
+  ],
+  "s-coach-canal": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Mes annonces"
+   ],
+   [
+    "Montserrat | 11px | 800 | uppercase | 2px | rgb(138, 138, 138)",
+    "Cette semaine, tu peux publier…"
+   ]
+  ],
+  "s-coach-file": [
+   [
+    "Bebas Neue | 16px | 400 | uppercase | 2.5px | rgb(239, 239, 239)",
+    "Reprise"
+   ],
+   [
+    "Bebas Neue | 20px | 400 | uppercase | 1px | rgb(239, 239, 239)",
+    "À relancer"
+   ]
+  ]
+ }
+}

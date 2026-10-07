@@ -185,7 +185,7 @@ function _actLibMois(cle){
 }
 function _actCarte(titre,corps,note){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:10px">${escapeHtml(titre)}</div>
+    <div class="t-section">${escapeHtml(titre)}</div>
     ${corps}
     ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${note}</div>`:''}
   </div>`;
@@ -1958,8 +1958,7 @@ function _htmlInactifs(liste,maintenant){
     +'overflow:hidden;box-shadow:var(--e2)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
-    +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
-    +'letter-spacing:2.4px">Inactifs</span>'
+    +'<span class="t-section" style="margin:0">Inactifs</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'

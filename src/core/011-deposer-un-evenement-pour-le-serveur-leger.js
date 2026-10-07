@@ -1082,8 +1082,8 @@ async function renderEcranAmis(){
     +(mp?'<p class="am-note">Tes potes te trouvent sous <b>@'+escapeHtml(mp)+'</b>.</p>'
         :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
     +'<div id="am-recues"></div>'
-    +'<div class="am-lab">La semaine</div><div id="am-classement"></div>'
-    +'<div class="am-lab">Ceux que tu suis</div><div id="am-liste"></div>';
+    +'<div class="am-lab t-section">La semaine</div><div id="am-classement"></div>'
+    +'<div class="am-lab t-section">Ceux que tu suis</div><div id="am-liste"></div>';
   _rendreListeEcranAmis(amisListe());
   try{ await amisSynchroniser(true); }catch(e){}
   const [l,moi]=await Promise.all([_amisAvecProfils(),_moiClassement(u)]);
@@ -2225,7 +2225,7 @@ function renderPropositionsCanal(){
     +'<div class="cp-x">'+E(x.texte)+'</div><div class="cp-b">'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="utiliserProposition('+i+')">Modifier et publier</button>'
     +'<button type="button" class="cp-lien" onclick="utiliserProposition('+i+',true)">Programmer</button></div></div>';
-  z.innerHTML='<div class="cp"><div class="cp-h"><span>Cette semaine, tu peux publier…</span>'
+  z.innerHTML='<div class="cp"><div class="cp-h"><span class="t-section" style="margin:0">Cette semaine, tu peux publier…</span>'
     +'<button type="button" class="cp-lien" onclick="passerPropositions()">Passer</button></div>'
     +carte(p,0)
     +(_cpListe.length>1?'<details class="cp-autres"><summary>'+(_cpListe.length-1)+' autre'+(_cpListe.length>2?'s':'')+' idée'+(_cpListe.length>2?'s':'')+'</summary>'

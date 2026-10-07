@@ -43565,8 +43565,10 @@ async function testExercices(){
         const bloc=css.slice(i,css.indexOf('}',i));
         if(/font-family:'Bebas Neue'/.test(bloc))
           return _echec('la pile est encore écrite à la main : '+bloc);
-        if(bloc.indexOf('var(--pile-titre)')<0)
-          return _echec('le titre ne passe pas par le jeton');
+        // BUILD 1894 : le titre de section de la fiche est un T2 de l'échelle
+        // (.t-section, Montserrat) ; le jeton reste celui des T0/T1.
+        if(!/\.cc-sect-t>span[^{]*\{[^}]*Montserrat/.test(css.replace(/\.t-section,[^{]*\.cc-sect-t>span/,'.cc-sect-t>span')))
+          return _echec('le titre de section n’est pas dans l’échelle');
         // ET LE JETON PORTE BIEN LES DEUX REPLIS que la pile manuelle perdait.
         const p=getComputedStyle(document.documentElement).getPropertyValue('--pile-titre');
         return /Haettenschweiler/.test(p)&&/Franklin Gothic/.test(p)
@@ -73410,6 +73412,56 @@ async function testExercices(){
         Object.assign(_pastilleSources,sv);
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
+
+    // ══ BUILD 1894 — L'ÉCHELLE DES TITRES ══════════════════════════════════
+    // Ouvre un écran avec un dossier de banc, rend la main, restaure tout.
+    const _sondeEcran=(user,ouvrir,fn)=>{
+      const sU=currentUser, sv=window.saveUser, act=document.querySelector('.screen.active');
+      try{ window.saveUser=()=>true; currentUser=user; ouvrir(); return fn(); }
+      finally{ currentUser=sU; window.saveUser=sv; try{ document.querySelectorAll('#modal-overlay').forEach(x=>x.remove()); }catch(e){} if(act) go(act.id); }
+    };
+    const _banAth=()=>({id:'banc_a',email:'banc@t.fr',fname:'Léa',role:'athlete',gender:'F',coachId:'banc_c',coachEmailKey:'coach@t,fr',
+      consent:{health:true,policyVersion:POLICY_VERSION},essai:{ouvertLe:Date.now(),seancesAuDebut:0},exAlias:{},exMuscles:{},videos:[],programs:{},nutrition:{},supplements:[],
+      sessions:[{id:'s1',date:Date.now()-2*864e5,name:'Jambes',complete:true,data:{'Squat':{sets:[{weight:'80',repsDone:'8',done:true}]}}}],
+      bilans:[{type:'coaching',date:Date.now()-9*864e5,'bil-weight':'64'}],weightLog:[],
+      stepsLog:[{date:localISODate(new Date(Date.now()-864e5)),count:8000}],sleepLog:[{date:localISODate(new Date(Date.now()-864e5)),duration:440}]});
+    const _banCoach=()=>({id:'banc_c',email:'coach@t.fr',fname:'Kevin',role:'coach',palier:'pro'});
+    ok('1894 — les quatre classes de titre existent avec leurs valeurs',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n').replace(/\s+/g,' ');
+      const regle=sel=>{ const m=css.match(new RegExp('(?:^|[}\\s,])'+sel.replace(/\./g,'\\.').replace(/:/g,'\\:')+'(?:,[^{]*)?\\{([^}]*)\\}')); return m?m[1]:null; };
+      const att={
+        '.t-page':['font-family:var(--pile-titre)','font-size:var(--fs-xl)','font-weight:400','text-transform:uppercase','letter-spacing:1px','color:var(--text)','line-height:1.1','margin:0 0 6px'],
+        '.t-page::before':['width:24px','height:2px','background:var(--red)','margin-bottom:10px'],
+        '.t-section':['font-size:var(--fs-xs)','font-weight:800','text-transform:uppercase','letter-spacing:2px','color:var(--sub)','margin:0 0 10px','Montserrat'],
+        '.t-section.is-action':['color:var(--red-text)'],
+        '.t-carte':['font-size:var(--fs-md)','font-weight:800','text-transform:none','letter-spacing:0','color:var(--text)','margin:0 0 4px','Montserrat']};
+      for(const [sel,vals] of Object.entries(att)){
+        const r=regle(sel); if(r==null) return _echec(sel+' absente');
+        for(const v of vals) if(r.indexOf(v)<0) return _echec(sel+' sans '+v);
+      }
+      return /ÉCHELLE DES TITRES/.test(_stylesProd().map(x=>x.textContent).join(''))?true:_echec('le commentaire de l’échelle manque');});
+    ok('1894 — aucune déclaration de .ls-titre ne dépasse var(--fs-xl)',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      const l=[...css.matchAll(/\.ls-titre[^{,]*\{([^}]*)\}/g)].map(m=>m[1]);
+      for(const r of l){ const f=r.match(/font-size:([^;]+)/); if(f&&!/var\(--fs-(xl|lg|md|sm|xs|2xs)\)/.test(f[1])) return _echec('font-size:'+f[1]); }
+      const t=document.querySelector('#s-lifestyle .ls-titre');
+      return t&&t.classList.contains('t-page')?true:_echec('le titre de Lifestyle n’est pas un .t-page');});
+    ok('1894 — sonde : tout .t-section rendu fait 11 px et 800 (Lifestyle, compléments, amis, relances, pas)',()=>{
+      const ecrans=[['s-lifestyle',_banAth,()=>loadLifestyle()],['s-supplements',_banAth,()=>loadSupplements()],
+        ['s-client-amis',_banAth,()=>ouvrirAmis()],['s-coach-relances',_banCoach,()=>ouvrirRelances()],['s-steps',_banAth,()=>loadSteps()]];
+      const faux=[];
+      for(const [id,u,ouvrir] of ecrans){
+        _sondeEcran(u(),ouvrir,()=>{
+          const l=[...document.querySelectorAll('#'+id+' .t-section')].filter(x=>x.getClientRects().length);
+          if(!l.length) faux.push(id+' : aucun .t-section');
+          for(const x of l){ const cs=getComputedStyle(x);
+            if(cs.fontSize!=='11px'||cs.fontWeight!=='800') faux.push(id+' : '+x.textContent.trim().slice(0,30)+' '+cs.fontSize+'/'+cs.fontWeight); }
+        });
+      }
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1894 — les sept titres d’écran coach en style en ligne sont des .t-page',()=>{
+      if(document.querySelectorAll('h1[style*="font-weight:900"]').length) return _echec('un h1 en 900 reste');
+      return document.querySelectorAll('h1.t-page').length>=7?true:_echec(document.querySelectorAll('h1.t-page').length+' .t-page');});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

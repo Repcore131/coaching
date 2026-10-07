@@ -2194,9 +2194,9 @@ function htmlSelecteurComptes(opts){
   };
   // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le
   // compte coach. Un groupe vide ne s'affiche pas.
-  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe">${titre}</div>`+liste.map(ligne).join('')):'';
+  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe t-section">${titre}</div>`+liste.map(ligne).join('')):'';
   return `<div id="cpt-selecteur">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>
+    <div class="t-section">Mes comptes</div>
     ${groupe('Compte athlète',l.filter(c=>c.role!=='coach'))}
     ${groupe('Compte coach',l.filter(c=>c.role==='coach'))}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>

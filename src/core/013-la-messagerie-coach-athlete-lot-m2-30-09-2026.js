@@ -354,7 +354,7 @@ function _rendreFil(garderPosition){
     +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
       +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
   const ferme=f.erreur==='acces';
-  z.innerHTML=tete+'<div class="msg-fil-titre">'+escapeHtml(f.nom)+'</div>'
+  z.innerHTML=tete+'<div class="msg-fil-titre t-carte">'+escapeHtml(f.nom)+'</div>'
     +'<div class="msg-liste" id="msg-liste">'+corps+'</div>'
     +(ferme?'':'<div class="msg-saisie">'
       +'<textarea id="msg-texte" maxlength="'+MSG_TEXTE_MAX+'" rows="3" placeholder="Ton message" oninput="_msgCompteur()"></textarea>'
@@ -455,27 +455,27 @@ function renderRelancesCoach(){
   const sem=_relJournal?relCetteSemaine(_relJournal):null;
   const partis=sem?sem.filter(e=>e.statut==='parti'):[];
   let h='<div class="rel-frein'+(pause?' rel-frein-on':'')+'">'
-    +'<div class="rel-frein-l"><b>Je reprends la main</b><span>'
+    +'<div class="rel-frein-l"><b class="t-carte">Je reprends la main</b><span>'
     +(pause?'Rien ne part. Tes règles sont gardées telles quelles.':'Coupe tout, tout de suite, y compris ce qui allait partir aujourd’hui.')+'</span></div>'
     +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
   // LES ATHLÈTES À RISQUE, avant tout : un message proposé, jamais envoyé seul.
   try{ h+=_htmlRisqueRelances(); }catch(e){}
   // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
-  h+='<h2 class="rel-h">Cette semaine</h2>';
+  h+='<h2 class="rel-h t-section">Cette semaine</h2>';
   if(!sem) h+=etatChargement(2);
   else if(!sem.length) h+=emptyState('','Rien n’est parti ces sept derniers jours.',null,null,'padding:12px 0');
   else h+='<div class="rel-sem-n">'+partis.length+' message'+(partis.length>1?'s':'')+' parti'+(partis.length>1?'s':'')
     +(sem.length>partis.length?', '+(sem.length-partis.length)+' pas parti'+(sem.length-partis.length>1?'s':''):'')+'</div>'
     +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
   // LES RÈGLES : une ligne par signal, dans l'ordre de « À traiter ».
-  h+='<h2 class="rel-h">Les règles</h2>'
+  h+='<h2 class="rel-h t-section">Les règles</h2>'
     +'<p class="sub rel-p">Un message par athlète sur sept jours au plus, tous signaux confondus. Le texte par défaut est celui de tes relances WhatsApp ; tu peux écrire le tien, il est toujours précédé du prénom. Une ligne que tu reportes dans « Mes notifications » ne part pas.</p>';
   // Les cinq réglables d'abord, puis les onze qui ne le seront jamais : le
   // coach règle en haut, et lit en bas pourquoi le reste n'y est pas.
   const lignes=RELANCE_LIGNES.filter(l=>l.auto).concat(RELANCE_LIGNES.filter(l=>!l.auto));
   for(const l of lignes){
     if(!l.auto){
-      if(l===lignes.find(x=>!x.auto)) h+='<h2 class="rel-h">Jamais automatiques</h2>';
+      if(l===lignes.find(x=>!x.auto)) h+='<h2 class="rel-h t-section">Jamais automatiques</h2>';
       h+='<div class="rel-l rel-l-off"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
         +'<div class="rel-l-r">'+escapeHtml(l.raison)+'</div></div>';
       continue;
@@ -1605,7 +1605,7 @@ function renderTodoBlock(clients){
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
   el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
-      <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
+      <span class="t-section is-action" style="margin:0">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">

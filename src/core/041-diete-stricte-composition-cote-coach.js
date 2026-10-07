@@ -2902,7 +2902,7 @@ function renderRecettes(){
       ?'Tes recettes, partagées à tous tes athlètes. Ajoute-les à un repas du plan, ou laisse-les dans leur recherche d’aliments.'
       :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
     +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
-    +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
+    +'<div class="rct-sec t-section">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
     +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):emptyState('','Aucune recette pour l’instant.',null,null,'padding:12px 0'))
     +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
 }

@@ -1310,7 +1310,7 @@ function _renderCaffeineEmbedded(){
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
+      <h3 class="t-section is-action" style="margin:0;--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
     </div>
     ${_bandeauJour('caff-embed-date-input',date,'_caffEmbedAllerJour',{avecFleches:true,prev:auFond?null:prevStr,next:isToday?null:nextStr,retention:CAFF_RETENTION_JOURS,libelle:dateLbl})}
     ${_renderCaffeineBlock(entries,totalMg,thr,'embedded',date,_wEst,isToday,dateLbl,wKg)}
