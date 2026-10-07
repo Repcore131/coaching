@@ -49241,6 +49241,28 @@ function loadClientHome(){
   const _resumeName=document.getElementById('clh-resume-name');
   if(_resumeEl){_resumeEl.style.display=_snap?'block':'none';}
   if(_resumeName&&_snap) _resumeName.textContent=_snap.progName||'Reprendre ma séance';
+  // BUILD 1862 : plus de 6 h sans activité — « Séance de <jour> non terminée ·
+  // N séries », et un second bouton « L'enregistrer », de la même taille.
+  try{
+    const _ob=_snap?seanceOubliee(_snap,Date.now()):null;
+    const _oub=!!(_ob&&_ob.heuresDepuis>SEANCE_OUBLIEE_H);
+    const _btn=_resumeEl&&_resumeEl.querySelector('.gv-btn:not(.gv-btn-enr)');
+    let _enr=_resumeEl&&_resumeEl.querySelector('.gv-btn-enr');
+    const _sous=_resumeEl&&_resumeEl.querySelector('.gv-sous');
+    if(_oub&&_resumeName){
+      const _j=_libJourSeance(_ob.fin);
+      _resumeName.textContent='Séance '+(_j==='aujourd’hui'||_j==='hier'?'d’':'de ')+_j+' non terminée · '+_ob.series+' série'+(_ob.series>1?'s':'');
+    }
+    if(_sous) _sous.textContent=_oub?'Tu as oublié de la terminer':'Ta séance est en pause';
+    if(_btn){ const sp=_btn.querySelector('span'); if(sp) sp.textContent=_oub?'Reprendre':'Reprendre maintenant'; }
+    if(_oub&&_btn&&!_enr){
+      _enr=document.createElement('button'); _enr.type='button'; _enr.className='gv-btn gv-btn-enr';
+      _enr.innerHTML='<span>L’enregistrer</span>';
+      _enr.onclick=ev=>{ ev.stopPropagation(); enregistrerSeanceOubliee(); };
+      _btn.insertAdjacentElement('afterend',_enr);
+    }
+    if(_enr) _enr.style.display=_oub?'':'none';
+  }catch(e){}
   // Reprise de bilan — même mécanique que la reprise de séance ci-dessus.
   const _bilDraft=_bilLoadDraft();
   const _bilEl=document.getElementById('clh-resume-bilan');
@@ -52560,12 +52582,20 @@ function _woLoadSnap(){
     if(!raw) return null;
     const snap=JSON.parse(raw);
     if(!snap?.exercises?.length||!snap.startTime) return null;
-    if(Date.now()-snap.startTime>24*3600*1000){localStorage.removeItem('rc_wo_state');return null;}
+    // BUILD 1862 : UNE SÉANCE AVEC DES SÉRIES VALIDÉES NE DISPARAÎT PLUS EN
+    // SILENCE au bout de 24 h. Elle reste lisible en mode « oubliée » jusqu'à
+    // 7 jours après sa dernière série, puis elle est ENREGISTRÉE comme séance
+    // partielle plutôt qu'effacée. Sans série validée, rien ne change.
+    const _ob=seanceOubliee(snap,Date.now());
+    if(Date.now()-snap.startTime>24*3600*1000&&!_ob){localStorage.removeItem('rc_wo_state');return null;}
     // ON NE SUPPRIME PAS l’instantané d’un autre, contrairement au cas de la
     // péremption juste au-dessus, qui vaut pour tout le monde. Même doctrine
     // que _bilLoadDraft : la lecture ne détruit rien, et son propriétaire
     // retrouve sa séance s’il se reconnecte sur cet appareil.
     if(!_woSnapAMoi(snap)) return null;
+    if(_ob&&_ob.heuresDepuis>SEANCE_OUBLIEE_MAX_H){
+      try{ if(enregistrerSeanceOubliee(snap,{silencieuxToast:true})) return null; }catch(e){}
+    }
     return snap;
   }catch{return null;}
 }
@@ -52608,6 +52638,51 @@ function demarrerSeance(sessConfig,slotIdx){
     return launchWorkout(sessConfig,slotIdx);
   });
 }
+// ══ LA SÉANCE OUBLIÉE (BUILD 1862) ═══════════════════════════════════════
+// Oublier « Terminer », se faire tuer l'app, reprendre le lendemain matin :
+// les séries validées étaient perdues au bout de 24 h. Elles se retrouvent.
+const SEANCE_OUBLIEE_H=6, SEANCE_OUBLIEE_MAX_H=7*24, SEANCE_OUBLIEE_DUREE_MAX=240, SEANCE_DERNIERE_SERIE_MIN=3;
+// PURE. null sans série validée ; sinon les séries, la première et la dernière
+// validation, et les heures écoulées depuis la dernière.
+function seanceOubliee(snap,maintenant){
+  const d=snap&&snap.sessionData;
+  if(!d) return null;
+  let n=0, debut=Infinity, fin=-Infinity;
+  for(const k of Object.keys(d)) for(const st of ((d[k]&&d[k].sets)||[])){
+    if(!st||st.done!==true) continue;
+    n++;
+    const t=Number(st.tValid)||Number(snap.startTime)||0;
+    if(t<debut) debut=t;
+    if(t>fin) fin=t;
+  }
+  if(!n) return null;
+  const m=Number(maintenant)||Date.now();
+  return {series:n,debut,fin,heuresDepuis:(m-fin)/3600e3};
+}
+// « L'enregistrer » : la séance est écrite à sa date (dernière série), sa durée
+// va de la première à la dernière série, + 3 min, plafonnée à 240.
+function enregistrerSeanceOubliee(snap,opts){
+  const sn=snap||_woLoadSnap();
+  const o=seanceOubliee(sn,Date.now());
+  if(!o) return false;
+  try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
+  woState={...sn};
+  const c=comptesSeriesSeance(woState);
+  const duree=Math.min(SEANCE_OUBLIEE_DUREE_MAX,Math.round((o.fin-o.debut)/60000)+SEANCE_DERNIERE_SERIE_MIN);
+  const s=finishWorkout(c.fait<c.total/2,{date:o.fin,duree,silencieux:true});
+  if(!s) return false;
+  const jour=new Date(o.fin).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  if(!(opts&&opts.silencieuxToast)) try{ toast('Séance du '+jour+' enregistrée'); }catch(e){}
+  try{ if(!(opts&&opts.silencieuxToast)) loadClientHome(); }catch(e){}
+  return true;
+}
+function _libJourSeance(t){
+  const d=new Date(t), auj=new Date();
+  const hier=new Date(auj.getFullYear(),auj.getMonth(),auj.getDate()-1);
+  if(d.toDateString()===auj.toDateString()) return 'aujourd’hui';
+  if(d.toDateString()===hier.toDateString()) return 'hier';
+  return d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'});
+}
 function woResumeAndGo(){
   const snap=_woLoadSnap();
   if(!snap){document.getElementById('clh-resume-workout').style.display='none';return;}
@@ -52617,6 +52692,15 @@ function woResumeAndGo(){
   // ressortir sur des séries qui ne sont pas des records.
   _resetRecordsVus();
   woState={...snap};
+  // BUILD 1862 : reprise après plus de 6 h sans activité — la séance garde la
+  // date de sa première série, et le trou ne compte pas dans la durée.
+  try{
+    const _ob=seanceOubliee(snap,Date.now());
+    if(_ob&&_ob.heuresDepuis>SEANCE_OUBLIEE_H){
+      woState.dateDebut=_ob.debut;
+      woState.pauseMs=(Number(woState.pauseMs)||0)+Math.max(0,Date.now()-_ob.fin);
+    }
+  }catch(e){}
   // L'ILLUSTRATION DU CRENEAU, RETROUVEE A LA SOURCE plutot que recopiee dans
   // l'instantane — voir woPersist. Le creneau y est, la photo est dans
   // sessions_config : la reprise la remet sans avoir eu a la porter.
@@ -58697,7 +58781,10 @@ function _arcGlissement(dir){
       {duration:180,easing:ARC.discharge,fill:'none'});
   }catch(e){ return null; }
 }
-function finishWorkout(incomplete=false){
+// `opts` (build 1862, facultatif) : {date, duree, silencieux}. date et duree
+// remplacent l'horloge (séance oubliée) ; silencieux enregistre sans l'écran
+// de fin. Sans opts, rien ne change.
+function finishWorkout(incomplete=false,opts){
   // IDEMPOTENTE, ET LE GARDE EST EN TOUTE PREMIERE LIGNE.
   //
   // Un second appel — par n’importe quel chemin — réécrivait la MÊME séance
@@ -58721,7 +58808,9 @@ function finishWorkout(incomplete=false){
   // Le minuteur de repos peut encore tourner : il repeint une bannière sur
   // un écran qu'on quitte, et il appelait woPersist en s'ajustant.
   try{ annulerRepos(); }catch(e){}
-  const mins=Math.floor((Date.now()-woState.startTime)/60000);
+  const _o=opts||{};
+  const mins=(_o.duree!=null&&isFinite(_o.duree))?Math.round(_o.duree)
+    :Math.floor(Math.max(0,Date.now()-woState.startTime-(Number(woState.pauseMs)||0))/60000);
   let sets=0,vol=0;
   // Total PRÉVU, compté sur le programme et non sur sessionData : ce dernier
   // n'est rempli qu'à l'ouverture de chaque exercice (renderWoEx), et
@@ -58792,7 +58881,8 @@ function finishWorkout(incomplete=false){
     }catch(e){}
     return Object.keys(o).length?o:null;
   })();
-  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
+  const _dSeance=(_o.date!=null&&isFinite(_o.date))?Number(_o.date):(Number(woState.dateDebut)||Date.now());
+  const sess={id:'s_'+Date.now(),date:_dSeance,name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
     // Planifiee par le coach : cette seance sort de la serie temporelle et ne
     // peut donc pas passer pour un recul.
     deload:!!woState.deload,
@@ -58855,6 +58945,7 @@ function finishWorkout(incomplete=false){
   // L'événement saisonnier : la valeur calculée par le Worker, relue une minute
   // après (le temps que « seance_fin » soit traité).
   try{ setTimeout(()=>{ saisonsLireProgression().catch(()=>{}); },70000); }catch(e){}
+  if(_o.silencieux) return sess;
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la

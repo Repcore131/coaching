@@ -648,6 +648,28 @@ function loadClientHome(){
   const _resumeName=document.getElementById('clh-resume-name');
   if(_resumeEl){_resumeEl.style.display=_snap?'block':'none';}
   if(_resumeName&&_snap) _resumeName.textContent=_snap.progName||'Reprendre ma séance';
+  // BUILD 1862 : plus de 6 h sans activité — « Séance de <jour> non terminée ·
+  // N séries », et un second bouton « L'enregistrer », de la même taille.
+  try{
+    const _ob=_snap?seanceOubliee(_snap,Date.now()):null;
+    const _oub=!!(_ob&&_ob.heuresDepuis>SEANCE_OUBLIEE_H);
+    const _btn=_resumeEl&&_resumeEl.querySelector('.gv-btn:not(.gv-btn-enr)');
+    let _enr=_resumeEl&&_resumeEl.querySelector('.gv-btn-enr');
+    const _sous=_resumeEl&&_resumeEl.querySelector('.gv-sous');
+    if(_oub&&_resumeName){
+      const _j=_libJourSeance(_ob.fin);
+      _resumeName.textContent='Séance '+(_j==='aujourd’hui'||_j==='hier'?'d’':'de ')+_j+' non terminée · '+_ob.series+' série'+(_ob.series>1?'s':'');
+    }
+    if(_sous) _sous.textContent=_oub?'Tu as oublié de la terminer':'Ta séance est en pause';
+    if(_btn){ const sp=_btn.querySelector('span'); if(sp) sp.textContent=_oub?'Reprendre':'Reprendre maintenant'; }
+    if(_oub&&_btn&&!_enr){
+      _enr=document.createElement('button'); _enr.type='button'; _enr.className='gv-btn gv-btn-enr';
+      _enr.innerHTML='<span>L’enregistrer</span>';
+      _enr.onclick=ev=>{ ev.stopPropagation(); enregistrerSeanceOubliee(); };
+      _btn.insertAdjacentElement('afterend',_enr);
+    }
+    if(_enr) _enr.style.display=_oub?'':'none';
+  }catch(e){}
   // Reprise de bilan — même mécanique que la reprise de séance ci-dessus.
   const _bilDraft=_bilLoadDraft();
   const _bilEl=document.getElementById('clh-resume-bilan');

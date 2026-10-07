@@ -122,7 +122,10 @@ function _arcGlissement(dir){
       {duration:180,easing:ARC.discharge,fill:'none'});
   }catch(e){ return null; }
 }
-function finishWorkout(incomplete=false){
+// `opts` (build 1862, facultatif) : {date, duree, silencieux}. date et duree
+// remplacent l'horloge (séance oubliée) ; silencieux enregistre sans l'écran
+// de fin. Sans opts, rien ne change.
+function finishWorkout(incomplete=false,opts){
   // IDEMPOTENTE, ET LE GARDE EST EN TOUTE PREMIERE LIGNE.
   //
   // Un second appel — par n’importe quel chemin — réécrivait la MÊME séance
@@ -146,7 +149,9 @@ function finishWorkout(incomplete=false){
   // Le minuteur de repos peut encore tourner : il repeint une bannière sur
   // un écran qu'on quitte, et il appelait woPersist en s'ajustant.
   try{ annulerRepos(); }catch(e){}
-  const mins=Math.floor((Date.now()-woState.startTime)/60000);
+  const _o=opts||{};
+  const mins=(_o.duree!=null&&isFinite(_o.duree))?Math.round(_o.duree)
+    :Math.floor(Math.max(0,Date.now()-woState.startTime-(Number(woState.pauseMs)||0))/60000);
   let sets=0,vol=0;
   // Total PRÉVU, compté sur le programme et non sur sessionData : ce dernier
   // n'est rempli qu'à l'ouverture de chaque exercice (renderWoEx), et
@@ -217,7 +222,8 @@ function finishWorkout(incomplete=false){
     }catch(e){}
     return Object.keys(o).length?o:null;
   })();
-  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
+  const _dSeance=(_o.date!=null&&isFinite(_o.date))?Number(_o.date):(Number(woState.dateDebut)||Date.now());
+  const sess={id:'s_'+Date.now(),date:_dSeance,name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
     // Planifiee par le coach : cette seance sort de la serie temporelle et ne
     // peut donc pas passer pour un recul.
     deload:!!woState.deload,
@@ -280,6 +286,7 @@ function finishWorkout(incomplete=false){
   // L'événement saisonnier : la valeur calculée par le Worker, relue une minute
   // après (le temps que « seance_fin » soit traité).
   try{ setTimeout(()=>{ saisonsLireProgression().catch(()=>{}); },70000); }catch(e){}
+  if(_o.silencieux) return sess;
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la

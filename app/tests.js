@@ -66090,6 +66090,60 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1862 : LA SÉANCE OUBLIÉE ══
+    const _seSnap=(heures,n,email)=>{
+      const fin=Date.now()-heures*3600e3, sets=[];
+      for(let i=0;i<n;i++) sets.push({weight:'60',repsDone:'8',done:true,tValid:fin-(n-1-i)*180e3});
+      sets.push({weight:'',repsDone:'',done:false});
+      return {email,exercises:[{name:'Squat',series:n+1,reps:'8'}],sessionData:{0:{sets}},startTime:fin-(n-1)*180e3-600e3,progName:'Jambes',slot:null};
+    };
+    ok('seanceOubliee : sans série validée → null ; 3 séries → fin = dernière tValid',()=>{
+      if(seanceOubliee({sessionData:{0:{sets:[{done:false}]}}},Date.now())!==null) return _echec('aucune série');
+      const s=_seSnap(10,3,'x');
+      const o=seanceOubliee(s,Date.now());
+      const der=s.sessionData[0].sets[2].tValid;
+      if(!o||o.series!==3||o.fin!==der||o.debut!==s.sessionData[0].sets[0].tValid) return _echec(JSON.stringify(o));
+      return Math.abs(o.heuresDepuis-10)<0.01?true:_echec(o.heuresDepuis);});
+    ok('_woLoadSnap : 30 h et 4 séries validées → rc_wo_state n’est PAS supprimé',()=>{
+      const sU=currentUser, av=localStorage.getItem('rc_wo_state');
+      try{
+        currentUser={id:'so',email:'so@t.fr',sessions:[]};
+        localStorage.setItem('rc_wo_state',JSON.stringify(_seSnap(30,4,'so@t.fr')));
+        const s=_woLoadSnap();
+        if(!s) return _echec('instantané non rendu');
+        if(!localStorage.getItem('rc_wo_state')) return _echec('supprimé');
+        // Sans série validée, la péremption de 24 h s'applique comme avant.
+        const vide=_seSnap(30,0,'so@t.fr'); vide.startTime=Date.now()-30*3600e3;
+        localStorage.setItem('rc_wo_state',JSON.stringify(vide));
+        return _woLoadSnap()===null&&!localStorage.getItem('rc_wo_state')?true:_echec('instantané vide gardé');
+      } finally { currentUser=sU; if(av) localStorage.setItem('rc_wo_state',av); else localStorage.removeItem('rc_wo_state'); }});
+    ok('enregistrerSeanceOubliee : datée de la dernière série (hier), durée ≤ 240 min, partielle si < moitié',()=>{
+      const sU=currentUser, sW=woState, sv={s:window.saveUser,t:window.toast,h:window.loadClientHome}, av=localStorage.getItem('rc_wo_state');
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window.loadClientHome=()=>{};
+        currentUser={id:'so',email:'so@t.fr',sessions:[],exAlias:{},exMuscles:{},nutrition:{}};
+        const snap=_seSnap(30,4,'so@t.fr');
+        localStorage.setItem('rc_wo_state',JSON.stringify(snap));
+        if(!enregistrerSeanceOubliee()) return _echec('non enregistrée');
+        const s=currentUser.sessions[currentUser.sessions.length-1];
+        const der=snap.sessionData[0].sets[3].tValid;
+        if(!s||s.date!==der) return _echec('date '+(s&&new Date(s.date).toISOString()));
+        if(!(s.duration<=240)||s.duration!==Math.round((der-snap.sessionData[0].sets[0].tValid)/60000)+3) return _echec('durée '+s.duration);
+        if(s.complete!==true||s.sets!==4) return _echec('séries '+s.sets+' complete '+s.complete);
+        return localStorage.getItem('rc_wo_state')===null?true:_echec('instantané resté');
+      } finally { currentUser=sU; woState=sW; window.saveUser=sv.s; window.toast=sv.t; window.loadClientHome=sv.h;
+        if(av) localStorage.setItem('rc_wo_state',av); else localStorage.removeItem('rc_wo_state'); }});
+    ok('Au-delà de 7 jours : la séance est enregistrée au lieu d’être effacée',()=>{
+      const sU=currentUser, sW=woState, sv={s:window.saveUser,t:window.toast}, av=localStorage.getItem('rc_wo_state');
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'so',email:'so@t.fr',sessions:[],exAlias:{},exMuscles:{},nutrition:{}};
+        localStorage.setItem('rc_wo_state',JSON.stringify(_seSnap(8*24,2,'so@t.fr')));
+        const r=_woLoadSnap();
+        return r===null&&currentUser.sessions.length===1&&!localStorage.getItem('rc_wo_state')?true:_echec(currentUser.sessions.length+' séance(s)');
+      } finally { currentUser=sU; woState=sW; window.saveUser=sv.s; window.toast=sv.t;
+        if(av) localStorage.setItem('rc_wo_state',av); else localStorage.removeItem('rc_wo_state'); }});
+
     // ══ BUILD 1861 : LES PHOTOS DU BILAN QUI MANQUENT ══
     ok('photosBilanManquantes : complet → [] ; sans photos → 3 vues ; grossesse → [] ; modification → []',()=>{
       const plein={'bil-photo-face':'a','bil-photo-back':'b','bil-photo-side':'c'};
