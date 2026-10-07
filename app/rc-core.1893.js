@@ -89877,11 +89877,11 @@ const PDJ_QUESTIONS=Object.freeze({
   poids:   {titre:'Combien pèses-tu ce matin ?',      accuse:'Pesée notée',
             ecran:null,        lienDit:null},
   sommeil: {titre:'Tu as dormi combien cette nuit ?', accuse:'Nuit notée',
-            ecran:'loadSleep', lienDit:'Saisir mon coucher et mon lever'},
+            ecran:'lifestyleSommeil', lienDit:'Saisir mon coucher et mon lever'},
   energie: {titre:'Ton énergie aujourd\'hui ?',        accuse:'Énergie notée',
             ecran:null,        lienDit:null},
   pas:     {titre:'Combien de pas hier ?',            accuse:'Pas notés',
-            ecran:'loadSteps', lienDit:'Voir ma semaine de pas'}
+            ecran:'lifestylePas', lienDit:'Voir ma semaine de pas'}
 });
 // Les quatre durees proposees au doigt. Une nuit se dit a la demi-heure pres
 // quand on la raconte, pas a la minute : celui qui veut la minute a le lien
@@ -94644,7 +94644,7 @@ const MISSIONS=Object.freeze([
     faite:(u,j)=>{ try{ return !!cibleTenueJour(u,j).prot; }catch(e){ return false; } }}),
   Object.freeze({cle:'nuit',type:'repos',lib:'Saisis ta nuit',
     faite:(u,j)=>(Array.isArray(u.sleepLog)?u.sleepLog:[]).some(e=>e&&e.date===j&&Number(e.duration)>0),
-    action:'loadSleep()',bouton:'Saisir'}),
+    action:'lifestyleSommeil()',bouton:'Saisir'}),
   Object.freeze({cle:'prochaine',type:'repos',lib:'Regarde ta prochaine séance et ses records à portée',
     possible:u=>_mjCreneauActif(u),
     faite:(u,j)=>_mjActe(u,j,'prochaine'),action:'missionProchaineVoir()',bouton:'Voir'}),
@@ -99399,13 +99399,13 @@ function showProgressTab(tab,btn,sansMemo){
       // R13 — le geste qui remplit l'onglet, s'il est permis : l'accueil
       // retire la pesee a dessein dans trois cas, voir _peseePossible.
       c.innerHTML=_peseePossible(currentUser)
-        ?emptyState('clipboard','Ta courbe de poids part de ta première pesée. Il n\'y en a pas encore.','Noter mon poids','ouvrirPeseeAccueil()')
+        ?htmlCartePesee(currentUser,Date.now(),'-evo')+emptyState('clipboard','Ta courbe de poids part de ta première pesée. Il n\'y en a pas encore.','Noter mon poids','ouvrirPeseeAccueil()')
         // Pesee retiree a dessein : on ne parle pas de poids. Le bilan, lui,
         // reste le geste qui remplit cet ecran.
         :emptyState('clipboard','Ton suivi s\'affichera ici après ton premier bilan.','Remplir mon bilan','openBilanChoice()');
       return;}
     const vals=bl.map(b=>getBW(b));
-    c.innerHTML=blocPoids(currentUser)
+    c.innerHTML=htmlCartePesee(currentUser,Date.now(),'-evo')+blocPoids(currentUser)
       +((bl.length&&!currentUser.masquerPoids)?renderDataTable(
         ['',...bilLabels],
         [{label:'Poids (kg)',labelColor:'#bbb',
@@ -131256,25 +131256,19 @@ function poidsAffiche(user){
   const d=dernierePesee(user);
   return d?d.kg:null;
 }
-function renderCartePesee(){
-  const z=document.getElementById('clh-pesee');
-  if(!z) return;
+// BUILD 1893 : LA CARTE EST PARTAGÉE, accueil et Évolution › Poids. PURE :
+// le dossier et l'instant suffisent. `suffixe` distingue les deux champs
+// (deux #pesee-input dans la page, et savePesee lirait le mauvais).
+function htmlCartePesee(u,maintenant,suffixe){
   // Même prudence que pour l'antécédent alimentaire : on n'incite pas à se
   // peser tous les jours quelqu'un dont plusieurs signaux de déficit se
   // cumulent déjà.
-  let _defBloque=false;
-  try{ _defBloque=(paliersDeficit(currentUser)==='blocage'); }catch(e){}
-  if(!currentUser||aTCA(currentUser)||currentUser.masquerPoids||_defBloque){ z.innerHTML=''; return; }
-  // ⚠ ET ELLE SE TAIT QUAND LE POINT DU JOUR POSE DEJA LA QUESTION DU POIDS.
-  // Le lundi, sans cette ligne, l'accueil affichait DEUX champs de pesee a
-  // quinze centimetres l'un de l'autre. Le point du jour disparait des que la
-  // pesee est faite — c'est sa regle — et cette carte revient aussitot, avec
-  // sa moyenne sur sept jours et sa coche. On ne perd donc rien : on retarde
-  // l'affichage de la moyenne du temps que la question soit repondue.
-  try{ const p=pdjEtat(currentUser,Date.now());
-       if(p&&p.question==='poids'){ z.innerHTML=''; return; } }catch(e){}
-  const auj=localISODate(new Date());
-  const serie=serieWeight(currentUser);
+  if(!u||aTCA(u)||u.masquerPoids) return '';
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const auj=localISODate(new Date(t));
+  try{ if(paliersDeficit(u,auj)==='blocage') return ''; }catch(e){}
+  const sx=suffixe?String(suffixe).replace(/[^\w-]/g,''):'';
+  const serie=serieWeight(u);
   const dujour=serie.find(e=>e.date===auj);
   const moy=mm7(serie,auj);
   const der=serie.length?serie[serie.length-1]:null;
@@ -131283,36 +131277,51 @@ function renderCartePesee(){
   if(moy!=null) sous='Moyenne 7 jours : <b style="color:var(--text)">'+moy.toFixed(1)+' kg</b>';
   else{
     const fen=serie.filter(e=>e.date>=_jourPlus(auj,-(PESEE_FENETRE_MM-1))).length;
-    // « … cette semaine avant une moyenne fiable » faisait 53 caracteres et
-    // passait a la ligne sur tout telephone. Kevin voulait un seul rang
-    // (15/09/2026) ; le corps ne peut pas descendre — une assertion interdit
-    // tout texte sous 11 px sur cet ecran — donc c'est la PHRASE qui se
-    // raccourcit. « Cette semaine » ne se perd pas : le compte est deja
-    // celui de la fenetre de sept jours, il ne disait rien de plus.
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
+  return `<div class="pes-carte" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">${icon('coche',14)} ${dujour.kg} kg</span>`:''}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <!-- La boîte, et non le champ, porte la bordure : c'est elle qui doit
-           contenir le couple « nombre + unité ». Un clic n'importe où dedans
-           donne le focus au champ, sinon la moitié de la surface serait morte. -->
-      <label class="pes-boite" for="pesee-input">
+      <label class="pes-boite" for="pesee-input${sx}">
         <span class="pes-duo">
-          <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
+          <input type="number" id="pesee-input${sx}" inputmode="decimal" step="0.1"
             min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'-'}"
             value="${dujour?dujour.kg:''}" class="pes-champ">
           <span class="pes-unite">kg</span>
         </span>
       </label>
-      <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
+      <button class="btn btn-red btn-sm" onclick="savePesee('${sx}')" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div class="pes-sous">${sous}</div>
   </div>`;
+}
+// Le poids du profil, en lecture seule : la dernière pesée, et le lien.
+function htmlPoidsProfil(u){
+  if(!u||aTCA(u)||u.masquerPoids) return '<span class="sub">Suivi du poids masqué</span>';
+  const s=serieWeight(u);
+  const d=s.length?s[s.length-1]:null;
+  const lien='<button type="button" class="rb-lien" onclick="ouvrirPeseeAccueil()" style="display:block;margin-top:4px">'+(d?'Noter une pesée':'Noter mon poids')+'</button>';
+  if(!d) return '<span class="sub">Aucune pesée pour l’instant.</span>'+lien;
+  const j=dateLocaleDeCle(d.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return 'Dernière pesée : <b>'+escapeHtml(String(d.kg).replace('.',','))+' kg</b> ('+escapeHtml(j)+')'+lien;
+}
+function renderCartePesee(){
+  const z=document.getElementById('clh-pesee');
+  if(!z) return;
+  if(!currentUser){ z.innerHTML=''; return; }
+  // ⚠ ET ELLE SE TAIT QUAND LE POINT DU JOUR POSE DEJA LA QUESTION DU POIDS.
+  // Le lundi, sans cette ligne, l'accueil affichait DEUX champs de pesee a
+  // quinze centimetres l'un de l'autre. Le point du jour disparait des que la
+  // pesee est faite — c'est sa regle — et cette carte revient aussitot, avec
+  // sa moyenne sur sept jours et sa coche. On ne perd donc rien : on retarde
+  // l'affichage de la moyenne du temps que la question soit repondue.
+  try{ const p=pdjEtat(currentUser,Date.now());
+       if(p&&p.question==='poids'){ z.innerHTML=''; return; } }catch(e){}
+  z.innerHTML=htmlCartePesee(currentUser,Date.now());
 }
 // ══ UNE PESEE S'ENREGISTRE EN UN SEUL ENDROIT ═══════════════════════════
 //
@@ -131343,11 +131352,16 @@ async function _enregistrerPesee(v,jour){
   toastEcriture(saveUser(),'Pesée enregistrée '+ICO.coche,'ta pesée est');
   return true;
 }
-async function savePesee(){
-  const inp=document.getElementById('pesee-input');
+async function savePesee(suffixe){
+  const sx=suffixe?String(suffixe):'';
+  const inp=document.getElementById('pesee-input'+sx);
   if(!inp) return;
   const v=parseFloat(String(inp.value).replace(',','.'));
-  if(await _enregistrerPesee(v,localISODate(new Date()))) renderCartePesee();
+  if(await _enregistrerPesee(v,localISODate(new Date()))){
+    renderCartePesee();
+    // Depuis Évolution, la courbe suit la pesée.
+    if(sx){ try{ showProgressTab('poids',document.querySelector('#prog-tabs button')); }catch(e){} }
+  }
 }
 // ── Onglet Poids : la courbe (refonte du 26/09/2026, maquette de Kevin) ────
 // UN SEUL DESSIN pour l'athlete (Evolution > Poids) et pour le coach (fiche,
@@ -134912,6 +134926,16 @@ function saveSleep(){
 
 // R34 — lifestyleSectionDuMoment est retiree avec les replis de R28 : les
 // deux sections sont affichees en entier, il n'y a plus rien a ouvrir.
+// BUILD 1893 : PAS ET SOMMEIL VIVENT DANS PROGRÈS › PAS & SOMMEIL. Les
+// liens (point du jour, mission « nuit ») y mènent et amènent la section sous
+// les yeux ; s-steps et s-sleep ne sont plus ouverts par un lien athlète.
+function _lifestyleVers(id){
+  loadLifestyle();
+  setTimeout(()=>{ try{ _defiler(document.getElementById(id),{block:'start'}); }catch(e){} },80);
+  return true;
+}
+function lifestylePas(){ return _lifestyleVers('lifestyle-steps-content'); }
+function lifestyleSommeil(){ return _lifestyleVers('lifestyle-sleep-content'); }
 function loadLifestyle(){
   go('s-lifestyle');
   try{ sanSyncTirer().catch(()=>{}); }catch(e){}
@@ -139892,6 +139916,8 @@ function openAthleteProfile(){
   if(repli) repli.style.display=u.birthdate?'none':'block';
   const wtEl=document.getElementById('atp-weight');
   if(wtEl) wtEl.value=u.profileWeight||'';
+  const pl=document.getElementById('atp-poids-lu');
+  if(pl) pl.innerHTML=htmlPoidsProfil(u);
   const objEl=document.getElementById('atp-objective');
   if(objEl) objEl.value=u.objective||'';
   _atpGender=isFemale(u.gender)?'F':(u.gender?'H':'');
@@ -139979,7 +140005,9 @@ function saveAthleteProfile(){
   }
   // Champ vidé alors qu'une date est enregistrée : on ne détruit rien. Effacer
   // sa date de naissance par inadvertance ferait disparaître son âge partout.
-  currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
+  // BUILD 1893 : plus de champ de poids au profil ; sans lui, rien n'est touché.
+  const _wEl=document.getElementById('atp-weight');
+  if(_wEl) currentUser.profileWeight=parseFloat(_wEl.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   // Le champ « Objectif » a quitté le profil (28/09/2026 : il est demandé
   // ailleurs). Sans lui, on ne touche pas à l'objectif déjà enregistré.

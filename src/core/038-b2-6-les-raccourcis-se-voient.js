@@ -1698,13 +1698,13 @@ function showProgressTab(tab,btn,sansMemo){
       // R13 — le geste qui remplit l'onglet, s'il est permis : l'accueil
       // retire la pesee a dessein dans trois cas, voir _peseePossible.
       c.innerHTML=_peseePossible(currentUser)
-        ?emptyState('clipboard','Ta courbe de poids part de ta première pesée. Il n\'y en a pas encore.','Noter mon poids','ouvrirPeseeAccueil()')
+        ?htmlCartePesee(currentUser,Date.now(),'-evo')+emptyState('clipboard','Ta courbe de poids part de ta première pesée. Il n\'y en a pas encore.','Noter mon poids','ouvrirPeseeAccueil()')
         // Pesee retiree a dessein : on ne parle pas de poids. Le bilan, lui,
         // reste le geste qui remplit cet ecran.
         :emptyState('clipboard','Ton suivi s\'affichera ici après ton premier bilan.','Remplir mon bilan','openBilanChoice()');
       return;}
     const vals=bl.map(b=>getBW(b));
-    c.innerHTML=blocPoids(currentUser)
+    c.innerHTML=htmlCartePesee(currentUser,Date.now(),'-evo')+blocPoids(currentUser)
       +((bl.length&&!currentUser.masquerPoids)?renderDataTable(
         ['',...bilLabels],
         [{label:'Poids (kg)',labelColor:'#bbb',

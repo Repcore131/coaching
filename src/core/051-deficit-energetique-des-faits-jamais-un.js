@@ -669,25 +669,19 @@ function poidsAffiche(user){
   const d=dernierePesee(user);
   return d?d.kg:null;
 }
-function renderCartePesee(){
-  const z=document.getElementById('clh-pesee');
-  if(!z) return;
+// BUILD 1893 : LA CARTE EST PARTAGÉE, accueil et Évolution › Poids. PURE :
+// le dossier et l'instant suffisent. `suffixe` distingue les deux champs
+// (deux #pesee-input dans la page, et savePesee lirait le mauvais).
+function htmlCartePesee(u,maintenant,suffixe){
   // Même prudence que pour l'antécédent alimentaire : on n'incite pas à se
   // peser tous les jours quelqu'un dont plusieurs signaux de déficit se
   // cumulent déjà.
-  let _defBloque=false;
-  try{ _defBloque=(paliersDeficit(currentUser)==='blocage'); }catch(e){}
-  if(!currentUser||aTCA(currentUser)||currentUser.masquerPoids||_defBloque){ z.innerHTML=''; return; }
-  // ⚠ ET ELLE SE TAIT QUAND LE POINT DU JOUR POSE DEJA LA QUESTION DU POIDS.
-  // Le lundi, sans cette ligne, l'accueil affichait DEUX champs de pesee a
-  // quinze centimetres l'un de l'autre. Le point du jour disparait des que la
-  // pesee est faite — c'est sa regle — et cette carte revient aussitot, avec
-  // sa moyenne sur sept jours et sa coche. On ne perd donc rien : on retarde
-  // l'affichage de la moyenne du temps que la question soit repondue.
-  try{ const p=pdjEtat(currentUser,Date.now());
-       if(p&&p.question==='poids'){ z.innerHTML=''; return; } }catch(e){}
-  const auj=localISODate(new Date());
-  const serie=serieWeight(currentUser);
+  if(!u||aTCA(u)||u.masquerPoids) return '';
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const auj=localISODate(new Date(t));
+  try{ if(paliersDeficit(u,auj)==='blocage') return ''; }catch(e){}
+  const sx=suffixe?String(suffixe).replace(/[^\w-]/g,''):'';
+  const serie=serieWeight(u);
   const dujour=serie.find(e=>e.date===auj);
   const moy=mm7(serie,auj);
   const der=serie.length?serie[serie.length-1]:null;
@@ -696,36 +690,51 @@ function renderCartePesee(){
   if(moy!=null) sous='Moyenne 7 jours : <b style="color:var(--text)">'+moy.toFixed(1)+' kg</b>';
   else{
     const fen=serie.filter(e=>e.date>=_jourPlus(auj,-(PESEE_FENETRE_MM-1))).length;
-    // « … cette semaine avant une moyenne fiable » faisait 53 caracteres et
-    // passait a la ligne sur tout telephone. Kevin voulait un seul rang
-    // (15/09/2026) ; le corps ne peut pas descendre — une assertion interdit
-    // tout texte sous 11 px sur cet ecran — donc c'est la PHRASE qui se
-    // raccourcit. « Cette semaine » ne se perd pas : le compte est deja
-    // celui de la fenetre de sept jours, il ne disait rien de plus.
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
+  return `<div class="pes-carte" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">${icon('coche',14)} ${dujour.kg} kg</span>`:''}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <!-- La boîte, et non le champ, porte la bordure : c'est elle qui doit
-           contenir le couple « nombre + unité ». Un clic n'importe où dedans
-           donne le focus au champ, sinon la moitié de la surface serait morte. -->
-      <label class="pes-boite" for="pesee-input">
+      <label class="pes-boite" for="pesee-input${sx}">
         <span class="pes-duo">
-          <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
+          <input type="number" id="pesee-input${sx}" inputmode="decimal" step="0.1"
             min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'-'}"
             value="${dujour?dujour.kg:''}" class="pes-champ">
           <span class="pes-unite">kg</span>
         </span>
       </label>
-      <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
+      <button class="btn btn-red btn-sm" onclick="savePesee('${sx}')" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div class="pes-sous">${sous}</div>
   </div>`;
+}
+// Le poids du profil, en lecture seule : la dernière pesée, et le lien.
+function htmlPoidsProfil(u){
+  if(!u||aTCA(u)||u.masquerPoids) return '<span class="sub">Suivi du poids masqué</span>';
+  const s=serieWeight(u);
+  const d=s.length?s[s.length-1]:null;
+  const lien='<button type="button" class="rb-lien" onclick="ouvrirPeseeAccueil()" style="display:block;margin-top:4px">'+(d?'Noter une pesée':'Noter mon poids')+'</button>';
+  if(!d) return '<span class="sub">Aucune pesée pour l’instant.</span>'+lien;
+  const j=dateLocaleDeCle(d.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return 'Dernière pesée : <b>'+escapeHtml(String(d.kg).replace('.',','))+' kg</b> ('+escapeHtml(j)+')'+lien;
+}
+function renderCartePesee(){
+  const z=document.getElementById('clh-pesee');
+  if(!z) return;
+  if(!currentUser){ z.innerHTML=''; return; }
+  // ⚠ ET ELLE SE TAIT QUAND LE POINT DU JOUR POSE DEJA LA QUESTION DU POIDS.
+  // Le lundi, sans cette ligne, l'accueil affichait DEUX champs de pesee a
+  // quinze centimetres l'un de l'autre. Le point du jour disparait des que la
+  // pesee est faite — c'est sa regle — et cette carte revient aussitot, avec
+  // sa moyenne sur sept jours et sa coche. On ne perd donc rien : on retarde
+  // l'affichage de la moyenne du temps que la question soit repondue.
+  try{ const p=pdjEtat(currentUser,Date.now());
+       if(p&&p.question==='poids'){ z.innerHTML=''; return; } }catch(e){}
+  z.innerHTML=htmlCartePesee(currentUser,Date.now());
 }
 // ══ UNE PESEE S'ENREGISTRE EN UN SEUL ENDROIT ═══════════════════════════
 //
@@ -756,11 +765,16 @@ async function _enregistrerPesee(v,jour){
   toastEcriture(saveUser(),'Pesée enregistrée '+ICO.coche,'ta pesée est');
   return true;
 }
-async function savePesee(){
-  const inp=document.getElementById('pesee-input');
+async function savePesee(suffixe){
+  const sx=suffixe?String(suffixe):'';
+  const inp=document.getElementById('pesee-input'+sx);
   if(!inp) return;
   const v=parseFloat(String(inp.value).replace(',','.'));
-  if(await _enregistrerPesee(v,localISODate(new Date()))) renderCartePesee();
+  if(await _enregistrerPesee(v,localISODate(new Date()))){
+    renderCartePesee();
+    // Depuis Évolution, la courbe suit la pesée.
+    if(sx){ try{ showProgressTab('poids',document.querySelector('#prog-tabs button')); }catch(e){} }
+  }
 }
 // ── Onglet Poids : la courbe (refonte du 26/09/2026, maquette de Kevin) ────
 // UN SEUL DESSIN pour l'athlete (Evolution > Poids) et pour le coach (fiche,

@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1892';
+window.RC_BUILD='1893';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1892.css">
+<link rel="stylesheet" href="./rc-style.1893.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1892.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1893.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -4075,8 +4075,10 @@ const COACH_PHOTO='icons/coach.jpg';
             <input id="atp-birthdate" type="date" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box">
           </div>
           <div style="flex:1">
-            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Poids (kg)</label>
-            <input id="atp-weight" type="number" min="30" max="300" step="0.1" placeholder="70" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box">
+            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Poids</label>
+            <!-- BUILD 1893 : LE POIDS SE LIT ICI, IL SE SAISIT À LA PESÉE. Un
+                 second champ faisait diverger le poids du profil et la courbe. -->
+            <div id="atp-poids-lu" style="font-size:var(--fs-sm);line-height:1.5;padding:12px 0"></div>
           </div>
         </div>
         <!-- REPLI. Les dossiers créés par doRescue n'ont pas de date de
@@ -6305,5 +6307,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1892.js"></script>
+<script src="./rc-core.1893.js"></script>
 </body></html>

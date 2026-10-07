@@ -62602,7 +62602,8 @@ async function testExercices(){
       // ⚠ LES GARDES DU POIDS SONT CELLES DE LA CARTE DE PESEE, mot pour mot.
       // Si l'une des deux apprend une garde que l'autre ignore, un lundi
       // demanderait son poids a quelqu'un a qui l'accueil refuse de le montrer.
-      const gardesPesee=String(renderCartePesee).match(/aTCA\(currentUser\)\|\|currentUser\.masquerPoids/);
+      // BUILD 1893 : les gardes vivent dans htmlCartePesee, partagée.
+      const gardesPesee=String(htmlCartePesee).match(/aTCA\(u\)\|\|u\.masquerPoids/)&&/paliersDeficit/.test(String(htmlCartePesee));
       if(!gardesPesee) return _echec('les gardes de la carte de pesee ont change de forme');
       const gp=String(pdjEtat);
       for(const g of ['aTCA','masquerPoids','paliersDeficit'])
@@ -73410,6 +73411,47 @@ async function testExercices(){
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
 
+    // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
+    ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
+      const src=_prodSrc();
+      const m=src.match(/onclick=\\?["'][^"']*load(Steps|Sleep)\(\)/g)||[];
+      if(m.length) return _echec(m.join(' | '));
+      if(/action:'load(Steps|Sleep)\(\)'/.test(src)) return _echec('une mission ouvre encore loadSleep()');
+      if(PDJ_QUESTIONS.sommeil.ecran!=='lifestyleSommeil'||PDJ_QUESTIONS.pas.ecran!=='lifestylePas') return _echec('point du jour');
+      const sU=currentUser;
+      try{
+        currentUser=Object.assign({},sU||{},{role:'athlete'});
+        lifestylePas();
+        return (document.querySelector('.screen.active')||{}).id==='s-lifestyle'?true:_echec('écran : '+(document.querySelector('.screen.active')||{}).id);
+      }finally{ currentUser=sU; go('s-client-home'); }});
+    ok('1893 — htmlCartePesee : vide si masquerPoids, TCA ou blocage ; sinon le champ',()=>{
+      const t=new Date(2026,9,7,9).getTime();
+      const u={weightLog:[{date:'2026-10-06',kg:63.4}]};
+      if(!/pesee-input/.test(htmlCartePesee(u,t))) return _echec('pas de champ');
+      if(htmlCartePesee(Object.assign({},u,{masquerPoids:true}),t)!=='') return _echec('masquerPoids');
+      const sv=window.paliersDeficit;
+      try{ window.paliersDeficit=()=>'blocage'; if(htmlCartePesee(u,t)!=='') return _echec('blocage'); }finally{ window.paliersDeficit=sv; }
+      return /id="pesee-input-evo"/.test(htmlCartePesee(u,t,'-evo'))&&/savePesee\('-evo'\)/.test(htmlCartePesee(u,t,'-evo'))?true:_echec('suffixe');});
+    ok('1893 — Évolution › Poids porte la carte de pesée',()=>{
+      const sU=currentUser;
+      try{
+        currentUser={role:'athlete',email:'p@t.fr',weightLog:[{date:localISODate(new Date(Date.now()-864e5)),kg:63.4}],bilans:[]};
+        go('s-progress'); showProgressTab('poids',document.querySelector('#prog-tabs button'));
+        return document.querySelector('#s-progress #pesee-input-evo')?true:_echec('carte absente');
+      }finally{ currentUser=sU; go('s-client-home'); }});
+    ok('1893 — le profil n’a plus de champ de poids : « Dernière pesée : 63,4 kg (6 oct.) »',()=>{
+      const p=document.getElementById('s-athlete-profile');
+      if(p.querySelector('input#atp-weight,input[id*="weight"],input[id*="poids"]')) return _echec('champ de poids modifiable');
+      const h=htmlPoidsProfil({weightLog:[{date:'2026-10-06',kg:63.4}]});
+      if(!/Dernière pesée : <b>63,4 kg<\/b> \(6 oct\.\)/.test(h)) return _echec(h);
+      const sU=currentUser, sv=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser=Object.assign(_r13Neuf(),{birthdate:'1990-05-01',gender:'homme',profileWeight:71});
+        openAthleteProfile(); saveAthleteProfile();
+        return currentUser.profileWeight===71?true:_echec('le poids du profil a été effacé');
+      }finally{ currentUser=sU; window.saveUser=sv; go('s-client-home'); }});
+
     // ══ BUILD 1892 — L'HISTORIQUE DES BILANS DANS « QUEL BILAN ? » ═════════
     const _hbU=()=>({role:'athlete',email:'hb@t.fr',fname:'Léa',bilans:[
       {type:'depart',date:Date.now()-30*864e5,'deb-weight':'64'},
@@ -75339,12 +75381,12 @@ async function testExercices(){
       // assertion-la a raison : c'est la PHRASE qui a ete raccourcie.
       if(m[1].indexOf('font-size:var(--fs-xs)')<0)
         return _echec('le corps n\'est plus au cran xs : '+m[1].slice(0,60));
-      if(String(renderCartePesee).indexOf('class="pes-sous"')<0)
+      if(String(htmlCartePesee).indexOf('class="pes-sous"')<0)
         return _echec('la carte n\'utilise pas la regle');
       // LA PHRASE A ETE RACCOURCIE, et c'est ce qui la fait tenir : 244 px a
       // 11 px, contre 326 pour l'ancienne. « Cette semaine » ne disait rien de
       // plus — le compte est deja celui de la fenetre de sept jours.
-      const s=String(renderCartePesee);
+      const s=String(htmlCartePesee);
       // LE MOTIF VISE LE CODE, PAS LE COMMENTAIRE. `String(fn)` rend le corps
       // entier, commentaires compris, et celui qui explique ce lot cite
       // justement l'ancienne phrase : sans l'apostrophe fermante et le

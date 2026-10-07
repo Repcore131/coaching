@@ -1481,6 +1481,16 @@ function saveSleep(){
 
 // R34 — lifestyleSectionDuMoment est retiree avec les replis de R28 : les
 // deux sections sont affichees en entier, il n'y a plus rien a ouvrir.
+// BUILD 1893 : PAS ET SOMMEIL VIVENT DANS PROGRÈS › PAS & SOMMEIL. Les
+// liens (point du jour, mission « nuit ») y mènent et amènent la section sous
+// les yeux ; s-steps et s-sleep ne sont plus ouverts par un lien athlète.
+function _lifestyleVers(id){
+  loadLifestyle();
+  setTimeout(()=>{ try{ _defiler(document.getElementById(id),{block:'start'}); }catch(e){} },80);
+  return true;
+}
+function lifestylePas(){ return _lifestyleVers('lifestyle-steps-content'); }
+function lifestyleSommeil(){ return _lifestyleVers('lifestyle-sleep-content'); }
 function loadLifestyle(){
   go('s-lifestyle');
   try{ sanSyncTirer().catch(()=>{}); }catch(e){}

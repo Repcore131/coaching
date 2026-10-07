@@ -1198,6 +1198,8 @@ function openAthleteProfile(){
   if(repli) repli.style.display=u.birthdate?'none':'block';
   const wtEl=document.getElementById('atp-weight');
   if(wtEl) wtEl.value=u.profileWeight||'';
+  const pl=document.getElementById('atp-poids-lu');
+  if(pl) pl.innerHTML=htmlPoidsProfil(u);
   const objEl=document.getElementById('atp-objective');
   if(objEl) objEl.value=u.objective||'';
   _atpGender=isFemale(u.gender)?'F':(u.gender?'H':'');
@@ -1285,7 +1287,9 @@ function saveAthleteProfile(){
   }
   // Champ vidé alors qu'une date est enregistrée : on ne détruit rien. Effacer
   // sa date de naissance par inadvertance ferait disparaître son âge partout.
-  currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
+  // BUILD 1893 : plus de champ de poids au profil ; sans lui, rien n'est touché.
+  const _wEl=document.getElementById('atp-weight');
+  if(_wEl) currentUser.profileWeight=parseFloat(_wEl.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   // Le champ « Objectif » a quitté le profil (28/09/2026 : il est demandé
   // ailleurs). Sans lui, on ne touche pas à l'objectif déjà enregistré.

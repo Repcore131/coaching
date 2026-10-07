@@ -486,11 +486,11 @@ const PDJ_QUESTIONS=Object.freeze({
   poids:   {titre:'Combien pèses-tu ce matin ?',      accuse:'Pesée notée',
             ecran:null,        lienDit:null},
   sommeil: {titre:'Tu as dormi combien cette nuit ?', accuse:'Nuit notée',
-            ecran:'loadSleep', lienDit:'Saisir mon coucher et mon lever'},
+            ecran:'lifestyleSommeil', lienDit:'Saisir mon coucher et mon lever'},
   energie: {titre:'Ton énergie aujourd\'hui ?',        accuse:'Énergie notée',
             ecran:null,        lienDit:null},
   pas:     {titre:'Combien de pas hier ?',            accuse:'Pas notés',
-            ecran:'loadSteps', lienDit:'Voir ma semaine de pas'}
+            ecran:'lifestylePas', lienDit:'Voir ma semaine de pas'}
 });
 // Les quatre durees proposees au doigt. Une nuit se dit a la demi-heure pres
 // quand on la raconte, pas a la minute : celui qui veut la minute a le lien

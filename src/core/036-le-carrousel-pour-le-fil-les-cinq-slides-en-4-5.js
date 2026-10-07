@@ -2768,7 +2768,7 @@ const MISSIONS=Object.freeze([
     faite:(u,j)=>{ try{ return !!cibleTenueJour(u,j).prot; }catch(e){ return false; } }}),
   Object.freeze({cle:'nuit',type:'repos',lib:'Saisis ta nuit',
     faite:(u,j)=>(Array.isArray(u.sleepLog)?u.sleepLog:[]).some(e=>e&&e.date===j&&Number(e.duration)>0),
-    action:'loadSleep()',bouton:'Saisir'}),
+    action:'lifestyleSommeil()',bouton:'Saisir'}),
   Object.freeze({cle:'prochaine',type:'repos',lib:'Regarde ta prochaine séance et ses records à portée',
     possible:u=>_mjCreneauActif(u),
     faite:(u,j)=>_mjActe(u,j,'prochaine'),action:'missionProchaineVoir()',bouton:'Voir'}),
