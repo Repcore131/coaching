@@ -92423,6 +92423,7 @@ function ouvrirAvantApres(role){
   return true;
 }
 function fermerAvantApres(){
+  try{ aaAnimArreter(); }catch(e){}
   const z=document.getElementById('aa-ecran'); if(z) z.remove();
   _aa=null;
   return true;
@@ -92442,7 +92443,15 @@ function _aaRendreEcran(){
     +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">'+icon('croix',14)+'</button></div>'
     +'<div class="aa-apercu"><canvas id="aa-canvas" aria-label="Aperçu de l’image"></canvas><div class="aa-charge" id="aa-charge">Composition…</div></div>'
     +'<div class="aa-bas">'
-    +(autorise
+    // BUILD 1885 : « Image / Évolution animée ».
+    +'<div class="aa-seg" role="group" style="margin-bottom:8px"><button type="button" aria-pressed="'+(_aa.mode!=='anime')+'" onclick="aaMode(\'image\')">Image</button>'
+      +'<button type="button" aria-pressed="'+(_aa.mode==='anime')+'"'+(aaBilansAvecPhoto(u,o.vue).length<2?' disabled':'')+' onclick="aaMode(\'anime\')">Évolution animée</button></div>'
+    +(_aa.mode==='anime'
+      ?('<button type="button" class="btn btn-outline btn-sm" onclick="aaAnimJouer()">Rejouer</button>'
+        +(autorise&&aaFormatVideo()?'<button type="button" class="btn btn-red aa-partager" onclick="aaVideoSortir(this)">'+icon('share',18)+' <span>Partager la vidéo</span></button>':'')
+        +(autorise?'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaMode(\'image\');aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer l’image</span></button>':''))
+      :'')
+    +(_aa.mode==='anime'?'':autorise
       ?('<button type="button" class="btn btn-red aa-partager" onclick="aaPartager(this)">'+icon('share',18)
           +' <span>'+(o.format==='post'?'Partager en post':'Partager en story')+'</span></button>'
         +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>'
@@ -92481,6 +92490,7 @@ function aaReglage(nom,val){
   const ouvert=!!document.querySelector('#aa-ecran .aa-perso[open]');
   _aaRendreEcran();
   if(ouvert){ const d=document.querySelector('#aa-ecran .aa-perso'); if(d) d.open=true; }
+  if(_aa.mode==='anime'){ aaAnimArreter(); aaAnimPreparer(); return; }
   _aaComposer();
 }
 // L'ACCORD DE L'ATHLÈTE pour l'export par son coach : une date, ou rien.
@@ -92579,6 +92589,150 @@ function _aaSortir(partager,btn,confirme){
   return ok;
 }
 function aaPartager(btn){ return _aaSortir(true,btn,false); }
+// ══ BUILD 1885 : L'ÉVOLUTION ANIMÉE ═════════════════════════════════════════
+// Toutes les photos d'une vue (8 au plus : la première, la dernière et des
+// intermédiaires régulières), alignées une à une sur la première (épaules →
+// chevilles), enchaînées en fondus de 600 ms. Tout est local ; l'export vidéo
+// passe par les mêmes garde-fous que l'image.
+const AA_ANIM_MAX=8, AA_ANIM_FONDU=600, AA_ANIM_DUREE=7000;
+/** PURE. n éléments au plus, la première et la dernière toujours gardées. */
+function aaSelectionAnimee(liste,n){
+  const l=Array.isArray(liste)?liste:[];
+  const m=Math.max(2,Number(n)||AA_ANIM_MAX);
+  if(l.length<=m) return l.slice();
+  const idx=[];
+  for(let i=0;i<m;i++){ const k=Math.round(i*(l.length-1)/(m-1)); if(idx.indexOf(k)<0) idx.push(k); }
+  return idx.map(k=>l[k]);
+}
+/** PURE. Aligne b sur a (coordonnées normalisées) : p' = p × échelle + (dx, dy). */
+function aaTransformeAlignement(ra,rb){
+  if(!ra||!rb) return {echelle:1,dx:0,dy:0};
+  const ha=(ra.chev&&rb.chev)?ra.chev:((ra.tronc&&rb.tronc)?ra.tronc:null);
+  const hb=(ra.chev&&rb.chev)?rb.chev:((ra.tronc&&rb.tronc)?rb.tronc:null);
+  const s=(ha&&hb)?ha/hb:1;
+  return {echelle:s,dx:ra.ex-rb.ex*s,dy:ra.ey-rb.ey*s};
+}
+let _aaAnim=null;   // {images:[{img,rep,b}], t0, raf}
+async function aaAnimPreparer(){
+  if(!_aa) return false;
+  const moi=_aa;
+  const bl=aaSelectionAnimee(aaBilansAvecPhoto(moi.u,moi.o.vue),AA_ANIM_MAX);
+  const ch=document.getElementById('aa-charge'); if(ch){ ch.hidden=false; ch.textContent='Préparation de l’animation…'; }
+  const images=[];
+  for(const b of bl){
+    try{ const img=await aaChargerPhoto(b,moi.o.vue); if(img) images.push({img,b,rep:null}); }catch(e){ /* photo illisible : sautée */ }
+  }
+  if(_aa!==moi) return false;
+  if(images.length<2){ if(ch) ch.textContent='Il faut au moins deux photos lisibles de cet angle.'; return false; }
+  for(const x of images){ try{ x.rep=await aaReperes(x.img); }catch(e){ x.rep=null; } }
+  if(_aa!==moi) return false;
+  const r0=images[0].rep;
+  images.forEach(x=>{ x.tr=(r0&&x.rep)?aaTransformeAlignement(r0,x.rep):{echelle:1,dx:0,dy:0}; });
+  _aaAnim={images,t0:0,raf:0};
+  if(ch) ch.hidden=true;
+  aaAnimJouer();
+  return true;
+}
+// La durée d'une photo tenue, pour que l'ensemble fasse 6 à 8 s.
+function _aaAnimTenue(n){ return Math.max(300,(AA_ANIM_DUREE-(n-1)*AA_ANIM_FONDU)/n); }
+function _aaAnimDessiner(g,W,H,t){
+  const A=_aaAnim; if(!A) return true;
+  const L=A.images, n=L.length, tenue=_aaAnimTenue(n), pas=tenue+AA_ANIM_FONDU;
+  const i=Math.min(n-1,Math.floor(t/pas)), r=t-i*pas;
+  const a=r>tenue&&i<n-1?(r-tenue)/AA_ANIM_FONDU:0;
+  g.fillStyle='#070707'; g.fillRect(0,0,W,H);
+  const base=L[0].img, iw=base.naturalWidth||base.width, ih=base.naturalHeight||base.height;
+  const k=Math.max(W/iw,H/ih), dw=iw*k, dh=ih*k, ox=(W-dw)/2, oy=(H-dh)*0.3;
+  const peindre=(x,alpha)=>{
+    const tr=x.tr||{echelle:1,dx:0,dy:0};
+    g.globalAlpha=alpha;
+    g.drawImage(x.img,ox+tr.dx*dw,oy+tr.dy*dh,tr.echelle*dw,tr.echelle*dh);
+    g.globalAlpha=1;
+  };
+  peindre(L[i],1);
+  if(a>0) peindre(L[i+1],a);
+  if(_aa&&_aa.o.flou){ try{ _aaFlouterHaut(g,0,0,W,H); }catch(e){} }
+  const cur=a>0.5?L[i+1]:L[i];
+  const sem=Math.max(0,Math.round((Number(cur.b.date)-Number(L[0].b.date))/(7*864e5)));
+  const u=_aa&&_aa.u;
+  const sansPoids=!u||u.masquerPoids||(function(){ try{ return aTCA(u); }catch(e){ return false; } })();
+  const morceaux=[(function(){ try{ return dateLocaleDeCle(cur.b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return ''; } })(),'Semaine '+sem];
+  if(_aa&&_aa.o.poids&&!sansPoids&&getBW(cur.b)) morceaux.push(String(getBW(cur.b)).replace('.',',')+' kg');
+  if(_aa&&_aa.o.indicateur==='taille'&&getBM(cur.b,'waist')) morceaux.push('taille '+String(getBM(cur.b,'waist')).replace('.',',')+' cm');
+  g.fillStyle='rgba(0,0,0,.55)'; g.fillRect(0,H-H*0.08,W,H*0.08);
+  g.fillStyle='#fff'; g.font='700 '+Math.round(H*0.028)+'px Montserrat,sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(morceaux.join(' · '),W/2,H-H*0.04);
+  return t>=n*pas-AA_ANIM_FONDU;
+}
+function aaAnimJouer(){
+  const A=_aaAnim, c=document.getElementById('aa-canvas');
+  if(!A||!c) return false;
+  const F=AA_FORMATS[_aa&&_aa.o.format==='post'?'post':'story'];
+  c.width=F.w; c.height=F.h;
+  const g=c.getContext('2d');
+  cancelAnimationFrame(A.raf);
+  A.t0=performance.now();
+  const pas=()=>{ if(_aaAnim!==A||!document.getElementById('aa-canvas')) return; const fini=_aaAnimDessiner(g,c.width,c.height,performance.now()-A.t0); if(!fini) A.raf=requestAnimationFrame(pas); };
+  A.raf=requestAnimationFrame(pas);
+  return true;
+}
+function aaAnimArreter(){ if(_aaAnim){ try{ cancelAnimationFrame(_aaAnim.raf); }catch(e){} } _aaAnim=null; }
+function aaMode(m){
+  if(!_aa) return false;
+  _aa.mode=m==='anime'?'anime':'image';
+  aaAnimArreter();
+  _aaRendreEcran();
+  if(_aa.mode==='anime') aaAnimPreparer(); else _aaComposer();
+  return true;
+}
+/** Le format vidéo enregistrable ici, ou null (certains iOS : lecture seule). */
+function aaFormatVideo(){
+  try{
+    if(typeof MediaRecorder==='undefined'||!MediaRecorder.isTypeSupported) return null;
+    for(const t of ['video/webm;codecs=vp9','video/webm','video/mp4']) if(MediaRecorder.isTypeSupported(t)) return t;
+  }catch(e){}
+  return null;
+}
+async function aaVideoSortir(btn,confirme){
+  if(!_aa||!_aaAnim) return false;
+  if(!aaExportAutorise(_aa.role,_aa.u)) return false;
+  if(!confirme&&!_aaDejaAverti()){
+    const p=document.getElementById('aa-avert');
+    if(p){
+      p.innerHTML='Cette vidéo contient '+(_aa.role==='coach'?'les photos de '+escapeHtml(_aa.u.fname||'ton athlète'):'tes photos')+'. Continuer ?'
+        +'<span><button type="button" class="btn btn-red btn-sm" onclick="aaVideoSortir(null,true)">Continuer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'aa-avert\').hidden=true">Annuler</button></span>';
+      p.hidden=false;
+    }
+    return false;
+  }
+  try{ localStorage.setItem(_aaAvertiCle(),'1'); }catch(e){}
+  const p=document.getElementById('aa-avert'); if(p) p.hidden=true;
+  const type=aaFormatVideo();
+  const c=document.getElementById('aa-canvas');
+  if(!type||!c||!c.captureStream){ toast('La vidéo ne s’enregistre pas sur cet appareil : l’animation se lit à l’écran.','var(--orange)'); return false; }
+  if(_storyEnCours) return false;
+  _storyEnCours=true;
+  try{
+    const flux=c.captureStream(30), rec=new MediaRecorder(flux,{mimeType:type}), morceaux=[];
+    rec.ondataavailable=e=>{ if(e.data&&e.data.size) morceaux.push(e.data); };
+    const fini=new Promise(r=>{ rec.onstop=r; });
+    rec.start();
+    aaAnimJouer();
+    const n=_aaAnim.images.length;
+    await new Promise(r=>setTimeout(r,n*(_aaAnimTenue(n)+AA_ANIM_FONDU)));
+    rec.stop(); await fini;
+    try{ flux.getTracks().forEach(t=>t.stop()); }catch(e){}
+    const ext=/mp4/.test(type)?'mp4':'webm';
+    const blob=new Blob(morceaux,{type:type.split(';')[0]});
+    const f=new File([blob],'repcore-evolution.'+ext,{type:blob.type});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){ try{ await navigator.share({files:[f]}); return true; }catch(e){ if(e&&e.name==='AbortError') return false; } }
+    const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=f.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),3000);
+    return true;
+  }catch(e){ toast('Vidéo impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); return false; }
+  finally{ _storyEnCours=false; }
+}
 function aaEnregistrer(btn){ return _aaSortir(false,btn,false); }
 // ══ LA CARTE DE CYCLE : « CYCLE N TERMINÉ » ═══════════════════════════════
 //

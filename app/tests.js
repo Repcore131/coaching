@@ -66103,6 +66103,23 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1885 : L'ÉVOLUTION ANIMÉE ══
+    ok('aaSelectionAnimee : 8 au plus, la première et la dernière gardées ; 2 photos → les 2',()=>{
+      const l=Array.from({length:20},(_,i)=>i);
+      const r=aaSelectionAnimee(l,8);
+      if(r.length!==8||r[0]!==0||r[7]!==19) return _echec(JSON.stringify(r));
+      if(r.some((x,i)=>i&&x<=r[i-1])) return _echec('ordre');
+      return JSON.stringify(aaSelectionAnimee([5,6],8))==='[5,6]'?true:_echec('deux');});
+    ok('aaTransformeAlignement : échelle et décalage sur des repères synthétiques',()=>{
+      const ra={ex:0.5,ey:0.2,chev:0.6,tronc:0.3}, rb={ex:0.4,ey:0.3,chev:0.3,tronc:0.15};
+      const t=aaTransformeAlignement(ra,rb);
+      const ok1=Math.abs(t.echelle-2)<1e-9&&Math.abs(t.dx-(0.5-0.8))<1e-9&&Math.abs(t.dy-(0.2-0.6))<1e-9;
+      if(!ok1) return _echec(JSON.stringify(t));
+      // Les épaules de b tombent sur celles de a.
+      const x=rb.ex*t.echelle+t.dx, y=rb.ey*t.echelle+t.dy;
+      if(Math.abs(x-ra.ex)>1e-9||Math.abs(y-ra.ey)>1e-9) return _echec('épaules mal alignées');
+      return JSON.stringify(aaTransformeAlignement(null,rb))==='{"echelle":1,"dx":0,"dy":0}'?true:_echec('sans repères');});
+
     // ══ BUILD 1884 : LE RAPPORT DU BLOC ══
     ok('_rapPresetBornes(\'bloc\') suit programmeDe (début → fin prévue ou aujourd’hui)',()=>{
       const d0=new Date(); d0.setDate(d0.getDate()-10);
