@@ -2176,6 +2176,7 @@ function _updateBilanCountdown(){
 // badge ne bouge ; le coach lit les nouvelles valeurs à la synchronisation
 // suivante, sur le même bilan, marqué « modifié le … ».
 let _bilEdition=null;          // {id,nom} pendant une modification, sinon null
+let _bilPhotosAVenir=null;     // vues promises « plus tard » à la validation (build 1861)
 const BIL_PREFIXES_REPONSES=/^(bil|deb|coach)-/;
 // PURE. Les bilans, du plus récent au plus ancien, avec leur nom d'usage.
 function historiqueBilans(u){
@@ -2219,7 +2220,9 @@ function ouvrirHistoriqueBilans(){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 // Rouvre le questionnaire sur un bilan déjà envoyé.
-function modifierBilan(id){
+// `etape` (facultatif) : 'photos' ouvre directement l'étape des photos —
+// calculée sur les étapes RÉELLES du questionnaire, jamais un index fixe.
+function modifierBilan(id,etape){
   const x=historiqueBilans(currentUser).find(h=>h.id===id);
   if(!x){ toast('Ce bilan est introuvable','var(--orange)'); return false; }
   try{ closeModal(); }catch(e){}
@@ -2233,8 +2236,59 @@ function modifierBilan(id){
     const v=x.b[k];
     bilData[k]=Array.isArray(v)?v.slice():v;
   }
+  if(etape==='photos'){
+    const i=_bilIndexEtapePhotos(_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS),bilType);
+    if(i>=0) bilStep=i;
+  }
   renderBilStep(); go('s-bilan');
   return true;
+}
+// ══ LES PHOTOS DU BILAN QUI MANQUENT (BUILD 1861) ═════════════════════════
+// L'élève oublie ses photos, n'a pas le temps, ou voit une photo refusée à
+// tort : il validait sans rien dire, et il fallait bricoler la base pour qu'il
+// y revienne. Une seule question à la validation, et une trace sur le bilan
+// (photosAVenir) qui fait revenir la demande sur l'accueil.
+const BIL_VUES=Object.freeze(['face','back','side']);
+// L'index de l'étape qui porte les cartes photo, dans les étapes RÉELLES ; -1 sans.
+function _bilIndexEtapePhotos(steps,type){
+  const cle=_bilPhotoPrefixe(type)+'face';
+  for(let i=0;i<(steps||[]).length;i++){
+    let h=''; try{ h=String(steps[i]()||''); }catch(e){ h=''; }
+    if(h.indexOf(cle)>=0) return i;
+  }
+  return -1;
+}
+// PURE. Les vues absentes parmi face/dos/profil. [] pendant une grossesse
+// (photos facultatives), en modification d'un bilan envoyé, ou quand aucune vue
+// n'est attendue (opts.attendues). opts.edition : défaut, la modification en cours.
+function photosBilanManquantes(type,data,user,opts){
+  const o=opts||{};
+  const edition=('edition' in o)?o.edition:(typeof _bilEdition!=='undefined'?_bilEdition:null);
+  if(edition) return [];
+  let gr=false; try{ gr=!!grossesseSuspend(user); }catch(e){ gr=false; }
+  if(gr) return [];
+  const att=Array.isArray(o.attendues)?o.attendues:BIL_VUES;
+  if(!att.length) return [];
+  const pre=_bilPhotoPrefixe(type);
+  return att.filter(v=>!(data&&data[pre+v]));
+}
+const BIL_LIB_VUES=Object.freeze({face:'de face',back:'de dos',side:'de profil'});
+// Le bilan le plus récent qui attend encore des photos, ou null.
+function bilanPhotosAVenir(user){
+  const l=historiqueBilans(user||currentUser);
+  for(const x of l){
+    const a=x.b&&x.b.photosAVenir;
+    if(Array.isArray(a)&&a.length) return x;
+  }
+  return null;
+}
+function _htmlPhotosAVenir(user){
+  const x=bilanPhotosAVenir(user);
+  if(!x) return '';
+  const num=x.depart?'d’inscription':'n°'+(x.b.num||x.nom.replace(/\D+/g,''));
+  return '<button type="button" class="clh-photos-avenir" onclick="modifierBilan('+_attrArg(x.id)+',\'photos\')"'
+    +' style="display:block;width:100%;background:none;border:0;padding:6px 0;text-align:left;font:inherit;font-size:var(--fs-xs);color:var(--sub);cursor:pointer">'
+    +'Photos du bilan '+escapeHtml(num)+' à ajouter →</button>';
 }
 // PURE. Applique les réponses `d` au bilan `b`, sans toucher à ce qui n'est pas
 // une réponse (date, numéro, réponse du coach). Rend la liste des clefs changées.
@@ -2263,6 +2317,11 @@ function _bilEnregistrerModif(){
   const x=ed&&historiqueBilans(currentUser).find(h=>h.id===ed.id);
   if(!x){ toast('Ce bilan est introuvable : rien n’a été modifié','var(--orange)'); _quitterEcranBilan(false); openBilanChoice(); return false; }
   const change=appliquerModifBilan(x.b,bilData);
+  // Les photos promises se consomment au fur et à mesure qu'elles arrivent.
+  if(Array.isArray(x.b.photosAVenir)){
+    x.b.photosAVenir=x.b.photosAVenir.filter(v=>{ try{ return !photoBilanExiste(x.b,v); }catch(e){ return true; } });
+    if(!x.b.photosAVenir.length){ delete x.b.photosAVenir; if(!change.length) change.push('photosAVenir'); }
+  }
   // Le profil suit le bilan LE PLUS RÉCENT, comme à l'envoi : corriger un bilan
   // ancien ne doit pas ramener le poids du profil six semaines en arrière.
   const dernier=historiqueBilans(currentUser)[0];
@@ -2512,7 +2571,25 @@ async function bilNext(){
     // Sur le même jeu : un poids seulement REPRIS ne fera pas de point sur la
     // courbe, puisqu’il va être retiré du bilan enregistré. L’avertissement
     // doit donc bien tomber.
-    if(!_bilPoidsSaisi(_saisi)
+    // LES PHOTOS ET LE POIDS : UNE SEULE QUESTION (build 1861). Quand les deux
+    // manquent, les deux messages tiennent dans le même texte.
+    const _iPh=_bilIndexEtapePhotos(steps,bilType);
+    const _manq=photosBilanManquantes(bilType,bilData,currentUser,{attendues:_iPh>=0?BIL_VUES:[]});
+    const _sansPoids=!_bilPoidsSaisi(_saisi);
+    _bilPhotosAVenir=null;
+    if(_manq.length){
+      const txt='Ton coach s’en sert pour voir ce que la balance ne montre pas.'
+        +(_sansPoids?'\n\nTon poids manque aussi : ta courbe n’aura pas de point pour ce bilan.':'');
+      const r=await rcConfirm3('Il manque tes photos',txt,'Ajouter mes photos','Envoyer sans, je les ajoute plus tard','Annuler');
+      if(r==='ok'){
+        bilStep=_iPh; renderBilStep();
+        try{ const c=document.querySelector('input[onchange*="'+_bilPhotoPrefixe(bilType)+_manq[0]+'"]');
+          const carte=c&&c.closest('div'); if(carte&&carte.scrollIntoView) carte.scrollIntoView({block:'center'}); }catch(e){}
+        return;
+      }
+      if(r!=='milieu') return;
+      _bilPhotosAVenir=_manq.slice();
+    } else if(_sansPoids
        &&!await rcConfirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.',null,'Valider')) return;
     // R32 — L'ECRAN DE RESTITUTION, seulement si le bilan S'EST ECRIT : la porte
     // du consentement de sante peut rendre la main sans rien enregistrer.

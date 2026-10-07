@@ -1400,6 +1400,9 @@ function saveBilanFinal(){
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // « Envoyer sans, je les ajoute plus tard » : la promesse reste sur le bilan.
+  if(Array.isArray(_bilPhotosAVenir)&&_bilPhotosAVenir.length) bi.photosAVenir=_bilPhotosAVenir.slice();
+  _bilPhotosAVenir=null;
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
   // ferait reproposer une reprise au prochain bilan du même type.
   _bilClearDraft();

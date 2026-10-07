@@ -687,6 +687,14 @@ function loadClientHome(){
     _alerte.innerHTML=_h;
     _alerte.style.display=_h?'block':'none';
   }
+  // BUILD 1861 : « Photos du bilan n°N à ajouter → », tant que le bilan
+  // envoyé sans elles les attend (photosAVenir).
+  try{
+    let _pa=document.getElementById('clh-photos-avenir');
+    const _ph=_htmlPhotosAVenir(currentUser);
+    if(!_pa&&_ph&&_alerte){ _pa=document.createElement('div'); _pa.id='clh-photos-avenir'; _alerte.insertAdjacentElement('afterend',_pa); }
+    if(_pa){ _pa.innerHTML=_ph; _pa.style.display=_ph?'block':'none'; }
+  }catch(e){}
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
   _majBandeauDispo('clh-dispo');

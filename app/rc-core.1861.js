@@ -49280,6 +49280,14 @@ function loadClientHome(){
     _alerte.innerHTML=_h;
     _alerte.style.display=_h?'block':'none';
   }
+  // BUILD 1861 : « Photos du bilan n°N à ajouter → », tant que le bilan
+  // envoyé sans elles les attend (photosAVenir).
+  try{
+    let _pa=document.getElementById('clh-photos-avenir');
+    const _ph=_htmlPhotosAVenir(currentUser);
+    if(!_pa&&_ph&&_alerte){ _pa=document.createElement('div'); _pa.id='clh-photos-avenir'; _alerte.insertAdjacentElement('afterend',_pa); }
+    if(_pa){ _pa.innerHTML=_ph; _pa.style.display=_ph?'block':'none'; }
+  }catch(e){}
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
   _majBandeauDispo('clh-dispo');
@@ -66805,7 +66813,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas',force:'gardée malgré l’avertissement'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
@@ -81012,6 +81020,7 @@ function _updateBilanCountdown(){
 // badge ne bouge ; le coach lit les nouvelles valeurs à la synchronisation
 // suivante, sur le même bilan, marqué « modifié le … ».
 let _bilEdition=null;          // {id,nom} pendant une modification, sinon null
+let _bilPhotosAVenir=null;     // vues promises « plus tard » à la validation (build 1861)
 const BIL_PREFIXES_REPONSES=/^(bil|deb|coach)-/;
 // PURE. Les bilans, du plus récent au plus ancien, avec leur nom d'usage.
 function historiqueBilans(u){
@@ -81055,7 +81064,9 @@ function ouvrirHistoriqueBilans(){
   document.body.insertAdjacentHTML('beforeend',html);
 }
 // Rouvre le questionnaire sur un bilan déjà envoyé.
-function modifierBilan(id){
+// `etape` (facultatif) : 'photos' ouvre directement l'étape des photos —
+// calculée sur les étapes RÉELLES du questionnaire, jamais un index fixe.
+function modifierBilan(id,etape){
   const x=historiqueBilans(currentUser).find(h=>h.id===id);
   if(!x){ toast('Ce bilan est introuvable','var(--orange)'); return false; }
   try{ closeModal(); }catch(e){}
@@ -81069,8 +81080,59 @@ function modifierBilan(id){
     const v=x.b[k];
     bilData[k]=Array.isArray(v)?v.slice():v;
   }
+  if(etape==='photos'){
+    const i=_bilIndexEtapePhotos(_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS),bilType);
+    if(i>=0) bilStep=i;
+  }
   renderBilStep(); go('s-bilan');
   return true;
+}
+// ══ LES PHOTOS DU BILAN QUI MANQUENT (BUILD 1861) ═════════════════════════
+// L'élève oublie ses photos, n'a pas le temps, ou voit une photo refusée à
+// tort : il validait sans rien dire, et il fallait bricoler la base pour qu'il
+// y revienne. Une seule question à la validation, et une trace sur le bilan
+// (photosAVenir) qui fait revenir la demande sur l'accueil.
+const BIL_VUES=Object.freeze(['face','back','side']);
+// L'index de l'étape qui porte les cartes photo, dans les étapes RÉELLES ; -1 sans.
+function _bilIndexEtapePhotos(steps,type){
+  const cle=_bilPhotoPrefixe(type)+'face';
+  for(let i=0;i<(steps||[]).length;i++){
+    let h=''; try{ h=String(steps[i]()||''); }catch(e){ h=''; }
+    if(h.indexOf(cle)>=0) return i;
+  }
+  return -1;
+}
+// PURE. Les vues absentes parmi face/dos/profil. [] pendant une grossesse
+// (photos facultatives), en modification d'un bilan envoyé, ou quand aucune vue
+// n'est attendue (opts.attendues). opts.edition : défaut, la modification en cours.
+function photosBilanManquantes(type,data,user,opts){
+  const o=opts||{};
+  const edition=('edition' in o)?o.edition:(typeof _bilEdition!=='undefined'?_bilEdition:null);
+  if(edition) return [];
+  let gr=false; try{ gr=!!grossesseSuspend(user); }catch(e){ gr=false; }
+  if(gr) return [];
+  const att=Array.isArray(o.attendues)?o.attendues:BIL_VUES;
+  if(!att.length) return [];
+  const pre=_bilPhotoPrefixe(type);
+  return att.filter(v=>!(data&&data[pre+v]));
+}
+const BIL_LIB_VUES=Object.freeze({face:'de face',back:'de dos',side:'de profil'});
+// Le bilan le plus récent qui attend encore des photos, ou null.
+function bilanPhotosAVenir(user){
+  const l=historiqueBilans(user||currentUser);
+  for(const x of l){
+    const a=x.b&&x.b.photosAVenir;
+    if(Array.isArray(a)&&a.length) return x;
+  }
+  return null;
+}
+function _htmlPhotosAVenir(user){
+  const x=bilanPhotosAVenir(user);
+  if(!x) return '';
+  const num=x.depart?'d’inscription':'n°'+(x.b.num||x.nom.replace(/\D+/g,''));
+  return '<button type="button" class="clh-photos-avenir" onclick="modifierBilan('+_attrArg(x.id)+',\'photos\')"'
+    +' style="display:block;width:100%;background:none;border:0;padding:6px 0;text-align:left;font:inherit;font-size:var(--fs-xs);color:var(--sub);cursor:pointer">'
+    +'Photos du bilan '+escapeHtml(num)+' à ajouter →</button>';
 }
 // PURE. Applique les réponses `d` au bilan `b`, sans toucher à ce qui n'est pas
 // une réponse (date, numéro, réponse du coach). Rend la liste des clefs changées.
@@ -81099,6 +81161,11 @@ function _bilEnregistrerModif(){
   const x=ed&&historiqueBilans(currentUser).find(h=>h.id===ed.id);
   if(!x){ toast('Ce bilan est introuvable : rien n’a été modifié','var(--orange)'); _quitterEcranBilan(false); openBilanChoice(); return false; }
   const change=appliquerModifBilan(x.b,bilData);
+  // Les photos promises se consomment au fur et à mesure qu'elles arrivent.
+  if(Array.isArray(x.b.photosAVenir)){
+    x.b.photosAVenir=x.b.photosAVenir.filter(v=>{ try{ return !photoBilanExiste(x.b,v); }catch(e){ return true; } });
+    if(!x.b.photosAVenir.length){ delete x.b.photosAVenir; if(!change.length) change.push('photosAVenir'); }
+  }
   // Le profil suit le bilan LE PLUS RÉCENT, comme à l'envoi : corriger un bilan
   // ancien ne doit pas ramener le poids du profil six semaines en arrière.
   const dernier=historiqueBilans(currentUser)[0];
@@ -81348,7 +81415,25 @@ async function bilNext(){
     // Sur le même jeu : un poids seulement REPRIS ne fera pas de point sur la
     // courbe, puisqu’il va être retiré du bilan enregistré. L’avertissement
     // doit donc bien tomber.
-    if(!_bilPoidsSaisi(_saisi)
+    // LES PHOTOS ET LE POIDS : UNE SEULE QUESTION (build 1861). Quand les deux
+    // manquent, les deux messages tiennent dans le même texte.
+    const _iPh=_bilIndexEtapePhotos(steps,bilType);
+    const _manq=photosBilanManquantes(bilType,bilData,currentUser,{attendues:_iPh>=0?BIL_VUES:[]});
+    const _sansPoids=!_bilPoidsSaisi(_saisi);
+    _bilPhotosAVenir=null;
+    if(_manq.length){
+      const txt='Ton coach s’en sert pour voir ce que la balance ne montre pas.'
+        +(_sansPoids?'\n\nTon poids manque aussi : ta courbe n’aura pas de point pour ce bilan.':'');
+      const r=await rcConfirm3('Il manque tes photos',txt,'Ajouter mes photos','Envoyer sans, je les ajoute plus tard','Annuler');
+      if(r==='ok'){
+        bilStep=_iPh; renderBilStep();
+        try{ const c=document.querySelector('input[onchange*="'+_bilPhotoPrefixe(bilType)+_manq[0]+'"]');
+          const carte=c&&c.closest('div'); if(carte&&carte.scrollIntoView) carte.scrollIntoView({block:'center'}); }catch(e){}
+        return;
+      }
+      if(r!=='milieu') return;
+      _bilPhotosAVenir=_manq.slice();
+    } else if(_sansPoids
        &&!await rcConfirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.',null,'Valider')) return;
     // R32 — L'ECRAN DE RESTITUTION, seulement si le bilan S'EST ECRIT : la porte
     // du consentement de sante peut rendre la main sans rien enregistrer.
@@ -81576,7 +81661,8 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
     contre:'Le téléphone est trop bas ou penché vers le haut : pose-le à hauteur de hanche, bien droit, à 2 ou 3 m.',
     sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
     clair:'Photo trop claire : évite le soleil direct ou le flash.',
-    ok:'Photo exploitable : tout est dans le cadre.'})});
+    ok:'Photo exploitable : tout est dans le cadre.',
+    force:'Gardée malgré l’avertissement.'})});
 /** Les six consignes illustrées de chaque vue (E1). */
 const PHOTO_CONSIGNES=Object.freeze({
   face:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Face à la lumière, fond clair et uni','Bras relâchés, légèrement écartés du corps','Bien face au téléphone, pieds à largeur de hanches','Tenue près du corps, pieds nus'],
@@ -82167,7 +82253,9 @@ async function _bilControlerPhoto(src,vue){
 // de la garder quand même : '<vue>-ctl' vaut alors 'rouge-force|<codes>'. Le
 // coach le voit (liseré orange, raison), et aucune analyse n'en tire de
 // centimètres tant qu'il ne l'a pas vérifiée.
-const BIL_REFUS_AVANT_FORCER=2;
+// BUILD 1861 : le lien est offert DÈS le premier refus (Kevin), et la photo
+// gardée l'est en orange avec le code « force » : 'orange|force,<codes>'.
+const BIL_REFUS_AVANT_FORCER=1;
 let _bilRefus={gen:-1,n:{},photo:{}};
 function _bilRefusDu(){
   if(_bilRefus.gen!==_bilGen) _bilRefus={gen:_bilGen,n:{},photo:{}};
@@ -82179,6 +82267,8 @@ function photoForcee(b,vue){
   for(const p of BILP_PREFIXES){
     const c=b[p+vue+'-ctl'];
     if(typeof c==='string'&&c.indexOf('rouge-force')===0) return (c.split('|')[1]||'').split(',').filter(Boolean);
+    // Depuis le build 1861 : 'orange|force,<codes>'.
+    if(typeof c==='string'&&/^orange\|force(,|$)/.test(c)) return (c.split('|')[1]||'').split(',').filter(x=>x&&x!=='force');
   }
   return null;
 }
@@ -82192,7 +82282,7 @@ function _htmlPhotoVerdict(ctl,forcer){
   const raisons=(etat==='vert'||etat==='rouge-force')?[]:codes.map(c=>PHOTO_CTL.MSG[c]).filter(Boolean);
   return '<div class="bil-ctl-v" data-e="'+escapeHtml(etat)+'"><b>'+escapeHtml(lib)+'</b>'+raisons.map(r=>'<span>'+escapeHtml(r)+'</span>').join('')
     +(etat==='orange'?'<small>Elle est gardée : tu peux l’envoyer telle quelle, ou la reprendre.</small>':'')
-    +(etat==='rouge'&&forcer?'<button type="button" class="bil-ctl-forcer" onclick="bilGarderQuandMeme('+_attrArg(forcer)+')">Garder quand même, ton coach vérifiera</button>':'')
+    +(etat==='rouge'&&forcer?'<button type="button" class="bil-ctl-forcer" onclick="bilGarderQuandMeme('+_attrArg(forcer)+')">Garder quand même</button>':'')
     +'</div>';
 }
 // Un refus rouge de plus pour cette vue. Rend le HTML du verdict, avec le lien
@@ -82208,7 +82298,7 @@ function bilGarderQuandMeme(key){
   const R=_bilRefusDu(), p=R.photo[key];
   if(!p||!p.data||(R.n[key]||0)<BIL_REFUS_AVANT_FORCER) return false;
   bilData[key]=p.data;
-  bilData[key+'-ctl']='rouge-force|'+p.codes.join(',');
+  bilData[key+'-ctl']='orange|force'+(p.codes.length?','+p.codes.join(','):'');
   const z=document.getElementById('bil-ctl-'+key);
   if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
   if(!_bilEdition) _setPhotoLS('rc_pendingphoto_'+key,p.data);
@@ -85530,6 +85620,9 @@ function saveBilanFinal(){
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // « Envoyer sans, je les ajoute plus tard » : la promesse reste sur le bilan.
+  if(Array.isArray(_bilPhotosAVenir)&&_bilPhotosAVenir.length) bi.photosAVenir=_bilPhotosAVenir.slice();
+  _bilPhotosAVenir=null;
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
   // ferait reproposer une reprise au prochain bilan du même type.
   _bilClearDraft();

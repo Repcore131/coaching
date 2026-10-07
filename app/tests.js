@@ -27798,7 +27798,8 @@ async function testExercices(){
           if(enregistre) return _echec('un bilan vide a été enregistré');
           if(!/vide/.test(dit||'')) return _echec('rien n\'a été dit : '+dit);
           // Une seule réponse suffit à débloquer.
-          bilData={'bil-weight':'72'};
+          // Build 1861 : photos jointes, sinon la question des photos rend la validation asynchrone.
+          bilData={'bil-weight':'72','bil-photo-face':'x','bil-photo-back':'x','bil-photo-side':'x'};
           bilStep=_etapesUtiles(BIL_STEPS).length-1;
           bilNext();
           return enregistre===1?true:_echec('un bilan rempli n\'a pas été enregistré');
@@ -57775,7 +57776,8 @@ async function testExercices(){
         return DEB_STEPS.length===5?true:_echec(DEB_STEPS.length+' étapes');
       } finally { bilData=sv.bd; }});
     // ── 06/10/2026 — LE CONTRÔLE DES PHOTOS NE BLOQUE JAMAIS L'ÉLÈVE ──
-    okA('Contrôle photo : un seul rouge → pas de lien ; deux rouges sur la même vue → « Garder quand même » ; le clic garde la photo en « rouge-force »',async()=>{
+    // Build 1861 : le lien est offert dès le PREMIER refus, et la photo gardée l'est en « orange|force ».
+    okA('Contrôle photo : un rouge → « Garder quand même » tout de suite ; le clic garde la photo en « orange|force »',async()=>{
       const sv={bd:bilData,ed:_bilEdition,ci:compressImage,ctl:_bilControlerPhoto,sd:_bilSaveDraft,ls:_setPhotoLS};
       const zs=[];
       try{
@@ -57788,24 +57790,23 @@ async function testExercices(){
           const z=document.createElement('div'); z.id='bil-ctl-'+k; document.body.appendChild(z); zs.push(z);
         }
         const charger=async k=>{ loadBilPhoto({files:[{}],closest:()=>null},k); await pr; };
-        const zS=document.getElementById('bil-ctl-deb-photo-side'), zF=document.getElementById('bil-ctl-deb-photo-face');
+        const zS=document.getElementById('bil-ctl-deb-photo-side');
         await charger('deb-photo-side');
-        if(zS.querySelector('.bil-ctl-forcer')) return _echec('un lien dès le premier refus');
         if(bilData['deb-photo-side']) return _echec('la photo rouge est gardée');
         await charger('deb-photo-face');
-        if(zF.querySelector('.bil-ctl-forcer')) return _echec('un seul rouge sur la face, et le lien apparaît');
+        // L'élément que l'app vise (un écran déjà rendu peut porter le même id).
+        const zF=document.getElementById('bil-ctl-deb-photo-face');
+        if(!zF.querySelector('.bil-ctl-forcer')) return _echec('pas de lien au premier refus de la face');
         await charger('deb-photo-side');
         const lien=zS.querySelector('.bil-ctl-forcer');
-        if(!lien||lien.textContent!=='Garder quand même, ton coach vérifiera') return _echec('pas de lien au deuxième refus : '+zS.innerHTML);
+        if(!lien||lien.textContent!=='Garder quand même') return _echec('pas de lien : '+zS.innerHTML);
         if(lien.tagName!=='BUTTON'||lien.classList.contains('btn')) return _echec('le lien est un gros bouton');
         lien.click();
         if(bilData['deb-photo-side']!=='data:image/jpeg;base64,PHOTO3') return _echec('photo gardée : '+String(bilData['deb-photo-side']).slice(0,40));
-        if(bilData['deb-photo-side-ctl']!=='rouge-force|pieds') return _echec('ctl : '+bilData['deb-photo-side-ctl']);
-        if(!/Gardée à ta demande : ton coach la vérifiera\./.test(zS.textContent)) return _echec('verdict : '+zS.textContent);
-        // Un nouveau bilan repart de zéro refus.
-        _bilGen++;
-        await charger('deb-photo-side');
-        return zS.querySelector('.bil-ctl-forcer')?_echec('le compte survit au bilan suivant'):true;
+        if(bilData['deb-photo-side-ctl']!=='orange|force,pieds') return _echec('ctl : '+bilData['deb-photo-side-ctl']);
+        if(!/Gardée malgré l’avertissement\./.test(zS.textContent)) return _echec('verdict : '+zS.textContent);
+        // Le coach lit la réserve, et l'analyse reste bloquée comme avant.
+        return JSON.stringify(photoForcee({type:'depart','deb-photo-side-ctl':'orange|force,pieds'},'side'))==='["pieds"]'?true:_echec('photoForcee');
       } finally {
         zs.forEach(z=>z.remove());
         bilData=sv.bd; _bilEdition=sv.ed; compressImage=sv.ci; _bilControlerPhoto=sv.ctl; _bilSaveDraft=sv.sd; _setPhotoLS=sv.ls;
@@ -66056,10 +66057,11 @@ async function testExercices(){
       } finally { window.profilCoachLocal=sv; }});
 
     okA('R32 — valider le dernier écran du bilan ouvre « Bilan enregistré », saveBilanFinal inchangée',async()=>{
-      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svProf=window.profilCoachLocal;
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svProf=window.profilCoachLocal, svC3=window.rcConfirm3;
       const svType=bilType, svData=bilData, svStep=bilStep;
       try{
         window.saveUser=()=>true; window.toast=()=>{}; window.profilCoachLocal=()=>null;
+        window.rcConfirm3=async()=>'milieu';   // build 1861 : bilan sans photos
         if(/ouvrirRestitutionBilan/.test(String(saveBilanFinal))) return _echec('saveBilanFinal a été modifiée');
         currentUser=_r32Base({coachId:'c1',coachName:'Kévin G',consent:{health:true,policyVersion:POLICY_VERSION},
           sessions_config:[{active:true,name:'Push',exercises:[{name:'X',series:3,reps:'8',repos:'2 min'}]}],
@@ -66083,10 +66085,75 @@ async function testExercices(){
         if(_origineAEcrire('s-bilan-fait','s-progress')==='s-bilan-fait') return _echec('Évolution reviendrait sur l’écran du bilan');
         return true;
       } finally {
-        window.saveUser=svSave; window.toast=svToast; window.profilCoachLocal=svProf;
+        window.saveUser=svSave; window.toast=svToast; window.profilCoachLocal=svProf; window.rcConfirm3=svC3;
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1861 : LES PHOTOS DU BILAN QUI MANQUENT ══
+    ok('photosBilanManquantes : complet → [] ; sans photos → 3 vues ; grossesse → [] ; modification → []',()=>{
+      const plein={'bil-photo-face':'a','bil-photo-back':'b','bil-photo-side':'c'};
+      const u={id:'p1',gender:'F'};
+      if(photosBilanManquantes('coaching',plein,u,{edition:null}).length) return _echec('complet');
+      if(photosBilanManquantes('coaching',{},u,{edition:null}).join()!=='face,back,side') return _echec('sans photos');
+      if(photosBilanManquantes('depart',{'deb-photo-face':'a'},u,{edition:null}).join()!=='back,side') return _echec('départ');
+      const sg=window.grossesseSuspend;
+      try{ window.grossesseSuspend=()=>true; if(photosBilanManquantes('coaching',{},u,{edition:null}).length) return _echec('grossesse'); }
+      finally{ window.grossesseSuspend=sg; }
+      if(photosBilanManquantes('coaching',{},u,{edition:{id:'x'}}).length) return _echec('modification');
+      return photosBilanManquantes('coaching',{},u,{edition:null,attendues:[]}).length===0?true:_echec('aucune vue attendue');});
+    okA('bilNext sans photos : Annuler → aucun bilan ; « Envoyer sans » → photosAVenir de 3 vues, une seule question',async()=>{
+      const sU=currentUser, sv={s:window.saveUser,t:window.toast,p:window.profilCoachLocal,c3:window.rcConfirm3,c:window.rcConfirm,r:window.ouvrirRestitutionBilan};
+      const svType=bilType, svData=bilData, svStep=bilStep;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window.profilCoachLocal=()=>null; window.ouvrirRestitutionBilan=()=>{};
+        let q=0; window.rcConfirm=async()=>{ q++; return true; };
+        const base=()=>_r32Base({coachId:'c1',coachName:'K',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'X',series:3,reps:'8',repos:'2 min'}]}],
+          bilans:[_r32Bilan(14,{'bil-weight':'80.0'})]});
+        currentUser=base(); bilType='coaching'; _bilReprises=null; _bilEdition=null;
+        bilData={'bil-waist':'83'};      // poids ET photos manquent
+        bilStep=_etapesUtiles(BIL_STEPS).length-1;
+        let n3=0, txt='';
+        window.rcConfirm3=async(t,x)=>{ n3++; txt=x; return null; };
+        await bilNext();
+        if(currentUser.bilans.length!==1) return _echec('annuler a enregistré');
+        if(n3!==1||q!==0) return _echec('questions : '+n3+' + '+q);
+        if(!/poids manque aussi/.test(txt)) return _echec('les deux messages ne sont pas fusionnés : '+txt);
+        bilData={'bil-weight':'80.4'}; bilStep=_etapesUtiles(BIL_STEPS).length-1;
+        window.rcConfirm3=async()=>'milieu';
+        await bilNext();
+        const b=currentUser.bilans[currentUser.bilans.length-1];
+        if(currentUser.bilans.length!==2) return _echec('« Envoyer sans » n’a rien enregistré');
+        if(!Array.isArray(b.photosAVenir)||b.photosAVenir.length!==3) return _echec(JSON.stringify(b.photosAVenir));
+        // L'accueil le dit, et ajouter les photos fait disparaître la ligne.
+        if(!/Photos du bilan n°2 à ajouter/.test(_htmlPhotosAVenir(currentUser))) return _echec('ligne : '+_htmlPhotosAVenir(currentUser));
+        b['bil-photo-face']='a'; b['bil-photo-back']='b';
+        const x=historiqueBilans(currentUser)[0];
+        _bilEdition={id:x.id,nom:x.nom}; bilData={'bil-weight':'80.4','bil-photo-face':'a','bil-photo-back':'b'};
+        const svQ=window._quitterEcranBilan, svO=window.openBilanChoice, svH=window.ouvrirHistoriqueBilans;
+        window._quitterEcranBilan=()=>{}; window.openBilanChoice=()=>{}; window.ouvrirHistoriqueBilans=()=>{};
+        try{ _bilEnregistrerModif(); } finally { window._quitterEcranBilan=svQ; window.openBilanChoice=svO; window.ouvrirHistoriqueBilans=svH; _bilEdition=null; }
+        if(JSON.stringify(b.photosAVenir)!=='["side"]') return _echec('consommation partielle : '+JSON.stringify(b.photosAVenir));
+        b['bil-photo-side']='c'; _bilEdition={id:x.id,nom:x.nom}; bilData={'bil-weight':'80.4','bil-photo-face':'a','bil-photo-back':'b','bil-photo-side':'c'};
+        window._quitterEcranBilan=()=>{}; window.openBilanChoice=()=>{}; window.ouvrirHistoriqueBilans=()=>{};
+        try{ _bilEnregistrerModif(); } finally { window._quitterEcranBilan=svQ; window.openBilanChoice=svO; window.ouvrirHistoriqueBilans=svH; _bilEdition=null; }
+        if('photosAVenir' in b) return _echec('photosAVenir non vidé');
+        return _htmlPhotosAVenir(currentUser)===''?true:_echec('la ligne reste');
+      } finally {
+        window.saveUser=sv.s; window.toast=sv.t; window.profilCoachLocal=sv.p; window.rcConfirm3=sv.c3; window.rcConfirm=sv.c; window.ouvrirRestitutionBilan=sv.r;
+        bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU; _bilEdition=null;
+      }});
+    ok('modifierBilan(id,\'photos\') ouvre sur l’étape des photos, calculée sur les étapes réelles',()=>{
+      const sU=currentUser, svR=window.renderBilStep, svG=window.go, svType=bilType, svData=bilData, svStep=bilStep;
+      try{
+        window.renderBilStep=()=>{}; window.go=()=>{};
+        currentUser=_r32Base({coachId:'c1',bilans:[_r32Bilan(3,{'bil-weight':'80'})]});
+        const x=historiqueBilans(currentUser)[0];
+        modifierBilan(x.id,'photos');
+        const i=_bilIndexEtapePhotos(_etapesUtiles(BIL_STEPS),'coaching');
+        return i>=0&&bilStep===i?true:_echec('étape '+bilStep+' / '+i);
+      } finally { window.renderBilStep=svR; window.go=svG; bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU; _bilEdition=null; }});
 
     // ══ 17/09/2026 — R33 : L'ONGLET MASSE GRASSE, SON BRUIT ET SES MANQUES ══
 

@@ -584,7 +584,7 @@ function _anatCtlEnvoi(b){
     const c=b[pre+v+'-ctl']; if(!c) return null;
     const [e,cs]=String(c).split('|');
     const codes=(cs||'').split(',').filter(Boolean);
-    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas'})[x]||x).join(', ')+')':'');
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière',plongee:'téléphone trop haut',contre:'téléphone trop bas',force:'gardée malgré l’avertissement'})[x]||x).join(', ')+')':'');
   }).filter(Boolean);
   return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
