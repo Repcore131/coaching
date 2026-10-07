@@ -42310,12 +42310,72 @@ function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=che
 // LIMITE CONNUE : chaque athlète n'a qu'un seul sessions_config actif à la fois.
 // Un système multi-programmes (ex : programme A le lundi, programme B en décharge)
 // n'est pas prévu ; sessions_config_history permet uniquement un rollback unitaire.
-const _SESSIONS_HISTORY_MAX=5;
-function _pushSessionsHistory(a){
-  if(!a.sessions_config) return;
-  if(!a.sessions_config_history) a.sessions_config_history=[];
-  a.sessions_config_history.unshift({ts:Date.now(),sessions_config:JSON.parse(JSON.stringify(a.sessions_config))});
-  if(a.sessions_config_history.length>_SESSIONS_HISTORY_MAX) a.sessions_config_history.length=_SESSIONS_HISTORY_MAX;
+// BUILD 1870 : 5 copies sans tri — six publications effaçaient la version
+// d'origine. Chaque entrée porte maintenant son MOTIF, et l'élagage garde ce
+// qui compte (elaguerHistoriqueSeances).
+//   motif : 'publication' | 'modele:<nom>' | 'report:<nom>' | 'restauration'
+const HIST_SEANCES_MAX=15, HIST_SEANCES_SPECIAUX_MAX=10;
+// Une copie sans les photos de séance (base64), comme _ajouterModeleDepuis.
+function _copieSansPhotos(sc){
+  const c=JSON.parse(JSON.stringify(sc||[]));
+  if(Array.isArray(c)) c.forEach(x=>{ if(x&&typeof x==='object'){ if('photo' in x) x.photo=null; if('photo2' in x) x.photo2=null; } });
+  return c;
+}
+function _pushSessionsHistory(a,motif){
+  if(!a||!a.sessions_config) return;
+  const l=Array.isArray(a.sessions_config_history)?a.sessions_config_history:[];
+  l.unshift({ts:Date.now(),motif:String(motif||'publication').slice(0,90),sessions_config:_copieSansPhotos(a.sessions_config)});
+  a.sessions_config_history=elaguerHistoriqueSeances(l,Date.now());
+}
+/**
+ * PURE. La liste (la plus récente d'abord) après élagage :
+ * - pas deux entrées identiques de suite (la plus parlante reste, sinon l'ancienne) ;
+ * - 'publication' : une par jour calendaire, la plus ancienne du jour ;
+ * - 'modele:' / 'report:' : toujours gardées, au plus 10 ;
+ * - 15 au total : on retire d'abord les publications les plus anciennes.
+ */
+function elaguerHistoriqueSeances(liste,maintenant){
+  const sp=e=>/^(modele|report):/.test(String(e&&e.motif||''));
+  const pub=e=>!sp(e)&&String(e&&e.motif||'publication')!=='restauration';
+  const l=(liste||[]).filter(e=>e&&e.sessions_config);
+  const out=[];
+  for(const e of l){
+    const prev=out[out.length-1];
+    if(prev&&JSON.stringify(prev.sessions_config)===JSON.stringify(e.sessions_config)){
+      if(!(sp(prev)&&!sp(e))) out[out.length-1]=e;
+      continue;
+    }
+    out.push(e);
+  }
+  const jour=ts=>{ const d=new Date(Number(ts)||0); return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); };
+  const vus=new Set(), r=[];
+  for(let i=out.length-1;i>=0;i--){
+    const e=out[i];
+    if(pub(e)){ const k=jour(e.ts); if(vus.has(k)) continue; vus.add(k); }
+    r.unshift(e);
+  }
+  let n=0;
+  let res=r.filter(e=>!sp(e)||(++n)<=HIST_SEANCES_SPECIAUX_MAX);
+  const retirer=pred=>{ for(let i=res.length-1;i>=0&&res.length>HIST_SEANCES_MAX;i--) if(pred(res[i])) res.splice(i,1); };
+  retirer(pub);
+  retirer(e=>!sp(e));
+  retirer(()=>true);
+  return res;
+}
+// « Avant le modèle « PPL » », « Avant tes retouches du 6 oct. »…
+function libelleMotifHistorique(e){
+  const m=String(e&&e.motif||'');
+  let j=''; try{ j=new Date(Number(e.ts)||0).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(x){}
+  if(m.indexOf('modele:')===0) return 'Avant le modèle « '+m.slice(7)+' »';
+  if(m.indexOf('report:')===0) return 'Avant le report de « '+m.slice(7)+' »';
+  if(m==='restauration') return 'Avant ta restauration du '+j;
+  if(m==='publication') return 'Avant tes retouches du '+j;
+  return '';
+}
+// PURE. Les lignes « ce qui change si tu restaures » (diffModele, _c4LibOp).
+function changementsSiRestaure(actuel,version){
+  let ops=[]; try{ ops=diffModele(actuel||[],version||[]); }catch(e){ ops=[]; }
+  return ops.map(op=>{ const j=(typeof DAYS!=='undefined'&&DAYS[op.jour])||''; return (op.seance||j?((op.seance||j)+' : '):'')+_c4LibOp(op); });
 }
 
 async function confirmAssignProgram(){
@@ -42378,7 +42438,7 @@ function _assignerModele(a,prog,genre){
   //   endroit qui ecrit — les deux chemins d'assignation en heritent.
   const g=progGenreServi(prog,genre);
   const base=(g==='F'?prog.sessions_F:prog.sessions_H)||[];
-  _pushSessionsHistory(a); // sauvegarde avant écrasement — rollback possible
+  _pushSessionsHistory(a,'modele:'+(prog.name||'Programme')); // sauvegarde avant écrasement — rollback possible
   // Clone PROFOND. A plat, le tableau `sets` restait partagé : l'athlète
   // retouchait ses séries et le modèle du coach bougeait avec — donc aussi
   // toutes les assignations suivantes de ce modèle.
@@ -42782,7 +42842,7 @@ function reporterPropagation(){
       id:a.assignedProgramId,genre:a.assignedProgramGenre,version:a.assignedProgramVersion});
     const ids=(choix[i]||[]).map(n=>l.res[n]&&l.res[n].op.id).filter(Boolean);
     if(ids.length){
-      _pushSessionsHistory(a);
+      _pushSessionsHistory(a,'report:'+(x.p.name||'modèle'));
       a.sessions_config=appliquerPropagation(a.sessions_config,l.o.ops,ids,l.o.apres);
     }
     // Le lien est posé, même sans rien cocher : le coach a vu cette version.
@@ -43050,12 +43110,22 @@ function renderSessionsHistory(){
       <input type="checkbox" ${on?'checked':''} onchange="histBasculer(${i})" aria-label="Sélectionner la version du ${escapeHtml(_histDate(e.ts))}">
       <span class="csm-hist-coche" aria-hidden="true"></span>
       <span class="csm-hist-c">
-        <span class="csm-hist-d">${escapeHtml(_histDate(e.ts))}</span>
+        <span class="csm-hist-d">${escapeHtml(_histDate(e.ts))}${libelleMotifHistorique(e)?' · '+escapeHtml(libelleMotifHistorique(e)):''}</span>
         <span class="csm-hist-r">${r.actifs} jour${r.actifs>1?'s':''} actif${r.actifs>1?'s':''} · ${r.exos} exercice${r.exos>1?'s':''}</span>
         ${r.noms.length?`<span class="csm-hist-noms">${escapeHtml(r.noms.join(' · '))}</span>`:''}
       </span>
     </label>`;
   }).join('')
+  +(()=>{
+    // BUILD 1870 : ce qui bouge si l'on restaure la version cochée.
+    if(nSel!==1) return '';
+    const v=hist[[..._histSel][0]];
+    const l=changementsSiRestaure(_coachEditClient&&_coachEditClient.sessions_config,v&&v.sessions_config);
+    return '<div class="csm-hist-diff" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:8px 0">'
+      +'<div style="font-weight:800;color:var(--text)">Ce qui change si tu restaures</div>'
+      +(l.length?l.slice(0,8).map(x=>'<div>'+x+'</div>').join('')+(l.length>8?'<div>… et '+(l.length-8)+' autre'+(l.length-8>1?'s':'')+'</div>':''):'<div>Rien : c’est le programme affiché.</div>')
+      +'</div>';
+  })()
   +`<div class="csm-hist-actions">
       <span class="csm-hist-sel">${nSel?nSel+' sélectionnée'+(nSel>1?'s':''):'Coche une version pour la restaurer ou la copier.'}</span>
       <span class="csm-hist-btns">
@@ -43132,10 +43202,24 @@ async function restaurerSessionsConfig(i){
   if(!await rcConfirm("Restaurer la configuration du "+d+" ?\n\n"
     +"Le programme affiché sera remplacé. Rien n'est enregistré tant que tu n'as "
     +"pas touché PUBLIER.",null,'Confirmer')) return;
+  // BUILD 1870 : l'état affiché part d'abord dans l'historique — restaurer
+  // par erreur se défait aussi. Écrit sur le dossier STOCKÉ, que la
+  // publication relit (saveCoachSessions reporte son historique).
+  restaurerPousserCourant(_coachEditClient);
   _coachEditClient.sessions_config=JSON.parse(JSON.stringify(e.sessions_config));
   loadCoachSessionSlots();
   renderSessionsHistory();
   toast('Version du '+d+' chargée : valide par PUBLIER','var(--orange)');
+}
+function restaurerPousserCourant(c){
+  if(!c||!c.sessions_config) return false;
+  const users=DB.get('users')||{};
+  const k=Object.keys(users).find(x=>users[x]&&users[x].id===c.id);
+  const tmp={sessions_config:c.sessions_config,sessions_config_history:(k&&users[k].sessions_config_history)||c.sessions_config_history||[]};
+  _pushSessionsHistory(tmp,'restauration');
+  c.sessions_config_history=tmp.sessions_config_history;
+  if(k){ users[k].sessions_config_history=JSON.parse(JSON.stringify(tmp.sessions_config_history)); DB.set('users',users); }
+  return true;
 }
 function loadCoachSessionSlots(){
   // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
@@ -43520,7 +43604,7 @@ function saveCoachSessions(){
   // copie qui va être écrite.
   // L'ONGLET « BLOC SUIVANT » OUVERT : on remet la copie à plat (06/10/2026).
   const _surSuivant=_csmSansOnglet(c);
-  _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
+  _pushSessionsHistory(users[emailKey],'publication'); // snapshot avant écrasement
   c.sessions_config_history=users[emailKey].sessions_config_history;
   // Le coach publie : ce n'est plus un repli, même s'il valide la Fondation
   // telle quelle. Sans ça, l'athlète continuerait de lire « ton coach n'a pas

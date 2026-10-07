@@ -66099,6 +66099,49 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1870 : L'HISTORIQUE DES PROGRAMMES GARDE CE QUI COMPTE ══
+    const _hsc=n=>[{day:'Lundi',active:true,name:'S'+n,exercises:[{name:'Squat',series:3,reps:String(n)}],photo:'data:xx'}];
+    const _hpush=(l,ts,motif,n)=>elaguerHistoriqueSeances([{ts,motif,sessions_config:_copieSansPhotos(_hsc(n))}].concat(l),ts);
+    ok('Historique : 6 publications le même jour → une seule entrée, la plus ancienne',()=>{
+      const t0=new Date(2026,9,6,9,0).getTime();
+      let l=[]; for(let i=0;i<6;i++) l=_hpush(l,t0+i*600e3,'publication',i);
+      return l.length===1&&l[0].ts===t0?true:_echec(l.length+' entrées');});
+    ok('Historique : un modèle puis 20 publications sur 20 jours → « avant le modèle » est toujours là ; 15 au plus',()=>{
+      const t0=new Date(2026,8,1,9,0).getTime();
+      let l=_hpush([],t0,'modele:PPL',0);
+      for(let i=1;i<=20;i++) l=_hpush(l,t0+i*864e5,'publication',i);
+      if(l.length!==15) return _echec(l.length+' entrées');
+      const m=l.find(e=>e.motif==='modele:PPL');
+      if(!m) return _echec('entrée du modèle perdue');
+      return libelleMotifHistorique(m)==='Avant le modèle « PPL »'?true:_echec(libelleMotifHistorique(m));});
+    ok('Historique : pas de doublon identique ; photos écartées des copies',()=>{
+      const t0=Date.now();
+      let l=_hpush([],t0-3*864e5,'publication',1);
+      l=_hpush(l,t0-2*864e5,'publication',1);
+      if(l.length!==1) return _echec(l.length);
+      return l[0].sessions_config[0].photo===null?true:_echec('photo copiée');});
+    ok('Restaurer pousse d’abord l’état courant avec le motif « restauration »',()=>{
+      const sUs=DB.get('users');
+      try{
+        const a={id:'hR',email:'hr@t.fr',sessions_config:_hsc(1),sessions_config_history:[]};
+        const u={}; u[a.email]=a; DB.set('users',u);
+        const c={id:'hR',sessions_config:_hsc(2),sessions_config_history:[]};
+        restaurerPousserCourant(c);
+        const h=DB.get('users')['hr@t.fr'].sessions_config_history;
+        if(!h.length||h[0].motif!=='restauration') return _echec(JSON.stringify(h));
+        return c.sessions_config_history[0].sessions_config[0].name==='S2'?true:_echec('mauvais état');
+      } finally { if(sUs) DB.set('users',sUs); }});
+    ok('« Ce qui change si tu restaures » : la séance renommée est listée',()=>{
+      const l=changementsSiRestaure(_hsc(1),_hsc(2));
+      return l.some(x=>/Séance renommée « S2 »/.test(x))?true:_echec(JSON.stringify(l));});
+    // Un programme LOURD (notes de 200 car., descriptions de 120) : ~14 Ko la copie.
+    // 15 copies ≈ 205 Ko, contre ~70 Ko pour les 5 d'avant : sous le quart de Mo.
+    ok('15 copies d’un programme lourd de 6 séances × 8 exercices restent sous 256 Ko',()=>{
+      const sc=Array.from({length:7},(_,j)=>({day:'J'+j,active:j<6,name:'Séance '+j,notes:'x'.repeat(200),warmup:'',cooldown:'',
+        exercises:Array.from({length:8},(_,k)=>({name:'Exercice numéro '+k,series:4,reps:'8-10',repos:'2 min',description:'y'.repeat(120)}))}));
+      const n=JSON.stringify(Array.from({length:15},(_,i)=>({ts:i,motif:'publication',sessions_config:sc}))).length;
+      return n<262144?true:_echec(n+' o');});
+
     // ══ BUILD 1869 : LES GESTES DU COACH SE DÉFONT ══
     okA('rcAnnulable : double appui sur « Annuler » → defaire appelé une seule fois',async()=>{
       let n=0;
