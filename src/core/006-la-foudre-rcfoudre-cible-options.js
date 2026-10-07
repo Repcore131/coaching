@@ -1704,6 +1704,7 @@ async function doRegister(){
     // accesseurs de nutrition depuis toujours.
     const user={id:uid,email:em,
       role:selRole,
+      langue:rcLangue(),
       createdAt:Date.now(),streak:0,lastSession:null,sessions:[],videos:[],coachId:null,coachName:null,
       status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null,
       // Trace du consentement : QUOI, QUAND, et sur QUELLE VERSION du texte.

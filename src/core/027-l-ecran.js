@@ -769,7 +769,7 @@ function anatSquatRegler(k,v){
   if(oa) oa.textContent=_anatN(cfg.alpha,0)+'°';
   if(ob) ob.textContent=_anatN(cfg.beta,0)+'°';
   const ck=document.querySelector('.an-sq-k input'); if(ck) ck.checked=!!cfg.cale;
-  if(k==='barre') document.querySelectorAll('.an-sq-t button').forEach(b=>{ const on=b.textContent==='Barre '+v; b.classList.toggle('actif',on); b.setAttribute('aria-pressed',on); });
+  if(k==='barre') document.querySelectorAll('.an-sq-t button').forEach(b=>{ const on=b.textContent==='Barre '+v||b.textContent===rcI18nT('Barre '+v); b.classList.toggle('actif',on); b.setAttribute('aria-pressed',on); });
 }
 function anatLevier(d,i){
   _anatLevIdx=(i!=null)?Number(i)||0:_anatLevIdx+(Number(d)||0);

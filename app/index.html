@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1923';
+window.RC_BUILD='1924';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -655,6 +655,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:16px">
     <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
     <button type="button" class="rb-lien" onclick="ouvrirSignalement()" style="display:block;margin:0 auto 8px">Signaler un problème</button>
+    <div class="r-langue r-langue-coach" data-i18n-off>
+      <select id="ch-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+    </div>
     <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
     <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
          bord, le lien est donc à un clic une fois connecté. -->
@@ -754,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1923.css">
+<link rel="stylesheet" href="./rc-style.1924.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1923.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1924.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1373,6 +1376,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="r-cadeau" class="r-cadeau" style="display:none"></div>
     <button type="button" id="r-parrain-appel" class="btn btn-outline btn-sm" style="display:none;margin:0;min-height:44px"
       onclick="parrainageAllerAuChamp()">Quelqu’un t’a invité ? Entre son code</button>
+    <!-- LA LANGUE, CHOISIE A L'INSCRIPTION (07/10/2026). Le libelle est ecrit
+         dans les quatre langues : celui qui ne lit pas le francais doit
+         pouvoir le trouver. data-i18n-off : ces noms-la ne se traduisent pas. -->
+    <div class="r-langue" data-i18n-off>
+      <label for="r-langue">Langue · Language · Idioma</label>
+      <select id="r-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+    </div>
     <!-- ══ LA PHOTO EST DEMANDEE A L'INSCRIPTION ══════════════════════════
          Demande de Kevin, 08/09/2026. L'accueil du coach s'ouvre desormais sur
          une grille de visages : sans photo, ce sont des initiales dans un rond
@@ -4219,6 +4229,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <button type="button" class="atp-med-lien" id="atp-trophees" onclick="ouvrirTrophees()" style="margin-bottom:14px">Trophées<span class="sub" style="font-size:var(--fs-xs);font-weight:600"> · badges, page publique, parrainage</span></button>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+      <!-- LA LANGUE DE L'APP (07/10/2026) : le meme choix qu'a l'inscription. -->
+      <div class="card r-langue" data-i18n-off style="margin-bottom:14px">
+        <label for="atp-langue">Langue · Language · Idioma</label>
+        <select id="atp-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+      </div>
         <!-- LE PIED, COMME CELUI D'UN SITE (Kevin, 28/09/2026). Exporter et
              supprimer ne sont plus deux blocs, dont un rouge qui dominait
              l'écran : quatre liens discrets sur une ligne. Chacun demande
@@ -6300,5 +6315,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1923.js"></script>
+<script src="./rc-core.1924.js"></script>
 </body></html>

@@ -847,6 +847,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // un reglage d'affichage et un pseudo qu'il choisit. Aucune donnee de sante,
   // mais ils DOIVENT etre classes, sinon ils ne sont proteges par rien.
   'pseudo','visuelNom',
+  // La langue de l'app, choisie à l'inscription ou dans le profil.
+  'langue',
   // L'accord de l'athlète pour que son coach EXPORTE son avant/après : une
   // date, ou null. Un consentement, pas une donnée de santé — et il doit être
   // lu par le coach, donc rester dans /users.
@@ -2272,6 +2274,8 @@ function _majSelecteurComptes(){
 }
 
 function routeUser(){
+  // La langue du compte l'emporte sur celle de l'appareil (rcLangueDuCompte).
+  try{ rcLangueDuCompte(currentUser); }catch(e){}
   // Marque le mois comme suivi par CE navigateur. Sans cet appel, un relevé
   // ne saurait pas distinguer « aucun trafic » de « compteur effacé ».
   try{ _quotaOuvrirMois(); }catch(e){}

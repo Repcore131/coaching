@@ -985,6 +985,7 @@ function _visuelOutils(g){
   };
   // Le texte espacé, réduit jusqu'à tenir dans `max`.
   const ajusteEspace=(t,poids,taille,police,esp,max,mini)=>{
+    t=rcI18nT(t);   // on mesure le texte qui sera réellement dessiné
     let s=taille;
     const larg=()=>{ g.font=poids+' '+s+'px '+police;
       return String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp; };
@@ -1330,7 +1331,8 @@ function _dessinerCarteRecords(d,fond,format){
 // Ecrit un texte en l espacant, l API canvas n ayant pas de letter-spacing
 // fiable partout.
 function _texteEspace(g,t,x,y,esp,centre){
-  const cs=String(t).split('');
+  // La langue : le libellé est traduit AVANT d'être découpé en lettres.
+  const cs=String(rcI18nT(t)).split('');
   const w=cs.reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp;
   let cx=centre?x-w/2:x;
   const alg=g.textAlign; g.textAlign='left';

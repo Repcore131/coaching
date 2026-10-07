@@ -176,3 +176,325 @@ function htmlProjectionsCoach(u,maintenant){
   }
   return cartes.join('');
 }
+// ══════════════════════════════════════════════════════════════════════════
+//  LA LANGUE DE L'APP (07/10/2026) : français, anglais, portugais, espagnol
+// ══════════════════════════════════════════════════════════════════════════
+//
+// Kevin : « donne la possibilité en s'inscrivant de choisir sa langue, et toute
+// l'app s'adapte et traduit ».
+//
+// LE CODE RESTE EN FRANÇAIS. L'app porte plus de douze mille textes écrits
+// dans le code ; les passer un par un par une table de clés aurait demandé de
+// réécrire chaque écran. À la place, UN TRADUCTEUR remplace à l'écran ce qui
+// vient d'être affiché :
+//   - chaque nœud de texte et chaque attribut lisible (title, placeholder,
+//     aria-label, alt) est cherché dans le dictionnaire de la langue ;
+//   - un texte fixe se traduit tel quel (« Annuler ») ; une phrase à variable
+//     passe par un MOTIF (« {0} séances cette semaine ») ;
+//   - les textes dessinés (visuels à partager) passent par le même traducteur.
+// Les dictionnaires sont app/i18n/<langue>.json, fabriqués à partir de
+// scripts/i18n_extraire.mjs. Un texte absent du dictionnaire RESTE EN FRANÇAIS :
+// jamais de case vide, jamais de clé à l'écran.
+//
+// ⚠ EN FRANÇAIS, RIEN DE TOUT CECI NE TOURNE : aucun observateur, aucune
+//   lecture de dictionnaire, aucun coût. La suite de tests juge donc l'app
+//   telle qu'elle a toujours été.
+// ⚠ LA LANGUE EST UN CHOIX, jamais une déduction : sans choix explicite (à
+//   l'inscription, ou dans le profil), l'app est en français, quel que soit
+//   le réglage du téléphone.
+// ⚠ CE QUI N'EST PAS TRADUIT, et c'est voulu : ce que l'utilisateur écrit
+//   lui-même, le nom des aliments du répertoire, les pages légales.
+const RC_LANGUES=Object.freeze(['fr','en','pt','es']);
+const RC_LANGUES_NOMS=Object.freeze({fr:'Français',en:'English',pt:'Português',es:'Español'});
+// La région des dates et des nombres, par langue.
+const RC_LANGUES_REGION=Object.freeze({fr:'fr-FR',en:'en-GB',pt:'pt-PT',es:'es-ES'});
+const RC_LANGUE_CLE='rc_langue';
+const _rcI18n={langue:'fr',pret:false,exact:null,casse:null,plat:null,rates:null,parDebut:null,parFin:null,reste:null,cache:new Map(),obs:null,enCours:null};
+
+// PURE. La langue choisie, 'fr' à défaut. Le dossier (u.langue) suit le compte
+// d'un appareil à l'autre ; l'appareil garde le dernier choix pour les écrans
+// d'avant la connexion.
+function rcLangue(){
+  let l=''; try{ l=String(localStorage.getItem(RC_LANGUE_CLE)||''); }catch(e){ l=''; }
+  return RC_LANGUES.indexOf(l)>=0?l:'fr';
+}
+// PURE. La même normalisation que scripts/i18n_extraire.mjs (norme) : toute
+// suite d'espaces, insécables ou fines comprises, vaut une espace ; bords rognés.
+function rcI18nNorme(s){ return String(s).replace(/[\s   ​⁠]+/g,' ').trim(); }
+// PURE. Sans casse ni accents : « Soulevé de terre » et « SOULEVE DE TERRE » se retrouvent.
+function _rcI18nPlat(s){ return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+// Rend à une traduction la casse du texte d'origine (CAPITALES, Majuscule initiale).
+function _rcI18nCasse(n,c){
+  const reg=RC_LANGUES_REGION[_rcI18n.langue]||undefined, bas=n.toLocaleLowerCase('fr-FR');
+  if(n===n.toLocaleUpperCase('fr-FR')&&n!==bas) return c.toLocaleUpperCase(reg);
+  if(n.charAt(0)!==bas.charAt(0)&&n.slice(1)===bas.slice(1)){ const cb=c.toLocaleLowerCase(reg); return cb.charAt(0).toLocaleUpperCase(reg)+cb.slice(1); }
+  if(n===bas) return c.toLocaleLowerCase(reg);
+  return c;
+}
+function _rcI18nEchapper(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+// Pose un dictionnaire {x:{fr:tr}, m:[[motif,tr],…]} et en construit les index.
+function rcI18nPoser(langue,dico){
+  const S=_rcI18n;
+  S.langue=langue; S.cache=new Map();
+  S.exact=new Map(); S.casse=new Map(); S.plat=new Map(); S.parDebut=new Map(); S.parFin=new Map(); S.reste=[];
+  const x=(dico&&dico.x)||{};
+  for(const k in x){
+    const v=x[k]; if(typeof v!=='string'||!v||v===k) continue;
+    S.exact.set(k,v);
+    const b=k.toLocaleLowerCase('fr-FR'); if(!S.casse.has(b)) S.casse.set(b,v);
+    const p=_rcI18nPlat(k); if(!S.plat.has(p)) S.plat.set(p,v);
+  }
+  const m=((dico&&dico.m)||[]).map(e=>{
+    const morceaux=String(e[0]).split(/\{\d+\}/), ordre=(String(e[0]).match(/\{(\d+)\}/g)||[]).map(t=>Number(t.slice(1,-1)));
+    return {src:e[0],tr:e[1],morceaux,ordre,fixe:morceaux.join('').length,re:null};
+  }).filter(e=>typeof e.tr==='string'&&e.tr&&e.fixe>=3);
+  // Le plus précis d'abord : le motif qui a le plus de texte fixe gagne.
+  m.sort((a,b)=>b.fixe-a.fixe);
+  for(const e of m){
+    const deb=e.morceaux[0], fin=e.morceaux[e.morceaux.length-1];
+    if(deb.length>=4){ const k=deb.slice(0,4); (S.parDebut.get(k)||S.parDebut.set(k,[]).get(k)).push(e); }
+    else if(fin.length>=4){ const k=fin.slice(-4); (S.parFin.get(k)||S.parFin.set(k,[]).get(k)).push(e); }
+    else S.reste.push(e);
+  }
+  S.pret=langue!=='fr';
+  return S.exact.size+m.length;
+}
+function _rcI18nMotif(n,prof){
+  const S=_rcI18n;
+  const essai=(liste)=>{
+    if(!liste) return null;
+    for(const e of liste){
+      if(!e.re) e.re=new RegExp('^'+e.morceaux.map(_rcI18nEchapper).join('([\\s\\S]*?)')+'$');
+      const r=e.re.exec(n);
+      if(!r) continue;
+      // Chaque variable est elle-même traduite si elle est un texte connu
+      // (« Total : {0} » où {0} vaut « 3 séances »).
+      return e.tr.replace(/\{(\d+)\}/g,(tout,i)=>{
+        const p=e.ordre.indexOf(Number(i));
+        return p<0?'':_rcI18nTexte(r[p+1],prof+1);
+      });
+    }
+    return null;
+  };
+  return essai(S.parDebut.get(n.slice(0,4)))||essai(S.parFin.get(n.slice(-4)))||essai(S.reste);
+}
+function _rcI18nTexte(s,prof){
+  const S=_rcI18n;
+  if(!S.pret||s==null) return s;
+  const brut=String(s);
+  if(brut.length<2||brut.length>700||!/\p{L}{2}/u.test(brut)) return brut;
+  const deja=S.cache.get(brut); if(deja!==undefined) return deja;
+  const n=rcI18nNorme(brut);
+  let t=S.exact.get(n);
+  if(t===undefined){
+    // Les bords décoratifs (« ✓ Enregistré », « Séances : ») : le cœur seul est cherché.
+    const b=/^([^\p{L}\d]*)([\s\S]*?)([^\p{L}\d]*)$/u.exec(n);
+    if(b&&(b[1]||b[3])&&b[2]){
+      const c=S.exact.get(b[2]);
+      if(c!==undefined) t=b[1]+c+b[3];
+    }
+  }
+  if(t===undefined&&n.length>2){
+    // Un texte dont le code a changé la casse, ou écrit avec (ou sans) ses accents :
+    // on le retrouve par ses minuscules, puis sans accents, et on lui rend sa casse.
+    const bas=n.toLocaleLowerCase('fr-FR');
+    let c=(bas!==n)?S.casse.get(bas):undefined;
+    if(c===undefined){ c=S.plat.get(_rcI18nPlat(n)); }
+    if(c!==undefined) t=_rcI18nCasse(n,c);
+  }
+  if(t===undefined&&prof<3){ const m0=_rcI18nMotif(n,prof); if(m0!=null) t=m0; }
+  if(t===undefined&&prof<3&&n.length>3&&n===n.toLocaleUpperCase('fr-FR')&&n!==n.toLocaleLowerCase('fr-FR')){
+    // Une phrase à variable passée en capitales par le code (« 4 SEMAINES »).
+    const m=_rcI18nMotif(n.toLocaleLowerCase('fr-FR'),prof);
+    if(m!=null) t=m.toLocaleUpperCase(RC_LANGUES_REGION[S.langue]||undefined);
+  }
+  if(t===undefined&&prof<2){
+    // Plusieurs textes posés côte à côte : chacun le sien. D'abord les
+    // séparateurs francs (point médian, barre, deux-points, fin de phrase),
+    // puis, à défaut, la virgule.
+    for(const sep of [/( [·•|] | : |\. (?=\p{Lu}))/u,/(, )/]){
+      if(!sep.test(n)) continue;
+      const morceaux=n.split(sep);
+      let change=false;
+      const out2=morceaux.map((x,k)=>{ if(k%2||!x) return x; const y=_rcI18nTexte(x,prof+1); if(y!==x) change=true; return y; });
+      if(change){ t=out2.join(''); break; }
+    }
+  }
+  // Pour le diagnostic : ce qui est resté en français (lu par scripts/i18n, jamais par l'app).
+  if(t===undefined&&S.rates&&S.rates.size<4000&&/\p{L}{3}/u.test(n)) S.rates.add(n);
+  let out=brut;
+  if(t!==undefined&&t!==null){
+    // Les blancs de bord du nœud sont rendus tels quels : ils font la mise en page.
+    out=(/^\s*/.exec(brut)[0])+t+(/\s*$/.exec(brut)[0]);
+  }
+  if(S.cache.size>12000) S.cache.clear();
+  S.cache.set(brut,out);
+  return out;
+}
+// Le texte à montrer dans la langue choisie. En français, ou sans traduction : le texte reçu.
+function rcI18nT(s){ return _rcI18n.pret?_rcI18nTexte(s,0):s; }
+
+// ── L'ÉCRAN ────────────────────────────────────────────────────────────────
+const _RC_I18N_ATTRS=['title','placeholder','aria-label','alt'];
+function _rcI18nHors(el){
+  // Ce que l'utilisateur écrit, le code et les zones marquées ne se traduisent pas.
+  for(let e=el;e&&e.nodeType===1;e=e.parentElement){
+    const t=e.tagName;
+    if(t==='SCRIPT'||t==='STYLE'||t==='TEXTAREA'||t==='CODE'||t==='PRE') return true;
+    if(e.isContentEditable||e.hasAttribute('data-i18n-off')) return true;
+  }
+  return false;
+}
+// ⚠ UNE <option> SANS ATTRIBUT value A POUR VALEUR SON TEXTE. Traduire ce texte
+//   ferait enregistrer « Man » là où le code attend « Homme ». On fige donc
+//   d'abord la valeur française dans l'attribut, puis on traduit le libellé.
+function _rcI18nOption(noeudTexte){
+  const p=noeudTexte.parentElement;
+  if(p&&p.tagName==='OPTION'&&!p.hasAttribute('value')) p.setAttribute('value',p.textContent);
+}
+function _rcI18nNoeud(n){
+  if(n.nodeType===3){
+    const v=n.nodeValue;
+    if(!v||n.__rcT===v) return;
+    if(n.parentElement&&_rcI18nHors(n.parentElement)) return;
+    _rcI18nOption(n);
+    const t=_rcI18nTexte(v,0);
+    if(t!==v){ n.__rcT=t; n.nodeValue=t; } else n.__rcT=v;
+    return;
+  }
+  if(n.nodeType!==1) return;
+  if(n.tagName==='TEXTAREA'&&!n.hasAttribute('data-i18n-off')){ const v=n.getAttribute('placeholder'); if(v){ const t=_rcI18nTexte(v,0); if(t!==v) n.setAttribute('placeholder',t); } return; }
+  if(_rcI18nHors(n)) return;
+  const attrs=(el)=>{
+    for(const a of _RC_I18N_ATTRS){
+      const v=el.getAttribute&&el.getAttribute(a);
+      if(v){ const t=_rcI18nTexte(v,0); if(t!==v) el.setAttribute(a,t); }
+    }
+    if(el.tagName==='INPUT'&&/^(button|submit|reset)$/i.test(el.type||'')&&el.value){ const t=_rcI18nTexte(el.value,0); if(t!==el.value) el.value=t; }
+  };
+  attrs(n);
+  const w=document.createTreeWalker(n,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT,{acceptNode(x){
+    if(x.nodeType===1){
+      const t=x.tagName;
+      if(t==='TEXTAREA'&&!x.hasAttribute('data-i18n-off')){ const v=x.getAttribute('placeholder'); if(v){ const tr=_rcI18nTexte(v,0); if(tr!==v) x.setAttribute('placeholder',tr); } return NodeFilter.FILTER_REJECT; }
+      if(t==='SCRIPT'||t==='STYLE'||t==='TEXTAREA'||t==='CODE'||t==='PRE'||x.isContentEditable||x.hasAttribute('data-i18n-off')) return NodeFilter.FILTER_REJECT;
+    }
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  for(let x=w.nextNode();x;x=w.nextNode()){
+    if(x.nodeType===1) attrs(x);
+    else{ const v=x.nodeValue; if(v&&x.__rcT!==v){ _rcI18nOption(x); const t=_rcI18nTexte(v,0); if(t!==v){ x.__rcT=t; x.nodeValue=t; } else x.__rcT=v; } }
+  }
+}
+function _rcI18nObserver(){
+  const S=_rcI18n;
+  if(S.obs||typeof MutationObserver==='undefined') return;
+  S.obs=new MutationObserver(lot=>{
+    for(const m of lot){
+      if(m.type==='characterData') _rcI18nNoeud(m.target);
+      else if(m.type==='attributes'){
+        const el=m.target, v=el.getAttribute(m.attributeName);
+        if(v&&!_rcI18nHors(el)){ const t=_rcI18nTexte(v,0); if(t!==v) el.setAttribute(m.attributeName,t); }
+      }
+      else for(const n of m.addedNodes) _rcI18nNoeud(n);
+    }
+  });
+  S.obs.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:_RC_I18N_ATTRS});
+}
+// Les textes DESSINÉS : fillText, strokeText et measureText passent par le
+// traducteur (les visuels écrivent leurs libellés au pinceau, pas dans le DOM).
+let _rcI18nToileFaite=false;
+function _rcI18nToile(){
+  if(_rcI18nToileFaite||typeof CanvasRenderingContext2D==='undefined') return;
+  _rcI18nToileFaite=true;
+  const P=CanvasRenderingContext2D.prototype;
+  for(const f of ['fillText','strokeText','measureText']){
+    const natif=P[f];
+    P[f]=function(t){ if(_rcI18n.pret&&typeof t==='string'){ const a=Array.prototype.slice.call(arguments); a[0]=_rcI18nTexte(t,0); return natif.apply(this,a); } return natif.apply(this,arguments); };
+  }
+}
+// Les dates et les nombres : le code les demande en 'fr-FR' ; dans une autre
+// langue, la région de cette langue répond à sa place.
+let _rcI18nDatesFaites=false;
+function _rcI18nDates(){
+  if(_rcI18nDatesFaites) return;
+  _rcI18nDatesFaites=true;
+  const region=(l)=>(_rcI18n.pret&&(l==='fr-FR'||l==='fr'))?(RC_LANGUES_REGION[_rcI18n.langue]||l):l;
+  for(const [proto,noms] of [[Date.prototype,['toLocaleDateString','toLocaleTimeString','toLocaleString']],[Number.prototype,['toLocaleString']]]){
+    for(const f of noms){
+      const natif=proto[f];
+      proto[f]=function(l,o){ return arguments.length?natif.call(this,region(l),o):natif.call(this); };
+    }
+  }
+}
+async function rcI18nCharger(langue){
+  const S=_rcI18n;
+  if(RC_LANGUES.indexOf(langue)<0||langue==='fr') return false;
+  if(S.pret&&S.langue===langue) return true;
+  if(S.enCours&&S.enCours.langue===langue) return S.enCours.p;
+  const p=(async()=>{
+    try{
+      const r=await fetch('./i18n/'+langue+'.json?v='+encodeURIComponent(window.RC_BUILD||''));
+      if(!r.ok) return false;
+      rcI18nPoser(langue,await r.json());
+    }catch(e){ return false; }
+    try{ document.documentElement.lang=langue; }catch(e){}
+    _rcI18nToile(); _rcI18nDates(); _rcI18nObserver();
+    try{ if(document.title) document.title=_rcI18nTexte(document.title,0); }catch(e){}
+    try{ _rcI18nNoeud(document.body); }catch(e){}
+    return true;
+  })();
+  S.enCours={langue,p};
+  const ok=await p;
+  if(S.enCours&&S.enCours.p===p) S.enCours=null;
+  return ok;
+}
+// LE CHOIX. Posé sur l'appareil et, une fois connecté, dans le dossier. Passer
+// d'une langue étrangère à une autre (ou revenir au français) recharge la page :
+// l'écran porte alors des textes déjà traduits, que plus rien ne sait relire.
+function rcLangueChoisir(langue,sansRecharger){
+  const l=RC_LANGUES.indexOf(langue)>=0?langue:'fr';
+  const avant=rcLangue();
+  try{ if(l==='fr') localStorage.removeItem(RC_LANGUE_CLE); else localStorage.setItem(RC_LANGUE_CLE,l); }catch(e){}
+  try{
+    if(currentUser&&(currentUser.langue||'fr')!==l){
+      currentUser.langue=l;
+      saveUser(currentUser);
+    }
+  }catch(e){}
+  _rcLangueSelecteurs(l);
+  if(l===avant) return true;
+  if(avant==='fr'||!_rcI18n.pret){ if(l!=='fr') rcI18nCharger(l); return true; }
+  if(!sansRecharger){ try{ location.reload(); }catch(e){} }
+  return true;
+}
+// Les sélecteurs de langue de l'app montrent tous la langue en cours.
+function _rcLangueSelecteurs(l){
+  try{ document.querySelectorAll('select.rc-langue').forEach(s=>{ if(s.value!==l) s.value=l; }); }catch(e){}
+}
+function htmlSelecteurLangue(id){
+  const l=rcLangue();
+  return '<select class="rc-langue" data-i18n-off'+(id?' id="'+id+'"':'')+' onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma">'
+    +RC_LANGUES.map(k=>'<option value="'+k+'"'+(k===l?' selected':'')+'>'+RC_LANGUES_NOMS[k]+'</option>').join('')+'</select>';
+}
+// À la connexion : la langue du COMPTE l'emporte sur celle de l'appareil (un
+// compte créé en anglais s'ouvre en anglais sur un téléphone neuf). Un compte
+// sans langue hérite de celle de l'appareil.
+function rcLangueDuCompte(u){
+  try{
+    if(!u) return false;
+    const c=RC_LANGUES.indexOf(u.langue)>=0?u.langue:'';
+    const a=rcLangue();
+    if(c&&c!==a){ rcLangueChoisir(c); return true; }
+    if(!c&&a!=='fr'){ u.langue=a; try{ saveUser(u); }catch(e){} }
+  }catch(e){}
+  return false;
+}
+// Au démarrage : la langue de l'appareil, tout de suite.
+(function(){
+  try{
+    const l=rcLangue();
+    _rcLangueSelecteurs(l);
+    if(l!=='fr') rcI18nCharger(l);
+  }catch(e){}
+})();
