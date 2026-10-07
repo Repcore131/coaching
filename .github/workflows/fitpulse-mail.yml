@@ -107,13 +107,15 @@ jobs:
         if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         run: |
           mkdir -p "$RUNNER_TEMP/robot" && cd "$RUNNER_TEMP/robot"
-          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 >/dev/null
+          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1 imapflow@1 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - name: Robot Resamania
         if: ${{ inputs.robot_resamania || inputs.robot_diag || steps.chk.outputs.go == '1' }}
         env:
           RESAMANIA_IDENTIFIANT: ${{ secrets.RESAMANIA_IDENTIFIANT }}
           RESAMANIA_MOT_DE_PASSE: ${{ secrets.RESAMANIA_MOT_DE_PASSE }}
+          RESAMANIA_MAIL: ${{ secrets.RESAMANIA_MAIL }}
+          RESAMANIA_MAIL_MDP: ${{ secrets.RESAMANIA_MAIL_MDP }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ROBOT_MODULES: ${{ runner.temp }}/robot
           ROBOT_MODE: ${{ inputs.robot_diag && 'diag' || inputs.robot_resamania && 'reperage' || 'auto' }}
