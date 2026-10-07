@@ -57,6 +57,39 @@ async function codeDepuisApp({ essais = 120 } = {}) {
   }
   throw new Error('code non saisi dans l’application (6 min)');
 }
+// Lecture automatique du code à usage unique dans la boîte mail du compte (IMAP).
+// Le robot lit son propre code → mise à jour 100 % automatique, sans intervention.
+// Identifiants dans les secrets : RESAMANIA_MAIL (adresse) + RESAMANIA_MAIL_MDP (mot de passe d'application Gmail).
+async function codeDepuisMail({ depuis, essais = 24 } = {}) {
+  const user = process.env.RESAMANIA_MAIL || '', pass = (process.env.RESAMANIA_MAIL_MDP || '').replace(/\s/g, '');
+  if (!user || !pass) return null;
+  let ImapFlow; try { ({ ImapFlow } = require('imapflow')); } catch { log('mail : module imapflow absent'); return null; }
+  const host = /outlook|hotmail|live\./i.test(user) ? 'outlook.office365.com' : 'imap.gmail.com';
+  const since = depuis || new Date(Date.now() - 10 * 60000);
+  const extraire = txt => { const m = String(txt).replace(/<[^>]+>/g, ' ').match(/(?:code|authentification|auth|vérification|verification)[^0-9]{0,40}(\d{4,8})/i) || String(txt).match(/\b(\d{6})\b/); return m ? m[1] : null; };
+  for (let i = 0; i < essais; i++) {
+    const client = new ImapFlow({ host, port: 993, secure: true, auth: { user, pass }, logger: false });
+    try {
+      await client.connect();
+      const lock = await client.getMailboxLock('INBOX');
+      try {
+        const uids = await client.search({ since }, { uid: true }).catch(() => []);
+        for (const uid of (uids || []).slice(-12).reverse()) {
+          const msg = await client.fetchOne(uid, { envelope: true, source: true }, { uid: true }).catch(() => null);
+          if (!msg) continue;
+          const from = (msg.envelope && msg.envelope.from || []).map(f => (f.address || '')).join(' ').toLowerCase();
+          if (!/fitnesspark|resamania|xplor/.test(from)) continue;
+          const code = extraire(msg.source ? msg.source.toString() : '');
+          if (code) { log('code lu automatiquement dans la boîte mail'); return code; }
+        }
+      } finally { lock.release(); }
+    } catch (e) { log('mail IMAP :', court(e.message, 90)); }
+    finally { await client.logout().catch(() => {}); }
+    await new Promise(r => setTimeout(r, 5000));
+  }
+  log('mail : aucun code trouvé');
+  return null;
+}
 
 // ── Description d'une page (sans aucune donnée personnelle) ───────────────
 async function decrire(page, titre, { complet = false } = {}) {
@@ -99,15 +132,18 @@ export async function connecter(page) {
   let champMdp = page.locator('input[type=password]');
   if (!(await visible(champMdp))) { await cliquerSuite(page); await page.waitForTimeout(3500); await decrire(page, 'après identifiant', { complet: true }); champMdp = page.locator('input[type=password]'); }
   if (!(await visible(champMdp))) throw new Error('champ mot de passe introuvable');
+  const tMdp = new Date(Date.now() - 60000); // repère pour chercher le mail de code reçu après la connexion
   await champMdp.first().fill(MDP); log('mot de passe saisi');
   await cliquerSuite(page); await page.waitForTimeout(5000);
   await decrire(page, 'après mot de passe', { complet: true });
-  // Code à usage unique : le manager le saisit dans l'appli (jamais lu dans un e-mail).
+  // Code à usage unique : lu automatiquement dans la boîte mail si configurée, sinon saisi par le manager dans l'appli.
   const champCode = page.locator('input[autocomplete=one-time-code],input[name*=code i],input[id*=code i],input[name*=otp i],input[inputmode=numeric],input[maxlength="1"],input[type=tel],input[type=number]');
   if (await visible(champCode)) {
-    log('code de connexion demandé : attente de la saisie dans l’application…');
-    const code = await codeDepuisApp();
-    log('code reçu de l’application (masqué)');
+    await fbEtat('code');
+    log('code de connexion demandé : lecture automatique dans la boîte mail…');
+    let code = await codeDepuisMail({ depuis: tMdp });
+    if (!code) { log('pas de lecture mail : attente de la saisie manuelle dans l’appli'); code = await codeDepuisApp(); }
+    else log('code reçu automatiquement (masqué)');
     const n = await champCode.count();
     if (n >= 4 && n <= 8) { for (let i = 0; i < n && i < code.length; i++) await champCode.nth(i).fill(code[i]); } else await champCode.first().fill(code);
     await cliquerSuite(page); await page.waitForTimeout(6000);
