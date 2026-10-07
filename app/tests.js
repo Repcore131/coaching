@@ -73682,6 +73682,34 @@ async function testExercices(){
       if(faux.length) return _echec(faux.length+' avec du texte ou sans svg : '+(faux[0].closest('.screen')||{}).id);
       const sansNom=l.filter(b=>!b.getAttribute('aria-label'));
       return sansNom.length?_echec(sansNom.length+' sans aria-label'):true;});
+    // ══ BUILD 1902 — LA PASTILLE, ET DES NIVEAUX SANS BANDES PLEINES ══════════
+    const _pastFaux=id=>[...document.querySelectorAll('#'+id+' .pastille, #'+id+' .badge, #'+id+' .tun-badge, #'+id+' .rir-tag, #'+id+' .tbk-pill')]
+      .filter(x=>x.getClientRects().length).map(x=>{ const h=x.getBoundingClientRect().height, f=getComputedStyle(x).fontSize;
+        return (Math.abs(h-18)<=1&&f==='10px')?'':id+' : « '+x.textContent.trim().slice(0,16)+' » '+Math.round(h)+' px / '+f; }).filter(Boolean);
+    ok('1902 — sonde : toute pastille visible fait 18 ± 1 px de haut, en 10 px (accueil coach, protocoles, fiche, séances)',()=>{
+      const faux=[], vus={n:0};
+      const compte=id=>{ vus.n+=document.querySelectorAll('#'+id+' .pastille, #'+id+' .badge').length; return _pastFaux(id); };
+      faux.push(..._sondeEcran(_banCoach(),()=>{ go('s-coach-home'); try{ loadCoachHome(); }catch(e){} },()=>compte('s-coach-home')));
+      faux.push(..._sondeEcran(_banCoach(),()=>{ try{ ouvrirProtocoles(); }catch(e){} },()=>compte('s-protocoles')));
+      faux.push(..._avecFiche(()=>compte('s-coach-client')));
+      faux.push(..._sondeEcran(Object.assign(_banAth(),{sessions_config:[{day:'Lundi',name:'Jambes',active:true,exercises:[]},{day:'Mardi',name:'Repos',active:false,exercises:[]}]}),()=>loadSessionManager(),()=>compte('s-session-manager')));
+      if(!vus.n) return _echec('aucune pastille rendue : la sonde ne voit rien');
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+    ok('1902 — accueil coach : aucun en-tête de groupe n’a un fond plein rouge, orange ou vert',()=>{
+      const z=document.getElementById('ch-todo'); if(!z) return _echec('#ch-todo absent');
+      const sv=z.innerHTML, sU=currentUser;
+      try{
+        currentUser=Object.assign(_banCoach(),{alertStatus:{},seenBilans:{}});
+        const a=Object.assign(_banAth(),{id:'nt1',email:'nt1@t.fr',coachId:'banc_c',bilans:[{type:'coaching',date:Date.now()-2*864e5,'bil-weight':'64'}]});
+        renderTodoBlock([a]);
+        const l=[...z.querySelectorAll('.nt-tete')];
+        if(l.length!==3) return _echec(l.length+' en-têtes de groupe');
+        const plein=c=>{ const m=c.match(/\d+(\.\d+)?/g)||[]; const [r,g,b,al]=[+m[0],+m[1],+m[2],m[3]==null?1:+m[3]]; return al>0.5&&Math.max(r,g,b)-Math.min(r,g,b)>90; };
+        const faux=l.filter(x=>plein(getComputedStyle(x).backgroundColor)).map(x=>x.textContent.trim().slice(0,12));
+        if(faux.length) return _echec('fond plein : '+faux.join(', '));
+        return l.every(x=>getComputedStyle(x).borderLeftWidth==='3px')?true:_echec('pas de filet gauche de 3 px');
+      }finally{ z.innerHTML=sv; currentUser=sU; }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

@@ -32209,17 +32209,17 @@ function renderTodoBlock(clients){
   el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span class="t-section is-action" style="margin:0">Mes notifications</span>
-      <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
+      <span class="compteur compteur--plein">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
     ${_cols.map(b=>`<div style="min-width:0;background:var(--red-bg);border:1px solid #1e0000;border-radius:0;overflow:hidden">
-      <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
-        <!-- LE TEXTE EST PRESQUE NOIR SUR LE BANDEAU PLEIN, et non blanc : sur
-             l'orange et sur le vert, du blanc tombe sous trois pour un de
-             contraste et ne se lit plus au soleil d'une salle. Le noir tient
-             les trois : 4,8 sur le rouge, 7,2 sur l'orange, 8,7 sur le vert. -->
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.5px">${b.titre}</span>
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;opacity:.72">${b.total}</span>
+      <!-- BUILD 1902 : PLUS DE BANDE PLEINE SATURÉE. Un en-tête sombre, un filet
+           gauche de 3 px à la couleur du niveau, le libellé en .t-section de la
+           même couleur et le nombre dans un .compteur. Les couleurs voulues par
+           Kévin ne changent pas (vert pour « À traiter »). -->
+      <div class="nt-tete" style="--nt-c:${b.couleur}">
+        <span class="t-section" style="margin:0;color:var(--nt-c)">${b.titre}</span>
+        <span class="compteur" style="color:var(--nt-c)">${b.total}</span>
       </div>
       ${b.lignes.length?renderDataList(b.lignes,(x)=>{
       const r=x.r, idx=x.idx, coul=b.couleur;
@@ -32266,7 +32266,8 @@ function renderTodoBlock(clients){
     },{pad:'9px 11px',gap:9,border:'#180000',hover:'#140000'})
       // UNE COLONNE VIDE LE DIT, et dit laquelle des deux raisons : il n'y a
       // rien à ce niveau, ou le plafond de huit lignes a coupé ici.
-      :`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
+      // Un groupe vide se replie sur son seul en-tête (le compteur dit 0).
+      :(b.total?`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">+ ${b.total} plus bas</div>`:'')}
     </div>`).join('')}
     </div>
     ${restant?`<button type="button" class="td-plus" onclick="todoDeplier(true)" aria-expanded="false">+ ${restant} autre${restant>1?'s':''}</button>`
@@ -50389,7 +50390,7 @@ function loadClientHome(){
       ${photo
         ?`<span style="flex-shrink:0;width:32px;height:32px;border-radius:var(--r-full);overflow:hidden;border:1px solid rgba(210,0,0,0.55)"><img src="${escapeHtml(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>`
         :`<span class="avatar" style="flex-shrink:0;width:32px;height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center">${escapeHtml(ini(coach&&coach.fname||name,coach&&coach.lname||''))}</span>`}
-      <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="sub" style="font-weight:700;font-size:var(--fs-2xs);letter-spacing:1.5px;margin-right:6px">COACH</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
+      <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="pastille pastille--neutre" style="margin-right:6px">Coach</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
     </div>`;
   }
   _selDay=null;_nettoyerFondationPosee();
@@ -51991,7 +51992,7 @@ function _renderSessionManager(){
           </div>
         </div>
         <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
-          <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
+          <span class="pastille ${s.active?'pastille--vert':'pastille--neutre'}">${s.active?'Actif':'Repos'}</span>
           <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>
           </div>
@@ -143588,10 +143589,10 @@ function _pfRendreListe(){
     return `<div style="background:var(--surface-1);border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:var(--r-3);padding:14px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
         <span style="font-size:var(--fs-md);font-weight:800">${escapeHtml(p.nom)}</span>
-        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
+        <span class="pastille" style="color:${o.c};background:color-mix(in srgb,${o.c} 14%,transparent)">${escapeHtml(o.lib)}</span>
         <span style="font-size:var(--fs-2xs);color:var(--sub)">${duree} min</span>
         <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;color:var(--text-faint)">${p.phase==='WARMUP'?'ÉCHAUFFEMENT':'FIN DE SÉANCE'}</span>
-        ${estProtoPerso(p.slug)?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);border:1px solid var(--border);color:var(--sub)">PERSO</span>':''}
+        ${estProtoPerso(p.slug)?'<span class="pastille pastille--neutre">Perso</span>':''}
         ${pose?'<span style="font-size:var(--fs-2xs);color:var(--success);font-weight:800">EN PLACE</span>':''}
       </div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:8px">${escapeHtml(p.desc)}</div>

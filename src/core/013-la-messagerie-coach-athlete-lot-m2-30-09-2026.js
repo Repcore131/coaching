@@ -1606,17 +1606,17 @@ function renderTodoBlock(clients){
   el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);margin-bottom:20px;overflow:hidden;box-shadow:var(--e3)">
     <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span class="t-section is-action" style="margin:0">Mes notifications</span>
-      <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
+      <span class="compteur compteur--plein">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
     ${_cols.map(b=>`<div style="min-width:0;background:var(--red-bg);border:1px solid #1e0000;border-radius:0;overflow:hidden">
-      <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
-        <!-- LE TEXTE EST PRESQUE NOIR SUR LE BANDEAU PLEIN, et non blanc : sur
-             l'orange et sur le vert, du blanc tombe sous trois pour un de
-             contraste et ne se lit plus au soleil d'une salle. Le noir tient
-             les trois : 4,8 sur le rouge, 7,2 sur l'orange, 8,7 sur le vert. -->
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.5px">${b.titre}</span>
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;opacity:.72">${b.total}</span>
+      <!-- BUILD 1902 : PLUS DE BANDE PLEINE SATURÉE. Un en-tête sombre, un filet
+           gauche de 3 px à la couleur du niveau, le libellé en .t-section de la
+           même couleur et le nombre dans un .compteur. Les couleurs voulues par
+           Kévin ne changent pas (vert pour « À traiter »). -->
+      <div class="nt-tete" style="--nt-c:${b.couleur}">
+        <span class="t-section" style="margin:0;color:var(--nt-c)">${b.titre}</span>
+        <span class="compteur" style="color:var(--nt-c)">${b.total}</span>
       </div>
       ${b.lignes.length?renderDataList(b.lignes,(x)=>{
       const r=x.r, idx=x.idx, coul=b.couleur;
@@ -1663,7 +1663,8 @@ function renderTodoBlock(clients){
     },{pad:'9px 11px',gap:9,border:'#180000',hover:'#140000'})
       // UNE COLONNE VIDE LE DIT, et dit laquelle des deux raisons : il n'y a
       // rien à ce niveau, ou le plafond de huit lignes a coupé ici.
-      :`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
+      // Un groupe vide se replie sur son seul en-tête (le compteur dit 0).
+      :(b.total?`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">+ ${b.total} plus bas</div>`:'')}
     </div>`).join('')}
     </div>
     ${restant?`<button type="button" class="td-plus" onclick="todoDeplier(true)" aria-expanded="false">+ ${restant} autre${restant>1?'s':''}</button>`

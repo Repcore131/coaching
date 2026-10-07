@@ -946,7 +946,7 @@ function loadClientHome(){
       ${photo
         ?`<span style="flex-shrink:0;width:32px;height:32px;border-radius:var(--r-full);overflow:hidden;border:1px solid rgba(210,0,0,0.55)"><img src="${escapeHtml(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>`
         :`<span class="avatar" style="flex-shrink:0;width:32px;height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center">${escapeHtml(ini(coach&&coach.fname||name,coach&&coach.lname||''))}</span>`}
-      <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="sub" style="font-weight:700;font-size:var(--fs-2xs);letter-spacing:1.5px;margin-right:6px">COACH</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
+      <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="pastille pastille--neutre" style="margin-right:6px">Coach</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
     </div>`;
   }
   _selDay=null;_nettoyerFondationPosee();
@@ -2548,7 +2548,7 @@ function _renderSessionManager(){
           </div>
         </div>
         <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
-          <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
+          <span class="pastille ${s.active?'pastille--vert':'pastille--neutre'}">${s.active?'Actif':'Repos'}</span>
           <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>
           </div>

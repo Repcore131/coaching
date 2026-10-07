@@ -1176,9 +1176,6 @@ h3{font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;lett
 .card{background:var(--surface-1);border-radius:var(--r-3);padding:16px;border:1px solid var(--border);box-shadow:none}
 .card--dense{padding:12px}
 .pile-cartes>*+*{margin-top:12px}
-.badge-green{background:#16532222;color:var(--green);border:1px solid #1a5c2a44}
-.badge-red{background:#7f1d1d22;color:var(--red-light);border:1px solid #7f1d1d44}
-.badge-orange{background:#7c2d1222;color:var(--orange);border:1px solid #7c2d1244}.badge-gray{background:color-mix(in srgb,var(--surface-3) 26.7%,transparent);color:var(--sub)}
 /* ══ LA GRILLE DE VIGNETTES ══════════════════════════════════════════════
    Maquette du 08/09/2026. Six colonnes sur un ecran de bureau, et autant que
    la largeur en autorise ailleurs : `auto-fill` plutot qu'un nombre fixe, pour
@@ -1489,8 +1486,7 @@ h3{font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;lett
    bilan » en prenait 136 — quarante pour cent pour une étiquette — et il ne
    restait que 107 px au nom, qui en demande 121. La règle est portée par
    #ch-clients-list : le même .badge sert partout ailleurs, où il a la place. */
-#ch-clients-list .badge{font-size:11px;letter-spacing:.5px;padding:4px 8px;border-radius:var(--r-1);
-  max-width:112px;white-space:normal;text-align:center;line-height:1.3}
+#ch-clients-list .badge{max-width:112px;overflow:hidden;text-overflow:ellipsis}
 
 /* ══ LA LIGNE DU TELEPHONE, SUR DEUX RANGEES (06/10/2026) ══════════════════
    Case, avatar, « Ouvrir la fiche », curseur SUIVI et badge etaient tous en
@@ -1634,8 +1630,7 @@ h3{font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;lett
   align-items:center;justify-content:center;font-weight:900;color:var(--text-faint);font-size:var(--fs-sm)}
 .tun-rond img{width:100%;height:100%;object-fit:cover}
 .tun-nom{font-size:var(--fs-sm);font-weight:800;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tun-badge{flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;
-  color:var(--c);border:1px solid var(--c);border-radius:var(--r-2);padding:4px 10px;white-space:nowrap}
+.tun-badge{flex:none;color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
 .tun-jauge{display:flex;gap:4px;margin-top:6px}
 .tun-jauge i{width:16px;height:4px;border-radius:var(--r-1);background:var(--border)}
 .tun-jauge i.on{background:var(--c)}
@@ -6178,7 +6173,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:0;padding-left:2px;padding-rig
 .metric-i .rc-i{margin-left:0}
 
 /* ====== SUGGEST BOX ====== */
-.rir-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;background:#7f1d1d22;color:#fca5a5;border:1px solid #7f1d1d44}
+.rir-tag{color:var(--red-text);background:color-mix(in srgb,var(--red-text) 14%,transparent)}
 .suggest-box{background:linear-gradient(135deg,var(--red-bg),#1c0505);border:1px solid #3a0a0a;border-radius:var(--r-1);padding:14px 16px;margin:10px 0 14px}
 .suggest-box .s-title{font-size:var(--fs-xs);color:#fca5a5;text-transform:uppercase;letter-spacing:1.5px;font-weight:700}
 .suggest-box .s-val{font-size:var(--fs-2xl);font-weight:900;color:var(--text);margin:4px 0;letter-spacing:-1px}
@@ -6497,9 +6492,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:0;padding-left:2px;padding-rig
 .tbk-carte .tbk-4 thead th:nth-child(2){width:17%}
 .tbk-carte .tbk-4 thead th:nth-child(3){width:23%}
 .tbk-carte .tbk-4 thead th:nth-child(4){width:28%}
-.tbk-pill{display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:12px;
-  font-weight:700;color:#f5c542;background:rgba(245,197,66,.12);
-  border:1px solid rgba(245,197,66,.45)}
+.tbk-pill{color:#f5c542;background:rgba(245,197,66,.14)}
 /* LES SPORTS SE REGLENT (build 1405) : sport, heures et intensite en champs,
    une croix pour retirer, un bouton pour ajouter. L'intensite garde sa
    pastille — sa couleur dit son niveau. */
@@ -7832,7 +7825,25 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .avatar{width:44px;height:44px;border-radius:var(--r-1);background:var(--red-bg);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-weight:400;font-size:var(--fs-md);flex-shrink:0;letter-spacing:1px;color:var(--red-text);font-family:var(--pile-titre)}
 
 /* ====== BADGE REDESIGN ====== */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:1.5px}
+/* ══ LA PASTILLE (build 1902) : un seul rendu de badge. ══════════════════════
+   10 px (--fs-2xs) 800 majuscules, 18 px de haut, rayon r-1 ; le ton est la
+   couleur du texte sur un fond à 14 % de la même teinte. .badge en est un
+   alias (ses couleurs -red/-green/-orange/-gray sont les quatre tons).
+   .compteur : le nombre, dans un cercle de 18 px. */
+.pastille,.badge,.tun-badge,.rir-tag,.tbk-pill{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:var(--r-1);
+  font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:1px;line-height:1;white-space:nowrap;
+  box-sizing:border-box;border:0;vertical-align:middle}
+.pastille--rouge,.badge-red{color:var(--red-text);background:color-mix(in srgb,var(--red-text) 14%,transparent)}
+.pastille--vert,.badge-green{color:var(--green);background:color-mix(in srgb,var(--green) 14%,transparent)}
+.pastille--orange,.badge-orange{color:var(--orange);background:color-mix(in srgb,var(--orange) 14%,transparent)}
+.pastille--neutre,.badge-gray{color:var(--sub);background:color-mix(in srgb,var(--sub) 14%,transparent)}
+.compteur{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;
+  border-radius:var(--r-full);font-size:var(--fs-2xs);font-weight:800;line-height:1;background:color-mix(in srgb,currentColor 14%,transparent)}
+.compteur--plein{background:var(--red);color:#fff}
+/* L'en-tête d'un groupe de notifications (accueil coach) : sombre, un filet
+   gauche de 3 px à la couleur du niveau. */
+.nt-tete{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;
+  background:var(--surface-1);border-left:3px solid var(--nt-c,var(--border))}
 
 /* ====== BACK BUTTON ====== */
 /* #444 sur le fond de la topbar donnait 2,3:1 — la flèche de retour, qui est

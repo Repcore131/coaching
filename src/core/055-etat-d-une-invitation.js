@@ -2226,10 +2226,10 @@ function _pfRendreListe(){
     return `<div style="background:var(--surface-1);border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:var(--r-3);padding:14px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
         <span style="font-size:var(--fs-md);font-weight:800">${escapeHtml(p.nom)}</span>
-        <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
+        <span class="pastille" style="color:${o.c};background:color-mix(in srgb,${o.c} 14%,transparent)">${escapeHtml(o.lib)}</span>
         <span style="font-size:var(--fs-2xs);color:var(--sub)">${duree} min</span>
         <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;color:var(--text-faint)">${p.phase==='WARMUP'?'ÉCHAUFFEMENT':'FIN DE SÉANCE'}</span>
-        ${estProtoPerso(p.slug)?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);border:1px solid var(--border);color:var(--sub)">PERSO</span>':''}
+        ${estProtoPerso(p.slug)?'<span class="pastille pastille--neutre">Perso</span>':''}
         ${pose?'<span style="font-size:var(--fs-2xs);color:var(--success);font-weight:800">EN PLACE</span>':''}
       </div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:8px">${escapeHtml(p.desc)}</div>
