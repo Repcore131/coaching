@@ -22766,6 +22766,44 @@ async function testExercices(){
           return el.innerHTML.indexOf('Résultats pour')<0&&/Aucun résultat/.test(el.textContent)?true:_echec('la recherche brute a été corrigée');
         } finally { el.innerHTML=av; }});
     }
+    // ══ BUILD 1858 : UNE SEULE LIGNE DE MACROS POUR LES QUATRE LISTES ══
+    {
+      ok('Ligne de macros : « 287 kcal · P 9 · G 56 · L 1,2 », protéines en gras',()=>{
+        const h=_htmlLigneMacros({k:287,p:9,c:56,l:1.2});
+        if(h.indexOf('287 kcal')<0||h.indexOf('P 9')<0||h.indexOf('L 1,2')<0) return _echec(h);
+        return /<b class="fj-lm-p">P 9<\/b>/.test(h)&&/aria-label="Pour 100 g : 287 kilocalories/.test(h)?true:_echec('gras ou aria-label');});
+      ok('Ligne de macros : valeur absente → « – », jamais 0 ; énergie absente → VALEUR INDISPONIBLE',()=>{
+        const h=_htmlLigneMacros({k:120,p:null,c:20});
+        if(h.indexOf('P –')<0||h.indexOf('L –')<0||/P 0\b/.test(h)) return _echec(h);
+        return _htmlLigneMacros({p:5,c:5,l:5}).indexOf('VALEUR INDISPONIBLE')>=0?true:_echec('badge');});
+      ok('Ligne de macros : une fiche k_calc garde « kcal estimées »',()=>
+        _htmlLigneMacros({k:174,p:10,c:10,l:10,k_calc:true}).indexOf('174 kcal estimées')>=0?true:_echec('mention perdue'));
+      ok('Les quatre listes passent par _htmlLigneMacros, sans groupe Ciqual ; nom sur deux lignes',()=>{
+        const f={id:7001,n:'Pain perdu',g:'produits laitiers',k:287,p:9,c:56,l:1.2};
+        const hs=[_fjResultHtml(f),_htmlPersoResult({id:'p1',n:'Mon pain',k:250,p:8,c:50,l:2}),
+          _htmlCoachResult({id:'c1',n:'Pain coach',k:250,p:8,c:50,l:2}),
+          _offResultHtml({id:'off:1',n:'Pain de marque',k:250,p:8,c:50,l:2,_off:{ean:'1',marque:'M',format:'500 g'}})];
+        for(const h of hs){
+          if(h.indexOf('class="fj-lm"')<0) return _echec('ligne absente : '+h.slice(0,160));
+          if(h.indexOf('class="fj-nom" title=')<0) return _echec('nom sans titre : '+h.slice(0,160));
+        }
+        return hs[0].indexOf('produits laitiers')<0?true:_echec('le groupe Ciqual est encore affiché');});
+      ok('À 320 px, aucune liste ne déborde horizontalement',()=>{
+        const z=document.createElement('div');
+        z.style.cssText='position:absolute;left:-9999px;top:0;width:320px';
+        const long='Céréales pour petit déjeuner fourrées au chocolat ou chocolat-noisettes, enrichies en vitamines et minéraux';
+        z.innerHTML=_fjResultHtml({id:32016,n:long,g:'produits sucrés',k:450.4,p:7.25,c:66.1,l:16.3,k_calc:true})
+          +_offResultHtml({id:'off:2',n:long,k:450,p:7,c:66,l:16,_off:{ean:'2',marque:'Une marque au nom très très long',format:'375 g'}})
+          +_htmlPersoResult({id:'p2',n:long,k:null,p:null,c:null,l:null});
+        document.body.appendChild(z);
+        try{
+          const trop=[...z.querySelectorAll('.fj-result')].filter(r=>r.scrollWidth>r.clientWidth+1);
+          const nom=z.querySelector('.fj-nom');
+          const lh=parseFloat(getComputedStyle(nom).lineHeight)||20;
+          if(nom.getBoundingClientRect().height>lh*2+2) return _echec('nom sur plus de deux lignes');
+          return trop.length?_echec(trop.length+' ligne(s) débordent'):true;
+        } finally { z.remove(); }});
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{

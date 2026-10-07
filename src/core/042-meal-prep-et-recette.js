@@ -1068,13 +1068,35 @@ function _fjTitreSection(t){
 function _attrArg(v){
   return JSON.stringify(v===undefined?null:v).replace(/"/g,'&quot;');
 }
+// ══ LA DEUXIÈME LIGNE D'UN RÉSULTAT, UNE SEULE FOIS (BUILD 1858) ══════════
+// « 287 kcal · P 9 · G 56 · L 1,2 », pour 100 g, nombres à la française,
+// protéines en gras. Une valeur absente s'écrit « – », jamais 0. Le groupe Ciqual
+// n'y figure plus (« Pain perdu » était classé « produits laitiers ») : il reste
+// sur la fiche détaillée. Les quatre listes — table, perso, coach, marque —
+// passent par ici.
+const FJ_BADGE_INDISPO='<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>';
+function _fjNbFr(v){
+  const n=Number(v);
+  return (v!=null&&v!==''&&isFinite(n))?String(Math.round(n*10)/10).replace('.',','):'–';
+}
+function _htmlLigneMacros(f){
+  const a=f||{};
+  const k=(a.k!=null&&isFinite(Number(a.k)))?Math.round(Number(a.k)):null;
+  const kcal=k!=null?'<span class="fj-lm-k">'+k+' kcal'+(a.k_calc?' estimées':'')+'</span>':FJ_BADGE_INDISPO;
+  const dit=(v,u)=>_fjNbFr(v)==='–'?'non renseigné':_fjNbFr(v)+u;
+  const aria='Pour 100 g : '+(k!=null?k+' kilocalories'+(a.k_calc?' estimées':''):'énergie indisponible')
+    +', protéines '+dit(a.p,' g')+', glucides '+dit(a.c,' g')+', lipides '+dit(a.l,' g');
+  return '<div class="fj-lm" aria-label="'+escapeHtml(aria)+'">'+kcal
+    +' · <b class="fj-lm-p">P '+_fjNbFr(a.p)+'</b> · G '+_fjNbFr(a.c)+' · L '+_fjNbFr(a.l)+'</div>';
+}
+// Le nom : deux lignes au plus, le titre complet au survol et sur la fiche.
+function _htmlNomResultat(nom,suite){
+  return '<div class="fj-nom" title="'+escapeHtml(nom||'')+'">'+escapeHtml(nom||'')+(suite||'')+'</div>';
+}
 function _htmlCoachResult(a){
-  const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
-  const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
   return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+_attrArg(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
-    +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +_htmlNomResultat(a.n)+_htmlLigneMacros(a)
     +'</div>';
 }
 // Le meme ecran de quantite que partout ailleurs.
@@ -1102,14 +1124,11 @@ function selectCoachFood(id){
   return true;
 }
 function _htmlPersoResult(a){
-  const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
-  const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
   return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+_attrArg(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
     +' style="display:flex;align-items:center;gap:10px">'
     +'<div style="flex:1;min-width:0">'
-    +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +_htmlNomResultat(a.n)+_htmlLigneMacros(a)
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
     +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">'+icon('pencil',14)+'</button>'
@@ -1119,21 +1138,16 @@ function _htmlPersoResult(a){
 // la mention, l'athlète qui tape « lait d'amande » ne comprend pas pourquoi
 // « Boisson à l'amande » lui répond.
 function _fjResultHtml(f,avecEpingle,via){
-  const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
-  const kcalSpan=f.k!=null?`<span style="color:var(--red-text);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   // L'épingle n'apparaît que sur les listes de favoris et de récents : les
   // résultats de recherche restent rendus exactement comme avant.
   const _ep=avecEpingle?_htmlEpingle(f.id,false):'';
   const _dq=(avecEpingle&&estFavori(f.id))?_fjDerniereQty(f.id):null;
   return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:8px">
     <div style="flex:1;min-width:0">
-    <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(f.n)}${_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:''}</div>
+    ${_htmlNomResultat(f.n,_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:'')}
     ${via?`<div class="fj-via" style="font-size:var(--fs-2xs);color:var(--sub)">trouvé via « ${escapeHtml(via)} »</div>`:''}
     ${f.src==='repcore'?`<div class="fj-repcore" style="font-size:var(--fs-2xs);color:var(--sub)">Valeur moyenne RepCore</div>`:''}
-    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
-      ${kcalSpan}
-      <span>${escapeHtml(f.g)}</span>
-    </div>
+    ${_htmlLigneMacros(f)}
     </div>${_ep}
   </div>`;
 }
@@ -2060,11 +2074,8 @@ function _offResultHtml(a){
     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     style="display:flex;align-items:center;gap:8px">
     <div style="flex:1;min-width:0">
-      <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(a.n)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
-        <span style="color:var(--red-text);font-weight:700">${a.k} kcal/100g</span>
-        ${detail?`<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(detail)}</span>`:''}
-      </div>
+      ${_htmlNomResultat(a.n,detail?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${escapeHtml(detail)}</span>`:'')}
+      ${_htmlLigneMacros(a)}
     </div>
   </div>`;
 }
