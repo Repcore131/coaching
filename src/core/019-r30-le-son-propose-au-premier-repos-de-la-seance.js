@@ -1249,7 +1249,7 @@ function renderProgEx(){
              borné à 220 px (.px-court) et laissait un vide à droite ; .px-l1 lève
              la borne, et le champ est centré comme ses deux voisins. -->
         <div class="px-l1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
+          <div><label style="margin-top:0">Séries</label><input type="number" min="1" max="20" value="${ex.series||3}" onchange="_progExSeries(${i},this)" class="f-c"></div>
           <div>
             <label style="margin-top:0">Répétition</label>
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
@@ -1601,8 +1601,17 @@ function _progExSemaines(n){
   if(l.length>v) l.length=v;
   _rendreProgEx();
 }
+// BUILD 1912 : l'éditeur des séries refuse hors de 1–20, dit pourquoi, et
+// remet l'ancienne valeur.
+function _progExSeries(i,el){
+  const r=lireSeriesSaisie(el&&el.value);
+  if(!r.ok){ toast(r.msg,'var(--orange)'); if(el) el.value=String((progEx[i]&&progEx[i].series)||3); return false; }
+  _progExDirty=true; progEx[i].series=r.valeur; el.value=String(r.valeur);
+  return true;
+}
 function _progExChamp(i,cle,val){
   if(!_progExBrouillon||!_progExBrouillon.semaines[i]) return;
+  if(cle==='series'){ const r=lireSeriesSaisie(val); if(!r.ok){ toast(r.msg,'var(--orange)'); _rendreProgEx(); return; } }
   if(cle==='rpe') _progExBrouillon.semaines[i].rpe=String(val||'');
   else{
     const n=Math.round(Number(val));

@@ -35806,6 +35806,7 @@ function _buildSessionCard(s,client){
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+      ${d.seriesPlafonnees?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Programme : ${escapeHtml(String(d.seriesPlafonnees.prevu))} séries, séance plafonnée à ${escapeHtml(String(d.seriesPlafonnees.joue))}.</div>`:''}
       ${_sx.length?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">${_sx.map(z=>escapeHtml(String(z.kg).replace('.',','))+' kg : plus de 2,5 × son meilleur (e1RM '+z.ref+' kg)').join(' · ')}</div>`:''}
       ${client&&s.date?`<button type="button" class="rb-lien" style="font-size:var(--fs-2xs)" onclick="ouvrirCorrectionSeries('${_em}','${escapeHtml(_cleSeance(s))}','${_nomEch}')">Corriger</button>`:''}
       ${(()=>{ const n=client?noteExo(client,nm):null;
@@ -48678,7 +48679,7 @@ function renderProgEx(){
              borné à 220 px (.px-court) et laissait un vide à droite ; .px-l1 lève
              la borne, et le champ est centré comme ses deux voisins. -->
         <div class="px-l1" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
+          <div><label style="margin-top:0">Séries</label><input type="number" min="1" max="20" value="${ex.series||3}" onchange="_progExSeries(${i},this)" class="f-c"></div>
           <div>
             <label style="margin-top:0">Répétition</label>
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" title="Exemples : 10 PUIS 20 (dégressive) · 6-8 (fourchette) · 15 par jambe (unilatéral)" class="f-c">
@@ -49030,8 +49031,17 @@ function _progExSemaines(n){
   if(l.length>v) l.length=v;
   _rendreProgEx();
 }
+// BUILD 1912 : l'éditeur des séries refuse hors de 1–20, dit pourquoi, et
+// remet l'ancienne valeur.
+function _progExSeries(i,el){
+  const r=lireSeriesSaisie(el&&el.value);
+  if(!r.ok){ toast(r.msg,'var(--orange)'); if(el) el.value=String((progEx[i]&&progEx[i].series)||3); return false; }
+  _progExDirty=true; progEx[i].series=r.valeur; el.value=String(r.valeur);
+  return true;
+}
 function _progExChamp(i,cle,val){
   if(!_progExBrouillon||!_progExBrouillon.semaines[i]) return;
+  if(cle==='series'){ const r=lireSeriesSaisie(val); if(!r.ok){ toast(r.msg,'var(--orange)'); _rendreProgEx(); return; } }
   if(cle==='rpe') _progExBrouillon.semaines[i].rpe=String(val||'');
   else{
     const n=Math.round(Number(val));
@@ -58027,7 +58037,11 @@ function _consigneOuverte(ex,data,prev,sig){
 function _blocExo(idx,estSS){
   const ex=woState.exercises[idx];
   const pr=parseReps(ex.reps);
-  if(!woState.sessionData[idx]) woState.sessionData[idx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
+  // BUILD 1912 : la séance lit au plus SERIES_MAX séries. Un « 40 » de
+  // programme (un 4 tapé deux fois) ne dessine plus quarante lignes ; le
+  // plafond est noté sur l'exercice, et le récapitulatif du coach le dit.
+  const _nbS=seriesBornees(ex);
+  if(!woState.sessionData[idx]) woState.sessionData[idx]=Object.assign(_nbS.plafonne?{seriesPlafonnees:{prevu:_nbS.prevu,joue:_nbS.n}}:{},{sets:Array.from({length:_nbS.n},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))});
   const data=woState.sessionData[idx];
   // ══ LA PROGRAMMATION DU COACH, SI ELLE EST ACTIVE CETTE SEMAINE ══════
   //
@@ -58408,6 +58422,22 @@ function libSeriesReps(ex){
   if(r) return escapeHtml(r+' reps');
   return '';
 }
+// ══ BUILD 1912 — DES SÉRIES ENTRE 1 ET 20 ═══════════════════════════════════
+const SERIES_MIN=1; // SERIES_MAX (20) est déclaré plus haut : le même plafond que « + série ».
+// PURE. Le nombre de séries qu'une séance dessine pour cet exercice :
+// {n, prevu, plafonne}. Illisible ou nul → 3 (la valeur d'un exercice neuf).
+function seriesBornees(ex){
+  const v=parseInt(ex&&(ex.series!=null&&ex.series!==''?ex.series:ex.sets),10);
+  if(!isFinite(v)||v<SERIES_MIN) return {n:3,prevu:null,plafonne:false};
+  if(v>SERIES_MAX) return {n:SERIES_MAX,prevu:v,plafonne:true};
+  return {n:v,prevu:v,plafonne:false};
+}
+// PURE. Une saisie du nombre de séries : {ok,valeur,msg}.
+function lireSeriesSaisie(brut){
+  const l=lireNombreFr(brut,{min:SERIES_MIN,max:SERIES_MAX});
+  if(l.ok&&Number.isInteger(l.valeur)) return {ok:true,valeur:l.valeur,msg:''};
+  return {ok:false,valeur:null,msg:'Séries : un nombre entier entre '+SERIES_MIN+' et '+SERIES_MAX+'.'};
+}
 // ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
 // Tous les champs à virgule sont <input type="text" inputmode="decimal"
 // autocomplete="off" data-dec> : un type="number" fr-FR lit « 62,5 » comme
@@ -58564,7 +58594,7 @@ function _woRepsSaisie(idx,i,el){
     const n=Number(brut);
     if(!Number.isInteger(n)||n<1||n>999){
       el.value=s.repsDone!=null?String(s.repsDone):'';
-      toast('Répétitions : un nombre entier, 1 ou plus','var(--orange)');
+      toast('Répétitions : un nombre entier entre 1 et 999','var(--orange)');
       return false;
     }
     s.repsDone=n;

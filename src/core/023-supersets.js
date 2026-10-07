@@ -643,7 +643,11 @@ function _consigneOuverte(ex,data,prev,sig){
 function _blocExo(idx,estSS){
   const ex=woState.exercises[idx];
   const pr=parseReps(ex.reps);
-  if(!woState.sessionData[idx]) woState.sessionData[idx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
+  // BUILD 1912 : la séance lit au plus SERIES_MAX séries. Un « 40 » de
+  // programme (un 4 tapé deux fois) ne dessine plus quarante lignes ; le
+  // plafond est noté sur l'exercice, et le récapitulatif du coach le dit.
+  const _nbS=seriesBornees(ex);
+  if(!woState.sessionData[idx]) woState.sessionData[idx]=Object.assign(_nbS.plafonne?{seriesPlafonnees:{prevu:_nbS.prevu,joue:_nbS.n}}:{},{sets:Array.from({length:_nbS.n},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))});
   const data=woState.sessionData[idx];
   // ══ LA PROGRAMMATION DU COACH, SI ELLE EST ACTIVE CETTE SEMAINE ══════
   //
@@ -1024,6 +1028,22 @@ function libSeriesReps(ex){
   if(r) return escapeHtml(r+' reps');
   return '';
 }
+// ══ BUILD 1912 — DES SÉRIES ENTRE 1 ET 20 ═══════════════════════════════════
+const SERIES_MIN=1; // SERIES_MAX (20) est déclaré plus haut : le même plafond que « + série ».
+// PURE. Le nombre de séries qu'une séance dessine pour cet exercice :
+// {n, prevu, plafonne}. Illisible ou nul → 3 (la valeur d'un exercice neuf).
+function seriesBornees(ex){
+  const v=parseInt(ex&&(ex.series!=null&&ex.series!==''?ex.series:ex.sets),10);
+  if(!isFinite(v)||v<SERIES_MIN) return {n:3,prevu:null,plafonne:false};
+  if(v>SERIES_MAX) return {n:SERIES_MAX,prevu:v,plafonne:true};
+  return {n:v,prevu:v,plafonne:false};
+}
+// PURE. Une saisie du nombre de séries : {ok,valeur,msg}.
+function lireSeriesSaisie(brut){
+  const l=lireNombreFr(brut,{min:SERIES_MIN,max:SERIES_MAX});
+  if(l.ok&&Number.isInteger(l.valeur)) return {ok:true,valeur:l.valeur,msg:''};
+  return {ok:false,valeur:null,msg:'Séries : un nombre entier entre '+SERIES_MIN+' et '+SERIES_MAX+'.'};
+}
 // ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
 // Tous les champs à virgule sont <input type="text" inputmode="decimal"
 // autocomplete="off" data-dec> : un type="number" fr-FR lit « 62,5 » comme
@@ -1180,7 +1200,7 @@ function _woRepsSaisie(idx,i,el){
     const n=Number(brut);
     if(!Number.isInteger(n)||n<1||n>999){
       el.value=s.repsDone!=null?String(s.repsDone):'';
-      toast('Répétitions : un nombre entier, 1 ou plus','var(--orange)');
+      toast('Répétitions : un nombre entier entre 1 et 999','var(--orange)');
       return false;
     }
     s.repsDone=n;

@@ -74058,6 +74058,43 @@ async function testExercices(){
       const f=motifs.filter(m=>m.test(s));
       return f.length?_echec(f.map(String).join(' | ')):true;});
 
+    // ══ BUILD 1912 — SÉRIES 1–20, RÉPÉTITIONS 1–999 ═══════════════════════════
+    ok('1912 — seriesBornees / lireSeriesSaisie : 1–20, plafond noté, illisible → 3',()=>{
+      const faux=[];
+      for(const [e,n,p] of [[{series:4},4,false],[{series:'40'},20,true],[{series:0},3,false],[{series:'abc'},3,false],[{sets:5},5,false],[{},3,false]]){
+        const r=seriesBornees(e); if(r.n!==n||r.plafonne!==p) faux.push(JSON.stringify(e)+' → '+JSON.stringify(r)); }
+      if(seriesBornees({series:40}).prevu!==40) faux.push('prevu');
+      for(const v of ['0','21','-3','2,5','abc','']) if(lireSeriesSaisie(v).ok) faux.push(v+' accepté');
+      for(const v of ['1','20','4']) if(!lireSeriesSaisie(v).ok) faux.push(v+' refusé');
+      if(!/entre 1 et 20/.test(lireSeriesSaisie('40').msg)) faux.push('message');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1912 — _progExSeries : 40 refusé avec message, ancienne valeur remise',()=>{
+      const _t=window.toast, sv=typeof progEx!=='undefined'?progEx:undefined; const toasts=[];
+      try{
+        window.toast=m=>toasts.push(String(m));
+        progEx=[{name:'Squat',series:4}];
+        const el=document.createElement('input'); el.value='40';
+        if(_progExSeries(0,el)!==false) return _echec('40 accepté');
+        if(progEx[0].series!==4||el.value!=='4') return _echec('ancienne valeur : '+progEx[0].series+'/'+el.value);
+        if(!toasts.some(t=>/entre 1 et 20/.test(t))) return _echec('message : '+toasts);
+        el.value='5'; _progExSeries(0,el);
+        return progEx[0].series===5?true:_echec('5 refusé');
+      }finally{ window.toast=_t; progEx=sv; }});
+    ok('1912 — séance : un programme à 40 séries en dessine 20, et le coach le lit au récapitulatif',()=>{
+      const faux=[];
+      const u=Object.assign(_banAth(),{gender:'H',currentCycle:'ignore',sessions_config:[{day:'Lundi',name:'Jambes',active:true,exercises:[{name:'Squat',sets:3,series:40,reps:'8',rest:90}]}]});
+      _sondeEcran(u,()=>startWorkoutSession(0,{sansApercu:true}),()=>{
+        const d=woState&&woState.sessionData&&woState.sessionData[0];
+        if(!d){ faux.push('séance non ouverte'); return; }
+        if(d.sets.length!==20) faux.push(d.sets.length+' séries dessinées');
+        if(!d.seriesPlafonnees||d.seriesPlafonnees.prevu!==40) faux.push('plafond non noté');
+      });
+      try{ woState=null; }catch(e){}
+      const h=_buildSessionCard({date:'2026-10-05',data:{Squat:{seriesPlafonnees:{prevu:40,joue:20},sets:[{done:true,weight:'80',reps:'8'}]}}},null);
+      if(!/40 séries, séance plafonnée à 20/.test(h)) faux.push('récapitulatif coach muet');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1912 — _woRepsSaisie dit « entre 1 et 999 »',()=>/entre 1 et 999/.test(String(_woRepsSaisie))?true:_echec('message'));
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

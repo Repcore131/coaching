@@ -2203,6 +2203,7 @@ function _buildSessionCard(s,client){
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+      ${d.seriesPlafonnees?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Programme : ${escapeHtml(String(d.seriesPlafonnees.prevu))} séries, séance plafonnée à ${escapeHtml(String(d.seriesPlafonnees.joue))}.</div>`:''}
       ${_sx.length?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">${_sx.map(z=>escapeHtml(String(z.kg).replace('.',','))+' kg : plus de 2,5 × son meilleur (e1RM '+z.ref+' kg)').join(' · ')}</div>`:''}
       ${client&&s.date?`<button type="button" class="rb-lien" style="font-size:var(--fs-2xs)" onclick="ouvrirCorrectionSeries('${_em}','${escapeHtml(_cleSeance(s))}','${_nomEch}')">Corriger</button>`:''}
       ${(()=>{ const n=client?noteExo(client,nm):null;
