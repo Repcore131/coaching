@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>RepCore — Plan de domination</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+@page{size:1920px 1080px;margin:0}
+:root{--noir:#0B0B0C;--carte:#151518;--carte2:#1C1C20;--bord:#2A2A2E;--rouge:#E02020;--rouge2:#FF3B3B;--gris:#A1A1AA;--blanc:#FFFFFF;--vert:#3DDC84}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;font-family:'Montserrat',sans-serif;color:var(--blanc)}
+.s{width:1920px;height:1080px;position:relative;overflow:hidden;background:var(--noir);padding:88px 104px;page-break-after:always;break-after:page}
+.s:last-child{page-break-after:auto}
+.glow{position:absolute;border-radius:50%;filter:blur(140px);background:var(--rouge);opacity:.22;pointer-events:none}
+.kick{font-family:'Montserrat';font-weight:800;font-size:22px;letter-spacing:.32em;color:var(--rouge);text-transform:uppercase;margin-bottom:26px;position:relative;padding-left:34px}
+.kick:before{content:'';position:absolute;left:0;top:4px;width:16px;height:16px;background:var(--rouge);border-radius:3px}
+h1{font-family:'Bebas Neue';font-weight:400;font-size:116px;line-height:.92;letter-spacing:.01em;text-transform:uppercase}
+h1 em,h2 em,.big em{font-style:normal;color:var(--rouge)}
+h2{font-family:'Bebas Neue';font-weight:400;font-size:64px;line-height:1;text-transform:uppercase}
+h3{font-family:'Montserrat';font-weight:800;font-size:28px;line-height:1.2}
+p,li{font-size:26px;line-height:1.45;color:#E6E6EA;}
+
+.muted{color:var(--gris)}
+.lead{font-size:32px;line-height:1.4;color:#D4D4D8;max-width:1250px;margin-top:26px}
+.card{background:var(--carte);border:1.5px solid var(--bord);border-radius:22px;padding:34px}
+.card.hot{border-color:var(--rouge);background:#221214}
+.tag{display:inline-block;font-weight:800;font-size:17px;letter-spacing:.14em;text-transform:uppercase;padding:7px 14px;border-radius:999px;background:#3B1416;color:var(--rouge2);border:1px solid #7A1F1F}
+.tag.g{background:#1F1F23;color:#D4D4D8;border-color:var(--bord)}
+.num{font-family:'Bebas Neue';font-size:150px;line-height:.85;color:var(--blanc)}
+.num.r{color:var(--rouge)}
+.foot{position:absolute;left:104px;right:104px;bottom:40px;display:flex;justify-content:space-between;align-items:center;font-size:17px;letter-spacing:.2em;color:#5A5A62;text-transform:uppercase;font-weight:700}
+.foot img{height:44px;border-radius:8px}
+.grid{display:grid;gap:28px}
+.bolt{color:var(--rouge)}
+.phone{border-radius:44px;border:10px solid #222226;box-shadow:0 0 0 2px #333;overflow:hidden;background:#000}
+.phone img{display:block;width:100%}
+.photo{position:absolute;top:0;bottom:0;background-size:cover;background-position:center}
+.fade-l{position:absolute;inset:0;background:linear-gradient(90deg,var(--noir) 0%,var(--noir) 38%,rgba(11,11,12,.75) 55%,rgba(11,11,12,.1) 100%)}
+ul.clean{list-style:none}
+ul.clean li{position:relative;padding-left:40px;margin-bottom:16px}
+ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;height:16px;background:var(--rouge);clip-path:polygon(40% 0,100% 0,55% 45%,85% 45%,20% 100%,40% 55%,10% 55%)}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:10px 20px;border-radius:999px;background:var(--carte2);border:1px solid var(--bord);font-weight:700;font-size:22px}
+.secnum{font-family:'Bebas Neue';font-size:520px;line-height:.8;color:transparent;-webkit-text-stroke:3px #7A1F1F;position:absolute;right:60px;bottom:-40px}
+</style></head><body>
+
+<!-- 1 COUVERTURE -->
+<section data-document-role="page" data-label="Page 1" class="s" style="padding:0">
+  <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/bg-cover.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
+  <div style="position:absolute;left:104px;top:96px;display:flex;align-items:center;gap:22px">
+    <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/logo.png" style="width:96px;border-radius:18px"><div style="font-family:'Bebas Neue';font-size:44px;letter-spacing:.08em">REPCORE <span class="muted" style="font-size:30px">· COACHING PREMIUM</span></div>
+  </div>
+  <div style="position:absolute;left:104px;top:300px;width:1050px">
+    <div class="kick">Plan stratégique · octobre 2026</div>
+    <h1 style="font-size:190px;line-height:.86">Plan de<br><em>domination</em></h1>
+    <p style="font-size:38px;margin-top:34px;font-weight:600;color:#fff">50 000 € par mois en 12 mois.<br><span class="muted" style="font-weight:500">0 € de budget. Une app. Un coach. Instagram.</span></p>
+  </div>
+  <div style="position:absolute;left:104px;bottom:72px;font-size:20px;letter-spacing:.24em;font-weight:700;color:var(--gris)">KEVIN GUELLEC · GUELLEC COACHING PRO</div>
+</section>
+
+<!-- 2 VERDICT -->
+<section data-document-role="page" data-label="Page 2" class="s">
+  <div class="glow" style="width:600px;height:600px;right:-150px;top:-150px"></div>
+  <div class="kick">01 · Le verdict</div>
+  <h1>Le produit est prêt.<br>Il manque des <em>gens qui le voient.</em></h1>
+  <p class="lead">Parrainage, codes ambassadeur, défis, duels, rangs, badges, Wrapped mensuel, export vidéo Instagram, relances automatiques : tout est déjà codé, et tourne à 0 €.</p>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:64px">
+    <div class="card"><div class="num r">0 €</div><h3 style="margin-top:18px">de budget</h3><p class="muted">Influence payée au résultat, contenu filmé au téléphone, serveur gratuit.</p></div>
+    <div class="card"><div class="num">12</div><h3 style="margin-top:18px">mois</h3><p class="muted">Pour passer de zéro à une machine qui tourne seule.</p></div>
+    <div class="card hot"><div class="num">50 K€</div><h3 style="margin-top:18px">de CA mensuel</h3><p class="muted">Objectif du scénario ambitieux au mois 12.</p></div>
+  </div>
+  <div class="foot"><span>RepCore · Plan de domination</span><span>La prochaine fonctionnalité qui rapporte le plus : une vidéo publiée</span></div>
+</section>
+
+<!-- 3 L'ARME -->
+<section data-document-role="page" data-label="Page 3" class="s">
+  <div class="glow" style="width:700px;height:700px;right:100px;top:200px;opacity:.18"></div>
+  <div style="display:grid;grid-template-columns:1fr 470px;gap:90px;align-items:center;height:100%">
+    <div>
+      <div class="kick">02 · L'arme que personne n'a</div>
+      <h1>La bonne charge,<br><em>même pendant tes règles.</em></h1>
+      <p class="lead" style="max-width:1000px">RepCore ajuste charges et volume à la phase du cycle menstruel. Aucune des 6 plateformes concurrentes étudiées ne le fait.</p>
+      <div style="margin-top:44px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1080px">
+        <div class="pill">Trainerize <span class="bolt">✕</span></div><div class="pill">TrueCoach <span class="bolt">✕</span></div><div class="pill">Everfit <span class="bolt">✕</span></div>
+        <div class="pill">Hexfit <span class="bolt">✕</span></div><div class="pill">Synergy <span class="bolt">✕</span></div><div class="pill">Fitr <span class="bolt">✕</span></div>
+      </div>
+      <div class="card hot" style="margin-top:40px;max-width:1080px;padding:28px 34px"><p style="font-size:24px"><b>Cible n°1 :</b> femmes 18-34 ans en salle. <b>Effets waouh filmables :</b> la charge proposée à chaque série, la fiche papier importée en photo.</p></div>
+    </div>
+    <div class="phone" style="width:470px;transform:rotate(3deg)"><img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/charge.jpg"></div>
+  </div>
+</section>
+
+<!-- 4 D'OÙ VIENNENT LES 50K -->
+<section data-document-role="page" data-label="Page 4" class="s">
+  <div class="kick">03 · Le modèle</div>
+  <h1>D'où viennent les <em>50 000 €</em></h1>
+  <p class="lead">Mois 12, scénario ambitieux. Quatre sources, aucune dépendance à une seule.</p>
+  <div style="display:flex;height:120px;border-radius:20px;overflow:hidden;margin-top:56px;border:1.5px solid var(--bord)">
+    <div style="flex:34500;background:var(--rouge);display:flex;align-items:center;padding-left:30px;font-family:'Bebas Neue';font-size:56px">34,5 K€</div>
+    <div style="flex:6750;background:#8E1616;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:44px">6,75 K€</div>
+    <div style="flex:6000;background:#5A1010;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:44px">6 K€</div>
+    <div style="flex:2800;background:#33333A;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:34px">2,8</div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:40px">
+    <div class="card hot"><div class="tag">69 %</div><h3 style="margin-top:20px">Abonnements athlètes</h3><p class="muted" style="margin-top:10px">2 300 payants × 15 € moyen (Essentielle 9,50 € / Ultime 24,90 €)</p></div>
+    <div class="card"><div class="tag g">13 %</div><h3 style="margin-top:20px">Abonnements coachs</h3><p class="muted" style="margin-top:10px">250 coachs × 27 € moyen (paliers 19 € et 39 €)</p></div>
+    <div class="card"><div class="tag g">12 %</div><h3 style="margin-top:20px">Coaching de Kevin</h3><p class="muted" style="margin-top:10px">40 clients × 150 €, puis une équipe de coachs RepCore</p></div>
+    <div class="card"><div class="tag g">6 %</div><h3 style="margin-top:20px">Programmes à l'unité</h3><p class="muted" style="margin-top:10px">Boutique 14,90 € et programmes personnalisés 99 €</p></div>
+  </div>
+  <div class="foot"><span>Scénario prudent au même mois : 12 000 à 18 000 €</span><span>Montants TTC, avant commissions et frais</span></div>
+</section>
+
+<!-- 5 LES 3 MOTEURS -->
+<section data-document-role="page" data-label="Page 5" class="s">
+  <div class="kick">04 · L'architecture</div>
+  <h1>Trois moteurs, <em>un seul objectif</em></h1>
+  <div style="margin-top:50px;background:#2E1416;border:2px solid var(--rouge);border-radius:22px;padding:26px;text-align:center;font-family:'Bebas Neue';font-size:64px;letter-spacing:.04em">50 K€ / mois au mois 12</div>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:28px">
+    <div class="card" style="height:430px"><div class="tag">Dès le mois 1</div><h2 style="margin-top:22px">Moteur <em>cash</em></h2><p style="margin-top:16px">Coaching premium : 150 €/mois, 350 € les 3 mois, 600 € les 6 mois.</p><p class="muted" style="margin-top:14px">Paie les premières semaines et fabrique les témoignages.</p></div>
+    <div class="card hot" style="height:430px"><div class="tag">Dès le mois 2</div><h2 style="margin-top:22px">Moteur <em>récurrent</em></h2><p style="margin-top:16px">Abonnements Essentielle 9,50 € et Ultime 24,90 €, annuel payé d'avance.</p><p class="muted" style="margin-top:14px">Le gros du chiffre, qui s'empile mois après mois.</p></div>
+    <div class="card" style="height:430px"><div class="tag">Dès le mois 3</div><h2 style="margin-top:22px">Moteur <em>distribution</em></h2><p style="margin-top:16px">Les coachs à 19 € et 39 € amènent 5 à 30 athlètes chacun.</p><p class="muted" style="margin-top:14px">Chaque coach signé est un canal d'acquisition.</p></div>
+  </div>
+  <div style="margin-top:28px;background:var(--carte2);border:1.5px solid var(--bord);border-radius:22px;padding:22px;text-align:center;font-size:26px;font-weight:700;letter-spacing:.04em">SOCLE · Instagram quotidien · Ambassadrices au résultat · Automatisation par Claude</div>
+</section>
+
+<!-- 6 ÉCHELLE D'OFFRES -->
+<section data-document-role="page" data-label="Page 6" class="s">
+  <div class="kick">05 · L'échelle d'offres</div>
+  <h1>Du gratuit au <em>premium</em></h1>
+  <svg viewBox="0 0 1712 760" width="1712" height="760" style="margin-top:20px">
+    <g font-family="Montserrat" font-weight="800">
+      <polygon points="706,20 1006,20 1066,140 646,140" fill="#E02020"/>
+      <text x="856" y="72" text-anchor="middle" fill="#fff" font-size="26">COACHING</text><text x="856" y="112" text-anchor="middle" fill="#fff" font-size="22" font-weight="600">150 € · 350 € · 600 €</text>
+      <polygon points="640,152 1072,152 1132,272 580,272" fill="#B01818"/>
+      <text x="856" y="204" text-anchor="middle" fill="#fff" font-size="26">PROGRAMMES</text><text x="856" y="244" text-anchor="middle" fill="#fff" font-size="22" font-weight="600">Boutique 14,90 € · Perso 99 €</text>
+      <polygon points="574,284 1138,284 1198,404 514,404" fill="#7E1414"/>
+      <text x="856" y="336" text-anchor="middle" fill="#fff" font-size="26">OFFRE FONDATEUR</text><text x="856" y="376" text-anchor="middle" fill="#fff" font-size="22" font-weight="600">Ultime annuel 149 € · 300 places</text>
+      <polygon points="508,416 1204,416 1264,536 448,536" fill="#3A1414"/>
+      <text x="856" y="468" text-anchor="middle" fill="#fff" font-size="26">ABONNEMENTS</text><text x="856" y="508" text-anchor="middle" fill="#fff" font-size="22" font-weight="600">Essentielle 9,50 € · Ultime 24,90 €</text>
+      <polygon points="442,548 1270,548 1330,668 382,668" fill="#1C1C20" stroke="#2A2A2E" stroke-width="2"/>
+      <text x="856" y="600" text-anchor="middle" fill="#fff" font-size="26">ESSAI GRATUIT</text><text x="856" y="640" text-anchor="middle" fill="#A1A1AA" font-size="22" font-weight="600">1 mois sans carte · 2 mois avec code ambassadrice</text>
+    </g>
+    <g font-family="Montserrat" font-size="21" font-weight="600" fill="#A1A1AA">
+      <text x="1120" y="88">← cash d'avance, 40 places max pour Kevin</text>
+      <text x="1160" y="220">← porte d'entrée vers le coaching</text>
+      <text x="1220" y="352">← cash immédiat au lancement</text>
+      <text x="0" y="476" >volume, le récurrent →</text>
+      <text x="40" y="608">zéro friction →</text>
+    </g>
+    <g font-family="Montserrat" font-size="20" font-weight="800" fill="#E02020" letter-spacing="3"><text x="0" y="740">PLUS ON MONTE, MOINS DE CLIENTS, PLUS DE VALEUR PAR CLIENT</text></g>
+  </svg>
+</section>
+
+<!-- 7 SEMAINE 0 -->
+<section data-document-role="page" data-label="Page 7" class="s">
+  <div class="secnum">0</div>
+  <div class="kick">06 · Semaine 0</div>
+  <h1>Réparer les fuites <em>avant</em><br>d'ouvrir les vannes</h1>
+  <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:20px;margin-top:48px;max-width:1500px">
+    <div class="card hot" style="padding:24px 30px"><div class="tag">Critique</div><h3 style="margin-top:12px">Supprimer l'engagement de 12 mois</h3><p class="muted" style="font-size:22px">Mensuel libre + annuel payé d'avance, 2 mois offerts.</p></div>
+    <div class="card hot" style="padding:24px 30px"><div class="tag">Critique</div><h3 style="margin-top:12px">Préparer Firebase Blaze</h3><p class="muted" style="font-size:22px">La base gratuite tient ≈ 10 coachs actifs : un Reel viral la sature.</p></div>
+    <div class="card" style="padding:24px 30px"><div class="tag g">Haute</div><h3 style="margin-top:12px">Carte bancaire sans compte PayPal</h3><p class="muted" style="font-size:22px">Bouton visible au moment de payer.</p></div>
+    <div class="card" style="padding:24px 30px"><div class="tag g">Haute</div><h3 style="margin-top:12px">Publier sur le Play Store</h3><p class="muted" style="font-size:22px">25 $ une seule fois : la seule dépense du plan.</p></div>
+    <div class="card" style="padding:24px 30px"><div class="tag g">Haute</div><h3 style="margin-top:12px">Une mise en ligne par semaine</h3><p class="muted" style="font-size:22px">467 en 30 jours mangeaient le quota d'hébergement.</p></div>
+    <div class="card" style="padding:24px 30px"><div class="tag g">Moyenne</div><h3 style="margin-top:12px">Aligner les prix</h3><p class="muted" style="font-size:22px">Google lit 9,95 €, la page affiche 9,50 €.</p></div>
+  </div>
+</section>
+
+<!-- 8 TUNNEL -->
+<section data-document-role="page" data-label="Page 8" class="s">
+  <div class="kick">07 · Le tunnel de vente</div>
+  <h1>Ce qu'il faut chaque mois<br>pour <em>400 nouveaux payants</em></h1>
+  <svg viewBox="0 0 1712 640" width="1712" height="640" style="margin-top:36px">
+    <g font-family="Montserrat">
+      <rect x="0" y="0" width="1100" height="100" rx="16" fill="#2A2A2E"/>
+      <rect x="0" y="130" width="700" height="100" rx="16" fill="#4A1515"/>
+      <rect x="0" y="260" width="420" height="100" rx="16" fill="#7E1414"/>
+      <rect x="0" y="390" width="230" height="100" rx="16" fill="#B01818"/>
+      <rect x="0" y="520" width="172" height="100" rx="16" fill="#E02020"/>
+      <g font-family="Bebas Neue" font-size="64" fill="#fff" text-anchor="end">
+        <text x="1076" y="72">1 MILLION</text><text x="676" y="202">20 000</text><text x="396" y="332">2 000</text><text x="206" y="462">400</text><text x="150" y="592">300</text>
+      </g>
+      <g font-weight="800" font-size="28" fill="#fff">
+        <text x="1140" y="48">vues Instagram</text><text x="740" y="178">visiteurs sur la page</text><text x="460" y="308">essais gratuits</text><text x="270" y="438">nouveaux payants</text><text x="212" y="568">encore là après 3 mois</text>
+      </g>
+      <g font-weight="600" font-size="22" fill="#A1A1AA">
+        <text x="1140" y="84">Kevin + ambassadrices + UGC des membres</text><text x="740" y="214">clic lien en bio / code : 1 à 2 %</text><text x="460" y="344">inscription : 10 à 15 %</text><text x="270" y="474">passage payant : 20 à 25 %</text><text x="212" y="604">rétention 3 mois : 75 %</text>
+      </g>
+    </g>
+  </svg>
+  <div class="foot"><span>Taux cibles = ordres de grandeur du secteur, à recaler sur tes vrais chiffres dès le mois 1</span><span></span></div>
+</section>
+
+<!-- 9 ROADMAP -->
+<section data-document-role="page" data-label="Page 9" class="s">
+  <div class="kick">08 · Feuille de route</div>
+  <h1>12 mois, <em>5 phases</em></h1>
+  <svg viewBox="0 0 1712 620" width="1712" height="620" style="margin-top:40px">
+    <g font-family="Montserrat">
+      <line x1="0" y1="110" x2="1712" y2="110" stroke="#2A2A2E" stroke-width="6"/>
+      <line x1="0" y1="110" x2="1712" y2="110" stroke="#E02020" stroke-width="6" stroke-dasharray="1712" stroke-dashoffset="0" opacity=".35"/>
+      <g fill="#E02020"><circle cx="40" cy="110" r="18"/><circle cx="330" cy="110" r="18"/><circle cx="700" cy="110" r="18"/><circle cx="1100" cy="110" r="18"/><circle cx="1500" cy="110" r="22"/></g>
+      <g font-family="Bebas Neue" font-size="44" fill="#fff"><text x="0" y="60">SEMAINE 0</text><text x="290" y="60">MOIS 1</text><text x="660" y="60">MOIS 2-3</text><text x="1060" y="60">MOIS 4-6</text><text x="1440" y="60">MOIS 7-12</text></g>
+    </g>
+  </svg>
+  <div class="grid" style="grid-template-columns:repeat(5,1fr);gap:18px;margin-top:-470px">
+    <div class="card" style="padding:24px;height:300px"><h3 style="font-size:24px">Réparer</h3><p style="font-size:20px;margin-top:10px" class="muted">Les correctifs, profil Instagram refait, 10 Reels tournés d'avance.</p><div class="tag g" style="margin-top:20px">0 €</div></div>
+    <div class="card" style="padding:24px;height:300px"><h3 style="font-size:24px">Cash immédiat</h3><p style="font-size:20px;margin-top:10px" class="muted">10 coachings à 350 €, Offre Fondateur, salle de sport, 50 bêta-testeurs.</p><div class="tag" style="margin-top:20px">3 à 10 K€</div></div>
+    <div class="card" style="padding:24px;height:300px"><h3 style="font-size:24px">Influence</h3><p style="font-size:20px;margin-top:10px" class="muted">30 ambassadrices au résultat, un défi RepCore par mois.</p><div class="tag" style="margin-top:20px">3 à 8 K€</div></div>
+    <div class="card" style="padding:24px;height:300px"><h3 style="font-size:24px">Coachs</h3><p style="font-size:20px;margin-top:10px" class="muted">Démarchage des coachs, défis inter-communautés.</p><div class="tag" style="margin-top:20px">6 à 20 K€</div></div>
+    <div class="card hot" style="padding:24px;height:300px"><h3 style="font-size:24px">Pilote auto</h3><p style="font-size:20px;margin-top:10px" class="muted">Équipe de coachs RepCore, SEO, résiliation sous 6 %.</p><div class="tag" style="margin-top:20px">12 à 50 K€</div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:18px;margin-top:36px">
+    <div class="card" style="padding:26px"><div class="tag g">Porte 1 · fin mois 1</div><p style="margin-top:14px;font-size:22px">10 clients coachés <b>ou</b> 50 Offres Fondateur vendues</p></div>
+    <div class="card" style="padding:26px"><div class="tag g">Porte 2 · fin mois 3</div><p style="margin-top:14px;font-size:22px">20 ambassadrices actives et essai → payant ≥ 20 %</p></div>
+    <div class="card hot" style="padding:26px"><div class="tag">Porte 3 · fin mois 6</div><p style="margin-top:14px;font-size:22px">500 payants, résiliation &lt; 8 %, Blaze activé</p></div>
+  </div>
+</section>
+
+<!-- 10 30 PREMIERS JOURS -->
+<section data-document-role="page" data-label="Page 10" class="s" style="padding:0">
+  <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/bg-hyrox.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
+  <div style="position:absolute;left:104px;top:88px;width:1150px">
+    <div class="kick">09 · Les 30 premiers jours</div>
+    <h1>Le mois du <em>cash</em></h1>
+    <div style="margin-top:46px;display:grid;gap:20px">
+      <div class="card" style="display:grid;grid-template-columns:150px 1fr;align-items:center;padding:24px 30px"><div class="num r" style="font-size:80px">S1</div><p>Profil refait, 10 Reels tournés, <b>50 bêta-testeurs</b> recrutés en DM (1 mois offert contre 20 s de témoignage vidéo).</p></div>
+      <div class="card" style="display:grid;grid-template-columns:150px 1fr;align-items:center;padding:24px 30px"><div class="num r" style="font-size:80px">S2</div><p>Ouverture de <b>10 places Transformation 90 jours à 350 €</b>, app incluse, puis liste d'attente.</p></div>
+      <div class="card" style="display:grid;grid-template-columns:150px 1fr;align-items:center;padding:24px 30px"><div class="num r" style="font-size:80px">S3</div><p>Lancement de l'<b>Offre Fondateur</b> : 300 places, compteur de places restantes en story chaque jour.</p></div>
+      <div class="card hot" style="display:grid;grid-template-columns:150px 1fr;align-items:center;padding:24px 30px"><div class="num" style="font-size:80px">S4</div><p>Premier <b>défi RepCore 30 jours</b> + affiche QR code au vestiaire de la salle (avec l'accord de la direction).</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 MACHINE INSTAGRAM -->
+<section data-document-role="page" data-label="Page 11" class="s">
+  <div class="kick">10 · La machine Instagram</div>
+  <h1>1 Reel par jour, <em>6 formats</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:46px;gap:22px">
+    <div class="card"><div class="tag">La charge</div><p style="margin-top:16px;font-weight:700;font-size:25px">« Tu sais pas quoi mettre sur la barre ? Mon app te le dit à chaque série. »</p></div>
+    <div class="card hot"><div class="tag">Le cycle</div><p style="margin-top:16px;font-weight:700;font-size:25px">« Pourquoi tu es plus faible certaines semaines du mois (et quoi faire). »</p></div>
+    <div class="card"><div class="tag">La fiche papier</div><p style="margin-top:16px;font-weight:700;font-size:25px">« J'ai pris en photo mon vieux programme papier. 10 secondes plus tard… »</p></div>
+    <div class="card"><div class="tag">Avant / après</div><p style="margin-top:16px;font-weight:700;font-size:25px">Bilan photo + courbe de l'app, avec accord écrit de la cliente.</p></div>
+    <div class="card"><div class="tag">Le défi</div><p style="margin-top:16px;font-weight:700;font-size:25px">« 30 jours, 400 personnes, une seule équipe gagne. Je suis 12e. »</p></div>
+    <div class="card"><div class="tag">Le record</div><p style="margin-top:16px;font-weight:700;font-size:25px">La vidéo exportée par l'app, telle quelle : la preuve que les gens l'utilisent.</p></div>
+  </div>
+  <div class="card" style="margin-top:26px;display:flex;gap:40px;align-items:center;padding:24px 34px">
+    <h3 style="white-space:nowrap">Les règles</h3><p style="font-size:23px">7 à 20 s · accroche dans les 2 premières secondes · sous-titres · un seul message · commentaire épinglé « Écris <b>REPCORE</b> et je t'envoie 2 mois gratuits »</p>
+  </div>
+</section>
+
+<!-- 12 SEMAINE TYPE -->
+<section data-document-role="page" data-label="Page 12" class="s">
+  <div class="kick">11 · Le calendrier</div>
+  <h1>La semaine <em>type</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(7,1fr);gap:14px;margin-top:50px">
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Lun</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">Cycle &amp; muscu</p><p class="muted" style="font-size:19px;margin-top:16px">Story : sondage « Tu t'entraînes pendant tes règles ? »</p></div>
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Mar</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">La charge proposée</p><p class="muted" style="font-size:19px;margin-top:16px">Carrousel : 5 erreurs qui bloquent ta progression</p></div>
+    <div class="card hot" style="padding:24px;height:430px"><h2 style="font-size:46px">Mer</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">Avant / après client</p><p class="muted" style="font-size:19px;margin-top:16px">Story : places de coaching restantes</p></div>
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Jeu</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">Fiche papier → app</p><p class="muted" style="font-size:19px;margin-top:16px">Live 20 min : questions programme</p></div>
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Ven</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">Record d'un membre</p><p class="muted" style="font-size:19px;margin-top:16px">Story : classement du défi</p></div>
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Sam</h2><div class="tag" style="margin:14px 0">Reel</div><p style="font-size:23px;font-weight:700">Coulisses / leg day</p><p class="muted" style="font-size:19px;margin-top:16px">Story : témoignage vidéo</p></div>
+    <div class="card" style="padding:24px;height:430px"><h2 style="font-size:46px">Dim</h2><div class="tag g" style="margin:14px 0">Recap</div><p style="font-size:23px;font-weight:700">La semaine en 30 s</p><p class="muted" style="font-size:19px;margin-top:16px">Appel à l'action « écris REPCORE »</p></div>
+  </div>
+  <div class="grid" style="grid-template-columns:1.3fr 1fr;gap:22px;margin-top:28px">
+    <div class="card hot" style="padding:28px 32px"><h3>Le batch du dimanche : 2 heures</h3><p style="margin-top:10px;font-size:22px">Tourner les 7 Reels de la semaine d'un coup, en salle. Claude a préparé les scripts le samedi.</p></div>
+    <div class="card" style="padding:28px 32px"><h3>Heures de publication</h3><p style="margin-top:10px;font-size:22px">12 h 15 ou 18 h 30 · tester 2 semaines, garder la meilleure</p></div>
+  </div>
+</section>
+
+<!-- 13 AMBASSADRICES -->
+<section data-document-role="page" data-label="Page 13" class="s">
+  <div class="kick">12 · Programme ambassadrices</div>
+  <h1>L'influence payée <em>uniquement au résultat</em></h1>
+  <svg viewBox="0 0 1712 330" width="1712" height="330" style="margin-top:46px">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#E02020"/></marker></defs>
+    <g font-family="Montserrat">
+      <rect x="0" y="40" width="440" height="200" rx="22" fill="#151518" stroke="#2A2A2E" stroke-width="2"/>
+      <rect x="636" y="40" width="440" height="200" rx="22" fill="#151518" stroke="#2A2A2E" stroke-width="2"/>
+      <rect x="1272" y="40" width="440" height="200" rx="22" fill="#2A1214" stroke="#E02020" stroke-width="2"/>
+      <g font-weight="800" font-size="30" fill="#fff" text-anchor="middle"><text x="220" y="112">L'AMBASSADRICE</text><text x="856" y="112">SA COMMUNAUTÉ</text><text x="1492" y="112">REPCORE ENCAISSE</text></g>
+      <g font-weight="600" font-size="22" fill="#A1A1AA" text-anchor="middle"><text x="220" y="160">5 000 à 60 000 abonnés</text><text x="220" y="194">poste avec son code</text><text x="856" y="160">2 mois d'essai offerts</text><text x="856" y="194">sans carte bancaire</text><text x="1492" y="160">puis reverse 30 %</text><text x="1492" y="194">pendant 12 mois</text></g>
+      <path d="M450 140 H626" stroke="#E02020" stroke-width="4" marker-end="url(#a)"/><path d="M1086 140 H1262" stroke="#E02020" stroke-width="4" marker-end="url(#a)"/>
+      <path d="M1492 250 V300 H220 V250" fill="none" stroke="#E02020" stroke-width="3" stroke-dasharray="10 8" marker-end="url(#a)"/>
+      <text x="856" y="290" text-anchor="middle" font-weight="800" font-size="22" fill="#FF3B3B" letter-spacing="2">30 % DE CHAQUE PAIEMENT + ULTIME GRATUIT À VIE</text>
+    </g>
+  </svg>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:30px">
+    <div class="card"><div class="num r" style="font-size:110px">15</div><p style="margin-top:10px">messages par jour, 6 jours sur 7</p></div>
+    <div class="card"><div class="num" style="font-size:110px">≈ 18</div><p style="margin-top:10px">nouvelles ambassadrices actives par mois</p></div>
+    <div class="card hot"><div class="num" style="font-size:110px">15-40</div><p style="margin-top:10px">payants ramenés par ambassadrice en 3 mois</p></div>
+  </div>
+</section>
+
+<!-- 14 LE DM -->
+<section data-document-role="page" data-label="Page 14" class="s">
+  <div class="glow" style="width:600px;height:600px;left:600px;top:300px;opacity:.16"></div>
+  <div style="display:grid;grid-template-columns:720px 1fr;gap:110px;align-items:center;height:100%">
+    <div>
+      <div class="kick">13 · Le script</div>
+      <h1>Le message qui<br><em>ouvre les portes</em></h1>
+      <ul class="clean" style="margin-top:40px">
+        <li>Personnel : cite <b>une</b> vidéo précise</li>
+        <li>Court : lisible sans « voir plus »</li>
+        <li>Une seule question à la fin</li>
+        <li>Jamais de lien au premier message</li>
+      </ul>
+    </div>
+    <div style="background:#000;border:1.5px solid var(--bord);border-radius:36px;padding:40px 40px 50px">
+      <div style="display:flex;align-items:center;gap:18px;padding-bottom:26px;border-bottom:1px solid var(--bord)"><img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/kevin.jpg" style="width:72px;height:72px;border-radius:50%;object-fit:cover"><div><h3 style="font-size:26px">kevin.repcore</h3><p class="muted" style="font-size:19px">Coach · créateur de RepCore</p></div></div>
+      <div style="margin-top:30px;margin-left:auto;max-width:820px;background:linear-gradient(135deg,#E02020,#A01010);border-radius:30px 30px 8px 30px;padding:30px 34px;font-size:25px;line-height:1.5">Salut [prénom], j'ai vu ta vidéo sur [sujet précis] 🔥 Je suis coach et j'ai créé RepCore : l'app de muscu qui te dit quelle charge mettre à chaque série, et qui l'ajuste à ton cycle si tu l'actives.<br><br>Je te l'offre à vie. Si elle te plaît et que tu en parles, ta commu a 2 mois gratuits et toi 30 % de ce qu'ils paient pendant un an.<br><br>Je t'envoie l'accès ?</div>
+      <div style="margin-top:22px;max-width:360px;background:#26262B;border-radius:30px 30px 30px 8px;padding:20px 28px;font-size:25px">Oh trop bien, vas-y 😍</div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 COACHS -->
+<section data-document-role="page" data-label="Page 15" class="s" style="padding:0">
+  <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/bg-prog.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
+  <div style="position:absolute;left:780px;top:88px;right:104px">
+    <div class="kick">14 · Les coachs</div>
+    <h1>Un coach =<br><em>5 à 30 athlètes</em> d'un coup</h1>
+    <ul class="clean" style="margin-top:40px">
+      <li><b>Cible :</b> coachs indépendants qui suivent leurs clients sur Excel ou WhatsApp</li>
+      <li><b>Offre :</b> gratuit pour 1 athlète, puis 19 € ou 39 € par mois</li>
+      <li><b>50 premiers :</b> 3 mois offerts contre un avis public</li>
+      <li><b>Argument :</b> leurs clients ont l'app, eux voient charges, bilans et cycle</li>
+    </ul>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:30px">
+      <div class="card"><div class="num r" style="font-size:96px">30</div><p class="muted">coachs payants au mois 4</p></div>
+      <div class="card hot"><div class="num" style="font-size:96px">250</div><p class="muted">coachs payants au mois 12</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 16 FLYWHEEL -->
+<section data-document-role="page" data-label="Page 16" class="s">
+  <div style="display:grid;grid-template-columns:600px 1fr;gap:60px;height:100%;align-items:center">
+    <div>
+      <div class="kick">15 · Le bouche à oreille</div>
+      <h1>La roue qui<br><em>tourne seule</em></h1>
+      <p class="lead">Tout est déjà codé : records, rangs, Wrapped, export vidéo, lien de parrainage. Objectif : <b>1 partage par membre et par mois.</b></p>
+    </div>
+    <svg viewBox="0 0 1000 860" width="1000" height="860">
+      <defs><marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#E02020"/></marker></defs>
+      <circle cx="500" cy="430" r="300" fill="none" stroke="#2A2A2E" stroke-width="3"/>
+      <g fill="none" stroke="#E02020" stroke-width="5" marker-end="url(#b)">
+        <path d="M590 145 A300 300 0 0 1 760 275"/><path d="M790 520 A300 300 0 0 1 680 680"/><path d="M420 720 A300 300 0 0 1 250 610"/><path d="M205 380 A300 300 0 0 1 280 205"/><path d="M380 150 A300 300 0 0 1 430 136"/>
+      </g>
+      <image href="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/logo.png" x="400" y="330" width="200" height="200"/>
+      <g font-family="Montserrat" font-weight="800" font-size="25" fill="#fff" text-anchor="middle">
+        <rect x="370" y="70" width="260" height="110" rx="18" fill="#E02020"/><text x="500" y="118">Record ou</text><text x="500" y="150">nouveau rang</text>
+        <rect x="720" y="300" width="270" height="110" rx="18" fill="#151518" stroke="#2A2A2E" stroke-width="2"/><text x="855" y="348">Vidéo prête</text><text x="855" y="380">pour Instagram</text>
+        <rect x="590" y="660" width="270" height="110" rx="18" fill="#151518" stroke="#2A2A2E" stroke-width="2"/><text x="725" y="708">Postée avec son</text><text x="725" y="740">lien de parrainage</text>
+        <rect x="130" y="660" width="270" height="110" rx="18" fill="#151518" stroke="#2A2A2E" stroke-width="2"/><text x="265" y="708">Son ami arrive,</text><text x="265" y="740">1 mois offert</text>
+        <rect x="10" y="300" width="270" height="110" rx="18" fill="#151518" stroke="#2A2A2E" stroke-width="2"/><text x="145" y="348">Le parrain</text><text x="145" y="380">gagne 1 mois</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<!-- 17 CLAUDE -->
+<section data-document-role="page" data-label="Page 17" class="s">
+  <div class="kick">16 · L'automatisation</div>
+  <h1>Claude, ton équipe marketing <em>à 0 €</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:22px;margin-top:46px">
+    <div class="card"><div class="tag">Chaque lundi</div><h3 style="margin-top:16px">7 scripts de Reels</h3><p class="muted" style="font-size:22px;margin-top:8px">Accroche, plan par plan, sous-titres, légende, hashtags.</p></div>
+    <div class="card"><div class="tag">Chaque jour</div><h3 style="margin-top:16px">15 DM personnalisés</h3><p class="muted" style="font-size:22px;margin-top:8px">Influenceuses et coachs, à partir de leur dernière vidéo.</p></div>
+    <div class="card"><div class="tag">Chaque semaine</div><h3 style="margin-top:16px">Visuels Canva</h3><p class="muted" style="font-size:22px;margin-top:8px">Carrousels, stories de vente, affiche du défi, compteur Fondateur.</p></div>
+    <div class="card hot"><div class="tag">Chaque lundi</div><h3 style="margin-top:16px">Le rapport de pilotage</h3><p class="muted" style="font-size:22px;margin-top:8px">Les 6 chiffres, ce qui marche, ce qu'on coupe, le plan de la semaine.</p></div>
+    <div class="card"><div class="tag">En continu</div><h3 style="margin-top:16px">Emails et relances</h3><p class="muted" style="font-size:22px;margin-top:8px">Bienvenue, fin d'essai, réactivation, réponses aux questions fréquentes.</p></div>
+    <div class="card"><div class="tag">Chaque mois</div><h3 style="margin-top:16px">2 articles SEO</h3><p class="muted" style="font-size:22px;margin-top:8px">Cycle et musculation, programme femme, quelle charge mettre.</p></div>
+  </div>
+  <div class="foot"><span>Une routine programmée peut lancer ces tâches seule, à heure fixe</span><span>Gain estimé : 10 à 15 h par semaine</span></div>
+</section>
+
+<!-- 18 PROMPTS -->
+<section data-document-role="page" data-label="Page 18" class="s">
+  <div class="kick">17 · Prêts à coller</div>
+  <h1>3 prompts qui <em>travaillent pour toi</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:22px;margin-top:44px">
+    <div class="card" style="height:640px"><div class="tag">Scripts de la semaine</div><p style="margin-top:20px;font-size:21px;line-height:1.55;font-family:monospace;color:#E6E6EA">« Tu es mon directeur de contenu RepCore. Écris 7 scripts de Reels de 15 s pour des femmes 18-34 ans en muscu, un par format : charge, cycle, fiche papier, avant/après, défi, record, coulisses. Pour chacun : accroche des 2 premières secondes, 4 plans, texte à l'écran, légende, 5 hashtags, appel à l'action « écris REPCORE ». »</p></div>
+    <div class="card" style="height:640px"><div class="tag">DM ambassadrices</div><p style="margin-top:20px;font-size:21px;line-height:1.55;font-family:monospace;color:#E6E6EA">« Voici 15 comptes avec, pour chacun, le sujet de leur dernière vidéo : [liste]. Écris un premier message privé personnalisé pour chacun, 60 mots maximum, en citant leur vidéo, avec l'offre : app offerte à vie, 2 mois gratuits pour leur commu, 30 % pendant 12 mois. Une seule question à la fin. »</p></div>
+    <div class="card hot" style="height:640px"><div class="tag">Rapport du lundi</div><p style="margin-top:20px;font-size:21px;line-height:1.55;font-family:monospace;color:#E6E6EA">« Voici mes chiffres de la semaine : [captures Instagram + essais, payants, résiliations, ambassadrices, coachs]. Compare à la semaine dernière et aux cibles du plan, dis-moi les 3 contenus qui ont le mieux marché et pourquoi, ce que je coupe, et mes 5 priorités de la semaine. »</p></div>
+  </div>
+</section>
+
+<!-- 19 ROUTINE -->
+<section data-document-role="page" data-label="Page 19" class="s">
+  <div class="kick">18 · La discipline</div>
+  <h1>La routine de <em>90 minutes</em> par jour</h1>
+  <div style="display:flex;height:150px;margin-top:70px;border-radius:22px;overflow:hidden;border:1.5px solid var(--bord)">
+    <div style="flex:15;background:#5A1010;padding:24px"><div class="num" style="font-size:60px">15'</div></div>
+    <div style="flex:20;background:var(--rouge);padding:24px"><div class="num" style="font-size:60px">20'</div></div>
+    <div style="flex:15;background:#8E1616;padding:24px"><div class="num" style="font-size:60px">15'</div></div>
+    <div style="flex:20;background:#B01818;padding:24px"><div class="num" style="font-size:60px">20'</div></div>
+    <div style="flex:20;background:#33333A;padding:24px"><div class="num" style="font-size:60px">20'</div></div>
+  </div>
+  <div style="display:flex;gap:0;margin-top:26px">
+    <div style="flex:15;padding-right:16px"><h3 style="font-size:24px">Préparer</h3><p class="muted" style="font-size:20px">Claude sort le script du jour et les 15 DM</p></div>
+    <div style="flex:20;padding-right:16px"><h3 style="font-size:24px">Tourner</h3><p class="muted" style="font-size:20px">Le Reel du jour, en salle, au téléphone</p></div>
+    <div style="flex:15;padding-right:16px"><h3 style="font-size:24px">Publier</h3><p class="muted" style="font-size:20px">Post + réponses aux commentaires</p></div>
+    <div style="flex:20;padding-right:16px"><h3 style="font-size:24px">Prospecter</h3><p class="muted" style="font-size:20px">Envoi des DM, suivi des réponses</p></div>
+    <div style="flex:20"><h3 style="font-size:24px">Vendre</h3><p class="muted" style="font-size:20px">Appels découverte coaching</p></div>
+  </div>
+  <div class="card hot" style="margin-top:60px;padding:30px 36px"><p style="font-size:28px"><b>Gel du développement pendant 90 jours.</b> Une mise en ligne par semaine, correctifs seulement. Chaque heure de code est une heure sans vendre.</p></div>
+</section>
+
+<!-- 20 MATRICE -->
+<section data-document-role="page" data-label="Page 20" class="s">
+  <div class="kick">19 · Optimisations produit</div>
+  <h1>Ce qu'on code <em>(un peu)</em></h1>
+  <div style="position:relative;margin-top:36px;height:740px">
+    <div style="position:absolute;left:60px;right:0;top:0;bottom:60px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px">
+      <div class="card hot" style="padding:26px"><div class="tag">À faire tout de suite</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Mensuel sans engagement, annuel −2 mois</li><li style="font-size:22px">« Thomas t'invite » : prénom du parrain à l'arrivée</li><li style="font-size:22px">Fiche Play Store</li></ul></div>
+      <div class="card" style="padding:26px"><div class="tag g">À planifier</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Parcours des 7 premiers jours</li><li style="font-size:22px">Relance des inactifs</li><li style="font-size:22px">Paiement Stripe en plus de PayPal</li></ul></div>
+      <div class="card" style="padding:26px"><div class="tag g">Petits bonus</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Légende + #RepCore pré-remplis au partage</li><li style="font-size:22px">Format 4:5 pour le Wrapped</li></ul></div>
+      <div class="card" style="padding:26px;opacity:.75"><div class="tag g">Pas maintenant</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Toute fonctionnalité sans lien direct avec la vente</li><li style="font-size:22px">Nouveaux badges, nouveaux écrans</li></ul></div>
+    </div>
+    <div style="position:absolute;left:0;top:0;bottom:60px;width:44px;display:flex;align-items:center;justify-content:center"><div style="transform:rotate(-90deg);white-space:nowrap;font-weight:800;letter-spacing:.2em;color:var(--gris);font-size:18px">IMPACT SUR LE CA →</div></div>
+    <div style="position:absolute;left:60px;right:0;bottom:10px;text-align:center;font-weight:800;letter-spacing:.2em;color:var(--gris);font-size:18px">EFFORT DE CODE →</div>
+  </div>
+</section>
+
+<!-- 21 PROJECTION -->
+<section data-document-role="page" data-label="Page 21" class="s">
+  <div class="kick">20 · La projection</div>
+  <h1>De 3 K€ à <em>50 K€</em> par mois</h1>
+  <svg viewBox="0 0 1712 680" width="1712" height="680" style="margin-top:30px">
+    <g font-family="Montserrat" font-size="20" fill="#A1A1AA" font-weight="600">
+      <line x1="90" y1="600" x2="1690" y2="600" stroke="#2A2A2E" stroke-width="2"/>
+      <line x1="90" y1="480" x2="1690" y2="480" stroke="#1E1E22"/><line x1="90" y1="360" x2="1690" y2="360" stroke="#1E1E22"/><line x1="90" y1="240" x2="1690" y2="240" stroke="#1E1E22"/><line x1="90" y1="120" x2="1690" y2="120" stroke="#1E1E22"/>
+      <text x="70" y="607" text-anchor="end">0</text><text x="70" y="487" text-anchor="end">10 K€</text><text x="70" y="367" text-anchor="end">20 K€</text><text x="70" y="247" text-anchor="end">30 K€</text><text x="70" y="127" text-anchor="end">40 K€</text>
+      <g text-anchor="middle"><text x="150" y="640">M1</text><text x="285" y="640">M2</text><text x="420" y="640">M3</text><text x="555" y="640">M4</text><text x="690" y="640">M5</text><text x="825" y="640">M6</text><text x="960" y="640">M7</text><text x="1095" y="640">M8</text><text x="1230" y="640">M9</text><text x="1365" y="640">M10</text><text x="1500" y="640">M11</text><text x="1635" y="640">M12</text></g>
+    </g>
+    <polyline fill="none" stroke="#6B6B73" stroke-width="5" points="150,564 285,558 420,546 555,528 690,510 825,492 960,480 1095,468 1230,450 1365,432 1500,414 1635,396"/>
+    <polyline fill="none" stroke="#E02020" stroke-width="7" points="150,480 285,516 420,492 555,444 690,396 825,348 960,288 1095,228 1230,180 1365,120 1500,60 1635,0"/>
+    <circle cx="1635" cy="4" r="12" fill="#E02020"/>
+    <g font-family="Montserrat" font-weight="800" font-size="24">
+      <text x="1450" y="30" fill="#fff" text-anchor="end">Ambitieux : 50 K€</text>
+      <text x="1620" y="380" fill="#A1A1AA" text-anchor="end">Prudent : 17 K€</text>
+      
+    </g>
+  </svg>
+  <div class="foot"><span>Pic du mois 1 : coaching + annuels encaissés d'avance</span><span>Projection selon les hypothèses du plan</span></div>
+</section>
+
+<!-- 22 UNIT ECONOMICS -->
+<section data-document-role="page" data-label="Page 22" class="s">
+  <div class="kick">21 · Les chiffres qui décident</div>
+  <h1>La résiliation <em>décide de tout</em></h1>
+  <div class="grid" style="grid-template-columns:1.1fr 1fr;gap:36px;margin-top:50px">
+    <div class="card hot" style="padding:44px">
+      <p class="muted" style="font-size:24px">À 8 % de résiliation mensuelle, 2 300 abonnés en perdent</p>
+      <div class="num" style="font-size:170px;margin-top:10px">184 / mois</div>
+      <p style="margin-top:20px;font-size:26px">Il faut donc <b>≈ 380 nouveaux payants par mois</b> pour continuer à monter. Passer à 6 % de résiliation, c'est <b>46 abonnés sauvés chaque mois</b>, soit ≈ 690 € de CA mensuel en plus, cumulés.</p>
+    </div>
+    <div class="card" style="padding:40px">
+      <h3>Ce qui sort, mois 12 ambitieux</h3>
+      <div style="margin-top:26px;display:grid;gap:18px">
+        <div style="display:flex;justify-content:space-between;font-size:26px;border-bottom:1px solid var(--bord);padding-bottom:14px"><span>Commissions ambassadrices (30 %)</span><b>≈ 6 000 €</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:26px;border-bottom:1px solid var(--bord);padding-bottom:14px"><span>Frais PayPal (≈ 3 %)</span><b>≈ 1 500 €</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:26px;border-bottom:1px solid var(--bord);padding-bottom:14px"><span>Hébergement (Blaze, vidéos)</span><b>100 à 400 €</b></div>
+        <div style="display:flex;justify-content:space-between;font-size:26px;border-bottom:1px solid var(--bord);padding-bottom:14px"><span>TVA (20 % du TTC)</span><b>≈ 8 300 €</b></div>
+      </div>
+      <p class="muted" style="margin-top:24px;font-size:21px">Les commissions ne sont dues que sur de l'argent déjà encaissé : jamais de trou de trésorerie.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 23 KPI -->
+<section data-document-role="page" data-label="Page 23" class="s">
+  <div class="kick">22 · Le tableau de bord</div>
+  <h1>6 chiffres, <em>chaque lundi</em>, 15 minutes</h1>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:22px;margin-top:50px">
+    <div class="card"><p class="muted" style="font-size:22px">Nouveaux essais</p><div class="num r" style="font-size:96px;margin-top:6px">+20 %</div><p style="font-size:21px">par mois</p></div>
+    <div class="card"><p class="muted" style="font-size:22px">Essai → payant</p><div class="num" style="font-size:96px;margin-top:6px">≥ 20 %</div><p style="font-size:21px">sinon : revoir l'écran de fin d'essai</p></div>
+    <div class="card hot"><p class="muted" style="font-size:22px">Résiliation mensuelle</p><div class="num" style="font-size:96px;margin-top:6px">&lt; 6 %</div><p style="font-size:21px">alerte au-dessus de 8 %</p></div>
+    <div class="card"><p class="muted" style="font-size:22px">Ambassadrices actives</p><div class="num" style="font-size:96px;margin-top:6px">10 → 40</div><p style="font-size:21px">mois 2 → mois 6</p></div>
+    <div class="card"><p class="muted" style="font-size:22px">Coachs payants</p><div class="num" style="font-size:96px;margin-top:6px">30 → 250</div><p style="font-size:21px">mois 4 → mois 12</p></div>
+    <div class="card"><p class="muted" style="font-size:22px">Quota Firebase</p><div class="num r" style="font-size:96px;margin-top:6px">70 %</div><p style="font-size:21px">seuil de bascule en Blaze</p></div>
+  </div>
+</section>
+
+<!-- 24 RISQUES -->
+<section data-document-role="page" data-label="Page 24" class="s">
+  <div class="kick">23 · Les garde-fous</div>
+  <h1>Les risques <em>tenus en laisse</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(5,1fr);gap:18px;margin-top:56px">
+    <div class="card" style="height:400px;padding:28px"><div class="num r" style="font-size:90px">01</div><h3 style="margin-top:12px;font-size:25px">La panne</h3><p class="muted" style="font-size:21px;margin-top:10px">Un Reel viral sur un plan gratuit saturé : l'app tombe pour les payants. Blaze prêt.</p></div>
+    <div class="card" style="height:400px;padding:28px"><div class="num r" style="font-size:90px">02</div><h3 style="margin-top:12px;font-size:25px">Données de santé</h3><p class="muted" style="font-size:21px;margin-top:10px">Cycle, photos, mesures : consentement explicite, rien de montré sans accord écrit.</p></div>
+    <div class="card" style="height:400px;padding:28px"><div class="num r" style="font-size:90px">03</div><h3 style="margin-top:12px;font-size:25px">Loi influence</h3><p class="muted" style="font-size:21px;margin-top:10px">Mention « collaboration commerciale » obligatoire depuis juin 2023. Contrat simple.</p></div>
+    <div class="card" style="height:400px;padding:28px"><div class="num r" style="font-size:90px">04</div><h3 style="margin-top:12px;font-size:25px">Engagement 12 mois</h3><p class="muted" style="font-size:21px;margin-top:10px">Litiges et remboursements PayPal. Le supprimer protège aussi le CA.</p></div>
+    <div class="card hot" style="height:400px;padding:28px"><div class="num" style="font-size:90px">05</div><h3 style="margin-top:12px;font-size:25px">Ton temps</h3><p class="muted" style="font-size:21px;margin-top:10px">Coder, coacher 40 clients et prospecter : impossible. Le gel du code n'est pas optionnel.</p></div>
+  </div>
+</section>
+
+<!-- 25 FIN -->
+<section data-document-role="page" data-label="Page 25" class="s" style="padding:0">
+  <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/bg-fin.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
+  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+    <img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/logo.png" style="width:150px;border-radius:26px;margin-bottom:40px">
+    <h1 style="font-size:200px">On lance.<br><em>Maintenant.</em></h1>
+    <div style="display:flex;gap:22px;margin-top:56px">
+      <div class="pill" style="font-size:26px;padding:16px 28px"><span class="bolt">1</span> Refaire la bio</div>
+      <div class="pill" style="font-size:26px;padding:16px 28px"><span class="bolt">2</span> Tourner 3 Reels</div>
+      <div class="pill" style="font-size:26px;padding:16px 28px"><span class="bolt">3</span> Envoyer 15 messages</div>
+    </div>
+    <p style="margin-top:44px;font-size:30px;font-weight:700;color:var(--gris)">50 000 € par mois commence par une vidéo.</p>
+  </div>
+</section>
+
+</body></html>
