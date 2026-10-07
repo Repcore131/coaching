@@ -3190,6 +3190,7 @@ function ouvrirReglagesAthlete(){
   try{ _majConsentementCoachReglages(); }catch(e){}
   try{ rendrePrefsAide(); }catch(e){}
   try{ _rendreUniteReglages(); }catch(e){}
+  try{ _rendreReglagesSections(); }catch(e){ rcErreurMuette('_rendreReglagesSections',e); }
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -3198,7 +3199,56 @@ function ouvrirReglagesAthlete(){
 function ouvrirEcranAbonnement(){
   ouvrirReglagesAthlete();
   const z=document.getElementById('cr-abo');
+  // La section Compte est repliée : on l'ouvre avant d'y aller.
+  const d=z&&z.closest('details'); if(d) d.open=true;
   if(z) z.scrollIntoView({block:'start'});
+  return true;
+}
+// ══ BUILD 1889 : LES SECTIONS DES RÉGLAGES ═════════════════════════════════
+// Les contrôles appellent les MÊMES fonctions qu'ailleurs (régime, unité des
+// macros, objectifs pas et sommeil, poids masqué, cycle, fréquence des bilans,
+// célébrations, nom sur les visuels) : seule leur place change.
+function _rendreReglagesSections(){
+  const u=currentUser; if(!u) return false;
+  const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
+  const tit=x=>'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">'+escapeHtml(x)+'</div>';
+  const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
+  const zn=document.getElementById('cr-nutrition');
+  if(zn){
+    let mu=''; try{ mu=htmlMacroUnite(u,'cr'); }catch(e){ mu=''; }
+    zn.innerHTML='<div style="'+carte+'">'+tit('Approche alimentaire')
+      +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="ouvrirChoixDiete()">Choisir mon approche</button></div>'
+      +'<div style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
+  }
+  const zs=document.getElementById('cr-objectifs');
+  if(zs){
+    let h='<div style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
+      +bt('Pas du jour','sanObjectif(\'pas\')')+bt('Sommeil','sanObjectif(\'sommeil\')')+'</div></div>'
+      +'<div style="'+carte+'">'+tit('Suivi du poids')
+      +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="togglePoidsMasque();_rendreReglagesSections()">'
+      +(u.masquerPoids?'Réafficher le suivi du poids':'Masquer le suivi du poids')+'</button></div>';
+    let montrer=false; try{ montrer=isFemale(u.gender)||!!cycleSuiviDe(u); }catch(e){}
+    if(montrer){
+      let cs=null; try{ cs=cycleSuiviDe(u); }catch(e){}
+      h+='<div style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
+        +ATP_CYCLE_OPTIONS.map(([v,titre])=>bt(titre,'setAtpCycleSuivi(\''+v+'\');_enregistrerCycleReglages()',cs===v)).join('')+'</div></div>';
+    }
+    zs.innerHTML=h;
+  }
+  const zb=document.getElementById('cr-bilans'), sb=document.getElementById('cr-sec-bilans');
+  let cad=null; try{ cad=bilanCadenceValide(u.bilanCadence); }catch(e){}
+  // Une cadence fixée par le coach prime : la section disparaît.
+  if(sb) sb.hidden=!!cad;
+  if(zb&&!cad){
+    const f=u._bilanFreq||2;
+    zb.innerHTML='<div style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
+      +bt('Chaque semaine','setBilanFreq(1);_rendreReglagesSections()',f===1)+bt('Toutes les 2 semaines','setBilanFreq(2);_rendreReglagesSections()',f===2)+'</div></div>';
+  }
+  const zc=document.getElementById('cr-celebrations');
+  if(zc){ try{ zc.innerHTML=htmlReglageCelebrations(u); }catch(e){ zc.innerHTML=''; } }
+  // Le nom sur les visuels : l'état du dossier, comme à l'ouverture du profil.
+  const ps=document.getElementById('atp-pseudo'); if(ps) ps.value=u.pseudo||'';
+  try{ setVisuelNom(u.visuelNom||'prenom'); }catch(e){}
   return true;
 }
 // Créé CONDITIONNELLEMENT : un accès gratuit par code coach ne voit ni
@@ -26436,7 +26486,7 @@ function _rendreAmisPartout(){
   try{ if(document.getElementById('s-client-amis')?.classList.contains('active')) _rendreListeEcranAmis(amisListe()); }catch(e){}
 }
 function amisVersPseudo(){
-  try{ openAthleteProfile(); }catch(e){ go('s-athlete-profile'); }
+  try{ ouvrirTrophees(); }catch(e){ go('s-trophees'); }
   setTimeout(()=>{ try{ document.getElementById('atp-page')?.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} },300);
   return true;
 }
@@ -90724,7 +90774,7 @@ function celebrationsChoisir(k){
   if(!u||(k!=='completes'&&k!=='discretes')) return false;
   u.celebrations=k;
   try{ saveUser(); }catch(e){ rcErreurMuette('celebrationsChoisir',e); }
-  const z=document.getElementById('atp-celebrations'); if(z) z.innerHTML=htmlReglageCelebrations(u);
+  for(const id of ['atp-celebrations','cr-celebrations']){ const z=document.getElementById(id); if(z) z.innerHTML=htmlReglageCelebrations(u); }
   return true;
 }
 function _bdgCouche(html,etiquette){
@@ -102681,6 +102731,7 @@ function setMacroUnite(u){
   try{ if(typeof _renderStrictDiet==='function') _renderStrictDiet(); }catch(e){}
   try{ if(typeof _fjDate!=='undefined'&&_fjDate) _renderFjDaySummary(_fjDate); }catch(e){}
   try{ const c=getOwnedClient(currentClientId); if(c) renderCoachNutriSection(c); }catch(e){}
+  try{ const z=document.getElementById('cr-macro'); if(z) z.innerHTML=htmlMacroUnite(currentUser,'cr'); }catch(e){}
   return v;
 }
 // Le sélecteur, partagé par tous les écrans qui l'affichent.
@@ -139618,6 +139669,44 @@ function openAthleteProfile(){
   try{ _rendreMesBadges(); }catch(e){}
   go('s-athlete-profile');
 }
+function _appliquerCycleSuivi(u,v){
+  if(!u||!v) return false;
+  // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
+  // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
+  // question que l'athlète vient tout juste de rouvrir.
+  if(u.cycleSuivi!==v){
+    u.cycleIgnoresSuite=0;
+    u.cycleArretPropose=false;
+    u.cycleChoixVus=0;
+  }
+  u.cycleSuivi=v;
+  // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
+  if(v!=='actif') u.currentCycle='ignore';
+  return true;
+}
+// BUILD 1889 : depuis les Réglages, l'écriture est immédiate (pas de bouton
+// « Enregistrer » sur cet écran).
+function _enregistrerCycleReglages(){
+  if(!_appliquerCycleSuivi(currentUser,_atpCycleSuivi)) return false;
+  saveUserOuDire('ton suivi du cycle');
+  try{ _rendreReglagesSections(); }catch(e){}
+  return true;
+}
+function _enregistrerVisuelNom(){
+  if(!currentUser) return false;
+  currentUser.visuelNom=_atpVisuelNom;
+  const _ps=(document.getElementById('atp-pseudo')?.value||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(_ps) currentUser.pseudo=_ps; else delete currentUser.pseudo;
+  saveUserOuDire('ton nom sur les visuels');
+  return true;
+}
+function ouvrirTrophees(){
+  go('s-trophees');
+  try{ _rendreMesBadges(); }catch(e){}
+  try{ _rendrePagePublique(); }catch(e){}
+  try{ _rendreEntreeParrainage(); }catch(e){}
+  return true;
+}
 function saveAthleteProfile(){
   const _fn=(document.getElementById('atp-fname')?.value||'').trim().slice(0,40);
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
@@ -139681,19 +139770,7 @@ function saveAthleteProfile(){
   const _ch=document.getElementById('atp-hormo-trait');
   if(_atpHormo&&_ch&&_ch.checked) currentUser.traitementHormonal=true;
   else delete currentUser.traitementHormonal;
-  if(_atpCycleSuivi){
-    // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
-    // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
-    // question que l'athlète vient tout juste de rouvrir.
-    if(currentUser.cycleSuivi!==_atpCycleSuivi){
-      currentUser.cycleIgnoresSuite=0;
-      currentUser.cycleArretPropose=false;
-      currentUser.cycleChoixVus=0;
-    }
-    currentUser.cycleSuivi=_atpCycleSuivi;
-    // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
-    if(_atpCycleSuivi!=='actif') currentUser.currentCycle='ignore';
-  }
+  _appliquerCycleSuivi(currentUser,_atpCycleSuivi);
   toastEcriture(saveUser(),'Profil enregistré '+ICO.coche,'ton profil est');
   go('s-client-home');
   loadClientHome();

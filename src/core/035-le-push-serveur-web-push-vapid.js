@@ -1626,7 +1626,7 @@ function celebrationsChoisir(k){
   if(!u||(k!=='completes'&&k!=='discretes')) return false;
   u.celebrations=k;
   try{ saveUser(); }catch(e){ rcErreurMuette('celebrationsChoisir',e); }
-  const z=document.getElementById('atp-celebrations'); if(z) z.innerHTML=htmlReglageCelebrations(u);
+  for(const id of ['atp-celebrations','cr-celebrations']){ const z=document.getElementById(id); if(z) z.innerHTML=htmlReglageCelebrations(u); }
   return true;
 }
 function _bdgCouche(html,etiquette){

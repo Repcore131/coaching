@@ -13509,3 +13509,11 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .lg-deux{text-transform:none;letter-spacing:0;font-weight:700;color:var(--text-dim)}
 .lg-plus{margin-top:4px;border-top:1px solid var(--border);padding-top:10px}
 .lg-plus>summary{cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+
+/* BUILD 1889 — Réglages en sections repliables. Mêmes tailles de police que les cartes. */
+.rg-sec{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface-1);margin-bottom:10px}
+.rg-sec>.rg-sec-t{list-style:none;cursor:pointer;padding:14px 16px;font-weight:800;font-size:var(--fs-md);display:flex;align-items:center;justify-content:space-between}
+.rg-sec>.rg-sec-t::-webkit-details-marker{display:none}
+.rg-sec>.rg-sec-t::after{content:'›';color:var(--sub);transition:transform var(--t-2)}
+.rg-sec[open]>.rg-sec-t::after{transform:rotate(90deg)}
+.rg-sec-c{padding:0 12px 4px}

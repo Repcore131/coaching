@@ -1142,7 +1142,7 @@ function _rendreAmisPartout(){
   try{ if(document.getElementById('s-client-amis')?.classList.contains('active')) _rendreListeEcranAmis(amisListe()); }catch(e){}
 }
 function amisVersPseudo(){
-  try{ openAthleteProfile(); }catch(e){ go('s-athlete-profile'); }
+  try{ ouvrirTrophees(); }catch(e){ go('s-trophees'); }
   setTimeout(()=>{ try{ document.getElementById('atp-page')?.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} },300);
   return true;
 }

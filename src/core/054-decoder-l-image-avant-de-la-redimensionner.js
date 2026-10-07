@@ -1222,6 +1222,44 @@ function openAthleteProfile(){
   try{ _rendreMesBadges(); }catch(e){}
   go('s-athlete-profile');
 }
+function _appliquerCycleSuivi(u,v){
+  if(!u||!v) return false;
+  // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
+  // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
+  // question que l'athlète vient tout juste de rouvrir.
+  if(u.cycleSuivi!==v){
+    u.cycleIgnoresSuite=0;
+    u.cycleArretPropose=false;
+    u.cycleChoixVus=0;
+  }
+  u.cycleSuivi=v;
+  // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
+  if(v!=='actif') u.currentCycle='ignore';
+  return true;
+}
+// BUILD 1889 : depuis les Réglages, l'écriture est immédiate (pas de bouton
+// « Enregistrer » sur cet écran).
+function _enregistrerCycleReglages(){
+  if(!_appliquerCycleSuivi(currentUser,_atpCycleSuivi)) return false;
+  saveUserOuDire('ton suivi du cycle');
+  try{ _rendreReglagesSections(); }catch(e){}
+  return true;
+}
+function _enregistrerVisuelNom(){
+  if(!currentUser) return false;
+  currentUser.visuelNom=_atpVisuelNom;
+  const _ps=(document.getElementById('atp-pseudo')?.value||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(_ps) currentUser.pseudo=_ps; else delete currentUser.pseudo;
+  saveUserOuDire('ton nom sur les visuels');
+  return true;
+}
+function ouvrirTrophees(){
+  go('s-trophees');
+  try{ _rendreMesBadges(); }catch(e){}
+  try{ _rendrePagePublique(); }catch(e){}
+  try{ _rendreEntreeParrainage(); }catch(e){}
+  return true;
+}
 function saveAthleteProfile(){
   const _fn=(document.getElementById('atp-fname')?.value||'').trim().slice(0,40);
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
@@ -1285,19 +1323,7 @@ function saveAthleteProfile(){
   const _ch=document.getElementById('atp-hormo-trait');
   if(_atpHormo&&_ch&&_ch.checked) currentUser.traitementHormonal=true;
   else delete currentUser.traitementHormonal;
-  if(_atpCycleSuivi){
-    // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
-    // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
-    // question que l'athlète vient tout juste de rouvrir.
-    if(currentUser.cycleSuivi!==_atpCycleSuivi){
-      currentUser.cycleIgnoresSuite=0;
-      currentUser.cycleArretPropose=false;
-      currentUser.cycleChoixVus=0;
-    }
-    currentUser.cycleSuivi=_atpCycleSuivi;
-    // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
-    if(_atpCycleSuivi!=='actif') currentUser.currentCycle='ignore';
-  }
+  _appliquerCycleSuivi(currentUser,_atpCycleSuivi);
   toastEcriture(saveUser(),'Profil enregistré '+ICO.coche,'ton profil est');
   go('s-client-home');
   loadClientHome();

@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1888';
+window.RC_BUILD='1889';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1888.css">
+<link rel="stylesheet" href="./rc-style.1889.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1888.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1889.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3477,11 +3477,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span>
   </div>
   <div class="scroll-area pad">
-    <!-- Mon abonnement. Créé conditionnellement : un athlète en accès
-         gratuit par code coach n'a pas d'abonnement, et un bloc vide qui
-         parle de résiliation ne lui dirait rien de bon. -->
-    <div id="cr-abo"></div>
-
+    <!-- BUILD 1889 : UN SOMMAIRE EN SECTIONS REPLIABLES. Chaque réglage
+         garde sa fonction ; seule la place change. -->
+    <details class="rg-sec" id="cr-sec-entrainement">
+      <summary class="rg-sec-t">Entraînement</summary>
+      <div class="rg-sec-c">
     <!-- L'UNITE DES CHARGES (kg ou lb) : _rendreUniteReglages. -->
     <div id="cr-unite"></div>
 
@@ -3518,18 +3518,73 @@ const COACH_PHOTO='icons/coach.jpg';
       </label>
     </div>
 
-    <!-- L'ACCORD DE PARTAGE AVEC LE COACH (victoires, recap d'equipe,
-         avant/apres) : _majConsentementCoachReglages. -->
-    <div id="cr-partage-coach"></div>
-
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-notifications">
+      <summary class="rg-sec-t">Notifications</summary>
+      <div class="rg-sec-c">
     <!-- LES NOTIFICATIONS PUSH. Rendu par _rendreReglagesPush (ouvrirReglagesAthlete) :
          l'état de l'appareil, le bouton d'activation (le geste qu'exige iOS) et
          une case par type, qui écrit u.pushPrefs. -->
     <div id="cr-push"></div>
 
-    <!-- R34 — « MON SUIVI » (R19) EST RETIRE : la frequence des bilans est
-         revenue sur l'ecran « QUEL BILAN ? », avec le compte a rebours
-         (Kevin, 17/09/2026). -->
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-nutrition">
+      <summary class="rg-sec-t">Nutrition</summary>
+      <div class="rg-sec-c">
+    <div id="cr-nutrition"></div>
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-suivi">
+      <summary class="rg-sec-t">Suivi</summary>
+      <div class="rg-sec-c">
+    <div id="cr-objectifs"></div>
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-bilans">
+      <summary class="rg-sec-t">Bilans</summary>
+      <div class="rg-sec-c">
+    <div id="cr-bilans"></div>
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-affichage">
+      <summary class="rg-sec-t">Affichage</summary>
+      <div class="rg-sec-c">
+    <!-- APPARENCE ET AIDE (theme, questions frequentes, contact du createur,
+         date de mise a jour) : rendu par rendrePrefsAide, le meme bloc que
+         dans l'onglet PROFIL du coach. -->
+    <div id="cr-prefs"></div>
+      <!-- NOM AFFICHE SUR MES VISUELS (26/09/2026). La signature en bas des
+           visuels de seance — « PRENOM · REPCORE » — et de ceux a venir.
+           Un seul reglage pour tous. Rempli par openAthleteProfile. -->
+      <div class="card" style="margin-bottom:14px">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Nom affiché sur mes visuels</label>
+        <div style="display:flex;gap:8px" role="group" aria-label="Nom affiché sur mes visuels">
+          <button type="button" id="atp-vn-prenom" aria-pressed="true" onclick="setVisuelNom('prenom');_enregistrerVisuelNom()" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Prénom</button>
+          <button type="button" id="atp-vn-pseudo" aria-pressed="false" onclick="setVisuelNom('pseudo');_enregistrerVisuelNom()" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Pseudo</button>
+          <button type="button" id="atp-vn-rien" aria-pressed="false" onclick="setVisuelNom('rien');_enregistrerVisuelNom()" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Rien</button>
+        </div>
+        <div id="atp-pseudo-bloc" style="display:none;margin-top:12px">
+          <label for="atp-pseudo" style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Pseudo</label>
+          <input id="atp-pseudo" type="text" maxlength="24" placeholder="Ton pseudo" oninput="_apercuVisuelNom()" onchange="_enregistrerVisuelNom()" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box">
+        </div>
+        <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:10px">En bas de tes visuels de séance : <b id="atp-vn-apercu" style="color:var(--text);letter-spacing:2px">REPCORE</b></div>
+      </div>
+    <div id="cr-celebrations"></div>
+      </div>
+    </details>
+    <details class="rg-sec" id="cr-sec-compte">
+      <summary class="rg-sec-t">Compte</summary>
+      <div class="rg-sec-c">
+    <!-- Mon abonnement. Créé conditionnellement : un athlète en accès
+         gratuit par code coach n'a pas d'abonnement, et un bloc vide qui
+         parle de résiliation ne lui dirait rien de bon. -->
+    <div id="cr-abo"></div>
+
+    <!-- L'ACCORD DE PARTAGE AVEC LE COACH (victoires, recap d'equipe,
+         avant/apres) : _majConsentementCoachReglages. -->
+    <div id="cr-partage-coach"></div>
 
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mes données</div>
@@ -3539,10 +3594,12 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="cr-manifeste" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>
     </div>
 
-    <!-- APPARENCE ET AIDE (theme, questions frequentes, contact du createur,
-         date de mise a jour) : rendu par rendrePrefsAide, le meme bloc que
-         dans l'onglet PROFIL du coach. -->
-    <div id="cr-prefs"></div>
+      <div style="text-align:center;margin:8px 0 12px">
+        <button type="button" class="rb-lien" onclick="ouvrirSignalement()" style="display:block;margin:0 auto 12px">Signaler un problème</button>
+        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">Se déconnecter</button>
+      </div>
+      </div>
+    </details>
     <div id="cr-version" style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-bottom:20px"></div>
   </div>
 </div>
@@ -3563,7 +3620,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="eyebrow eyebrow-act" style="margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
         <!-- LE RANG (les volts) : l'emblème, le nom, la jauge. Posé par _rendreRang. -->
-        <div id="clh-rang" class="rg-accueil" hidden></div>
+        <div id="clh-rang" class="rg-accueil" hidden role="button" tabindex="0" aria-label="Mes trophées" onclick="event.stopPropagation();ouvrirTrophees()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();ouvrirTrophees()}"></div>
       </div>
     </div>
     <!-- L'INDICATEUR DE SEMAINES. La flambée est DERRIÈRE le cadre : son corps
@@ -4040,22 +4097,6 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
       </div>
-      <!-- NOM AFFICHE SUR MES VISUELS (26/09/2026). La signature en bas des
-           visuels de seance — « PRENOM · REPCORE » — et de ceux a venir.
-           Un seul reglage pour tous. Rempli par openAthleteProfile. -->
-      <div class="card" style="margin-bottom:14px">
-        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Nom affiché sur mes visuels</label>
-        <div style="display:flex;gap:8px" role="group" aria-label="Nom affiché sur mes visuels">
-          <button type="button" id="atp-vn-prenom" aria-pressed="true" onclick="setVisuelNom('prenom')" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Prénom</button>
-          <button type="button" id="atp-vn-pseudo" aria-pressed="false" onclick="setVisuelNom('pseudo')" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Pseudo</button>
-          <button type="button" id="atp-vn-rien" aria-pressed="false" onclick="setVisuelNom('rien')" style="flex:1;padding:12px;border:1px solid var(--border);background:none;border-radius:var(--r-1);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text)">Rien</button>
-        </div>
-        <div id="atp-pseudo-bloc" style="display:none;margin-top:12px">
-          <label for="atp-pseudo" style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Pseudo</label>
-          <input id="atp-pseudo" type="text" maxlength="24" placeholder="Ton pseudo" oninput="_apercuVisuelNom()" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box">
-        </div>
-        <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:10px">En bas de tes visuels de séance : <b id="atp-vn-apercu" style="color:var(--text);letter-spacing:2px">REPCORE</b></div>
-      </div>
       <!-- MES INFORMATIONS MÉDICALES (Kevin, 28/09/2026). Tout ce qui touche à la
            santé tient dans UN menu déroulant, fermé par défaut : bandeau rouge,
            titre blanc, et sous lui ce qu'il contient. À l'intérieur, une
@@ -4152,22 +4193,12 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
         </div>
       </details>
-      <!-- INVITER DES AMIS (parrainage) : pose par _rendreEntreeParrainage. -->
-      <div id="atp-parrainage"></div>
-      <!-- MA PAGE PUBLIQUE (/@pseudo) et le lien de la bio : _rendrePagePublique. -->
-      <div id="atp-page"></div>
-      <!-- LE RÉGLAGE DES CÉLÉBRATIONS : complètes ou discrètes (htmlReglageCelebrations). -->
-      <div id="atp-celebrations"></div>
-      <!-- MES BADGES. Cinq cases, toujours les cinq. Remplie par
-           _rendreMesBadges, appelée depuis openAthleteProfile. Elle ne
-           s'affiche que s'il y a des badges à montrer, c'est-à-dire
-           toujours pour un athlète — et jamais pour un dossier coach, qui
-           n'ouvre pas cet écran. -->
-      <div class="card" id="atp-badges" style="margin-bottom:14px"></div>
+      <!-- BUILD 1889 : badges, page publique, parrainage et célébrations vivent
+           dans l'écran « Trophées ». Le profil garde l'identité, la photo et
+           le médical. -->
+      <button type="button" class="atp-med-lien" id="atp-trophees" onclick="ouvrirTrophees()" style="margin-bottom:14px">Trophées<span class="sub" style="font-size:var(--fs-xs);font-weight:600"> · badges, page publique, parrainage</span></button>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
-        <button type="button" class="rb-lien" onclick="ouvrirSignalement()" style="display:block;margin:0 auto 12px">Signaler un problème</button>
-        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">Se déconnecter</button>
         <!-- LE PIED, COMME CELUI D'UN SITE (Kevin, 28/09/2026). Exporter et
              supprimer ne sont plus deux blocs, dont un rouge qui dominait
              l'écran : quatre liens discrets sur une ligne. Chacun demande
@@ -4177,12 +4208,38 @@ const COACH_PHOTO='icons/coach.jpg';
           <span aria-hidden="true">·</span>
           <a href="../privacy.html" target="_blank" rel="noopener">Confidentialité</a>
           <span aria-hidden="true">·</span>
-          <button type="button" onclick="exporterMesDonneesConfirme()">Exporter mes données</button>
-          <span aria-hidden="true">·</span>
           <button type="button" onclick="requestAccountDeletion()">Supprimer mon compte</button>
         </nav>
         <p class="atp-droits" style="margin:10px 0 0;text-align:center;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">© 2026 Kevin Guellec. RepCore : tous droits réservés.</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ TROPHÉES (build 1889) : badges, page publique, parrainage,
+     célébrations. Ouvert depuis le rang de l'accueil et une ligne du profil.
+     Les zones gardent leurs identifiants (atp-*) : leurs poseurs n'ont pas
+     changé. -->
+<div id="s-trophees" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-trophees')">←</button>
+    <span class="topbar-title">Trophées</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <!-- MES BADGES. Cinq cases, toujours les cinq. Remplie par
+           _rendreMesBadges, appelée depuis openAthleteProfile. Elle ne
+           s'affiche que s'il y a des badges à montrer, c'est-à-dire
+           toujours pour un athlète — et jamais pour un dossier coach, qui
+           n'ouvre pas cet écran. -->
+      <div class="card" id="atp-badges" style="margin-bottom:14px"></div>
+      <!-- INVITER DES AMIS (parrainage) : pose par _rendreEntreeParrainage. -->
+      <div id="atp-parrainage"></div>
+      <!-- MA PAGE PUBLIQUE (/@pseudo) et le lien de la bio : _rendrePagePublique. -->
+      <div id="atp-page"></div>
+      <!-- LE RÉGLAGE DES CÉLÉBRATIONS : complètes ou discrètes (htmlReglageCelebrations). -->
+      <div id="atp-celebrations"></div>
     </div>
   </div>
 </div>
@@ -6226,5 +6283,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1888.js"></script>
+<script src="./rc-core.1889.js"></script>
 </body></html>

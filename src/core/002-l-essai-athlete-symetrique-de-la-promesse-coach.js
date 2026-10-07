@@ -1357,6 +1357,7 @@ function ouvrirReglagesAthlete(){
   try{ _majConsentementCoachReglages(); }catch(e){}
   try{ rendrePrefsAide(); }catch(e){}
   try{ _rendreUniteReglages(); }catch(e){}
+  try{ _rendreReglagesSections(); }catch(e){ rcErreurMuette('_rendreReglagesSections',e); }
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -1365,7 +1366,56 @@ function ouvrirReglagesAthlete(){
 function ouvrirEcranAbonnement(){
   ouvrirReglagesAthlete();
   const z=document.getElementById('cr-abo');
+  // La section Compte est repliée : on l'ouvre avant d'y aller.
+  const d=z&&z.closest('details'); if(d) d.open=true;
   if(z) z.scrollIntoView({block:'start'});
+  return true;
+}
+// ══ BUILD 1889 : LES SECTIONS DES RÉGLAGES ═════════════════════════════════
+// Les contrôles appellent les MÊMES fonctions qu'ailleurs (régime, unité des
+// macros, objectifs pas et sommeil, poids masqué, cycle, fréquence des bilans,
+// célébrations, nom sur les visuels) : seule leur place change.
+function _rendreReglagesSections(){
+  const u=currentUser; if(!u) return false;
+  const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
+  const tit=x=>'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">'+escapeHtml(x)+'</div>';
+  const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
+  const zn=document.getElementById('cr-nutrition');
+  if(zn){
+    let mu=''; try{ mu=htmlMacroUnite(u,'cr'); }catch(e){ mu=''; }
+    zn.innerHTML='<div style="'+carte+'">'+tit('Approche alimentaire')
+      +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="ouvrirChoixDiete()">Choisir mon approche</button></div>'
+      +'<div style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
+  }
+  const zs=document.getElementById('cr-objectifs');
+  if(zs){
+    let h='<div style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
+      +bt('Pas du jour','sanObjectif(\'pas\')')+bt('Sommeil','sanObjectif(\'sommeil\')')+'</div></div>'
+      +'<div style="'+carte+'">'+tit('Suivi du poids')
+      +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="togglePoidsMasque();_rendreReglagesSections()">'
+      +(u.masquerPoids?'Réafficher le suivi du poids':'Masquer le suivi du poids')+'</button></div>';
+    let montrer=false; try{ montrer=isFemale(u.gender)||!!cycleSuiviDe(u); }catch(e){}
+    if(montrer){
+      let cs=null; try{ cs=cycleSuiviDe(u); }catch(e){}
+      h+='<div style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
+        +ATP_CYCLE_OPTIONS.map(([v,titre])=>bt(titre,'setAtpCycleSuivi(\''+v+'\');_enregistrerCycleReglages()',cs===v)).join('')+'</div></div>';
+    }
+    zs.innerHTML=h;
+  }
+  const zb=document.getElementById('cr-bilans'), sb=document.getElementById('cr-sec-bilans');
+  let cad=null; try{ cad=bilanCadenceValide(u.bilanCadence); }catch(e){}
+  // Une cadence fixée par le coach prime : la section disparaît.
+  if(sb) sb.hidden=!!cad;
+  if(zb&&!cad){
+    const f=u._bilanFreq||2;
+    zb.innerHTML='<div style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
+      +bt('Chaque semaine','setBilanFreq(1);_rendreReglagesSections()',f===1)+bt('Toutes les 2 semaines','setBilanFreq(2);_rendreReglagesSections()',f===2)+'</div></div>';
+  }
+  const zc=document.getElementById('cr-celebrations');
+  if(zc){ try{ zc.innerHTML=htmlReglageCelebrations(u); }catch(e){ zc.innerHTML=''; } }
+  // Le nom sur les visuels : l'état du dossier, comme à l'ouverture du profil.
+  const ps=document.getElementById('atp-pseudo'); if(ps) ps.value=u.pseudo||'';
+  try{ setVisuelNom(u.visuelNom||'prenom'); }catch(e){}
   return true;
 }
 // Créé CONDITIONNELLEMENT : un accès gratuit par code coach ne voit ni

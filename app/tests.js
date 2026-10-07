@@ -73334,7 +73334,8 @@ async function testExercices(){
       // informations médicales », juste sous les visuels.
       const iMed=kids.findIndex(x=>x.id==='atp-med');
       const b=pad&&pad.querySelector('#atp-med .atp-med-corps button');
-      if(!(iId===1&&iVn===2&&iMed===3)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', médical '+iMed);
+      // BUILD 1889 : le nom sur les visuels est passé dans Réglages › Affichage.
+      if(!(iId===1&&iVn<0&&iMed===2)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', médical '+iMed);
       if(!b) return _echec('le bouton Tension n’est pas dans le menu médical');
       if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
         return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
@@ -73407,6 +73408,72 @@ async function testExercices(){
         Object.assign(_pastilleSources,sv);
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
+
+    // ══ BUILD 1889 — RÉGLAGES EN SECTIONS, PROFIL ALLÉGÉ, TROPHÉES ════════
+    ok('1889 — chaque réglage listé est appelé par un contrôle de #s-client-reglages',()=>{
+      const sU=currentUser;
+      try{
+        currentUser=Object.assign({},sU||{},{role:'athlete',email:'r1889@t.fr',gender:'F',bilans:[],bilanCadence:null});
+        ouvrirReglagesAthlete();
+        const z=document.getElementById('s-client-reglages');
+        const manque=[];
+        for(const f of ['setBilanFreq','ouvrirChoixDiete','sanObjectif','togglePoidsMasque','setMacroUnite','setVisuelNom','setAtpCycleSuivi','celebrationsChoisir','themeChoisir'])
+          if(!z.querySelector('[onclick*="'+f+'("]')) manque.push(f);
+        // Les poseurs : leur zone est remplie à l'ouverture.
+        if(!document.getElementById('cr-unite').innerHTML.trim()) manque.push('_rendreUniteReglages');
+        if(!/htmlReglagesPush/.test(String(_rendreReglagesPush))||!document.getElementById('cr-push')) manque.push('htmlReglagesPush');
+        if(!document.querySelector('#s-client-home [onclick*="ouvrirReglagesAthlete("]')) manque.push('ouvrirReglagesAthlete (accueil)');
+        if(manque.length) return _echec('sans contrôle : '+manque.join(', '));
+        const secs=[...z.querySelectorAll('details.rg-sec>summary')].map(x=>x.textContent.trim());
+        return secs.join(',')==='Entraînement,Notifications,Nutrition,Suivi,Bilans,Affichage,Compte'?true:_echec('sections : '+secs.join(','));
+      }finally{ currentUser=sU; }});
+    ok('1889 — une cadence fixée par le coach cache la section Bilans',()=>{
+      const sU=currentUser;
+      try{
+        currentUser=Object.assign({},sU||{},{role:'athlete',email:'r1889b@t.fr',bilanCadence:{freq:3,jour:1,depuis:Date.now()}});
+        const imp=!!bilanCadenceValide(currentUser.bilanCadence);
+        _rendreReglagesSections();
+        return document.getElementById('cr-sec-bilans').hidden===imp?true:_echec('section Bilans visible malgré la cadence ('+imp+')');
+      }finally{ currentUser=sU; try{ _rendreReglagesSections(); }catch(e){} }});
+    ok('1889 — exporter ses données : une seule entrée côté athlète, dans Réglages › Compte',()=>{
+      const ecrans=[...document.querySelectorAll('.screen:not([id^="s-coach"])')]
+        .filter(e=>e.querySelector('[onclick*="exporterMesDonnees"]')).map(e=>e.id);
+      if(ecrans.join(',')!=='s-client-reglages') return _echec('écrans : '+ecrans.join(','));
+      const b=document.querySelector('#s-client-reglages [onclick*="exporterMesDonnees"]');
+      return b.closest('#cr-sec-compte')?true:_echec('hors de la section Compte');});
+    ok('1889 — le profil n’a plus ni badges ni déconnexion ; la déconnexion est dans Réglages › Compte',()=>{
+      const p=document.getElementById('s-athlete-profile');
+      if(p.querySelector('.bdg,#atp-badges')) return _echec('badges dans le profil');
+      if(p.querySelector('[onclick*="logout()"]')) return _echec('logout() dans le profil');
+      if(!document.querySelector('#cr-sec-compte [onclick*="logout()"]')) return _echec('pas de déconnexion dans Compte');
+      return p.querySelector('[onclick*="ouvrirTrophees("]')?true:_echec('pas de ligne Trophées dans le profil');});
+    ok('1889 — Trophées : badges, page publique, parrainage, célébrations ; ouvert depuis le rang',()=>{
+      const t=document.getElementById('s-trophees');
+      if(!t) return _echec('écran absent');
+      for(const id of ['atp-badges','atp-page','atp-parrainage','atp-celebrations'])
+        if(!t.querySelector('#'+id)) return _echec(id+' hors de Trophées');
+      const r=document.getElementById('clh-rang');
+      return /ouvrirTrophees\(\)/.test(r.getAttribute('onclick')||'')&&/stopPropagation/.test(r.getAttribute('onclick')||'')
+        ?true:_echec('le rang n’ouvre pas les trophées');});
+    ok('1889 — le profil ouvert mesure moins de 1 800 px',()=>{
+      const sU=currentUser, act=document.querySelector('.screen.active');
+      try{
+        currentUser=Object.assign(_r13Neuf(),{birthdate:'1990-05-01',gender:'homme'});
+        openAthleteProfile();
+        const pad=document.querySelector('#s-athlete-profile .scroll-area .pad');
+        const h=pad.scrollHeight;
+        return h>0&&h<1800?true:_echec(h+' px');
+      }finally{ currentUser=sU; if(act) go(act.id); }});
+    ok('1889 — régler le nom sur les visuels depuis Réglages écrit le dossier aussitôt',()=>{
+      const sU=currentUser, sv=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser={role:'athlete',email:'vn@t.fr',fname:'Léa',visuelNom:'prenom'};
+        _rendreReglagesSections();
+        document.getElementById('atp-pseudo').value='  lea  fit ';
+        setVisuelNom('pseudo'); _enregistrerVisuelNom();
+        return currentUser.visuelNom==='pseudo'&&currentUser.pseudo==='lea fit'?true:_echec(JSON.stringify(currentUser));
+      }finally{ currentUser=sU; window.saveUser=sv; }});
 
     // ══ BUILD 1888 — ÉCRIRE À SON COACH : UNE SEULE PORTE, LA MESSAGERIE ══
     ok('1888 — la feuille de contact n’appelle plus motOuvrirDepuisContact ; « Dans l’app » ouvre msgOuvrirFil',()=>{
