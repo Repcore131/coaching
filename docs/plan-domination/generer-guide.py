@@ -108,7 +108,7 @@ page('Mode d\'emploi', f'''
  <div class="box"><div class="big r" style="font-size:72px">4</div><h3>Les portes ne se sautent pas</h3><p class="mut" style="font-size:19px">Une porte non franchie = on corrige avant d'avancer. C'est ce qui évite de brûler 3 mois.</p></div>
 </div>
 <h2>La légende</h2>
-<div class="leg"><span>{cb('s')} &nbsp;tâche à cocher</span><span>✎ &nbsp;à remplir</span><span><b style="color:var(--r)">▲</b> &nbsp;porte de passage</span><span><b style="color:var(--r)">★</b> &nbsp;priorité absolue</span></div>
+<div class="leg"><span>{cb('s')}</span><span>tâche à cocher</span><span>✎ &nbsp;à remplir</span><span><b style="color:var(--r)">▲</b> &nbsp;porte de passage</span><span><b style="color:var(--r)">★</b> &nbsp;priorité absolue</span></div>
 <h2>Mon <em>engagement</em></h2>
 <div class="box r">
  <p>✎ Mon objectif de chiffre d'affaires au mois 12 : <span class="fl" style="min-width:200px"></span> € par mois</p>
@@ -307,7 +307,7 @@ def wk(w):
     tk=''.join(f'<div class="task" style="padding:8px 0;font-size:19px">{cb("s")}<div>{x}</div></div>' for x in tasks)
     return f'''<div class="wk"><div class="top"><div class="num">S{n}</div><div style="flex:1"><h3 style="font-size:24px">{t}</h3><p class="mut" style="font-size:17px">Objectif : {obj}</p></div><div style="font-size:16px;color:var(--g)">du __/__ au __/__</div></div>
 {tk}
-<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:20px"><div class="days">Reels <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div style="font-size:18px">✎ {res} : <span class="fl" style="min-width:150px"></span></div></div></div>'''
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:20px"><div style="display:flex;align-items:center;gap:14px"><div style="font-size:15px;font-weight:700;color:var(--g);width:120px">Reels publiés</div><div class="days"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div></div><div style="font-size:18px">✎ {res} : <span class="fl" style="min-width:150px"></span></div></div></div>'''
 for i in range(0,12,3):
     first = '<div class="kick">09 · Les 90 premiers jours</div><h1 style="font-size:72px;margin-bottom:24px">Semaine par semaine</h1>' if i==0 else ''
     page('Partie 2 · Le lancement', first + ''.join(wk(w) for w in weeks[i:i+3]) + ('' if i else ''))
