@@ -760,7 +760,9 @@ async function saveFoodEntry(){
   // `user` n en recoit aucun, et rien n est migre. Contrainte ODbL : la
   // donnee OFF ne se recopie pas ailleurs que dans ce que l athlete a
   // reellement journalise.
-  if(f._off&&f._off.ean){ entry.alim_source='off'; entry.ean=f._off.ean; }
+  if(f._off&&f._off.ean){ entry.alim_source='off'; entry.ean=f._off.ean;
+    // BUILD 1857 : le produit rejoint le carnet « Mes produits » de l'athlète.
+    try{ offCarnetRanger(currentUser,f,_fjDate); }catch(e){} }
   // AFFICHAGE SEUL. `qty` reste la seule verite, en grammes. Cette chaine
   // sert a relire « 2 oeufs » dans les recents, et rien ne la recalcule.
   try{ const _lu=fjaLibelleUniteChoisie(); if(_lu) entry.unite=_lu; }catch(e){}

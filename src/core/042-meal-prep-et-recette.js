@@ -898,8 +898,9 @@ function _renderFjActions(){
   // Hors ligne le scan disparait — la fiche produit se lit chez Open Food
   // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
-  const scan=(typeof navigator!=='undefined'&&navigator.onLine===false)?''
-    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner</button>';
+  // BUILD 1857 : le scan RESTE hors ligne — le carnet répond, et un code
+  // inconnu est mis de côté jusqu'au retour du réseau.
+  const scan='<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner</button>';
   // DEUX ENTREES DE PLUS, sur une seconde ligne : quatre boutons cote a cote
   // ne tiendraient pas a 320 px, et ces deux-la repondent a une autre question
   // que « quel aliment » — « combien dans mon assiette ».
@@ -921,11 +922,12 @@ function _renderFjRecent(){
   // Les favoris passent DEVANT les récents, et recentFoods n'est pas touché :
   // il se remplit et s'affiche exactement comme avant.
   const favIds=_fjFavs();
-  const favs=favIds.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
+  // BUILD 1857 : un favori « off:<ean> » se résout dans le carnet.
+  const favs=favIds.map(id=>(typeof id==='string'&&id.indexOf('off:')===0)?offCarnetAliment(id.slice(4)):_ciqualDB.find(f=>f.id===id)).filter(Boolean);
   const titre=t=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+t+'</div>';
   const sep='<div style="height:1px;background:var(--surface-1);margin:6px 0"></div>';
   const blocFav=favs.length
-    ?titre('Favoris')+favs.map(f=>_fjResultHtml(f,true)).join('')+sep
+    ?titre('Favoris')+favs.map(f=>(f._off?_offResultHtml(f):_fjResultHtml(f,true))).join('')+sep
     :'';
   // Les cinq derniers aliments perso crees, en tete : ce sont ceux qu on
   // reprend le plus souvent, et la seule liste ou on les retrouve sans les
@@ -1620,7 +1622,6 @@ async function scanChargerDecodeur(){
 function htmlScanBouton(){
   // RÈGLE 5 : hors ligne, le bouton disparaît. La fiche produit se lit chez
   // OFF, et sans réseau il n'y a rien à lire — scanner mènerait à un mur.
-  if(typeof navigator!=='undefined'&&navigator.onLine===false) return '';
   return `<button id="scan-btn" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px"
     onclick="ouvrirScan()">Scanner un code-barres</button>`;
 }
@@ -1899,6 +1900,22 @@ async function scanTraiterCode(code,zone){
     return false;
   }
   code=ex.code;
+  // Le même code deux fois en 10 s : un seul traitement.
+  const _t=Date.now();
+  if(_scanDernier&&_scanDernier.ean===code&&_t-_scanDernier.t<SCAN_DOUBLON_MS){ dire('Ce produit vient d’être scanné.'); return false; }
+  _scanDernier={ean:code,t:_t};
+  // HORS LIGNE : le carnet d'abord ; sinon, mis de côté.
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){
+    const _c=offCarnetAliment(code);
+    if(_c){
+      try{ scanArreter(); }catch(err){}
+      selectOffFood(code);
+      return true;
+    }
+    if(scanMettreDeCote(currentUser,code,(typeof _fjRepas!=='undefined'&&_fjRepas)||null,null)){ try{ saveUser(); }catch(err){} }
+    dire('Produit mis de côté : il sera complété au retour du réseau.');
+    return false;
+  }
   dire('Recherche du produit…');
   const r=await offParEAN(code);
   if(r.ok){
@@ -2055,8 +2072,109 @@ function _offResultHtml(a){
 // mêmes repères. Seules deux choses diffèrent : l'épingle et les portions
 // visuelles, qui s'appuient sur un identifiant Ciqual et un groupe d'aliment
 // que ce produit n'a pas.
+// ══ LE CARNET « MES PRODUITS » ET LE SCAN HORS LIGNE (BUILD 1857) ═══════════
+// À chaque ENREGISTREMENT d'un produit Open Food Facts au journal, une fiche
+// courte rejoint nutrition.produits (40 au plus, du plus récent au plus ancien).
+// Ce n'est PAS une copie de la base OFF : ce sont les produits que l'athlète a
+// lui-même consommés, et la fiche porte l'attribution OFF.
+// Données Open Food Facts — licence ODbL 1.0 (base) et DbCL 1.0 (contenus),
+// https://world.openfoodfacts.org — attribution affichée sur la fiche produit.
+const OFF_CARNET_MAX=40, OFF_FILE_MAX=10, SCAN_DOUBLON_MS=10e3;
+function offCarnet(user){
+  const l=(user&&user.nutrition&&user.nutrition.produits)||[];
+  return Array.isArray(l)?l.filter(x=>x&&x.ean):[];
+}
+// PURE (sur le dossier passé). Range le produit en tête, sans doublon.
+function offCarnetRanger(user,a,dateISO){
+  if(!user||!a||!a._off||!a._off.ean) return false;
+  if(!user.nutrition) user.nutrition={};
+  const x={ean:String(a._off.ean),nom:a.n,marque:a._off.marque||'',portion:a._off.portion||null,
+    p:a.p,c:a.c,l:a.l,k:a.k,f:a.f!=null?a.f:null,sel:a.e!=null?a.e:null,vu:dateISO||localISODate(new Date()),src:'off'};
+  user.nutrition.produits=[x].concat(offCarnet(user).filter(y=>y.ean!==x.ean)).slice(0,OFF_CARNET_MAX);
+  return true;
+}
+function offCarnetRetirer(user,ean){
+  if(!user||!user.nutrition) return false;
+  const av=offCarnet(user).length;
+  user.nutrition.produits=offCarnet(user).filter(y=>y.ean!==String(ean));
+  // Les entrées de journal ne sont PAS touchées : elles portent leurs valeurs.
+  return user.nutrition.produits.length<av;
+}
+// Une fiche du carnet, rendue sous la forme qu'offNormalise donne à un produit.
+function offDepuisCarnet(x){
+  if(!x||!x.ean) return null;
+  const a={id:'off:'+x.ean,n:x.nom,g:'produit de marque',s:_offNorm((x.nom||'')+' '+(x.marque||'')),
+    k:x.k,p:x.p,c:x.c,l:x.l,f:x.f,e:x.sel,source:NUTRI_SOURCES.OFF,verifie:false,
+    _off:{ean:x.ean,marque:x.marque||'',format:'',portion:x.portion||null,carnet:true,allergenes:'',traces:''},_ambigu:false};
+  return a;
+}
+function offCarnetAliment(ean){
+  const x=offCarnet(currentUser).find(y=>y.ean===String(ean));
+  return x?offDepuisCarnet(x):null;
+}
+function offCarnetAliments(user){ return offCarnet(user).map(offDepuisCarnet).filter(Boolean); }
+// ── La file des scans hors ligne ──────────────────────────────────────────
+// Hors ligne, un code lu est cherché d'abord dans le carnet (succès immédiat) ;
+// sinon il est mis de côté. Au retour du réseau, chaque code est demandé à OFF,
+// et l'athlète CONFIRME : rien n'entre au journal sans lui.
+let _scanDernier=null, _scansAConfirmer=[];
+function scanFile(user){
+  const l=(user&&user.nutrition&&user.nutrition.scansEnAttente)||[];
+  return Array.isArray(l)?l:[];
+}
+function scanMettreDeCote(user,ean,repas,qty){
+  if(!user) return false;
+  if(!user.nutrition) user.nutrition={};
+  const f=scanFile(user);
+  if(f.some(x=>x.ean===String(ean))) return false;
+  if(f.length>=OFF_FILE_MAX) return false;
+  user.nutrition.scansEnAttente=f.concat([{ean:String(ean),date:(typeof _fjDate==='string'&&_fjDate)||localISODate(new Date()),repas:repas||null,qty:qty||null}]);
+  return true;
+}
+// Au retour du réseau, et au démarrage. `chercher` (facultatif) remplace
+// offParEAN — les tests le bouchonnent.
+async function scanTraiterFile(chercher){
+  const u=currentUser;
+  const f=scanFile(u);
+  if(!f.length) return 0;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return 0;
+  const lire=chercher||offParEAN;
+  const reste=[];
+  for(const x of f){
+    let r=null;
+    try{ r=await lire(x.ean); }catch(e){ r=null; }
+    if(r&&r.ok){ _offResultats=_offResultats.filter(a=>!(a&&a._off&&a._off.ean===x.ean)).concat([r.produit]); _scansAConfirmer.push(Object.assign({},x,{ok:true})); }
+    else if(r&&r.inconnu) _scansAConfirmer.push(Object.assign({},x,{inconnu:true}));
+    else reste.push(x);         // quota, réseau : on retentera
+  }
+  u.nutrition.scansEnAttente=reste;
+  try{ saveUser(); }catch(e){}
+  const n=_scansAConfirmer.length;
+  if(n){
+    const txt=n+' produit'+(n>1?'s':'')+' scanné'+(n>1?'s':'')+' à confirmer';
+    try{ _suppActionToast(txt,'Voir',ouvrirScansAConfirmer,8000); }catch(e){ try{ toast(txt); }catch(_){} }
+  }
+  return n;
+}
+// Ouvre le premier : la fiche pré-remplie (quantité, repas) — l'athlète valide.
+function ouvrirScansAConfirmer(){
+  const x=_scansAConfirmer.shift();
+  if(!x) return false;
+  if(x.inconnu){ try{ creerAlimentDepuisScan(x.ean); }catch(e){} return true; }
+  if(x.date) _fjDate=x.date;
+  if(x.repas){ _fjRepas=x.repas; _fjRepasChoisi=true; }
+  const ok=selectOffFood(x.ean);
+  if(ok!==false&&x.qty>0){ const q=document.getElementById('fja-qty'); if(q){ q.value=x.qty; try{ updateFjaCalc(); }catch(e){} } }
+  return true;
+}
+try{
+  if(typeof window!=='undefined'){
+    window.addEventListener('online',()=>{ scanTraiterFile().catch(()=>{}); });
+    window.addEventListener('load',()=>{ setTimeout(()=>{ try{ if(currentUser) scanTraiterFile().catch(()=>{}); }catch(e){} },4000); });
+  }
+}catch(e){}
 function selectOffFood(ean){
-  const a=_offResultats.find(x=>x&&x._off&&x._off.ean===ean);
+  const a=_offResultats.find(x=>x&&x._off&&x._off.ean===ean)||offCarnetAliment(ean);
   if(!a) return false;
   const v=offValide(a);
   if(!v.ok){ toast(v.raison,'var(--orange)'); return false; }
@@ -2074,8 +2192,10 @@ function selectOffFood(ean){
   // Pas d'épingle : les favoris sont une liste d'identifiants Ciqual, et y
   // ranger un produit OFF le rendrait irrésolvable au rechargement — en plus
   // de recopier de la donnée OFF dans le dossier, ce que l'ODbL interdit.
+  // BUILD 1857 : un produit DU CARNET s'épingle (clé 'off:'+ean) — il est
+  // résolvable au rechargement, puisqu'il vit dans le dossier.
   const _ep=document.getElementById('fja-epingle-slot');
-  if(_ep) _ep.innerHTML='';
+  if(_ep) _ep.innerHTML=offCarnet(currentUser).some(y=>y.ean===a._off.ean)?_htmlEpingle(a.id,true):'';
   const _po=document.getElementById('fja-portions');
   if(_po) _po.innerHTML=`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${escapeHtml(OFF_ATTRIBUTION)}</div>`;
   _majFjaFiabilite();
@@ -2112,7 +2232,7 @@ function onFjSearch(val){
   document.getElementById('fj-recent-section').innerHTML='';
   // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
   const _rcH=htmlRecettesRecherche(words);
-  if(!res.length){el.innerHTML=(_rcH||'<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>')+_offBoutonHtml(q);return;}
+  if(!res.length&&!offCarnetAliments(currentUser).some(f=>_fjCorrespond(f,words))){el.innerHTML=(_rcH||'<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>')+_offBoutonHtml(q);return;}
   const scored=_classerAliments(res,normQ,words);
   // Les aliments perso passent DEVANT : l athlete les a crees precisement
   // parce que la table ne repondait pas. Ils sont classes entre eux par la
@@ -2122,6 +2242,8 @@ function onFjSearch(val){
   // à la même frappe.
   const filtre=l=>_fjFiltrer(l,words);
   const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
+  // BUILD 1857 : les produits du carnet, juste après les aliments perso.
+  const mo=_classerAliments(filtre(offCarnetAliments(currentUser)),normQ,words);
   // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
   // table Ciqual, puis les produits de marque. Le plus specifique d abord :
   // un aliment saisi l a ete parce que rien d autre ne convenait.
@@ -2136,8 +2258,9 @@ function onFjSearch(val){
   // au bas de chaque section les rendrait invisibles.
   const _releg=_trP.releguees.concat(_trC.releguees,_trT.releguees);
   el.innerHTML=_htmlBandeauCorrection(_corr,q,'onFjSearch')+_rcH+(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
+    +(mo.length?_fjTitreSection('Mes produits')+mo.map(x=>_offResultHtml(x.f)).join(''):'')
     +(_trC.liste.length?_fjTitreSection('Aliments de ton coach')+_trC.liste.map(f=>_htmlCoachResult(f)).join(''):'')
-    +((_rcH||_trP.liste.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
+    +((_rcH||_trP.liste.length||mo.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
     +_trT.liste.map(f=>_fjResultHtml(f,false,_fjAliasVia(f,words)?q:null)).join('')
     +_htmlRelegues(_releg)
     +_offBoutonHtml(q);

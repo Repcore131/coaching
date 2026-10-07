@@ -1999,13 +1999,18 @@ let _fjSaisieAjout=null;
 // recentFoods n'est PAS touché : il continue de se remplir et de s'afficher
 // comme avant. Les favoris sont une liste à part, tenue à la main.
 const FJ_FAV_MAX=20;
+// Un favori est un identifiant Ciqual (nombre) ou, depuis le build 1857, un
+// produit du carnet « off:<ean> ». Rien d'autre.
+const FJ_FAV_OFF=/^off:[0-9]{6,14}$/;
+function _fjFavValide(id){ return typeof id==='number'||(typeof id==='string'&&FJ_FAV_OFF.test(id)); }
 function _fjFavs(){
   const l=(currentUser&&currentUser.nutrition&&currentUser.nutrition.favoriteFoods)||[];
-  return Array.isArray(l)?l:[];
+  return Array.isArray(l)?l.filter(_fjFavValide):[];
 }
 function estFavori(id){ return _fjFavs().indexOf(id)>=0; }
 function toggleFavFood(id,ev){
   if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(!_fjFavValide(id)) return false;
   if(!currentUser.nutrition) currentUser.nutrition={};
   const l=_fjFavs().slice();
   const i=l.indexOf(id);
@@ -2040,7 +2045,7 @@ function _fjDerniereQty(id){
 function _htmlEpingle(id,grand){
   const on=estFavori(id);
   const t=grand?18:15;
-  return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${id},event)"
+  return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${_attrArg(id)},event)"
     title="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     aria-label="${on?'Retirer des favoris':'Ajouter aux favoris'}"
     style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'<span class="ico-plein">'+icon('etoile',t)+'</span>':icon('etoile',t)}</button>`;

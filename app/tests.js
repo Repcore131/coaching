@@ -32973,6 +32973,76 @@ async function testExercices(){
         const g=qtyDepuisUnite('0,5',u);
         return g===15&&uniteDepuisQty(g,u)===0.5?true:_echec(g);});
     }
+    // ── BUILD 1857 : LE CARNET « MES PRODUITS » ET LE SCAN HORS LIGNE ──
+    {
+      const _ean=b=>{ const d=String(b).split('').map(Number); const s=d.reduce((a,x,i)=>a+x*(i%2?3:1),0); return b+String((10-s%10)%10); };
+      const E1=_ean('300000000001'), E2=_ean('300000000002');
+      const _prod=(ean,nom)=>({id:'off:'+ean,n:nom,g:'produit de marque',s:_offNorm(nom),k:380,p:75,c:8,l:6,f:1,e:0.5,_off:{ean,marque:'Marque',format:'',portion:30}});
+      const _avec=async(fn)=>{
+        const sv={u:currentUser,s:window.saveUser,res:_offResultats.slice(),d:_scanDernier,a:_scansAConfirmer.slice(),
+          on:Object.getOwnPropertyDescriptor(Navigator.prototype,'onLine')};
+        try{ window.saveUser=()=>true; currentUser={id:'_c',email:'c@t',sessions:[],nutrition:{log:{},favoriteFoods:[]}}; _scanDernier=null; _scansAConfirmer.length=0; return await fn(); }
+        finally{ currentUser=sv.u; window.saveUser=sv.s; _offResultats=sv.res; _scanDernier=sv.d; _scansAConfirmer.length=0; sv.a.forEach(x=>_scansAConfirmer.push(x));
+          try{ delete navigator.onLine; }catch(e){} try{ Object.defineProperty(Navigator.prototype,'onLine',sv.on); }catch(e){} }
+      };
+      const _horsLigne=v=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>!v});
+      ok('Carnet : les EAN de test sont valides',()=>scanEanValide(E1).ok&&scanEanValide(E2).ok?true:_echec(E1+' '+E2));
+      okA('Carnet : un produit enregistré est dans « Mes produits » et trouvé par « whey »',()=>_avec(async()=>{
+        await _loadCiqual();
+        offCarnetRanger(currentUser,_prod(E1,'Whey Native Chocolat'),'2026-10-07');
+        offCarnetRanger(currentUser,_prod(E1,'Whey Native Chocolat'),'2026-10-07');
+        if(offCarnet(currentUser).length!==1) return _echec('doublon dans le carnet');
+        const el=document.getElementById('fj-results-list'); const av=el.innerHTML;
+        try{
+          onFjSearch('whey');
+          return el.innerHTML.indexOf('Mes produits')>=0&&el.innerHTML.indexOf('Whey Native Chocolat')>=0?true:_echec('section absente');
+        } finally { el.innerHTML=av; }}));
+      okA('Carnet : 40 produits au plus, le plus récent en tête ; retirer garde le journal',()=>_avec(async()=>{
+        for(let i=0;i<45;i++) offCarnetRanger(currentUser,_prod(_ean(String(400000000000+i)),'P'+i),'2026-10-07');
+        const c=offCarnet(currentUser);
+        if(c.length!==40||c[0].nom!=='P44') return _echec(c.length+' '+c[0].nom);
+        currentUser.nutrition.log={'2026-10-07':{entries:[{id:1,nom:'P44',ean:c[0].ean,kcal:100}]}};
+        offCarnetRetirer(currentUser,c[0].ean);
+        return currentUser.nutrition.log['2026-10-07'].entries.length===1&&offCarnet(currentUser).length===39?true:_echec('retrait');}));
+      okA('Carnet : l’épinglage « off:… » survit à un rechargement',()=>_avec(async()=>{
+        await _loadCiqual();
+        offCarnetRanger(currentUser,_prod(E1,'Skyr Marque'),'2026-10-07');
+        if(toggleFavFood('off:'+E1)!==true) return _echec('épinglage refusé');
+        if(toggleFavFood('off:pas-un-ean')!==false) return _echec('clé invalide acceptée');
+        currentUser=JSON.parse(JSON.stringify(currentUser));
+        if(_fjFavs().indexOf('off:'+E1)<0) return _echec('favori perdu');
+        const z=document.getElementById('fj-recent-section'); const av=z?z.innerHTML:'';
+        try{ _renderFjRecent(); return !z||z.innerHTML.indexOf('Skyr Marque')>=0?true:_echec('favori non rendu'); } finally { if(z) z.innerHTML=av; }}));
+      okA('Scan hors ligne : un EAN du carnet ouvre la fiche sans réseau ; un inconnu est mis de côté',()=>_avec(async()=>{
+        offCarnetRanger(currentUser,_prod(E1,'Barre Marque'),'2026-10-07');
+        const fe=window.fetch; let appels=0; window.fetch=()=>{ appels++; return Promise.reject(new Error('réseau')); };
+        try{
+          _horsLigne(true);
+          const ok1=await scanTraiterCode(E1);
+          if(ok1!==true||!_fjFood||!_fjFood._off||_fjFood._off.ean!==E1) return _echec('fiche non ouverte');
+          const ok2=await scanTraiterCode(E2);
+          if(ok2!==false) return _echec('inconnu traité comme connu');
+          const f=scanFile(currentUser);
+          if(f.length!==1||f[0].ean!==E2) return _echec('file : '+JSON.stringify(f));
+          return appels===0?true:_echec('réseau appelé hors ligne');
+        } finally { window.fetch=fe; }}));
+      okA('Scan : le même code deux fois en 10 s n’est traité qu’une fois',()=>_avec(async()=>{
+        _horsLigne(true);
+        await scanTraiterCode(E2); await scanTraiterCode(E2);
+        _scanDernier=null; await scanTraiterCode(E2);
+        return scanFile(currentUser).length===1?true:_echec(scanFile(currentUser).length+' en file');}));
+      okA('Retour en ligne : toast de confirmation, et rien au journal avant validation',()=>_avec(async()=>{
+        currentUser.nutrition.scansEnAttente=[{ean:E1,date:'2026-10-07',repas:'matin',qty:null},{ean:E2,date:'2026-10-07',repas:'matin',qty:null}];
+        _horsLigne(false);
+        const stub=async e=>e===E1?{ok:true,produit:_prod(E1,'Produit A')}:{ok:false,inconnu:true,code:e};
+        const n=await scanTraiterFile(stub);
+        const t=document.getElementById('supp-action-toast');
+        const txt=t?t.textContent:'';
+        if(t) t.remove();
+        if(n!==2||txt.indexOf('2 produits scannés à confirmer')<0) return _echec(n+' / '+txt);
+        if(scanFile(currentUser).length) return _echec('file non vidée');
+        return Object.keys(currentUser.nutrition.log||{}).length===0?true:_echec('écriture au journal avant validation');}));
+    }
     // ── Scan de code-barres : les six critères d'acceptation ──
     (function(){
       // Critère 1 : le décodeur est absent du chargement initial ET d'ASSETS.
