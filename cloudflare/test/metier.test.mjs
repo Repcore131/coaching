@@ -81,6 +81,23 @@ await test('build 1868 : demande de compléter un bilan — relue en base, push 
   assert.equal(w3.F.recus.length, 0);
 });
 
+await test('build 1878 : bilan corrigé après la réponse — le COACH reçoit le push, relu en base', async () => {
+  const telK = appareil('https://push.test/kevin1');
+  const w = monde({ users: { [A1]: { coachEmailKey: C1, fname: 'Léa', bilans: [{ date: 1, reponseCoach: 'ok', modifApresReponse: true, modifs: { le: 2, cles: ['photos'] } }] }, [C1]: { fname: 'Kevin' } },
+    push: { [C1]: { k1: telK.abonnement } },
+    evenements: { e1: { type: 'bilan_corrige', par: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  const m = telK.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Bilan corrigé');
+  assert.equal(m.body, 'Léa a ajouté ses photos.');
+  // Sans correction en base : rien.
+  const w2 = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ date: 1, reponseCoach: 'ok' }] } }, push: { [C1]: { k1: telK.abonnement } },
+    evenements: { e1: { type: 'bilan_corrige', par: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w2.minute();
+  assert.equal(w2.F.recus.length, 0);
+});
+
 await test('un événement déposé par quelqu’un qui n’est pas le coach n’envoie rien', async () => {
   const w = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ reponseCoach: 'x' }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
     evenements: { e1: { type: 'reponse_bilan', par: 'autre@t,fr', dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));

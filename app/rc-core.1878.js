@@ -7743,6 +7743,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion',
   // Les derniers reports du coach (build 1873) : des identifiants et des dates.
   'derniersReports',
+  // Le dernier passage du coach sur les bilans de chaque athlète (build 1878) : des dates.
+  'bilansVus',
   // L'activation (05/10/2026) : quatre dates d'usage et un canal, pas une mesure.
   'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
@@ -25286,6 +25288,8 @@ function evenementCible(ev){
   // Un message privé : l'événement vise le message (les règles vérifient qu'il existe et qui l'a écrit).
   if(t==='message') return /^m[a-z0-9]{8,20}$/.test(String(ev.i||''))?String(ev.i):'';
   if(t==='reponse_bilan'||t==='reponse_rite'||t==='bilan_a_completer') return String(ev.dest||'');
+  // BUILD 1878 : l'athlète prévient son coach d'une correction ; la cible est lui-même.
+  if(t==='bilan_corrige') return (currentUser&&currentUser.email)?currentUser.email.replace(/\./g,','):'';
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
@@ -31292,7 +31296,7 @@ function lundiOuvrir(id,cat,cle){
 // ⚠ « + N autres » se déplie (état en mémoire, jamais en localStorage).
 // ⚠ Un report groupé passe par une feuille (une case par athlète), et tout
 //   report s'annule pendant 6 s : alertStatus revient à l'identique.
-const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','overdue','message','accueil_prog','accueil_retour']);
+const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','bilan_corrige','overdue','message','accueil_prog','accueil_retour']);
 const TODO_GROUPE_SEUIL=3;
 const TODO_ANNULER_MS=6000;
 let _todoDeplie=false;
@@ -31993,8 +31997,9 @@ function renderTodoBlock(clients){
   const _corBil=newBil.filter(c=>{ const d=dernierBilan(c); return !(d&&!bilanRepondu(d)&&!d.traite); });
   const _neufBil=newBil.filter(c=>_corBil.indexOf(c)<0);
   if(_neufBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(_neufBil.length>1?'x bilans à lire':' bilan à lire'),list:_neufBil});
-  if(_corBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',
-    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0]):_corBil.length+' bilans corrigés à relire',list:_corBil});
+  // BUILD 1878 : sa propre ligne, 'bilan_corrige', rangée avec 'bilan' et hors plafond.
+  if(_corBil.length) rows.push({type:'bilan_corrige',icon:icon('download',16),color:'var(--orange)',
+    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0],null,{ligne:true}):_corBil.length+' bilans corrigés à relire',list:_corBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
   // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.
@@ -32150,6 +32155,8 @@ function renderTodoBlock(clients){
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
+        // BUILD 1878 : le bilan corrigé, ouvert sur ses réponses.
+        :r.type==='bilan_corrige'?`ouvrirBilanCorrige('${r.list[0].id}')`
         // Une ligne groupée ouvre sa file : un athlète, puis « Athlète suivant ».
         :r.groupe?`_entrerFileSignal(${idx})`
         // La file de correction des videos est deja ecrite : la ligne y entre,
@@ -36579,6 +36586,7 @@ function _majBoutonBilan(c){
   if(!n){ z.innerHTML=''; return false; }
   let neuf=false;
   try{ neuf=hasNewBilan(c); }catch(e){ neuf=false; }
+  let _cor=false; try{ _cor=bilanCorrigeNonVu(c)||!!bilanCorrigeAVoir(c); }catch(e){ _cor=false; }
   // LA DATE DU DERNIER BILAN. Elle ne sort QUE lorsqu'il y en a un a lire :
   // « recu le 6 septembre » sous un bouton qui dit « voir le dernier bilan »
   // n'ajoute rien — on va le voir, on verra bien quand il date. Sous « nouveau
@@ -36592,7 +36600,7 @@ function _majBoutonBilan(c){
   z.innerHTML='<div class="ccd-tete-a">'
     +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans('+(neuf?'{reponses:true}':'')+')">'
     +(neuf?'<span class="ccd-tete-pt"></span>':'')
-    +'<span class="ccd-tete-bt">'+(neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
+    +'<span class="ccd-tete-bt">'+(_cor?'Bilan corrigé à revoir':neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
     +(quand?('<small>reçu le '+escapeHtml(quand)+'</small>'):'')
     +'</span></button></div>';
   return true;
@@ -37779,10 +37787,21 @@ function evoTab(t){
 // plus récent sans réponse déplié, le curseur à la fin du brouillon : le
 // coach n'a plus à toucher « Réponses ». « Voir le dernier bilan », sans
 // nouveauté, garde « Mesures ».
+function ouvrirBilanCorrige(id){
+  try{ openClientDetail(id,true); }catch(e){}
+  currentClientId=id;
+  viewClientBilans({reponses:true});
+  try{ evoTab('reponses'); }catch(e){}
+}
 function viewClientBilans(opts){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
+  // BUILD 1878 : le passage du coach (bilansVus), lu par bilanCorrigeNonVu.
+  // Le signal se lit AVANT d'être éteint, pour ouvrir sur les réponses.
+  let _corrige=false; try{ _corrige=bilanCorrigeNonVu(c)||!!bilanCorrigeAVoir(c); }catch(e){}
+  try{ currentUser.bilansVus=Object.assign({},currentUser.bilansVus||{},{[_relCle(c)]:Date.now()}); saveUser(); }catch(e){}
+  if(_corrige) opts=Object.assign({},opts||{},{reponses:true});
   document.getElementById('evo-title').textContent=nomCourtClient(c)+' : Évolution';
   renderBilanEvolution(c);
   // N3.15 — L'ECRITURE EST ICI, apres le rendu et sur un GESTE : le coach
@@ -82404,26 +82423,61 @@ function appliquerModifBilan(b,d,maintenant){
     const ph=change.some(k=>/-photo-(face|back|side)$/.test(k));
     b.correctionApresReponse={le:maintenant||Date.now(),cles:change.slice(),photos:ph};
   }
+  // BUILD 1878 : la trace lisible de la correction — photos regroupées, 10
+  // clés au plus — et, après la réponse du coach, modifApresReponse.
+  if(change.length){
+    const cles=[];
+    for(const k of change){ const c=/-photo-/.test(k)?'photos':k; if(cles.indexOf(c)<0) cles.push(c); }
+    b.modifs={le:maintenant||Date.now(),cles:cles.slice(0,10)};
+    if(bilanRepondu(b)) b.modifApresReponse=true;
+  }
   return change;
 }
+// Le libellé lisible d'une clé corrigée (« photos », « tour de taille »).
+function libelleCleBilan(k){
+  if(k==='photos') return 'photos';
+  try{ const m=MEAS.find(x=>'bil-'+x.k===k||'deb-'+x.k===k); if(m) return m.l.toLowerCase(); }catch(e){}
+  if(/-weight$/.test(k)) return 'poids';
+  try{ for(const t of ['suivi','depart']) for(const q of (BILAN_QUESTIONS[t]||[])) if(q.k===k) return String(q.lbl||q.l||k).toLowerCase(); }catch(e){}
+  return k.replace(/^(bil|deb)-/,'');
+}
+// Le dernier passage du coach sur les bilans de cet athlète (côté coach).
+function _bilansVusDe(c){
+  try{ const v=currentUser&&currentUser.bilansVus; return Number(v&&v[_relCle(c)])||0; }catch(e){ return 0; }
+}
 // PURE. Une correction faite après la réponse, que le coach n'a pas encore lue.
-function bilanCorrigeNonVu(b){
+function bilanCorrigeNonVu(b,vuLe){
+  // BUILD 1878 : appelé avec un DOSSIER (c, vuLe) : un bilan des 60 derniers
+  // jours corrigé après la réponse, et après le dernier passage du coach.
+  if(b&&Array.isArray(b.bilans)){
+    const v=vuLe!=null?Number(vuLe)||0:_bilansVusDe(b), m=Date.now();
+    return b.bilans.some(x=>x&&x.modifApresReponse&&x.modifs&&Number(x.modifs.le)>v
+      &&(m-Number(x.modifs.le))<=BIL_CORRECTION_JOURS*864e5&&!(Number(x.correctionVueLe)>=Number(x.modifs.le)));
+  }
   const c=b&&b.correctionApresReponse;
   if(!c||!c.le) return false;
   return !(Number(b.correctionVueLe)>=Number(c.le));
 }
 // PURE. Le bilan corrigé non lu le plus récent des 60 derniers jours, ou null.
 const BIL_CORRECTION_JOURS=60;
-function bilanCorrigeAVoir(c,maintenant){
+function bilanCorrigeAVoir(c,maintenant,vuLe){
   const m=Number(maintenant)||Date.now();
-  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
+  const v=vuLe!=null?Number(vuLe)||0:_bilansVusDe(c);
+  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&Number(b.correctionApresReponse.le)>v&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
   return l.sort((x,y)=>Number(y.correctionApresReponse.le)-Number(x.correctionApresReponse.le))[0]||null;
 }
 // « Photos ajoutées au bilan n°N » ou « Bilan n°N corrigé ».
-function libelleCorrectionBilan(c,b){
+function libelleCorrectionBilan(c,b,o){
   const x=b||bilanCorrigeAVoir(c);
   if(!x) return '';
   const nom=x.type==='depart'?'d’inscription':'n°'+(x.num||'?');
+  // BUILD 1878 : « Bilan corrigé : Léa a ajouté ses photos ».
+  if(o&&o.ligne){
+    const qui=(c&&c!==x&&String(c.fname||'').trim())||'ton athlète';
+    if(x.type==='depart') return 'Bilan d’inscription corrigé : '+qui+(x.correctionApresReponse.photos?' a ajouté ses photos':'');
+    const n=((x.modifs&&x.modifs.cles)||x.correctionApresReponse.cles||[]).filter(k=>k!=='photos'&&!/-photo-/.test(k)).length;
+    return 'Bilan corrigé : '+qui+(x.correctionApresReponse.photos?' a ajouté ses photos':' a modifié '+n+' réponse'+(n>1?'s':''));
+  }
   // BUILD 1868 : complété à la demande du coach.
   if(x.completeSuiteDemande&&x.completeLe){
     const qui=(c&&c!==x&&String(c.fname||'').trim())||'Ton athlète';
@@ -82490,6 +82544,8 @@ function _bilEnregistrerModif(){
     const r=await photosBilanMigrer(currentUser,{max:9});
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
   }catch(e){} })();
+  // BUILD 1878 : le coach est prévenu d'une correction faite après sa réponse.
+  if(change.length&&x.b.modifApresReponse){ try{ const _i=(currentUser.bilans||[]).indexOf(x.b); if(_i>=0) deposerEvenement({type:'bilan_corrige',i:String(_i)}).catch(()=>{}); }catch(e){} }
   if(!change.length) toast('Aucun changement : '+x.nom+' est resté tel quel');
   else if(enregistre) toast(x.b.correctionApresReponse&&bilanCorrigeNonVu(x.b)
     ?'Ton coach est prévenu de la correction'
@@ -86630,6 +86686,18 @@ async function retirerReponseBilan(email,bilanId){
   try{ renderBilanEvolution(c); evoTab('reponses'); }catch(e){}
   return true;
 }
+// BUILD 1878 : « Compléter ma réponse » — un paragraphe AJOUTÉ à la réponse
+// envoyée, jamais à sa place. Le champ se pré-remplit avec l'existant suivi
+// d'une ligne vide ; « Envoyer » garde la version précédente (1874).
+function completerReponseBilan(email,bilanId){
+  const ta=document.getElementById(_taIdBilan(bilanId));
+  const r=_bilanDuCoach(email,bilanId);
+  if(!ta||!r) return false;
+  const base=String(r.b.reponseCoach||'');
+  if(ta.value.trim()===base.trim()||!ta.value.trim()) ta.value=base+(base?'\n\n':'')+'Suite à ta correction : ';
+  try{ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); ta.scrollIntoView({block:'center'}); }catch(e){}
+  return true;
+}
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
@@ -86967,6 +87035,8 @@ function renderReponsesBilans(bilans,client){
           ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
+        ${(client&&b.modifApresReponse&&b.modifs)?`<div class="bn-date" style="color:var(--orange);padding:0 2px 6px">Corrigé le ${escapeHtml(new Date(Number(b.modifs.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} : ${escapeHtml((b.modifs.cles||[]).map(libelleCleBilan).join(', '))}
+          <button type="button" class="rb-lien" onclick="completerReponseBilan('${escapeHtml(client.email||'')}','${escapeHtml(id)}')">Compléter ma réponse</button></div>`:''}
         ${(function(){ try{ return _htmlDepuisBilan(b,client,_rang.get(b)); }catch(e){ return ''; } })()}
         ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
         ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">

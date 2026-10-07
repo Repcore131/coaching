@@ -2503,26 +2503,61 @@ function appliquerModifBilan(b,d,maintenant){
     const ph=change.some(k=>/-photo-(face|back|side)$/.test(k));
     b.correctionApresReponse={le:maintenant||Date.now(),cles:change.slice(),photos:ph};
   }
+  // BUILD 1878 : la trace lisible de la correction — photos regroupées, 10
+  // clés au plus — et, après la réponse du coach, modifApresReponse.
+  if(change.length){
+    const cles=[];
+    for(const k of change){ const c=/-photo-/.test(k)?'photos':k; if(cles.indexOf(c)<0) cles.push(c); }
+    b.modifs={le:maintenant||Date.now(),cles:cles.slice(0,10)};
+    if(bilanRepondu(b)) b.modifApresReponse=true;
+  }
   return change;
 }
+// Le libellé lisible d'une clé corrigée (« photos », « tour de taille »).
+function libelleCleBilan(k){
+  if(k==='photos') return 'photos';
+  try{ const m=MEAS.find(x=>'bil-'+x.k===k||'deb-'+x.k===k); if(m) return m.l.toLowerCase(); }catch(e){}
+  if(/-weight$/.test(k)) return 'poids';
+  try{ for(const t of ['suivi','depart']) for(const q of (BILAN_QUESTIONS[t]||[])) if(q.k===k) return String(q.lbl||q.l||k).toLowerCase(); }catch(e){}
+  return k.replace(/^(bil|deb)-/,'');
+}
+// Le dernier passage du coach sur les bilans de cet athlète (côté coach).
+function _bilansVusDe(c){
+  try{ const v=currentUser&&currentUser.bilansVus; return Number(v&&v[_relCle(c)])||0; }catch(e){ return 0; }
+}
 // PURE. Une correction faite après la réponse, que le coach n'a pas encore lue.
-function bilanCorrigeNonVu(b){
+function bilanCorrigeNonVu(b,vuLe){
+  // BUILD 1878 : appelé avec un DOSSIER (c, vuLe) : un bilan des 60 derniers
+  // jours corrigé après la réponse, et après le dernier passage du coach.
+  if(b&&Array.isArray(b.bilans)){
+    const v=vuLe!=null?Number(vuLe)||0:_bilansVusDe(b), m=Date.now();
+    return b.bilans.some(x=>x&&x.modifApresReponse&&x.modifs&&Number(x.modifs.le)>v
+      &&(m-Number(x.modifs.le))<=BIL_CORRECTION_JOURS*864e5&&!(Number(x.correctionVueLe)>=Number(x.modifs.le)));
+  }
   const c=b&&b.correctionApresReponse;
   if(!c||!c.le) return false;
   return !(Number(b.correctionVueLe)>=Number(c.le));
 }
 // PURE. Le bilan corrigé non lu le plus récent des 60 derniers jours, ou null.
 const BIL_CORRECTION_JOURS=60;
-function bilanCorrigeAVoir(c,maintenant){
+function bilanCorrigeAVoir(c,maintenant,vuLe){
   const m=Number(maintenant)||Date.now();
-  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
+  const v=vuLe!=null?Number(vuLe)||0:_bilansVusDe(c);
+  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&Number(b.correctionApresReponse.le)>v&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
   return l.sort((x,y)=>Number(y.correctionApresReponse.le)-Number(x.correctionApresReponse.le))[0]||null;
 }
 // « Photos ajoutées au bilan n°N » ou « Bilan n°N corrigé ».
-function libelleCorrectionBilan(c,b){
+function libelleCorrectionBilan(c,b,o){
   const x=b||bilanCorrigeAVoir(c);
   if(!x) return '';
   const nom=x.type==='depart'?'d’inscription':'n°'+(x.num||'?');
+  // BUILD 1878 : « Bilan corrigé : Léa a ajouté ses photos ».
+  if(o&&o.ligne){
+    const qui=(c&&c!==x&&String(c.fname||'').trim())||'ton athlète';
+    if(x.type==='depart') return 'Bilan d’inscription corrigé : '+qui+(x.correctionApresReponse.photos?' a ajouté ses photos':'');
+    const n=((x.modifs&&x.modifs.cles)||x.correctionApresReponse.cles||[]).filter(k=>k!=='photos'&&!/-photo-/.test(k)).length;
+    return 'Bilan corrigé : '+qui+(x.correctionApresReponse.photos?' a ajouté ses photos':' a modifié '+n+' réponse'+(n>1?'s':''));
+  }
   // BUILD 1868 : complété à la demande du coach.
   if(x.completeSuiteDemande&&x.completeLe){
     const qui=(c&&c!==x&&String(c.fname||'').trim())||'Ton athlète';
@@ -2589,6 +2624,8 @@ function _bilEnregistrerModif(){
     const r=await photosBilanMigrer(currentUser,{max:9});
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
   }catch(e){} })();
+  // BUILD 1878 : le coach est prévenu d'une correction faite après sa réponse.
+  if(change.length&&x.b.modifApresReponse){ try{ const _i=(currentUser.bilans||[]).indexOf(x.b); if(_i>=0) deposerEvenement({type:'bilan_corrige',i:String(_i)}).catch(()=>{}); }catch(e){} }
   if(!change.length) toast('Aucun changement : '+x.nom+' est resté tel quel');
   else if(enregistre) toast(x.b.correctionApresReponse&&bilanCorrigeNonVu(x.b)
     ?'Ton coach est prévenu de la correction'

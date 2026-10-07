@@ -1077,6 +1077,18 @@ async function retirerReponseBilan(email,bilanId){
   try{ renderBilanEvolution(c); evoTab('reponses'); }catch(e){}
   return true;
 }
+// BUILD 1878 : « Compléter ma réponse » — un paragraphe AJOUTÉ à la réponse
+// envoyée, jamais à sa place. Le champ se pré-remplit avec l'existant suivi
+// d'une ligne vide ; « Envoyer » garde la version précédente (1874).
+function completerReponseBilan(email,bilanId){
+  const ta=document.getElementById(_taIdBilan(bilanId));
+  const r=_bilanDuCoach(email,bilanId);
+  if(!ta||!r) return false;
+  const base=String(r.b.reponseCoach||'');
+  if(ta.value.trim()===base.trim()||!ta.value.trim()) ta.value=base+(base?'\n\n':'')+'Suite à ta correction : ';
+  try{ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); ta.scrollIntoView({block:'center'}); }catch(e){}
+  return true;
+}
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
@@ -1414,6 +1426,8 @@ function renderReponsesBilans(bilans,client){
           ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
+        ${(client&&b.modifApresReponse&&b.modifs)?`<div class="bn-date" style="color:var(--orange);padding:0 2px 6px">Corrigé le ${escapeHtml(new Date(Number(b.modifs.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} : ${escapeHtml((b.modifs.cles||[]).map(libelleCleBilan).join(', '))}
+          <button type="button" class="rb-lien" onclick="completerReponseBilan('${escapeHtml(client.email||'')}','${escapeHtml(id)}')">Compléter ma réponse</button></div>`:''}
         ${(function(){ try{ return _htmlDepuisBilan(b,client,_rang.get(b)); }catch(e){ return ''; } })()}
         ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
         ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">

@@ -66103,6 +66103,29 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1878 : LE BILAN CORRIGÉ APRÈS LA RÉPONSE ══
+    ok('appliquerModifBilan sur un bilan répondu : modifApresReponse et modifs.cles = ["photos"]',()=>{
+      const b={type:'coaching',date:1,reponseCoach:'ok'};
+      appliquerModifBilan(b,{'bil-photo-face':'https://x/f.jpg','bil-photo-back':'https://x/b.jpg'},50);
+      return b.modifApresReponse===true&&JSON.stringify(b.modifs)==='{"le":50,"cles":["photos"]}'?true:_echec(JSON.stringify(b));});
+    ok('bilanCorrigeNonVu(c,vuLe) : vrai, puis faux une fois le coach passé ; non répondu : rien',()=>{
+      const t=Date.now();
+      const b={type:'coaching',date:t-5*864e5,reponseCoach:'ok'};
+      appliquerModifBilan(b,{'bil-photo-face':'https://x/f.jpg'},t-3600e3);
+      const c={email:'cn@t.fr',bilans:[b]};
+      if(!bilanCorrigeNonVu(c,t-864e5)) return _echec('pas vu');
+      if(bilanCorrigeNonVu(c,t)) return _echec('encore vrai après passage');
+      const n={type:'coaching',date:t-5*864e5};
+      appliquerModifBilan(n,{'bil-photo-face':'https://x/f.jpg'},t-3600e3);
+      return !n.modifApresReponse&&!bilanCorrigeNonVu({bilans:[n]},0)?true:_echec('non répondu signalé');});
+    ok('Ligne « Bilan corrigé : Léa a ajouté ses photos » ; libellé lisible des clés',()=>{
+      const t=Date.now();
+      const b={type:'coaching',date:t-5*864e5,reponseCoach:'ok'};
+      appliquerModifBilan(b,{'bil-photo-face':'https://x/f.jpg','bil-waist':'70'},t-3600e3);
+      const l=libelleCorrectionBilan({fname:'Léa',bilans:[b]},b,{ligne:true});
+      if(l!=='Bilan corrigé : Léa a ajouté ses photos') return _echec(l);
+      return b.modifs.cles.map(libelleCleBilan).join(', ')==='photos, tour de taille'?true:_echec(b.modifs.cles.map(libelleCleBilan).join(', '));});
+
     // ══ BUILD 1877 : D'UN BILAN À L'AUTRE (comparerBilans) ══
     const _cbB=(j,o)=>Object.assign({type:'coaching',date:Date.now()-j*864e5},o);
     ok('comparerBilans : motivation 8/10 → 4/10 = fort et « moins bien » ; alerte ≤ 4',()=>{

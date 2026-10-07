@@ -823,6 +823,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion',
   // Les derniers reports du coach (build 1873) : des identifiants et des dates.
   'derniersReports',
+  // Le dernier passage du coach sur les bilans de chaque athlète (build 1878) : des dates.
+  'bilansVus',
   // L'activation (05/10/2026) : quatre dates d'usage et un canal, pas une mesure.
   'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.

@@ -1716,6 +1716,23 @@ export function creerMetier(deps) {
         body: rep ? String(rep).slice(0, 120) : 'Une réponse vocale (' + dureeTxt(audio.duree) + ') t’attend dans l’app.' });
       return 'envoye';
     }
+    // BUILD 1878 : l'athlète a corrigé un bilan après la réponse : on
+    // prévient SON coach, après avoir relu la correction en base.
+    if (type === 'bilan_corrige') {
+      const ath = String(e.par || '');
+      const i = String(e.i || '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (!ath || !i) return 'incomplet';
+      const coach = await _lire(ath, 'coachEmailKey');
+      if (!coach) return 'sans_coach';
+      const b = await _val('users/' + ath + '/bilans/' + i);
+      if (!b || !b.modifApresReponse || !b.modifs) return 'sans_correction';
+      const prenom = String((await _lire(ath, 'fname')) || 'Ton athlète').slice(0, 40);
+      const cles = Array.isArray(b.modifs.cles) ? b.modifs.cles : Object.values(b.modifs.cles || {});
+      await envoyerPush(coach, { type: 'coach', url: './', tag: 'bilan-corrige-' + ath + '-' + i,
+        title: 'Bilan corrigé',
+        body: prenom + (cles.includes('photos') ? ' a ajouté ses photos.' : ' a modifié ' + cles.length + ' réponse' + (cles.length > 1 ? 's' : '') + '.') });
+      return 'envoye';
+    }
     // BUILD 1868 : le coach demande de compléter un bilan. Relu en base : la
     // demande (aCompleter) doit y être, et venir du coach de l'athlète.
     if (type === 'bilan_a_completer') {

@@ -783,6 +783,7 @@ function _majBoutonBilan(c){
   if(!n){ z.innerHTML=''; return false; }
   let neuf=false;
   try{ neuf=hasNewBilan(c); }catch(e){ neuf=false; }
+  let _cor=false; try{ _cor=bilanCorrigeNonVu(c)||!!bilanCorrigeAVoir(c); }catch(e){ _cor=false; }
   // LA DATE DU DERNIER BILAN. Elle ne sort QUE lorsqu'il y en a un a lire :
   // « recu le 6 septembre » sous un bouton qui dit « voir le dernier bilan »
   // n'ajoute rien — on va le voir, on verra bien quand il date. Sous « nouveau
@@ -796,7 +797,7 @@ function _majBoutonBilan(c){
   z.innerHTML='<div class="ccd-tete-a">'
     +'<button type="button" class="ccd-tete-b'+(neuf?' neuf':'')+'" onclick="viewClientBilans('+(neuf?'{reponses:true}':'')+')">'
     +(neuf?'<span class="ccd-tete-pt"></span>':'')
-    +'<span class="ccd-tete-bt">'+(neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
+    +'<span class="ccd-tete-bt">'+(_cor?'Bilan corrigé à revoir':neuf?'Nouveau bilan à checker':'Voir le dernier bilan')
     +(quand?('<small>reçu le '+escapeHtml(quand)+'</small>'):'')
     +'</span></button></div>';
   return true;
@@ -1983,10 +1984,21 @@ function evoTab(t){
 // plus récent sans réponse déplié, le curseur à la fin du brouillon : le
 // coach n'a plus à toucher « Réponses ». « Voir le dernier bilan », sans
 // nouveauté, garde « Mesures ».
+function ouvrirBilanCorrige(id){
+  try{ openClientDetail(id,true); }catch(e){}
+  currentClientId=id;
+  viewClientBilans({reponses:true});
+  try{ evoTab('reponses'); }catch(e){}
+}
 function viewClientBilans(opts){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
+  // BUILD 1878 : le passage du coach (bilansVus), lu par bilanCorrigeNonVu.
+  // Le signal se lit AVANT d'être éteint, pour ouvrir sur les réponses.
+  let _corrige=false; try{ _corrige=bilanCorrigeNonVu(c)||!!bilanCorrigeAVoir(c); }catch(e){}
+  try{ currentUser.bilansVus=Object.assign({},currentUser.bilansVus||{},{[_relCle(c)]:Date.now()}); saveUser(); }catch(e){}
+  if(_corrige) opts=Object.assign({},opts||{},{reponses:true});
   document.getElementById('evo-title').textContent=nomCourtClient(c)+' : Évolution';
   renderBilanEvolution(c);
   // N3.15 — L'ECRITURE EST ICI, apres le rendu et sur un GESTE : le coach

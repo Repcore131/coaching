@@ -784,7 +784,7 @@ function lundiOuvrir(id,cat,cle){
 // ⚠ « + N autres » se déplie (état en mémoire, jamais en localStorage).
 // ⚠ Un report groupé passe par une feuille (une case par athlète), et tout
 //   report s'annule pendant 6 s : alertStatus revient à l'identique.
-const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','overdue','message','accueil_prog','accueil_retour']);
+const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','bilan_corrige','overdue','message','accueil_prog','accueil_retour']);
 const TODO_GROUPE_SEUIL=3;
 const TODO_ANNULER_MS=6000;
 let _todoDeplie=false;
@@ -1485,8 +1485,9 @@ function renderTodoBlock(clients){
   const _corBil=newBil.filter(c=>{ const d=dernierBilan(c); return !(d&&!bilanRepondu(d)&&!d.traite); });
   const _neufBil=newBil.filter(c=>_corBil.indexOf(c)<0);
   if(_neufBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(_neufBil.length>1?'x bilans à lire':' bilan à lire'),list:_neufBil});
-  if(_corBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',
-    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0]):_corBil.length+' bilans corrigés à relire',list:_corBil});
+  // BUILD 1878 : sa propre ligne, 'bilan_corrige', rangée avec 'bilan' et hors plafond.
+  if(_corBil.length) rows.push({type:'bilan_corrige',icon:icon('download',16),color:'var(--orange)',
+    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0],null,{ligne:true}):_corBil.length+' bilans corrigés à relire',list:_corBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
   // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.
@@ -1642,6 +1643,8 @@ function renderTodoBlock(clients){
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
+        // BUILD 1878 : le bilan corrigé, ouvert sur ses réponses.
+        :r.type==='bilan_corrige'?`ouvrirBilanCorrige('${r.list[0].id}')`
         // Une ligne groupée ouvre sa file : un athlète, puis « Athlète suivant ».
         :r.groupe?`_entrerFileSignal(${idx})`
         // La file de correction des videos est deja ecrite : la ligne y entre,
