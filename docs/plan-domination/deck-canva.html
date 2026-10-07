@@ -33,9 +33,8 @@ p,li{font-size:26px;line-height:1.45;color:#E6E6EA;}
 .phone img{display:block;width:100%}
 .photo{position:absolute;top:0;bottom:0;background-size:cover;background-position:center}
 .fade-l{position:absolute;inset:0;background:linear-gradient(90deg,var(--noir) 0%,var(--noir) 38%,rgba(11,11,12,.75) 55%,rgba(11,11,12,.1) 100%)}
-ul.clean{list-style:none}
-ul.clean li{position:relative;padding-left:40px;margin-bottom:16px}
-ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;height:16px;background:var(--rouge);clip-path:polygon(40% 0,100% 0,55% 45%,85% 45%,20% 100%,40% 55%,10% 55%)}
+.clean .li{font-size:26px;line-height:1.45;color:#E6E6EA;margin-bottom:16px}
+.clean .li .bolt{font-weight:800;margin-right:12px}
 .pill{display:inline-flex;align-items:center;gap:10px;padding:10px 20px;border-radius:999px;background:var(--carte2);border:1px solid var(--bord);font-weight:700;font-size:22px}
 .secnum{font-family:'Bebas Neue';font-size:520px;line-height:.8;color:transparent;-webkit-text-stroke:3px #7A1F1F;position:absolute;right:60px;bottom:-40px}
 </style></head><body>
@@ -235,12 +234,12 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
     <div>
       <div class="kick">13 · Le script</div>
       <h1>Le message qui<br><em>ouvre les portes</em></h1>
-      <ul class="clean" style="margin-top:40px">
-        <li>Personnel : cite <b>une</b> vidéo précise</li>
-        <li>Court : lisible sans « voir plus »</li>
-        <li>Une seule question à la fin</li>
-        <li>Jamais de lien au premier message</li>
-      </ul>
+      <div class="clean" style="margin-top:40px">
+        <div class="li"><span class="bolt">›</span>Personnel : cite <b>une</b> vidéo précise</div>
+        <div class="li"><span class="bolt">›</span>Court : lisible sans « voir plus »</div>
+        <div class="li"><span class="bolt">›</span>Une seule question à la fin</div>
+        <div class="li"><span class="bolt">›</span>Jamais de lien au premier message</div>
+      </div>
     </div>
     <div style="background:#000;border:1.5px solid var(--bord);border-radius:36px;padding:40px 40px 50px">
       <div style="display:flex;align-items:center;gap:18px;padding-bottom:26px;border-bottom:1px solid var(--bord)"><img src="https://raw.githubusercontent.com/Repcore131/coaching/claude/hopeful-faraday-pgtu0x/docs/plan-domination/img/kevin.jpg" style="width:72px;height:72px;border-radius:50%;object-fit:cover"><div><h3 style="font-size:26px">kevin.repcore</h3><p class="muted" style="font-size:19px">Coach · créateur de RepCore</p></div></div>
@@ -256,12 +255,12 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
   <div style="position:absolute;left:780px;top:88px;right:104px">
     <div class="kick">14 · Les coachs</div>
     <h1>Un coach =<br><em>5 à 30 athlètes</em> d'un coup</h1>
-    <ul class="clean" style="margin-top:40px">
-      <li><b>Cible :</b> coachs indépendants qui suivent leurs clients sur Excel ou WhatsApp</li>
-      <li><b>Offre :</b> gratuit pour 1 athlète, puis 19 € ou 39 € par mois</li>
-      <li><b>50 premiers :</b> 3 mois offerts contre un avis public</li>
-      <li><b>Argument :</b> leurs clients ont l'app, eux voient charges, bilans et cycle</li>
-    </ul>
+    <div class="clean" style="margin-top:40px">
+      <div class="li"><span class="bolt">›</span><b>Cible :</b> coachs indépendants qui suivent leurs clients sur Excel ou WhatsApp</div>
+      <div class="li"><span class="bolt">›</span><b>Offre :</b> gratuit pour 1 athlète, puis 19 € ou 39 € par mois</div>
+      <div class="li"><span class="bolt">›</span><b>50 premiers :</b> 3 mois offerts contre un avis public</div>
+      <div class="li"><span class="bolt">›</span><b>Argument :</b> leurs clients ont l'app, eux voient charges, bilans et cycle</div>
+    </div>
     <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:30px">
       <div class="card"><div class="num r" style="font-size:96px">30</div><p class="muted">coachs payants au mois 4</p></div>
       <div class="card hot"><div class="num" style="font-size:96px">250</div><p class="muted">coachs payants au mois 12</p></div>
@@ -334,10 +333,10 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
   <h1>Ce qu'on code <em>(un peu)</em></h1>
   <div style="position:relative;margin-top:36px;height:740px">
     <div style="position:absolute;left:60px;right:0;top:0;bottom:60px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:16px">
-      <div class="card hot" style="padding:26px"><div class="tag">À faire tout de suite</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Mensuel sans engagement, annuel −2 mois</li><li style="font-size:22px">« Thomas t'invite » : prénom du parrain à l'arrivée</li><li style="font-size:22px">Fiche Play Store</li></ul></div>
-      <div class="card" style="padding:26px"><div class="tag g">À planifier</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Parcours des 7 premiers jours</li><li style="font-size:22px">Relance des inactifs</li><li style="font-size:22px">Paiement Stripe en plus de PayPal</li></ul></div>
-      <div class="card" style="padding:26px"><div class="tag g">Petits bonus</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Légende + #RepCore pré-remplis au partage</li><li style="font-size:22px">Format 4:5 pour le Wrapped</li></ul></div>
-      <div class="card" style="padding:26px;opacity:.75"><div class="tag g">Pas maintenant</div><ul class="clean" style="margin-top:16px"><li style="font-size:22px">Toute fonctionnalité sans lien direct avec la vente</li><li style="font-size:22px">Nouveaux badges, nouveaux écrans</li></ul></div>
+      <div class="card hot" style="padding:26px"><div class="tag">À faire tout de suite</div><div class="clean" style="margin-top:16px"><div class="li" style="font-size:22px"><span class="bolt">›</span>Mensuel sans engagement, annuel −2 mois</div><div class="li" style="font-size:22px"><span class="bolt">›</span>« Thomas t'invite » : prénom du parrain à l'arrivée</div><div class="li" style="font-size:22px"><span class="bolt">›</span>Fiche Play Store</div></div></div>
+      <div class="card" style="padding:26px"><div class="tag g">À planifier</div><div class="clean" style="margin-top:16px"><div class="li" style="font-size:22px"><span class="bolt">›</span>Parcours des 7 premiers jours</div><div class="li" style="font-size:22px"><span class="bolt">›</span>Relance des inactifs</div><div class="li" style="font-size:22px"><span class="bolt">›</span>Paiement Stripe en plus de PayPal</div></div></div>
+      <div class="card" style="padding:26px"><div class="tag g">Petits bonus</div><div class="clean" style="margin-top:16px"><div class="li" style="font-size:22px"><span class="bolt">›</span>Légende + #RepCore pré-remplis au partage</div><div class="li" style="font-size:22px"><span class="bolt">›</span>Format 4:5 pour le Wrapped</div></div></div>
+      <div class="card" style="padding:26px;opacity:.75"><div class="tag g">Pas maintenant</div><div class="clean" style="margin-top:16px"><div class="li" style="font-size:22px"><span class="bolt">›</span>Toute fonctionnalité sans lien direct avec la vente</div><div class="li" style="font-size:22px"><span class="bolt">›</span>Nouveaux badges, nouveaux écrans</div></div></div>
     </div>
     <div style="position:absolute;left:0;top:0;bottom:60px;width:44px;display:flex;align-items:center;justify-content:center"><div style="transform:rotate(-90deg);white-space:nowrap;font-weight:800;letter-spacing:.2em;color:var(--gris);font-size:18px">IMPACT SUR LE CA →</div></div>
     <div style="position:absolute;left:60px;right:0;bottom:10px;text-align:center;font-weight:800;letter-spacing:.2em;color:var(--gris);font-size:18px">EFFORT DE CODE →</div>
