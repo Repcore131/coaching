@@ -16218,3 +16218,13 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
   margin:14px 0 0;padding-top:8px;border-top:1px solid var(--border)}
 @media print{ .doc-sign{color:#52525b;border-top-color:#d4d4d8;font-size:7.5pt} }
 .fa-pied-pour{display:block;margin-top:5px;font-size:.72em;font-weight:600;letter-spacing:1.2px;opacity:.75}
+/* LA LANGUE DE L'APP (07/10/2026) : le selecteur, a l'inscription, dans le
+   profil de l'athlete et dans la barre du coach. */
+.r-langue{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)}
+.r-langue label{flex:1 1 auto;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.r-langue.card{background:var(--surface-1)}
+.r-langue-coach{padding:0;border:0;background:none;margin-bottom:8px}
+select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:8px 12px;background:var(--dark,#0c0c0c);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700}
+.r-langue-coach select.rc-langue{width:100%;max-width:none}
