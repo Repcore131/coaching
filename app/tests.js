@@ -66103,6 +66103,50 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1877 : D'UN BILAN À L'AUTRE (comparerBilans) ══
+    const _cbB=(j,o)=>Object.assign({type:'coaching',date:Date.now()-j*864e5},o);
+    ok('comparerBilans : motivation 8/10 → 4/10 = fort et « moins bien » ; alerte ≤ 4',()=>{
+      const p=_cbB(14,{'bil-motivation':'8/10'}), d=_cbB(1,{'bil-motivation':'4/10'});
+      const r=comparerBilans(p,d,{bilans:[p,d]});
+      const l=r.lignes.find(x=>x.cle==='bil-motivation');
+      if(!l||!l.fort||l.sens!=='moins bien'||l.avant!=='8'||l.apres!=='4') return _echec(JSON.stringify(l));
+      return r.alertes.some(a=>a.cle==='motivation')?true:_echec(JSON.stringify(r.alertes));});
+    ok('comparerBilans : sommeil Bien → Mauvais ; deux « Mauvais » de suite alertent ; ancien libellé lu',()=>{
+      const p=_cbB(14,{'bil-sleep-quality':BIL_OPTS_SOMMEIL[0]}), d=_cbB(1,{'bil-sleep-quality':BIL_OPTS_SOMMEIL[2]});
+      const l=comparerBilans(p,d,{bilans:[p,d]}).lignes.find(x=>x.cle==='bil-sleep-quality');
+      if(!l||l.avant!=='Bien'||l.apres!=='Mauvais'||l.sens!=='moins bien') return _echec(JSON.stringify(l));
+      const a=_cbB(28,{'bil-sleep-quality':'Mal, je dors mal'}), b=_cbB(14,{'bil-sleep-quality':BIL_OPTS_SOMMEIL[2]});
+      const r=comparerBilans(a,b,{bilans:[a,b]});
+      return r.alertes.some(x=>x.texte==='Sommeil Mauvais (2e fois)')?true:_echec(JSON.stringify(r.alertes));});
+    ok('comparerBilans : une taille reportée n’est pas comparée ; réponse absente → pas de puce, jamais « undefined »',()=>{
+      const p=_cbB(14,{'bil-waist':'80'}), d=_cbB(1,{'bil-waist':'80',reprises:['bil-waist']});
+      const r=comparerBilans(p,d,{bilans:[p,d]});
+      if(r.lignes.some(x=>x.cle==='waist')) return _echec('taille reportée comparée');
+      return !/undefined/.test(JSON.stringify(r))?true:_echec(JSON.stringify(r));});
+    ok('Premier bilan coaching (seul le départ précède) : pas de bandeau',()=>{
+      const dep={type:'depart',date:Date.now()-30*864e5,'deb-weight':'70'}, d=_cbB(1,{'bil-motivation':'3/10'});
+      return _htmlDepuisBilan(d,{bilans:[dep,d]},1)===''?true:_echec('bandeau');});
+    ok('Persona Léa : bandeau « Motivation 5 → 4 », « Sommeil Mauvais (2e fois) », « Photos absentes » ; le brouillon le dit',()=>{
+      const ph={face:'https://x/f.jpg',back:'https://x/b.jpg',side:'https://x/s.jpg'};
+      const a=_cbB(28,{'bil-motivation':'6/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[1],photos:ph});
+      const p=_cbB(14,{'bil-motivation':'5/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[2],photos:ph});
+      const d=_cbB(1,{'bil-motivation':'4/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[2]});
+      const lea={fname:'Léa',bilans:[a,p,d],sessions:[]};
+      const h=_htmlDepuisBilan(d,lea,3);
+      for(const x of ['Motivation 5 → 4','Sommeil Mauvais (2e fois)','Photos absentes']) if(h.indexOf(x)<0) return _echec('manque '+x+' : '+h.replace(/<[^>]+>/g,' '));
+      const br=brouillonBilan(lea,d,{},{});
+      if(!/Ta motivation est passée de 6 à 4 en trois bilans et tu dors mal depuis deux bilans\./.test(br.texte)) return _echec(br.texte);
+      return /le boulot, le sommeil, les séances/.test(br.question)?true:_echec(br.question);});
+    ok('Profil TCA : aucune phrase de poids dans le brouillon, aucune ligne de poids ni d’écarts',()=>{
+      const p=_cbB(14,{'bil-weight':'60','bil-motivation':'8/10','bil-cheat-meals':'Aucun'}), d=_cbB(1,{'bil-weight':'58','bil-motivation':'4/10','bil-cheat-meals':'3'});
+      const u={fname:'T',bilans:[p,d],sessions:[],tcaRisque:true,tcaRisqueDate:Date.now()};
+      if(!aTCA(u)) return _echec('la fixture n’est pas TCA');
+      const r=comparerBilans(p,d,u);
+      if(r.lignes.some(l=>l.cle==='poids'||l.cle==='bil-cheat-meals')) return _echec(JSON.stringify(r.lignes));
+      const br=brouillonBilan(u,d,{},{});
+      if(/\bkg\b|pèses|poids/i.test(br.texte)) return _echec(br.texte);
+      return /motivation/.test(br.texte)?true:_echec('phrase de motivation absente');});
+
     // ══ BUILD 1876 : LE SUPPORT ══
     ok('Tampon d’erreurs : borné à 20, les plus récentes ; adresses et longues suites de chiffres masquées',()=>{
       let l=[]; for(let i=0;i<30;i++) l=ajouterErreurTampon(l,{m:'e'+i});

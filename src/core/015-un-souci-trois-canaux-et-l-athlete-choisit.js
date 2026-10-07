@@ -1484,11 +1484,20 @@ function openClientDetail(cid,_refresh,_force){
       const _extrait=b.type==='depart'?[]:_ACTIONNABLES
         .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
         .filter(x=>x.txt);
+      // BUILD 1877 : « Motivation 4/10 (↓ de 8) » quand l'écart est fort.
+      try{
+        const _sv=_cbSuivis(c), _i=_sv.indexOf(b);
+        if(_i>=1){
+          const _l=comparerBilans(_sv[_i-1],b,c).lignes.find(l=>l.cle==='bil-motivation'&&l.fort);
+          const _x=_l&&_extrait.find(x=>x.lbl==='Motivation');
+          if(_x){ _x.txt=_l.apres+'/10 ('+(_l.sens==='mieux'?'↑':'↓')+' de '+_l.avant+')'; _x.sansDeuxPoints=true; }
+        }
+      }catch(e){}
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${dateLocaleDeCle(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau '+icon('etoile',10):'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
-        ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
+        ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl}${x.sansDeuxPoints?'':' :'}</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
       </div>`:''}
     </div>`}).join('');

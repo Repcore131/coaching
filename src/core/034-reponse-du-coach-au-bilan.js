@@ -593,6 +593,16 @@ function brouillonBilan(athlete,bilan,signaux,opts){
     retenus.push(k); accroche.push(x.fait);
     if(!question) question=x.question;
   }
+  // BUILD 1877 : une phrase tirée des alertes du bilan (comparerBilans), si
+  // la place le permet — la douleur reste devant.
+  let _alerte=null;
+  try{
+    const sv=_cbSuivis(u).filter(x=>Number(x.date)<t);
+    if(b.type!=='depart'&&sv.length&&retenus.length<BROUILLON_MAX_SIGNAUX){
+      _alerte=_brPhraseAlertes(comparerBilans(sv[sv.length-1],b,u).alertes,tca);
+      if(_alerte){ accroche.push(_alerte.phrase); retenus.push('alerteBilan'); if(retenus.indexOf('douleur')<0&&retenus.indexOf('douleurDiffuse')<0) question=_alerte.question; }
+    }
+  }catch(e){}
   if(!question) question='Qu\'est-ce qui t\'a paru le plus facile, et le plus dur, depuis '+(prec?'ton dernier bilan':'le début')+' ?';
 
   // ── LE CADRE : la formule du coach, réglée une fois.
@@ -1204,6 +1214,126 @@ function _bnVoir(id){
 // le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
 // l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
 // l'athlete lui-meme.
+// ══ BUILD 1877 : D'UN BILAN À L'AUTRE ════════════════════════════════════════
+// Le coach lisait chaque bilan seul et devait se souvenir du précédent.
+// comparerBilans (PURE) dit ce qui a bougé et ce qui alerte.
+const CB_SOMMEIL_LIB=Object.freeze(['Bien','Correct','Mauvais']);
+const CB_STRESS_LIB=Object.freeze(['Aucun','Un peu','Beaucoup','Énorme']);
+function _cbTexte(v){ try{ return _texteReponse(v).trim(); }catch(e){ return String(v==null?'':v).trim(); } }
+function _cbMotiv(b){ const n=Math.round(parseFloat(_cbTexte(b&&b['bil-motivation']).replace(',','.'))); return (n>=1&&n<=10)?n:null; }
+// Le rang dans la liste d'options ; les anciens libellés par leur début.
+function _cbSommeil(b){
+  const t=_cbTexte(b&&b['bil-sleep-quality']); if(!t) return null;
+  const i=BIL_OPTS_SOMMEIL.indexOf(t); if(i>=0) return i;
+  if(/^(tr[eè]s )?bien/i.test(t)) return 0; if(/^correct|moyen/i.test(t)) return 1; if(/^mal|mauvais/i.test(t)) return 2;
+  return null;
+}
+function _cbStress(b){
+  const t=_cbTexte(b&&b['bil-stress']); if(!t) return null;
+  const i=BIL_OPTS_STRESS.indexOf(t); if(i>=0) return i;
+  if(/^pas|aucun/i.test(t)) return 0; if(/^un peu/i.test(t)) return 1; if(/^beaucoup/i.test(t)) return 2; if(/^[ée]norm/i.test(t)) return 3;
+  return null;
+}
+function _cbEcarts(b){ const t=_cbTexte(b&&b['bil-cheat-meals']); if(!t) return null; if(/^aucun/i.test(t)) return 0; const n=parseInt(t,10); return isNaN(n)?null:n; }
+function _cbPhotos(b){ return BIL_VUES.filter(v=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } }).length; }
+function _cbNb(v){ return String(Math.round(v*10)/10).replace('.',','); }
+// La mesure RÉELLE d'un bilan (null si reportée ou absente).
+function _cbMesure(b,k){ if(!b||bmReportee(b,k)) return null; return getBM(b,k); }
+// Les bilans de suivi, du plus ancien au plus récent.
+function _cbSuivis(u){ return ((u&&u.bilans)||[]).filter(b=>b&&b.date&&b.type!=='depart').sort((a,b)=>a.date-b.date); }
+/**
+ * PURE (serieWeight mis à part). Ce qui a bougé entre deux bilans de suivi.
+ * @return {lignes:[{cle,lib,avant,apres,sens,fort}], alertes:[{cle,texte}]}
+ */
+function comparerBilans(prec,der,u){
+  const out={lignes:[],alertes:[]};
+  if(!der||der.type==='depart') return out;
+  const tca=(function(){ try{ return aTCA(u); }catch(e){ return false; } })();
+  const sansPoids=tca||!!(u&&u.masquerPoids);
+  const ligne=(cle,lib,a,b,mieuxSiPlus,fort,fmt)=>{
+    if(a==null||b==null) return;
+    const f=fmt||(x=>String(x));
+    const d=b-a;
+    const sens=Math.abs(d)<1e-9?'stable':((d>0)===mieuxSiPlus?'mieux':'moins bien');
+    out.lignes.push({cle,lib,avant:f(a),apres:f(b),sens,fort:!!fort});
+  };
+  if(prec&&prec.type!=='depart'){
+    // LE POIDS : la moyenne sur 7 jours aux deux dates, sinon les pesées des bilans.
+    if(!sansPoids){
+      let a=null,b=null;
+      try{ const s=serieWeight(u); a=mm7(s,_jourISO(prec.date)); b=mm7(s,_jourISO(der.date)); }catch(e){}
+      if(a==null||b==null){ a=getBW(prec); b=getBW(der); }
+      if(a!=null&&b!=null){
+        const d=b-a;
+        let bon=false; try{ bon=_synPoidsDansLeSens(u,d); }catch(e){}
+        out.lignes.push({cle:'poids',lib:'Poids',avant:_cbNb(a)+' kg',apres:_cbNb(b)+' kg',
+          sens:Math.abs(d)<0.2?'stable':(bon?'mieux':'moins bien'),fort:Math.abs(d)>=1.5});
+      }
+    }
+    // Les tours : on ignore les valeurs reportées (pas remesurées).
+    const ta=_cbMesure(prec,'waist'), tb=_cbMesure(der,'waist');
+    ligne('waist','Taille',ta,tb,false,ta!=null&&tb!=null&&Math.abs(tb-ta)>=2,x=>_cbNb(x)+' cm');
+    const ha=_cbMesure(prec,'hips'), hb=_cbMesure(der,'hips');
+    ligne('hips','Hanches',ha,hb,false,ha!=null&&hb!=null&&Math.abs(hb-ha)>=2,x=>_cbNb(x)+' cm');
+    const ma=_cbMotiv(prec), mb=_cbMotiv(der);
+    ligne('bil-motivation','Motivation',ma,mb,true,ma!=null&&mb!=null&&Math.abs(mb-ma)>=2);
+    const sa=_cbSommeil(prec), sb=_cbSommeil(der);
+    ligne('bil-sleep-quality','Sommeil',sa,sb,false,sa!=null&&sb!=null&&Math.abs(sb-sa)>=2,x=>CB_SOMMEIL_LIB[x]);
+    const sta=_cbStress(prec), stb=_cbStress(der);
+    ligne('bil-stress','Stress',sta,stb,false,sta!=null&&stb!=null&&Math.abs(stb-sta)>=2,x=>CB_STRESS_LIB[x]);
+    if(!tca){
+      const ea=_cbEcarts(prec), eb=_cbEcarts(der);
+      ligne('bil-cheat-meals','Écarts',ea,eb,false,ea!=null&&eb!=null&&Math.abs(eb-ea)>=2,x=>x>=4?'4 ou plus':String(x));
+    }
+    const pa=_cbPhotos(prec), pb=_cbPhotos(der);
+    if(pa!==pb) ligne('photos','Photos',pa,pb,true,false,x=>x+'/3');
+  }
+  // LES ALERTES. L'historique des suivis jusqu'à ce bilan.
+  const suivis=_cbSuivis(u).filter(b=>Number(b.date)<=Number(der.date));
+  if(!suivis.length||suivis[suivis.length-1]!==der){ suivis.push(der); }
+  const m=suivis.map(_cbMotiv);
+  const n=m.length;
+  const m3=n>=3?m.slice(-3):null;
+  if(m3&&m3.every(x=>x!=null)&&m3[0]>m3[1]&&m3[1]>m3[2])
+    out.alertes.push({cle:'motivation',texte:'Motivation en baisse : '+m3.join(' → '),de:m3[0],a:m3[2],bilans:3});
+  else if(m[n-1]!=null&&m[n-1]<=4)
+    out.alertes.push({cle:'motivation',texte:'Motivation '+m[n-1]+'/10',a:m[n-1]});
+  let mauvais=0; for(let i=n-1;i>=0&&_cbSommeil(suivis[i])===2;i--) mauvais++;
+  if(mauvais>=2) out.alertes.push({cle:'sommeil',texte:'Sommeil Mauvais ('+mauvais+'e fois)',fois:mauvais});
+  if(_cbTexte(der['bil-prog-modifs'])) out.alertes.push({cle:'modifs',texte:'Demande de modification du programme'});
+  if(prec&&prec.type!=='depart'&&_cbPhotos(prec)>0&&_cbPhotos(der)===0) out.alertes.push({cle:'photos',texte:'Photos absentes'});
+  return out;
+}
+// Le bandeau « Depuis le bilan N−1 » (coach seulement).
+function _htmlDepuisBilan(b,client,rang){
+  if(!client||!b||b.type==='depart') return '';
+  const s=_cbSuivis(client);
+  const i=s.indexOf(b);
+  if(i<1) return '';
+  const r=comparerBilans(s[i-1],b,client);
+  const fl={mieux:'↗','moins bien':'↘',stable:'→'};
+  const puces=r.alertes.map(a=>'<div class="bn-l" style="color:var(--orange)">'+icon('alert-triangle',12)+' '+escapeHtml(a.texte)+'</div>')
+    .concat(r.lignes.filter(l=>l.sens!=='stable'||l.fort).sort((x,y)=>(y.fort?1:0)-(x.fort?1:0))
+      .concat(r.lignes.filter(l=>l.sens==='stable'&&!l.fort))
+      .map(l=>'<div class="bn-l">'+fl[l.sens]+' '+escapeHtml(l.lib+' '+l.avant+' → '+l.apres)+(l.fort?' <b>·</b>':'')+'</div>'));
+  if(!puces.length) return '';
+  return '<section class="bn-rub bn-depuis"><div class="bn-rub-t"><h3>Depuis le bilan '+(rang?rang-1:'précédent')+'</h3></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--fs-xs)">'+puces.slice(0,6).join('')+'</div></section>';
+}
+// La phrase d'alerte du brouillon (au plus une), et sa question ciblée.
+function _brPhraseAlertes(alertes,tca){
+  const a=k=>(alertes||[]).find(x=>x.cle===k);
+  const mo=a('motivation'), so=a('sommeil'), md=a('modifs');
+  const p=[];
+  if(mo) p.push(mo.bilans?'ta motivation est passée de '+mo.de+' à '+mo.a+' en trois bilans':'ta motivation est à '+mo.a+'/10');
+  if(so) p.push('tu dors mal depuis '+(so.fois===2?'deux':so.fois)+' bilans');
+  if(p.length){
+    const t=p.join(' et ');
+    return {phrase:t.charAt(0).toUpperCase()+t.slice(1)+'.',question:'Qu\'est-ce qui pèse le plus en ce moment : le boulot, le sommeil, les séances ?'};
+  }
+  if(md) return {phrase:'Tu m\'as demandé de modifier ton programme : on en parle.',question:'Qu\'est-ce que tu changerais en premier dans ton programme ?'};
+  return null;
+}
 function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
   // BUILD 1863 : les champs corrigés après la réponse ressortent (soulignés),
@@ -1284,6 +1414,7 @@ function renderReponsesBilans(bilans,client){
           ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
+        ${(function(){ try{ return _htmlDepuisBilan(b,client,_rang.get(b)); }catch(e){ return ''; } })()}
         ${sections||`<section class="bn-rub">${emptyState('','Aucune réponse écrite dans ce bilan : mesures et photos seulement.',null,null,'padding:12px 0')}</section>`}
         ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">
           <div class="bn-reponse-t">Réponse de ton coach</div>
