@@ -58,14 +58,14 @@ page('Avant de tourner', f'''
 <h1>4 vidéos, <em>un seul message</em></h1>
 <p class="lead">Les gens ne te connaissent pas encore. Tu n'as pas des dizaines d'avant/après. Ce qui doit sauter aux yeux dans chaque image : <b>le sérieux</b>. Quelqu'un de passionné, qui mesure tout, et qui a construit son propre outil parce qu'aucun ne suffisait.</p>
 <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:30px">
- <div class="box r"><span class="tag">Vidéo 1</span><h3 style="margin-top:10px">« Personne ne viendra te chercher »</h3><p class="mut" style="font-size:17px">Motivation · 55 s · Instagram, YouTube, page de vente. Donne envie d'ouvrir l'app.</p></div>
+ <div class="box r"><span class="tag">Vidéo 1</span><h3 style="margin-top:10px">« La bonne charge. À chaque série. »</h3><p class="mut" style="font-size:17px">Motivation · 17 s · copie plan pour plan de ta référence, version RepCore. Pub, Insta, YouTube.</p></div>
  <div class="box r"><span class="tag">Vidéo 2</span><h3 style="margin-top:10px">« Comment je coache »</h3><p class="mut" style="font-size:17px">Vente · 2 min 40 · envoyée en message privé à chaque demande d'info. Donne envie de payer.</p></div>
  <div class="box"><span class="tag o">Vidéo 3</span><h3 style="margin-top:10px">« Bienvenue dans ton coaching » · diète stricte</h3><p class="mut" style="font-size:17px">Tuto · 4 min · envoyée juste après le 1er bilan.</p></div>
  <div class="box"><span class="tag o">Vidéo 4</span><h3 style="margin-top:10px">« Bienvenue dans ton coaching » · diète flexible</h3><p class="mut" style="font-size:17px">Tuto · 4 min · même tronc commun, module nutrition différent.</p></div>
 </div>
 <h2>Les 5 règles anti-kitsch</h2>
 {task('<b>3 couleurs, pas une de plus :</b> noir, blanc, rouge RepCore #E02020. Étalonnage contrasté, noirs profonds.','')}
-{task('<b>Un effet toutes les 5 secondes maximum.</b> Un flash, un glitch ou un éclair dure 2 à 4 images, jamais plus.','')}
+{task('<b>Un effet par plan, au maximum.</b> Un clignotement, un flare ou un éclair dure 2 à 4 images, jamais plus.','')}
 {task('<b>Les effets viennent de l’app :</b> l’éclair du record, le rang, le Wrapped. On ne colle pas d’effet « stock » qui n’existe pas dans le produit.','')}
 {task('<b>Le son fait 50 % de la vidéo :</b> respiration, disques qui claquent, un silence avant chaque révélation.','')}
 {task('<b>Rien de faux :</b> pas de chiffre inventé, pas de client sans accord écrit, pas de promesse de résultat.','')}
@@ -172,39 +172,80 @@ page('Avant de tourner', f'''
 ''')
 
 # ═════════════════════════ VIDÉO 1
+CSS += """
+.shotr .row>div{font-size:14.5px;line-height:1.38;display:block;padding:8px 9px}
+.shotr .row.h>div{font-size:12px;display:flex;align-items:center}
+.shotr .row>div:first-child{font-family:'Bebas Neue';font-size:26px;color:var(--r);line-height:1}
+.shotr .row>div:last-child{background:#FAFAFB}
+.shotr .row.h>div:last-child{background:var(--r);border-color:var(--r);color:#fff}
+.shotr .rf{width:100%;border-radius:6px;display:block}
+.shotr .tc{font-size:12px;color:var(--g);font-weight:700;margin-top:5px}
+.tl{display:flex;height:74px;border-radius:12px;overflow:hidden;margin-top:12px}
+.tl>div{display:flex;flex-direction:column;justify-content:center;padding:0 12px;color:#fff;font-size:14px;font-weight:700;border-right:3px solid #fff;line-height:1.25}
+.tl>div span{font-family:'Bebas Neue';font-size:24px;font-weight:400}
+.fx{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fx .box{padding:14px 18px}
+.fx h3{font-size:19px}
+.fx p{font-size:15.5px;color:#3A3A40;margin-top:3px}
+"""
+
+def shotsr(rows, h=180):
+    cols = ['#', 'Réf.', 'Temps', 'Image · cadrage (version RepCore)', 'Texte · son', 'Effet · IA (stylisation)', '✎ Modification']
+    rr = [[r[0], f'<img class="rf" src="ref/r{int(r[0]):02d}.jpg"><div class="tc">{r[1]}</div>', r[2], r[3], r[4], r[5], ''] for r in rows]
+    return '<div class="shotr">' + table(cols, rr, ['.32fr', '1.22fr', '.55fr', '2.05fr', '1.15fr', '1.85fr', '1.25fr'], h) + '</div>'
+
+# [n°, temps réf., temps RepCore, image, texte/son, effet]
 V1A = [
- ['1','0:00 – 0:03','<b>Noir total.</b> Puis un néon rouge qui s\'allume en grésillant au fond de la salle.','Texte blanc qui s\'écrit lettre par lettre : <b>« 5 h 47. »</b>','Son : respiration lente, grésillement. Clignotement du néon (2 images).',''],
- ['2','0:03 – 0:06','<b>Très gros plan</b> : un œil s\'ouvre, éclairé par l\'écran d\'un téléphone.','VO : « Personne ne viendra te chercher. »','Lumière d\'écran qui passe du bleu au rouge.',''],
- ['3','0:06 – 0:09','<b>Plan serré, ralenti</b> : des mains serrent des lacets, puis la sangle d\'un sac.','VO : « Personne ne verra les séances que tu ne rates pas. »','Ralenti 50 %. Son des lacets amplifié.',''],
- ['4','0:09 – 0:13','<b>Plan large en plongée</b> (coin haut de la salle) : une silhouette entre en contre-jour, la porte laisse passer la lumière.','—','<b>IA</b> : plan « salle vide » (prompt 1) si la vraie salle n\'est pas disponible.',''],
- ['5','0:13 – 0:16','<b>Gros plan ralenti</b> : la magnésie tombe des mains, les disques s\'emboîtent sur la barre.','—','Ralenti 100 i/s. Coup de basse sur le disque.',''],
- ['6','0:16 – 0:20','<b>Plan sur l\'épaule</b> : le téléphone posé sur le banc affiche « 48,75 kg · charge pour la première série ».','VO : « Mais quelque chose sait exactement ce que tu peux soulever aujourd\'hui. »','Remplacer l\'écran par la vraie capture (suivi d\'écran CapCut).',''],
- ['7','0:20 – 0:24','<b>Contre-plongée sous la barre</b> : une répétition lourde, visage dans l\'effort.','—','<b>Rampe de vitesse</b> : rapide à la descente, ralenti à la remontée. La musique décolle ici.',''],
+ ['1', '0,00 – 1,70', '1,7 s', "<b>Plan large, légère contre-plongée.</b> Tu es assis sur le hayon ou le capot de ta voiture, parking souterrain ou garage de nuit, néons froids. Tu parles avec les mains, un doigt levé, comme si tu expliquais ta séance.", "Musique : intro, une seule nappe.", "<b>Écran flottant</b> : l’accueil RepCore (« Salut Kevin · séance du jour ») apparaît à gauche de toi, grand, légèrement en perspective. Lueur rouge sur les bords."],
+ ['2', '1,70 – 2,40', '0,7 s', "<b>Même plan, caméra fixe.</b> Tu baisses la main, tu regardes l’écran.", "Petit grésillement électrique.", "<b>Clignotement</b> de l’écran flottant : 2 coupures irrégulières (opacité 100 → 15 → 100 %)."],
+ ['3', '2,40 – 3,40', '1,0 s', "<b>Même plan.</b> Tu te penches vers l’écran, puis tu te redresses.", "Clic d’interface quand l’écran change.", "<b>Fondu enchaîné dans l’écran</b> : l’accueil devient l’aperçu de séance (exercices + bouton « Commencer la séance »)."],
+ ['4', '3,40 – 4,20', '0,8 s', "<b>Plan large.</b> L’écran s’éteint, tu sautes du hayon. À l’atterrissage, un phare ou une lampe frappe l’objectif.", "Whoosh, puis le premier temps fort de la musique.", "<b>Flare</b> lumineux qui sert de transition vers la salle (raccord lumière). Disparition de l’écran en 4 images."],
+ ['5', '4,20 – 4,80', '0,6 s', "<b>Gros plan</b> : tes mains glissent un disque sur la machine. Caméra basse, profondeur de champ courte.", "Son du disque amplifié.", "Ralenti 50 %. <b>IA</b> (Higgsfield relight) : léger liseré rouge sur le métal."],
+ ['6', '4,80 – 5,30', '0,5 s', "<b>Plan large en contre-plongée</b> : tu es installé sur la machine (presse pectoraux ou développé), toute la salle derrière toi.", "Musique qui avance.", "Rien. Le plan respire."],
 ]
 V1B = [
- ['8','0:24 – 0:27','<b>Insert écran</b> : la série est validée, le chiffre monte, l\'éclair du record frappe le chiffre.','Texte : <b>« NOUVEAU RECORD »</b>','Utiliser la vidéo exportée par l\'app (record). Flash blanc 2 images.',''],
- ['9','0:27 – 0:31','<b>Plan moyen</b> : il repose la barre, regarde l\'écran, hoche la tête.','VO : « Séance après séance. Série après série. »','Silence d\'une demi-seconde avant la VO.',''],
- ['10','0:31 – 0:36','<b>Montage rythmé</b> : 8 micro-plans de 0,5 s (squat, tirage, presse, écran de badges, chrono, poignée de main).','—','Coupe sur chaque temps fort de la musique. <b>Raccords sur le geste</b>.',''],
- ['11','0:36 – 0:41','<b>Plan serré</b> sur une athlète (accord écrit) qui regarde l\'écran du cycle activé.','VO : « Même les semaines où ton corps dit autre chose. »','Aucune promesse chiffrée : l\'app adapte, l\'athlète garde la main.',''],
- ['12','0:41 – 0:46','<b>Travelling arrière</b> : sortie de la salle au lever du jour. L\'écran affiche le Wrapped « Ton mois en chiffres ».','VO : « Tu ne t\'entraînes plus au hasard. »','Lumière chaude du matin : seul moment non rouge de la vidéo.',''],
- ['13','0:46 – 0:51','<b>Noir.</b> Un éclair rouge dessine le logo RepCore.','Texte : <b>« La bonne charge, à chaque série. »</b>','Silence total, puis impact. <b>IA</b> : téléphone en rotation (prompt 4).',''],
- ['14','0:51 – 0:55','<b>Mock-up</b> : le téléphone avec l\'écran de séance.','Texte : <b>« 1 mois offert · lien en bio »</b>','Musique qui retombe, dernier battement de cœur.',''],
+ ['7', '5,30 – 5,73', '0,45 s', "<b>Très grosse contre-plongée</b>, caméra sous les poignées : les poignées passent devant l’objectif pendant la poussée.", "Expiration forte.", "Flou de mouvement naturel (vitesse d’obturation lente : 1/50)."],
+ ['8', '5,73 – 6,20', '0,45 s', "<b>Plan serré de profil</b> : tête baissée, écouteurs, un néon flou derrière toi. Moment de concentration.", "La musique se creuse d’un coup.", "Néon de fond qui « respire » (bokeh)."],
+ ['9', '6,20 – 7,17', '1,0 s', "<b>Plan subjectif (POV)</b> : tes deux mains tiennent le téléphone, tu saisis ta série (charge, répétitions) dans RepCore. Grand angle.", "Clics de saisie.", "Remplacer l’écran par une vraie capture si besoin (suivi d’écran CapCut)."],
+ ['10', '7,17 – 7,60', '0,45 s', "<b>Plan moyen en contre-plongée</b> : assis sur la machine, tu souris en regardant l’écran.", "—", "Rien."],
+ ['11', '7,60 – 8,50', '0,9 s', "<b>Insert écran, gros plan</b> : ton doigt valide la série, la charge proposée pour la suivante s’affiche.", "Clic + petit son de validation.", "Si c’est un record : l’<b>éclair rouge</b> de l’app frappe le chiffre (2 images, pas plus)."],
+ ['12', '8,50 – 9,03', '0,55 s', "<b>MAISON · Plan subjectif</b> : tu marches dans ta cuisine, téléphone en main, l’écran nutrition du jour visible. Même mouvement que le POV de la salle.", "Pas, porte du frigo.", "<b>Raccord sur le geste</b> : même main, même téléphone que le plan 9, on passe de la salle à la cuisine sans rien expliquer."],
 ]
+V1C = [
+ ['13', '9,03 – 9,27', '0,25 s', "<b>MAISON · Insert éclair</b> : la balance de cuisine affiche « 150 g » sous ton blanc de poulet ou ton riz.", "Bip de la balance.", "Coupé sec : c’est le plan le plus court. Raccord « poids » : la pile de la machine devient la balance."],
+ ['14', '9,27 – 9,93', '0,65 s', "<b>MAISON · Plan moyen</b> : tu prépares ta boîte repas sur le plan de travail, concentré, même énergie que pendant ta série.", "Couvercle qui claque.", "Lumière de cuisine éteinte, seule la hotte ou une lampe latérale allumée (clair-obscur)."],
+ ['15', '9,93 – 10,63', '0,7 s', "<b>MAISON · Plan moyen trois-quarts</b> : tu regardes ton téléphone. À côté de toi, l’écran flottant affiche ta journée nutrition (anneaux calories et protéines qui se remplissent).", "Petit son d’interface.", "<b>Écran flottant</b>, même style qu’au plan 1 (lueur rouge). Les anneaux se remplissent en 12 images."],
+ ['16', '10,63 – 11,33', '0,7 s', "<b>SALLE · Plan large en clair-obscur</b> : ta silhouette (de dos ou de profil), une seule lumière dure sur le côté. On devine le travail sans voir le visage.", "La musique monte une dernière fois.", "<b>IA</b> : ajouter une brume légère dans le faisceau (Higgsfield, prompt « haze »)."],
+ ['17', '11,33 – 12,17', '0,85 s', "<b>Plan fixe</b> : une poignée de poulie qui pend, éclairée à contre-jour par une lampe. Plus personne. La séance est finie.", "Dernière note de musique.", "Rien. Le silence visuel prépare le logo."],
+ ['18', '12,17 – 17,20', '5,0 s', "<b>Carton de fin</b> : fond noir, logo RepCore au centre, badges App Store et Google Play dessous. Fondu au noir sur la dernière seconde.", "Texte : <b>« La bonne charge. À chaque série. »</b> puis <b>« 1 mois offert · lien en bio »</b>", "Le logo s’allume avec un <b>éclair rouge</b> (comme dans l’app). Fondu au noir 0,8 s."],
+]
+
 page('Vidéo 1 · Motivation', f'''
-<div class="box d" style="padding:30px 34px;margin-bottom:28px"><div class="kick" style="margin:0">Vidéo 1 · motivation</div><div style="font-family:'Bebas Neue';font-size:66px;line-height:1;margin-top:6px">« Personne ne viendra te chercher »</div></div>
-<div class="pitch"><p><b>Le pitch.</b> 5 h 47, une salle vide, un néon qui s'allume. Personne ne regarde, personne ne félicite. Et pourtant, quelque chose sait exactement quelle charge mettre, et fait vibrer le moindre record. RepCore n'est pas une app de plus : c'est le partenaire de ceux qui viennent quand personne ne les voit.</p></div>
-{meta([('Durée','55 s'),('Format','16:9 · 4K'),('Lieu','Salle + noir'),('Diffusion','Insta · YouTube')])}
-<h2>Structure</h2>
-<div class="grid" style="grid-template-columns:repeat(4,1fr);gap:12px">
- <div class="box"><span class="tag o">0-13 s</span><h3 style="margin-top:8px">La solitude</h3><p class="mut" style="font-size:16px">L'effort que personne ne voit</p></div>
- <div class="box"><span class="tag o">13-24 s</span><h3 style="margin-top:8px">La révélation</h3><p class="mut" style="font-size:16px">L'app sait ce que tu peux soulever</p></div>
- <div class="box r"><span class="tag">24-41 s</span><h3 style="margin-top:8px">La montée</h3><p class="mut" style="font-size:16px">Records, badges, régularité</p></div>
- <div class="box"><span class="tag o">41-55 s</span><h3 style="margin-top:8px">L'identité</h3><p class="mut" style="font-size:16px">Logo, promesse, appel à l'action</p></div></div>
-<div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:24px;align-items:end">{mock('charge',250,'Plan 6 : la charge proposée')}{mock('apercu',250,'Plan 10 : la séance du jour')}{mock('evo',250,'Plan 12 : la progression')}</div>
-<p class="mut" style="font-size:16px;margin-top:10px">Musique : hybride « bande-annonce » (basses, cordes, montée), libre de droits. Elle décolle au plan 7 et se tait juste avant le logo.</p>
+<div class="box d" style="padding:28px 34px;margin-bottom:22px"><div class="kick" style="margin:0">Vidéo 1 · motivation · d’après ta référence</div><div style="font-family:'Bebas Neue';font-size:64px;line-height:1;margin-top:6px">« La bonne charge. À chaque série. »</div></div>
+<div class="pitch"><p><b>Le pitch.</b> Le même film que ta référence, plan pour plan : 17 secondes, 18 plans, zéro parole. Ton app prend vie à côté de toi, tu sautes dans la salle, chaque série est notée, et même ta cuisine fait partie de l’entraînement. Le spectateur ne lit rien : il <b>voit</b> que RepCore l’accompagne de la machine à l’assiette.</p></div>
+{meta([('Durée','17 s'),('Plans','18 · sans voix'),('Lieux','Parking · salle · cuisine'),('Diffusion','Insta · YouTube · pub')])}
+<h2 style="margin-top:22px">La répartition (identique à la référence)</h2>
+<div class="tl">
+ <div style="flex:4.2;background:#141416"><span>0 – 4,2 s</span>L’app prend vie · 1-4</div>
+ <div style="flex:4.3;background:#E02020"><span>4,2 – 8,5 s</span>La salle · 5-11</div>
+ <div style="flex:2.1;background:#8A1414"><span>8,5 – 10,6</span>La cuisine · 12-15</div>
+ <div style="flex:1.6;background:#3A3A40"><span>10,6 – 12,2</span>16-17</div>
+ <div style="flex:5;background:#0B0B0C"><span>12,2 – 17,2 s</span>Le logo · 18</div>
+</div>
+<p class="mut" style="font-size:15px;margin-top:8px">Rythme : plans longs au début (1 à 1,7 s), puis la salle et la cuisine s’accélèrent (0,25 à 0,9 s), puis 5 s de carton pour laisser le temps de mémoriser le nom.</p>
+<h2 style="margin-top:20px">Les 4 effets qui stylisent (et rien d’autre)</h2>
+<div class="fx">
+ <div class="box r"><h3>1 · L’écran flottant</h3><p>Plans 1-3 et 15. Une vraie capture RepCore, posée dans l’espace à côté de toi, avec une lueur rouge. CapCut : incrustation + suivi de mouvement. Caméra sur trépied = suivi inutile.</p></div>
+ <div class="box"><h3>2 · Le clignotement</h3><p>Plan 2. Deux coupures irrégulières de l’écran, comme un néon. Une seule fois dans la vidéo.</p></div>
+ <div class="box"><h3>3 · Le flare de transition</h3><p>Plan 4. Une lumière réelle (phare, lampe torche) qui frappe l’objectif quand tu atterris. Elle cache la coupe vers la salle.</p></div>
+ <div class="box"><h3>4 · L’IA d’ambiance</h3><p>Plans 5 et 16. Higgsfield pour un liseré rouge et une brume légère. On stylise tes vraies images, on n’invente pas de plan.</p></div>
+</div>
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:16px;align-items:end">{mock('apercu',165,'Écran flottant · plans 1-3')}{mock('charge',165,'Saisie de série · plans 9 et 11')}{mock('nutri',165,'Nutrition · plans 12 et 15')}</div>
 ''')
-page('Vidéo 1 · Motivation', f'''<div class="kick">Vidéo 1 · plan par plan (1/2)</div><h1 style="font-size:64px;margin-bottom:20px">La solitude, puis la révélation</h1>{shots(V1A,150)}''')
-page('Vidéo 1 · Motivation', f'''<div class="kick">Vidéo 1 · plan par plan (2/2)</div><h1 style="font-size:64px;margin-bottom:20px">La montée, puis l'identité</h1>{shots(V1B,150)}''')
+page('Vidéo 1 · Motivation', f'''<div class="kick">Vidéo 1 · plan par plan (1/3) · l’app prend vie</div><h1 style="font-size:60px;margin-bottom:16px">Le parking, l’écran, le saut</h1>
+<p class="mut" style="font-size:16px;margin-bottom:14px">Colonne « Réf. » : l’image de ta vidéo de référence et son minutage. Colonne « Temps » : la durée du plan dans la version RepCore.</p>{shotsr(V1A,205)}''')
+page('Vidéo 1 · Motivation', f'''<div class="kick">Vidéo 1 · plan par plan (2/3) · la salle</div><h1 style="font-size:60px;margin-bottom:16px">La série, la saisie, la cuisine</h1>{shotsr(V1B,215)}''')
+page('Vidéo 1 · Motivation', f'''<div class="kick">Vidéo 1 · plan par plan (3/3) · la diète et la fin</div><h1 style="font-size:60px;margin-bottom:16px">L’assiette, l’ombre, le logo</h1>{shotsr(V1C,215)}''')
 
 # ═════════════════════════ VIDÉO 2
 page('Vidéo 2 · Vente', f'''
@@ -313,9 +354,9 @@ page('Le tournage', f'''
 <h1>2 jours, <em>4 vidéos</em></h1>
 <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:24px">
  <div class="box r"><span class="tag">Jour 1 · maison</span><h3 style="margin-top:10px">Bureau du coach</h3><div class="tx" style="font-size:17px;margin-top:8px">
- {task('Matin : installer la lumière (schéma « maison »), tester le son','')}{task('Vidéo 2 : toutes les parties face caméra (plans 1 à 6, 8 à 10)','')}{task('Vidéos 3 et 4 : tronc commun face caméra + les 2 modules nutrition','')}{task('Après-midi : enregistrements d’écran sur un compte de démo propre','')}{task('Inserts : bureau, livres, diplôme, carnet, ordinateur','')}</div></div>
+ {task('Matin : installer la lumière (schéma « maison »), tester le son','')}{task('Vidéo 2 : toutes les parties face caméra (plans 1 à 6, 8 à 10)','')}{task('Vidéos 3 et 4 : tronc commun face caméra + les 2 modules nutrition','')}{task('Après-midi : enregistrements d’écran sur un compte de démo propre','')}{task('Inserts : bureau, livres, diplôme, carnet, ordinateur','')}{task('Vidéo 1 · cuisine le soir : plans 12 à 15 (balance, boîte repas)','')}</div></div>
  <div class="box"><span class="tag o">Jour 2 · salle</span><h3 style="margin-top:10px">Heure creuse, accord écrit</h3><div class="tx" style="font-size:17px;margin-top:8px">
- {task('Lumière « clair-obscur », néons à moitié éteints si possible','')}{task('Vidéo 1 : tous les plans (1 à 14)','')}{task('Vidéo 2 : plans d’illustration (5, 7) sans parole','')}{task('Ralentis : magnésie, disques, lacets (50-100 i/s)','')}{task('Athlète filmée pour le plan 11 : accord écrit signé avant','')}</div></div></div>
+ {task('Lumière « clair-obscur », néons à moitié éteints si possible','')}{task('Vidéo 1 : parking (plans 1 à 4) puis salle (5 à 11, 16, 17)','')}{task('Vidéo 2 : plans d’illustration (5, 7) sans parole','')}{task('Ralentis : magnésie, disques, lacets (50-100 i/s)','')}{task('Toute personne visible à l’image : accord écrit signé avant','')}</div></div></div>
 <h2>Avant de dire « action »</h2>
 {task('Mode avion, notifications coupées, batterie et stockage pleins','')}
 {task('Exposition et mise au point verrouillées (appui long sur l’écran)','')}
@@ -324,18 +365,19 @@ page('Le tournage', f'''
 {task('Consentements signés (modèle : CONSENTEMENT-TEMOIGNAGE.md) et autorisation de la salle','')}
 {task('Musique libre de droits choisie pour chaque vidéo','')}
 <h2>✎ Ce qui manque / à acheter</h2>
-{lines(4)}
+{lines(3)}
 ''')
 
 page('Le tournage', f'''
 <div class="kick">Le montage</div>
 <h1>La banque d'effets, <em>utilisés avec parcimonie</em></h1>
 {table(['Effet','Où','Réglage','✎ Testé'],[
- ['<b>Apparition lettre par lettre</b>','V1 plan 1, titres de chapitre','Blanc, Bebas Neue, 2 images par lettre',cb('s')],
- ['<b>Clignotement néon</b>','V1 plan 1','Opacité 100 → 20 → 100 %, 2 fois, irrégulier',cb('s')],
- ['<b>Flash blanc</b>','Record (V1 plan 8)','2 images, jamais deux flashs à la suite',cb('s')],
- ['<b>Éclair rouge</b>','Record, logo','Exporté de l’app (vidéo de record ou de rang)',cb('s')],
- ['<b>Rampe de vitesse</b>','V1 plan 7, montage rythmé','200 % → 30 % sur l’instant clé',cb('s')],
+ ['<b>Écran flottant</b>','V1 plans 1-3 et 15','Vraie capture + lueur rouge, trépied, incrustation CapCut',cb('s')],
+ ['<b>Apparition lettre par lettre</b>','Titres de chapitre (tutos)','Blanc, Bebas Neue, 2 images par lettre',cb('s')],
+ ['<b>Clignotement</b>','V1 plan 2 (écran flottant)','Opacité 100 → 20 → 100 %, 2 fois, irrégulier',cb('s')],
+ ['<b>Flare de transition</b>','V1 plan 4 (le saut)','Lumière réelle dans l’objectif, coupe cachée dedans',cb('s')],
+ ['<b>Éclair rouge</b>','V1 plans 11 et 18 (record, logo)','Exporté de l’app (vidéo de record ou de rang)',cb('s')],
+ ['<b>Ralenti</b>','V1 plan 5 (le disque)','Filmé en 60 i/s, lu à 50 %',cb('s')],
  ['<b>Glitch court</b>','V2 passage « avant / après »','2 à 3 images, décalage rouge',cb('s')],
  ['<b>Mock-up qui apparaît</b>','V2 plan 6, tutos','Glissement par la gauche + ombre rouge',cb('s')],
  ['<b>Cercle rouge sur un bouton</b>','Tutos','Trait 6 px, apparition en 6 images',cb('s')],
