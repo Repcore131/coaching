@@ -66268,9 +66268,10 @@ async function testExercices(){
       const r=restitutionBilan(_r81U({masquerPoids:true}),Date.now());
       if(r.lignes.some(l=>l.libelle==='Poids')) return _echec('poids au bilan précédent');
       return !(r.depuisDebut&&r.depuisDebut.lignes.some(l=>l.cle==='poids'))?true:_echec('poids depuis le début');});
-    ok('Restitution : bilan validé sans photos alors que le précédent en avait → « Ajoute tes photos quand tu peux »',()=>{
+    // BUILD 1917 : la phrase devient « Tes photos manquent : ajoute-les à ce bilan… ».
+    ok('Restitution : bilan validé sans photos alors que le précédent en avait → « Tes photos manquent »',()=>{
       const u=_r81U(); u.bilans[1].photos={face:'https://x/f.jpg'};
-      return /Ajoute tes photos quand tu peux/.test(_htmlRestitutionBilan(u))?true:_echec('ligne absente');});
+      return /Tes photos manquent/.test(_htmlRestitutionBilan(u))?true:_echec('ligne absente');});
 
     // ══ BUILD 1880 : LE POIDS DU BILAN VIENT DES PESÉES ══
     const _ppJ=k=>localISODate(new Date(Date.now()-k*864e5));
@@ -74250,6 +74251,32 @@ async function testExercices(){
     ok('1916 — invitation aux notifications repliée en <details> à la première séance',()=>{
       const s=String(_rendreInvitationNotif);
       return /_finPremiere/.test(s)&&/<details class="wd-notif-det">/.test(s)?true:_echec('pas de details');});
+
+    // ══ BUILD 1917 — DEPUIS LE DÉPART, ET L'AVANT/APRÈS EN VIGNETTE ════════════
+    ok('1917 — restitutionBilan : depuisDepart, avantApres (face d’abord, premier bilan qui la porte)',()=>{
+      const J=864e5, t0=Date.now()-60*J;
+      const u=Object.assign(_banAth(),{bilans:[
+        {type:'depart',date:t0,'deb-weight':'80',photos:{face:'data:image/png;base64,QQ',side:'data:image/png;base64,Qg'}},
+        {type:'coaching',date:t0+20*J,'bil-weight':'79',photos:{face:'data:image/png;base64,Qw'}},
+        {type:'coaching',date:t0+42*J,'bil-weight':'77.5',photos:{side:'data:image/png;base64,RA',face:'data:image/png;base64,RQ'}}]});
+      const r=restitutionBilan(u,Date.now());
+      if(!r||r.depart) return _echec('restitution : '+JSON.stringify(r&&r.depart));
+      if(r.depuisDepart!==r.depuisDebut||!r.depuisDepart) return _echec('depuisDepart absent');
+      if(!r.avantApres||r.avantApres.vue!=='face'||r.avantApres.avant.date!==t0) return _echec('avantApres : '+JSON.stringify(r.avantApres&&{v:r.avantApres.vue,d:r.avantApres.avant.date}));
+      const h=_htmlRestitutionBilan(u);
+      if(!/Avant \/ après/.test(h)||(h.match(/<img /g)||[]).length<2) return _echec('vignette absente');
+      return /Voir mon avant\/après/.test(h)?true:_echec('bouton absent');});
+    ok('1917 — plan B : photos oubliées → « Tes photos manquent » et « Ajouter mes photos » à CE bilan',()=>{
+      const J=864e5, t0=Date.now()-30*J;
+      const u=Object.assign(_banAth(),{bilans:[
+        {type:'depart',date:t0,'deb-weight':'80',photos:{face:'data:image/png;base64,QQ'}},
+        {type:'coaching',date:t0+20*J,'bil-weight':'79'}]});
+      const r=restitutionBilan(u,Date.now());
+      if(!r.photosOubliees) return _echec('oubli non vu');
+      if(r.avantApres) return _echec('vignette sans photo du jour');
+      const h=_htmlRestitutionBilan(u);
+      if(!/Tes photos manquent/.test(h)) return _echec('phrase');
+      return /modifierBilan\([^)]*'photos'\)">Ajouter mes photos/.test(h)?true:_echec('bouton vers ce bilan absent');});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

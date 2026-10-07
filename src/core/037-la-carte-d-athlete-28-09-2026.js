@@ -1152,10 +1152,15 @@ function restitutionBilan(user,now){
   const _sansPoids=!!user.masquerPoids||(function(){ try{ return aTCA(user); }catch(e){ return false; } })();
   // BUILD 1881 : DEPUIS LE DÉBUT, et le constat des photos.
   try{ out.depuisDebut=depuisDebutBilan(user,bl,_sansPoids); }catch(e){ out.depuisDebut=null; }
+  // BUILD 1917 : le même relevé, sous le nom du lot (« depuis le départ »).
+  out.depuisDepart=out.depuisDebut;
   try{
     const ph=b=>BIL_VUES.filter(v=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } }).length;
     out.photosOubliees=ph(der)===0&&ph(prev)>0;
   }catch(e){}
+  // BUILD 1917 : L'AVANT/APRÈS EN VIGNETTE. La même vue, sur le PREMIER bilan
+  // qui la porte et sur celui qu'on vient d'envoyer ; face d'abord.
+  try{ out.avantApres=avantApresBilan(bl); }catch(e){ out.avantApres=null; }
   if(!_sansPoids){
     const a=getBW(prev), b=getBW(der);
     if(a!=null&&b!=null){
@@ -1186,6 +1191,20 @@ function restitutionBilan(user,now){
  * le poids (moyenne 7 j quand il y a des pesées) et les 2 mensurations qui ont
  * le plus bougé, premier relevé réel → dernier relevé réel. null sans écart.
  */
+// {vue, avant, apres} (les deux bilans), ou null. Le dernier bilan doit porter
+// la vue, et un bilan PLUS ANCIEN aussi.
+function avantApresBilan(bl){
+  const l=Array.isArray(bl)?bl:[];
+  if(l.length<2) return null;
+  const der=l[l.length-1];
+  const a=v=>{ try{ return photoBilanExiste(der,v); }catch(e){ return false; } };
+  const vues=['face'].concat(BIL_VUES.filter(v=>v!=='face')).filter(v=>BIL_VUES.indexOf(v)>=0&&a(v));
+  for(const v of vues){
+    const av=l.slice(0,-1).find(b=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } });
+    if(av) return {vue:v,avant:av,apres:der};
+  }
+  return null;
+}
 function depuisDebutBilan(user,bl,sansPoids){
   const l=bl||bilansOrdonnes(user);
   if(l.length<2) return null;
@@ -1275,7 +1294,16 @@ function _htmlRestitutionBilan(user){
   if(r&&!r.depart&&r.depuisDebut)
     corps+='<div class="rb-carte"><div class="rb-titre-carte">Depuis le début ('+r.depuisDebut.semaines+' semaine'+(r.depuisDebut.semaines>1?'s':'')+')</div>'
       +r.depuisDebut.lignes.map(l=>ligne({libelle:l.libelle.charAt(0).toUpperCase()+l.libelle.slice(1),valeur:l.valeur,accord:l.accord})).join('')+'</div>';
-  if(r&&r.photosOubliees) corps+='<p class="rb-texte">Ajoute tes photos quand tu peux.</p>';
+  // BUILD 1917 : la vignette avant/après, et le plan B quand les photos manquent.
+  if(r&&!r.depart&&r.avantApres){
+    const aa=r.avantApres, sa=photoBilanSrc(aa.avant,aa.vue), sb=photoBilanSrc(aa.apres,aa.vue);
+    const d=b=>{ try{ return dateLocaleDeCle(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return ''; } };
+    if(sa&&sb) corps+='<div class="rb-carte rb-aa"><div class="rb-titre-carte">Avant / après</div>'
+      +'<div class="rb-aa-g"><figure><img src="'+escapeHtml(sa)+'" alt="Avant, '+escapeHtml(d(aa.avant))+'" loading="lazy"><figcaption>'+escapeHtml(d(aa.avant))+'</figcaption></figure>'
+      +'<figure><img src="'+escapeHtml(sb)+'" alt="Après, '+escapeHtml(d(aa.apres))+'" loading="lazy"><figcaption>'+escapeHtml(d(aa.apres))+'</figcaption></figure></div>'
+      +'<button type="button" class="btn btn-outline btn-m" onclick="ouvrirAvantApres(\'athlete\')">Voir mon avant/après</button></div>';
+  }
+  if(r&&r.photosOubliees) corps+='<p class="rb-texte rb-photos-manquent">Tes photos manquent : ajoute-les à ce bilan, il reste ouvert pour elles.</p>';
   return '<h1 class="rb-titre">Bilan enregistré</h1>'
     +corps
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'

@@ -13685,3 +13685,9 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 #wd-ressenti.wd-replie{display:none}
 #wd-ressenti-ouvrir{width:100%;margin:8px 0}
 .wd-notif-det>summary{cursor:pointer;font-size:var(--fs-sm);font-weight:700;color:var(--sub);padding:8px 0}
+/* BUILD 1917 — la vignette avant/après de la restitution du bilan. */
+.rb-aa .rb-aa-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 10px}
+.rb-aa figure{margin:0}
+.rb-aa img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:var(--r-2);display:block;background:var(--surface-2)}
+.rb-aa figcaption{font-size:var(--fs-xs);color:var(--sub);text-align:center;margin-top:4px}
+.rb-aa .btn{width:100%}
