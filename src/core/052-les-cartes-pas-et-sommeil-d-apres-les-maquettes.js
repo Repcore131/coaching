@@ -1741,10 +1741,10 @@ function jsArg(v){ return escapeHtml(JSON.stringify(String(v==null?'':v))); }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 // ══ LES ERREURS QU'ON NE MONTRE PAS, MAIS QU'ON GARDE (05/10/2026) ══════════
 // Un try/catch vide autour de saveUser avalait l'échec sans trace : la saisie
-// était perdue, et rien, nulle part, ne permettait de le savoir. Les 50
+// était perdue, et rien, nulle part, ne permettait de le savoir. Les 20
 // dernières sont gardées EN MÉMOIRE (window._rcErreurs) et dites à la console.
 // Aucun envoi réseau : ce qui échoue ici peut porter des données de santé.
-const RC_ERREURS_MAX=50;
+const RC_ERREURS_MAX=20; // BUILD 1905 : comme les erreurs de la page, qui partagent le tableau.
 function rcErreurMuette(ou,e){
   try{
     const l=Array.isArray(window._rcErreurs)?window._rcErreurs:(window._rcErreurs=[]);

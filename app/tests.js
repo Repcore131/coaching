@@ -73803,6 +73803,42 @@ async function testExercices(){
         return bilData['bil-weight']==='72.5'?true:_echec('rangé : '+bilData['bil-weight']);
       } finally { zone.remove(); if(ancien) ancien.id='bil-content'; bilType=_bt; bilData=_bd; bilStep=_bs; }});
 
+    // ══ BUILD 1905 — L'INSCRIPTION DU WORKER NE LAISSE RIEN « UNCAUGHT » ══════
+    okA('1905 — rcEnregistrerSW : résout la registration, ou null (undefined, rejet, exception, pas de worker) ; un refus va dans _swEchec',async()=>{
+      const faux=[], av=window._swEchec;
+      try{
+        const reg={scope:'/'};
+        if(await rcEnregistrerSW({register:()=>Promise.resolve(reg)})!==reg) faux.push('registration perdue');
+        if(await rcEnregistrerSW({register:()=>Promise.resolve(undefined)})!==null) faux.push('undefined');
+        window._swEchec=undefined;
+        if(await rcEnregistrerSW({register:()=>Promise.reject(new Error('refus banc'))})!==null) faux.push('rejet');
+        if(!window._swEchec||window._swEchec.message!=='refus banc') faux.push('_swEchec : '+JSON.stringify(window._swEchec));
+        if(await rcEnregistrerSW({register:()=>{ throw new Error('leve'); }})!==null) faux.push('exception');
+        if(await rcEnregistrerSW(null)!==null||await rcEnregistrerSW({})!==null) faux.push('pas de worker');
+        let url=''; await rcEnregistrerSW({register:u=>{ url=u; return Promise.resolve(reg); }});
+        if(url!=='./sw.js') faux.push('url : '+url);
+      }finally{ window._swEchec=av; }
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1905 — window._rcErreurs garde les erreurs de la page et les promesses rejetées, 20 au plus',()=>{
+      const av=Array.isArray(window._rcErreurs)?window._rcErreurs.slice():window._rcErreurs;
+      try{
+        window._rcErreurs=[];
+        window.dispatchEvent(new ErrorEvent('error',{message:'banc-1905'}));
+        const ev=new Event('unhandledrejection'); ev.reason=new Error('banc-promesse'); window.dispatchEvent(ev);
+        const l=window._rcErreurs;
+        if(!l.some(x=>x.ou==='window'&&x.message==='banc-1905')) return _echec('erreur non gardée : '+JSON.stringify(l));
+        if(!l.some(x=>x.ou==='promesse'&&x.message==='banc-promesse')) return _echec('promesse non gardée');
+        for(let i=0;i<30;i++) window.dispatchEvent(new ErrorEvent('error',{message:'b'+i}));
+        return window._rcErreurs.length<=20?true:_echec(window._rcErreurs.length+' gardées');
+      }finally{ window._rcErreurs=av; }});
+    ok('1905 — source : controllerchange hors du then, reg.update gardé, plus de register() nu',()=>{
+      const h=document.documentElement.outerHTML;
+      const src=[...document.scripts].map(x=>x.textContent).join('\n');
+      if(/serviceWorker\.register\(['"]\.\/sw\.js['"]\)\.then/.test(src)) return _echec('register().then nu');
+      if(/then\(g=>\{ if\(g\) g\.update\(\); \}\)/.test(src)) return _echec('g.update() sans garde ni catch');
+      if(!/rcEnregistrerSW\(navigator\.serviceWorker/.test(src)) return _echec('rcEnregistrerSW non appelé');
+      return h?true:_echec('page vide');});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
@@ -89598,7 +89634,10 @@ vendredi 78 6h 44m
         if(sonde.indexOf('g.'+'update()')<0) return _echec('update() n’est pas dans la sonde');
         // 05/10/2026 : .then(reg=>…) — reg sert à la garde « if(!reg) return », pas à update() :
         // le compte d'appels ci-dessus suffit à le garantir.
-        return /register\('\.\/sw\.js'\)\.then\((\(\)|reg)=>/.test(page)?true:_echec('l’inscription appelle encore reg.update()');});
+        // BUILD 1905 : l'inscription passe par rcEnregistrerSW, qui n'appelle pas update().
+        const ins=String(window.rcEnregistrerSW||'');
+        if(/update\(/.test(ins)) return _echec('rcEnregistrerSW appelle update()');
+        return /rcEnregistrerSW\(navigator\.serviceWorker/.test(page)?true:_echec('l’inscription ne passe pas par rcEnregistrerSW');});
       ok('Le worker laisse version.json au réseau, et reporte motion-lab.js?v= comme les actifs rc-*',()=>{
         const sw=_lireSync('sw.js?t='+Date.now());
         if(sw==null) return _echec('sw.js illisible');
@@ -90000,9 +90039,9 @@ vendredi 78 6h 44m
         if(r!==false) return _echec('rend '+r);
         const e=window._rcErreurs[0];
         if(window._rcErreurs.length!==1||!/Ton check-in/.test(e.ou)||!e.message) return _echec(JSON.stringify(window._rcErreurs));
-        // LA BORNE : 50 entrées, les plus récentes.
+        // LA BORNE : 20 entrées, les plus récentes (build 1905, partagée avec les erreurs de la page).
         for(let i=0;i<60;i++) rcErreurMuette('borne '+i,new Error('x'));
-        return (window._rcErreurs.length===50&&window._rcErreurs[49].ou==='borne 59')?true:_echec(window._rcErreurs.length+' entrées');
+        return (window._rcErreurs.length===20&&window._rcErreurs[19].ou==='borne 59')?true:_echec(window._rcErreurs.length+' entrées');
       } finally { _seRanger(sv); }});
     ok('Écriture : stockage plein, le toast orange dit la perte UNE fois par minute, pas à chaque série',()=>{
       const sv=_seMonter();
@@ -90033,7 +90072,8 @@ vendredi 78 6h 44m
       const n=(_prodSrc().match(/function _lundiDe\(/g)||[]).length;
       return n===1?true:_echec(n+' déclarations : la seconde écraserait la première sans un mot');});
     ok('L’enregistrement du service worker a son .catch : un refus se dit, sans « Uncaught (in promise) »',()=>{
-      const s=_prodSrc(), i=s.indexOf("serviceWorker.register('./sw.js')");
+      // BUILD 1905 : l'appel vit dans rcEnregistrerSW (sw.register(url||'./sw.js')).
+      const s=_prodSrc(), i=s.indexOf("sw.register(url||'./sw.js')");
       if(i<0) return _echec('enregistrement introuvable');
       const j=s.indexOf('.catch(',i);
       if(j<0||j-i>800) return _echec('pas de .catch après serviceWorker.register');

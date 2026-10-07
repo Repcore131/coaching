@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1904';
+window.RC_BUILD='1905';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -217,6 +217,33 @@ window._rcServiParCache=(()=>{
     return !!(e&&e.transferSize===0&&e.decodedBodySize>0);
   }catch(err){ return false; }
 })();
+// ══ BUILD 1905 — LES ERREURS DE LA PAGE, GARDÉES EN MÉMOIRE ════════════════
+// window._rcErreurs : les 20 dernières (erreur non rattrapée, promesse
+// rejetée sans .catch), sans aucun envoi réseau. Posé AVANT l'inscription du
+// worker : c'est elle qui, refusée, laissait un « Uncaught (in promise) ».
+(function(){
+  const garder=(ou,m)=>{ try{
+    const l=Array.isArray(window._rcErreurs)?window._rcErreurs:(window._rcErreurs=[]);
+    l.push({ou:ou,message:String(m==null?'':m).slice(0,300),at:Date.now()});
+    if(l.length>20) l.splice(0,l.length-20);
+  }catch(_){} };
+  window.addEventListener('error',e=>garder('window',e&&e.message));
+  window.addEventListener('unhandledrejection',e=>{ const r=e&&e.reason; garder('promesse',(r&&r.message)||r); });
+})();
+// L'INSCRIPTION DU WORKER, TESTABLE. Rend TOUJOURS une promesse tenue : la
+// registration, ou null (pas de worker, register qui résout undefined, qui
+// lève ou qui rejette). Un refus est noté dans window._swEchec — jamais en
+// erreur non rattrapée.
+window.rcEnregistrerSW=function(sw,url){
+  if(!sw||typeof sw.register!=='function') return Promise.resolve(null);
+  let p;
+  try{ p=sw.register(url||'./sw.js'); }catch(e){ p=Promise.reject(e); }
+  return Promise.resolve(p).then(reg=>reg||null).catch(e=>{
+    window._swEchec={at:Date.now(),message:String((e&&e.message)||e||'')};
+    try{ console.warn('[RepCore] service worker non enregistré',e); }catch(_){}
+    return null;
+  });
+};
 if('serviceWorker' in navigator){
   // ══ LE GARDE-FOU DE VERSION ══════════════════════════════════════════════
   //
@@ -373,7 +400,7 @@ if('serviceWorker' in navigator){
         //   tel quel ; son message « maj » rechargera au prochain ecran sur.
         //   L'inscription ne l'appelle plus a chaque ouverture : le navigateur
         //   verifie deja sw.js de lui-meme, et cette sonde dit quand c'est utile.
-        try{ navigator.serviceWorker.getRegistration().then(g=>{ if(g) g.update(); }).catch(()=>{}); }catch(e){}
+        try{ navigator.serviceWorker.getRegistration().then(g=>{ if(g&&typeof g.update==='function') return Promise.resolve(g.update()).catch(()=>{}); }).catch(()=>{}); }catch(e){}
         window._swUpdatePending=true; return false;
       }
       sessionStorage.setItem('rc_maj_forcee',String(distant));
@@ -437,13 +464,16 @@ if('serviceWorker' in navigator){
   //   (navigation privée, HTTP, quota) partait en « Uncaught (in promise) »
   //   dans la console, sans dire de quoi il s'agissait. Pas d'appel de mise
   //   à jour ici : la sonde de version s'en charge (voir plus haut).
-  navigator.serviceWorker.register('./sw.js').then(reg=>{
-    if(!reg) return;
+  // BUILD 1905 : l'écoute de `controllerchange` est posée HORS du then —
+  //   elle ne dépend pas de ce que rend register(), qui peut résoudre
+  //   undefined sur certains navigateurs embarqués.
+  try{
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
       if(!_rcControleurInitial) return;
       _rcRechargerSiPossible();
     });
-  }).catch(e=>{ try{ console.warn('[RepCore] service worker non enregistré',e); }catch(_){} });
+  }catch(e){}
+  window.rcEnregistrerSW(navigator.serviceWorker,'./sw.js');
 }</script>
 <!-- Encodeur QR local : 10 Ko, et il remplace un appel reseau a chaque
      ouverture de la fenetre de synchronisation. EN DEFER (01/10/2026) : il ne
@@ -724,13 +754,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1904.css">
+<link rel="stylesheet" href="./rc-style.1905.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1904.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1905.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -6270,5 +6300,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1904.js"></script>
+<script src="./rc-core.1905.js"></script>
 </body></html>
