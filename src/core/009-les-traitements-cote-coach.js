@@ -1637,7 +1637,7 @@ async function _canalCharger(){
   // seul qui debloque quoi que ce soit, parce que la clef ne peut revenir que
   // par un code d'acces neuf.
   if(!CLOUD.ok()){
-    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reviens quand tu auras du réseau.');
+    fil.innerHTML=_canalVide('Annonces indisponibles hors connexion.','Reviens quand tu auras du réseau.');
     return;
   }
   if(!cle){
@@ -1659,7 +1659,7 @@ async function _canalCharger(){
   catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
     return;

@@ -316,7 +316,7 @@ const ACCUEIL_BLOCS=Object.freeze([
   {cle:'croissance',lib:'Arrivées par mois'},
   {cle:'kit',lib:'Mon kit de la semaine'},
   {cle:'recap',lib:'Récap de l’équipe'},
-  {cle:'raccourcis',lib:'Canal, groupe, CRM, code'},
+  {cle:'raccourcis',lib:'Annonces, groupe, CRM, code'},
   {cle:'portefeuille',lib:'Barre du portefeuille'},
   {cle:'chrono',lib:'Temps passé par athlète'},
   {cle:'pilotage',lib:'Pilotage'},

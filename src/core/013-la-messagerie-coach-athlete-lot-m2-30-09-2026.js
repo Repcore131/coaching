@@ -309,6 +309,7 @@ async function msgOuvrirFil(athleteCle){
     // Le profil public du coach, rangé par pullProfilCoach (hors du dossier).
     try{ const cp=JSON.parse(localStorage.getItem('rc_coach_profil')||'null'); if(cp&&cp.key===u.coachEmailKey&&cp.d&&cp.d.fname) nom=cp.d.fname; }catch(e){}
     goAvecRetour('s-messages');
+    try{ _motEdition=false; renderMotCoach(); }catch(e){}
   }
   _msgFil={cle,nom,liste:[],complet:false,charge:true};
   _rendreFil();
@@ -413,7 +414,7 @@ async function _rendreEntreeMessagesAthlete(force){
   if(!z) return false;
   if(!u||u.role==='coach'||!u.coachEmailKey){ z.innerHTML=''; return false; }
   const peindre=()=>{ const n=_msgAth?_msgAth.nonLus:0;
-    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Mon coach'
+    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Écrire à mon coach'
       +(n?' <span class="msg-pastille">'+n+'</span>':'')+'</span><span class="rel-entree-e">'+(n?n+' message'+(n>1?'s':'')+' non lu'+(n>1?'s':''):'Lui écrire, en privé')+'</span></button>'; };
   peindre();
   if(!force&&_msgAth&&Date.now()-_msgAth.t<MSG_CACHE_MS) return true;

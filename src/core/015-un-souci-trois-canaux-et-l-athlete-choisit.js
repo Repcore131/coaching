@@ -18,10 +18,13 @@ function _rendreContactCoach(u,users){
   const bouts=[];
   if(c.whatsapp) bouts.push(['a','https://wa.me/'+c.whatsapp,'WhatsApp','wa']);
   if(c.mail) bouts.push(['a','mailto:'+c.mail,'E-mail','ml']);
-  // LE MOT DANS L'APPLICATION est toujours disponible : il ne depend d'aucun
-  // numero ni d'aucun consentement, et il reste chez soi.
-  bouts.push(['b','motOuvrirDepuisContact()','Dans l\'app','ap']);
-  if(!bouts.length){ z.innerHTML=''; return false; }
+  // BUILD 1888 : « DANS L'APP » OUVRE LA MESSAGERIE. Le mot au coach n'était
+  // pas un message (aucune notification) : l'athlète croyait avoir écrit. Il
+  // vit désormais en tête du fil, comme une note épinglée.
+  bouts.push(['b','msgOuvrirFil()','Dans l\'app','ap']);
+  // Sans WhatsApp ni e-mail, la feuille n'offrirait que la messagerie, déjà
+  // ouverte par « Écrire à mon coach » juste au-dessus : pas de second lien.
+  if(bouts.length<2){ z.innerHTML=''; _contactBouts=[]; return false; }
   // La mention de sortie et les horaires restent portees par l'info-bulle,
   // comme avant — voir la note de CONTACT_SORTIE.
   let titre='';
@@ -66,13 +69,6 @@ function _journaliserContactCoach(){
   try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){ rcErreurMuette('_journaliserContactCoach',e); }
   return true;
 }
-// Ouvre l'editeur du mot au coach ET l'amene sous les yeux : il vit plus bas
-// dans la page, et l'ouvrir sans y aller donnerait un bouton qui ne fait rien.
-function motOuvrirDepuisContact(){
-  motOuvrir();
-  try{ _defiler(document.getElementById('clh-mot'),{block:'center'}); }catch(e){}
-  return true;
-}
 function renderMotCoach(){
   const z=document.getElementById('clh-mot');
   if(!z) return false;
@@ -85,7 +81,7 @@ function renderMotCoach(){
   if(_motEdition){
     z.innerHTML='<div style="'+enc+'">'
       +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-      +'text-transform:uppercase;margin-bottom:8px">À dire à ton coach</div>'
+      +'text-transform:uppercase;margin-bottom:8px">Note épinglée pour ton coach</div>'
       +'<textarea id="mot-texte" rows="4" maxlength="'+MOT_COACH_MAX+'" '
       +'placeholder="Ce qui n’entre dans aucune case : une douleur, une semaine compliquée, '
       +'un truc qui te bloque, une bonne nouvelle." '
@@ -100,6 +96,13 @@ function renderMotCoach(){
     const t=document.getElementById('mot-texte'); if(t) t.focus();
     return true;
   }
+  // BUILD 1888 : EN TÊTE DU FIL (s-messages), une ligne discrète tant que la
+  // note est vide — c'est le seul endroit où elle s'écrit désormais.
+  if(!m&&z.closest&&z.closest('#s-messages')){
+    z.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="motOuvrir()">'
+      +icon('pencil',12)+' Note épinglée pour ton coach</button>';
+    return true;
+  }
   // ⚠ PLUS DE CARTE D'INVITATION QUAND IL N'Y A RIEN A DIRE. « Quelque chose
   // a dire a ton coach ? » occupait un cadre entier de l'accueil pour poser
   // une question a laquelle on repond rarement — et le meme geste est
@@ -109,7 +112,7 @@ function renderMotCoach(){
   z.innerHTML='<div style="'+enc+'">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-    +'text-transform:uppercase">À dire à ton coach</span>'
+    +'text-transform:uppercase">Note épinglée pour ton coach</span>'
     +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
       +new Date(m.maj).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span>':'')
     +'</div>'

@@ -73408,6 +73408,43 @@ async function testExercices(){
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
 
+    // ══ BUILD 1888 — ÉCRIRE À SON COACH : UNE SEULE PORTE, LA MESSAGERIE ══
+    ok('1888 — la feuille de contact n’appelle plus motOuvrirDepuisContact ; « Dans l’app » ouvre msgOuvrirFil',()=>{
+      if(typeof window.motOuvrirDepuisContact==='function') return _echec('motOuvrirDepuisContact existe encore');
+      const src=String(_rendreContactCoach);
+      if(/motOuvrirDepuisContact/.test(src)) return _echec('la feuille l’appelle encore');
+      return /\['b','msgOuvrirFil\(\)','Dans l\\'app'/.test(src)?true:_echec('« Dans l’app » ne mène pas à msgOuvrirFil');});
+    ok('1888 — l’accueil n’a qu’un seul élément vers msgOuvrirFil, « Écrire à mon coach »',()=>{
+      const sU=currentUser, z=document.getElementById('clh-messages');
+      try{
+        currentUser=Object.assign({},sU||{},{role:'athlete',coachEmailKey:'k@t,fr',coachId:'cK'});
+        _msgAth={t:Date.now(),nonLus:0};
+        _rendreEntreeMessagesAthlete();
+        const l=[...document.querySelectorAll('#s-client-home [onclick*="msgOuvrirFil"]')];
+        if(l.length!==1) return _echec(l.length+' élément(s)');
+        if(!/Écrire à mon coach/.test(l[0].textContent)) return _echec('libellé : '+l[0].textContent);
+        return /msgOuvrirFil/.test(String(loadClientHome))?_echec('le bandeau coach garde « Écrire »'):true;
+      }finally{ currentUser=sU; _msgAth=null; if(z) z.innerHTML=''; }});
+    ok('1888 — la note épinglée pour le coach est en tête du fil (s-messages), plus sur l’accueil',()=>{
+      const n=document.getElementById('clh-mot');
+      if(!n||!n.closest('#s-messages')) return _echec('#clh-mot n’est pas dans s-messages');
+      if(document.querySelector('#s-client-home #clh-mot')) return _echec('encore sur l’accueil');
+      if(!(n.compareDocumentPosition(document.getElementById('msga-corps'))&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la note n’est pas avant le fil');
+      if(MOT_COACH_MENTION!=='Visible par ton coach dans ton dossier, sans notification.') return _echec('mention : '+MOT_COACH_MENTION);
+      const sU=currentUser;
+      try{
+        currentUser={role:'athlete',email:'n@t.fr',coachId:'c',coachEmailKey:'c@t,fr',motCoach:{texte:'Genou sensible',maj:Date.now()}};
+        _motEdition=false; renderMotCoach();
+        if(!/Note épinglée pour ton coach/.test(n.textContent)||!/Genou sensible/.test(n.textContent)) return _echec('note : '+n.textContent.slice(0,80));
+        delete currentUser.motCoach; renderMotCoach();
+        return /Note épinglée pour ton coach/.test(n.textContent)?true:_echec('aucune entrée quand la note est vide');
+      }finally{ currentUser=sU; _motEdition=false; n.innerHTML=''; }});
+    ok('1888 — « Canal » devient « Annonces » à l’écran',()=>{
+      const t=document.querySelector('#s-canal .topbar-title');
+      if(!t||t.textContent.trim()!=='Annonces') return _echec('titre : '+(t&&t.textContent));
+      const tc=document.querySelector('#s-coach-canal .topbar-title');
+      return tc&&/annonces/i.test(tc.textContent)?true:_echec('titre coach : '+(tc&&tc.textContent));});
+
     // ══ 17/09/2026 — R21 : LA FLÈCHE ET LE RETOUR DU SYSTÈME, PARTOUT PAREILS ══
     //
     // Le retour matériel Android et le geste de retour passent par

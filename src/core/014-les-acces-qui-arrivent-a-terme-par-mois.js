@@ -2257,9 +2257,7 @@ function toggleSCard(hdr){
 // document reecrit a chaque sauvegarde, finit par deborder le quota — c'est le
 // plafond reel de RepCore. La regle RTDB le borne aussi, comme coachNotes.
 const MOT_COACH_MAX=600;
-const MOT_COACH_MENTION='Ton coach le lit tel quel, tu peux le modifier ou '
-  +'l’effacer quand tu veux. Ce n’est pas un message : il n’y a pas de '
-  +'notification, il le verra en ouvrant ton dossier.';
+const MOT_COACH_MENTION='Visible par ton coach dans ton dossier, sans notification.';
 
 // PURE. Le mot tel qu'il est stocke, ou null. Rend TOUJOURS la meme forme —
 // un dossier revenu de Firebase peut avoir perdu l'objet et ne garder que la

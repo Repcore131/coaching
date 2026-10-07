@@ -104,7 +104,7 @@ function openDefiCanal(id){
   '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
   +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="df-h" class="dfm-feuille">'
   +'<h2 id="df-h" style="margin-bottom:4px">'+(id?'Modifier le défi':'Créer un défi')+'</h2>'
-  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut du Canal de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
+  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut des annonces de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
   +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
     '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
   +'<label for="df-objectif">1 · Le défi</label>'
@@ -2361,7 +2361,7 @@ async function _canalChargerCoach(idNeuf){
   const fil=document.getElementById('canal-coach-fil');
   if(!fil) return;
   if(!cle||!CLOUD.ok()){
-    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reconnecte-toi pour écrire.');
+    fil.innerHTML=_canalVide('Annonces indisponibles hors connexion.','Reconnecte-toi pour écrire.');
     return;
   }
   // Le coach seul peut lire /reactions : c'est ce qui lui donne les prénoms.
@@ -2380,7 +2380,7 @@ async function _canalChargerCoach(idNeuf){
   }catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
     return;

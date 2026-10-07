@@ -22002,7 +22002,7 @@ async function _canalCharger(){
   // seul qui debloque quoi que ce soit, parce que la clef ne peut revenir que
   // par un code d'acces neuf.
   if(!CLOUD.ok()){
-    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reviens quand tu auras du réseau.');
+    fil.innerHTML=_canalVide('Annonces indisponibles hors connexion.','Reviens quand tu auras du réseau.');
     return;
   }
   if(!cle){
@@ -22024,7 +22024,7 @@ async function _canalCharger(){
   catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
     return;
@@ -25398,7 +25398,7 @@ function openDefiCanal(id){
   '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
   +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="df-h" class="dfm-feuille">'
   +'<h2 id="df-h" style="margin-bottom:4px">'+(id?'Modifier le défi':'Créer un défi')+'</h2>'
-  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut du Canal de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
+  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut des annonces de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
   +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
     '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
   +'<label for="df-objectif">1 · Le défi</label>'
@@ -27655,7 +27655,7 @@ async function _canalChargerCoach(idNeuf){
   const fil=document.getElementById('canal-coach-fil');
   if(!fil) return;
   if(!cle||!CLOUD.ok()){
-    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reconnecte-toi pour écrire.');
+    fil.innerHTML=_canalVide('Annonces indisponibles hors connexion.','Reconnecte-toi pour écrire.');
     return;
   }
   // Le coach seul peut lire /reactions : c'est ce qui lui donne les prénoms.
@@ -27674,7 +27674,7 @@ async function _canalChargerCoach(idNeuf){
   }catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
       <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
     return;
@@ -30850,6 +30850,7 @@ async function msgOuvrirFil(athleteCle){
     // Le profil public du coach, rangé par pullProfilCoach (hors du dossier).
     try{ const cp=JSON.parse(localStorage.getItem('rc_coach_profil')||'null'); if(cp&&cp.key===u.coachEmailKey&&cp.d&&cp.d.fname) nom=cp.d.fname; }catch(e){}
     goAvecRetour('s-messages');
+    try{ _motEdition=false; renderMotCoach(); }catch(e){}
   }
   _msgFil={cle,nom,liste:[],complet:false,charge:true};
   _rendreFil();
@@ -30954,7 +30955,7 @@ async function _rendreEntreeMessagesAthlete(force){
   if(!z) return false;
   if(!u||u.role==='coach'||!u.coachEmailKey){ z.innerHTML=''; return false; }
   const peindre=()=>{ const n=_msgAth?_msgAth.nonLus:0;
-    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Mon coach'
+    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Écrire à mon coach'
       +(n?' <span class="msg-pastille">'+n+'</span>':'')+'</span><span class="rel-entree-e">'+(n?n+' message'+(n>1?'s':'')+' non lu'+(n>1?'s':''):'Lui écrire, en privé')+'</span></button>'; };
   peindre();
   if(!force&&_msgAth&&Date.now()-_msgAth.t<MSG_CACHE_MS) return true;
@@ -35761,9 +35762,7 @@ function toggleSCard(hdr){
 // document reecrit a chaque sauvegarde, finit par deborder le quota — c'est le
 // plafond reel de RepCore. La regle RTDB le borne aussi, comme coachNotes.
 const MOT_COACH_MAX=600;
-const MOT_COACH_MENTION='Ton coach le lit tel quel, tu peux le modifier ou '
-  +'l’effacer quand tu veux. Ce n’est pas un message : il n’y a pas de '
-  +'notification, il le verra en ouvrant ton dossier.';
+const MOT_COACH_MENTION='Visible par ton coach dans ton dossier, sans notification.';
 
 // PURE. Le mot tel qu'il est stocke, ou null. Rend TOUJOURS la meme forme —
 // un dossier revenu de Firebase peut avoir perdu l'objet et ne garder que la
@@ -35850,10 +35849,13 @@ function _rendreContactCoach(u,users){
   const bouts=[];
   if(c.whatsapp) bouts.push(['a','https://wa.me/'+c.whatsapp,'WhatsApp','wa']);
   if(c.mail) bouts.push(['a','mailto:'+c.mail,'E-mail','ml']);
-  // LE MOT DANS L'APPLICATION est toujours disponible : il ne depend d'aucun
-  // numero ni d'aucun consentement, et il reste chez soi.
-  bouts.push(['b','motOuvrirDepuisContact()','Dans l\'app','ap']);
-  if(!bouts.length){ z.innerHTML=''; return false; }
+  // BUILD 1888 : « DANS L'APP » OUVRE LA MESSAGERIE. Le mot au coach n'était
+  // pas un message (aucune notification) : l'athlète croyait avoir écrit. Il
+  // vit désormais en tête du fil, comme une note épinglée.
+  bouts.push(['b','msgOuvrirFil()','Dans l\'app','ap']);
+  // Sans WhatsApp ni e-mail, la feuille n'offrirait que la messagerie, déjà
+  // ouverte par « Écrire à mon coach » juste au-dessus : pas de second lien.
+  if(bouts.length<2){ z.innerHTML=''; _contactBouts=[]; return false; }
   // La mention de sortie et les horaires restent portees par l'info-bulle,
   // comme avant — voir la note de CONTACT_SORTIE.
   let titre='';
@@ -35898,13 +35900,6 @@ function _journaliserContactCoach(){
   try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){ rcErreurMuette('_journaliserContactCoach',e); }
   return true;
 }
-// Ouvre l'editeur du mot au coach ET l'amene sous les yeux : il vit plus bas
-// dans la page, et l'ouvrir sans y aller donnerait un bouton qui ne fait rien.
-function motOuvrirDepuisContact(){
-  motOuvrir();
-  try{ _defiler(document.getElementById('clh-mot'),{block:'center'}); }catch(e){}
-  return true;
-}
 function renderMotCoach(){
   const z=document.getElementById('clh-mot');
   if(!z) return false;
@@ -35917,7 +35912,7 @@ function renderMotCoach(){
   if(_motEdition){
     z.innerHTML='<div style="'+enc+'">'
       +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-      +'text-transform:uppercase;margin-bottom:8px">À dire à ton coach</div>'
+      +'text-transform:uppercase;margin-bottom:8px">Note épinglée pour ton coach</div>'
       +'<textarea id="mot-texte" rows="4" maxlength="'+MOT_COACH_MAX+'" '
       +'placeholder="Ce qui n’entre dans aucune case : une douleur, une semaine compliquée, '
       +'un truc qui te bloque, une bonne nouvelle." '
@@ -35932,6 +35927,13 @@ function renderMotCoach(){
     const t=document.getElementById('mot-texte'); if(t) t.focus();
     return true;
   }
+  // BUILD 1888 : EN TÊTE DU FIL (s-messages), une ligne discrète tant que la
+  // note est vide — c'est le seul endroit où elle s'écrit désormais.
+  if(!m&&z.closest&&z.closest('#s-messages')){
+    z.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="motOuvrir()">'
+      +icon('pencil',12)+' Note épinglée pour ton coach</button>';
+    return true;
+  }
   // ⚠ PLUS DE CARTE D'INVITATION QUAND IL N'Y A RIEN A DIRE. « Quelque chose
   // a dire a ton coach ? » occupait un cadre entier de l'accueil pour poser
   // une question a laquelle on repond rarement — et le meme geste est
@@ -35941,7 +35943,7 @@ function renderMotCoach(){
   z.innerHTML='<div style="'+enc+'">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-    +'text-transform:uppercase">À dire à ton coach</span>'
+    +'text-transform:uppercase">Note épinglée pour ton coach</span>'
     +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
       +new Date(m.maj).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+'</span>':'')
     +'</div>'
@@ -50319,14 +50321,14 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    // BUILD 1886 : UNE LIGNE — l'avatar (32 px), le nom, « Écrire ». Mêmes
+    // BUILD 1886 : UNE LIGNE — l'avatar (32 px), le nom. (1888 : « Écrire » est
+    // retiré, l'accueil n'a plus qu'une entrée « Écrire à mon coach ».) Mêmes
     // tailles de police ; la vitrine s'ouvre toujours au toucher de la carte.
     el.innerHTML=`<div class="clh-coach-ligne" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border)">
       ${photo
         ?`<span style="flex-shrink:0;width:32px;height:32px;border-radius:var(--r-full);overflow:hidden;border:1px solid rgba(210,0,0,0.55)"><img src="${escapeHtml(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>`
         :`<span class="avatar" style="flex-shrink:0;width:32px;height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center">${escapeHtml(ini(coach&&coach.fname||name,coach&&coach.lname||''))}</span>`}
       <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="sub" style="font-weight:700;font-size:var(--fs-2xs);letter-spacing:1.5px;margin-right:6px">COACH</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
-      <button type="button" class="btn btn-sm" style="margin:0" onclick="event.stopPropagation();msgOuvrirFil()">Écrire</button>
     </div>`;
   }
   _selDay=null;_nettoyerFondationPosee();
@@ -89121,7 +89123,7 @@ const PUSH_TYPES=Object.freeze([
   {cle:'bilan',titre:'Rappel de bilan',txt:'Le samedi, quand ton dernier bilan date de deux semaines.'},
   {cle:'badge',titre:'Badge à portée',txt:'Le dimanche, quand un badge n’est plus qu’à une ou deux séances.'},
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
-  {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
+  {cle:'defi',titre:'Défi dans les annonces',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
@@ -144025,7 +144027,7 @@ const ACCUEIL_BLOCS=Object.freeze([
   {cle:'croissance',lib:'Arrivées par mois'},
   {cle:'kit',lib:'Mon kit de la semaine'},
   {cle:'recap',lib:'Récap de l’équipe'},
-  {cle:'raccourcis',lib:'Canal, groupe, CRM, code'},
+  {cle:'raccourcis',lib:'Annonces, groupe, CRM, code'},
   {cle:'portefeuille',lib:'Barre du portefeuille'},
   {cle:'chrono',lib:'Temps passé par athlète'},
   {cle:'pilotage',lib:'Pilotage'},

@@ -939,14 +939,14 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    // BUILD 1886 : UNE LIGNE — l'avatar (32 px), le nom, « Écrire ». Mêmes
+    // BUILD 1886 : UNE LIGNE — l'avatar (32 px), le nom. (1888 : « Écrire » est
+    // retiré, l'accueil n'a plus qu'une entrée « Écrire à mon coach ».) Mêmes
     // tailles de police ; la vitrine s'ouvre toujours au toucher de la carte.
     el.innerHTML=`<div class="clh-coach-ligne" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border)">
       ${photo
         ?`<span style="flex-shrink:0;width:32px;height:32px;border-radius:var(--r-full);overflow:hidden;border:1px solid rgba(210,0,0,0.55)"><img src="${escapeHtml(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>`
         :`<span class="avatar" style="flex-shrink:0;width:32px;height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center">${escapeHtml(ini(coach&&coach.fname||name,coach&&coach.lname||''))}</span>`}
       <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="sub" style="font-weight:700;font-size:var(--fs-2xs);letter-spacing:1.5px;margin-right:6px">COACH</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
-      <button type="button" class="btn btn-sm" style="margin:0" onclick="event.stopPropagation();msgOuvrirFil()">Écrire</button>
     </div>`;
   }
   _selDay=null;_nettoyerFondationPosee();

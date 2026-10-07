@@ -25,7 +25,7 @@ const PUSH_TYPES=Object.freeze([
   {cle:'bilan',titre:'Rappel de bilan',txt:'Le samedi, quand ton dernier bilan date de deux semaines.'},
   {cle:'badge',titre:'Badge à portée',txt:'Le dimanche, quand un badge n’est plus qu’à une ou deux séances.'},
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
-  {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
+  {cle:'defi',titre:'Défi dans les annonces',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},

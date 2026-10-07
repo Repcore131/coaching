@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1887';
+window.RC_BUILD='1888';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1887.css">
+<link rel="stylesheet" href="./rc-style.1888.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1887.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1888.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1691,7 +1691,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <span class="topbar-title">Mon coach</span><span></span>
   </div>
   <div class="scroll-area" style="flex:1">
-    <div class="pad"><div id="msga-corps"></div></div>
+    <div class="pad"><div id="clh-mot"></div><div id="msga-corps"></div></div>
   </div>
 </div>
 <!-- « DEMANDER À REPCORE » (05/10/2026) : l'assistant de l'athlète autonome en
@@ -1897,7 +1897,7 @@ const COACH_PHOTO='icons/coach.jpg';
              capitales ne dise deja, et ils rendaient les boutons inegaux a
              l'oeil. -->
         <div data-acc="raccourcis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:14px">
-          <button class="btn btn-blanc btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:10px 12px;margin:0;min-height:38px">Canal</button>
+          <button class="btn btn-blanc btn-sm" onclick="loadCanalCoach()" title="Annonces : écrire à tous mes athlètes" aria-label="Annonces : écrire à tous mes athlètes" style="letter-spacing:1px;padding:10px 12px;margin:0;min-height:38px">Annonces</button>
           <button class="btn btn-blanc btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:10px 12px;margin:0;min-height:38px">Groupé</button>
           <button class="btn btn-blanc btn-sm" onclick="ouvrirCrmCoach()" title="Carnet d'adresses : mail, genre, téléphone" aria-label="Carnet d'adresses" style="letter-spacing:1px;padding:10px 12px;margin:0;min-height:38px">CRM</button>
           <!-- ⚠ L'ID NE BOUGE PAS. loadCoachHome ecrit son libelle dedans, et
@@ -3644,7 +3644,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- LE MOT AU COACH. Sous l'en-tete, au-dessus des cartes de suivi :
            c'est une chose qu'on ecrit en passant, pas une section a aller
            chercher au fond d'un ecran. -->
-      <div id="clh-mot"></div>
 
       <!-- COACH BANNER -->
       <div id="clh-coach-banner" style="display:none;margin-bottom:16px"></div>
@@ -5579,7 +5578,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-canal" class="screen ecran-coach">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-coach-canal','s-coach-home')">←</button>
-    <span class="topbar-title">Mon canal</span>
+    <span class="topbar-title">Mes annonces</span>
     <span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -5767,7 +5766,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-canal" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-canal')">←</button>
-    <span class="topbar-title">Canal</span>
+    <span class="topbar-title">Annonces</span>
     <span></span>
   </div>
   <div id="canal-marque" class="mq-zone" hidden></div>
@@ -6227,5 +6226,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1887.js"></script>
+<script src="./rc-core.1888.js"></script>
 </body></html>
