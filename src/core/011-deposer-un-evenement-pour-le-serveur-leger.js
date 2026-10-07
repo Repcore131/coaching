@@ -22,7 +22,7 @@ function evenementCible(ev){
   const t=ev&&ev.type;
   // Un message privé : l'événement vise le message (les règles vérifient qu'il existe et qui l'a écrit).
   if(t==='message') return /^m[a-z0-9]{8,20}$/.test(String(ev.i||''))?String(ev.i):'';
-  if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
+  if(t==='reponse_bilan'||t==='reponse_rite'||t==='bilan_a_completer') return String(ev.dest||'');
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).

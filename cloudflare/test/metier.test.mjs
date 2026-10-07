@@ -60,6 +60,27 @@ await test('réponse VOCALE seule : relue en base, le même push, qui dit sa dur
   assert.equal(w2.F.recus.length, 0);
 });
 
+await test('build 1868 : demande de compléter un bilan — relue en base, push qui nomme les vues', async () => {
+  const w = monde({ users: { [A1]: { coachEmailKey: C1, fname: 'Léa', bilans: [{ date: 1, reponseCoach: 'ok', aCompleter: { vues: ['face', 'back'], mesures: [], le: 2 } }] } },
+    push: { [A1]: { a1b2c3: tel.abonnement } },
+    evenements: { e1: { type: 'bilan_a_completer', par: C1, dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  const m = tel.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Ton coach te demande de compléter ton bilan');
+  assert.equal(m.body, 'Photos de face, de dos à ajouter.');
+  // Demande retirée entre-temps : rien ne part.
+  const w2 = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ date: 1 }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
+    evenements: { e1: { type: 'bilan_a_completer', par: C1, dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w2.minute();
+  assert.equal(w2.F.recus.length, 0);
+  // Pas son coach : rien.
+  const w3 = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ date: 1, aCompleter: { vues: ['face'] } }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
+    evenements: { e1: { type: 'bilan_a_completer', par: 'autre@t,fr', dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w3.minute();
+  assert.equal(w3.F.recus.length, 0);
+});
+
 await test('un événement déposé par quelqu’un qui n’est pas le coach n’envoie rien', async () => {
   const w = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ reponseCoach: 'x' }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
     evenements: { e1: { type: 'reponse_bilan', par: 'autre@t,fr', dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));

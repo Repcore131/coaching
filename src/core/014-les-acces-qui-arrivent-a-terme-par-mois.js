@@ -792,6 +792,8 @@ function hasNewBilan(c){
   if(!!der&&!bilanRepondu(der)&&!der.traite) return true;
   // BUILD 1863 : un bilan corrigé APRÈS la réponse, sur 60 jours, pas
   // seulement le dernier. Même prédicat pour le badge et « À traiter ».
+  // BUILD 1868 : complété (souvent à sa demande) après la réponse.
+  try{ if(c.bilans.some(b=>bilanARelire(b))) return true; }catch(e){}
   try{ return !!bilanCorrigeAVoir(c); }catch(e){ return false; }
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.

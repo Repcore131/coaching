@@ -717,6 +717,13 @@ function loadClientHome(){
     if(!_pa&&_ph&&_alerte){ _pa=document.createElement('div'); _pa.id='clh-photos-avenir'; _alerte.insertAdjacentElement('afterend',_pa); }
     if(_pa){ _pa.innerHTML=_ph; _pa.style.display=_ph?'block':'none'; }
   }catch(e){}
+  // BUILD 1868 : la demande du coach de compléter un bilan, en haut.
+  try{
+    let _ac=document.getElementById('clh-a-completer');
+    const _hc=_htmlCarteACompleter(currentUser);
+    if(!_ac&&_hc&&_alerte){ _ac=document.createElement('div'); _ac.id='clh-a-completer'; _alerte.insertAdjacentElement('beforebegin',_ac); }
+    if(_ac){ _ac.innerHTML=_hc; _ac.style.display=_hc?'block':'none'; }
+  }catch(e){}
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
   _majBandeauDispo('clh-dispo');

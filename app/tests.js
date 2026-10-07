@@ -66099,6 +66099,54 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1868 : LE COACH DEMANDE DE COMPLÉTER UN BILAN ══
+    ok('manquesBilan : sans photo → 3 vues ; deux photos → la troisième ; inscription sans poids → deb-weight',()=>{
+      const t=Date.now();
+      const a=manquesBilan({type:'coaching',date:t-1,'bil-weight':'70'});
+      if(a.vues.join()!=='face,back,side'||a.mesures.length) return _echec(JSON.stringify(a));
+      const b=manquesBilan({type:'coaching',date:t-2,'bil-weight':'70',photos:{face:'https://x/f.jpg',back:'https://x/b.jpg'}});
+      if(b.vues.join()!=='side') return _echec(JSON.stringify(b));
+      const c=manquesBilan({type:'depart',date:t-3,photos:{face:'u',back:'u',side:'u'}});
+      return c.vues.length===0&&c.mesures.join()==='deb-weight'?true:_echec(JSON.stringify(c));});
+    ok('hasNewBilan : vrai quand completeLe > reponseDate, faux une fois relu',()=>{
+      const t=Date.now();
+      const b={type:'coaching',date:t-5*864e5,reponseCoach:'ok',reponseDate:t-4*864e5,completeLe:t-3600e3};
+      const c={bilans:[b]};
+      if(!hasNewBilan(c)) return _echec('pas remonté');
+      if(bilansSansReponse(c)!==1) return _echec('charge '+bilansSansReponse(c));
+      b.correctionVueLe=t;
+      return !hasNewBilan(c)?true:_echec('reste après lecture');});
+    ok('reduireDemandeCompleter : une seule des deux photos ajoutée → la demande reste, réduite',()=>{
+      const b={type:'coaching',date:1,photos:{face:'https://x/f.jpg'},aCompleter:{vues:['face','back'],mesures:[],le:1}};
+      if(reduireDemandeCompleter(b)!=='reste'||b.aCompleter.vues.join()!=='back') return _echec(JSON.stringify(b.aCompleter));
+      b.photos.back='https://x/b.jpg';
+      return reduireDemandeCompleter(b)==='comble'&&!b.aCompleter?true:_echec('pas consommée');});
+    ok('demanderCompleterBilan puis retirer ; double clic idempotent ; refus sur un athlète _fromCode',()=>{
+      const sU=currentUser, sUs=DB.get('users'), sp=CLOUD.pushOne, sd=window.deposerEvenement, st=window.toastSync;
+      try{
+        currentUser={id:'coK',email:'cok@t.fr',role:'coach'};
+        const b={type:'coaching',date:Date.now()-864e5,'bil-weight':'70'};
+        const ath={id:'aK',email:'ak@t.fr',role:'athlete',coachId:'coK',fname:'Léa',bilans:[b]};
+        const fc={id:'aF',email:'af@t.fr',role:'athlete',coachId:'coK',_fromCode:true,bilans:[{type:'coaching',date:Date.now()-864e5}]};
+        const u={}; u[ath.email]=ath; u[fc.email]=fc; DB.set('users',u);
+        let n=0; CLOUD.pushOne=()=>{ n++; return Promise.resolve(false); };
+        window.toastSync=()=>{};
+        const id=_idBilan(b);
+        if(!demanderCompleterBilan('ak@t.fr',id)) return _echec('demande refusée');
+        const b2=DB.get('users')['ak@t.fr'].bilans[0];
+        if(!b2.aCompleter||b2.aCompleter.vues.length!==3) return _echec(JSON.stringify(b2.aCompleter));
+        demanderCompleterBilan('ak@t.fr',id);
+        if(n!==1) return _echec('double clic : '+n+' envois');
+        if(!/Demandé le/.test(_htmlDemandeCompleter(b2,DB.get('users')['ak@t.fr']))) return _echec('pas de « Demandé le »');
+        if(!retirerDemandeCompleter('ak@t.fr',id)||DB.get('users')['ak@t.fr'].bilans[0].aCompleter) return _echec('retrait');
+        if(demanderCompleterBilan('af@t.fr',_idBilan(fc.bilans[0]))) return _echec('_fromCode accepté');
+        return _htmlDemandeCompleter(fc.bilans[0],fc)===''?true:_echec('bouton sur _fromCode');
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sp; window.toastSync=st; }});
+    ok('Carte d’accueil : « Ton coach te demande de compléter ton bilan du … : photos de face, de dos »',()=>{
+      const u={id:'x',email:'x@t.fr',bilans:[{type:'coaching',date:Date.now()-2*864e5,aCompleter:{vues:['face','back'],mesures:[],le:1}}]};
+      const h=_htmlCarteACompleter(u);
+      return /Ton coach te demande de compléter ton bilan du .*: photos de face, de dos/.test(h)&&/modifierBilan\(.*'photos'\)/.test(h)?true:_echec(h);});
+
     // ══ BUILD 1867 : LE JOURNAL ALIMENTAIRE SE CORRIGE ══
     const _jaUser=()=>{
       const t=localISODate(new Date());

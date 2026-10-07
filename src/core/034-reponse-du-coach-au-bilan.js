@@ -140,7 +140,8 @@ function openBilanNotes(id){
 // Un bilan MARQUÉ TRAITÉ (b.traite, 06/10/2026) n'en est plus : le coach l'a
 // lu et a choisi de ne pas y répondre par écrit. Réversible.
 function bilansSansReponse(c){
-  return ((c&&c.bilans)||[]).filter(b=>b&&!bilanRepondu(b)&&!b.traite).length;
+  // BUILD 1868 : un bilan complété après la réponse est à relire.
+  return ((c&&c.bilans)||[]).filter(b=>b&&((!bilanRepondu(b)&&!b.traite)||bilanARelire(b))).length;
 }
 // PURE. Les bilans de suivi plus anciens restés sans réponse (ni traités),
 // du plus récent au plus ancien.
@@ -920,12 +921,69 @@ function enregistrerFormulesReponse(){
 }
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
 function _taIdBilan(id){ return 'rb-texte_'+id; }
+// ══ BUILD 1868 : « LUI DEMANDER DE COMPLÉTER » ════════════════════════════
+// Même patron que la mesure demandée (_htmlCcdManque) : une ligne, un bouton,
+// puis « Demandé le … · Retirer la demande ». Double clic sans effet.
+function _bilDuClient(email,bilanId){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||c._fromCode||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return null;
+  const b=c.bilans.find(x=>_idBilan(x)===bilanId);
+  return b?{users,c,b}:null;
+}
+function _apresDemandeCompleter(c){
+  try{ renderBilanEvolution(c); evoTab('reponses'); _renderQuickCommentChips('bilan'); }catch(e){}
+}
+function demanderCompleterBilan(email,bilanId){
+  const r=_bilDuClient(email,bilanId);
+  if(!r){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const {users,c,b}=r;
+  if(b.aCompleter) return true;
+  const m=manquesBilan(b,c);
+  if(_manquesVides(m)) return false;
+  const t=Date.now();
+  b.aCompleter={vues:m.vues,mesures:m.mesures,note:'',le:t,par:String(currentUser.id||'')};
+  c.updatedAt=t; users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  const i=c.bilans.indexOf(b);
+  Promise.resolve(envoi).then(x=>{ if(x!==false) deposerEvenement({type:'bilan_a_completer',dest:email.replace(/\./g,','),i:String(i)}); }).catch(()=>{});
+  toastSync(ok,envoi,'Demande envoyée. '+(c.fname||'Ton athlète')+' la verra sur son accueil.','la demande est');
+  _apresDemandeCompleter(c);
+  return true;
+}
+function retirerDemandeCompleter(email,bilanId){
+  const r=_bilDuClient(email,bilanId);
+  if(!r||!r.b.aCompleter) return false;
+  const {users,c,b}=r;
+  delete b.aCompleter;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  toastSync(ok,envoi,'Demande retirée','le retrait est');
+  _apresDemandeCompleter(c);
+  return true;
+}
+function _htmlDemandeCompleter(b,c){
+  if(!b||!c||c._fromCode) return '';
+  const d=b.aCompleter;
+  const m=d?{vues:Array.isArray(d.vues)?d.vues:[],mesures:Array.isArray(d.mesures)?d.mesures:[]}:manquesBilan(b,c);
+  if(!d&&_manquesVides(m)) return '';
+  const em=escapeHtml(c.email||''), ide=escapeHtml(_idBilan(b));
+  return '<p class="ccd-manque ccd-manque-a"><span class="ccd-manque-t">Il manque : '+escapeHtml(texteManquesBilan(m)||'—')+'</span>'
+    +(d
+      ?'<span class="ccd-manque-d">Demandé le '+escapeHtml(_ccdJour(d.le))+'.'
+        +'<button type="button" class="ccd-out-r" onclick="retirerDemandeCompleter(\''+em+'\',\''+ide+'\')">Retirer la demande</button></span>'
+      :'<button type="button" class="ccd-manque-b" onclick="demanderCompleterBilan(\''+em+'\',\''+ide+'\')">Lui demander de compléter</button>')
+    +'</p>';
+}
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
   const dejaLue=b.reponseVue===true;
   const tca=(()=>{ try{ return aTCA(c); }catch(e){ return false; } })();
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    ${_htmlDemandeCompleter(b,c)}
     ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>

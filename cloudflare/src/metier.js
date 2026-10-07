@@ -1716,6 +1716,22 @@ export function creerMetier(deps) {
         body: rep ? String(rep).slice(0, 120) : 'Une réponse vocale (' + dureeTxt(audio.duree) + ') t’attend dans l’app.' });
       return 'envoye';
     }
+    // BUILD 1868 : le coach demande de compléter un bilan. Relu en base : la
+    // demande (aCompleter) doit y être, et venir du coach de l'athlète.
+    if (type === 'bilan_a_completer') {
+      const dest = String(e.dest || '');
+      const i = String(e.i || '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (!dest || !i) return 'incomplet';
+      if ((await _lire(dest, 'coachEmailKey')) !== e.par) return 'pas_son_coach';
+      const dem = await _val('users/' + dest + '/bilans/' + i + '/aCompleter');
+      if (!dem || typeof dem !== 'object') return 'sans_demande';
+      const LIB = { face: 'de face', back: 'de dos', side: 'de profil' };
+      const vues = (Array.isArray(dem.vues) ? dem.vues : Object.values(dem.vues || {})).map(v => LIB[v]).filter(Boolean);
+      await envoyerPush(dest, { type: 'coach', url: './', tag: 'coach-completer-' + i,
+        title: 'Ton coach te demande de compléter ton bilan',
+        body: vues.length ? 'Photos ' + vues.join(', ') + ' à ajouter.' : 'Une mesure manque à ton bilan.' });
+      return 'envoye';
+    }
     // LA MESSAGERIE (lot M2) : un message privé coach ↔ athlète. Comme une
     // réponse de bilan, le Worker relit le message en base avant de pousser :
     // l'événement ne suffit pas, ni pour le texte ni pour l'auteur.

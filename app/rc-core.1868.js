@@ -25070,7 +25070,7 @@ function evenementCible(ev){
   const t=ev&&ev.type;
   // Un message privé : l'événement vise le message (les règles vérifient qu'il existe et qui l'a écrit).
   if(t==='message') return /^m[a-z0-9]{8,20}$/.test(String(ev.i||''))?String(ev.i):'';
-  if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
+  if(t==='reponse_bilan'||t==='reponse_rite'||t==='bilan_a_completer') return String(ev.dest||'');
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
@@ -34045,6 +34045,8 @@ function hasNewBilan(c){
   if(!!der&&!bilanRepondu(der)&&!der.traite) return true;
   // BUILD 1863 : un bilan corrigé APRÈS la réponse, sur 60 jours, pas
   // seulement le dernier. Même prédicat pour le badge et « À traiter ».
+  // BUILD 1868 : complété (souvent à sa demande) après la réponse.
+  try{ if(c.bilans.some(b=>bilanARelire(b))) return true; }catch(e){}
   try{ return !!bilanCorrigeAVoir(c); }catch(e){ return false; }
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
@@ -49319,6 +49321,13 @@ function loadClientHome(){
     const _ph=_htmlPhotosAVenir(currentUser);
     if(!_pa&&_ph&&_alerte){ _pa=document.createElement('div'); _pa.id='clh-photos-avenir'; _alerte.insertAdjacentElement('afterend',_pa); }
     if(_pa){ _pa.innerHTML=_ph; _pa.style.display=_ph?'block':'none'; }
+  }catch(e){}
+  // BUILD 1868 : la demande du coach de compléter un bilan, en haut.
+  try{
+    let _ac=document.getElementById('clh-a-completer');
+    const _hc=_htmlCarteACompleter(currentUser);
+    if(!_ac&&_hc&&_alerte){ _ac=document.createElement('div'); _ac.id='clh-a-completer'; _alerte.insertAdjacentElement('beforebegin',_ac); }
+    if(_ac){ _ac.innerHTML=_hc; _ac.style.display=_hc?'block':'none'; }
   }catch(e){}
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
@@ -81498,6 +81507,68 @@ function _htmlPhotosAVenir(user){
     +' style="display:block;width:100%;background:none;border:0;padding:6px 0;text-align:left;font:inherit;font-size:var(--fs-xs);color:var(--sub);cursor:pointer">'
     +'Photos du bilan '+escapeHtml(num)+' à ajouter →</button>';
 }
+// ══ BUILD 1868 : LE COACH DEMANDE DE COMPLÉTER UN BILAN ══════════════════
+// b.aCompleter={vues:[...], mesures:[clés], note:'', le, par}. La demande se
+// réduit au fur et à mesure que l'athlète comble les manques, et disparaît
+// quand tout est là. Bilan d'inscription traité pareil (préfixe deb-).
+const BIL_MESURES_ATTENDUES=Object.freeze(['weight']);
+const BIL_LIB_MESURES=Object.freeze({weight:'le poids',height:'la taille'});
+// PURE. Les vues photo absentes, et les mesures attendues restées vides.
+// `user` (facultatif) : pendant une grossesse, les photos ne manquent pas.
+function manquesBilan(b,user){
+  if(!b) return {vues:[],mesures:[]};
+  const pre=b.type==='depart'?'deb-':'bil-';
+  let gr=false; try{ gr=!!(user&&grossesseSuspend(user)); }catch(e){ gr=false; }
+  const vues=gr?[]:BIL_VUES.filter(v=>{ try{ return !photoBilanExiste(b,v); }catch(e){ return true; } });
+  const dem=(b.aCompleter&&Array.isArray(b.aCompleter.mesures))?b.aCompleter.mesures:[];
+  const vide=k=>{ const v=b[k]; return v==null||String(v).trim()===''; };
+  const mesures=[...new Set(BIL_MESURES_ATTENDUES.map(x=>pre+x).concat(dem))].filter(vide);
+  return {vues,mesures};
+}
+function _manquesVides(m){ return !m||(!(m.vues||[]).length&&!(m.mesures||[]).length); }
+// « photo de face, de dos » ; « photo de face et le poids ».
+function texteManquesBilan(m){
+  const p=[];
+  const v=(m&&m.vues)||[];
+  if(v.length) p.push((v.length>1?'photos ':'photo ')+v.map(x=>BIL_LIB_VUES[x]||x).join(', '));
+  for(const k of (m&&m.mesures)||[]){ const suf=String(k).replace(/^(bil|deb)-/,''); p.push(BIL_LIB_MESURES[suf]||suf); }
+  return p.join(' et ');
+}
+// PURE (sur b). Réduit la demande à ce qui manque encore. 'comble' si elle
+// disparaît, 'reste' si elle demeure (réduite), null sans demande.
+function reduireDemandeCompleter(b){
+  const d=b&&b.aCompleter;
+  if(!d) return null;
+  const vues=(Array.isArray(d.vues)?d.vues:[]).filter(v=>{ try{ return !photoBilanExiste(b,v); }catch(e){ return true; } });
+  const mesures=(Array.isArray(d.mesures)?d.mesures:[]).filter(k=>b[k]==null||String(b[k]).trim()==='');
+  if(!vues.length&&!mesures.length){ delete b.aCompleter; return 'comble'; }
+  d.vues=vues; d.mesures=mesures;
+  return 'reste';
+}
+// PURE. Complété après la réponse, et pas encore relu par le coach.
+function bilanARelire(b){
+  if(!b||!bilanRepondu(b)) return false;
+  const c=Number(b.completeLe)||0;
+  return c>(Number(b.reponseDate)||0)&&!(Number(b.correctionVueLe)>=c);
+}
+// Le bilan le plus récent qui porte une demande du coach, ou null.
+function bilanACompleter(user){
+  for(const x of historiqueBilans(user||currentUser)) if(x.b&&x.b.aCompleter) return x;
+  return null;
+}
+function _htmlCarteACompleter(user){
+  const x=bilanACompleter(user);
+  if(!x) return '';
+  const d=x.b.aCompleter;
+  const m={vues:Array.isArray(d.vues)?d.vues:[],mesures:Array.isArray(d.mesures)?d.mesures:[]};
+  if(_manquesVides(m)) return '';
+  const jour=dateLocaleDeCle(x.b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  const quoi=x.depart?'ton bilan d’inscription':'ton bilan du '+jour;
+  return '<p class="ccd-manque clh-a-completer"><span class="ccd-manque-t">Ton coach te demande de compléter '
+    +escapeHtml(quoi)+' : '+escapeHtml(texteManquesBilan(m))
+    +(d.note?' — '+escapeHtml(String(d.note).slice(0,200)):'')+'</span>'
+    +'<button type="button" class="ccd-manque-b" onclick="modifierBilan('+_attrArg(x.id)+(m.vues.length?',\'photos\'':'')+')">Compléter</button></p>';
+}
 // PURE. Applique les réponses `d` au bilan `b`, sans toucher à ce qui n'est pas
 // une réponse (date, numéro, réponse du coach). Rend la liste des clefs changées.
 function appliquerModifBilan(b,d,maintenant){
@@ -81545,6 +81616,12 @@ function libelleCorrectionBilan(c,b){
   const x=b||bilanCorrigeAVoir(c);
   if(!x) return '';
   const nom=x.type==='depart'?'d’inscription':'n°'+(x.num||'?');
+  // BUILD 1868 : complété à la demande du coach.
+  if(x.completeSuiteDemande&&x.completeLe){
+    const qui=(c&&c!==x&&String(c.fname||'').trim())||'Ton athlète';
+    let j=''; try{ j=dateLocaleDeCle(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){}
+    return qui+' a complété son bilan '+(x.type==='depart'?'d’inscription':'du '+j)+(x.correctionApresReponse&&x.correctionApresReponse.photos?' (photos ajoutées)':'');
+  }
   return x.correctionApresReponse.photos
     ?'Photos ajoutées au bilan '+nom
     :(x.type==='depart'?'Bilan d’inscription corrigé':'Bilan '+nom+' corrigé');
@@ -81573,6 +81650,15 @@ function _bilEnregistrerModif(){
   const x=ed&&historiqueBilans(currentUser).find(h=>h.id===ed.id);
   if(!x){ toast('Ce bilan est introuvable : rien n’a été modifié','var(--orange)'); _quitterEcranBilan(false); openBilanChoice(); return false; }
   const change=appliquerModifBilan(x.b,bilData);
+  // BUILD 1868 : la demande du coach se réduit à ce qui manque encore ; un
+  // bilan DÉJÀ RÉPONDU qui change porte completeLe (sa réponse reste).
+  const _avaitDemande=!!x.b.aCompleter;
+  const _rd=reduireDemandeCompleter(x.b);
+  if(change.length&&bilanRepondu(x.b)){
+    x.b.completeLe=Date.now();
+    if(_avaitDemande) x.b.completeSuiteDemande=true;
+  }
+  if(_rd&&!change.length) change.push('aCompleter');
   // Les photos promises se consomment au fur et à mesure qu'elles arrivent.
   if(Array.isArray(x.b.photosAVenir)){
     x.b.photosAVenir=x.b.photosAVenir.filter(v=>{ try{ return !photoBilanExiste(x.b,v); }catch(e){ return true; } });
@@ -84799,7 +84885,8 @@ function openBilanNotes(id){
 // Un bilan MARQUÉ TRAITÉ (b.traite, 06/10/2026) n'en est plus : le coach l'a
 // lu et a choisi de ne pas y répondre par écrit. Réversible.
 function bilansSansReponse(c){
-  return ((c&&c.bilans)||[]).filter(b=>b&&!bilanRepondu(b)&&!b.traite).length;
+  // BUILD 1868 : un bilan complété après la réponse est à relire.
+  return ((c&&c.bilans)||[]).filter(b=>b&&((!bilanRepondu(b)&&!b.traite)||bilanARelire(b))).length;
 }
 // PURE. Les bilans de suivi plus anciens restés sans réponse (ni traités),
 // du plus récent au plus ancien.
@@ -85579,12 +85666,69 @@ function enregistrerFormulesReponse(){
 }
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
 function _taIdBilan(id){ return 'rb-texte_'+id; }
+// ══ BUILD 1868 : « LUI DEMANDER DE COMPLÉTER » ════════════════════════════
+// Même patron que la mesure demandée (_htmlCcdManque) : une ligne, un bouton,
+// puis « Demandé le … · Retirer la demande ». Double clic sans effet.
+function _bilDuClient(email,bilanId){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||c._fromCode||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return null;
+  const b=c.bilans.find(x=>_idBilan(x)===bilanId);
+  return b?{users,c,b}:null;
+}
+function _apresDemandeCompleter(c){
+  try{ renderBilanEvolution(c); evoTab('reponses'); _renderQuickCommentChips('bilan'); }catch(e){}
+}
+function demanderCompleterBilan(email,bilanId){
+  const r=_bilDuClient(email,bilanId);
+  if(!r){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const {users,c,b}=r;
+  if(b.aCompleter) return true;
+  const m=manquesBilan(b,c);
+  if(_manquesVides(m)) return false;
+  const t=Date.now();
+  b.aCompleter={vues:m.vues,mesures:m.mesures,note:'',le:t,par:String(currentUser.id||'')};
+  c.updatedAt=t; users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  const i=c.bilans.indexOf(b);
+  Promise.resolve(envoi).then(x=>{ if(x!==false) deposerEvenement({type:'bilan_a_completer',dest:email.replace(/\./g,','),i:String(i)}); }).catch(()=>{});
+  toastSync(ok,envoi,'Demande envoyée. '+(c.fname||'Ton athlète')+' la verra sur son accueil.','la demande est');
+  _apresDemandeCompleter(c);
+  return true;
+}
+function retirerDemandeCompleter(email,bilanId){
+  const r=_bilDuClient(email,bilanId);
+  if(!r||!r.b.aCompleter) return false;
+  const {users,c,b}=r;
+  delete b.aCompleter;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  toastSync(ok,envoi,'Demande retirée','le retrait est');
+  _apresDemandeCompleter(c);
+  return true;
+}
+function _htmlDemandeCompleter(b,c){
+  if(!b||!c||c._fromCode) return '';
+  const d=b.aCompleter;
+  const m=d?{vues:Array.isArray(d.vues)?d.vues:[],mesures:Array.isArray(d.mesures)?d.mesures:[]}:manquesBilan(b,c);
+  if(!d&&_manquesVides(m)) return '';
+  const em=escapeHtml(c.email||''), ide=escapeHtml(_idBilan(b));
+  return '<p class="ccd-manque ccd-manque-a"><span class="ccd-manque-t">Il manque : '+escapeHtml(texteManquesBilan(m)||'—')+'</span>'
+    +(d
+      ?'<span class="ccd-manque-d">Demandé le '+escapeHtml(_ccdJour(d.le))+'.'
+        +'<button type="button" class="ccd-out-r" onclick="retirerDemandeCompleter(\''+em+'\',\''+ide+'\')">Retirer la demande</button></span>'
+      :'<button type="button" class="ccd-manque-b" onclick="demanderCompleterBilan(\''+em+'\',\''+ide+'\')">Lui demander de compléter</button>')
+    +'</p>';
+}
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
   const dejaLue=b.reponseVue===true;
   const tca=(()=>{ try{ return aTCA(c); }catch(e){ return false; } })();
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    ${_htmlDemandeCompleter(b,c)}
     ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
