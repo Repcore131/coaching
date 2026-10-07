@@ -42126,6 +42126,8 @@ function ouvrirBilanBloc(){
     // Et la suite : le bloc suivant à assigner, l'athlète suivant de la file.
     +_htmlSuiteBilanBloc(c)
     +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" onclick="bilanBlocExporter()">Exporter</button>':'')
+    // BUILD 1884 : un seul document à remettre — séances, poids, mensurations, photos, ressentis.
+    +(b?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirRapportBloc(getOwnedClient(currentClientId))">Rapport complet du bloc</button>':'')
     +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div></div>');
   return true;
 }
@@ -73972,6 +73974,8 @@ const RAP_BLOCS=Object.freeze([
   // n'apparaissaient. Coche comme les autres, et place avant le mot du coach :
   // celui-la ferme le document, il reste dernier.
   {cle:'lifestyle',  lib:'Sommeil et pas'},
+  // BUILD 1884 : ce que les bilans de la période disent du ressenti.
+  {cle:'ressentis',  lib:'Ressentis des bilans'},
   {cle:'mot',        lib:'Mot du coach'}
 ]);
 // PURE. Sommeil et pas SUR LA PERIODE DU RAPPORT, et non sur une fenetre
@@ -74282,13 +74286,17 @@ function rapMensurations(u,debut,fin){
   if(bl.length<2) return {present:false};
   const lignes=[];
   for(const m of RAP_MESURES){
-    let a=null,b=null;
+    let a=null,b=null,n=0;
     for(const x of bl){
+      // BUILD 1884 : une valeur REPORTÉE ne sert jamais de borne.
+      try{ if(bmReportee(x,m.cle)) continue; }catch(e){}
       let v=null; try{ v=getBM(x,m.cle); }catch(e){ v=null; }
       if(!(v>0)) continue;
       if(a===null) a=v;
-      b=v;
+      b=v; n++;
     }
+    // Deux relevés RÉELS au moins (build 1884).
+    if(n<2) continue;
     // UNE SEULE MESURE NE DIT AUCUNE EVOLUTION : il en faut deux, et
     // differentes de rang — a et b viennent du premier et du dernier bilan qui
     // la portent.
@@ -74297,6 +74305,24 @@ function rapMensurations(u,debut,fin){
     lignes.push({lib:m.lib,debut:a,fin:b,delta:Math.round((b-a)*10)/10});
   }
   return lignes.length?{present:true,lignes}:{present:false};
+}
+/**
+ * PURE. Les ressentis des bilans de la période : motivation (première →
+ * dernière, moyenne), sommeil et stress (répartition), écarts moyens (pas
+ * pour un profil TCA). {present:false} sans bilan.
+ */
+function rapRessentis(u,debut,fin){
+  const bl=bilansOrdonnes(u).filter(b=>b&&b.type!=='depart'&&b.date>=debut&&b.date<=fin);
+  if(!bl.length) return {present:false};
+  const tca=(function(){ try{ return aTCA(u); }catch(e){ return false; } })();
+  const mot=bl.map(_cbMotiv).filter(x=>x!=null);
+  const rep=(fn,libs)=>{ const o={}; bl.forEach(b=>{ const i=fn(b); if(i!=null) o[libs[i]]=(o[libs[i]]||0)+1; }); return o; };
+  const ec=tca?[]:bl.map(_cbEcarts).filter(x=>x!=null);
+  const out={present:true,n:bl.length,
+    motivation:mot.length?{debut:mot[0],fin:mot[mot.length-1],moyenne:Math.round(mot.reduce((a,x)=>a+x,0)/mot.length*10)/10}:null,
+    sommeil:rep(_cbSommeil,CB_SOMMEIL_LIB),stress:rep(_cbStress,CB_STRESS_LIB),
+    ecarts:ec.length?Math.round(ec.reduce((a,x)=>a+x,0)/ec.length*10)/10:null};
+  return out;
 }
 // N6.7 — DEUX PHOTOS, LA PREMIERE ET LA DERNIERE DE LA PERIODE, de la meme
 // vue. Comparer une photo de face a une photo de dos ne compare rien.
@@ -74340,6 +74366,7 @@ function rapportPeriode(u,debut,fin,opts){
     },
     sante:rapSanteAutorisee(u),
     lifestyle:rapLifestyle(u,debut,fin),
+    ressentis:rapRessentis(u,debut,fin),
     // N6.7 — les trois blocs manquants.
     diete:rapDiete(u),
     mensurations:rapMensurations(u,debut,fin),
@@ -74395,7 +74422,7 @@ function _rapBarreVolume(m){
 }
 // ── Le document ───────────────────────────────────────────────────────────
 let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,
-  diete:true,mensurations:true,photos:true,lifestyle:true,mot:true};
+  diete:true,mensurations:true,photos:true,lifestyle:true,ressentis:true,mot:true};
 let _rapDebut=null,_rapFin=null,_rapCible=null;
 // Les trois fenêtres qu’on demande réellement. Remplir deux champs date à la
 // main, sur téléphone, pour chaque athlète, était le prix de la moindre
@@ -74403,7 +74430,9 @@ let _rapDebut=null,_rapFin=null,_rapCible=null;
 const RAP_PRESETS=Object.freeze([
   {cle:'14j', lib:'14 derniers jours', jours:14},
   {cle:'28j', lib:'28 derniers jours', jours:28},
-  {cle:'mois',lib:'Mois précédent'}
+  {cle:'mois',lib:'Mois précédent'},
+  // BUILD 1884 : le bloc en cours (programmeDe), masqué sans bloc daté.
+  {cle:'bloc',lib:'Ce bloc'}
 ]);
 // Le préréglage actuellement en vigueur, ou null dès que les dates ont été
 // modifiées à la main : un bouton qui resterait allumé pendant que les champs
@@ -74417,8 +74446,18 @@ let _rapPresetActif=null;
 //
 // n-1 : « 14 derniers jours » compte aujourd’hui. Quatorze jours pleins, pas
 // quinze.
-function _rapPresetBornes(cle){
+function _rapPresetBornes(cle,u){
   if(cle==='mois'){ const m=rapMoisPrecedent(); return {debut:m.debut,fin:m.fin,cle:'mois'}; }
+  if(cle==='bloc'){
+    let p=null; try{ p=programmeDe(u||_rapCible||currentUser); }catch(e){ p=null; }
+    if(p){
+      const d0=new Date(p.debut), d=new Date();
+      const prevue=new Date(d0.getFullYear(),d0.getMonth(),d0.getDate()+p.semaines*7-1,23,59,59,999).getTime();
+      return {debut:new Date(d0.getFullYear(),d0.getMonth(),d0.getDate(),0,0,0,0).getTime(),
+        fin:Math.min(new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999).getTime(),prevue),cle:'bloc'};
+    }
+    cle='14j';
+  }
   const p=RAP_PRESETS.find(x=>x.cle===cle)||RAP_PRESETS[0];
   const n=Number(p.jours)||14;
   const d=new Date();
@@ -74597,6 +74636,22 @@ function htmlRapport(r){
       +`</tbody></table>`;
     h+=`</section>`;
   }
+  // BUILD 1884 — LES RESSENTIS DES BILANS.
+  if(B.ressentis){
+    h+=`<section class="rap-bloc"><h2>Ressentis des bilans</h2>`;
+    const rs=r.ressentis;
+    if(!rs||!rs.present) h+=`<p class="rap-note">${RAP_INSUFFISANT}</p>`;
+    else{
+      const dist=o=>Object.keys(o).map(k=>escapeHtml(k)+' ×'+o[k]).join(', ')||'—';
+      h+=`<table class="rap-tbl"><thead><tr><th>Ressenti</th><th>Sur ${rs.n} bilan${rs.n>1?'s':''}</th></tr></thead><tbody>`
+        +(rs.motivation?`<tr><td>Motivation</td><td>${rs.motivation.debut} → ${rs.motivation.fin} /10 (moyenne ${String(rs.motivation.moyenne).replace('.',',')})</td></tr>`:'')
+        +`<tr><td>Sommeil</td><td>${dist(rs.sommeil)}</td></tr>`
+        +`<tr><td>Stress</td><td>${dist(rs.stress)}</td></tr>`
+        +(rs.ecarts!=null?`<tr><td>Écarts par bilan</td><td>${String(rs.ecarts).replace('.',',')} en moyenne</td></tr>`:'')
+        +`</tbody></table>`;
+    }
+    h+=`</section>`;
+  }
   // N6.7 — (10) DEUX PHOTOS DE LA MEME VUE. En <img>, jamais en canvas : le
   // canvas s'imprime flou, la raison est ecrite plus haut dans ce module.
   if(B.photos){
@@ -74645,6 +74700,14 @@ function htmlRapport(r){
   return h;
 }
 // ── L'écran ───────────────────────────────────────────────────────────────
+// BUILD 1884 : « Rapport complet du bloc » — le bloc, et TOUS les blocs cochés.
+function ouvrirRapportBloc(cible){
+  try{ closeModal(); }catch(e){}
+  ouvrirRapport(cible);
+  Object.keys(_rapBlocs).forEach(k=>{ _rapBlocs[k]=true; });
+  const c=document.getElementById('rap-cases'); if(c){ delete c.dataset.pose; }
+  return rapPreset('bloc');
+}
 function ouvrirRapport(cible){
   _rapCible=cible||currentUser;
   // SOI OU UN CLIENT : le défaut n’est pas le même. Un coach qui ouvre la
@@ -74691,7 +74754,8 @@ function rapRendre(){
   // allumé doit suivre la période en vigueur, et s’éteindre dès qu’elle est
   // reprise à la main.
   const pz=document.getElementById('rap-presets');
-  if(pz) pz.innerHTML=RAP_PRESETS.map(x=>{
+  let _bloc=null; try{ _bloc=programmeDe(_rapCible||currentUser); }catch(e){ _bloc=null; }
+  if(pz) pz.innerHTML=RAP_PRESETS.filter(x=>x.cle!=='bloc'||_bloc).map(x=>{
     const actif=_rapPresetActif===x.cle;
     return `<button type="button" onclick="rapPreset('${x.cle}')" aria-pressed="${actif?'true':'false'}" style="flex:1;min-height:38px;padding:0 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;background:${actif?'#1a0000':'var(--surface-1)'};border:1px solid ${actif?'var(--red)':'var(--border)'};color:${actif?'var(--red-light)':'var(--sub)'}">${escapeHtml(x.lib)}</button>`;
   }).join('');

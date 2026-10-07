@@ -66103,6 +66103,37 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1884 : LE RAPPORT DU BLOC ══
+    ok('_rapPresetBornes(\'bloc\') suit programmeDe (début → fin prévue ou aujourd’hui)',()=>{
+      const d0=new Date(); d0.setDate(d0.getDate()-10);
+      const u={email:'rp@t.fr',programme:{debut:d0.getTime(),semaines:8}};
+      const b=_rapPresetBornes('bloc',u);
+      if(b.cle!=='bloc') return _echec('repli : '+b.cle);
+      if(localISODate(new Date(b.debut))!==localISODate(new Date(programmeDe(u).debut))) return _echec('début '+localISODate(new Date(b.debut)));
+      if(localISODate(new Date(b.fin))!==localISODate(new Date())) return _echec('fin');
+      const v=new Date(); v.setDate(v.getDate()-70);
+      const b2=_rapPresetBornes('bloc',{programme:{debut:v.getTime(),semaines:4}});
+      const pd=new Date(programmeDe({programme:{debut:v.getTime(),semaines:4}}).debut); const fp=new Date(pd.getFullYear(),pd.getMonth(),pd.getDate()+27);
+      return localISODate(new Date(b2.fin))===localISODate(fp)?true:_echec('fin prévue '+localISODate(new Date(b2.fin)));});
+    ok('rapRessentis : 8/10, 6/10, 4/10 → début 8, fin 4, moyenne 6 ; sans bilan → insuffisant',()=>{
+      const t=Date.now();
+      const u={bilans:[{type:'coaching',date:t-20*864e5,'bil-motivation':'8/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[0]},
+        {type:'coaching',date:t-10*864e5,'bil-motivation':'6/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[2]},
+        {type:'coaching',date:t-864e5,'bil-motivation':'4/10','bil-sleep-quality':BIL_OPTS_SOMMEIL[2]}]};
+      const r=rapRessentis(u,t-30*864e5,t);
+      if(!r.present||r.motivation.debut!==8||r.motivation.fin!==4||r.motivation.moyenne!==6) return _echec(JSON.stringify(r));
+      if(r.sommeil.Mauvais!==2) return _echec(JSON.stringify(r.sommeil));
+      return rapRessentis({bilans:[]},0,t).present===false?true:_echec('vide');});
+    ok('rapMensurations ignore une valeur reportée',()=>{
+      const t=Date.now();
+      const u={bilans:[{type:'coaching',date:t-20*864e5,'bil-waist':'80'},{type:'coaching',date:t-10*864e5,'bil-waist':'78'},
+        {type:'coaching',date:t-864e5,'bil-waist':'78',reprises:['bil-waist']}]};
+      const r=rapMensurations(u,t-30*864e5,t);
+      const l=r.lignes&&r.lignes.find(x=>/taille/i.test(x.lib));
+      if(!l||l.debut!==80||l.fin!==78) return _echec(JSON.stringify(r));
+      const u2={bilans:[{type:'coaching',date:t-20*864e5,'bil-waist':'80'},{type:'coaching',date:t-864e5,'bil-waist':'80',reprises:['bil-waist']}]};
+      return !rapMensurations(u2,t-30*864e5,t).present?true:_echec('reportée prise comme borne');});
+
     // ══ BUILD 1883 : LE CADRAGE DE LA DERNIÈRE PHOTO ══
     ok('ecartCadrage : null sous les seuils ; « cadrage » au-delà (taille, décalage) ; profil sans décalage',()=>{
       const b={ex:0.5,ey:0.2,tronc:0.3,chev:0.7};

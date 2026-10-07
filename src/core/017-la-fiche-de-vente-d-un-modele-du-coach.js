@@ -793,6 +793,8 @@ function ouvrirBilanBloc(){
     // Et la suite : le bloc suivant à assigner, l'athlète suivant de la file.
     +_htmlSuiteBilanBloc(c)
     +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" onclick="bilanBlocExporter()">Exporter</button>':'')
+    // BUILD 1884 : un seul document à remettre — séances, poids, mensurations, photos, ressentis.
+    +(b?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirRapportBloc(getOwnedClient(currentClientId))">Rapport complet du bloc</button>':'')
     +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div></div>');
   return true;
 }
