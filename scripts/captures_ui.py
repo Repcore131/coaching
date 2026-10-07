@@ -160,7 +160,7 @@ def _navigateur(p):
             return p.chromium.launch(executable_path=chemin, args=['--no-sandbox'])
     return p.chromium.launch()
 
-def capturer(ecrans, sortie, hors_ligne=False, vide=False, zoom=None, titres=None):
+def capturer(ecrans, sortie, hors_ligne=False, vide=False, zoom=None, titres=None, sonde=None):
     from playwright.sync_api import sync_playwright
     os.makedirs(sortie, exist_ok=True)
     srv, port = servir()
@@ -207,10 +207,19 @@ def capturer(ecrans, sortie, hors_ligne=False, vide=False, zoom=None, titres=Non
             ecrits.append(f)
             if zoom:
                 el = page.query_selector(zoom)
-                if el and el.is_visible():
-                    zf = os.path.join(sortie, nom + '-zoom.png'); el.screenshot(path=zf, scale='device'); ecrits.append(zf)
+                if el:
+                    el.scroll_into_view_if_needed(); page.wait_for_timeout(300)
+                    bb = el.bounding_box()
+                    if bb and bb['width'] > 0:
+                        zf = os.path.join(sortie, nom + '-zoom.png')
+                        page.screenshot(path=zf, clip={'x': max(0, bb['x'] - 8), 'y': max(0, bb['y'] - 8),
+                                                       'width': min(390, bb['width'] + 16), 'height': bb['height'] + 16})
+                        ecrits.append(zf)
             if titres is not None:
                 titres[nom] = page.evaluate(SONDE_TITRES)
+            if sonde:
+                r = page.evaluate(sonde)
+                if r: print('SONDE', nom, json.dumps(r, ensure_ascii=False))
             actif = page.evaluate('()=>(document.querySelector(".screen.active")||{}).id||"?"')
             print('ecrit', f, '(écran actif : %s)' % actif)
             if os.environ.get('CAP_DEBUG'): print(page.title())
@@ -248,6 +257,7 @@ if __name__ == '__main__':
     ap.add_argument('--vide', action='store_true')
     ap.add_argument('--zoom', default='')
     ap.add_argument('--planche', nargs=2, metavar=('AVANT', 'APRES'))
+    ap.add_argument('--sonde', default='', help='fichier JS : une fonction ()=>[…] évaluée sur chaque écran')
     ap.add_argument('--titres', action='store_true', help='relève les styles de titre rendus (titres.json)')
     a = ap.parse_args()
     voulus = [x for x in a.ecrans.split(',') if x]
@@ -260,7 +270,7 @@ if __name__ == '__main__':
     if inconnus: sys.exit('écrans inconnus : ' + ', '.join(sorted(inconnus)))
     sortie = a.sortie or os.path.join(RACINE, 'docs', 'captures', _build())
     t = {} if a.titres else None
-    capturer(liste, sortie, a.hors_ligne, a.vide, a.zoom or None, t)
+    capturer(liste, sortie, a.hors_ligne, a.vide, a.zoom or None, t, open(a.sonde).read() if a.sonde else None)
     if t is not None:
         tous = {}
         for nom, l in t.items():

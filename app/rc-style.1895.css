@@ -183,10 +183,10 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
 .t-page,.ch-titre-ath{font-family:var(--pile-titre)!important;font-size:var(--fs-xl);font-weight:400;text-transform:uppercase;
   letter-spacing:1px;color:var(--text);line-height:1.1;margin:0 0 6px}
 .t-page::before{content:"";display:block;width:24px;height:2px;background:var(--red);margin-bottom:10px}
-.t-section,.rc-sect-t,.eyebrow,.ma-sur,.cs-sur,.pp-titre,.cc-sect-t>span,.hb-page-t{font-family:Montserrat,sans-serif!important;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;
+.t-section,.rc-sect-t,.eyebrow,.ma-sur,.cs-sur,.pp-titre,.cc-sect-t>span,.hb-page-t{font-family:Montserrat,sans-serif!important;font-size:var(--fs-xs);font-weight:800!important;text-transform:uppercase;
   letter-spacing:2px;color:var(--sub);margin:0 0 10px;line-height:1.3}
 .t-section.is-action{color:var(--red-text)}
-.t-carte,.prf-t,.sv-g-t h3{font-family:Montserrat,sans-serif!important;font-size:var(--fs-md);font-weight:800;text-transform:none;
+.t-carte,.prf-t,.sv-g-t h3{font-family:Montserrat,sans-serif!important;font-size:var(--fs-md);font-weight:800!important;text-transform:none;
   letter-spacing:0;color:var(--text);margin:0 0 4px;line-height:1.3}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
@@ -4367,15 +4367,23 @@ html{scroll-behavior:smooth}
    mot d'un seul tenant, n'y entre qu'a 10 px ; sur l'ecran du coach, large,
    rien n'empeche d'aller a 13. clamp() fait les deux sans point de rupture,
    et l'interlettre reste a 0,4 px : c'est elle qui paie la taille. */
-#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-size:clamp(10px,2.6vw,13px);
-  letter-spacing:.4px;line-height:1.2;overflow-wrap:anywhere}
+/* BUILD 1895 : MONTSERRAT, PLUS DE BEBAS EN FAUX GRAS. Bebas n'est chargée
+   qu'en 400 ; à 800 le navigateur la grossissait lui-même, floue. Les mots ne
+   se coupent plus : un libellé trop long est RACCOURCI (« Relances auto. »),
+   jamais rapetissé. */
+#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{font-family:Montserrat,sans-serif!important;font-size:var(--fs-2xs);
+  font-weight:800;text-transform:uppercase;letter-spacing:.4px;line-height:1.2;text-shadow:none;
+  overflow-wrap:normal;hyphens:none;word-break:normal}
+/* CHAQUE COMMANDE PREND AU MOINS SON PLUS LONG MOT (min-content) : un mot ne
+   déborde plus jamais de son rectangle ; si les cinq ne tiennent pas sur une
+   ligne, la rangée passe à la ligne au lieu de couper. */
+#s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t,.ccd-b4{flex:1 1 auto!important;min-width:min-content!important}
 /* LES DEUX BOUTONS PORTENT LE MEME RECTANGLE QUE LES BANDEAUX — meme fond,
    meme filet a gauche, meme rayon — et PAS de chevron : ils n'ouvrent rien sur
    place. Le texte est donc centre, faute de triangle pour l'ancrer a gauche. */
 .ccd-b4{order:1;flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;
   text-align:center;padding:6px 6px;min-height:46px;cursor:pointer;
-  font-family:var(--pile-titre);font-weight:800;text-transform:uppercase;
-  color:#fff;text-shadow:0 0 8px rgba(255,255,255,.35);
+  color:var(--text);
   background:var(--surface-1);border:none;border-left:3px solid var(--border);
   border-radius:var(--r-2);transition:background var(--t-1) var(--c-out)}
 .ccd-b4:hover,.ccd-b4:focus-visible{background:var(--surface-2)}
@@ -4383,7 +4391,7 @@ html{scroll-behavior:smooth}
    fond rouge dans cette ligne aurait reconstitue l'echelle de couleurs que
    N5.11 a demontee. Le filet de gauche, lui, prend le rouge : dans toute la
    fiche, c'est lui qui porte le niveau. */
-.ccd-b4-agit{color:var(--red);text-shadow:0 0 8px color-mix(in srgb,var(--red) 45%,transparent);
+.ccd-b4-agit{color:var(--red-text);
   border-left-color:var(--red)}
 @media (prefers-reduced-motion:reduce){.ccd-b4{transition:none}}
 /* LA MARQUE D'ARRIVEE. ::before est libre — ::after porte deja les hachures. */
@@ -7628,7 +7636,10 @@ input[type=file]{display:none}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 
 /* ====== METAL MANIA — TITRES PRINCIPAUX ====== */
-h1,h2,.topbar-title{font-family:var(--pile-titre)!important;letter-spacing:1px}
+/* BUILD 1895 : Bebas Neue n'existe qu'en 400 (app/fonts/bebasneue-400-latin.woff2).
+   Toute graisse plus forte serait un gras SYNTHÉTIQUE, flou : on l'interdit. */
+h1,h2,.topbar-title{font-family:var(--pile-titre)!important;letter-spacing:1px;font-weight:400!important}
+h1,h2,.topbar-title,[style*="pile-titre"]{font-synthesis:none}
 .metric-val{font-family:var(--pile-titre)!important;letter-spacing:0.5px}
 h1{font-size:var(--fs-2xl);text-transform:uppercase;letter-spacing:1.5px}
 h2{font-size:var(--fs-xl);text-transform:uppercase;letter-spacing:1.5px}
@@ -9231,7 +9242,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pes-champ::-webkit-outer-spin-button,
 .pes-champ::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .pes-champ{-moz-appearance:textfield;appearance:textfield}
-.pes-unite{flex:0 0 auto;font-family:var(--pile-titre);font-size:var(--fs-md);
+.pes-unite{flex:0 0 auto;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;
   letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
 /* LA LIGNE DU DESSOUS TIENT SUR UN SEUL RANG. « Encore 4 pesées cette semaine
    avant une moyenne fiable » passait à la ligne sur tout téléphone et faisait

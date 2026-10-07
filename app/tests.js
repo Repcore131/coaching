@@ -73463,6 +73463,51 @@ async function testExercices(){
       if(document.querySelectorAll('h1[style*="font-weight:900"]').length) return _echec('un h1 en 900 reste');
       return document.querySelectorAll('h1.t-page').length>=7?true:_echec(document.querySelectorAll('h1.t-page').length+' .t-page');});
 
+    // ══ BUILD 1895 — PLUS DE BEBAS EN FAUX GRAS ════════════════════════════
+    // La fiche coach avec un athlète : le dossier est posé dans la carte, puis
+    // la carte d'origine est remise mot pour mot.
+    const _avecFiche=(fn)=>{
+      const brut=localStorage.getItem('rc_users');
+      const c=Object.assign(_banAth(),{id:'banc_fiche',email:'fiche@t.fr',coachId:'banc_c'});
+      const u={}; u[c.email]=c;
+      try{ DB.set('users',u); return _sondeEcran(_banCoach(),()=>{ currentClientId=c.id; openClientDetail(c.id,false,true); },fn); }
+      finally{ try{ if(brut==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',brut); }catch(e){} }
+    };
+    const _bebasGras=id=>[...document.querySelectorAll('#'+id+' *')].filter(e=>{
+      if(!e.getClientRects().length) return false;
+      if(![...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())) return false;
+      const cs=getComputedStyle(e); return /^["']?Bebas/.test(cs.fontFamily)&&+cs.fontWeight>400; })
+      .map(e=>id+' : '+e.tagName+'.'+e.className+' '+getComputedStyle(e).fontWeight+' « '+e.textContent.trim().slice(0,20)+' »');
+    ok('1895 — sonde : aucun texte Bebas visible au-delà de 400 (relances, lundi, activité, réglages, fiche)',()=>{
+      const faux=[];
+      faux.push(..._sondeEcran(_banCoach(),()=>ouvrirRelances(),()=>_bebasGras('s-coach-relances')));
+      faux.push(..._sondeEcran(_banCoach(),()=>ouvrirLundi(),()=>_bebasGras('s-coach-lundi')));
+      faux.push(..._sondeEcran(_banCoach(),()=>loadCoachActivite(),()=>_bebasGras('s-coach-activite')));
+      faux.push(..._sondeEcran(_banAth(),()=>ouvrirReglagesAthlete(),()=>_bebasGras('s-client-reglages')));
+      faux.push(..._avecFiche(()=>_bebasGras('s-coach-client')));
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+    ok('1895 — la feuille interdit le gras synthétique sur la pile titre',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      if(!/h1,h2,\.topbar-title,\[style\*="pile-titre"\]\{font-synthesis:none\}/.test(css)) return _echec('font-synthesis:none absent');
+      return /h1,h2,\.topbar-title\{[^}]*font-weight:400!important/.test(css)?true:_echec('h1,h2,.topbar-title sans font-weight:400!important');});
+    ok('1895 — .ccd-barre4 : aucun mot coupé (lignes rendues ≤ nombre de mots), Montserrat, 46 px',()=>_avecFiche(()=>{
+      const l=[...document.querySelectorAll('#s-coach-client .ccd-barre4 .cc-sect-t>span, #s-coach-client .ccd-barre4 .ccd-b4')].filter(x=>x.getClientRects().length);
+      if(l.length<3) return _echec(l.length+' commande(s) visible(s)');
+      const faux=[];
+      for(const b of l){
+        const t=[...b.childNodes].find(n=>n.nodeType===3&&n.textContent.trim()); if(!t) continue;
+        const r=document.createRange(); r.selectNodeContents(t);
+        const lignes=new Set([...r.getClientRects()].map(x=>Math.round(x.top))).size;
+        const mots=t.textContent.trim().split(/\s+/).length;
+        const cs=getComputedStyle(b);
+        if(lignes>mots) faux.push(t.textContent.trim()+' : '+lignes+' lignes pour '+mots+' mot(s)');
+        if(b.scrollWidth>b.clientWidth+1) faux.push(t.textContent.trim()+' déborde');
+        if(!/^Montserrat/.test(cs.fontFamily)||cs.fontWeight!=='800'||cs.textShadow!=='none') faux.push(t.textContent.trim()+' : '+cs.fontFamily.slice(0,12)+' '+cs.fontWeight+' '+cs.textShadow);
+      }
+      const h=[...document.querySelectorAll('#s-coach-client .ccd-b4')].filter(x=>x.getClientRects().length).map(x=>Math.round(x.getBoundingClientRect().height));
+      if(h.some(x=>x<46)) faux.push('hauteurs '+h.join('/'));
+      return faux.length?_echec(faux.join(' | ')):true;}));
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

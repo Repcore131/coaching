@@ -783,9 +783,9 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] #s-coach-client .cc-sect-i .rc-i{color:rgba(9,9,9,0.72)}
 :root[data-theme="clair"] #s-coach-client .cc-sect-t:hover:not(.cc-sect-fixe>.cc-sect-t),:root[data-theme="clair"] #s-coach-client .cc-sect-t:focus-visible:not(.cc-sect-fixe>.cc-sect-t){background:var(--surface-2)}
 :root[data-theme="clair"] #s-coach-client .cc-sect-t::before{border-top:6px solid color-mix(in srgb,var(--text) 75%,transparent)}
-:root[data-theme="clair"] .ccd-b4{color:#090909;text-shadow:0 0 8px rgba(255,255,255,.35);background:var(--surface-1);border-left:3px solid var(--border)}
+:root[data-theme="clair"] .ccd-b4{color:var(--text);background:var(--surface-1);border-left:3px solid var(--border)}
 :root[data-theme="clair"] .ccd-b4:hover,:root[data-theme="clair"] .ccd-b4:focus-visible{background:var(--surface-2)}
-:root[data-theme="clair"] .ccd-b4-agit{color:var(--red-texte-clair);text-shadow:0 0 8px color-mix(in srgb,var(--red) 45%,transparent);border-left-color:var(--red)}
+:root[data-theme="clair"] .ccd-b4-agit{color:var(--red-text);border-left-color:var(--red)}
 :root[data-theme="clair"] .cc-sect-t.cc-vise::before{background:linear-gradient(90deg,color-mix(in srgb,var(--text) 30%,transparent),transparent 55%)}
 :root[data-theme="clair"] .px-grp{color:var(--red-text)}
 :root[data-theme="clair"] .px-grp::after{background:linear-gradient(90deg,color-mix(in srgb,var(--red) 75%,transparent),color-mix(in srgb,var(--red) 18%,transparent))}
