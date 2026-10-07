@@ -1475,7 +1475,7 @@ const BIL_STEPS=[
     `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
     _htmlNoteReprises()+
     `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}${_htmlPoidsPesees()}</div>`+
-    bBodySchema('bil')+
+    bBodySchema('bil',_bilEdition?null:mesuresDemandees(currentUser))+
     // LA MASSE GRASSE MESURÉE, FACULTATIVE (05/10/2026) : un chiffre d'appareil,
     // jamais calculé ici. Elle passe devant l'estimation au ruban à ±3 jours
     // (pctMasseGrasseDu) et entre dans masseGrasseLog avec sa méthode.
@@ -1483,13 +1483,14 @@ const BIL_STEPS=[
     bLbl('Mesurée avec\u00a0:')+
     `<div>${bC('bil-bf-methode',BIL_MG_METHODES.map(m=>m.lib))}</div>`
   ),
-  // Step 2 : Difficultés & Alimentation
-  ()=>bSec('Difficultés & Alimentation',
-    // R35 — espace insecable avant « ? », « : » et « ! » ; cles et valeurs inchangees.
+  // BUILD 1882 : « TA SEMAINE ». Difficultés, alimentation, ressenti,
+  // sommeil, stress et objectifs en UNE étape — mêmes clés bil-*, même ordre,
+  // mêmes composants. Les détails ne s'ouvrent que si la réponse les appelle.
+  ()=>bSec('Ta semaine',
     bLbl("As-tu éprouvé des difficultés récentes en séance ou avec l'alimentation ?")+
     `<div>${bC('bil-diff-type',["Oui, avec les séances","Oui, avec l'alimentation","Oui, avec les deux","Non, aucune difficulté particulière"])}</div>`+
-    bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
-    // « cheat meals » reste entre parentheses : c'est le mot que les athletes
+    _bilSi('bil-diff-type',bLbl('Détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...'))+
+    // « cheat meals » reste entre parentheses : c'est le mot que les athletes
     // emploient, et le coach le lit dans les reponses.
     bLbl('Combien de repas hors programme (cheat meals) as-tu pris cette semaine ?')+
     `<div>${bEmojiScale('bil-cheat-meals',[
@@ -1499,21 +1500,16 @@ const BIL_STEPS=[
       {v:'3',f:'sad',c:'#f97316'},
       {v:'4 ou plus',f:'angry',c:ROUGE_MARQUE},
     ])}</div>`+
-    bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
-  ),
-  // Step 3 : Ressenti & Modifications
-  ()=>bSec('Ressenti & Modifications',
+    _bilSi('bil-cheat-meals',bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...'))+
     bLbl('Quel est ton niveau de motivation en ce moment, sur une échelle de 1 à 10 ?')+
     `<div>${bSlider('bil-motivation')}</div>`+
-    bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Décris librement tes souhaits de modifications...')
-  ),
-  // Step 4 : Sommeil & Stress
-  ()=>bSec('Sommeil & Stress',
     bLbl('Qualité du sommeil : comment dors-tu en ce moment ?')+
     `<div>${bC('bil-sleep-quality',BIL_OPTS_SOMMEIL.slice())}</div>`+
     bLbl('Es-tu stressé(e) en ce moment ?')+
     `<div>${bC('bil-stress',BIL_OPTS_STRESS.slice())}</div>`+
-    bLbl('Si tu es stressé(e), peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
+    _bilSi('bil-stress',bLbl('Peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...'))+
+    bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Facultatif...')+
+    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
   // Rend une chaîne VIDE le reste du temps : bSec n'est même pas appelé, il
@@ -1525,12 +1521,6 @@ const BIL_STEPS=[
     `<div>${bC('bil-traitement-change',['Non, rien n\'a changé','Oui, il a changé','Je ne prends plus de traitement'])}</div>`+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">${escapeHtml(TRAITEMENT_MENTION)}</div>`
   ):'',
-  // Step 5 : Objectif — texte libre uniquement. L'engagement chiffré a été
-  // retiré du produit ; ce texte reste lu par _objectifTexte pour suggérer
-  // une phase.
-  ()=>bSec('Tes objectifs',
-    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
-  ),
   // Les questions libres du coach, s'il en a posé : vide sinon, comme le
   // traitement. Le texte de chacune part avec la réponse (<clé>-q).
   ()=>{

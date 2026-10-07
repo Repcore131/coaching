@@ -7746,6 +7746,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'derniersReports',
   // Le dernier passage du coach sur les bilans de chaque athlète (build 1878) : des dates.
   'bilansVus',
+  // Les mesures demandées à chaque bilan, posées par le coach (build 1882) : un réglage.
+  'mesuresBilan',
   // L'activation (05/10/2026) : quatre dates d'usage et un canal, pas une mesure.
   'activation',
   // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
@@ -82764,7 +82766,7 @@ async function openBilan(type,forcerReprise){
   // LIMITÉ AUX CLEFS ABSENTES DU BROUILLON. `in` et non une valeur vide : une
   // case que l’athlète a délibérément effacée est une décision, pas un trou —
   // la re-remplir reviendrait à lui rendre ce qu’il vient de retirer.
-  _bilPoidsPesees=null;
+  _bilPoidsPesees=null; _bschTout=false;
   if(type==='coaching'&&!_bilEdition&&!('bil-weight' in bilData)){
     // BUILD 1880 : la moyenne des pesées de la semaine, une MESURE (pas une reprise).
     let _p=null; try{ _p=poidsPourBilan(currentUser); }catch(e){ _p=null; }
@@ -82773,7 +82775,9 @@ async function openBilan(type,forcerReprise){
   if(type==='coaching'){
     let _r={};
     try{ _r=mensurationsReprises(currentUser); }catch(e){ _r={}; }
-    const _k=Object.keys(_r).filter(k=>!(k in bilData));
+    // BUILD 1882 : les tours non demandés ne sont PAS recopiés (pas de fausse stabilité).
+    let _dem=null; try{ _dem=new Set(mesuresDemandees(currentUser).map(k=>'bil-'+k)); }catch(e){ _dem=null; }
+    const _k=Object.keys(_r).filter(k=>!(k in bilData)&&(k==='bil-weight'||!_dem||_dem.has(k)));
     if(_k.length){
       for(const k of _k) bilData[k]=_r[k];
       _bilReprises=new Set(_k);
@@ -82951,6 +82955,20 @@ function renderBilStep(){
   // dernière étape où l'athlète a tapé quelque chose, pas où il en était.
   _bilSaveDraft();
 }
+// BUILD 1882 : un détail qui ne s'ouvre que si la réponse l'appelle.
+// Difficultés « Oui… », stress autre que « Pas du tout », écarts ≥ 1.
+function bilSiOuvert(gid,v){
+  const t=String(v==null?'':v).trim();
+  if(!t) return false;
+  if(gid==='bil-diff-type') return /^oui/i.test(t);
+  if(gid==='bil-stress') return t!=='Pas du tout';
+  if(gid==='bil-cheat-meals') return t!=='Aucun';
+  return true;
+}
+function _bilSi(gid,html){
+  const ouvert=bilSiOuvert(gid,bilData[gid])||!!String(bilData[{'bil-diff-type':'bil-diff-detail','bil-stress':'bil-stress-detail','bil-cheat-meals':'bil-cheat-reasons'}[gid]]||'').trim();
+  return '<div data-bil-si="'+gid+'"'+(ouvert?'':' hidden')+'>'+html+'</div>';
+}
 function pickBilChoice(groupId,val,multi){
   if(multi){
     if(!bilData[groupId])bilData[groupId]=[];
@@ -82961,6 +82979,7 @@ function pickBilChoice(groupId,val,multi){
     bilData[groupId]=val;
     document.querySelectorAll('[data-grp="'+groupId+'"]').forEach(el=>el.classList.toggle('sel',el.dataset.val===val));
   }
+  try{ document.querySelectorAll('[data-bil-si="'+groupId+'"]').forEach(z=>{ z.hidden=!bilSiOuvert(groupId,bilData[groupId]); }); }catch(e){}
   // Un clic ne déclenche pas d'événement `input` : la délégation ne le voit pas.
   _bilSaveDraft();
 }
@@ -83479,8 +83498,13 @@ function arcTracerSchema(root){
 // Le drapeau « les douze cases viennent d'etre remplies », remis a zero a
 // l'entree dans l'etape.
 let _bschComplet=false;
-function bBodySchema(prefix){
+// BUILD 1882 : `cles` (facultatif) — les tours DEMANDÉS ; les autres
+// derrière « + autres mesures ». Sans liste, les douze comme avant.
+let _bschTout=false;
+function bschToutesMesures(){ _bschTout=true; try{ renderBilStep(); }catch(e){} }
+function bBodySchema(prefix,cles){
   _bschComplet=false;
+  const _filtre=(Array.isArray(cles)&&!_bschTout)?new Set(cles):null;
   // Silhouette selon le genre : questionnaire de début → réponse "Tu es ?", sinon profil
   let female;
   if(prefix==='deb'&&bilData['deb-gender']) female=bilData['deb-gender']==='Femme';
@@ -83500,9 +83524,12 @@ function bBodySchema(prefix){
     {k:'thigh-r', l:'Cuisse droite', s:'l'},
     {k:'calf-r',  l:'Mollet droit',  s:'l'},
   ];
+  // Une case DÉJÀ remplie reste visible (modification d'un ancien bilan).
+  const _visibles=_filtre?F.filter(f=>_filtre.has(f.k)||String(bilData[prefix+'-'+f.k]||'').trim()):F;
+  const _caches=F.length-_visibles.length;
   const W=360,H=572,Y0=48,VH=484; // viewBox rognée : supprime le vide au-dessus/dessous de la silhouette
   // Lignes de rappel en équerre : segment horizontal depuis la case, puis courte oblique vers le point
-  const leaders=F.map(f=>{
+  const leaders=_visibles.map(f=>{
     const id=prefix+'-'+f.k;
     const [nx,ny,fx]=A.seg[f.k];
     const cy=A.box[f.k];
@@ -83549,7 +83576,7 @@ function bBodySchema(prefix){
       <g stroke="var(--border)" stroke-width="1.2" fill="none" stroke-linecap="round">${A.detail}</g>
       ${leaders}
     </svg>
-    ${F.map(f=>{
+    ${_visibles.map(f=>{
       const id=prefix+'-'+f.k;
       const posX=f.s==='l'?'left:0':'right:0';
       // Plus de decalage de 26px pour loger un libelle au-dessus : il est
@@ -83575,6 +83602,7 @@ function bBodySchema(prefix){
       </div>`;
     }).join('')}
   </div>
+  ${_caches>0?`<button type="button" class="rb-lien" style="display:block;margin:6px auto 0" onclick="bschToutesMesures()">+ autres mesures (${_caches})</button>`:''}
   ${prefix==='deb'?bLongueurs():''}`;
 }
 // Deux longueurs, facultatives, sous le schéma. Elles ne changent plus une
@@ -84123,13 +84151,63 @@ function _htmlCalendrierBilansCoach(c){
         : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Ce bilan ne porte que des mesures : aucune question n\'a reçu de réponse écrite.</div>')
     +'</div></div>';
 }
+// ══ BUILD 1882 : LES MESURES DEMANDÉES À CHAQUE BILAN ══════════════════════
+// u.mesuresBilan={cles:[…], completToutesLes:4} posé par le coach. Absent : les
+// douze tours, comme avant. Le jeu complet revient toutes les N semaines.
+const MESURES_ESSENTIEL=Object.freeze(['waist','hips','thigh-r','bicep-r']);
+const MESURES_COMPLET_SEMAINES=4;
+/** PURE. Les clés MEAS à demander à ce bilan. */
+function mesuresDemandees(u,maintenant){
+  const toutes=MEAS.map(m=>m.k);
+  const mb=u&&u.mesuresBilan;
+  const cles=(mb&&Array.isArray(mb.cles)?mb.cles:mb&&mb.cles?Object.values(mb.cles):[]).filter(k=>toutes.indexOf(k)>=0);
+  if(!cles.length) return toutes;
+  const sem=Number(mb.completToutesLes)>0?Number(mb.completToutesLes):MESURES_COMPLET_SEMAINES;
+  const t=Number(maintenant)||Date.now();
+  const complet=((u&&u.bilans)||[]).some(b=>b&&b.date&&(t-Number(b.date))<sem*7*864e5
+    &&toutes.every(k=>getBM(b,k)!=null&&!bmReportee(b,k)));
+  if(!complet) return toutes;
+  return cles.indexOf('waist')>=0?cles:['waist'].concat(cles);
+}
+function _htmlMesuresBilanCoach(c){
+  const mb=(c&&c.mesuresBilan)||null;
+  const sel=new Set((mb&&Array.isArray(mb.cles))?mb.cles:MEAS.map(m=>m.k));
+  const em=escapeHtml(c.email||'');
+  return '<details class="cc-mesures" style="margin:8px 0 12px"><summary style="font-size:var(--fs-xs);font-weight:800;cursor:pointer">Mesures demandées à chaque bilan'
+    +(mb?' : '+sel.size+' sur '+MEAS.length:' : toutes')+'</summary>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin:8px 0">'
+    +MEAS.map(m=>'<label style="font-size:var(--fs-xs);display:flex;align-items:center;gap:4px"><input type="checkbox" data-mb="'+m.k+'"'+(sel.has(m.k)?' checked':'')+'> '+escapeHtml(m.l)+'</label>').join('')
+    +'</div><div style="display:flex;flex-wrap:wrap;gap:6px">'
+    +'<button type="button" class="btn btn-sm" style="margin:0" onclick="enregistrerMesuresBilan(\''+em+'\',\'essentiel\')">Essentiel : taille, hanches, cuisse D, biceps D</button>'
+    +'<button type="button" class="btn btn-sm" style="margin:0" onclick="enregistrerMesuresBilan(\''+em+'\')">Enregistrer</button>'
+    +'<button type="button" class="rb-lien" onclick="enregistrerMesuresBilan(\''+em+'\',\'toutes\')">Toutes</button></div>'
+    +'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:6px">Le jeu complet revient toutes les '+MESURES_COMPLET_SEMAINES+' semaines. La taille reste toujours demandée.</div></details>';
+}
+function enregistrerMesuresBilan(email,preset){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)) return false;
+  let cles;
+  if(preset==='essentiel') cles=MESURES_ESSENTIEL.slice();
+  else if(preset==='toutes') cles=null;
+  else { cles=[]; document.querySelectorAll('#ccd-bil-cal input[data-mb]').forEach(x=>{ if(x.checked) cles.push(x.dataset.mb); }); }
+  if(cles&&cles.indexOf('waist')<0) cles.unshift('waist');
+  if(!cles||cles.length>=MEAS.length) delete c.mesuresBilan;
+  else c.mesuresBilan={cles,completToutesLes:MESURES_COMPLET_SEMAINES};
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(email,c),cles&&cles.length<MEAS.length?cles.length+' mesures demandées à chaque bilan':'Les douze mesures à chaque bilan','le réglage est');
+  try{ renderCalendrierBilansCoach(c); }catch(e){}
+  return true;
+}
 function renderCalendrierBilansCoach(c){
   const z=document.getElementById('ccd-bil-cal');
   if(!z) return;
   let h=''; try{ h=_htmlCalendrierBilansCoach(c); }catch(e){ h=''; }
   // La cadence des bilans, et les questions du coach, en tête du calendrier.
   let k=''; try{ k=(c&&!c._fromCode)?_htmlCadenceCoach(c):''; }catch(e){ k=''; }
-  z.innerHTML=k+h;
+  let m=''; try{ m=(c&&!c._fromCode)?_htmlMesuresBilanCoach(c):''; }catch(e){ m=''; }
+  z.innerHTML=k+m+h;
 }
 // Les deux commandes. Elles relisent le dossier plutot que de garder celui du
 // premier rendu : un bilan arrive entre-temps apparait sans rouvrir la fiche.
@@ -87175,7 +87253,7 @@ const BIL_STEPS=[
     `<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
     _htmlNoteReprises()+
     `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}${_htmlPoidsPesees()}</div>`+
-    bBodySchema('bil')+
+    bBodySchema('bil',_bilEdition?null:mesuresDemandees(currentUser))+
     // LA MASSE GRASSE MESURÉE, FACULTATIVE (05/10/2026) : un chiffre d'appareil,
     // jamais calculé ici. Elle passe devant l'estimation au ruban à ±3 jours
     // (pctMasseGrasseDu) et entre dans masseGrasseLog avec sa méthode.
@@ -87183,13 +87261,14 @@ const BIL_STEPS=[
     bLbl('Mesurée avec\u00a0:')+
     `<div>${bC('bil-bf-methode',BIL_MG_METHODES.map(m=>m.lib))}</div>`
   ),
-  // Step 2 : Difficultés & Alimentation
-  ()=>bSec('Difficultés & Alimentation',
-    // R35 — espace insecable avant « ? », « : » et « ! » ; cles et valeurs inchangees.
+  // BUILD 1882 : « TA SEMAINE ». Difficultés, alimentation, ressenti,
+  // sommeil, stress et objectifs en UNE étape — mêmes clés bil-*, même ordre,
+  // mêmes composants. Les détails ne s'ouvrent que si la réponse les appelle.
+  ()=>bSec('Ta semaine',
     bLbl("As-tu éprouvé des difficultés récentes en séance ou avec l'alimentation ?")+
     `<div>${bC('bil-diff-type',["Oui, avec les séances","Oui, avec l'alimentation","Oui, avec les deux","Non, aucune difficulté particulière"])}</div>`+
-    bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
-    // « cheat meals » reste entre parentheses : c'est le mot que les athletes
+    _bilSi('bil-diff-type',bLbl('Détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...'))+
+    // « cheat meals » reste entre parentheses : c'est le mot que les athletes
     // emploient, et le coach le lit dans les reponses.
     bLbl('Combien de repas hors programme (cheat meals) as-tu pris cette semaine ?')+
     `<div>${bEmojiScale('bil-cheat-meals',[
@@ -87199,21 +87278,16 @@ const BIL_STEPS=[
       {v:'3',f:'sad',c:'#f97316'},
       {v:'4 ou plus',f:'angry',c:ROUGE_MARQUE},
     ])}</div>`+
-    bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
-  ),
-  // Step 3 : Ressenti & Modifications
-  ()=>bSec('Ressenti & Modifications',
+    _bilSi('bil-cheat-meals',bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...'))+
     bLbl('Quel est ton niveau de motivation en ce moment, sur une échelle de 1 à 10 ?')+
     `<div>${bSlider('bil-motivation')}</div>`+
-    bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Décris librement tes souhaits de modifications...')
-  ),
-  // Step 4 : Sommeil & Stress
-  ()=>bSec('Sommeil & Stress',
     bLbl('Qualité du sommeil : comment dors-tu en ce moment ?')+
     `<div>${bC('bil-sleep-quality',BIL_OPTS_SOMMEIL.slice())}</div>`+
     bLbl('Es-tu stressé(e) en ce moment ?')+
     `<div>${bC('bil-stress',BIL_OPTS_STRESS.slice())}</div>`+
-    bLbl('Si tu es stressé(e), peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
+    _bilSi('bil-stress',bLbl('Peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...'))+
+    bLbl('Souhaiterais-tu des modifications dans ton programme ?')+bTA('bil-prog-modifs','Facultatif...')+
+    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
   // Rend une chaîne VIDE le reste du temps : bSec n'est même pas appelé, il
@@ -87225,12 +87299,6 @@ const BIL_STEPS=[
     `<div>${bC('bil-traitement-change',['Non, rien n\'a changé','Oui, il a changé','Je ne prends plus de traitement'])}</div>`+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">${escapeHtml(TRAITEMENT_MENTION)}</div>`
   ):'',
-  // Step 5 : Objectif — texte libre uniquement. L'engagement chiffré a été
-  // retiré du produit ; ce texte reste lu par _objectifTexte pour suggérer
-  // une phase.
-  ()=>bSec('Tes objectifs',
-    bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
-  ),
   // Les questions libres du coach, s'il en a posé : vide sinon, comme le
   // traitement. Le texte de chacune part avec la réponse (<clé>-q).
   ()=>{

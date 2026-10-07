@@ -66103,6 +66103,36 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1882 : LE BILAN ALLÉGÉ ══
+    ok('mesuresDemandees : 12 au premier bilan, 4 après un bilan complet, 12 de nouveau après 4 semaines',()=>{
+      const t=Date.now();
+      const u={mesuresBilan:{cles:MESURES_ESSENTIEL.slice(),completToutesLes:4},bilans:[]};
+      if(mesuresDemandees(u,t).length!==12) return _echec('premier bilan : '+mesuresDemandees(u,t).length);
+      const complet={type:'coaching',date:t-7*864e5}; MEAS.forEach(m=>{ complet['bil-'+m.k]='40'; });
+      u.bilans.push(complet);
+      const l=mesuresDemandees(u,t);
+      if(l.length!==4||l.indexOf('waist')<0) return _echec('après complet : '+l.join());
+      if(mesuresDemandees(u,t+28*864e5).length!==12) return _echec('après 4 semaines');
+      return mesuresDemandees({bilans:[]},t).length===12?true:_echec('sans réglage');});
+    ok('BIL_STEPS : au plus 4 étapes sans traitement ni questions du coach',()=>{
+      const sU=currentUser;
+      try{ currentUser={id:'st',email:'st@t.fr',role:'athlete',bilans:[],sessions:[]}; const n=_etapesUtiles(BIL_STEPS).length; return n<=4?true:_echec(n+' étapes'); }
+      finally{ currentUser=sU; }});
+    ok('Un brouillon avec bilStep=5 reprend à la dernière étape',()=>{
+      const sU=currentUser, sD=bilData, sS=bilStep, sG=window.go, sT=bilType;
+      try{
+        window.go=()=>{};
+        currentUser={id:'bs',email:'bs@t.fr',role:'athlete',bilans:[{type:'depart',date:Date.now()-30*864e5}],sessions:[]};
+        localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:5,bilData:{'bil-motivation':'7'},email:'bs@t.fr',ts:Date.now()}));
+        openBilan('coaching',true);
+        const n=_etapesUtiles(BIL_STEPS).length;
+        return bilStep===n-1?true:_echec('bilStep '+bilStep+' sur '+n);
+      } finally { currentUser=sU; bilData=sD; bilStep=sS; window.go=sG; bilType=sT; try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){} }});
+    ok('Les détails ne s’ouvrent que si la réponse les appelle',()=>
+      !bilSiOuvert('bil-diff-type','Non, aucune difficulté particulière')&&bilSiOuvert('bil-diff-type','Oui, avec les séances')
+      &&!bilSiOuvert('bil-stress','Pas du tout')&&bilSiOuvert('bil-stress','Un peu')
+      &&!bilSiOuvert('bil-cheat-meals','Aucun')&&bilSiOuvert('bil-cheat-meals','2')?true:_echec('règle'));
+
     // ══ BUILD 1881 : LA RESTITUTION DU BILAN ══
     const _r81U=(extra)=>{
       const t=Date.now();

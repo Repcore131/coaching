@@ -160,6 +160,12 @@
             "$date": { ".validate": "$date.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" }
           }
         },
+        // Les mesures demandees a chaque bilan, posees par le coach (build 1882).
+        "mesuresBilan": {
+          "cles": { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(bicep-r|bicep-l|chest|waist|hips|glutes|thigh-r|thigh-l|calf-r|calf-l|bust|neck)$/)" } },
+          "completToutesLes": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 26" },
+          "$autre": { ".validate": false }
+        },
         "questionsCoach": {
           "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" }
         },

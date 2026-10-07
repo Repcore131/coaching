@@ -2794,7 +2794,7 @@ async function openBilan(type,forcerReprise){
   // LIMITÉ AUX CLEFS ABSENTES DU BROUILLON. `in` et non une valeur vide : une
   // case que l’athlète a délibérément effacée est une décision, pas un trou —
   // la re-remplir reviendrait à lui rendre ce qu’il vient de retirer.
-  _bilPoidsPesees=null;
+  _bilPoidsPesees=null; _bschTout=false;
   if(type==='coaching'&&!_bilEdition&&!('bil-weight' in bilData)){
     // BUILD 1880 : la moyenne des pesées de la semaine, une MESURE (pas une reprise).
     let _p=null; try{ _p=poidsPourBilan(currentUser); }catch(e){ _p=null; }
@@ -2803,7 +2803,9 @@ async function openBilan(type,forcerReprise){
   if(type==='coaching'){
     let _r={};
     try{ _r=mensurationsReprises(currentUser); }catch(e){ _r={}; }
-    const _k=Object.keys(_r).filter(k=>!(k in bilData));
+    // BUILD 1882 : les tours non demandés ne sont PAS recopiés (pas de fausse stabilité).
+    let _dem=null; try{ _dem=new Set(mesuresDemandees(currentUser).map(k=>'bil-'+k)); }catch(e){ _dem=null; }
+    const _k=Object.keys(_r).filter(k=>!(k in bilData)&&(k==='bil-weight'||!_dem||_dem.has(k)));
     if(_k.length){
       for(const k of _k) bilData[k]=_r[k];
       _bilReprises=new Set(_k);
@@ -2981,6 +2983,20 @@ function renderBilStep(){
   // dernière étape où l'athlète a tapé quelque chose, pas où il en était.
   _bilSaveDraft();
 }
+// BUILD 1882 : un détail qui ne s'ouvre que si la réponse l'appelle.
+// Difficultés « Oui… », stress autre que « Pas du tout », écarts ≥ 1.
+function bilSiOuvert(gid,v){
+  const t=String(v==null?'':v).trim();
+  if(!t) return false;
+  if(gid==='bil-diff-type') return /^oui/i.test(t);
+  if(gid==='bil-stress') return t!=='Pas du tout';
+  if(gid==='bil-cheat-meals') return t!=='Aucun';
+  return true;
+}
+function _bilSi(gid,html){
+  const ouvert=bilSiOuvert(gid,bilData[gid])||!!String(bilData[{'bil-diff-type':'bil-diff-detail','bil-stress':'bil-stress-detail','bil-cheat-meals':'bil-cheat-reasons'}[gid]]||'').trim();
+  return '<div data-bil-si="'+gid+'"'+(ouvert?'':' hidden')+'>'+html+'</div>';
+}
 function pickBilChoice(groupId,val,multi){
   if(multi){
     if(!bilData[groupId])bilData[groupId]=[];
@@ -2991,6 +3007,7 @@ function pickBilChoice(groupId,val,multi){
     bilData[groupId]=val;
     document.querySelectorAll('[data-grp="'+groupId+'"]').forEach(el=>el.classList.toggle('sel',el.dataset.val===val));
   }
+  try{ document.querySelectorAll('[data-bil-si="'+groupId+'"]').forEach(z=>{ z.hidden=!bilSiOuvert(groupId,bilData[groupId]); }); }catch(e){}
   // Un clic ne déclenche pas d'événement `input` : la délégation ne le voit pas.
   _bilSaveDraft();
 }
