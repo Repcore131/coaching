@@ -2520,7 +2520,7 @@ function openMessageCanal(msgId){
     <label for="cm-lien" style="margin-top:12px">Lien (optionnel)</label>
     <input id="cm-lien" type="url" maxlength="${CANAL_LIEN_MAX}" value="${escapeHtml(m.lien||'')}" placeholder="Colle ici l'adresse de ta publication">
     <div class="sub" style="font-size:var(--fs-xs);margin-top:6px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Tes athlètes voient le nom du site et ouvrent le lien d'un tap, dans leur navigateur. Aucune image d'aperçu n'est chargée : rien n'est demandé à un autre site tant que personne n'a touché le lien.</div>
-    <label style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
+    <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
     </label>

@@ -73508,6 +73508,35 @@ async function testExercices(){
       if(h.some(x=>x<46)) faux.push('hauteurs '+h.join('/'));
       return faux.length?_echec(faux.join(' | ')):true;}));
 
+    // ══ BUILD 1896 — LA LIGNE DE RÉGLAGE, SANS CAPITALES ═══════════════════
+    const _phrasesMaj=id=>[...document.querySelectorAll('#'+id+' *')].filter(e=>{
+      // Les boutons portent leur casse (lot des boutons) : une phrase, pas une commande.
+      if(!e.getClientRects().length||e.closest('button')) return false;
+      const t=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').replace(/\s+/g,' ').trim();
+      return t.length>40&&getComputedStyle(e).textTransform==='uppercase'; })
+      .map(e=>e.tagName+'.'+e.className+' « '+e.textContent.trim().slice(0,40)+' »');
+    ok('1896 — Réglages : aucun texte de plus de 40 caractères en majuscules',()=>{
+      const faux=_sondeEcran(_banAth(),()=>{ ouvrirReglagesAthlete(); document.querySelectorAll('#s-client-reglages details').forEach(d=>d.open=true); },()=>_phrasesMaj('s-client-reglages'));
+      return faux.length?_echec(faux.slice(0,5).join(' | ')):true;});
+    ok('1896 — .reg-ligne neutralise la règle label (casse, interlettre, graisse)',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n').replace(/\s+/g,' ');
+      const m=css.match(/\.reg-ligne\{([^}]*)\}/);
+      if(!m) return _echec('.reg-ligne absente');
+      for(const v of ['text-transform:none','letter-spacing:0','font-weight:inherit']) if(m[1].indexOf(v)<0) return _echec('sans '+v);
+      return true;});
+    ok('1896 — les lignes de réglage sont identiques (son, écran, partage)',()=>_sondeEcran(_banAth(),()=>{ ouvrirReglagesAthlete(); document.querySelectorAll('#s-client-reglages details').forEach(d=>d.open=true); },()=>{
+      const l=['cr-son-case','cr-ecran-case','cr-partage-case'].map(id=>document.getElementById(id)).map(x=>x&&x.closest('label'));
+      if(l.some(x=>!x||!x.classList.contains('reg-ligne'))) return _echec('une ligne n’est pas une .reg-ligne');
+      const sig=x=>{ const t=x.querySelector('.reg-t'), d=x.querySelector('.reg-d'), cs=getComputedStyle(x);
+        return [cs.paddingTop,cs.paddingLeft,cs.borderRadius,t&&getComputedStyle(t).fontSize,t&&getComputedStyle(t).fontWeight,d&&getComputedStyle(d).fontSize,d&&getComputedStyle(d).textTransform].join('/'); };
+      const s0=sig(l[0]);
+      return l.every(x=>sig(x)===s0)&&/\/11px\/none$/.test(s0)?true:_echec(l.map(sig).join(' ≠ '));}));
+    ok('1896 — aucun <label style="display:flex…"> à case sans .reg-ligne ni text-transform:none',()=>{
+      const src=_prodSrc()+document.documentElement.outerHTML;
+      const l=(src.match(/<label\b[^>]*style=\\?["']display:flex[^"']*/g)||[])
+        .filter(x=>!/reg-ligne/.test(x)&&!/text-transform:none/.test(x)&&!/justify-content:center/.test(x));
+      return l.length?_echec(l.length+' : '+l[0].slice(0,80)):true;});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

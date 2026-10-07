@@ -112,7 +112,7 @@ function _htmlTableauxTableur(c){
         _htmlEcartFormules(t),false,'calc')
     +((currentUser&&currentUser.email===CREATOR_EMAIL)
       ?li('Noms réels des formules',
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
+          '<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
             +(nomsReels()?' checked':'')+'> Afficher</label>',
           'Réservé à ton compte : les autres voient les libellés RepCore, jamais le nom des formules ni les coefficients.',false,'calc')
       :'')

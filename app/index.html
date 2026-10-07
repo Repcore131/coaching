@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1895';
+window.RC_BUILD='1896';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1895.css">
+<link rel="stylesheet" href="./rc-style.1896.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1895.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1896.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -2225,7 +2225,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <input id="coach-dispo-delai" type="number" min="1" max="168" placeholder="24" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box;margin-bottom:8px">
           <div id="coach-dispo-apercu" style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px"></div>
           <div style="border-top:1px solid var(--border);padding-top:12px">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
+            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
               <input type="checkbox" id="coach-dispo-abs" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
               <span style="font-size:var(--fs-sm);color:var(--text-strong)">Je suis absent</span>
             </label>
@@ -2266,7 +2266,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:var(--fs-md);padding:12px 14px">
               <button onclick="saveCoachPhone()" style="background:var(--green);border:none;color:#000;border-radius:var(--r-1);padding:12px 20px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">Enregistrer</button>
             </div>
-            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px">
+            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px">
               <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
               <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
             </label>
@@ -3489,34 +3489,22 @@ const COACH_PHOTO='icons/coach.jpg';
          l'athlète a souvent ses écouteurs. Il compte surtout sur iOS, où
          Safari n'expose pas navigator.vibrate : sans lui, la fin du repos n'y
          émet aucun signal. État posé par ouvrirReglagesAthlete. -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-      <label for="cr-son-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
-        <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()"
-          style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
-        <span style="flex:1;min-width:0">
-          <span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Son de fin de repos</span>
-          <span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Un bip court quand le minuteur arrive à zéro,
-            en plus de la vibration. Utile sur iPhone, où la vibration n'est pas disponible dans le navigateur.</span>
-          <span id="cr-son-etat" style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-top:6px">Éteint</span>
-        </span>
-      </label>
-    </div>
+    <label for="cr-son-case" class="reg-ligne">
+      <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()">
+      <span class="reg-c"><span class="reg-t">Son de fin de repos</span>
+        <span class="reg-d">Un bip court quand le minuteur arrive à zéro, en plus de la vibration. Utile sur iPhone, où la vibration n'est pas disponible dans le navigateur.</span>
+        <span class="reg-etat" id="cr-son-etat">Éteint</span></span>
+    </label>
 
     <!-- L'ÉCRAN ALLUMÉ PENDANT LA SÉANCE (Wake Lock). Activé par défaut : un
          écran qui s'éteint pendant le repos gèle le minuteur, et la vibration
          de fin n'arrive qu'au rallumage. État posé par _majSonReglages. -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-      <label for="cr-ecran-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
-        <input type="checkbox" id="cr-ecran-case" onchange="basculerEcranAllume()" checked
-          style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
-        <span style="flex:1;min-width:0">
-          <span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Écran allumé pendant la séance</span>
-          <span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Le téléphone ne se met pas en veille pendant
-            l'entraînement : le minuteur de repos continue de tourner et vibre à la fin.</span>
-          <span id="cr-ecran-etat" style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-top:6px">Activé</span>
-        </span>
-      </label>
-    </div>
+    <label for="cr-ecran-case" class="reg-ligne">
+      <input type="checkbox" id="cr-ecran-case" onchange="basculerEcranAllume()" checked>
+      <span class="reg-c"><span class="reg-t">Écran allumé pendant la séance</span>
+        <span class="reg-d">Le téléphone ne se met pas en veille pendant l'entraînement : le minuteur de repos continue de tourner et vibre à la fin.</span>
+        <span class="reg-etat" id="cr-ecran-etat">Activé</span></span>
+    </label>
 
       </div>
     </details>
@@ -4128,10 +4116,10 @@ const COACH_PHOTO='icons/coach.jpg';
            user.etatsSante sans qu'aucun moyen n'existe de le remplir. Voici
            le mécanisme, avec les deux seules clés dont le code se sert. -->
       <div class="atp-med-q" id="atp-gross-card" style="margin-bottom:14px">
-        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Es-tu enceinte, allaites-tu, ou as-tu accouché il y a peu ?</label>
+        <label class="t-carte" style="display:block;margin:0 0 8px">Es-tu enceinte, allaites-tu, ou as-tu accouché il y a peu ?</label>
         <div id="atp-gross-msg" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px"></div>
         <div id="atp-gross-consent-row" style="margin-bottom:10px">
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+          <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
             <input type="checkbox" id="atp-gross-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
             <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que RepCore conserve cette information pour désactiver ce qui ne me convient pas. Je peux la retirer à tout moment, et elle sera alors effacée.</span>
           </label>
@@ -4145,14 +4133,14 @@ const COACH_PHOTO='icons/coach.jpg';
            n'est pas un diagnostic, et les libellés de ETATS_DECLARABLES
            portent tous « diagnostiqué par un médecin ». -->
       <div class="atp-med-q" id="atp-pes-card" style="margin-bottom:14px">
-        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Utilises-tu des produits améliorant la performance ?</label>
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+        <label class="t-carte" style="display:block;margin:0 0 8px">Utilises-tu des produits améliorant la performance ?</label>
+        <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
           <input type="checkbox" id="atp-pes" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPES(this.checked)">
           <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">J'en utilise</span>
         </label>
         <div id="atp-pes-bloc" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
           <div id="atp-pes-phrase" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-bottom:10px"></div>
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+          <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
             <input type="checkbox" id="atp-pes-partage" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPartagePES(this.checked)">
             <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">Transmettre cette information à mon coach</span>
           </label>
@@ -4168,12 +4156,12 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="atp-trait-note" style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:10px"></div>
       </div>
       <div class="atp-med-q" id="atp-etats-card" style="margin-bottom:14px">
-        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Un médecin t’a-t-il diagnostiqué l’un de ces états ? (SOPK, thyroïde…)</label>
+        <label class="t-carte" style="display:block;margin:0 0 8px">Un médecin t’a-t-il diagnostiqué l’un de ces états ? (SOPK, thyroïde…)</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
         <div id="atp-hormo-bloc" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
           <div class="t-section" style="margin-bottom:8px">Statut hormonal</div>
           <div id="atp-hormo-opts" style="display:flex;flex-direction:column;gap:8px"></div>
-          <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
+          <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="atp-hormo-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
             <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Un traitement hormonal est en cours</span>
           </label>
@@ -4181,7 +4169,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="atp-thyroide-bloc" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px">Ce que ton médecin a dit</div>
           <div id="atp-thyroide-etats" style="display:flex;flex-direction:column;gap:8px"></div>
-          <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
+          <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="atp-thyroide-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
             <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Un traitement est en cours</span>
           </label>
@@ -4189,7 +4177,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:10px">Ces déclarations sont visibles de ton coach : c'est lui qui ajuste tes repères avec. RepCore ne pose aucun diagnostic et ne demande ni dose, ni molécule, ni résultat d'analyse.</div>
       </div>
       <div class="atp-med-q" id="atp-cycle-card" style="margin-bottom:14px;display:none">
-        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Veux-tu que RepCore tienne compte de ton cycle ?</label>
+        <label class="t-carte" style="display:block;margin:0 0 8px">Veux-tu que RepCore tienne compte de ton cycle ?</label>
         <div id="atp-cycle-opts" style="display:flex;flex-direction:column;gap:8px"></div>
         <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:10px">Ta charge suggérée et ton nombre de séries peuvent être réduits selon ta réponse.</div>
       </div>
@@ -4282,7 +4270,7 @@ const COACH_PHOTO='icons/coach.jpg';
   onclick="if(event.target===this)fermerAchatProgramme()" role="dialog" aria-modal="true">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 20px;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain">
     <div id="ach-corps"></div>
-    <label for="ach-cgv" style="display:flex;gap:10px;align-items:flex-start;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin:20px 0 14px;cursor:pointer">
+    <label class="reg-ligne reg-ligne--nue" for="ach-cgv" style="display:flex;gap:10px;align-items:flex-start;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin:20px 0 14px;cursor:pointer">
       <input type="checkbox" id="ach-cgv" onchange="_majBoutonAchat()" style="margin-top:4px;flex-shrink:0;width:18px;height:18px;accent-color:var(--red);cursor:pointer">
       <span style="font-size:var(--fs-sm);line-height:1.6;color:var(--sub)">J'ai lu et j'accepte les <a href="../terms.html" target="_blank" rel="noopener">conditions générales de vente</a>. Je demande l'accès immédiat au programme et reconnais qu'à ce titre je perds mon droit de rétractation de 14 jours une fois le contenu numérique fourni.</span>
     </label>
@@ -5136,7 +5124,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Actif -->
       <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
         <label class="form-label" style="margin:0">Complément actif</label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="supp-active" checked style="width:18px;height:18px;accent-color:var(--red)">
           <span id="supp-active-label" style="font-size:var(--fs-sm);color:var(--sub)">Oui</span>
         </label>
@@ -6276,7 +6264,7 @@ const COACH_PHOTO='icons/coach.jpg';
            DÉCOCHÉE PAR DÉFAUT et jamais posée par le code : sans cet accord
            exprès, un service pleinement fourni resterait rétractable 14 jours.
            Le bouton PayPal est inactif tant qu'elle ne l'est pas. -->
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;text-align:left">
+      <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px;text-align:left">
         <input type="checkbox" id="sub-renonciation" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="_majRenonciation(this.checked)">
         <span id="sub-renonc-txt" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55"></span>
       </label>
@@ -6304,5 +6292,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1895.js"></script>
+<script src="./rc-core.1896.js"></script>
 </body></html>

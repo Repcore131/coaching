@@ -22957,11 +22957,10 @@ function _majConsentementCoachReglages(){
   if(!z) return;
   const u=currentUser;
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
-    +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
-    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
-    +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
-    +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label></div>';
+  z.innerHTML='<label for="cr-partage-case" class="reg-ligne">'
+    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()">'
+    +'<span class="reg-c"><span class="reg-t">Mon coach peut partager mes progrès</span>'
+    +'<span class="reg-d">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label>';
 }
 // ══ LE LIEN PERSO ET LES PAGES PUBLIQUES ════════════════════════════════════
 //
@@ -27866,7 +27865,7 @@ function openMessageCanal(msgId){
     <label for="cm-lien" style="margin-top:12px">Lien (optionnel)</label>
     <input id="cm-lien" type="url" maxlength="${CANAL_LIEN_MAX}" value="${escapeHtml(m.lien||'')}" placeholder="Colle ici l'adresse de ta publication">
     <div class="sub" style="font-size:var(--fs-xs);margin-top:6px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Tes athlètes voient le nom du site et ouvrent le lien d'un tap, dans leur navigateur. Aucune image d'aperçu n'est chargée : rien n'est demandé à un autre site tant que personne n'a touché le lien.</div>
-    <label style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
+    <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
     </label>
@@ -28075,7 +28074,7 @@ function openWaGroupe(rowIdx,ids,corps){
   const lignes=tous.map(c=>{
     const tel=_telAthlete(c);
     const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
-    return `<label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #181818;cursor:pointer">
+    return `<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #181818;cursor:pointer">
       <input type="checkbox" class="wag-cb" value="${escapeHtml(c.id)}" data-tel="${escapeHtml(tel)}" data-nom="${escapeHtml(c.fname||'')}"
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">
@@ -51980,7 +51979,7 @@ function _renderSessionManager(){
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px" id="sm-sub-${i}">${s.active?escapeHtml(s.name||'Séance sans nom'):' Jour de repos'}</div>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
           <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
           <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>
@@ -87930,7 +87929,7 @@ const DEB_STEPS=[
     bLbl('As-tu des problèmes de santé ou des blessures ? (si oui, précise)')+bT('deb-health','Ex : hernie discale, entorse...')+
     // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
-    `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
+    `<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
       <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">Je suis un traitement médicamenteux régulier</span>
     </label>`+
@@ -89310,7 +89309,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
   const promesse=phrase
     ? 'Ta prochaine séance est <strong style="color:var(--text)">'+escapeHtml(phrase)+'</strong>. Je te préviens ?'
     : 'Je peux te prévenir avant chacune de tes séances. On essaie ?';
-  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" style="display:flex;align-items:center;gap:10px;'
+  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;'
       +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
       +'font-size:var(--fs-sm);color:var(--text)">'
       +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
@@ -101044,7 +101043,7 @@ function _htmlPostPartum(user){
             :' : les impacts attendent que tu aies fait le point.'))}
     </div>`:'';
   const evalRow=(f==='12_plus'||f==='6_12')
-    ?`<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
+    ?`<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
         <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
           style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
         <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
@@ -102614,7 +102613,7 @@ function _renderCycleNutSettings(nut){
     </div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
-      <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
+      <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
         <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
         <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>
@@ -115999,7 +115998,7 @@ function _htmlTableauxTableur(c){
         _htmlEcartFormules(t),false,'calc')
     +((currentUser&&currentUser.email===CREATOR_EMAIL)
       ?li('Noms réels des formules',
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
+          '<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tbk-noms-reels" onchange="basculerNomsReels(this.checked)"'
             +(nomsReels()?' checked':'')+'> Afficher</label>',
           'Réservé à ton compte : les autres voient les libellés RepCore, jamais le nom des formules ni les coefficients.',false,'calc')
       :'')
@@ -118610,7 +118609,7 @@ function renderEditeurEviction(){
   h+='<div style="margin:12px 0 14px">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
     +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Niveau</div>'
-    +NIV.map(([id,lib,txt])=>'<label style="display:flex;align-items:flex-start;gap:10px;'
+    +NIV.map(([id,lib,txt])=>'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;'
       +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
       +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
       +'text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -119227,7 +119226,7 @@ function renderTraitements(){
           const coche=prisePrise(currentUser,'trt',t.id,m,j);
           const dose=(Number(t.dosage_quantite)>0)
             ? String(t.dosage_quantite).replace('.',',')+' '+escapeHtml(t.dosage_unite||'') : '';
-          h+='<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
+          h+='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
             +'background:var(--surface-1);border:1px solid var(--border);'
             +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
             +'text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -119455,7 +119454,7 @@ function renderEditeurTraitement(){
     +'</div></div>';
 
   // ── LE RYTHME ──────────────────────────────────────────────────────────
-  const rad=(val,lib)=>'<label style="display:flex;align-items:center;gap:8px;'
+  const rad=(val,lib)=>'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;'
     +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;font-size:var(--fs-sm);'
     +'color:var(--text);text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -119505,7 +119504,7 @@ function renderEditeurTraitement(){
   // ⚠ IL N'EST PROPOSE QU'A L'ATHLETE, et il vaut NON tant qu'il n'y touche
   // pas. Un interrupteur pre-coche n'est pas un consentement.
   if(!_trtEdit.parCoach)
-    h+='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px;'
+    h+='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
       +'margin:6px 0 16px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400">'
       +'<input type="checkbox" id="trte-partage"'+((t&&t.partageCoach===true)?' checked':'')
@@ -136590,7 +136589,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     const desc=(ex.description||'').replace(/"/g,'&quot;');
     return`
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px;margin-bottom:10px;border:1px solid ${ex.ss?'var(--orange)':'var(--border)'}" id="ocr-ex-${i}">
-      ${i===0?'':`<label style="display:flex;align-items:center;gap:8px;margin:-4px 0 10px;cursor:pointer">
+      ${i===0?'':`<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;margin:-4px 0 10px;cursor:pointer">
         <input type="checkbox" id="ocr-ss-${i}" ${ex.ss?'checked':''} style="width:15px;height:15px;margin:0;accent-color:var(--orange);flex-shrink:0;cursor:pointer">
         <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">${icon('echange',12)} EN SUPERSET AVEC LE PRÉCÉDENT</span>
       </label>`}
@@ -140438,19 +140437,19 @@ function offboardCoach(coachId){
     '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||'')+' : '+(c.email||''))+'</option>'
   ).join('');
   const reassignBlock=otherCoaches.length
-    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+    ?'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
       +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:4px;flex-shrink:0">'
       +'<div style="width:100%"><div style="font-weight:700;font-size:var(--fs-sm)">Réassigner à un autre coach</div>'
       +'<select id="ob-target" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
       +'</div></label>'
     :'';
   const creatorBlock=(!isCreatorSelf&&creator)
-    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+    ?'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
       +'<input type="radio" name="ob-action" value="creator" '+(otherCoaches.length?'':'checked')+' style="margin-top:4px;flex-shrink:0">'
       +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Transférer au créateur</div>'
       +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">'+escapeHtml((creator.fname||'')+' '+(creator.lname||''))+' · '+CREATOR_EMAIL+'</div></div></label>'
     :'';
-  const freeBlock='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+  const freeBlock='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
     +'<input type="radio" name="ob-action" value="free" '+((!otherCoaches.length&&isCreatorSelf)?'checked':'')+' style="margin-top:4px;flex-shrink:0">'
     +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Libérer (sans coach assigné)</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';
@@ -142366,7 +142365,7 @@ function renderPaypalButton(planId,coachId){
   // Le bouton PayPal n'est pas seulement masque : createSubscription refuse
   // aussi, pour qu'aucun chemin ne contourne la case.
   container.innerHTML=
-    '<label for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
+    '<label class="reg-ligne reg-ligne--nue" for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
     +'background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);'
     +'padding:14px 16px;margin-bottom:16px;cursor:pointer;text-align:left">'
     +'<input type="checkbox" id="cgv-ok" style="margin-top:4px;flex-shrink:0;'

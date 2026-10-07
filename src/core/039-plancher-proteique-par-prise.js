@@ -765,7 +765,7 @@ function _htmlPostPartum(user){
             :' : les impacts attendent que tu aies fait le point.'))}
     </div>`:'';
   const evalRow=(f==='12_plus'||f==='6_12')
-    ?`<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
+    ?`<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
         <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
           style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
         <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
@@ -2335,7 +2335,7 @@ function _renderCycleNutSettings(nut){
     </div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
-      <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
+      <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
         <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
         <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>

@@ -1013,7 +1013,7 @@ function renderPaypalButton(planId,coachId){
   // Le bouton PayPal n'est pas seulement masque : createSubscription refuse
   // aussi, pour qu'aucun chemin ne contourne la case.
   container.innerHTML=
-    '<label for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
+    '<label class="reg-ligne reg-ligne--nue" for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
     +'background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);'
     +'padding:14px 16px;margin-bottom:16px;cursor:pointer;text-align:left">'
     +'<input type="checkbox" id="cgv-ok" style="margin-top:4px;flex-shrink:0;'

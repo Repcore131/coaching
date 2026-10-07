@@ -64,6 +64,11 @@ html[data-theme="clair"]{background:var(--bg)}
 :root[data-theme="clair"] input:focus,:root[data-theme="clair"] select:focus,:root[data-theme="clair"] textarea:focus{border-color:var(--red);background:var(--red-bg);box-shadow:0 0 0 2px color-mix(in srgb,var(--red) 15%,transparent)}
 :root[data-theme="clair"] select option{background:var(--surface-1)}
 :root[data-theme="clair"] label{color:var(--sub)}
+:root[data-theme="clair"] .reg-ligne{background:var(--surface-1);border:1px solid var(--border);color:var(--text)}
+:root[data-theme="clair"] .reg-ligne input[type=checkbox]{accent-color:var(--red)}
+:root[data-theme="clair"] .reg-t{color:var(--text)}
+:root[data-theme="clair"] .reg-d{color:var(--sub)}
+:root[data-theme="clair"] .reg-etat{color:var(--text-faint)}
 :root[data-theme="clair"] h3{color:var(--sub)}
 :root[data-theme="clair"] .red{color:var(--red-text)}
 :root[data-theme="clair"] .sub{color:var(--sub)}

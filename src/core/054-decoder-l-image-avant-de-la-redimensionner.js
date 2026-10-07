@@ -1721,19 +1721,19 @@ function offboardCoach(coachId){
     '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||'')+' : '+(c.email||''))+'</option>'
   ).join('');
   const reassignBlock=otherCoaches.length
-    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+    ?'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
       +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:4px;flex-shrink:0">'
       +'<div style="width:100%"><div style="font-weight:700;font-size:var(--fs-sm)">Réassigner à un autre coach</div>'
       +'<select id="ob-target" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
       +'</div></label>'
     :'';
   const creatorBlock=(!isCreatorSelf&&creator)
-    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+    ?'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
       +'<input type="radio" name="ob-action" value="creator" '+(otherCoaches.length?'':'checked')+' style="margin-top:4px;flex-shrink:0">'
       +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Transférer au créateur</div>'
       +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">'+escapeHtml((creator.fname||'')+' '+(creator.lname||''))+' · '+CREATOR_EMAIL+'</div></div></label>'
     :'';
-  const freeBlock='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
+  const freeBlock='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
     +'<input type="radio" name="ob-action" value="free" '+((!otherCoaches.length&&isCreatorSelf)?'checked':'')+' style="margin-top:4px;flex-shrink:0">'
     +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Libérer (sans coach assigné)</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';

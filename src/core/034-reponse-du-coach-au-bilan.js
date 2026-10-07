@@ -1570,7 +1570,7 @@ const DEB_STEPS=[
     bLbl('As-tu des problèmes de santé ou des blessures ? (si oui, précise)')+bT('deb-health','Ex : hernie discale, entorse...')+
     // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
-    `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
+    `<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
       <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">Je suis un traitement médicamenteux régulier</span>
     </label>`+
@@ -2950,7 +2950,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
   const promesse=phrase
     ? 'Ta prochaine séance est <strong style="color:var(--text)">'+escapeHtml(phrase)+'</strong>. Je te préviens ?'
     : 'Je peux te prévenir avant chacune de tes séances. On essaie ?';
-  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" style="display:flex;align-items:center;gap:10px;'
+  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;'
       +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
       +'font-size:var(--fs-sm);color:var(--text)">'
       +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')

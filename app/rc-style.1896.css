@@ -1109,6 +1109,23 @@ select.f-c{text-align-last:center}
   font-weight:800;font-size:14px}
 select option{background:var(--surface-1)}
 label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
+/* ══ LA LIGNE DE RÉGLAGE (.reg-ligne, build 1896) ═══════════════════════════
+   Une case à cocher et sa phrase. La règle label ci-dessus (majuscules
+   espacées) est faite pour l'intitulé d'un champ : un <label> qui ENVELOPPE
+   une case et sa description la neutralise ici, sinon toute la description
+   passait en capitales grasses espacées.
+   .reg-ligne        carte : surface-1, filet, rayon r-3, 14 x 16 px
+   .reg-ligne--nue   la même ligne sans carte, quand elle est déjà DANS une carte
+   .reg-t titre (14 px 800) · .reg-d description (11 px 400) · .reg-etat état (10 px) */
+.reg-ligne{display:flex;align-items:flex-start;gap:12px;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--r-3);padding:14px 16px;margin:0 0 12px;cursor:pointer;
+  text-transform:none;letter-spacing:0;font-weight:inherit;font-size:inherit;color:var(--text)}
+.reg-ligne--nue{background:none;border:0;border-radius:0;padding:0;margin:0}
+.reg-ligne input[type=checkbox]{width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin:2px 0 0;cursor:pointer}
+.reg-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.reg-t{font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;text-transform:none;letter-spacing:0;color:var(--text)}
+.reg-d{font-size:var(--fs-xs);font-weight:400;color:var(--sub);line-height:1.5;text-transform:none;letter-spacing:0}
+.reg-etat{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint)}
 
 /* ====== TYPOGRAPHY ====== */
 h1{font-weight:400;line-height:1.05}
@@ -4615,7 +4632,7 @@ html{scroll-behavior:smooth}
 .dv-titre{font-family:var(--pile-titre);font-size:36px;line-height:1;letter-spacing:1px;
   color:var(--text);text-transform:uppercase}
 .dv-titre em{font-style:normal;color:var(--red)}
-.dv-sous{font-size:var(--fs-2xs);letter-spacing:3.5px;color:var(--sub);text-transform:uppercase;
+.dv-sous{font-size:var(--fs-2xs);letter-spacing:0;color:var(--sub);text-transform:none;
   margin-top:8px;line-height:1.5}
 .dv-txt{font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin:14px 0;max-width:600px}
 .dv-cours{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-2px 0 14px}
@@ -4656,7 +4673,7 @@ html{scroll-behavior:smooth}
   .dv-devise,.dv-slogan,.dv-br{display:none}
   .dv-tete{padding-right:0;gap:14px}
   .dv-titre{font-size:28px}
-  .dv-sous{letter-spacing:2px}
+  .dv-sous{letter-spacing:0}
   .dv-form{flex-direction:column}
   .dv-btn{min-width:0;width:100%}
   .dv-photo{right:0;width:75%;opacity:.45}

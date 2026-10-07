@@ -94,7 +94,7 @@ ECRANS = [
     ('s-historique-seances', 'ath', "loadHistoriqueSeances()"),
     ('s-charges', 'ath', "loadCharges()"),
     ('s-athlete-profile', 'ath', "openAthleteProfile()"),
-    ('s-client-reglages', 'ath', "ouvrirReglagesAthlete()"),
+    ('s-client-reglages', 'ath', "ouvrirReglagesAthlete();document.querySelectorAll('#s-client-reglages details').forEach(d=>d.open=true)"),
     ('s-messages', 'ath', "msgOuvrirFil()"),
     ('s-supplements', 'ath', "loadSupplements()"),
     ('s-steps', 'ath', "loadSteps()"),

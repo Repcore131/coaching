@@ -2547,7 +2547,7 @@ function _renderSessionManager(){
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px" id="sm-sub-${i}">${s.active?escapeHtml(s.name||'Séance sans nom'):' Jour de repos'}</div>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
           <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
           <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:var(--r-3);background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:background var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:var(--r-2);background:#fff;top:3px;left:3px;transition:transform var(--t-3);transform:translateX(${s.active?'20px':'0px'})"></div>

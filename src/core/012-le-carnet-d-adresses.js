@@ -93,7 +93,7 @@ function openWaGroupe(rowIdx,ids,corps){
   const lignes=tous.map(c=>{
     const tel=_telAthlete(c);
     const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
-    return `<label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #181818;cursor:pointer">
+    return `<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #181818;cursor:pointer">
       <input type="checkbox" class="wag-cb" value="${escapeHtml(c.id)}" data-tel="${escapeHtml(tel)}" data-nom="${escapeHtml(c.fname||'')}"
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">

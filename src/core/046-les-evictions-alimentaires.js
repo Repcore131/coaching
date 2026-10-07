@@ -239,7 +239,7 @@ function renderEditeurEviction(){
   h+='<div style="margin:12px 0 14px">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
     +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Niveau</div>'
-    +NIV.map(([id,lib,txt])=>'<label style="display:flex;align-items:flex-start;gap:10px;'
+    +NIV.map(([id,lib,txt])=>'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;'
       +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
       +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
       +'text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -856,7 +856,7 @@ function renderTraitements(){
           const coche=prisePrise(currentUser,'trt',t.id,m,j);
           const dose=(Number(t.dosage_quantite)>0)
             ? String(t.dosage_quantite).replace('.',',')+' '+escapeHtml(t.dosage_unite||'') : '';
-          h+='<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
+          h+='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
             +'background:var(--surface-1);border:1px solid var(--border);'
             +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
             +'text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -1084,7 +1084,7 @@ function renderEditeurTraitement(){
     +'</div></div>';
 
   // ── LE RYTHME ──────────────────────────────────────────────────────────
-  const rad=(val,lib)=>'<label style="display:flex;align-items:center;gap:8px;'
+  const rad=(val,lib)=>'<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:8px;'
     +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;font-size:var(--fs-sm);'
     +'color:var(--text);text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -1134,7 +1134,7 @@ function renderEditeurTraitement(){
   // ⚠ IL N'EST PROPOSE QU'A L'ATHLETE, et il vaut NON tant qu'il n'y touche
   // pas. Un interrupteur pre-coche n'est pas un consentement.
   if(!_trtEdit.parCoach)
-    h+='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px;'
+    h+='<label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
       +'margin:6px 0 16px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400">'
       +'<input type="checkbox" id="trte-partage"'+((t&&t.partageCoach===true)?' checked':'')
