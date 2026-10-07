@@ -1423,7 +1423,7 @@ function renderReponsesBilans(bilans,client){
             <div class="bn-titre">${depart?'Bilan <em>d’inscription</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
             <div class="bn-date">${d}${b.modifieLe?' · modifié le '+new Date(b.modifieLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):''}</div>
           </div>
-          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
+          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="ouvrirHistoriqueBilans('${escapeHtml(id)}')">Détail</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
         ${(client&&b.modifApresReponse&&b.modifs)?`<div class="bn-date" style="color:var(--orange);padding:0 2px 6px">Corrigé le ${escapeHtml(new Date(Number(b.modifs.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} : ${escapeHtml((b.modifs.cles||[]).map(libelleCleBilan).join(', '))}

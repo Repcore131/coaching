@@ -13524,3 +13524,13 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rch-l{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;color:var(--text);font:inherit;cursor:pointer}
 .rch-l-t{font-weight:800;font-size:var(--fs-sm)}
 .rch-l-s{font-size:var(--fs-xs);color:var(--sub)}
+
+/* BUILD 1892 — l'historique des bilans dans la page « QUEL BILAN ? ». */
+.hb-page{margin:0 0 14px}
+.hb-page-t{font-size:var(--fs-md);font-weight:800;letter-spacing:1px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.hb-page-t b{min-width:26px;padding:4px 8px;border-radius:var(--r-full);background:#141414;color:#fff;font-size:var(--fs-xs);text-align:center}
+.hb-page .hb-l{display:block}
+.hb-page .hb-l>summary{list-style:none;cursor:pointer}
+.hb-page .hb-l>summary::-webkit-details-marker{display:none}
+.hb-page .hb-l-b{margin-top:10px;flex-wrap:wrap}
+.hb-page .hb-recap{margin-top:10px}

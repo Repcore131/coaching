@@ -82716,34 +82716,51 @@ function historiqueBilans(u){
       photos:['face','back','side'].filter(v=>{ try{ return photoBilanExiste(b,v); }catch(e){ return false; } }).length};
   }).reverse();
 }
-function _majBoutonHistoriqueBilans(){
+// BUILD 1892 : L'HISTORIQUE DANS LA PAGE, PAS DANS UNE FEUILLE. Chaque bilan
+// se déplie sur place et montre son récap (le rendu de l'onglet Notes) sans
+// quitter « QUEL BILAN ? ». Un bilan à moins de trois photos propose
+// « Ajouter mes photos », qui rouvre directement l'étape photo.
+function _majBoutonHistoriqueBilans(ouvert){
   const cd=document.getElementById('bilan-countdown'); if(!cd) return;
   let z=document.getElementById('bilan-historique');
-  const n=historiqueBilans(currentUser).length;
-  if(!n){ if(z) z.remove(); return; }
-  if(!z){ z=document.createElement('button'); z.type='button'; z.id='bilan-historique'; z.className='hb-ouvrir';
-    z.onclick=()=>ouvrirHistoriqueBilans(); cd.insertAdjacentElement('afterend',z); }
-  z.innerHTML='<span>Historique des bilans</span><b>'+n+'</b>';
-}
-function ouvrirHistoriqueBilans(){
   const l=historiqueBilans(currentUser);
-  const lignes=l.map(x=>`<div class="hb-l">
-      <div class="hb-l-t"><b>${escapeHtml(x.nom)}</b><span>${escapeHtml(x.date)}${x.b.modifieLe?' · modifié':''}</span>
-        <i>${x.poids?escapeHtml(String(x.poids).replace('.',','))+' kg · ':''}${x.photos?x.photos+' photo'+(x.photos>1?'s':''):'sans photo'}</i></div>
+  if(!l.length){ if(z) z.remove(); return; }
+  if(!z){ z=document.createElement('section'); z.id='bilan-historique'; z.className='hb-page'; z.setAttribute('aria-label','Historique des bilans'); cd.insertAdjacentElement('afterend',z); }
+  z.innerHTML='<h2 class="hb-page-t">Historique des bilans <b>'+l.length+'</b></h2>'
+    +l.map(x=>`<details class="hb-l" data-bilan="${escapeHtml(x.id)}" ontoggle="if(this.open)bilanRecapLocal(this.dataset.bilan)"${x.id===ouvert?' open':''}>
+      <summary class="hb-l-t"><b>${escapeHtml(x.nom)}</b><span>${escapeHtml(x.date)}${x.b.modifieLe?' · modifié':''}</span>
+        <i>${x.poids?escapeHtml(String(x.poids).replace('.',','))+' kg · ':''}${x.photos?x.photos+' photo'+(x.photos>1?'s':''):'sans photo'}</i></summary>
       <div class="hb-l-b">
-        <button type="button" class="hb-b" onclick="closeModal();openBilanNotes('${escapeHtml(x.id)}')">Récap</button>
-        <button type="button" class="hb-b hb-b-r" onclick="modifierBilan('${escapeHtml(x.id)}')">Modifier</button>
+        ${x.photos<3?`<button type="button" class="hb-b hb-b-r" onclick="modifierBilan('${escapeHtml(x.id)}','photos')">Ajouter mes photos</button>`:''}
+        <button type="button" class="hb-b" onclick="modifierBilan('${escapeHtml(x.id)}')">Modifier</button>
         ${bilanSupprimable(x.b)?`<button type="button" class="hb-b" onclick="bilanSupprimerDemande('${escapeHtml(x.id)}')">Supprimer</button>`:''}
-      </div></div>`).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div class="hb" onclick="event.stopPropagation()" role="dialog" aria-label="Historique des bilans">
-      <h2>Historique des bilans</h2>
-      <p class="sub">Relis un bilan, ou corrige-le : une mesure fausse, des photos que tu n’avais pas eu le temps de prendre. Ton coach voit la correction sur le même bilan.</p>
-      <div class="hb-liste">${lignes||emptyState('clipboard','Aucun bilan envoyé pour l’instant.')}</div>
-      <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
-    </div></div>`;
-  const old=document.getElementById('modal-overlay'); if(old) old.remove();
-  document.body.insertAdjacentHTML('beforeend',html);
+      </div>
+      <div class="hb-recap"></div></details>`).join('');
+  if(ouvert) try{ bilanRecapLocal(ouvert); }catch(e){}
+}
+// Le récap d'UN bilan, rendu sur place : le rendu de l'onglet Notes, dont on
+// ne garde que le bilan voulu (sans son identifiant, déjà porté par Évolution).
+function bilanRecapLocal(id){
+  const d=document.querySelector('#bilan-historique .hb-l[data-bilan="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
+  const z=d&&d.querySelector('.hb-recap');
+  if(!z||!currentUser) return false;
+  const t=document.createElement('div');
+  try{ t.innerHTML=renderReponsesBilans((currentUser.bilans||[]).filter(b=>b&&b.date)); }catch(e){ t.innerHTML=''; }
+  const b=[...t.querySelectorAll('.bn-bilan')].find(x=>x.getAttribute('data-bn')===id);
+  if(!b){ z.innerHTML=''; return false; }
+  b.removeAttribute('id'); b.hidden=false;
+  // Le bouton « Modifier » de l'en-tête doublerait celui de la ligne.
+  b.querySelectorAll('.hb-b-tete').forEach(x=>x.remove());
+  z.innerHTML=''; z.appendChild(b);
+  return true;
+}
+// L'ancien point d'entrée : l'écran « QUEL BILAN ? », la liste en vue, et le
+// bilan demandé déplié.
+function ouvrirHistoriqueBilans(id){
+  if(!document.getElementById('s-bilan-choice')?.classList.contains('active')) openBilanChoice();
+  _majBoutonHistoriqueBilans(id||null);
+  try{ const z=document.getElementById(id?'bilan-historique':'bilan-historique'); if(z) z.scrollIntoView({block:'start'}); }catch(e){}
+  return true;
 }
 // BUILD 1865 : un bilan renvoyé par erreur se supprime — moins de 48 h, et
 // tant que le coach n'y a pas répondu. Pierre tombale, et 8 s pour annuler.
@@ -82779,8 +82796,8 @@ async function bilanSupprimerDemande(id){
   const ok=await rcConfirm('Supprimer '+x.nom+' ?','Envoyé le '+x.date+'. Ton coach ne le verra plus.','Supprimer');
   if(!ok) return false;
   if(!supprimerBilan(id)) return false;
-  try{ closeModal(); ouvrirHistoriqueBilans(); }catch(e){}
-  try{ _suppActionToast(x.nom+' supprimé','Annuler',()=>{ annulerSuppressionBilan(); try{ closeModal(); ouvrirHistoriqueBilans(); }catch(e){} },ANNULER_MS); }catch(e){}
+  try{ _majBoutonHistoriqueBilans(); }catch(e){}
+  try{ _suppActionToast(x.nom+' supprimé','Annuler',()=>{ annulerSuppressionBilan(); try{ _majBoutonHistoriqueBilans(); }catch(e){} },ANNULER_MS); }catch(e){}
   return true;
 }
 // Rouvre le questionnaire sur un bilan déjà envoyé.
@@ -87767,7 +87784,7 @@ function renderReponsesBilans(bilans,client){
             <div class="bn-titre">${depart?'Bilan <em>d’inscription</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
             <div class="bn-date">${d}${b.modifieLe?' · modifié le '+new Date(b.modifieLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):''}</div>
           </div>
-          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="modifierBilan('${escapeHtml(id)}')">Modifier</button>`}
+          ${client?'':`<button type="button" class="hb-b hb-b-tete" onclick="ouvrirHistoriqueBilans('${escapeHtml(id)}')">Détail</button>`}
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
         ${(client&&b.modifApresReponse&&b.modifs)?`<div class="bn-date" style="color:var(--orange);padding:0 2px 6px">Corrigé le ${escapeHtml(new Date(Number(b.modifs.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} : ${escapeHtml((b.modifs.cles||[]).map(libelleCleBilan).join(', '))}

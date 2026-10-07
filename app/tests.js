@@ -44450,7 +44450,8 @@ async function testExercices(){
           if(u.bilans.length!==3) return _echec('un bilan a été créé : '+u.bilans.length);
           if(u.bilans[2]['bil-weight']!=='77.5'||u.weight!=='77.5'||!sauves) return _echec('la correction n’est pas enregistrée');
           if(_bilEdition) return _echec('la modification n’est pas refermée');
-          if(!document.querySelector('#modal-overlay .hb')) return _echec('retour à l’historique attendu');
+          // BUILD 1892 : l'historique vit dans la page « QUEL BILAN ? ».
+          if(!document.querySelector('#s-bilan-choice #bilan-historique')) return _echec('retour à l’historique attendu');
           // Corriger un bilan ANCIEN ne ramène pas le poids du profil en arrière.
           modifierBilan(_idBilan(u.bilans[1])); bilData['bil-weight']='90'; saveBilanFinal();
           if(u.weight!=='77.5') return _echec('le poids du profil a suivi un bilan ancien : '+u.weight);
@@ -73408,6 +73409,47 @@ async function testExercices(){
         Object.assign(_pastilleSources,sv);
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
+
+    // ══ BUILD 1892 — L'HISTORIQUE DES BILANS DANS « QUEL BILAN ? » ═════════
+    const _hbU=()=>({role:'athlete',email:'hb@t.fr',fname:'Léa',bilans:[
+      {type:'depart',date:Date.now()-30*864e5,'deb-weight':'64'},
+      {type:'coaching',date:Date.now()-10*864e5,'bil-weight':'63','bil-motivation':'7','bil-photo-face':'https://x/f.jpg','bil-photo-back':'https://x/b.jpg','bil-photo-side':'https://x/s.jpg'},
+      {type:'coaching',date:Date.now()-3*864e5,'bil-weight':'62,5','bil-motivation':'8'}]});
+    ok('1892 — le récap se déplie dans la page : on reste sur s-bilan-choice',()=>{
+      const sU=currentUser, sv=window.saveUser;
+      try{
+        window.saveUser=()=>true; currentUser=_hbU();
+        openBilanChoice();
+        const z=document.getElementById('bilan-historique');
+        if(!z||z.tagName!=='SECTION') return _echec('pas de liste dans la page');
+        if(document.getElementById('modal-overlay')) return _echec('une feuille s’est ouverte');
+        const d=z.querySelector('.hb-l'); d.open=true; bilanRecapLocal(d.dataset.bilan);
+        if((document.querySelector('.screen.active')||{}).id!=='s-bilan-choice') return _echec('on a quitté l’écran');
+        return d.querySelector('.hb-recap .bn-bilan')?true:_echec('récap vide');
+      }finally{ currentUser=sU; window.saveUser=sv; go('s-client-home'); }});
+    ok('1892 — « Ajouter mes photos » seulement si moins de 3 photos, et il ouvre l’étape photo',()=>{
+      const sU=currentUser, sv=window.saveUser;
+      try{
+        window.saveUser=()=>true; currentUser=_hbU();
+        openBilanChoice();
+        const l=[...document.querySelectorAll('#bilan-historique .hb-l')];
+        const avec=l.filter(x=>[...x.querySelectorAll('button')].some(b=>/Ajouter mes photos/.test(b.textContent))).map(x=>x.dataset.bilan);
+        const h=historiqueBilans(currentUser);
+        const attendus=h.filter(x=>x.photos<3).map(x=>x.id);
+        if(avec.join()!==attendus.join()||avec.length!==2) return _echec('boutons : '+avec.join()+' / '+attendus.join());
+        const b=[...l[0].querySelectorAll('button')].find(x=>/Ajouter mes photos/.test(x.textContent));
+        if(!/modifierBilan\('[^']+','photos'\)/.test(b.getAttribute('onclick'))) return _echec(b.getAttribute('onclick'));
+        modifierBilan(l[0].dataset.bilan,'photos');
+        const et=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
+        return bilStep===_bilIndexEtapePhotos(et,bilType)&&bilStep>=0?true:_echec('étape '+bilStep);
+      }finally{ try{ _bilEdition=null; }catch(e){} currentUser=sU; window.saveUser=sv; go('s-client-home'); }});
+    ok('1892 — corriger un bilan ne crée rien : même nombre de bilans, modifieLe posé',()=>{
+      const u=_hbU(), n=u.bilans.length, b=u.bilans[2];
+      const ch=appliquerModifBilan(b,Object.assign({},b,{'bil-photo-face':'https://x/n.jpg'}),12345);
+      return u.bilans.length===n&&ch.length===1&&b.modifieLe===12345?true:_echec(JSON.stringify(ch));});
+    ok('1892 — Évolution › Bilans renvoie au détail dans « QUEL BILAN ? »',()=>{
+      const h=renderReponsesBilans(_hbU().bilans);
+      return /ouvrirHistoriqueBilans\('[^']+'\)/.test(h)?true:_echec('aucun lien vers le détail');});
 
     // ══ BUILD 1891 — MES RECORDS ═══════════════════════════════════════════
     const _recS=(id,date,nom,w,r,extra)=>Object.assign({id,date,name:'S',data:{[nom]:{sets:[{weight:String(w),repsDone:String(r),done:true}]}}},extra||{});
