@@ -1454,11 +1454,33 @@ function canalDomaine(lien){
 // seule chose, dont un qui noyait le reste.
 //
 // Desormais : le compte vit sur l'icone, en bas, et nulle part ailleurs.
+// BUILD 1887 : plusieurs sources par onglet (Coach = bilan + annonces) ; un
+// seul chiffre « à traiter ». Pas et sommeil : un point gris, jamais rouge.
+const _pastilleSources={};
 function _pastilleOnglet(onglet,n,libelle){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+onglet+'"]');
+  const cible=(typeof ONGLET_PARENT==='object'&&ONGLET_PARENT[onglet])||onglet;
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+cible+'"]');
   if(!btn) return null;
   const dot=btn.querySelector('.tab-dot');
-  const c=Math.max(0,Math.floor(Number(n)||0));
+  const n0=Math.max(0,Math.floor(Number(n)||0));
+  _pastilleSources[onglet]={cible,n:n0,lib:(n0>0&&typeof libelle==='function')?libelle(n0):''};
+  if(onglet==='lifestyle'){
+    const autres=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible).reduce((a,k)=>a+_pastilleSources[k].n,0);
+    if(dot&&!autres){ dot.classList.toggle('on',n0>0); dot.classList.toggle('gris',n0>0); dot.classList.remove('chiffre'); dot.textContent=''; }
+    if(!autres){ if(n0>0) btn.setAttribute('aria-label',_pastilleSources[onglet].lib); else btn.removeAttribute('aria-label'); }
+    return n0;
+  }
+  const srcs=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible);
+  const c=srcs.reduce((a,k)=>a+_pastilleSources[k].n,0);
+  if(dot) dot.classList.remove('gris');
+  // Plus rien d'autre sur l'onglet : le point gris de Lifestyle reprend sa place.
+  const ls=_pastilleSources.lifestyle;
+  if(!c&&ls&&ls.cible===cible&&ls.n>0){
+    if(dot){ dot.classList.add('on','gris'); dot.classList.remove('chiffre'); dot.textContent=''; }
+    btn.setAttribute('aria-label',ls.lib);
+    return btn;
+  }
+  libelle=c>0?(()=>srcs.map(k=>_pastilleSources[k].lib).filter(Boolean).join(' · ')):libelle;
   if(dot){
     dot.classList.toggle('on',c>0);
     // La classe ET le texte : sans le texte la pastille reste un point, sans
@@ -1529,9 +1551,10 @@ function bilanMarquerOngletVu(){
 }
 // ── L'onglet : verrou et pastille ───────────────────────────────────────────
 function _majOngletCanal(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
   if(!btn) return;
-  const ouvert=canalAccessible(currentUser);
+  // BUILD 1887 : l'onglet Coach est ouvert dès qu'un coach est rattaché.
+  const ouvert=!!(currentUser&&(currentUser.coachEmailKey||currentUser.coachId));
   btn.classList.toggle('verrou',!ouvert);
   // aria-disabled et non l'attribut disabled : le bouton reste atteignable au
   // clavier et mène à la saisie du code coach. Un onglet verrouillé qu'on ne
@@ -1541,9 +1564,9 @@ function _majOngletCanal(){
   // LE COMPTE, ET PLUS LE SEUL FAIT. _pastilleOnglet efface le libelle quand
   // le compte est nul : le verrou repose donc le sien APRES, sinon il serait
   // retire aussitot pose.
-  const n=ouvert?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0;
-  _pastilleOnglet('canal',n,c=>'Canal : '+c+' nouveau'+(c>1?'x':'')+' message'+(c>1?'s':'')+' de ton coach');
-  if(!ouvert) btn.setAttribute('aria-label','Canal : réservé aux athlètes suivis');
+  let n=0; try{ n=(ouvert&&canalAccessible(currentUser))?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0; }catch(e){ n=0; }
+  _pastilleOnglet('canal',n,c=>'Annonces : '+c+' nouvelle'+(c>1?'s':'')+' annonce'+(c>1?'s':'')+' de ton coach');
+  if(!ouvert) btn.setAttribute('aria-label','Coach : réservé aux athlètes suivis');
 }
 
 // ── L'écran athlète ─────────────────────────────────────────────────────────

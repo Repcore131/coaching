@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1886';
+window.RC_BUILD='1887';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1886.css">
+<link rel="stylesheet" href="./rc-style.1887.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1886.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1887.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -5314,6 +5314,16 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- VIDEOS -->
+<!-- BUILD 1887 : LES DEUX NOUVELLES RACINES DE LA BARRE. Pas de préfixe
+     s-coach- : go() le refuserait à l'athlète. -->
+<div id="s-entrainement" class="screen">
+  <div class="topbar"><span></span><span class="topbar-title">Entraînement</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad" id="ent-corps"></div></div>
+</div>
+<div id="s-mon-coach" class="screen">
+  <div class="topbar"><span></span><span class="topbar-title">Coach</span><span></span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad" id="mc-corps"></div></div>
+</div>
 <div id="s-videos" class="screen">
   <!-- R17 — « Mes corrections » et non plus « Vidéos techniques » : l'ancien
        titre promettait des demonstrations, l'ecran demande un ENVOI. L'id
@@ -5892,18 +5902,16 @@ const COACH_PHOTO='icons/coach.jpg';
      Ni son affichage ni l'onglet surligné ne sont décidés ici : go() les déduit
      de l'écran réellement affiché — voir _majTabbar(). -->
 <div class="tab-bar" id="client-tabbar" aria-label="Navigation athlète">
-  <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Accueil</button>
-  <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')"><span class="tab-dot" aria-hidden="true"></span>Bilan</button>
+  <!-- BUILD 1887 : CINQ ONGLETS, AUCUNE FONCTION RETIRÉE. Corrections,
+       historique et séances vivent dans Entraînement ; Pas et sommeil dans
+       Progrès ; bilans, messages et annonces dans Coach. -->
+  <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Aujourd’hui</button>
+  <button class="tab-btn" data-tab="entrainement" data-icon="dumbbell" onclick="clientTab('entrainement')"><span class="tab-dot" aria-hidden="true"></span>Entraînement</button>
   <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
-  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Corrections</button>
-  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')"><span class="tab-dot" aria-hidden="true"></span>Lifestyle</button>
-  <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
-  <!-- Sans coach rattaché, ce bouton reste VISIBLE et grisé plutôt que masqué :
-       l'athlète autonome doit voir ce dont il ne dispose pas. aria-disabled et
-       non l'attribut disabled — ce dernier le sortirait du parcours clavier et
-       n'annoncerait aucune raison, alors qu'il mène justement à la saisie du
-       code coach. -->
-  <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true" data-ico="lock" data-taille="10"></span>Canal</button>
+  <button class="tab-btn" data-tab="progres" data-icon="trending-up" onclick="clientTab('progres')"><span class="tab-dot" aria-hidden="true"></span>Progrès</button>
+  <!-- Sans coach rattaché, ce bouton reste VISIBLE et grisé : il mène au code
+       coach (aria-disabled, pas disabled : il reste atteignable au clavier). -->
+  <button class="tab-btn" data-tab="coach" data-icon="message-circle" onclick="clientTab('coach')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true" data-ico="lock" data-taille="10"></span>Coach</button>
 </div>
 <!-- ══════ LA RELANCE D'INSTALLATION ══════════════════════════════════
      SŒUR DES ECRANS, comme la barre d'onglets, et pour la meme raison :
@@ -6219,5 +6227,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1886.js"></script>
+<script src="./rc-core.1887.js"></script>
 </body></html>

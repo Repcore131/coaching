@@ -12076,7 +12076,7 @@ async function testExercices(){
           // defiler.
           return /@media\(max-width:359px\)/.test(css)
             ?true:_echec('le repli en défilement sous 360px a disparu');});
-        ok('Les sept libelles d\'onglet tiennent sur une ligne',()=>{
+        ok('Les cinq libelles d\'onglet tiennent sur une ligne',()=>{
           // LE RISQUE DE CE LOT, mesure plutot que suppose : une police plus
           // grande peut faire passer un libelle a la ligne, ou le tronquer.
           const bar=document.getElementById('client-tabbar');
@@ -12085,7 +12085,7 @@ async function testExercices(){
           bar.classList.add('show');
           try{
             const btns=[...bar.querySelectorAll('.tab-btn')];
-            if(btns.length<7) return _echec(btns.length+' onglet(s) seulement');
+            if(btns.length!==5) return _echec(btns.length+' onglet(s)');
             // UNE SEULE LIGNE : toutes les hauteurs egales. Un libelle qui
             // passe a la ligne rend son bouton plus haut que les autres.
             const h=[...new Set(btns.map(b=>Math.round(b.getBoundingClientRect().height)))];
@@ -65490,10 +65490,10 @@ async function testExercices(){
       if(!e) return _echec('l’écran s-videos a disparu');
       const t=e.querySelector('.topbar-title');
       if(!t||t.textContent.trim()!=='Mes corrections') return _echec('titre : « '+(t&&t.textContent.trim())+' »');
-      const b=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
-      if(!b) return _echec('l’onglet data-tab="videos" a disparu');
-      if(b.textContent.trim()!=='Corrections') return _echec('onglet : « '+b.textContent.trim()+' »');
-      if(TABBAR_ECRANS['s-videos']!=='videos') return _echec('TABBAR_ECRANS ne relie plus s-videos à l’onglet');
+      // BUILD 1887 : les corrections vivent sous l'onglet Entraînement.
+      const b=document.querySelector('#client-tabbar .tab-btn[data-tab="entrainement"]');
+      if(!b) return _echec('l’onglet data-tab="entrainement" a disparu');
+      if(TABBAR_ECRANS['s-videos']!=='entrainement') return _echec('TABBAR_ECRANS ne relie plus s-videos à l’onglet Entraînement');
       // « Vidéos techniques » ne subsiste nulle part côté athlète.
       for(const s of document.querySelectorAll('.screen:not([id^="s-coach"]),#client-tabbar'))
         if(/vidéos techniques/i.test(s.textContent)) return _echec('« Vidéos techniques » reste dans '+s.id);
@@ -65510,7 +65510,7 @@ async function testExercices(){
     // petits écrans ne s'applique pas dans le panneau de test : on la LIT dans
     // la feuille, on la pose sur une copie de la barre large de 360 px, et on
     // mesure. C'est la largeur d'un Galaxy ; sous 360, la barre défile.
-    ok('R17 — les sept onglets tiennent entiers sur un téléphone de 360 px',()=>{
+    ok('R17 — les cinq onglets tiennent entiers sur un téléphone de 360 px, 64 px au moins chacun',()=>{
       const css=_stylesProd().map(s=>s.textContent).join('\n');
       const m=css.match(/@media\(max-width:420px\)\{\.tab-btn\{([^}]*)\}\}/);
       if(!m) return _echec('la règle des petits écrans est introuvable');
@@ -65524,10 +65524,12 @@ async function testExercices(){
         try{
           const bs=[...c.querySelectorAll('.tab-btn')];
           bs.forEach(b=>b.setAttribute('style',m[1]));
-          if(bs[3].textContent.trim()!=='Corrections') trop.push('l’onglet vidéos ne dit pas « Corrections »');
+          if(bs.length!==5) trop.push(bs.length+' onglets');
+          const etroits=bs.filter(b=>b.getBoundingClientRect().width<64).map(b=>b.textContent.trim());
+          if(etroits.length) trop.push(w+' px : moins de 64 px pour '+etroits.join(', '));
           const coupes=bs.filter(b=>b.scrollWidth>b.clientWidth+1).map(b=>b.textContent.trim());
           if(coupes.length) trop.push(w+' px : tronqué(s) '+coupes.join(', '));
-          if(parseFloat(getComputedStyle(bs[3]).fontSize)<10) trop.push(w+' px : police sous 10 px');
+          if(parseFloat(getComputedStyle(bs[1]).fontSize)<10) trop.push(w+' px : police sous 10 px');
         } finally { c.remove(); }
       }
       return trop.length?_echec(trop.join(' | ')):true;});
@@ -73349,13 +73351,61 @@ async function testExercices(){
     ok('R22 — rien dans la barre d’onglets, et l’import de fiche reste fermé comme décidé',()=>{
       const tabs=[...document.querySelectorAll('#client-tabbar .tab-btn')].map(b=>b.dataset.tab);
       if(tabs.some(t=>/sante|scan|import|capture/.test(t||''))) return _echec('onglets : '+tabs.join(','));
-      if(tabs.length!==7) return _echec(tabs.length+' onglets');
+      if(tabs.length!==5) return _echec(tabs.length+' onglets');
       // Kevin, 17/09/2026 : l'import par photo/PDF reste désactivé, et rien
       // ne l'expose — une entrée mènerait à un refus.
       if(LEGACY_PDF_IMPORT!==false) return _echec('l’import de fiche a été réactivé');
       if(/Importer une fiche/i.test(document.getElementById('s-session-manager').textContent))
         return _echec('une entrée « Importer une fiche » mène à un import fermé');
       return true;});
+
+    // ══ BUILD 1887 — CINQ ONGLETS, AUCUNE FONCTION RETIRÉE ════════════════
+    ok('1887 — chaque écran de TABBAR_ECRANS allume un des cinq onglets, aucun écran coach',()=>{
+      const cles=[...document.querySelectorAll('#client-tabbar .tab-btn')].map(b=>b.dataset.tab);
+      if(cles.join(',')!=='home,entrainement,nutrition,progres,coach') return _echec('onglets : '+cles.join(','));
+      for(const [ecran,onglet] of Object.entries(TABBAR_ECRANS)){
+        if(/^s-coach-/.test(ecran)) return _echec('écran coach dans la table : '+ecran);
+        if(cles.indexOf(onglet)<0) return _echec(ecran+' → onglet inconnu « '+onglet+' »');
+      }
+      for(const id of ['s-entrainement','s-mon-coach'])
+        if(!document.getElementById(id)) return _echec('écran '+id+' absent');
+      return TABBAR_ECRANS['s-videos']==='entrainement'&&TABBAR_ECRANS['s-bilan-choice']==='coach'
+        &&TABBAR_ECRANS['s-lifestyle']==='progres'&&TABBAR_ECRANS['s-canal']==='coach'
+        ?true:_echec('une ancienne racine n’allume pas son nouvel onglet');});
+    ok('1887 — clientTab connaît les cinq clés, et les anciennes ouvrent toujours le même écran',()=>{
+      const src=String(clientTab);
+      for(const k of ['home','entrainement','nutrition','progres','coach','videos','bilan','lifestyle','canal','evolution'])
+        if(src.indexOf("tab==='"+k+"'")<0) return _echec('clé inconnue : '+k);
+      if(!/tab==='videos'\)\s*loadVideos\(\)/.test(src)) return _echec('clientTab(\'videos\') n’ouvre plus les corrections');
+      return true;});
+    ok('1887 — clientTab(\'videos\') affiche bien l’écran des corrections',()=>{
+      const sU=currentUser, act=document.querySelector('.screen.active');
+      try{
+        currentUser=Object.assign({},sU||{},{role:'athlete',email:'t1887@t.fr',videos:[]});
+        clientTab('videos');
+        const e=document.getElementById('s-videos');
+        return e&&e.classList.contains('active')?true:_echec('écran actif : '+((document.querySelector('.screen.active')||{}).id));
+      }finally{ currentUser=sU; if(act) go(act.id); }});
+    ok('1887 — deux sources sur l’onglet Coach : les chiffres s’additionnent, le gris de Lifestyle revient',()=>{
+      const sv=JSON.parse(JSON.stringify(_pastilleSources));
+      try{
+        for(const k of Object.keys(_pastilleSources)) delete _pastilleSources[k];
+        const b=_pastilleOnglet('bilan',1,c=>'Bilan : '+c);
+        _pastilleOnglet('canal',2,c=>'Annonces : '+c);
+        const dot=b.querySelector('.tab-dot');
+        if(dot.textContent!=='3') return _echec('chiffre : '+dot.textContent);
+        if(!/Bilan : 1 · Annonces : 2/.test(b.getAttribute('aria-label')||'')) return _echec('libellé : '+b.getAttribute('aria-label'));
+        const p=_pastilleOnglet('lifestyle',2,c=>'Lifestyle : '+c);
+        const pv=_pastilleOnglet('evolution',1,c=>'Évolution : '+c);
+        const d2=pv.querySelector('.tab-dot');
+        if(d2.classList.contains('gris')||d2.textContent!=='1') return _echec('une vraie pastille doit passer devant le gris');
+        _pastilleOnglet('evolution',0);
+        return d2.classList.contains('on')&&d2.classList.contains('gris')?true:_echec('le gris de Lifestyle n’est pas revenu');
+      }finally{
+        for(const k of Object.keys(_pastilleSources)) delete _pastilleSources[k];
+        Object.assign(_pastilleSources,sv);
+        try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
+      }});
 
     // ══ 17/09/2026 — R21 : LA FLÈCHE ET LE RETOUR DU SYSTÈME, PARTOUT PAREILS ══
     //
@@ -75577,7 +75627,7 @@ async function testExercices(){
        &&feedbacksNonVus(_vdU([])).length===0);
     ok('_majPastilleVideos : allume et éteint la pastille',()=>{
       const sauve=currentUser;
-      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="entrainement"]');
       if(!btn){ currentUser=sauve; return false; }
       const dot=btn.querySelector('.tab-dot');
       currentUser=_vdU([{id:'a',feedbackSeen:false}]);
@@ -75729,8 +75779,8 @@ async function testExercices(){
     })();
 
     // ── _majPastilleBilan ──
-    ok('La pastille de l\'onglet Bilan existe dans le HTML',
-       !!document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"] .tab-dot'));
+    ok('La pastille du Bilan existe dans le HTML (onglet Coach)',
+       !!document.querySelector('#client-tabbar .tab-btn[data-tab="coach"] .tab-dot'));
     ok('QA — LA RÉPONSE LUE DANS L’ONGLET NOTES ÉTEINT LA PASTILLE, MÊME SUR UN BILAN SANS TEXTE',()=>{
       const sauve=currentUser;
       try{
@@ -75748,20 +75798,22 @@ async function testExercices(){
       }finally{ currentUser=sauve; try{ _majPastilleBilan(); }catch(e){} }});
     ok('Pastille allumée puis éteinte',()=>{
       const sauve=currentUser;
-      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
       const dot=btn&&btn.querySelector('.tab-dot');
       if(!dot){ currentUser=sauve; return false; }
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})]);
       _majPastilleBilan();
       const on=dot.classList.contains('on')&&/Bilan : 1 élément/.test(btn.getAttribute('aria-label')||'');
+      const _sc=_pastilleSources.canal; delete _pastilleSources.canal;
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})]);
       _majPastilleBilan();
       const off=!dot.classList.contains('on')&&!btn.getAttribute('aria-label');
+      if(_sc) _pastilleSources.canal=_sc;
       currentUser=sauve; _majPastilleBilan();
       return on&&off;});
     ok('Historique sans les champs : aucune pastille',()=>{
       const sauve=currentUser;
-      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
       const dot=btn&&btn.querySelector('.tab-dot');
       currentUser=_rbU([_rbB(10),_rbB(24),_rbB(38)]);
       _majPastilleBilan();
@@ -78123,10 +78175,10 @@ async function testExercices(){
       }
 
       // ── Le câblage : l'onglet, l'écran, le bouton coach ─────────────────
-      ok('L\'onglet Canal existe dans la barre athlète',
-        !!document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]'));
-      ok('L\'onglet Canal porte une pastille ET un cadenas',()=>{
-        const b=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
+      ok('L\'onglet Coach (qui porte le canal) existe dans la barre athlète',
+        !!document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]'));
+      ok('L\'onglet Coach porte une pastille ET un cadenas',()=>{
+        const b=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
         return b&&b.querySelector('.tab-dot')&&b.querySelector('.tab-lock')
           ?true:_echec('pastille ou cadenas manquant');});
       ok('L\'écran athlète et l\'écran coach existent tous les deux',
@@ -78136,8 +78188,8 @@ async function testExercices(){
         // atteignable par un athlète sans qu'une seule ligne le signale.
         return document.getElementById('s-coach-canal')!==null
           &&document.getElementById('s-canal-coach')===null;});
-      ok('s-canal est routé vers l\'onglet canal',
-        TABBAR_ECRANS['s-canal']==='canal');
+      ok('s-canal est routé vers l\'onglet Coach',
+        TABBAR_ECRANS['s-canal']==='coach');
       ok('Le bouton du coach est câblé sur le canal',()=>{
         const b=Array.from(document.querySelectorAll('button'))
           .find(x=>/loadCanalCoach\(\)/.test(x.getAttribute('onclick')||''));
@@ -87360,7 +87412,7 @@ vendredi 78 6h 44m
           return joursSansDonnees(u,1).length===0
             ?true:_echec('une journee a moitie remplie compte comme vide');});
         ok('L\'onglet Lifestyle porte un support de pastille',()=>{
-          const b=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
+          const b=document.querySelector('#client-tabbar .tab-btn[data-tab="progres"]');
           if(!b) return _echec('onglet introuvable');
           // Sans ce <span>, _pastilleOnglet ne trouve rien et se tait : la
           // pastille serait posee sur un onglet qui ne peut pas l'afficher.

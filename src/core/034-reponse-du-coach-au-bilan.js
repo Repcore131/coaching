@@ -58,7 +58,7 @@ function joursSansDonnees(u,jours){
 // decroche », pas « ton historique est imparfait ». Le CHIFFRE, lui, compte la
 // semaine entiere — c'est ce qui reste a rattraper.
 function _majPastilleLifestyle(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="progres"]');
   if(!btn) return;
   // SYNCHRONISÉ : les jours arrivent seuls, on ne les réclame plus.
   if(typeof sanSyncActif==='function'&&sanSyncActif()){ _pastilleOnglet('lifestyle',0,c=>''); return; }
@@ -70,7 +70,7 @@ function _majPastilleLifestyle(){
 }
 // Pastille de l'onglet Bilan, calquée sur _majPastilleVideos.
 function _majPastilleBilan(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
   if(!btn) return;
   // DEUX SOURCES, UN SEUL CHIFFRE : les reponses du coach qu'on n'a pas lues,
   // et le bilan a remplir aujourd'hui. Ce dernier ne compte qu'une fois par

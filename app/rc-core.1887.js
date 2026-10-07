@@ -10469,15 +10469,18 @@ function loadAccessGate(){
 // Une table d'inclusion plutôt qu'une liste d'exclusion : un écran ajouté plus
 // tard est masqué par défaut, ce qui est le comportement sûr — l'oubli inverse
 // ferait apparaître la barre en pleine séance.
+// BUILD 1887 : cinq onglets. Les écrans rangés sous un onglet gardent la
+// barre visible (Pas, Sommeil, Historique la perdaient).
 const TABBAR_ECRANS={
   's-client-home':'home',
-  's-bilan-choice':'bilan',
+  's-entrainement':'entrainement','s-videos':'entrainement','s-historique-seances':'entrainement',
+  's-session-manager':'entrainement','s-records':'entrainement',
   's-nutrition':'nutrition',
-  's-videos':'videos',
-  's-lifestyle':'lifestyle',
-  's-progress':'evolution',
-  's-canal':'canal'
+  's-progress':'progres','s-lifestyle':'progres','s-steps':'progres','s-sleep':'progres',
+  's-mon-coach':'coach','s-bilan-choice':'coach','s-canal':'coach','s-messages':'coach'
 };
+// L'onglet qui porte la pastille d'une source (les anciens onglets).
+const ONGLET_PARENT=Object.freeze({videos:'entrainement',bilan:'coach',canal:'coach',lifestyle:'progres',evolution:'progres'});
 // Hauteur mesurée, pas devinée : elle dépend des icônes injectées au boot et de
 // l'échelle typographique (--fs-xs). Une constante en dur laisserait soit une
 // bande morte sous le contenu, soit le dernier élément caché par la barre.
@@ -10505,7 +10508,7 @@ function feedbacksNonVus(u){
 // accessible est mis à jour en même temps : une pastille seule n'est
 // perceptible que visuellement. R17 — il porte le nom VISIBLE de l'onglet.
 function _majPastilleVideos(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+(ONGLET_PARENT.videos)+'"]');
   if(!btn) return;
   _pastilleOnglet('videos',feedbacksNonVus(currentUser).length,
     c=>'Corrections : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
@@ -11011,7 +11014,7 @@ function retourDe(id,defaut){
 // L'ÉCRAN PRÉCÉDENT VIENT DE retourDe, donc de _ecranOrigine. On ne tient pas
 // une seconde pile : deux mémoires de la même chose finiraient par se
 // contredire, et c’est déjà ce que le produit évite pour les boutons retour.
-const HIST_RACINES=['s-welcome','s-coach-home','s-client-home'];
+const HIST_RACINES=['s-welcome','s-coach-home','s-client-home','s-entrainement','s-mon-coach'];
 // Les deux écrans qu’on ne quitte pas par mégarde. Le texte dit ce qui est
 // gardé : sans cela, « Quitter ? » se répond au hasard.
 const HIST_CONFIRME={
@@ -21816,11 +21819,33 @@ function canalDomaine(lien){
 // seule chose, dont un qui noyait le reste.
 //
 // Desormais : le compte vit sur l'icone, en bas, et nulle part ailleurs.
+// BUILD 1887 : plusieurs sources par onglet (Coach = bilan + annonces) ; un
+// seul chiffre « à traiter ». Pas et sommeil : un point gris, jamais rouge.
+const _pastilleSources={};
 function _pastilleOnglet(onglet,n,libelle){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+onglet+'"]');
+  const cible=(typeof ONGLET_PARENT==='object'&&ONGLET_PARENT[onglet])||onglet;
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+cible+'"]');
   if(!btn) return null;
   const dot=btn.querySelector('.tab-dot');
-  const c=Math.max(0,Math.floor(Number(n)||0));
+  const n0=Math.max(0,Math.floor(Number(n)||0));
+  _pastilleSources[onglet]={cible,n:n0,lib:(n0>0&&typeof libelle==='function')?libelle(n0):''};
+  if(onglet==='lifestyle'){
+    const autres=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible).reduce((a,k)=>a+_pastilleSources[k].n,0);
+    if(dot&&!autres){ dot.classList.toggle('on',n0>0); dot.classList.toggle('gris',n0>0); dot.classList.remove('chiffre'); dot.textContent=''; }
+    if(!autres){ if(n0>0) btn.setAttribute('aria-label',_pastilleSources[onglet].lib); else btn.removeAttribute('aria-label'); }
+    return n0;
+  }
+  const srcs=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible);
+  const c=srcs.reduce((a,k)=>a+_pastilleSources[k].n,0);
+  if(dot) dot.classList.remove('gris');
+  // Plus rien d'autre sur l'onglet : le point gris de Lifestyle reprend sa place.
+  const ls=_pastilleSources.lifestyle;
+  if(!c&&ls&&ls.cible===cible&&ls.n>0){
+    if(dot){ dot.classList.add('on','gris'); dot.classList.remove('chiffre'); dot.textContent=''; }
+    btn.setAttribute('aria-label',ls.lib);
+    return btn;
+  }
+  libelle=c>0?(()=>srcs.map(k=>_pastilleSources[k].lib).filter(Boolean).join(' · ')):libelle;
   if(dot){
     dot.classList.toggle('on',c>0);
     // La classe ET le texte : sans le texte la pastille reste un point, sans
@@ -21891,9 +21916,10 @@ function bilanMarquerOngletVu(){
 }
 // ── L'onglet : verrou et pastille ───────────────────────────────────────────
 function _majOngletCanal(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
   if(!btn) return;
-  const ouvert=canalAccessible(currentUser);
+  // BUILD 1887 : l'onglet Coach est ouvert dès qu'un coach est rattaché.
+  const ouvert=!!(currentUser&&(currentUser.coachEmailKey||currentUser.coachId));
   btn.classList.toggle('verrou',!ouvert);
   // aria-disabled et non l'attribut disabled : le bouton reste atteignable au
   // clavier et mène à la saisie du code coach. Un onglet verrouillé qu'on ne
@@ -21903,9 +21929,9 @@ function _majOngletCanal(){
   // LE COMPTE, ET PLUS LE SEUL FAIT. _pastilleOnglet efface le libelle quand
   // le compte est nul : le verrou repose donc le sien APRES, sinon il serait
   // retire aussitot pose.
-  const n=ouvert?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0;
-  _pastilleOnglet('canal',n,c=>'Canal : '+c+' nouveau'+(c>1?'x':'')+' message'+(c>1?'s':'')+' de ton coach');
-  if(!ouvert) btn.setAttribute('aria-label','Canal : réservé aux athlètes suivis');
+  let n=0; try{ n=(ouvert&&canalAccessible(currentUser))?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0; }catch(e){ n=0; }
+  _pastilleOnglet('canal',n,c=>'Annonces : '+c+' nouvelle'+(c>1?'s':'')+' annonce'+(c>1?'s':'')+' de ton coach');
+  if(!ouvert) btn.setAttribute('aria-label','Coach : réservé aux athlètes suivis');
 }
 
 // ── L'écran athlète ─────────────────────────────────────────────────────────
@@ -50138,6 +50164,7 @@ function loadClientHome(){
   }
   // BUILD 1886 : la carte du moment (et les doublons masqués plus bas).
   try{ _rendreCarteMoment(currentUser); }catch(e){}
+  try{ setTimeout(_infoBulleNouvelleBarre,1500); }catch(e){}
   // BUILD 1861 : « Photos du bilan n°N à ajouter → », tant que le bilan
   // envoyé sans elles les attend (photosAVenir).
   try{
@@ -50792,6 +50819,14 @@ function clientTab(tab){
   // ce déplacement corrige, et allumerait l'onglet AVANT de savoir si la
   // navigation aboutit — go() peut rediriger (filet de sécurité de rôle).
   if(tab==='home') loadClientHome();
+  // BUILD 1887 : les cinq onglets ; les anciennes clés restent connues
+  // (liens profonds, notifications) et ouvrent le même écran qu'avant.
+  else if(tab==='entrainement') loadEntrainement();
+  else if(tab==='progres') loadProgress();
+  else if(tab==='coach'){
+    if(!(currentUser&&(currentUser.coachEmailKey||currentUser.coachId))){ go('s-client-code'); return; }
+    loadMonCoach();
+  }
   else if(tab==='bilan'){
     bilanMarquerOngletVu();
     openBilanChoice();
@@ -50804,6 +50839,50 @@ function clientTab(tab){
   else if(tab==='canal') loadCanal();
 }
 
+// ══ BUILD 1887 : LES RACINES ENTRAÎNEMENT ET COACH ══════════════════════════
+function _ligneEntree(titre,sous,action,pastille){
+  return '<button type="button" class="hb-l" onclick="'+action+'" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px;cursor:pointer;color:var(--text);font:inherit">'
+    +'<span style="flex:1;min-width:0"><b style="display:block">'+escapeHtml(titre)+'</b>'+(sous?'<span class="sub" style="font-size:var(--fs-xs)">'+escapeHtml(sous)+'</span>':'')+'</span>'
+    +(pastille?'<span class="badge badge-orange">'+pastille+'</span>':'')+'<span class="sub">›</span></button>';
+}
+function loadEntrainement(){
+  go('s-entrainement');
+  const z=document.getElementById('ent-corps');
+  if(!z||!currentUser) return false;
+  let s=null; try{ s=seancePrevueDuJour(currentUser,Date.now()); }catch(e){ s=null; }
+  const nv=(function(){ try{ return feedbacksNonVus(currentUser).length; }catch(e){ return 0; } })();
+  z.innerHTML=(s?'<div class="gv-carte" role="button" tabindex="0" onclick="openSessionPicker()" style="padding:14px 16px;margin-bottom:14px;cursor:pointer"><div style="font-weight:800">Séance du jour</div><div class="sub" style="font-size:var(--fs-xs)">'+escapeHtml(s.name||'Séance')+' · '+(s.exercises||[]).length+' exercices</div></div>'
+      :'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">Pas de séance prévue aujourd’hui.</div>')
+    +'<div id="ent-semaine" style="margin-bottom:14px"></div>'
+    +_ligneEntree('Mes séances','Ton programme de la semaine','loadSessionManager()')
+    +_ligneEntree('Historique','Les séances faites','loadHistoriqueSeances()')
+    +_ligneEntree('Mes records','Tes meilleures charges, exercice par exercice',"(typeof ouvrirMesRecords==='function'?ouvrirMesRecords():loadProgress())")
+    +_ligneEntree('Corrections vidéo','Tes vidéos et les retours du coach','loadVideos()',nv||'');
+  try{ const w=document.getElementById('ent-semaine'); if(w) _renderProgExercisesInto(w); }catch(e){}
+  return true;
+}
+function loadMonCoach(){
+  go('s-mon-coach');
+  const z=document.getElementById('mc-corps');
+  if(!z||!currentUser) return false;
+  let prochain=''; try{ const e=echeanceBilan(currentUser,Date.now()); if(e&&e.echeance) prochain='Prochain bilan le '+new Date(e.echeance).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){}
+  const rep=(function(){ try{ return bilansAvecReponseNonVue(currentUser).length; }catch(e){ return 0; } })();
+  let ann=0; try{ ann=canalAccessible(currentUser)?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0; }catch(e){ ann=0; }
+  z.innerHTML=_ligneEntree('Messages','Écrire à ton coach','msgOuvrirFil()')
+    +_ligneEntree('Bilans',prochain||'Faire, relire ou corriger un bilan','bilanMarquerOngletVu();openBilanChoice()',rep||'')
+    +_ligneEntree('Annonces','Ce que ton coach partage à tous','loadCanal()',ann||'');
+  return true;
+}
+// Une seule fois : « Corrections est maintenant dans Entraînement ».
+function _infoBulleNouvelleBarre(){
+  try{
+    if(!currentUser||currentUser.role!=='athlete'||!(currentUser.videos||[]).length) return false;
+    if(localStorage.getItem('rc_info_barre_5')) return false;
+    localStorage.setItem('rc_info_barre_5','1');
+    toast('Corrections est maintenant dans Entraînement.','var(--sub)',4500);
+    return true;
+  }catch(e){ return false; }
+}
 // ======= SESSION MANAGER =======
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const DAY_ICONS=['L','Ma','Me','J','V','S','D'];
@@ -86045,7 +86124,7 @@ function joursSansDonnees(u,jours){
 // decroche », pas « ton historique est imparfait ». Le CHIFFRE, lui, compte la
 // semaine entiere — c'est ce qui reste a rattraper.
 function _majPastilleLifestyle(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="progres"]');
   if(!btn) return;
   // SYNCHRONISÉ : les jours arrivent seuls, on ne les réclame plus.
   if(typeof sanSyncActif==='function'&&sanSyncActif()){ _pastilleOnglet('lifestyle',0,c=>''); return; }
@@ -86057,7 +86136,7 @@ function _majPastilleLifestyle(){
 }
 // Pastille de l'onglet Bilan, calquée sur _majPastilleVideos.
 function _majPastilleBilan(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="coach"]');
   if(!btn) return;
   // DEUX SOURCES, UN SEUL CHIFFRE : les reponses du coach qu'on n'a pas lues,
   // et le bilan a remplir aujourd'hui. Ce dernier ne compte qu'une fois par

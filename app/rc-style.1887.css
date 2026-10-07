@@ -1225,7 +1225,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    Les marges laterales tombent (les icones au-dessus separent deja les
    onglets) et l'interlettrage se resserre d'un cinquieme de pixel. La taille,
    elle, reste a 10px : on ne descend pas sous l'exception deja mesuree. */
-@media(max-width:420px){.tab-btn{letter-spacing:-.2px;padding:6px 0;font-size:var(--fs-2xs);flex:1 1 auto}}
+@media(max-width:420px){.tab-btn{letter-spacing:-.2px;padding:6px 0;font-size:var(--fs-2xs);flex:1 1 auto;min-width:64px}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.

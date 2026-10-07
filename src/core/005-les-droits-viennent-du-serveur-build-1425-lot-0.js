@@ -1171,15 +1171,18 @@ function loadAccessGate(){
 // Une table d'inclusion plutôt qu'une liste d'exclusion : un écran ajouté plus
 // tard est masqué par défaut, ce qui est le comportement sûr — l'oubli inverse
 // ferait apparaître la barre en pleine séance.
+// BUILD 1887 : cinq onglets. Les écrans rangés sous un onglet gardent la
+// barre visible (Pas, Sommeil, Historique la perdaient).
 const TABBAR_ECRANS={
   's-client-home':'home',
-  's-bilan-choice':'bilan',
+  's-entrainement':'entrainement','s-videos':'entrainement','s-historique-seances':'entrainement',
+  's-session-manager':'entrainement','s-records':'entrainement',
   's-nutrition':'nutrition',
-  's-videos':'videos',
-  's-lifestyle':'lifestyle',
-  's-progress':'evolution',
-  's-canal':'canal'
+  's-progress':'progres','s-lifestyle':'progres','s-steps':'progres','s-sleep':'progres',
+  's-mon-coach':'coach','s-bilan-choice':'coach','s-canal':'coach','s-messages':'coach'
 };
+// L'onglet qui porte la pastille d'une source (les anciens onglets).
+const ONGLET_PARENT=Object.freeze({videos:'entrainement',bilan:'coach',canal:'coach',lifestyle:'progres',evolution:'progres'});
 // Hauteur mesurée, pas devinée : elle dépend des icônes injectées au boot et de
 // l'échelle typographique (--fs-xs). Une constante en dur laisserait soit une
 // bande morte sous le contenu, soit le dernier élément caché par la barre.
@@ -1207,7 +1210,7 @@ function feedbacksNonVus(u){
 // accessible est mis à jour en même temps : une pastille seule n'est
 // perceptible que visuellement. R17 — il porte le nom VISIBLE de l'onglet.
 function _majPastilleVideos(){
-  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="'+(ONGLET_PARENT.videos)+'"]');
   if(!btn) return;
   _pastilleOnglet('videos',feedbacksNonVus(currentUser).length,
     c=>'Corrections : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
@@ -1713,7 +1716,7 @@ function retourDe(id,defaut){
 // L'ÉCRAN PRÉCÉDENT VIENT DE retourDe, donc de _ecranOrigine. On ne tient pas
 // une seconde pile : deux mémoires de la même chose finiraient par se
 // contredire, et c’est déjà ce que le produit évite pour les boutons retour.
-const HIST_RACINES=['s-welcome','s-coach-home','s-client-home'];
+const HIST_RACINES=['s-welcome','s-coach-home','s-client-home','s-entrainement','s-mon-coach'];
 // Les deux écrans qu’on ne quitte pas par mégarde. Le texte dit ce qui est
 // gardé : sans cela, « Quitter ? » se répond au hasard.
 const HIST_CONFIRME={

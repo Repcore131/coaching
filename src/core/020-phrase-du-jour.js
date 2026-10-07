@@ -784,6 +784,7 @@ function loadClientHome(){
   }
   // BUILD 1886 : la carte du moment (et les doublons masqués plus bas).
   try{ _rendreCarteMoment(currentUser); }catch(e){}
+  try{ setTimeout(_infoBulleNouvelleBarre,1500); }catch(e){}
   // BUILD 1861 : « Photos du bilan n°N à ajouter → », tant que le bilan
   // envoyé sans elles les attend (photosAVenir).
   try{
@@ -1438,6 +1439,14 @@ function clientTab(tab){
   // ce déplacement corrige, et allumerait l'onglet AVANT de savoir si la
   // navigation aboutit — go() peut rediriger (filet de sécurité de rôle).
   if(tab==='home') loadClientHome();
+  // BUILD 1887 : les cinq onglets ; les anciennes clés restent connues
+  // (liens profonds, notifications) et ouvrent le même écran qu'avant.
+  else if(tab==='entrainement') loadEntrainement();
+  else if(tab==='progres') loadProgress();
+  else if(tab==='coach'){
+    if(!(currentUser&&(currentUser.coachEmailKey||currentUser.coachId))){ go('s-client-code'); return; }
+    loadMonCoach();
+  }
   else if(tab==='bilan'){
     bilanMarquerOngletVu();
     openBilanChoice();
@@ -1450,6 +1459,50 @@ function clientTab(tab){
   else if(tab==='canal') loadCanal();
 }
 
+// ══ BUILD 1887 : LES RACINES ENTRAÎNEMENT ET COACH ══════════════════════════
+function _ligneEntree(titre,sous,action,pastille){
+  return '<button type="button" class="hb-l" onclick="'+action+'" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px;cursor:pointer;color:var(--text);font:inherit">'
+    +'<span style="flex:1;min-width:0"><b style="display:block">'+escapeHtml(titre)+'</b>'+(sous?'<span class="sub" style="font-size:var(--fs-xs)">'+escapeHtml(sous)+'</span>':'')+'</span>'
+    +(pastille?'<span class="badge badge-orange">'+pastille+'</span>':'')+'<span class="sub">›</span></button>';
+}
+function loadEntrainement(){
+  go('s-entrainement');
+  const z=document.getElementById('ent-corps');
+  if(!z||!currentUser) return false;
+  let s=null; try{ s=seancePrevueDuJour(currentUser,Date.now()); }catch(e){ s=null; }
+  const nv=(function(){ try{ return feedbacksNonVus(currentUser).length; }catch(e){ return 0; } })();
+  z.innerHTML=(s?'<div class="gv-carte" role="button" tabindex="0" onclick="openSessionPicker()" style="padding:14px 16px;margin-bottom:14px;cursor:pointer"><div style="font-weight:800">Séance du jour</div><div class="sub" style="font-size:var(--fs-xs)">'+escapeHtml(s.name||'Séance')+' · '+(s.exercises||[]).length+' exercices</div></div>'
+      :'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">Pas de séance prévue aujourd’hui.</div>')
+    +'<div id="ent-semaine" style="margin-bottom:14px"></div>'
+    +_ligneEntree('Mes séances','Ton programme de la semaine','loadSessionManager()')
+    +_ligneEntree('Historique','Les séances faites','loadHistoriqueSeances()')
+    +_ligneEntree('Mes records','Tes meilleures charges, exercice par exercice',"(typeof ouvrirMesRecords==='function'?ouvrirMesRecords():loadProgress())")
+    +_ligneEntree('Corrections vidéo','Tes vidéos et les retours du coach','loadVideos()',nv||'');
+  try{ const w=document.getElementById('ent-semaine'); if(w) _renderProgExercisesInto(w); }catch(e){}
+  return true;
+}
+function loadMonCoach(){
+  go('s-mon-coach');
+  const z=document.getElementById('mc-corps');
+  if(!z||!currentUser) return false;
+  let prochain=''; try{ const e=echeanceBilan(currentUser,Date.now()); if(e&&e.echeance) prochain='Prochain bilan le '+new Date(e.echeance).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){}
+  const rep=(function(){ try{ return bilansAvecReponseNonVue(currentUser).length; }catch(e){ return 0; } })();
+  let ann=0; try{ ann=canalAccessible(currentUser)?canalNonLusCompte(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus()):0; }catch(e){ ann=0; }
+  z.innerHTML=_ligneEntree('Messages','Écrire à ton coach','msgOuvrirFil()')
+    +_ligneEntree('Bilans',prochain||'Faire, relire ou corriger un bilan','bilanMarquerOngletVu();openBilanChoice()',rep||'')
+    +_ligneEntree('Annonces','Ce que ton coach partage à tous','loadCanal()',ann||'');
+  return true;
+}
+// Une seule fois : « Corrections est maintenant dans Entraînement ».
+function _infoBulleNouvelleBarre(){
+  try{
+    if(!currentUser||currentUser.role!=='athlete'||!(currentUser.videos||[]).length) return false;
+    if(localStorage.getItem('rc_info_barre_5')) return false;
+    localStorage.setItem('rc_info_barre_5','1');
+    toast('Corrections est maintenant dans Entraînement.','var(--sub)',4500);
+    return true;
+  }catch(e){ return false; }
+}
 // ======= SESSION MANAGER =======
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const DAY_ICONS=['L','Ma','Me','J','V','S','D'];
