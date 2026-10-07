@@ -22558,7 +22558,10 @@ async function testExercices(){
       const w=b.filter(f=>_fjContientTous(f.s,['whey']));
       if(!w.length) return _echec('aucune whey');
       const gen=b.filter(f=>f.id<0);
-      if(gen.length!==11||gen.some(f=>f.g!=='produits pour sportifs'||!(f.k>0))) return _echec('génériques : '+gen.length);
+      // Build 1854 : les génériques sortent de scripts/repcore_generiques.csv (68) ;
+      // les onze d'origine (-1 à -11) restent des produits pour sportifs, énergie non nulle.
+      const g11=gen.filter(f=>f.id>=-11);
+      if(gen.length<60||g11.length!==11||g11.some(f=>f.g!=='produits pour sportifs'||!(f.k>0))) return _echec('génériques : '+gen.length);
       for(const n of ['caseine','skyr','maltodextrine','creme de riz','gel energetique','isotonique','barre proteinee','clear whey','proteine vegetale'])
         if(!b.some(f=>f.id<0&&f.s.indexOf(n)>=0)) return _echec('générique absent : '+n);
       const kc=b.filter(f=>f.k_calc);
@@ -22577,8 +22580,8 @@ async function testExercices(){
       const ATTENDU=[["crème fraîche",/^Crème .*MG/],["lait d'amande",/^Boisson à l'amande/],["lait de soja",/^Boisson au soja/],
         ['thon en boîte',/^Thon, au naturel/],['coca',/^Cola, sucré$/],['coca zero',/^Cola, sans sucres ajoutés, avec édulcorants$/],
         ['red bull',/^Boisson énergisante/],['nutella',/^Pâte à tartiner chocolat/],['corn flakes',/^Pétales de maïs/],
-        ['granola',/^Muesli croustillant/],['barre de cereales',/^Barre céréalière/],['big mac',/^(Hamburger|Cheeseburger), de restauration rapide/],
-        ['whopper',/^(Hamburger|Cheeseburger), de restauration rapide/],['frites mcdo',/^Frites/],['tenders',/^Nuggets/],
+        ['granola',/^Muesli croustillant/],['barre de cereales',/^Barre céréalière/],['big mac',/restauration rapide/],
+        ['whopper',/restauration rapide/],['frites mcdo',/^Frites/],['tenders',/^Nuggets/],
         ['california roll',/^Sushi ou maki/],['pad thai',/^Nouilles aux crevettes/],['pdt',/^Pomme de terre/],
         ['chocolatine',/^Pain au chocolat/],['yogourt',/^Yaourt/]];
       okA('Alias : les 20 requêtes du quotidien trouvent la fiche attendue dans les 3 premiers',async()=>{
@@ -22669,6 +22672,57 @@ async function testExercices(){
         const a=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).map(x=>x.f.id).join();
         const b=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).map(x=>x.f.id).join();
         return a===b?true:_echec('tri instable');});
+    }
+    // ══ BUILD 1854 : LES GÉNÉRIQUES REPCORE, SOURCÉS (scripts/repcore_generiques.csv) ══
+    {
+      const ORIGINE={'-1':[390,76,8,6],'-2':[370,88,2,1],'-3':[355,78,6,1.5],'-4':[380,75,5,7],'-5':[360,85,3,0.5],'-6':[63,11,4,0.2],
+        '-7':[270,0,67,0],'-8':[25,0,6,0],'-9':[360,33,35,11],'-10':[380,0,95,0],'-11':[360,7,80,1]};
+      okA('Génériques : src « repcore », k p c l renseignés, 4/4/9 à 15 % près',async()=>{
+        await _loadCiqual();
+        const g=_ciqualDB.filter(f=>f.id<0);
+        const mal=g.filter(f=>f.src!=='repcore'||[f.k,f.p,f.c,f.l].some(v=>typeof v!=='number'));
+        if(mal.length) return _echec('incomplets : '+mal.map(f=>f.id).join());
+        const inc=g.filter(f=>Math.abs(f.k-(4*f.p+4*f.c+9*f.l+2*(f.f||0)))>Math.max(0.15*f.k,5));
+        return inc.length?_echec('4/4/9 : '+inc.map(f=>f.id+' '+f.n).join(' ; ')):true;});
+      okA('Génériques : les ids -1 à -11 sont inchangés (des plans les référencent)',async()=>{
+        await _loadCiqual();
+        for(const [id,[k,p,c,l]] of Object.entries(ORIGINE)){
+          const f=_ciqualDB.find(x=>x.id===Number(id));
+          if(!f||f.k!==k||f.p!==p||f.c!==c||f.l!==l) return _echec('id '+id+' : '+JSON.stringify(f&&[f.k,f.p,f.c,f.l]));
+        }
+        return true;});
+      okA('Génériques : les requêtes de salle trouvent leur fiche dans les 3 premiers',async()=>{
+        await _loadCiqual();
+        const ATT=[['cottage',/^Cottage cheese/],['gainer',/^Gainer/],['creatine',/^Créatine/],['bcaa',/^BCAA/],
+          ['pate a tartiner proteinee',/^Pâte à tartiner protéinée/],['poke',/^Poke bowl/],['kfc',/type KFC/],['big mac',/type Big Mac/],
+          ['whopper',/type Whopper/],['mcflurry',/type McFlurry/],['tacos',/^Taco/]];
+        const ko=[];
+        for(const [q,re] of ATT){
+          const {normQ,words}=_fjRequete(q);
+          const r=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).slice(0,3).map(x=>x.f);
+          if(!r.some(f=>re.test(f.n))) ko.push(q+' → '+r.map(f=>f.n).join(' / '));
+        }
+        return ko.length?_echec(ko.join(' ; ')):true;});
+      okA('Génériques : 0 kcal (créatine, BCAA) reste 0, sans estimation 4/4/9',async()=>{
+        await _loadCiqual();
+        const cr=_ciqualDB.find(f=>/^Créatine/.test(f.n));
+        if(!cr) return _echec('pas de créatine');
+        const k=kcalPortion(cr,0.05);
+        return k.kcal===0&&k.estimee===false&&!cr.k_calc?true:_echec(JSON.stringify(k));});
+      ok('Génériques : un plan qui vise un id négatif retiré s’affiche encore par sa copie',()=>{
+        const f=_planAlimentLigne({ciqual:-999,ciqualRef:{n:'Ancien générique',p:10,c:10,l:1}},()=>null);
+        return f&&f.n==='Ancien générique'?true:_echec(JSON.stringify(f));});
+      ok('Génériques : « Valeur moyenne RepCore » sous le nom, et la source de pied de liste le dit',()=>{
+        const h=_fjResultHtml({id:-54,n:'Créatine monohydrate, poudre',g:'produits pour sportifs',k:0,src:'repcore'});
+        if(h.indexOf('Valeur moyenne RepCore')<0) return _echec('mention absente');
+        if(_fjResultHtml({id:1,n:'Riz',g:'',k:100}).indexOf('Valeur moyenne RepCore')>=0) return _echec('mention sur une fiche Ciqual');
+        const x=new XMLHttpRequest(); x.open('GET','index.html',false); x.send();
+        return (x.responseText.match(/aliments génériques RepCore \(sources par fiche\)/g)||[]).length===2?true:_echec('pied de liste');});
+      ok('Base : app/data/ciqual.version = CIQUAL_VERSION de sw.js',()=>{
+        const a=new XMLHttpRequest(); a.open('GET','data/ciqual.version',false); a.send();
+        const b=new XMLHttpRequest(); b.open('GET','sw.js',false); b.send();
+        const v=(b.responseText.match(/const CIQUAL_VERSION = '([^']+)'/)||[])[1];
+        return a.status===200&&a.responseText.trim()===v?true:_echec(a.responseText+' ≠ '+v);});
     }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};

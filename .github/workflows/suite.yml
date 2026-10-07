@@ -84,6 +84,9 @@ jobs:
       - name: Verifier les emojis
         run: python3 scripts/emojis.py --verifier
 
+      - name: Verifier que la base d'aliments se regenere a l'identique
+        run: node scripts/verif/ciqual-reproductible.mjs
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &

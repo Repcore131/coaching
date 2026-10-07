@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1853';
+window.RC_BUILD='1854';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -723,13 +723,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1853.css">
+<link rel="stylesheet" href="./rc-style.1854.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1853.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1854.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3247,7 +3247,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div class="scroll-area" style="flex:1"><div id="cpl-search-list"></div>
       <div style="padding:20px 16px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;letter-spacing:.5px">
-        Source&nbsp;: Anses. 2025. Table de composition nutritionnelle des aliments Ciqual
+        Source&nbsp;: Anses. 2025. Table de composition nutritionnelle des aliments Ciqual + aliments génériques RepCore (sources par fiche)
       </div>
     </div>
   </div>
@@ -5077,7 +5077,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="fj-recent-section"></div>
     <div id="fj-results-list"></div>
     <div style="padding:20px 16px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;letter-spacing:.5px">
-      Source&nbsp;: Anses. 2025. Table de composition nutritionnelle des aliments Ciqual
+      Source&nbsp;: Anses. 2025. Table de composition nutritionnelle des aliments Ciqual + aliments génériques RepCore (sources par fiche)
     </div>
   </div>
 </div>
@@ -6189,5 +6189,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1853.js"></script>
+<script src="./rc-core.1854.js"></script>
 </body></html>

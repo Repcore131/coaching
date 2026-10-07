@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1853';
+const CACHE = 'repcore-v1854';
 // ══ L'INSTALLATION NE RETÉLÉCHARGE QUE CE QUI A CHANGÉ (01/10/2026) ══════
 // Chaque build retéléchargeait les 141 entrées d'ASSETS avec cache:'reload'
 // (~4,8 Mo, images inchangées comprises), et rc-core partait deux fois au
@@ -182,7 +182,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1853.js', './rc-style.1853.css', './rc-theme.1853.css',
+const ASSETS = ['./index.html', './rc-core.1854.js', './rc-style.1854.css', './rc-theme.1854.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -278,7 +278,7 @@ const CIQUAL_URL = './data/ciqual.json';
 // gardait l'ancienne pour toujours (ni whey, ni énergie calculée). Le marqueur
 // vit à côté, sous CIQUAL_VERSION_URL ; une base d'une autre version n'est
 // plus reportée, et le préchargement la retélécharge.
-const CIQUAL_VERSION = '2026-10-07-references';
+const CIQUAL_VERSION = '2025-11-03+c90874747d';
 const CIQUAL_VERSION_URL = './data/ciqual.version';
 async function _ciqualAJour(c) {
   try { const r = await c.match(CIQUAL_VERSION_URL); return !!(r && (await r.text()) === CIQUAL_VERSION); }

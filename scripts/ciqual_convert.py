@@ -138,41 +138,93 @@ def kcal_calculee(e):
         return None
     return round(4*e['p'] + 4*e['c'] + 9*e['l'] + 2*(e.get('f') or 0), 1)
 
-# Valeurs moyennes pour 100 g, relevées sur les étiquettes de produits
-# courants du commerce (plusieurs marques, 2025-2026) et arrondies. Elles
-# ne viennent PAS de Ciqual : chaque ligne dit ce qu'elle représente.
+# ── LES ALIMENTS GÉNÉRIQUES REPCORE : scripts/repcore_generiques.csv ──────
+# Sortis du code (BUILD 1854) : une ligne par aliment, séparateur « ; »,
+#   id;nom;groupe;k;p;c;l;f;e;sel;portion_lib;portion_g;alias;source;date_source
+# pour 100 g. k = kcal, p/c/l = protéines/glucides/lipides, f = fibres,
+# e = EAU (g, facultative : elle ne sert qu'au contrôle de la somme), sel = sel
+# (g) — écrit sous la clé JSON « e », comme les fiches Ciqual. Les alias sont
+# séparés par « | ».
+# ⚠ LES IDS : -1 à -11 sont ceux des premières versions et des plans de coach
+# les référencent — jamais renumérotés, jamais réutilisés. Un id retiré reste
+# dans le fichier en ligne commentée « #retiré;-NN;nom;raison » : il est réservé
+# à vie, et le script refuse qu'une ligne active le reprenne.
+# ⚠ AUCUNE VALEUR SANS SOURCE. Par ordre de priorité : une fiche Ciqual proche
+# (« = Ciqual 25600 »), sinon USDA FoodData Central (domaine public CC0, numéro
+# FDC), sinon la moyenne d'au moins 3 étiquettes françaises lues sur Open Food
+# Facts (codes EAN) ou le tableau publié par la chaîne, avec sa date.
 GROUPE_SPORT = 'produits pour sportifs'
-GENERIQUES = [
-    # Whey concentrée (~80 % de protéines) : étiquettes de whey « standard ».
-    (-1,  'Whey concentrée (protéine de lactosérum), poudre',        390, 76,  8,   6,   0,   0.5),
-    # Whey isolat (~90 %) : quasi sans lactose ni graisse.
-    (-2,  'Whey isolat, poudre',                                     370, 88,  2,   1,   0,   0.5),
-    # Caséine micellaire : protéine lente du lait.
-    (-3,  'Caséine micellaire, poudre',                              355, 78,  6,   1.5, 0,   0.6),
-    # Protéine végétale (mélange pois et riz).
-    (-4,  'Protéine végétale (pois et riz), poudre',                 380, 75,  5,   7,   3,   1.5),
-    # Clear whey : isolat hydrolysé, se boit comme un jus.
-    (-5,  'Clear whey (isolat hydrolysé), poudre',                   360, 85,  3,   0.5, 0,   0.3),
-    # Skyr nature 0 % : valeurs d'étiquettes des skyrs du rayon frais.
-    (-6,  'Skyr nature',                                             63,  11,  4,   0.2, 0,   0.1),
-    # Gel énergétique : sachets de 30 à 40 g, ramenés à 100 g.
-    (-7,  'Gel énergétique',                                         270, 0,   67,  0,   0,   0.2),
-    # Boisson isotonique prête à boire (100 ml ≈ 100 g).
-    (-8,  'Boisson isotonique, prête à boire',                       25,  0,   6,   0,   0,   0.1),
-    # Barre protéinée : moyenne de barres à ~30 % de protéines.
-    (-9,  'Barre protéinée',                                         360, 33,  35,  11,  5,   0.6),
-    # Maltodextrine : glucide pur en poudre.
-    (-10, 'Maltodextrine, poudre',                                   380, 0,   95,  0,   0,   0),
-    # Crème de riz : farine de riz précuite.
-    (-11, 'Crème de riz, poudre',                                    360, 7,   80,  1,   1,   0),
-]
+GENERIQUES_CSV = os.path.join(os.path.dirname(__file__), 'repcore_generiques.csv')
+COLS_GEN = ['id', 'nom', 'groupe', 'k', 'p', 'c', 'l', 'f', 'e', 'sel',
+            'portion_lib', 'portion_g', 'alias', 'source', 'date_source']
 
-def generiques():
-    out = []
-    for (i, nom, k, p, c, l, f, e) in GENERIQUES:
-        out.append({'id': i, 'n': nom, 'g': GROUPE_SPORT, 's': normalize(nom),
-                    'k': float(k), 'p': float(p), 'c': float(c), 'l': float(l),
-                    'f': float(f), 'e': float(e), 'src': 'repcore'})
+def _num(v):
+    v = (v or '').strip().replace(',', '.')
+    return float(v) if v else None
+
+def lire_generiques():
+    lignes, retires = [], set()
+    with open(GENERIQUES_CSV, encoding='utf-8') as fp:
+        for n, brut in enumerate(fp, 1):
+            brut = brut.rstrip('\n')
+            if not brut.strip():
+                continue
+            if brut.startswith('#retiré;') or brut.startswith('#retire;'):
+                retires.add(int(brut.split(';')[1]))
+                continue
+            if brut.startswith('#') or brut.startswith('id;'):
+                continue
+            cols = brut.split(';')
+            if len(cols) != len(COLS_GEN):
+                print(f'  ✗ repcore_generiques.csv:{n} : {len(cols)} colonnes au lieu de {len(COLS_GEN)}')
+                sys.exit(1)
+            lignes.append((n, dict(zip(COLS_GEN, cols))))
+    return lignes, retires
+
+def generiques(base):
+    """Lit le CSV et REFUSE (exit 1) toute ligne incohérente."""
+    lignes, retires = lire_generiques()
+    noms_ciqual = {e.get('s') for e in base}
+    alias_ciqual = {a for e in base for a in (e.get('a') or [])}
+    vus, noms_vus, out, erreurs = set(), set(), [], []
+    for n, r in lignes:
+        i = int(r['id'])
+        k, p, c, l = (_num(r[x]) for x in ('k', 'p', 'c', 'l'))
+        f, eau, sel = _num(r['f']), _num(r['e']), _num(r['sel'])
+        ou = f'ligne {n} (id {i})'
+        if i >= 0: erreurs.append(f'{ou} : un générique a un id négatif')
+        if i in vus: erreurs.append(f'{ou} : id en double')
+        if i in retires: erreurs.append(f'{ou} : id retiré, réservé à vie')
+        vus.add(i)
+        if None in (k, p, c, l): erreurs.append(f'{ou} : k, p, c et l sont obligatoires')
+        else:
+            calc = 4*p + 4*c + 9*l + 2*(f or 0)
+            if abs(k - calc) > max(0.15*k, 5): erreurs.append(f'{ou} : {k} kcal contre {calc:.0f} par 4/4/9 (> 15 %)')
+            if p + c + l + (f or 0) + (sel or 0) + (eau or 0) > 105: erreurs.append(f'{ou} : plus de 105 g pour 100 g')
+        if not r['source'].strip(): erreurs.append(f'{ou} : source vide')
+        s_norm = normalize(r['nom'])
+        if s_norm in noms_ciqual or s_norm in noms_vus: erreurs.append(f'{ou} : nom déjà pris « {r["nom"]} »')
+        noms_vus.add(s_norm)
+        alias = sorted({norm_alias(a) for a in r['alias'].split('|') if a.strip()})
+        for a in alias:
+            if a in noms_ciqual or a in alias_ciqual: erreurs.append(f'{ou} : alias « {a} » déjà pris par une fiche Ciqual')
+        e = {'id': i, 'n': r['nom'].strip(), 'g': (r['groupe'].strip() or GROUPE_SPORT), 's': s_norm,
+             'k': k, 'p': p, 'c': c, 'l': l}
+        # Fibres inconnues : clé ABSENTE, jamais 0 (même règle que Ciqual).
+        if f is not None: e['f'] = f
+        if sel is not None: e['e'] = sel
+        if alias: e['a'] = alias
+        # La portion (portion_lib, portion_g) est lue par poser_unites (unités
+        # naturelles « u ») : elle ne s'écrit pas ici.
+        if r['portion_lib'].strip() and _num(r['portion_g']):
+            e['_portion'] = (r['portion_lib'].strip(), _num(r['portion_g']))
+        e['src'] = 'repcore'
+        out.append(e)
+    if erreurs:
+        print('  ✗ repcore_generiques.csv refusé :')
+        for x in erreurs: print('    - ' + x)
+        sys.exit(1)
+    out.sort(key=lambda e: -e['id'])
     return out
 
 # ── Les alias de recherche (champ "a") ───────────────────────────────────
@@ -207,18 +259,22 @@ def lire_alias():
                 par_id.setdefault(int(i.strip()), []).append(a)
     return par_id
 
-def poser_alias(out):
+def poser_alias(out, garder_csv=False):
     par_id = lire_alias()
     ids = {e['id'] for e in out}
-    orphelins = sorted(i for i in par_id if i not in ids)
+    orphelins = sorted(i for i in par_id if i not in ids and not (garder_csv is False and i < 0))
     if orphelins:
         print(f'  ✗ Alias vers des ids absents de la table : {orphelins}')
         sys.exit(1)
     n = 0
     for e in out:
+        # Les alias des génériques viennent de leur CSV (garder_csv) ; ceux du
+        # TSV s'y ajoutent.
+        avant = e.get('a') if (garder_csv and e.get('src') == 'repcore') else None
         e.pop('a', None)
-        if e['id'] in par_id:
-            e['a'] = sorted(set(par_id[e['id']]))
+        tous = set(avant or []) | set(par_id.get(e['id'], []))
+        if tous:
+            e['a'] = sorted(tous)
             n += len(e['a'])
     print(f'  Alias de recherche : {n} sur {sum(1 for e in out if "a" in e)} fiches')
     return out
@@ -265,15 +321,45 @@ def completer(out):
             e['k_calc'] = True
             n += 1
     print(f'  Énergie calculée (4p + 4c + 9l + 2f) : {n} aliments')
-    g = generiques()
+    base = poser_alias(base)
+    g = generiques(base)
     print(f'  Aliments génériques RepCore : {len(g)}')
-    return poser_references(poser_alias(base + g))
+    return poser_references(poser_alias(base + g, garder_csv=True))
 
 def ecrire(out):
+    """JSON STABLE : même entrée, même sortie, octet pour octet. La base Ciqual
+    garde l'ordre de la table, les génériques suivent par id (-1, -2, …), et
+    chaque fiche écrit ses clés dans un ordre fixe. La version écrite dans
+    app/data/ciqual.version est la date de la table Anses suivie d'une
+    empreinte du contenu — pas la date du jour, qui casserait la reproductibilité.
+    sw.js (CIQUAL_VERSION) doit porter la même chaîne : un test le vérifie."""
+    import hashlib
+    ORDRE = ['id', 'n', 'g', 's', 'k', 'p', 'c', 'l', 'f', 'e']
+    def trie(e):
+        return {**{k: e[k] for k in ORDRE if k in e}, **{k: e[k] for k in sorted(e) if k not in ORDRE}}
+    out = [trie({k: v for k, v in e.items() if not k.startswith('_')}) for e in out]
+    avant = {}
+    if os.path.exists(DST):
+        try:
+            with open(DST, encoding='utf-8') as fp:
+                avant = {e['id']: e for e in json.load(fp)}
+        except Exception:
+            avant = {}
+    texte = json.dumps(out, ensure_ascii=False, separators=(',', ':'))
     os.makedirs(os.path.dirname(DST), exist_ok=True)
     with open(DST, 'w', encoding='utf-8') as fp:
-        json.dump(out, fp, ensure_ascii=False, separators=(',', ':'))
-    print(f'  Écrit : {DST} ({os.path.getsize(DST)/1024:.0f} KB)')
+        fp.write(texte)
+    version = '2025-11-03+' + hashlib.sha256(texte.encode('utf-8')).hexdigest()[:10]
+    with open(os.path.join(os.path.dirname(DST), 'ciqual.version'), 'w', encoding='utf-8') as fp:
+        fp.write(version)
+    apres = {e['id']: e for e in out}
+    ajouts = sorted(i for i in apres if i not in avant)
+    retraits = sorted(i for i in avant if i not in apres)
+    modifs = sorted(i for i in apres if i in avant and apres[i] != avant[i])
+    print(f'  Écrit : {DST} ({os.path.getsize(DST)/1024:.0f} KB), version {version}')
+    print(f'  Delta : {len(ajouts)} ajout(s), {len(modifs)} modification(s), {len(retraits)} retrait(s)')
+    if ajouts: print(f'    ajouts : {ajouts[:20]}{" …" if len(ajouts) > 20 else ""}')
+    if retraits: print(f'    retraits : {retraits[:20]}')
 
 if '--depuis-json' in sys.argv:
     with open(DST, encoding='utf-8') as fp:

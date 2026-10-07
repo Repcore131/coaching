@@ -106508,6 +106508,7 @@ function _fjResultHtml(f,avecEpingle,via){
     <div style="flex:1;min-width:0">
     <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(f.n)}${_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:''}</div>
     ${via?`<div class="fj-via" style="font-size:var(--fs-2xs);color:var(--sub)">trouvé via « ${escapeHtml(via)} »</div>`:''}
+    ${f.src==='repcore'?`<div class="fj-repcore" style="font-size:var(--fs-2xs);color:var(--sub)">Valeur moyenne RepCore</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
       ${kcalSpan}
       <span>${escapeHtml(f.g)}</span>
