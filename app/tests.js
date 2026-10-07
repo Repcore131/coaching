@@ -66915,7 +66915,8 @@ async function testExercices(){
         if(!(sess.volume<avant)||sess.volume!==160) return _echec('volume '+sess.volume);
         _apresCorrectionSeances();
         const r=recordsExercice(currentUser,'Squat');
-        const max=JSON.stringify(r).match(/100/);
+        // Les CHARGES seules : un horodatage contient parfois « 100 » (flake CI, build 1886).
+        const max=JSON.stringify(r,(k,v)=>/^(date|le|ts|at)$/.test(k)?undefined:v).match(/(?:^|[^\d.])100(?:[^\d]|$)/);
         if(max) return _echec('le record garde 100 kg : '+JSON.stringify(r).slice(0,200));
         if(appliquerCorrectionSeance(sess,{series:[{ex:'Squat',i:0,weight:'abc'}]})) return _echec('une saisie illisible a changé la séance');
         return /· corrigée/.test(_buildSessionCard(sess,currentUser))?true:_echec('le coach ne voit pas « corrigée »');
