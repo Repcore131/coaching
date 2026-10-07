@@ -74044,6 +74044,20 @@ async function testExercices(){
         getOwnedClient('inconnu',{}); return toasts.length?_echec('athlète : '+toasts[0]):true;
       }finally{ window.toast=_t; currentUser=cu; }});
 
+    // ══ BUILD 1911 — libSeriesReps : « 4 × 8-10 », OU RIEN ════════════════════
+    ok('1911 — libSeriesReps : pleine, séries seules, reps seules, vide, échappée',()=>{
+      const faux=[];
+      for(const [e,att] of [[{series:4,reps:'8-10'},'4 × 8-10'],[{series:'4',reps:8},'4 × 8'],[{series:4},'4 séries'],[{series:1},'1 série'],
+        [{sets:3,reps:'12'},'3 × 12'],[{reps:'12'},'12 reps'],[{},''],[null,''],[{series:undefined,reps:undefined},''],[{series:'abc',reps:'null'},''],
+        [{series:3,reps:'<b>5</b>'},'3 × &lt;b&gt;5&lt;/b&gt;']])
+        if(libSeriesReps(e)!==att) faux.push(JSON.stringify(e)+' → '+libSeriesReps(e));
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1911 — plus de « ${x.series}×${x.reps} » ni de « séries × » brut dans le code servi',()=>{
+      const s=_prodSrc();
+      const motifs=[/\$\{ex\.series\}\s*×/,/\$\{ex\.series\} séries ×/,/e\.series\+' × '\+escapeHtml/,/value="\$\{ex\.reps\}"/,/value="\$\{ex\.repos\}"/];
+      const f=motifs.filter(m=>m.test(s));
+      return f.length?_echec(f.map(String).join(' | ')):true;});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

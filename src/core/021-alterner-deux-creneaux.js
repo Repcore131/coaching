@@ -270,7 +270,7 @@ function _htmlSeanceDepart(s){
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+escapeHtml(e.name)+'</div>'
       +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
-      +e.series+' × '+escapeHtml(String(e.reps))+' · repos '+escapeHtml(String(e.repos))+'</div>'
+      +libSeriesReps(e)+' · repos '+escapeHtml(String(e.repos))+'</div>'
       +'</div>';
     },{pad:'9px 0',gap:11})
     +'<div style="margin-top:24px">'

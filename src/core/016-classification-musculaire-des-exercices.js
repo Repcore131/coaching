@@ -2569,7 +2569,7 @@ function _collageRendre(){
       +s.exercices.map((e,j)=>'<div class="col-ex'+(e._inconnu?' col-inconnu':'')+'" style="padding:6px 8px;margin-bottom:4px;'
         +'border-radius:var(--r-2);'+(e._inconnu?'border:1px solid var(--orange);background:color-mix(in srgb,var(--orange) 10%,transparent)':'border:1px solid transparent')+'">'
         +'<div style="font-size:var(--fs-sm)">'+escapeHtml(e.name)
-        +' <span style="color:var(--sub)">· '+(e.sets||'?')+' × '+escapeHtml(e.reps||'?')
+        +' <span style="color:var(--sub)">· '+(libSeriesReps(e)||'?')
         +(e.charge?' · '+escapeHtml(e.charge):'')+(e.rir?' · RIR '+escapeHtml(e.rir):'')+'</span></div>'
         +(e._inconnu?'<div style="font-size:var(--fs-xs);color:var(--orange);margin-top:4px">Pas dans la banque'
           +(suggestionsBanque(e.name).length?' : ':', gardé tel quel.')

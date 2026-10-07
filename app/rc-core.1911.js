@@ -41205,7 +41205,7 @@ function _collageRendre(){
       +s.exercices.map((e,j)=>'<div class="col-ex'+(e._inconnu?' col-inconnu':'')+'" style="padding:6px 8px;margin-bottom:4px;'
         +'border-radius:var(--r-2);'+(e._inconnu?'border:1px solid var(--orange);background:color-mix(in srgb,var(--orange) 10%,transparent)':'border:1px solid transparent')+'">'
         +'<div style="font-size:var(--fs-sm)">'+escapeHtml(e.name)
-        +' <span style="color:var(--sub)">· '+(e.sets||'?')+' × '+escapeHtml(e.reps||'?')
+        +' <span style="color:var(--sub)">· '+(libSeriesReps(e)||'?')
         +(e.charge?' · '+escapeHtml(e.charge):'')+(e.rir?' · RIR '+escapeHtml(e.rir):'')+'</span></div>'
         +(e._inconnu?'<div style="font-size:var(--fs-xs);color:var(--orange);margin-top:4px">Pas dans la banque'
           +(suggestionsBanque(e.name).length?' : ':', gardé tel quel.')
@@ -51033,7 +51033,7 @@ function htmlCarteSeanceSlot(i,s){
   const lignes=vis.map((e,n)=>`<li class="cs-li">
     <span class="cs-no">${n+1}</span>
     <span class="cs-nom">${escapeHtml(String(e.name||'').toUpperCase())}</span>
-    <span class="cs-det">${escapeHtml(String(e.series||'')+'×'+String(e.reps||''))}</span>
+    <span class="cs-det">${libSeriesReps(e)}</span>
   </li>`).join('');
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager ma séance</button>`:'';
@@ -52588,7 +52588,7 @@ function _htmlSeanceDepart(s){
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:var(--fs-sm);font-weight:800;line-height:1.3">'+escapeHtml(e.name)+'</div>'
       +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">'
-      +e.series+' × '+escapeHtml(String(e.reps))+' · repos '+escapeHtml(String(e.repos))+'</div>'
+      +libSeriesReps(e)+' · repos '+escapeHtml(String(e.repos))+'</div>'
       +'</div>';
     },{pad:'9px 0',gap:11})
     +'<div style="margin-top:24px">'
@@ -54901,7 +54901,7 @@ function _storyDonnees(){
     titre:(DAYS[sel]||'').toUpperCase()+(selS.name?' : '+selS.name.toUpperCase():''),
     repos:(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''),
     ex:selS.exercises.slice(0,14).map(e=>({n:String(e.name||'').toUpperCase(),
-      d:String(e.series||'')+'×'+String(e.reps||'')})),
+      d:String(e.series||'')&&String(e.reps||'')?String(e.series)+'×'+String(e.reps):(e.series?e.series+' séries':(e.reps?e.reps+' reps':''))})),
     coupes:Math.max(0,selS.exercises.length-14)};
 }
 // Le rendu. Toutes les mesures sont en pixels de l image finale, pas en
@@ -57272,7 +57272,7 @@ function _renderWeeklyInto(el,sc){
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
               <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
-              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
+              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${libSeriesReps(ex)}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
         ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);display:flex;justify-content:flex-end;gap:8px">
@@ -58169,7 +58169,7 @@ function _blocExo(idx,estSS){
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
           ${_htmlNoteExo(idx,ex)}
-          <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
+          <div class="wo-serie">${libSeriesReps(ex)}</div>
           <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes
                dans le même écran : c'est une CLASSE qui les marque, et
                woMajProgression ne garde que la première. -->
@@ -58388,6 +58388,25 @@ function lireNombreFr(txt,opts){
   if(typeof o.min==='number'&&x<o.min) return {ok:false,valeur:x,raison:'min'};
   if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
   return {ok:true,valeur:x,raison:''};
+}
+// ══ BUILD 1911 — « 4 × 8-10 », OU RIEN ══════════════════════════════════════
+// PURE. Le libellé séries × répétitions d'un exercice, DÉJÀ ÉCHAPPÉ (il part
+// dans du HTML). Une séance importée, un modèle à moitié rempli ou un
+// exercice ajouté à la main affichaient « undefined × 10 », « 4 × » ou
+// « × null » : chaque moitié manquante disparaît proprement.
+//   {series:4,reps:'8-10'} → '4 × 8-10' · {series:4} → '4 séries' ·
+//   {reps:'12'} → '12 reps' · {} → ''
+function libSeriesReps(ex){
+  const e=ex||{};
+  const s0=e.series!=null&&e.series!==''?e.series:e.sets;
+  const n=parseInt(s0,10);
+  const s=isFinite(n)&&n>0?n:null;
+  const r0=e.reps==null?'':String(e.reps).trim();
+  const r=(r0&&r0!=='undefined'&&r0!=='null')?r0:'';
+  if(s&&r) return escapeHtml(s+' × '+r);
+  if(s) return escapeHtml(s+(s>1?' séries':' série'));
+  if(r) return escapeHtml(r+' reps');
+  return '';
 }
 // ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
 // Tous les champs à virgule sont <input type="text" inputmode="decimal"
@@ -136866,20 +136885,20 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
       </label>`}
       <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px">
         <span style="background:var(--red);color:var(--text);border-radius:var(--r-2);padding:2px 8px;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${i+1}</span>
-        <input value="${ex.name.replace(/"/g,'&quot;')}" id="ocr-name-${i}" style="font-weight:700;font-size:var(--fs-md);text-transform:uppercase;flex:1" placeholder="Nom exercice">
+        <input value="${escapeHtml(ex.name||'')}" id="ocr-name-${i}" style="font-weight:700;font-size:var(--fs-md);text-transform:uppercase;flex:1" placeholder="Nom exercice">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">SÉRIES</div>
-          <input type="number" value="${ex.series}" id="ocr-series-${i}" style="text-align:center;padding:8px" min="1" max="10">
+          <input type="number" value="${escapeHtml(ex.series==null?'':String(ex.series))}" id="ocr-series-${i}" style="text-align:center;padding:8px" min="1" max="10">
         </div>
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPS</div>
-          <input value="${ex.reps}" id="ocr-reps-${i}" style="text-align:center;padding:8px" placeholder="10 ou 10 PUIS 20">
+          <input value="${escapeHtml(ex.reps==null?'':String(ex.reps))}" id="ocr-reps-${i}" style="text-align:center;padding:8px" placeholder="10 ou 10 PUIS 20">
         </div>
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPOS</div>
-          <input value="${ex.repos}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
+          <input value="${escapeHtml(ex.repos==null?'':String(ex.repos))}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
         </div>
       </div>
       <div style="margin-bottom:8px">
@@ -137113,7 +137132,7 @@ function showPdfSeancesModal(seances,targetEmail){
             <div style="width:20px;height:20px;background:var(--red);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:var(--text);flex-shrink:0">${ei+1}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:var(--fs-xs);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(ex.name)}</div>
-              <div style="font-size:var(--fs-xs);color:var(--sub)">${ex.series} × ${escapeHtml(String(ex.reps))} · repos ${escapeHtml(ex.repos)}</div>
+              <div style="font-size:var(--fs-xs);color:var(--sub)">${libSeriesReps(ex)} · repos ${escapeHtml(ex.repos)}</div>
             </div>
           </div>`).join('')}
       </div>

@@ -785,7 +785,7 @@ function _blocExo(idx,estSS){
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
           ${_htmlNoteExo(idx,ex)}
-          <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
+          <div class="wo-serie">${libSeriesReps(ex)}</div>
           <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes
                dans le même écran : c'est une CLASSE qui les marque, et
                woMajProgression ne garde que la première. -->
@@ -1004,6 +1004,25 @@ function lireNombreFr(txt,opts){
   if(typeof o.min==='number'&&x<o.min) return {ok:false,valeur:x,raison:'min'};
   if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
   return {ok:true,valeur:x,raison:''};
+}
+// ══ BUILD 1911 — « 4 × 8-10 », OU RIEN ══════════════════════════════════════
+// PURE. Le libellé séries × répétitions d'un exercice, DÉJÀ ÉCHAPPÉ (il part
+// dans du HTML). Une séance importée, un modèle à moitié rempli ou un
+// exercice ajouté à la main affichaient « undefined × 10 », « 4 × » ou
+// « × null » : chaque moitié manquante disparaît proprement.
+//   {series:4,reps:'8-10'} → '4 × 8-10' · {series:4} → '4 séries' ·
+//   {reps:'12'} → '12 reps' · {} → ''
+function libSeriesReps(ex){
+  const e=ex||{};
+  const s0=e.series!=null&&e.series!==''?e.series:e.sets;
+  const n=parseInt(s0,10);
+  const s=isFinite(n)&&n>0?n:null;
+  const r0=e.reps==null?'':String(e.reps).trim();
+  const r=(r0&&r0!=='undefined'&&r0!=='null')?r0:'';
+  if(s&&r) return escapeHtml(s+' × '+r);
+  if(s) return escapeHtml(s+(s>1?' séries':' série'));
+  if(r) return escapeHtml(r+' reps');
+  return '';
 }
 // ══ BUILD 1908 — LES CHAMPS DÉCIMAUX SONT DU TEXTE ═════════════════════════
 // Tous les champs à virgule sont <input type="text" inputmode="decimal"

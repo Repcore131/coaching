@@ -63,7 +63,7 @@ function _storyDonnees(){
     titre:(DAYS[sel]||'').toUpperCase()+(selS.name?' : '+selS.name.toUpperCase():''),
     repos:(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''),
     ex:selS.exercises.slice(0,14).map(e=>({n:String(e.name||'').toUpperCase(),
-      d:String(e.series||'')+'×'+String(e.reps||'')})),
+      d:String(e.series||'')&&String(e.reps||'')?String(e.series)+'×'+String(e.reps):(e.series?e.series+' séries':(e.reps?e.reps+' reps':''))})),
     coupes:Math.max(0,selS.exercises.length-14)};
 }
 // Le rendu. Toutes les mesures sont en pixels de l image finale, pas en
@@ -2434,7 +2434,7 @@ function _renderWeeklyInto(el,sc){
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
               <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
-              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
+              <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${libSeriesReps(ex)}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
         ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);display:flex;justify-content:flex-end;gap:8px">

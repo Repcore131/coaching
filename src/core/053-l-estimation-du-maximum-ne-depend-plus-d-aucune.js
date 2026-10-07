@@ -515,20 +515,20 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
       </label>`}
       <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px">
         <span style="background:var(--red);color:var(--text);border-radius:var(--r-2);padding:2px 8px;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${i+1}</span>
-        <input value="${ex.name.replace(/"/g,'&quot;')}" id="ocr-name-${i}" style="font-weight:700;font-size:var(--fs-md);text-transform:uppercase;flex:1" placeholder="Nom exercice">
+        <input value="${escapeHtml(ex.name||'')}" id="ocr-name-${i}" style="font-weight:700;font-size:var(--fs-md);text-transform:uppercase;flex:1" placeholder="Nom exercice">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">SÉRIES</div>
-          <input type="number" value="${ex.series}" id="ocr-series-${i}" style="text-align:center;padding:8px" min="1" max="10">
+          <input type="number" value="${escapeHtml(ex.series==null?'':String(ex.series))}" id="ocr-series-${i}" style="text-align:center;padding:8px" min="1" max="10">
         </div>
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPS</div>
-          <input value="${ex.reps}" id="ocr-reps-${i}" style="text-align:center;padding:8px" placeholder="10 ou 10 PUIS 20">
+          <input value="${escapeHtml(ex.reps==null?'':String(ex.reps))}" id="ocr-reps-${i}" style="text-align:center;padding:8px" placeholder="10 ou 10 PUIS 20">
         </div>
         <div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPOS</div>
-          <input value="${ex.repos}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
+          <input value="${escapeHtml(ex.repos==null?'':String(ex.repos))}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
         </div>
       </div>
       <div style="margin-bottom:8px">
@@ -762,7 +762,7 @@ function showPdfSeancesModal(seances,targetEmail){
             <div style="width:20px;height:20px;background:var(--red);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:var(--text);flex-shrink:0">${ei+1}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:var(--fs-xs);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(ex.name)}</div>
-              <div style="font-size:var(--fs-xs);color:var(--sub)">${ex.series} × ${escapeHtml(String(ex.reps))} · repos ${escapeHtml(ex.repos)}</div>
+              <div style="font-size:var(--fs-xs);color:var(--sub)">${libSeriesReps(ex)} · repos ${escapeHtml(ex.repos)}</div>
             </div>
           </div>`).join('')}
       </div>

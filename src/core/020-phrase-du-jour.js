@@ -1547,7 +1547,7 @@ function htmlCarteSeanceSlot(i,s){
   const lignes=vis.map((e,n)=>`<li class="cs-li">
     <span class="cs-no">${n+1}</span>
     <span class="cs-nom">${escapeHtml(String(e.name||'').toUpperCase())}</span>
-    <span class="cs-det">${escapeHtml(String(e.series||'')+'×'+String(e.reps||''))}</span>
+    <span class="cs-det">${libSeriesReps(e)}</span>
   </li>`).join('');
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager ma séance</button>`:'';
