@@ -1781,7 +1781,7 @@ function _histCalqueOuvert(){
   // _histFermerCalque sait les fermer : le retour tombait plus bas, go()
   // les fermait au passage, et l'ecran changeait avec. Meme ordre que
   // _histFermerCalque, pour qu'on lise les deux listes cote a cote.
-  for(const id of ['rc-achat','rc-progvente','rc-vente','rc-contact','rc-lexique','rc-histo','rc-diete','rc-confirm','rc-saisie']){
+  for(const id of ['rc-achat','rc-progvente','rc-vente','rc-contact','rc-recherche','rc-lexique','rc-histo','rc-diete','rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }
@@ -1802,6 +1802,8 @@ function _histFermerCalque(){
   if(_vb&&_vb.style.display==='flex'&&!_vb.dataset.sortie){ fermerFicheVente(); return; }
   const _ct=document.getElementById('rc-contact');
   if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
+  const _rh=document.getElementById('rc-recherche');
+  if(_rh&&_rh.style.display==='flex'&&!_rh.dataset.sortie){ fermerRecherche(); return; }
   const _lx=document.getElementById('rc-lexique');
   if(_lx&&_lx.style.display==='flex'&&!_lx.dataset.sortie){ rcInfoFermer(); return; }
   // L'historique d'un exercice, APRES le lexique : ce dernier peut s'ouvrir

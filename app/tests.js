@@ -73409,6 +73409,61 @@ async function testExercices(){
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
 
+    // ══ BUILD 1890 — LA RECHERCHE LOCALE ═══════════════════════════════════
+    const _rchU=()=>({role:'athlete',email:'rch@t.fr',unite:'kg',
+      sessions:[{id:'s1',date:new Date(2026,9,5,18).getTime(),name:'Jambes',data:{'Squat':{sets:[{weight:'100',repsDone:'5',done:true}]}}},
+                {id:'s2',date:new Date(2026,8,12,18).getTime(),name:'Haut du corps',data:{'Développé couché':{sets:[{weight:'70',repsDone:'8',done:true}]}}}],
+      bilans:[{type:'coaching',date:new Date(2026,9,1).getTime()}]});
+    const _rchT=new Date(2026,9,7,12).getTime();
+    ok('1890 — « pesee » met la pesée en premier',()=>{
+      const r=rechercher(_rchU(),'pesee',_rchT);
+      return r[0]&&r[0].id==='pesee'?true:_echec(JSON.stringify(r.slice(0,3)));});
+    ok('1890 — « PR » mène aux records ; « Pesée » accentuée aussi',()=>{
+      const r=rechercher(_rchU(),'PR',_rchT);
+      if(!(r[0]&&r[0].id==='records')) return _echec(JSON.stringify(r.slice(0,3)));
+      return rechercher(_rchU(),'  PESÉE ',_rchT)[0].id==='pesee'?true:_echec('normalisation');});
+    ok('1890 — « squat » trouve l’exercice et sa charge',()=>{
+      const r=rechercher(_rchU(),'squat',_rchT);
+      const e=r.find(x=>x.type==='exercice');
+      return e&&e.libelle==='Squat'&&/100 kg/.test(e.sous)?true:_echec(JSON.stringify(r));});
+    ok('1890 — « deconnexion » trouve « Se déconnecter » ; une faute tolérée au-delà de 4 lettres',()=>{
+      if(rechercher(_rchU(),'deconnexion',_rchT)[0].id!=='deconnexion') return _echec('déconnexion');
+      if(!rechercher(_rchU(),'deconexion',_rchT).some(x=>x.id==='deconnexion')) return _echec('une faute non tolérée');
+      return rechercher(_rchU(),'pzs',_rchT).length===0?true:_echec('faute tolérée sur 3 lettres');});
+    ok('1890 — « oct » rend les séances d’octobre, pas celles de septembre',()=>{
+      const r=rechercher(_rchU(),'oct',_rchT).filter(x=>x.type==='seance');
+      return r.length===1&&r[0].libelle==='Jambes'?true:_echec(JSON.stringify(r));});
+    ok('1890 — au plus 12 résultats, destinations d’abord ; chaque action est une fonction de window, aucun écran coach',()=>{
+      const u=_rchU();
+      for(let i=0;i<30;i++) u.sessions.push({id:'x'+i,date:_rchT-i*864e5,name:'Séance '+i});
+      const r=rechercher(u,'se',_rchT);
+      if(r.length>12) return _echec(r.length+' résultats');
+      const iD=r.map(x=>x.type).lastIndexOf('destination'), iA=r.findIndex(x=>x.type!=='destination');
+      if(iD>=0&&iA>=0&&iA<iD) return _echec('un résultat passe avant une destination');
+      for(const d of RECHERCHE_DESTINATIONS){
+        if(typeof window[d.action]!=='function') return _echec(d.id+' : '+d.action+' n’est pas une fonction');
+        if(/s-coach-/.test(String(window[d.action]).slice(0,400))&&!/coach/.test(d.id)) return _echec(d.id+' ouvre un écran coach');
+      }
+      for(const x of ['ouvrirSeanceHistorique','ouvrirHistoriqueExoNom']) if(typeof window[x]!=='function') return _echec(x);
+      return true;});
+    ok('1890 — la feuille : requête vide = 6 favorites ; aucun résultat = « Écrire à mon coach » + 6 ; Entrée = 1er',()=>{
+      const sU=currentUser; let appel=null; const sv=window.ouvrirPeseeAccueil;
+      try{
+        currentUser=_rchU();
+        ouvrirRecherche();
+        if(document.getElementById('rc-recherche').style.display!=='flex') return _echec('feuille fermée');
+        if(document.querySelectorAll('#rch-res .rch-l').length!==6) return _echec('favorites : '+document.querySelectorAll('#rch-res .rch-l').length);
+        const q=document.getElementById('rch-q');
+        q.value='zzzzqqq'; rechercheMaj();
+        const l=[...document.querySelectorAll('#rch-res .rch-l')];
+        if(l.length!==7||!/Écrire à mon coach/.test(l[0].textContent)) return _echec('sans résultat : '+l.map(x=>x.textContent).join('|'));
+        window.ouvrirPeseeAccueil=()=>{ appel='pesee'; };
+        q.value='pesee'; rechercheMaj(); rechercheEntree();
+        return appel==='pesee'?true:_echec('Entrée n’ouvre pas le premier résultat');
+      }finally{ window.ouvrirPeseeAccueil=sv; currentUser=sU; try{ fermerRecherche(true); localStorage.removeItem(RECHERCHE_USAGE_CLE); }catch(e){} }});
+    ok('1890 — une loupe sur l’accueil ouvre la recherche',
+      !!document.querySelector('#s-client-home [onclick*="ouvrirRecherche()"]'));
+
     // ══ BUILD 1889 — RÉGLAGES EN SECTIONS, PROFIL ALLÉGÉ, TROPHÉES ════════
     ok('1889 — chaque réglage listé est appelé par un contrôle de #s-client-reglages',()=>{
       const sU=currentUser;

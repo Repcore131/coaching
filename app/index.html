@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1889';
+window.RC_BUILD='1890';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1889.css">
+<link rel="stylesheet" href="./rc-style.1890.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1889.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1890.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -3674,6 +3674,7 @@ const COACH_PHOTO='icons/coach.jpg';
              Contacte ton coach » puis « Réglages », côte à côte. -->
         <div class="clh-liens">
           <div id="clh-contact"></div>
+          <a href="#" class="clh-reglages clh-loupe" onclick="ouvrirRecherche();return false" style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:13px;height:13px;flex-shrink:0" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Rechercher</a>
           <a href="#" class="clh-reglages" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
         </div>
         <!-- LA LIGNE D AUTEUR A ETE RETIREE le 24/08/2026, avec le jeu de
@@ -4249,6 +4250,16 @@ const COACH_PHOTO='icons/coach.jpg';
      Trois portes, et l'athlete choisit. Elles ne vivent pas sur l'accueil :
      posees a demeure, elles y occupaient une rangee entiere pour une
      question qu'on se pose rarement. -->
+<!-- BUILD 1890 : LA RECHERCHE LOCALE (ouvrirRecherche). Entrée = premier résultat. -->
+<div id="rc-recherche" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerRecherche()" role="dialog" aria-modal="true" aria-label="Rechercher">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 16px 16px;width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column">
+    <input id="rch-q" type="search" enterkeyhint="go" autocomplete="off" placeholder="Pesée, records, squat, octobre…" aria-label="Rechercher"
+      oninput="rechercheMaj()" onkeydown="if(event.key==='Enter'){event.preventDefault();rechercheEntree()}" style="width:100%;box-sizing:border-box">
+    <div id="rch-res" class="rch-res"></div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="fermerRecherche()">Fermer</button>
+  </div>
+</div>
 <div id="rc-contact" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
   onclick="if(event.target===this)fermerContactCoach()" role="dialog" aria-modal="true">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 20px;width:100%;max-width:560px">
@@ -6283,5 +6294,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1889.js"></script>
+<script src="./rc-core.1890.js"></script>
 </body></html>

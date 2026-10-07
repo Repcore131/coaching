@@ -934,6 +934,10 @@ document.addEventListener('keydown',e=>{
   if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
     e.preventDefault(); try{ rcInfoFermer(); }catch(x){} return;
   }
+  const rh=document.getElementById('rc-recherche');
+  if(rh&&rh.style.display==='flex'&&!rh.dataset.sortie){
+    e.preventDefault(); try{ fermerRecherche(); }catch(x){} return;
+  }
   const hx=document.getElementById('rc-histo');
   if(hx&&hx.style.display==='flex'&&!hx.dataset.sortie){
     e.preventDefault(); try{ fermerHistoriqueExo(); }catch(x){} return;

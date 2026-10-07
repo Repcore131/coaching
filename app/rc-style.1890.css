@@ -13517,3 +13517,10 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rg-sec>.rg-sec-t::after{content:'›';color:var(--sub);transition:transform var(--t-2)}
 .rg-sec[open]>.rg-sec-t::after{transform:rotate(90deg)}
 .rg-sec-c{padding:0 12px 4px}
+
+/* BUILD 1890 — la recherche locale. */
+.rch-res{overflow:auto;margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.rch-t{font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin:4px 2px}
+.rch-l{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;color:var(--text);font:inherit;cursor:pointer}
+.rch-l-t{font-weight:800;font-size:var(--fs-sm)}
+.rch-l-s{font-size:var(--fs-xs);color:var(--sub)}

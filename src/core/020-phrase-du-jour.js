@@ -2607,3 +2607,179 @@ function toggleDayActive(i){
   saveUser();loadSessionManager();
 }
 
+
+// ══ BUILD 1890 : LA RECHERCHE LOCALE ══════════════════════════════════════
+//
+// Une loupe sur l'accueil : « pesée », « PR », « squat », « octobre »… Tout se
+// cherche dans le dossier déjà sur le téléphone, rien ne part sur le réseau.
+// Les destinations d'abord (les écrans), puis les séances, les exercices (et
+// leur meilleure charge), les aliments du plan et les bilans.
+// ⚠ PAS D'ÉCRAN s-coach-* : la recherche est celle de l'athlète.
+// ⚠ L'ACTION EST UN NOM DE FONCTION (window) ET SES ARGUMENTS, jamais une
+//   chaîne à évaluer : la CSP interdit eval.
+const RECHERCHE_DESTINATIONS=Object.freeze([
+  {id:'pesee',libelle:'Pesée du jour',motsCles:['pesee','poids','peser','balance'],action:'ouvrirPeseeAccueil'},
+  {id:'records',libelle:'Mes records',motsCles:['records','pr','record','max','meilleures charges'],action:'ouvrirMesRecords'},
+  {id:'seance',libelle:'Séance du jour',motsCles:['seance','entrainement','programme','training'],action:'loadEntrainement'},
+  {id:'historique',libelle:'Historique des séances',motsCles:['historique','seances passees'],action:'loadHistoriqueSeances'},
+  {id:'corrections',libelle:'Mes corrections',motsCles:['corrections','video','technique'],action:'loadVideos'},
+  {id:'nutrition',libelle:'Nutrition',motsCles:['nutrition','repas','calories','macros','manger','journal alimentaire'],action:'loadNutrition'},
+  {id:'bilan',libelle:'Faire mon bilan',motsCles:['bilan','photos','mensurations','mesures'],action:'clientTab',args:['bilan']},
+  {id:'messages',libelle:'Écrire à mon coach',motsCles:['message','coach','ecrire','contact','question'],action:'msgOuvrirFil'},
+  {id:'annonces',libelle:'Annonces du coach',motsCles:['annonces','canal','defi'],action:'loadCanal'},
+  {id:'evolution',libelle:'Évolution',motsCles:['evolution','progres','courbe','graphique'],action:'loadProgress'},
+  {id:'pas',libelle:'Pas et sommeil',motsCles:['pas','sommeil','nuit','lifestyle','marche'],action:'loadLifestyle'},
+  {id:'profil',libelle:'Mon profil',motsCles:['profil','photo','nom','medical','sante'],action:'openAthleteProfile'},
+  {id:'trophees',libelle:'Trophées',motsCles:['trophees','badges','parrainage','page publique','volts','rang'],action:'ouvrirTrophees'},
+  {id:'reglages',libelle:'Réglages',motsCles:['reglages','parametres','notifications','theme','unite','son'],action:'ouvrirReglagesAthlete'},
+  {id:'abonnement',libelle:'Mon abonnement',motsCles:['abonnement','paiement','resilier','facture'],action:'ouvrirEcranAbonnement'},
+  {id:'export',libelle:'Exporter mes données',motsCles:['exporter','donnees','rgpd','telecharger'],action:'exporterMesDonnees'},
+  {id:'deconnexion',libelle:'Se déconnecter',motsCles:['deconnexion','deconnecter','logout','quitter'],action:'logout'}
+]);
+const RECHERCHE_MAX=12;
+const RECHERCHE_USAGE_CLE='rc_recherche_usage';
+/** PURE. Minuscules, sans accents ni apostrophes, espaces réduits. */
+function normRecherche(x){
+  return String(x==null?'':x).normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[’'`\-_.,;:!?()]/g,' ').replace(/\s+/g,' ').trim();
+}
+// PURE. Distance d'édition bornée à 1 (une lettre en trop, en moins ou changée).
+function _uneFaute(a,b){
+  if(a===b) return true;
+  const la=a.length, lb=b.length;
+  if(Math.abs(la-lb)>1) return false;
+  let i=0; while(i<la&&i<lb&&a[i]===b[i]) i++;
+  if(la===lb) return a.slice(i+1)===b.slice(i+1);
+  return la>lb?a.slice(i+1)===b.slice(i):a.slice(i)===b.slice(i+1);
+}
+// PURE. Le rang d'un texte pour une requête : 0 mot exact, 1 début de mot,
+// 2 sous-chaîne, 3 une faute (requête de plus de 4 lettres), null sinon.
+function _rangRecherche(q,textes){
+  let best=null;
+  for(const t0 of textes){
+    const t=normRecherche(t0); if(!t) continue;
+    const mots=t.split(' ');
+    let r=null;
+    if(t===q||mots.indexOf(q)>=0) r=0;
+    else if(t.indexOf(q)===0||mots.some(m=>m.indexOf(q)===0)||(' '+t).indexOf(' '+q)>=0) r=1;
+    else if(t.indexOf(q)>=0) r=2;
+    else if(q.length>4&&(mots.some(m=>_uneFaute(q,m)||(m.length>q.length&&_uneFaute(q,m.slice(0,q.length))))||_uneFaute(q,t))) r=3;
+    if(r!==null&&(best===null||r<best)) best=r;
+    if(best===0) break;
+  }
+  return best;
+}
+/** PURE. Au plus 12 résultats {type,id,libelle,sous,action,args}. */
+function rechercher(u,requete,maintenant){
+  const q=normRecherche(requete);
+  if(!q) return [];
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const trier=l=>l.sort((a,b)=>a._r-b._r||a._o-b._o);
+  const dest=[];
+  RECHERCHE_DESTINATIONS.forEach((d,o)=>{
+    const r=_rangRecherche(q,[d.libelle].concat(d.motsCles));
+    if(r!==null) dest.push({type:'destination',id:d.id,libelle:d.libelle,sous:'',action:d.action,args:d.args||[],_r:r,_o:o});
+  });
+  const autres=[];
+  const fmtJ=d=>{ try{ return new Date(d).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(e){ return ''; } };
+  // Les séances : leur nom et leur date en toutes lettres (« octobre »).
+  ((u&&u.sessions)||[]).filter(s=>s&&s.date>0&&s.date<=t+864e5).slice().sort((a,b)=>b.date-a.date).forEach((s,o)=>{
+    const jour=fmtJ(s.date);
+    const r=_rangRecherche(q,[s.name||'Séance',jour]);
+    if(r!==null) autres.push({type:'seance',id:String(s.id!=null?s.id:s.date),libelle:s.name||'Séance',sous:jour,
+      action:'ouvrirSeanceHistorique',args:[String(s.id!=null?s.id:s.date)],_r:r+0.1,_o:o});
+  });
+  // Les exercices, avec leur meilleure charge, dans l'unité de l'athlète.
+  let rec=[]; try{ rec=meilleursRecordsPublics(u,200); }catch(e){ rec=[]; }
+  rec.forEach((x,o)=>{
+    const r=_rangRecherche(q,[x.exo]);
+    if(r===null) return;
+    let kg=x.kg; try{ const a=kgVersAffiche(x.kg,u); if(a!=null) kg=a; }catch(e){}
+    let un='kg'; try{ un=uniteCharge(u); }catch(e){}
+    autres.push({type:'exercice',id:x.exo,libelle:x.exo,sous:'Record : '+String(kg).replace('.',',')+' '+un,
+      action:'ouvrirHistoriqueExoNom',args:[x.exo],_r:r,_o:o});
+  });
+  // Les aliments du plan (squelette et catalogues posés par le coach).
+  const vus={};
+  try{
+    const p=u&&u.nutrition&&u.nutrition.plan;
+    if(p){
+      const lignes=[].concat(_tabBloc(planSquelette(p)),_tabBloc(planCatalogue(p,'p')),_tabBloc(planCatalogue(p,'c')),_tabBloc(planCatalogue(p,'l')));
+      lignes.forEach((l,o)=>{
+        const lib=String((l&&(l.lib||l.nom))||'').trim();
+        if(!lib||vus[normRecherche(lib)]) return;
+        vus[normRecherche(lib)]=1;
+        const r=_rangRecherche(q,[lib]);
+        if(r!==null) autres.push({type:'aliment',id:lib,libelle:lib,sous:'Dans ton plan',action:'loadNutrition',args:[],_r:r+0.2,_o:o});
+      });
+    }
+  }catch(e){}
+  // Les bilans : « bilan », le type et la date.
+  ((u&&u.bilans)||[]).filter(b=>b&&b.date>0).slice().sort((a,b)=>b.date-a.date).forEach((b,o)=>{
+    const jour=fmtJ(b.date);
+    const lib=b.type==='depart'?'Bilan de départ':'Bilan';
+    const r=_rangRecherche(q,['bilan',lib,jour]);
+    if(r!==null) autres.push({type:'bilan',id:String(b.date),libelle:lib,sous:jour,action:'clientTab',args:['bilan'],_r:r+0.3,_o:o});
+  });
+  return trier(dest).concat(trier(autres)).slice(0,RECHERCHE_MAX)
+    .map(x=>({type:x.type,id:x.id,libelle:x.libelle,sous:x.sous,action:x.action,args:x.args}));
+}
+// L'historique d'un exercice, depuis son nom (la feuille rc-histo).
+function ouvrirHistoriqueExoNom(nom){
+  const z=document.getElementById('rc-histo-corps');
+  if(!z||!currentUser) return null;
+  z.innerHTML=htmlHistoriqueExo(currentUser,nom);
+  return _feuilleOuvrir('rc-histo');
+}
+// Les records, en attendant leur écran (build suivant) : l'onglet Évolution.
+function ouvrirMesRecords(){ loadProgress(); return true; }
+// ── La feuille ───────────────────────────────────────────────────────────
+function _rechUsage(){ try{ return JSON.parse(localStorage.getItem(RECHERCHE_USAGE_CLE)||'{}')||{}; }catch(e){ return {}; } }
+/** Les six destinations les plus utilisées (compteur local), à défaut l'ordre de la liste. */
+function rechercheFavorites(usage){
+  const c=usage||_rechUsage();
+  return RECHERCHE_DESTINATIONS.map((d,o)=>({d,o,n:Number(c[d.id])||0}))
+    .sort((a,b)=>b.n-a.n||a.o-b.o).slice(0,6)
+    .map(x=>({type:'destination',id:x.d.id,libelle:x.d.libelle,sous:'',action:x.d.action,args:x.d.args||[]}));
+}
+let _rechRes=[];
+function ouvrirRecherche(){
+  const i=document.getElementById('rch-q');
+  if(i) i.value='';
+  rechercheMaj();
+  const f=_feuilleOuvrir('rc-recherche');
+  try{ if(i) i.focus({preventScroll:true}); }catch(e){}
+  return f;
+}
+function fermerRecherche(tout_de_suite){ _feuilleFermer('rc-recherche',tout_de_suite); }
+function rechercheMaj(){
+  const z=document.getElementById('rch-res'); if(!z) return false;
+  const q=(document.getElementById('rch-q')||{}).value||'';
+  let l=q.trim()?rechercher(currentUser,q,Date.now()):[];
+  let tete='';
+  if(!q.trim()) tete='<div class="rch-t">Les plus utilisées</div>';
+  else if(!l.length){
+    tete='<div class="rch-t">Rien trouvé pour « '+escapeHtml(q.trim())+' ».</div>';
+    const ecrire=RECHERCHE_DESTINATIONS.find(d=>d.id==='messages');
+    l=[{type:'destination',id:'messages',libelle:ecrire.libelle,sous:'Pose-lui la question',action:ecrire.action,args:[]}]
+      .concat(rechercheFavorites().filter(x=>x.id!=='messages'));
+  }
+  if(!q.trim()) l=rechercheFavorites();
+  _rechRes=l;
+  z.innerHTML=tete+l.map((r,i)=>'<button type="button" class="rch-l" onclick="rechercheAgir('+i+')">'
+    +'<span class="rch-l-t">'+escapeHtml(r.libelle)+'</span>'
+    +(r.sous?'<span class="rch-l-s">'+escapeHtml(r.sous)+'</span>':'')+'</button>').join('');
+  return true;
+}
+function rechercheEntree(){ return _rechRes.length?rechercheAgir(0):false; }
+function rechercheAgir(i){
+  const r=_rechRes[i]; if(!r) return false;
+  const f=window[r.action];
+  if(typeof f!=='function') return false;
+  if(r.type==='destination'){
+    try{ const c=_rechUsage(); c[r.id]=(Number(c[r.id])||0)+1; localStorage.setItem(RECHERCHE_USAGE_CLE,JSON.stringify(c)); }catch(e){}
+  }
+  fermerRecherche(true);
+  try{ f.apply(null,r.args||[]); }catch(e){ rcErreurMuette('rechercheAgir',e); }
+  return true;
+}
