@@ -1026,11 +1026,13 @@ function _synPeriode(debut,fin){
 // La fenetre : le DERNIER bilan, et le premier bilan des huit semaines qui le
 // precedent — ou le plus ancien disponible quand l'historique est plus court.
 // Si aucun bilan ne tombe dans la fenetre, le plus recent d'avant elle.
-function _synBilansFenetre(user){
+// BUILD 1919 : o.depuisDebut — la fenêtre part du PREMIER bilan.
+function _synBilansFenetre(user,o){
   const bl=bilansOrdonnes(user);
   if(bl.length<2) return null;
   const der=bl[bl.length-1];
   const avant=bl.slice(0,-1);
+  if(o&&o.depuisDebut) return (bl[0].date<der.date)?{prem:bl[0],der}:null;
   const debut=der.date-SYN_SEMAINES*7*864e5;
   const prem=avant.find(b=>b.date>=debut)||avant[avant.length-1];
   return (prem&&prem.date<der.date)?{prem,der}:null;
@@ -1066,12 +1068,50 @@ function _synMeilleurE1rm(user,debut,fin){
   }
   return best;
 }
+// ══ BUILD 1919 — L'HISTOIRE DU JOUR ════════════════════════════════════════
+// PURE. Un anniversaire, jour pour jour (12, 6, 3 ou 1 mois), ou null :
+//   - c'était sa PREMIÈRE séance → « Il y a un an aujourd'hui, ta première séance. » ;
+//   - une séance ce jour-là, et l'exercice le plus chargé ce jour-là a
+//     progressé depuis → « Il y a 3 mois jour pour jour : 60 kg au squat.
+//     Aujourd'hui : 80. »
+// Le plus ancien anniversaire gagne. 90 caractères au plus.
+function histoireDuJour(u,date){
+  const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date&&s.complete!==false);
+  if(!ss.length) return null;
+  const d0=date instanceof Date?new Date(date.getTime()):new Date(Number(date)||Date.now());
+  const iso=s=>{ const v=s.date; return /^\d{4}-\d{2}-\d{2}$/.test(String(v))?String(v):localISODate(new Date(v)); };
+  const triees=ss.slice().sort((a,b)=>iso(a).localeCompare(iso(b)));
+  const premiere=iso(triees[0]);
+  const maxPar=(l)=>{ const m={}; l.forEach(s=>Object.entries(s.data||{}).forEach(([nm,dd])=>((dd&&dd.sets)||[]).forEach(x=>{
+    if(!x||!(x.done||x.horsCalcul)) return; const kg=parseFloat(String(x.weight==null?'':x.weight).replace(',','.'))||0;
+    if(kg>(m[nm]||0)) m[nm]=kg; }))); return m; };
+  const auj=localISODate(d0);
+  const actuel=maxPar(triees.filter(s=>iso(s)<=auj));
+  const lib=n=>n===12?'Il y a un an':'Il y a '+n+' mois';
+  for(const n of [12,6,3,1]){
+    const a=new Date(d0.getFullYear(),d0.getMonth()-n,d0.getDate(),12);
+    if(a.getDate()!==d0.getDate()) continue;          // le 31 d'un mois qui n'en a que 30
+    const cle=localISODate(a);
+    if(premiere===cle) return {mois:n,type:'premiere',texte:lib(n)+' aujourd’hui, ta première séance.'};
+    const ce=triees.filter(s=>iso(s)===cle);
+    if(!ce.length) continue;
+    const alors=maxPar(ce);
+    const nm=Object.keys(alors).sort((x,y)=>alors[y]-alors[x])[0];
+    if(nm&&actuel[nm]>alors[nm]){
+      const f=v=>String(v).replace('.',',');
+      let t=lib(n)+' jour pour jour : '+f(alors[nm])+' kg au '+nm.toLowerCase()+'. Aujourd’hui : '+f(actuel[nm])+'.';
+      if(t.length>90) t=lib(n)+' : '+f(alors[nm])+' kg. Aujourd’hui : '+f(actuel[nm])+'.';
+      return {mois:n,type:'progres',texte:t};
+    }
+  }
+  return null;
+}
 // PURE. La synthese, ou null. { periode, elements:[{type, libelle, delta, sens,
 // accord}] } — trois elements au plus : le poids, la mensuration qui a le plus
 // bouge, l'exercice qui a le plus progresse. `accord` porte le vert.
-function syntheseProgression(user){
+function syntheseProgression(user,o){
   if(!user) return null;
-  const f=_synBilansFenetre(user);
+  const f=_synBilansFenetre(user,o);
   if(!f) return null;
   const {prem,der}=f;
   const elements=[];
@@ -1110,10 +1150,15 @@ function _htmlSyntheseProgression(user){
   // MOINS DE DEUX BILANS : RIEN, pas « données insuffisantes ». L'etat vide de
   // chaque onglet le dit deja, et deux fois serait une de trop.
   if(!s) return '';
-  return '<div class="prog-synthese">Sur '+escapeHtml(s.periode)+' : '
-    +s.elements.map(e=>'<span class="syn-el">'+escapeHtml(e.libelle)+' <span class="syn-d'+(e.accord?' syn-vert':'')+'">'
-      +escapeHtml(e.delta)+'</span>'+(e.type==='exercice'?rcInfo('e1rm'):'')+'</span>').join('<span class="syn-sep"> · </span>')
-    +'</div>';
+  const els=x=>x.elements.map(e=>'<span class="syn-el">'+escapeHtml(e.libelle)+' <span class="syn-d'+(e.accord?' syn-vert':'')+'">'
+      +escapeHtml(e.delta)+'</span>'+(e.type==='exercice'?rcInfo('e1rm'):'')+'</span>').join('<span class="syn-sep"> · </span>');
+  // BUILD 1919 : DEPUIS LE DÉBUT, quand le premier bilan est plus ancien que
+  // la fenêtre de la synthèse.
+  let dd=null;
+  try{ const f=_synBilansFenetre(user), g=_synBilansFenetre(user,{depuisDebut:true});
+    if(f&&g&&g.prem.date<f.prem.date) dd=syntheseProgression(user,{depuisDebut:true}); }catch(e){ dd=null; }
+  return '<div class="prog-synthese">Sur '+escapeHtml(s.periode)+' : '+els(s)+'</div>'
+    +(dd?'<div class="prog-synthese prog-synthese-debut">Depuis le début ('+escapeHtml(dd.periode)+') : '+els(dd)+'</div>':'');
 }
 function _renderSyntheseProgression(){
   const z=document.getElementById('prog-synthese');

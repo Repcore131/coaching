@@ -674,7 +674,10 @@ function loadClientHome(){
   // textContent et non innerHTML : ces textes n ont aucune raison de traverser
   // l analyseur HTML.
   const _phr=document.getElementById('clh-phrase');
-  if(_phr) _phr.textContent=phraseDuJour();
+  // BUILD 1919 : le jour d'un anniversaire, L'HISTOIRE DE L'ATHLÈTE prend la
+  // place de la phrase du jour — elle parle de lui.
+  let _hist=null; try{ _hist=histoireDuJour(u,new Date()); }catch(e){ _hist=null; }
+  if(_phr){ _phr.textContent=_hist?_hist.texte:phraseDuJour(); _phr.classList.toggle('clh-histoire',!!_hist); }
   // ── Trois chiffres d'entraînement ──
   // Le total de séances et le poids ont quitté cet écran : le premier compte
   // des présences, le second est déjà porté par la carte « Pesée du jour »

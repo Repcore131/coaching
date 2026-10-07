@@ -74330,6 +74330,35 @@ async function testExercices(){
         if(brut==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',brut);
       }});
 
+    // ══ BUILD 1919 — L'HISTOIRE DU JOUR, ET « DEPUIS LE DÉBUT » ═══════════════
+    ok('1919 — histoireDuJour : première séance il y a un an, progrès jour pour jour, sinon null',()=>{
+      const faux=[];
+      const S=(date,kg)=>({date,complete:true,data:{Squat:{sets:[{done:true,weight:String(kg),reps:'5'}]}}});
+      const d=new Date(2026,9,7,9);
+      let h=histoireDuJour({sessions:[S('2025-10-07',60),S('2026-09-01',80)]},d);
+      if(!h||h.type!=='premiere'||h.texte!=='Il y a un an aujourd’hui, ta première séance.') faux.push('premiere : '+JSON.stringify(h));
+      h=histoireDuJour({sessions:[S('2026-01-02',50),S('2026-07-07',60),S('2026-10-01',80)]},d);
+      if(!h||h.type!=='progres'||!/Il y a 3 mois jour pour jour : 60 kg au squat\. Aujourd’hui : 80\./.test(h.texte)) faux.push('progrès : '+JSON.stringify(h));
+      if(histoireDuJour({sessions:[S('2026-01-02',50),S('2026-07-07',90),S('2026-10-01',80)]},d)) faux.push('recul fêté');
+      if(histoireDuJour({sessions:[S('2026-01-02',50),S('2026-07-08',60)]},d)) faux.push('pas le bon jour');
+      if(histoireDuJour({sessions:[]},d)!==null||histoireDuJour(null,d)!==null) faux.push('vide');
+      h=histoireDuJour({sessions:[S('2026-01-02',50),S('2026-07-07',60),S('2026-10-01',80)]},d);
+      if(h&&h.texte.length>90) faux.push('trop long');
+      if(histoireDuJour({sessions:[S('2026-02-28',50)]},new Date(2026,2,31,9))) faux.push('31 mars → 31 février');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1919 — synthèse : la ligne « Depuis le début » paraît quand le premier bilan est hors de la fenêtre',()=>{
+      const J=864e5, t=Date.now();
+      const u={bilans:[{type:'depart',date:t-200*J,'deb-weight':'90'},{type:'coaching',date:t-60*J,'bil-weight':'84'},{type:'coaching',date:t-5*J,'bil-weight':'80'}],sessions:[]};
+      const f=_synBilansFenetre(u), g=_synBilansFenetre(u,{depuisDebut:true});
+      if(!g||g.prem.date!==t-200*J) return _echec('fenêtre depuis le début : '+JSON.stringify(g&&g.prem));
+      const h=_htmlSyntheseProgression(u);
+      if(f&&f.prem.date>g.prem.date&&!/Depuis le début \(/.test(h)) return _echec('ligne absente : '+h.slice(0,240));
+      const u2={bilans:u.bilans.slice(1),sessions:[]};
+      return !/Depuis le début/.test(_htmlSyntheseProgression(u2))?true:_echec('ligne en double quand la fenêtre part du début');});
+    ok('1919 — accueil : l’histoire du jour prend la place de la phrase du jour',()=>{
+      const s=String(window.loadClientHome||'')+String(typeof _rendreAccueil==='function'?_rendreAccueil:'');
+      return /histoireDuJour\(u,new Date\(\)\)/.test(_prodSrc())&&/clh-histoire/.test(_prodSrc())?true:_echec('branchement absent');});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

@@ -13694,3 +13694,6 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 /* BUILD 1918 — la victoire de la semaine, sur l'écran du lundi. */
 .ld-victoire{border-left-color:var(--green)}
 .ld-victoire .ld-d{color:var(--green);font-weight:800}
+/* BUILD 1919 — l'histoire du jour (accueil) et « Depuis le début » (synthèse). */
+#clh-phrase.clh-histoire{color:var(--text-strong)}
+.prog-synthese-debut{margin-top:4px}
