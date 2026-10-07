@@ -2564,8 +2564,7 @@ function _trkLibreRes(q){
   z.innerHTML=r.length
     ?'<div class="trk-grille" style="margin-top:10px">'+r.map(_trkTuile).join('')+'</div>'
     :(String(q||'').trim()
-      ?'<div class="san-vide">Rien trouvé. '
-        +'<button type="button" class="trk-lien" onclick="_trkSignaler()">Signaler ma montre</button></div>':'');
+      ?emptyState('','Rien trouvé.','Signaler ma montre','_trkSignaler()'):'');
 }
 function _trkRien(){
   _sanFeuille('On va la retrouver',

@@ -205,7 +205,7 @@ function htmlFicheAlim(user,chercher){
         <td>${l.per100==null?'-':E(String(l.per100).replace('.',',')+' g')}</td>
         <td>${l.jour==null?'-':E(l.jour+' g')}</td></tr>`).join('')
       +'</tbody></table>'
-    : `<div class="fa-vide-t">Aucune source posée par le coach.</div>`;
+    : emptyState('','Aucune source posée par le coach.');
   // LA LISTE DES GLUCIDES PASSE SUR DEUX COLONNES au-dela de douze lignes.
   // Sur une seule, ses trente lignes rendaient la seconde planche trop haute :
   // pour la faire tenir sur la feuille, il fallait la reduire, et elle

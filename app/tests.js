@@ -62276,7 +62276,8 @@ async function testExercices(){
       if(r[2].querySelectorAll('.skeleton').length!==5||r[1].getAttribute('aria-busy')!=='true') return _echec('lignes ou aria-busy');
       const b=r[3].querySelector('button.btn.btn-outline.btn-sm');
       if(!b||b.textContent!=='Réessayer'||!r[3].querySelector('svg')||r[3].getAttribute('role')!=='alert') return _echec('etatErreur : bouton, icône ou rôle');
-      if(!/var\(--sub\)/.test(r[3].innerHTML)) return _echec('le message d’erreur n’est pas en --sub');
+      // BUILD 1898 : la couleur vient de .vide (var(--sub)), plus d'un style en ligne.
+      if(!r[3].classList.contains('vide')||!r[3].querySelector('.vide-texte')) return _echec('le message d’erreur n’est pas dans la forme .vide');
       return r[4].querySelector('.empty-illus')?_echec('un état sans icône garde sa place d’illustration'):true;});
     ok('Les états vides d’écran passent par emptyState : moins de 15 classes « -vide » dans la feuille, plus de classes mortes',()=>{
       const css=_stylesProd().map(s=>s.textContent).join('\n');
@@ -73575,6 +73576,35 @@ async function testExercices(){
         const e=document.elementFromPoint(x,y);
         return e===b||b.contains(e)?true:_echec('touche '+(e&&(e.tagName+'.'+e.className)));
       }finally{ d.remove(); }});
+
+    // ══ BUILD 1898 — L'ÉTAT VIDE, UN SEUL RENDU ════════════════════════════
+    ok('1898 — .vide déclare font-size:var(--fs-sm) ; le body pose var(--fs-md)',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      const m=css.match(/(?:^|[}\s])\.vide\{([^}]*)\}/);
+      if(!m||m[1].indexOf('font-size:var(--fs-sm)')<0) return _echec('.vide sans font-size:var(--fs-sm)');
+      return /(?:^|[}\s])body\{[^}]*font-size:var\(--fs-md\)/.test(css)?true:_echec('body sans font-size:var(--fs-md)');});
+    ok('1898 — sonde : l’état vide est en 12 px, centré, rien au-dessus de 14 px (compléments, vidéos, recettes, messages coach, annonces, programmes)',()=>{
+      const vide=()=>Object.assign(_banAth(),{sessions:[],bilans:[],videos:[],supplements:[]});
+      const ecrans=[['s-supplements',vide,()=>loadSupplements()],['s-videos',vide,()=>{ const sv=window.peut; window.peut=()=>true; try{ loadVideos(); }finally{ window.peut=sv; } }],['s-recettes',vide,()=>ouvrirRecettes()],
+        ['s-coach-messages',_banCoach,()=>ouvrirMessages()],['s-canal',vide,()=>{ const sv=CLOUD.ok; CLOUD.ok=()=>false; try{ loadCanal(); }finally{ CLOUD.ok=sv; } }],['s-coach-programs',_banCoach,()=>openCoachPrograms()]];
+      const faux=[];
+      for(const [id,u,ouvrir] of ecrans){
+        _sondeEcran(u(),ouvrir,()=>{
+          const l=[...document.querySelectorAll('#'+id+' .vide')].filter(x=>x.getClientRects().length);
+          if(!l.length){ faux.push(id+' : aucun état vide .vide'); return; }
+          for(const v of l){
+            const t=v.querySelector('.vide-texte'), cs=t&&getComputedStyle(t);
+            if(!cs||cs.fontSize!=='12px'||getComputedStyle(v).textAlign!=='center') faux.push(id+' : texte '+(cs&&cs.fontSize)+' '+getComputedStyle(v).textAlign);
+            for(const e of v.querySelectorAll('*')) if(parseFloat(getComputedStyle(e).fontSize)>14&&e.textContent.trim()) faux.push(id+' : '+e.tagName+' en '+getComputedStyle(e).fontSize);
+          }
+        });
+      }
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+    ok('1898 — aucune antenne 📡 dans rc-core ; « Annonces injoignables » par la fabrique',()=>{
+      const src=_prodSrc();
+      if(src.indexOf('\u{1F4E1}')>=0) return _echec('📡 encore présent');
+      const h=etatErreur('x','Réessayer','f()','Annonces injoignables');
+      return /class="vide /.test(h)&&/btn btn-sm btn-outline/.test(h)&&/t-carte vide-titre/.test(h)?true:_echec(h.slice(0,120));});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

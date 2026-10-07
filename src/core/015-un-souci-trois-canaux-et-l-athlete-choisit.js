@@ -983,7 +983,7 @@ function _ccdMajEtages(){
     }
     // UN SEUL ETAGE NE FAIT PAS UNE BARRE : elle ne menerait qu'a l'endroit ou
     // l'on est deja.
-    if(nav) nav.classList.toggle('vide',n<2);
+    if(nav) nav.classList.toggle('sans-contenu',n<2);
   }catch(e){}
 }
 /**

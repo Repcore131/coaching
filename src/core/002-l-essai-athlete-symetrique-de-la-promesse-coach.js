@@ -1699,6 +1699,8 @@ function rcInfoOuvrir(cle){
 function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite); }
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
+  // Réseau coupé (états d'erreur, build 1898) : le wifi barré, au trait.
+  'wifi-off':'<line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><line x1="12" y1="20" x2="12.01" y2="20"/>',
   // Une petite hache (« Défie un pote », 28/09/2026), dessin Lucide « axe » (licence ISC).
   hache:'<path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" stroke-linecap="round" stroke-linejoin="round"/>',
   // Des barres qui montent et une flèche (mesure « Progression » des duels).
@@ -1862,7 +1864,19 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="etat empty-state"${sa}>${ico?`<div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div>`:''}<div>${message}</div>${cta}</div>`;}
+// ══ L'ÉTAT VIDE, UNE SEULE FABRIQUE (build 1898) ══════════════════════════
+// <div class="vide"> : icône 28 px à 40 %, titre facultatif (.t-carte), texte
+// 12 px gris centré sur 280 px, CTA facultatif en .btn .btn-sm .btn-outline.
+// Les classes etat/empty-state restent (les tests R13 et les sondes les lisent).
+// L'icône ne grossit jamais au survol.
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle,titre){
+  const ico=iconName?(ILLUS[iconName]?illusIcon(iconName,28):icon(iconName,28)):'';
+  const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-sm btn-outline empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';
+  const sa=wrapStyle?' style="'+wrapStyle+'"':'';
+  return `<div class="vide etat empty-state"${sa}>${ico?`<div class="vide-ico empty-illus">${ico}</div>`:''}`
+    +(titre?`<div class="t-carte vide-titre">${titre}</div>`:'')
+    +`<div class="vide-texte">${message}</div>${cta}</div>`;
+}
 // ══ LES TROIS ETATS D'UN BLOC : VIDE, EN CHARGEMENT, EN ERREUR (01/10/2026) ══
 // Meme structure et meme racine .etat que emptyState : un bloc qui attend, qui
 // a echoue ou qui n'a rien a montrer occupe la meme place et se lit pareil.
@@ -1878,10 +1892,10 @@ function etatChargement(lignes=3){
 // etatErreur : l'icone d'alerte, le message en --sub, et un seul geste,
 // secondaire comme celui de emptyState. fnReessayer est une CHAINE posee dans
 // un onclick entre guillemets doubles (meme regle que ctaFn).
-function etatErreur(message,libelleReessayer,fnReessayer){
-  const cta=(libelleReessayer&&fnReessayer)?'<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="'+fnReessayer+'">'+libelleReessayer+'</button>':'';
-  return '<div class="etat empty-state etat-erreur" role="alert"><div class="empty-illus" style="opacity:.6;margin-bottom:14px">'+icon('alerte',40)+'</div>'
-    +'<div style="color:var(--sub)">'+message+'</div>'+cta+'</div>';
+function etatErreur(message,libelleReessayer,fnReessayer,titre){
+  // La même forme que l'état vide ; « Réessayer » en .btn-sm.
+  return emptyState('alerte',message,libelleReessayer,fnReessayer,null,titre)
+    .replace('<div class="vide etat empty-state"','<div class="vide etat empty-state etat-erreur" role="alert"');
 }
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit

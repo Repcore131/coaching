@@ -2378,11 +2378,7 @@ async function _canalChargerCoach(idNeuf){
       CLOUD._canalGet(cle,'defis').catch(()=>null)
     ]);
   }catch(e){
-    fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
-      <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
+    fil.innerHTML=etatErreur('Ne republie pas : tes messages sont peut-être déjà là. La demande n\'a pas abouti.','Réessayer','_canalChargerCoach()','Annonces injoignables').replace(icon('alerte',28),icon('wifi-off',28));
     return;
   }
   window._canalMsgsCoach=msgs||{};

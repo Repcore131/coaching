@@ -158,7 +158,7 @@ html{background:var(--bg)}
    barre d'URL RÉTRACTÉE, si bien qu'au premier affichage — barre déployée — le
    bas de l'écran passe sous le pli. dvh suit la hauteur réellement visible.
    Un navigateur qui ignore dvh laisse simplement la première déclaration. */
-body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;min-height:100dvh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
+body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);min-height:100vh;min-height:100dvh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
 @supports (overflow:clip){body{overflow-x:clip}}
 /* SAFARI iOS ZOOME SUR TOUT CHAMP ECRIT A MOINS DE 16 PX, et ne dezoome pas
    ensuite : la page reste agrandie, coupee a droite. Sur iPhone seulement
@@ -5427,7 +5427,7 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
    restants se serraient a gauche devant un tiers de barre vide. */
 .ccd-etages{display:none;z-index:4}
 .ccd-etages.actif{display:flex}
-.ccd-etages.vide{display:none}
+.ccd-etages.sans-contenu{display:none}
 .ccd-etages .ccd-et-b{flex:1 1 0;min-width:0;min-height:0;padding:8px 2px 6px;gap:0;
   font-size:9px;letter-spacing:.2px;border-bottom-width:2px}
 .ccd-etages .ccd-tu-lib{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -6093,7 +6093,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 .histo-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px}
 .wo-note-exo{display:block;max-width:100%;margin:2px 0 2px;padding:2px 0;min-height:24px;background:none;border:0;text-align:left;
   font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-.wo-note-exo.vide{color:var(--text-faint);font-style:italic}
+.wo-note-exo.sans-contenu{color:var(--text-faint);font-style:italic}
 .rcf-note-l{display:block;margin-top:14px;font-size:var(--fs-sm);font-weight:700;text-transform:none;letter-spacing:normal}
 .rcf-note{width:100%;margin-top:6px;resize:vertical;min-height:56px}
 .sc-note-exo{font-size:var(--fs-xs);color:var(--text-dim);font-style:italic;margin-top:2px}
@@ -7561,13 +7561,16 @@ button.drs-j:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .content-card:hover{box-shadow:var(--e2);transform:translateY(-1px);filter:brightness(1.08)}
 .content-card:active{transform:scale(var(--arc-scale-charge));box-shadow:none;filter:brightness(1);transition:transform var(--arc-attack) var(--arc-c-charge)}
 
-.empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
+/* ══ L'ÉTAT VIDE (build 1898) : un seul rendu, fait par emptyState. ══ */
+.vide{text-align:center;padding:24px 16px;font-size:var(--fs-sm);line-height:1.5;color:var(--sub)}
+.vide-texte{max-width:280px;margin:0 auto}
+.vide-ico{opacity:.4;margin:0 0 10px;display:flex;justify-content:center;color:var(--sub)}
+.vide-titre{margin:0 0 4px}
 /* R13 — le geste d'un etat vide : secondaire, centre, jamais pleine largeur. */
-.empty-state .empty-cta{margin-top:16px;width:auto}
+.vide .empty-cta{margin-top:12px;width:auto}
 /* LE CHARGEMENT A LA PLACE DU BLOC (etatChargement, 01/10/2026) : memes marges
    laterales que l'etat vide, moins haut, les squelettes centres. */
 .etat-chargement{padding:24px 20px}
-.empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--red) 30%,transparent))}
 .obj-opt{padding:14px;border-radius:var(--r-3);background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:var(--fs-md);font-weight:600;transition:border-color var(--t-2),background var(--t-2),color var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
 .obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red-text)}
 /* .obj-opt etait la seule surface pressable SANS etat :active — elle ne
@@ -10539,7 +10542,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .fa-col-nom{width:42%} .fa-col-jour{width:22%} .fa-col-fruit{width:36%}
 .fa-2col .fa-col-nom{width:44%} .fa-2col .fa-t4 td,.fa-2col .fa-t4 th{padding-left:8px;padding-right:8px}
 .fa-alerte{color:#a87800;font-weight:700}
-.fa-vide-t{padding:12px 14px;font-size:13px;color:#777}
 .fa-motto{text-align:center;font-size:9.5px;letter-spacing:2.4px;color:#6f6f6f;margin:14px 0 10px}
 /* ── LE PIED ──────────────────────────────────────────────────────────── */
 .fa-pied{display:flex;align-items:center;justify-content:space-between;gap:16px;

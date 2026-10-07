@@ -3532,6 +3532,8 @@ function rcInfoOuvrir(cle){
 function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite); }
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
+  // Réseau coupé (états d'erreur, build 1898) : le wifi barré, au trait.
+  'wifi-off':'<line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><line x1="12" y1="20" x2="12.01" y2="20"/>',
   // Une petite hache (« Défie un pote », 28/09/2026), dessin Lucide « axe » (licence ISC).
   hache:'<path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" stroke-linecap="round" stroke-linejoin="round"/>',
   // Des barres qui montent et une flèche (mesure « Progression » des duels).
@@ -3695,7 +3697,19 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="etat empty-state"${sa}>${ico?`<div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div>`:''}<div>${message}</div>${cta}</div>`;}
+// ══ L'ÉTAT VIDE, UNE SEULE FABRIQUE (build 1898) ══════════════════════════
+// <div class="vide"> : icône 28 px à 40 %, titre facultatif (.t-carte), texte
+// 12 px gris centré sur 280 px, CTA facultatif en .btn .btn-sm .btn-outline.
+// Les classes etat/empty-state restent (les tests R13 et les sondes les lisent).
+// L'icône ne grossit jamais au survol.
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle,titre){
+  const ico=iconName?(ILLUS[iconName]?illusIcon(iconName,28):icon(iconName,28)):'';
+  const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-sm btn-outline empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';
+  const sa=wrapStyle?' style="'+wrapStyle+'"':'';
+  return `<div class="vide etat empty-state"${sa}>${ico?`<div class="vide-ico empty-illus">${ico}</div>`:''}`
+    +(titre?`<div class="t-carte vide-titre">${titre}</div>`:'')
+    +`<div class="vide-texte">${message}</div>${cta}</div>`;
+}
 // ══ LES TROIS ETATS D'UN BLOC : VIDE, EN CHARGEMENT, EN ERREUR (01/10/2026) ══
 // Meme structure et meme racine .etat que emptyState : un bloc qui attend, qui
 // a echoue ou qui n'a rien a montrer occupe la meme place et se lit pareil.
@@ -3711,10 +3725,10 @@ function etatChargement(lignes=3){
 // etatErreur : l'icone d'alerte, le message en --sub, et un seul geste,
 // secondaire comme celui de emptyState. fnReessayer est une CHAINE posee dans
 // un onclick entre guillemets doubles (meme regle que ctaFn).
-function etatErreur(message,libelleReessayer,fnReessayer){
-  const cta=(libelleReessayer&&fnReessayer)?'<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="'+fnReessayer+'">'+libelleReessayer+'</button>':'';
-  return '<div class="etat empty-state etat-erreur" role="alert"><div class="empty-illus" style="opacity:.6;margin-bottom:14px">'+icon('alerte',40)+'</div>'
-    +'<div style="color:var(--sub)">'+message+'</div>'+cta+'</div>';
+function etatErreur(message,libelleReessayer,fnReessayer,titre){
+  // La même forme que l'état vide ; « Réessayer » en .btn-sm.
+  return emptyState('alerte',message,libelleReessayer,fnReessayer,null,titre)
+    .replace('<div class="vide etat empty-state"','<div class="vide etat empty-state etat-erreur" role="alert"');
 }
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
@@ -22074,11 +22088,7 @@ async function _canalCharger(){
   let msgs;
   try{ msgs=await CLOUD.pullCanalMessages(cle); }
   catch(e){
-    fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
-      <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
+    fil.innerHTML=etatErreur('Ce n\'est pas que ton coach n\'a rien publié : la demande n\'a pas abouti.','Réessayer','_canalCharger()','Annonces injoignables').replace(icon('alerte',28),icon('wifi-off',28));
     return;
   }
   const [compteurs,miennes]=await Promise.all([
@@ -22114,10 +22124,7 @@ async function _canalCharger(){
   try{ arcEntreeAuDefilement(fil,'.cnl-carte',4); }catch(e){}
 }
 function _canalVide(titre,sous){
-  return `<div style="text-align:center;padding:48px 20px">
-    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('mail',32)}</div>
-    <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">${escapeHtml(titre)}</div>
-    <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">${escapeHtml(sous)}</div></div>`;
+  return emptyState('mail',escapeHtml(sous),null,null,null,escapeHtml(titre));
 }
 // La carte d'un message. `mienne` est l'emoji déjà posé par cet athlète, ou ''.
 // Les quatre boutons de réaction, communs aux messages et aux défis.
@@ -27723,11 +27730,7 @@ async function _canalChargerCoach(idNeuf){
       CLOUD._canalGet(cle,'defis').catch(()=>null)
     ]);
   }catch(e){
-    fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
-      <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
+    fil.innerHTML=etatErreur('Ne republie pas : tes messages sont peut-être déjà là. La demande n\'a pas abouti.','Réessayer','_canalChargerCoach()','Annonces injoignables').replace(icon('alerte',28),icon('wifi-off',28));
     return;
   }
   window._canalMsgsCoach=msgs||{};
@@ -36864,7 +36867,7 @@ function _ccdMajEtages(){
     }
     // UN SEUL ETAGE NE FAIT PAS UNE BARRE : elle ne menerait qu'a l'endroit ou
     // l'on est deja.
-    if(nav) nav.classList.toggle('vide',n<2);
+    if(nav) nav.classList.toggle('sans-contenu',n<2);
   }catch(e){}
 }
 /**
@@ -75419,7 +75422,7 @@ function htmlFicheAlim(user,chercher){
         <td>${l.per100==null?'-':E(String(l.per100).replace('.',',')+' g')}</td>
         <td>${l.jour==null?'-':E(l.jour+' g')}</td></tr>`).join('')
       +'</tbody></table>'
-    : `<div class="fa-vide-t">Aucune source posée par le coach.</div>`;
+    : emptyState('','Aucune source posée par le coach.');
   // LA LISTE DES GLUCIDES PASSE SUR DEUX COLONNES au-dela de douze lignes.
   // Sur une seule, ses trente lignes rendaient la seconde planche trop haute :
   // pour la faire tenir sur la feuille, il fallait la reduire, et elle
@@ -86084,7 +86087,7 @@ function ecrireNoteExo(nom,texte){
 function _htmlNoteExo(idx,ex){
   if(!ex||!ex.name) return '';
   const n=noteExo(currentUser,ex.name);
-  return `<button type="button" class="wo-note-exo${n?'':' vide'}" onclick="editerNoteExo(${idx})"
+  return `<button type="button" class="wo-note-exo${n?'':' sans-contenu'}" onclick="editerNoteExo(${idx})"
     aria-label="${n?'Ma note sur cet exercice : '+escapeHtml(n.texte)+'. Toucher pour la modifier':'Ajouter une note sur cet exercice'}">${n?escapeHtml(n.texte):'+ Ma note (réglage, prise…)'}</button>`;
 }
 function editerNoteExo(idx){
@@ -133149,8 +133152,7 @@ function _trkLibreRes(q){
   z.innerHTML=r.length
     ?'<div class="trk-grille" style="margin-top:10px">'+r.map(_trkTuile).join('')+'</div>'
     :(String(q||'').trim()
-      ?'<div class="san-vide">Rien trouvé. '
-        +'<button type="button" class="trk-lien" onclick="_trkSignaler()">Signaler ma montre</button></div>':'');
+      ?emptyState('','Rien trouvé.','Signaler ma montre','_trkSignaler()'):'');
 }
 function _trkRien(){
   _sanFeuille('On va la retrouver',
@@ -133834,7 +133836,7 @@ function sanOuvrirJour(quoi,iso){
   if(quoi==='sommeil'){
     const e=sanSommeilEntree(u,iso),min=sanSommeilMin(u,iso),obj=sanObjSommeil(u);
     corps=min==null
-      ? '<div class="san-vide">Aucune donnée pour cette nuit.</div>'
+      ? emptyState('','Aucune donnée pour cette nuit.')
       : '<div class="san-gros">'+sanHM(min)+'</div>'
         +_sanL('Coucher',(e&&e.bed)||'-')+_sanL('Réveil',(e&&e.wake)||'-')
         +_sanL('Objectif',sanHM(obj))+_sanL('Écart',sanHMSigne(min-obj))
@@ -133852,7 +133854,7 @@ function sanOuvrirJour(quoi,iso){
     const n=sanPas(u,iso),obj=sanObjPas(u);
     const e=((u&&u.stepsLog)||[]).find(x=>x&&x.date===iso);
     corps=n==null
-      ? '<div class="san-vide">Aucune donnée pour ce jour.</div>'
+      ? emptyState('','Aucune donnée pour ce jour.')
       : '<div class="san-gros">'+sanNb(n)+'</div>'
         +_sanL('Objectif',sanNb(obj))
         +_sanL('Écart',(n-obj>=0?'+':'−')+sanNb(Math.abs(n-obj)))

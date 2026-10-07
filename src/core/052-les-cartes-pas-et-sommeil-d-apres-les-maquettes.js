@@ -391,7 +391,7 @@ function sanOuvrirJour(quoi,iso){
   if(quoi==='sommeil'){
     const e=sanSommeilEntree(u,iso),min=sanSommeilMin(u,iso),obj=sanObjSommeil(u);
     corps=min==null
-      ? '<div class="san-vide">Aucune donnée pour cette nuit.</div>'
+      ? emptyState('','Aucune donnée pour cette nuit.')
       : '<div class="san-gros">'+sanHM(min)+'</div>'
         +_sanL('Coucher',(e&&e.bed)||'-')+_sanL('Réveil',(e&&e.wake)||'-')
         +_sanL('Objectif',sanHM(obj))+_sanL('Écart',sanHMSigne(min-obj))
@@ -409,7 +409,7 @@ function sanOuvrirJour(quoi,iso){
     const n=sanPas(u,iso),obj=sanObjPas(u);
     const e=((u&&u.stepsLog)||[]).find(x=>x&&x.date===iso);
     corps=n==null
-      ? '<div class="san-vide">Aucune donnée pour ce jour.</div>'
+      ? emptyState('','Aucune donnée pour ce jour.')
       : '<div class="san-gros">'+sanNb(n)+'</div>'
         +_sanL('Objectif',sanNb(obj))
         +_sanL('Écart',(n-obj>=0?'+':'−')+sanNb(Math.abs(n-obj)))

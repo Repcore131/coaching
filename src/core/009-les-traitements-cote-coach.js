@@ -1657,11 +1657,7 @@ async function _canalCharger(){
   let msgs;
   try{ msgs=await CLOUD.pullCanalMessages(cle); }
   catch(e){
-    fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
-      <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('message-circle',32)}</div>
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Annonces injoignables</div>
-      <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
-      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
+    fil.innerHTML=etatErreur('Ce n\'est pas que ton coach n\'a rien publié : la demande n\'a pas abouti.','Réessayer','_canalCharger()','Annonces injoignables').replace(icon('alerte',28),icon('wifi-off',28));
     return;
   }
   const [compteurs,miennes]=await Promise.all([
@@ -1697,10 +1693,7 @@ async function _canalCharger(){
   try{ arcEntreeAuDefilement(fil,'.cnl-carte',4); }catch(e){}
 }
 function _canalVide(titre,sous){
-  return `<div style="text-align:center;padding:48px 20px">
-    <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">${icon('mail',32)}</div>
-    <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">${escapeHtml(titre)}</div>
-    <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">${escapeHtml(sous)}</div></div>`;
+  return emptyState('mail',escapeHtml(sous),null,null,null,escapeHtml(titre));
 }
 // La carte d'un message. `mienne` est l'emoji déjà posé par cet athlète, ou ''.
 // Les quatre boutons de réaction, communs aux messages et aux défis.
