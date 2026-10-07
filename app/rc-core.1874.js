@@ -12601,13 +12601,13 @@ function rcAnnulerDernier(etat){
 }
 // toastSync, avec « Annuler ». Un envoi qui échoue (hors ligne) garde
 // l'annulation : on défait en local, la file de renvoi rejouera.
-function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire){
+function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire,duree){
   if(!localOk) return toastSync(localOk,promesse,succes,perdu);
-  const etat=rcAnnulable({message:succes,defaire});
+  const etat=rcAnnulable({message:succes,defaire,duree});
   return Promise.resolve(promesse).then(()=>true,e=>{
     if(etat&&!etat.fait&&_rcAnnulable===etat){
       const detail=(e&&e._actionnable)?e.message:null;
-      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',duree>0?duree:RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
       _rcAnnulable=etat;
     } else toastSync(localOk,Promise.reject(e),succes,perdu);
     return false;
@@ -85549,8 +85549,15 @@ function saveReponseBilan(email,bilanId,taId,_confirme){
   const b=c.bilans.find(x=>_idBilan(x)===bilanId);
   if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
   const _premiere=!b.reponseCoach, _indice=c.bilans.indexOf(b);
+  // BUILD 1874 : l'instantané d'avant, pour « Annuler » ; et une MODIFICATION
+  // garde la version précédente (3 au plus, côté coach seulement).
+  const _avant={reponseCoach:b.reponseCoach,reponseDate:b.reponseDate,reponseVue:b.reponseVue,
+    reponsesPrecedentes:b.reponsesPrecedentes?JSON.parse(JSON.stringify(b.reponsesPrecedentes)):undefined};
+  const _nouveau=avecSignature(txt).slice(0,2000);
+  if(b.reponseCoach&&b.reponseCoach!==_nouveau)
+    b.reponsesPrecedentes=[{t:b.reponseCoach,le:Number(b.reponseDate)||Date.now()}].concat(b.reponsesPrecedentes||[]).slice(0,REPONSES_GARDEES);
   // La signature des Réglages de coaching, en dernière ligne.
-  b.reponseCoach=avecSignature(txt).slice(0,2000);
+  b.reponseCoach=_nouveau;
   b.reponseDate=Date.now();
   // Repasse à false même si la réponse avait déjà été lue : une réponse
   // modifiée est une nouvelle information.
@@ -85566,9 +85573,13 @@ function saveReponseBilan(email,bilanId,taId,_confirme){
   if(_premiere) rcmCoach('coach_bilan_repondu');
   // LA NOTIFICATION, À LA PREMIÈRE RÉPONSE SEULEMENT, et APRÈS l'envoi : le
   // serveur relit la réponse dans la base avant de prévenir l'athlète.
-  if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:email.replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});
-  toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
-    'la réponse est');
+  // BUILD 1874 : LA NOTIFICATION ATTEND 10 s (l'écriture, elle, est faite) :
+  // « Annuler » pendant ce délai défait la réponse SANS prévenir l'athlète.
+  // L'attente est persistée : app tuée, elle part au démarrage suivant.
+  let _cleNotif=null;
+  if(_premiere) _cleNotif=notifReponseDifferer(email,_indice,bilanId,envoi);
+  toastSyncAnnulable(ok,envoi,'Réponse envoyée à '+nomCourtClient(c)+'.','la réponse est',
+    ()=>annulerReponseBilan(email,bilanId,_avant,txt,_cleNotif),NOTIF_REPONSE_DELAI_MS);
   // LE RETOUR À L'ASSISTANT (ia.js, iaRetour) : ce que le coach a fait de la
   // proposition, et de combien le texte envoyé s'en écarte. Sans attendre, et
   // une erreur ici ne dit rien : la réponse, elle, est partie.
@@ -86229,6 +86240,85 @@ function _htmlDemandeCompleter(b,c){
       :'<button type="button" class="ccd-manque-b" onclick="demanderCompleterBilan(\''+em+'\',\''+ide+'\')">Lui demander de compléter</button>')
     +'</p>';
 }
+// ══ BUILD 1874 : UNE RÉPONSE SE RETIRE, SE DÉFAIT, GARDE SES VERSIONS ══════
+const NOTIF_REPONSE_DELAI_MS=10000, REPONSES_GARDEES=3, NOTIF_ATTENTE_CLE='rc_notif_reponse_attente';
+function _notifsAttente(){ try{ const l=JSON.parse(localStorage.getItem(NOTIF_ATTENTE_CLE)||'[]'); return Array.isArray(l)?l:[]; }catch(e){ return []; } }
+function _notifsEcrire(l){ try{ if(l.length) localStorage.setItem(NOTIF_ATTENTE_CLE,JSON.stringify(l)); else localStorage.removeItem(NOTIF_ATTENTE_CLE); }catch(e){} }
+// Dépose l'événement 10 s après, si personne n'a annulé. Rend la clé de l'attente.
+function notifReponseDifferer(email,indice,bilanId,envoi){
+  const cle='n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const l=_notifsAttente();
+  l.push({cle,email,i:String(indice),bilanId,at:Date.now()+NOTIF_REPONSE_DELAI_MS,par:currentUser&&currentUser.email});
+  _notifsEcrire(l);
+  setTimeout(()=>{ Promise.resolve(envoi).then(r=>{ if(r!==false) _notifPartir(cle); }).catch(()=>{}); },NOTIF_REPONSE_DELAI_MS);
+  return cle;
+}
+function _notifPartir(cle){
+  const l=_notifsAttente();
+  const x=l.find(n=>n.cle===cle);
+  if(!x) return false;
+  _notifsEcrire(l.filter(n=>n.cle!==cle));
+  try{ deposerEvenement({type:'reponse_bilan',dest:String(x.email).replace(/\./g,','),i:x.i}); }catch(e){}
+  return true;
+}
+function notifReponseAnnuler(cle){
+  const l=_notifsAttente();
+  const n=l.length;
+  _notifsEcrire(l.filter(x=>x.cle!==cle));
+  return _notifsAttente().length!==n;
+}
+// Au démarrage : ce qui attendait encore quand l'app a été tuée part maintenant.
+function rejouerNotifsReponse(){
+  if(!currentUser||!currentUser.email) return 0;
+  const t=Date.now(); let n=0;
+  for(const x of _notifsAttente()) if(x.par===currentUser.email&&Number(x.at)<=t&&_notifPartir(x.cle)) n++;
+  return n;
+}
+try{
+  if(typeof window!=='undefined') window.addEventListener('load',()=>{ setTimeout(()=>{ try{ rejouerNotifsReponse(); }catch(e){} },6000); });
+}catch(e){}
+function _bilanDuCoach(email,bilanId){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return null;
+  const b=c.bilans.find(x=>_idBilan(x)===bilanId);
+  return b?{users,c,b}:null;
+}
+// « Annuler » du toast : l'état d'avant revient, aucune notification ne
+// part, et le texte retourne au brouillon.
+function annulerReponseBilan(email,bilanId,avant,txt,cleNotif){
+  if(cleNotif) notifReponseAnnuler(cleNotif);
+  const r=_bilanDuCoach(email,bilanId);
+  if(!r) return 'Élève introuvable ou non autorisé : la réponse n’a pas été retirée.';
+  const {users,c,b}=r;
+  for(const k of ['reponseCoach','reponseDate','reponseVue','reponsesPrecedentes']){
+    if(avant[k]===undefined||avant[k]===null) delete b[k]; else b[k]=avant[k];
+  }
+  c.updatedAt=Date.now(); users[email]=c; DB.set('users',users);
+  try{ CLOUD.pushOne(email,c).catch(()=>{}); }catch(e){}
+  try{ rbNoterBrouillon(email,bilanId,txt); }catch(e){}
+  try{ renderBilanEvolution(c); evoTab('reponses'); }catch(e){}
+  return true;
+}
+// « Retirer ma réponse » : le texte est gardé (reponsesRetirees, 3 au plus) et
+// remis au brouillon. Déjà lue : on le dit avant.
+async function retirerReponseBilan(email,bilanId){
+  const r=_bilanDuCoach(email,bilanId);
+  if(!r){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const {users,c,b}=r;
+  if(!b.reponseCoach) return false;
+  if(b.reponseVue===true&&!await rcConfirm('Retirer ta réponse ?',nomCourtClient(c)+' l’a déjà lue.','Retirer')) return false;
+  const txt=b.reponseCoach;
+  b.reponsesRetirees=[{t:txt,le:Date.now()}].concat(b.reponsesRetirees||[]).slice(0,REPONSES_GARDEES);
+  delete b.reponseCoach; delete b.reponseDate; delete b.reponseVue;
+  for(const x of _notifsAttente()) if(x.email===email&&x.bilanId===bilanId) notifReponseAnnuler(x.cle);
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  try{ rbNoterBrouillon(email,bilanId,txt); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(email,c),'Réponse retirée : le texte est dans ton brouillon.','le retrait est');
+  try{ renderBilanEvolution(c); evoTab('reponses'); }catch(e){}
+  return true;
+}
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
@@ -86239,6 +86329,7 @@ function blocReponseBilan(b,c){
     ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
+      <div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:4px">${(b.reponsesPrecedentes&&b.reponsesPrecedentes.length)?'Modifiée le '+escapeHtml(_ccdJour(b.reponseDate))+' · ':''}<button type="button" class="rb-lien" onclick="retirerReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}')">Retirer ma réponse</button></div>
     </div>`:''}
     ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Les chiffres de poids sont masqués dans son application. Évite de les citer par message.

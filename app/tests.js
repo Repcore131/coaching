@@ -25264,11 +25264,13 @@ async function testExercices(){
       if(i.prenom!=='Léa'||i.le!==123||i.classement!==true) return _echec(JSON.stringify(i));
       if('prenom' in defiInscription(false,'',1,'')) return _echec('un prénom vide est écrit');
       // Chaque geste qui doit prévenir le serveur passe par le dépôt.
-      const src=[saveReponseBilan,saveReponseRite,enregistrerDefiCanal,defiInscrire,parrainageApresInscription].map(String).join('\n');
+      // Build 1874 : la notification de réponse au bilan part 10 s après (notifReponseDifferer → _notifPartir).
+      const src=[saveReponseBilan,_notifPartir,saveReponseRite,enregistrerDefiCanal,defiInscrire,parrainageApresInscription].map(String).join('\n');
       for(const t of ['reponse_bilan','reponse_rite','defi_publie','parrainage_demande'])
         if(src.indexOf("'"+t+"'")<0) return _echec('le geste « '+t+' » ne dépose rien');
       // La réponse du coach ne part qu’APRÈS l’envoi du dossier (le serveur la relit).
-      if(!/envoi\)\.then\([^)]*=>\{ if\([a-z]+!==false\) deposerEvenement\(\{type:'reponse_bilan'/.test(String(saveReponseBilan))) return _echec('l’événement n’attend pas l’envoi');
+      if(String(saveReponseBilan).indexOf('notifReponseDifferer(email,_indice,bilanId,envoi)')<0) return _echec('la réponse ne passe plus par l’envoi différé');
+      if(!/Promise\.resolve\(envoi\)\.then\(r=>\{ if\(r!==false\) _notifPartir\(cle\)/.test(String(notifReponseDifferer))) return _echec('l’événement n’attend pas l’envoi');
       return true;});
     ok('SERVEUR LÉGER — LES APPELS, L’ABONNEMENT PAYPAL ET LA FIN D’ACCÈS',()=>{
       if(SERVEUR_LEGER&&CLOUD._functionsBase!==SERVEUR_LEGER_URL+'/fn') return _echec('les appels ne vont pas au serveur léger : '+CLOUD._functionsBase);
@@ -66098,6 +66100,66 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1874 : LA RÉPONSE AU BILAN SE DÉFAIT ET SE RETIRE ══
+    const _rbMonde=(extra)=>{
+      currentUser={id:'coQ',email:'coq@t.fr',role:'coach'};
+      const b=Object.assign({type:'coaching',date:Date.now()-864e5,'bil-weight':'70'},extra||{});
+      const a={id:'aQ',email:'aq@t.fr',role:'athlete',coachId:'coQ',fname:'Léa',lname:'Moreau',bilans:[b]};
+      const u={}; u[a.email]=a; DB.set('users',u);
+      return {a,b,id:_idBilan(b)};
+    };
+    okA('Annuler la réponse dans le délai : aucune notification, l’état d’avant revient, le texte va au brouillon',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sD=window.deposerEvenement, sO=window.openClientDetail, sR=window.renderBilanEvolution;
+      let ta;
+      try{
+        const m=_rbMonde();
+        CLOUD.pushOne=()=>Promise.resolve(true); window.openClientDetail=()=>{}; window.renderBilanEvolution=()=>{};
+        let n=0; window.deposerEvenement=()=>{ n++; return Promise.resolve(true); };
+        ta=document.createElement('textarea'); ta.id=_taIdBilan(m.id); ta.value='Bravo pour ta régularité'; document.body.appendChild(ta);
+        saveReponseBilan('aq@t.fr',m.id,ta.id,true);
+        const b1=DB.get('users')['aq@t.fr'].bilans[0];
+        if(!/Bravo/.test(b1.reponseCoach||'')) return _echec('réponse non écrite');
+        if(!_notifsAttente().some(x=>x.bilanId===m.id)) return _echec('pas d’attente persistée');
+        await rcAnnulerDernier();
+        const b2=DB.get('users')['aq@t.fr'].bilans[0];
+        if(b2.reponseCoach||b2.reponseDate) return _echec('réponse restée');
+        if(_notifsAttente().some(x=>x.bilanId===m.id)) return _echec('notification encore en attente');
+        if(!/Bravo/.test(rbBrouillon('aq@t.fr',m.id)||'')) return _echec('texte perdu');
+        return n===0?true:_echec(n+' événement(s)');
+      } finally { if(ta) ta.remove(); try{ rbOublierBrouillon('aq@t.fr',_idBilan({type:'coaching',date:0})); }catch(e){}
+        currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; window.deposerEvenement=sD; window.openClientDetail=sO; window.renderBilanEvolution=sR; }});
+    okA('Retirer une réponse non lue : le bilan redevient « à lire » ; le texte est gardé',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sR=window.renderBilanEvolution;
+      try{
+        const m=_rbMonde({reponseCoach:'Mauvais athlète',reponseDate:Date.now()-1000,reponseVue:false});
+        CLOUD.pushOne=()=>Promise.resolve(true); window.renderBilanEvolution=()=>{};
+        if(!await retirerReponseBilan('aq@t.fr',m.id)) return _echec('refus');
+        const a=DB.get('users')['aq@t.fr'];
+        if(a.bilans[0].reponseCoach) return _echec('pas retirée');
+        if(a.bilans[0].reponsesRetirees[0].t!=='Mauvais athlète') return _echec('texte non gardé');
+        return hasNewBilan(a)?true:_echec('pas « à lire »');
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; window.renderBilanEvolution=sR; }});
+    ok('Modifier une réponse garde l’ancienne version (3 au plus)',()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sO=window.openClientDetail;
+      let ta;
+      try{
+        const m=_rbMonde({reponseCoach:'V1',reponseDate:5,reponseVue:true});
+        CLOUD.pushOne=()=>Promise.resolve(true); window.openClientDetail=()=>{};
+        ta=document.createElement('textarea'); ta.id=_taIdBilan(m.id); document.body.appendChild(ta);
+        for(const v of ['V2','V3','V4','V5']){ ta.value=v; saveReponseBilan('aq@t.fr',m.id,ta.id,true); }
+        const b=DB.get('users')['aq@t.fr'].bilans[0];
+        const l=(b.reponsesPrecedentes||[]).map(x=>x.t.split('\n')[0]);
+        return l.length===3&&l[0]==='V4'&&l[2]==='V2'?true:_echec(JSON.stringify(l));
+      } finally { if(ta) ta.remove(); _rcAnnulable=null; currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; window.openClientDetail=sO; }});
+    okA('Retirer une réponse : refusé hors de ses athlètes (_estMonAthlete)',async()=>{
+      const sU=currentUser, sUs=DB.get('users');
+      try{
+        _rbMonde({reponseCoach:'x',reponseDate:1});
+        currentUser={id:'autreCoach',email:'ac@t.fr',role:'coach'};
+        const r=await retirerReponseBilan('aq@t.fr',_idBilan(DB.get('users')['aq@t.fr'].bilans[0]));
+        return r===false&&DB.get('users')['aq@t.fr'].bilans[0].reponseCoach==='x'?true:_echec('retiré par un autre coach');
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); }});
 
     // ══ BUILD 1873 : UN REPORT SE DÉFAIT EN UNE FOIS ══
     const _rpMonde=()=>{

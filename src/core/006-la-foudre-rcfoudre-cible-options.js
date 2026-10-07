@@ -1017,13 +1017,13 @@ function rcAnnulerDernier(etat){
 }
 // toastSync, avec « Annuler ». Un envoi qui échoue (hors ligne) garde
 // l'annulation : on défait en local, la file de renvoi rejouera.
-function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire){
+function toastSyncAnnulable(localOk,promesse,succes,perdu,defaire,duree){
   if(!localOk) return toastSync(localOk,promesse,succes,perdu);
-  const etat=rcAnnulable({message:succes,defaire});
+  const etat=rcAnnulable({message:succes,defaire,duree});
   return Promise.resolve(promesse).then(()=>true,e=>{
     if(etat&&!etat.fait&&_rcAnnulable===etat){
       const detail=(e&&e._actionnable)?e.message:null;
-      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
+      toast(detail||'Enregistré sur cet appareil : synchronisation en échec','var(--orange)',duree>0?duree:RC_ANNULABLE_MS,{lib:'Annuler',fn:()=>rcAnnulerDernier(etat)});
       _rcAnnulable=etat;
     } else toastSync(localOk,Promise.reject(e),succes,perdu);
     return false;
