@@ -66099,6 +66099,58 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1871 : LA CORBEILLE DU COACH ══
+    okA('Corbeille : supprimer un modèle puis le restaurer depuis la corbeille garde l’id et les versions',async()=>{
+      const sU=currentUser, sC=window.rcConfirm, sS=window.saveUser, sL=window.loadCoachProgramsList;
+      try{
+        currentUser={id:'coB',email:'cob@t.fr',role:'coach',coachPrograms:[{id:'pA',name:'PPL',versions:[{le:1,H:[],F:[]}],sessions_H:[{day:'Lundi',photo:'data:x'}]}]};
+        window.rcConfirm=async()=>true; window.saveUser=()=>true; window.loadCoachProgramsList=()=>{};
+        await deleteCoachProgTemplate(0);
+        _rcAnnulable=null;
+        if(currentUser.coachPrograms.length) return _echec('pas supprimé');
+        const l=corbeilleListe();
+        if(l.length!==1||l[0].type!=='modele') return _echec(JSON.stringify(l));
+        if(l[0].donnees.sessions_H[0].photo!==null) return _echec('photo gardée');
+        currentUser.coachPrograms.push({id:'pZ',name:'PPL'});
+        if(!restaurerDeCorbeille(0)) return _echec('refus');
+        const p=currentUser.coachPrograms.find(x=>x.id==='pA');
+        if(!p||!p.versions||p.versions.length!==1) return _echec(JSON.stringify(currentUser.coachPrograms));
+        if(p.name!=='PPL (restauré)') return _echec('nom '+p.name);
+        return corbeilleListe().length===0?true:_echec('resté dans la corbeille');
+      } finally { currentUser=sU; window.rcConfirm=sC; window.saveUser=sS; window.loadCoachProgramsList=sL; try{ closeModal(); }catch(e){} }});
+    ok('Corbeille : purge à 30 jours et 20 éléments ; fusion de deux appareils par id',()=>{
+      const t=Date.now();
+      const l=purgerCorbeille([{type:'modele',id:'a',le:t-31*864e5},{type:'modele',id:'b',le:t-29*864e5}],t);
+      if(l.length!==1||l[0].id!=='b') return _echec(JSON.stringify(l));
+      const m=purgerCorbeille(Array.from({length:25},(_,i)=>({type:'recette',id:'r'+i,le:t-i*1000})),t);
+      if(m.length!==20||m[0].id!=='r0') return _echec(m.length);
+      const f=fusionnerCorbeilles([{type:'plan',id:'x',le:t-5,nom:'A'}],[{type:'plan',id:'x',le:t-1,nom:'B'},{type:'recette',id:'y',le:t-2}],t);
+      return f.length===2&&f.find(x=>x.id==='x').nom==='B'?true:_echec(JSON.stringify(f));});
+    ok('planHisto ne double pas un plan identique (majAt ignoré) ; 5 au plus',()=>{
+      const p={v:1,squelette:[{repas:'midi'}],majAt:1};
+      let h=planHistoAjouter([],p,'c',1);
+      h=planHistoAjouter(h,Object.assign({},p,{majAt:99}),'c',2);
+      if(h.length!==1) return _echec(h.length);
+      if(planHistoAjouter([],p,'c',1,Object.assign({},p,{majAt:5})).length!==0) return _echec('plan inchangé noté');
+      for(let i=0;i<8;i++) h=planHistoAjouter(h,{v:1,squelette:[{n:i}]},'c',i);
+      return h.length===5?true:_echec(h.length);});
+    okA('Remettre un plan précédent puis « Annuler » rend l’état d’avant',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sCid=currentClientId, sR=window.renderPlanCoach;
+      try{
+        currentUser={id:'coN',email:'con@t.fr',role:'coach'};
+        const actuel={v:1,squelette:[{repas:'midi',id:'actuel'}]}, ancien={v:1,squelette:[{repas:'soir',id:'ancien'}]};
+        const a={id:'aN',email:'an@t.fr',role:'athlete',coachId:'coN',nutrition:{plan:actuel,planHisto:[{le:1,par:'coN',plan:ancien}]}};
+        const u={}; u[a.email]=a; DB.set('users',u); currentClientId='aN';
+        CLOUD.pushOne=()=>Promise.resolve(true); window.renderPlanCoach=()=>{};
+        await planHistoRemettre(0,true);
+        const b=DB.get('users')['an@t.fr'].nutrition;
+        if(b.plan.squelette[0].id!=='ancien') return _echec('pas remis');
+        if(b.planHisto[0].plan.squelette[0].id!=='actuel') return _echec('actuel pas gardé');
+        await rcAnnulerDernier();
+        const c=DB.get('users')['an@t.fr'].nutrition;
+        return c.plan.squelette[0].id==='actuel'&&c.planHisto.length===1&&c.planHisto[0].plan.squelette[0].id==='ancien'?true:_echec(JSON.stringify(c));
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; currentClientId=sCid; window.renderPlanCoach=sR; }});
+
     // ══ BUILD 1870 : L'HISTORIQUE DES PROGRAMMES GARDE CE QUI COMPTE ══
     const _hsc=n=>[{day:'Lundi',active:true,name:'S'+n,exercises:[{name:'Squat',series:3,reps:String(n)}],photo:'data:xx'}];
     const _hpush=(l,ts,motif,n)=>elaguerHistoriqueSeances([{ts,motif,sessions_config:_copieSansPhotos(_hsc(n))}].concat(l),ts);
@@ -66183,13 +66235,13 @@ async function testExercices(){
       const sU=currentUser, sUs=DB.get('users'), sC=window.rcConfirm, sS=window.saveUser, sL=window.loadCoachProgramsList;
       try{
         currentUser={id:'coM',email:'com@t.fr',role:'coach',coachPrograms:[{id:'p1',name:'A'},{id:'p2',name:'PPL',versions:[{v:1}]},{id:'p3',name:'C'}]};
-        const u={}; ['x','y','z'].forEach((n,i)=>{ u[n+'@t.fr']={id:n,email:n+'@t.fr',role:'athlete',coachId:'coM',assignedProgramId:i<3?'p2':'p1'}; });
+        const u={}; ['x','y','z'].forEach((n,i)=>{ u[n+'@t.fr']={id:n,email:n+'@t.fr',role:'athlete',coachId:'coM',assignedProgramId:i<3?'p2':'p1',sessions_config:[]}; });
         DB.set('users',u);
         let q='', d=''; window.rcConfirm=async(t,x)=>{ q=String(t); d=String(x||''); return true; };
         window.saveUser=()=>true; window.loadCoachProgramsList=()=>{};
         await deleteCoachProgTemplate(1);
         if(q!=='Supprimer « PPL » ?') return _echec('question : '+q);
-        if(!/3 athlètes l’utilisent \(leur programme ne change pas\)/.test(d)) return _echec('détail : '+d);
+        if(!/3 athlètes l’utilisent : leur programme ne change pas, mais tu ne pourras plus leur reporter une correction\.\nIl reste 30 jours dans la corbeille\./.test(d)) return _echec('détail : '+d);
         if(currentUser.coachPrograms.some(p=>p.id==='p2')) return _echec('pas supprimé');
         await rcAnnulerDernier();
         const l=currentUser.coachPrograms;

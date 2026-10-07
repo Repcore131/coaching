@@ -1084,6 +1084,7 @@ function renderPlanCoach(){
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:16px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
     <button class="btn btn-red" onclick="savePlanCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">Enregistrer le plan</button>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="supprimerPlanCoach()">Supprimer le plan de cet athlète</button>
+    ${_htmlPlanHisto(c)}
   </div></div>`;
 }
 
@@ -1102,12 +1103,75 @@ function savePlanCoach(){
   // Chaque aliment Ciqual part avec son nom et ses valeurs : l'athlète les lit
   // même avant d'avoir la base (planFigerAliments).
   try{ planFigerAliments(p); }catch(e){}
+  // BUILD 1870 : la version d'avant part dans planHisto (si elle diffère).
+  if(c.nutrition.plan) c.nutrition.planHisto=planHistoAjouter(c.nutrition.planHisto,c.nutrition.plan,c.nutrition.plan.majPar||null,undefined,p);
   p.majAt=Date.now();
   p.majPar=currentUser&&currentUser.id;
   c.nutrition.plan=p;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré '+ICO.coche,'le plan est');
+}
+// ══ BUILD 1870 : LES VERSIONS PRÉCÉDENTES DU PLAN ════════════════════════════
+// c.nutrition.planHisto=[{le, par, plan}], 5 au plus, la plus récente d'abord.
+const PLAN_HISTO_MAX=5;
+function _planSignature(p){
+  if(!p) return 'null';
+  const c=JSON.parse(JSON.stringify(p)); delete c.majAt; delete c.majPar;
+  return JSON.stringify(c);
+}
+/** PURE. Ajoute `plan` en tête, sauf s'il est identique à la tête ou au plan qui le remplace (`nouveau`). */
+function planHistoAjouter(histo,plan,par,maintenant,nouveau){
+  const l=Array.isArray(histo)?histo.slice():[];
+  if(!plan) return l;
+  const sig=_planSignature(plan);
+  if(nouveau!==undefined&&_planSignature(nouveau)===sig) return l;
+  if(l.length&&_planSignature(l[0].plan)===sig) return l;
+  l.unshift({le:Number(maintenant)||Date.now(),par:par||null,plan:JSON.parse(JSON.stringify(plan))});
+  return l.slice(0,PLAN_HISTO_MAX);
+}
+let _planHistoOuvert=false;
+function basculerPlanHisto(){ _planHistoOuvert=!_planHistoOuvert; try{ renderPlanCoach(); }catch(e){} return _planHistoOuvert; }
+function _htmlPlanHisto(c){
+  const l=((getOwnedClient(c&&c.id)||c||{}).nutrition||{}).planHisto||[];
+  if(!l.length) return '';
+  return '<button type="button" class="rb-lien" style="display:block;margin:10px auto 0" onclick="basculerPlanHisto()">Versions précédentes ('+l.length+')</button>'
+    +(_planHistoOuvert?l.map((e,i)=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:var(--fs-xs)">'
+      +'<span style="flex:1">Version du '+escapeHtml(new Date(Number(e.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))
+      +' · '+(((e.plan||{}).squelette||[]).length)+' ligne'+((((e.plan||{}).squelette||[]).length>1)?'s':'')+'</span>'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="planHistoRemettre('+i+')">Remettre en place</button></div>').join(''):'');
+}
+// Remet une version, puis « Annuler » juste après (rcAnnulable).
+async function planHistoRemettre(i,sansConfirm){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const l=(c.nutrition&&c.nutrition.planHisto)||[];
+  const e=l[Number(i)];
+  if(!e||!e.plan){ toast('Cette version n’existe plus','var(--orange)'); return false; }
+  if(!sansConfirm&&!await rcConfirm('Remettre ce plan en place ?','Le plan actuel ira dans les versions précédentes. Tu pourras annuler juste après.','Remettre en place')) return false;
+  const avant=c.nutrition.plan?JSON.parse(JSON.stringify(c.nutrition.plan)):null;
+  const avantHisto=JSON.parse(JSON.stringify(l));
+  c.nutrition.planHisto=planHistoAjouter(l,avant,avant&&avant.majPar||null,undefined,e.plan);
+  c.nutrition.plan=Object.assign(JSON.parse(JSON.stringify(e.plan)),{majAt:Date.now(),majPar:currentUser&&currentUser.id});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _cplPlan=_cplCopie(c.nutrition.plan);
+  try{ renderPlanCoach(); }catch(x){}
+  const em=c.email;
+  toastSyncAnnulable(ok,CLOUD.pushOne(em,c),'Plan remis en place','le plan est',()=>{
+    const us=DB.get('users')||{};
+    const a=us[em];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste.';
+    a.nutrition=a.nutrition||{};
+    if(avant) a.nutrition.plan=avant; else delete a.nutrition.plan;
+    a.nutrition.planHisto=avantHisto;
+    a.updatedAt=Date.now(); us[em]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(em,a).catch(()=>{}); }catch(x){}
+    try{ if(currentClientId===a.id){ _cplPlan=_cplCopie(a.nutrition.plan||null); renderPlanCoach(); } }catch(x){}
+    return true;
+  });
+  return true;
 }
 async function supprimerPlanCoach(){
   const _c0=getOwnedClient(currentClientId);
@@ -1118,6 +1182,11 @@ async function supprimerPlanCoach(){
   if(!c) return;
   // BUILD 1869 : l'objet entier, pour le remettre.
   const _copie=(c.nutrition&&c.nutrition.plan)?JSON.parse(JSON.stringify(c.nutrition.plan)):null;
+  // BUILD 1870 : le plan supprimé va dans la corbeille ET dans planHisto.
+  if(_copie){
+    c.nutrition.planHisto=planHistoAjouter(c.nutrition.planHisto,_copie,_copie.majPar||null);
+    try{ deposerCorbeille('plan','plan_'+c.id+'_'+Date.now(),'Plan de '+_qui,_copie,c.id); saveUser(); }catch(e){}
+  }
   if(c.nutrition) delete c.nutrition.plan;
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
@@ -2864,10 +2933,13 @@ async function supprimerRecette(id){
   if(!r) return false;
   if(!await rcConfirm('Supprimer « '+r.nom+' » ?','Ce qui est déjà dans un journal reste tel quel. Une ligne de plan garde ses dernières valeurs.','Supprimer')) return false;
   const _copie=JSON.parse(JSON.stringify(r));
+  // BUILD 1870 : la corbeille garde la recette 30 jours.
+  try{ deposerCorbeille('recette',id,r.nom,_copie); saveUser(); }catch(e){}
   recetteSupprimerLocal(id);
   renderRecettes();
   // BUILD 1869 : la recette revient, avec son identifiant.
   rcAnnulable({message:'« '+r.nom+' » supprimée',defaire:()=>{
+    try{ retirerDeCorbeille('recette',id); saveUser(); }catch(e){}
     const res=recetteEnregistrer(Object.assign({},_copie,{id}));
     try{ recettesSynchroniser().catch(()=>{}); }catch(e){}
     try{ renderRecettes(); }catch(e){}

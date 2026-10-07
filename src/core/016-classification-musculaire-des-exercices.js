@@ -2251,6 +2251,8 @@ function loadCoachProgramsList(){
   const progs=(currentUser&&currentUser.coachPrograms)||[];
   const container=document.getElementById('cpl-list');if(!container)return;
   let bq=''; try{ bq=_htmlCplBoutique(); }catch(e){ bq=''; }
+  // BUILD 1870 : la corbeille, une ligne discrète en bas de liste.
+  try{ bq+=_htmlLigneCorbeille(); }catch(e){}
   if(!progs.length){
     // R13 — le geste est offert ici, plus renvoye au « + CRÉER » de la barre.
     container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes : pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
@@ -2685,11 +2687,14 @@ async function deleteCoachProgTemplate(idx){
   // BUILD 1869 : la confirmation nomme le modèle et dit qui l'utilise.
   const _p=currentUser.coachPrograms[idx];
   if(!_p) return;
-  const _n=athletesSurModele(_p).length;
+  // BUILD 1870 : utilisateursModele (par l'id, ou par le nom pour les anciens).
+  let _n=0; try{ _n=utilisateursModele(_c4Athletes(),_p).length; }catch(e){ _n=athletesSurModele(_p).length; }
   if(!await rcConfirm('Supprimer « '+(_p.name||'Sans nom')+' » ?',
-    [_n?_n+' athlète'+(_n>1?'s l’utilisent':' l’utilise')+' (leur programme ne change pas).':'',
-     _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':''].filter(Boolean).join('\n')||null,
+    [_n?_n+' athlète'+(_n>1?'s l’utilisent':' l’utilise')+' : leur programme ne change pas, mais tu ne pourras plus leur reporter une correction.':'',
+     'Il reste '+CORBEILLE_JOURS+' jours dans la corbeille.',
+     _enBoutique?'Il reste en vente dans la boutique : retire-le de la vente si tu ne veux plus le vendre.':''].filter(Boolean).join('\n'),
     'Supprimer')) return;
+  deposerCorbeille('modele',_p.id,_p.name||'Sans nom',_p);
   const _copie=JSON.parse(JSON.stringify(_p));
   // ⚠ UN PROGRAMME EN VENTE QU'ON SUPPRIME DOIT QUITTER LA VITRINE. Sans cette
   // ligne, la carte restait publiee dans coach_public : les athletes voyaient
@@ -2702,6 +2707,108 @@ async function deleteCoachProgTemplate(idx){
   loadCoachProgramsList();
   rcAnnulable({message:'« '+(_copie.name||'Sans nom')+' » supprimé.',defaire:()=>remettreModele(_copie,idx,_vendait)});
 }
+// ══ BUILD 1870 : LA CORBEILLE DU COACH ═══════════════════════════════════════
+// currentUser.corbeille=[{type:'modele'|'plan'|'recette', id, nom, le, donnees, athleteId?}].
+// 30 jours, 20 éléments au plus, purge à chaque écriture. Les photos de séance
+// n'y entrent pas (quota local).
+const CORBEILLE_JOURS=30, CORBEILLE_MAX=20;
+const CORBEILLE_LIB=Object.freeze({modele:'Modèle',plan:'Plan alimentaire',recette:'Recette'});
+/** PURE. Les éléments de moins de 30 jours, les plus récents d'abord, 20 au plus. */
+function purgerCorbeille(l,maintenant){
+  const m=Number(maintenant)||Date.now();
+  return (Array.isArray(l)?l:[]).filter(x=>x&&x.type&&(m-Number(x.le||0))<=CORBEILLE_JOURS*864e5)
+    .sort((a,b)=>Number(b.le)-Number(a.le)).slice(0,CORBEILLE_MAX);
+}
+/** PURE. Deux corbeilles (deux appareils) : union par type+id, la plus récente gagne. */
+function fusionnerCorbeilles(a,b,maintenant){
+  const m=new Map();
+  for(const x of [].concat(a||[],b||[])){
+    if(!x||!x.type) continue;
+    const k=x.type+':'+x.id, y=m.get(k);
+    if(!y||Number(x.le)>Number(y.le)) m.set(k,x);
+  }
+  return purgerCorbeille([...m.values()],maintenant);
+}
+function _sansPhotosModele(p){
+  const c=JSON.parse(JSON.stringify(p||{}));
+  for(const k of ['sessions_H','sessions_F']) if(Array.isArray(c[k])) c[k]=_copieSansPhotos(c[k]);
+  if(Array.isArray(c.versions)) c.versions.forEach(v=>{ for(const k of ['H','F']) if(Array.isArray(v&&v[k])) v[k]=_copieSansPhotos(v[k]); });
+  return c;
+}
+function deposerCorbeille(type,id,nom,donnees,athleteId){
+  if(!currentUser) return false;
+  const d=type==='modele'?_sansPhotosModele(donnees):JSON.parse(JSON.stringify(donnees==null?null:donnees));
+  const e={type,id:String(id),nom:String(nom||'').slice(0,120),le:Date.now(),donnees:d};
+  if(athleteId) e.athleteId=String(athleteId);
+  currentUser.corbeille=purgerCorbeille([e].concat((currentUser.corbeille||[]).filter(x=>!(x&&x.type===type&&String(x.id)===String(id)))));
+  return true;
+}
+function retirerDeCorbeille(type,id){
+  if(!currentUser||!Array.isArray(currentUser.corbeille)) return false;
+  const n=currentUser.corbeille.length;
+  currentUser.corbeille=currentUser.corbeille.filter(x=>!(x&&x.type===type&&String(x.id)===String(id)));
+  return currentUser.corbeille.length!==n;
+}
+function corbeilleListe(){ return purgerCorbeille((currentUser&&currentUser.corbeille)||[]); }
+function _htmlLigneCorbeille(){
+  const n=corbeilleListe().length;
+  if(!n) return '';
+  return '<button type="button" class="rb-lien cpl-corbeille" onclick="ouvrirCorbeille()" style="display:block;margin:14px auto 0">Corbeille ('+n+')</button>';
+}
+function ouvrirCorbeille(){
+  try{ closeModal(); }catch(e){}
+  const l=corbeilleListe();
+  const E=escapeHtml;
+  const lignes=l.length?l.map((x,i)=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">'
+    +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+E(x.nom||'Sans nom')+'</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs)">'+E(CORBEILLE_LIB[x.type]||x.type)+' · supprimé le '+E(new Date(Number(x.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))+'</div></div>'
+    +'<button type="button" class="btn btn-sm" style="margin:0" onclick="restaurerDeCorbeille('+i+')">Restaurer</button></div>').join('')
+    :emptyState('','La corbeille est vide.',null,null,'padding:16px 0');
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Corbeille</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:8px">Ce que tu as supprimé ces ${CORBEILLE_JOURS} derniers jours.</p>
+    ${lignes}
+    <button class="btn btn-outline" style="margin-top:14px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`);
+}
+// Restaurer : un modèle reprend le MÊME id (la propagation retrouve ses
+// athlètes) ; un nom déjà pris entre-temps reçoit « (restauré) ».
+function restaurerDeCorbeille(i){
+  const l=corbeilleListe();
+  const x=l[Number(i)];
+  if(!x) return false;
+  let ok=false, msg='';
+  if(x.type==='modele'){
+    const progs=currentUser.coachPrograms=Array.isArray(currentUser.coachPrograms)?currentUser.coachPrograms:[];
+    if(progs.some(p=>p&&p.id===x.donnees.id)){ retirerDeCorbeille(x.type,x.id); ok=true; msg='Ce modèle est déjà dans ta liste'; }
+    else {
+      const p=JSON.parse(JSON.stringify(x.donnees));
+      const nom=String(p.name||'').trim().toLowerCase();
+      if(nom&&progs.some(q=>q&&String(q.name||'').trim().toLowerCase()===nom)) p.name=p.name+' (restauré)';
+      progs.push(p); ok=true; msg='« '+p.name+' » restauré';
+    }
+  } else if(x.type==='plan'){
+    const users=DB.get('users')||{};
+    const k=Object.keys(users).find(e=>users[e]&&users[e].id===x.athleteId);
+    const c=k&&users[k];
+    if(!c||!_estMonAthlete(c,currentUser)){ toast('Cet athlète n’est plus dans ta liste : le plan ne peut pas être remis.','var(--orange)'); return false; }
+    c.nutrition=c.nutrition||{};
+    if(c.nutrition.plan) c.nutrition.planHisto=planHistoAjouter(c.nutrition.planHisto,c.nutrition.plan,currentUser.id);
+    c.nutrition.plan=JSON.parse(JSON.stringify(x.donnees));
+    c.updatedAt=Date.now(); users[k]=c; DB.set('users',users);
+    try{ CLOUD.pushOne(k,c).catch(()=>{}); }catch(e){}
+    ok=true; msg=x.nom+' restauré';
+  } else if(x.type==='recette'){
+    const r=recetteEnregistrer(Object.assign({},x.donnees,{id:x.id}));
+    ok=!!(r&&r.ok); msg=ok?'« '+x.nom+' » restaurée':((r&&r.raison)||'Recette non restaurée');
+  }
+  if(ok) retirerDeCorbeille(x.type,x.id);
+  toastEcriture(saveUser(),msg,'la restauration est');
+  try{ closeModal(); }catch(e){}
+  try{ loadCoachProgramsList(); }catch(e){}
+  return ok;
+}
 // PURE (sur la base locale). Les athlètes du coach sur ce modèle.
 function athletesSurModele(p){
   if(!p||!p.id) return [];
@@ -2711,6 +2818,7 @@ function athletesSurModele(p){
 // Remet le modèle À SON INDEX, avec ses versions et son état de vente.
 function remettreModele(copie,idx,vendait){
   const l=currentUser.coachPrograms=Array.isArray(currentUser.coachPrograms)?currentUser.coachPrograms:[];
+  retirerDeCorbeille('modele',copie.id);
   if(l.some(x=>x&&x.id===copie.id)) return true;
   l.splice(Math.max(0,Math.min(l.length,idx)),0,JSON.parse(JSON.stringify(copie)));
   saveUser();

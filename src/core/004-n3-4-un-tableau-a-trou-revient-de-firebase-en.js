@@ -744,6 +744,9 @@ const CHAMPS_SANTE=Object.freeze([
   // Poids, mensurations, photos corporelles
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
+  // La corbeille du coach (build 1871) : elle peut porter le plan
+  // alimentaire d'un athlète. Classée santé par prudence.
+  'corbeille',
   // Sommeil, pas, energie, habitudes quotidiennes
   'sleepLog','stepsLog','fcReposLog','vfcLog',
   // Leurs moyennes hebdomadaires, au-delà de 180 jours (05/10/2026).

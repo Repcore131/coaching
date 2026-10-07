@@ -1405,7 +1405,10 @@ function openClientDetail(cid,_refresh,_force){
   const _ap=document.getElementById('ccd-assigned-prog');
   if(_ap){
     if(c.assignedProgramName){
+      // BUILD 1870 : l'identifiant ne correspond plus à aucun modèle.
+      const _supp=!!c.assignedProgramId&&!((currentUser&&currentUser.coachPrograms)||[]).some(p=>p&&p.id===c.assignedProgramId);
       _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
+        +(_supp?' (modèle supprimé)':'')
         +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
