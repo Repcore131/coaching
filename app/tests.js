@@ -66103,6 +66103,20 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1883 : LE CADRAGE DE LA DERNIÈRE PHOTO ══
+    ok('ecartCadrage : null sous les seuils ; « cadrage » au-delà (taille, décalage) ; profil sans décalage',()=>{
+      const b={ex:0.5,ey:0.2,tronc:0.3,chev:0.7};
+      if(ecartCadrage({ex:0.52,ey:0.2,tronc:0.31,chev:0.74},b)!==null) return _echec('sous les seuils');
+      const loin=ecartCadrage({ex:0.5,ey:0.2,tronc:0.15,chev:0.35},b);
+      if(!loin||loin.code!=='cadrage'||loin.sens!=='pres') return _echec('deux fois trop loin : '+JSON.stringify(loin));
+      if(!ecartCadrage({ex:0.66,ey:0.2,tronc:0.3,chev:0.7},b)) return _echec('décalage');
+      return ecartCadrage({ex:0.66,ey:0.2,tronc:0.3,chev:0.7},b,{vue:'side'})===null?true:_echec('profil décalé signalé');});
+    ok('Le code « cadrage » ne rend jamais une photo rouge : orange au plus',()=>{
+      const e={code:'cadrage',sens:'pres'};
+      if(ctlAvecCadrage('vert|',e)!=='orange|cadragePres') return _echec(ctlAvecCadrage('vert|',e));
+      if(ctlAvecCadrage('orange|sombre',e)!=='orange|sombre,cadragePres') return _echec(ctlAvecCadrage('orange|sombre',e));
+      return /Rapproche-toi/.test(_htmlPhotoVerdict(ctlAvecCadrage('vert|',e)))?true:_echec('message absent');});
+
     // ══ BUILD 1882 : LE BILAN ALLÉGÉ ══
     ok('mesuresDemandees : 12 au premier bilan, 4 après un bilan complet, 12 de nouveau après 4 semaines',()=>{
       const t=Date.now();

@@ -741,7 +741,10 @@ function aaReperesDe(r){
   // LE NEZ situe la tête : le haut du crâne est à peu près deux fois plus
   // haut au-dessus des épaules que le nez.
   const nez=(vu(0)&&p[0][1]<ey)?ey-p[0][1]:null;
-  return {ex,ey,tronc,larg:larg>0.03?larg:null,nez};
+  // BUILD 1883 : épaules → chevilles, quand les chevilles sont dans le cadre.
+  let chev=null;
+  if(vu(27)&&vu(28)){ const c=(p[27][1]+p[28][1])/2-ey; if(c>0.1) chev=c; }
+  return {ex,ey,tronc,larg:larg>0.03?larg:null,nez,chev};
 }
 // PURE. La mesure commune aux deux photos : le tronc si les deux le montrent,
 // sinon la largeur d'épaules si les deux la montrent (vue de face ou de dos),

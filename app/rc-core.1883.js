@@ -83161,6 +83161,9 @@ const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,R
     sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
     clair:'Photo trop claire : évite le soleil direct ou le flash.',
     ok:'Photo exploitable : tout est dans le cadre.',
+    cadrage:'Recule d’un pas ou rapproche-toi pour retrouver le cadrage de ta dernière photo.',
+    cadrageLoin:'Recule d’un pas pour retrouver le cadrage de ta dernière photo.',
+    cadragePres:'Rapproche-toi pour retrouver le cadrage de ta dernière photo.',
     force:'Gardée malgré l’avertissement.'})});
 /** Les six consignes illustrées de chaque vue (E1). */
 const PHOTO_CONSIGNES=Object.freeze({
@@ -83828,6 +83831,69 @@ function rappelPhotosManquantes(b){
   const quoi=l.length===1?'Photo '+l[0]+' manquante':'Photos '+l.slice(0,-1).join(', ')+' et '+l[l.length-1]+' manquantes';
   return quoi+' : tu pourras '+(l.length===1?'l’':'les ')+'ajouter depuis Historique des bilans → Modifier.';
 }
+// ══ BUILD 1883 : LE CADRAGE DE LA DERNIÈRE PHOTO ═══════════════════════════
+// Deux photos comparées doivent être prises au même cadrage. Tout reste local.
+const CADRAGE_TAILLE=0.15, CADRAGE_DECALAGE=0.10;
+/**
+ * PURE. Les repères de la nouvelle photo (ra) contre la précédente (rb) :
+ * null sous les seuils, sinon {code:'cadrage', sens:'loin'|'pres'|null}.
+ * Taille : épaules → chevilles (sinon le tronc) ; décalage : le milieu des
+ * épaules, en largeur. Profil : pas de décalage (l'autre côté est permis).
+ */
+function ecartCadrage(ra,rb,opts){
+  if(!ra||!rb) return null;
+  const o=opts||{};
+  const ha=ra.chev&&rb.chev?ra.chev:(ra.tronc&&rb.tronc?ra.tronc:null);
+  const hb=ra.chev&&rb.chev?rb.chev:(ra.tronc&&rb.tronc?rb.tronc:null);
+  let sens=null, ecart=false;
+  if(ha&&hb){
+    const r=ha/hb;
+    if(Math.abs(r-1)>CADRAGE_TAILLE){ ecart=true; sens=r>1?'loin':'pres'; }
+  }
+  if(o.vue!=='side'&&isFinite(ra.ex)&&isFinite(rb.ex)&&Math.abs(ra.ex-rb.ex)>CADRAGE_DECALAGE) ecart=true;
+  return ecart?{code:'cadrage',sens}:null;
+}
+/** PURE. Le verdict avec le code de cadrage : orange au plus, jamais rouge. */
+function ctlAvecCadrage(ctl,e){
+  if(!e) return ctl;
+  const [etat,cs]=String(ctl||'vert|').split('|');
+  const codes=(cs||'').split(',').filter(Boolean);
+  const c=e.sens==='loin'?'cadrageLoin':e.sens==='pres'?'cadragePres':'cadrage';
+  if(codes.indexOf(c)<0) codes.push(c);
+  const et=(etat==='rouge'||etat==='rouge-force')?etat:'orange';
+  return et+'|'+codes.join(',');
+}
+// La dernière photo de cette vue dans un bilan ANTÉRIEUR (pas celui qu'on modifie).
+function _bilPhotoPrecedente(vue){
+  try{
+    if(grossesseSuspend(currentUser)) return null;
+    const l=aaBilansAvecPhoto(currentUser,vue).filter(b=>!(_bilEdition&&_idBilan(b)===_bilEdition.id));
+    return l.length?l[l.length-1]:null;
+  }catch(e){ return null; }
+}
+const CALQUE_CLE='rc_cam_calque';
+function _calqueChoisi(){ try{ return localStorage.getItem(CALQUE_CLE)||'photo'; }catch(e){ return 'photo'; } }
+function _calquePoser(v){ try{ localStorage.setItem(CALQUE_CLE,v); }catch(e){} }
+// Après qu'une photo est gardée : son cadrage contre la précédente, en tâche de fond.
+function _bilVerifierCadrage(key,data,vue){
+  const prec=_bilPhotoPrecedente(vue);
+  if(!prec) return;
+  const gen=_bilGen;
+  const img=new Image();
+  img.onload=async()=>{
+    try{
+      const avant=await aaChargerPhoto(prec,vue);
+      const ra=await aaReperes(img), rb=await aaReperes(avant);
+      const e=ecartCadrage(ra,rb,{vue});
+      if(!e||gen!==_bilGen||bilData[key]!==data) return;
+      bilData[key+'-ctl']=ctlAvecCadrage(bilData[key+'-ctl'],e);
+      const z=document.getElementById('bil-ctl-'+key);
+      if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
+      _bilSaveDraft();
+    }catch(x){}
+  };
+  img.src=data;
+}
 /**
  * LE MINUTEUR 10 S (E1). La caméra de l'appareil, la silhouette à caler en
  * calque, dix secondes pour se placer, et l'image capturée passe par le même
@@ -83846,6 +83912,27 @@ async function bilMinuteur(key,vue){
     +'<div class="bil-cam-a"><button type="button" class="btn btn-red" data-a="go">Démarrer le minuteur 10 s</button><button type="button" class="btn" data-a="x">Annuler</button></div></div>';
   document.body.appendChild(o);
   const v=o.querySelector('video'); v.srcObject=flux;
+  // BUILD 1883 : la DERNIÈRE PHOTO de cette vue en calque, à la place de la
+  // silhouette ; bascule mémorisée. Premier bilan, grossesse, photo non
+  // téléchargeable : la silhouette, comme avant.
+  try{
+    const prec=_bilPhotoPrecedente(vue);
+    if(prec){
+      const im=o.querySelector('.bil-cam-sil');
+      aaChargerPhoto(prec,vue).then(ph=>{
+        if(!o.isConnected||!ph) return;
+        const cal=document.createElement('img');
+        cal.className='bil-cam-calque'; cal.alt=''; cal.src=ph.src;
+        cal.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35;pointer-events:none';
+        im.after(cal);
+        const b=document.createElement('button'); b.type='button'; b.className='btn btn-sm'; b.style.margin='0';
+        const appliquer=()=>{ const ph2=_calqueChoisi()==='photo'; cal.hidden=!ph2; im.hidden=ph2; b.textContent=ph2?'Silhouette':'Ma dernière photo'; };
+        b.onclick=()=>{ _calquePoser(_calqueChoisi()==='photo'?'silhouette':'photo'); appliquer(); };
+        o.querySelector('.bil-cam-a').prepend(b);
+        appliquer();
+      }).catch(()=>{});
+    }
+  }catch(e){}
   const fin=()=>{ try{ flux.getTracks().forEach(t=>t.stop()); }catch(e){} o.remove(); };
   o.querySelector('[data-a="x"]').onclick=fin;
   o.querySelector('[data-a="go"]').onclick=async e=>{
@@ -83914,6 +84001,8 @@ function loadBilPhoto(input,key){
     if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
     if(!_bilEdition) _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
+    // BUILD 1883 : le cadrage contre la dernière photo de cette vue (orange au plus).
+    try{ if(['face','back','side'].indexOf(vue)>=0) _bilVerifierCadrage(key,data,vue); }catch(e){}
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   },()=>{
     _rendre();
@@ -92032,7 +92121,10 @@ function aaReperesDe(r){
   // LE NEZ situe la tête : le haut du crâne est à peu près deux fois plus
   // haut au-dessus des épaules que le nez.
   const nez=(vu(0)&&p[0][1]<ey)?ey-p[0][1]:null;
-  return {ex,ey,tronc,larg:larg>0.03?larg:null,nez};
+  // BUILD 1883 : épaules → chevilles, quand les chevilles sont dans le cadre.
+  let chev=null;
+  if(vu(27)&&vu(28)){ const c=(p[27][1]+p[28][1])/2-ey; if(c>0.1) chev=c; }
+  return {ex,ey,tronc,larg:larg>0.03?larg:null,nez,chev};
 }
 // PURE. La mesure commune aux deux photos : le tronc si les deux le montrent,
 // sinon la largeur d'épaules si les deux la montrent (vue de face ou de dos),
