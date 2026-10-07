@@ -50910,7 +50910,7 @@ function loadEntrainement(){
     +'<div id="ent-semaine" style="margin-bottom:14px"></div>'
     +_ligneEntree('Mes séances','Ton programme de la semaine','loadSessionManager()')
     +_ligneEntree('Historique','Les séances faites','loadHistoriqueSeances()')
-    +_ligneEntree('Mes records','Tes meilleures charges, exercice par exercice',"(typeof ouvrirMesRecords==='function'?ouvrirMesRecords():loadProgress())")
+    +_ligneEntree('Mes records','Tes meilleures charges, exercice par exercice','ouvrirMesRecords()')
     +_ligneEntree('Corrections vidéo','Tes vidéos et les retours du coach','loadVideos()',nv||'');
   try{ const w=document.getElementById('ent-semaine'); if(w) _renderProgExercisesInto(w); }catch(e){}
   return true;
@@ -52165,8 +52165,55 @@ function ouvrirHistoriqueExoNom(nom){
   z.innerHTML=htmlHistoriqueExo(currentUser,nom);
   return _feuilleOuvrir('rc-histo');
 }
-// Les records, en attendant leur écran (build suivant) : l'onglet Évolution.
-function ouvrirMesRecords(){ loadProgress(); return true; }
+// ══ BUILD 1891 : MES RECORDS ════════════════════════════════════════════════
+// PURE. La meilleure série de chaque exercice (alias résolus) : la charge la
+// plus lourde, à charge égale le plus de répétitions puis la plus ancienne.
+// ASSISTÉ (dips, tractions guidés) : MOINS d'assistance vaut mieux.
+// Séances de décharge et séries non validées exclues ; au-delà de 1 000 kg,
+// une saisie fautive.
+function recordsParExercice(u){
+  const best={};
+  const cle=nm=>{ try{ return _resoudreAliasChaine(exKey(nm),u&&u.exAlias); }catch(e){ return String(nm); } };
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)||s.deload) continue;
+    const exos=(s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+      ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+      :((s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+    for(const e of exos){
+      let assiste=false; try{ assiste=typeCharge(_exPourCharge(e.nom,u))==='assiste'; }catch(x){}
+      for(const st of e.sets){
+        if(!st||st.done===false) continue;
+        const w=parseFloat(st.weight);
+        if(!(w>0)||w>1000) continue;
+        const reps=parseInt(st.repsDone!=null?st.repsDone:st.reps)||0;
+        const k=cle(e.nom), b=best[k];
+        const mieux=!b||(assiste?w<b.kg:w>b.kg)||(w===b.kg&&(reps>b.reps||(reps===b.reps&&s.date<b.date)));
+        if(mieux) best[k]={cle:k,exo:String(e.nom).trim().slice(0,60),kg:Math.round(w*100)/100,reps,
+          date:Number(s.date),seance:String(s.id!=null?s.id:s.date),assiste};
+      }
+    }
+  }
+  return Object.values(best).sort((a,b)=>b.date-a.date||a.exo.localeCompare(b.exo));
+}
+function ouvrirMesRecords(){
+  go('s-records');
+  const f=document.getElementById('rec-filtre'); if(f) f.value='';
+  return rendreMesRecords();
+}
+function rendreMesRecords(){
+  const z=document.getElementById('rec-liste');
+  if(!z||!currentUser) return false;
+  const tous=recordsParExercice(currentUser);
+  const q=normRecherche((document.getElementById('rec-filtre')||{}).value||'');
+  const l=q?tous.filter(r=>normRecherche(r.exo).indexOf(q)>=0):tous;
+  if(!tous.length){ z.innerHTML=emptyState('trophy','Tes records apparaîtront après ta première séance',null,null,'padding:24px 8px'); return true; }
+  if(!l.length){ z.innerHTML='<div class="sub" style="font-size:var(--fs-xs);padding:12px 2px">Aucun exercice ne correspond.</div>'; return true; }
+  z.innerHTML=l.map(r=>'<button type="button" class="rch-l" onclick="ouvrirSeanceHistorique('+_attrArg(r.seance)+')">'
+    +'<span class="rch-l-t">'+escapeHtml(r.exo)+'</span>'
+    +'<span class="rch-l-s">'+escapeHtml(String(_kgAff(r.kg)).replace('.',',')+_uniteTxt(r.exo)+(r.reps?' × '+r.reps:'')+(r.assiste?' d’assistance':'')
+      +' · '+new Date(Number(r.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}))+'</span></button>').join('');
+  return true;
+}
 // ── La feuille ───────────────────────────────────────────────────────────
 function _rechUsage(){ try{ return JSON.parse(localStorage.getItem(RECHERCHE_USAGE_CLE)||'{}')||{}; }catch(e){ return {}; } }
 /** Les six destinations les plus utilisées (compteur local), à défaut l'ordre de la liste. */
@@ -60168,7 +60215,8 @@ function finishWorkout(incomplete=false,opts){
   //    n'invente pas trois faux badges pour meubler.
   _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
   // 3. MES RECORDS.
-  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })());
+  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })()
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" onclick="ouvrirMesRecords()">Tous mes records</button>');
   // 4. LA PERFORMANCE, delta compris.
   _pose('wd-stats',(()=>{ try{
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());

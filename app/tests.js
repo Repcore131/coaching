@@ -73409,6 +73409,45 @@ async function testExercices(){
         try{ _majPastilleBilan(); _majOngletCanal(); _majPastilleVideos(); _majPastilleLifestyle(); }catch(e){}
       }});
 
+    // ══ BUILD 1891 — MES RECORDS ═══════════════════════════════════════════
+    const _recS=(id,date,nom,w,r,extra)=>Object.assign({id,date,name:'S',data:{[nom]:{sets:[{weight:String(w),repsDone:String(r),done:true}]}}},extra||{});
+    ok('1891 — recordsParExercice : le max par exercice, le plus récent d’abord, décharge et séries non validées exclues',()=>{
+      const u={sessions:[_recS('a',1000,'Squat',100,5),_recS('b',2000,'Squat',90,8),_recS('c',3000,'Squat',120,1,{deload:true}),
+        _recS('d',4000,'Développé couché',80,6),{id:'e',date:5000,data:{'Squat':{sets:[{weight:'140',repsDone:'1',done:false}]}}}]};
+      const r=recordsParExercice(u);
+      if(r.length!==2) return _echec(JSON.stringify(r));
+      const sq=r.find(x=>x.exo==='Squat');
+      if(!(sq.kg===100&&sq.reps===5&&sq.seance==='a')) return _echec(JSON.stringify(sq));
+      return r[0].exo==='Développé couché'?true:_echec('tri par date');});
+    ok('1891 — recordsParExercice : alias résolus ; à charge égale, plus de répétitions',()=>{
+      const u={exAlias:{[exKey('Back squat')]:exKey('Squat')},sessions:[_recS('a',1000,'Squat',100,3),_recS('b',2000,'Back squat',100,6)]};
+      const r=recordsParExercice(u);
+      return r.length===1&&r[0].reps===6?true:_echec(JSON.stringify(r));});
+    ok('1891 — recordsParExercice : assisté, moins d’assistance vaut mieux',()=>{
+      const u={sessions_config:[{exercises:[{name:'Tractions assistées',typeCharge:'assiste'}]}],
+        sessions:[_recS('a',1000,'Tractions assistées',40,8),_recS('b',2000,'Tractions assistées',25,6)]};
+      const r=recordsParExercice(u);
+      return r[0].kg===25&&r[0].assiste?true:_echec(JSON.stringify(r));});
+    ok('1891 — l’écran : unité de l’athlète (lb), filtre, toucher = la séance, vide = la phrase',()=>{
+      const sU=currentUser, act=document.querySelector('.screen.active');
+      try{
+        currentUser={role:'athlete',email:'rec@t.fr',unite:'lb',sessions:[_recS('a',Date.now()-864e5,'Squat',100,5),_recS('b',Date.now()-2*864e5,'Rowing',60,10)]};
+        ouvrirMesRecords();
+        if(TABBAR_ECRANS['s-records']!=='entrainement') return _echec('s-records hors de l’onglet Entraînement');
+        const l=[...document.querySelectorAll('#rec-liste .rch-l')];
+        if(l.length!==2) return _echec(l.length+' lignes');
+        if(!/lb/.test(l[0].textContent)||/kg/.test(l[0].textContent)) return _echec('unité : '+l[0].textContent);
+        if(!/ouvrirSeanceHistorique\(["']a["']\)/.test(l[0].getAttribute('onclick'))) return _echec(l[0].getAttribute('onclick'));
+        document.getElementById('rec-filtre').value='row'; rendreMesRecords();
+        if(document.querySelectorAll('#rec-liste .rch-l').length!==1) return _echec('filtre');
+        currentUser={role:'athlete',email:'rec2@t.fr',sessions:[]}; ouvrirMesRecords();
+        return /Tes records apparaîtront après ta première séance/.test(document.getElementById('rec-liste').textContent)?true:_echec('vide');
+      }finally{ currentUser=sU; if(act) go(act.id); }});
+    ok('1891 — entrées : Entraînement, recherche, fin de séance « Tous mes records »',()=>{
+      if(!/ouvrirMesRecords\(\)/.test(String(loadEntrainement))) return _echec('Entraînement');
+      if(RECHERCHE_DESTINATIONS.find(d=>d.id==='records').action!=='ouvrirMesRecords') return _echec('recherche');
+      return /Tous mes records/.test(_prodSrc())?true:_echec('fin de séance');});
+
     // ══ BUILD 1890 — LA RECHERCHE LOCALE ═══════════════════════════════════
     const _rchU=()=>({role:'athlete',email:'rch@t.fr',unite:'kg',
       sessions:[{id:'s1',date:new Date(2026,9,5,18).getTime(),name:'Jambes',data:{'Squat':{sets:[{weight:'100',repsDone:'5',done:true}]}}},

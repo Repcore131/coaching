@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1890';
+window.RC_BUILD='1891';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1890.css">
+<link rel="stylesheet" href="./rc-style.1891.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1890.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1891.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -5387,6 +5387,17 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><span></span><span class="topbar-title">Entraînement</span><span></span></div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="ent-corps"></div></div>
 </div>
+<!-- BUILD 1891 : MES RECORDS (rendreMesRecords). Un exercice par ligne, le plus récent d'abord ; le toucher rouvre la séance. -->
+<div id="s-records" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-records')">←</button>
+    <span class="topbar-title">Mes records</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1"><div class="pad">
+    <input id="rec-filtre" type="search" autocomplete="off" placeholder="Filtrer : squat, tractions…" aria-label="Filtrer les exercices" oninput="rendreMesRecords()" style="width:100%;box-sizing:border-box;margin-bottom:12px">
+    <div id="rec-liste" class="rch-res"></div>
+  </div></div>
+</div>
 <div id="s-mon-coach" class="screen">
   <div class="topbar"><span></span><span class="topbar-title">Coach</span><span></span></div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="mc-corps"></div></div>
@@ -6294,5 +6305,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1890.js"></script>
+<script src="./rc-core.1891.js"></script>
 </body></html>

@@ -367,7 +367,8 @@ function finishWorkout(incomplete=false,opts){
   //    n'invente pas trois faux badges pour meubler.
   _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
   // 3. MES RECORDS.
-  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })());
+  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })()
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" onclick="ouvrirMesRecords()">Tous mes records</button>');
   // 4. LA PERFORMANCE, delta compris.
   _pose('wd-stats',(()=>{ try{
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
