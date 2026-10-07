@@ -49795,6 +49795,79 @@ function _repeindreSiJourChange(){
   }
   return false;
 }
+// ══ BUILD 1886 : LA CARTE DU MOMENT ═════════════════════════════════════════
+// Une seule carte, sous le bonjour : l'action du jour, visible sans défiler.
+// Elle ne fait que choisir et RÉUTILISER les gestes existants.
+/**
+ * PURE. env = {snap:{progName,heures,series}|null, draft:{type,etape,total}|null,
+ *   retard:number (jours), seanceDuJour:{nom}|null, premiere:bool,
+ *   prochaine:{nom,jour}|null}
+ */
+function carteDuMoment(u,maintenant,env){
+  const e=env||{};
+  if(e.snap) return {type:'reprise_seance',titre:e.snap.heures>6?'Séance non terminée':'Reprends ta séance',
+    sousTitre:(e.snap.progName||'Séance en pause')+(e.snap.series?' · '+e.snap.series+' série'+(e.snap.series>1?'s':'')+' faite'+(e.snap.series>1?'s':''):''),action:'woResumeAndGo()'};
+  if(e.draft) return {type:'reprise_bilan',titre:e.draft.type==='depart'?'Reprends ton questionnaire':'Reprends ton bilan',
+    sousTitre:'Étape '+e.draft.etape+'/'+e.draft.total+' : là où tu t’es arrêté',action:'bilResumeAndGo()'};
+  if(Number(e.retard)>0) return {type:'bilan_retard',titre:'Ton bilan est à faire',
+    sousTitre:'En retard de '+e.retard+' jour'+(e.retard>1?'s':''),action:"openBilan('coaching')"};
+  if(e.seanceDuJour) return {type:'seance_du_jour',titre:'Démarrer ma séance',sousTitre:e.seanceDuJour.nom||'Séance du jour',action:'openSessionPicker()'};
+  if(e.premiere) return {type:'premiere_seance',titre:'Ta première séance',sousTitre:'Ton programme est prêt',action:'openSessionPicker()'};
+  return {type:'repos',titre:'Jour de repos',sousTitre:e.prochaine?('Prochaine séance '+e.prochaine.jour+' : '+(e.prochaine.nom||'séance')):'Récupère bien',action:null};
+}
+// L'environnement, lu sur le dossier local (hors ligne compris).
+function _envMoment(u,t){
+  const env={};
+  try{
+    const sn=_woLoadSnap();
+    if(sn&&_woSnapAMoi(sn)){
+      let ob=null; try{ ob=seanceOubliee(sn,t); }catch(e){ ob=null; }
+      env.snap={progName:sn.progName,heures:ob?ob.heuresDepuis:0,series:ob?ob.series:0};
+    }
+  }catch(e){}
+  try{
+    const d=_bilLoadDraft();
+    if(d&&_bilDraftRempli(d)>0){
+      const steps=_etapesUtiles(d.bilType==='depart'?DEB_STEPS:BIL_STEPS);
+      env.draft={type:d.bilType,etape:Math.min(steps.length,(Number(d.bilStep)||0)+1),total:steps.length};
+    }
+  }catch(e){}
+  try{ const ec=echeanceBilan(u,t); if(_bilTexteRetard(ec.retardJours)) env.retard=ec.retardJours; }catch(e){}
+  try{ const s=seancePrevueDuJour(u,t); if(s&&!((u.sessions||[]).some(x=>x&&localISODate(new Date(x.date))===localISODate(new Date(t))))) env.seanceDuJour={nom:s.name}; }catch(e){}
+  try{ env.premiere=!(u.sessions||[]).length&&(u.sessions_config||[]).some(x=>x&&x.active&&(x.exercises||[]).length); }catch(e){}
+  try{
+    for(let k=1;k<=7;k++){ const s=seancePrevueDuJour(u,t+k*864e5); if(s){ env.prochaine={nom:s.name,jour:k===1?'demain':new Date(t+k*864e5).toLocaleDateString('fr-FR',{weekday:'long'})}; break; } }
+  }catch(e){}
+  return env;
+}
+let _momentDernier=0;
+// Anti-rebond : un double toucher n'ouvre pas deux écrans.
+const MOMENT_GESTES=Object.freeze({reprise_seance:()=>woResumeAndGo(),reprise_bilan:()=>bilResumeAndGo(),
+  bilan_retard:()=>openBilan('coaching'),seance_du_jour:()=>openSessionPicker(),premiere_seance:()=>openSessionPicker()});
+function carteMomentAgir(type){
+  const t=Date.now();
+  if(t-_momentDernier<800) return false;
+  _momentDernier=t;
+  const f=MOMENT_GESTES[type];
+  if(!f) return false;
+  try{ f(); }catch(e){ return false; }
+  return true;
+}
+function _rendreCarteMoment(u){
+  const z=document.getElementById('clh-moment');
+  if(!z||!u||u.role==='coach') return null;
+  const t=Date.now();
+  const c=carteDuMoment(u,t,_envMoment(u,t));
+  z.innerHTML='<div class="gv-carte clh-moment" data-type="'+c.type+'"'+(c.action?' role="button" tabindex="0" onclick="carteMomentAgir(\''+c.type+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}"':'')+' style="margin-bottom:14px;padding:14px 16px;cursor:'+(c.action?'pointer':'default')+'">'
+    +'<div style="font-weight:800;font-size:var(--fs-md)">'+escapeHtml(c.titre)+'</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);margin-top:2px">'+escapeHtml(c.sousTitre||'')+'</div></div>';
+  // Pas de doublon plus bas.
+  const cache=(id,oui)=>{ const el=document.getElementById(id); if(el&&oui) el.style.display='none'; };
+  cache('clh-resume-workout',c.type==='reprise_seance');
+  cache('clh-resume-bilan',c.type==='reprise_bilan');
+  cache('clh-bilan-alert',c.type==='bilan_retard');
+  return c;
+}
 function loadClientHome(){
   try{ _majRappelVerification(); }catch(e){}
   // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
@@ -50063,6 +50136,8 @@ function loadClientHome(){
     _alerte.innerHTML=_h;
     _alerte.style.display=_h?'block':'none';
   }
+  // BUILD 1886 : la carte du moment (et les doublons masqués plus bas).
+  try{ _rendreCarteMoment(currentUser); }catch(e){}
   // BUILD 1861 : « Photos du bilan n°N à ajouter → », tant que le bilan
   // envoyé sans elles les attend (photosAVenir).
   try{
@@ -50217,33 +50292,14 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
-      
-      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
-      <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
-           et le bandeau « COACH » occupe l'espace laissé libre sous elle. Le
-           bandeau déborde de 20 px vers la gauche, la valeur exacte du
-           padding de cette rangée, pour venir mourir sur le bord rouge de la
-           carte, comme une étiquette cousue et non un bouton posé. -->
-      <!-- LA HAUTEUR DE CETTE CARTE NE VIENT PAS DU TEXTE, et c'est ce que
-           la mesure a montre : remettre le nom de la team sur une ligne ne
-           l'a pas raccourcie d'un pixel. La colonne de GAUCHE commande, la
-           photo de 72 px et la pastille COACH sous elle, et la colonne de
-           droite est plus courte qu'elle. C'est donc le rembourrage vertical
-           qui cede : 20 px deviennent 13, en haut comme en bas. -->
-      <div style="display:flex;align-items:stretch;padding:14px 20px 14px 20px;gap:16px;position:relative">
-        <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
-        ${photo
-          ?`<div style="width:72px;height:72px;border-radius:var(--r-full);overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
-          :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),var(--bg));border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
-          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:6px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
-        </div>
-        <div style="flex:1;min-width:0">
-          ${team?`<div class="cc-team">${escapeHtml(team)}</div>`:''}
-          <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;color:var(--text);margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
-          ${phrase?`<div style="font-size:var(--fs-xs);color:var(--sub);font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
-        </div>
-      </div>
+    // BUILD 1886 : UNE LIGNE — l'avatar (32 px), le nom, « Écrire ». Mêmes
+    // tailles de police ; la vitrine s'ouvre toujours au toucher de la carte.
+    el.innerHTML=`<div class="clh-coach-ligne" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border)">
+      ${photo
+        ?`<span style="flex-shrink:0;width:32px;height:32px;border-radius:var(--r-full);overflow:hidden;border:1px solid rgba(210,0,0,0.55)"><img src="${escapeHtml(photo)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>`
+        :`<span class="avatar" style="flex-shrink:0;width:32px;height:32px;font-size:12px;display:inline-flex;align-items:center;justify-content:center">${escapeHtml(ini(coach&&coach.fname||name,coach&&coach.lname||''))}</span>`}
+      <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span class="sub" style="font-weight:700;font-size:var(--fs-2xs);letter-spacing:1.5px;margin-right:6px">COACH</span>${escapeHtml(name.trim())}${team?' · '+escapeHtml(team):''}</span>
+      <button type="button" class="btn btn-sm" style="margin:0" onclick="event.stopPropagation();msgOuvrirFil()">Écrire</button>
     </div>`;
   }
   _selDay=null;_nettoyerFondationPosee();
@@ -89861,6 +89917,8 @@ function pdjValiderSommeil(h){
     toast('Durée refusée','var(--red)'); return; }
   toastEcriture(saveUser(),d+'h enregistrées '+ICO.coche,'ta nuit est');
   _pdjAccuser('sommeil');
+  // BUILD 1886 : la nuit complète le check-in qui ne l'a pas redemandée.
+  try{ if(_ciBrouillon&&_ciBrouillon.energie&&_ciBrouillon.courbatures) checkinRepondre('energie',_ciBrouillon.energie); }catch(e){}
 }
 function pdjValiderEnergie(n){
   if(!demanderConsentementSante('energie',()=>pdjValiderEnergie(n))) return;
@@ -98070,6 +98128,22 @@ function _ciRecharge(u,maintenant){
 }
 let _ciBrouillon={};
 // PURE (sauf le brouillon passé). La carte : le formulaire, ou la batterie.
+// BUILD 1886 : « TON MATIN ». Le jour où le point du jour pose la question du
+// sommeil, le check-in ne la repose pas : sa note vient de la nuit saisie.
+function checkinSansSommeil(u,t){
+  try{ return pdjQuestionDuJour(t)==='sommeil'&&!accueilMasque('pdj'); }catch(e){ return false; }
+}
+/** PURE. Une nuit en heures → la note 1-5 du check-in. */
+function noteSommeilDepuisHeures(h){
+  const v=Number(h); if(!(v>0)) return null;
+  return v<5?1:v<6?2:v<7?3:v<8?4:5;
+}
+function _ciNoteNuit(u,t){
+  const j=_ciJour(t);
+  const e=((u&&Array.isArray(u.sleepLog))?u.sleepLog:[]).find(x=>x&&x.date===j&&Number(x.duration)>0);
+  if(!e) return null;
+  const d=Number(e.duration); return noteSommeilDepuisHeures(d<24?d:d/60);
+}
 function htmlCheckinAccueil(u,maintenant,brouillon){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   if(!u||u.role==='coach') return '';
@@ -98093,9 +98167,11 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
   if(!checkinAProposer(u,t)) return '';
   const br=brouillon||{};
   const imp=_ciSommeilImporte(u,t);
+  // BUILD 1886 : le point du jour demande déjà la nuit : pas de seconde ligne.
+  const _sansSom=checkinSansSommeil(u,t);
   return '<div class="ci-carte" data-acc role="group" aria-label="Check-in du matin">'+_accX('ci')
     +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
-    +CHECKIN_QUESTIONS.map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
+    +CHECKIN_QUESTIONS.filter(q=>!(_sansSom&&q.cle==='sommeil')).map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
       +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
       +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
         +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
@@ -98127,6 +98203,8 @@ function checkinRepondre(cle,n){
     return true;
   }
   _ciBrouillon[cle]=_ciNote(n);
+  // BUILD 1886 : la note de sommeil vient de la nuit saisie au point du jour.
+  if(!_ciBrouillon.sommeil&&checkinSansSommeil(u,Date.now())){ const ns=_ciNoteNuit(u,Date.now()); if(ns) _ciBrouillon.sommeil=ns; }
   if(checkinComplet(_ciBrouillon)){
     const t=Date.now(), j=_ciJour(t);
     const c={sommeil:_ciBrouillon.sommeil,energie:_ciBrouillon.energie,courbatures:_ciBrouillon.courbatures,at:t};

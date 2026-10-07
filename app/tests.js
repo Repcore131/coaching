@@ -60337,6 +60337,9 @@ async function testExercices(){
       if(!checkinAProposer(u,_CT)) return _echec('9 h 30');
       if(checkinAProposer(u,new Date(2026,9,20,14,0).getTime())) return _echec('14 h');
       if(checkinAProposer({role:'coach',email:'c@t.fr'},_CT)) return _echec('coach');
+      // Build 1886 : ce test lit la ligne Sommeil ; le point du jour ne la pose pas ici.
+      const _svSS=window.checkinSansSommeil; window.checkinSansSommeil=()=>false;
+      try{
       const d=document.createElement('div'); d.innerHTML=htmlCheckinAccueil(u,_CT,{sommeil:4});
       // Quatre rangées depuis le lot N5 : la faim, facultative, en dernier.
       if(d.querySelectorAll('.ci-ligne').length!==4||d.querySelectorAll('.ci-p').length!==20) return _echec('quatre rangées de cinq');
@@ -60345,6 +60348,7 @@ async function testExercices(){
       // Le sommeil importé est montré.
       const v=Object.assign({},u,{sleepLog:[{date:_Cjour(0),duration:7.5}]});
       if(htmlCheckinAccueil(v,_CT,{}).indexOf('7 h 30 cette nuit')<0) return _echec('sommeil importé');
+      } finally { window.checkinSansSommeil=_svSS; }
       // Les trois réponses : écrit sous la date du jour, avec la batterie.
       const sv={u:currentUser,s:window.saveUser,x:window.majXp,r:window._rendreRang};
       try{
@@ -66102,6 +66106,34 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1886 : LA CARTE DU MOMENT ══
+    ok('carteDuMoment : les 6 cas, et la priorité dans leurs combinaisons',()=>{
+      const t=Date.now(), u={};
+      const cas=[
+        [{snap:{progName:'Jambes',heures:1,series:3}},'reprise_seance','woResumeAndGo()'],
+        [{draft:{type:'coaching',etape:2,total:3}},'reprise_bilan','bilResumeAndGo()'],
+        [{retard:4},'bilan_retard',"openBilan('coaching')"],
+        [{seanceDuJour:{nom:'Haut'}},'seance_du_jour','openSessionPicker()'],
+        [{premiere:true},'premiere_seance','openSessionPicker()'],
+        [{prochaine:{nom:'Bas',jour:'demain'}},'repos',null]];
+      for(const [env,type,act] of cas){ const c=carteDuMoment(u,t,env); if(c.type!==type||c.action!==act) return _echec(type+' : '+JSON.stringify(c)); }
+      if(carteDuMoment(u,t,{snap:{heures:1},retard:5}).type!=='reprise_seance') return _echec('reprise + retard');
+      if(carteDuMoment(u,t,{draft:{etape:1,total:3},seanceDuJour:{nom:'x'}}).type!=='reprise_bilan') return _echec('bilan + séance');
+      if(carteDuMoment(u,t,{retard:2,seanceDuJour:{nom:'x'},premiere:true}).type!=='bilan_retard') return _echec('retard + séance');
+      return /Prochaine séance demain : Bas/.test(carteDuMoment(u,t,cas[5][0]).sousTitre)?true:_echec('repos');});
+    ok('#clh-moment est au-dessus de #clh-coach-banner dans l’accueil',()=>{
+      const m=document.getElementById('clh-moment'), c=document.getElementById('clh-coach-banner');
+      if(!m||!c) return _echec('absent');
+      return (m.compareDocumentPosition(c)&Node.DOCUMENT_POSITION_FOLLOWING)?true:_echec('ordre');});
+    ok('Le jour où le point du jour demande la nuit, le check-in ne la redemande pas ; la note vient des heures',()=>{
+      if(noteSommeilDepuisHeures(4.5)!==1||noteSommeilDepuisHeures(7.5)!==4||noteSommeilDepuisHeures(9)!==5) return _echec('barème');
+      const s=String(htmlCheckinAccueil);
+      return /checkinSansSommeil/.test(s)&&/filter\(q=>!\(_sansSom&&q\.cle==='sommeil'\)\)/.test(s)?true:_echec('filtre absent');});
+    ok('Double toucher sur la carte du moment : un seul geste',()=>{
+      let n=0; const sv=window.openSessionPicker;
+      try{ window.openSessionPicker=()=>{ n++; }; _momentDernier=0; carteMomentAgir('seance_du_jour'); carteMomentAgir('seance_du_jour'); return n===1?true:_echec(n+' ouvertures'); }
+      finally{ window.openSessionPicker=sv; _momentDernier=0; }});
 
     // ══ BUILD 1885 : L'ÉVOLUTION ANIMÉE ══
     ok('aaSelectionAnimee : 8 au plus, la première et la dernière gardées ; 2 photos → les 2',()=>{

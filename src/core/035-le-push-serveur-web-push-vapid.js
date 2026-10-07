@@ -900,6 +900,8 @@ function pdjValiderSommeil(h){
     toast('Durée refusée','var(--red)'); return; }
   toastEcriture(saveUser(),d+'h enregistrées '+ICO.coche,'ta nuit est');
   _pdjAccuser('sommeil');
+  // BUILD 1886 : la nuit complète le check-in qui ne l'a pas redemandée.
+  try{ if(_ciBrouillon&&_ciBrouillon.energie&&_ciBrouillon.courbatures) checkinRepondre('energie',_ciBrouillon.energie); }catch(e){}
 }
 function pdjValiderEnergie(n){
   if(!demanderConsentementSante('energie',()=>pdjValiderEnergie(n))) return;

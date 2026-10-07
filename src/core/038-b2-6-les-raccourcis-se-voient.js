@@ -801,6 +801,22 @@ function _ciRecharge(u,maintenant){
 }
 let _ciBrouillon={};
 // PURE (sauf le brouillon passé). La carte : le formulaire, ou la batterie.
+// BUILD 1886 : « TON MATIN ». Le jour où le point du jour pose la question du
+// sommeil, le check-in ne la repose pas : sa note vient de la nuit saisie.
+function checkinSansSommeil(u,t){
+  try{ return pdjQuestionDuJour(t)==='sommeil'&&!accueilMasque('pdj'); }catch(e){ return false; }
+}
+/** PURE. Une nuit en heures → la note 1-5 du check-in. */
+function noteSommeilDepuisHeures(h){
+  const v=Number(h); if(!(v>0)) return null;
+  return v<5?1:v<6?2:v<7?3:v<8?4:5;
+}
+function _ciNoteNuit(u,t){
+  const j=_ciJour(t);
+  const e=((u&&Array.isArray(u.sleepLog))?u.sleepLog:[]).find(x=>x&&x.date===j&&Number(x.duration)>0);
+  if(!e) return null;
+  const d=Number(e.duration); return noteSommeilDepuisHeures(d<24?d:d/60);
+}
 function htmlCheckinAccueil(u,maintenant,brouillon){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   if(!u||u.role==='coach') return '';
@@ -824,9 +840,11 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
   if(!checkinAProposer(u,t)) return '';
   const br=brouillon||{};
   const imp=_ciSommeilImporte(u,t);
+  // BUILD 1886 : le point du jour demande déjà la nuit : pas de seconde ligne.
+  const _sansSom=checkinSansSommeil(u,t);
   return '<div class="ci-carte" data-acc role="group" aria-label="Check-in du matin">'+_accX('ci')
     +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
-    +CHECKIN_QUESTIONS.map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
+    +CHECKIN_QUESTIONS.filter(q=>!(_sansSom&&q.cle==='sommeil')).map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
       +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
       +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
         +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
@@ -858,6 +876,8 @@ function checkinRepondre(cle,n){
     return true;
   }
   _ciBrouillon[cle]=_ciNote(n);
+  // BUILD 1886 : la note de sommeil vient de la nuit saisie au point du jour.
+  if(!_ciBrouillon.sommeil&&checkinSansSommeil(u,Date.now())){ const ns=_ciNoteNuit(u,Date.now()); if(ns) _ciBrouillon.sommeil=ns; }
   if(checkinComplet(_ciBrouillon)){
     const t=Date.now(), j=_ciJour(t);
     const c={sommeil:_ciBrouillon.sommeil,energie:_ciBrouillon.energie,courbatures:_ciBrouillon.courbatures,at:t};
