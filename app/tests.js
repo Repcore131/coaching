@@ -74021,6 +74021,29 @@ async function testExercices(){
         return jour().km===8.4&&jour().count===9000?true:_echec('8,4 : '+JSON.stringify(jour()));
       }finally{ z.remove(); for(const id of ['san-pas','san-km','san-date']){ const x=document.getElementById(id+'-sauve1909'); if(x) x.id=id; } currentUser=cu; window.saveUser=_su; CLOUD.pushOne=_po; window.toast=_t; window.rcConfirm3=_c3; window.sanFermer=_sf; window.sanRendre=_sr; }});
 
+    // ══ BUILD 1910 — UN ATHLÈTE NE LIT JAMAIS « ÉLÈVE INTROUVABLE » ═══════════
+    ok('1910 — athlète : setMacroUnite(\'pct\') → aucun toast, aucun rendu de fiche coach',()=>{
+      const cu=currentUser, cid=currentClientId, _t=window.toast, _r=window.renderCoachNutriSection, av=_macroUnite;
+      const toasts=[]; let rendu=0;
+      try{
+        window.toast=m=>toasts.push(String(m)); window.renderCoachNutriSection=()=>{ rendu++; };
+        currentUser=_banAth(); currentClientId='quelquun';
+        setMacroUnite('pct');
+        if(toasts.length) return _echec('toast : '+toasts[0]);
+        return rendu===0?true:_echec('fiche coach rendue');
+      }finally{ window.toast=_t; window.renderCoachNutriSection=_r; currentUser=cu; currentClientId=cid; try{ setMacroUnite(av); }catch(e){} }});
+    ok('1910 — getOwnedClient : silencieux sur demande, sans identifiant ou pour un athlète ; le coach garde son message',()=>{
+      const cu=currentUser, _t=window.toast; const toasts=[];
+      try{
+        window.toast=m=>toasts.push(String(m));
+        currentUser=_banCoach();
+        if(getOwnedClient('inconnu',{},{silencieux:true})!==null||toasts.length) return _echec('silencieux : '+toasts);
+        getOwnedClient(null,{}); if(toasts.length) return _echec('sans id : '+toasts);
+        getOwnedClient('inconnu',{}); if(!toasts.some(t=>/introuvable/.test(t))) return _echec('le coach n’est plus prévenu');
+        toasts.length=0; currentUser=_banAth();
+        getOwnedClient('inconnu',{}); return toasts.length?_echec('athlète : '+toasts[0]):true;
+      }finally{ window.toast=_t; currentUser=cu; }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

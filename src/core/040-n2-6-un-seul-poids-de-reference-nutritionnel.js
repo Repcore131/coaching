@@ -93,7 +93,8 @@ function setMacroUnite(u){
   try{ renderNutriAnneaux(); }catch(e){}
   try{ if(typeof _renderStrictDiet==='function') _renderStrictDiet(); }catch(e){}
   try{ if(typeof _fjDate!=='undefined'&&_fjDate) _renderFjDaySummary(_fjDate); }catch(e){}
-  try{ const c=getOwnedClient(currentClientId); if(c) renderCoachNutriSection(c); }catch(e){}
+  // BUILD 1910 : la fiche du coach seulement si un coach a une fiche ouverte.
+  try{ if(currentUser&&currentUser.role!=='athlete'&&currentClientId){ const c=getOwnedClient(currentClientId,null,{silencieux:true}); if(c) renderCoachNutriSection(c); } }catch(e){}
   try{ const z=document.getElementById('cr-macro'); if(z) z.innerHTML=htmlMacroUnite(currentUser,'cr'); }catch(e){}
   return v;
 }

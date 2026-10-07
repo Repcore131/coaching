@@ -506,8 +506,15 @@ async function jrSupprimer(noteId){
   return true;
 }
 
-function getOwnedClient(cid,users){
+// BUILD 1910 : opts.silencieux — un rendu PARTAGÉ (athlète et coach) demande
+// « y a-t-il une fiche ouverte ? », et un non n'est pas une erreur à afficher.
+// Silencieux aussi d'office sans identifiant, ou quand l'appelant n'est pas
+// coach : un athlète n'a jamais d'élève, lui dire « Élève introuvable » était
+// toujours faux.
+function getOwnedClient(cid,users,opts){
   if(!currentUser) return null;
+  const _muet=!!(opts&&opts.silencieux)||!cid||currentUser.role==='athlete';
+  const toast=_muet?(()=>{}):window.toast;
   if(cid?.startsWith('_code_')){
     const codeId=cid.replace('_code_','');
     const code=(currentUser.studentCodes||[]).find(x=>x.codeId===codeId);
