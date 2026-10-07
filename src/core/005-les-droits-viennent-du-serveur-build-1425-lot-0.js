@@ -828,7 +828,7 @@ function _rendreConsoleAcces(){
   if(mail&&_accesVu.lecture==='ok'){ d=droitsDe({email:mail}); etat=accesEtatPhrase(d); }
   const carte=(h)=>'<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-4);padding:16px;margin-bottom:14px">'+h+'</div>';
-  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;'
+  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;'
     +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
   const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
     +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:10px 10px;min-height:38px" '

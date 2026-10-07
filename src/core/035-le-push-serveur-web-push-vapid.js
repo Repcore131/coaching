@@ -208,7 +208,7 @@ function htmlReglagesPush(u,etat){
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
+  return '<div class="card" style="margin-bottom:20px">'
     +'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Notifications</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
     +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
@@ -380,7 +380,7 @@ function _htmlInvitationInstall(etat,aussiNotif){
   const lib=etat==='ios'?'Comment faire':'Installer RepCore';
   return '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Dans la salle</div>'
     +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
     +'RepCore fonctionne <strong style="color:var(--text)">sans réseau</strong> : '

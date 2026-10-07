@@ -373,7 +373,7 @@ function _tunnelHistorique(codeId){
   const ech=(n<TUNNEL_MAX&&k.prochaine)
     ?'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:8px">Prochaine relance : <b style="color:var(--text-strong)">'+dt(k.prochaine)+'</b></div>'
     :'';
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:12px">'
+  return '<div class="card card--dense" style="margin-top:12px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Historique du tunnel commercial</span>'
     +'<span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
@@ -417,7 +417,7 @@ function renderJournalCoach(c){
        +'ce qu\'il faudra reprendre.</div>';
   }
   const opts=NOTE_TAGS.map(t=>'<option value="'+t+'">'+escapeHtml(NOTE_TAG_LIB[t])+'</option>').join('');
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
+  z.innerHTML='<div class="card card--dense">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     // N1.16 — « Journal » tout court se confondait avec le JOURNAL
     // ALIMENTAIRE de l'athlete, une section plus haut dans un autre onglet.
@@ -1440,11 +1440,11 @@ function openClientDetail(cid,_refresh,_force){
     const _ctL=contraintesActives(c), _ctD=drapeauRougeActif(c);
     _al.style.display=(ci.length||_ctL.length||_ctD)?'block':'none';
     _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px">
-      <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">À prendre en compte</div>
+      <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">À prendre en compte</div>
       ${blocDrapeauRouge(c)}
       ${ci.map(x=>`<div style="font-size:var(--fs-sm);line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.lbl} :</span> <span style="color:var(--text)">${escapeHtml(x.txt)}</span></div>`).join('')}
       ${_ctL.length?`<div style="margin-top:10px;border-top:1px solid #3a2400;padding-top:8px">
-        <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
+        <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
       </div>`:''}
       <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('',${jsArg(c.id)})" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
@@ -2542,7 +2542,7 @@ function renderBilanEvolution(c){
     }).join('');
 
     return `<div style="margin-top:4px;margin-bottom:28px">
-      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
         <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
         FRESQUE ÉVOLUTION
         <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>

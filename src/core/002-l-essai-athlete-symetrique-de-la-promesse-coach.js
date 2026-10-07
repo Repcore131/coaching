@@ -549,7 +549,7 @@ function _renderAbonnementCoach(users){
     </div>`;
   }).join('');
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes suivis',texteTuSuis(nbAthletesSuivis()).replace(/^Tu suis |\.$/g,''))}
     ${l('Athlètes',compteur)}
@@ -1377,27 +1377,27 @@ function ouvrirEcranAbonnement(){
 // célébrations, nom sur les visuels) : seule leur place change.
 function _rendreReglagesSections(){
   const u=currentUser; if(!u) return false;
-  const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
+  const carte='margin-bottom:12px';
   const tit=x=>'<div class="t-carte" style="margin-bottom:8px">'+escapeHtml(x)+'</div>';
   const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
   const zn=document.getElementById('cr-nutrition');
   if(zn){
     let mu=''; try{ mu=htmlMacroUnite(u,'cr'); }catch(e){ mu=''; }
-    zn.innerHTML='<div style="'+carte+'">'+tit('Approche alimentaire')
+    zn.innerHTML='<div class="card card--dense" style="'+carte+'">'+tit('Approche alimentaire')
       +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="ouvrirChoixDiete()">Choisir mon approche</button></div>'
-      +'<div style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
+      +'<div class="card card--dense" style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
   }
   const zs=document.getElementById('cr-objectifs');
   if(zs){
-    let h='<div style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
+    let h='<div class="card card--dense" style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
       +bt('Pas du jour','sanObjectif(\'pas\')')+bt('Sommeil','sanObjectif(\'sommeil\')')+'</div></div>'
-      +'<div style="'+carte+'">'+tit('Suivi du poids')
+      +'<div class="card card--dense" style="'+carte+'">'+tit('Suivi du poids')
       +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="togglePoidsMasque();_rendreReglagesSections()">'
       +(u.masquerPoids?'Réafficher le suivi du poids':'Masquer le suivi du poids')+'</button></div>';
     let montrer=false; try{ montrer=isFemale(u.gender)||!!cycleSuiviDe(u); }catch(e){}
     if(montrer){
       let cs=null; try{ cs=cycleSuiviDe(u); }catch(e){}
-      h+='<div style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
+      h+='<div class="card card--dense" style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
         +ATP_CYCLE_OPTIONS.map(([v,titre])=>bt(titre,'setAtpCycleSuivi(\''+v+'\');_enregistrerCycleReglages()',cs===v)).join('')+'</div></div>';
     }
     zs.innerHTML=h;
@@ -1408,7 +1408,7 @@ function _rendreReglagesSections(){
   if(sb) sb.hidden=!!cad;
   if(zb&&!cad){
     const f=u._bilanFreq||2;
-    zb.innerHTML='<div style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
+    zb.innerHTML='<div class="card card--dense" style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
       +bt('Chaque semaine','setBilanFreq(1);_rendreReglagesSections()',f===1)+bt('Toutes les 2 semaines','setBilanFreq(2);_rendreReglagesSections()',f===2)+'</div></div>';
   }
   const zc=document.getElementById('cr-celebrations');

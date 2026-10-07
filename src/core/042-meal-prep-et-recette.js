@@ -112,7 +112,7 @@ function _prepRendre(){
     +'border:1px solid '+(e.mode===m?'var(--red)':'var(--border)')+';background:'+(e.mode===m?'rgba(224,32,32,.16)':'transparent')
     +';color:'+(e.mode===m?'var(--red-text)':'var(--text-dim)')+'">'+lib+'</button>';
   const lignes=e.ing.map((l,i)=>
-    '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;margin-bottom:8px">'
+    '<div class="card card--dense" style="margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;margin-bottom:6px">'
       +'<input placeholder="Ingrédient" value="'+ch(l.n)+'" oninput="prepChamp('+i+',\'n\',this.value)" style="flex:1;min-width:0">'
       +'<button type="button" onclick="prepRetirerLigne('+i+')" aria-label="Retirer" style="min-width:44px;min-height:44px;'
@@ -145,7 +145,7 @@ function _prepRendre(){
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
-    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:16px">'+diviseur+'</div>'
+    +'<div class="card card--dense" style="margin-bottom:16px">'+diviseur+'</div>'
     +'<div id="prep-resultat" style="margin-bottom:16px"></div>'
     +'<button type="button" class="btn btn-red" id="prep-ajouter" onclick="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
   _prepResultat();
@@ -601,7 +601,7 @@ function _htmlEquivalents(e){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase">Équivalences</span>
       <button onclick="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:32px">×</button>
     </div>`;
-  const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:10px">${entete}${corps}</div>`;
+  const cadre=(corps)=>`<div class="card card--dense" style="margin-top:10px">${entete}${corps}</div>`;
   // RÈGLE 8 : produit OFF ou groupe vide ⇒ aucune équivalence, et on dit
   // pourquoi plutôt que de rendre une liste vide muette.
   if(!alim||!alim.g)
@@ -656,7 +656,7 @@ function _htmlEquivalents(e){
       <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
         class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`).join('')}
-    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
+    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
     ${_eqReleg.map(x=>{
       const _ev=(function(){ try{ return evictionDe(currentUser,x.alim); }catch(err){ return null; } })();
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
@@ -906,7 +906,7 @@ function _renderFjActions(){
   // d environ 12 % : « + CRÉER UN ALIMENT / SCANNER UN PRODUIT » passait sur
   // deux lignes a 320 px (hauteur 50 px au lieu de 36). « + Nouvel aliment /
   // Scanner » tient sur une ligne des 320 px, et respire a 375.
-  const st='flex:1;padding:10px 8px;font-size:var(--fs-xs);letter-spacing:.3px';
+  const st='flex:1;padding:10px 8px;font-size:var(--fs-xs);letter-spacing:0';
   // Hors ligne le scan disparait — la fiche produit se lit chez Open Food
   // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.

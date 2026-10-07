@@ -1262,7 +1262,7 @@ function renderEtatsSeance(user,sess){
   let ch=[];
   try{ ch=etatsChanges(user,sess); }catch(e){ ch=[]; }
   if(!ch.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:16px">
     ${ch.map(x=>`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
       <span style="width:6px;height:6px;border-radius:var(--r-full);background:${x.etat==='regression'?'var(--orange)':'var(--sub)'};margin-top:6px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.6;color:#ccc">

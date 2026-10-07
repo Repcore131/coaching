@@ -694,7 +694,7 @@ function _renderNutriContent(type,dateAff){
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
             <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE FLEXIBLE</div>
             <p style="margin:0;font-size:var(--fs-sm);color:rgba(255,255,255,.72);line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux: à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides: tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
           </div>
@@ -944,7 +944,7 @@ function _renderStrictDiet(){
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
         ${coachCircle}
         <div style="flex:1;min-width:0">
-          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE STRICTE</div>
           <p style="margin:0;font-size:var(--fs-xs);color:rgba(255,255,255,.72);line-height:1.6">Ton programme alimentaire est 100&nbsp;% défini par ton coach: chaque repas, chaque apport. L'avantage: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
         </div>

@@ -893,7 +893,7 @@ function _cplHtmlModele(c){
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
     return `<button onclick="cplPoserModele('${k}')"
-      style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
+      style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
   if(pose){
@@ -925,7 +925,7 @@ function _cplHtmlMoment(c,moment){
   const choix=PLAN_MOMENTS.map(m=>{
     const actif=(moment===m.cle);
     return `<button onclick="cplSetMoment('${m.cle}')"
-      style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
+      style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
   }).join('');
   // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
   // choisi croit avoir choisi.
@@ -1395,7 +1395,7 @@ function _htmlPlanAthlete(user,intercale){
       :'background:color-mix(in srgb,var(--text) 2.8%,transparent);border:1px solid color-mix(in srgb,var(--text) 5%,transparent)'}">
     ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:none"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'-':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
-    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:6px">${lib}</div>
+    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1px;font-weight:800;margin-top:6px">${lib}</div>
   </div>`;
 
   // Code couleur commun aux deux écrans du plan — voir PLAN_COULEURS.
@@ -1520,7 +1520,7 @@ function _htmlPlanAthlete(user,intercale){
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">${icon('alert-triangle',16)}</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
-        letter-spacing:3px;color:var(--text);text-transform:uppercase;
+        letter-spacing:2.5px;color:var(--text);text-transform:uppercase;
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
     </div>
     <div style="position:relative;padding:12px 14px 12px">
@@ -1555,7 +1555,7 @@ function _htmlPlanAthlete(user,intercale){
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
           border:1px solid ${stock?'rgba(34,197,94,.42)':'var(--border)'};
           color:${stock?'var(--green)':'var(--sub)'};
-          font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px">
+          font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0">
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>

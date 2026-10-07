@@ -1329,7 +1329,7 @@ const TRAITEMENT_SUPP='Tu as déclaré un traitement régulier. Avant d\'ajouter
   +'de dire si l\'un peut gêner l\'autre.';
 function _htmlTraitementSupp(user){
   if(!traitementDeclare(user||currentUser)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
+  return `<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
   </div>`;
 }
@@ -1874,7 +1874,7 @@ function _renderSuppTable(list, isCoach, editFn){
   // L'unite « gélule(s) » de la fiche se resout comme celle de la dose : « 1 à
   // 2 gélules », « 1 comprimé » — le « (s) » est une facon d'ecrire le
   // formulaire, pas une facon de parler.
-  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(String(x.fiche.unite||'').replace(/\(s\)/i,/[2-9]|\d\d/.test(String(x.fiche.dose))?'s':''))})</span>`:'';
+  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(String(x.fiche.unite||'').replace(/\(s\)/i,/[2-9]|\d\d/.test(String(x.fiche.dose))?'s':''))})</span>`:'';
 
   // L'IDENTITÉ, ET NON LE RANG. `list.indexOf(s)` donnait la position dans la
   // liste REÇUE — filtrée sur les actifs côté athlète — pendant que

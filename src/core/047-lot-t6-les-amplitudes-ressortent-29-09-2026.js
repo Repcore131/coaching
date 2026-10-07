@@ -191,7 +191,7 @@ function renderCoachAmplitudesSection(c){
   const faits=l.filter(t=>t.date&&t.texte);
   const email=String((c&&c.email)||'');
   const ligne=t=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:10px">`
-    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
+    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
     +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
     +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
     +`test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
@@ -213,7 +213,7 @@ function renderCoachAmplitudesSection(c){
     //   est deja celle qui debloque le plus ; les autres reviendront une a une,
     //   quand celle-ci sera saisie.
     +(manque.length?`<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">`
-      +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
+      +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
       +`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">${escapeHtml(manque[0])}</div>`
       +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivr${manque.length>2?'ont':'a'}, une à la fois.</div>`:'')
       +`</div>`:'');
@@ -1754,7 +1754,7 @@ function renderCarteAFilmer(sess){
   if(!z) return;
   const noms=((sess&&sess.aFilmer)||[]).filter(Boolean);
   if(!noms.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">À filmer</div>
     <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6;margin-bottom:10px">Tu voulais filmer : ${noms.map(n=>escapeHtml(n)).join(', ')}</div>
     <div style="display:flex;flex-direction:column;gap:6px">

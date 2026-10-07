@@ -72,7 +72,7 @@ function _htmlCroissanceCoach(athletes){
       <div class="evo-titre" style="margin-bottom:0">Arrivées par mois</div>
       <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'var(--text)':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
     </div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:10px">
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0;margin-bottom:10px">
       D'après la date de création de chaque dossier.</div>
     <!-- UNE SEULE LIGNE, ET LES COMPTES SONT DEDANS. La carte portait la
          répartition du portefeuille juste au-dessus de la légende des barres :
@@ -80,11 +80,11 @@ function _htmlCroissanceCoach(athletes){
          suivi, c'étaient les mêmes quatre mots, écrits deux fois, l'un sur
          l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--red-text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px color-mix(in srgb,var(--red) 80%,transparent)"></span>${avecSuivi} avec suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text)">
         <span style="width:11px;height:2px;border-radius:var(--r-1);background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
     </div>
     <canvas id="ch-croissance-toile" height="150" style="width:100%;display:block"></canvas>
@@ -184,7 +184,7 @@ function _actLibMois(cle){
   return ACT_MOIS_LIB[+m[2]-1]+' '+m[1].slice(2);
 }
 function _actCarte(titre,corps,note){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:12px">
+  return `<div class="card card--dense" style="margin-bottom:12px">
     <div class="t-section">${escapeHtml(titre)}</div>
     ${corps}
     ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${note}</div>`:''}
@@ -210,12 +210,12 @@ function renderCoachActivite(){
     return;
   }
   if(!fiable&&!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 14px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
+    el.innerHTML=`<div class="card" style="text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
     return;
   }
   // ── État « 0 athlète » ──
   if(!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 16px;text-align:center">
+    el.innerHTML=`<div class="card" style="text-align:center">
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-bottom:6px">Pas encore d'athlète</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Cet écran se remplira tout seul dès qu'un athlète aura rejoint ton suivi et enregistré sa première séance.</div>
     </div>`;
@@ -236,7 +236,7 @@ function renderCoachActivite(){
       <div style="width:100%;height:64px;display:flex;align-items:flex-end">
         <div style="width:100%;height:${Math.max(h,2)}%;background:${x.actifs?'linear-gradient(180deg,var(--red),#8d0000)':'#242424'};border-radius:var(--r-1) var(--r-1) 0 0"></div>
       </div>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px;white-space:nowrap;transform:rotate(-45deg);transform-origin:center;height:22px">${escapeHtml(_actLibMois(x.mois))}</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0;white-space:nowrap;transform:rotate(-45deg);transform-origin:center;height:22px">${escapeHtml(_actLibMois(x.mois))}</div>
     </div>`;
   }).join('');
   const c1=_actCarte('Athlètes actifs par mois',
@@ -1125,7 +1125,7 @@ function _htmlJamaisDemarre(liste,maintenant){
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
-    +'letter-spacing:2.4px">Jamais démarré</span>'
+    +'letter-spacing:2px">Jamais démarré</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
@@ -1460,7 +1460,7 @@ function tunnelRelancer(codeId){
   +'<div class="ml-lab" style="margin-bottom:6px">Canal utilisé</div>'
   +'<div id="tun-canaux" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:6px">'
   +TUNNEL_CANAUX.map((x,i)=>'<button type="button" class="btn btn-blanc btn-sm tun-c'+(i?'':' actif')+'" data-canal="'+x.cle+'"'
-     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:.3px">'+escapeHtml(x.lib)+'</button>').join('')
+     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:0">'+escapeHtml(x.lib)+'</button>').join('')
   +'</div>'
   // ⚠ ON N'ECRIT JAMAIS « ENVOYE ». RepCore n'envoie rien ici : il enregistre
   //   ce que le coach a fait de son cote. Les deux canaux qui SAVENT ouvrir un

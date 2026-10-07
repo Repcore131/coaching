@@ -67,7 +67,7 @@ function alternerSeance(i){
     +escapeHtml('Échanger « '+(String(src.name||'').trim()||'cette séance')
       +' » avec :')+'</div>'
     +cibles.map(c=>'<button type="button" class="btn btn-outline btn-sm" '
-      +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
+      +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:0;'
       +'text-align:left;padding:10px 12px" onclick="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
       +'<span style="color:var(--text-faint)"> : '+escapeHtml(c.nom)+'</span>'
@@ -2118,7 +2118,7 @@ function _apLigne(ex,i){
   // deux séries, pas assis au calme.
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
       font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">`
-    +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
+    +`<span style="color:var(--sub);letter-spacing:0">${escapeHtml(t)}</span>`
     +`<span style="color:var(--text);font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
   // `ex.note` a disparu d'ici : TROIS lectures, et aucun champ ne l'écrivait.
   // Le seul écrivain était la chaîne d'import legacy, qui posait une chaîne
@@ -2171,7 +2171,7 @@ function _apLigne(ex,i){
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
-        <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
+        <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:0;
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:4px 10px;border-radius:var(--r-2);
           background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 32%,transparent);

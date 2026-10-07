@@ -1090,7 +1090,7 @@ function _htmlEcheanceCoach(c){
   const u=_dossier(c);
   const e=echeance(u);
   const j=e?echeanceJour(u):null;
-  const tete='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
+  const tete='<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Échéance</div>';
   if(!e)
     return tete+'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:8px">'
@@ -1248,14 +1248,14 @@ function _renderEcheance(){
   // LA SORTIE, a J+1 — et c'est la fonction EXISTANTE.
   const sortie=echeancePropositionSortie(u);
   if(sortie){
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
+    h+='<div class="card card--dense" style="margin-bottom:14px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(sortie.phrase)+'</div>'
       +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
   }
   if(j&&j.phase==='AFFUTAGE'){
     // L'AFFUTAGE NE FAIT RIEN DE NEUF : il resserre ce qui existe. On le DIT,
     // plutot que d'afficher des cibles qui n'existent pas.
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
+    h+='<div class="card card--dense" style="margin-bottom:14px">'
       +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Affûtage</div>'
       +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6">'
       +'Rien de nouveau : tes macros suivent ta phase, ton sel reste à ta cible, '
@@ -1279,7 +1279,7 @@ function _echHtmlFiches(u,e,estCoach){
   for(let n=ECH_JOURS_PEAK;n>=0;n--){
     const f=e.fiches['j'+n]||null;
     const vide=!f||(f.cibleGlucides==null&&f.cibleSodium==null&&f.cibleEau==null);
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">'
+    h+='<div class="card card--dense" style="margin-bottom:10px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
       +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">J-'+n+'</span>'
       +(f&&f.poses?'<span style="font-size:var(--fs-2xs);color:var(--red-text)">poses</span>':'')
@@ -1729,7 +1729,7 @@ function rcRendreSrpe(){
   // DEJA NOTEE, OU SANS DUREE : rien a demander. Une seance sans duree ne
   // produirait aucune charge, et la question serait posee pour rien.
   if(!s||s.srpe||!(Number(s.duration)>0)) return false;
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px">'
+  z.innerHTML='<div class="card card--dense">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
     +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
@@ -2135,7 +2135,7 @@ function _htmlRendement(c){
         +'</div>';
     }
   }catch(e){ rot=''; }
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+  return '<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Rendement · '+REND_SEMAINES+' semaines</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">progression − coût, pondéré</span></div>'

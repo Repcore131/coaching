@@ -73422,7 +73422,7 @@ async function testExercices(){
       try{ window.saveUser=()=>true; currentUser=user; ouvrir(); return fn(); }
       finally{ currentUser=sU; window.saveUser=sv; try{ document.querySelectorAll('#modal-overlay').forEach(x=>x.remove()); }catch(e){} if(act) go(act.id); }
     };
-    const _banAth=()=>({id:'banc_a',email:'banc@t.fr',fname:'Léa',role:'athlete',gender:'F',coachId:'banc_c',coachEmailKey:'coach@t,fr',
+    const _banAth=()=>({id:'banc_a',email:'banc@t.fr',fname:'Léa',role:'athlete',gender:'F',birthdate:'1994-05-12',age:32,coachId:'banc_c',coachEmailKey:'coach@t,fr',
       consent:{health:true,policyVersion:POLICY_VERSION},essai:{ouvertLe:Date.now(),seancesAuDebut:0},exAlias:{},exMuscles:{},videos:[],programs:{},nutrition:{},supplements:[],
       sessions:[{id:'s1',date:Date.now()-2*864e5,name:'Jambes',complete:true,data:{'Squat':{sets:[{weight:'80',repsDone:'8',done:true}]}}}],
       bilans:[{type:'coaching',date:Date.now()-9*864e5,'bil-weight':'64'}],weightLog:[],
@@ -73632,6 +73632,42 @@ async function testExercices(){
       }
       if(filets.size>1) faux.push('filets : '+[...filets].join(' / '));
       return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+
+    // ══ BUILD 1900 — LA FORME, MÉCANIQUE ═════════════════════════════════════
+    ok('1900 — feuille : plus aucun rayon simple en px, interlettres sur l’échelle (forme.py --verifier)',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n').replace(/:root\{[^}]*\}/g,'');
+      const r=(css.match(/border-radius:\s*([1-9]\d*(?:\.\d+)?)px\s*(?:!important)?\s*[;}]/g)||[]);
+      if(r.length) return _echec(r.length+' rayon(s) en px : '+r.slice(0,3).join(' '));
+      const ok=['0','.5px','1px','1.5px','2px','2.5px'];
+      const ls=[...css.matchAll(/letter-spacing:\s*([^;}!]+)/g)].map(m=>m[1].trim())
+        .filter(v=>/^\d*\.?\d+px$/.test(v)&&ok.indexOf(v)<0);
+      return ls.length?_echec('interlettres hors échelle : '+[...new Set(ls)].join(', ')):true;});
+    ok('1900 — plus de déclaration --elev-*, --el-*, --r-sm, --r-lg (ni --r-md, --r-card)',()=>{
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      const l=css.match(/--(?:elev-\d|el-\d|r-sm|r-lg|r-md|r-card)\s*:/g);
+      return l?_echec(l.join(' ')):true;});
+    ok('1900 — la carte : .card 16 px sans ombre, .card--dense 12 px, .pile-cartes à 12 px',()=>{
+      const d=document.createElement('div'); d.className='pile-cartes'; d.style.cssText='position:fixed;left:0;top:0;width:300px;visibility:hidden';
+      d.innerHTML='<div class="card">a</div><div class="card card--dense">b</div>';
+      document.body.appendChild(d);
+      try{
+        const [a,b]=d.children, ca=getComputedStyle(a), cb=getComputedStyle(b);
+        if(ca.paddingLeft!=='16px'||ca.boxShadow!=='none'||ca.borderRadius!=='12px') return _echec('.card '+ca.paddingLeft+' '+ca.boxShadow+' '+ca.borderRadius);
+        if(cb.paddingLeft!=='12px') return _echec('.card--dense '+cb.paddingLeft);
+        return cb.marginTop==='12px'?true:_echec('pile : '+cb.marginTop);
+      }finally{ d.remove(); }});
+    ok('1900 — sonde : la gouttière gauche du premier bloc vaut 20 px (10 écrans)',()=>{
+      const premier=id=>{ const e=document.getElementById(id), sr=e.getBoundingClientRect();
+        const z=e.querySelector('.scroll-area .pad')||e.querySelector('.scroll-area')||e;
+        const b=[...z.querySelectorAll('*')].find(x=>x.getClientRects().length&&x.getBoundingClientRect().width>40&&getComputedStyle(x).display!=='contents');
+        return b?Math.round(b.getBoundingClientRect().left-sr.left):-1; };
+      const ecrans=[['s-client-home',_banAth,()=>clientTab('home')],['s-nutrition',_banAth,()=>loadNutrition()],['s-lifestyle',_banAth,()=>loadLifestyle()],
+        ['s-steps',_banAth,()=>loadSteps()],['s-sleep',_banAth,()=>loadSleep()],['s-coach-relances',_banCoach,()=>ouvrirRelances()],
+        ['s-coach-activite',_banCoach,()=>loadCoachActivite()],['s-bilan-choice',_banAth,()=>openBilanChoice()],
+        ['s-coach-banque',_banCoach,()=>{ try{ ouvrirBanque(); }catch(e){} }],['s-protocoles',_banCoach,()=>{ try{ ouvrirProtocoles(); }catch(e){} }]];
+      const faux=[];
+      for(const [id,u,o] of ecrans) _sondeEcran(u(),o,()=>{ const g=premier(id); if(g!==20) faux.push(id+' : '+g+' px'); });
+      return faux.length?_echec(faux.join(' | ')):true;});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

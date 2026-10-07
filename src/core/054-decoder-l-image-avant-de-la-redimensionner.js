@@ -465,10 +465,10 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;font-weight:400;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:0;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
     :'';
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
@@ -516,7 +516,7 @@ function _htmlDiplomesCoach(p){
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
     +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">'+icon('coche',14)+'</span>'
-    +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
+    +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:0">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
   if(dips.length) h+='<div style="'+TITRE+'">Diplômes et formations</div>'+dips.map(ligne).join('');
@@ -1492,7 +1492,7 @@ function _rendreAccesAthletes(){
   z.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin:28px 0 12px">'
     +'<div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>'
     +'<div style="flex:1;min-width:0">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Accès de mes athlètes</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Accès de mes athlètes</div>'
     +'<div class="sub" style="font-size:var(--fs-xs);margin-top:2px">'
     +(aRelancer?(aRelancer+' à relancer'):'Personne à relancer')
     +' · abonnement athlète : '+PRIX_ATHLETE_MOIS+' par mois</div></div></div>'
@@ -1742,7 +1742,7 @@ function offboardCoach(coachId){
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
     +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:var(--r-1);margin:0 auto 20px"></div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
     +'<div style="background:var(--surface-1);border-radius:var(--r-2);padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'

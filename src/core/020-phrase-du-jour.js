@@ -2334,7 +2334,7 @@ function ouvrirMesExercices(){
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
       +'padding:8px 10px;margin-bottom:8px;cursor:pointer;font-family:inherit">'
       +vign(x)
-      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.4px">'
+      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:0">'
       +escapeHtml(x.nom)+'</span></button>').join('')
     :'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6">Tes séances sont encore vides. '
       +'Dès qu\'un exercice y est posé, sa fiche apparaît ici.</p>';

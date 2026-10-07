@@ -94,7 +94,7 @@ function renderCoachMicroSection(c){
       // REGROUPÉS PAR NUTRIMENT (build 1845), la question du bilan sanguin UNE fois en pied.
       const g=regrouperRisquesMicro(l);
       return g.blocs.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
       ${r.motifs.length>1
         ?'<ul style="margin:0;padding-left:16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+r.motifs.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul>'
         :'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+escapeHtml(r.motifs[0]||'')+'</div>'}
@@ -257,7 +257,7 @@ function _rendreEcheanceAcces(){
       background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 55%,var(--surface-0));
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:var(--e3)}33">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
       Ton accès se termine ${quand}</div>
     <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:6px">
       Il prend fin le ${escapeHtml(d)}. ${nom?escapeHtml(nom)+' peut le prolonger':'Ton coach peut le prolonger'}, préviens-le avant.</div>
@@ -765,7 +765,7 @@ function renderPilotage(clients){
   // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
   // precedent. Un seul volet, trois sections separees d'un filet.
   const corpsSep='<div style="height:1px;background:var(--surface-3);margin:10px 0"></div>';
-  const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
+  const _tt=t=>`<div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsC2=_tt('Charge de travail')+corpsC;
   // LES TROIS LIENS ONT QUITTE LE VOLET. Ils etaient la seule porte de trois

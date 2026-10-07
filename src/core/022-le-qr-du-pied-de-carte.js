@@ -2433,7 +2433,7 @@ function _renderWeeklyInto(el,sc){
           ${selS.exercises.map((ex,i)=>`
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
-              <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
+              <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
@@ -2441,7 +2441,7 @@ function _renderWeeklyInto(el,sc){
           <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);color:var(--text);
-              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
+              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:0">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Télécharger
@@ -2454,7 +2454,7 @@ function _renderWeeklyInto(el,sc){
           <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:color-mix(in srgb,var(--text) 16%,transparent);border:1px solid color-mix(in srgb,var(--text) 34%,transparent);color:var(--text);
-              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
+              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:0">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Partager
@@ -2490,7 +2490,7 @@ function _renderProgExercisesInto(el){
   if(!prog._isDefault){
     el.innerHTML=`
       <div style="margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
         <div style="font-size:var(--fs-lg);font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
         ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:var(--fs-sm);line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
       </div>

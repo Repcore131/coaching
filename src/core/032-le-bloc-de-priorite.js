@@ -476,7 +476,7 @@ function _htmlBlocPriorite(c){
   // PAS DE BLOC : un bouton pour en ouvrir un, et rien d'autre. Un panneau
   // vide avec trois colonnes vides serait du mobilier.
   if(!b){
-    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+    return '<div class="card card--dense" style="margin-bottom:16px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span></div>'
       +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">'
@@ -1488,7 +1488,7 @@ const RETOUR_LIB_COURBATURES=Object.freeze({aucune:'Aucune',legeres:'Légères',
 
 function _htmlChoixRetour(muscle,champ,libs){
   const lib=(MUSCLES[muscle]||{}).lib||muscle;
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
+  return '<div class="card card--dense" style="margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">'
     +escapeHtml(lib)+'</div>'
     +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.5;margin-bottom:10px">'
@@ -1610,7 +1610,7 @@ function _htmlJournalSeance(c){
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
       +(cause?escapeHtml(cause)+' · ':'')+dat(e&&e.date)+'</span></div>';
   };
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+  return '<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Allègements</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">décidés par l’athlète</span></div>'
@@ -2232,7 +2232,7 @@ function _updateBilanCountdown(){
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 95%,transparent),color-mix(in srgb,var(--red) 15%,transparent),transparent)"></div>
     <div class="t-section is-action" style="margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète

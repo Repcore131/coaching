@@ -920,7 +920,7 @@ function accuserEncartOsseux(){
 function _htmlEncartOsseux(user){
   const u=user||currentUser;
   if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">
+  return `<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
     <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
@@ -2493,7 +2493,7 @@ function renderVolumeCoach(c){
   const _axPrio=axialPrioritaire(c);
   const _axial=_htmlChargeAxiale(c,0,null,{disclaimer:_axPrio});
   z.innerHTML=(_axPrio?_axial:'')
-    +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    +`<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
       <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>

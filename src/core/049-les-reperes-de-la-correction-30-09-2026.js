@@ -1742,11 +1742,11 @@ function loadSteps(containerId='steps-content',opts){
             <!-- R12, PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
                  libelle le dit, et il ne se confond plus avec le marquage du
                  jour, plus haut, qui employait les memes mots. -->
-            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
             <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--red-bg),var(--red-bg));border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--bg),var(--bg));border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>

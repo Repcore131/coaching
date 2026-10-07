@@ -2068,7 +2068,7 @@ function _htmlMorphoExercice(ex){
       +' : à envisager à côté, jamais à la place.');
   return '<div style="background:var(--surface-0);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
-    +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
+    +'<div style="color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;'
     +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
 }
 /** Le calibrage, calculé une fois par rendu d'écran et non par carte. */
@@ -2123,7 +2123,7 @@ function _htmlMorphoLecture(user,cal,opts){
   // cadre permanent, et deux assertions l'interdisent depuis longtemps.
   if(!res.profils.length&&!res.aRegarder.length) return '';
   const E=escapeHtml;
-  const titre=(t)=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;'
+  const titre=(t)=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
     +'font-weight:800;text-transform:uppercase;margin:14px 0 6px">'+E(t)+'</div>';
   let h='';
   // LOT T6 : UN TEST JAMAIS FAIT, DIT UNE FOIS, ici, en tête de la lecture :
@@ -2865,7 +2865,7 @@ function _htmlMorphoPhoto(){
   const vue=(_morphoPhotoVue&&_morphoPhotoVue.email===_amp.email)?_morphoPhotoVue:null;
   const pr=vue&&vue.prise;
   return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
     +'La photo de face</div>'
     +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
     +'Elle rend deux rapports d’un repère osseux à l’autre, cuisse sur jambe et '
@@ -2890,7 +2890,7 @@ function _htmlMorphoPhoto(){
     // qu'on ne recalcule plus. Le bouton « Refaire l'analyse » est cote coach,
     // et nulle part ailleurs.
     +'<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
     +'Ses longueurs, figées</div>'
     +_htmlMorphoInitiale(c,(function(){ try{ return getClients(); }catch(e){ return []; } })())
     +'</div>';
@@ -3018,7 +3018,7 @@ function _ampRendre(){
       else if(d.champ==='niveau') saisie=(d.niveaux||[]).map(k=>bouton(d.cle,'niveau',v.niveau,k,
         k==='haut'?'Haut du dos':k==='milieu'?'Milieu':'Bas du dos')).join('');
       return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-        +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+        +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
         +escapeHtml(d.lib)+'</div>'
         +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'+escapeHtml(d.protocole)+'</p>'
         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+saisie+'</div>'
@@ -3244,19 +3244,19 @@ function _htmlQuestionsMorpho(user){
   // LES TESTS, AVEC LEUR DATE ET LEUR PÉREMPTION : une amplitude relevée il y
   // a six mois est montrée, marquée « périmé », plutôt que de disparaître.
   const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
     ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${E(t.lib)} : ${E(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
   const questions=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>`
     +(l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`)
     +l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${E(r.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${E(r.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${E(r.motif)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${E(r.question)}</div>
     </div>`).join('');
   let longueurs='';
   try{ if(morphoInitialeEtat(user)==='gelee') longueurs='<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Longueurs figées</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Longueurs figées</div>'
     +_htmlMorphoInitiale(user,[],{sansBouton:true})+'</div>'; }catch(e){ longueurs=''; }
   const detail=det('Proportions, ordre de lecture, amplitudes',questions+lecture+htmlTests+longueurs
     +`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px;margin-top:12px">${E(MORPHO_DISCLAIMER)}</div>`);
@@ -3308,7 +3308,7 @@ function _htmlDeficitCoach(c){
     const q=risqueDeficitQuestion(c);
     if(!q) return '';
     return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(q.motif)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(q.question)}</div>
     </div>`;

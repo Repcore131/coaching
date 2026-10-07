@@ -725,13 +725,13 @@ function ouvrirRite(cycle){
     </div>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Un point d'étape, pas une note. Tu peux fermer cet écran à tout moment.</p>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    <div class="card card--dense" style="margin-bottom:10px">
       ${_riteLigne('Séances réalisées',c.seances)}
       ${_riteLigne('Séances faites sur prévues',tauxLib,c.taux?c.taux.fenetre:'')}
       ${vit&&vit.pctSem!=null?_riteLigne('Tendance de poids',(vit.pctSem>0?'+':'')+String(Math.round(vit.pctSem*100)/100).replace('.',',')+' %/sem'):''}
     </div>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    <div class="card card--dense" style="margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Records battus</div>
       ${c.records.length
         ? c.records.slice(0,6).map(r=>_riteLigne(r.nom,r.valeur+' <span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400">e1RM</span>')).join('')
@@ -739,7 +739,7 @@ function ouvrirRite(cycle){
       ${c.mentionPhase?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Relevé en phase lutéale tardive : une baisse y est attendue, et n\'a pas la même signification qu\'une régression.</div>':''}
     </div>
 
-    ${muscles.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    ${muscles.length?`<div class="card card--dense" style="margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Volume par muscle</div>
       ${muscles.map(m=>_riteLigne(m.muscle,m.series+' séries','MEV '+m.mev+' · MAV '+m.mav+' · MRV '+m.mrv)).join('')}
     </div>`:''}
@@ -1370,7 +1370,7 @@ function renderFileReprise(){
         --halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
+      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
         style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:var(--surface-1);border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
@@ -1385,7 +1385,7 @@ function renderFileReprise(){
   }
   const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
     style="flex:1;min-width:0;min-height:44px;padding:8px 6px;border-radius:var(--r-2);cursor:pointer;
-      font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
+      font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
   el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));
@@ -2089,7 +2089,7 @@ function blocDouleurCoach(c){
   const l=douleurParExercice(c,SIG_DOULEUR_JOURS);
   if(!l.length) return '';
   const dat=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Douleur · 30 jours</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">niveau 4 et plus</span>
@@ -2180,7 +2180,7 @@ function _renderPremiersPas(clients){
   if(n>0){ z.innerHTML=''; return false; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-4);padding:20px;margin-bottom:20px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">'
     +escapeHtml(PROMESSE_COACH)+'</div>'

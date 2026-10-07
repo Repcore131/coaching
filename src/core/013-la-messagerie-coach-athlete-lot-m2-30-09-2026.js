@@ -1615,7 +1615,7 @@ function renderTodoBlock(clients){
              l'orange et sur le vert, du blanc tombe sous trois pour un de
              contraste et ne se lit plus au soleil d'une salle. Le noir tient
              les trois : 4,8 sur le rouge, 7,2 sur l'orange, 8,7 sur le vert. -->
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.8px">${b.titre}</span>
+        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.5px">${b.titre}</span>
         <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;opacity:.72">${b.total}</span>
       </div>
       ${b.lignes.length?renderDataList(b.lignes,(x)=>{
@@ -1932,7 +1932,7 @@ function _selMaj(){
   z.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
     +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--red);'
     +'border-radius:var(--r-3)">'
-    +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:0">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersMessage()">Message</button>'

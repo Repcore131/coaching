@@ -2440,7 +2440,7 @@ function htmlHabitudes(u,opts){
   if(!l.length) return '';
   const _taux=!!(opts&&opts.taux);
   const auj=localISODate(new Date());
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
+  return `<div class="card card--dense" style="margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span class="t-section" style="margin:0">Aujourd'hui</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">un appui, c'est tout</span>
@@ -2671,7 +2671,7 @@ function renderWoReminderCard(){
   el.innerHTML=''; return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;margin-bottom:10px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
@@ -2683,7 +2683,7 @@ function renderWoReminderCard(){
   el.innerHTML=`<div style="background:var(--surface-0);border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
     <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">${icon('sliders',14)}</button>
@@ -2942,7 +2942,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
   const cadre=(titre,corps,actions)=>
     '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">'+titre+'</div>'+corps+actions+'</div>';
   // LA PROMESSE EST NOMMEE, ET ELLE VIENT DE SES PROPRES CRENEAUX. Sans
   // planning enregistre, on ne promet pas un jour qu'on ne connait pas : la

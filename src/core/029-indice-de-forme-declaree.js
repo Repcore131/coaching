@@ -299,7 +299,7 @@ function phraseSatisfaction(s){
 function _htmlSatisfaction(user){
   const s=satisfactionMoyenne(user);
   if(!s) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Satisfaction des séances</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif. N'entre pas dans l'indice de forme : une séance dure peut satisfaire, une séance facile peut décevoir.</div>

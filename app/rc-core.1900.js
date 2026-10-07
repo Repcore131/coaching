@@ -2382,7 +2382,7 @@ function _renderAbonnementCoach(users){
     </div>`;
   }).join('');
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes suivis',texteTuSuis(nbAthletesSuivis()).replace(/^Tu suis |\.$/g,''))}
     ${l('Athlètes',compteur)}
@@ -3210,27 +3210,27 @@ function ouvrirEcranAbonnement(){
 // célébrations, nom sur les visuels) : seule leur place change.
 function _rendreReglagesSections(){
   const u=currentUser; if(!u) return false;
-  const carte='background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px';
+  const carte='margin-bottom:12px';
   const tit=x=>'<div class="t-carte" style="margin-bottom:8px">'+escapeHtml(x)+'</div>';
   const bt=(lib,act,on)=>'<button type="button" class="btn '+(on?'btn-red':'btn-outline')+' btn-sm" style="flex:1;margin:0" aria-pressed="'+(on?'true':'false')+'" onclick="'+act+'">'+escapeHtml(lib)+'</button>';
   const zn=document.getElementById('cr-nutrition');
   if(zn){
     let mu=''; try{ mu=htmlMacroUnite(u,'cr'); }catch(e){ mu=''; }
-    zn.innerHTML='<div style="'+carte+'">'+tit('Approche alimentaire')
+    zn.innerHTML='<div class="card card--dense" style="'+carte+'">'+tit('Approche alimentaire')
       +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="ouvrirChoixDiete()">Choisir mon approche</button></div>'
-      +'<div style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
+      +'<div class="card card--dense" style="'+carte+'">'+tit('Unité des macros')+'<div id="cr-macro">'+mu+'</div></div>';
   }
   const zs=document.getElementById('cr-objectifs');
   if(zs){
-    let h='<div style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
+    let h='<div class="card card--dense" style="'+carte+'">'+tit('Objectifs')+'<div style="display:flex;gap:8px">'
       +bt('Pas du jour','sanObjectif(\'pas\')')+bt('Sommeil','sanObjectif(\'sommeil\')')+'</div></div>'
-      +'<div style="'+carte+'">'+tit('Suivi du poids')
+      +'<div class="card card--dense" style="'+carte+'">'+tit('Suivi du poids')
       +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="togglePoidsMasque();_rendreReglagesSections()">'
       +(u.masquerPoids?'Réafficher le suivi du poids':'Masquer le suivi du poids')+'</button></div>';
     let montrer=false; try{ montrer=isFemale(u.gender)||!!cycleSuiviDe(u); }catch(e){}
     if(montrer){
       let cs=null; try{ cs=cycleSuiviDe(u); }catch(e){}
-      h+='<div style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
+      h+='<div class="card card--dense" style="'+carte+'">'+tit('Suivi du cycle')+'<div style="display:flex;flex-direction:column;gap:8px">'
         +ATP_CYCLE_OPTIONS.map(([v,titre])=>bt(titre,'setAtpCycleSuivi(\''+v+'\');_enregistrerCycleReglages()',cs===v)).join('')+'</div></div>';
     }
     zs.innerHTML=h;
@@ -3241,7 +3241,7 @@ function _rendreReglagesSections(){
   if(sb) sb.hidden=!!cad;
   if(zb&&!cad){
     const f=u._bilanFreq||2;
-    zb.innerHTML='<div style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
+    zb.innerHTML='<div class="card card--dense" style="'+carte+'">'+tit('Fréquence des bilans')+'<div style="display:flex;gap:8px">'
       +bt('Chaque semaine','setBilanFreq(1);_rendreReglagesSections()',f===1)+bt('Toutes les 2 semaines','setBilanFreq(2);_rendreReglagesSections()',f===2)+'</div></div>';
   }
   const zc=document.getElementById('cr-celebrations');
@@ -10192,7 +10192,7 @@ function _rendreConsoleAcces(){
   if(mail&&_accesVu.lecture==='ok'){ d=droitsDe({email:mail}); etat=accesEtatPhrase(d); }
   const carte=(h)=>'<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-4);padding:16px;margin-bottom:14px">'+h+'</div>';
-  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;'
+  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;'
     +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
   const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
     +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:10px 10px;min-height:38px" '
@@ -19145,7 +19145,7 @@ function _htmlMorphoExercice(ex){
       +' : à envisager à côté, jamais à la place.');
   return '<div style="background:var(--surface-0);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
-    +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
+    +'<div style="color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;'
     +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
 }
 /** Le calibrage, calculé une fois par rendu d'écran et non par carte. */
@@ -19200,7 +19200,7 @@ function _htmlMorphoLecture(user,cal,opts){
   // cadre permanent, et deux assertions l'interdisent depuis longtemps.
   if(!res.profils.length&&!res.aRegarder.length) return '';
   const E=escapeHtml;
-  const titre=(t)=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;'
+  const titre=(t)=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
     +'font-weight:800;text-transform:uppercase;margin:14px 0 6px">'+E(t)+'</div>';
   let h='';
   // LOT T6 : UN TEST JAMAIS FAIT, DIT UNE FOIS, ici, en tête de la lecture :
@@ -19942,7 +19942,7 @@ function _htmlMorphoPhoto(){
   const vue=(_morphoPhotoVue&&_morphoPhotoVue.email===_amp.email)?_morphoPhotoVue:null;
   const pr=vue&&vue.prise;
   return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
     +'La photo de face</div>'
     +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
     +'Elle rend deux rapports d’un repère osseux à l’autre, cuisse sur jambe et '
@@ -19967,7 +19967,7 @@ function _htmlMorphoPhoto(){
     // qu'on ne recalcule plus. Le bouton « Refaire l'analyse » est cote coach,
     // et nulle part ailleurs.
     +'<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
     +'Ses longueurs, figées</div>'
     +_htmlMorphoInitiale(c,(function(){ try{ return getClients(); }catch(e){ return []; } })())
     +'</div>';
@@ -20095,7 +20095,7 @@ function _ampRendre(){
       else if(d.champ==='niveau') saisie=(d.niveaux||[]).map(k=>bouton(d.cle,'niveau',v.niveau,k,
         k==='haut'?'Haut du dos':k==='milieu'?'Milieu':'Bas du dos')).join('');
       return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
-        +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+        +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
         +escapeHtml(d.lib)+'</div>'
         +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'+escapeHtml(d.protocole)+'</p>'
         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+saisie+'</div>'
@@ -20321,19 +20321,19 @@ function _htmlQuestionsMorpho(user){
   // LES TESTS, AVEC LEUR DATE ET LEUR PÉREMPTION : une amplitude relevée il y
   // a six mois est montrée, marquée « périmé », plutôt que de disparaître.
   const htmlTests=!faits.length?'':`<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Amplitudes</div>
     ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${E(t.lib)} : ${E(t.texte)} <span style="color:var(--text-faint)">(test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
   const questions=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>`
     +(l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`)
     +l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${E(r.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${E(r.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${E(r.motif)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${E(r.question)}</div>
     </div>`).join('');
   let longueurs='';
   try{ if(morphoInitialeEtat(user)==='gelee') longueurs='<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Longueurs figées</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Longueurs figées</div>'
     +_htmlMorphoInitiale(user,[],{sansBouton:true})+'</div>'; }catch(e){ longueurs=''; }
   const detail=det('Proportions, ordre de lecture, amplitudes',questions+lecture+htmlTests+longueurs
     +`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px;margin-top:12px">${E(MORPHO_DISCLAIMER)}</div>`);
@@ -20385,7 +20385,7 @@ function _htmlDeficitCoach(c){
     const q=risqueDeficitQuestion(c);
     if(!q) return '';
     return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(q.motif)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(q.question)}</div>
     </div>`;
@@ -20527,7 +20527,7 @@ function renderCoachMicroSection(c){
       // REGROUPÉS PAR NUTRIMENT (build 1845), la question du bilan sanguin UNE fois en pied.
       const g=regrouperRisquesMicro(l);
       return g.blocs.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;margin-bottom:4px">${escapeHtml(r.lib)}</div>
       ${r.motifs.length>1
         ?'<ul style="margin:0;padding-left:16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+r.motifs.map(m=>'<li>'+escapeHtml(m)+'</li>').join('')+'</ul>'
         :'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">'+escapeHtml(r.motifs[0]||'')+'</div>'}
@@ -20690,7 +20690,7 @@ function _rendreEcheanceAcces(){
       background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 55%,var(--surface-0));
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:var(--e3)}33">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
       Ton accès se termine ${quand}</div>
     <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:6px">
       Il prend fin le ${escapeHtml(d)}. ${nom?escapeHtml(nom)+' peut le prolonger':'Ton coach peut le prolonger'}, préviens-le avant.</div>
@@ -21198,7 +21198,7 @@ function renderPilotage(clients){
   // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
   // precedent. Un seul volet, trois sections separees d'un filet.
   const corpsSep='<div style="height:1px;background:var(--surface-3);margin:10px 0"></div>';
-  const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
+  const _tt=t=>`<div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsC2=_tt('Charge de travail')+corpsC;
   // LES TROIS LIENS ONT QUITTE LE VOLET. Ils etaient la seule porte de trois
@@ -28711,13 +28711,13 @@ function ouvrirRite(cycle){
     </div>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Un point d'étape, pas une note. Tu peux fermer cet écran à tout moment.</p>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    <div class="card card--dense" style="margin-bottom:10px">
       ${_riteLigne('Séances réalisées',c.seances)}
       ${_riteLigne('Séances faites sur prévues',tauxLib,c.taux?c.taux.fenetre:'')}
       ${vit&&vit.pctSem!=null?_riteLigne('Tendance de poids',(vit.pctSem>0?'+':'')+String(Math.round(vit.pctSem*100)/100).replace('.',',')+' %/sem'):''}
     </div>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    <div class="card card--dense" style="margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Records battus</div>
       ${c.records.length
         ? c.records.slice(0,6).map(r=>_riteLigne(r.nom,r.valeur+' <span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400">e1RM</span>')).join('')
@@ -28725,7 +28725,7 @@ function ouvrirRite(cycle){
       ${c.mentionPhase?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Relevé en phase lutéale tardive : une baisse y est attendue, et n\'a pas la même signification qu\'une régression.</div>':''}
     </div>
 
-    ${muscles.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
+    ${muscles.length?`<div class="card card--dense" style="margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Volume par muscle</div>
       ${muscles.map(m=>_riteLigne(m.muscle,m.series+' séries','MEV '+m.mev+' · MAV '+m.mav+' · MRV '+m.mrv)).join('')}
     </div>`:''}
@@ -29356,7 +29356,7 @@ function renderFileReprise(){
         --halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
+      <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
         style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:var(--surface-1);border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
@@ -29371,7 +29371,7 @@ function renderFileReprise(){
   }
   const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
     style="flex:1;min-width:0;min-height:44px;padding:8px 6px;border-radius:var(--r-2);cursor:pointer;
-      font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
+      font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
   el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));
@@ -30075,7 +30075,7 @@ function blocDouleurCoach(c){
   const l=douleurParExercice(c,SIG_DOULEUR_JOURS);
   if(!l.length) return '';
   const dat=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Douleur · 30 jours</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">niveau 4 et plus</span>
@@ -30166,7 +30166,7 @@ function _renderPremiersPas(clients){
   if(n>0){ z.innerHTML=''; return false; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-4);padding:20px;margin-bottom:20px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">'
     +escapeHtml(PROMESSE_COACH)+'</div>'
@@ -32212,7 +32212,7 @@ function renderTodoBlock(clients){
              l'orange et sur le vert, du blanc tombe sous trois pour un de
              contraste et ne se lit plus au soleil d'une salle. Le noir tient
              les trois : 4,8 sur le rouge, 7,2 sur l'orange, 8,7 sur le vert. -->
-        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.8px">${b.titre}</span>
+        <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;text-transform:uppercase;letter-spacing:1.5px">${b.titre}</span>
         <span style="font-size:var(--fs-2xs);font-weight:800;color:#0a0000;opacity:.72">${b.total}</span>
       </div>
       ${b.lignes.length?renderDataList(b.lignes,(x)=>{
@@ -32529,7 +32529,7 @@ function _selMaj(){
   z.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
     +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--red);'
     +'border-radius:var(--r-3)">'
-    +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:0">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersMessage()">Message</button>'
@@ -33633,7 +33633,7 @@ function _htmlCroissanceCoach(athletes){
       <div class="evo-titre" style="margin-bottom:0">Arrivées par mois</div>
       <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'var(--text)':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
     </div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:10px">
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0;margin-bottom:10px">
       D'après la date de création de chaque dossier.</div>
     <!-- UNE SEULE LIGNE, ET LES COMPTES SONT DEDANS. La carte portait la
          répartition du portefeuille juste au-dessus de la légende des barres :
@@ -33641,11 +33641,11 @@ function _htmlCroissanceCoach(athletes){
          suivi, c'étaient les mêmes quatre mots, écrits deux fois, l'un sur
          l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--red-text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px color-mix(in srgb,var(--red) 80%,transparent)"></span>${avecSuivi} avec suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--text)">
         <span style="width:11px;height:2px;border-radius:var(--r-1);background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
     </div>
     <canvas id="ch-croissance-toile" height="150" style="width:100%;display:block"></canvas>
@@ -33745,7 +33745,7 @@ function _actLibMois(cle){
   return ACT_MOIS_LIB[+m[2]-1]+' '+m[1].slice(2);
 }
 function _actCarte(titre,corps,note){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:12px">
+  return `<div class="card card--dense" style="margin-bottom:12px">
     <div class="t-section">${escapeHtml(titre)}</div>
     ${corps}
     ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${note}</div>`:''}
@@ -33771,12 +33771,12 @@ function renderCoachActivite(){
     return;
   }
   if(!fiable&&!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 14px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
+    el.innerHTML=`<div class="card" style="text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
     return;
   }
   // ── État « 0 athlète » ──
   if(!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 16px;text-align:center">
+    el.innerHTML=`<div class="card" style="text-align:center">
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-bottom:6px">Pas encore d'athlète</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Cet écran se remplira tout seul dès qu'un athlète aura rejoint ton suivi et enregistré sa première séance.</div>
     </div>`;
@@ -33797,7 +33797,7 @@ function renderCoachActivite(){
       <div style="width:100%;height:64px;display:flex;align-items:flex-end">
         <div style="width:100%;height:${Math.max(h,2)}%;background:${x.actifs?'linear-gradient(180deg,var(--red),#8d0000)':'#242424'};border-radius:var(--r-1) var(--r-1) 0 0"></div>
       </div>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px;white-space:nowrap;transform:rotate(-45deg);transform-origin:center;height:22px">${escapeHtml(_actLibMois(x.mois))}</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0;white-space:nowrap;transform:rotate(-45deg);transform-origin:center;height:22px">${escapeHtml(_actLibMois(x.mois))}</div>
     </div>`;
   }).join('');
   const c1=_actCarte('Athlètes actifs par mois',
@@ -34686,7 +34686,7 @@ function _htmlJamaisDemarre(liste,maintenant){
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
-    +'letter-spacing:2.4px">Jamais démarré</span>'
+    +'letter-spacing:2px">Jamais démarré</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
     +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
@@ -35021,7 +35021,7 @@ function tunnelRelancer(codeId){
   +'<div class="ml-lab" style="margin-bottom:6px">Canal utilisé</div>'
   +'<div id="tun-canaux" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:6px">'
   +TUNNEL_CANAUX.map((x,i)=>'<button type="button" class="btn btn-blanc btn-sm tun-c'+(i?'':' actif')+'" data-canal="'+x.cle+'"'
-     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:.3px">'+escapeHtml(x.lib)+'</button>').join('')
+     +' onclick="tunnelChoisirCanal(this)" style="min-height:40px;padding:8px 10px;letter-spacing:0">'+escapeHtml(x.lib)+'</button>').join('')
   +'</div>'
   // ⚠ ON N'ECRIT JAMAIS « ENVOYE ». RepCore n'envoie rien ici : il enregistre
   //   ce que le coach a fait de son cote. Les deux canaux qui SAVENT ouvrir un
@@ -36259,7 +36259,7 @@ function _tunnelHistorique(codeId){
   const ech=(n<TUNNEL_MAX&&k.prochaine)
     ?'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:8px">Prochaine relance : <b style="color:var(--text-strong)">'+dt(k.prochaine)+'</b></div>'
     :'';
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:12px">'
+  return '<div class="card card--dense" style="margin-top:12px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Historique du tunnel commercial</span>'
     +'<span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
@@ -36303,7 +36303,7 @@ function renderJournalCoach(c){
        +'ce qu\'il faudra reprendre.</div>';
   }
   const opts=NOTE_TAGS.map(t=>'<option value="'+t+'">'+escapeHtml(NOTE_TAG_LIB[t])+'</option>').join('');
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
+  z.innerHTML='<div class="card card--dense">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     // N1.16 — « Journal » tout court se confondait avec le JOURNAL
     // ALIMENTAIRE de l'athlete, une section plus haut dans un autre onglet.
@@ -37326,11 +37326,11 @@ function openClientDetail(cid,_refresh,_force){
     const _ctL=contraintesActives(c), _ctD=drapeauRougeActif(c);
     _al.style.display=(ci.length||_ctL.length||_ctD)?'block':'none';
     _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px">
-      <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">À prendre en compte</div>
+      <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">À prendre en compte</div>
       ${blocDrapeauRouge(c)}
       ${ci.map(x=>`<div style="font-size:var(--fs-sm);line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.lbl} :</span> <span style="color:var(--text)">${escapeHtml(x.txt)}</span></div>`).join('')}
       ${_ctL.length?`<div style="margin-top:10px;border-top:1px solid #3a2400;padding-top:8px">
-        <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
+        <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
       </div>`:''}
       <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('',${jsArg(c.id)})" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Structurer une contrainte</button>
@@ -38428,7 +38428,7 @@ function renderBilanEvolution(c){
     }).join('');
 
     return `<div style="margin-top:4px;margin-bottom:28px">
-      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
         <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
         FRESQUE ÉVOLUTION
         <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
@@ -51771,7 +51771,7 @@ function ouvrirMesExercices(){
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
       +'padding:8px 10px;margin-bottom:8px;cursor:pointer;font-family:inherit">'
       +vign(x)
-      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.4px">'
+      +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:0">'
       +escapeHtml(x.nom)+'</span></button>').join('')
     :'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6">Tes séances sont encore vides. '
       +'Dès qu\'un exercice y est posé, sa fiche apparaît ici.</p>';
@@ -52336,7 +52336,7 @@ function alternerSeance(i){
     +escapeHtml('Échanger « '+(String(src.name||'').trim()||'cette séance')
       +' » avec :')+'</div>'
     +cibles.map(c=>'<button type="button" class="btn btn-outline btn-sm" '
-      +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
+      +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:0;'
       +'text-align:left;padding:10px 12px" onclick="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
       +'<span style="color:var(--text-faint)"> : '+escapeHtml(c.nom)+'</span>'
@@ -54387,7 +54387,7 @@ function _apLigne(ex,i){
   // deux séries, pas assis au calme.
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
       font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">`
-    +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
+    +`<span style="color:var(--sub);letter-spacing:0">${escapeHtml(t)}</span>`
     +`<span style="color:var(--text);font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
   // `ex.note` a disparu d'ici : TROIS lectures, et aucun champ ne l'écrivait.
   // Le seul écrivain était la chaîne d'import legacy, qui posait une chaîne
@@ -54440,7 +54440,7 @@ function _apLigne(ex,i){
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
-        <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
+        <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:0;
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:4px 10px;border-radius:var(--r-2);
           background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 32%,transparent);
@@ -57222,7 +57222,7 @@ function _renderWeeklyInto(el,sc){
           ${selS.exercises.map((ex,i)=>`
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
-              <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
+              <div style="font-size:var(--fs-xs);color:var(--text);font-weight:700;text-transform:uppercase;letter-spacing:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
@@ -57230,7 +57230,7 @@ function _renderWeeklyInto(el,sc){
           <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);color:var(--text);
-              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
+              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:0">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Télécharger
@@ -57243,7 +57243,7 @@ function _renderWeeklyInto(el,sc){
           <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:color-mix(in srgb,var(--text) 16%,transparent);border:1px solid color-mix(in srgb,var(--text) 34%,transparent);color:var(--text);
-              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
+              font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:0">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Partager
@@ -57279,7 +57279,7 @@ function _renderProgExercisesInto(el){
   if(!prog._isDefault){
     el.innerHTML=`
       <div style="margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
         <div style="font-size:var(--fs-lg);font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
         ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:var(--fs-sm);line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
       </div>
@@ -61113,7 +61113,7 @@ function renderEtatsSeance(user,sess){
   let ch=[];
   try{ ch=etatsChanges(user,sess); }catch(e){ ch=[]; }
   if(!ch.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:16px">
     ${ch.map(x=>`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
       <span style="width:6px;height:6px;border-radius:var(--r-full);background:${x.etat==='regression'?'var(--orange)':'var(--sub)'};margin-top:6px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.6;color:#ccc">
@@ -70314,7 +70314,7 @@ function renderTendancesCoach(c){
   // LES PROJECTIONS (build 1830) : une carte par exercice principal, ou rien.
   let proj=''; try{ proj=htmlProjectionsCoach(c,Date.now()); }catch(e){ proj=''; }
   z.innerHTML=(l.length
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:8px">`
+    ?`<div class="card card--dense" style="margin-bottom:8px">`
       +l.map(x=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(x)}</div>`).join('')
       +`</div>`
     :'')+proj;
@@ -72941,7 +72941,7 @@ function phraseSatisfaction(s){
 function _htmlSatisfaction(user){
   const s=satisfactionMoyenne(user);
   if(!s) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Satisfaction des séances</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif. N'entre pas dans l'indice de forme : une séance dure peut satisfaire, une séance facile peut décevoir.</div>
@@ -79139,7 +79139,7 @@ function _htmlEcheanceCoach(c){
   const u=_dossier(c);
   const e=echeance(u);
   const j=e?echeanceJour(u):null;
-  const tete='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
+  const tete='<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Échéance</div>';
   if(!e)
     return tete+'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:8px">'
@@ -79297,14 +79297,14 @@ function _renderEcheance(){
   // LA SORTIE, a J+1 — et c'est la fonction EXISTANTE.
   const sortie=echeancePropositionSortie(u);
   if(sortie){
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
+    h+='<div class="card card--dense" style="margin-bottom:14px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(sortie.phrase)+'</div>'
       +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
   }
   if(j&&j.phase==='AFFUTAGE'){
     // L'AFFUTAGE NE FAIT RIEN DE NEUF : il resserre ce qui existe. On le DIT,
     // plutot que d'afficher des cibles qui n'existent pas.
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
+    h+='<div class="card card--dense" style="margin-bottom:14px">'
       +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Affûtage</div>'
       +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6">'
       +'Rien de nouveau : tes macros suivent ta phase, ton sel reste à ta cible, '
@@ -79328,7 +79328,7 @@ function _echHtmlFiches(u,e,estCoach){
   for(let n=ECH_JOURS_PEAK;n>=0;n--){
     const f=e.fiches['j'+n]||null;
     const vide=!f||(f.cibleGlucides==null&&f.cibleSodium==null&&f.cibleEau==null);
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">'
+    h+='<div class="card card--dense" style="margin-bottom:10px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
       +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">J-'+n+'</span>'
       +(f&&f.poses?'<span style="font-size:var(--fs-2xs);color:var(--red-text)">poses</span>':'')
@@ -79778,7 +79778,7 @@ function rcRendreSrpe(){
   // DEJA NOTEE, OU SANS DUREE : rien a demander. Une seance sans duree ne
   // produirait aucune charge, et la question serait posee pour rien.
   if(!s||s.srpe||!(Number(s.duration)>0)) return false;
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px">'
+  z.innerHTML='<div class="card card--dense">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
     +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
@@ -80184,7 +80184,7 @@ function _htmlRendement(c){
         +'</div>';
     }
   }catch(e){ rot=''; }
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+  return '<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Rendement · '+REND_SEMAINES+' semaines</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">progression − coût, pondéré</span></div>'
@@ -80928,7 +80928,7 @@ function _htmlBlocPriorite(c){
   // PAS DE BLOC : un bouton pour en ouvrir un, et rien d'autre. Un panneau
   // vide avec trois colonnes vides serait du mobilier.
   if(!b){
-    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+    return '<div class="card card--dense" style="margin-bottom:16px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span></div>'
       +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">'
@@ -81940,7 +81940,7 @@ const RETOUR_LIB_COURBATURES=Object.freeze({aucune:'Aucune',legeres:'Légères',
 
 function _htmlChoixRetour(muscle,champ,libs){
   const lib=(MUSCLES[muscle]||{}).lib||muscle;
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
+  return '<div class="card card--dense" style="margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">'
     +escapeHtml(lib)+'</div>'
     +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.5;margin-bottom:10px">'
@@ -82062,7 +82062,7 @@ function _htmlJournalSeance(c){
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
       +(cause?escapeHtml(cause)+' · ':'')+dat(e&&e.date)+'</span></div>';
   };
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+  return '<div class="card card--dense" style="margin-bottom:16px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Allègements</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">décidés par l’athlète</span></div>'
@@ -82684,7 +82684,7 @@ function _updateBilanCountdown(){
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 95%,transparent),color-mix(in srgb,var(--red) 15%,transparent),transparent)"></div>
     <div class="t-section is-action" style="margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
@@ -83758,7 +83758,7 @@ function bPhotoCards(prefix){
     const done=!!bilData[key];
     return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:10px">${p.l}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#ccc;margin-bottom:10px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
       <button type="button" class="bil-minut" onclick="bilMinuteur('${key}','${p.k}')">Minuteur 10 s</button>
     </div>`;
@@ -84092,7 +84092,7 @@ function bBodySchema(prefix,cles){
       const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:34%">
         <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:var(--surface-0);border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
-          <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
+          <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:0;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="text" inputmode="decimal" autocomplete="off" id="${id}" value="${escapeHtml(String(bilData[id]||'').replace('.',','))}" placeholder="-"
             oninput="bMesureSaisie('${id}',this.value)"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
@@ -84208,7 +84208,7 @@ function bLongueurs(){
   //   numérique refuse « 77,5 » sur certains navigateurs et « 77 cm » collé
   //   partout — la saisie disparaissait sans un mot.
   const champ=(id,lbl,aide,schema)=>`<div style="margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:4px">${lbl}${LONGUEURS_A_DEUX.indexOf(id)>=0?' <span class="lg-deux">· à deux</span>':''}</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--sub);margin-bottom:4px">${lbl}${LONGUEURS_A_DEUX.indexOf(id)>=0?' <span class="lg-deux">· à deux</span>':''}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:6px">${aide}</div>
     ${schema||''}
     <div style="display:flex;align-items:center;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
@@ -85690,7 +85690,7 @@ function renderCharges(){
   if(_vrr){ z.innerHTML=_vrr; return; }
   const av=avancementCharges();
   const pc=av.total?Math.round(av.pose/av.total*100):0;
-  const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+  const entete=`<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">
       Pour chaque famille de mouvement, dis à quel point elle sollicite chaque articulation.
       Un appui fait défiler <b style="color:var(--text-strong)">0</b> aucune · <b style="color:var(--text-strong)">1</b> légère ·
@@ -85710,12 +85710,12 @@ function renderCharges(){
   </div>`;
   const entetes=`<div style="display:flex;gap:4px;padding:0 0 6px 0;min-width:max-content">
     <div style="flex:0 0 132px"></div>
-    ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-2xs);letter-spacing:.3px;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
+    ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-2xs);letter-spacing:0;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
   </div>`;
   const lignes=Object.keys(SCHEMAS_META).map(s=>{
     const m=SCHEMAS_META[s];
     const ouvert=_chSchemaOuvert===s;
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 10px;margin-bottom:6px">
+    return `<div class="card card--dense" style="margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:4px;min-width:max-content">
         <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.25">${escapeHtml(m.lib)}</div>
@@ -88804,7 +88804,7 @@ function htmlHabitudes(u,opts){
   if(!l.length) return '';
   const _taux=!!(opts&&opts.taux);
   const auj=localISODate(new Date());
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
+  return `<div class="card card--dense" style="margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span class="t-section" style="margin:0">Aujourd'hui</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">un appui, c'est tout</span>
@@ -89035,7 +89035,7 @@ function renderWoReminderCard(){
   el.innerHTML=''; return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;margin-bottom:10px">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
@@ -89047,7 +89047,7 @@ function renderWoReminderCard(){
   el.innerHTML=`<div style="background:var(--surface-0);border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
     <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">${icon('sliders',14)}</button>
@@ -89306,7 +89306,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
   const cadre=(titre,corps,actions)=>
     '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">'+titre+'</div>'+corps+actions+'</div>';
   // LA PROMESSE EST NOMMEE, ET ELLE VIENT DE SES PROPRES CRENEAUX. Sans
   // planning enregistre, on ne promet pas un jour qu'on ne connait pas : la
@@ -89602,7 +89602,7 @@ function htmlReglagesPush(u,etat){
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
+  return '<div class="card" style="margin-bottom:20px">'
     +'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Notifications</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
     +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
@@ -89774,7 +89774,7 @@ function _htmlInvitationInstall(etat,aussiNotif){
   const lib=etat==='ios'?'Comment faire':'Installer RepCore';
   return '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:2.5px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Dans la salle</div>'
     +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
     +'RepCore fonctionne <strong style="color:var(--text)">sans réseau</strong> : '
@@ -95971,7 +95971,7 @@ function accuserEncartOsseux(){
 function _htmlEncartOsseux(user){
   const u=user||currentUser;
   if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">
+  return `<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
     <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
@@ -97544,7 +97544,7 @@ function renderVolumeCoach(c){
   const _axPrio=axialPrioritaire(c);
   const _axial=_htmlChargeAxiale(c,0,null,{disclaimer:_axPrio});
   z.innerHTML=(_axPrio?_axial:'')
-    +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    +`<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
       <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
@@ -99129,7 +99129,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
@@ -99271,7 +99271,7 @@ function renderVolumePrescrit(cfg,user){
   const lignes=Object.keys(v.muscles).filter(m=>v.muscles[m]>=0.5)
     .sort((a,b)=>v.muscles[b]-v.muscles[a]);
   if(!lignes.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:10px;line-height:1.5">
       ${v.avecConsigne
@@ -99755,25 +99755,25 @@ function showProgressTab(tab,btn,sansMemo){
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--red) 85%,transparent))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.5px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 85%,transparent),transparent)"></div>
           </div>
           <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px color-mix(in srgb,var(--red) 35%,transparent)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,var(--red-deep));border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px color-mix(in srgb,var(--red) 85%,transparent)"></div>
-          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
+          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.5px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:10px;margin:12px 0 14px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--sub)">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px color-mix(in srgb,var(--red) 40%,transparent),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px" data-scroll-fade>
@@ -99794,7 +99794,7 @@ function showProgressTab(tab,btn,sansMemo){
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:6px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:calc(var(--fq) * .5);max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
-                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
+                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
                 const src=getP(b,key);
@@ -99812,7 +99812,7 @@ function showProgressTab(tab,btn,sansMemo){
         <!-- Pied facon signature -->
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:var(--r-1);object-fit:cover;opacity:.9">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
+          <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.5px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
@@ -100181,13 +100181,13 @@ function _htmlDossierSante(user,pourCoach){
   // « rien n'est déclaré… » occupait le menu médical pour n'annoncer que du vide.
   if(dossierSanteVide(d)&&!pourCoach) return '';
   if(dossierSanteVide(d))
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
+    return `<div class="card card--dense" style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
   const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px">
+  return `<div class="card card--dense">
     ${titre('Ce qui est déclaré')}
     ${d.etats.length?d.etats.map(x=>ligne(escapeHtml(x.valeur),_dossDate(x.date))).join('')
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
@@ -101167,7 +101167,7 @@ function _htmlPostPartumCoach(c){
   if(ppSymptomePositif(c)) causes.push('signalement de l\'athlète');
   if(f==='12_plus'&&!e.evaluationPerineale) causes.push('point non encore fait');
   const impact=ppImpactAutorise(c);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(PP_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${impact===true?'var(--sub)':'var(--orange)'}">${escapeHtml(f?(PP_LIB_FENETRES[f]||''):'Informatif')}</span>
@@ -102744,7 +102744,7 @@ function _htmlDepartAthlete(nut){
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
   const nom=mbNom(b.source);
   const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
       <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5">P ${j.p} · G ${j.g} · L ${j.l}<br>Fibres ${j.f}</div>
     </div>`;
@@ -103577,7 +103577,7 @@ function _renderNutriContent(type,dateAff){
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
             <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE FLEXIBLE</div>
             <p style="margin:0;font-size:var(--fs-sm);color:rgba(255,255,255,.72);line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux: à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides: tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
           </div>
@@ -103827,7 +103827,7 @@ function _renderStrictDiet(){
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
         ${coachCircle}
         <div style="flex:1;min-width:0">
-          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
           <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE STRICTE</div>
           <p style="margin:0;font-size:var(--fs-xs);color:rgba(255,255,255,.72);line-height:1.6">Ton programme alimentaire est 100&nbsp;% défini par ton coach: chaque repas, chaque apport. L'avantage: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
         </div>
@@ -106320,7 +106320,7 @@ function _cplHtmlModele(c){
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
     return `<button onclick="cplPoserModele('${k}')"
-      style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
+      style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
   if(pose){
@@ -106352,7 +106352,7 @@ function _cplHtmlMoment(c,moment){
   const choix=PLAN_MOMENTS.map(m=>{
     const actif=(moment===m.cle);
     return `<button onclick="cplSetMoment('${m.cle}')"
-      style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
+      style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
   }).join('');
   // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
   // choisi croit avoir choisi.
@@ -106822,7 +106822,7 @@ function _htmlPlanAthlete(user,intercale){
       :'background:color-mix(in srgb,var(--text) 2.8%,transparent);border:1px solid color-mix(in srgb,var(--text) 5%,transparent)'}">
     ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:none"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'-':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
-    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:6px">${lib}</div>
+    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1px;font-weight:800;margin-top:6px">${lib}</div>
   </div>`;
 
   // Code couleur commun aux deux écrans du plan — voir PLAN_COULEURS.
@@ -106947,7 +106947,7 @@ function _htmlPlanAthlete(user,intercale){
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">${icon('alert-triangle',16)}</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
-        letter-spacing:3px;color:var(--text);text-transform:uppercase;
+        letter-spacing:2.5px;color:var(--text);text-transform:uppercase;
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
     </div>
     <div style="position:relative;padding:12px 14px 12px">
@@ -106982,7 +106982,7 @@ function _htmlPlanAthlete(user,intercale){
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
           border:1px solid ${stock?'rgba(34,197,94,.42)':'var(--border)'};
           color:${stock?'var(--green)':'var(--sub)'};
-          font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px">
+          font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0">
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
@@ -108580,7 +108580,7 @@ function _prepRendre(){
     +'border:1px solid '+(e.mode===m?'var(--red)':'var(--border)')+';background:'+(e.mode===m?'rgba(224,32,32,.16)':'transparent')
     +';color:'+(e.mode===m?'var(--red-text)':'var(--text-dim)')+'">'+lib+'</button>';
   const lignes=e.ing.map((l,i)=>
-    '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;margin-bottom:8px">'
+    '<div class="card card--dense" style="margin-bottom:8px">'
     +'<div style="display:flex;gap:8px;margin-bottom:6px">'
       +'<input placeholder="Ingrédient" value="'+ch(l.n)+'" oninput="prepChamp('+i+',\'n\',this.value)" style="flex:1;min-width:0">'
       +'<button type="button" onclick="prepRetirerLigne('+i+')" aria-label="Retirer" style="min-width:44px;min-height:44px;'
@@ -108613,7 +108613,7 @@ function _prepRendre(){
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
-    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:16px">'+diviseur+'</div>'
+    +'<div class="card card--dense" style="margin-bottom:16px">'+diviseur+'</div>'
     +'<div id="prep-resultat" style="margin-bottom:16px"></div>'
     +'<button type="button" class="btn btn-red" id="prep-ajouter" onclick="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
   _prepResultat();
@@ -109069,7 +109069,7 @@ function _htmlEquivalents(e){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase">Équivalences</span>
       <button onclick="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:32px">×</button>
     </div>`;
-  const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:10px">${entete}${corps}</div>`;
+  const cadre=(corps)=>`<div class="card card--dense" style="margin-top:10px">${entete}${corps}</div>`;
   // RÈGLE 8 : produit OFF ou groupe vide ⇒ aucune équivalence, et on dit
   // pourquoi plutôt que de rendre une liste vide muette.
   if(!alim||!alim.g)
@@ -109124,7 +109124,7 @@ function _htmlEquivalents(e){
       <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
         class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`).join('')}
-    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
+    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
     ${_eqReleg.map(x=>{
       const _ev=(function(){ try{ return evictionDe(currentUser,x.alim); }catch(err){ return null; } })();
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
@@ -109374,7 +109374,7 @@ function _renderFjActions(){
   // d environ 12 % : « + CRÉER UN ALIMENT / SCANNER UN PRODUIT » passait sur
   // deux lignes a 320 px (hauteur 50 px au lieu de 36). « + Nouvel aliment /
   // Scanner » tient sur une ligne des 320 px, et respire a 375.
-  const st='flex:1;padding:10px 8px;font-size:var(--fs-xs);letter-spacing:.3px';
+  const st='flex:1;padding:10px 8px;font-size:var(--fs-xs);letter-spacing:0';
   // Hors ligne le scan disparait — la fiche produit se lit chez Open Food
   // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
@@ -119704,7 +119704,7 @@ const TRAITEMENT_SUPP='Tu as déclaré un traitement régulier. Avant d\'ajouter
   +'de dire si l\'un peut gêner l\'autre.';
 function _htmlTraitementSupp(user){
   if(!traitementDeclare(user||currentUser)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
+  return `<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
   </div>`;
 }
@@ -120249,7 +120249,7 @@ function _renderSuppTable(list, isCoach, editFn){
   // L'unite « gélule(s) » de la fiche se resout comme celle de la dose : « 1 à
   // 2 gélules », « 1 comprimé » — le « (s) » est une facon d'ecrire le
   // formulaire, pas une facon de parler.
-  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(String(x.fiche.unite||'').replace(/\(s\)/i,/[2-9]|\d\d/.test(String(x.fiche.dose))?'s':''))})</span>`:'';
+  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:0">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(String(x.fiche.unite||'').replace(/\(s\)/i,/[2-9]|\d\d/.test(String(x.fiche.dose))?'s':''))})</span>`:'';
 
   // L'IDENTITÉ, ET NON LE RANG. `list.indexOf(s)` donnait la position dans la
   // liste REÇUE — filtrée sur les actifs côté athlète — pendant que
@@ -120872,7 +120872,7 @@ function renderCoachAmplitudesSection(c){
   const faits=l.filter(t=>t.date&&t.texte);
   const email=String((c&&c.email)||'');
   const ligne=t=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:10px">`
-    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
+    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
     +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
     +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
     +`test, ${dateLocaleDeCle(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
@@ -120894,7 +120894,7 @@ function renderCoachAmplitudesSection(c){
     //   est deja celle qui debloque le plus ; les autres reviendront une a une,
     //   quand celle-ci sera saisie.
     +(manque.length?`<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">`
-      +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
+      +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
       +`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">${escapeHtml(manque[0])}</div>`
       +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivr${manque.length>2?'ont':'a'}, une à la fois.</div>`:'')
       +`</div>`:'');
@@ -122435,7 +122435,7 @@ function renderCarteAFilmer(sess){
   if(!z) return;
   const noms=((sess&&sess.aFilmer)||[]).filter(Boolean);
   if(!noms.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">À filmer</div>
     <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6;margin-bottom:10px">Tu voulais filmer : ${noms.map(n=>escapeHtml(n)).join(', ')}</div>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -124900,7 +124900,7 @@ function _tplFiltrer(){
   const parCat={};
   for(const t of l) (parCat[t.cat]=parCat[t.cat]||[]).push(t);
   z.innerHTML=Object.keys(TPL_CAT_LIB).filter(c=>parCat[c]).map(c=>`
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.6px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
     ${parCat[c].map(t=>{
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
@@ -127336,11 +127336,11 @@ function loadSteps(containerId='steps-content',opts){
             <!-- R12, PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
                  libelle le dit, et il ne se confond plus avec le marquage du
                  jour, plus haut, qui employait les memes mots. -->
-            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
             <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--red-bg),var(--red-bg));border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--bg),var(--bg));border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
@@ -128234,7 +128234,7 @@ function _htmlDeficit(user,lectureSeule){
 function _htmlDernierAjust(nut){
   const h=((nut&&nut.ajustHisto)||[]).slice(-1)[0];
   if(!h) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Dernier ajustement proposé</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${dateLocaleDeCle(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) : vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
   </div>`;
@@ -131029,7 +131029,7 @@ const REDS_LIB_SIGNAUX=Object.freeze({
 // ── L'écran athlète ───────────────────────────────────────────────────────
 let _leafqRep={};
 function htmlLeafq(){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
+  return `<div class="card" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">${escapeHtml(REDS_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
     ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
@@ -131070,7 +131070,7 @@ function leafqValider(){
   saveUser();
   const z=document.getElementById('prog-reds');
   if(z) z.innerHTML=redsSuspend(currentUser)
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
+    ?`<div class="card card--dense" style="margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
     :'';
   return true;
 }
@@ -131104,7 +131104,7 @@ function renderReds(){
   try{
     if(shouldPromptLeafq(currentUser)) h=htmlLeafq();
     else if(redsSuspend(currentUser))
-      h=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
+      h=`<div class="card card--dense" style="margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
   }catch(e){ h=''; }
   z.innerHTML=h;
 }
@@ -131707,7 +131707,7 @@ function _blocVitesse(user){
 // qui suit est inatteignable en mode neutre.
 function blocPoids(user){
   if(user&&user.masquerPoids){
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;text-align:center">
+    return `<div class="card" style="text-align:center">
       <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:12px">Le suivi du poids est masqué.</div>
       <button class="btn btn-outline btn-sm" onclick="togglePoidsMasque()" style="letter-spacing:1px">Réafficher</button>
     </div>`;
@@ -131747,7 +131747,7 @@ function blocPoids(user){
         ${_blocVitesse(user)}
       </div>
     </div>`;
-  const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+  const neutreNote=neutre?`<div class="card card--dense" style="margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Tu as signalé un antécédent de trouble du comportement alimentaire dans ton
       questionnaire de départ. RepCore affiche donc tes pesées telles quelles,
       sans vitesse, sans objectif et sans alerte. Tu peux masquer complètement
@@ -131807,7 +131807,7 @@ function blocPoidsCoach(user,depuis){
   const c=alerte?'var(--orange)':'var(--text)';
   const der=serie[serie.length-1];
   const moy=mm7(serie,der.date);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}${der.heure?' à '+der.heure.replace(':',' h '):''} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
@@ -132024,7 +132024,7 @@ function renderCartePhase(){
   if(!z) return;
   z.innerHTML=''; return;
   if(!currentUser||phaseCourante(currentUser)||currentUser.phaseRefusee){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:14px">
     ${_htmlChoixPhase()}</div>`;
 }
 function ouvrirChoixPhase(){
@@ -132165,7 +132165,7 @@ function _htmlPhaseCoach(c){
         s'applique intégralement : ni vitesse, ni cible, ni alerte du côté de
         l'athlète. À suivre de près hors de l'application.
       </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <!-- LE TITRE EST REVENU le 08/09/2026. Il avait ete retire parce que le
          bandeau de la section « Phase » le disait juste au-dessus : or ce bloc
          a quitte sa section pour remonter en tete de l'onglet, sous le type de
@@ -132692,7 +132692,7 @@ function _htmlCadreImportCapture(quoi,opts){
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
-        style="width:100%;min-height:44px;margin:0;letter-spacing:1.2px">Envoyer une capture</button>
+        style="width:100%;min-height:44px;margin:0;letter-spacing:1px">Envoyer une capture</button>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px;text-align:center">
         La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.
       </div>
@@ -132724,7 +132724,7 @@ function _htmlCadreImportCapture(quoi,opts){
            lui-meme, avant meme d'etre lue. -->
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button class="btn" onclick="this.previousElementSibling.click()"
-        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
+        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.5px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
       <!-- LA PHRASE DE CONFIDENTIALITE EST UN ENGAGEMENT, PAS UNE MENTION
            LEGALE A ENTERRER : elle passe de --fs-2xs / --text-faint, ou elle
            etait illisible, a --fs-xs sur --text-dim. C'est elle qui autorise
@@ -139185,10 +139185,10 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;font-weight:400;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    ?('<div style="font-size:15px;color:var(--text-strong);letter-spacing:0;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
     :'';
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
@@ -139236,7 +139236,7 @@ function _htmlDiplomesCoach(p){
   const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
     +'<div style="display:flex;gap:12px;align-items:center">'
     +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px color-mix(in srgb,var(--red) 60%,transparent)">'+icon('coche',14)+'</span>'
-    +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
+    +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:0">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
   if(dips.length) h+='<div style="'+TITRE+'">Diplômes et formations</div>'+dips.map(ligne).join('');
@@ -140212,7 +140212,7 @@ function _rendreAccesAthletes(){
   z.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin:28px 0 12px">'
     +'<div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>'
     +'<div style="flex:1;min-width:0">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Accès de mes athlètes</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Accès de mes athlètes</div>'
     +'<div class="sub" style="font-size:var(--fs-xs);margin-top:2px">'
     +(aRelancer?(aRelancer+' à relancer'):'Personne à relancer')
     +' · abonnement athlète : '+PRIX_ATHLETE_MOIS+' par mois</div></div></div>'
@@ -140462,7 +140462,7 @@ function offboardCoach(coachId){
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
     +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:var(--r-1);margin:0 auto 20px"></div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
     +'<div style="background:var(--surface-1);border-radius:var(--r-2);padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'
@@ -142530,7 +142530,7 @@ function _ligneMuscles(ex,i){
   const r=resoudreMuscles(nom,ex);
   const past=(g,plein)=>{
     const m=MUSCLES[g]; if(!m) return '';
-    return `<span style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;white-space:nowrap;`
+    return `<span style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:0;white-space:nowrap;`
       +(plein?`background:${m.c};color:#08080a;border:1px solid ${m.c}`
              :`background:transparent;color:${m.c};border:1px solid ${m.c}`)+`">${m.lib}</span>`;
   };
@@ -142652,7 +142652,7 @@ function loadExClassify(){
     return;
   }
   el.innerHTML=`<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">${aClasser.length} exercice${aClasser.length>1?'s':''} sans muscle rattaché. Classe-les, ou fusionne un doublon avec l'exercice qu'il désigne vraiment pour lui rendre son historique de charge.</p>`
-    +aClasser.map(a=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
+    +aClasser.map(a=>`<div class="card card--dense" style="margin-bottom:10px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(a.nom)}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${a.seances?a.seances+' séance'+(a.seances>1?'s':''):'jamais réalisé'}</div>
       <div style="display:flex;gap:8px">

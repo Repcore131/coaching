@@ -884,7 +884,7 @@ function _htmlPostPartumCoach(c){
   if(ppSymptomePositif(c)) causes.push('signalement de l\'athlète');
   if(f==='12_plus'&&!e.evaluationPerineale) causes.push('point non encore fait');
   const impact=ppImpactAutorise(c);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(PP_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${impact===true?'var(--sub)':'var(--orange)'}">${escapeHtml(f?(PP_LIB_FENETRES[f]||''):'Informatif')}</span>
@@ -2461,7 +2461,7 @@ function _htmlDepartAthlete(nut){
   // Le nom vient de la formule QUI A CALCULE (b.source), jamais d'un défaut.
   const nom=mbNom(b.source);
   const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
       <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5">P ${j.p} · G ${j.g} · L ${j.l}<br>Fibres ${j.f}</div>
     </div>`;

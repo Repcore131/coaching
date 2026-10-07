@@ -1174,7 +1174,7 @@ function _ligneMuscles(ex,i){
   const r=resoudreMuscles(nom,ex);
   const past=(g,plein)=>{
     const m=MUSCLES[g]; if(!m) return '';
-    return `<span style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;white-space:nowrap;`
+    return `<span style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:0;white-space:nowrap;`
       +(plein?`background:${m.c};color:#08080a;border:1px solid ${m.c}`
              :`background:transparent;color:${m.c};border:1px solid ${m.c}`)+`">${m.lib}</span>`;
   };
@@ -1296,7 +1296,7 @@ function loadExClassify(){
     return;
   }
   el.innerHTML=`<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">${aClasser.length} exercice${aClasser.length>1?'s':''} sans muscle rattaché. Classe-les, ou fusionne un doublon avec l'exercice qu'il désigne vraiment pour lui rendre son historique de charge.</p>`
-    +aClasser.map(a=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
+    +aClasser.map(a=>`<div class="card card--dense" style="margin-bottom:10px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(a.nom)}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${a.seances?a.seances+' séance'+(a.seances>1?'s':''):'jamais réalisé'}</div>
       <div style="display:flex;gap:8px">

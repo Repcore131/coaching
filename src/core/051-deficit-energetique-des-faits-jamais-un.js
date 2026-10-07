@@ -439,7 +439,7 @@ const REDS_LIB_SIGNAUX=Object.freeze({
 // ── L'écran athlète ───────────────────────────────────────────────────────
 let _leafqRep={};
 function htmlLeafq(){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
+  return `<div class="card" style="margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">${escapeHtml(REDS_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
     ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
@@ -480,7 +480,7 @@ function leafqValider(){
   saveUser();
   const z=document.getElementById('prog-reds');
   if(z) z.innerHTML=redsSuspend(currentUser)
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
+    ?`<div class="card card--dense" style="margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
     :'';
   return true;
 }
@@ -514,7 +514,7 @@ function renderReds(){
   try{
     if(shouldPromptLeafq(currentUser)) h=htmlLeafq();
     else if(redsSuspend(currentUser))
-      h=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
+      h=`<div class="card card--dense" style="margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
   }catch(e){ h=''; }
   z.innerHTML=h;
 }
@@ -1117,7 +1117,7 @@ function _blocVitesse(user){
 // qui suit est inatteignable en mode neutre.
 function blocPoids(user){
   if(user&&user.masquerPoids){
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;text-align:center">
+    return `<div class="card" style="text-align:center">
       <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:12px">Le suivi du poids est masqué.</div>
       <button class="btn btn-outline btn-sm" onclick="togglePoidsMasque()" style="letter-spacing:1px">Réafficher</button>
     </div>`;
@@ -1157,7 +1157,7 @@ function blocPoids(user){
         ${_blocVitesse(user)}
       </div>
     </div>`;
-  const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+  const neutreNote=neutre?`<div class="card card--dense" style="margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Tu as signalé un antécédent de trouble du comportement alimentaire dans ton
       questionnaire de départ. RepCore affiche donc tes pesées telles quelles,
       sans vitesse, sans objectif et sans alerte. Tu peux masquer complètement
@@ -1217,7 +1217,7 @@ function blocPoidsCoach(user,depuis){
   const c=alerte?'var(--orange)':'var(--text)';
   const der=serie[serie.length-1];
   const moy=mm7(serie,der.date);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}${der.heure?' à '+der.heure.replace(':',' h '):''} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
@@ -1434,7 +1434,7 @@ function renderCartePhase(){
   if(!z) return;
   z.innerHTML=''; return;
   if(!currentUser||phaseCourante(currentUser)||currentUser.phaseRefusee){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:14px">
     ${_htmlChoixPhase()}</div>`;
 }
 function ouvrirChoixPhase(){
@@ -1575,7 +1575,7 @@ function _htmlPhaseCoach(c){
         s'applique intégralement : ni vitesse, ni cible, ni alerte du côté de
         l'athlète. À suivre de près hors de l'application.
       </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+  return `<div class="card card--dense" style="margin-bottom:16px">
     <!-- LE TITRE EST REVENU le 08/09/2026. Il avait ete retire parce que le
          bandeau de la section « Phase » le disait juste au-dessus : or ce bloc
          a quitte sa section pour remonter en tete de l'onglet, sous le type de
@@ -2102,7 +2102,7 @@ function _htmlCadreImportCapture(quoi,opts){
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
-        style="width:100%;min-height:44px;margin:0;letter-spacing:1.2px">Envoyer une capture</button>
+        style="width:100%;min-height:44px;margin:0;letter-spacing:1px">Envoyer une capture</button>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px;text-align:center">
         La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.
       </div>
@@ -2134,7 +2134,7 @@ function _htmlCadreImportCapture(quoi,opts){
            lui-meme, avant meme d'etre lue. -->
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button class="btn" onclick="this.previousElementSibling.click()"
-        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.8px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
+        style="width:100%;min-height:46px;margin:0;background:${teinte.g};border:1px solid ${teinte.b};color:#fff;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:900;letter-spacing:1.5px;cursor:pointer;box-shadow:0 0 18px ${teinte.h},inset 0 1px 0 rgba(255,255,255,.18)">Envoyer une capture</button>
       <!-- LA PHRASE DE CONFIDENTIALITE EST UN ENGAGEMENT, PAS UNE MENTION
            LEGALE A ENTERRER : elle passe de --fs-2xs / --text-faint, ou elle
            etait illisible, a --fs-xs sur --text-dim. C'est elle qui autorise

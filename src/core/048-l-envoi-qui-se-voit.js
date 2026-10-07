@@ -1809,7 +1809,7 @@ function _tplFiltrer(){
   const parCat={};
   for(const t of l) (parCat[t.cat]=parCat[t.cat]||[]).push(t);
   z.innerHTML=Object.keys(TPL_CAT_LIB).filter(c=>parCat[c]).map(c=>`
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.6px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
     ${parCat[c].map(t=>{
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"

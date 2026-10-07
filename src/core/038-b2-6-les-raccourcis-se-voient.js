@@ -1425,7 +1425,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:0;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
@@ -1567,7 +1567,7 @@ function renderVolumePrescrit(cfg,user){
   const lignes=Object.keys(v.muscles).filter(m=>v.muscles[m]>=0.5)
     .sort((a,b)=>v.muscles[b]-v.muscles[a]);
   if(!lignes.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+  z.innerHTML=`<div class="card card--dense" style="margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:10px;line-height:1.5">
       ${v.avecConsigne
@@ -2051,25 +2051,25 @@ function showProgressTab(tab,btn,sansMemo){
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--red) 85%,transparent))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.5px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 85%,transparent),transparent)"></div>
           </div>
           <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px color-mix(in srgb,var(--red) 35%,transparent)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,var(--red-deep));border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px color-mix(in srgb,var(--red) 85%,transparent)"></div>
-          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
+          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.5px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:10px;margin:12px 0 14px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--sub)">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px color-mix(in srgb,var(--red) 40%,transparent),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px" data-scroll-fade>
@@ -2090,7 +2090,7 @@ function showProgressTab(tab,btn,sansMemo){
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:6px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:calc(var(--fq) * .5);max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
-                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
+                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
                 const src=getP(b,key);
@@ -2108,7 +2108,7 @@ function showProgressTab(tab,btn,sansMemo){
         <!-- Pied facon signature -->
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:var(--r-1);object-fit:cover;opacity:.9">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
+          <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.5px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
@@ -2477,13 +2477,13 @@ function _htmlDossierSante(user,pourCoach){
   // « rien n'est déclaré… » occupait le menu médical pour n'annoncer que du vide.
   if(dossierSanteVide(d)&&!pourCoach) return '';
   if(dossierSanteVide(d))
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
+    return `<div class="card card--dense" style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
   const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px">
+  return `<div class="card card--dense">
     ${titre('Ce qui est déclaré')}
     ${d.etats.length?d.etats.map(x=>ligne(escapeHtml(x.valeur),_dossDate(x.date))).join('')
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
