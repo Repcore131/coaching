@@ -74359,6 +74359,34 @@ async function testExercices(){
       const s=String(window.loadClientHome||'')+String(typeof _rendreAccueil==='function'?_rendreAccueil:'');
       return /histoireDuJour\(u,new Date\(\)\)/.test(_prodSrc())&&/clh-histoire/.test(_prodSrc())?true:_echec('branchement absent');});
 
+    // ══ BUILD 1920 — previsionExo : OÙ MÈNE CE RYTHME ══════════════════════════
+    ok('1920 — previsionExo : tendance montante projetée, plafonnée ; trop peu de points, plat ou recul → null',()=>{
+      const J=864e5, t=dateLocaleDeCle('2026-10-07').getTime();
+      const S=(j,kg,o)=>Object.assign({date:localISODate(new Date(t-j*J)),complete:true,data:{Squat:{sets:[{done:true,weight:String(kg),reps:'5',rir:'1'}]}}},o||{});
+      const faux=[];
+      const u={sessions:[S(42,80),S(35,82.5),S(28,85),S(21,87.5),S(14,90),S(7,92.5)]};
+      const p=previsionExo(u,'Squat',5,6,t);
+      if(!p||!(p.kg>92.5)||p.semaines!==6||p.reps!==5) faux.push('montante : '+JSON.stringify(p));
+      if(p&&p.e1rmPrevu>p.e1rmActuel*(1+0.015*6)+0.05) faux.push('plafond dépassé : '+JSON.stringify(p));
+      if(p&&(p.kg*2)%1!==0) faux.push('pas arrondi au demi-kilo');
+      if(previsionExo({sessions:[S(14,80),S(7,85)]},'Squat',5,6,t)) faux.push('deux points');
+      if(previsionExo({sessions:[S(5,80),S(3,82),S(1,84)]},'Squat',5,6,t)) faux.push('moins de 14 jours');
+      if(previsionExo({sessions:[S(42,92.5),S(28,90),S(14,87.5),S(7,85)]},'Squat',5,6,t)) faux.push('recul prédit');
+      if(previsionExo({sessions:[S(200,50),S(190,60),S(180,70)]},'Squat',5,6,t)) faux.push('hors des 12 semaines');
+      const avecDecharge={sessions:[S(42,80),S(35,82.5),S(28,85),S(21,40,{deload:true}),S(14,87.5),S(7,90)]};
+      const q=previsionExo(avecDecharge,'Squat',5,6,t); if(!q) faux.push('décharge non écartée');
+      const p8=previsionExo(u,'Squat',8,6,t); if(!(p8&&p8.kg<p.kg)) faux.push('8 reps ≥ 5 reps');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1920 — Perfs : la ligne « À ce rythme, dans 6 semaines » sur un exercice en progression, rien en recul',()=>{
+      const J=864e5, t=Date.now(); const cu=currentUser;
+      const S=(j,kg)=>({date:localISODate(new Date(t-j*J)),complete:true,data:{Squat:{sets:[{done:true,weight:String(kg),reps:'5',rir:'1'}]}}});
+      try{
+        currentUser={sessions:[S(42,80),S(35,82.5),S(28,85),S(21,87.5),S(14,90),S(7,92.5)]};
+        const h=_lignePrevision({nom:'Squat',etat:'progression'});
+        if(!/À ce rythme, dans 6 semaines : ~[\d,]+ kg × 5/.test(h)) return _echec('ligne : '+h);
+        return _lignePrevision({nom:'Squat',etat:'regression'})===''?true:_echec('prévision sur un recul');
+      }finally{ currentUser=cu; }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

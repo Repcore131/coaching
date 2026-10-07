@@ -13697,3 +13697,5 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 /* BUILD 1919 — l'histoire du jour (accueil) et « Depuis le début » (synthèse). */
 #clh-phrase.clh-histoire{color:var(--text-strong)}
 .prog-synthese-debut{margin-top:4px}
+/* BUILD 1920 — la prévision d'un exercice, sous sa courbe (onglet Perfs). */
+.perf-prev{font-size:var(--fs-2xs);color:var(--text-strong);font-weight:700;margin-top:4px}

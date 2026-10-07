@@ -1325,6 +1325,59 @@ function _listeEtats(user){
 }
 // `info` : R10 — la ligne porte le ⓘ de l'e1RM. L'appelant le donne a la
 // PREMIERE ligne qui nomme le sigle, et a elle seule.
+// ══ BUILD 1920 — OÙ MÈNE CE RYTHME ═════════════════════════════════════════
+// PURE (maintenant en argument). La charge à `reps` répétitions dans
+// `semaines` semaines SI la tendance des douze dernières semaines se
+// poursuit : régression linéaire de l'e1RM (séances fiables, hors décharge),
+// au moins 3 points sur 14 jours. Pente nulle ou négative → null : on ne
+// prédit pas un recul. Le gain est plafonné à 1,5 % par semaine — au-delà,
+// c'est un début de programme qui s'emballe, pas un rythme.
+// {kg, e1rmActuel, e1rmPrevu, semaines, reps}
+const PREVISION_GAIN_SEMAINE_MAX=0.015;
+function previsionExo(u,nomEx,reps,semaines,maintenant){
+  const sem=Number(semaines)>0?Number(semaines):6;
+  const r=Math.max(1,Math.round(Number(reps)||0));
+  const t=Number(maintenant)||Date.now();
+  const debut=t-84*864e5;
+  const ts=s=>{ const v=s&&s.date; if(!v) return 0; return /^\d{4}-\d{2}-\d{2}$/.test(String(v))?dateLocaleDeCle(v).getTime():(Number(v)||new Date(v).getTime()||0); };
+  const pts=[];
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||s.deload||s.complete===false) continue;
+    const x=ts(s); if(!(x>=debut&&x<=t)) continue;
+    let p=null; try{ p=perfExercice(s,nomEx,u); }catch(e){ p=null; }
+    if(p&&p.fiable&&p.score>0) pts.push([x,p.score]);
+  }
+  if(pts.length<3) return null;
+  pts.sort((a,b)=>a[0]-b[0]);
+  if(pts[pts.length-1][0]-pts[0][0]<14*864e5) return null;
+  const n=pts.length, mx=pts.reduce((a,p)=>a+p[0],0)/n, my=pts.reduce((a,p)=>a+p[1],0)/n;
+  const sxx=pts.reduce((a,p)=>a+(p[0]-mx)*(p[0]-mx),0);
+  if(!(sxx>0)) return null;
+  const pente=pts.reduce((a,p)=>a+(p[0]-mx)*(p[1]-my),0)/sxx;   // kg par ms
+  if(!(pente>0)) return null;
+  const actuel=my+pente*(t-mx);
+  if(!(actuel>0)) return null;
+  const prevu=Math.min(actuel+pente*sem*7*864e5,actuel*(1+PREVISION_GAIN_SEMAINE_MAX*sem));
+  const kg=Math.round(chargePourReps(prevu,r,0)*2)/2;
+  if(!(kg>0)) return null;
+  return {kg,e1rmActuel:Math.round(actuel*10)/10,e1rmPrevu:Math.round(prevu*10)/10,semaines:sem,reps:r};
+}
+// Les répétitions de travail d'un exercice : celles de la meilleure série de
+// sa dernière séance (8 par défaut).
+function _repsHabituelles(u,nom){
+  const l=((u&&u.sessions)||[]).filter(s=>s&&s.data&&s.data[nom]);
+  const d=l.length?l[l.length-1].data[nom]:null;
+  let best=null;
+  ((d&&d.sets)||[]).forEach(x=>{ if(!x||x.done!==true) return; const w=parseFloat(x.weight)||0, r=parseInt(x.repsDone!=null?x.repsDone:x.reps,10)||0;
+    if(r>0&&(!best||w>best.w)) best={w,r}; });
+  return best?best.r:8;
+}
+function _lignePrevision(x){
+  if(!x||x.etat==='insuffisant'||x.etat==='recul'||x.etat==='regression') return '';
+  let p=null; try{ p=previsionExo(currentUser,x.nom,_repsHabituelles(currentUser,x.nom),6,Date.now()); }catch(e){ p=null; }
+  if(!p) return '';
+  return '<div class="perf-prev">À ce rythme, dans '+p.semaines+' semaines : ~'+String(p.kg).replace('.',',')+' kg × '+p.reps+'</div>';
+}
 function _ligneEtat(x,info){
   const c=PERF_ETAT_COULEUR[x.etat]||'var(--sub)';
   const detail=x.etat==='insuffisant'
@@ -1339,6 +1392,7 @@ function _ligneEtat(x,info){
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${detail}</div>
     ${x.etat!=='insuffisant'?_sparkline(x.points,c):''}
+    ${_lignePrevision(x)}
     <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${PERF_METRIQUE_LIB[x.metrique]||''}${x.sansRir?' · estimation sans RIR':''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
   </div>`;
 }
