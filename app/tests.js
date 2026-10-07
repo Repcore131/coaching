@@ -28040,7 +28040,9 @@ async function testExercices(){
       // écrite d'un bloc — c'est d'ailleurs une seule histoire : on se
       // déconnecte deux fois de suite, et on regarde ce qui reste.
       okA('La déconnexion retire le compte, active le suivant, puis rend l\'accueil',(async()=>{
-        const sR=window.rcConfirm;
+        const sR=window.rcConfirm, sR3=window.rcConfirm3;
+        // Build 1866 : s'il reste des envois en file, logout passe par rcConfirm3.
+        window.rcConfirm3=async()=>'milieu';
         try{
           _poser();
           const u=DB.get('users');
@@ -28063,7 +28065,7 @@ async function testExercices(){
           if(currentUser!==null) return _echec('un utilisateur est encore en session');
           return comptesConnectes().length===0
             ?true:_echec('le registre n’est pas vide');
-        } finally { window.rcConfirm=sR; }}));
+        } finally { window.rcConfirm=sR; window.rcConfirm3=sR3; }}));
 
       // ── routeUser est le seul point d'accroche ──
       ok('routeUser inscrit le compte au registre, à lui seul',()=>{
@@ -66094,6 +66096,33 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1866 : CE QU'ON PERD EN SE DÉCONNECTANT ══
+    ok('pertesALaDeconnexion : rien → [] ; séance de 2 séries + file de 1 → 2 phrases',()=>{
+      if(pertesALaDeconnexion({}).length!==0) return _echec('vide : '+pertesALaDeconnexion({}).join('|'));
+      const snap={sessionData:{0:{sets:[{done:true,weight:'60',repsDone:'8'},{done:true,weight:'60',repsDone:'8'},{done:false}]}}};
+      const l=pertesALaDeconnexion({snap,file:1});
+      if(l.length!==2) return _echec(JSON.stringify(l));
+      return /2 séries/.test(l[0])&&/1 envoi pas encore parti/.test(l[1])?true:_echec(JSON.stringify(l));});
+    okA('logout avec une séance en cours et « Annuler » : rc_wo_state est toujours là',async()=>{
+      const sU=currentUser, c3=window.rcConfirm3, av=localStorage.getItem('rc_wo_state');
+      try{
+        currentUser={id:'lg',email:'lg@t.fr',role:'athlete',sessions:[],bilans:[]};
+        const fin=Date.now()-600e3;
+        const snap={email:'lg@t.fr',exercises:[{name:'Squat',series:3,reps:'8'}],
+          sessionData:{0:{sets:[{weight:'60',repsDone:'8',done:true,tValid:fin-180e3},{weight:'60',repsDone:'8',done:true,tValid:fin},{weight:'',repsDone:'',done:false}]}},
+          startTime:fin-900e3,progName:'Jambes',slot:null};
+        localStorage.setItem('rc_wo_state',JSON.stringify(snap));
+        let n=0, corps=''; window.rcConfirm3=async(t,c)=>{ n++; corps=c; return null; };
+        await logout();
+        if(n!==1) return _echec('rcConfirm3 appelé '+n+' fois');
+        if(!/2 séries/.test(corps)) return _echec('message : '+corps);
+        if(!localStorage.getItem('rc_wo_state')) return _echec('instantané perdu');
+        return currentUser&&currentUser.id==='lg'?true:_echec('session détruite');
+      } finally {
+        currentUser=sU; window.rcConfirm3=c3;
+        if(av===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',av);
+      }});
 
     // ══ BUILD 1865 : CORRIGER OU SUPPRIMER CE QUI A ÉTÉ ENVOYÉ ══
     const _csUser=()=>{

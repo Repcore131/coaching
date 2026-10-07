@@ -133125,8 +133125,53 @@ function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oubli
   try{ BOITE_COACH.fermer(); }catch(e){}
   try{ retirerMarque(); }catch(e){}
   try{localStorage.removeItem('rc_wo_state');}catch(e){}}
+// ══ CE QUI SERAIT PERDU À LA DÉCONNEXION (BUILD 1866) ════════════════════
+// Se déconnecter pour changer de téléphone, prêter le sien, « pour réparer » :
+// une séance en pause, des envois en attente partaient avec. PURE.
+function pertesALaDeconnexion(o){
+  const x=o||{}, out=[];
+  const n=x.snap?_woSeriesValidees(x.snap):0;
+  if(n>0) out.push('une séance en cours ('+n+' série'+(n>1?'s':'')+')');
+  let r=0; try{ r=x.draft?_bilDraftRempli(x.draft):0; }catch(e){ r=0; }
+  if(r>0) out.push('un bilan commencé ('+r+' réponse'+(r>1?'s':'')+'), qui t’attendra sur ce téléphone');
+  const f=Number(x.file)||0;
+  if(f>0) out.push(f+(f>1?' envois pas encore partis':' envoi pas encore parti'));
+  const p=Number(x.photos)||0;
+  if(p>0) out.push(p+(p>1?' photos de bilan pas encore envoyées':' photo de bilan pas encore envoyée'));
+  return out;
+}
+const DECONNEXION_ENVOI_MS=8000;
+function _etatDeconnexion(){
+  let snap=null, draft=null, file=0, photos=0;
+  try{ snap=_woLoadSnap(); }catch(e){}
+  try{ draft=_bilLoadDraft(); }catch(e){}
+  try{ file=CLOUD.enAttenteDeSync(); }catch(e){}
+  try{ photos=photosBilanARenvoyer(currentUser).length; }catch(e){}
+  return {snap,draft,file,photos};
+}
 async function logout(){
-  if(!await rcConfirm('Se déconnecter ?',null,'Se déconnecter')) return;
+  const _etat=_etatDeconnexion();
+  const _pertes=pertesALaDeconnexion(_etat);
+  let _brouillonGarde=null;
+  try{ _brouillonGarde=localStorage.getItem(BIL_DRAFT_KEY); }catch(e){}
+  if(!_pertes.length){
+    if(!await rcConfirm('Se déconnecter ?',null,'Se déconnecter')) return;
+  } else {
+    const ch=await rcConfirm3('Avant de te déconnecter','– '+_pertes.join('\n– '),
+      'Enregistrer et me déconnecter','Me déconnecter quand même','Annuler');
+    if(ch===null) return;
+    if(ch==='ok'){
+      try{ toast('Envoi en cours…'); }catch(e){}
+      try{ if(_etat.snap&&_woSeriesValidees(_etat.snap)) enregistrerSeanceOubliee(_etat.snap,{silencieuxToast:true}); }catch(e){}
+      const attente=new Promise(r=>setTimeout(r,DECONNEXION_ENVOI_MS));
+      try{ await Promise.race([Promise.all([
+        CLOUD.viderFile().catch(()=>{}),
+        photosBilanRenvoyer(currentUser).catch(()=>{})]),attente]); }catch(e){}
+      let reste=0;
+      try{ reste=CLOUD.enAttenteDeSync()+photosBilanARenvoyer(currentUser).length; }catch(e){ reste=1; }
+      if(reste>0){ try{ saveUser(); }catch(e){} toast('Pas de réseau : reste connecté jusqu’au prochain envoi','var(--orange)'); return; }
+    }
+  }
   // Le compte quitte le registre : ses jetons viennent d'être révoqués, le
   // garder en liste promettrait une bascule qui échouerait.
   const _sortant=compteActif();
@@ -133149,6 +133194,10 @@ async function logout(){
   // stockage, et un setInterval qui continuait d’écrire dans #wo-timer pour un
   // compte qui n’existe plus.
   _comptesRemiseAZero();
+  // BUILD 1866 : le brouillon de bilan ne part pas au cloud ; il porte
+  // l'adresse de son propriétaire (_bilDraftAMoi le protège des autres
+  // comptes) — on le laisse sur ce téléphone.
+  try{ if(_brouillonGarde) localStorage.setItem(BIL_DRAFT_KEY,_brouillonGarde); }catch(e){}
   // Un autre compte est resté connecté : on l'active au lieu de renvoyer sur
   // l'écran d'accueil, comme le fait Instagram.
   const users=DB.get('users')||{};
