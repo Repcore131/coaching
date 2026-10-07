@@ -502,11 +502,10 @@ function finishWorkout(incomplete=false,opts){
   // 2 200 ms : la celebration de fin dure environ deux secondes. Se poser
   // pendant serait une interruption, et l'ecran de fin est le seul moment
   // ou l'application se felicite — on ne marche pas dessus.
-  if(!incomplete){
-    try{
-      setTimeout(()=>{ try{ rcBanniereInstallMontrer(); }catch(_e){} },2200);
-    }catch(_e){}
-  }
+  // BUILD 1914 : plus de minuterie à l'aveugle. _installApresFete attend que
+  // la fête soit VUE (les volts entièrement à l'écran) ou que l'athlète quitte
+  // l'écran de fin — et jamais par-dessus le calque d'un badge.
+  try{ _installApresFete(incomplete); }catch(_e){}
 }
 
 // LA CELEBRATION DE FIN DE SEANCE.

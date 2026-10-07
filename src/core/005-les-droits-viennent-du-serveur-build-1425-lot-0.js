@@ -1262,6 +1262,8 @@ function go(id){
   try{ id=rcRoleRoute(id); }catch(e){}
   try{ if(id==='s-register') setTimeout(rcRolePreselection,80); }catch(e){}
   try{ lectureCacher(); }catch(e){}
+  // BUILD 1914 : quitter la fin de séance pose la bannière d'installation.
+  try{ _installApresFeteQuitter(id); }catch(e){}
   // La pastille « n envois en attente » suit le compte affiche (connexion,
   // deconnexion, changement de compte).
   try{ setTimeout(_majIndicAttente,0); }catch(e){}

@@ -10852,12 +10852,16 @@ async function testExercices(){
 
             ok('Elle se déclenche APRÈS une séance allée au bout, et pas ailleurs',()=>{
               const s=String(finishWorkout).replace(/^\s*\/\/.*$/gm,'');
-              const i=s.indexOf('rcBanniereInstallMontrer');
+              // BUILD 1914 : la fin de séance passe par _installApresFete(incomplete),
+              // qui arme l'attente (volts visibles ou écran quitté) et refuse d'abord
+              // une séance incomplète.
+              const i=s.indexOf('_installApresFete(incomplete)');
               if(i<0) return _echec('la fin de séance ne propose plus rien');
               // SEULEMENT SI LA SÉANCE EST ALLÉE AU BOUT. Une séance
               // abandonnée n'a rendu aucun service : c'est le pire moment.
-              if(!/if\(!incomplete\)/.test(s)) return _echec('une séance abandonnée déclencherait la bannière');
-              if(s.lastIndexOf('if(!incomplete)')>i) return _echec('le garde vient après l’appel');
+              const f=String(_installApresFete);
+              if(!/if\(incomplete\) return/.test(f)) return _echec('une séance abandonnée déclencherait la bannière');
+              if(f.indexOf('if(incomplete) return')>f.indexOf('IntersectionObserver')) return _echec('le garde vient après l’attente');
               // APRÈS le try/catch : la séance est enregistrée dans les deux
               // cas, donc la proposition a lieu d'être dans les deux cas.
               const iC=s.lastIndexOf('affichage de fin incomplet');
@@ -74126,6 +74130,71 @@ async function testExercices(){
         if(b[4].right>360.5) faux.push('dépasse : '+b[4].right);
         return faux.length?_echec(faux.join(' | ')):true;
       }finally{ ifr.remove(); }});
+
+    // ══ BUILD 1914 — LA BANNIÈRE D'INSTALLATION APRÈS LA FÊTE ══════════════════
+    const _instBanc=(fn)=>{ // rend la valeur, ou une promesse (le ménage attend qu'elle se tienne)
+      const _ra=window.rcBanniereInstallRaison, _mo=window.rcBanniereInstallMontrer, _io=window.IntersectionObserver;
+      const etat={montree:0,cb:null,observe:null};
+      const volts=document.getElementById('wd-volts')?null:document.createElement('div');
+      if(volts){ volts.id='wd-volts'; document.body.appendChild(volts); }
+      let asy=false;
+      const menage=()=>{ window.rcBanniereInstallRaison=_ra; window.rcBanniereInstallMontrer=_mo; window.IntersectionObserver=_io; if(volts) volts.remove(); _instFete=null; };
+      try{
+        window.rcBanniereInstallRaison=()=>'ok'; window.rcBanniereInstallMontrer=()=>{ etat.montree++; return true; };
+        window.IntersectionObserver=function(cb){ etat.cb=cb; this.observe=x=>{ etat.observe=x; }; this.disconnect=()=>{ etat.cb=null; }; };
+        const r=fn(etat);
+        if(r&&typeof r.then==='function'){ asy=true; return r.finally(menage); }
+        return r;
+      }finally{ if(!asy) menage(); }
+    };
+    ok('1914 a — séance incomplète : rien n’est armé',()=>_instBanc(e=>{
+      const r=_installApresFete(true);
+      return r==='incomplete'&&!_instFete&&e.montree===0?true:_echec(r);}));
+    ok('1914 b — les volts entièrement visibles posent la bannière, une seule fois',()=>_instBanc(e=>{
+      if(_installApresFete(false)!=='attend') return _echec('pas en attente');
+      if(!e.observe||e.observe.id!=='wd-volts') return _echec('wd-volts non observé');
+      e.cb([{isIntersecting:true,intersectionRatio:0.5}]); if(e.montree) return _echec('posée à moitié visible');
+      e.cb([{isIntersecting:true,intersectionRatio:1}]);
+      if(e.montree!==1) return _echec(e.montree+' fois');
+      _installApresFeteTirer(); return e.montree===1?true:_echec('deux fois');}));
+    ok('1914 c — jamais par-dessus le calque d’un badge : elle attend qu’il parte',()=>_instBanc(e=>{
+      const bdg=document.createElement('div'); bdg.id='bdg-ecran'; document.body.appendChild(bdg);
+      try{
+        _installApresFete(false);
+        e.cb([{isIntersecting:true,intersectionRatio:1}]);
+        if(e.montree) return _echec('posée sur le badge');
+        if(!_instFete) return _echec('désarmée');
+      }finally{ bdg.remove(); }
+      _installApresFeteTirer();
+      return e.montree===1?true:_echec('pas posée après le badge');}));
+    okA('1914 d — quitter l’écran de fin pose la bannière ; un autre écran ne déclenche rien',async()=>_instBanc(async e=>{
+      _installApresFete(false);
+      if(_installApresFeteQuitter('s-client-home')&&(document.querySelector('.screen.active')||{}).id!=='s-workout-done') return _echec('déclenché hors de la fin de séance');
+      const act=document.querySelector('.screen.active'); const fin=document.getElementById('s-workout-done');
+      if(!fin) return _echec('s-workout-done absent');
+      if(act) act.classList.remove('active'); fin.classList.add('active');
+      try{
+        if(!_installApresFeteQuitter('s-client-home')) return _echec('quitter non vu');
+        await new Promise(r=>setTimeout(r,350));
+        return e.montree===1?true:_echec('montrée '+e.montree);
+      }finally{ fin.classList.remove('active'); if(act) act.classList.add('active'); }}));
+    ok('1914 — la bande « en attente » se tait sur s-workout-done tant qu’on n’a pas défilé',()=>{
+      const brut=localStorage.getItem('rc_sync_queue'); const cu=currentUser;
+      const act=document.querySelector('.screen.active'); const fin=document.getElementById('s-workout-done');
+      try{
+        currentUser=_banAth();
+        localStorage.setItem('rc_sync_queue',JSON.stringify([{cle:'banc@t,fr',at:Date.now()}]));
+        if(act) act.classList.remove('active'); fin.classList.add('active'); fin._rcAttDefile=false;
+        _majIndicAttente();
+        const z=document.getElementById('rc-attente');
+        if(!z||!z.classList.contains('rc-attente--tue')) return _echec('bande visible sur la fin de séance');
+        fin._rcAttDefile=true; _majIndicAttente();
+        return !z.classList.contains('rc-attente--tue')?true:_echec('toujours tue après défilement');
+      }finally{
+        fin.classList.remove('active'); if(act) act.classList.add('active'); currentUser=cu; fin._rcAttDefile=false;
+        if(brut==null) localStorage.removeItem('rc_sync_queue'); else localStorage.setItem('rc_sync_queue',brut);
+        try{ _majIndicAttente(); }catch(e){}
+      }});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

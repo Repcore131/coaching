@@ -1567,6 +1567,15 @@ function _majIndicAttente(){
     if(tb){ if(tb.nextElementSibling!==z) tb.insertAdjacentElement('afterend',z); }
     else if(z.parentElement!==b) b.appendChild(z);
   }
+  // BUILD 1914 : sur la fin de séance, la bande se tait tant que l'athlète
+  // n'a pas défilé — la fête d'abord. Le premier défilement la rend.
+  const fin=!!(ecran&&ecran.id==='s-workout-done');
+  if(fin&&!ecran._rcAttDefile){
+    z.classList.add('rc-attente--tue');
+    if(!ecran._rcAttEcoute){ ecran._rcAttEcoute=true;
+      const rendre=()=>{ if((ecran.scrollTop||0)>0||(window.scrollY||0)>0){ ecran._rcAttDefile=true; z.classList.remove('rc-attente--tue'); } };
+      ecran.addEventListener('scroll',rendre,{passive:true}); window.addEventListener('scroll',rendre,{passive:true}); }
+  } else z.classList.remove('rc-attente--tue');
   z.hidden=false;
   return n;
 }

@@ -1672,6 +1672,54 @@ function rcBanniereInstallCacher(){
   _majHauteurBanniere();
   return true;
 }
+// ══ BUILD 1914 — LA BANNIÈRE APRÈS LA FÊTE, PAS PENDANT ════════════════════
+// Elle se pose quand l'une de ces deux choses arrive, la première gagne :
+//   a) #wd-volts est ENTIÈREMENT visible (IntersectionObserver, seuil 1) —
+//      la fête a été vue ;
+//   b) l'athlète quitte s-workout-done (go() appelle _installApresFeteQuitter).
+// Jamais pendant #bdg-ecran (le calque d'un badge) : on réessaie après.
+// Rien pour une séance incomplète, rien si rcBanniereInstallRaison() ≠ 'ok'.
+let _instFete=null;
+function _badgeEcranOuvert(){ return !!document.getElementById('bdg-ecran'); }
+function _installApresFeteTirer(){
+  if(!_instFete) return false;
+  if(_badgeEcranOuvert()){ clearTimeout(_instFete.t); _instFete.t=setTimeout(_installApresFeteTirer,800); return false; }
+  const f=_instFete; _instFete=null;
+  try{ if(f.io) f.io.disconnect(); }catch(e){}
+  clearTimeout(f.t);
+  try{ return rcBanniereInstallMontrer(); }catch(e){ return false; }
+}
+function _installApresFete(incomplete){
+  try{ if(_instFete&&_instFete.io) _instFete.io.disconnect(); }catch(e){}
+  _instFete=null;
+  // Une nouvelle fin de séance : la bande « en attente » se tait de nouveau.
+  try{ const e=document.getElementById('s-workout-done'); if(e) e._rcAttDefile=false; }catch(e){}
+  if(incomplete) return 'incomplete';
+  let r='ok'; try{ r=rcBanniereInstallRaison(); }catch(e){ r='erreur'; }
+  if(r!=='ok') return r;
+  _instFete={io:null,t:0};
+  const cible=document.getElementById('wd-volts');
+  if(cible&&typeof IntersectionObserver==='function'){
+    _instFete.io=new IntersectionObserver(es=>{
+      if(es.some(e=>e.isIntersecting&&e.intersectionRatio>=0.999)) _installApresFeteTirer();
+    },{threshold:1});
+    _instFete.io.observe(cible);
+    return 'attend';
+  }
+  // Sans observateur : l'ancienne attente, le temps de la célébration.
+  _instFete.t=setTimeout(_installApresFeteTirer,2200);
+  return 'minuterie';
+}
+function _installApresFeteQuitter(versId){
+  if(!_instFete) return false;
+  const act=(document.querySelector('.screen.active')||{}).id;
+  if(act!=='s-workout-done'||versId==='s-workout-done') return false;
+  try{ if(_instFete.io) _instFete.io.disconnect(); }catch(e){}
+  _instFete.io=null;
+  clearTimeout(_instFete.t);
+  _instFete.t=setTimeout(_installApresFeteTirer,300);
+  return true;
+}
 // NE LEVE JAMAIS. Elle est appelee depuis la fin de seance : une banniere
 // qui echoue ne doit pas emporter l'enregistrement de la seance.
 function rcBanniereInstallMontrer(){

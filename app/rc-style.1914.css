@@ -13672,3 +13672,5 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 @media(max-width:399px){
   #s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t,#s-coach-client .ccd-barre4>.ccd-b4{flex:1 1 calc(33.333% - 6px)!important}
 }
+/* BUILD 1914 — la bande « envois en attente » se tait sur la fin de séance tant qu'on n'a pas défilé. */
+.rc-attente.rc-attente--tue{display:none!important}
