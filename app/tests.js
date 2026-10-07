@@ -73742,6 +73742,67 @@ async function testExercices(){
       }
       return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
 
+    // ══ BUILD 1904 — LE NOMBRE À LA FRANÇAISE (lireNombreFr), BILAN BORNÉ ═════
+    ok('1904 — lireNombreFr : virgule, point, unité acceptés ; vide, texte, emoji, négatif, hors bornes refusés avec leur raison',()=>{
+      const b={min:25,max:300};
+      const att=[['72,5',true,72.5,''],['72.5',true,72.5,''],['72,5 kg',true,72.5,''],['72,5 kg',true,72.5,''],
+        ['725',false,725,'max'],['-5',false,-5,'negatif'],['9999',false,9999,'max'],['abc',false,null,'texte'],
+        ['💪',false,null,'texte'],['',false,null,'vide'],['  ',false,null,'vide'],[null,false,null,'vide'],['7,2,5',false,null,'texte'],['10',false,10,'min']];
+      const faux=[];
+      for(const [t,ok_,v,r] of att){ const l=lireNombreFr(t,b); if(l.ok!==ok_||l.raison!==r||(v!=null&&l.valeur!==v)) faux.push(JSON.stringify(t)+' → '+JSON.stringify(l)); }
+      if(lireNombreFr('72,456',{decimales:1}).valeur!==72.5) faux.push('decimales:1');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1904 — bornes du bilan : poids 25–300, tours 10–250, bras et mollets 10–80 ; message sous le champ',()=>{
+      const faux=[];
+      const cas=[['bil-weight','72,5',''],['bil-weight','725','725 kg ? Vérifie la virgule.'],['bil-weight','-5','négative'],['bil-waist','260','?'],
+        ['bil-waist','80',''],['bil-bicep-l','85','?'],['bil-bicep-l','38',''],['deb-calf-r','9','?'],['bil-weight','abc','Un nombre']];
+      for(const [id,v,m] of cas){ const a=aideMesureBilan(id,v); if(m?!a.includes(m):a) faux.push(id+' '+v+' → « '+a+' »'); }
+      const d=champsBilanEnDefaut({'bil-weight':'9999','bil-waist':'80','bil-hips':''},['bil-weight','bil-waist','bil-hips']);
+      if(d.length!==1||d[0].id!=='bil-weight') faux.push('champsBilanEnDefaut : '+JSON.stringify(d));
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1904 — nettoyerMesuresBilan : 72,5 → "72.5", 9999 et -5 retirés, vidé retiré, le reste intact',()=>{
+      const r=nettoyerMesuresBilan({'bil-weight':'72,5','bil-waist':'-5','bil-chest':'9999','bil-hips':'','bil-ressenti':'abc','bil-energie':7});
+      const b=r.bilan;
+      if(b['bil-weight']!=='72.5') return _echec('poids : '+b['bil-weight']);
+      if('bil-waist' in b||'bil-chest' in b||'bil-hips' in b) return _echec('valeur en défaut gardée : '+JSON.stringify(b));
+      if(b['bil-ressenti']!=='abc'||b['bil-energie']!==7) return _echec('champ non chiffré touché');
+      return r.retirees.sort().join(',')==='bil-chest,bil-waist'?true:_echec('retirées : '+r.retirees);});
+    ok('1904 — saveBilanFinal relit le brouillon : 9999 / -5 ne sont pas enregistrés, 72,5 devient 72.5',()=>{
+      const sauve=currentUser, _bt=bilType, _bd=bilData;
+      const _sv=window.saveUser, _go=window.go, _lc=window.loadClientHome, _te=window.toastEcriture;
+      try{
+        window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{}; window.toastEcriture=()=>{};
+        currentUser=Object.assign(_banAth(),{bilans:[],weight:'70'});
+        bilType='coaching';
+        bilData={'bil-weight':'9999','bil-waist':'-5','bil-chest':'98'};
+        saveBilanFinal();
+        let dern=(currentUser.bilans||[]).slice(-1)[0]||{};
+        if('bil-weight' in dern||'bil-waist' in dern) return _echec('valeur aberrante enregistrée : '+JSON.stringify(dern));
+        if(String(currentUser.weight)!=='70') return _echec('poids du profil écrasé : '+currentUser.weight);
+        bilData={'bil-weight':'72,5'};
+        saveBilanFinal();
+        dern=(currentUser.bilans||[]).slice(-1)[0]||{};
+        if(dern['bil-weight']!=='72.5') return _echec('72,5 → '+dern['bil-weight']);
+        return String(currentUser.weight)==='72.5'?true:_echec('profil : '+currentUser.weight);
+      } finally { currentUser=sauve; bilType=_bt; bilData=_bd;
+        window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc; window.toastEcriture=_te; }});
+    ok('1904 — Suivant bloqué sur un champ hors bornes, débloqué une fois corrigé ; les champs sont en texte décimal',()=>{
+      const _bt=bilType, _bd=bilData, _bs=bilStep;
+      const zone=document.createElement('div'); zone.id='bil-content'; zone.innerHTML='<div class="pad">'+bQ('bil-weight')+'</div>';
+      const ancien=document.getElementById('bil-content'); if(ancien) ancien.id='bil-content-sauve';
+      document.body.appendChild(zone);
+      try{
+        const ch=document.getElementById('bil-weight');
+        if(ch.type!=='text'||ch.getAttribute('inputmode')!=='decimal') return _echec('champ : '+ch.type+'/'+ch.getAttribute('inputmode'));
+        bilData={}; bMesureSaisie('bil-weight','725');
+        if(!_bilBloquerSiDefaut()) return _echec('725 kg ne bloque pas');
+        const aide=document.getElementById('bil-aide-mesures');
+        if(!aide||!/725 kg \? Vérifie la virgule/.test(aide.textContent)) return _echec('message : '+(aide&&aide.textContent));
+        bMesureSaisie('bil-weight','72,5');
+        if(_bilBloquerSiDefaut()) return _echec('72,5 bloque encore');
+        return bilData['bil-weight']==='72.5'?true:_echec('rangé : '+bilData['bil-weight']);
+      } finally { zone.remove(); if(ancien) ancien.id='bil-content'; bilType=_bt; bilData=_bd; bilStep=_bs; }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

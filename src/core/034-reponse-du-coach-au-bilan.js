@@ -1688,7 +1688,9 @@ function saveBilanFinal(){
     return;
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
-  const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // BUILD 1904 : chaque mesure est RELUE ici, brouillon repris compris.
+  const _net=nettoyerMesuresBilan(bilData);
+  const bi=Object.assign({type:bilType,date:Date.now(),num:n},_net.bilan);
   // BUILD 1880 : le poids vient des pesées de la semaine (non retouché).
   if(_bilPoidsPesees&&String(bi['bil-weight']||'')===String(_bilPoidsPesees.kg)) bi.bilPoidsSource='pesees';
   _bilPoidsPesees=null;
@@ -1769,8 +1771,8 @@ function saveBilanFinal(){
     // reste — même règle que partout ailleurs dans ce lot.
     if(/ne prends plus/i.test(_rep)) delete currentUser.traitementEnCours;
   }
-  if(bilData['bil-weight']) currentUser.weight=bilData['bil-weight'];
-  if(bilData['deb-weight']) currentUser.weight=bilData['deb-weight'];
+  if(_net.bilan['bil-weight']) currentUser.weight=_net.bilan['bil-weight'];
+  if(_net.bilan['deb-weight']) currentUser.weight=_net.bilan['deb-weight'];
   // Propager hauteur, âge et genre vers le profil pour les calculs de composition
   const _h=parseFloat(bilData['deb-height']||bilData['bil-height']||0);
   if(_h>100&&_h<250) currentUser._evol_height=_h;

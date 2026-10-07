@@ -983,6 +983,28 @@ function lireDecimal(brut,opts){
   if(typeof o.max==='number'&&v>o.max) return null;
   return Math.round(v*1e6)/1e6;
 }
+// BUILD 1904 (série 5, lot 1) — LE NOMBRE À LA FRANÇAISE, AVEC SA RAISON.
+// PURE. « 72,5 », « 72.5 », « 72,5 kg », « 72,5 kg » → {ok:true,valeur:72.5}.
+// Refus motivé : 'vide', 'texte' (lettres, emoji, deux virgules…), 'negatif',
+// 'min', 'max'. lireDecimal dit « non » ; celui-ci dit POURQUOI, et c'est ce
+// qui permet d'écrire sous le champ autre chose que « invalide ».
+function lireNombreFr(txt,opts){
+  const o=opts||{};
+  let t=String(txt==null?'':txt).replace(/[\u00a0\u202f]/g,' ').trim();
+  if(!t) return {ok:false,valeur:null,raison:'vide'};
+  t=t.replace(/\s*(kg|g|cm|km|kcal|%)$/i,'').trim();
+  const neg=/^[-−]/.test(t);
+  const corps=neg?t.slice(1).trim():t;
+  if(!/^\d+(?:[.,]\d+)?$/.test(corps)&&!/^\d+[.,]$/.test(corps)) return {ok:false,valeur:null,raison:'texte'};
+  let x=parseFloat(corps.replace(',','.'));
+  if(!isFinite(x)) return {ok:false,valeur:null,raison:'texte'};
+  if(neg&&x>0) return {ok:false,valeur:-x,raison:'negatif'};
+  if(typeof o.decimales==='number'&&o.decimales>=0){ const f=Math.pow(10,o.decimales); x=Math.round(x*f)/f; }
+  else x=Math.round(x*1e6)/1e6;
+  if(typeof o.min==='number'&&x<o.min) return {ok:false,valeur:x,raison:'min'};
+  if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
+  return {ok:true,valeur:x,raison:''};
+}
 function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
   return lireDecimal(brut,{min:0,max:m,pas:0.25});

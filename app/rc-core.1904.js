@@ -58360,6 +58360,28 @@ function lireDecimal(brut,opts){
   if(typeof o.max==='number'&&v>o.max) return null;
   return Math.round(v*1e6)/1e6;
 }
+// BUILD 1904 (série 5, lot 1) — LE NOMBRE À LA FRANÇAISE, AVEC SA RAISON.
+// PURE. « 72,5 », « 72.5 », « 72,5 kg », « 72,5 kg » → {ok:true,valeur:72.5}.
+// Refus motivé : 'vide', 'texte' (lettres, emoji, deux virgules…), 'negatif',
+// 'min', 'max'. lireDecimal dit « non » ; celui-ci dit POURQUOI, et c'est ce
+// qui permet d'écrire sous le champ autre chose que « invalide ».
+function lireNombreFr(txt,opts){
+  const o=opts||{};
+  let t=String(txt==null?'':txt).replace(/[\u00a0\u202f]/g,' ').trim();
+  if(!t) return {ok:false,valeur:null,raison:'vide'};
+  t=t.replace(/\s*(kg|g|cm|km|kcal|%)$/i,'').trim();
+  const neg=/^[-−]/.test(t);
+  const corps=neg?t.slice(1).trim():t;
+  if(!/^\d+(?:[.,]\d+)?$/.test(corps)&&!/^\d+[.,]$/.test(corps)) return {ok:false,valeur:null,raison:'texte'};
+  let x=parseFloat(corps.replace(',','.'));
+  if(!isFinite(x)) return {ok:false,valeur:null,raison:'texte'};
+  if(neg&&x>0) return {ok:false,valeur:-x,raison:'negatif'};
+  if(typeof o.decimales==='number'&&o.decimales>=0){ const f=Math.pow(10,o.decimales); x=Math.round(x*f)/f; }
+  else x=Math.round(x*1e6)/1e6;
+  if(typeof o.min==='number'&&x<o.min) return {ok:false,valeur:x,raison:'min'};
+  if(typeof o.max==='number'&&x>o.max) return {ok:false,valeur:x,raison:'max'};
+  return {ok:true,valeur:x,raison:''};
+}
 function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
   return lireDecimal(brut,{min:0,max:m,pas:0.25});
@@ -82489,12 +82511,16 @@ function bornesMesureBilan(id){
   const k=String(id||'');
   if(/-weight$/.test(k)) return {min:PESEE_MIN,max:PESEE_MAX,unite:'kg'};
   if(/-height$/.test(k)) return {min:100,max:250,unite:'cm'};
+  // BUILD 1904 : un bras ou un mollet de 120 cm est une virgule oubliée.
+  if(/-(bicep|calf)-[lr]$/.test(k)) return {min:10,max:80,unite:'cm'};
   try{ const m=MORPHO_MESURES.find(x=>x.cle===k); if(m) return {min:m.min||10,max:m.max||250,unite:'cm'}; }catch(e){}
   return {min:10,max:250,unite:'cm'};
 }
 // PURE. Le mot d'aide d'une saisie hors bornes, ou ''.
 function aideMesureBilan(id,brut){
-  const v=lireDecimal(brut);
+  const _l=lireNombreFr(brut);
+  if(_l.raison==='negatif') return '« '+String(brut).trim()+' » ? Une mesure ne peut pas être négative.';
+  const v=_l.ok?_l.valeur:null;
   if(v==null) return String(brut||'').trim()?'« '+String(brut).trim()+' » ? Un nombre, avec une virgule si besoin.':'';
   const b=bornesMesureBilan(id);
   if(v>=b.min&&v<=b.max) return '';
@@ -82503,6 +82529,47 @@ function aideMesureBilan(id,brut){
   if(/-height$/.test(id)&&v>=PESEE_MIN&&v<100) return vt+' cm ? C’est peut-être ton poids : ta taille va de 100 à 250 cm.';
   if(v>b.max&&v/10>=b.min&&v/10<=b.max) return vt+' cm ? En centimètres, ce serait '+String(v/10).replace('.',',')+'.';
   return vt+' '+b.unite+' ? Vérifie la virgule.';
+}
+// BUILD 1904 — LES CHAMPS CHIFFRÉS DU BILAN. Une clé est chiffrée si elle
+// porte un poids, une taille, un tour du schéma ou une mesure morpho.
+const _BIL_CLES_TOURS=/^(bil|deb)-(weight|height|neck|bicep-[lr]|bust|glutes|thigh-[lr]|calf-[lr]|chest|waist|hips)$/;
+function estCleMesureBilan(k){
+  k=String(k||'');
+  if(_BIL_CLES_TOURS.test(k)) return true;
+  try{ return MORPHO_MESURES.some(x=>x.cle===k); }catch(e){ return false; }
+}
+// PURE. Les champs en défaut parmi ids : [{id,msg}]. Vide = pas en défaut
+// (un bilan peut ne porter qu'une partie des mesures).
+function champsBilanEnDefaut(data,ids){
+  const d=data||{}, out=[];
+  (ids||[]).forEach(id=>{ const m=aideMesureBilan(id,d[id]); if(m) out.push({id,msg:m}); });
+  return out;
+}
+// PURE. Relit chaque mesure d'un bilan prêt à partir : normalisée (« 72,5 »
+// → "72.5"), vidée → retirée, illisible ou hors bornes → retirée et listée.
+// Un brouillon corrompu (9999, -5, « abc ») n'atteint donc jamais l'historique.
+function nettoyerMesuresBilan(bi){
+  const o=Object.assign({},bi||{}), retirees=[];
+  Object.keys(o).forEach(k=>{
+    if(!estCleMesureBilan(k)) return;
+    const brut=o[k];
+    if(brut==null||String(brut).trim()===''){ delete o[k]; return; }
+    const b=bornesMesureBilan(k), l=lireNombreFr(brut,{min:b.min,max:b.max});
+    if(l.ok) o[k]=String(l.valeur); else { delete o[k]; retirees.push(k); }
+  });
+  return {bilan:o,retirees};
+}
+function _bilChampsAffiches(){
+  try{ return Array.from(document.querySelectorAll('#bil-content input[oninput*="bMesureSaisie"]')).map(x=>x.id).filter(Boolean); }catch(e){ return []; }
+}
+// SUIVANT BLOQUÉ tant qu'un champ affiché est hors bornes : le message est
+// déjà sous le champ, on y ramène le doigt. Le retour arrière, lui, passe.
+function _bilBloquerSiDefaut(){
+  const def=champsBilanEnDefaut(bilData,_bilChampsAffiches());
+  if(!def.length) return false;
+  def.forEach(x=>_bilMontrerAide(x.id,x.msg));
+  try{ const el=document.getElementById(def[0].id); if(el){ el.focus(); if(el.scrollIntoView) el.scrollIntoView({block:'center'}); } }catch(e){}
+  return true;
 }
 function _bilMontrerAide(id,msg){
   try{
@@ -82526,8 +82593,8 @@ function bMesureSaisie(id,v){
   if(id==='bil-weight'&&_bilPoidsPesees){ const _n0=lireDecimal(v); if(_n0==null||_n0!==_bilPoidsPesees.kg){ _bilPoidsPesees=null; try{ const z=document.getElementById('bil-poids-pesees'); if(z) z.remove(); }catch(e){} } }
   // La valeur est rangée NORMALISÉE (point décimal) : « 62,0 » devient « 62 ».
   // Une saisie illisible est gardée telle quelle — l'aide le dit, rien ne se perd.
-  const _n=lireDecimal(v);
-  bilData[id]=_n!=null?String(_n):v;
+  const _l=lireNombreFr(v);
+  bilData[id]=_l.ok?String(_l.valeur):v;
   _bilMontrerAide(id,aideMesureBilan(id,v));
   // LE POINT S'ALLUME quand la case passe de vide a renseignee. 200 ms : c'est
   // un geste repete douze fois, il doit etre presque subliminal et ne jamais
@@ -83392,6 +83459,7 @@ function bilBack(){
 }
 async function bilNext(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
+  if(_bilBloquerSiDefaut()) return;
   if(bilStep<steps.length-1){bilStep++;renderBilStep();}
   else{
     if(_bilPhotoLoading>0&&++_bilPhotoEssais<=BIL_PHOTO_ESSAIS_MAX){
@@ -88094,7 +88162,9 @@ function saveBilanFinal(){
     return;
   }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
-  const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // BUILD 1904 : chaque mesure est RELUE ici, brouillon repris compris.
+  const _net=nettoyerMesuresBilan(bilData);
+  const bi=Object.assign({type:bilType,date:Date.now(),num:n},_net.bilan);
   // BUILD 1880 : le poids vient des pesées de la semaine (non retouché).
   if(_bilPoidsPesees&&String(bi['bil-weight']||'')===String(_bilPoidsPesees.kg)) bi.bilPoidsSource='pesees';
   _bilPoidsPesees=null;
@@ -88175,8 +88245,8 @@ function saveBilanFinal(){
     // reste — même règle que partout ailleurs dans ce lot.
     if(/ne prends plus/i.test(_rep)) delete currentUser.traitementEnCours;
   }
-  if(bilData['bil-weight']) currentUser.weight=bilData['bil-weight'];
-  if(bilData['deb-weight']) currentUser.weight=bilData['deb-weight'];
+  if(_net.bilan['bil-weight']) currentUser.weight=_net.bilan['bil-weight'];
+  if(_net.bilan['deb-weight']) currentUser.weight=_net.bilan['deb-weight'];
   // Propager hauteur, âge et genre vers le profil pour les calculs de composition
   const _h=parseFloat(bilData['deb-height']||bilData['bil-height']||0);
   if(_h>100&&_h<250) currentUser._evol_height=_h;
