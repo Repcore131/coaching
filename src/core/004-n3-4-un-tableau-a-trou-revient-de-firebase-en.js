@@ -1522,18 +1522,51 @@ function _majRappelVerification(){
   return true;
 }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ try{ _majRappelVerification(); }catch(e){} } });
+// BUILD 1903 : UNE BANDE D'ÉTAT DE 24 PX, PLUS UNE PASTILLE FLOTTANTE. Fixée
+// en bas à gauche, elle recouvrait « Informations médicales » (profil),
+// « Ajouter / modifier mes données » (Lifestyle) et la rangée « Suivant » de
+// la séance. Elle se pose désormais :
+//  - collée au-dessus de la barre d'onglets (ou de la bannière d'installation
+//    quand elle est là), l'écran actif rendant 24 px de plus en bas ;
+//  - sur la séance, dans le flux juste au-dessus de la barre d'actions ;
+//  - ailleurs, sous la barre de titre, DANS le flux : elle prend sa place.
+// Même logique d'affichage (athlète, file non vide) ; un toucher force l'envoi.
 function _majIndicAttente(){
   let n=0; try{ n=CLOUD.enAttenteDeSync(); }catch(e){ n=0; }
   let z=document.getElementById('rc-attente');
   const athlete=!!(typeof currentUser==='object'&&currentUser&&currentUser.email&&currentUser.role!=='coach');
-  if(!n||!athlete){ if(z) z.hidden=true; return 0; }
+  const b=document.body;
+  if(!n||!athlete){ if(z) z.hidden=true; b.classList.remove('rc-att-bas','rc-att-wo'); return 0; }
   if(!z){
     z=document.createElement('div');
     z.id='rc-attente'; z.className='rc-attente';
     z.setAttribute('role','status'); z.setAttribute('aria-live','polite');
-    document.body.appendChild(z);
+    z.title='Toucher pour envoyer maintenant';
+    z.addEventListener('click',()=>{ try{ if(navigator.onLine!==false) CLOUD.viderFile().catch(()=>{}); }catch(e){} });
   }
-  z.textContent='↻ '+n+' envoi'+(n>1?'s':'')+' en attente';
+  z.innerHTML='<i class="rc-att-pt" aria-hidden="true"></i>'+n+' envoi'+(n>1?'s':'')+' en attente';
+  const ecran=document.querySelector('.screen.active');
+  const wo=!!(ecran&&ecran.id==='s-workout');
+  const tab=b.classList.contains('with-tabbar');
+  b.classList.toggle('rc-att-wo',wo);
+  b.classList.toggle('rc-att-bas',tab&&!wo);
+  z.classList.toggle('rc-attente--fixe',tab&&!wo);
+  if(wo){
+    // Dans le flux, juste au-dessus de la barre d'actions : la zone qui défile
+    // rétrécit d'autant, rien ne passe dessous.
+    const barre=ecran.querySelector('.wo-barre');
+    z.style.bottom='';
+    if(barre){ if(barre.previousElementSibling!==z) barre.insertAdjacentElement('beforebegin',z); }
+    else if(z.parentElement!==b) b.appendChild(z);
+  } else if(tab){
+    if(z.parentElement!==b) b.appendChild(z);
+    z.style.bottom='';
+  } else {
+    const tb=ecran&&ecran.querySelector(':scope > .topbar');
+    z.style.bottom='';
+    if(tb){ if(tb.nextElementSibling!==z) tb.insertAdjacentElement('afterend',z); }
+    else if(z.parentElement!==b) b.appendChild(z);
+  }
   z.hidden=false;
   return n;
 }

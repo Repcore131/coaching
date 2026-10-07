@@ -6094,9 +6094,14 @@ input.set-input.wo-reps{width:42px;letter-spacing:0;padding-left:2px;padding-rig
 #s-client-home[data-demarrage] #clh-first-bilan-card,
 #s-client-home[data-demarrage] #clh-reprise{display:none!important}
 /* « n envois en attente » (30/09/2026) : discret, au-dessus de la barre d'onglets. */
-.rc-attente{position:fixed;left:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:var(--z-bar);
-  padding:4px 10px;border-radius:var(--r-2);background:var(--surface-2);border:1px solid var(--border);
-  color:var(--sub);font-size:var(--fs-2xs);font-weight:700;pointer-events:none}
+/* BUILD 1903 : une bande d'état de 24 px (voir _majIndicAttente). */
+.rc-attente{display:flex;align-items:center;gap:6px;height:24px;padding:0 20px;box-sizing:border-box;
+  background:var(--surface-1);color:var(--sub);font-size:var(--fs-2xs);font-weight:700;cursor:pointer;flex-shrink:0}
+.rc-attente--fixe{position:fixed;left:0;right:0;max-width:480px;margin:0 auto;z-index:var(--z-bar);
+  bottom:calc(var(--tabbar-eff) + var(--rc-ban-h))}
+.rc-att-pt{width:6px;height:6px;border-radius:var(--r-full);background:var(--orange);flex-shrink:0}
+body.rc-att-bas{--rc-att-h:24px}
+body.rc-att-bas .screen.active{padding-bottom:calc(var(--tabbar-eff) + var(--rc-ban-h) + var(--rc-att-h))!important}
 .rc-attente[hidden]{display:none}
 /* « Vérifie ton adresse e-mail » (01/10/2026) : même discrétion, deux gestes. */
 .rc-verif{position:fixed;left:12px;bottom:calc(100px + env(safe-area-inset-bottom,0px));z-index:var(--z-bar);

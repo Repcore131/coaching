@@ -1216,6 +1216,8 @@ function _majPastilleVideos(){
     c=>'Corrections : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
 }
 function _majTabbar(id){
+  // La bande « envois en attente » suit l'écran (bas, séance ou sous la barre de titre).
+  try{ setTimeout(_majIndicAttente,0); }catch(e){}
   const bar=document.getElementById('client-tabbar');
   if(!bar) return;
   const onglet=TABBAR_ECRANS[id];

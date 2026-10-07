@@ -9030,7 +9030,7 @@ async function testExercices(){
             localStorage.setItem(CLOUD._QUEUE_KEY,JSON.stringify(['ath@t.fr','b@t.fr']));
             if(_majIndicAttente()!==2) return _echec('compte faux');
             const z=document.getElementById('rc-attente');
-            if(!z||z.hidden||z.textContent!=='↻ 2 envois en attente') return _echec('pastille : '+(z&&z.textContent));
+            if(!z||z.hidden||z.textContent!=='2 envois en attente') return _echec('pastille : '+(z&&z.textContent));
             currentUser={email:'c@t.fr',role:'coach'}; _majIndicAttente();
             if(!z.hidden) return _echec('la pastille s’affiche chez le coach');
             currentUser={email:'ath@t.fr',role:'athlete'}; localStorage.setItem(CLOUD._QUEUE_KEY,'[]'); _majIndicAttente();
@@ -73709,6 +73709,38 @@ async function testExercices(){
         if(faux.length) return _echec('fond plein : '+faux.join(', '));
         return l.every(x=>getComputedStyle(x).borderLeftWidth==='3px')?true:_echec('pas de filet gauche de 3 px');
       }finally{ z.innerHTML=sv; currentUser=sU; }});
+
+    // ══ BUILD 1903 — « ENVOIS EN ATTENTE » NE MASQUE PLUS RIEN ════════════════
+    ok('1903 — file non vide : la bande ne recouvre aucun élément interactif ni aucun titre (profil, Lifestyle, séance)',()=>{
+      const brut=localStorage.getItem('rc_sync_queue');
+      const recouvre=(z)=>{
+        const r=z.getBoundingClientRect(); if(!r.width||!r.height) return ['bande invisible'];
+        const cibles=[...document.querySelectorAll('.screen.active button,.screen.active a,.screen.active input,.screen.active select,.screen.active textarea,.screen.active [onclick],.screen.active [role="button"],.screen.active .topbar-title,.screen.active .t-page,.screen.active .t-section,.screen.active .t-carte,.screen.active h1,.screen.active h2,.screen.active h3,.screen.active summary')]
+          .filter(x=>x!==z&&!z.contains(x)&&!x.contains(z)&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden');
+        return cibles.filter(x=>{ const q=x.getBoundingClientRect(); const w=Math.min(r.right,q.right)-Math.max(r.left,q.left), h=Math.min(r.bottom,q.bottom)-Math.max(r.top,q.top); return w>0.5&&h>0.5; })
+          .map(x=>x.tagName+'.'+(typeof x.className==='string'?x.className.split(' ')[0]:'')+' « '+(x.textContent||'').trim().slice(0,18)+' »');
+      };
+      const faux=[];
+      try{
+        localStorage.setItem('rc_sync_queue',JSON.stringify([{cle:'banc@t,fr',at:Date.now()}]));
+        if(CLOUD.enAttenteDeSync()<1) return _echec('la fixture rc_sync_queue n’est pas lue');
+        const u=()=>Object.assign(_banAth(),{sessions_config:[{day:'Lundi',name:'Jambes',active:true,exercises:[{name:'Squat',sets:3,reps:'8',rest:90},{name:'Fentes',sets:3,reps:'10',rest:60}]}]});
+        for(const [id,o] of [['s-athlete-profile',()=>openAthleteProfile()],['s-lifestyle',()=>loadLifestyle()],['s-workout',()=>{ currentUser.gender='H'; currentUser.currentCycle='ignore'; startWorkoutSession(0,{sansApercu:true}); }]]){
+          _sondeEcran(u(),o,()=>{
+            if((document.querySelector('.screen.active')||{}).id!==id){ faux.push(id+' : écran non ouvert ('+(document.querySelector('.screen.active')||{}).id+')'); return; }
+            _majIndicAttente();
+            const z=document.getElementById('rc-attente');
+            if(!z||z.hidden){ faux.push(id+' : bande absente'); return; }
+            if(z.getBoundingClientRect().height!==24) faux.push(id+' : bande de '+z.getBoundingClientRect().height+' px');
+            faux.push(...recouvre(z).map(x=>id+' : '+x));
+          });
+          try{ if(typeof woState!=='undefined'&&id==='s-workout'){ woState=null; } }catch(e){}
+        }
+      }finally{
+        if(brut==null) localStorage.removeItem('rc_sync_queue'); else localStorage.setItem('rc_sync_queue',brut);
+        try{ _majIndicAttente(); }catch(e){}
+      }
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
