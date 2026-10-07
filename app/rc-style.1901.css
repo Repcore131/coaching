@@ -7841,7 +7841,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    44x44 : le repère tactile d'iOS, et bien au-delà des 24x24 exigés par la
    règle WCAG 2.5.8 AA. inline-flex parce qu'un min-width sans centrage
    collerait le glyphe à gauche de sa nouvelle zone. */
-.back-btn{background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:12px 14px;font-weight:300;transition:color var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.back-btn{background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:12px 14px;font-weight:300;transition:color var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;display:inline-flex;align-items:center;justify-content:center}
 /* Zone tactile de 44x44 sans toucher a l'apparence. Le ::before est un calque
    invisible centre sur la commande : il agrandit ce que le doigt atteint, pas
    ce que l'oeil voit. C'est ce qui permet aux pastilles de serie de rester des

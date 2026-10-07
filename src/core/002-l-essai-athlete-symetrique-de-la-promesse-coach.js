@@ -1830,6 +1830,12 @@ Object.assign(ICONS,{
   'carte-bancaire':'<rect x="1.5" y="4.5" width="21" height="15" rx="2"/><line x1="1.5" y1="10" x2="22.5" y2="10"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
 });
+// Build 1901 : le retour (chevron gauche, barre de titre à 20 px) et les
+// noms français qui manquaient encore.
+ICONS.retour='<polyline points="15 18 9 12 15 6"/>';
+if(!ICONS.echanger) ICONS.echanger=ICONS.echange;
+if(!ICONS.cadenas) ICONS.cadenas=ICONS.lock;
+if(!ICONS.avertissement) ICONS.avertissement=ICONS.alerte;
 // UNE ICONE DANS UN TEXTE BRUT. toast() et les libelles poses par textContent
 // n'acceptent pas de balisage (et ne doivent pas : ils portent des noms
 // d'athletes). ICO.coche est un MARQUEUR (deux caracteres d'usage prive autour

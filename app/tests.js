@@ -12127,7 +12127,8 @@ async function testExercices(){
           // Et les deux commandes que le critère nomme sont bien pourvues.
           const woBack=document.querySelector('#s-workout .back-btn');
           if(!woBack) return _echec('la sortie de l\'écran de séance a disparu');
-          if(!(woBack.textContent||'').trim())
+          // BUILD 1901 : la flèche est une icône (svg), plus le caractère « ← ».
+          if(!woBack.querySelector('svg')&&!(woBack.textContent||'').trim())
             return _echec('la sortie de l\'écran de séance n\'a plus de flèche');
           if(!/pauseWorkout/.test(woBack.getAttribute('onclick')||''))
             return _echec('la flèche de séance n\'ouvre plus la modale Pause');
@@ -73669,6 +73670,18 @@ async function testExercices(){
       for(const [id,u,o] of ecrans) _sondeEcran(u(),o,()=>{ const g=premier(id); if(g!==20) faux.push(id+' : '+g+' px'); });
       return faux.length?_echec(faux.join(' | ')):true;});
 
+    // ══ BUILD 1901 — LES ICÔNES AU MÊME TRAIT ═══════════════════════════════
+    ok('1901 — ICONS porte les noms français (retour, coche, croix, cadenas, wifi-off…)',()=>{
+      const manque=['retour','echanger','cadenas','wifi-off','coche','croix','eclair','muscle','regle','flamme','cafe','the','gelule','bouclier','avertissement']
+        .filter(k=>!ICONS[k]);
+      return manque.length?_echec('absentes : '+manque.join(', ')):true;});
+    ok('1901 — aucun .back-btn ne contient de texte : seulement un <svg>, et un nom pour le lecteur d’écran',()=>{
+      const l=[...document.querySelectorAll('.back-btn')];
+      if(l.length<60) return _echec(l.length+' boutons retour');
+      const faux=l.filter(b=>b.textContent.trim()!==''||!b.querySelector('svg'));
+      if(faux.length) return _echec(faux.length+' avec du texte ou sans svg : '+(faux[0].closest('.screen')||{}).id);
+      const sansNom=l.filter(b=>!b.getAttribute('aria-label'));
+      return sansNom.length?_echec(sansNom.length+' sans aria-label'):true;});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
