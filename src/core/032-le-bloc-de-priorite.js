@@ -2310,7 +2310,55 @@ function appliquerModifBilan(b,d,maintenant){
     if(!b.reprises.length) delete b.reprises;
   }
   if(change.length) b.modifieLe=maintenant||Date.now();
+  // BUILD 1863 : CORRIGÉ APRÈS LA RÉPONSE DU COACH. Le coach doit le savoir —
+  // sans quoi un poids corrigé ou des photos ajoutées passaient inaperçus. La
+  // réponse n'est pas touchée.
+  if(change.length&&bilanRepondu(b)){
+    const ph=change.some(k=>/-photo-(face|back|side)$/.test(k));
+    b.correctionApresReponse={le:maintenant||Date.now(),cles:change.slice(),photos:ph};
+  }
   return change;
+}
+// PURE. Une correction faite après la réponse, que le coach n'a pas encore lue.
+function bilanCorrigeNonVu(b){
+  const c=b&&b.correctionApresReponse;
+  if(!c||!c.le) return false;
+  return !(Number(b.correctionVueLe)>=Number(c.le));
+}
+// PURE. Le bilan corrigé non lu le plus récent des 60 derniers jours, ou null.
+const BIL_CORRECTION_JOURS=60;
+function bilanCorrigeAVoir(c,maintenant){
+  const m=Number(maintenant)||Date.now();
+  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
+  return l.sort((x,y)=>Number(y.correctionApresReponse.le)-Number(x.correctionApresReponse.le))[0]||null;
+}
+// « Photos ajoutées au bilan n°N » ou « Bilan n°N corrigé ».
+function libelleCorrectionBilan(c,b){
+  const x=b||bilanCorrigeAVoir(c);
+  if(!x) return '';
+  const nom=x.type==='depart'?'d’inscription':'n°'+(x.num||'?');
+  return x.correctionApresReponse.photos
+    ?'Photos ajoutées au bilan '+nom
+    :(x.type==='depart'?'Bilan d’inscription corrigé':'Bilan '+nom+' corrigé');
+}
+// Le coach ouvre le bilan : la correction est lue.
+function _bilMarquerCorrectionsVues(client){
+  try{
+    if(!client||!client.email||currentUser.role!=='coach') return 0;
+    const users=DB.get('users')||{};
+    const c=users[client.email];
+    if(!c||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return 0;
+    const t=Date.now(); let n=0;
+    c.bilans.forEach((b,i)=>{
+      if(!bilanCorrigeNonVu(b)) return;
+      b.correctionVueLe=t; n++;
+      const bb=(client.bilans||[])[i]; if(bb&&bb!==b) bb.correctionVueLe=t;
+    });
+    if(!n) return 0;
+    c.updatedAt=t; users[c.email]=c; DB.set('users',users);
+    try{ CLOUD.pushOne(c.email,c).catch(()=>{}); }catch(e){}
+    return n;
+  }catch(e){ return 0; }
 }
 function _bilEnregistrerModif(){
   const ed=_bilEdition;
@@ -2341,7 +2389,9 @@ function _bilEnregistrerModif(){
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
   }catch(e){} })();
   if(!change.length) toast('Aucun changement : '+x.nom+' est resté tel quel');
-  else if(enregistre) toast(x.nom+' mis à jour : ton coach verra la correction');
+  else if(enregistre) toast(x.b.correctionApresReponse&&bilanCorrigeNonVu(x.b)
+    ?'Ton coach est prévenu de la correction'
+    :x.nom+' mis à jour : ton coach verra la correction');
   else toast('Stockage plein : la correction est envoyée au cloud, mais absente de cet appareil','var(--orange)');
   _quitterEcranBilan(false);
   openBilanChoice(); ouvrirHistoriqueBilans();

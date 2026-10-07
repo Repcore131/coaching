@@ -66078,7 +66078,9 @@ async function testExercices(){
         if(t.indexOf('Poids+0,4 kg')<0||t.indexOf('Tour de taille−0,8 cm')<0||t.indexOf('Tour de hanchestable')<0) return _echec('écarts : '+t);
         if(t.indexOf('Ton coach est prévenu.')<0) return _echec('coach : '+t);
         const b=[...document.querySelectorAll('#bf-contenu button')].map(x=>x.textContent.trim()+'>'+x.getAttribute('onclick'));
-        if(b.join(' | ')!=='Voir ma progression>loadProgress() | Retour à l\'accueil>go(\'s-client-home\');loadClientHome()') return _echec('boutons : '+b.join(' | '));
+        // Build 1863 : un bilan sans photo propose en plus « Ajouter mes photos ».
+        if(b.slice(0,2).join(' | ')!=='Voir ma progression>loadProgress() | Retour à l\'accueil>go(\'s-client-home\');loadClientHome()') return _echec('boutons : '+b.join(' | '));
+        if(!/^Ajouter mes photos>modifierBilan\(.*'photos'\)$/.test(b[2]||'')) return _echec('ajout de photos : '+b[2]);
         // LE RETOUR NE BOUCLE PAS : depuis Évolution, on rentre à l'accueil.
         document.querySelector('#bf-contenu .btn-red').click();
         await new Promise(r=>setTimeout(r,150));
@@ -66089,6 +66091,31 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1863 : UN BILAN CORRIGÉ APRÈS LA RÉPONSE DU COACH ══
+    ok('Correction après réponse : photos ajoutées → hasNewBilan vrai ; lue → faux ; rien changé → aucune trace',()=>{
+      const t=Date.now();
+      const b={type:'coaching',date:t-5*864e5,num:3,'bil-weight':'80',reponseCoach:'Bravo',reponseDate:t-4*864e5};
+      const c={id:'cr',email:'cr@t.fr',bilans:[b]};
+      if(hasNewBilan(c)) return _echec('répondu, et signalé');
+      if(appliquerModifBilan(b,{'bil-weight':'80'},t).length||b.correctionApresReponse) return _echec('trace sans changement');
+      appliquerModifBilan(b,{'bil-weight':'80','bil-photo-face':'data:x'},t);
+      if(!b.correctionApresReponse||!b.correctionApresReponse.photos||b.correctionApresReponse.cles.join()!=='bil-photo-face') return _echec(JSON.stringify(b.correctionApresReponse));
+      if(b.reponseCoach!=='Bravo') return _echec('la réponse a bougé');
+      if(!hasNewBilan(c)) return _echec('le coach n’est pas prévenu');
+      if(libelleCorrectionBilan(c)!=='Photos ajoutées au bilan n°3') return _echec(libelleCorrectionBilan(c));
+      b.correctionVueLe=t+1;
+      if(hasNewBilan(c)) return _echec('lue, et encore signalée');
+      appliquerModifBilan(b,{'bil-weight':'79,5','bil-photo-face':'data:x'},t+10);
+      return libelleCorrectionBilan(c)==='Bilan n°3 corrigé'?true:_echec(libelleCorrectionBilan(c));});
+    ok('Correction d’un bilan NON répondu : comportement inchangé, aucune trace « après réponse »',()=>{
+      const b={type:'coaching',date:Date.now()-864e5,'bil-weight':'80'};
+      appliquerModifBilan(b,{'bil-weight':'81'},Date.now());
+      return !b.correctionApresReponse&&b.modifieLe&&hasNewBilan({bilans:[b]})?true:_echec(JSON.stringify(b));});
+    ok('Correction : un bilan corrigé il y a plus de 60 jours ne remonte plus',()=>{
+      const t=Date.now();
+      const b={type:'coaching',date:t-90*864e5,reponseCoach:'ok',correctionApresReponse:{le:t-70*864e5,cles:['bil-weight'],photos:false}};
+      return !hasNewBilan({bilans:[b,{type:'coaching',date:t-864e5,reponseCoach:'ok'}]})?true:_echec('remonte');});
 
     // ══ BUILD 1862 : LA SÉANCE OUBLIÉE ══
     const _seSnap=(heures,n,email)=>{

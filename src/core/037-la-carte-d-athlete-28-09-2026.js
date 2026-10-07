@@ -1210,7 +1210,18 @@ function _htmlRestitutionBilan(user){
     +corps
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
     +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
-    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>'
+    +_htmlRestitutionCorriger(user);
+}
+// BUILD 1863 : « Ajouter mes photos » si le bilan qu'on vient d'envoyer en
+// promet ou n'en a aucune ; sinon un lien discret « Corriger ce bilan ».
+function _htmlRestitutionCorriger(user){
+  let x=null; try{ x=historiqueBilans(user)[0]; }catch(e){ x=null; }
+  if(!x) return '';
+  const sansPhotos=(Array.isArray(x.b.photosAVenir)&&x.b.photosAVenir.length)||!x.photos;
+  return sansPhotos
+    ?'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="modifierBilan('+_attrArg(x.id)+',\'photos\')">Ajouter mes photos</button>'
+    :'<button type="button" class="rb-lien" style="display:block;margin:12px auto 0;background:none;border:0;padding:4px;font:inherit;font-size:var(--fs-xs);color:var(--sub);text-decoration:underline;cursor:pointer" onclick="modifierBilan('+_attrArg(x.id)+')">Corriger ce bilan</button>';
 }
 // LA REPRISE APRES L'ACCORD DE SANTE. Le bilan attendait en memoire (bilData,
 // bilType) pendant la question : on l'enregistre, et l'ecran de restitution

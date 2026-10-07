@@ -1481,7 +1481,12 @@ function renderTodoBlock(clients){
   // point de l'accueil passent AVANT les signaux d'entraînement, et ne
   // comptent pas dans le plafond (TODO_TOUJOURS_VISIBLES) : huit plateaux ne
   // replient plus un athlète qui attend une réponse ou son programme.
-  if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
+  // BUILD 1863 : les bilans CORRIGÉS après la réponse ont leur propre libellé.
+  const _corBil=newBil.filter(c=>{ const d=dernierBilan(c); return !(d&&!bilanRepondu(d)&&!d.traite); });
+  const _neufBil=newBil.filter(c=>_corBil.indexOf(c)<0);
+  if(_neufBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(_neufBil.length>1?'x bilans à lire':' bilan à lire'),list:_neufBil});
+  if(_corBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',
+    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0]):_corBil.length+' bilans corrigés à relire',list:_corBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
   // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.

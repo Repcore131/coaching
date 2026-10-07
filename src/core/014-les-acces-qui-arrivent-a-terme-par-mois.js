@@ -789,7 +789,10 @@ function hasNewBilan(c){
   const der=dernierBilan(c);
   // Répondu par écrit OU de vive voix (bilanRepondu).
   // Marqué traité (06/10/2026) : lu, sans réponse écrite voulue.
-  return !!der&&!bilanRepondu(der)&&!der.traite;
+  if(!!der&&!bilanRepondu(der)&&!der.traite) return true;
+  // BUILD 1863 : un bilan corrigé APRÈS la réponse, sur 60 jours, pas
+  // seulement le dernier. Même prédicat pour le badge et « À traiter ».
+  try{ return !!bilanCorrigeAVoir(c); }catch(e){ return false; }
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul

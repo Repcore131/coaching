@@ -20457,7 +20457,9 @@ function expliquerUrgence(c){
       // non répondu DANS L’ORDRE DU TABLEAU, ce qui pouvait montrer une date
       // plus ancienne que la raison réelle du signal.
       const der=dernierBilan(c);
-      ajout('Bilan sans réponse',5,(der&&der.date)||dernier);
+      const _cor=(der&&!bilanRepondu(der)&&!der.traite)?null:bilanCorrigeAVoir(c);
+      if(_cor) ajout(libelleCorrectionBilan(c,_cor),5,_cor.correctionApresReponse.le);
+      else ajout('Bilan sans réponse',5,(der&&der.date)||dernier);
     }
   }catch(e){}
   try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
@@ -31772,7 +31774,12 @@ function renderTodoBlock(clients){
   // point de l'accueil passent AVANT les signaux d'entraînement, et ne
   // comptent pas dans le plafond (TODO_TOUJOURS_VISIBLES) : huit plateaux ne
   // replient plus un athlète qui attend une réponse ou son programme.
-  if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
+  // BUILD 1863 : les bilans CORRIGÉS après la réponse ont leur propre libellé.
+  const _corBil=newBil.filter(c=>{ const d=dernierBilan(c); return !(d&&!bilanRepondu(d)&&!d.traite); });
+  const _neufBil=newBil.filter(c=>_corBil.indexOf(c)<0);
+  if(_neufBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(_neufBil.length>1?'x bilans à lire':' bilan à lire'),list:_neufBil});
+  if(_corBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',
+    label:_corBil.length===1?libelleCorrectionBilan(_corBil[0]):_corBil.length+' bilans corrigés à relire',list:_corBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
   // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.
@@ -34035,7 +34042,10 @@ function hasNewBilan(c){
   const der=dernierBilan(c);
   // Répondu par écrit OU de vive voix (bilanRepondu).
   // Marqué traité (06/10/2026) : lu, sans réponse écrite voulue.
-  return !!der&&!bilanRepondu(der)&&!der.traite;
+  if(!!der&&!bilanRepondu(der)&&!der.traite) return true;
+  // BUILD 1863 : un bilan corrigé APRÈS la réponse, sur 60 jours, pas
+  // seulement le dernier. Même prédicat pour le badge et « À traiter ».
+  try{ return !!bilanCorrigeAVoir(c); }catch(e){ return false; }
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
@@ -81245,7 +81255,55 @@ function appliquerModifBilan(b,d,maintenant){
     if(!b.reprises.length) delete b.reprises;
   }
   if(change.length) b.modifieLe=maintenant||Date.now();
+  // BUILD 1863 : CORRIGÉ APRÈS LA RÉPONSE DU COACH. Le coach doit le savoir —
+  // sans quoi un poids corrigé ou des photos ajoutées passaient inaperçus. La
+  // réponse n'est pas touchée.
+  if(change.length&&bilanRepondu(b)){
+    const ph=change.some(k=>/-photo-(face|back|side)$/.test(k));
+    b.correctionApresReponse={le:maintenant||Date.now(),cles:change.slice(),photos:ph};
+  }
   return change;
+}
+// PURE. Une correction faite après la réponse, que le coach n'a pas encore lue.
+function bilanCorrigeNonVu(b){
+  const c=b&&b.correctionApresReponse;
+  if(!c||!c.le) return false;
+  return !(Number(b.correctionVueLe)>=Number(c.le));
+}
+// PURE. Le bilan corrigé non lu le plus récent des 60 derniers jours, ou null.
+const BIL_CORRECTION_JOURS=60;
+function bilanCorrigeAVoir(c,maintenant){
+  const m=Number(maintenant)||Date.now();
+  const l=((c&&c.bilans)||[]).filter(b=>b&&bilanCorrigeNonVu(b)&&(m-Number(b.correctionApresReponse.le))<=BIL_CORRECTION_JOURS*864e5);
+  return l.sort((x,y)=>Number(y.correctionApresReponse.le)-Number(x.correctionApresReponse.le))[0]||null;
+}
+// « Photos ajoutées au bilan n°N » ou « Bilan n°N corrigé ».
+function libelleCorrectionBilan(c,b){
+  const x=b||bilanCorrigeAVoir(c);
+  if(!x) return '';
+  const nom=x.type==='depart'?'d’inscription':'n°'+(x.num||'?');
+  return x.correctionApresReponse.photos
+    ?'Photos ajoutées au bilan '+nom
+    :(x.type==='depart'?'Bilan d’inscription corrigé':'Bilan '+nom+' corrigé');
+}
+// Le coach ouvre le bilan : la correction est lue.
+function _bilMarquerCorrectionsVues(client){
+  try{
+    if(!client||!client.email||currentUser.role!=='coach') return 0;
+    const users=DB.get('users')||{};
+    const c=users[client.email];
+    if(!c||!_estMonAthlete(c,currentUser)||!Array.isArray(c.bilans)) return 0;
+    const t=Date.now(); let n=0;
+    c.bilans.forEach((b,i)=>{
+      if(!bilanCorrigeNonVu(b)) return;
+      b.correctionVueLe=t; n++;
+      const bb=(client.bilans||[])[i]; if(bb&&bb!==b) bb.correctionVueLe=t;
+    });
+    if(!n) return 0;
+    c.updatedAt=t; users[c.email]=c; DB.set('users',users);
+    try{ CLOUD.pushOne(c.email,c).catch(()=>{}); }catch(e){}
+    return n;
+  }catch(e){ return 0; }
 }
 function _bilEnregistrerModif(){
   const ed=_bilEdition;
@@ -81276,7 +81334,9 @@ function _bilEnregistrerModif(){
     if(r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{}); }
   }catch(e){} })();
   if(!change.length) toast('Aucun changement : '+x.nom+' est resté tel quel');
-  else if(enregistre) toast(x.nom+' mis à jour : ton coach verra la correction');
+  else if(enregistre) toast(x.b.correctionApresReponse&&bilanCorrigeNonVu(x.b)
+    ?'Ton coach est prévenu de la correction'
+    :x.nom+' mis à jour : ton coach verra la correction');
   else toast('Stockage plein : la correction est envoyée au cloud, mais absente de cet appareil','var(--orange)');
   _quitterEcranBilan(false);
   openBilanChoice(); ouvrirHistoriqueBilans();
@@ -85368,6 +85428,11 @@ function _bnVoir(id){
 // l'athlete lui-meme.
 function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
+  // BUILD 1863 : les champs corrigés après la réponse ressortent (soulignés),
+  // puis la correction est marquée lue.
+  const _corrige=new Map();
+  if(client) bl.forEach(b=>{ if(bilanCorrigeNonVu(b)) _corrige.set(b,new Set(b.correctionApresReponse.cles||[])); });
+  if(client&&_corrige.size) setTimeout(()=>_bilMarquerCorrectionsVues(client),0);
   // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
   // son propre titre, mais il occupait quand même un rang : le premier bilan
   // de suivi s'affichait « Bilan 2 » alors qu'il n'y en avait qu'un.
@@ -85404,7 +85469,7 @@ function renderReponsesBilans(bilans,client){
         const large=String(t).length>60;
         tuiles.push({large,html:`<div class="bn-t${j?' bn-t-j':''}${q.k==='bil-motivation'&&j?' bn-t-motiv':''}">
             <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(libelleQuestionBilan(q,b))}</div>
-            <div class="bn-v">${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
+            <div class="bn-v"${(_corrige.get(b)&&_corrige.get(b).has(q.k))?' style="text-decoration:underline dotted;text-underline-offset:3px" title="Corrigé après ta réponse"':''}>${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
             ${j&&q.k!=='bil-motivation'?_bnSegments(j):''}
           </div>`});
         if(q.k==='bil-motivation'){
@@ -93757,7 +93822,18 @@ function _htmlRestitutionBilan(user){
     +corps
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
     +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
-    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>'
+    +_htmlRestitutionCorriger(user);
+}
+// BUILD 1863 : « Ajouter mes photos » si le bilan qu'on vient d'envoyer en
+// promet ou n'en a aucune ; sinon un lien discret « Corriger ce bilan ».
+function _htmlRestitutionCorriger(user){
+  let x=null; try{ x=historiqueBilans(user)[0]; }catch(e){ x=null; }
+  if(!x) return '';
+  const sansPhotos=(Array.isArray(x.b.photosAVenir)&&x.b.photosAVenir.length)||!x.photos;
+  return sansPhotos
+    ?'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="modifierBilan('+_attrArg(x.id)+',\'photos\')">Ajouter mes photos</button>'
+    :'<button type="button" class="rb-lien" style="display:block;margin:12px auto 0;background:none;border:0;padding:4px;font:inherit;font-size:var(--fs-xs);color:var(--sub);text-decoration:underline;cursor:pointer" onclick="modifierBilan('+_attrArg(x.id)+')">Corriger ce bilan</button>';
 }
 // LA REPRISE APRES L'ACCORD DE SANTE. Le bilan attendait en memoire (bilData,
 // bilType) pendant la question : on l'enregistre, et l'ecran de restitution

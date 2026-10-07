@@ -1057,6 +1057,11 @@ function _bnVoir(id){
 // l'athlete lui-meme.
 function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
+  // BUILD 1863 : les champs corrigés après la réponse ressortent (soulignés),
+  // puis la correction est marquée lue.
+  const _corrige=new Map();
+  if(client) bl.forEach(b=>{ if(bilanCorrigeNonVu(b)) _corrige.set(b,new Set(b.correctionApresReponse.cles||[])); });
+  if(client&&_corrige.size) setTimeout(()=>_bilMarquerCorrectionsVues(client),0);
   // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
   // son propre titre, mais il occupait quand même un rang : le premier bilan
   // de suivi s'affichait « Bilan 2 » alors qu'il n'y en avait qu'un.
@@ -1093,7 +1098,7 @@ function renderReponsesBilans(bilans,client){
         const large=String(t).length>60;
         tuiles.push({large,html:`<div class="bn-t${j?' bn-t-j':''}${q.k==='bil-motivation'&&j?' bn-t-motiv':''}">
             <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(libelleQuestionBilan(q,b))}</div>
-            <div class="bn-v">${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
+            <div class="bn-v"${(_corrige.get(b)&&_corrige.get(b).has(q.k))?' style="text-decoration:underline dotted;text-underline-offset:3px" title="Corrigé après ta réponse"':''}>${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
             ${j&&q.k!=='bil-motivation'?_bnSegments(j):''}
           </div>`});
         if(q.k==='bil-motivation'){

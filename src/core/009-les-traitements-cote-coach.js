@@ -315,7 +315,9 @@ function expliquerUrgence(c){
       // non répondu DANS L’ORDRE DU TABLEAU, ce qui pouvait montrer une date
       // plus ancienne que la raison réelle du signal.
       const der=dernierBilan(c);
-      ajout('Bilan sans réponse',5,(der&&der.date)||dernier);
+      const _cor=(der&&!bilanRepondu(der)&&!der.traite)?null:bilanCorrigeAVoir(c);
+      if(_cor) ajout(libelleCorrectionBilan(c,_cor),5,_cor.correctionApresReponse.le);
+      else ajout('Bilan sans réponse',5,(der&&der.date)||dernier);
     }
   }catch(e){}
   try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
