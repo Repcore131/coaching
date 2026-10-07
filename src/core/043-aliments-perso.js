@@ -1036,7 +1036,7 @@ function _renderFjDaySummary(date){
          la marge du BOUTON qu on ouvre, pas celle du bloc : ce dernier est
          partage avec l ecran de progression et la fiche coach. -->
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
-    ${_htmlHydratationNut(currentUser)}
+    ${_htmlHydratationNut(currentUser,date)}
     ${repasOrder.map(r=>!grouped[r]?(date<=todayStr?_htmlRepasVide(date,r,repasLabels[r]):''):`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">

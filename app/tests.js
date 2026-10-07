@@ -22403,7 +22403,7 @@ async function testExercices(){
     ok('Eau bue : deux ajouts de 250 ml puis une annulation → nutrition.eau[aujourd’hui] === 250',()=>{
       const sv={u:currentUser,s:saveUser,a:_eauAjouts.slice()};
       try{
-        currentUser=_eauU(70,178); saveUser=()=>true; _eauAjouts.length=0;
+        currentUser=_eauU(70,178); saveUser=()=>true; _eauAjouts.length=0; _eauDateAff=null;
         const d=localISODate(new Date());
         ajouterEau(250); ajouterEau(250);
         if(currentUser.nutrition.eau[d]!==500) return _echec('après deux ajouts : '+currentUser.nutrition.eau[d]);
@@ -22420,6 +22420,37 @@ async function testExercices(){
         if(!/progressbar/.test(h)||!/ajouterEau\(250\)/.test(h)||!/ajouterEau\(500\)/.test(h)||!/annulerEau\(\)/.test(h)) return _echec('rendu');
         return /id="eau-suivi"/.test(_htmlHydratationNut(currentUser))?true:_echec('absent de l’écran nutrition');
       } finally { currentUser=sv.u; saveUser=sv.s; _eauAjouts.length=0; sv.a.forEach(x=>_eauAjouts.push(x)); }});
+    // ══ BUILD 1851 : L'EAU DU JOUR AFFICHÉ, ET SA VALEUR EXACTE ══
+    // Un « +500 ml » de trop ne se corrigeait plus après un rechargement, et
+    // l'eau d'hier ne se notait pas. Le libellé « X L bus » ouvre la saisie.
+    ok('Eau : « 1,5 » et « 1.5 » valent 1500 ml ; vide et illisible → null',()=>{
+      const v=[eauLitresVersMl('1,5'),eauLitresVersMl('1.5'),eauLitresVersMl(' 2 '),eauLitresVersMl(''),eauLitresVersMl('abc'),eauLitresVersMl('0')];
+      return JSON.stringify(v)==='[1500,1500,2000,null,null,0]'?true:_echec(JSON.stringify(v));});
+    ok('Eau : écrire 1,5 L sur la veille, 12 refusé, 0 efface, jamais le futur',()=>{
+      const sv={u:currentUser,s:saveUser,a:_eauAjouts.slice(),d:_eauDateAff,t:window.toast};
+      try{
+        currentUser=_eauU(70,178); saveUser=()=>true; _eauAjouts.length=0; window.toast=()=>{};
+        const auj=localISODate(new Date()), hier=_jourPlus(auj,-1), dem=_jourPlus(auj,1);
+        currentUser.nutrition.eau={[auj]:2500};
+        if(eauSaisirLitres('1,5',hier)!==true) return _echec('1,5 L sur la veille refusé');
+        if(currentUser.nutrition.eau[hier]!==1500) return _echec('veille : '+currentUser.nutrition.eau[hier]);
+        if(currentUser.nutrition.eau[auj]!==2500) return _echec('aujourd’hui touché');
+        if(eauSaisirLitres('12',auj)!==false||currentUser.nutrition.eau[auj]!==2500) return _echec('12 L accepté');
+        if(eauSaisirLitres('',auj)!==false||currentUser.nutrition.eau[auj]!==2500) return _echec('vide écrit');
+        if(eauSaisirLitres('2',auj)!==true||currentUser.nutrition.eau[auj]!==2000) return _echec('2,5 → 2 L');
+        if(eauSaisirLitres('0',hier)!==true||(hier in currentUser.nutrition.eau)) return _echec('0 ne supprime pas la clé');
+        if(eauSaisirLitres('1',dem)!==false||(dem in currentUser.nutrition.eau)) return _echec('écrit dans le futur');
+        // « +250 » sur le jour affiché (hier), et le libellé le dit.
+        const h=_htmlEauSuivi(currentUser,false,hier);
+        if(!/L bus hier/.test(h)||!/eauEditer\(\)/.test(h)) return _echec('libellé : '+h.slice(0,400));
+        ajouterEau(250);
+        if(currentUser.nutrition.eau[hier]!==250) return _echec('+250 hors du jour affiché');
+        // Une date future est ramenée à aujourd'hui.
+        _htmlEauSuivi(currentUser,false,dem);
+        return _eauDateAff===auj?true:_echec('jour affiché : '+_eauDateAff);
+      } finally { currentUser=sv.u; saveUser=sv.s; _eauAjouts.length=0; sv.a.forEach(x=>_eauAjouts.push(x)); _eauDateAff=sv.d; window.toast=sv.t; _eauEdition=false; }});
+    ok('Eau : le journal passe sa date au suivi de l’eau',()=>
+      /_htmlHydratationNut\(currentUser,date\)/.test(String(_renderFjDaySummary))?true:_echec('date non passée'));
     ok('Coach : moyenne des jours notés sur les 7 derniers, et un jour sans saisie n’est pas zéro',()=>{
       const d=localISODate(new Date());
       const c=_eauU(80,180,{nutrition:{eau:{[d]:2000,[_jourPlus(d,-1)]:3000,[_jourPlus(d,-8)]:9000}}});

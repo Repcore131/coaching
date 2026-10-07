@@ -20216,14 +20216,16 @@ function renderCoachMicroSection(c){
 // pas sur l'écran nutrition — alors que le sel et les fibres, eux, y sont.
 // On l'y ajoute : c'est là qu'on la cherche. Aucun retrait ailleurs, un appel
 // de plus, et le même bloc — pas une seconde implémentation.
-function _htmlHydratationNut(user){
+function _htmlHydratationNut(user,dateISO){
   const u=user||currentUser;
   // `u` et non currentUser : cette fonction reçoit un dossier, et il faut la
   // croire sur parole.
   // Le suivi de l'eau bue vit DANS le cadre Hydratation, sous le repère.
   try{
-    const on=nutIsOnDay(localISODate(new Date()),u);
-    const h=_htmlHydratation(u,on), suivi=_htmlEauSuivi(u,on);
+    // Le jour AFFICHÉ par le journal, jamais dans le futur (_eauJour).
+    const d=_eauJour(dateISO||localISODate(new Date()));
+    const on=nutIsOnDay(d,u);
+    const h=_htmlHydratation(u,on), suivi=_htmlEauSuivi(u,on,d);
     if(!h) return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:0">Hydratation</div>${suivi}</div>`;
     return h.replace(/<\/div>\s*$/,suivi+'</div>');
@@ -71155,13 +71157,23 @@ function _eauEcrire(u,d,ml){
   for(const k of Object.keys(m)) if(k<lim) delete m[k];
   u.nutrition.eau=m;
 }
-function ajouterEau(ml){
+// LE JOUR DE L'EAU EST CELUI QU'AFFICHE LE JOURNAL (_fjDate). Il ne lisait
+// qu'aujourd'hui : l'eau d'hier ne se notait pas, et un « +500 ml » de trop
+// ne se corrigeait plus après un rechargement (_eauAjouts vit en mémoire).
+// Jamais dans le futur : une date à venir est ramenée à aujourd'hui.
+let _eauDateAff=null, _eauEdition=false;
+function _eauJour(dateISO){
+  const auj=localISODate(new Date());
+  const d=(typeof dateISO==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(dateISO))?dateISO:(_eauDateAff||auj);
+  return d>auj?auj:d;
+}
+function ajouterEau(ml,dateISO){
   const u=currentUser;
   if(!u||!(ml>0)) return false;
-  const d=localISODate(new Date());
+  const d=_eauJour(dateISO);
   const avant=eauDuJour(u,d);
   const apres=Math.min(EAU_SAISIE_MAX_ML,avant+ml);
-  if(apres===avant){ try{ toast('10 L notés aujourd’hui : c’est le maximum.','var(--orange)'); }catch(e){} return false; }
+  if(apres===avant){ try{ toast('10 L notés ce jour-là : c’est le maximum.','var(--orange)'); }catch(e){} return false; }
   _eauEcrire(u,d,apres);
   _eauAjouts.push({d,ml:apres-avant});
   if(!saveUser()) try{ toastEcriture(false,'','ce verre est'); }catch(e){}
@@ -71176,6 +71188,43 @@ function annulerEau(){
   _repeindreEau();
   return true;
 }
+// PURE. Le texte saisi, en litres → millilitres. « 1,5 » et « 1.5 » valent
+// pareil. null : vide ou illisible. Pas de borne ici, l'appelant la dit.
+function eauLitresVersMl(txt){
+  const t=String(txt==null?'':txt).trim().replace(/\s+/g,'').replace(/l$/i,'').replace(',','.');
+  if(!t||!/^\d+(\.\d+)?$|^\.\d+$/.test(t)) return null;
+  return Math.round(parseFloat(t)*1000);
+}
+// LA VALEUR EXACTE DU JOUR. Vide : rien n'est écrit. Au-delà de 10 L : refus
+// dit. 0 : le jour est EFFACÉ (absent, pas zéro — la règle de _eauEcrire).
+// Date future : refus. Rend true si la valeur a été écrite.
+function eauSaisirLitres(txt,dateISO){
+  const u=currentUser;
+  if(!u) return false;
+  const auj=localISODate(new Date());
+  const d=(typeof dateISO==='string'&&dateISO)?dateISO:_eauJour();
+  if(d>auj){ try{ toast('On ne note pas l’eau d’un jour à venir.','var(--orange)'); }catch(e){} return false; }
+  const ml=eauLitresVersMl(txt);
+  if(ml==null){ if(String(txt==null?'':txt).trim()) try{ toast('Quantité illisible : écris par exemple 1,5.','var(--orange)'); }catch(e){} return false; }
+  if(ml>EAU_SAISIE_MAX_ML){ try{ toast('10 L au plus par jour.','var(--orange)'); }catch(e){} return false; }
+  _eauEcrire(u,d,ml);
+  // Les ajouts de la session sur CE jour ne s'annulent plus : la valeur
+  // exacte les remplace, et les retrancher fausserait ce qui vient d'être dit.
+  for(let i=_eauAjouts.length-1;i>=0;i--) if(_eauAjouts[i].d===d) _eauAjouts.splice(i,1);
+  _eauEdition=false;
+  if(!saveUser()) try{ toastEcriture(false,'','cette quantité est'); }catch(e){}
+  _repeindreEau();
+  return true;
+}
+function eauEditer(ouvrir){
+  _eauEdition=ouvrir!==false;
+  _repeindreEau();
+  if(_eauEdition) try{ const i=document.getElementById('eau-saisie'); if(i){ i.focus(); i.select&&i.select(); } }catch(e){}
+}
+function _eauValiderSaisie(){
+  const i=document.getElementById('eau-saisie');
+  return eauSaisirLitres(i?i.value:'',_eauJour());
+}
 // PURE. Moyenne des jours NOTÉS parmi les 7 derniers (aujourd'hui compris).
 function eauMoyenne7j(u,dRef){
   const fin=dRef||localISODate(new Date());
@@ -71185,15 +71234,33 @@ function eauMoyenne7j(u,dRef){
   return {ml:Math.round(vals.reduce((a,b)=>a+b,0)/vals.length),nJours:vals.length};
 }
 const _eauL=ml=>String(Math.round(ml/100)/10).replace('.',',');
-// Le suivi du jour, sous le repère : barre, +250, +500, annuler.
-function _htmlEauSuivi(u,jourEstOn){
-  const ml=eauDuJour(u,localISODate(new Date()));
+// Le suivi du jour AFFICHÉ, sous le repère : barre, +250, +500, annuler.
+// Le libellé « X L bus » se touche : il ouvre la saisie de la valeur exacte.
+function _libJourEau(d){
+  const auj=localISODate(new Date());
+  if(d===auj) return 'aujourd’hui';
+  if(d===_jourPlus(auj,-1)) return 'hier';
+  return 'le '+d.slice(8,10)+'/'+d.slice(5,7);
+}
+function _htmlEauSuivi(u,jourEstOn,dateISO){
+  const d=_eauJour(dateISO);
+  _eauDateAff=d;
+  const ml=eauDuJour(u,d);
   const bes=besoinEau(u,!!jourEstOn);
   const pct=bes?Math.min(100,Math.round(ml/(bes*1000)*100)):0;
   const btn='flex:1;min-width:0;padding:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer';
+  const annulable=_eauAjouts.length>0;
+  const tete=_eauEdition
+    ?`<span style="display:flex;align-items:center;gap:6px;min-width:0">
+        <input id="eau-saisie" type="text" inputmode="decimal" aria-label="Litres bus ${_libJourEau(d)}" value="${_eauL(ml)}" style="width:64px;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm)" onkeydown="if(event.key==='Enter')_eauValiderSaisie();if(event.key==='Escape')eauEditer(false)">
+        <span style="font-size:var(--fs-sm);color:var(--text-dim)">L</span>
+        <button type="button" class="btn btn-sm" onclick="_eauValiderSaisie()">Valider</button>
+        <button type="button" class="btn btn-sm" style="color:var(--sub)" onclick="eauEditer(false)">Annuler</button>
+      </span>`
+    :`<button type="button" onclick="eauEditer()" style="background:none;border:0;padding:0;cursor:pointer;font-family:inherit;text-align:left;font-size:var(--fs-sm);color:var(--text-strong);font-weight:700;text-decoration:underline dotted;text-underline-offset:3px">${_eauL(ml)} L bus ${_libJourEau(d)}</button>`;
   return `<div id="eau-suivi" style="margin-top:12px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
-      <span style="font-size:var(--fs-sm);color:var(--text-strong);font-weight:700">${_eauL(ml)} L bus aujourd’hui</span>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      ${tete}
       <span style="font-size:var(--fs-xs);color:var(--text-dim)">${bes?'repère '+String(bes).replace('.',',')+' L':'sans repère'}</span>
     </div>
     ${bes?`<div role="progressbar" aria-label="Eau bue" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" style="height:8px;background:var(--surface-2);border-radius:var(--r-2);overflow:hidden;margin-bottom:10px">
@@ -71201,15 +71268,16 @@ function _htmlEauSuivi(u,jourEstOn){
     <div style="display:flex;gap:8px">
       <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(250)">+250 ml</button>
       <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(500)">+500 ml</button>
-      <button type="button" class="hit44" style="${btn};color:var(--sub)${_eauAjouts.length?'':';opacity:.45'}" onclick="annulerEau()"${_eauAjouts.length?'':' disabled'}>Annuler</button>
+      <button type="button" class="hit44" style="${btn};color:var(--sub)${annulable?'':';opacity:.45'}" onclick="annulerEau()"${annulable?'':' disabled'}>Annuler</button>
     </div>
   </div>`;
 }
 function _repeindreEau(){
   const z=document.getElementById('eau-suivi');
   if(!z||!currentUser) return;
-  let on=false; try{ on=nutIsOnDay(localISODate(new Date()),currentUser); }catch(e){ on=false; }
-  z.outerHTML=_htmlEauSuivi(currentUser,on);
+  const d=_eauJour();
+  let on=false; try{ on=nutIsOnDay(d,currentUser); }catch(e){ on=false; }
+  z.outerHTML=_htmlEauSuivi(currentUser,on,d);
 }
 // DEUX PHRASES, ET NON UNE COUPEE PAR UN TIRET. « pas une mesure — la couleur
 // des urines » se lisait comme si la couleur des urines etait ce qui n est pas
@@ -108664,7 +108732,7 @@ function _renderFjDaySummary(date){
          la marge du BOUTON qu on ouvre, pas celle du bloc : ce dernier est
          partage avec l ecran de progression et la fiche coach. -->
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
-    ${_htmlHydratationNut(currentUser)}
+    ${_htmlHydratationNut(currentUser,date)}
     ${repasOrder.map(r=>!grouped[r]?(date<=todayStr?_htmlRepasVide(date,r,repasLabels[r]):''):`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">

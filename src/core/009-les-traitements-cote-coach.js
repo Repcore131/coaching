@@ -109,14 +109,16 @@ function renderCoachMicroSection(c){
 // pas sur l'écran nutrition — alors que le sel et les fibres, eux, y sont.
 // On l'y ajoute : c'est là qu'on la cherche. Aucun retrait ailleurs, un appel
 // de plus, et le même bloc — pas une seconde implémentation.
-function _htmlHydratationNut(user){
+function _htmlHydratationNut(user,dateISO){
   const u=user||currentUser;
   // `u` et non currentUser : cette fonction reçoit un dossier, et il faut la
   // croire sur parole.
   // Le suivi de l'eau bue vit DANS le cadre Hydratation, sous le repère.
   try{
-    const on=nutIsOnDay(localISODate(new Date()),u);
-    const h=_htmlHydratation(u,on), suivi=_htmlEauSuivi(u,on);
+    // Le jour AFFICHÉ par le journal, jamais dans le futur (_eauJour).
+    const d=_eauJour(dateISO||localISODate(new Date()));
+    const on=nutIsOnDay(d,u);
+    const h=_htmlHydratation(u,on), suivi=_htmlEauSuivi(u,on,d);
     if(!h) return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:0">Hydratation</div>${suivi}</div>`;
     return h.replace(/<\/div>\s*$/,suivi+'</div>');
