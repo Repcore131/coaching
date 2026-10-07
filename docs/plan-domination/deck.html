@@ -1,8 +1,13 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>RepCore — Plan de domination</title>
 <style>
-@font-face{font-family:'Bebas Neue';src:url('bebasneue-400-latin.woff2') format('woff2');font-weight:400}
-@font-face{font-family:'Montserrat';src:url('montserrat-var-latin.woff2') format('woff2');font-weight:100 900}
+@font-face{font-family:'Bebas Neue';src:url('BebasNeue-Regular.ttf');font-weight:400}
+@font-face{font-family:'Montserrat';src:url('Montserrat-Regular.ttf');font-weight:400}
+@font-face{font-family:'Montserrat';src:url('Montserrat-Medium.ttf');font-weight:500}
+@font-face{font-family:'Montserrat';src:url('Montserrat-SemiBold.ttf');font-weight:600}
+@font-face{font-family:'Montserrat';src:url('Montserrat-Bold.ttf');font-weight:700}
+@font-face{font-family:'Montserrat';src:url('Montserrat-ExtraBold.ttf');font-weight:800}
+
 @page{size:1920px 1080px;margin:0}
 :root{--noir:#0B0B0C;--carte:#151518;--carte2:#1C1C20;--bord:#2A2A2E;--rouge:#E02020;--rouge2:#FF3B3B;--gris:#A1A1AA;--blanc:#FFFFFF;--vert:#3DDC84}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -19,16 +24,16 @@ p,li{font-size:26px;line-height:1.45;color:#E6E6EA}
 .muted{color:var(--gris)}
 .lead{font-size:32px;line-height:1.4;color:#D4D4D8;max-width:1250px;margin-top:26px}
 .card{background:var(--carte);border:1.5px solid var(--bord);border-radius:22px;padding:34px}
-.card.hot{border-color:var(--rouge);background:linear-gradient(180deg,rgba(224,32,32,.16),rgba(224,32,32,.04))}
-.tag{display:inline-block;font-weight:800;font-size:17px;letter-spacing:.14em;text-transform:uppercase;padding:7px 14px;border-radius:999px;background:rgba(224,32,32,.15);color:var(--rouge2);border:1px solid rgba(224,32,32,.5)}
-.tag.g{background:rgba(255,255,255,.06);color:#D4D4D8;border-color:var(--bord)}
+.card.hot{border-color:var(--rouge);background:#221214}
+.tag{display:inline-block;font-weight:800;font-size:17px;letter-spacing:.14em;text-transform:uppercase;padding:7px 14px;border-radius:999px;background:#3B1416;color:var(--rouge2);border:1px solid #7A1F1F}
+.tag.g{background:#1F1F23;color:#D4D4D8;border-color:var(--bord)}
 .num{font-family:'Bebas Neue';font-size:150px;line-height:.85;color:var(--blanc)}
 .num.r{color:var(--rouge)}
 .foot{position:absolute;left:104px;right:104px;bottom:40px;display:flex;justify-content:space-between;align-items:center;font-size:17px;letter-spacing:.2em;color:#5A5A62;text-transform:uppercase;font-weight:700}
 .foot img{height:44px;border-radius:8px}
 .grid{display:grid;gap:28px}
 .bolt{color:var(--rouge)}
-.phone{border-radius:44px;border:10px solid #222226;box-shadow:0 0 0 2px #333,0 40px 120px rgba(224,32,32,.25);overflow:hidden;background:#000}
+.phone{border-radius:44px;border:10px solid #222226;box-shadow:0 0 0 2px #333;overflow:hidden;background:#000}
 .phone img{display:block;width:100%}
 .photo{position:absolute;top:0;bottom:0;background-size:cover;background-position:center}
 .fade-l{position:absolute;inset:0;background:linear-gradient(90deg,var(--noir) 0%,var(--noir) 38%,rgba(11,11,12,.75) 55%,rgba(11,11,12,.1) 100%)}
@@ -36,14 +41,12 @@ ul.clean{list-style:none}
 ul.clean li{position:relative;padding-left:40px;margin-bottom:16px}
 ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;height:16px;background:var(--rouge);clip-path:polygon(40% 0,100% 0,55% 45%,85% 45%,20% 100%,40% 55%,10% 55%)}
 .pill{display:inline-flex;align-items:center;gap:10px;padding:10px 20px;border-radius:999px;background:var(--carte2);border:1px solid var(--bord);font-weight:700;font-size:22px}
-.secnum{font-family:'Bebas Neue';font-size:520px;line-height:.8;color:transparent;-webkit-text-stroke:3px rgba(224,32,32,.55);position:absolute;right:60px;bottom:-40px}
+.secnum{font-family:'Bebas Neue';font-size:520px;line-height:.8;color:transparent;-webkit-text-stroke:3px #7A1F1F;position:absolute;right:60px;bottom:-40px}
 </style></head><body>
 
 <!-- 1 COUVERTURE -->
 <section class="s" style="padding:0">
-  <div class="photo" style="right:0;width:1150px;background-image:url(img/cover.jpg);background-position:center 20%"></div>
-  <div class="fade-l"></div>
-  <div class="glow" style="width:700px;height:700px;left:-200px;top:-200px"></div>
+  <img src="img/bg-cover.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
   <div style="position:absolute;left:104px;top:96px;display:flex;align-items:center;gap:22px">
     <img src="img/logo.png" style="width:96px;border-radius:18px"><div style="font-family:'Bebas Neue';font-size:44px;letter-spacing:.08em">REPCORE <span class="muted" style="font-size:30px">· COACHING PREMIUM</span></div>
   </div>
@@ -111,7 +114,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
 <section class="s">
   <div class="kick">04 · L'architecture</div>
   <h1>Trois moteurs, <em>un seul objectif</em></h1>
-  <div style="margin-top:50px;background:linear-gradient(90deg,rgba(224,32,32,.25),rgba(224,32,32,.08));border:2px solid var(--rouge);border-radius:22px;padding:26px;text-align:center;font-family:'Bebas Neue';font-size:64px;letter-spacing:.04em">50 K€ / mois au mois 12</div>
+  <div style="margin-top:50px;background:#2E1416;border:2px solid var(--rouge);border-radius:22px;padding:26px;text-align:center;font-family:'Bebas Neue';font-size:64px;letter-spacing:.04em">50 K€ / mois au mois 12</div>
   <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:28px">
     <div class="card" style="height:430px"><div class="tag">Dès le mois 1</div><h2 style="margin-top:22px">Moteur <em>cash</em></h2><p style="margin-top:16px">Coaching premium : 150 €/mois, 350 € les 3 mois, 600 € les 6 mois.</p><p class="muted" style="margin-top:14px">Paie les premières semaines et fabrique les témoignages.</p></div>
     <div class="card hot" style="height:430px"><div class="tag">Dès le mois 2</div><h2 style="margin-top:22px">Moteur <em>récurrent</em></h2><p style="margin-top:16px">Abonnements Essentielle 9,50 € et Ultime 24,90 €, annuel payé d'avance.</p><p class="muted" style="margin-top:14px">Le gros du chiffre, qui s'empile mois après mois.</p></div>
@@ -175,7 +178,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
       <rect x="0" y="390" width="230" height="100" rx="16" fill="#B01818"/>
       <rect x="0" y="520" width="172" height="100" rx="16" fill="#E02020"/>
       <g font-family="Bebas Neue" font-size="64" fill="#fff">
-        <text x="30" y="72">1 000 000</text><text x="30" y="202">20 000</text><text x="30" y="332">2 000</text><text x="30" y="462">400</text><text x="30" y="592">300</text>
+        <text x="30" y="72">1 MILLION</text><text x="30" y="202">20 000</text><text x="30" y="332">2 000</text><text x="30" y="462">400</text><text x="30" y="592">300</text>
       </g>
       <g font-weight="800" font-size="28" fill="#fff">
         <text x="1140" y="48">vues Instagram</text><text x="740" y="178">visiteurs sur la page</text><text x="460" y="308">essais gratuits</text><text x="270" y="438">nouveaux payants</text><text x="212" y="568">encore là après 3 mois</text>
@@ -216,8 +219,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
 
 <!-- 10 30 PREMIERS JOURS -->
 <section class="s" style="padding:0">
-  <div class="photo" style="right:0;width:640px;background-image:url(img/hyrox.jpg)"></div>
-  <div style="position:absolute;right:0;top:0;bottom:0;width:640px;background:linear-gradient(90deg,var(--noir),rgba(11,11,12,.2) 40%,rgba(11,11,12,0))"></div>
+  <img src="img/bg-hyrox.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
   <div style="position:absolute;left:104px;top:88px;width:1150px">
     <div class="kick">09 · Les 30 premiers jours</div>
     <h1>Le mois du <em>cash</em></h1>
@@ -275,7 +277,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
     <g font-family="Montserrat">
       <rect x="0" y="40" width="440" height="200" rx="22" fill="#151518" stroke="#2A2A2E" stroke-width="2"/>
       <rect x="636" y="40" width="440" height="200" rx="22" fill="#151518" stroke="#2A2A2E" stroke-width="2"/>
-      <rect x="1272" y="40" width="440" height="200" rx="22" fill="rgba(224,32,32,.14)" stroke="#E02020" stroke-width="2"/>
+      <rect x="1272" y="40" width="440" height="200" rx="22" fill="#2A1214" stroke="#E02020" stroke-width="2"/>
       <g font-weight="800" font-size="30" fill="#fff" text-anchor="middle"><text x="220" y="112">L'AMBASSADRICE</text><text x="856" y="112">SA COMMUNAUTÉ</text><text x="1492" y="112">REPCORE ENCAISSE</text></g>
       <g font-weight="600" font-size="22" fill="#A1A1AA" text-anchor="middle"><text x="220" y="160">5 000 à 60 000 abonnés</text><text x="220" y="194">poste avec son code</text><text x="856" y="160">2 mois d'essai offerts</text><text x="856" y="194">sans carte bancaire</text><text x="1492" y="160">puis reverse 30 %</text><text x="1492" y="194">pendant 12 mois</text></g>
       <path d="M450 140 H626" stroke="#E02020" stroke-width="4" marker-end="url(#a)"/><path d="M1086 140 H1262" stroke="#E02020" stroke-width="4" marker-end="url(#a)"/>
@@ -314,8 +316,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
 
 <!-- 15 COACHS -->
 <section class="s" style="padding:0">
-  <div class="photo" style="left:0;width:700px;background-image:url(img/prog.jpg);background-position:center 30%"></div>
-  <div style="position:absolute;left:0;top:0;bottom:0;width:700px;background:linear-gradient(270deg,var(--noir),rgba(11,11,12,.1) 45%)"></div>
+  <img src="img/bg-prog.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
   <div style="position:absolute;left:780px;top:88px;right:104px">
     <div class="kick">14 · Les coachs</div>
     <h1>Un coach =<br><em>5 à 30 athlètes</em> d'un coup</h1>
@@ -496,8 +497,7 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
 
 <!-- 25 FIN -->
 <section class="s" style="padding:0">
-  <div class="photo" style="inset:0;width:100%;background-image:url(img/legday.jpg);background-position:center 40%;opacity:.35"></div>
-  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(11,11,12,.4),var(--noir) 75%)"></div>
+  <img src="img/bg-fin.jpg" style="position:absolute;inset:0;width:1920px;height:1080px">
   <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
     <img src="img/logo.png" style="width:150px;border-radius:26px;margin-bottom:40px">
     <h1 style="font-size:200px">On lance.<br><em>Maintenant.</em></h1>
