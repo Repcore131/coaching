@@ -2990,6 +2990,11 @@ function _rendreInvitationNotif(){
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
   z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
+  // BUILD 1916 : à la première séance, l'invitation est repliée — la fête
+  // d'abord, la question ensuite, à qui l'ouvre.
+  if(window._finPremiere&&z.firstElementChild){
+    z.innerHTML='<details class="wd-notif-det"><summary>Être prévenu de ta prochaine séance</summary>'+z.innerHTML+'</details>';
+  }
   try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationNotif',e); }
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de

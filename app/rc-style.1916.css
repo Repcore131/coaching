@@ -13676,3 +13676,12 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rc-attente.rc-attente--tue{display:none!important}
 /* BUILD 1915 — la phrase sous « Séance terminée » (phraseHeroFin). */
 .rcf-sous{margin:6px 0 0;font-size:var(--fs-sm);font-weight:600;color:var(--sub);line-height:1.4;text-align:center}
+/* BUILD 1916 — ton point de départ (première séance), ressenti replié, invitation repliée. */
+.pdd .pdd-sous{margin:0 0 8px;font-size:var(--fs-xs);color:var(--sub)}
+.pdd .pdd-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pdd .pdd-l li{display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm)}
+.pdd .pdd-l b{font-weight:800;white-space:nowrap}
+.pdd .pdd-proch{margin:10px 0 0;font-size:var(--fs-xs);color:var(--sub)}
+#wd-ressenti.wd-replie{display:none}
+#wd-ressenti-ouvrir{width:100%;margin:8px 0}
+.wd-notif-det>summary{cursor:pointer;font-size:var(--fs-sm);font-weight:700;color:var(--sub);padding:8px 0}

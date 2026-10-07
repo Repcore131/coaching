@@ -367,6 +367,14 @@ function finishWorkout(incomplete=false,opts){
   //    n'invente pas trois faux badges pour meubler.
   _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
   // 3. MES RECORDS.
+  // BUILD 1916 : à la première séance, pas de records à montrer — LE POINT
+  // DE DÉPART, et la prochaine séance.
+  let _pdd=null; try{ _pdd=pointDeDepart(currentUser,sess); }catch(e){ _pdd=null; }
+  window._finPremiere=!!_pdd;
+  if(_pdd){
+    let _proch=''; try{ _proch=texteProchainCreneau(prochainCreneau(currentUser,Date.now()))||''; }catch(e){}
+    _pose('wd-records',(()=>{ try{ return _htmlPointDeDepart(_pdd,_proch); }catch(e){ return ''; } })());
+  } else
   _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })()
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" onclick="ouvrirMesRecords()">Tous mes records</button>');
   // 4. LA PERFORMANCE, delta compris.
@@ -388,6 +396,7 @@ function finishWorkout(incomplete=false,opts){
   //    d'une seance a l'autre.
   try{ rcfPoserRessenti(); }catch(e){}
   try{ rcfReinitRessenti(); }catch(e){}
+  try{ rcfReplierRessenti(!!window._finPremiere); }catch(e){}
   // ⚠ #wd-comparison A DISPARU DU GABARIT, et avec lui le gros medaillon
   // « nouveau record » qu'il dessinait. Ce n'est pas une perte : le record est
   // dit deux fois au-dessus, par la recompense et par « Mes records ». Le

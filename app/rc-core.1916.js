@@ -60383,6 +60383,14 @@ function finishWorkout(incomplete=false,opts){
   //    n'invente pas trois faux badges pour meubler.
   _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
   // 3. MES RECORDS.
+  // BUILD 1916 : à la première séance, pas de records à montrer — LE POINT
+  // DE DÉPART, et la prochaine séance.
+  let _pdd=null; try{ _pdd=pointDeDepart(currentUser,sess); }catch(e){ _pdd=null; }
+  window._finPremiere=!!_pdd;
+  if(_pdd){
+    let _proch=''; try{ _proch=texteProchainCreneau(prochainCreneau(currentUser,Date.now()))||''; }catch(e){}
+    _pose('wd-records',(()=>{ try{ return _htmlPointDeDepart(_pdd,_proch); }catch(e){ return ''; } })());
+  } else
   _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })()
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0" onclick="ouvrirMesRecords()">Tous mes records</button>');
   // 4. LA PERFORMANCE, delta compris.
@@ -60404,6 +60412,7 @@ function finishWorkout(incomplete=false,opts){
   //    d'une seance a l'autre.
   try{ rcfPoserRessenti(); }catch(e){}
   try{ rcfReinitRessenti(); }catch(e){}
+  try{ rcfReplierRessenti(!!window._finPremiere); }catch(e){}
   // ⚠ #wd-comparison A DISPARU DU GABARIT, et avec lui le gros medaillon
   // « nouveau record » qu'il dessinait. Ce n'est pas une perte : le record est
   // dit deux fois au-dessus, par la recompense et par « Mes records ». Le
@@ -72150,6 +72159,54 @@ function phraseHeroFin(u,ctx,sess){
   if(s.deload) return coupe('Semaine allégée : moins, c’est voulu.');
   if(nom) return coupe(nom.charAt(0).toUpperCase()+nom.slice(1)+' bouclée.');
   return 'Une de plus au compteur.';
+}
+// ══ BUILD 1916 — TON POINT DE DÉPART ═══════════════════════════════════════
+// PURE. À la PREMIÈRE séance complète du dossier, rien n'est encore un record :
+// ce qu'on vient de soulever est la ligne de départ. Rend null hors de ce cas,
+// sinon {lignes:[{nom,kg,reps}]} — trois exercices au plus, les plus chargés
+// d'abord (les exercices au poids du corps complètent, à leurs répétitions).
+function pointDeDepart(u,sess){
+  const s=sess||{}, x=u||{};
+  if(s.complete===false) return null;
+  const faites=(Array.isArray(x.sessions)?x.sessions:[]).filter(z=>z&&z.complete!==false);
+  if(faites.length!==1) return null;
+  const l=[];
+  Object.entries(s.data||{}).forEach(([nom,d])=>{
+    let best=null;
+    ((d&&d.sets)||[]).forEach(t=>{
+      if(!t||!(t.done||t.horsCalcul)) return;
+      const kg=parseFloat(String(t.weight==null?'':t.weight).replace(',','.'))||0;
+      const r=parseInt(t.repsDone!=null?t.repsDone:t.reps,10)||0;
+      if(!kg&&!r) return;
+      if(!best||kg>best.kg||(kg===best.kg&&r>best.reps)) best={nom,kg,reps:r};
+    });
+    if(best) l.push(best);
+  });
+  if(!l.length) return null;
+  l.sort((a,b)=>(b.kg-a.kg)||(b.reps-a.reps));
+  return {lignes:l.slice(0,3)};
+}
+function _htmlPointDeDepart(p,prochaine){
+  if(!p||!p.lignes||!p.lignes.length) return '';
+  const nb=v=>String(v).replace('.',',');
+  return '<section class="card pdd" aria-label="Ton point de départ">'
+    +'<h3 class="t-section">Ton point de départ</h3>'
+    +'<p class="pdd-sous">La prochaine fois, c’est ça qu’on bat.</p>'
+    +'<ul class="pdd-l">'+p.lignes.map(x=>'<li><span>'+escapeHtml(x.nom)+'</span><b>'
+      +(x.kg>0?escapeHtml(nb(x.kg))+' kg'+(x.reps?' × '+x.reps:''):x.reps+' reps')+'</b></li>').join('')+'</ul>'
+    +(prochaine?'<p class="pdd-proch">'+escapeHtml(prochaine)+'</p>':'')
+    +'</section>';
+}
+// Le ressenti REPLIÉ à la première séance : un bouton, et le bloc se déplie.
+function rcfReplierRessenti(replier){
+  const z=document.getElementById('wd-ressenti'); if(!z) return false;
+  let b=document.getElementById('wd-ressenti-ouvrir');
+  if(!replier){ z.classList.remove('wd-replie'); if(b) b.remove(); return false; }
+  z.classList.add('wd-replie');
+  if(!b){ b=document.createElement('button'); b.type='button'; b.id='wd-ressenti-ouvrir';
+    b.className='btn btn-outline btn-m'; b.textContent='Noter mon ressenti';
+    b.onclick=()=>rcfReplierRessenti(false); z.insertAdjacentElement('beforebegin',b); }
+  return true;
 }
 function _htmlHeroFin(badges,ctx,u,sess){
   let ph=''; try{ ph=phraseHeroFin(u,ctx,sess); }catch(e){ ph=''; }
@@ -89601,6 +89658,11 @@ function _rendreInvitationNotif(){
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
   z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
+  // BUILD 1916 : à la première séance, l'invitation est repliée — la fête
+  // d'abord, la question ensuite, à qui l'ouvre.
+  if(window._finPremiere&&z.firstElementChild){
+    z.innerHTML='<details class="wd-notif-det"><summary>Être prévenu de ta prochaine séance</summary>'+z.innerHTML+'</details>';
+  }
   try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){ rcErreurMuette('_rendreInvitationNotif',e); }
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
@@ -91315,7 +91377,10 @@ function _bdgEcran(id,reste){
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(b.nom)+'</h2>'
     +'<div class="bdg-ecran-meta">'+escapeHtml([pal,_bdgDate(at)].filter(Boolean).join(' · '))+'</div>'
     +'<div class="bdg-ecran-rar"'+(rar?'':' hidden')+'>'+escapeHtml(rar)+'</div>'
-    +'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>'
+    // BUILD 1916 : la première séance s'adresse à quelqu'un, pas à un compte.
+    +(id==='premiere-seance'
+      ?'<p class="bdg-ecran-cond">'+escapeHtml(((String((u&&(u.pseudo||u.fname))||'').trim().split(/\s+/)[0])||'Toi')+', c’est parti.')+'</p>'
+      :'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>')
     +_htmlVisuelFonds('bdg-ecran-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerBadge(\''+id+'\',this)">'
       +icon('share',16)+' <span>Partager</span></button>'

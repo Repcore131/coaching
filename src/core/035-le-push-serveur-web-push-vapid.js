@@ -1672,7 +1672,10 @@ function _bdgEcran(id,reste){
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(b.nom)+'</h2>'
     +'<div class="bdg-ecran-meta">'+escapeHtml([pal,_bdgDate(at)].filter(Boolean).join(' · '))+'</div>'
     +'<div class="bdg-ecran-rar"'+(rar?'':' hidden')+'>'+escapeHtml(rar)+'</div>'
-    +'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>'
+    // BUILD 1916 : la première séance s'adresse à quelqu'un, pas à un compte.
+    +(id==='premiere-seance'
+      ?'<p class="bdg-ecran-cond">'+escapeHtml(((String((u&&(u.pseudo||u.fname))||'').trim().split(/\s+/)[0])||'Toi')+', c’est parti.')+'</p>'
+      :'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>')
     +_htmlVisuelFonds('bdg-ecran-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerBadge(\''+id+'\',this)">'
       +icon('share',16)+' <span>Partager</span></button>'

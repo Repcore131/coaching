@@ -1992,6 +1992,54 @@ function phraseHeroFin(u,ctx,sess){
   if(nom) return coupe(nom.charAt(0).toUpperCase()+nom.slice(1)+' bouclée.');
   return 'Une de plus au compteur.';
 }
+// ══ BUILD 1916 — TON POINT DE DÉPART ═══════════════════════════════════════
+// PURE. À la PREMIÈRE séance complète du dossier, rien n'est encore un record :
+// ce qu'on vient de soulever est la ligne de départ. Rend null hors de ce cas,
+// sinon {lignes:[{nom,kg,reps}]} — trois exercices au plus, les plus chargés
+// d'abord (les exercices au poids du corps complètent, à leurs répétitions).
+function pointDeDepart(u,sess){
+  const s=sess||{}, x=u||{};
+  if(s.complete===false) return null;
+  const faites=(Array.isArray(x.sessions)?x.sessions:[]).filter(z=>z&&z.complete!==false);
+  if(faites.length!==1) return null;
+  const l=[];
+  Object.entries(s.data||{}).forEach(([nom,d])=>{
+    let best=null;
+    ((d&&d.sets)||[]).forEach(t=>{
+      if(!t||!(t.done||t.horsCalcul)) return;
+      const kg=parseFloat(String(t.weight==null?'':t.weight).replace(',','.'))||0;
+      const r=parseInt(t.repsDone!=null?t.repsDone:t.reps,10)||0;
+      if(!kg&&!r) return;
+      if(!best||kg>best.kg||(kg===best.kg&&r>best.reps)) best={nom,kg,reps:r};
+    });
+    if(best) l.push(best);
+  });
+  if(!l.length) return null;
+  l.sort((a,b)=>(b.kg-a.kg)||(b.reps-a.reps));
+  return {lignes:l.slice(0,3)};
+}
+function _htmlPointDeDepart(p,prochaine){
+  if(!p||!p.lignes||!p.lignes.length) return '';
+  const nb=v=>String(v).replace('.',',');
+  return '<section class="card pdd" aria-label="Ton point de départ">'
+    +'<h3 class="t-section">Ton point de départ</h3>'
+    +'<p class="pdd-sous">La prochaine fois, c’est ça qu’on bat.</p>'
+    +'<ul class="pdd-l">'+p.lignes.map(x=>'<li><span>'+escapeHtml(x.nom)+'</span><b>'
+      +(x.kg>0?escapeHtml(nb(x.kg))+' kg'+(x.reps?' × '+x.reps:''):x.reps+' reps')+'</b></li>').join('')+'</ul>'
+    +(prochaine?'<p class="pdd-proch">'+escapeHtml(prochaine)+'</p>':'')
+    +'</section>';
+}
+// Le ressenti REPLIÉ à la première séance : un bouton, et le bloc se déplie.
+function rcfReplierRessenti(replier){
+  const z=document.getElementById('wd-ressenti'); if(!z) return false;
+  let b=document.getElementById('wd-ressenti-ouvrir');
+  if(!replier){ z.classList.remove('wd-replie'); if(b) b.remove(); return false; }
+  z.classList.add('wd-replie');
+  if(!b){ b=document.createElement('button'); b.type='button'; b.id='wd-ressenti-ouvrir';
+    b.className='btn btn-outline btn-m'; b.textContent='Noter mon ressenti';
+    b.onclick=()=>rcfReplierRessenti(false); z.insertAdjacentElement('beforebegin',b); }
+  return true;
+}
 function _htmlHeroFin(badges,ctx,u,sess){
   let ph=''; try{ ph=phraseHeroFin(u,ctx,sess); }catch(e){ ph=''; }
   return '<div class="rcf-hero">'+_htmlFlammeFin()

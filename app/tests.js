@@ -74219,6 +74219,38 @@ async function testExercices(){
       const h=_htmlHeroFin([],{},{sessions:[{},{}]},{name:'<b>Haut</b>'});
       return /<p class="rcf-sous">&lt;b&gt;Haut&lt;\/b&gt; bouclée\.<\/p>/.test(h)?true:_echec(h.slice(0,300));});
 
+    // ══ BUILD 1916 — TON POINT DE DÉPART ═══════════════════════════════════════
+    ok('1916 — pointDeDepart : seulement la première séance complète ; trois exercices, les plus chargés',()=>{
+      const faux=[];
+      const sess={complete:true,data:{Squat:{sets:[{done:true,weight:'60',reps:'8'},{done:true,weight:'70',reps:'5'}]},
+        'Développé':{sets:[{done:true,weight:'50,5',reps:'8'}]},Tractions:{sets:[{done:true,weight:'',reps:'6'}]},
+        Curl:{sets:[{done:true,weight:'12',reps:'10'}]},Gainage:{sets:[{done:false,weight:'',reps:'30'}]}}};
+      const p=pointDeDepart({sessions:[sess]},sess);
+      if(!p||p.lignes.length!==3) return _echec(JSON.stringify(p));
+      if(p.lignes[0].nom!=='Squat'||p.lignes[0].kg!==70||p.lignes[0].reps!==5) faux.push('1re : '+JSON.stringify(p.lignes[0]));
+      if(p.lignes[1].kg!==50.5) faux.push('virgule : '+JSON.stringify(p.lignes[1]));
+      if(pointDeDepart({sessions:[{complete:true},sess]},sess)) faux.push('deuxième séance');
+      if(pointDeDepart({sessions:[sess]},Object.assign({},sess,{complete:false}))) faux.push('incomplète');
+      if(pointDeDepart({sessions:[{complete:true}]},{complete:true,data:{}})) faux.push('séance vide');
+      const h=_htmlPointDeDepart(p,'Prochaine séance : mercredi');
+      if(!/Ton point de départ/.test(h)||!/70 kg × 5/.test(h)||!/50,5 kg/.test(h)||!/mercredi/.test(h)) faux.push('carte : '+h.slice(0,200));
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1916 — ressenti replié derrière « Noter mon ressenti », déplié au toucher',()=>{
+      const z=document.getElementById('wd-ressenti'); if(!z) return _echec('#wd-ressenti absent');
+      try{
+        rcfReplierRessenti(true);
+        const b=document.getElementById('wd-ressenti-ouvrir');
+        if(!z.classList.contains('wd-replie')||!b||b.textContent!=='Noter mon ressenti') return _echec('pas replié');
+        b.click();
+        return !z.classList.contains('wd-replie')&&!document.getElementById('wd-ressenti-ouvrir')?true:_echec('pas déplié');
+      }finally{ rcfReplierRessenti(false); }});
+    ok('1916 — calque du badge PREMIÈRE SÉANCE : « <Prénom>, c’est parti. »',()=>{
+      const s=String(_bdgEcran);
+      return /premiere-seance/.test(s)&&/c’est parti\./.test(s)?true:_echec('phrase absente');});
+    ok('1916 — invitation aux notifications repliée en <details> à la première séance',()=>{
+      const s=String(_rendreInvitationNotif);
+      return /_finPremiere/.test(s)&&/<details class="wd-notif-det">/.test(s)?true:_echec('pas de details');});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
