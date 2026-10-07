@@ -13657,3 +13657,18 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .ccd-aide-av{color:var(--sub);margin:0 0 4px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 /* BUILD 1907 — le mot sous un champ du profil. */
 .atp-aide{color:var(--orange);font-size:var(--fs-xs);line-height:1.5;margin:4px 0 0}
+/* BUILD 1913 — SOUS 420 PX, LES ONGLETS PRENNENT LEUR NOM COURT et s'écartent
+   de 2 px : à 360, « AUJOURD’HUI » et « ENTRAÎNEMENT » en capitales se
+   touchaient. Le nom long reste dans le DOM (aria-label et texte masqué) ;
+   la taille ne bouge pas. */
+@media(max-width:419px){
+  .tab-bar{gap:2px}
+  .tab-btn[data-court] .tab-l{display:none}
+  .tab-btn[data-court]::before{content:attr(data-court)}
+  .tab-btn[data-court] svg{order:-1}
+}
+/* La barre de la fiche : jamais de césure, et deux rangées sous 400 px. */
+#s-coach-client .ccd-barre4 .cc-sect-t>span,.ccd-b4{hyphens:none;-webkit-hyphens:none}
+@media(max-width:399px){
+  #s-coach-client .ccd-barre4>.cc-sect>.cc-sect-t,#s-coach-client .ccd-barre4>.ccd-b4{flex:1 1 calc(33.333% - 6px)!important}
+}

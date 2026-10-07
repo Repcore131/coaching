@@ -74095,6 +74095,38 @@ async function testExercices(){
       return faux.length?_echec(faux.join(' | ')):true;});
     ok('1912 — _woRepsSaisie dit « entre 1 et 999 »',()=>/entre 1 et 999/.test(String(_woRepsSaisie))?true:_echec('message'));
 
+    // ══ BUILD 1913 — ONGLETS COURTS SOUS 420 PX, BARRE DE FICHE SUR DEUX RANGÉES ═
+    ok('1913 — onglets : data-court sur Aujourd’hui et Entraînement, nom long en aria-label, gap 2 px sous 420',()=>{
+      const bar=document.getElementById('client-tabbar'); if(!bar) return _echec('barre absente');
+      const h=bar.querySelector('[data-tab=home]'), e=bar.querySelector('[data-tab=entrainement]');
+      if(h.dataset.court!=='Accueil'||e.dataset.court!=='Séances') return _echec('data-court : '+h.dataset.court+'/'+e.dataset.court);
+      if(h.getAttribute('aria-label')!=='Aujourd’hui'||e.getAttribute('aria-label')!=='Entraînement') return _echec('aria-label');
+      if([...bar.querySelectorAll('.tab-btn')].some(b=>!b.querySelector('.tab-l'))) return _echec('un onglet sans .tab-l');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      return /@media\(max-width:419px\)\{[\s\S]{0,80}\.tab-bar\{gap:2px\}/.test(css)?true:_echec('gap 2px absent');});
+    ok('1913 — fiche : « Relances » et « Infos », sans césure',()=>{
+      const t=[...document.querySelectorAll('#s-coach-client .ccd-barre4 .cc-sect-t>span')].map(x=>x.textContent.trim());
+      if(!t.includes('Relances')||!t.includes('Infos')) return _echec(t.join(','));
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      return /\.ccd-barre4 \.cc-sect-t>span,\.ccd-b4\{hyphens:none/.test(css)?true:_echec('hyphens');});
+    ok('1913 — sonde 360 px : les cinq onglets ne se touchent pas, aucun libellé tronqué',()=>{
+      const ifr=document.createElement('iframe');
+      ifr.style.cssText='position:fixed;left:-2000px;top:0;width:360px;height:640px;border:0';
+      document.body.appendChild(ifr);
+      try{
+        const d=ifr.contentDocument;
+        const css=_stylesProd().map(x=>x.textContent).join('\n');
+        d.open(); d.write('<!doctype html><html><head><style>'+css+'</style></head><body class="with-tabbar">'+document.getElementById('client-tabbar').outerHTML+'</body></html>'); d.close();
+        const bar=d.getElementById('client-tabbar'); bar.classList.add('show');
+        const b=[...bar.querySelectorAll('.tab-btn')].map(x=>x.getBoundingClientRect());
+        if(b.length!==5) return _echec(b.length+' onglets');
+        const faux=[];
+        for(let i=1;i<b.length;i++) if(b[i].left-b[i-1].right<1.5) faux.push('onglets '+i+'/'+(i+1)+' : écart '+(b[i].left-b[i-1].right).toFixed(1));
+        [...bar.querySelectorAll('.tab-btn')].forEach(x=>{ if(x.scrollWidth>x.clientWidth+1) faux.push((x.dataset.tab)+' tronqué'); });
+        if(b[4].right>360.5) faux.push('dépasse : '+b[4].right);
+        return faux.length?_echec(faux.join(' | ')):true;
+      }finally{ ifr.remove(); }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
@@ -76602,7 +76634,8 @@ async function testExercices(){
       const allume=dot&&dot.classList.contains('on')&&/1 retour/.test(btn.getAttribute('aria-label')||'');
       currentUser=_vdU([{id:'a',feedbackSeen:true}]);
       _majPastilleVideos();
-      const eteint=dot&&!dot.classList.contains('on')&&!btn.getAttribute('aria-label');
+      // BUILD 1913 : éteinte, l'onglet garde son nom long (il a un nom court affiché).
+      const eteint=dot&&!dot.classList.contains('on')&&(btn.getAttribute('aria-label')||'')==='Entraînement';
       currentUser=sauve; _majPastilleVideos();
       return allume&&eteint;});
     ok('checkFeedbackNotif : premier passage, aucune notification',()=>{

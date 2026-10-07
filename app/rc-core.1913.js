@@ -21941,7 +21941,7 @@ function _pastilleOnglet(onglet,n,libelle){
   if(onglet==='lifestyle'){
     const autres=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible).reduce((a,k)=>a+_pastilleSources[k].n,0);
     if(dot&&!autres){ dot.classList.toggle('on',n0>0); dot.classList.toggle('gris',n0>0); dot.classList.remove('chiffre'); dot.textContent=''; }
-    if(!autres){ if(n0>0) btn.setAttribute('aria-label',_pastilleSources[onglet].lib); else btn.removeAttribute('aria-label'); }
+    if(!autres){ if(n0>0) btn.setAttribute('aria-label',_pastilleSources[onglet].lib); else _ongletAriaDefaut(btn); }
     return n0;
   }
   const srcs=Object.keys(_pastilleSources).filter(k=>k!=='lifestyle'&&_pastilleSources[k].cible===cible);
@@ -21965,8 +21965,14 @@ function _pastilleOnglet(onglet,n,libelle){
   // Le libelle accessible suit le chiffre : une pastille seule ne se percoit
   // qu'a l'oeil, et le lecteur d'ecran annoncerait un onglet sans rien.
   if(c>0&&typeof libelle==='function') btn.setAttribute('aria-label',libelle(c));
-  else btn.removeAttribute('aria-label');
+  else _ongletAriaDefaut(btn);
   return btn;
+}
+// BUILD 1913 : un onglet à nom court garde son NOM LONG pour le lecteur
+// d'écran quand la pastille s'éteint (sinon il lirait « Accueil »).
+function _ongletAriaDefaut(btn){
+  const l=btn&&btn.dataset&&btn.dataset.court&&btn.querySelector('.tab-l');
+  if(l) btn.setAttribute('aria-label',l.textContent.trim()); else if(btn) btn.removeAttribute('aria-label');
 }
 // ── COMBIEN DE MESSAGES NON LUS ─────────────────────────────────────────
 // canalNonLu ne rend qu'un booleen, et il ne peut pas faire mieux : la seule
