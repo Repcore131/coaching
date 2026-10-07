@@ -69,6 +69,8 @@ function ouvrirPlanCoach(){
   _cplNeuf=vide&&!!_cplPlan.modele;
   _cplCible=null; _cplPliage={};
   go('s-coach-plan');
+  // BUILD 1872 : le titre dit de quel athlète il s'agit, avec sa pastille.
+  try{ const t=document.getElementById('cpl-titre'); if(t){ t.textContent='Plan de '+nomCourtClient(c); _poserPastilleTitre(t,c); } }catch(e){}
   renderPlanCoach();
   // Ciqual pèse 873 Ko : on affiche d'abord, on complète les noms ensuite.
   _loadCiqual().then(()=>renderPlanCoach());

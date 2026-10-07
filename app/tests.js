@@ -66099,6 +66099,30 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1872 : DEUX LÉA ══
+    ok('nomCourtAthlete : prénom unique ; homonymes « Léa Ma. » / « Léa Mo. » ; homonymes complets → e-mail ; accents',()=>{
+      const a={id:1,fname:'Léa',lname:'Martin',email:'a@t.fr'}, b={id:2,fname:'Lea',lname:'Moreau',email:'b@t.fr'},
+            c={id:3,fname:'Tom',lname:'Roy',email:'c@t.fr'}, d={id:4,fname:'Léa',lname:'Martin',email:'d@t.fr'};
+      if(nomCourtAthlete(c,[a,b,c])!=='Tom') return _echec('unique : '+nomCourtAthlete(c,[a,b,c]));
+      if(nomCourtAthlete(a,[a,b,c])!=='Léa Ma.') return _echec(nomCourtAthlete(a,[a,b,c]));
+      if(nomCourtAthlete(b,[a,b,c])!=='Lea Mo.') return _echec(nomCourtAthlete(b,[a,b,c]));
+      const x=nomCourtAthlete(a,[a,b,c,d]);
+      return x==='Léa Martin (a@t.fr)'?true:_echec(x);});
+    ok('copierSeanceVersAthlete ouvre une feuille de boutons, sans rcSaisie pour le destinataire',()=>{
+      const sU=currentUser, sUs=DB.get('users'), sE=_coachEditClient, sCid=currentClientId, sS=window.rcSaisie;
+      try{
+        currentUser={id:'coS',email:'cos@t.fr',role:'coach'};
+        const mk=(id,f,l)=>({id,email:id+'@t.fr',role:'athlete',coachId:'coS',fname:f,lname:l,sessions_config:[]});
+        const u={}; [mk('s1','Léa','Martin'),mk('s2','Léa','Moreau'),mk('s3','Tom','Roy')].forEach(a=>{ u[a.email]=a; });
+        DB.set('users',u); currentClientId='s3';
+        _coachEditClient={id:'s3',fname:'Tom',sessions_config:[{day:'Lundi',active:true,name:'Haut',exercises:[{name:'Développé couché'}]}]};
+        let n=0; window.rcSaisie=async()=>{ n++; return null; };
+        copierSeanceVersAthlete(0);
+        const t=(document.getElementById('modal-overlay')||{}).textContent||'';
+        if(n) return _echec('rcSaisie appelé');
+        return /Léa Ma\./.test(t)&&/Léa Mo\./.test(t)?true:_echec(t.slice(0,200));
+      } finally { try{ closeModal(); }catch(e){} currentUser=sU; if(sUs) DB.set('users',sUs); _coachEditClient=sE; currentClientId=sCid; window.rcSaisie=sS; }});
+
     // ══ BUILD 1871 : LA CORBEILLE DU COACH ══
     okA('Corbeille : supprimer un modèle puis le restaurer depuis la corbeille garde l’id et les versions',async()=>{
       const sU=currentUser, sC=window.rcConfirm, sS=window.saveUser, sL=window.loadCoachProgramsList;

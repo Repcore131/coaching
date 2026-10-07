@@ -1792,6 +1792,41 @@ async function confirmDeleteClient(){
   go('s-coach-home');loadCoachHome();
   toastSyncAnnulable(ok,envoi,_nom+' retiré de ton suivi','le retrait est',()=>defaireRetraitEleve(_avant));
 }
+// ══ BUILD 1872 : DEUX LÉA ════════════════════════════════════════════════════
+// PURE. Le prénom seul s'il est unique dans le portefeuille ; sinon le prénom
+// et le début du nom jusqu'à ce que ça distingue (« Léa Ma. » / « Léa Mo. ») ;
+// l'e-mail en dernier recours (homonymes complets). Accents et casse ignorés.
+function nomCourtAthlete(a,tous){
+  const f=String(a&&a.fname||'').trim(), l=String(a&&a.lname||'').trim();
+  if(!f&&!l) return String(a&&a.email||'Athlète');
+  const n=x=>String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  const autres=(tous||[]).filter(b=>b&&b!==a&&!(a.id!=null&&b.id===a.id)&&!(a.email&&b.email===a.email)&&n(b.fname)===n(f));
+  if(!autres.length) return f||l;
+  for(let k=1;k<=l.length;k++){
+    const p=n(l.slice(0,k));
+    if(!autres.some(b=>n(b.lname).indexOf(p)===0)) return f+' '+l.slice(0,k)+(k<l.length?'.':'');
+  }
+  return (f+' '+l).trim()+' ('+(a.email||'sans e-mail')+')';
+}
+// Le portefeuille du coach connecté.
+function nomCourtClient(c){
+  if(!c) return 'cet athlète';
+  let tous=[]; try{ tous=_c4Athletes(); }catch(e){ tous=[]; }
+  return nomCourtAthlete(c,tous);
+}
+// La pastille d'initiales de la liste (.avatar), devant un titre d'écran.
+function _htmlPastille(c){
+  return '<span class="avatar" aria-hidden="true" style="width:32px;height:32px;font-size:12px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center">'
+    +escapeHtml(ini(c&&c.fname,c&&c.lname))+'</span>';
+}
+function _poserPastilleTitre(titre,c){
+  try{
+    if(!titre||!titre.parentNode) return;
+    let p=titre.parentNode.querySelector('.titre-pastille');
+    if(!p){ p=document.createElement('span'); p.className='titre-pastille'; p.style.cssText='display:inline-flex;margin-right:8px'; titre.parentNode.insertBefore(p,titre); }
+    p.innerHTML=c?_htmlPastille(c):'';
+  }catch(e){}
+}
 // BUILD 1869 : « Retirer Léa Moreau de ton suivi ? » — le nom complet.
 function nomCompletEleve(c){
   const n=((c&&c.fname||'')+' '+(c&&c.lname||'')).trim()||String(c&&c.studentName||'').trim();
@@ -1943,7 +1978,7 @@ function viewClientBilans(opts){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
-  document.getElementById('evo-title').textContent=c.fname+' : Évolution';
+  document.getElementById('evo-title').textContent=nomCourtClient(c)+' : Évolution';
   renderBilanEvolution(c);
   // N3.15 — L'ECRITURE EST ICI, apres le rendu et sur un GESTE : le coach
   // vient d'ouvrir l'evolution de son athlete. Le rendu, lui, peut etre

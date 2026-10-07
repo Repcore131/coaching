@@ -502,7 +502,7 @@ function _cibleCopieAthlete(){
     .filter(u=>_estMonAthlete(u,currentUser)&&u.id!==currentClientId&&u.email)
     .sort((a,b)=>((a.fname||'')+(a.lname||'')).localeCompare((b.fname||'')+(b.lname||'')));
 }
-async function copierSeanceVersAthlete(i){
+async function copierSeanceVersAthlete(i,destId,jour){
   const src=_coachEditClient&&(_coachEditClient.sessions_config||[])[i];
   if(!src||!src.active||!((src.exercises||[]).length)){
     toast('Ce créneau est vide : rien à porter.','var(--orange)'); return false;
@@ -510,19 +510,15 @@ async function copierSeanceVersAthlete(i){
   const cibles=_cibleCopieAthlete();
   if(!cibles.length){ toast('Aucun autre athlète à qui porter cette séance.','var(--orange)'); return false; }
   const nl=String.fromCharCode(10);
-  const liste=cibles.map((a,n)=>(n+1)+'. '+(((a.fname||'')+' '+(a.lname||'')).trim()||a.email)).join(nl);
-  const rep=await rcSaisie('Porter « '+(src.name||DAYS[i])+' » chez qui ?'+nl+nl
-    +liste+nl+nl+'Écris le numéro.','',{libelleOk:'Choisir',inputmode:'numeric'});
-  const n=parseInt(String(rep||'').trim(),10);
-  if(!isFinite(n)||n<1||n>cibles.length) return false;
-  const dest=cibles[n-1];
-  const nom=((dest.fname||'')+' '+(dest.lname||'')).trim()||dest.email;
-  // LE JOUR D'ARRIVEE. Le meme par defaut : porter le lundi de l'un sur le
-  // lundi de l'autre est ce qu'on veut neuf fois sur dix.
-  const jr=await rcSaisie('Quel jour chez '+nom+' ?'+nl+nl
-    +DAYS.map((d,k)=>(k+1)+'. '+d).join(nl),String(i+1),
-    {libelleOk:'Porter',inputmode:'numeric'});
-  const j=parseInt(String(jr||'').trim(),10)-1;
+  // BUILD 1872 : une feuille de boutons (nom distinctif + pastille), puis une
+  // rangée de 7 jours. Plus de numéro à taper : avec deux Léa, on se trompait.
+  if(destId==null){ _feuilleCopieSeance(i,cibles,src); return false; }
+  const dest=cibles.find(a=>a.id===destId);
+  if(!dest) return false;
+  if(jour==null){ _feuilleCopieSeance(i,cibles,src,dest); return false; }
+  try{ closeModal(); }catch(e){}
+  const nom=nomCourtClient(dest);
+  const j=Number(jour);
   if(!isFinite(j)||j<0||j>=DAYS.length) return false;
   // LE BROUILLON DU DESTINATAIRE, ou son dossier s'il n'en a pas encore.
   const base=_brouillonSessionsDe(dest)||_normaliserSessionsConfig(dest).map(s=>JSON.parse(JSON.stringify(s)));
@@ -555,6 +551,21 @@ async function copierSeanceVersAthlete(i){
   try{ saveUser(); }catch(e){ rcErreurMuette('copierSeanceVersAthlete',e); }
   toast('« '+r.nom+' » portée chez '+nom+' en brouillon. Publie depuis son programme.','var(--success)');
   return true;
+}
+function _feuilleCopieSeance(i,cibles,src,dest){
+  try{ closeModal(); }catch(e){}
+  const E=escapeHtml;
+  const corps=!dest
+    ?cibles.map(a=>'<button type="button" class="btn btn-outline" style="display:flex;align-items:center;gap:10px;width:100%;margin:0 0 8px;text-align:left" onclick="copierSeanceVersAthlete('+i+','+_attrArg(a.id)+')">'
+        +_htmlPastille(a)+'<span>'+E(nomCourtClient(a))+'</span></button>').join('')
+    :'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:8px">Quel jour chez '+E(nomCourtClient(dest))+' ?</p>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'+DAYS.map((d,k)=>'<button type="button" class="btn btn-sm'+(k===i?' btn-red':'')+'" style="margin:0" onclick="copierSeanceVersAthlete('+i+','+_attrArg(dest.id)+','+k+')">'+E(d)+'</button>').join('')+'</div>';
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:8px">Porter « ${E(src.name||DAYS[i])} » chez qui ?</h2>
+    ${corps}
+    <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="closeModal()">Annuler</button>
+  </div></div>`);
 }
 // Le brouillon d'un athlete, tel que enregistrerBrouillon l'ecrit — meme
 // stockage, meme forme. Rendre null et non un tableau vide : « pas de
@@ -1464,7 +1475,7 @@ async function setClientPhone(){
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
   if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
   const a=users[emailKey];
-  const saisi=await rcSaisie('Numéro WhatsApp de '+(a.fname||'cet athlète')
+  const saisi=await rcSaisie('Numéro WhatsApp de '+nomCourtClient(a)
     +'\n\nAvec l\'indicatif pays, ex : +33612345678',a.phone||'+33',
     {type:'tel',inputmode:'tel',placeholder:'+33612345678',libelleOk:'Enregistrer'});
   if(saisi===null) return; // annulé
@@ -1999,7 +2010,7 @@ async function applyTemplateToClient(idx){
   if(hasProgram(a)){
     const rollback=a.sessions_config
       ?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'';
-    if(!await rcConfirm('Remplacer le programme actuel de '+(a.fname||'cet athlète')
+    if(!await rcConfirm('Remplacer le programme actuel de '+nomCourtClient(a)
       +' par « '+(prog.name||'ce modèle')+' » (version '+genre+') ?'+rollback,null,'Remplacer')) return;
   }
   _assignerModele(a,prog,genre);
@@ -2121,7 +2132,7 @@ function _seancesCoachRendre(){
   // il n'y a plus de pose automatique du tout, donc plus de garde a tenir
   // juste. Une grille vide reste vide jusqu'a ce que quelqu'un la remplisse.
   const title=document.getElementById('csm-title');
-  if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' : Séances';
+  if(title){ title.textContent=nomCourtClient(_coachEditClient)+' : Séances'; _poserPastilleTitre(title,_coachEditClient); }
   go('s-coach-sessions');
   loadCoachSessionSlots();
 }
@@ -2597,7 +2608,7 @@ async function _proposerBrouillon(){
   const vieux=brouillonEstPerime(b)
     ?'\n\nIl a plus de '+BROUILLON_PEREMPTION_J+' jours : vérifie qu\'il correspond encore à cet athlète.'
     :'';
-  const ok=await rcConfirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
+  const ok=await rcConfirm('Tu as un brouillon non publié pour '+nomCourtClient(c)+' ('+quand+').'
     +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.',null,'Confirmer');
   if(!ok){
     if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){ rcErreurMuette('_proposerBrouillon',e); }

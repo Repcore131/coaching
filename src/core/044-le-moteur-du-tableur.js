@@ -1881,7 +1881,7 @@ async function nutTransmettre(){
     const min=Math.min(Number((m.on||{}).kcal)||Infinity,Number((m.off||m.on||{}).kcal)||Infinity);
     let pl=0; try{ pl=plancherAthlete(c); }catch(e){ pl=0; }
     if(d<0&&pl>0&&min<pl){
-      const oui=await rcConfirm('Sous son plancher',(c.fname||'Ton athlète')+' passerait à '+_tbNb(min)+' kcal, sous son plancher de '+_tbNb(pl)+' kcal.','Transmettre quand même','Revenir');
+      const oui=await rcConfirm('Sous son plancher',nomCourtClient(c)+' passerait à '+_tbNb(min)+' kcal, sous son plancher de '+_tbNb(pl)+' kcal.','Transmettre quand même','Revenir');
       if(!oui) return false;
     }
     const nut=c.nutrition||(c.nutrition={});
