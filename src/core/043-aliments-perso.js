@@ -1027,7 +1027,7 @@ function _renderFjDaySummary(date){
       ${htmlConsigneJournal(date,entries.length===0)}
     </div>`;
   el.innerHTML=`
-    ${_htmlSelSemaine(currentUser)}
+    ${_htmlSelSemaine(currentUser,date)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
     <!-- 22 px SOUS LE BOUTON, ET NON 12. Le bloc d hydratation porte lui-meme

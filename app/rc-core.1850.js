@@ -71319,15 +71319,96 @@ function selSemaine(user,ref){
   return {total:Math.round(total*10)/10,
     parJour:Math.round(total/nJours*10)/10,nJours,manquants};
 }
-function _htmlSelSemaine(user){
+// LE SEL AJOUTÉ EN CUISINE N'EST DANS AUCUNE FICHE. Ciqual décrit le riz
+// « cuit, sans sel ajouté », et le journal additionne ce que les fiches
+// portent : le total du jour est donc toujours SOUS-estimé. La phrase le dit,
+// et la pincée donne un geste pour le corriger sans chercher « sel » dans la
+// table.
+const SEL_CUISINE_NON_COMPTE='Le sel ajouté en cuisine n’est pas compté.';
+// `dateISO` : le jour affiché par le journal. Le bouton n'y paraît que si ce
+// jour porte déjà un aliment — la pincée va au DERNIER repas saisi, et sans
+// repas saisi il n'y a nulle part où la poser.
+function _htmlSelSemaine(user,dateISO){
   const s=selSemaine(user);
-  if(!s) return '';
+  const jour=dateISO?((((user&&user.nutrition)||{}).log||{})[dateISO]||{}).entries||[]:[];
+  const bouton=jour.length&&dateISO
+    ?`<button type="button" class="btn btn-sm" style="margin-left:6px;padding:2px 8px" onclick="ajouterPinceeSel('${dateISO}')">+ pincée de sel</button>`:'';
+  if(!s&&!bouton) return '';
   return `<div style="margin-top:10px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">
-    Sel : ${String(s.parJour).replace('.',',')} g par jour en moyenne sur ${s.nJours} jour${s.nJours>1?'s':''} journalisé${s.nJours>1?'s':''}.
+    ${s?`Sel : ${_selFmt(s.parJour)} g par jour en moyenne sur ${s.nJours} jour${s.nJours>1?'s':''} journalisé${s.nJours>1?'s':''}.
     ${s.manquants?`${s.manquants} aliment${s.manquants>1?'s':''} sans donnée de sel.`:''}
-    ${escapeHtml(SEL_REGISTRE)}
+    ${escapeHtml(SEL_REGISTRE)}<br>`:''}
+    ${escapeHtml(SEL_CUISINE_NON_COMPTE)}${bouton}
   </div>`;
 }
+// ── LA PINCÉE DE SEL ─────────────────────────────────────────────────────
+// 0,5 g de sel, 0 kcal. L'iode vient de la fiche Ciqual du sel iodé quand la
+// table est chargée — jamais d'une valeur recopiée ici : une fiche absente
+// laisse la clé absente (« on ne sait pas »), pas à zéro.
+const SEL_PINCEE_G=0.5;
+const SEL_PINCEE_NOM='Sel iodé, pincée';
+const SEL_IODE_CIQUAL_ID=11058;
+// PURE. L'entrée, sans l'écrire. `entries` : le jour tel qu'il est, pour
+// trouver le dernier repas saisi et un identifiant libre — un double appui
+// dans la même milliseconde donnerait sinon deux entrées au même id, et
+// « Annuler » en retirerait deux.
+function entreePinceeSel(entries,fiche,maintenantMs){
+  const l=(entries||[]).filter(Boolean);
+  if(!l.length) return null;
+  const repas=l[l.length-1].repas||'matin';
+  let id=Number(maintenantMs)||Date.now();
+  const pris=new Set(l.map(e=>e.id));
+  while(pris.has(id)) id++;
+  const e={id,alim_id:SEL_IODE_CIQUAL_ID,nom:SEL_PINCEE_NOM,groupe:'aides culinaires et ingrédients divers',
+    qty:SEL_PINCEE_G,repas,kcal:0,p:0,c:0,l:0,fi:0,sel:SEL_PINCEE_G};
+  if(fiche&&fiche.id===SEL_IODE_CIQUAL_ID){ try{ _poserMicros(e,fiche,SEL_PINCEE_G/100); }catch(_){} }
+  return e;
+}
+function ajouterPinceeSel(dateISO){
+  const log=((currentUser&&currentUser.nutrition)||{}).log||{};
+  const entries=(log[dateISO]||{}).entries||[];
+  let fiche=null;
+  try{ fiche=Array.isArray(_ciqualDB)?(_ciqualDB.find(f=>f&&f.id===SEL_IODE_CIQUAL_ID)||null):null; }catch(e){}
+  const e=entreePinceeSel(entries,fiche);
+  if(!e) return false;
+  return _fjAjouter([e],dateISO,SEL_PINCEE_NOM+' ajoutée');
+}
+// ── LE REPÈRE DE SEL : UNE FOURCHETTE, PAS UN OBJECTIF ───────────────────
+// La cible sodique tombe souvent au plancher (1500 mg de sodium = 3,8 g de
+// sel), et le journal sous-estime toujours le sel. Écrite « 1,1 / 3,8 g »,
+// elle se lisait « il te manque 2,7 g de sel » — une invitation à saler que
+// personne n'a voulu faire. Elle devient une fourchette : la cible en bas,
+// 5 g en haut (ou la cible si elle est plus haute), jamais au-delà du plafond.
+//
+// ⚠ MOTIF MÉDICAL : la cible EST le plafond, et il n'y a pas de fourchette
+// au-dessus — la borne haute est la cible.
+const SEL_REPERE_HAUT_G=5;
+function bornesSel(t){
+  if(!t||!(t.targetSaltG>0)) return null;
+  const r=v=>Math.round(v*10)/10;
+  const bas=r(t.targetSaltG);
+  const medical=!!(t.ceiling&&t.ceiling.motif==='MEDICAL');
+  if(medical) return {bas,haut:bas,medical:true};
+  let plafond=sodiumMgToSaltG(SODIUM_CONFIG.plafondAthleteMg);
+  if(t.ceiling&&t.ceiling.motif==='PRESCRIPTION'&&t.ceiling.mg>0) plafond=Math.min(plafond,sodiumMgToSaltG(t.ceiling.mg));
+  const haut=r(Math.min(Math.max(SEL_REPERE_HAUT_G,bas),plafond));
+  return {bas:Math.min(bas,haut),haut,medical:false};
+}
+// La virgule décimale, une décimale au plus, et pas de « ,0 ».
+function _selFmt(v){
+  const n=Number(v)||0;
+  return String(parseFloat(n.toFixed(1))).replace('.',',');
+}
+// « repère 3,8–5 g », ou « max 2,3 g » sous plafond médical.
+function texteRepereSel(b){
+  if(!b) return '';
+  if(b.medical||b.haut<=b.bas) return (b.medical?'max ':'repère ')+_selFmt(b.bas)+' g';
+  return 'repère '+_selFmt(b.bas)+'–'+_selFmt(b.haut)+' g';
+}
+// L'AMBRE NE DIT QU'UNE CHOSE : au-dessus de la borne haute. Sous la borne
+// basse, rien — le journal sous-estime, et colorer « trop peu » pousserait à
+// saler pour faire monter un chiffre faux.
+function selAuDessus(val,b){ return !!(b&&(Number(val)||0)>b.haut); }
 
 // ══════════════ SODIUM : LE BESOIN DU JOUR, EN MILLIGRAMMES ═══════════════
 // Portage du moteur @repcore/sodium, spécifié par Kevin. Domaine PUR : aucune
@@ -100223,6 +100304,7 @@ function htmlTuileNut(val,cible,unite,label,coul,ico,opts){
     ? `<span class="fj-val">${aCible?nb(cible):'-'}</span>${aCible&&unite?`<span class="fj-cible">${unite}</span>`:''}`
     : `<span class="fj-val">${nb(val)}</span>${aCible?`<span class="fj-cible">/${nb(cible)}${unite}</span>`:''}`;
   const pc=(!o.cibleSeule&&aCible)?Math.round((val/cible)*100):null;
+  if(o.bornes) return _htmlTuileSel(val,o.bornes,label,ico,o.cibleSeule);
   return `<div class="fj-tuile${o.kcal?' fj-kcal':''}" style="--c:${coul}">
     <div class="fj-tete">
       <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
@@ -100233,6 +100315,45 @@ function htmlTuileNut(val,cible,unite,label,coul,ico,opts){
       <div class="fj-barre"><i style="width:${pc==null?0:Math.min(pc,100)}%"></i></div>
       <span class="fj-pct">${pc==null?'-':pc+'%'}</span>
     </div>`}
+  </div>`;
+}
+// LA TUILE SEL PORTE UNE FOURCHETTE, PAS UNE CIBLE (bornesSel, 029). En
+// cible seule : « 3,8–5 g ». Sinon : « 1,1 g · repère 3,8–5 g », une barre
+// NEUTRE remplie jusqu'à la borne haute, et l'ambre au-dessus seulement. Pas
+// de pourcentage : un « 29 % » d'une fourchette se lirait comme un retard.
+function _htmlTuileSel(val,b,label,ico,cibleSeule){
+  const fourch=(b.medical||b.haut<=b.bas)?_selFmt(b.bas):_selFmt(b.bas)+'–'+_selFmt(b.haut);
+  const haut=selAuDessus(val,b);
+  const coul=haut?'var(--amber)':'var(--sub)';
+  const tete=cibleSeule
+    ? `<span class="fj-val">${fourch}</span><span class="fj-cible">${b.medical?'g max':'g'}</span>`
+    : `<span class="fj-val">${_selFmt(val)}</span><span class="fj-cible"> g · ${texteRepereSel(b)}</span>`;
+  const pc=Math.min(((Number(val)||0)/b.haut)*100,100);
+  return `<div class="fj-tuile" style="--c:${coul}">
+    <div class="fj-tete">
+      <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
+      <div style="min-width:0">${tete}</div>
+    </div>
+    <div class="fj-lbl">${label}</div>
+    ${cibleSeule?'':`<div class="fj-pied">
+      <div class="fj-barre"><i style="width:${pc.toFixed(1)}%"></i></div>
+      <span class="fj-pct"></span>
+    </div>`}
+  </div>`;
+}
+// LA LIGNE SEL DU JOURNAL : la même fourchette que la tuile, en ligne légère.
+function htmlLigneSel(val,t){
+  const b=bornesSel(t);
+  if(!b) return htmlLigneMiniNut('Sel',val,0,' g','#60a5fa');
+  const v=Number(val)||0;
+  const coul=selAuDessus(v,b)?'var(--amber)':'var(--sub)';
+  const pc=Math.min((v/b.haut)*100,100);
+  return `<div class="fj-mini-e" style="--c:${coul}">
+    <div class="fj-mini-t">
+      <span class="fj-mini-lbl">Sel</span>
+      <span class="fj-mini-v">${_selFmt(v)} g<small> · ${texteRepereSel(b)}</small></span>
+    </div>
+    <div class="fj-mini-p"><i class="rc-barre" data-bar-w="${pc.toFixed(1)}" style="width:0;transition:width var(--t-3) var(--c-out)"></i></div>
   </div>`;
 }
 // LES SIX TUILES, DECRITES UNE FOIS. Les deux cartes lisent cette liste :
@@ -100325,7 +100446,8 @@ function htmlGrilleTuilesNut(tot,m,opts){
     const brut=(tot&&tot[t.tot])||0;
     const v=t.tot==='kcal'?Math.round(brut):brut;
     const c=t.cible?((m&&m[t.cible])||0):0;
-    return htmlTuileNut(v,c,t.unite,t.label,t.coul,t.ico,{kcal:t.kcal,cibleSeule:o.cibleSeule});
+    const bornes=(t.tot==='sel'&&o.selCible)?bornesSel(o.selCible):null;
+    return htmlTuileNut(v,c,t.unite,t.label,t.coul,t.ico,{kcal:t.kcal,cibleSeule:o.cibleSeule,bornes});
   }).join('')}</div>`;
 }
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
@@ -100471,7 +100593,7 @@ function _renderStrictMacroRings(nut,jourAff){
          journal, elles remontent ici, ou vit deja tout ce qui se compare a une
          cible. Demande de Kevin, 24/08/2026. -->
     <div class="fj-mini" style="margin-top:14px">
-      ${htmlLigneMiniNut('Sel',tot.sel,_sel.macros.sel,' g','#60a5fa')}
+      ${htmlLigneSel(tot.sel,_sel.cible)}
       ${htmlLigneMiniNut('Fibres ℹ',tot.fi,m.f,' g','#a78bfa')}
     </div>
     <!-- « fibres : indicatif » N EST ECRIT QU UNE FOIS, plus bas, sous les
@@ -100503,7 +100625,7 @@ function _renderStrictMacroRings(nut,jourAff){
          maquette du 21/08/2026. -->
     <div style="margin-top:14px">
       <div class="nut-cap" style="margin-bottom:10px">Tes cibles</div>
-      ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true})}
+      ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true,selCible:_sel.cible})}
       <!-- LA MEME NOTE QU AU JOURNAL. Le « ℹ » de la tuile des fibres ne veut
            rien dire sans elle, et une grille qui porte le signe sans porter la
            legende renvoie le lecteur a une phrase qui n est pas la. -->
@@ -108533,7 +108655,7 @@ function _renderFjDaySummary(date){
       ${htmlConsigneJournal(date,entries.length===0)}
     </div>`;
   el.innerHTML=`
-    ${_htmlSelSemaine(currentUser)}
+    ${_htmlSelSemaine(currentUser,date)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
     <!-- 22 px SOUS LE BOUTON, ET NON 12. Le bloc d hydratation porte lui-meme

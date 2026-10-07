@@ -31639,6 +31639,75 @@ async function testExercices(){
         return !/class="fj-tuile/.test(src)
           ?true:_echec('le journal refabrique une tuile chez lui');});
     })();
+    // ══════ BUILD 1850 : LE SEL EST UN REPÈRE, PAS UN OBJECTIF ══════
+    // « 1,1 / 3,8 g » se lisait « il te manque 2,7 g de sel ». La cible
+    // devient une fourchette, la barre est neutre, l'ambre ne dit que le trop.
+    (function(){
+      const _t=(g,motif,mg)=>({targetSaltG:g,ceiling:{motif:motif||'ATHLETE',mg:mg||6000}});
+      ok('Sel — la fourchette : la cible en bas, 5 g en haut',()=>{
+        const b=bornesSel(_t(3.81));
+        if(!b||b.bas!==3.8||b.haut!==5) return _echec(JSON.stringify(b));
+        return texteRepereSel(b)==='repère 3,8–5 g'?true:_echec(texteRepereSel(b));});
+      ok('Sel — la tuile ne contient jamais « 3.8 »',()=>{
+        const m={kcal:2000,p:150,g:200,l:60,f:30,sel:3.8};
+        const tot={kcal:900,p:60,c:90,l:30,fi:12,sel:1.1};
+        const h1=htmlGrilleTuilesNut(tot,m,{cibleSeule:true,selCible:_t(3.8)});
+        const h2=htmlGrilleTuilesNut(tot,m,{selCible:_t(3.8)});
+        const l=htmlLigneSel(1.1,_t(3.8));
+        for(const h of [h1,h2,l]) if(h.indexOf('3.8')>=0) return _echec('« 3.8 » : '+h.slice(0,200));
+        const t2=h2.split('<div class="fj-tuile').find(x=>/Sel/.test(x))||'';
+        if(!/1,1/.test(t2)||t2.indexOf('repère 3,8–5 g')<0) return _echec(t2.slice(0,300));
+        const t1=h1.split('<div class="fj-tuile').find(x=>/Sel/.test(x))||'';
+        if(t1.indexOf('3,8–5')<0) return _echec(t1.slice(0,300));
+        return l.indexOf('repère 3,8–5 g')>=0&&l.indexOf('1,1 g')>=0?true:_echec(l);});
+      ok('Sel — motif MEDICAL : aucune fourchette au-delà de la cible',()=>{
+        const b=bornesSel(_t(2.3,'MEDICAL',2300));
+        if(b.haut!==2.3) return _echec(JSON.stringify(b));
+        const l=htmlLigneSel(1,_t(2.3,'MEDICAL',2300));
+        if(/–/.test(l)||/5 g/.test(l)) return _echec(l);
+        return /max 2,3 g/.test(l)?true:_echec(l);});
+      ok('Sel — borne haute = max(5, cible), plafonnée au plafond athlète',()=>{
+        const b=bornesSel(_t(6.2));
+        if(b.haut!==6.2) return _echec('cible haute : '+JSON.stringify(b));
+        const p=Math.round(sodiumMgToSaltG(SODIUM_CONFIG.plafondAthleteMg)*10)/10;
+        const c=bornesSel(_t(40));
+        return c.haut<=p+1e-9?true:_echec(JSON.stringify(c)+' plafond '+p);});
+      ok('Sel — barre neutre sous la borne basse, ambre au-dessus de la haute',()=>{
+        const bas=htmlLigneSel(0.4,_t(3.8)), haut=htmlLigneSel(6,_t(3.8));
+        if(/amber/.test(bas)) return _echec('ambre sous la borne basse');
+        return /amber/.test(haut)?true:_echec('pas d\'ambre au-dessus de 5 g');});
+      ok('Sel — « + pincée » : 0,5 g de sel, 0 kcal, au dernier repas saisi',()=>{
+        const fiche={id:11058,io:1860};
+        const e=entreePinceeSel([{id:1,repas:'matin'},{id:2,repas:'diner'}],fiche,2);
+        if(!e||e.sel!==0.5||e.kcal!==0) return _echec(JSON.stringify(e));
+        if(e.repas!=='diner') return _echec('repas '+e.repas);
+        if(e.id===1||e.id===2) return _echec('identifiant déjà pris');
+        if(Math.abs(e.io-9.3)>1e-9) return _echec('iode '+e.io);
+        const sans=entreePinceeSel([{id:1,repas:'matin'}],null,5);
+        if('io' in sans) return _echec('iode écrit sans fiche');
+        return entreePinceeSel([],fiche)===null?true:_echec('pincée sur une journée vide');});
+      ok('Sel — deux pincées, puis « Annuler » retire la dernière',()=>{
+        const sauve=currentUser, sv=window.saveUser, rd=window._renderFjDaySummary;
+        try{
+          window.saveUser=()=>true; window._renderFjDaySummary=()=>{};
+          const J='2026-01-06';
+          currentUser={id:'_s',email:'s@t',sessions:[],nutrition:{log:{[J]:{entries:[{id:1,nom:'Riz',repas:'dejeuner',kcal:200,sel:0}]}}}};
+          if(!/pincée de sel/.test(_htmlSelSemaine(currentUser,J))) return _echec('pas de bouton');
+          if(/pincée de sel/.test(_htmlSelSemaine(currentUser,'2026-01-07'))) return _echec('bouton sur un jour vide');
+          ajouterPinceeSel(J); ajouterPinceeSel(J);
+          const es=currentUser.nutrition.log[J].entries;
+          if(es.length!==3) return _echec(es.length+' entrées');
+          if(es[1].id===es[2].id) return _echec('deux pincées au même identifiant');
+          const sel=es.reduce((a,e)=>a+(e.sel||0),0), kcal=es.reduce((a,e)=>a+(e.kcal||0),0);
+          if(sel!==1||kcal!==200) return _echec('sel '+sel+' kcal '+kcal);
+          annulerDernierAjout();
+          return currentUser.nutrition.log[J].entries.length===2?true:_echec('annulation');
+        } finally { currentUser=sauve; window.saveUser=sv; window._renderFjDaySummary=rd; }});
+      ok('Sel — la phrase « pas compté » est sous la ligne du journal',()=>{
+        const J='2026-01-06';
+        const u={nutrition:{log:{[J]:{entries:[{id:1,repas:'matin'}]}}}};
+        return /Le sel ajouté en cuisine n.est pas compté/.test(_htmlSelSemaine(u,J))?true:_echec('phrase absente');});
+    })();
 
     // ══════ SODIUM : LE MOTEUR, ET CE QU\'IL REFUSE DE DIRE ══════
     // Cinq cents lignes de domaine pur, portées de la spécification de Kevin.
@@ -88241,8 +88310,9 @@ vendredi 78 6h 44m
         const src=_prodSrc();
         const n=(src.match(/_poserMicros\(/g)||[]).length;
         // Build 1848 : la whey cochée qui rejoint le journal passe AUSSI par lui (3 appels).
+        // Build 1850 : la pincée de sel aussi, pour l'iode du sel iodé (4 appels).
         ok('Micro : le prorata des micronutriments est écrit une fois, et tous les ajouts l’appellent',
-          n===4, n+' occurrence(s) — 1 définition + 3 appels attendus');
+          n===5, n+' occurrence(s) — 1 définition + 4 appels attendus');
         const e={};
         _poserMicros(e,{fe:2,ca:100,zn:null},1.5);
         ok('Micro : le prorata pose la clé au prorata, et saute ce qui est absent',

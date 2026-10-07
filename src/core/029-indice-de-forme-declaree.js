@@ -268,15 +268,96 @@ function selSemaine(user,ref){
   return {total:Math.round(total*10)/10,
     parJour:Math.round(total/nJours*10)/10,nJours,manquants};
 }
-function _htmlSelSemaine(user){
+// LE SEL AJOUTÉ EN CUISINE N'EST DANS AUCUNE FICHE. Ciqual décrit le riz
+// « cuit, sans sel ajouté », et le journal additionne ce que les fiches
+// portent : le total du jour est donc toujours SOUS-estimé. La phrase le dit,
+// et la pincée donne un geste pour le corriger sans chercher « sel » dans la
+// table.
+const SEL_CUISINE_NON_COMPTE='Le sel ajouté en cuisine n’est pas compté.';
+// `dateISO` : le jour affiché par le journal. Le bouton n'y paraît que si ce
+// jour porte déjà un aliment — la pincée va au DERNIER repas saisi, et sans
+// repas saisi il n'y a nulle part où la poser.
+function _htmlSelSemaine(user,dateISO){
   const s=selSemaine(user);
-  if(!s) return '';
+  const jour=dateISO?((((user&&user.nutrition)||{}).log||{})[dateISO]||{}).entries||[]:[];
+  const bouton=jour.length&&dateISO
+    ?`<button type="button" class="btn btn-sm" style="margin-left:6px;padding:2px 8px" onclick="ajouterPinceeSel('${dateISO}')">+ pincée de sel</button>`:'';
+  if(!s&&!bouton) return '';
   return `<div style="margin-top:10px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">
-    Sel : ${String(s.parJour).replace('.',',')} g par jour en moyenne sur ${s.nJours} jour${s.nJours>1?'s':''} journalisé${s.nJours>1?'s':''}.
+    ${s?`Sel : ${_selFmt(s.parJour)} g par jour en moyenne sur ${s.nJours} jour${s.nJours>1?'s':''} journalisé${s.nJours>1?'s':''}.
     ${s.manquants?`${s.manquants} aliment${s.manquants>1?'s':''} sans donnée de sel.`:''}
-    ${escapeHtml(SEL_REGISTRE)}
+    ${escapeHtml(SEL_REGISTRE)}<br>`:''}
+    ${escapeHtml(SEL_CUISINE_NON_COMPTE)}${bouton}
   </div>`;
 }
+// ── LA PINCÉE DE SEL ─────────────────────────────────────────────────────
+// 0,5 g de sel, 0 kcal. L'iode vient de la fiche Ciqual du sel iodé quand la
+// table est chargée — jamais d'une valeur recopiée ici : une fiche absente
+// laisse la clé absente (« on ne sait pas »), pas à zéro.
+const SEL_PINCEE_G=0.5;
+const SEL_PINCEE_NOM='Sel iodé, pincée';
+const SEL_IODE_CIQUAL_ID=11058;
+// PURE. L'entrée, sans l'écrire. `entries` : le jour tel qu'il est, pour
+// trouver le dernier repas saisi et un identifiant libre — un double appui
+// dans la même milliseconde donnerait sinon deux entrées au même id, et
+// « Annuler » en retirerait deux.
+function entreePinceeSel(entries,fiche,maintenantMs){
+  const l=(entries||[]).filter(Boolean);
+  if(!l.length) return null;
+  const repas=l[l.length-1].repas||'matin';
+  let id=Number(maintenantMs)||Date.now();
+  const pris=new Set(l.map(e=>e.id));
+  while(pris.has(id)) id++;
+  const e={id,alim_id:SEL_IODE_CIQUAL_ID,nom:SEL_PINCEE_NOM,groupe:'aides culinaires et ingrédients divers',
+    qty:SEL_PINCEE_G,repas,kcal:0,p:0,c:0,l:0,fi:0,sel:SEL_PINCEE_G};
+  if(fiche&&fiche.id===SEL_IODE_CIQUAL_ID){ try{ _poserMicros(e,fiche,SEL_PINCEE_G/100); }catch(_){} }
+  return e;
+}
+function ajouterPinceeSel(dateISO){
+  const log=((currentUser&&currentUser.nutrition)||{}).log||{};
+  const entries=(log[dateISO]||{}).entries||[];
+  let fiche=null;
+  try{ fiche=Array.isArray(_ciqualDB)?(_ciqualDB.find(f=>f&&f.id===SEL_IODE_CIQUAL_ID)||null):null; }catch(e){}
+  const e=entreePinceeSel(entries,fiche);
+  if(!e) return false;
+  return _fjAjouter([e],dateISO,SEL_PINCEE_NOM+' ajoutée');
+}
+// ── LE REPÈRE DE SEL : UNE FOURCHETTE, PAS UN OBJECTIF ───────────────────
+// La cible sodique tombe souvent au plancher (1500 mg de sodium = 3,8 g de
+// sel), et le journal sous-estime toujours le sel. Écrite « 1,1 / 3,8 g »,
+// elle se lisait « il te manque 2,7 g de sel » — une invitation à saler que
+// personne n'a voulu faire. Elle devient une fourchette : la cible en bas,
+// 5 g en haut (ou la cible si elle est plus haute), jamais au-delà du plafond.
+//
+// ⚠ MOTIF MÉDICAL : la cible EST le plafond, et il n'y a pas de fourchette
+// au-dessus — la borne haute est la cible.
+const SEL_REPERE_HAUT_G=5;
+function bornesSel(t){
+  if(!t||!(t.targetSaltG>0)) return null;
+  const r=v=>Math.round(v*10)/10;
+  const bas=r(t.targetSaltG);
+  const medical=!!(t.ceiling&&t.ceiling.motif==='MEDICAL');
+  if(medical) return {bas,haut:bas,medical:true};
+  let plafond=sodiumMgToSaltG(SODIUM_CONFIG.plafondAthleteMg);
+  if(t.ceiling&&t.ceiling.motif==='PRESCRIPTION'&&t.ceiling.mg>0) plafond=Math.min(plafond,sodiumMgToSaltG(t.ceiling.mg));
+  const haut=r(Math.min(Math.max(SEL_REPERE_HAUT_G,bas),plafond));
+  return {bas:Math.min(bas,haut),haut,medical:false};
+}
+// La virgule décimale, une décimale au plus, et pas de « ,0 ».
+function _selFmt(v){
+  const n=Number(v)||0;
+  return String(parseFloat(n.toFixed(1))).replace('.',',');
+}
+// « repère 3,8–5 g », ou « max 2,3 g » sous plafond médical.
+function texteRepereSel(b){
+  if(!b) return '';
+  if(b.medical||b.haut<=b.bas) return (b.medical?'max ':'repère ')+_selFmt(b.bas)+' g';
+  return 'repère '+_selFmt(b.bas)+'–'+_selFmt(b.haut)+' g';
+}
+// L'AMBRE NE DIT QU'UNE CHOSE : au-dessus de la borne haute. Sous la borne
+// basse, rien — le journal sous-estime, et colorer « trop peu » pousserait à
+// saler pour faire monter un chiffre faux.
+function selAuDessus(val,b){ return !!(b&&(Number(val)||0)>b.haut); }
 
 // ══════════════ SODIUM : LE BESOIN DU JOUR, EN MILLIGRAMMES ═══════════════
 // Portage du moteur @repcore/sodium, spécifié par Kevin. Domaine PUR : aucune

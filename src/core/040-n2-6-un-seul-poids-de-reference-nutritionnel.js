@@ -318,6 +318,7 @@ function htmlTuileNut(val,cible,unite,label,coul,ico,opts){
     ? `<span class="fj-val">${aCible?nb(cible):'-'}</span>${aCible&&unite?`<span class="fj-cible">${unite}</span>`:''}`
     : `<span class="fj-val">${nb(val)}</span>${aCible?`<span class="fj-cible">/${nb(cible)}${unite}</span>`:''}`;
   const pc=(!o.cibleSeule&&aCible)?Math.round((val/cible)*100):null;
+  if(o.bornes) return _htmlTuileSel(val,o.bornes,label,ico,o.cibleSeule);
   return `<div class="fj-tuile${o.kcal?' fj-kcal':''}" style="--c:${coul}">
     <div class="fj-tete">
       <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
@@ -328,6 +329,45 @@ function htmlTuileNut(val,cible,unite,label,coul,ico,opts){
       <div class="fj-barre"><i style="width:${pc==null?0:Math.min(pc,100)}%"></i></div>
       <span class="fj-pct">${pc==null?'-':pc+'%'}</span>
     </div>`}
+  </div>`;
+}
+// LA TUILE SEL PORTE UNE FOURCHETTE, PAS UNE CIBLE (bornesSel, 029). En
+// cible seule : « 3,8–5 g ». Sinon : « 1,1 g · repère 3,8–5 g », une barre
+// NEUTRE remplie jusqu'à la borne haute, et l'ambre au-dessus seulement. Pas
+// de pourcentage : un « 29 % » d'une fourchette se lirait comme un retard.
+function _htmlTuileSel(val,b,label,ico,cibleSeule){
+  const fourch=(b.medical||b.haut<=b.bas)?_selFmt(b.bas):_selFmt(b.bas)+'–'+_selFmt(b.haut);
+  const haut=selAuDessus(val,b);
+  const coul=haut?'var(--amber)':'var(--sub)';
+  const tete=cibleSeule
+    ? `<span class="fj-val">${fourch}</span><span class="fj-cible">${b.medical?'g max':'g'}</span>`
+    : `<span class="fj-val">${_selFmt(val)}</span><span class="fj-cible"> g · ${texteRepereSel(b)}</span>`;
+  const pc=Math.min(((Number(val)||0)/b.haut)*100,100);
+  return `<div class="fj-tuile" style="--c:${coul}">
+    <div class="fj-tete">
+      <span class="fj-hexa" aria-hidden="true">${icon(ico,15)}</span>
+      <div style="min-width:0">${tete}</div>
+    </div>
+    <div class="fj-lbl">${label}</div>
+    ${cibleSeule?'':`<div class="fj-pied">
+      <div class="fj-barre"><i style="width:${pc.toFixed(1)}%"></i></div>
+      <span class="fj-pct"></span>
+    </div>`}
+  </div>`;
+}
+// LA LIGNE SEL DU JOURNAL : la même fourchette que la tuile, en ligne légère.
+function htmlLigneSel(val,t){
+  const b=bornesSel(t);
+  if(!b) return htmlLigneMiniNut('Sel',val,0,' g','#60a5fa');
+  const v=Number(val)||0;
+  const coul=selAuDessus(v,b)?'var(--amber)':'var(--sub)';
+  const pc=Math.min((v/b.haut)*100,100);
+  return `<div class="fj-mini-e" style="--c:${coul}">
+    <div class="fj-mini-t">
+      <span class="fj-mini-lbl">Sel</span>
+      <span class="fj-mini-v">${_selFmt(v)} g<small> · ${texteRepereSel(b)}</small></span>
+    </div>
+    <div class="fj-mini-p"><i class="rc-barre" data-bar-w="${pc.toFixed(1)}" style="width:0;transition:width var(--t-3) var(--c-out)"></i></div>
   </div>`;
 }
 // LES SIX TUILES, DECRITES UNE FOIS. Les deux cartes lisent cette liste :
@@ -420,7 +460,8 @@ function htmlGrilleTuilesNut(tot,m,opts){
     const brut=(tot&&tot[t.tot])||0;
     const v=t.tot==='kcal'?Math.round(brut):brut;
     const c=t.cible?((m&&m[t.cible])||0):0;
-    return htmlTuileNut(v,c,t.unite,t.label,t.coul,t.ico,{kcal:t.kcal,cibleSeule:o.cibleSeule});
+    const bornes=(t.tot==='sel'&&o.selCible)?bornesSel(o.selCible):null;
+    return htmlTuileNut(v,c,t.unite,t.label,t.coul,t.ico,{kcal:t.kcal,cibleSeule:o.cibleSeule,bornes});
   }).join('')}</div>`;
 }
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
@@ -566,7 +607,7 @@ function _renderStrictMacroRings(nut,jourAff){
          journal, elles remontent ici, ou vit deja tout ce qui se compare a une
          cible. Demande de Kevin, 24/08/2026. -->
     <div class="fj-mini" style="margin-top:14px">
-      ${htmlLigneMiniNut('Sel',tot.sel,_sel.macros.sel,' g','#60a5fa')}
+      ${htmlLigneSel(tot.sel,_sel.cible)}
       ${htmlLigneMiniNut('Fibres ℹ',tot.fi,m.f,' g','#a78bfa')}
     </div>
     <!-- « fibres : indicatif » N EST ECRIT QU UNE FOIS, plus bas, sous les
@@ -598,7 +639,7 @@ function _renderStrictMacroRings(nut,jourAff){
          maquette du 21/08/2026. -->
     <div style="margin-top:14px">
       <div class="nut-cap" style="margin-bottom:10px">Tes cibles</div>
-      ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true})}
+      ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true,selCible:_sel.cible})}
       <!-- LA MEME NOTE QU AU JOURNAL. Le « ℹ » de la tuile des fibres ne veut
            rien dire sans elle, et une grille qui porte le signe sans porter la
            legende renvoie le lecteur a une phrase qui n est pas la. -->
