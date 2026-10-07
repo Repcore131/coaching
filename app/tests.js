@@ -73984,6 +73984,43 @@ async function testExercices(){
       if(quantiteSuspecte(2000,null,500)) return _echec('2000 g demande');
       return quantiteSuspecte(150,120,300)===false?true:_echec('150 g demande');});
 
+    // ══ BUILD 1909 — LES PAS LUS COMME ON LES ÉCRIT, LA DISTANCE BORNÉE ═══════
+    ok('1909 — sanLirePas : séparateurs de milliers, « k », et « 12,5 » marqué petit (jamais <100 en silence)',()=>{
+      const faux=[];
+      for(const [t,n] of [['12.500',12500],['12 500',12500],['12,500',12500],['12 500',12500],['1.234.567',1234567],['12500',12500],['12,5k',12500],['8k',8000],['abc',null],['-5',null],['',null]])
+        if(sanLirePas(t)!==n) faux.push(t+' → '+sanLirePas(t));
+      const d=sanLirePasDetail('12,5');
+      if(!d||!d.petit||d.milliers!==12500||d.n!==13) faux.push('12,5 → '+JSON.stringify(d));
+      if(sanLirePasDetail('12500').petit) faux.push('12500 petit');
+      if(sanLirePasDetail('0').petit) faux.push('0 petit');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    okA('1909 — sanEnregistrer : « 12,5 » demande (12 500 / 13) ; km 0,1–100, vidé → supprimé',async()=>{
+      const u=_banAth(); u.consent={health:true,policyVersion:POLICY_VERSION};
+      const iso=localISODate(new Date());
+      u.stepsLog=[{date:iso,count:9000,km:6.2,source:'manuel',dataStatus:'manual'}];
+      const cu=currentUser, _su=window.saveUser, _po=CLOUD.pushOne, _t=window.toast, _c3=window.rcConfirm3, _sf=window.sanFermer, _sr=window.sanRendre;
+      const toasts=[], questions=[];
+      const z=document.createElement('div');
+      try{
+        currentUser=u; window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true); window.toast=m=>toasts.push(String(m));
+        window.sanFermer=()=>{}; window.sanRendre=()=>{};
+        for(const id of ['san-pas','san-km','san-date']){ const x=document.getElementById(id); if(x){ x.id=id+'-sauve1909'; } }
+        z.innerHTML='<input id="san-pas"><input id="san-km"><input id="san-date" value="'+iso+'">';
+        document.body.appendChild(z);
+        const jour=()=>(currentUser.stepsLog||[]).find(x=>x.date===iso)||{};
+        let rep='ok'; window.rcConfirm3=(t,x,a,b)=>{ questions.push(t+'|'+a+'|'+b); return Promise.resolve(rep); };
+        document.getElementById('san-pas').value='12,5'; document.getElementById('san-km').value='';
+        sanEnregistrer('pas'); await new Promise(r=>setTimeout(r,0)); await new Promise(r=>setTimeout(r,0));
+        if(!questions.length||!/12[\s\u00a0\u202f]500 pas/.test(questions[0])||!/13 pas/.test(questions[0])) return _echec('question : '+JSON.stringify(questions));
+        if(jour().count!==12500) return _echec('choix 12 500 : '+jour().count);
+        if('km' in jour()) return _echec('km vidé gardé : '+jour().km);
+        document.getElementById('san-pas').value='9000'; document.getElementById('san-km').value='250';
+        sanEnregistrer('pas');
+        if(jour().count!==12500||!toasts.some(t=>/0,1 et 100 km/.test(t))) return _echec('km 250 : '+JSON.stringify(jour())+' '+toasts.join('/'));
+        document.getElementById('san-km').value='8,4'; sanEnregistrer('pas');
+        return jour().km===8.4&&jour().count===9000?true:_echec('8,4 : '+JSON.stringify(jour()));
+      }finally{ z.remove(); for(const id of ['san-pas','san-km','san-date']){ const x=document.getElementById(id+'-sauve1909'); if(x) x.id=id; } currentUser=cu; window.saveUser=_su; CLOUD.pushOne=_po; window.toast=_t; window.rcConfirm3=_c3; window.sanFermer=_sf; window.sanRendre=_sr; }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

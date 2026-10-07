@@ -460,6 +460,7 @@ function sanSaisir(quoi,iso){
     corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
       +'onclick="sanEnregistrer(\''+quoi+'\')">Enregistrer</button>');
 }
+let _sanPasConfirme=null;
 function sanEnregistrer(quoi){
   // ⚠ CETTE FONCTION N'EMPRUNTE PAS _recordSleep / _recordSteps : elle ecrit
   // dans sleepLog et stepsLog EN DIRECT, avec ses propres champs (source,
@@ -494,17 +495,34 @@ function sanEnregistrer(quoi){
     }
     try{ rcm('manual_sleep_added'); }catch(e){}
   } else {
-    const n=sanLirePas((document.getElementById('san-pas')||{}).value);
-    if(n==null) return toast('Nombre de pas illisible','var(--orange)');
+    const _champ=document.getElementById('san-pas')||{};
+    const _d=sanLirePasDetail(_champ.value);
+    if(_d==null) return toast('Nombre de pas illisible','var(--orange)');
+    let n=_d.n;
+    // BUILD 1909 : moins de 100 pas ne s'écrit jamais sans qu'on l'ait dit.
+    if(_d.petit&&_sanPasConfirme!==n){
+      const vt=String(_champ.value).trim();
+      rcConfirm3(vt+' pas ?','Tu voulais sans doute dire '+sanNb(_d.milliers)+' pas.',
+        sanNb(_d.milliers)+' pas',sanNb(_d.n)+' pas','Corriger').then(r=>{
+        if(!r){ try{ _champ.focus(); }catch(e){} return; }
+        const v=r==='ok'?_d.milliers:_d.n;
+        _champ.value=String(v); _sanPasConfirme=v; sanEnregistrer(quoi);
+      });
+      return;
+    }
+    _sanPasConfirme=null;
     if(n>60000&&!confirm(sanNb(n)+' pas, c\'est bien ça ?')) return;
-    const kmTxt=String((document.getElementById('san-km')||{}).value||'').replace(',','.').trim();
-    const km=kmTxt?Number(kmTxt):null;
+    // La distance : 0,1 à 100 km ; vidée, elle disparaît du jour.
+    const kmTxt=String((document.getElementById('san-km')||{}).value||'').trim();
+    const _lk=kmTxt?lireNombreFr(kmTxt,{min:0.1,max:100,decimales:2}):null;
+    if(_lk&&!_lk.ok) return toast('Distance : entre 0,1 et 100 km','var(--orange)');
+    const km=_lk?_lk.valeur:null;
     if(!u.stepsLog) u.stepsLog=[];
     const i=u.stepsLog.findIndex(x=>x&&x.date===jour);
     const now=Date.now();
     if(i>=0){
       const e=u.stepsLog[i]; e.count=n;
-      if(km!=null&&isFinite(km)&&km>0) e.km=km;
+      if(km!=null&&isFinite(km)&&km>0) e.km=km; else delete e.km;
       e.source=sanSource(u,'pas').cle; e.updatedAt=now; e.dataStatus='manual';
     } else {
       const e={date:jour,count:n,source:sanSource(u,'pas').cle,dataStatus:'manual',

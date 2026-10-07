@@ -2848,12 +2848,23 @@ function sanLireDuree(txt){
   return n>24?Math.round(n):Math.round(n*60);
 }
 // PURE. « 10 542 », « 10.5k », « 10542 » -> entier. null si illisible.
-function sanLirePas(txt){
-  const t=String(txt==null?'':txt).trim().toLowerCase()
-    .replace(/[\s  ]/g,'').replace(',','.');
+// BUILD 1909 — LES PAS, LUS COMME ON LES ÉCRIT. « 12 500 », « 12.500 » et
+// « 12,500 » sont douze mille cinq cents (un séparateur suivi d'exactement
+// trois chiffres est un séparateur de milliers) ; « 12,5k » aussi. « 12,5 »
+// seul est AMBIGU : rendu arrondi (13), mais marqué `petit` avec sa lecture
+// en milliers — l'enregistrement demande alors, jamais moins de 100 en silence.
+// PURE. null si illisible ou négatif.
+function sanLirePasDetail(txt){
+  const t=String(txt==null?'':txt).trim().toLowerCase().replace(/[\s\u00a0\u202f]/g,'');
   if(!t) return null;
-  const m=/^(\d+(?:\.\d+)?)k$/.exec(t);
-  if(m) return Math.round(Number(m[1])*1000);
-  const n=Number(t);
-  return isFinite(n)&&n>=0?Math.round(n):null;
+  let x;
+  const k=/^(\d+(?:[.,]\d+)?)k$/.exec(t);
+  if(k) x=Number(k[1].replace(',','.'))*1000;
+  else if(/^\d{1,3}(?:[.,]\d{3})+$/.test(t)) x=Number(t.replace(/[.,]/g,''));
+  else if(/^\d+(?:[.,]\d+)?$/.test(t)) x=Number(t.replace(',','.'));
+  else return null;
+  if(!isFinite(x)||x<0) return null;
+  const n=Math.round(x);
+  return {n,petit:n>0&&n<100,milliers:Math.round(x*1000)};
 }
+function sanLirePas(txt){ const d=sanLirePasDetail(txt); return d?d.n:null; }
