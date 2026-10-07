@@ -175,9 +175,58 @@ def generiques():
                     'f': float(f), 'e': float(e), 'src': 'repcore'})
     return out
 
+# ── Les alias de recherche (champ "a") ───────────────────────────────────
+# Les noms Ciqual sont des noms de laboratoire (« Boisson à l'amande ») ; l'athlète
+# tape « lait d'amande ». scripts/alias_aliments.tsv dit, une ligne par alias,
+# quelles fiches il désigne. L'alias est écrit DÉJÀ normalisé comme f.s, plus
+# l'apostrophe changée en espace (la requête la change aussi côté app).
+# ⚠ UN ID ABSENT DE LA TABLE FAIT ÉCHOUER LA GÉNÉRATION : un alias orphelin est
+# une recherche cassée, et personne ne le verrait.
+ALIAS = os.path.join(os.path.dirname(__file__), 'alias_aliments.tsv')
+
+def norm_alias(t):
+    return re.sub(r'\s+', ' ', re.sub(r"['’]", ' ', normalize(t))).strip()
+
+def lire_alias():
+    par_id = {}
+    if not os.path.exists(ALIAS):
+        return par_id
+    with open(ALIAS, encoding='utf-8') as fp:
+        for n, ligne in enumerate(fp, 1):
+            ligne = ligne.rstrip('\n')
+            if not ligne.strip() or ligne.startswith('#'):
+                continue
+            cols = ligne.split('\t')
+            if len(cols) < 2:
+                print(f'  ✗ alias_aliments.tsv:{n} : colonne id manquante')
+                sys.exit(1)
+            a = norm_alias(cols[0])
+            if not a:
+                continue
+            for i in cols[1].split(','):
+                par_id.setdefault(int(i.strip()), []).append(a)
+    return par_id
+
+def poser_alias(out):
+    par_id = lire_alias()
+    ids = {e['id'] for e in out}
+    orphelins = sorted(i for i in par_id if i not in ids)
+    if orphelins:
+        print(f'  ✗ Alias vers des ids absents de la table : {orphelins}')
+        sys.exit(1)
+    n = 0
+    for e in out:
+        e.pop('a', None)
+        if e['id'] in par_id:
+            e['a'] = sorted(set(par_id[e['id']]))
+            n += len(e['a'])
+    print(f'  Alias de recherche : {n} sur {sum(1 for e in out if "a" in e)} fiches')
+    return out
+
 def completer(out):
     """Énergie calculée là où elle manque, puis le bloc générique (remplacé
-    s'il existait déjà : le script peut repasser sans rien dupliquer)."""
+    s'il existait déjà : le script peut repasser sans rien dupliquer), puis
+    les alias de recherche."""
     base = [e for e in out if not (isinstance(e.get('id'), int) and e['id'] < 0)]
     n = 0
     for e in base:
@@ -189,7 +238,7 @@ def completer(out):
     print(f'  Énergie calculée (4p + 4c + 9l + 2f) : {n} aliments')
     g = generiques()
     print(f'  Aliments génériques RepCore : {len(g)}')
-    return base + g
+    return poser_alias(base + g)
 
 def ecrire(out):
     os.makedirs(os.path.dirname(DST), exist_ok=True)

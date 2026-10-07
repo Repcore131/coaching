@@ -22565,6 +22565,59 @@ async function testExercices(){
       if(!kc.length||kc.some(f=>Math.abs(f.k-Math.round((4*f.p+4*f.c+9*f.l+2*(f.f||0))*10)/10)>0.05)) return _echec('k_calc : '+kc.length);
       // Aucune entrée n'a plus p, c et l sans énergie.
       return b.some(f=>f.k==null&&f.p!=null&&f.c!=null&&f.l!=null)?_echec('une énergie manque encore'):true;});
+    // ══ BUILD 1852 : LES ALIAS DE RECHERCHE (scripts/alias_aliments.tsv) ══
+    // Les noms Ciqual sont des noms de laboratoire : vingt aliments PRÉSENTS
+    // en base répondaient « Aucun résultat » aux mots de tous les jours.
+    {
+      const _cherche=(q,sansAlias)=>{
+        const {normQ,words}=_fjRequete(q);
+        const b=sansAlias?_ciqualDB.map(f=>{ const c=Object.assign({},f); delete c.a; return c; }):_ciqualDB;
+        return _classerAliments(b.filter(f=>_fjCorrespond(f,words)),normQ,words).map(x=>x.f);
+      };
+      const ATTENDU=[["crème fraîche",/^Crème .*MG/],["lait d'amande",/^Boisson à l'amande/],["lait de soja",/^Boisson au soja/],
+        ['thon en boîte',/^Thon, au naturel/],['coca',/^Cola, sucré$/],['coca zero',/^Cola, sans sucres ajoutés, avec édulcorants$/],
+        ['red bull',/^Boisson énergisante/],['nutella',/^Pâte à tartiner chocolat/],['corn flakes',/^Pétales de maïs/],
+        ['granola',/^Muesli croustillant/],['barre de cereales',/^Barre céréalière/],['big mac',/^(Hamburger|Cheeseburger), de restauration rapide/],
+        ['whopper',/^(Hamburger|Cheeseburger), de restauration rapide/],['frites mcdo',/^Frites/],['tenders',/^Nuggets/],
+        ['california roll',/^Sushi ou maki/],['pad thai',/^Nouilles aux crevettes/],['pdt',/^Pomme de terre/],
+        ['chocolatine',/^Pain au chocolat/],['yogourt',/^Yaourt/]];
+      okA('Alias : les 20 requêtes du quotidien trouvent la fiche attendue dans les 3 premiers',async()=>{
+        await _loadCiqual();
+        const ko=[];
+        for(const [q,re] of ATTENDU){
+          const r=_cherche(q).slice(0,3);
+          if(!r.some(f=>re.test(f.n))) ko.push(q+' → '+(r.map(f=>f.n).join(' / ')||'aucun résultat'));
+        }
+        return ko.length?_echec(ko.join(' ; ')):true;});
+      okA('Alias : « riz », « poulet », « oeuf » gardent la même fiche en tête',async()=>{
+        await _loadCiqual();
+        for(const q of ['riz','poulet','oeuf']){
+          const a=_cherche(q)[0], b=_cherche(q,true)[0];
+          if(!a||!b||a.id!==b.id) return _echec(q+' : '+(a&&a.n)+' au lieu de '+(b&&b.n));
+        }
+        return true;});
+      okA('Alias : un alias correspond EN ENTIER, pas un mot dans le nom et l’autre dans l’alias',async()=>{
+        await _loadCiqual();
+        // « lait » est dans des centaines de noms, « amande » dans l'alias « lait d amande » :
+        // une fiche n'a pas le droit de répondre avec un mot pris de chaque côté.
+        const f={s:'boisson a la noisette',a:['lait de noisette']};
+        if(_fjCorrespond(f,['lait','amande'])) return _echec('mélange nom + alias');
+        if(!_fjCorrespond({s:'boisson a l\'amande',a:['lait d amande']},['lait','amande'])) return _echec('alias entier refusé');
+        // Toutes les fiches visées par un alias existent (le script refuse un orphelin) et les alias sont normalisés.
+        const mal=_ciqualDB.filter(f=>Array.isArray(f.a)&&f.a.some(a=>a!==_fjRequete(a).normQ));
+        return mal.length?_echec('alias non normalisés : '+mal.slice(0,3).map(f=>f.n).join(' / ')):true;});
+      okA('Alias : « trouvé via » sous le nom quand c’est l’alias qui a fait correspondre',async()=>{
+        await _loadCiqual();
+        const el=document.getElementById('fj-results-list');
+        if(!el) return _echec('pas de liste');
+        const av=el.innerHTML;
+        try{
+          onFjSearch("lait d'amande");
+          if(el.innerHTML.indexOf('trouvé via « lait d&#39;amande »')<0&&el.innerHTML.indexOf("trouvé via « lait d'amande »")<0) return _echec('mention absente');
+          onFjSearch('riz basmati');
+          return el.innerHTML.indexOf('trouvé via')<0?true:_echec('mention sur une correspondance par le nom');
+        } finally { el.innerHTML=av; }});
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{

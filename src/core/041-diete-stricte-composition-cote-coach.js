@@ -141,8 +141,7 @@ function onPlanSearch(val){
     return;
   }
   if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onPlanSearch(val); }); return; }
-  const normQ=_fjNorm(q);
-  const words=normQ.split(/\s+/).filter(w=>w.length>1);
+  const {normQ,words}=_fjRequete(q);
   if(!words.length){ el.innerHTML=''; return; }
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
@@ -151,7 +150,7 @@ function onPlanSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_ciqualDB.filter(f=>_fjContientTous(f.s,words));
+  const res=_ciqualDB.filter(f=>_fjCorrespond(f,words));
   if(!res.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>'; return; }
   const scored=_classerAliments(res,normQ,words);
   // La macro visée est rappelée sur chaque ligne : choisir une source de
@@ -1634,6 +1633,35 @@ function _fjContientTous(texte,words){
   const t=String(texte||'');
   return (words||[]).every(w=>_fjFormes(w).some(v=>t.includes(v)));
 }
+// ── LES ALIAS DE RECHERCHE (champ « a » de la table, BUILD 1852) ─────────
+// Les noms Ciqual sont des noms de laboratoire : « Boisson à l'amande » pour
+// « lait d'amande ». scripts/alias_aliments.tsv pose sur la fiche des alias
+// DÉJÀ normalisés (minuscules, sans accents, apostrophe → espace).
+//
+// PURE. La requête normalisée et ses mots. L'apostrophe devient une espace,
+// comme dans les alias : « lait d'amande » donne « lait », « amande ».
+function _fjRequete(q){
+  const normQ=_fjNorm(q).replace(/['’]/g,' ').replace(/\s+/g,' ').trim();
+  return {normQ,words:normQ.split(' ').filter(w=>w.length>1)};
+}
+// PURE. Le texte sur lequel porte la recherche : le nom, puis les alias.
+function _fjTexteRecherche(f){
+  const s=(f&&(f.s||_fjNorm(f.n)))||'';
+  return (f&&Array.isArray(f.a)&&f.a.length)?s+' | '+f.a.join(' | '):s;
+}
+// PURE. L'alias qui a fait correspondre, quand le NOM seul ne le fait pas.
+// ⚠ UN ALIAS CORRESPOND EN ENTIER, pas morceau par morceau : « lait » pris dans
+// le nom et « amande » dans un alias ne font pas « lait d'amande ».
+function _fjAliasVia(f,words){
+  if(!f||!Array.isArray(f.a)||!f.a.length) return null;
+  if(_fjContientTous((f.s||_fjNorm(f.n)||''),words)) return null;
+  return f.a.find(a=>_fjContientTous(a,words))||null;
+}
+// PURE. LA seule décision « cette fiche répond-elle ? », pour toutes les listes.
+function _fjCorrespond(f,words){
+  if(!f) return false;
+  return _fjContientTous(f.s||_fjNorm(f.n),words)||!!_fjAliasVia(f,words);
+}
 function _fjNorm(s){
   return (s||'').toLowerCase()
     .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
@@ -1670,13 +1698,18 @@ function _classerAliments(res,normQ,words){
     // frappe coutait le double du temps de recherche. Le repli reste la au
     // cas ou la table serait regeneree sans ce champ.
     const nn=f.s||_fjNorm(f.n), ng=_fjNorm(f.g||'');
+    // Quand c'est un ALIAS qui a fait correspondre, la tete et le mot entier
+    // se jugent sur lui : « Boisson à l'amande » ne commence pas par « lait ».
+    // L'etat brut, la preparation et la longueur restent ceux du NOM.
+    const via=_fjAliasVia(f,words);
+    const tete=(via||nn).replace(/['’]/g,' ');
     let sc=0;
-    // 1) La correspondance de tete.
-    if(nn===normQ) sc+=200;                    // le nom EST la requete
-    else if(nn.startsWith(normQ)) sc+=100;
-    else if(nn.startsWith(words[0])) sc+=50;
+    // 1) La correspondance de tete. Un alias EGAL a la requete vaut le nom.
+    if(tete===normQ||(Array.isArray(f.a)&&f.a.includes(normQ))) sc+=200;
+    else if(tete.startsWith(normQ)) sc+=100;
+    else if(tete.startsWith(words[0])) sc+=50;
     // 2) Le mot entier, l etat brut, et l absence de preparation.
-    if(MOTS.every(r=>r.test(nn))) sc+=60;
+    if(MOTS.every(r=>r.test(tete))) sc+=60;
     if(ETAT_BRUT.test(nn)) sc+=45; else if(ETAT_SEC.test(nn)) sc+=25;
     if(PREPARE.test(nn)) sc-=70;
     if(TRANSFORME.test(nn)) sc-=35;
@@ -2637,8 +2670,8 @@ function _rendreResultatsIngredient(){
   const q=_recEdCherche.trim();
   if(q.length<2){ z.innerHTML=''; return; }
   if(!_ciqualDB){ z.innerHTML=etatChargement(2); _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
-  const normQ=_fjNorm(q), words=normQ.split(/\s+/).filter(w=>w.length>1);
-  const res=_classerAliments(_ciqualDB.filter(f=>_fjContientTous(f.s,words)),normQ,words).slice(0,12).map(x=>x.f);
+  const {normQ,words}=_fjRequete(q);
+  const res=_classerAliments(_ciqualDB.filter(f=>_fjCorrespond(f,words)),normQ,words).slice(0,12).map(x=>x.f);
   const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div class="rct-n" style="font-size:var(--fs-sm)">'+escapeHtml(a.n)+(src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'

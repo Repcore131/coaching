@@ -1113,7 +1113,10 @@ function _htmlPersoResult(a){
     +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">'+icon('pencil',14)+'</button>'
     +'</div>';
 }
-function _fjResultHtml(f,avecEpingle){
+// `via` : la saisie, quand c'est un ALIAS qui a fait sortir la fiche. Sans
+// la mention, l'athlète qui tape « lait d'amande » ne comprend pas pourquoi
+// « Boisson à l'amande » lui répond.
+function _fjResultHtml(f,avecEpingle,via){
   const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red-text);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   // L'épingle n'apparaît que sur les listes de favoris et de récents : les
@@ -1123,6 +1126,7 @@ function _fjResultHtml(f,avecEpingle){
   return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:8px">
     <div style="flex:1;min-width:0">
     <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(f.n)}${_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:''}</div>
+    ${via?`<div class="fj-via" style="font-size:var(--fs-2xs);color:var(--sub)">trouvé via « ${escapeHtml(via)} »</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
       ${kcalSpan}
       <span>${escapeHtml(f.g)}</span>
@@ -2091,8 +2095,7 @@ function onFjSearch(val){
     return;
   }
   if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onFjSearch(val); }); return; }
-  const normQ=_fjNorm(q);
-  const words=normQ.split(/\s+/).filter(w=>w.length>1);
+  const {normQ,words}=_fjRequete(q);
   if(!words.length){el.innerHTML='';return;}
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
@@ -2101,7 +2104,7 @@ function onFjSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_ciqualDB.filter(f=>_fjContientTous(f.s,words));
+  const res=_ciqualDB.filter(f=>_fjCorrespond(f,words));
   document.getElementById('fj-recent-section').innerHTML='';
   // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
   const _rcH=htmlRecettesRecherche(words);
@@ -2113,7 +2116,7 @@ function onFjSearch(val){
   // Même règle pour les aliments perso et ceux du coach : une seule fonction
   // décide, sinon la table et les listes personnelles répondraient différemment
   // à la même frappe.
-  const filtre=l=>l.filter(a=>a&&_fjContientTous(String(a.s||''),words));
+  const filtre=l=>l.filter(a=>a&&_fjCorrespond({s:String(a.s||''),a:a.a},words));
   const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
   // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
   // table Ciqual, puis les produits de marque. Le plus specifique d abord :
@@ -2131,7 +2134,7 @@ function onFjSearch(val){
   el.innerHTML=_rcH+(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
     +(_trC.liste.length?_fjTitreSection('Aliments de ton coach')+_trC.liste.map(f=>_htmlCoachResult(f)).join(''):'')
     +((_rcH||_trP.liste.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
-    +_trT.liste.map(f=>_fjResultHtml(f)).join('')
+    +_trT.liste.map(f=>_fjResultHtml(f,false,_fjAliasVia(f,words)?q:null)).join('')
     +_htmlRelegues(_releg)
     +_offBoutonHtml(q);
 }
@@ -2277,7 +2280,7 @@ function alimentPourNomRepas(nom,db,user){
   const l=Array.isArray(db)?db:[];
   const chercher=words=>{
     if(!words.length) return null;
-    const res=l.filter(f=>_fjContientTous(f.s||_fjNorm(f.n),words));
+    const res=l.filter(f=>_fjCorrespond(f,words));
     if(!res.length) return null;
     const cl=_classerAliments(res,words.join(' '),words).map(x=>x.f);
     let tr=null; try{ tr=evictionTrier(user,cl); }catch(e){ tr=null; }
@@ -2391,7 +2394,7 @@ function photoRepasChercher(q){
   const z=document.getElementById('prp-res'); if(!z||!_photoRepas) return;
   const words=_fjNorm(String(q||'')).split(/\s+/).filter(w=>w.length>1);
   if(!words.length){ z.innerHTML=''; return; }
-  const res=(_ciqualDB||[]).filter(f=>_fjContientTous(f.s||_fjNorm(f.n),words));
+  const res=(_ciqualDB||[]).filter(f=>_fjCorrespond(f,words));
   _photoRepas.res=_classerAliments(res,words.join(' '),words).slice(0,6).map(x=>x.f);
   z.innerHTML=_photoRepas.res.map((f,k)=>'<button type="button" class="prp-r" onclick="photoRepasPrendre('+k+')">'+escapeHtml(f.n)+'</button>').join('')
     ||'<div class="prp-lu">Aucun résultat.</div>';
