@@ -74196,6 +74196,29 @@ async function testExercices(){
         try{ _majIndicAttente(); }catch(e){}
       }});
 
+    // ══ BUILD 1915 — phraseHeroFin : UNE PHRASE SOUS « SÉANCE TERMINÉE » ═══════
+    ok('1915 — phraseHeroFin : priorités a–g, 70 caractères au plus',()=>{
+      const faux=[];
+      const u2={fname:'Léa',sessions:[{complete:true},{complete:true}]};
+      const t=(u,c,s,re,nom)=>{ const p=phraseHeroFin(u,c,s); if(!re.test(p)||p.length>70) faux.push(nom+' → « '+p+' » ('+p.length+')'); };
+      t(u2,{records:[{nm:'Squat',gain:5}]},{complete:false},/^Séance écourtée/,'a');
+      t({fname:'Léa Martin',sessions:[{complete:true}]},{records:[{nm:'Squat',gain:5}]},{},/^Léa, ta première séance est faite\.$/,'b');
+      t({sessions:[{}]},{},{},/^Ta première séance/,'b sans prénom');
+      t(u2,{records:[{nm:'Squat',gain:2.5}],joursDepuisDerniere:30},{},/^Record sur Squat : \+2,5 kg\.$/,'c');
+      t(u2,{records:[{nm:'Développé couché incliné prise serrée avec haltères et pause en bas',gain:5}]},{},/^Record sur .+…/,'c long');
+      t(u2,{records:[{nm:'A',gain:1},{nm:'B',gain:2}]},{},/^2 records battus/,'c plusieurs');
+      t(u2,{records:[],joursDepuisDerniere:21.4},{},/^De retour après 21 jours/,'d');
+      t(u2,{exosAmeliores:3},{},/^3 exercices en progrès/,'e');
+      t(u2,{exosAmeliores:1},{},/^1 exercice en progrès/,'e singulier');
+      t(u2,{},{deload:true},/^Semaine allégée/,'f');
+      t(u2,{},{name:'jambes'},/^Jambes bouclée\.$/,'g');
+      t(u2,{},{name:'x'.repeat(90)},/…$/,'g long');
+      t(u2,null,null,/^Une de plus au compteur\.$/,'g neutre');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1915 — _htmlHeroFin pose <p class="rcf-sous"> échappé',()=>{
+      const h=_htmlHeroFin([],{},{sessions:[{},{}]},{name:'<b>Haut</b>'});
+      return /<p class="rcf-sous">&lt;b&gt;Haut&lt;\/b&gt; bouclée\.<\/p>/.test(h)?true:_echec(h.slice(0,300));});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

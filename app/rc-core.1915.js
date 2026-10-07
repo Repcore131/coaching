@@ -60377,7 +60377,7 @@ function finishWorkout(incomplete=false,opts){
 
   // 1. LE HERO : flamme et titre. Il ne depend d'aucun calcul, il ne peut
   //    donc pas manquer — et c'est lui qui dit que la seance est finie.
-  _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin); }catch(e){
+  _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin,currentUser,sess); }catch(e){
     return '<div class="rcf-hero"><h1 class="rcf-titre">Séance terminée</h1></div>'; } })());
   // 2. LES RECOMPENSES : trois au maximum. Aucune obtenue, aucun bloc — on
   //    n'invente pas trois faux badges pour meubler.
@@ -72116,9 +72116,46 @@ function _htmlExercicesRelus(sc){
       +'</span></div>').join('')
     +'</div>';
 }
-function _htmlHeroFin(badges,ctx){
+// ══ BUILD 1915 — UNE PHRASE SOUS « SÉANCE TERMINÉE » ═══════════════════════
+// PURE. 70 caractères au plus, la PREMIÈRE vraie de cette liste :
+//   a) séance écourtée — on ne fête pas un volume qu'on n'a pas fait ;
+//   b) première séance du dossier — « <Prénom>, ta première séance est faite. » ;
+//   c) record(s) battu(s) — le plus gros gain, ou le nombre ;
+//   d) retour après 14 jours ou plus sans séance ;
+//   e) exercices en progrès sur la dernière fois ;
+//   f) semaine de décharge — moins, c'est voulu ;
+//   g) sinon, le nom de la séance (« Jambes bouclée. ») ou une phrase neutre.
+function phraseHeroFin(u,ctx,sess){
+  const c=ctx||{}, s=sess||{}, x=u||{};
+  const prenom=String(x.pseudo||x.fname||'').trim().split(/\s+/)[0]||'';
+  const nb=n=>String(n).replace('.',',');
+  const coupe=(t)=>t.length<=70?t:(t.slice(0,69).replace(/\s+\S*$/,'')+'…');
+  const nom=String(s.name||'').trim();
+  if(s.complete===false) return coupe('Séance écourtée : ce qui est fait compte.');
+  const nSess=Array.isArray(x.sessions)?x.sessions.filter(z=>z&&z.complete!==false).length:0;
+  if(nSess<=1) return coupe((prenom?prenom+', ta':'Ta')+' première séance est faite.');
+  const rec=Array.isArray(c.records)?c.records:[];
+  if(rec.length===1&&rec[0]&&rec[0].nm){
+    const g=Math.round((Number(rec[0].gain)||0)*10)/10;
+    const fin=g>0?' : +'+nb(g)+' kg.':'.';
+    const place=70-('Record sur '.length+fin.length);
+    let n=String(rec[0].nm); if(n.length>place) n=n.slice(0,Math.max(4,place-1)).trim()+'…';
+    return coupe('Record sur '+n+fin);
+  }
+  if(rec.length>1) return coupe(rec.length+' records battus aujourd’hui.');
+  const j=Math.floor(Number(c.joursDepuisDerniere)||0);
+  if(j>=14) return coupe('De retour après '+j+' jours. Le plus dur est fait.');
+  const am=Number(c.exosAmeliores)||0;
+  if(am>0) return coupe(am+(am>1?' exercices en progrès':' exercice en progrès')+' sur la dernière fois.');
+  if(s.deload) return coupe('Semaine allégée : moins, c’est voulu.');
+  if(nom) return coupe(nom.charAt(0).toUpperCase()+nom.slice(1)+' bouclée.');
+  return 'Une de plus au compteur.';
+}
+function _htmlHeroFin(badges,ctx,u,sess){
+  let ph=''; try{ ph=phraseHeroFin(u,ctx,sess); }catch(e){ ph=''; }
   return '<div class="rcf-hero">'+_htmlFlammeFin()
     +'<h1 class="rcf-titre">Séance terminée</h1>'
+    +(ph?'<p class="rcf-sous">'+escapeHtml(ph)+'</p>':'')
     +'<div class="rcf-trait" aria-hidden="true"></div></div>';
 }
 

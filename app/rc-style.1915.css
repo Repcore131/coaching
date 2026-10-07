@@ -13674,3 +13674,5 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 }
 /* BUILD 1914 — la bande « envois en attente » se tait sur la fin de séance tant qu'on n'a pas défilé. */
 .rc-attente.rc-attente--tue{display:none!important}
+/* BUILD 1915 — la phrase sous « Séance terminée » (phraseHeroFin). */
+.rcf-sous{margin:6px 0 0;font-size:var(--fs-sm);font-weight:600;color:var(--sub);line-height:1.4;text-align:center}

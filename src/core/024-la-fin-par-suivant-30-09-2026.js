@@ -361,7 +361,7 @@ function finishWorkout(incomplete=false,opts){
 
   // 1. LE HERO : flamme et titre. Il ne depend d'aucun calcul, il ne peut
   //    donc pas manquer — et c'est lui qui dit que la seance est finie.
-  _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin); }catch(e){
+  _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin,currentUser,sess); }catch(e){
     return '<div class="rcf-hero"><h1 class="rcf-titre">Séance terminée</h1></div>'; } })());
   // 2. LES RECOMPENSES : trois au maximum. Aucune obtenue, aucun bloc — on
   //    n'invente pas trois faux badges pour meubler.
