@@ -125,7 +125,9 @@ if (process.env.SUITE_ATTENDUS && rap && !rap.erreur) {
   const gueris = [...attendus].filter((n) => !noms.includes(n));
   console.log('\nEchecs attendus (hors navigateur reel) : ' + (noms.length - imprevus.length) + ' sur ' + attendus.size + '.');
   if (gueris.length) console.log('::warning::Attendu(s) qui passe(nt) desormais, a retirer de ' + process.env.SUITE_ATTENDUS + ' :\n  ' + gueris.join('\n  '));
-  if (imprevus.length) console.log('::error::Echec(s) IMPREVU(S) :\n  ' + imprevus.join('\n  '));
+  // Les noms sur UNE ligne : une annotation GitHub ne garde que la première,
+  // et le nom du test en échec se perdait (build 1876).
+  if (imprevus.length) console.log('::error::Echec(s) IMPREVU(S) : ' + imprevus.map((n) => n.replace(/\s+/g, ' ')).join(' | '));
   compte = imprevus.length;
 }
 const raisons = [];
