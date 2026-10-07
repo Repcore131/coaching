@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1875';
+window.RC_BUILD='1876';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -624,6 +624,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div style="padding:16px">
     <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
+    <button type="button" class="rb-lien" onclick="ouvrirSignalement()" style="display:block;margin:0 auto 8px">Signaler un problème</button>
     <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
     <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
          bord, le lien est donc à un clic une fois connecté. -->
@@ -723,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1875.css">
+<link rel="stylesheet" href="./rc-style.1876.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1875.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1876.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1622,6 +1623,26 @@ const COACH_PHOTO='icons/coach.jpg';
       <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Ouvrir, fermer un accès</h1>
       <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Fermer n’efface rien : la personne retrouve ses séances, son programme et son historique dès que tu rouvres.</p>
       <div id="acces-corps"></div>
+    </div>
+  </div>
+</div>
+<!-- BUILD 1876 : LE SUPPORT DU CRÉATEUR (cloudflare/src/support.js). -->
+<div id="s-support" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-support','s-coach-acces')">←</button>
+    <span class="topbar-title">Support</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="sup-mail" type="email" autocomplete="off" placeholder="Adresse de la personne" style="flex:1;min-width:0">
+        <button class="btn btn-red btn-sm" style="margin:0" onclick="supportOuvrir()">Ouvrir</button>
+      </div>
+      <div id="sup-fiche"></div>
+      <h2 style="margin:16px 0 8px">Signalements</h2>
+      <div id="sup-tickets"></div>
+      <h2 style="margin:16px 0 8px">Journal</h2>
+      <div id="sup-journal"></div>
     </div>
   </div>
 </div>
@@ -4143,6 +4164,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card" id="atp-badges" style="margin-bottom:14px"></div>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <button type="button" class="rb-lien" onclick="ouvrirSignalement()" style="display:block;margin:0 auto 12px">Signaler un problème</button>
         <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">Se déconnecter</button>
         <!-- LE PIED, COMME CELUI D'UN SITE (Kevin, 28/09/2026). Exporter et
              supprimer ne sont plus deux blocs, dont un rouge qui dominait
@@ -6194,5 +6216,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1875.js"></script>
+<script src="./rc-core.1876.js"></script>
 </body></html>

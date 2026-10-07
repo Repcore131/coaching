@@ -44890,6 +44890,8 @@ async function testExercices(){
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
+        // Build 1876 : le support du créateur, ouvert depuis « Accès ».
+        's-support',
         // LES AMBASSADEURS, 26/09/2026 : l'ecran admin des codes et commissions.
         's-ambassadeurs',
         // L'ATTRIBUTION, 26/09/2026 : l'entonnoir de viralite (admin).
@@ -66100,6 +66102,32 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1876 : LE SUPPORT ══
+    ok('Tampon d’erreurs : borné à 20, les plus récentes ; adresses et longues suites de chiffres masquées',()=>{
+      let l=[]; for(let i=0;i<30;i++) l=ajouterErreurTampon(l,{m:'e'+i});
+      if(l.length!==20||l[0].m!=='e10'||l[19].m!=='e29') return _echec(JSON.stringify(l.map(x=>x.m)));
+      const t=_nettoyerTexteDiag('lea@t.fr a pesé 63500 g');
+      return !/lea@t\.fr|63500/.test(t)?true:_echec(t);});
+    ok('Diagnostic : technique seulement, aucune donnée du dossier en clair',()=>{
+      const sU=currentUser, sE=_rcErreurs;
+      try{
+        currentUser={id:'dg',email:'secret@t.fr',role:'athlete',fname:'Léa',weight:'63.5',weightLog:[{date:'2026-10-01',kg:63.5}],
+          bilans:[{date:1,'bil-weight':'63.5','bil-sleep-quality':'Mal'}],sessions:[{data:{Squat:{sets:[{weight:'100'}]}}}]};
+        noterErreurJS('TypeError chez secret@t.fr poids 63500','rc-core.js:1234');
+        const d=diagnosticSupport();
+        const j=JSON.stringify(d);
+        for(const k of ['build','ecran','role','enAttente','erreurs','stockageOctets']) if(!(k in d)) return _echec('manque '+k);
+        if(/secret@t\.fr|Léa|63[.,]5|Squat|Mal\b/.test(j)) return _echec(j.slice(0,300));
+        return d.erreurs.length<=20&&/rc-core\.js:1234/.test(j)?true:_echec('source perdue');
+      } finally { currentUser=sU; _rcErreurs=sE; try{ localStorage.setItem('rc_erreurs',JSON.stringify(sE)); }catch(e){} }});
+    ok('L’écran Support existe, réservé au créateur ; « Signaler un problème » est dans les deux profils',()=>{
+      if(!document.getElementById('s-support')) return _echec('écran absent');
+      const sU=currentUser;
+      try{ currentUser={id:'x',email:'pas-kevin@t.fr',role:'coach'}; if(ouvrirSupport()!==false) return _echec('ouvert à un autre'); }
+      finally{ currentUser=sU; }
+      const n=document.querySelectorAll('[onclick="ouvrirSignalement()"]').length;
+      return n>=2?true:_echec(n+' entrée(s)');});
 
     // ══ BUILD 1875 : LE COACH CORRIGE UNE SÉRIE ══
     const _scU=()=>{

@@ -111,7 +111,8 @@ export async function valeurDepuisBase(client, noeud) {
   let valeur;
   await exporterChemin(client, noeud, async (p) => {
     const v = JSON.parse(p.texte);
-    const relatif = p.chemin.split('/').slice(1);
+    // Build 1876 : un sous-chemin (« users/lea@t,fr ») se relit aussi.
+    const relatif = p.chemin.split('/').slice(noeud.split('/').length);
     const poser = (rel, x) => {
       if (!rel.length) { valeur = x; return; }
       if (!valeur || typeof valeur !== 'object') valeur = {};
@@ -127,7 +128,14 @@ export async function valeurDepuisBase(client, noeud) {
 
 export async function restaurer({ client, dossier, noeud, ecrire, journal }) {
   const log = journal || console.log;
-  const { valeur, decoupe, manifeste } = valeurDepuisArchive(dossier, noeud);
+  // BUILD 1876 : UN SEUL DOSSIER. « users/<clé> » se lit dans la part
+  // « users » de l'archive, puis on descend ; l'écriture ne touche que lui.
+  const segs = String(noeud).split('/').filter(Boolean);
+  const lu = valeurDepuisArchive(dossier, segs[0]);
+  let valeur = lu.valeur;
+  for (const k of segs.slice(1)) valeur = (valeur && typeof valeur === 'object') ? valeur[k] : undefined;
+  if (segs.length > 1 && valeur === undefined) throw new Error(noeud + ' : absent de cette sauvegarde');
+  const decoupe = segs.length > 1 ? false : lu.decoupe, manifeste = lu.manifeste;
   const actuelle = await valeurDepuisBase(client, noeud);
   const d = difference(valeur, actuelle);
   log('Archive : ' + manifeste.mode + ' du ' + manifeste.date + ' — nœud « ' + noeud + ' »' + (decoupe ? ' (découpé en parts)' : ''));

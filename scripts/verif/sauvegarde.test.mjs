@@ -133,6 +133,19 @@ await test('après dégâts : la simulation les montre, sans rien écrire ; --ec
   assert.equal((await restaurer({ client: w.client(), dossier: d, noeud: 'droits', ecrire: false, journal: () => {} })).difference.total, 0);
 });
 
+await test('build 1876 : UN SEUL dossier (users/<clé>) se restaure depuis le complet, sans toucher aux autres', async () => {
+  const w = monde(donnees());
+  const d = join(temp, 'un-dossier');
+  await sauvegarder({ client: w.client(), mode: 'complet', dossier: d });
+  w.F.ecrire('users/a3@t,fr/fname', 'Abîmé');
+  w.F.ecrire('users/a4@t,fr/fname', 'Changé après');
+  const sim = await restaurer({ client: w.client(), dossier: d, noeud: 'users/a3@t,fr', ecrire: false, journal: () => {} });
+  assert.deepEqual(sim.difference.modifiees, ['fname']);
+  await restaurer({ client: w.client(), dossier: d, noeud: 'users/a3@t,fr', ecrire: true, journal: () => {} });
+  assert.equal(w.F.lire('users/a3@t,fr/fname'), 'Léa 3');
+  assert.equal(w.F.lire('users/a4@t,fr/fname'), 'Changé après', 'l’autre dossier n’est pas touché');
+});
+
 await test('un nœud découpé se réécrit par lots, et ses enfants en trop sont retirés (comme un PUT)', async () => {
   const w = monde(donnees(), { refus413: ['/paypal_journal.json'] });
   const d = join(temp, 'decoupe');

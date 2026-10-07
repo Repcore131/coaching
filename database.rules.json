@@ -2568,6 +2568,19 @@
       }
     },
 
+    // Le support du createur (build 1876, cloudflare/src/support.js) : le
+    // journal des actions et les signalements. Ecrits par le Worker seul
+    // (compte de service), lus par le createur seul. support_corbeille et
+    // support_tickets_dernier : aucun acces client.
+    "support_log": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "support_tickets": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+
     // Reglages lus par toute l app, ecrits par le createur seul. droitsServeur :
     // pose par le script de rattrapage des paiements (remplir-paiements.mjs)
     // une fois droits/ rempli pour les abonnes d avant ; l app ne ferme qu a

@@ -279,6 +279,40 @@ L'adresse du créateur doit aussi être **vérifiée** : le jeton porte `email_v
 l'est pas, cliquer le lien de vérification reçu par e-mail, puis se déconnecter et se reconnecter
 (le jeton n'est relu qu'à la connexion ou au renouvellement, au plus une heure).
 
+## Le support du créateur (`src/support.js`, build 1876)
+
+`POST /support` (ou `/fn/support`), même protocole et même jeton Firebase que `/fn/<nom>`. **Réservé au créateur** : l'UID (`CREATEUR_UID`, voir ci-dessus) ET l'adresse vérifiée `CREATOR_EMAIL`. Tant que l'UID n'est pas posé, la route refuse tout le monde (403).
+
+| `action` | Ce qu'elle fait |
+|---|---|
+| `lire {email}` | le dossier allégé : coach, statut, bilans résumés (date, photos présentes, réponse), versions du programme (date, motif), événements en attente, droits — sans photo ni texte de santé |
+| `rouvrirBilan {email, bilanId, vues}` | pose `aCompleter` sur le bilan : la demande apparaît sur l'accueil de la personne |
+| `restaurerProgramme {email, index}` | remet une entrée de `sessions_config_history`, après y avoir poussé l'état courant (motif `restauration`) |
+| `retirerDoublonBilan {email, bilanId}` | retire le bilan, pose la pierre tombale (`supprimes/bilans`), et le garde 30 jours dans `support_corbeille/<clé>` |
+| `rattacher {email, coachEmail}` | remet `coachEmailKey`, `coachId`, `coachName` (retrait du suivi fait par erreur) |
+| `exporter {email}` | le JSON complet du dossier |
+| `journal`, `tickets` | les 50 dernières lignes de `support_log`, les 50 derniers signalements |
+
+Chaque action écrit `support_log/<id> = {le, action, email, avant, apres}` (des **résumés**). `support_log` et `support_tickets` : lus par le créateur seul, écrits par le Worker seul (règles).
+
+`signalerProbleme {texte, diag}` (`/fn/signalerProbleme`) : tout compte connecté, un par minute ; le diagnostic (version, écran, envois en attente, 20 dernières erreurs JS nettoyées, taille du stockage) est borné à 6 000 caractères.
+
+Dans l'app : **Accès → Support : réparer un dossier**, et **Signaler un problème** dans le profil (athlète) et la barre latérale (coach).
+
+### Restaurer UN dossier depuis une sauvegarde
+
+La sauvegarde complète (`.github/workflows/sauvegarde.yml`, le dimanche ; artefact 35 jours, release brouillon) contient `users`. Pour ne remettre QUE le dossier d'une personne (clé = adresse avec `.` → `,`) :
+
+```bash
+read -rs SAUVEGARDE_CLE && export SAUVEGARDE_CLE
+# 1. Simuler : affiche les champs à ajouter, retirer, modifier. Rien n'est écrit.
+node scripts/restaurer_noeud.mjs sauvegarde-2026-10-05-complet.tar.enc 'users/lea@exemple,fr' --compte ~/RepCore-secrets/compte-service.json
+# 2. Écrire ce seul dossier (un PUT sur users/<clé>, les autres ne bougent pas)
+node scripts/restaurer_noeud.mjs sauvegarde-2026-10-05-complet.tar.enc 'users/lea@exemple,fr' --compte ~/RepCore-secrets/compte-service.json --ecrire
+```
+
+⚠ Le dossier revient **à la date de l'archive** : ce que la personne a fait depuis (séances, bilans) disparaît. Exporte d'abord son dossier actuel (`exporter` ci-dessus) pour pouvoir recopier à la main ce qui est plus récent. Les nuits, seuls les nœuds critiques sont exportés (`users` n'en fait pas partie, pour le quota de 10 Go/mois) : la sauvegarde d'un dossier a donc au plus 7 jours.
+
 ## Limites
 
 - **`/sante?cles=1`** interroge PayPal et Cloudinary : il est réservé à l'administrateur. Poser le

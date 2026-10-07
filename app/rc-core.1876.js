@@ -9934,6 +9934,155 @@ function accesSuspendre(email,opt){
 function accesRouvrir(email){
   return accesAgir('rendre',email||(_accesVu&&_accesVu.email),{});
 }
+// ══ BUILD 1876 : LE DIAGNOSTIC ET LE SIGNALEMENT ═══════════════════════════
+// Les 20 dernières erreurs JS, en mémoire et dans le stockage local (tampon
+// circulaire). Le texte est nettoyé : pas d'adresse, pas de longue suite de
+// chiffres (une mesure, un identifiant). Rien du dossier n'y entre.
+const ERREURS_MAX=20, ERREURS_CLE='rc_erreurs';
+/** PURE. Ajoute en fin, garde les `max` dernières. */
+function ajouterErreurTampon(l,e,max){ return (Array.isArray(l)?l:[]).concat([e]).slice(-(max||ERREURS_MAX)); }
+function _nettoyerTexteDiag(t,garderChiffres){
+  let x=String(t==null?'':t).replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g,'[e-mail]');
+  if(!garderChiffres) x=x.replace(/\d{3,}/g,'#');
+  return x.slice(0,200);
+}
+let _rcErreurs=(function(){ try{ const l=JSON.parse(localStorage.getItem(ERREURS_CLE)||'[]'); return Array.isArray(l)?l.slice(-ERREURS_MAX):[]; }catch(e){ return []; } })();
+function noterErreurJS(msg,src){
+  _rcErreurs=ajouterErreurTampon(_rcErreurs,{le:Date.now(),m:_nettoyerTexteDiag(msg),s:_nettoyerTexteDiag(src,true)});
+  try{ localStorage.setItem(ERREURS_CLE,JSON.stringify(_rcErreurs)); }catch(e){}
+}
+try{
+  if(typeof window!=='undefined'){
+    window.addEventListener('error',e=>{ try{ noterErreurJS(e&&e.message,String((e&&e.filename)||'').split('/').pop()+':'+((e&&e.lineno)||0)); }catch(x){} });
+    window.addEventListener('unhandledrejection',e=>{ try{ const r=e&&e.reason; noterErreurJS('promesse : '+((r&&r.message)||r),''); }catch(x){} });
+  }
+}catch(e){}
+function _octetsStockage(){ let n=0; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); n+=k.length+String(localStorage.getItem(k)||'').length; } }catch(e){} return n*2; }
+/** Le diagnostic joint au signalement : technique seulement. */
+function diagnosticSupport(){
+  let att=null; try{ att=CLOUD.enAttenteDeSync(); }catch(e){}
+  return {build:(typeof window!=='undefined'&&window.RC_BUILD)||null,
+    ecran:((document.querySelector('.screen.active')||{}).id)||null,
+    role:(currentUser&&currentUser.role)||null, enAttente:att,
+    erreurs:_rcErreurs.slice(-ERREURS_MAX), stockageOctets:_octetsStockage(),
+    enLigne:(typeof navigator!=='undefined')?navigator.onLine:null,
+    appareil:(typeof navigator!=='undefined')?String(navigator.userAgent||'').slice(0,120):''};
+}
+function ouvrirSignalement(){
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px">
+    <h2 style="margin-bottom:4px">Signaler un problème</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:8px">Dis ce qui s’est passé. Un diagnostic technique part avec (version, écran, envois en attente, dernières erreurs) : aucune de tes mesures.</p>
+    <textarea id="sig-texte" rows="5" maxlength="2000" style="width:100%;box-sizing:border-box" placeholder="Ce que tu faisais, ce que tu attendais, ce qui est arrivé."></textarea>
+    <button class="btn btn-red" style="margin-top:10px;width:100%" onclick="envoyerSignalement()">Envoyer</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+  </div></div>`);
+}
+async function envoyerSignalement(){
+  const z=document.getElementById('sig-texte');
+  const texte=String((z&&z.value)||'').trim();
+  if(!texte){ toast('Décris le problème en quelques mots.','var(--orange)'); return false; }
+  try{
+    await CLOUD._callFn('signalerProbleme',{texte,diag:diagnosticSupport()});
+    try{ closeModal(); }catch(e){}
+    toast('Merci : ton signalement est parti.');
+    return true;
+  }catch(e){ toast((e&&e.message)||'Envoi impossible : réessaie.','var(--orange)'); return false; }
+}
+
+// ══ BUILD 1876 : L'ÉCRAN SUPPORT DU CRÉATEUR ════════════════════════════════
+// Le Worker fait tout (POST /fn/support, réservé au créateur) ; l'écran lit,
+// demande confirmation en nommant la personne, et relit le journal.
+let _supVu=null;
+function ouvrirSupport(){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){ toast('Réservé au créateur.','var(--orange)'); return false; }
+  go('s-support');
+  _rendreSupport();
+  supportListes();
+  return true;
+}
+async function _supAppel(data){
+  try{ return await CLOUD._callFn('support',data); }
+  catch(e){ toast((e&&e.message)||'Le serveur a refusé.','var(--orange)'); return null; }
+}
+function _supNom(){ const v=_supVu||{}; return ((v.fname||'')+' '+(v.lname||'')).trim()||v.email||'cette personne'; }
+function _rendreSupport(){
+  const z=document.getElementById('sup-fiche');
+  if(!z) return;
+  const v=_supVu;
+  if(!v){ z.innerHTML=''; return; }
+  const E=escapeHtml, j=t=>t?new Date(Number(t)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'—';
+  z.innerHTML='<div class="card" style="margin-bottom:12px">'
+    +'<div style="font-weight:800">'+E(_supNom())+' <span class="sub" style="font-size:var(--fs-xs)">'+E(v.email||'')+'</span></div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">'+E(v.role||'?')+' · coach : '+E(v.coach||'aucun')+' · '+E(v.status||'')+' '+E(v.paymentStatus||'')
+      +' · '+v.seances+' séances · dossier du '+j(v.updatedAt)+(v.evenementsEnAttente&&v.evenementsEnAttente.length?' · '+v.evenementsEnAttente.length+' événement(s) en attente':'')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="supportRattacher()">Rattacher à un coach</button>'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="supportExporter()">Exporter</button></div></div>'
+    +'<div class="card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">Bilans</div>'
+    +((v.bilans||[]).slice().reverse().map(b=>'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--fs-xs)">'
+      +'<span style="flex:1">'+E(j(b.date))+' · '+E(b.type)+' · '+b.photos+'/3 photos'+(b.repondu?' · répondu':'')+(b.aCompleter?' · à compléter':'')+'</span>'
+      +'<button type="button" class="rb-lien" onclick="supportRouvrirBilan('+_attrArg(b.id)+')">Rouvrir pour les photos</button>'
+      +'<button type="button" class="rb-lien" onclick="supportRetirerDoublon('+_attrArg(b.id)+')">Retirer ce doublon</button></div>').join('')||'<div class="sub">Aucun bilan.</div>')
+    +'</div>'
+    +'<div class="card" style="margin-bottom:12px"><div style="font-weight:800;margin-bottom:6px">Versions du programme</div>'
+    +((v.historique||[]).map(h=>'<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--fs-xs)">'
+      +'<span style="flex:1">'+E(new Date(Number(h.ts)||0).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+(h.motif?' · '+E(h.motif):'')+'</span>'
+      +'<button type="button" class="rb-lien" onclick="supportRestaurer('+h.index+')">Restaurer</button></div>').join('')||'<div class="sub">Aucune version gardée.</div>')
+    +'</div>';
+}
+async function supportOuvrir(email){
+  const champ=document.getElementById('sup-mail');
+  const mail=String((email!=null?email:(champ&&champ.value))||'').trim().toLowerCase();
+  if(!mail||mail.indexOf('@')<0){ toast('Colle l’adresse de la personne.','var(--orange)'); return false; }
+  if(champ) champ.value=mail;
+  const r=await _supAppel({action:'lire',email:mail});
+  if(!r) return false;
+  _supVu=r; _rendreSupport(); supportListes();
+  return true;
+}
+async function _supAgir(question,data,fait){
+  if(!_supVu) return false;
+  if(!await rcConfirm(question,null,'Confirmer')) return false;
+  const r=await _supAppel(Object.assign({email:_supVu.email},data));
+  if(!r) return false;
+  toast(fait);
+  await supportOuvrir(_supVu.email);
+  return true;
+}
+function supportRouvrirBilan(id){ return _supAgir('Rouvrir ce bilan de '+_supNom()+' pour ses photos ?',{action:'rouvrirBilan',bilanId:id,vues:['face','back','side']},'Bilan rouvert : la demande est sur son accueil.'); }
+function supportRetirerDoublon(id){ return _supAgir('Retirer ce bilan de '+_supNom()+' ? Il reste 30 jours dans la corbeille du support.',{action:'retirerDoublonBilan',bilanId:id},'Bilan retiré.'); }
+function supportRestaurer(i){ return _supAgir('Restaurer cette version du programme de '+_supNom()+' ? L’actuelle est gardée dans l’historique.',{action:'restaurerProgramme',index:i},'Programme restauré.'); }
+async function supportRattacher(){
+  if(!_supVu) return false;
+  const c=(await rcSaisie('Rattacher '+_supNom()+' à quel coach ? (adresse e-mail)','',{libelleOk:'Suivant'})||'').trim();
+  if(!c) return false;
+  return _supAgir('Rattacher '+_supNom()+' au coach '+c+' ?',{action:'rattacher',coachEmail:c},'Rattaché.');
+}
+async function supportExporter(){
+  if(!_supVu) return false;
+  if(!await rcConfirm('Exporter le dossier complet de '+_supNom()+' ?','Il contient ses données de santé : garde le fichier en lieu sûr.','Exporter')) return false;
+  const r=await _supAppel({action:'exporter',email:_supVu.email});
+  if(!r) return false;
+  try{
+    const u=URL.createObjectURL(new Blob([JSON.stringify(r,null,2)],{type:'application/json'}));
+    const a=document.createElement('a'); a.href=u; a.download='dossier-'+String(_supVu.email).replace(/[^a-z0-9]+/gi,'_')+'.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000);
+  }catch(e){ toast('Téléchargement impossible.','var(--orange)'); return false; }
+  return true;
+}
+async function supportListes(){
+  const zj=document.getElementById('sup-journal'), zt=document.getElementById('sup-tickets');
+  if(!zj&&!zt) return false;
+  const E=escapeHtml, d=t=>new Date(Number(t)||0).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const t=await _supAppel({action:'tickets'});
+  if(zt&&t) zt.innerHTML=t.length?t.map(x=>'<button type="button" class="btn btn-outline" style="display:block;width:100%;text-align:left;margin:0 0 6px;font-size:var(--fs-xs)" onclick="supportOuvrir('+_attrArg(String(x.email||'').replace(/,/g,'.'))+')">'
+    +E(d(x.le))+' · '+E(String(x.email||'').replace(/,/g,'.'))+'<br><span class="sub">'+E(String(x.texte||'').slice(0,160))+'</span></button>').join(''):'<div class="sub">Aucun signalement.</div>';
+  const l=await _supAppel({action:'journal'});
+  if(zj&&l) zj.innerHTML=l.length?l.map(x=>'<div style="font-size:var(--fs-xs);padding:4px 0;border-bottom:1px solid var(--border)">'+E(d(x.le))+' · '+E(x.action)+' · '+E(String(x.email||'').replace(/,/g,'.'))+'</div>').join(''):'<div class="sub">Journal vide.</div>';
+  return true;
+}
 // ── L’ÉCRAN ───────────────────────────────────────────────────────────────
 // L’adresse qu’on regarde, et l’état de sa lecture. Une seule à la fois : on
 // vient du rapport, une ligne après l’autre.
@@ -10039,6 +10188,8 @@ function _rendreConsoleAcces(){
     +'Ici, tu ouvres et tu fermes l’accès.<br>'
     +'Fermer l’accès de quelqu’un n’arrête pas son prélèvement, et arrêter son prélèvement '
     +'ne ferme pas son accès : les deux gestes vont ensemble.</div>');
+  // BUILD 1876 : l'écran Support (lire et réparer un dossier, journal, signalements).
+  h+='<button type="button" class="btn btn-outline" style="margin-top:16px;width:100%" onclick="ouvrirSupport()">Support : réparer un dossier</button>';
   z.innerHTML=h;
   return true;
 }

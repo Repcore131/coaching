@@ -47,6 +47,7 @@ import { creerAppelsDroits, cleDe } from './droits-appels.js';
 import { creerEssai } from './essai.js';
 import { noter429, viderPouls, surveillerQuota } from './pouls.js';
 import { creerIA } from './ia.js';
+import { creerSupport } from './support.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
@@ -77,7 +78,12 @@ const ia = (req, ctx) => iaDe(ctx).appeler(req);
 const iaRetour = (req, ctx) => iaDe(ctx).retour(req);
 // relanceIA : le texte proposé par l'assistant, relu et ENVOYÉ PAR LE COACH.
 const relanceIA = (req, ctx) => iaDe(ctx).envoyerRelance(req, ctx.M && ctx.M.envoyerPush);
-const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin, ia, iaRetour, relanceIA,
+// LE SUPPORT DU CRÉATEUR (support.js, build 1876) : lire et réparer un
+// dossier, avec journal ; et le signalement d'un problème par tout compte.
+const supportDe = (ctx) => creerSupport({ db: ctx.db, maintenant: ctx.maintenant });
+const support = (req, ctx) => supportDe(ctx).support(req);
+const signalerProbleme = (req, ctx) => supportDe(ctx).signalerProbleme(req);
+const APPELS = { support, signalerProbleme, cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin, ia, iaRetour, relanceIA,
   ouvrirEssai, verifierAchatProgramme, redeemCode: droitsAppel('redeemCode'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
   emailVerifie: droitsAppel('emailVerifie') };
@@ -269,6 +275,12 @@ async function servir(req, env, ctx) {
       const o = outils(env);
       budgetRequete(o);
       return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
+    }
+    // LE SUPPORT : /support, même protocole et même jeton que /fn/support.
+    if (url.pathname === '/support' && req.method === 'POST') {
+      const o = outils(env);
+      budgetRequete(o);
+      return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req, nom: 'support' });
     }
     // RÉSILIER : même protocole et même jeton Firebase que /fn/<nom>.
     if (url.pathname === '/resiliation' && req.method === 'POST') {
