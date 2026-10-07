@@ -141,7 +141,7 @@ function onPlanSearch(val){
     return;
   }
   if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onPlanSearch(val); }); return; }
-  const {normQ,words}=_fjRequete(q);
+  let {normQ,words}=_fjRequete(q);
   if(!words.length){ el.innerHTML=''; return; }
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
@@ -150,7 +150,9 @@ function onPlanSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_fjFiltrer(_ciqualDB,words);
+  let res=_fjFiltrer(_ciqualDB,words);
+  const _corr=_fjAvecCorrection(q,words,res,_ciqualDB);
+  if(_corr){ res=_corr.res; words=_corr.words; normQ=_corr.normQ; }
   if(!res.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>'; return; }
   const scored=_classerAliments(res,normQ,words);
   // La macro visée est rappelée sur chaque ligne : choisir une source de
@@ -162,7 +164,7 @@ function onPlanSearch(val){
   // l'arachide de l'athlete.
   const _cli=(function(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } })();
   const _tr=evictionTrier(_cli,scored.slice(0,50).map(x=>x.f));
-  el.innerHTML=_htmlEvictionsRappelPlan(_cli)
+  el.innerHTML=_htmlBandeauCorrection(_corr,q,'onPlanSearch')+_htmlEvictionsRappelPlan(_cli)
     +_tr.liste.concat(_tr.releguees.map(r=>r.aliment)).map(f0=>{
     const f=f0;
     const _ev=(function(){ try{ return evictionDe(_cli,f); }catch(e){ return null; } })();
@@ -1688,6 +1690,119 @@ function _fjFiltrer(liste,words){
   const strict=l.filter(f=>_fjCorrespond(f,words));
   return strict.length?strict:l.filter(f=>_fjCorrespond(f,words,true));
 }
+// ── LA CORRECTION DES FAUTES DE FRAPPE (BUILD 1856) ─────────────────────
+// « pouelt », « yahourt », « cacahouete », « spagetti », « saumond » rendaient
+// « Aucun résultat ». QUAND (et seulement quand) le filtre ne rend RIEN, chaque
+// mot sans résultat de 4 lettres ou plus est corrigé vers le mot le plus proche
+// du vocabulaire de la table, et la recherche est relancée — avec un bandeau
+// qui le DIT et permet de chercher le mot tel quel. Jamais en silence.
+//
+// PURE. Une clé phonétique française grossière, pour la requête ET le
+// vocabulaire : ph → f, gh → g, h muet supprimé (sauf ch, sh), ou → u devant
+// une voyelle, doubles consonnes simplifiées, d ou t final muet supprimé.
+function _fjPhonetique(mot){
+  let m=String(mot||'').toLowerCase();
+  m=m.replace(/ph/g,'f').replace(/gh/g,'g');
+  m=m.replace(/([^cs])h/g,'$1').replace(/^h/,'');
+  m=m.replace(/ou(?=[aeiouy])/g,'u');
+  m=m.replace(/([bcdfgjklmnpqrstvwxz])\1+/g,'$1');
+  m=m.replace(/[dt]$/,'');
+  return m;
+}
+// PURE. Distance de Damerau-Levenshtein (variante « transposition adjacente »),
+// avec abandon au-delà de `max` : seules les petites distances intéressent.
+function _fjDamerau(a,b,max){
+  const n=a.length, m=b.length;
+  if(Math.abs(n-m)>max) return max+1;
+  let p2=null, p1=new Array(m+1), c=new Array(m+1);
+  for(let j=0;j<=m;j++) p1[j]=j;
+  for(let i=1;i<=n;i++){
+    c[0]=i; let mini=c[0];
+    for(let j=1;j<=m;j++){
+      const cout=a[i-1]===b[j-1]?0:1;
+      let v=Math.min(p1[j]+1,c[j-1]+1,p1[j-1]+cout);
+      if(p2&&i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) v=Math.min(v,p2[j-2]+1);
+      c[j]=v; if(v<mini) mini=v;
+    }
+    if(mini>max) return max+1;
+    p2=p1; p1=c; c=new Array(m+1);
+  }
+  return p1[m];
+}
+// Le vocabulaire de la table : chaque mot distinct des noms et des alias, sa
+// fréquence (nombre de fiches qui le portent) et sa clé phonétique. Construit
+// UNE fois, à la première correction, en mémoire seulement.
+let _fjVocabCache=null;
+function _fjVocab(db){
+  if(_fjVocabCache&&_fjVocabCache.db===db) return _fjVocabCache;
+  const freq=new Map();
+  for(const f of (db||[])){
+    if(!f) continue;
+    const vus=new Set();
+    for(const t of [f.s||'',...(Array.isArray(f.a)?f.a:[])])
+      for(const w of t.split(/[^a-z0-9]+/)) if(w.length>=3&&!vus.has(w)){ vus.add(w); freq.set(w,(freq.get(w)||0)+1); }
+  }
+  const parPhon=new Map();
+  for(const [w,n] of freq){
+    const k=_fjPhonetique(w), cur=parPhon.get(k);
+    if(!cur||n>cur.n) parPhon.set(k,{w,n});
+  }
+  _fjVocabCache={db,freq,parPhon,mots:Array.from(freq.keys())};
+  return _fjVocabCache;
+}
+// PURE (sur le vocabulaire). Le mot corrigé, ou null. Moins de 4 lettres :
+// jamais. D'abord la même clé phonétique ; sinon la distance — 1 jusqu'à 6
+// lettres, 2 au-delà —, à égalité le mot le plus fréquent de la table.
+function _fjCorrigerMot(w,v){
+  if(!w||w.length<4) return null;
+  const p=v.parPhon.get(_fjPhonetique(w));
+  if(p&&p.w!==w) return p.w;
+  const lim=w.length<=6?1:2;
+  let best=null;
+  for(const m of v.mots){
+    if(Math.abs(m.length-w.length)>lim) continue;
+    const d=_fjDamerau(w,m,lim);
+    if(d>lim) continue;
+    const n=v.freq.get(m)||0;
+    if(!best||d<best.d||(d===best.d&&n>best.n)) best={w:m,d,n};
+  }
+  return best&&best.w!==w?best.w:null;
+}
+// La requête corrigée, ou null. Un mot qui a DÉJÀ des résultats n'est jamais
+// touché : seule la faute est corrigée, pas le reste de la phrase.
+function _fjCorriger(words,db){
+  const v=_fjVocab(db);
+  let change=false;
+  const out=(words||[]).map(w=>{
+    if(_fjFiltrer(db,[w]).length) return w;
+    const c=_fjCorrigerMot(w,v);
+    if(c){ change=true; return c; }
+    return w;
+  });
+  return change?{words:out,normQ:out.join(' ')}:null;
+}
+// Le bandeau, obligatoire dès qu'une correction a eu lieu. `fn` : la fonction
+// de recherche à relancer SANS correction.
+let _fjSansCorrPour=null;
+function _htmlBandeauCorrection(corr,q,fn){
+  if(!corr) return '';
+  return '<div class="fj-corr" role="status" style="padding:8px 12px;font-size:var(--fs-xs);color:var(--sub)">Résultats pour « '
+    +escapeHtml(corr.normQ)+' » · <button type="button" class="lien-btn" style="background:none;border:0;padding:0;color:var(--link);font:inherit;text-decoration:underline;cursor:pointer" onclick="_fjChercherQuandMeme('
+    +_attrArg(fn)+','+_attrArg(q)+')">Rechercher « '+escapeHtml(q)+' » quand même</button></div>';
+}
+function _fjChercherQuandMeme(fn,q){
+  _fjSansCorrPour=q;
+  try{ if(typeof window[fn]==='function') window[fn](q); } finally { _fjSansCorrPour=null; }
+}
+// Le geste commun aux trois recherches : rien trouvé → corriger, sauf si
+// l'athlète a demandé le mot tel quel.
+function _fjAvecCorrection(q,words,res,db){
+  if(res.length||_fjSansCorrPour===q) return null;
+  const c=_fjCorriger(words,db);
+  if(!c) return null;
+  const r=_fjFiltrer(db,c.words);
+  return r.length?Object.assign(c,{res:r}):null;
+}
 // PURE. LES HABITUDES DE L'ATHLÈTE. Celui qui mange toujours du « Riz basmati
 // cuit » doit le voir en premier quand il tape « riz » : +80 favori, +60
 // fréquent (FJ_FREQUENT_MIN ajouts), +30 récent. Un favori passe donc devant
@@ -2767,13 +2882,16 @@ function _rendreResultatsIngredient(){
   const q=_recEdCherche.trim();
   if(q.length<2){ z.innerHTML=''; return; }
   if(!_ciqualDB){ z.innerHTML=etatChargement(2); _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
-  const {normQ,words}=_fjRequete(q);
-  const res=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).slice(0,12).map(x=>x.f);
+  let {normQ,words}=_fjRequete(q);
+  let _brut=_fjFiltrer(_ciqualDB,words);
+  const _corr=_fjAvecCorrection(q,words,_brut,_ciqualDB);
+  if(_corr){ _brut=_corr.res; words=_corr.words; normQ=_corr.normQ; }
+  const res=_classerAliments(_brut,normQ,words).slice(0,12).map(x=>x.f);
   const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div class="rct-n" style="font-size:var(--fs-sm)">'+escapeHtml(a.n)+(src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
     +'<div class="rct-m">'+(a.k!=null?_recF(a.k)+' kcal/100 g':'énergie non renseignée')+' · P '+_recF(a.p)+' · G '+_recF(a.c)+' · L '+_recF(a.l)+'</div></div>';
-  let h=res.map(f=>ligne('ciqual',f,f.id)).join('');
+  let h=_htmlBandeauCorrection(_corr,q,'recetteChercher')+res.map(f=>ligne('ciqual',f,f.id)).join('');
   if(_recOff&&_recOff.liste) h+=_fjTitreSection('Produits de marque (Open Food Facts)')+_recOff.liste.slice(0,10).map(a=>ligne('off',a,a.id)).join('');
   else if(_recOff&&_recOff.raison) h+=emptyState('',escapeHtml(_recOff.raison),null,null,'padding:12px 0');
   else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" onclick="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';

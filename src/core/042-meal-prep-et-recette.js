@@ -2096,7 +2096,7 @@ function onFjSearch(val){
     return;
   }
   if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onFjSearch(val); }); return; }
-  const {normQ,words}=_fjRequete(q);
+  let {normQ,words}=_fjRequete(q);
   if(!words.length){el.innerHTML='';return;}
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
@@ -2105,7 +2105,10 @@ function onFjSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_fjFiltrer(_ciqualDB,words);
+  let res=_fjFiltrer(_ciqualDB,words);
+  // BUILD 1856 : rien trouvé → la faute de frappe est corrigée, et le bandeau le dit.
+  const _corr=_fjAvecCorrection(q,words,res,_ciqualDB);
+  if(_corr){ res=_corr.res; words=_corr.words; normQ=_corr.normQ; }
   document.getElementById('fj-recent-section').innerHTML='';
   // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
   const _rcH=htmlRecettesRecherche(words);
@@ -2132,7 +2135,7 @@ function onFjSearch(val){
   // LES RELEGUES EN FIN DE LISTE, une seule fois, tous ensemble. Les eparpiller
   // au bas de chaque section les rendrait invisibles.
   const _releg=_trP.releguees.concat(_trC.releguees,_trT.releguees);
-  el.innerHTML=_rcH+(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
+  el.innerHTML=_htmlBandeauCorrection(_corr,q,'onFjSearch')+_rcH+(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
     +(_trC.liste.length?_fjTitreSection('Aliments de ton coach')+_trC.liste.map(f=>_htmlCoachResult(f)).join(''):'')
     +((_rcH||_trP.liste.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
     +_trT.liste.map(f=>_fjResultHtml(f,false,_fjAliasVia(f,words)?q:null)).join('')

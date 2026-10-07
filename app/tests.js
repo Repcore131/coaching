@@ -22724,6 +22724,48 @@ async function testExercices(){
         const v=(b.responseText.match(/const CIQUAL_VERSION = '([^']+)'/)||[])[1];
         return a.status===200&&a.responseText.trim()===v?true:_echec(a.responseText+' ≠ '+v);});
     }
+    // ══ BUILD 1856 : LA CORRECTION DES FAUTES DE FRAPPE, TOUJOURS DITE ══
+    {
+      const _cherche=q=>{
+        const {normQ,words}=_fjRequete(q); const res=_fjFiltrer(_ciqualDB,words);
+        const c=_fjAvecCorrection(q,words,res,_ciqualDB);
+        const r=_classerAliments(c?c.res:res,c?c.normQ:normQ,c?c.words:words);
+        return {c,premier:r[0]&&r[0].f};
+      };
+      okA('Correction : pouelt, yahourt, yaourth, cacahouete, spagetti, saumond trouvent la bonne fiche',async()=>{
+        await _loadCiqual();
+        const ATT=[['pouelt',/^Poulet/],['yahourt',/^Yaourt/],['yaourth',/^Yaourt/],['cacahouete',/^Cacahuète/],['spagetti',/^(Pâtes|Spaghetti)/],['saumond',/^Saumon/]];
+        const ko=ATT.map(([q,re])=>{ const r=_cherche(q); return r.premier&&re.test(r.premier.n)?null:q+' → '+(r.premier?r.premier.n:'rien'); }).filter(Boolean);
+        return ko.length?_echec(ko.join(' ; ')):true;});
+      okA('Correction : « riz » et « oeuf » ne déclenchent rien ; « xqzw » ne plante pas et ne trouve rien',async()=>{
+        await _loadCiqual();
+        if(_cherche('riz').c||_cherche('oeuf').c) return _echec('correction sur un mot qui a des résultats');
+        const x=_cherche('xqzw');
+        return !x.c&&!x.premier?true:_echec(JSON.stringify(x.c));});
+      ok('Correction : jamais sous 4 lettres ; phonétique attendue',()=>{
+        const v={parPhon:new Map([['riz',{w:'riz',n:1}]]),freq:new Map([['riz',9]]),mots:['riz']};
+        if(_fjCorrigerMot('rix',v)!==null) return _echec('mot de 3 lettres corrigé');
+        const k=[_fjPhonetique('yahourt'),_fjPhonetique('yaourt'),_fjPhonetique('saumond'),_fjPhonetique('saumon'),_fjPhonetique('spagetti'),_fjPhonetique('spaghetti'),_fjPhonetique('cacahouete'),_fjPhonetique('cacahuete')];
+        if(k[0]!==k[1]||k[2]!==k[3]||k[4]!==k[5]||k[6]!==k[7]) return _echec(k.join(' '));
+        return _fjDamerau('pouelt','poulet',2)===1&&_fjDamerau('abc','xyz',1)>1?true:_echec('Damerau');});
+      okA('Correction : le vocabulaire se construit en moins de 50 ms',async()=>{
+        await _loadCiqual();
+        _fjVocabCache=null;
+        const t0=performance.now(); const v=_fjVocab(_ciqualDB); const ms=performance.now()-t0;
+        if(v.mots.length<1500) return _echec(v.mots.length+' mots');
+        return ms<50?true:_echec(Math.round(ms)+' ms');});
+      okA('Correction : le bandeau est rendu, et « quand même » cherche le mot tel quel',async()=>{
+        await _loadCiqual();
+        const el=document.getElementById('fj-results-list');
+        if(!el) return _echec('pas de liste');
+        const av=el.innerHTML;
+        try{
+          onFjSearch('pouelt');
+          if(el.innerHTML.indexOf('Résultats pour « poulet »')<0||el.innerHTML.indexOf('Rechercher « pouelt » quand même')<0) return _echec('bandeau absent');
+          _fjChercherQuandMeme('onFjSearch','pouelt');
+          return el.innerHTML.indexOf('Résultats pour')<0&&/Aucun résultat/.test(el.textContent)?true:_echec('la recherche brute a été corrigée');
+        } finally { el.innerHTML=av; }});
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{
