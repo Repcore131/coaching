@@ -1220,7 +1220,35 @@ h3{font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;lett
 /* En PWA installée avec viewport-fit=cover, la page démarre SOUS la barre
    d'état : sans ce retrait, l'heure système recouvre le titre de la topbar.
    La longhand suit la shorthand, sinon elle serait écrasée. */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--red);flex-shrink:0;background:var(--bg);position:relative}
+/* ══ LA BARRE DE TITRE (build 1899) ════════════════════════════════════════
+   UNE GRILLE 44 | 1fr | 44 : les deux côtés ont la même largeur, le titre est
+   donc au centre de l'écran quoi qu'il y ait à droite (il glissait à
+   x=113-123 quand un bouton occupait la droite).
+   - le retour en 1re colonne ; le titre en 2e, centré, coupé par une ellipse ;
+   - l'action de droite en 3e colonne, collée à droite (justify-self:end) :
+     elle déborde vers la gauche SANS élargir sa colonne. Une icône de 32 px
+     (.topbar-ico) ou un .btn-sm de 96 px au plus ; ce qui ne tient pas devient
+     une icône (« Enregistrer » du profil : coche ; « + Créer » : plus).
+   - deux actions : un seul conteneur .topbar-act.
+   UN SEUL FILET, 1 px var(--red), sur toutes les barres ; .topbar--nue pour
+   l'écran plein qui n'en a pas (la fin de séance). Jamais de style en ligne
+   sur le filet. Le titre est toujours var(--text), sans icône. */
+.topbar{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;column-gap:8px;
+  padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--red);flex-shrink:0;background:var(--bg);position:relative}
+.topbar>*{grid-row:1}
+.topbar>:first-child{grid-column:1;justify-self:start}
+.topbar>:nth-child(2){grid-column:2;justify-self:stretch;min-width:0}
+.topbar>:nth-child(n+3){grid-column:3;justify-self:end;white-space:nowrap}
+.topbar>[style*="position:absolute"]{grid-column:auto;grid-row:auto}
+.topbar>.topbar-title{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.topbar>:nth-child(n+3).btn-sm,.topbar>:nth-child(n+3) .btn-sm{max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.topbar--nue{border-bottom:0}
+.topbar-act{display:inline-flex;align-items:center;gap:6px}
+.topbar-ico{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-3);
+  cursor:pointer;padding:0;position:relative}
+.topbar-ico:not(.btn-red){background:none;border:1px solid var(--border);color:var(--text)}
+.topbar-ico::before{content:'';position:absolute;inset:-6px}
+.btn.topbar-ico{width:32px;min-width:0;height:32px!important;min-height:32px!important;padding:0!important;border:0}
 
 /* ====== ACCENT LINE ====== */
 

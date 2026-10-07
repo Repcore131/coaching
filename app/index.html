@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1898';
+window.RC_BUILD='1899';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-07';
@@ -724,13 +724,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1898.css">
+<link rel="stylesheet" href="./rc-style.1899.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1898.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1899.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1004,7 +1004,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni, ombre portée vers le bas pour séparation visuelle -->
-  <div class="topbar" style="border-bottom:1px solid color-mix(in srgb,var(--text) 22%,transparent);box-shadow:var(--e2);position:relative;z-index:2;background:var(--bg)">
+  <div class="topbar" style="position:relative;z-index:2;background:var(--bg)">
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
@@ -1100,7 +1100,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-athlete-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni avec séparation visuelle identique coach -->
-  <div class="topbar" style="border-bottom:1px solid color-mix(in srgb,var(--text) 22%,transparent);box-shadow:var(--e2);position:relative;z-index:2;background:var(--bg)">
+  <div class="topbar" style="position:relative;z-index:2;background:var(--bg)">
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
@@ -1200,7 +1200,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 <!-- LOGIN -->
 <div id="s-login" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--border)">
+  <div class="topbar">
     <!-- R21 — retour force : tunnel de connexion ; laisse tel quel, voir le rapport du lot (« Ajouter un compte » y mene aussi depuis l'accueil). -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.webp" style="display:block;height:52px;width:52px;margin:-8px 0"></div>
@@ -3147,7 +3147,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-programs','s-coach-home')">←</button>
     <span class="topbar-title">Mes programmes</span>
-    <button class="btn btn-red btn-sm" onclick="createCoachProgTemplate()" style="margin:0;letter-spacing:1px;padding:8px 14px;min-height:0">+ CRÉER</button>
+    <button type="button" class="btn btn-sm btn-red topbar-ico" onclick="createCoachProgTemplate()" aria-label="Créer un programme" title="Créer"><span data-ico="plus" data-taille="20" aria-hidden="true"></span></button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -3209,11 +3209,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-decharge','s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
-    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:var(--surface-3);color:var(--text-dim);border:none;padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
+    <span class="topbar-act"><button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:var(--surface-3);color:var(--text-dim);border:none;padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
     <!-- Le retrait groupe : meme selection, meme recapitulatif nomme, meme
          rapport d echecs. Un booleen distingue les deux gestes, il n y a pas
          deux mecanismes de decharge a tenir d accord. -->
-    <button id="cdg-retirer" onclick="confirmDechargeGroupee(false)" disabled style="background:none;color:var(--text-dim);border:1px solid var(--border);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1);margin-left:8px">Retirer</button>
+    <button id="cdg-retirer" onclick="confirmDechargeGroupee(false)" disabled style="background:none;color:var(--text-dim);border:1px solid var(--border);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1);margin-left:8px">Retirer</button></span>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -3286,8 +3286,8 @@ const COACH_PHOTO='icons/coach.jpg';
          enregistrement avait eu lieu.
          DANS LA BARRE DE TITRE, qui est collante : c'est le seul endroit qui
          reste sous les yeux quel que soit l'exercice qu'on edite. -->
-    <span id="cp-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;margin-right:8px"></span>
-    <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Enregistrer</button>
+    <span class="topbar-act"><span id="cp-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;margin-right:8px"></span>
+    <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Enregistrer</button></span>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -4025,7 +4025,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-athlete-profile')">←</button>
     <span class="topbar-title">Mon profil</span>
-    <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:var(--text);padding:8px 16px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
+    <button type="button" class="btn btn-sm btn-red topbar-ico" onclick="saveAthleteProfile()" aria-label="Enregistrer mon profil" title="Enregistrer"><span data-ico="check" data-taille="20" aria-hidden="true"></span></button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -4768,7 +4768,7 @@ const COACH_PHOTO='icons/coach.jpg';
        remontait à _ecranOrigine — c’est-à-dire s-workout, la séance qu’on
        vient d’enregistrer. La flèche affichée et le bouton matériel mènent
        désormais au même endroit : le cas 4 trouve celle-ci et la délègue. -->
-  <div class="topbar" style="border-bottom:none">
+  <div class="topbar topbar--nue">
     <!-- R21 — retour force : revenir sur la seance qu'on vient d'enregistrer n'a aucun sens. -->
     <button class="back-btn" aria-label="Retour à l'accueil" onclick="go('s-client-home');loadClientHome()">←</button>
     <span></span><span></span>
@@ -5595,7 +5595,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- STEPS -->
 <div id="s-steps" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-steps')">←</button>
     <span class="topbar-title">Mes pas</span>
     <span></span>
@@ -5606,7 +5606,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-sleep" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-sleep')">←</button>
     <span class="topbar-title">Mon sommeil</span>
     <span></span>
@@ -5622,7 +5622,7 @@ const COACH_PHOTO='icons/coach.jpg';
      sur le préfixe « s-coach- ». L'écran est donc protégé sans une ligne de
      plus, et le resterait si quelqu'un le rendait atteignable autrement. -->
 <div id="s-coach-canal" class="screen ecran-coach">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-canal','s-coach-home')">←</button>
     <span class="topbar-title">Mes annonces</span>
     <span></span>
@@ -5654,7 +5654,7 @@ const COACH_PHOTO='icons/coach.jpg';
      n implemente pas BarcodeDetector, c est souvent le seul chemin qui
      aboutit. Aucune image n est enregistree, transmise ni mise en cache. -->
 <div id="s-scan" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <!-- R21 — fermeture dediee : libere la camera, puis retourDe('s-scan'). -->
     <button class="back-btn" onclick="scanFermer()">←</button>
     <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">SCANNER</span>
@@ -5663,7 +5663,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-rapport" class="screen ecran-coach">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-rapport')">←</button>
     <span class="topbar-title">Rapport</span><span></span>
   </div>
@@ -5702,7 +5702,7 @@ const COACH_PHOTO='icons/coach.jpg';
        DEUX cotes — l athlete depuis son plan, le coach depuis sa composition.
        La nommer ou la classer d un cote la fermerait a l autre. -->
 <div id="s-fiche-alim" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-fiche-alim')">←</button>
     <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">FICHE ALIMENTAIRE</span>
     <span></span>
@@ -5723,7 +5723,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-programme-print" class="screen ecran-coach">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-programme-print')">←</button>
     <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">PROGRAMME</span>
   </div>
@@ -5810,7 +5810,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-canal" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-canal')">←</button>
     <span class="topbar-title">Annonces</span>
     <span></span>
@@ -5825,7 +5825,7 @@ const COACH_PHOTO='icons/coach.jpg';
      Le code, le partage, les compteurs et les paliers. htmlParrainage. -->
 <!-- ══════ VIRALITE (admin) ══════ htmlViralite. -->
 <div id="s-viralite" class="screen ecran-coach">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-viralite','s-coach-home')">←</button>
     <span class="topbar-title">Viralité</span>
     <span></span>
@@ -5837,7 +5837,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- ══════ AMBASSADEURS (admin) ══════ htmlAmbassadeurs. -->
 <div id="s-ambassadeurs" class="screen ecran-coach">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-ambassadeurs','s-coach-home')">←</button>
     <span class="topbar-title">Ambassadeurs</span>
     <span></span>
@@ -5849,7 +5849,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- LES AMIS (lot A, 29/09/2026) : la recherche par pseudo, la fiche, le carnet. -->
 <div id="s-client-amis" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-client-amis','s-client-home')">←</button>
     <span class="topbar-title">Mes amis</span>
     <span></span>
@@ -5860,7 +5860,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-parrainage" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-parrainage','s-athlete-profile')">←</button>
     <span class="topbar-title">Inviter des amis</span>
     <span></span>
@@ -5871,7 +5871,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-lifestyle" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-lifestyle')">←</button>
     <span class="topbar-title">Lifestyle</span>
     <span></span>
@@ -6168,7 +6168,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <div id="s-subscribe" class="screen" style="background:var(--bg);overflow:hidden">
-  <div class="topbar" style="border-bottom:1px solid #1a0000">
+  <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-subscribe')">←</button>
     <span class="topbar-title">Accès RepCore</span>
     <span></span>
@@ -6270,5 +6270,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1898.js"></script>
+<script src="./rc-core.1899.js"></script>
 </body></html>

@@ -73606,6 +73606,33 @@ async function testExercices(){
       const h=etatErreur('x','Réessayer','f()','Annonces injoignables');
       return /class="vide /.test(h)&&/btn btn-sm btn-outline/.test(h)&&/t-carte vide-titre/.test(h)?true:_echec(h.slice(0,120));});
 
+    // ══ BUILD 1899 — LA BARRE DE TITRE : UN FILET, UN TITRE CENTRÉ ════════════
+    ok('1899 — aucune barre de titre ne surcharge son filet dans index.html',()=>{
+      const html=document.documentElement.outerHTML;
+      const l=html.match(/class="topbar[^"]*"\s+style="[^"]*border-bottom[^"]*"/g)||[];
+      return l.length?_echec(l.length+' : '+l[0].slice(0,80)):true;});
+    ok('1899 — sonde : titre centré à 195 ± 4 px et même filet sur 10 écrans (dont profil, programmes, banque, Lifestyle)',()=>{
+      const ecrans=[['s-athlete-profile',_banAth,()=>openAthleteProfile()],['s-lifestyle',_banAth,()=>loadLifestyle()],
+        ['s-client-reglages',_banAth,()=>ouvrirReglagesAthlete()],['s-supplements',_banAth,()=>loadSupplements()],
+        ['s-steps',_banAth,()=>loadSteps()],['s-canal',_banAth,()=>{ const sv=CLOUD.ok; CLOUD.ok=()=>false; try{ loadCanal(); }finally{ CLOUD.ok=sv; } }],
+        ['s-client-amis',_banAth,()=>ouvrirAmis()],['s-coach-programs',_banCoach,()=>openCoachPrograms()],
+        ['s-coach-banque',_banCoach,()=>{ try{ ouvrirBanque(); }catch(e){} }],['s-coach-canal',_banCoach,()=>loadCanalCoach()]];
+      const faux=[], filets=new Set();
+      const w=window.innerWidth;
+      for(const [id,u,ouvrir] of ecrans){
+        _sondeEcran(u(),ouvrir,()=>{
+          const bar=document.querySelector('#'+id+' > .topbar')||document.querySelector('#'+id+' .topbar');
+          const t=bar&&bar.querySelector('.topbar-title');
+          if(!bar||!t){ faux.push(id+' : barre ou titre absent'); return; }
+          const br=bar.getBoundingClientRect(), r=t.getBoundingClientRect();
+          const centreAttendu=br.left+br.width/2, centre=r.left+r.width/2;
+          if(Math.abs(centre-centreAttendu)>4) faux.push(id+' : titre centré à '+Math.round(centre-br.left)+' px sur '+Math.round(br.width));
+          filets.add(getComputedStyle(bar).borderBottomColor+' '+getComputedStyle(bar).borderBottomWidth);
+        });
+      }
+      if(filets.size>1) faux.push('filets : '+[...filets].join(' / '));
+      return faux.length?_echec(faux.slice(0,6).join(' | ')):true;});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
