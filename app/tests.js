@@ -74387,6 +74387,42 @@ async function testExercices(){
         return _lignePrevision({nom:'Squat',etat:'regression'})===''?true:_echec('prévision sur un recul');
       }finally{ currentUser=cu; }});
 
+    // ══ BUILD 1921 — LE WRAPPED D'UN BLOC ══════════════════════════════════════
+    const _wbU=(dates,o)=>{
+      const lundi=_lundiDe(new Date(2026,7,3,12)).getTime();          // lundi 3 août 2026
+      return Object.assign({programme:{debut:lundi,semaines:6},sessions_config:[{active:true},{active:true},{active:false}],
+        sessions:dates.map((j,k)=>({date:lundi+j*864e5+10*3600e3,complete:true,duration:50,volume:1000,
+          data:{Squat:{sets:[{done:true,weight:String(80+k*2.5),reps:'5'}]},Rowing:{sets:[{done:true,weight:String(60+k),reps:'8'}]}}}))},o||{});
+    };
+    ok('1921 — wrappedBloc : 10 jours après la fin prévue, ≥ 4 séances, sans trou de plus de 14 jours',()=>{
+      const faux=[];
+      const u=_wbU([1,4,8,11,15,18,22,25,29,32,36,39]);
+      const fin=u.programme.debut+42*864e5;
+      const b=wrappedBloc(u,fin+2*864e5);
+      if(!b||b.type!=='bloc'||b.semaines!==6||!/^b-2026-08-03$/.test(b.cle)) faux.push('offert : '+JSON.stringify(b&&{c:b.cle,t:b.type}));
+      if(b&&b.prevues!==12) faux.push('prévues : '+(b&&b.prevues));
+      if(wrappedBloc(u,fin-864e5)) faux.push('avant la fin');
+      if(wrappedBloc(u,fin+11*864e5)) faux.push('après 10 jours');
+      if(wrappedBloc(_wbU([1,4,8]),fin+864e5)) faux.push('3 séances');
+      if(wrappedBloc(_wbU([1,4,8,30,33]),fin+864e5)) faux.push('interrompu (trou de 22 jours)');
+      const per=wrappedPeriodes(fin+864e5,u);
+      if(!per.length||per[0].type!=='bloc') faux.push('wrappedPeriodes : '+JSON.stringify(per.map(p=>p.type)));
+      if(wrappedPeriodes(fin+864e5).some(p=>p.type==='bloc')) faux.push('bloc sans dossier');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1921 — slides du bloc : assiduité en % et podium des exercices',()=>{
+      const u=_wbU([1,4,8,11,15,18,22,25,29]);
+      const fin=u.programme.debut+42*864e5, per=wrappedBloc(u,fin+864e5);
+      const w=calculerWrapped(u,per.debut,per.fin); w.top3=wrappedTop3(u,per.debut,per.fin);
+      const s=wrappedSlides(w,per).find(x=>x.k==='assiduite');
+      if(!s) return _echec('slide assiduité absente');
+      if(s.grand!==75) return _echec('assiduité : '+s.grand);
+      if(!/^1\. Squat : \+20 kg$/.test(s.lignes[1]||'')) return _echec('podium : '+JSON.stringify(s.lignes));
+      return wrappedSlides(w,{type:'mois',titre:'X'}).some(x=>x.k==='habitudes')?true:_echec('le mois perd ses habitudes');});
+    ok('1921 — fiche coach : « Récapitulatif du bloc vu par l’athlète le … »',()=>{
+      const h=htmlWrappedVusCoach({wrappedVus:{'m-2026-09':1,'b-2026-08-03':new Date(2026,8,16,10).getTime()}});
+      if(!/vu par l’athlète le 16 septembre/.test(h)) return _echec(h);
+      return htmlWrappedVusCoach({wrappedVus:{'m-2026-09':1}})===''?true:_echec('un mois compté comme un bloc');});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

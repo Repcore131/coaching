@@ -68,7 +68,7 @@ function _rendreCarteWrapped(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   let html='';
   try{
-    for(const p of wrappedPeriodes(Date.now())){
+    for(const p of wrappedPeriodes(Date.now(),u)){
       const w=calculerWrapped(u||{},p.debut,p.fin);
       if(!w.seances) continue;
       if(accCarteMasquee('wrapped-'+p.cle)) continue;

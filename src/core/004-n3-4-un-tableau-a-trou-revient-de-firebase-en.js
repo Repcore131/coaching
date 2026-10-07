@@ -898,6 +898,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'duels',
   // Le réglage des célébrations (complètes ou discrètes).
   'celebrations',
+  // BUILD 1918-1921 : des horodatages d'interface (bravos du coach, récapitulatifs vus).
+  'bravos','wrappedVus',
   // Le parcours de démarrage : des étapes datées, rien de santé.
   'parcours',
   // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise

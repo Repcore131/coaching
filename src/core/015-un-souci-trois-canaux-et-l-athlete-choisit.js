@@ -537,6 +537,15 @@ function getOwnedClient(cid,users,opts){
   if(!c||!_estMonAthlete(c,currentUser)){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
   return c;
 }
+// PURE. « Récapitulatif du bloc vu par l'athlète le 3 octobre. » — le dernier
+// récapitulatif de BLOC ouvert, ou rien.
+function htmlWrappedVusCoach(c){
+  const v=(c&&c.wrappedVus&&typeof c.wrappedVus==='object')?c.wrappedVus:{};
+  const k=Object.keys(v).filter(x=>/^b-/.test(x)).sort().pop();
+  if(!k||!(Number(v[k])>0)) return '';
+  let d=''; try{ d=new Date(Number(v[k])).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ d=''; }
+  return '<br><span class="ccd-wr-vu">Récapitulatif du bloc vu par l’athlète le '+escapeHtml(d)+'.</span>';
+}
 // LA NAVIGATION PAR ANCRES DE LA FICHE ATHLETE. Trois choses : le saut lui-meme
 // (par _defiler, qui respecte la preference systeme la ou scrollIntoView ne le
 // fait pas), la marque d'arrivee sur le titre de la section atteinte, et la
@@ -1420,7 +1429,9 @@ function openClientDetail(cid,_refresh,_force){
       const _supp=!!c.assignedProgramId&&!((currentUser&&currentUser.coachPrograms)||[]).some(p=>p&&p.id===c.assignedProgramId);
       _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
         +(_supp?' (modèle supprimé)':'')
-        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'')
+        // BUILD 1921 : le récapitulatif de bloc, vu ou non par l'athlète.
+        +(()=>{ try{ return htmlWrappedVusCoach(c); }catch(e){ return ''; } })();
       _ap.style.display='block';
     } else _ap.style.display='none';
   }

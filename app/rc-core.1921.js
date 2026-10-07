@@ -7891,6 +7891,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'duels',
   // Le réglage des célébrations (complètes ou discrètes).
   'celebrations',
+  // BUILD 1918-1921 : des horodatages d'interface (bravos du coach, récapitulatifs vus).
+  'bravos','wrappedVus',
   // Le parcours de démarrage : des étapes datées, rien de santé.
   'parcours',
   // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise
@@ -36549,6 +36551,15 @@ function getOwnedClient(cid,users,opts){
   if(!c||!_estMonAthlete(c,currentUser)){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
   return c;
 }
+// PURE. « Récapitulatif du bloc vu par l'athlète le 3 octobre. » — le dernier
+// récapitulatif de BLOC ouvert, ou rien.
+function htmlWrappedVusCoach(c){
+  const v=(c&&c.wrappedVus&&typeof c.wrappedVus==='object')?c.wrappedVus:{};
+  const k=Object.keys(v).filter(x=>/^b-/.test(x)).sort().pop();
+  if(!k||!(Number(v[k])>0)) return '';
+  let d=''; try{ d=new Date(Number(v[k])).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ d=''; }
+  return '<br><span class="ccd-wr-vu">Récapitulatif du bloc vu par l’athlète le '+escapeHtml(d)+'.</span>';
+}
 // LA NAVIGATION PAR ANCRES DE LA FICHE ATHLETE. Trois choses : le saut lui-meme
 // (par _defiler, qui respecte la preference systeme la ou scrollIntoView ne le
 // fait pas), la marque d'arrivee sur le titre de la section atteinte, et la
@@ -37432,7 +37443,9 @@ function openClientDetail(cid,_refresh,_force){
       const _supp=!!c.assignedProgramId&&!((currentUser&&currentUser.coachPrograms)||[]).some(p=>p&&p.id===c.assignedProgramId);
       _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
         +(_supp?' (modèle supprimé)':'')
-        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'')
+        // BUILD 1921 : le récapitulatif de bloc, vu ou non par l'athlète.
+        +(()=>{ try{ return htmlWrappedVusCoach(c); }catch(e){ return ''; } })();
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
@@ -92042,9 +92055,11 @@ function calculerWrapped(u,debut,fin,maintenant){
 // PURE. Les périodes offertes à l'instant `t` : le mois écoulé du 1er au 7,
 // l'année qui s'achève tout décembre. Plus récente d'abord : en décembre,
 // l'annuelle passe devant.
-function wrappedPeriodes(t){
+// BUILD 1921 : `u` (facultatif) ajoute la période « bloc » — voir wrappedBloc.
+function wrappedPeriodes(t,u){
   const d=new Date(typeof t==='number'?t:Date.now());
   const out=[];
+  if(u){ let b=null; try{ b=wrappedBloc(u,d.getTime()); }catch(e){ b=null; } if(b) out.push(b); }
   if(d.getMonth()===11){
     const a=d.getFullYear();
     out.push({type:'annee',cle:'a-'+a,debut:new Date(a,0,1).getTime(),fin:new Date(a+1,0,1).getTime(),
@@ -92058,6 +92073,42 @@ function wrappedPeriodes(t){
       carte:'Ton mois de '+mois+' est prêt',lib:mois});
   }
   return out;
+}
+// ══ BUILD 1921 — LE WRAPPED D'UN BLOC ═════════════════════════════════════
+// PURE. Le bloc d'entraînement qui vient de se terminer, offert pendant les
+// 10 jours qui suivent sa fin prévue — s'il compte au moins 4 séances et n'a
+// pas été INTERROMPU (aucun trou de plus de 14 jours sans séance entre son
+// début et sa dernière séance). Sinon null.
+const WR_BLOC_JOURS=10, WR_BLOC_SEANCES_MIN=4, WR_BLOC_TROU_J=14;
+function wrappedBloc(u,t){
+  let p=null; try{ p=programmeDe(u); }catch(e){ p=null; }
+  if(!p) return null;
+  const debut=p.debut, fin=debut+p.semaines*7*864e5;
+  if(!(t>=fin&&t<fin+WR_BLOC_JOURS*864e5)) return null;
+  const ts=s=>{ const v=s&&s.date; return /^\d{4}-\d{2}-\d{2}$/.test(String(v))?dateLocaleDeCle(v).getTime():(Number(v)||new Date(v).getTime()||0); };
+  const dates=((u&&u.sessions)||[]).filter(s=>s&&s.complete!==false).map(ts).filter(x=>x>=debut&&x<fin).sort((a,b)=>a-b);
+  if(dates.length<WR_BLOC_SEANCES_MIN) return null;
+  let prec=debut;
+  for(const x of dates){ if(x-prec>WR_BLOC_TROU_J*864e5) return null; prec=x; }
+  const n=p.semaines;
+  return {type:'bloc',cle:'b-'+localISODate(new Date(debut)),debut,fin,semaines:n,
+    titre:'TON BLOC DE '+n+' SEMAINES',carte:'Ton bloc de '+n+' semaines est bouclé',lib:'bloc de '+n+' semaines',
+    prevues:(()=>{ let q=0; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=0; } return Math.max(0,q)*n; })()};
+}
+// PURE. Les trois exercices qui ont le plus gagné (charge max) entre la
+// première et la dernière séance de la période où ils apparaissent.
+function wrappedTop3(u,debut,fin){
+  const ts=s=>{ const v=s&&s.date; return /^\d{4}-\d{2}-\d{2}$/.test(String(v))?dateLocaleDeCle(v).getTime():(Number(v)||new Date(v).getTime()||0); };
+  const par={};
+  ((u&&u.sessions)||[]).filter(s=>s&&s.complete!==false&&ts(s)>=debut&&ts(s)<fin).sort((a,b)=>ts(a)-ts(b)).forEach(s=>{
+    Object.entries(s.data||{}).forEach(([nm,d])=>{
+      let m=0; ((d&&d.sets)||[]).forEach(x=>{ if(x&&(x.done||x.horsCalcul)){ const kg=parseFloat(String(x.weight==null?'':x.weight).replace(',','.'))||0; if(kg>m) m=kg; } });
+      if(!(m>0)) return;
+      if(!par[nm]) par[nm]={nom:nm,de:m,a:m}; else par[nm].a=m;
+    });
+  });
+  return Object.values(par).map(x=>Object.assign(x,{gain:x.a-x.de})).filter(x=>x.gain>0)
+    .sort((a,b)=>b.gain-a.gain).slice(0,3);
 }
 // PURE. « 12,4 » t ou « 850 » kg : l'unité qui se lit.
 function _wrTonnage(kg){
@@ -92088,7 +92139,11 @@ function wrappedSlides(w,per){
        nb?(nb+' badge'+(nb>1?'s':'')+' débloqué'+(nb>1?'s':'')):'',
        // L'édition du mois, bouclée (saisons_resultats) : « Édition Mars en fonte bouclée ».
        (w.editions&&w.editions.length)?('Édition '+w.editions[0]+' bouclée'+(w.editions.length>1?' (+'+(w.editions.length-1)+')':'')):'']},
-    {k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
+    // BUILD 1921 : sur un bloc, l'assiduité et le podium remplacent les habitudes.
+    (per&&per.type==='bloc'&&per.prevues>0)
+    ?{k:'assiduite',sur:'TON ASSIDUITÉ',grand:Math.min(100,Math.round(100*w.seances/per.prevues)),dec:0,unite:'% DES SÉANCES PRÉVUES',
+      lignes:[w.seances+' séance'+(w.seances>1?'s':'')+' sur '+per.prevues].concat(((w.top3)||[]).map((x,k)=>(k+1)+'. '+x.nom+' : +'+_recKg(x.gain)+' kg'))}
+    :{k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
      lignes:[w.jourPrefere?('Ton jour : le '+w.jourPrefere.lib):'',
        w.heureMoyenne?('Ton heure : '+w.heureMoyenne.lib):'']},
     {k:'profil',sur:'TON PROFIL',profil:w.profil,equivalent:eq,
@@ -92189,10 +92244,13 @@ const WR_DUREE=6500;
 let _wr=null;                 // {w, per, i, minuteur, t0}
 function ouvrirWrapped(cle){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
-  const per=wrappedPeriodes(Date.now()).find(p=>!cle||p.cle===cle)
+  const per=wrappedPeriodes(Date.now(),u).find(p=>!cle||p.cle===cle)
     ||(cle&&_wrPeriodeDeCle(cle));
   if(!u||!per) return false;
   const w=calculerWrapped(u,per.debut,per.fin);
+  if(per.type==='bloc'){ try{ w.top3=wrappedTop3(u,per.debut,per.fin); }catch(e){ w.top3=[]; } }
+  // BUILD 1921 : le coach lit QUAND l'athlète a vu son récapitulatif.
+  try{ if(w.seances){ u.wrappedVus=Object.assign({},u.wrappedVus||{},{[per.cle]:Date.now()}); saveUser(); } }catch(e){ rcErreurMuette('wrappedVus',e); }
   if(!w.seances){ toast('Aucune séance sur cette période.','var(--orange)'); return false; }
   const z=document.getElementById('s-wrapped'); if(!z) return false;
   _wrFermer(true);
@@ -92211,6 +92269,7 @@ function ouvrirWrapped(cle){
 function _wrPeriodeDeCle(cle){
   let m=/^m-(\d{4})-(\d{2})$/.exec(cle||'');
   if(m) return wrappedPeriodes(new Date(+m[1],+m[2],1,12).getTime()).find(p=>p.cle===cle)||null;
+  if(/^b-\d{4}-\d{2}-\d{2}$/.test(cle||'')){ try{ const u=currentUser, b=wrappedBloc(u,(programmeDe(u)||{}).debut+((programmeDe(u)||{}).semaines||0)*7*864e5); return (b&&b.cle===cle)?b:null; }catch(e){ return null; } }
   m=/^a-(\d{4})$/.exec(cle||'');
   if(m) return wrappedPeriodes(new Date(+m[1],11,15,12).getTime()).find(p=>p.cle===cle)||null;
   return null;
@@ -92384,7 +92443,7 @@ function _rendreCarteWrapped(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   let html='';
   try{
-    for(const p of wrappedPeriodes(Date.now())){
+    for(const p of wrappedPeriodes(Date.now(),u)){
       const w=calculerWrapped(u||{},p.debut,p.fin);
       if(!w.seances) continue;
       if(accCarteMasquee('wrapped-'+p.cle)) continue;
