@@ -15,12 +15,14 @@ body{background:#000;font-family:'Montserrat',sans-serif;color:var(--blanc)}
 .s{width:1920px;height:1080px;position:relative;overflow:hidden;background:var(--noir);padding:88px 104px;page-break-after:always;break-after:page}
 .s:last-child{page-break-after:auto}
 .glow{position:absolute;border-radius:50%;filter:blur(140px);background:var(--rouge);opacity:.22;pointer-events:none}
-.kick{font-family:'Montserrat';font-weight:800;font-size:22px;letter-spacing:.32em;color:var(--rouge);text-transform:uppercase;margin-bottom:18px}
+.kick{font-family:'Montserrat';font-weight:800;font-size:22px;letter-spacing:.32em;color:var(--rouge);text-transform:uppercase;margin-bottom:26px;position:relative;padding-left:34px}
+.kick:before{content:'';position:absolute;left:0;top:4px;width:16px;height:16px;background:var(--rouge);border-radius:3px}
 h1{font-family:'Bebas Neue';font-weight:400;font-size:116px;line-height:.92;letter-spacing:.01em;text-transform:uppercase}
 h1 em,h2 em,.big em{font-style:normal;color:var(--rouge)}
 h2{font-family:'Bebas Neue';font-weight:400;font-size:64px;line-height:1;text-transform:uppercase}
 h3{font-family:'Montserrat';font-weight:800;font-size:28px;line-height:1.2}
-p,li{font-size:26px;line-height:1.45;color:#E6E6EA}
+p,li{font-size:26px;line-height:1.45;color:#E6E6EA;word-spacing:.09em}
+.lead,.muted{word-spacing:.09em}
 .muted{color:var(--gris)}
 .lead{font-size:32px;line-height:1.4;color:#D4D4D8;max-width:1250px;margin-top:26px}
 .card{background:var(--carte);border:1.5px solid var(--bord);border-radius:22px;padding:34px}
@@ -177,8 +179,8 @@ ul.clean li:before{content:'';position:absolute;left:0;top:14px;width:16px;heigh
       <rect x="0" y="260" width="420" height="100" rx="16" fill="#7E1414"/>
       <rect x="0" y="390" width="230" height="100" rx="16" fill="#B01818"/>
       <rect x="0" y="520" width="172" height="100" rx="16" fill="#E02020"/>
-      <g font-family="Bebas Neue" font-size="64" fill="#fff">
-        <text x="30" y="72">1 MILLION</text><text x="30" y="202">20 000</text><text x="30" y="332">2 000</text><text x="30" y="462">400</text><text x="30" y="592">300</text>
+      <g font-family="Bebas Neue" font-size="64" fill="#fff" text-anchor="end">
+        <text x="1076" y="72">1 MILLION</text><text x="676" y="202">20 000</text><text x="396" y="332">2 000</text><text x="206" y="462">400</text><text x="150" y="592">300</text>
       </g>
       <g font-weight="800" font-size="28" fill="#fff">
         <text x="1140" y="48">vues Instagram</text><text x="740" y="178">visiteurs sur la page</text><text x="460" y="308">essais gratuits</text><text x="270" y="438">nouveaux payants</text><text x="212" y="568">encore là après 3 mois</text>
