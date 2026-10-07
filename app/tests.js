@@ -74466,6 +74466,40 @@ async function testExercices(){
       let l; try{ l=lundiLigne(u,{},ctx); }finally{ window.lignesSansContact=_lsc; }
       return l.cat==='jalon'&&l.signal==='100 jours ensemble'?true:_echec(JSON.stringify(l));});
 
+    // ══ BUILD 1923 — LES RECORDS, RANGÉS PAR MUSCLE ════════════════════════════
+    ok('1923 — muscRecords : meilleure charge par exercice, datée de sa première atteinte, rangée par muscle principal',()=>{
+      const J=864e5, t=Date.now();
+      const S=(j,ex)=>({date:t-j*J,complete:true,data:Object.fromEntries(Object.entries(ex).map(([n,kg])=>[n,{sets:[{done:true,weight:String(kg),reps:'5'}]}]))});
+      const u={sessions:[S(90,{'Squat':80,'Développé couché':60}),S(60,{'Squat':100,'Développé couché':70}),S(10,{'Squat':100,'Développé couché':75}),S(5,{'Squat':95})]};
+      const l=muscRecords(u,t);
+      if(!l.length) return _echec('aucun groupe');
+      const sq=l.find(m=>m.exos.some(x=>x.nom==='Squat'));
+      const dc=l.find(m=>m.exos.some(x=>x.nom==='Développé couché'));
+      if(!sq||!dc) return _echec('groupes : '+l.map(m=>m.cle+':'+m.exos.map(x=>x.nom).join('+')).join(' | '));
+      const s=sq.exos.find(x=>x.nom==='Squat');
+      if(s.kg!==100||Math.round((t-s.date)/J)!==60) return _echec('squat : '+JSON.stringify(s));
+      if(sq.recents!==0&&!sq.exos.some(x=>x.nom!=='Squat')) return _echec('squat compté récent');
+      const d=dc.exos.find(x=>x.nom==='Développé couché');
+      if(d.kg!==75||dc.recents<1) return _echec('développé : '+JSON.stringify(d)+' récents '+dc.recents);
+      if(l[0].recents<l[l.length-1].recents) return _echec('ordre');
+      return muscRecords({sessions:[]},t).length===0?true:_echec('vide');});
+    ok('1923 — sélecteur « Records » : liste des groupes, toucher un groupe déplie ses exercices',()=>{
+      let z=document.getElementById('prog-muscles'), cree=false;
+      if(!z){ z=document.createElement('div'); z.id='prog-muscles'; document.body.appendChild(z); cree=true; }
+      const cu=currentUser, av=_muscEvoPeriode, sv=z.innerHTML;
+      try{
+        const t=Date.now();
+        currentUser={sessions:[{date:t-3*864e5,complete:true,data:{'Squat':{sets:[{done:true,weight:'100',reps:'5'}]}}}]};
+        muscEvoPeriode('records');
+        const b=[...z.querySelectorAll('.musc-bascule button')].map(x=>x.textContent);
+        if(b.join('|')!=='Semaine|4 semaines|Records') return _echec('bascule : '+b.join('|'));
+        const g=z.querySelector('.musc-rec-g'); if(!g) return _echec('aucun groupe rendu');
+        if(z.querySelector('.musc-rec-l')) return _echec('déplié d’office');
+        g.click();
+        const li=z.querySelector('.musc-rec-l li');
+        return li&&/Squat/.test(li.textContent)&&/100 kg × 5/.test(li.textContent)?true:_echec('dépli : '+(li&&li.textContent));
+      }finally{ currentUser=cu; _muscEvoPeriode=av; _muscRecOuvert=null; z.innerHTML=sv; if(cree) z.remove(); }});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

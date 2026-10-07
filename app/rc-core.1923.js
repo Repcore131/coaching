@@ -92970,7 +92970,57 @@ function telechargerCarteMuscles(id,btn){ return _muscSortir(id,btn,false); }
 // Évolution : la semaine affichée par l'onglet Volume, ou les quatre
 // semaines qui finissent avec elle (« mois »).
 let _muscEvoPeriode='semaine';
-function muscEvoPeriode(p){ _muscEvoPeriode=(p==='mois')?'mois':'semaine'; rendreMusclesEvolution(); }
+// BUILD 1923 : un troisième choix, « Records » — muscRecords.
+function muscEvoPeriode(p){ _muscEvoPeriode=(p==='mois'||p==='records')?p:'semaine'; _muscRecOuvert=null; rendreMusclesEvolution(); }
+// ══ BUILD 1923 — LES RECORDS, RANGÉS PAR MUSCLE ════════════════════════════
+// PURE. Pour chaque muscle PRINCIPAL travaillé : les exercices et leur
+// meilleure charge, datée du jour où elle a été atteinte pour la première
+// fois. `recents` compte ceux battus dans les 28 jours avant `maintenant`.
+// Trié : le plus de records récents, puis le plus d'exercices.
+// [{cle, lib, recents, exos:[{nom,kg,reps,date}]}]
+function muscRecords(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const best={};
+  ((u&&u.sessions)||[]).filter(s=>s&&s.complete!==false&&Number(s.date)>0).slice().sort((a,b)=>a.date-b.date).forEach(s=>{
+    for(const e of _wrExos(s)){
+      for(const st of e.sets){
+        if(!st||!(st.done||st.horsCalcul)) continue;
+        const kg=parseFloat(String(st.weight==null?'':st.weight).replace(',','.'))||0;
+        if(!(kg>0)) continue;
+        const r=parseInt(st.repsDone!=null?st.repsDone:st.reps,10)||0;
+        const b=best[e.cle];
+        if(!b||kg>b.kg) best[e.cle]={nom:e.nom,kg,reps:r,date:Number(s.date)};
+      }
+    }
+  });
+  const par={};
+  Object.values(best).forEach(x=>{
+    let cls=null; try{ cls=resoudreMusclesLecture(x.nom,null,u); }catch(e){ cls=null; }
+    if(!cls||cls===VOL_CARDIO) return;
+    for(const m of (cls.p||[])){
+      if(!par[m]) par[m]={cle:m,lib:(MUSCLES[m]&&MUSCLES[m].lib)||m,recents:0,exos:[]};
+      par[m].exos.push(x);
+      if(t-x.date<=28*864e5&&x.date<=t) par[m].recents++;
+    }
+  });
+  return Object.values(par).map(m=>Object.assign(m,{exos:m.exos.sort((a,b)=>b.kg-a.kg)}))
+    .sort((a,b)=>(b.recents-a.recents)||(b.exos.length-a.exos.length)||String(a.lib).localeCompare(String(b.lib)));
+}
+let _muscRecOuvert=null;
+function muscRecToucher(cle){ _muscRecOuvert=_muscRecOuvert===cle?null:cle; rendreMusclesEvolution(); }
+function _htmlMuscRecords(u){
+  const l=muscRecords(u,Date.now());
+  if(!l.length) return '<p class="musc-rec-vide">Tes records apparaîtront ici après tes premières séances chargées.</p>';
+  const nb=v=>String(v).replace('.',',');
+  return '<ul class="musc-rec">'+l.map(m=>{
+    const ouvert=_muscRecOuvert===m.cle;
+    return '<li><button type="button" class="musc-rec-g" aria-expanded="'+ouvert+'" onclick="muscRecToucher('+_attrArg(m.cle)+')">'
+      +'<span>'+escapeHtml(m.lib)+'</span><span class="musc-rec-n">'+m.exos.length+' record'+(m.exos.length>1?'s':'')
+      +(m.recents?' · '+m.recents+' récent'+(m.recents>1?'s':''):'')+'</span></button>'
+      +(ouvert?'<ul class="musc-rec-l">'+m.exos.map(x=>'<li><span>'+escapeHtml(x.nom)+'</span><b>'+escapeHtml(nb(x.kg))+' kg'
+        +(x.reps?' × '+x.reps:'')+'</b></li>').join('')+'</ul>':'')+'</li>';
+  }).join('')+'</ul>';
+}
 function rendreMusclesEvolution(){
   const z=document.getElementById('prog-muscles'); if(!z) return false;
   const u=currentUser;
@@ -92981,8 +93031,9 @@ function rendreMusclesEvolution(){
   const debut=mois?fin-28*864e5:lundi.getTime();
   const ses=(u.sessions||[]).filter(s=>s&&s.date>=debut&&s.date<fin);
   const bascule='<div class="musc-bascule" role="group" aria-label="Période">'
-    +['semaine','mois'].map(k=>'<button type="button" aria-pressed="'+(_muscEvoPeriode===k)+'" onclick="muscEvoPeriode(\''+k+'\')">'
-      +(k==='semaine'?'Semaine':'4 semaines')+'</button>').join('')+'</div>';
+    +['semaine','mois','records'].map(k=>'<button type="button" aria-pressed="'+(_muscEvoPeriode===k)+'" onclick="muscEvoPeriode(\''+k+'\')">'
+      +(k==='semaine'?'Semaine':k==='mois'?'4 semaines':'Records')+'</button>').join('')+'</div>';
+  if(_muscEvoPeriode==='records'){ z.innerHTML='<div class="musc-rec-carte">'+bascule+_htmlMuscRecords(u)+'</div>'; return true; }
   const d=muscDonnees(ses,{user:u,semaines:mois?4:1,periode:mois?'4 semaines':'la semaine'});
   z.innerHTML=htmlCarteMuscles('ev',d,{genre:woGenreAvatar(u),bascule});
   monterCarteMuscles('ev');

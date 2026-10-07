@@ -13703,3 +13703,13 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .ccd-wr-vu{color:var(--sub)}
 /* BUILD 1922 — le jalon de la relation, sur l'écran du lundi. */
 .ld-jalon{border-left-color:var(--green)}
+/* BUILD 1923 — les records rangés par muscle (Évolution > Volume, « Records »). */
+.musc-rec-carte .musc-bascule{margin-bottom:12px}
+.musc-rec,.musc-rec-l{list-style:none;margin:0;padding:0}
+.musc-rec>li{border-top:1px solid var(--border)}
+.musc-rec-g{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;padding:8px 0;background:none;border:0;color:var(--text);font:inherit;font-size:var(--fs-sm);font-weight:700;text-align:left;cursor:pointer}
+.musc-rec-n{font-size:var(--fs-xs);color:var(--sub);font-weight:600;white-space:nowrap}
+.musc-rec-l{padding:0 0 10px}
+.musc-rec-l li{display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-xs);padding:4px 0;color:var(--sub)}
+.musc-rec-l b{color:var(--text-strong);white-space:nowrap}
+.musc-rec-vide{font-size:var(--fs-sm);color:var(--sub)}
