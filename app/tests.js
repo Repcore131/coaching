@@ -66092,6 +66092,55 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1864 : LES NOMBRES TAPÉS DANS LE BILAN ══
+    ok('lireDecimal : « 62,0 » → 62 ; « 62.5 » → 62,5 ; « 6a » → null ; bornes et pas',()=>{
+      const r=[lireDecimal('62,0'),lireDecimal('62.5'),lireDecimal('62'),lireDecimal('6a'),lireDecimal(''),lireDecimal('-3'),lireDecimal('62,5',{max:50}),lireDecimal('82,6',{pas:0.25})];
+      if(JSON.stringify(r)!=='[62,62.5,62,null,null,null,null,82.5]') return _echec(JSON.stringify(r));
+      return lireCharge('82,5')===82.5&&lireCharge('501')===null&&lireCharge('600',1000)===600?true:_echec('lireCharge a changé');});
+    ok('Le bilan n’a plus de type="number" (BIL_STEPS[0], DEB_STEPS[0], bQ, schéma)',()=>{
+      const sv=bilData;
+      try{
+        bilData={};
+        const h=BIL_STEPS[0]()+DEB_STEPS[0]()+bQ('bil-weight')+bBodySchema('bil');
+        if(/type="number"/.test(h)) return _echec('type="number" encore présent');
+        return /inputmode="decimal"/.test(bQ('bil-weight'))?true:_echec('inputmode');
+      } finally { bilData=sv; }});
+    ok('Saisie : « 62,0 » est rangé « 62 » ; 620 kg et 850 cm sont signalés sans toast',()=>{
+      const sv=bilData, t=window.toast; let toasts=0;
+      try{
+        window.toast=()=>{ toasts++; }; bilData={};
+        bMesureSaisie('bil-weight','62,0');
+        if(bilData['bil-weight']!=='62') return _echec('rangé : '+bilData['bil-weight']);
+        if(aideMesureBilan('bil-weight','620')!=='620 kg ? Vérifie la virgule.') return _echec(aideMesureBilan('bil-weight','620'));
+        if(!/En centimètres, ce serait 85/.test(aideMesureBilan('bil-waist','850'))) return _echec(aideMesureBilan('bil-waist','850'));
+        if(!/ton poids/.test(aideMesureBilan('deb-height','72'))) return _echec(aideMesureBilan('deb-height','72'));
+        if(aideMesureBilan('bil-waist','85')!=='') return _echec('85 cm signalé');
+        bMesureSaisie('bil-weight','620');
+        return toasts===0?true:_echec('toast à la frappe');
+      } finally { bilData=sv; window.toast=t; }});
+    okA('bilNext : 620 kg contre une pesée à 63,5 → une question ; « Corriger » n’enregistre rien',async()=>{
+      const sU=currentUser, sv={s:window.saveUser,t:window.toast,c:window.rcConfirm,c3:window.rcConfirm3,r:window.renderBilStep};
+      const svType=bilType, svData=bilData, svStep=bilStep;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window.renderBilStep=()=>{};
+        const t=Date.now();
+        currentUser=_r32Base({coachId:'c1',consent:{health:true,policyVersion:POLICY_VERSION},weightLog:[{date:localISODate(new Date(t-864e5)),kg:63.5}],
+          bilans:[_r32Bilan(14,{'bil-weight':'63.0'})]});
+        bilType='coaching'; _bilReprises=null; _bilEdition=null;
+        bilData={'bil-weight':'620','bil-photo-face':'a','bil-photo-back':'b','bil-photo-side':'c'};
+        bilStep=_etapesUtiles(BIL_STEPS).length-1;
+        let q=[]; window.rcConfirm=async(titre,texte)=>{ q.push(texte); return false; };
+        window.rcConfirm3=async()=>'milieu';
+        await bilNext();
+        if(q.length!==1||!/620 kg \(dernière : 63,5\)/.test(q[0])) return _echec('question : '+JSON.stringify(q));
+        if(currentUser.bilans.length!==1) return _echec('un bilan a été ajouté');
+        const s=valeursSuspectesBilan('coaching',{'bil-weight':'64','bil-waist':'120'},Object.assign({},currentUser,{bilans:[{type:'coaching',date:t-5*864e5,'bil-weight':'63','bil-waist':'84'}]}));
+        return s.length===1&&s[0].cle==='bil-waist'?true:_echec(JSON.stringify(s));
+      } finally {
+        window.saveUser=sv.s; window.toast=sv.t; window.rcConfirm=sv.c; window.rcConfirm3=sv.c3; window.renderBilStep=sv.r;
+        bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
+      }});
+
     // ══ BUILD 1863 : UN BILAN CORRIGÉ APRÈS LA RÉPONSE DU COACH ══
     ok('Correction après réponse : photos ajoutées → hasNewBilan vrai ; lue → faux ; rien changé → aucune trace',()=>{
       const t=Date.now();

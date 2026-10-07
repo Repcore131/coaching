@@ -969,14 +969,23 @@ function _progTempoSaisie(i,el){
 // signe, deux separateurs, vide) rend null. Arrondi au quart de kilo — le
 // plus petit disque qui existe en salle —, borne a 0..max (500 par defaut).
 const CHARGE_SAISIE_MAX=500;
-function lireCharge(brut,max){
+// BUILD 1864 — LA MÊME LECTURE POUR TOUT NOMBRE TAPÉ. PURE : « 62,0 »,
+// « 62.0 » et « 62 » valent 62 ; le reste (lettres, signe, deux séparateurs,
+// vide) rend null. opts : {min, max, pas} — hors bornes : null ; `pas` arrondit.
+function lireDecimal(brut,opts){
+  const o=opts||{};
   const t=String(brut==null?'':brut).trim();
   if(!/^\d+(?:[.,]\d*)?$/.test(t)) return null;
   const x=parseFloat(t.replace(',','.'));
   if(!isFinite(x)) return null;
-  const v=Math.round(x*4)/4;
+  const v=(o.pas>0)?Math.round(x/o.pas)*o.pas:x;
+  if(typeof o.min==='number'&&v<o.min) return null;
+  if(typeof o.max==='number'&&v>o.max) return null;
+  return Math.round(v*1e6)/1e6;
+}
+function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
-  return (v<0||v>m)?null:v;
+  return lireDecimal(brut,{min:0,max:m,pas:0.25});
 }
 // LA PRESSE, LE HACK, LA BARRE GUIDEE (06/10/2026) : 600 kg a la presse a
 // cuisses existent, et le plafond de 500 les refusait. Ces exercices montent

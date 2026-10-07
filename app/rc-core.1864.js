@@ -57131,14 +57131,23 @@ function _progTempoSaisie(i,el){
 // signe, deux separateurs, vide) rend null. Arrondi au quart de kilo — le
 // plus petit disque qui existe en salle —, borne a 0..max (500 par defaut).
 const CHARGE_SAISIE_MAX=500;
-function lireCharge(brut,max){
+// BUILD 1864 — LA MÊME LECTURE POUR TOUT NOMBRE TAPÉ. PURE : « 62,0 »,
+// « 62.0 » et « 62 » valent 62 ; le reste (lettres, signe, deux séparateurs,
+// vide) rend null. opts : {min, max, pas} — hors bornes : null ; `pas` arrondit.
+function lireDecimal(brut,opts){
+  const o=opts||{};
   const t=String(brut==null?'':brut).trim();
   if(!/^\d+(?:[.,]\d*)?$/.test(t)) return null;
   const x=parseFloat(t.replace(',','.'));
   if(!isFinite(x)) return null;
-  const v=Math.round(x*4)/4;
+  const v=(o.pas>0)?Math.round(x/o.pas)*o.pas:x;
+  if(typeof o.min==='number'&&v<o.min) return null;
+  if(typeof o.max==='number'&&v>o.max) return null;
+  return Math.round(v*1e6)/1e6;
+}
+function lireCharge(brut,max){
   const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
-  return (v<0||v>m)?null:v;
+  return lireDecimal(brut,{min:0,max:m,pas:0.25});
 }
 // LA PRESSE, LE HACK, LA BARRE GUIDEE (06/10/2026) : 600 kg a la presse a
 // cuisses existent, et le plafond de 500 les refusait. Ces exercices montent
@@ -80901,9 +80910,50 @@ function mensurationsReprises(u){
 }
 // Toucher une case la rend à son auteur : le pointillé tombe, sinon il
 // désignerait une saisie fraîche comme une valeur reprise.
+// BUILD 1864 : LES BORNES D'UNE MESURE DU BILAN. Poids PESEE_MIN..MAX, taille
+// 100..250, longueurs selon MORPHO_MESURES, mensurations 10..250 cm.
+function bornesMesureBilan(id){
+  const k=String(id||'');
+  if(/-weight$/.test(k)) return {min:PESEE_MIN,max:PESEE_MAX,unite:'kg'};
+  if(/-height$/.test(k)) return {min:100,max:250,unite:'cm'};
+  try{ const m=MORPHO_MESURES.find(x=>x.cle===k); if(m) return {min:m.min||10,max:m.max||250,unite:'cm'}; }catch(e){}
+  return {min:10,max:250,unite:'cm'};
+}
+// PURE. Le mot d'aide d'une saisie hors bornes, ou ''.
+function aideMesureBilan(id,brut){
+  const v=lireDecimal(brut);
+  if(v==null) return String(brut||'').trim()?'« '+String(brut).trim()+' » ? Un nombre, avec une virgule si besoin.':'';
+  const b=bornesMesureBilan(id);
+  if(v>=b.min&&v<=b.max) return '';
+  const vt=String(v).replace('.',',');
+  if(b.unite==='kg') return vt+' kg ? Vérifie la virgule.';
+  if(/-height$/.test(id)&&v>=PESEE_MIN&&v<100) return vt+' cm ? C’est peut-être ton poids : ta taille va de 100 à 250 cm.';
+  if(v>b.max&&v/10>=b.min&&v/10<=b.max) return vt+' cm ? En centimètres, ce serait '+String(v/10).replace('.',',')+'.';
+  return vt+' '+b.unite+' ? Vérifie la virgule.';
+}
+function _bilMontrerAide(id,msg){
+  try{
+    const bx=document.getElementById('bx-'+id), ch=document.getElementById(id);
+    const cadre=bx||ch;
+    if(cadre){ cadre.style.borderColor=msg?'var(--orange)':''; if(!bx&&ch) ch.style.borderColor=msg?'var(--orange)':''; }
+    let z=document.getElementById('bil-aide-mesures');
+    const zone=document.querySelector('#bil-content .pad');
+    if(!z&&zone){ z=document.createElement('div'); z.id='bil-aide-mesures'; z.setAttribute('role','status');
+      z.style.cssText='font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-top:8px'; zone.appendChild(z); }
+    if(!z) return;
+    const l=Object.assign({},z._aides||{});
+    if(msg) l[id]=msg; else delete l[id];
+    z._aides=l;
+    z.textContent=Object.values(l).join(' ');
+  }catch(e){}
+}
 function bMesureSaisie(id,v){
   const _avantVide=!String(bilData[id]||'').trim();
-  bilData[id]=v;
+  // La valeur est rangée NORMALISÉE (point décimal) : « 62,0 » devient « 62 ».
+  // Une saisie illisible est gardée telle quelle — l'aide le dit, rien ne se perd.
+  const _n=lireDecimal(v);
+  bilData[id]=_n!=null?String(_n):v;
+  _bilMontrerAide(id,aideMesureBilan(id,v));
   // LE POINT S'ALLUME quand la case passe de vide a renseignee. 200 ms : c'est
   // un geste repete douze fois, il doit etre presque subliminal et ne jamais
   // retarder la frappe suivante.
@@ -81187,6 +81237,50 @@ function modifierBilan(id,etape){
   }
   renderBilStep(); go('s-bilan');
   return true;
+}
+// ══ LES VALEURS SUSPECTES (BUILD 1864) ═══════════════════════════════════
+// PURE. [{cle, val, ref, texte}] : poids à plus de 10 % de la référence (poids
+// nutritionnel, sinon dernier bilan), mensuration à plus de 25 % de la même
+// mesure au dernier bilan qui la porte.
+function valeursSuspectesBilan(type,data,user){
+  const d=data||{}, out=[];
+  const fr=v=>String(Math.round(v*10)/10).replace('.',',');
+  const pre=type==='depart'?'deb-':'bil-';
+  const bils=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>b.date-a.date);
+  const avant=suf=>{ for(const b of bils){ const v=lireDecimal(b['bil-'+suf]!=null?b['bil-'+suf]:b['deb-'+suf]); if(v!=null) return v; } return null; };
+  for(const k of Object.keys(d)){
+    if(k.indexOf(pre)!==0||/-photo|-ctl$|-q$/.test(k)) continue;
+    const v=lireDecimal(d[k]);
+    if(v==null) continue;
+    const suf=k.slice(pre.length);
+    if(suf==='weight'){
+      let ref=null;
+      try{ const p=poidsNutritionnel(user); if(p&&p.kg>0) ref=p.kg; }catch(e){}
+      if(ref==null) ref=avant('weight');
+      if(ref>0&&Math.abs(v-ref)/ref>0.10) out.push({cle:k,val:v,ref,texte:fr(v)+' kg (dernière : '+fr(ref)+')'});
+      continue;
+    }
+    if(suf==='height') continue;
+    // Les longueurs ne bougent pas d'un bilan à l'autre : elles ont leur propre contrôle (bLgSaisie).
+    try{ if(MORPHO_MESURES.some(m=>m.cle===k)) continue; }catch(e){}
+    const ref=avant(suf);
+    if(ref>0&&Math.abs(v-ref)/ref>0.25) out.push({cle:k,val:v,ref,texte:fr(v)+' cm (dernière : '+fr(ref)+')'});
+  }
+  return out;
+}
+// « Corriger » : l'étape qui porte la case, et la case en surbrillance.
+function _bilAllerAuChamp(steps,cle){
+  for(let i=0;i<(steps||[]).length;i++){
+    let h=''; try{ h=String(steps[i]()||''); }catch(e){ h=''; }
+    if(h.indexOf('id="'+cle+'"')>=0){
+      bilStep=i; renderBilStep();
+      try{ const el=document.getElementById(cle); const bx=document.getElementById('bx-'+cle)||el;
+        if(bx) bx.style.borderColor='var(--orange)';
+        if(el){ el.focus(); if(el.scrollIntoView) el.scrollIntoView({block:'center'}); } }catch(e){}
+      return true;
+    }
+  }
+  return false;
 }
 // ══ LES PHOTOS DU BILAN QUI MANQUENT (BUILD 1861) ═════════════════════════
 // L'élève oublie ses photos, n'a pas le temps, ou voit une photo refusée à
@@ -81566,6 +81660,14 @@ async function bilNext(){
     // Sur le même jeu : un poids seulement REPRIS ne fera pas de point sur la
     // courbe, puisqu’il va être retiré du bilan enregistré. L’avertissement
     // doit donc bien tomber.
+    // BUILD 1864 : UN CHIFFRE DE TROP SE DEMANDE AVANT DE PARTIR. Poids à plus
+    // de 10 % de la référence, mensuration à plus de 25 % du dernier bilan.
+    const _susp=valeursSuspectesBilan(bilType,bilData,currentUser);
+    if(_susp.length){
+      const ok=await rcConfirm('Vérifie ces valeurs',
+        _susp.map(x=>x.texte).join('\n'),'C’est juste','Corriger');
+      if(!ok){ _bilAllerAuChamp(steps,_susp[0].cle); return; }
+    }
     // LES PHOTOS ET LE POIDS : UNE SEULE QUESTION (build 1861). Quand les deux
     // manquent, les deux messages tiennent dans le même texte.
     const _iPh=_bilIndexEtapePhotos(steps,bilType);
@@ -81641,7 +81743,7 @@ function pickBilChoice(groupId,val,multi){
 // regarde, et un athlète distrait y inscrirait le poids d'il y a quinze jours.
 // Aucune mensuration ne passe par bQ : seul le poids est concerné.
 function bQ(id){const _r=_bilEstReprise(id);
-  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:var(--bg);border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
+  return`<input type="text" inputmode="decimal" autocomplete="off" id="${id}" placeholder="-" value="${escapeHtml(String(bilData[id]||'').replace('.',','))}" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:var(--bg);border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 // ⚠ UNE DATE DE NAISSANCE, PAS UN AGE. « 26 » saisi une fois reste 26 pour
 // toujours : deux ans plus tard le metabolisme de base se calcule sur un age
@@ -82237,7 +82339,7 @@ function bBodySchema(prefix){
       return `<div style="position:absolute;${posX};top:${top}%;width:34%">
         <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:var(--surface-0);border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
           <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
-          <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
+          <input type="text" inputmode="decimal" autocomplete="off" id="${id}" value="${escapeHtml(String(bilData[id]||'').replace('.',','))}" placeholder="-"
             oninput="bMesureSaisie('${id}',this.value)"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
             style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:right;padding:4px 0;margin:0">
