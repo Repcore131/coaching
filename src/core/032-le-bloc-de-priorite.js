@@ -2249,6 +2249,7 @@ function ouvrirHistoriqueBilans(){
       <div class="hb-l-b">
         <button type="button" class="hb-b" onclick="closeModal();openBilanNotes('${escapeHtml(x.id)}')">Récap</button>
         <button type="button" class="hb-b hb-b-r" onclick="modifierBilan('${escapeHtml(x.id)}')">Modifier</button>
+        ${bilanSupprimable(x.b)?`<button type="button" class="hb-b" onclick="bilanSupprimerDemande('${escapeHtml(x.id)}')">Supprimer</button>`:''}
       </div></div>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
     <div class="hb" onclick="event.stopPropagation()" role="dialog" aria-label="Historique des bilans">
@@ -2259,6 +2260,44 @@ function ouvrirHistoriqueBilans(){
     </div></div>`;
   const old=document.getElementById('modal-overlay'); if(old) old.remove();
   document.body.insertAdjacentHTML('beforeend',html);
+}
+// BUILD 1865 : un bilan renvoyé par erreur se supprime — moins de 48 h, et
+// tant que le coach n'y a pas répondu. Pierre tombale, et 8 s pour annuler.
+const BIL_SUPPRESSION_H=48;
+function bilanSupprimable(b,maintenant){
+  return !!(b&&b.date&&(Number(maintenant)||Date.now())-Number(b.date)<=BIL_SUPPRESSION_H*3600e3&&!bilanRepondu(b));
+}
+let _bilanSupprime=null;
+function supprimerBilan(id){
+  const l=(currentUser&&currentUser.bilans)||[];
+  const i=l.findIndex(b=>_idBilan(b)===id);
+  if(i<0||!bilanSupprimable(l[i])) return false;
+  const b=l[i], cle=cleSuppressionBilan(b);
+  l.splice(i,1);
+  marquerSupprime(currentUser,'bilans',cle);
+  _bilanSupprime={b,index:i,cle};
+  saveUser();
+  return true;
+}
+function annulerSuppressionBilan(){
+  const x=_bilanSupprime;
+  if(!x) return false;
+  _bilanSupprime=null;
+  const l=currentUser.bilans||(currentUser.bilans=[]);
+  if(l.indexOf(x.b)<0) l.splice(Math.min(x.index,l.length),0,x.b);
+  try{ delete currentUser.supprimes.bilans[x.cle]; }catch(e){}
+  saveUser();
+  return true;
+}
+async function bilanSupprimerDemande(id){
+  const x=historiqueBilans(currentUser).find(h=>h.id===id);
+  if(!x) return false;
+  const ok=await rcConfirm('Supprimer '+x.nom+' ?','Envoyé le '+x.date+'. Ton coach ne le verra plus.','Supprimer');
+  if(!ok) return false;
+  if(!supprimerBilan(id)) return false;
+  try{ closeModal(); ouvrirHistoriqueBilans(); }catch(e){}
+  try{ _suppActionToast(x.nom+' supprimé','Annuler',()=>{ annulerSuppressionBilan(); try{ closeModal(); ouvrirHistoriqueBilans(); }catch(e){} },ANNULER_MS); }catch(e){}
+  return true;
 }
 // Rouvre le questionnaire sur un bilan déjà envoyé.
 // `etape` (facultatif) : 'photos' ouvre directement l'étape des photos —
@@ -2489,7 +2528,24 @@ function _etapesUtiles(steps){
                                // etape fautive qu une etape escamotee
   });
 }
+// BUILD 1865 : un bilan de suivi envoyé il y a moins de 5 jours — l'élève
+// croyait que le premier n'était pas parti. On propose de le corriger.
+const BIL_DOUBLON_JOURS=5;
+function bilanRecentDeType(user,type,maintenant){
+  const m=Number(maintenant)||Date.now();
+  const l=((user&&user.bilans)||[]).filter(b=>b&&b.type===type&&b.date&&(m-Number(b.date))<BIL_DOUBLON_JOURS*864e5);
+  return l.sort((a,b)=>b.date-a.date)[0]||null;
+}
 async function openBilan(type,forcerReprise){
+  if(type==='coaching'&&!forcerReprise&&!_bilEdition){
+    const r=bilanRecentDeType(currentUser,'coaching');
+    if(r){
+      const d=dateLocaleDeCle(r.date).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+      const ch=await rcConfirm3('Tu as envoyé un bilan le '+d,'','Le corriger','En faire un nouveau','Annuler');
+      if(ch===null) return false;
+      if(ch==='ok') return modifierBilan(_idBilan(r));
+    }
+  }
   const brut=localStorage.getItem(BIL_DRAFT_KEY);
   // LE BROUILLON BRUT, avant tout filtre : _bilLoadDraft rend null dès que le
   // type diffère, et c'est précisément le cas qu'on veut voir ici.

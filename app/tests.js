@@ -62451,7 +62451,10 @@ async function testExercices(){
       // NEUVIEME (01/10/2026) : l'OUVERTURE DU COFFRE de la mission du jour
       // (missionOuvrirCoffre), jamais un rendu : c'est le coffre qui fait
       // gagner SEPT SUR SEPT.
-      if(n!==9) return _echec(n+' occurrences de majBadges( au lieu de neuf');
+      // DIXIEME (build 1865) : apres la CORRECTION ou la SUPPRESSION d'une seance
+      // passee (_apresCorrectionSeances), demandee par Kevin : les badges suivent
+      // une charge corrigee, jamais un rendu.
+      if(n!==10) return _echec(n+' occurrences de majBadges( au lieu de dix');
       if(!/function missionOuvrirCoffre\(btn\)\{[\s\S]{0,200}?if\(!k\) return null;[\s\S]{0,600}?majBadges\(\)/.test(s)) return _echec('l’appel du coffre n’est plus gardé par son ouverture');
       if(!/function _nutGeste\(date\)\{[\s\S]{0,300}?setTimeout\(\(\)=>\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du journal n’est plus garde par l’ajout');
       if(!/if\(r\.fini\)\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du parcours n’est plus garde par sa fin');
@@ -66091,6 +66094,59 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1865 : CORRIGER OU SUPPRIMER CE QUI A ÉTÉ ENVOYÉ ══
+    const _csUser=()=>{
+      const t=Date.now();
+      return {id:'cs',email:'cs@t.fr',role:'athlete',exAlias:{},exMuscles:{},bilans:[],nutrition:{},
+        sessions:[{id:'s_1',date:t-2*864e5,name:'Jambes',sets:2,volume:1600,complete:true,
+          data:{'Squat':{sets:[{weight:'100',repsDone:'8',done:true},{weight:'100',repsDone:'8',done:true}]}}}]};
+    };
+    ok('Supprimer une séance puis fusionner avec un serveur qui l’a encore : elle ne revient pas ; « Annuler » la remet',()=>{
+      const sU=currentUser, sv=window.saveUser;
+      try{
+        window.saveUser=()=>true;
+        currentUser=_csUser();
+        const sess=currentUser.sessions[0];
+        const copieServeur=JSON.parse(JSON.stringify(currentUser));
+        if(!supprimerSeance(sess)) return _echec('suppression refusée');
+        // La fusion à trois voies, celle que _mergeUser emploie dès qu'une base
+        // existe : base = l'état du serveur avant la suppression.
+        const r=syncFusion(syncEmpreintes(copieServeur),JSON.parse(JSON.stringify(currentUser)),copieServeur);
+        if((r.sessions||[]).some(x=>x.id==='s_1')) return _echec('ressuscitée par la fusion');
+        if(!annulerSuppressionSeance()) return _echec('annulation refusée');
+        if(!currentUser.sessions.some(x=>x.id==='s_1')) return _echec('pas remise');
+        return !(currentUser.supprimes&&currentUser.supprimes.sessions&&currentUser.supprimes.sessions['s_1'])?true:_echec('pierre tombale restée');
+      } finally { currentUser=sU; window.saveUser=sv; }});
+    ok('Corriger une charge 100 → 10 : volume et records recalculés ; corrigeeLe posé',()=>{
+      const sU=currentUser;
+      try{
+        currentUser=_csUser();
+        const sess=currentUser.sessions[0];
+        const avant=sess.volume;
+        const ok1=appliquerCorrectionSeance(sess,{series:[{ex:'Squat',i:0,weight:'10'},{ex:'Squat',i:1,weight:'10'}]});
+        if(!ok1||!sess.corrigeeLe) return _echec('pas de correction');
+        if(!(sess.volume<avant)||sess.volume!==160) return _echec('volume '+sess.volume);
+        _apresCorrectionSeances();
+        const r=recordsExercice(currentUser,'Squat');
+        const max=JSON.stringify(r).match(/100/);
+        if(max) return _echec('le record garde 100 kg : '+JSON.stringify(r).slice(0,200));
+        if(appliquerCorrectionSeance(sess,{series:[{ex:'Squat',i:0,weight:'abc'}]})) return _echec('une saisie illisible a changé la séance');
+        return /· corrigée/.test(_buildSessionCard(sess,currentUser))?true:_echec('le coach ne voit pas « corrigée »');
+      } finally { currentUser=sU; }});
+    ok('Bilan : supprimable moins de 48 h sans réponse ; sinon non',()=>{
+      const t=Date.now();
+      if(!bilanSupprimable({date:t-3600e3},t)) return _echec('récent');
+      if(bilanSupprimable({date:t-50*3600e3},t)) return _echec('ancien');
+      return !bilanSupprimable({date:t-3600e3,reponseCoach:'ok'},t)?true:_echec('répondu');});
+    okA('openBilan avec un bilan de la veille : rcConfirm3 appelé ; « Annuler » n’ouvre rien',async()=>{
+      const sU=currentUser, c3=window.rcConfirm3;
+      try{
+        currentUser={id:'ob',email:'ob@t.fr',bilans:[{type:'coaching',date:Date.now()-864e5,'bil-weight':'80'}]};
+        let n=0; window.rcConfirm3=async()=>{ n++; return null; };
+        const r=await openBilan('coaching');
+        return n===1&&r===false?true:_echec('appels '+n+' / '+r);
+      } finally { currentUser=sU; window.rcConfirm3=c3; }});
 
     // ══ BUILD 1864 : LES NOMBRES TAPÉS DANS LE BILAN ══
     ok('lireDecimal : « 62,0 » → 62 ; « 62.5 » → 62,5 ; « 6a » → null ; bornes et pas',()=>{

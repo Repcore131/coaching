@@ -1652,9 +1652,139 @@ function ouvrirSeanceHistorique(cle){
   pose('sd-objectif',(()=>{ try{ return _htmlProchainObjectif(ctx); }catch(e){ return ''; } })());
   try{ _animerGrimpeur(document.getElementById('sd-objectif')); }catch(e){}
   pose('sd-ressenti',_htmlRessentiRelu(sc));
-  pose('sd-exercices',_htmlExercicesRelus(sc));
+  pose('sd-exercices',_htmlExercicesRelus(sc)+_htmlActionsSeanceRelue(sc));
   _rendrePartageSeanceRelue(sc);
   go('s-seance-detail');
+}
+// ══ CORRIGER OU SUPPRIMER UNE SÉANCE PASSÉE (BUILD 1865) ═════════════════
+// Mauvaise charge validée, mauvais exercice, séance enregistrée deux fois :
+// rien ne se corrigeait. Correction en place (14 derniers jours), suppression
+// avec pierre tombale et « Annuler » pendant 8 s.
+const SEANCE_CORRECTION_JOURS=14, ANNULER_MS=8000;
+function _seanceDuDossier(sc){
+  const l=(currentUser&&currentUser.sessions)||[];
+  return l.find(x=>x===sc)||l.find(x=>x&&sc&&((x.id&&x.id===sc.id)||(!x.id&&x.date===sc.date)))||null;
+}
+function _htmlActionsSeanceRelue(sc){
+  const recente=sc&&(Date.now()-Number(sc.date))<=SEANCE_CORRECTION_JOURS*864e5;
+  const lien=(lib,fn)=>'<button type="button" class="rb-lien" onclick="'+fn+'" style="background:none;border:0;padding:4px 6px;font:inherit;font-size:var(--fs-xs);color:var(--sub);text-decoration:underline;cursor:pointer">'+lib+'</button>';
+  return '<div class="sd-actions" style="display:flex;gap:12px;justify-content:center;margin-top:8px">'
+    +(recente?lien('Corriger','seanceCorrigerOuvrir()'):'')
+    +lien('Supprimer la séance','seanceSupprimerRelue()')+'</div>';
+}
+// Les noms d'exercices que l'athlète connaît : son programme et son historique.
+function _nomsExercicesConnus(u){
+  const s=new Set();
+  try{ ((u&&u.sessions_config)||[]).forEach(c=>((c&&c.exercises)||[]).forEach(e=>{ if(e&&e.name) s.add(e.name); })); }catch(e){}
+  try{ ((u&&u.sessions)||[]).forEach(x=>Object.keys((x&&x.data)||{}).forEach(n=>s.add(n))); }catch(e){}
+  return Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'));
+}
+function seanceCorrigerOuvrir(){
+  const sess=_seanceDuDossier(_seanceRelue);
+  const z=document.getElementById('sd-exercices');
+  if(!sess||!z) return false;
+  const noms=_nomsExercicesConnus(currentUser);
+  const champ=(v,attr)=>'<input type="text" inputmode="decimal" autocomplete="off" '+attr+' value="'+escapeHtml(String(v==null?'':v).replace('.',','))+'" style="width:64px;text-align:right;padding:4px 6px;margin:0">';
+  const blocs=Object.entries(sess.data||{}).map(([nm,d])=>{
+    const sets=(d&&d.sets)||[];
+    const lignes=sets.map((st,i)=>!st||!st.done?'':'<div style="display:flex;align-items:center;gap:6px;margin:4px 0">'
+      +'<span style="font-size:var(--fs-xs);color:var(--sub);min-width:52px">Série '+(i+1)+'</span>'
+      +champ(st.weight,'data-ex="'+escapeHtml(nm)+'" data-i="'+i+'" data-k="weight" aria-label="Charge"')+'<span style="font-size:var(--fs-xs)">kg ×</span>'
+      +champ(st.repsDone!=null&&st.repsDone!==''?st.repsDone:st.reps,'data-ex="'+escapeHtml(nm)+'" data-i="'+i+'" data-k="repsDone" aria-label="Répétitions"')+'</div>').join('');
+    if(!lignes) return '';
+    return '<div class="sd-cor-ex" style="margin:10px 0"><select data-renommer="'+escapeHtml(nm)+'" aria-label="Exercice" style="max-width:100%">'
+      +noms.map(n=>'<option'+(n===nm?' selected':'')+'>'+escapeHtml(n)+'</option>').join('')+'</select>'+lignes+'</div>';
+  }).join('');
+  z.innerHTML='<div class="rcf-rk"><div class="rcf-rk-t">Corriger la séance</div>'+blocs
+    +'<div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-sm btn-red" onclick="seanceCorrigerEnregistrer()">Enregistrer</button>'
+    +'<button type="button" class="btn btn-sm btn-outline" onclick="ouvrirSeanceHistorique('+_attrArg(String(_seanceRelue.id||_seanceRelue.date))+')">Annuler</button></div></div>';
+  return true;
+}
+// PURE (sur la séance passée). modifs : {series:[{ex,i,weight,repsDone}], renommer:{ancien:nouveau}}.
+// Les charges passent par lireCharge ; une valeur illisible ne change rien.
+// Rend true si quelque chose a changé ; recalcule sets et volume.
+function appliquerCorrectionSeance(sess,modifs,maintenant){
+  if(!sess||!sess.data) return false;
+  let change=false;
+  for(const m of ((modifs&&modifs.series)||[])){
+    const d=sess.data[m.ex]; const st=d&&d.sets&&d.sets[m.i];
+    if(!st||!st.done) continue;
+    if(m.weight!=null){ const w=lireCharge(m.weight,chargeMaxSaisie(m.ex)); if(w!=null&&String(w)!==String(st.weight)){ st.weight=String(w); change=true; } }
+    if(m.repsDone!=null){ const r=lireDecimal(m.repsDone,{min:0,max:200,pas:1}); if(r!=null&&String(r)!==String(st.repsDone)){ st.repsDone=String(r); change=true; } }
+  }
+  const ren=(modifs&&modifs.renommer)||{};
+  for(const anc of Object.keys(ren)){
+    const nv=ren[anc];
+    if(!nv||nv===anc||!sess.data[anc]) continue;
+    if(sess.data[nv]){ const a=sess.data[nv]; a.sets=(a.sets||[]).concat(sess.data[anc].sets||[]); }
+    else sess.data[nv]=sess.data[anc];
+    delete sess.data[anc]; change=true;
+  }
+  if(!change) return false;
+  let sets=0, vol=0;
+  for(const [nm,d] of Object.entries(sess.data)) for(const st of ((d&&d.sets)||[])){
+    if(!st||!st.done) continue;
+    sets++; try{ vol+=tonnageSerie(st,{name:nm,methode:d.methode}); }catch(e){}
+  }
+  sess.sets=sets; sess.volume=Math.round(vol);
+  sess.corrigeeLe=Number(maintenant)||Date.now();
+  return true;
+}
+function _apresCorrectionSeances(){
+  try{ _viderCachePlateau(); }catch(e){}
+  try{ _viderCacheSignaux(); }catch(e){}
+  try{ _viderCacheVolume(); }catch(e){}
+  try{ majBadges(); }catch(e){}
+}
+function seanceCorrigerEnregistrer(){
+  const sess=_seanceDuDossier(_seanceRelue);
+  if(!sess) return false;
+  const modifs={series:[],renommer:{}};
+  document.querySelectorAll('#sd-exercices input[data-ex]').forEach(i=>{
+    const m=modifs.series.find(x=>x.ex===i.dataset.ex&&x.i===Number(i.dataset.i))||(modifs.series.push({ex:i.dataset.ex,i:Number(i.dataset.i)}),modifs.series[modifs.series.length-1]);
+    m[i.dataset.k]=i.value;
+  });
+  document.querySelectorAll('#sd-exercices select[data-renommer]').forEach(s=>{ if(s.value!==s.dataset.renommer) modifs.renommer[s.dataset.renommer]=s.value; });
+  const ok=appliquerCorrectionSeance(sess,modifs);
+  if(ok){ _apresCorrectionSeances(); saveUser(); toast('Séance corrigée'); }
+  else toast('Aucun changement');
+  ouvrirSeanceHistorique(String(sess.id||sess.date));
+  return ok;
+}
+// Suppression : pierre tombale (la fusion ne la ressuscite pas), puis 8 s pour annuler.
+let _seanceSupprimee=null;
+function supprimerSeance(sess){
+  const l=(currentUser&&currentUser.sessions)||[];
+  const i=l.indexOf(sess);
+  if(i<0) return false;
+  const cle=cleSuppressionSeance(sess)||String(sess.date);
+  l.splice(i,1);
+  marquerSupprime(currentUser,'sessions',cle);
+  _seanceSupprimee={sess,index:i,cle,le:Date.now()};
+  _apresCorrectionSeances();
+  saveUser();
+  return true;
+}
+function annulerSuppressionSeance(){
+  const x=_seanceSupprimee;
+  if(!x) return false;
+  _seanceSupprimee=null;
+  const l=currentUser.sessions||(currentUser.sessions=[]);
+  if(l.indexOf(x.sess)<0) l.splice(Math.min(x.index,l.length),0,x.sess);
+  try{ delete currentUser.supprimes.sessions[x.cle]; }catch(e){}
+  _apresCorrectionSeances();
+  saveUser();
+  return true;
+}
+async function seanceSupprimerRelue(){
+  const sess=_seanceDuDossier(_seanceRelue);
+  if(!sess) return false;
+  const ok=await rcConfirm('Supprimer la séance ?',(sess.name||'Séance')+' du '+_dateHistorique(sess.date,Date.now())+' disparaîtra de ton historique et de tes calculs.','Supprimer');
+  if(!ok) return false;
+  supprimerSeance(sess);
+  try{ go('s-progress'); loadProgress(); }catch(e){}
+  try{ _suppActionToast('Séance supprimée','Annuler',()=>{ annulerSuppressionSeance(); try{ loadProgress(); }catch(e){} toast('Séance remise'); },ANNULER_MS); }catch(e){}
+  return true;
 }
 // PURE. Le ressenti TEL QU'IL A ETE DONNE. Des valeurs, pas des curseurs :
 // cet ecran ne redemande rien. Les libelles viennent de RCF_QUESTIONS, la
