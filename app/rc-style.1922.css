@@ -13701,3 +13701,5 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .perf-prev{font-size:var(--fs-2xs);color:var(--text-strong);font-weight:700;margin-top:4px}
 /* BUILD 1921 — « Récapitulatif du bloc vu par l'athlète le … » (fiche coach). */
 .ccd-wr-vu{color:var(--sub)}
+/* BUILD 1922 — le jalon de la relation, sur l'écran du lundi. */
+.ld-jalon{border-left-color:var(--green)}

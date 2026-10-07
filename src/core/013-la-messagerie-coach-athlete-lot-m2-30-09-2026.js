@@ -595,11 +595,11 @@ function relanceVue(at){
 // traiter » (vidéo, note, accès, programme à écrire…) donne 'autre' : un
 // athlète qui a une ligne n'est jamais « Rien à signaler ».
 const SIGNAL_CATS=Object.freeze(['drapeau','douleur','bilan','message','retard','fatigue','regression','plateau',
-  'volume','forme','absence','bloc','nostart','autre','victoire','rien']);
+  'volume','forme','absence','bloc','nostart','autre','victoire','jalon','rien']);
 const LUNDI_RANGS=SIGNAL_CATS;
 const LUNDI_CIBLE=Object.freeze({drapeau:'ccd-securite',douleur:'ccd-douleur',bilan:'bilan',message:'message',retard:null,
   fatigue:'ccd-volume',regression:'ccd-plateaux',plateau:'ccd-plateaux',volume:'ccd-volume',forme:'ccd-volume',
-  absence:'ccd-sessions-recap',bloc:'bloc',nostart:null,autre:null,victoire:'bravo',rien:null});
+  absence:'ccd-sessions-recap',bloc:'bloc',nostart:null,autre:null,victoire:'bravo',jalon:null,rien:null});
 const LUNDI_PAQUET=4;
 /**
  * PURE (lit le dossier, les signaux en cache et les reports du coach).
@@ -725,6 +725,11 @@ function lundiLigne(c,sg,o){
   if(sp.cat==='rien'){
     let v=null; try{ v=victoireSemaine(c,x.maintenant); }catch(e){ v=null; }
     if(v&&!v.envoye) sp={cat:'victoire',libelle:v.texte,depuis:null,cible:LUNDI_CIBLE.victoire};
+  }
+  // BUILD 1922 : un jalon de la relation (30, 100, 365 jours) se signale aussi.
+  if(sp.cat==='rien'){
+    let j=null; try{ j=jalonRelation(c,x.maintenant); }catch(e){ j=null; }
+    if(j) sp={cat:'jalon',libelle:(j.jours===365?'Un an':j.jours+' jours')+' ensemble',depuis:j.debut,cible:null};
   }
   return {id:c&&c.id,prenom,cle:(()=>{ try{ return _relCle(c); }catch(e){ return ''; } })(),
     cat:sp.cat,signal:sp.libelle,depuis:sp.depuis,cible:sp.cible};

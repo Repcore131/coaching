@@ -2218,6 +2218,8 @@ function calculerWrapped(u,debut,fin,maintenant){
 function wrappedPeriodes(t,u){
   const d=new Date(typeof t==='number'?t:Date.now());
   const out=[];
+  // BUILD 1922 : l'ordre est la priorité — jalon, puis bloc, puis année, puis mois.
+  if(u){ let j=null; try{ j=wrappedJalon(u,d.getTime()); }catch(e){ j=null; } if(j) out.push(j); }
   if(u){ let b=null; try{ b=wrappedBloc(u,d.getTime()); }catch(e){ b=null; } if(b) out.push(b); }
   if(d.getMonth()===11){
     const a=d.getFullYear();
@@ -2253,6 +2255,48 @@ function wrappedBloc(u,t){
   return {type:'bloc',cle:'b-'+localISODate(new Date(debut)),debut,fin,semaines:n,
     titre:'TON BLOC DE '+n+' SEMAINES',carte:'Ton bloc de '+n+' semaines est bouclé',lib:'bloc de '+n+' semaines',
     prevues:(()=>{ let q=0; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=0; } return Math.max(0,q)*n; })()};
+}
+// ══ BUILD 1922 — LES JALONS DE LA RELATION ═════════════════════════════════
+// PURE. 30, 100 ou 365 jours depuis le rattachement au coach (rattacheLe,
+// sinon coachSince, sinon createdAt), offerts du jour J au jour J+6, s'il y a
+// eu au moins 4 séances depuis. Le plus grand jalon atteint gagne. Sinon null.
+const JALONS_RELATION=Object.freeze([365,100,30]);
+function debutRelation(u){
+  return Number(u&&u.rattacheLe)||Number(u&&u.coachSince)||Number(u&&u.createdAt)||0;
+}
+function jalonRelation(u,maintenant){
+  if(!u||!u.coachId) return null;
+  const d0=debutRelation(u); if(!(d0>0)) return null;
+  const t=Number(maintenant)||Date.now();
+  const a=new Date(d0); a.setHours(0,0,0,0);
+  const b=new Date(t); b.setHours(0,0,0,0);
+  const jours=Math.round((b-a)/864e5);
+  const J=JALONS_RELATION.find(x=>jours>=x&&jours<=x+6);
+  if(!J) return null;
+  const ts=s=>{ const v=s&&s.date; return /^\d{4}-\d{2}-\d{2}$/.test(String(v))?dateLocaleDeCle(v).getTime():(Number(v)||new Date(v).getTime()||0); };
+  const n=((u.sessions)||[]).filter(s=>s&&s.complete!==false&&ts(s)>=d0).length;
+  if(n<4) return null;
+  return {jours:J,debut:d0,seances:n,cle:'j-'+J+'-'+localISODate(new Date(d0))};
+}
+function wrappedJalon(u,t){
+  const j=jalonRelation(u,t); if(!j) return null;
+  const nom=j.jours===365?'UN AN':j.jours+' JOURS';
+  return {type:'jalon',cle:j.cle,debut:j.debut,fin:j.debut+(j.jours+7)*864e5,jours:j.jours,
+    titre:nom+' AVEC TON COACH',carte:(j.jours===365?'Un an':j.jours+' jours')+' avec ton coach',lib:(j.jours===365?'un an':j.jours+' jours')};
+}
+// PURE. L'avant/après d'un jalon : le poids (sauf s'il est masqué), le meilleur
+// gain de charge, le nombre de bilans. Des lignes, prêtes à afficher.
+function lignesAvantApresJalon(u,debut,fin){
+  const out=[];
+  try{
+    const bl=bilansOrdonnes(u).filter(b=>b.date>=debut-14*864e5&&b.date<fin);
+    if(!u.masquerPoids&&bl.length>=2){ const a=getBW(bl[0]), b=getBW(bl[bl.length-1]);
+      if(a!=null&&b!=null&&a!==b) out.push('Poids : '+_recKg(a)+' → '+_recKg(b)+' kg'); }
+    const t=wrappedTop3(u,debut,fin)[0];
+    if(t) out.push(t.nom+' : '+_recKg(t.de)+' → '+_recKg(t.a)+' kg');
+    if(bl.length) out.push(bl.length+' bilan'+(bl.length>1?'s':''));
+  }catch(e){}
+  return out;
 }
 // PURE. Les trois exercices qui ont le plus gagné (charge max) entre la
 // première et la dernière séance de la période où ils apparaissent.
@@ -2299,7 +2343,9 @@ function wrappedSlides(w,per){
        // L'édition du mois, bouclée (saisons_resultats) : « Édition Mars en fonte bouclée ».
        (w.editions&&w.editions.length)?('Édition '+w.editions[0]+' bouclée'+(w.editions.length>1?' (+'+(w.editions.length-1)+')':'')):'']},
     // BUILD 1921 : sur un bloc, l'assiduité et le podium remplacent les habitudes.
-    (per&&per.type==='bloc'&&per.prevues>0)
+    (per&&per.type==='jalon')
+    ?{k:'avantapres',sur:'AVANT / APRÈS',grand:per.jours,dec:0,unite:'JOURS ENSEMBLE',lignes:(w.avantApres||[]).slice(0,3)}
+    :(per&&per.type==='bloc'&&per.prevues>0)
     ?{k:'assiduite',sur:'TON ASSIDUITÉ',grand:Math.min(100,Math.round(100*w.seances/per.prevues)),dec:0,unite:'% DES SÉANCES PRÉVUES',
       lignes:[w.seances+' séance'+(w.seances>1?'s':'')+' sur '+per.prevues].concat(((w.top3)||[]).map((x,k)=>(k+1)+'. '+x.nom+' : +'+_recKg(x.gain)+' kg'))}
     :{k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
@@ -2408,6 +2454,7 @@ function ouvrirWrapped(cle){
   if(!u||!per) return false;
   const w=calculerWrapped(u,per.debut,per.fin);
   if(per.type==='bloc'){ try{ w.top3=wrappedTop3(u,per.debut,per.fin); }catch(e){ w.top3=[]; } }
+  if(per.type==='jalon'){ try{ w.avantApres=lignesAvantApresJalon(u,per.debut,per.fin); }catch(e){ w.avantApres=[]; } }
   // BUILD 1921 : le coach lit QUAND l'athlète a vu son récapitulatif.
   try{ if(w.seances){ u.wrappedVus=Object.assign({},u.wrappedVus||{},{[per.cle]:Date.now()}); saveUser(); } }catch(e){ rcErreurMuette('wrappedVus',e); }
   if(!w.seances){ toast('Aucune séance sur cette période.','var(--orange)'); return false; }
@@ -2428,6 +2475,7 @@ function ouvrirWrapped(cle){
 function _wrPeriodeDeCle(cle){
   let m=/^m-(\d{4})-(\d{2})$/.exec(cle||'');
   if(m) return wrappedPeriodes(new Date(+m[1],+m[2],1,12).getTime()).find(p=>p.cle===cle)||null;
+  if(/^j-\d+-\d{4}-\d{2}-\d{2}$/.test(cle||'')){ try{ const u=currentUser, J=+cle.split('-')[1], j=wrappedJalon(u,debutRelation(u)+J*864e5+12*3600e3); return (j&&j.cle===cle)?j:null; }catch(e){ return null; } }
   if(/^b-\d{4}-\d{2}-\d{2}$/.test(cle||'')){ try{ const u=currentUser, b=wrappedBloc(u,(programmeDe(u)||{}).debut+((programmeDe(u)||{}).semaines||0)*7*864e5); return (b&&b.cle===cle)?b:null; }catch(e){ return null; } }
   m=/^a-(\d{4})$/.exec(cle||'');
   if(m) return wrappedPeriodes(new Date(+m[1],11,15,12).getTime()).find(p=>p.cle===cle)||null;

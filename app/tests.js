@@ -74423,6 +74423,49 @@ async function testExercices(){
       if(!/vu par l’athlète le 16 septembre/.test(h)) return _echec(h);
       return htmlWrappedVusCoach({wrappedVus:{'m-2026-09':1}})===''?true:_echec('un mois compté comme un bloc');});
 
+    // ══ BUILD 1922 — LES JALONS DE LA RELATION ══════════════════════════════════
+    const _jrU=(jours,nSeances,o)=>{
+      const t0=new Date(2026,0,5,9).getTime();
+      return Object.assign({coachId:'c1',rattacheLe:t0,bilans:[{type:'depart',date:t0+864e5,'deb-weight':'82'},{type:'coaching',date:t0+(jours-3)*864e5,'bil-weight':'78'}],
+        sessions:Array.from({length:nSeances},(_,k)=>({date:t0+(k*3+1)*864e5,complete:true,duration:50,volume:900,
+          data:{Squat:{sets:[{done:true,weight:String(60+k*2.5),reps:'5'}]}}}))},o||{});
+    };
+    ok('1922 — jalonRelation : 30/100/365 jours, de J à J+6, ≥ 4 séances, avec un coach',()=>{
+      const faux=[]; const J=864e5;
+      const u=_jrU(100,10); const d0=u.rattacheLe;
+      const at=(n)=>jalonRelation(u,d0+n*J+3600e3);
+      if(!at(30)||at(30).jours!==30) faux.push('30');
+      if(!at(36)||at(37)) faux.push('fenêtre de 7 jours');
+      if(!at(100)||at(100).jours!==100) faux.push('100');
+      if(at(50)) faux.push('50');
+      if(!at(365)||at(365).jours!==365) faux.push('365');
+      if(jalonRelation(_jrU(100,3),d0+100*J)) faux.push('3 séances');
+      if(jalonRelation(Object.assign(_jrU(100,10),{coachId:null}),d0+100*J)) faux.push('sans coach');
+      if(!/^j-100-2026-01-05$/.test((at(100)||{}).cle||'')) faux.push('clé : '+(at(100)||{}).cle);
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1922 — Wrapped : priorité jalon > bloc > mois ; slide avant/après',()=>{
+      const u=_jrU(100,12); const t=u.rattacheLe+100*864e5+3600e3;
+      const per=wrappedPeriodes(t,u);
+      if(!per.length||per[0].type!=='jalon') return _echec('ordre : '+per.map(p=>p.type).join(','));
+      const w=calculerWrapped(u,per[0].debut,per[0].fin); w.avantApres=lignesAvantApresJalon(u,per[0].debut,per[0].fin);
+      const s=wrappedSlides(w,per[0]).find(x=>x.k==='avantapres');
+      if(!s||s.grand!==100||s.unite!=='JOURS ENSEMBLE') return _echec('slide : '+JSON.stringify(s));
+      if(!s.lignes.some(l=>/^Poids : 82 → 78 kg$/.test(l))||!s.lignes.some(l=>/^Squat : 60 → /.test(l))) return _echec('lignes : '+JSON.stringify(s.lignes));
+      const um=Object.assign(_jrU(100,12),{masquerPoids:true});
+      return !lignesAvantApresJalon(um,per[0].debut,per[0].fin).some(l=>/Poids/.test(l))?true:_echec('poids masqué affiché');});
+    ok('1922 — lundiLigne : « 100 jours ensemble » quand rien d’autre ne presse',()=>{
+      // Relation commencée il y a 100 jours, à l'heure réelle : needsAlert lit Date.now().
+      const J=864e5, now=Date.now(), t0=now-100*J;
+      const u={id:'jr1',fname:'Léa',email:'jr1@t.fr',coachId:'c1',rattacheLe:t0,createdAt:t0,programPdfLink:'https://x/p.pdf',sessions_config:[],
+        bilans:[{type:'depart',date:t0+J,'deb-weight':'82'},{type:'coaching',date:now-2*J,'bil-weight':'78'}],
+        sessions:Array.from({length:12},(_,k)=>({date:t0+(k*3+1)*J,complete:true,data:{}}))};
+      const t=now;
+      const ctx={drapeau:null,proposition:null,acc:{prog:[],retour:[],silence:new Set()},messages:new Set(),maintenant:t,sansBilan:true};
+      // « Sans échange récent » dépend des contacts du coach connecté : neutralisé ici.
+      const _lsc=window.lignesSansContact; window.lignesSansContact=()=>[];
+      let l; try{ l=lundiLigne(u,{},ctx); }finally{ window.lignesSansContact=_lsc; }
+      return l.cat==='jalon'&&l.signal==='100 jours ensemble'?true:_echec(JSON.stringify(l));});
+
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
