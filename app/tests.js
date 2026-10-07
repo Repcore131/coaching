@@ -32879,7 +32879,9 @@ async function testExercices(){
       try{
         const poser=(v)=>{ const u={id:'b',nutrition:{log:{},recentFoods:[]}};
           currentUser=u; _fjDate='2026-08-08'; _fjUnite='g';
-          _fjFood={id:1,n:'X',g:'',k:100,p:10,c:10,l:2};
+          // Build 1867 : 10 kcal/100 g, pour que 9 999 g restent sous le seuil
+          // des 1 500 kcal qui fait poser la question du zéro de trop.
+          _fjFood={id:1,n:'X',g:'',k:10,p:1,c:1,l:0.2};
           if(q) q.value=v;
           saveFoodEntry();
           return ((u.nutrition.log['2026-08-08']||{entries:[]}).entries||[]).length; };
@@ -66096,6 +66098,70 @@ async function testExercices(){
         bilType=svType; bilData=svData; bilStep=svStep; currentUser=sU;
       }
     });
+
+    // ══ BUILD 1867 : LE JOURNAL ALIMENTAIRE SE CORRIGE ══
+    const _jaUser=()=>{
+      const t=localISODate(new Date());
+      const mk=(id,nom,qty)=>({id,alim_id:'x'+id,nom,groupe:'',qty,repas:'dejeuner',kcal:qty*2,p:qty/10,c:qty/5,l:qty/20,fi:null,sel:null,periSeance:false});
+      const log={}; log[t]={entries:[mk(1,'Riz',150),mk(2,'Poulet',120),mk(3,'Pomme',100)]};
+      return {u:{id:'ja',email:'ja@t.fr',role:'athlete',nutrition:{log}},t};
+    };
+    ok('deleteFoodEntry puis annulerDernierAjout : l’entrée revient au même index',()=>{
+      const sU=currentUser, sv=window.saveUser, sa=_fjDernierAjout;
+      try{
+        window.saveUser=()=>true;
+        const {u,t}=_jaUser(); currentUser=u;
+        deleteFoodEntry(t,2);
+        if(_fjEntrees(t).some(e=>e.id===2)) return _echec('pas retirée');
+        if(!_fjDernierAjout||!_fjDernierAjout.suppression) return _echec('pas de bandeau');
+        if(!/Aliment retiré/.test(_htmlDernierAjout(t))) return _echec('bandeau : '+_htmlDernierAjout(t));
+        if(!annulerDernierAjout()) return _echec('annulation refusée');
+        return _fjEntrees(t).map(e=>e.id).join(',')==='1,2,3'?true:_echec(_fjEntrees(t).map(e=>e.id).join(','));
+      } finally { currentUser=sU; window.saveUser=sv; _fjDernierAjout=sa; }});
+    ok('Correction de quantité : même identifiant, kcal recalculées ; annulable',()=>{
+      const sU=currentUser, sa=_fjDernierAjout;
+      try{
+        const {u,t}=_jaUser(); currentUser=u;
+        const e=_fjEntrees(t)[0];
+        const n=entreeCorrigee(e,_fjAlimentDeEntree(e),105,'dejeuner');
+        if(n.id!==1||n.qty!==105) return _echec(JSON.stringify(n));
+        if(n.kcal!==210) return _echec('kcal '+n.kcal);
+        if(!remplacerEntreeJournal(u,t,1,n,t)) return _echec('refus');
+        if(_fjEntrees(t)[0].qty!==105) return _echec('pas au même index');
+        annulerDernierAjout();
+        return _fjEntrees(t)[0].qty===150?true:_echec('annulation : '+_fjEntrees(t)[0].qty);
+      } finally { currentUser=sU; _fjDernierAjout=sa; }});
+    ok('Une entrée passée d’aujourd’hui à hier : absente d’aujourd’hui, présente hier',()=>{
+      const sU=currentUser, sa=_fjDernierAjout;
+      try{
+        const {u,t}=_jaUser(); currentUser=u;
+        const hier=joursCorrectionEntree(t)[1].date;
+        const e=_fjEntrees(t)[1];
+        remplacerEntreeJournal(u,t,2,entreeCorrigee(e,_fjAlimentDeEntree(e),120,'diner'),hier);
+        if(_fjEntrees(t).some(x=>x.id===2)) return _echec('encore aujourd’hui');
+        const h=_fjEntrees(hier).find(x=>x.id===2);
+        if(!h||h.repas!=='diner') return _echec('absente hier');
+        annulerDernierAjout();
+        return _fjEntrees(t).map(x=>x.id).join(',')==='1,2,3'&&!_fjEntrees(hier).length?true:_echec('annulation');
+      } finally { currentUser=sU; _fjDernierAjout=sa; }});
+    okA('saveFoodEntry : 1 000 g d’un aliment pris d’habitude à 10 g → rcConfirm appelé, rien écrit sur « Corriger »',async()=>{
+      const sU=currentUser, sf=_fjFood, sc=window.rcConfirm, sd=_fjDate, se=_fjEdition;
+      try{
+        const {u,t}=_jaUser(); currentUser=u;
+        u.nutrition.log[t].entries.push({id:9,alim_id:'huile',nom:'Huile',qty:10,repas:'dejeuner',kcal:90});
+        _fjFood={id:'huile',n:'Huile d’olive',g:'',k:900,p:0,c:0,l:100};
+        _fjDate=t; _fjEdition=null;
+        go('s-food-add');
+        document.getElementById('fja-qty').value='1000';
+        let n=0, txt=''; window.rcConfirm=async(a,b)=>{ n++; txt=b; return false; };
+        const avant=_fjEntrees(t).length;
+        await saveFoodEntry();
+        if(n!==1) return _echec('rcConfirm '+n);
+        if(!/1 000 g d’huile d’olive \(9 000 kcal\) \?/.test(txt)) return _echec(txt);
+        return _fjEntrees(t).length===avant?true:_echec('écrit');
+      } finally { currentUser=sU; _fjFood=sf; window.rcConfirm=sc; _fjDate=sd; _fjEdition=se; }});
+    ok('quantiteSuspecte : 150 g habituels → 105 g ne déclenche rien ; 1 600 kcal oui',()=>
+      !quantiteSuspecte(105,150,200)&&quantiteSuspecte(200,null,1600)&&!quantiteSuspecte(310,100,300)&&quantiteSuspecte(410,100,300)?true:_echec('seuils'));
 
     // ══ BUILD 1866 : CE QU'ON PERD EN SE DÉCONNECTANT ══
     ok('pertesALaDeconnexion : rien → [] ; séance de 2 séries + file de 1 → 2 phrases',()=>{

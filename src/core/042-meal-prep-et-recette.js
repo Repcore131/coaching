@@ -721,11 +721,15 @@ function annulerDernierAjout(){
   if(!a) return false;
   const log=(currentUser.nutrition||{}).log||{};
   const j=log[a.date];
-  if(!j||!Array.isArray(j.entries)){ _fjDernierAjout=null; return false; }
+  if((!j||!Array.isArray(j.entries))&&!a.suppression){ _fjDernierAjout=null; return false; }
+  // BUILD 1867 : une suppression a pu vider le jour ; on le recrée.
+  if(!log[a.date]) log[a.date]={entries:[]};
+  const jj=log[a.date];
+  if(!Array.isArray(jj.entries)) jj.entries=[];
   // On retire EXACTEMENT les identifiants ajoutés, rien d'autre : une entrée
   // saisie à la main entre-temps ne doit pas partir avec.
   const aRetirer=new Set(a.ids.map(String));
-  j.entries=j.entries.filter(e=>!aRetirer.has(String(e&&e.id)));
+  jj.entries=jj.entries.filter(e=>!aRetirer.has(String(e&&e.id)));
   // RESTITUTION. Un AJOUT n a rien a rendre et ce bloc ne s execute pas :
   // le chemin d avant est conserve a l octet pres. Un REMPLACEMENT, lui,
   // a retire une entree en plus d en ajouter une — sans la rendre,
@@ -734,15 +738,22 @@ function annulerDernierAjout(){
   if(Array.isArray(a.retirees)){
     for(const r of a.retirees.slice().sort((x,y)=>x.index-y.index)){
       if(!r||!r.entree) continue;
-      const i=Math.max(0,Math.min(j.entries.length,Number(r.index)||0));
-      j.entries.splice(i,0,r.entree);
+      // BUILD 1867 : une correction qui a changé de jour rend l'entrée à SON jour.
+      const dr=r.date||a.date;
+      if(!log[dr]) log[dr]={entries:[]};
+      const jr=log[dr];
+      if(!Array.isArray(jr.entries)) jr.entries=[];
+      const i=Math.max(0,Math.min(jr.entries.length,Number(r.index)||0));
+      jr.entries.splice(i,0,r.entree);
     }
   }
-  if(!j.entries.length) delete log[a.date];
+  for(const d of new Set([a.date].concat((a.retirees||[]).map(r=>r&&r.date).filter(Boolean))))
+    if(log[d]&&Array.isArray(log[d].entries)&&!log[d].entries.length) delete log[d];
+  const _retour=(a.retirees||[]).find(r=>r&&r.date)?a.retirees.find(r=>r&&r.date).date:a.date;
   _fjDernierAjout=null;
   saveUser();
-  _renderFjDaySummary(a.date);
-  toast('Ajout annulé');
+  _renderFjDaySummary(_retour);
+  toast(a.suppression?'Aliment remis':a.modification?'Correction annulée':'Ajout annulé');
   return true;
 }
 // ══ LOT N6 : LA RÉPARTITION DES PROTÉINES DANS LA JOURNÉE (29/09/2026) ═══
@@ -852,6 +863,7 @@ const FJ_REPAS_LIB=Object.freeze({matin:'Petit-déjeuner',dejeuner:'Déjeuner',
 function _htmlDernierAjout(date){
   const a=_fjDernierAjout;
   if(!a||a.date!==date) return '';
+  if(a.expire&&Date.now()>a.expire) return '';
   return `<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--success);line-height:1.5">${escapeHtml(a.quoi)}</div>
     <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
@@ -1104,7 +1116,7 @@ function selectCoachFood(id){
   const a=_alimentsDuCoach().find(x=>x&&x.id===id);
   if(!a) return false;
   _fjFood=a;
-  go('s-food-add');
+  go('s-food-add'); _fjaModeAjout();
   document.getElementById('fja-food-name').textContent=a.n;
   { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
@@ -2191,7 +2203,7 @@ function selectOffFood(ean){
   const v=offValide(a);
   if(!v.ok){ toast(v.raison,'var(--orange)'); return false; }
   _fjFood=a;
-  go('s-food-add');
+  go('s-food-add'); _fjaModeAjout();
   document.getElementById('fja-food-name').textContent=a.n;
   { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const _g=document.getElementById('fja-food-group');
@@ -2324,7 +2336,7 @@ function selectFjFood(id){
   if(!_ciqualDB) return;
   _fjFood=_ciqualDB.find(f=>f.id===id);
   if(!_fjFood) return;
-  go('s-food-add');
+  go('s-food-add'); _fjaModeAjout();
   document.getElementById('fja-food-name').textContent=_fjFood.n;
   document.getElementById('fja-food-group').textContent=_fjFood.g||'';
   const _rp=document.getElementById('fja-repris');

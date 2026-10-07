@@ -177,7 +177,7 @@ function selectPersoFood(id){
   const a=_persoParId(id);
   if(!a) return false;
   _fjFood=a;
-  go('s-food-add');
+  go('s-food-add'); _fjaModeAjout();
   document.getElementById('fja-food-name').textContent=a.n;
   { const _rp=document.getElementById('fja-repris'); if(_rp) _rp.textContent=''; }
   const g=document.getElementById('fja-food-group');
@@ -703,6 +703,17 @@ async function saveFoodEntry(){
   const f=_fjFood;if(!f) return;
   const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
   if(qty<=0||qty>9999){toast('Quantité invalide (1-9999g)','var(--orange)');return;}
+  // BUILD 1867 : un zéro de trop se voit AVANT d'écrire. La décision est
+  // synchrone ; on n'attend que si l'on demande.
+  {
+    const _kq=(function(){ try{ return kcalPortion(f,qty/100).kcal; }catch(e){ return null; } })();
+    const _dqs=(function(){ try{ return _fjDerniereQty(f.id); }catch(e){ return null; } })();
+    if(quantiteSuspecte(qty,_dqs,_kq)){
+      const _okq=await rcConfirm('Quantité inhabituelle',texteQuantiteSuspecte(qty,f.n,_kq),'C’est juste','Corriger');
+      if(!_okq){ const _i=document.getElementById('fja-qty'); if(_i){ try{ _i.focus(); _i.select(); }catch(e){} } return; }
+    }
+  }
+  if(_fjEdition){ _fjEnregistrerCorrection(qty); return; }
   try{
     const ctrl=nutriControle(f);
     // SEULEMENT les impossibilites arithmetiques. Une fiche incomplete n est
@@ -771,6 +782,8 @@ async function saveFoodEntry(){
   if(!currentUser.nutrition.log) currentUser.nutrition.log={};
   if(!currentUser.nutrition.log[_fjDate]) currentUser.nutrition.log[_fjDate]={entries:[]};
   currentUser.nutrition.log[_fjDate].entries.push(entry);
+  // BUILD 1867 : le bandeau « Aliment retiré » tient jusqu'au prochain ajout.
+  if(_fjDernierAjout&&_fjDernierAjout.suppression) _fjDernierAjout=null;
   // LOT N3 : les récents à un geste (12, distincts, avec la quantité), dans le
   // dossier. Relevés AVANT, pour que « Annuler » les rende tels quels.
   const _avantRecS=Array.isArray(currentUser.nutrition.recentsSaisie)?currentUser.nutrition.recentsSaisie.slice():undefined;
@@ -908,7 +921,7 @@ function annulerAjoutAliment(){
     if(s.avantUsage===undefined) delete n.usageFoods[s.cleUsage];
     else n.usageFoods[s.cleUsage]=Object.assign({},s.avantUsage);
   }
-  deleteFoodEntry(s.date,s.id);
+  deleteFoodEntry(s.date,s.id,{sansAnnulation:true});
   if(_fjEntrees(s.date).some(e=>e&&e.id===s.id)){
     toast('L\'aliment n\'a pas pu être retiré.','var(--orange)');
     _renderFjBandeau();
@@ -948,12 +961,178 @@ function terminerSaisieAliments(){
   return true;
 }
 
-function deleteFoodEntry(date,id){
+// BUILD 1867 : ✕ touché au lieu de ⇄ ne coûte plus rien. La suppression passe
+// par le bandeau d'annulation des ajouts (_fjDernierAjout), qui sait remettre
+// une entrée À SA PLACE. Pas de rcConfirm : l'annulation suffit et n'ajoute
+// aucune étape. opts.sansAnnulation : « Annuler » d'un ajout (R27) retire sa
+// propre entrée, ce n'est pas une suppression à défaire.
+const FJ_ANNULER_SUPPR_MS=8000;
+function deleteFoodEntry(date,id,opts){
   const log=currentUser.nutrition?.log?.[date];
   if(!log) return;
+  const o=opts||{};
+  const retirees=[];
+  (log.entries||[]).forEach((e,i)=>{ if(e&&e.id===id) retirees.push({index:i,entree:e}); });
   log.entries=log.entries.filter(e=>e.id!==id);
+  if(!o.sansAnnulation&&retirees.length){
+    const a={date,ids:[],retirees,suppression:true,quoi:'Aliment retiré',expire:Date.now()+FJ_ANNULER_SUPPR_MS};
+    _fjDernierAjout=a;
+    try{ setTimeout(()=>{ if(_fjDernierAjout===a){ _fjDernierAjout=null;
+      try{ if((document.querySelector('.screen.active')||{}).id==='s-nutrition'&&_fjDate===date) _renderFjDaySummary(date); }catch(e){} } },FJ_ANNULER_SUPPR_MS+50); }catch(e){}
+  }
   saveUser();
   _renderFjDaySummary(date);
+}
+
+// ══ BUILD 1867 : CORRIGER UNE LIGNE DU JOURNAL ══════════════════════════════
+// Toucher le nom d'une ligne rouvre l'écran de quantité, pré-rempli, avec un
+// choix du jour. « Mettre à jour » remplace l'entrée AU MÊME INDEX et garde son
+// identifiant ; si le jour change, elle passe sur l'autre jour. Annulable par
+// le même bandeau.
+let _fjEdition=null;   // {date, id} — en mémoire seulement
+function _fjaModeAjout(){
+  _fjEdition=null;
+  const b=document.getElementById('fja-valider');
+  if(b) b.textContent='Ajouter au journal';
+  const z=document.getElementById('fja-jour-slot');
+  if(z) z.innerHTML='';
+}
+/** PURE : les jours proposés à la correction (aujourd'hui, hier, avant-hier, et le jour d'origine s'il est plus ancien). */
+function joursCorrectionEntree(dateOrigine,maintenant){
+  const t=new Date(maintenant==null?Date.now():maintenant);
+  const l=[0,1,2].map(k=>({date:localISODate(new Date(t.getFullYear(),t.getMonth(),t.getDate()-k)),
+    lib:['Aujourd’hui','Hier','Avant-hier'][k]}));
+  if(dateOrigine&&!l.some(x=>x.date===dateOrigine)) l.push({date:dateOrigine,lib:_libelleJourNut(dateOrigine)});
+  return l;
+}
+// L'aliment d'une entrée : la table, les aliments perso ou du coach, le carnet
+// OFF. À défaut, une fiche pour 100 g recalculée depuis l'entrée elle-même —
+// la règle de trois reste juste, puisque toutes les valeurs y sont proportionnelles.
+function _fjAlimentDeEntree(e){
+  if(!e) return null;
+  try{ if(Array.isArray(_ciqualDB)){ const a=_ciqualDB.find(f=>f&&f.id===e.alim_id); if(a) return a; } }catch(x){}
+  try{ const a=_persoParId(e.alim_id); if(a) return a; }catch(x){}
+  try{ const a=_alimentsDuCoach().find(x=>x&&x.id===e.alim_id); if(a) return a; }catch(x){}
+  try{ if(e.ean){ const a=offCarnetAliment(e.ean); if(a) return a; } }catch(x){}
+  const q=Number(e.qty);
+  if(!(q>0)) return null;
+  const k=100/q, f={id:e.alim_id,n:e.nom,g:e.groupe||'',_depuisEntree:true};
+  const r=(v,d)=>v==null?null:parseFloat((Number(v)*k).toFixed(d));
+  f.k=r(e.kcal,1); f.p=r(e.p,2); f.c=r(e.c,2); f.l=r(e.l,2); f.f=r(e.fi,2); f.e=r(e.sel,3);
+  for(const mc of Object.keys(MICRO_REFS).concat(MICRO_HORS_REFS)) if(e[mc]!=null) f[mc]=r(e[mc],4);
+  return f;
+}
+/** L'entrée corrigée : même identifiant, nouvelle quantité et nouveau repas. */
+function entreeCorrigee(e,f,qty,repas){
+  let n;
+  if(f&&!f._depuisEntree){
+    n=_eqConstruireEntree(f,qty,repas,e.id);
+    if(f._off&&f._off.ean){ n.alim_source='off'; n.ean=f._off.ean; }
+  } else {
+    const k=qty/(Number(e.qty)||qty);
+    n=JSON.parse(JSON.stringify(e));
+    n.qty=qty; n.repas=repas||e.repas;
+    for(const c of ['kcal','p','c','l','fi']) if(n[c]!=null) n[c]=parseFloat((n[c]*k).toFixed(c==='kcal'?0:1));
+    if(n.sel!=null) n.sel=parseFloat((n.sel*k).toFixed(2));
+    for(const mc of Object.keys(MICRO_REFS).concat(MICRO_HORS_REFS)) if(n[mc]!=null) n[mc]=parseFloat((n[mc]*k).toFixed(3));
+  }
+  n.id=e.id;
+  n.periSeance=!!e.periSeance;
+  if(e.recette) n.recette=e.recette;
+  // L'unité affichée (« 2 œufs ») ne dit plus vrai si la quantité a changé.
+  if(e.unite&&Number(e.qty)===Number(qty)) n.unite=e.unite; else delete n.unite;
+  return n;
+}
+/**
+ * Remplace l'entrée `id` du jour `date` par `neuve`, au même index ; si
+ * `dateCible` diffère, elle passe sur ce jour (à la fin). Pose le bandeau
+ * d'annulation. Rend true si quelque chose a changé.
+ */
+function remplacerEntreeJournal(user,date,id,neuve,dateCible){
+  const log=user&&user.nutrition&&user.nutrition.log;
+  const j=log&&log[date];
+  if(!j||!Array.isArray(j.entries)) return false;
+  const i=j.entries.findIndex(e=>e&&e.id===id);
+  if(i<0) return false;
+  const ancienne=j.entries[i];
+  const cible=dateCible||date;
+  if(cible===date) j.entries.splice(i,1,neuve);
+  else {
+    j.entries.splice(i,1);
+    if(!j.entries.length) delete log[date];
+    if(!log[cible]) log[cible]={entries:[]};
+    if(!Array.isArray(log[cible].entries)) log[cible].entries=[];
+    log[cible].entries.push(neuve);
+  }
+  _fjDernierAjout={date:cible,ids:[neuve.id],quoi:ancienne.nom+' corrigé',modification:true,
+    retirees:[{index:i,entree:ancienne,date}]};
+  return true;
+}
+function modifierEntreeJournal(date,id){
+  const e=_fjEntrees(date).find(x=>x&&x.id===id);
+  if(!e) return false;
+  const f=_fjAlimentDeEntree(e);
+  if(!f){ toast('Cette ligne ne peut pas être corrigée : retire-la et ajoute-la à nouveau.','var(--orange)'); return false; }
+  _fjFood=f;
+  _fjDate=date;
+  go('s-food-add');
+  _fjEdition={date,id,jour:date};
+  const nm=document.getElementById('fja-food-name'); if(nm) nm.textContent=e.nom||f.n;
+  const gr=document.getElementById('fja-food-group'); if(gr) gr.textContent=f.g||'';
+  const rp=document.getElementById('fja-repris'); if(rp) rp.textContent='';
+  _fjUnite='g';
+  const pu=document.getElementById('fja-unites-slot'); if(pu) pu.innerHTML=f._depuisEntree?'':_htmlUnites(f);
+  const po=document.getElementById('fja-portions'); if(po) po.innerHTML=f._depuisEntree?'':_htmlPortions(f);
+  const ep=document.getElementById('fja-epingle-slot'); if(ep) ep.innerHTML='';
+  try{ _majFjaFiabilite(); }catch(x){}
+  const q=document.getElementById('fja-qty'); if(q) q.value=e.qty;
+  _fjRepas=e.repas||'dejeuner';
+  document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
+  const b=document.getElementById('fja-valider'); if(b) b.textContent='Mettre à jour';
+  _renderFjaJours();
+  updateFjaCalc();
+  return true;
+}
+function _renderFjaJours(){
+  const z=document.getElementById('fja-jour-slot');
+  if(!z) return;
+  if(!_fjEdition){ z.innerHTML=''; return; }
+  z.innerHTML='<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:10px">Jour</label>'
+    +'<div style="display:flex;gap:8px;margin-bottom:20px">'
+    +joursCorrectionEntree(_fjEdition.date).map(j=>'<button type="button" class="fj-repas-btn'+(j.date===_fjEdition.jour?' active':'')
+      +'" onclick="fjaChoisirJour('+_attrArg(j.date)+')">'+escapeHtml(j.lib)+'</button>').join('')
+    +'</div>';
+}
+function fjaChoisirJour(d){
+  if(!_fjEdition) return;
+  _fjEdition.jour=d;
+  _renderFjaJours();
+}
+function _fjEnregistrerCorrection(qty){
+  const ed=_fjEdition;
+  const e=_fjEntrees(ed.date).find(x=>x&&x.id===ed.id);
+  if(!e){ toast('Cette ligne n’est plus dans ton journal.','var(--orange)'); _fjaModeAjout(); return false; }
+  const neuve=entreeCorrigee(e,_fjFood,qty,_fjRepas);
+  if(!remplacerEntreeJournal(currentUser,ed.date,ed.id,neuve,ed.jour)) return false;
+  const cible=ed.jour||ed.date;
+  _fjaModeAjout();
+  if(!saveUser()) toastEcriture(false,'','cette correction est');
+  try{ _nutGeste(cible); }catch(x){}
+  loadNutrition(cible);
+  return true;
+}
+// ── BUILD 1867 : LE ZÉRO DE TROP ─────────────────────────────────────────
+/** PURE : la quantité est-elle invraisemblable ? (plus de 4 × l'habitude et plus de 300 g, ou plus de 1 500 kcal à elle seule) */
+function quantiteSuspecte(qty,derniere,kcal){
+  const q=Number(qty)||0;
+  if(Number(derniere)>0&&q>4*Number(derniere)&&q>300) return true;
+  return Number(kcal)>1500;
+}
+function _fjMille(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+function texteQuantiteSuspecte(qty,nom,kcal){
+  const n=String(nom||'cet aliment');
+  const de=/^[aeiouyhâàéèêîïôœûAEIOUYHÂÀÉÈÊÎÏÔŒÛ]/.test(n)?'d’':'de ';
+  return _fjMille(qty)+' g '+de+n.charAt(0).toLowerCase()+n.slice(1)+(kcal!=null?' ('+_fjMille(kcal)+' kcal)':'')+' ?';
 }
 
 function _renderFjDaySummary(date){
@@ -1050,14 +1229,14 @@ function _renderFjDaySummary(date){
         ${_htmlNommerRepas(date,r)}
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
+            <div role="button" tabindex="0" class="fj-nom-ligne" onclick="modifierEntreeJournal('${date}',${e.id})" aria-label="Corriger cette ligne" style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer">${escapeHtml(e.nom)}</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[(e.recette&&e.unite)?escapeHtml(e.unite):e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal${e.kcalEstimee?' estimées':''}</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('echange',14)}</button>
-            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">${icon('croix',14)}</button>
+            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" aria-label="Retirer cet aliment" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px;margin-left:8px">${icon('croix',14)}</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
