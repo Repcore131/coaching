@@ -66099,6 +66099,70 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1873 : UN REPORT SE DÉFAIT EN UNE FOIS ══
+    const _rpMonde=()=>{
+      currentUser={id:'coP',email:'cop@t.fr',role:'coach',coachPrograms:[]};
+      const seance=n=>[{day:'Lundi',active:true,name:'Haut',exercises:[{name:'Développé couché',series:n,reps:'8'}]}];
+      const p={id:'mP',name:'PPL',sessions_H:seance(4),sessions_F:seance(4),majAt:2};
+      currentUser.coachPrograms.push(p);
+      const u={};
+      ['r1','r2','r3'].forEach(id=>{ u[id+'@t.fr']={id,email:id+'@t.fr',role:'athlete',coachId:'coP',fname:id,assignedProgramId:'mP',assignedProgramGenre:'H',sessions_config:seance(3)}; });
+      DB.set('users',u);
+      const lignes=utilisateursModele(_c4Athletes(),p).map(x=>{ const o=opsPourAthlete(p,x.a); return {a:x.a,lien:x.lien,o,res:propagationAthlete(x.a.sessions_config,o.ops,o.direct)}; });
+      _c4Prop={p,lignes};
+      const z=document.createElement('div'); z.id='c4-prop';
+      lignes.forEach((l,i)=>l.res.forEach((r,k)=>{ const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.a=i; cb.dataset.o=k; cb.checked=true; z.appendChild(cb); }));
+      document.body.appendChild(z);
+      return {p,lignes,z};
+    };
+    okA('Report chez 3 athlètes puis annulerReport : les 3 programmes d’origine reviennent',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sS=window.saveUser; let m;
+      try{
+        CLOUD.pushOne=()=>Promise.resolve(true); window.saveUser=()=>true;
+        m=_rpMonde();
+        reporterPropagation();
+        const u=DB.get('users');
+        if(u['r1@t.fr'].sessions_config[0].exercises[0].series!==4) return _echec('report non appliqué : '+JSON.stringify(u['r1@t.fr'].sessions_config[0].exercises[0]));
+        const lot=currentUser.derniersReports[0].lot;
+        if(!/^rep_/.test(lot)||currentUser.derniersReports[0].athletes.length!==3) return _echec(JSON.stringify(currentUser.derniersReports[0]));
+        if(!u['r2@t.fr'].sessions_config_history.some(e=>e.lot===lot&&e.motif==='report:PPL')) return _echec('historique sans lot');
+        const r=annulerReport(lot);
+        const v=DB.get('users');
+        if(r.remis.length!==3) return _echec(JSON.stringify(r));
+        if(!['r1','r2','r3'].every(id=>v[id+'@t.fr'].sessions_config[0].exercises[0].series===3)) return _echec('pas remis');
+        const r2=annulerReport(lot);
+        return r2&&r2.deja?true:_echec('double annulation');
+      } finally { if(m) m.z.remove(); _rcAnnulable=null; currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; window.saveUser=sS; }});
+    okA('Un athlète retouché après le report n’est pas écrasé et figure dans la liste',async()=>{
+      const sU=currentUser, sUs=DB.get('users'), sP=CLOUD.pushOne, sS=window.saveUser; let m;
+      try{
+        CLOUD.pushOne=()=>Promise.resolve(true); window.saveUser=()=>true;
+        m=_rpMonde();
+        reporterPropagation();
+        const u=DB.get('users');
+        u['r2@t.fr'].sessions_config[0].exercises[0].reps='12';
+        DB.set('users',u);
+        const r=annulerReport(currentUser.derniersReports[0].lot);
+        if(r.remis.length!==2||r.changes.length!==1||r.changes[0].id!=='r2') return _echec(JSON.stringify(r));
+        return DB.get('users')['r2@t.fr'].sessions_config[0].exercises[0].reps==='12'?true:_echec('écrasé');
+      } finally { if(m) m.z.remove(); try{ closeModal(); }catch(e){} _rcAnnulable=null; currentUser=sU; if(sUs) DB.set('users',sUs); CLOUD.pushOne=sP; window.saveUser=sS; }});
+    ok('Restaurer une version du modèle ne touche aucun athlète',()=>{
+      const sU=currentUser, sUs=DB.get('users'), sI=_editProgTemplateIdx, sL=window.loadProgTemplateSlots;
+      try{
+        window.loadProgTemplateSlots=()=>{};
+        currentUser={id:'coV',email:'cov@t.fr',role:'coach',coachPrograms:[{id:'mV',name:'V',
+          sessions_H:[{day:'Lundi',active:true,name:'Haut',notes:'garder',exercises:[{name:'Squat',series:5,reps:'5',description:'desc'}]}],sessions_F:[],
+          versions:[{at:1,H:[{day:'Lundi',name:'Haut',active:true,exercises:[{name:'Squat',series:3,reps:'10'}]}],F:[]}]}]};
+        const a={id:'aV',email:'av@t.fr',role:'athlete',coachId:'coV',assignedProgramId:'mV',sessions_config:[{day:'Lundi',active:true,name:'Haut',exercises:[{name:'Squat',series:5}]}]};
+        const u={}; u[a.email]=a; DB.set('users',u);
+        const avant=JSON.stringify(DB.get('users'));
+        _editProgTemplateIdx=0;
+        restaurerVersionModele(0);
+        const p=currentUser.coachPrograms[0];
+        if(p.sessions_H[0].exercises[0].series!==3||p.sessions_H[0].notes!=='garder'||p.sessions_H[0].exercises[0].description!=='desc') return _echec(JSON.stringify(p.sessions_H[0]));
+        return JSON.stringify(DB.get('users'))===avant?true:_echec('un athlète a bougé');
+      } finally { currentUser=sU; if(sUs) DB.set('users',sUs); _editProgTemplateIdx=sI; window.loadProgTemplateSlots=sL; }});
+
     // ══ BUILD 1872 : DEUX LÉA ══
     ok('nomCourtAthlete : prénom unique ; homonymes « Léa Ma. » / « Léa Mo. » ; homonymes complets → e-mail ; accents',()=>{
       const a={id:1,fname:'Léa',lname:'Martin',email:'a@t.fr'}, b={id:2,fname:'Lea',lname:'Moreau',email:'b@t.fr'},

@@ -1390,10 +1390,10 @@ function _copieSansPhotos(sc){
   if(Array.isArray(c)) c.forEach(x=>{ if(x&&typeof x==='object'){ if('photo' in x) x.photo=null; if('photo2' in x) x.photo2=null; } });
   return c;
 }
-function _pushSessionsHistory(a,motif){
+function _pushSessionsHistory(a,motif,extra){
   if(!a||!a.sessions_config) return;
   const l=Array.isArray(a.sessions_config_history)?a.sessions_config_history:[];
-  l.unshift({ts:Date.now(),motif:String(motif||'publication').slice(0,90),sessions_config:_copieSansPhotos(a.sessions_config)});
+  l.unshift(Object.assign({ts:Date.now(),motif:String(motif||'publication').slice(0,90),sessions_config:_copieSansPhotos(a.sessions_config)},extra||{}));
   a.sessions_config_history=elaguerHistoriqueSeances(l,Date.now());
 }
 /**
@@ -1843,11 +1843,13 @@ function renderPropagationEntree(){
   const p=((currentUser&&currentUser.coachPrograms)||[])[_editProgTemplateIdx];
   if(!p){ z.innerHTML=''; return false; }
   const us=utilisateursModele(_c4Athletes(),p);
-  if(!us.length){ z.innerHTML='<div class="c4-entree sub">Personne n’utilise ce modèle pour l’instant.</div>'; return true; }
+  // BUILD 1873 : le dernier report (annulable 7 jours) et les versions du modèle.
+  const _bas=(function(){ try{ return _htmlDernierReport(p)+_htmlVersionsModele(p); }catch(e){ return ''; } })();
+  if(!us.length){ z.innerHTML='<div class="c4-entree sub">Personne n’utilise ce modèle pour l’instant.</div>'+_bas; return true; }
   const aReporter=us.filter(x=>{ const o=opsPourAthlete(p,x.a); return !o.aJour&&o.ops.length; }).length;
   z.innerHTML='<div class="c4-entree"><span>'+us.length+' athlète'+(us.length>1?'s':'')+' l’utilise'+(us.length>1?'nt':'')
     +(aReporter?', '+aReporter+' n’'+(aReporter>1?'ont':'a')+' pas la dernière version':', tous à jour')+'.</span>'
-    +(aReporter?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirPropagation()">Reporter chez les athlètes qui l’utilisent</button>':'')+'</div>';
+    +(aReporter?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirPropagation()">Reporter chez les athlètes qui l’utilisent</button>':'')+'</div>'+_bas;
   return true;
 }
 function _c4LibOp(op){
@@ -1901,17 +1903,21 @@ function reporterPropagation(){
   document.querySelectorAll('#c4-prop input[data-a]').forEach(cb=>{ if(cb.checked&&!cb.disabled) (choix[cb.dataset.a]=choix[cb.dataset.a]||[]).push(Number(cb.dataset.o)); });
   const users=DB.get('users')||{};
   const pushes=[];
-  // BUILD 1869 : l'état d'avant de chaque athlète touché, pour « Annuler ».
-  const _avant=[];
+  // BUILD 1873 : UN LOT. Chaque entrée d'historique créée ici porte son
+  // identifiant ; derniersReports garde de quoi tout défaire ensemble.
+  const lot='rep_'+Date.now();
+  const _ath=[];
   x.lignes.forEach((l,i)=>{
     const k=Object.keys(users).find(kk=>users[kk]&&users[kk].id===l.a.id);
     if(!k) return;
     const a=users[k];
-    _avant.push({k,sc:JSON.parse(JSON.stringify(a.sessions_config||null)),
-      id:a.assignedProgramId,genre:a.assignedProgramGenre,version:a.assignedProgramVersion});
+    const _av={id:a.id,nom:nomCourtClient(a),idAvant:a.assignedProgramId||null,genreAvant:a.assignedProgramGenre||null,
+      versionAvant:a.assignedProgramVersion==null?null:a.assignedProgramVersion,touche:false};
+    _ath.push({_av,a});
     const ids=(choix[i]||[]).map(n=>l.res[n]&&l.res[n].op.id).filter(Boolean);
     if(ids.length){
-      _pushSessionsHistory(a,'report:'+(x.p.name||'modèle'));
+      _ath[_ath.length-1]._av.touche=true;
+      _pushSessionsHistory(a,'report:'+(x.p.name||'modèle'),{lot});
       a.sessions_config=appliquerPropagation(a.sessions_config,l.o.ops,ids,l.o.apres);
     }
     // Le lien est posé, même sans rien cocher : le coach a vu cette version.
@@ -1925,29 +1931,136 @@ function reporterPropagation(){
   closeModal();
   _c4Prop=null;
   try{ renderPropagationEntree(); }catch(e){}
-  const _apres={};
-  _avant.forEach(v=>{ _apres[v.k]=JSON.stringify((users[v.k]||{}).sessions_config||null); });
-  toastSyncAnnulable(ok,Promise.all(pushes),'Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est',
-    ()=>defaireReport(_avant,_apres));
+  const athletes=_ath.map(o=>Object.assign(o._av,{apres:_empreinteSlim(o.a.sessions_config)}));
+  currentUser.derniersReports=[{lot,modeleId:x.p.id,nom:String(x.p.name||'modèle'),le:Date.now(),athletes}]
+    .concat((currentUser.derniersReports||[]).filter(r=>r&&r.lot!==lot)).slice(0,REPORTS_MAX);
+  try{ saveUser(); }catch(e){}
+  const n=pushes.length;
+  toastSyncAnnulable(ok,Promise.all(pushes),'Correction reportée chez '+n+' athlète'+(n>1?'s':''),'la correction est',
+    ()=>{ const r=annulerReport(lot); return _texteAnnulReport(r,true); });
+  try{ renderPropagationEntree(); }catch(e){}
   return true;
 }
-// Remet chaque athlète tel qu'avant le report, SAUF celui dont le programme a
-// changé depuis (le coach l'a retouché) : on ne défait pas son travail.
-function defaireReport(avant,apres){
-  const us=DB.get('users')||{};
-  let n=0, saut=0;
-  for(const v of avant||[]){
-    const a=us[v.k];
-    if(!a) continue;
-    if(JSON.stringify(a.sessions_config||null)!==apres[v.k]){ saut++; continue; }
-    a.sessions_config=JSON.parse(JSON.stringify(v.sc));
-    a.assignedProgramId=v.id; a.assignedProgramGenre=v.genre; a.assignedProgramVersion=v.version;
-    a.updatedAt=Date.now(); us[v.k]=a; n++;
-    try{ CLOUD.pushOne(v.k,a).catch(()=>{}); }catch(e){}
+const REPORTS_MAX=5, REPORT_ANNULABLE_J=7;
+// Une empreinte courte du prescrit (modSlim), pour savoir si on y a touché.
+function _empreinteSlim(sc){
+  const t=JSON.stringify(modSlim(sc||[]));
+  let h=5381; for(let i=0;i<t.length;i++) h=((h<<5)+h+t.charCodeAt(i))|0;
+  return (h>>>0).toString(36)+':'+t.length;
+}
+/**
+ * Défait le report `lot` chez chaque athlète dont le programme est ENCORE
+ * celui que le report a écrit. Les autres ne sont pas écrasés : ils sont
+ * rendus dans `changes`. Rend {remis, changes, absents} ou null.
+ */
+function annulerReport(lot){
+  const r=((currentUser&&currentUser.derniersReports)||[]).find(x=>x&&x.lot===lot);
+  if(!r) return null;
+  if(r.annule) return {remis:[],changes:[],absents:[],deja:true};
+  const users=DB.get('users')||{};
+  const out={remis:[],changes:[],absents:[]};
+  for(const v of r.athletes||[]){
+    const k=Object.keys(users).find(e=>users[e]&&users[e].id===v.id);
+    const a=k&&users[k];
+    if(!a||!_estMonAthlete(a,currentUser)){ out.absents.push(v); continue; }
+    if(_empreinteSlim(a.sessions_config)!==v.apres){ out.changes.push(v); continue; }
+    if(v.touche){
+      const h=(a.sessions_config_history||[]).find(e=>e&&e.lot===lot);
+      if(!h){ out.changes.push(v); continue; }
+      const photos=(a.sessions_config||[]).map(x=>x?{photo:x.photo,photo2:x.photo2}:null);
+      a.sessions_config=JSON.parse(JSON.stringify(h.sessions_config));
+      // Les photos de séance ne sont pas dans les copies : on garde celles en place.
+      a.sessions_config.forEach((x,j)=>{ const p=photos[j]; if(x&&p){ if(p.photo&&!x.photo) x.photo=p.photo; if(p.photo2&&!x.photo2) x.photo2=p.photo2; } });
+    }
+    a.assignedProgramId=v.idAvant; a.assignedProgramGenre=v.genreAvant; a.assignedProgramVersion=v.versionAvant;
+    a.updatedAt=Date.now(); users[k]=a; out.remis.push(v);
+    try{ CLOUD.pushOne(k,a).catch(()=>{}); }catch(e){}
   }
-  DB.set('users',us);
+  DB.set('users',users);
+  r.annule=Date.now();
+  try{ saveUser(); }catch(e){}
   try{ renderPropagationEntree(); }catch(e){}
-  return saut?(n+' remis, '+saut+' laissé'+(saut>1?'s':'')+' tel'+(saut>1?'s':'')+' : modifié'+(saut>1?'s':'')+' depuis le report.'):true;
+  return out;
+}
+function _texteAnnulReport(r,pourToast){
+  if(!r) return 'Ce report n’est plus annulable.';
+  if(r.deja) return 'Ce report est déjà annulé.';
+  const pl=n=>n>1?'s':'';
+  const parts=[];
+  if(r.changes.length) parts.push(r.changes.length+' athlète'+pl(r.changes.length)+' '+(r.changes.length>1?'ont':'a')+' changé depuis : à voir un par un');
+  if(r.absents.length) parts.push(r.absents.length+' n’'+(r.absents.length>1?'sont':'est')+' plus dans ton suivi');
+  if(!parts.length) return true;
+  if(r.changes.length) setTimeout(()=>{ try{ _feuilleReportChanges(r); }catch(e){} },0);
+  return 'Annulé chez '+r.remis.length+'. '+parts.join(' ; ')+'.';
+}
+function _feuilleReportChanges(r){
+  try{ closeModal(); }catch(e){}
+  const E=escapeHtml;
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">${r.changes.length} athlète${r.changes.length>1?'s ont':' a'} changé depuis</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:10px">Leur programme a été retouché après le report : il n’a pas été écrasé. À voir un par un.</p>
+    ${r.changes.map(v=>'<button type="button" class="btn btn-outline" style="width:100%;margin:0 0 8px;text-align:left" onclick="closeModal();currentClientId='+_attrArg(v.id)+';openCoachSessions()">'+E(v.nom||'Athlète')+' : voir son programme</button>').join('')}
+    <button class="btn btn-outline" style="margin-top:6px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`);
+}
+async function annulerReportUI(lot){
+  const r=((currentUser&&currentUser.derniersReports)||[]).find(x=>x&&x.lot===lot);
+  if(!r) return false;
+  if(!await rcConfirm('Annuler le report de « '+r.nom+' » ?','Chez les '+r.athletes.length+' athlète'+(r.athletes.length>1?'s':'')+' qui ne l’ont pas retouché depuis.','Annuler le report','Garder')) return false;
+  const t=_texteAnnulReport(annulerReport(lot));
+  if(t===true) toast('Report annulé'); else toast(t,'var(--orange)',6000);
+  return true;
+}
+// Le dernier report de ce modèle, annulable 7 jours.
+function _htmlDernierReport(p){
+  const r=((currentUser&&currentUser.derniersReports)||[]).find(x=>x&&x.modeleId===p.id&&!x.annule&&(Date.now()-Number(x.le))<REPORT_ANNULABLE_J*864e5);
+  if(!r) return '';
+  const j=new Date(Number(r.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return '<div class="c4-entree sub">Dernier report le '+escapeHtml(j)+' · <button type="button" class="rb-lien" onclick="annulerReportUI('+_attrArg(r.lot)+')">Annuler chez '+(r.athletes.length>1?'les '+r.athletes.length:'lui')+'</button></div>';
+}
+// ── Les versions précédentes du modèle (p.versions) ──
+let _versionsModeleOuvert=false;
+function basculerVersionsModele(){ _versionsModeleOuvert=!_versionsModeleOuvert; try{ renderPropagationEntree(); }catch(e){} }
+function _htmlVersionsModele(p){
+  const v=Array.isArray(p.versions)?p.versions:[];
+  if(!v.length) return '';
+  return '<div class="c4-entree sub"><button type="button" class="rb-lien" onclick="basculerVersionsModele()">Versions précédentes du modèle ('+v.length+')</button></div>'
+    +(_versionsModeleOuvert?v.map((x,i)=>'<div class="c4-entree sub" style="display:flex;align-items:center;gap:10px"><span style="flex:1">Version du '
+      +escapeHtml(new Date(Number(x.at)||0).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}))+'</span>'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="restaurerVersionModele('+i+')">Restaurer cette version</button></div>').join(''):'');
+}
+/**
+ * La version redevient le BROUILLON du modèle (en mémoire, comme toute
+ * retouche de l'éditeur) : rien n'est enregistré, et rien ne part chez les
+ * athlètes sans le report habituel. Les champs que la version ne garde pas
+ * (notes, échauffement, descriptions) sont repris du modèle actuel.
+ */
+function versionVersSeances(slim,actuel){
+  const cur=Array.isArray(actuel)?actuel:[];
+  return (slim||[]).map((s,j)=>{
+    const c=cur[j]||{};
+    const pris=new Set();
+    const ex=(s.exercises||[]).map(e=>{
+      const k=cur[j]&&(c.exercises||[]).findIndex((x,i)=>!pris.has(i)&&x&&_modCle(x.name)===_modCle(e.name));
+      const base=(k!=null&&k>=0)?(pris.add(k),JSON.parse(JSON.stringify(c.exercises[k]))):{};
+      const o=Object.assign(base,{name:e.name});
+      for(const m of MOD_CHAMPS){ if(e[m]!=null) o[m]=e[m]; else delete o[m]; }
+      return o;
+    });
+    return Object.assign({},JSON.parse(JSON.stringify(c)),{day:s.day||c.day,name:s.name,active:!!s.active,exercises:ex});
+  });
+}
+function restaurerVersionModele(i){
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_editProgTemplateIdx];
+  const v=p&&Array.isArray(p.versions)?p.versions[Number(i)]:null;
+  if(!v) return false;
+  p.sessions_H=versionVersSeances(v.H,p.sessions_H);
+  p.sessions_F=versionVersSeances(v.F,p.sessions_F);
+  try{ loadProgTemplateSlots(_editProgTemplateGender); }catch(e){}
+  try{ renderPropagationEntree(); }catch(e){}
+  toast('Version chargée : sauvegarde le modèle pour la garder. Rien ne part chez tes athlètes sans le report.','var(--orange)',5000);
+  return true;
 }
 
 // ── Appliquer un modèle depuis la fiche de l'athlète ────────────────────────
