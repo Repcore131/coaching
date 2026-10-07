@@ -1,0 +1,162 @@
+# mot_de_tete<TAB>id<TAB>nom (pour relecture) — lu par scripts/ciqual_convert.py (champ "r").
+# La fiche de référence passe devant quand le PREMIER mot de la requête est le mot de tête.
+pain	7001	Pain blanc (par ex. : baguette, boule…)
+baguette	7007	Pain de tradition française (par ex. : baguette, boule…)
+banane	13005	Banane, chair sans peau, crue
+beurre	16400	Beurre à 80% MG minimum, doux
+pizza	25404	Pizza au fromage ou pizza margherita, préemballée
+kebab	25428	Sandwich grec ou kebab, pita, crudités
+spaghetti	9811	Pâtes sèches, standard, cuites, sans sel ajouté
+pate	9811	Pâtes sèches, standard, cuites, sans sel ajouté
+chevre	12803	Fromage de chèvre lactique affiné, type palet, crottin ou bûchette
+nem	25674	Nem ou pâté impérial, préemballé, cuit (aliment moyen)
+jambon	28900	Jambon cuit, supérieur
+poulet	36017	Poulet, filet sans peau cru
+oeuf	22000	Oeuf cru
+riz	9104	Riz blanc, cuit, sans sel ajouté
+pomme	13039	Pomme, chair et peau, crue
+poire	13397	Poire, chair, crue (aliment moyen)
+orange	13034	Orange, chair sans peau, sans pépins, crue
+fraise	13014	Fraise, crue
+tomate	20276	Tomate ronde, crue
+carotte	20009	Carotte, crue
+salade	25604	Salade verte, crue, sans assaisonnement
+laitue	20031	Laitue, crue
+lait	19033	Lait demi-écrémé (aliment moyen)
+yaourt	19593	Yaourt ou lait fermenté, nature
+fromage	12999	Fromage (aliment moyen)
+emmental	12099	Emmental de Savoie ou emmenthal de Savoie
+camembert	12001	Camembert, sans précision sur le type de lait (pasteurisé ou cru)
+mozzarella	19590	Mozzarella au lait de vache
+feta	12066	Feta, au lait de brebis 70% minimum et lait de chèvre 30% maximum
+parmesan	12120	Parmesan
+comte	12110	Comté
+saumon	26036	Saumon, élevage, cru
+thon	26039	Thon, au naturel, appertisé, égoutté
+cabillaud	26043	Cabillaud, cru
+sardine	26034	Sardine, à l'huile, appertisée, égouttée
+crevette	10007	Crevette, cuite
+steak	6251	Boeuf, steak haché 5% MG cuit
+boeuf	6100	Boeuf, entrecôte, partie maigre grillée/poêlée
+porc	28101	Porc, côte grillée/poêlée
+dinde	36306	Dinde, escalope grillée/poêlée
+veau	6564	Veau, viande, cuite (aliment moyen)
+agneau	21503	Agneau, gigot rôti/cuit au four
+lapin	34000	Lapin, viande braisée
+canard	36205	Canard, magret grillé/poêlé
+saucisse	30011	Saucisse de Toulouse cuite
+lardon	28501	Lardon nature, cru
+chorizo	30315	Chorizo
+saucisson	30300	Saucisson sec
+semoule	9610	Semoule de blé dur, crue
+quinoa	9341	Quinoa, bouilli/cuit à l'eau, sans sel ajouté
+lentille	20360	Lentille, bouillie/cuite à l'eau (aliment moyen)
+pois	20507	Pois chiche, bouilli/cuit à l'eau
+haricot	20030	Haricot vert, cuit
+tofu	20904	Tofu nature, préemballé
+avocat	13004	Avocat, chair sans peau, sans noyau, cru
+concombre	20019	Concombre, chair et peau, cru
+courgette	20020	Courgette, chair et peau, crue
+brocoli	20057	Brocoli, cru
+epinard	20083	Epinard, haché ou purée ou en branches, surgelé, cru
+champignon	20056	Champignon de Paris ou champignon de couche, cru
+poivron	20041	Poivron, vert, jaune ou rouge, cru
+oignon	20034	Oignon, cru
+ail	11000	Ail, cru
+mais	20108	Maïs doux, en épis, surgelé, cru
+frite	4032	Frites de pommes de terre, surgelées, cuites en friteuse
+chips	4004	Chips de pommes de terre nature ou aromatisées
+chocolat	31005	Chocolat noir 50 % de cacao environ, tablette
+sucre	31016	Sucre blanc
+miel	31008	Miel
+confiture	31006	Confiture ou marmelade ou gelée, tout type de fruits, non allégée en sucres (aliment moyen)
+biscuit	24000	Biscuit sec, sans précision
+croissant	7603	Croissant, sans précision (aliment moyen)
+brioche	7746	Brioche, sans précision (aliment moyen)
+crepe	24370	Crêpe dentelle nature
+glace	39527	Glace ou crème glacée, bac ou pot (aliment moyen)
+cafe	18004	Café, non instantané, sans sucres ajoutés, prêt à boire
+the	18020	Thé infusé, sans sucres ajoutés
+jus	2012	Jus d'orange, à base de concentré
+eau	18066	Eau du robinet
+biere	5000	Bière brune
+vin	5214	Vin rouge
+huile	17270	Huile d'olive vierge extra
+creme	19410	Crème 30% MG, épaisse, rayon frais
+compote	13038	Compote de pomme, préemballée
+cereale	32003	Céréales pour petit déjeuner (aliment moyen)
+muesli	32004	Muesli (aliment moyen)
+avoine	9313	Flocons d'avoine bouillis/cuits à l'eau
+flocon	9313	Flocons d'avoine bouillis/cuits à l'eau
+galette	7352	Galette de riz complet soufflé
+tortilla	7815	Tortilla souple (à garnir), à base de blé
+hamburger	25413	Hamburger, de restauration rapide
+burger	25413	Hamburger, de restauration rapide
+quiche	25405	Quiche lorraine, préemballée
+lasagne	25081	Lasagnes ou canellonis à la viande (bolognaise), préemballés
+couscous	25138	Couscous au poulet
+soupe	25900	Soupe aux lentilles, préemballée à réchauffer
+olive	13032	Olive noire, en saumure, égouttée
+amande	15000	Amande, avec peau, sans sel ajouté
+noix	15005	Noix, cerneau, séchée
+noisette	15004	Noisette, sans sel ajouté
+cacahuete	15002	Cacahuète, grillée, salée
+cajou	15019	Noix de cajou, grillée, salée
+pistache	15009	Pistache, grillée, salée
+raisin	13044	Raisin blanc, à gros grain (type Italia ou Dattier), cru
+kiwi	13021	Kiwi, chair sans peau, avec pépins, cru
+ananas	13002	Ananas, chair sans peau, cru
+mangue	13025	Mangue, chair sans peau, sans noyau, crue
+peche	13043	Pêche, chair et peau, sans noyau, crue
+abricot	13000	Abricot, dénoyauté, cru
+cerise	13008	Ceriser, chair et peau, sans noyau, crue
+melon	13026	Melon cantaloup (par ex.: Charentais), chair sans peau, sans pépins, cru
+pasteque	13036	Pastèque, chair sans peau, sans pépins, crue
+citron	13009	Citron, chair sans peau, sans pépins, cru
+clementine	13024	Clémentine ou mandarine, chair sans peau, sans pépins, crue
+myrtille	13028	Myrtille, crue
+framboise	13015	Framboise, crue
+datte	13523	Datte du désert, chair et peau, sans noyau, crue
+figue	13012	Figue, crue
+prune	13027	Prune mirabelle, sans noyau, crue
+patate	4102	Patate douce, cuite
+puree	4017	Purée de pomme de terre, à base de flocons, reconstituée avec lait entier et matière grasse
+gnocchi	25510	Gnocchi à la pomme de terre, cuit
+ravioli	25019	Ravioli au boeuf, sauce tomate, appertisé
+sushi	25456	Sushi ou maki aux produits de la mer
+wrap	25647	Wrap poulet crudités
+sandwich	25517	Sandwich baguette, jambon beurre, fait maison
+cookie	24684	Cookie au chocolat, préemballé
+madeleine	24630	Madeleine, pur beurre, préemballée
+gaufre	23851	Gaufre moelleuse (type bruxelloise ou liégeoise), nature ou sucrée, préemballée
+flan	23525	Flan pâtissier aux oeufs ou à la parisienne
+mayonnaise	11054	Mayonnaise (70% MG min.), préemballée
+ketchup	11008	Ketchup, préemballé
+moutarde	11013	Moutarde
+vinaigrette	11110	Sauce vinaigrette (50 à 75% d'huile), préemballée
+whey	-1	Whey concentrée (protéine de lactosérum), poudre
+skyr	-6	Skyr nature
+faisselle	19641	Faisselle, 6% MG environ
+boulgour	9691	Boulgour de blé, cuit, sans sel ajouté
+polenta	9615	Polenta ou semoule de maïs, cuite, sans sel ajouté
+farine	9436	Farine de blé tendre ou froment T55 (pour pains)
+tempeh	20917	Tempeh
+seitan	25598	Seitan, préemballé
+maquereau	26019	Maquereau, rôti/cuit au four
+truite	26998	Truite saumonée, sautée/poêlée
+merlu	26120	Merlu, cuit à l'étouffée
+surimi	26046	Surimi, bâtonnets, tranche ou râpé saveur crabe
+rillette	8000	Rillettes traditionnelles de porc
+endive	20026	Endive, crue
+chou	20016	Chou-fleur, cru
+radis	20045	Radis rouge, cru
+betterave	20091	Betterave rouge, crue
+aubergine	20053	Aubergine, crue
+poireau	20039	Poireau, cru
+asperge	20279	Asperge, verte, crue
+artichaut	20052	Artichaut, cru
+celeri	20023	Céleri branche, cru
+navet	20064	Navet, pelé, cru
+fenouil	20028	Fenouil, cru
+courge	20139	Courge, crue
+potiron	20044	Potiron, cru

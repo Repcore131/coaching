@@ -223,6 +223,35 @@ def poser_alias(out):
     print(f'  Alias de recherche : {n} sur {sum(1 for e in out if "a" in e)} fiches')
     return out
 
+# ── Les fiches de référence (champ "r") ──────────────────────────────────
+# « pain » rendait le Pain perdu en premier et la baguette en dixième.
+# scripts/references_aliments.tsv dit, pour un mot de tête, LA fiche que
+# l'athlète attend ; l'app la fait passer devant quand le premier mot de la
+# requête est ce mot. "r" porte les mots de tête (et non un simple 1) : une
+# fiche peut en avoir plusieurs (« pate » et « spaghetti »).
+REFERENCES = os.path.join(os.path.dirname(__file__), 'references_aliments.tsv')
+
+def poser_references(out):
+    par_id = {}
+    if os.path.exists(REFERENCES):
+        with open(REFERENCES, encoding='utf-8') as fp:
+            for ligne in fp:
+                if not ligne.strip() or ligne.startswith('#'):
+                    continue
+                cols = ligne.rstrip('\n').split('\t')
+                par_id.setdefault(int(cols[1]), []).append(norm_alias(cols[0]))
+    ids = {e['id'] for e in out}
+    orphelins = sorted(i for i in par_id if i not in ids)
+    if orphelins:
+        print(f'  ✗ Références vers des ids absents de la table : {orphelins}')
+        sys.exit(1)
+    for e in out:
+        e.pop('r', None)
+        if e['id'] in par_id:
+            e['r'] = sorted(set(par_id[e['id']]))
+    print(f'  Fiches de référence : {len(par_id)}')
+    return out
+
 def completer(out):
     """Énergie calculée là où elle manque, puis le bloc générique (remplacé
     s'il existait déjà : le script peut repasser sans rien dupliquer), puis
@@ -238,7 +267,7 @@ def completer(out):
     print(f'  Énergie calculée (4p + 4c + 9l + 2f) : {n} aliments')
     g = generiques()
     print(f'  Aliments génériques RepCore : {len(g)}')
-    return poser_alias(base + g)
+    return poser_references(poser_alias(base + g))
 
 def ecrire(out):
     os.makedirs(os.path.dirname(DST), exist_ok=True)

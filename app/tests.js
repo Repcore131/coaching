@@ -22618,6 +22618,58 @@ async function testExercices(){
           return el.innerHTML.indexOf('trouvé via')<0?true:_echec('mention sur une correspondance par le nom');
         } finally { el.innerHTML=av; }});
     }
+    // ══ BUILD 1853 : DÉBUT DE MOT, FICHES DE RÉFÉRENCE, HABITUDES, BRUIT ══
+    {
+      const _premier=q=>{ const {normQ,words}=_fjRequete(q); const r=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words); return r[0]&&r[0].f; };
+      const PREMIERS=[['pain',/^Pain (blanc|de tradition)/],['nems',/^Nem/],['chevre',/^Fromage de chèvre/],['pizza',/^Pizza/],
+        ['beurre',/^Beurre à/],['banane',/^Banane, chair sans peau, crue/],['kebab',/^Sandwich grec ou kebab/],['spaghetti',/^Pâtes/],
+        ['poulet cuit',/^Poulet, .*(rôti|cuit)/],['oeufs',/^Oeuf/],['riz',/^Riz/],['whey',/whey/i],['skyr',/^Skyr/],['steak hache',/steak haché/]];
+      okA('Classement : la 1re fiche est celle qu’on attend (pain, nems, chèvre, pizza, beurre, banane, kebab, spaghetti, poulet cuit…)',async()=>{
+        await _loadCiqual();
+        const ko=PREMIERS.map(([q,re])=>{ const f=_premier(q); return f&&re.test(f.n)?null:q+' → '+(f?f.n:'rien'); }).filter(Boolean);
+        return ko.length?_echec(ko.join(' ; ')):true;});
+      ok('Filtre : un mot doit COMMENCER un mot du nom (« nems » ne prend plus « assaisonnement »)',()=>{
+        if(_fjContientDebut('salade verte, crue, sans assaisonnement',['nem'])) return _echec('nem dans assaisonnement');
+        if(!_fjContientDebut('nem ou pate imperial',['nems'])) return _echec('le pluriel ne passe plus');
+        // 6 lettres et plus : la sous-chaîne reste permise (mots soudés).
+        return _fjContientDebut('chou-fleur, cru',['fleur'])&&_fjContientDebut('pommedeterre',['deterre'])?true:_echec('sous-chaîne de 6 lettres refusée');});
+      ok('Filtre : sans aucun résultat en début de mot, l’ancien filtre par sous-chaîne reprend',()=>{
+        const l=[{s:'assaisonnement'},{s:'riz'}];
+        const r=_fjFiltrer(l,['sonn']);
+        return r.length===1&&r[0].s==='assaisonnement'?true:_echec(JSON.stringify(r));});
+      okA('_bonusHabitude : un favori fréquent passe devant la fiche de référence',async()=>{
+        await _loadCiqual();
+        const sauve=currentUser;
+        try{
+          const basmati=_ciqualDB.find(f=>/^Riz basmati/.test(f.n));
+          if(!basmati) return _echec('pas de riz basmati');
+          currentUser={id:'_h',email:'h@t',nutrition:{favoriteFoods:[basmati.id],usageFoods:{[String(basmati.id)]:{n:5,t:1}},recentFoods:[basmati.id]}};
+          if(_bonusHabitude(basmati,currentUser)!==170) return _echec('bonus '+_bonusHabitude(basmati,currentUser));
+          if(_bonusHabitude({id:1},currentUser)!==0) return _echec('bonus sans habitude');
+          const f=_premier('riz');
+          return f&&f.id===basmati.id?true:_echec('en tête : '+(f&&f.n));
+        } finally { currentUser=sauve; }});
+      okA('Bruit : eaux minérales, Martinique et infantile derrière, sauf si on les nomme',async()=>{
+        await _loadCiqual();
+        const eau=_ciqualDB.find(f=>/^Eau minérale Volvic/.test(f.n));
+        if(eau){
+          if(_malusBruit(eau,['eau'])!==-60) return _echec('eau minérale sans malus');
+          if(_malusBruit(eau,['volvic'])!==0) return _echec('« volvic » garde le malus');
+        }
+        const m=_ciqualDB.find(f=>/Martinique/.test(f.n));
+        if(m&&(_malusBruit(m,['patate'])>-60||_malusBruit(m,['patate','martinique'])<=-60)) return _echec('Martinique');
+        const b=_ciqualDB.find(f=>/infantile/.test(_fjNorm(f.g||'')));
+        if(b&&(_malusBruit(b,['compote'])>-60||_malusBruit(b,['compote','bebe'])<0)) return _echec('infantile');
+        return true;});
+      okA('Références : chaque fiche « r » existe, et le tri reste stable',async()=>{
+        await _loadCiqual();
+        const n=_ciqualDB.filter(f=>Array.isArray(f.r)&&f.r.length).length;
+        if(n<100) return _echec(n+' fiches de référence');
+        const {normQ,words}=_fjRequete('pomme');
+        const a=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).map(x=>x.f.id).join();
+        const b=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).map(x=>x.f.id).join();
+        return a===b?true:_echec('tri instable');});
+    }
     okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
       const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
       try{

@@ -60,19 +60,16 @@ wok nouilles	25183	nouilles sautées
 pdt	4003,4008,4014	pomme de terre
 patate	4003,4008,4014	pomme de terre
 patates	4003,4008,4014	pomme de terre
-pomme de terre cuite	4003,4008,4014	pomme de terre
 pommes de terre vapeur	4003,4008,4014	pomme de terre
 chocolatine	7730,7733	viennoiserie
 yogourt	19600,19624	yaourt
 yoghourt	19600,19624	yaourt
 yogurt	19600,19624	yaourt
 jambon blanc	28900,28910,28925	jambon cuit
-jambon de paris	28900,28910,28925	jambon cuit
 steack	6251,6253,6255	steak haché
 steack hache	6251,6253,6255	steak haché
 blanc de poulet	36018,36017	poulet filet
 filet de poulet	36018,36017	poulet filet
-poulet grille	36018,36017	poulet filet
 escalope de poulet	36018,36017	poulet filet
 aiguillette de poulet	36018,36017	poulet filet
 aiguillettes de poulet	36018,36017	poulet filet
@@ -102,7 +99,6 @@ pitch	7746,7740	brioche
 porridge	9313,32140	avoine
 gruau	9313,32140	avoine
 musli	32004	muesli
-cereales chocolat	32003,32001,32016	céréales
 chocapic	32003,32001,32016	céréales
 tresor	32003,32001,32016	céréales
 miel pops	32003,32001,32016	céréales
@@ -110,7 +106,6 @@ coco pops	32003,32001,32016	céréales
 special k	32001	céréales
 fitness	32001	céréales
 galettes de riz	7352,7355	galette de riz
-pates cuites	9811,9810	pâtes
 spaghetti	9811,9810	pâtes
 spaghettis	9811,9810	pâtes
 penne	9811,9810	pâtes
@@ -128,18 +123,12 @@ lait 1/2 ecreme	19033,19041	lait
 lait sans lactose	19060	lait
 lactose free	19060	lait
 matin leger	19060	lait
-fromage blanc	19501,19638,19639	fromage blanc
-faisselle	19501,19638,19639	fromage blanc
 fromage frais	19501,19638,19639	fromage blanc
 greek yogurt	19550,19552	yaourt
-emmental	12775,12099,12115	fromage
-emmenthal	12775,12099,12115	fromage
 gruyere rape	12775,12099,12115	fromage
-fromage rape	12775,12099,12115	fromage
 comte affine	12110	fromage
 mozarella	19590,19591	fromage
 chevre frais	19437,12803,12810	fromage
-buche de chevre	19437,12803,12810	fromage
 vache qui rit	12300,12303	fromage
 kiri	12300,12303	fromage
 carre frais	12300,12303	fromage
@@ -160,7 +149,6 @@ pistaches	15009	pistache
 fruits secs	15066	fruits secs
 mélange fruits secs	15066	fruits secs
 trail mix	15066	fruits secs
-clementine	13024,13425	fruit
 fraises	13014	fruit
 myrtilles	13028	fruit
 blueberries	13028	fruit
@@ -175,16 +163,12 @@ compote de pommes	13212,13038	compote
 pom potes	13212,13038	compote
 pompote	13212,13038	compote
 jus de fruit	2012,2013	jus
-avocat	13004,25620	avocat
 avocats	13004,25620	avocat
-guacamole	13004,25620	avocat
 tomates	20172	légume
 tomates cerises	20172	légume
 salade	20031,20099	légume
 salade verte	20031,20099	légume
-laitue	20031,20099	légume
 batavia	20031,20099	légume
-mache	20031,20099	légume
 roquette	20031,20099	légume
 carottes	20009	légume
 carotte rapee	20009	légume
@@ -195,8 +179,6 @@ poivrons	19999,20041	légume
 oignons	20034	légume
 lentilles	20360,20587	légumineuse
 pois chiches	20532,25621	légumineuse
-pois chiche	20532,25621	légumineuse
-houmous	20532,25621	légumineuse
 hummus	20532,25621	légumineuse
 haricots rouges	20503	légumineuse
 pave de saumon	25996,26038	poisson
@@ -210,32 +192,19 @@ maquereaux	26019,26020	poisson
 crevettes	10101,10006	fruits de mer
 gambas	10101,10006	fruits de mer
 batonnets de crabe	26046	surimi
-poulet roti	36004,36006,36018	poulet
 cuisse de poulet	36004,36006,36018	poulet
 pilon de poulet	36004,36006,36018	poulet
 escalope de dinde	36306,36308,36304	dinde
 blanc de dinde	36306,36308,36304	dinde
 viande rouge	6100,6105,6110	boeuf
-entrecote	6100,6105,6110	boeuf
 bavette	6100,6105,6110	boeuf
 rumsteck	6100,6105,6110	boeuf
-faux filet	6100,6105,6110	boeuf
 cote de porc	28101,28203	porc
-filet mignon	28101,28203	porc
 lardons	28501,28504	porc
-saucisse	30151,30005,30011	saucisse
 saucisses	30151,30005,30011	saucisse
-chipolata	30151,30005,30011	saucisse
-merguez	30151,30005,30011	saucisse
 knacki	30134,30742	saucisse
-saucisse de strasbourg	30134,30742	saucisse
 hot dog	30134,30742	saucisse
-pizza margherita	25516,25404	pizza
-pizza fromage	25516,25404	pizza
-pizza reine	25435,25548	pizza
-pizza royale	25435,25548	pizza
 doner	25428,25429	sandwich
-couscous poulet	25127,25138	plat
 tortillas	7815	pain
 galette de ble	7815	pain
 doritos	38105,38417	chips
@@ -258,7 +227,6 @@ madeleines	24630	biscuit
 crepes	25409,25410	crêpe
 gaufres	24300	gaufre
 pancakes	23827	pancake
-the vert	18020,18155	thé
 eau plate	18044,18066	eau
 ice tea	18062	boisson
 the glace	18062	boisson
@@ -289,8 +257,6 @@ sauce salade	11110	sauce
 spaghettis bolo	25085	plat
 parisien	25517	sandwich
 sandwich parisien	25517	sandwich
-sandwich thon	25431,25476	sandwich
-sandwich poulet	25431,25476	sandwich
 espresso	18071	café
 cafe noir	18071	café
 petit noir	18071	café
@@ -307,5 +273,4 @@ chocolat chaud	18101,18102	boisson
 nesquik	18101,18102	boisson
 banania	18101,18102	boisson
 poulain	18101,18102	boisson
-cacao en poudre	18101,18102	boisson
 tourte	25573	plat

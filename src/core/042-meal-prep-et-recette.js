@@ -2104,7 +2104,7 @@ function onFjSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_ciqualDB.filter(f=>_fjCorrespond(f,words));
+  const res=_fjFiltrer(_ciqualDB,words);
   document.getElementById('fj-recent-section').innerHTML='';
   // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
   const _rcH=htmlRecettesRecherche(words);
@@ -2116,7 +2116,7 @@ function onFjSearch(val){
   // Même règle pour les aliments perso et ceux du coach : une seule fonction
   // décide, sinon la table et les listes personnelles répondraient différemment
   // à la même frappe.
-  const filtre=l=>l.filter(a=>a&&_fjCorrespond({s:String(a.s||''),a:a.a},words));
+  const filtre=l=>_fjFiltrer(l,words);
   const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
   // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
   // table Ciqual, puis les produits de marque. Le plus specifique d abord :
@@ -2280,7 +2280,7 @@ function alimentPourNomRepas(nom,db,user){
   const l=Array.isArray(db)?db:[];
   const chercher=words=>{
     if(!words.length) return null;
-    const res=l.filter(f=>_fjCorrespond(f,words));
+    const res=_fjFiltrer(l,words);
     if(!res.length) return null;
     const cl=_classerAliments(res,words.join(' '),words).map(x=>x.f);
     let tr=null; try{ tr=evictionTrier(user,cl); }catch(e){ tr=null; }
@@ -2394,7 +2394,7 @@ function photoRepasChercher(q){
   const z=document.getElementById('prp-res'); if(!z||!_photoRepas) return;
   const words=_fjNorm(String(q||'')).split(/\s+/).filter(w=>w.length>1);
   if(!words.length){ z.innerHTML=''; return; }
-  const res=(_ciqualDB||[]).filter(f=>_fjCorrespond(f,words));
+  const res=_fjFiltrer(_ciqualDB||[],words);
   _photoRepas.res=_classerAliments(res,words.join(' '),words).slice(0,6).map(x=>x.f);
   z.innerHTML=_photoRepas.res.map((f,k)=>'<button type="button" class="prp-r" onclick="photoRepasPrendre('+k+')">'+escapeHtml(f.n)+'</button>').join('')
     ||'<div class="prp-lu">Aucun résultat.</div>';

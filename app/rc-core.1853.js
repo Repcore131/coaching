@@ -102747,7 +102747,7 @@ function onPlanSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_ciqualDB.filter(f=>_fjCorrespond(f,words));
+  const res=_fjFiltrer(_ciqualDB,words);
   if(!res.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>'; return; }
   const scored=_classerAliments(res,normQ,words);
   // La macro visée est rappelée sur chaque ligne : choisir une source de
@@ -104246,18 +104246,76 @@ function _fjTexteRecherche(f){
   const s=(f&&(f.s||_fjNorm(f.n)))||'';
   return (f&&Array.isArray(f.a)&&f.a.length)?s+' | '+f.a.join(' | '):s;
 }
+// PURE. AU DÉBUT D'UN MOT (BUILD 1853). La sous-chaîne faisait sortir la
+// salade verte sur « nems » (assaisonNEMent) et le chevreuil sur « chevre ».
+// Un mot de la requête doit commencer un mot du texte. Exception : à partir de
+// 6 lettres, la sous-chaîne reste acceptée, pour les mots soudés
+// (« chou-fleur », « pommedeterre ») — _classerAliments lui retire 40.
+const FJ_SOUS_CHAINE_MIN=6;
+function _fjDebutMot(t,v){
+  const i=t.indexOf(v);
+  if(i<0) return false;
+  const re=new RegExp('(^|[^a-z0-9])'+v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  return re.test(t);
+}
+function _fjContientDebut(texte,words){
+  const t=String(texte||'');
+  return (words||[]).every(w=>_fjFormes(w).some(v=>_fjDebutMot(t,v)||(v.length>=FJ_SOUS_CHAINE_MIN&&t.includes(v))));
+}
 // PURE. L'alias qui a fait correspondre, quand le NOM seul ne le fait pas.
 // ⚠ UN ALIAS CORRESPOND EN ENTIER, pas morceau par morceau : « lait » pris dans
 // le nom et « amande » dans un alias ne font pas « lait d'amande ».
-function _fjAliasVia(f,words){
+// `lache` : l'ancien filtre par sous-chaîne, pour le repli de _fjFiltrer.
+function _fjAliasVia(f,words,lache){
   if(!f||!Array.isArray(f.a)||!f.a.length) return null;
-  if(_fjContientTous((f.s||_fjNorm(f.n)||''),words)) return null;
-  return f.a.find(a=>_fjContientTous(a,words))||null;
+  const ok=lache?_fjContientTous:_fjContientDebut;
+  if(ok((f.s||_fjNorm(f.n)||''),words)) return null;
+  return f.a.find(a=>ok(a,words))||null;
 }
 // PURE. LA seule décision « cette fiche répond-elle ? », pour toutes les listes.
-function _fjCorrespond(f,words){
+function _fjCorrespond(f,words,lache){
   if(!f) return false;
-  return _fjContientTous(f.s||_fjNorm(f.n),words)||!!_fjAliasVia(f,words);
+  const ok=lache?_fjContientTous:_fjContientDebut;
+  return ok(f.s||_fjNorm(f.n),words)||!!_fjAliasVia(f,words,lache);
+}
+// PURE. Le filtre en début de mot ; s'il ne rend RIEN, l'ancien filtre par
+// sous-chaîne — la recherche ne rend jamais moins qu'avant.
+function _fjFiltrer(liste,words){
+  const l=(liste||[]).filter(Boolean);
+  const strict=l.filter(f=>_fjCorrespond(f,words));
+  return strict.length?strict:l.filter(f=>_fjCorrespond(f,words,true));
+}
+// PURE. LES HABITUDES DE L'ATHLÈTE. Celui qui mange toujours du « Riz basmati
+// cuit » doit le voir en premier quand il tape « riz » : +80 favori, +60
+// fréquent (FJ_FREQUENT_MIN ajouts), +30 récent. Un favori passe donc devant
+// la fiche de référence (+150) dès qu'il est aussi fréquent ou récent… et
+// devant elle seul quand elle ne correspond qu'à moitié à la requête.
+function _bonusHabitude(f,user){
+  if(!f||f.id==null) return 0;
+  const n=(user&&user.nutrition)||{};
+  let b=0;
+  const fav=Array.isArray(n.favoriteFoods)?n.favoriteFoods:[];
+  if(fav.indexOf(f.id)>=0) b+=80;
+  const u=n.usageFoods&&n.usageFoods[String(f.id)];
+  const min=(typeof FJ_FREQUENT_MIN==='number')?FJ_FREQUENT_MIN:3;
+  if(u&&(u.n||0)>=min) b+=60;
+  if(Array.isArray(n.recentFoods)&&n.recentFoods.indexOf(f.id)>=0) b+=30;
+  return b;
+}
+// PURE. LE BRUIT : 86 eaux minérales de marque, 79 fiches prélevées à la
+// Martinique, 39 aliments infantiles. Ils restent trouvables, mais derrière,
+// SAUF quand la requête porte leur mot distinctif (« volvic », « martinique »,
+// « bébé »). Les abats aussi passent derrière, sauf si on les nomme.
+const FJ_MOTS_EAU=new Set(['eau','eaux','minerale','minerales','embouteillee','gazeuse','plate','source']);
+function _malusBruit(f,words){
+  const nn=(f&&(f.s||_fjNorm(f.n)))||'', ng=_fjNorm((f&&f.g)||'');
+  const w=words||[];
+  let m=0;
+  if(/^eau minerale /.test(nn)&&!w.some(x=>!FJ_MOTS_EAU.has(x)&&nn.indexOf(x)>=0)) m-=60;
+  if(/martinique/.test(nn)&&!w.some(x=>x.startsWith('martiniq'))) m-=60;
+  if(/infantile/.test(ng)&&!w.some(x=>/^(bebe|infantile|nourrisson|enfant)/.test(x))) m-=60;
+  if(/^(coeur|foie|rognon|gesier|langue|cervelle|tripe|abat)/.test(nn)&&!w.some(x=>/^(coeur|foie|rognon|gesier|langue|cervelle|tripe|abat)/.test(x))) m-=40;
+  return m;
 }
 function _fjNorm(s){
   return (s||'').toLowerCase()
@@ -104289,7 +104347,11 @@ function _classerAliments(res,normQ,words){
   // du côté TABLE — « oeuf » retrouvait « oeufs » — mais jamais du côté
   // REQUÊTE. Sans ça, « tomates » remonterait désormais du filtre sans jamais
   // recevoir le bonus « mot entier » : trouvées, mais classées derrière.
-  const MOTS=words.map(w=>new RegExp('\\b'+_fjSingulier(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[sx]?\\b'));
+  // « e » accepté : « cuit » est entier dans « cuite », le féminin n'est pas un autre mot.
+  const MOTS=words.map(w=>new RegExp('\\b'+_fjSingulier(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'e?[sx]?\\b'));
+  // Le premier mot, pour les fiches de référence (champ « r », 1853).
+  const tete0=words.length?_fjSingulier(words[0]):'';
+  let _u=null; try{ _u=currentUser; }catch(e){ _u=null; }
   return res.map(f=>{
     // f.s EST deja le nom normalise dans la table : le recalculer a chaque
     // frappe coutait le double du temps de recherche. Le repli reste la au
@@ -104308,8 +104370,11 @@ function _classerAliments(res,normQ,words){
     // 2) Le mot entier, l etat brut, et l absence de preparation.
     if(MOTS.every(r=>r.test(tete))) sc+=60;
     if(ETAT_BRUT.test(nn)) sc+=45; else if(ETAT_SEC.test(nn)) sc+=25;
-    if(PREPARE.test(nn)) sc-=70;
-    if(TRANSFORME.test(nn)) sc-=35;
+    // UNE FICHE DE RÉFÉRENCE n'est pas « préparée » : c'est l'aliment attendu
+    // (« Thon, au naturel, appertisé » pour « thon », le kebab pour « kebab »).
+    const estRef=Array.isArray(f.r)&&(f.r.indexOf(tete0)>=0||f.r.indexOf(words[0])>=0);
+    if(!estRef&&PREPARE.test(nn)) sc-=70;
+    if(!estRef&&TRANSFORME.test(nn)) sc-=35;
     // 3) Un nom COURT est presque toujours plus generique qu un nom long :
     //    « Oeuf cru » contre « Salade composee au thon et aux oeufs ». C est
     //    un departage, pas une regle principale — d ou le petit poids.
@@ -104317,6 +104382,11 @@ function _classerAliments(res,normQ,words){
     // 4) Les groupes CIQUAL : matieres premieres contre plats composes.
     if(isGeneric&&/viande|volaille|gibier|oeuf|poisson|legume|fruit|cereale|lait/.test(ng)) sc+=30;
     if(/plat|sandwich|dessert|snack|aperitif/.test(ng)) sc-=80;
+    // 5) BUILD 1853 : la référence, les habitudes, le bruit, et la sous-chaîne.
+    if(estRef) sc+=150;
+    sc+=_bonusHabitude(f,_u);
+    sc+=_malusBruit(f,words);
+    if(!_fjContientDebut(tete,words)&&!via) sc-=40;
     return{f,sc};
   }).sort((a,b)=>b.sc-a.sc);
 }
@@ -105268,7 +105338,7 @@ function _rendreResultatsIngredient(){
   if(q.length<2){ z.innerHTML=''; return; }
   if(!_ciqualDB){ z.innerHTML=etatChargement(2); _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
   const {normQ,words}=_fjRequete(q);
-  const res=_classerAliments(_ciqualDB.filter(f=>_fjCorrespond(f,words)),normQ,words).slice(0,12).map(x=>x.f);
+  const res=_classerAliments(_fjFiltrer(_ciqualDB,words),normQ,words).slice(0,12).map(x=>x.f);
   const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div class="rct-n" style="font-size:var(--fs-sm)">'+escapeHtml(a.n)+(src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
@@ -107415,7 +107485,7 @@ function onFjSearch(val){
   // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
   // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
   // que l'aliment n'est pas dans la table.
-  const res=_ciqualDB.filter(f=>_fjCorrespond(f,words));
+  const res=_fjFiltrer(_ciqualDB,words);
   document.getElementById('fj-recent-section').innerHTML='';
   // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
   const _rcH=htmlRecettesRecherche(words);
@@ -107427,7 +107497,7 @@ function onFjSearch(val){
   // Même règle pour les aliments perso et ceux du coach : une seule fonction
   // décide, sinon la table et les listes personnelles répondraient différemment
   // à la même frappe.
-  const filtre=l=>l.filter(a=>a&&_fjCorrespond({s:String(a.s||''),a:a.a},words));
+  const filtre=l=>_fjFiltrer(l,words);
   const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
   // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
   // table Ciqual, puis les produits de marque. Le plus specifique d abord :
@@ -107591,7 +107661,7 @@ function alimentPourNomRepas(nom,db,user){
   const l=Array.isArray(db)?db:[];
   const chercher=words=>{
     if(!words.length) return null;
-    const res=l.filter(f=>_fjCorrespond(f,words));
+    const res=_fjFiltrer(l,words);
     if(!res.length) return null;
     const cl=_classerAliments(res,words.join(' '),words).map(x=>x.f);
     let tr=null; try{ tr=evictionTrier(user,cl); }catch(e){ tr=null; }
@@ -107705,7 +107775,7 @@ function photoRepasChercher(q){
   const z=document.getElementById('prp-res'); if(!z||!_photoRepas) return;
   const words=_fjNorm(String(q||'')).split(/\s+/).filter(w=>w.length>1);
   if(!words.length){ z.innerHTML=''; return; }
-  const res=(_ciqualDB||[]).filter(f=>_fjCorrespond(f,words));
+  const res=_fjFiltrer(_ciqualDB||[],words);
   _photoRepas.res=_classerAliments(res,words.join(' '),words).slice(0,6).map(x=>x.f);
   z.innerHTML=_photoRepas.res.map((f,k)=>'<button type="button" class="prp-r" onclick="photoRepasPrendre('+k+')">'+escapeHtml(f.n)+'</button>').join('')
     ||'<div class="prp-lu">Aucun résultat.</div>';
