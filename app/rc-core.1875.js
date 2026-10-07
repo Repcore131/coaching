@@ -7663,6 +7663,8 @@ function _diffAthletePkg(a){
 const CHAMPS_SANTE=Object.freeze([
   // Poids, mensurations, photos corporelles
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
+  // Les pesées écartées par le coach (build 1875).
+  'weightLogExclu',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // La corbeille du coach (build 1871) : elle peut porter le plan
   // alimentaire d'un athlète. Classée santé par prudence.
@@ -35477,8 +35479,11 @@ function _viserExercice(nom){
 function _buildSessionCard(s,client){
   const dt=dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
+  // BUILD 1875 : les séries suspectes (2,5 × son meilleur e1RM) et la correction.
+  const _susp=(function(){ try{ return client?seriesSuspectes(client.sessions):[]; }catch(e){ return []; } })().filter(x=>x.cle===_cleSeance(s));
+  const _em=client?escapeHtml(client.email||'').replace(/'/g,'&#39;'):'';
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
-    const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));
+    const done=(d.sets||[]).filter(x=>(x.done||x.horsCalcul)&&(x.weight||x.reps));
     if(!done.length) return '';
     // N6.9 — LE RIR ET LA DOULEUR, SERIE PAR SERIE. Les deux sont collectes a
     // chaque serie et lus ailleurs — rir alimente e1rm et rirMoyenSeance, pain
@@ -35504,7 +35509,9 @@ function _buildSessionCard(s,client){
       // R29 — sur une fourchette, les repetitions NOTEES : « 36kg×10 », et non
       // la prescription « 36kg×10-12 » qui ne dit pas ce qui a ete fait.
       :`${x.weight||'?'}kg×${x.repsDone!=null?x.repsDone:(x.reps||'?')}`)+_sfx(x)
+      +(x.horsCalcul?' (non comptée)':x.corrige?' (corrigée)':'')
     ).join(' · ');
+    const _sx=_susp.filter(z=>z.ex===nm);
     // N4.5 — LE NOM DE L'EXERCICE EST LE CHEMIN. Un bouton et non un div : il
     // se prend au clavier, il s'annonce comme un bouton, et le reste de la
     // ligne — ce que l'athlete a REELLEMENT fait — reste du texte.
@@ -35514,6 +35521,8 @@ function _buildSessionCard(s,client){
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+      ${_sx.length?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">${_sx.map(z=>escapeHtml(String(z.kg).replace('.',','))+' kg : plus de 2,5 × son meilleur (e1RM '+z.ref+' kg)').join(' · ')}</div>`:''}
+      ${client&&s.date?`<button type="button" class="rb-lien" style="font-size:var(--fs-2xs)" onclick="ouvrirCorrectionSeries('${_em}','${escapeHtml(_cleSeance(s))}','${_nomEch}')">Corriger</button>`:''}
       ${(()=>{ const n=client?noteExo(client,nm):null;
         return n?`<div class="sc-note-exo">Sa note : ${escapeHtml(n.texte)}</div>`:''; })()}
     </div>`;
@@ -71067,6 +71076,138 @@ function appliquerCorrectionSeance(sess,modifs,maintenant){
   sess.corrigeeLe=Number(maintenant)||Date.now();
   return true;
 }
+// ══ BUILD 1875 : LE COACH CORRIGE UNE SÉRIE ═════════════════════════════════
+// 825 kg au lieu de 82,5 faussait records, e1RM, charges suggérées et volume.
+// Corriger : set.corrige={avant:{weight,repsDone,rir},par,le} (le PREMIER
+// « avant » est gardé). Neutraliser : set.horsCalcul=true ET done=false —
+// les cent lecteurs de séries filtrent déjà sur done, ils l'ignorent tous ;
+// l'affichage, lui, la montre barrée.
+/** PURE. La série compte-t-elle dans les calculs ? */
+function serieComptee(st){ return !!st&&!!st.done&&!st.horsCalcul; }
+/** PURE (sur st). Applique une correction ; rend true si la série a changé. */
+function appliquerCorrectionSerie(st,m,par,le,max){
+  if(!st||!m) return false;
+  if(!(st.done||st.horsCalcul)) return false;
+  const avant={weight:st.weight==null?'':st.weight,repsDone:st.repsDone==null?'':st.repsDone,rir:st.rir==null?'':st.rir};
+  let ch=false;
+  if(m.weight!=null&&String(m.weight).trim()!==''){ const w=lireCharge(m.weight,max); if(w!=null&&String(w)!==String(st.weight)){ st.weight=String(w); ch=true; } }
+  if(m.repsDone!=null&&String(m.repsDone).trim()!==''){ const r=lireDecimal(m.repsDone,{min:0,max:200,pas:1}); if(r!=null&&String(r)!==String(st.repsDone)){ st.repsDone=String(r); ch=true; } }
+  if(m.rir!=null&&String(m.rir).trim()!==''){ const r=lireDecimal(m.rir,{min:0,max:10,pas:0.5}); if(r!=null&&String(r)!==String(st.rir)){ st.rir=String(r); ch=true; } }
+  if(m.horsCalcul===true&&!st.horsCalcul){ st.horsCalcul=true; st.done=false; ch=true; }
+  else if(m.horsCalcul===false&&st.horsCalcul){ delete st.horsCalcul; st.done=true; ch=true; }
+  if(ch){
+    if(!st.corrige) st.corrige={avant,par:par||null,le:Number(le)||Date.now()};
+    else { st.corrige.par=par||null; st.corrige.le=Number(le)||Date.now(); }
+  }
+  return ch;
+}
+function _recalculerTotauxSeance(sess){
+  let sets=0, vol=0;
+  for(const [nm,d] of Object.entries(sess.data||{})) for(const st of ((d&&d.sets)||[])){
+    if(!serieComptee(st)) continue;
+    sets++; try{ vol+=tonnageSerie(st,{name:nm,methode:d.methode}); }catch(e){}
+  }
+  sess.sets=sets; sess.volume=Math.round(vol);
+}
+function _cleSeance(s){ return String(s&&(s.id!=null?s.id:s.date)); }
+function corrigerSeriesCoach(email,sessCle,ex,modifs){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const sess=(c.sessions||[]).find(s=>_cleSeance(s)===String(sessCle));
+  const d=sess&&sess.data&&sess.data[ex];
+  if(!d||!Array.isArray(d.sets)) return false;
+  const avant=JSON.parse(JSON.stringify(sess));
+  const t=Date.now();
+  let max; try{ max=chargeMaxSaisie(ex); }catch(e){ max=undefined; }
+  let ch=false;
+  for(const m of modifs||[]) if(appliquerCorrectionSerie(d.sets[m.i],m,currentUser&&currentUser.id,t,max)) ch=true;
+  if(!ch) return false;
+  _recalculerTotauxSeance(sess);
+  sess.corrigeeLe=t;
+  c.updatedAt=t; users[email]=c;
+  const ok=DB.set('users',users);
+  _apresCorrectionSeances();
+  const apres=JSON.stringify(sess);
+  toastSyncAnnulable(ok,CLOUD.pushOne(email,c),'Série corrigée chez '+nomCourtClient(c),'la correction est',()=>{
+    const us=DB.get('users')||{}, a=us[email];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste.';
+    const i=(a.sessions||[]).findIndex(s=>_cleSeance(s)===String(sessCle));
+    if(i<0) return 'La séance n’existe plus.';
+    if(JSON.stringify(a.sessions[i])!==apres) return 'La séance a changé depuis : rien n’a été défait.';
+    a.sessions[i]=avant; a.updatedAt=Date.now(); us[email]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(email,a).catch(()=>{}); }catch(e){}
+    _apresCorrectionSeances();
+    try{ _rafraichirFicheCoach(a); }catch(e){}
+    return true;
+  });
+  try{ _rafraichirFicheCoach(c); }catch(e){}
+  return true;
+}
+function _rafraichirFicheCoach(c){
+  try{ if(typeof renderCoachSessionRecap==='function') renderCoachSessionRecap(c); }catch(e){}
+  try{ renderPoidsCoach(c); }catch(e){}
+}
+// La feuille de correction d'un exercice d'une séance faite.
+function ouvrirCorrectionSeries(email,sessCle,ex){
+  const c=(DB.get('users')||{})[email];
+  const sess=c&&(c.sessions||[]).find(s=>_cleSeance(s)===String(sessCle));
+  const d=sess&&sess.data&&sess.data[ex];
+  if(!d) return false;
+  try{ closeModal(); }catch(e){}
+  const E=escapeHtml;
+  const lignes=(d.sets||[]).map((st,i)=>(st&&(st.done||st.horsCalcul))?'<div class="cs-ligne" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="width:22px;color:var(--sub)">'+(i+1)+'</span>'
+      +'<input data-i="'+i+'" data-k="weight" inputmode="decimal" aria-label="Charge" value="'+E(String(st.weight==null?'':st.weight).replace('.',','))+'" style="width:70px"> kg'
+      +'<input data-i="'+i+'" data-k="repsDone" inputmode="numeric" aria-label="Répétitions" value="'+E(String(st.repsDone==null?'':st.repsDone))+'" style="width:50px"> rép.'
+      +'<input data-i="'+i+'" data-k="rir" inputmode="decimal" aria-label="RIR" value="'+E(String(st.rir==null?'':st.rir))+'" style="width:44px"> RIR'
+      +'<label style="flex-basis:100%;font-size:var(--fs-xs);color:var(--sub)"><input type="checkbox" data-i="'+i+'" data-k="horsCalcul"'+(st.horsCalcul?' checked':'')+'> Ne pas compter cette série dans les calculs</label>'
+      +'</div>':'').join('');
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Corriger : ${E(ex)}</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:8px">${E(nomCourtClient(c))} verra « corrigé par ton coach » et la valeur d’avant.</p>
+    <div id="cs-series">${lignes}</div>
+    <button class="btn btn-red" style="margin-top:12px;width:100%" onclick="_validerCorrectionSeries(${_attrArg(email)},${_attrArg(String(sessCle))},${_attrArg(ex)})">Enregistrer</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+  </div></div>`);
+  return true;
+}
+function _validerCorrectionSeries(email,sessCle,ex){
+  const m={};
+  document.querySelectorAll('#cs-series [data-i]').forEach(x=>{
+    const i=Number(x.dataset.i); m[i]=m[i]||{i};
+    m[i][x.dataset.k]=x.type==='checkbox'?x.checked:x.value;
+  });
+  try{ closeModal(); }catch(e){}
+  const ok=corrigerSeriesCoach(email,sessCle,ex,Object.values(m));
+  if(!ok) toast('Rien n’a changé.');
+  return ok;
+}
+// PURE. Les séries dont la charge dépasse 2,5 × le meilleur e1RM connu de
+// l'exercice (calculé sur les AUTRES séries). [{cle, ex, i, kg, ref}]
+const SERIE_SUSPECTE_FACTEUR=2.5;
+function seriesSuspectes(sessions){
+  const pts=[];
+  for(const s of sessions||[]) for(const [nm,d] of Object.entries((s&&s.data)||{})) ((d&&d.sets)||[]).forEach((st,i)=>{
+    if(!serieComptee(st)) return;
+    const w=parseFloat(String(st.weight).replace(',','.'))||0, r=parseFloat(st.repsDone!=null&&st.repsDone!==''?st.repsDone:st.reps)||0;
+    if(w>0) pts.push({cle:_cleSeance(s),ex:nm,k:(function(){ try{ return exKey(nm); }catch(e){ return nm; } })(),i,kg:w,e1:w*(1+Math.min(r,12)/30)});
+  });
+  const out=[];
+  for(const p of pts){
+    let ref=0;
+    for(const q of pts) if(q!==p&&q.k===p.k&&q.e1>ref) ref=q.e1;
+    if(ref>0&&p.kg>SERIE_SUSPECTE_FACTEUR*ref) out.push({cle:p.cle,ex:p.ex,i:p.i,kg:p.kg,ref:Math.round(ref)});
+  }
+  return out;
+}
+function _htmlCorrigeAthlete(d){
+  const l=((d&&d.sets)||[]).filter(st=>st&&(st.corrige||st.horsCalcul));
+  if(!l.length) return '';
+  const av=l.map(st=>st.horsCalcul?'série non comptée':((st.corrige&&st.corrige.avant&&st.corrige.avant.weight!=='')?'avant : '+st.corrige.avant.weight+' kg × '+(st.corrige.avant.repsDone||'?'):'')).filter(Boolean).join(' ; ');
+  return ' <span class="sub" title="'+escapeHtml(av)+'" style="font-size:var(--fs-2xs)">· corrigé par ton coach</span>';
+}
 function _apresCorrectionSeances(){
   try{ _viderCachePlateau(); }catch(e){}
   try{ _viderCacheSignaux(); }catch(e){}
@@ -71154,7 +71295,7 @@ function _htmlExercicesRelus(sc){
   const nb=v=>Number(v).toLocaleString('fr-FR');
   return '<div class="rcf-rk"><div class="rcf-rk-t">Ce que tu as fait</div>'
     +ex.map(x=>'<div class="rcf-rk-l">'
-      +'<span class="rcf-rk-ex">'+escapeHtml(String(x.nom))+'</span>'
+      +'<span class="rcf-rk-ex">'+escapeHtml(String(x.nom))+(function(){ try{ return _htmlCorrigeAthlete(sc&&sc.data&&sc.data[x.nom]); }catch(e){ return ''; } })()+'</span>'
       +'<span class="rcf-rk-v">'+escapeHtml(String(x.series))+' série'
       +(x.series>1?'s':'')
       +(x.kg>0?' · '+nb(x.kg)+' kg':'')
@@ -130320,7 +130461,92 @@ function renderPoidsCoach(c){
   if(!z) return;
   let html='';
   try{ html=c?blocPoidsCoach(c,(typeof ccdDepuis==='function')?ccdDepuis():0):''; }catch(e){ html=''; }
+  // BUILD 1875 : corriger ou ne pas compter une pesée.
+  if(c&&((c.weightLog||[]).length||(c.weightLogExclu||[]).length))
+    html+='<button type="button" class="rb-lien" style="font-size:var(--fs-2xs);margin-top:6px" onclick="ouvrirCorrectionPesees('+_attrArg(c.email||'')+')">Corriger une pesée</button>';
   z.innerHTML=html;
+}
+// ══ BUILD 1875 : LE COACH CORRIGE UNE PESÉE ══════════════════════════════════
+// Corriger : e.corrige={avant:{kg},par,le}. Ne pas compter : l'entrée passe
+// dans weightLogExclu, que rien ne lit pour calculer ; « Compter » la remet.
+/** PURE (sur u). */
+function appliquerCorrectionPesee(u,date,m,par,le){
+  if(!u) return false;
+  if(m&&m.horsCalcul===false){
+    const ex=u.weightLogExclu||[]; const i=ex.findIndex(e=>e&&e.date===date);
+    if(i<0) return false;
+    const e=ex.splice(i,1)[0]; delete e.horsCalcul;
+    u.weightLog=(u.weightLog||[]).concat([e]).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    if(!ex.length) delete u.weightLogExclu;
+    return true;
+  }
+  const l=u.weightLog||[]; const i=l.findIndex(e=>e&&e.date===date);
+  if(i<0) return false;
+  const e=l[i];
+  const avant={kg:e.kg};
+  if(m&&m.horsCalcul===true){
+    l.splice(i,1);
+    e.horsCalcul=true;
+    if(!e.corrige) e.corrige={avant,par:par||null,le:Number(le)||Date.now()};
+    u.weightLogExclu=(u.weightLogExclu||[]).concat([e]);
+    return true;
+  }
+  const kg=lireDecimal(m&&m.kg,{min:PESEE_MIN,max:PESEE_MAX,pas:0.05});
+  if(kg==null||Number(kg)===Number(e.kg)) return false;
+  if(!e.corrige) e.corrige={avant,par:par||null,le:Number(le)||Date.now()};
+  else { e.corrige.par=par||null; e.corrige.le=Number(le)||Date.now(); }
+  e.kg=kg;
+  return true;
+}
+function corrigerPeseeCoach(email,date,m){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const avant={weightLog:JSON.parse(JSON.stringify(c.weightLog||[])),weightLogExclu:c.weightLogExclu?JSON.parse(JSON.stringify(c.weightLogExclu)):undefined};
+  if(!appliquerCorrectionPesee(c,date,m,currentUser&&currentUser.id,Date.now())) return false;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  try{ _apresCorrectionSeances(); }catch(e){}
+  try{ renderPoidsCoach(c); }catch(e){}
+  toastSyncAnnulable(ok,CLOUD.pushOne(email,c),'Pesée corrigée chez '+nomCourtClient(c),'la correction est',()=>{
+    const us=DB.get('users')||{}, a=us[email];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste.';
+    a.weightLog=avant.weightLog; if(avant.weightLogExclu) a.weightLogExclu=avant.weightLogExclu; else delete a.weightLogExclu;
+    a.updatedAt=Date.now(); us[email]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(email,a).catch(()=>{}); }catch(e){}
+    try{ renderPoidsCoach(a); }catch(e){}
+    return true;
+  });
+  return true;
+}
+function _cpCorriger(email,date,k){
+  const i=document.getElementById('cp-kg-'+k);
+  try{ closeModal(); }catch(e){}
+  return corrigerPeseeCoach(email,date,{kg:i?i.value:''});
+}
+function ouvrirCorrectionPesees(email){
+  const c=(DB.get('users')||{})[email];
+  if(!c) return false;
+  try{ closeModal(); }catch(e){}
+  const E=escapeHtml;
+  const l=(c.weightLog||[]).slice(-15).reverse();
+  const ex=c.weightLogExclu||[];
+  const jour=d=>{ try{ return dateLocaleDeCle(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return String(d); } };
+  const lignes=l.map((e,k)=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="flex:1">'+E(jour(e.date))+(e.corrige?' <span class="sub" style="font-size:var(--fs-2xs)">(corrigée)</span>':'')+'</span>'
+      +'<input id="cp-kg-'+k+'" inputmode="decimal" aria-label="Poids" value="'+E(String(e.kg).replace('.',','))+'" style="width:70px"> kg'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="_cpCorriger('+_attrArg(email)+','+_attrArg(e.date)+','+k+')">Corriger</button>'
+      +'<button type="button" class="rb-lien" onclick="corrigerPeseeCoach('+_attrArg(email)+','+_attrArg(e.date)+',{horsCalcul:true});closeModal()">Ne pas compter</button></div>').join('')
+    +ex.map(e=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);color:var(--sub)">'
+      +'<span style="flex:1;text-decoration:line-through">'+E(jour(e.date))+' · '+E(String(e.kg).replace('.',','))+' kg</span>'
+      +'<button type="button" class="rb-lien" onclick="corrigerPeseeCoach('+_attrArg(email)+','+_attrArg(e.date)+',{horsCalcul:false});closeModal()">Compter de nouveau</button></div>').join('');
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:8px">Corriger une pesée</h2>
+    ${lignes}
+    <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`);
+  return true;
 }
 // ── Choix de phase, côté athlète ────────────────────────────────────────────
 // La carte est REFUSABLE et ne revient pas : un refus écrit une date dans

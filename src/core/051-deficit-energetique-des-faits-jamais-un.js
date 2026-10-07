@@ -1235,7 +1235,92 @@ function renderPoidsCoach(c){
   if(!z) return;
   let html='';
   try{ html=c?blocPoidsCoach(c,(typeof ccdDepuis==='function')?ccdDepuis():0):''; }catch(e){ html=''; }
+  // BUILD 1875 : corriger ou ne pas compter une pesée.
+  if(c&&((c.weightLog||[]).length||(c.weightLogExclu||[]).length))
+    html+='<button type="button" class="rb-lien" style="font-size:var(--fs-2xs);margin-top:6px" onclick="ouvrirCorrectionPesees('+_attrArg(c.email||'')+')">Corriger une pesée</button>';
   z.innerHTML=html;
+}
+// ══ BUILD 1875 : LE COACH CORRIGE UNE PESÉE ══════════════════════════════════
+// Corriger : e.corrige={avant:{kg},par,le}. Ne pas compter : l'entrée passe
+// dans weightLogExclu, que rien ne lit pour calculer ; « Compter » la remet.
+/** PURE (sur u). */
+function appliquerCorrectionPesee(u,date,m,par,le){
+  if(!u) return false;
+  if(m&&m.horsCalcul===false){
+    const ex=u.weightLogExclu||[]; const i=ex.findIndex(e=>e&&e.date===date);
+    if(i<0) return false;
+    const e=ex.splice(i,1)[0]; delete e.horsCalcul;
+    u.weightLog=(u.weightLog||[]).concat([e]).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    if(!ex.length) delete u.weightLogExclu;
+    return true;
+  }
+  const l=u.weightLog||[]; const i=l.findIndex(e=>e&&e.date===date);
+  if(i<0) return false;
+  const e=l[i];
+  const avant={kg:e.kg};
+  if(m&&m.horsCalcul===true){
+    l.splice(i,1);
+    e.horsCalcul=true;
+    if(!e.corrige) e.corrige={avant,par:par||null,le:Number(le)||Date.now()};
+    u.weightLogExclu=(u.weightLogExclu||[]).concat([e]);
+    return true;
+  }
+  const kg=lireDecimal(m&&m.kg,{min:PESEE_MIN,max:PESEE_MAX,pas:0.05});
+  if(kg==null||Number(kg)===Number(e.kg)) return false;
+  if(!e.corrige) e.corrige={avant,par:par||null,le:Number(le)||Date.now()};
+  else { e.corrige.par=par||null; e.corrige.le=Number(le)||Date.now(); }
+  e.kg=kg;
+  return true;
+}
+function corrigerPeseeCoach(email,date,m){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!_estMonAthlete(c,currentUser)){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const avant={weightLog:JSON.parse(JSON.stringify(c.weightLog||[])),weightLogExclu:c.weightLogExclu?JSON.parse(JSON.stringify(c.weightLogExclu)):undefined};
+  if(!appliquerCorrectionPesee(c,date,m,currentUser&&currentUser.id,Date.now())) return false;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  try{ _apresCorrectionSeances(); }catch(e){}
+  try{ renderPoidsCoach(c); }catch(e){}
+  toastSyncAnnulable(ok,CLOUD.pushOne(email,c),'Pesée corrigée chez '+nomCourtClient(c),'la correction est',()=>{
+    const us=DB.get('users')||{}, a=us[email];
+    if(!a||!_estMonAthlete(a,currentUser)) return 'L’athlète n’est plus dans ta liste.';
+    a.weightLog=avant.weightLog; if(avant.weightLogExclu) a.weightLogExclu=avant.weightLogExclu; else delete a.weightLogExclu;
+    a.updatedAt=Date.now(); us[email]=a; DB.set('users',us);
+    try{ CLOUD.pushOne(email,a).catch(()=>{}); }catch(e){}
+    try{ renderPoidsCoach(a); }catch(e){}
+    return true;
+  });
+  return true;
+}
+function _cpCorriger(email,date,k){
+  const i=document.getElementById('cp-kg-'+k);
+  try{ closeModal(); }catch(e){}
+  return corrigerPeseeCoach(email,date,{kg:i?i.value:''});
+}
+function ouvrirCorrectionPesees(email){
+  const c=(DB.get('users')||{})[email];
+  if(!c) return false;
+  try{ closeModal(); }catch(e){}
+  const E=escapeHtml;
+  const l=(c.weightLog||[]).slice(-15).reverse();
+  const ex=c.weightLogExclu||[];
+  const jour=d=>{ try{ return dateLocaleDeCle(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return String(d); } };
+  const lignes=l.map((e,k)=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="flex:1">'+E(jour(e.date))+(e.corrige?' <span class="sub" style="font-size:var(--fs-2xs)">(corrigée)</span>':'')+'</span>'
+      +'<input id="cp-kg-'+k+'" inputmode="decimal" aria-label="Poids" value="'+E(String(e.kg).replace('.',','))+'" style="width:70px"> kg'
+      +'<button type="button" class="btn btn-sm" style="margin:0" onclick="_cpCorriger('+_attrArg(email)+','+_attrArg(e.date)+','+k+')">Corriger</button>'
+      +'<button type="button" class="rb-lien" onclick="corrigerPeseeCoach('+_attrArg(email)+','+_attrArg(e.date)+',{horsCalcul:true});closeModal()">Ne pas compter</button></div>').join('')
+    +ex.map(e=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);color:var(--sub)">'
+      +'<span style="flex:1;text-decoration:line-through">'+E(jour(e.date))+' · '+E(String(e.kg).replace('.',','))+' kg</span>'
+      +'<button type="button" class="rb-lien" onclick="corrigerPeseeCoach('+_attrArg(email)+','+_attrArg(e.date)+',{horsCalcul:false});closeModal()">Compter de nouveau</button></div>').join('');
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:8px">Corriger une pesée</h2>
+    ${lignes}
+    <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`);
+  return true;
 }
 // ── Choix de phase, côté athlète ────────────────────────────────────────────
 // La carte est REFUSABLE et ne revient pas : un refus écrit une date dans

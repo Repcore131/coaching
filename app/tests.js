@@ -66101,6 +66101,48 @@ async function testExercices(){
       }
     });
 
+    // ══ BUILD 1875 : LE COACH CORRIGE UNE SÉRIE ══
+    const _scU=()=>{
+      const t=Date.now(), mk=(id,j,w,r)=>({id,date:t-j*864e5,name:'Jambes',complete:true,data:{'Squat':{sets:[{weight:String(w),repsDone:String(r),rir:'2',done:true}]}}});
+      return {id:'sc',email:'sc@t.fr',role:'athlete',coachId:'coC',exAlias:{},exMuscles:{},sessions:[mk('a',9,100,5),mk('b',6,102.5,5),mk('c',2,825,5)]};
+    };
+    ok('serieComptee : faite oui ; non faite non ; hors calcul non',()=>
+      serieComptee({done:true})&&!serieComptee({done:false})&&!serieComptee({done:true,horsCalcul:true})&&!serieComptee(null)?true:_echec('règle'));
+    ok('Détection : 825 kg signalé (plus de 2,5 × l’e1RM), 85 kg non',()=>{
+      const u=_scU();
+      const l=seriesSuspectes(u.sessions);
+      if(l.length!==1||l[0].kg!==825||l[0].cle!=='c') return _echec(JSON.stringify(l));
+      u.sessions[2].data.Squat.sets[0].weight='85';
+      return seriesSuspectes(u.sessions).length===0?true:_echec('85 kg signalé');});
+    ok('Une série hors calcul n’entre plus dans les records ; corrige.avant garde la PREMIÈRE valeur',()=>{
+      const u=_scU(), st=u.sessions[2].data.Squat.sets[0];
+      _viderCachePlateau();
+      if(!/825/.test(JSON.stringify(recordsExercice(u,'Squat')))) return _echec('prémisse : 825 absent du record');
+      appliquerCorrectionSerie(st,{horsCalcul:true},'coC',1);
+      _viderCachePlateau();
+      const r=JSON.stringify(recordsExercice(u,'Squat'));
+      if(/825/.test(r)) return _echec('record garde 825 : '+r);
+      appliquerCorrectionSerie(st,{horsCalcul:false,weight:'82,5'},'coC',2);
+      appliquerCorrectionSerie(st,{weight:'83'},'coC',3);
+      if(st.weight!=='83'||st.corrige.avant.weight!=='825'||st.corrige.le!==3) return _echec(JSON.stringify(st));
+      _viderCachePlateau();
+      return st.done===true&&!st.horsCalcul?true:_echec('série pas recomptée');});
+    ok('Correction du coach et note de l’athlète sur la même séance : la fusion garde les deux',()=>{
+      const base=_scU(), local=JSON.parse(JSON.stringify(base)), dist=JSON.parse(JSON.stringify(base));
+      appliquerCorrectionSerie(local.sessions[2].data.Squat.sets[0],{weight:'82,5'},'coC',1);
+      dist.sessions[2].noteAthlete='Grosse forme';
+      const r=syncFusion(syncEmpreintes(base),local,dist);
+      const s2=r.sessions.find(x=>x.id==='c');
+      return s2.data.Squat.sets[0].weight==='82.5'&&s2.noteAthlete==='Grosse forme'?true:_echec(JSON.stringify(s2));});
+    ok('Pesée : corriger garde l’avant ; « ne pas compter » la sort du journal ; « compter » la remet',()=>{
+      const u={weightLog:[{date:'2026-10-01',kg:63.5},{date:'2026-10-03',kg:635}]};
+      if(!appliquerCorrectionPesee(u,'2026-10-03',{kg:'63,5'},'coC',1)) return _echec('refus');
+      if(u.weightLog[1].kg!==63.5||u.weightLog[1].corrige.avant.kg!==635) return _echec(JSON.stringify(u.weightLog[1]));
+      appliquerCorrectionPesee(u,'2026-10-01',{horsCalcul:true},'coC',2);
+      if(u.weightLog.length!==1||u.weightLogExclu.length!==1) return _echec('pas écartée');
+      appliquerCorrectionPesee(u,'2026-10-01',{horsCalcul:false},'coC',3);
+      return u.weightLog.length===2&&!u.weightLogExclu&&u.weightLog[0].date==='2026-10-01'?true:_echec(JSON.stringify(u));});
+
     // ══ BUILD 1874 : LA RÉPONSE AU BILAN SE DÉFAIT ET SE RETIRE ══
     const _rbMonde=(extra)=>{
       currentUser={id:'coQ',email:'coq@t.fr',role:'coach'};

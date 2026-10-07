@@ -2162,8 +2162,11 @@ function _viserExercice(nom){
 function _buildSessionCard(s,client){
   const dt=dateLocaleDeCle(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
+  // BUILD 1875 : les séries suspectes (2,5 × son meilleur e1RM) et la correction.
+  const _susp=(function(){ try{ return client?seriesSuspectes(client.sessions):[]; }catch(e){ return []; } })().filter(x=>x.cle===_cleSeance(s));
+  const _em=client?escapeHtml(client.email||'').replace(/'/g,'&#39;'):'';
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
-    const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));
+    const done=(d.sets||[]).filter(x=>(x.done||x.horsCalcul)&&(x.weight||x.reps));
     if(!done.length) return '';
     // N6.9 — LE RIR ET LA DOULEUR, SERIE PAR SERIE. Les deux sont collectes a
     // chaque serie et lus ailleurs — rir alimente e1rm et rirMoyenSeance, pain
@@ -2189,7 +2192,9 @@ function _buildSessionCard(s,client){
       // R29 — sur une fourchette, les repetitions NOTEES : « 36kg×10 », et non
       // la prescription « 36kg×10-12 » qui ne dit pas ce qui a ete fait.
       :`${x.weight||'?'}kg×${x.repsDone!=null?x.repsDone:(x.reps||'?')}`)+_sfx(x)
+      +(x.horsCalcul?' (non comptée)':x.corrige?' (corrigée)':'')
     ).join(' · ');
+    const _sx=_susp.filter(z=>z.ex===nm);
     // N4.5 — LE NOM DE L'EXERCICE EST LE CHEMIN. Un bouton et non un div : il
     // se prend au clavier, il s'annonce comme un bouton, et le reste de la
     // ligne — ce que l'athlete a REELLEMENT fait — reste du texte.
@@ -2199,6 +2204,8 @@ function _buildSessionCard(s,client){
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+      ${_sx.length?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">${_sx.map(z=>escapeHtml(String(z.kg).replace('.',','))+' kg : plus de 2,5 × son meilleur (e1RM '+z.ref+' kg)').join(' · ')}</div>`:''}
+      ${client&&s.date?`<button type="button" class="rb-lien" style="font-size:var(--fs-2xs)" onclick="ouvrirCorrectionSeries('${_em}','${escapeHtml(_cleSeance(s))}','${_nomEch}')">Corriger</button>`:''}
       ${(()=>{ const n=client?noteExo(client,nm):null;
         return n?`<div class="sc-note-exo">Sa note : ${escapeHtml(n.texte)}</div>`:''; })()}
     </div>`;

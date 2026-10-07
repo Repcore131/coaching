@@ -743,6 +743,8 @@ function _diffAthletePkg(a){
 const CHAMPS_SANTE=Object.freeze([
   // Poids, mensurations, photos corporelles
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
+  // Les pesées écartées par le coach (build 1875).
+  'weightLogExclu',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // La corbeille du coach (build 1871) : elle peut porter le plan
   // alimentaire d'un athlète. Classée santé par prudence.
