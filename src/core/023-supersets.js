@@ -769,7 +769,7 @@ function _blocExo(idx,estSS){
       s0.weight=sug; s0.isAuto=true; s0.sugPremiere=true;
     }
   }
-  const _aff=kg=>kgVersAffiche(kg,currentUser)+_unite();
+  const _aff=kg=>fmtCharge(kg,currentUser);
   // QUAND LE TABLEAU PASSE EN CARTES : la regle est dans _seriesEnCartes, et
   // renderSets la lit aussi : l'en-tete et les lignes ne peuvent pas diverger.
   const isWide=pr.type==='degressive'||_seriesEnCartes(data);
@@ -1136,7 +1136,7 @@ function _woChargeSaisie(idx,i,champ,el){
   // auto-remplie, donc ni `userEdited` ni `isAuto` ne la concernent.
   const principal=champ!=='weight2';
   const lb=uniteCharge(currentUser)==='lb';
-  const avant=String(_poidsSaisie(s[champ]));
+  const avant=String(_poidsSaisie(s[champ])).replace(',','.');
   const tape=String(el.value).trim();
   const ecrire=(val)=>{
     s[champ]=val;
@@ -1154,7 +1154,7 @@ function _woChargeSaisie(idx,i,champ,el){
   const _max=lb?Math.round(maxKg/LB_KG):maxKg;
   const v=lireCharge(tape,_max);
   if(v==null){
-    el.value=avant;
+    el.value=avant.replace('.',',');
     toast(/^\s*-/.test(tape)?'Charge négative ignorée'
       :/^\d+(?:[.,]\d*)?$/.test(tape)?'Charge hors limites : '+_max+' '+(lb?'lb':'kg')+' au plus'
       :'Charge illisible : tape un nombre, par exemple 82,5','var(--orange)');
@@ -1167,7 +1167,7 @@ function _woChargeSaisie(idx,i,champ,el){
   const kg=lb?(inchangee?Number(s[champ]):afficheVersKg(String(v),currentUser,s[champ])):v;
   const val=inchangee&&!lb?String(s[champ]):String(kg);
   // Le champ affiche ce qui a été retenu : deux vérités pour une saisie, jamais.
-  el.value=lb?String(v):val;
+  el.value=(lb?String(v):val).replace('.',',');
   const record=inchangee?null:chargeSuspecte(kg,currentUser,nomEx);
   // Au-delà de 500 kg (presse, hack, barre guidée) : une question, même sans
   // historique. Une seule question si la charge est aussi suspecte.
@@ -1180,7 +1180,7 @@ function _woChargeSaisie(idx,i,champ,el){
       :'C’est au-delà de 500 kg. Confirme, ou corrige si une virgule a sauté.',
     'Oui, c’est ça','Corriger').then(ok=>{
       if(ok){ ecrire(val); return true; }
-      el.value=avant;
+      el.value=avant.replace('.',',');
       _woMajLignes(woState.exercises[idx],d,idx);
       try{ el.focus(); el.select(); }catch(e){}
       return false;
@@ -1251,7 +1251,7 @@ function _woBrancherEnchainement(tb,idx){
         // Compare ce que le champ AFFICHE (en livres, la valeur convertie) :
         // « 82,5 » face a un dossier en « 82.5 » n'est pas une nouvelle saisie.
         const brut=String(el.value).trim().replace(',','.');
-        const deja=champ==='repsDone'?String(s[champ]==null?'':s[champ]):String(_poidsSaisie(s[champ]));
+        const deja=champ==='repsDone'?String(s[champ]==null?'':s[champ]):String(_poidsSaisie(s[champ])).replace(',','.');
         if(brut!==deja){
           // R29 — les repetitions d'une fourchette ont leur propre ecriture.
           if(champ==='repsDone') _woRepsSaisie(idx,i,el);
@@ -2735,12 +2735,15 @@ function _woAmenerLigne(k,j){
   return true;
 }
 function _woDefilerApresValidation(idx,i){
+  // Lot 9 : après chaque ✓, la série suivante passe au-dessus du cadran et de
+  // la bande du RIR — en superset comme seul.
   const c=cibleSuivanteSuperset(woState.exercises,woState.sessionData,idx,i);
-  if(!c||!c.superset) return false;
-  const t0=Date.now();
+  if(!c) return false;
+  const t0=Date.now(), w=woState;
   setTimeout(()=>{
     // L'athlète a défilé lui-même, ou tape dans un champ : on ne bouge rien.
-    if(_woDefilUtil>=t0) return;
+    // Une autre séance entre-temps : rien non plus.
+    if(_woDefilUtil>=t0||woState!==w) return;
     const a=document.activeElement;
     if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
     _woAmenerLigne(c.idx,c.i);
@@ -2749,9 +2752,8 @@ function _woDefilerApresValidation(idx,i){
 }
 // Après la série 1, la carte de charge (et l'échauffement) se replient en une
 // ligne ; ▾ les rouvre. Une fois rouverte, elle le reste pour la séance.
+// Lot 9 : pour tous les exercices, plus seulement les supersets.
 function woChargeReplie(idx,data){
-  const g=_groupeDe(woState.exercises,idx);
-  if(g.length<2) return false;
   if((woState.chargeDepliee||[]).indexOf(idx)>=0) return false;
   return !!(data&&data.sets&&data.sets[0]&&data.sets[0].done);
 }

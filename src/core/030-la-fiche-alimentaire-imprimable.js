@@ -1797,9 +1797,18 @@ function afficheVersKg(val,user,kgActuel){
 // La valeur d'un champ de saisie : telle quelle en kilos, convertie en livres.
 function _poidsSaisie(v){
   if(v===''||v==null) return '';
-  if(uniteCharge(currentUser)!=='lb') return v;
+  // SÉRIE 7, LOT 9 : la virgule française dans la case (« 58,75 »).
+  if(uniteCharge(currentUser)!=='lb') return String(v).replace('.',',');
   const a=kgVersAffiche(v,currentUser);
-  return a==null?'':a;
+  return a==null?'':String(a).replace('.',',');
+}
+// SÉRIE 7, LOT 9. PURE. Une charge telle qu'on l'écrit partout : « 56,25 kg »
+// (deux décimales au plus, virgule, espace insécable, unité de l'athlète).
+function fmtCharge(kg,user){
+  const u=user===undefined?(typeof currentUser!=='undefined'?currentUser:null):user;
+  const a=kgVersAffiche(kg,u);
+  if(a==null) return '';
+  return String(a).replace('.',',')+'\u00a0'+(uniteCharge(u)==='lb'?'lb':'kg');
 }
 // PURE. Une charge PROPOSÉE (suggestion, série suivante, échauffement).
 // ⚠ À LA BARRE, EN KILOS, LE 1,25 DE chargeSuivante RESTE : la progression

@@ -2215,13 +2215,13 @@ async function testExercices(){
     ok('Une seule charge affichée, pas deux',_cyF20.gros.length===1,JSON.stringify(_cyF20.gros));
 
     // L'ajustement est DANS la charge suggérée, et sa raison est écrite.
-    ok('Phase neutre : charge inchangée',_cyF0.gros[0]==='50kg'&&_cyH.gros[0]==='50kg',
+    ok('Phase neutre : charge inchangée',_cyF0.gros[0]==='50\u00a0kg'&&_cyH.gros[0]==='50\u00a0kg',
        _cyF0.gros[0]+' / '+_cyH.gros[0]);
-    ok('Phase à 0,95 : charge ajustée affichée',_cyF5.gros[0]==='47.5kg',_cyF5.gros[0]);
-    ok('Phase à 0,80 : charge ajustée affichée',_cyF20.gros[0]==='40kg',_cyF20.gros[0]);
+    ok('Phase à 0,95 : charge ajustée affichée',_cyF5.gros[0]==='47,5\u00a0kg',_cyF5.gros[0]);
+    ok('Phase à 0,80 : charge ajustée affichée',_cyF20.gros[0]==='40\u00a0kg',_cyF20.gros[0]);
     ok('La raison de l\'ajustement est écrite',
        /Ajustée de 20 % pour ta phase de cycle/.test(_cyF20.txt)
-       &&/50kg d’habitude|50kg d'habitude/.test(_cyF20.txt));
+       &&/50\s?kg d’habitude|50\s?kg d'habitude/.test(_cyF20.txt));
     ok('Aucune mention d\'ajustement en phase neutre',!_cyF0.txt.includes('Ajustée de'));
     ok('Aucune mention d\'ajustement chez l\'homme',!_cyH.txt.includes('Ajustée de'));
 
@@ -2520,7 +2520,7 @@ async function testExercices(){
           };
           try{
             const f=monter('femme'), h=monter('homme');
-            if(f!=='40kg') return _echec('fixture muette : femme → '+f);
+            if(f!=='40\u00a0kg') return _echec('fixture muette : femme → '+f);
             return h===f?true:_echec('même réponse, charges différentes : '+h+' contre '+f);
           } finally { if(_woAvant) woState=_woAvant; }});
 
@@ -24398,7 +24398,7 @@ async function testExercices(){
           woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),exercises:[Object.assign({series:3},_fx)],sessionData:{}};
           _viderCachePlateau();
           const h=_blocExo(0,false).html;
-          return (/on garde la charge/.test(h)&&/100kg/.test(h))?true:_echec(h.slice(0,400));
+          return (/on garde la charge/.test(h)&&/100\s?kg/.test(h))?true:_echec(h.slice(0,400));
         } finally { currentUser=sU; woState=sW; }});
     }
     // ══════ UNE SEULE UNITÉ POUR LES ÉTATS : L'e1RM (06/10/2026, build 1826) ══════
@@ -72736,7 +72736,7 @@ async function testExercices(){
             const _e0=woState.exercises[0];
             const att=String(progressionCharge({mode:'serie',charge:parseFloat(precedente),repsFaites:[repsFaitesSerie(d.sets[i-1])],rirFait:'2',
               reps:d.sets[i-1].reps||_e0.reps,rirCible:_rirPrescrit(_e0),contrepoids:false,ex:_e0,user:currentUser}).kg);
-            if(el.value!==att) return _echec('série '+(i+1)+' : proposé « '+el.value+' », attendu « '+att+' »');
+            if(el.value!==att.replace('.',',')) return _echec('série '+(i+1)+' : proposé « '+el.value+' », attendu « '+att+' »');
             if(d.sets[i].isAuto!==true) return _echec('série '+(i+1)+' : la charge proposée n’est pas marquée auto');
           }
           if(tape[i]!==null) el.value=tape[i];
@@ -72864,7 +72864,7 @@ async function testExercices(){
         if(questions.length) return _echec('82,5 face à un record de 80 ne devait rien demander');
         // ILLISIBLE : la valeur d'avant revient, un toast le dit.
         const c0b=_r25Champ(0,0); c0b.value='8a'; _woChargeSaisie(0,0,'weight',c0b);
-        if(d.sets[0].weight!=='82.5'||_r25Champ(0,0).value!=='82.5') return _echec('« 8a » a changé la charge : '+d.sets[0].weight);
+        if(d.sets[0].weight!=='82.5'||_r25Champ(0,0).value!=='82,5') return _echec('« 8a » a changé la charge : '+d.sets[0].weight);
         if(!toasts.some(m=>/illisible/.test(m))) return _echec('pas de toast pour « 8a »');
         // AU-DELÀ DE 500 : refusé, sans question. « 825 » pour « 82,5 » n'arrive plus au dossier.
         const c1z=_r25Champ(0,1); c1z.value='825'; _woChargeSaisie(0,1,'weight',c1z);
@@ -73088,9 +73088,9 @@ async function testExercices(){
         if(!z||z.style.display!=='flex') return _echec('la feuille ne s’ouvre pas');
         const dates=[...z.querySelectorAll('.histo-l li')];
         if(dates.length!==5) return _echec(dates.length+' lignes dans la feuille');
-        if(!/70 kg × 8 @RIR 1/.test(dates[0].textContent)) return _echec('première ligne : '+dates[0].textContent);
-        if(!/67,5 kg × 8 @échec/.test(dates[1].textContent)) return _echec('deuxième ligne : '+dates[1].textContent);
-        if(!/Meilleure charge/.test(z.textContent)||!/70 kg/.test(z.querySelector('.histo-rec').textContent)) return _echec('records : '+(z.querySelector('.histo-rec')||{}).textContent);
+        if(!/70\s?kg × 8 @RIR 1/.test(dates[0].textContent)) return _echec('première ligne : '+dates[0].textContent);
+        if(!/67,5\s?kg × 8 @échec/.test(dates[1].textContent)) return _echec('deuxième ligne : '+dates[1].textContent);
+        if(!/Meilleure charge/.test(z.textContent)||!/70\s?kg/.test(z.querySelector('.histo-rec').textContent)) return _echec('records : '+(z.querySelector('.histo-rec')||{}).textContent);
         if(!/Meilleur e1RM/.test(z.textContent)) return _echec('pas de meilleur e1RM');
         if(z.querySelector('input,textarea,select')) return _echec('la feuille n’est pas en lecture seule');
         // LE RETOUR ANDROID LA FERME, ET RESTE SUR LA SÉANCE.
@@ -75808,6 +75808,44 @@ async function testExercices(){
       if(!/passerPostSession\(\)/.test(h)) return _echec('Passer ne passe pas par passerPostSession');
       if(/metrics/.test(String(passerPostSession))) return _echec('Passer écrit des métriques');
       return true;
+    });
+    // ══ BUILD 1951 — « 56,25 kg » PARTOUT ════════════════════════════════════════
+    ok('1951 — fmtCharge « 56,25 kg » ; _poidsSaisie à la virgule',()=>{
+      const sU=currentUser;
+      try{
+        currentUser={email:'c@t'};
+        if(fmtCharge(56.25)!=='56,25 kg') return _echec(fmtCharge(56.25));
+        if(fmtCharge('80')!=='80 kg'||fmtCharge(82.5)!=='82,5 kg') return _echec(fmtCharge('80')+' / '+fmtCharge(82.5));
+        if(fmtCharge('')!=='') return _echec('vide');
+        if(_poidsSaisie('58.75')!=='58,75'||_poidsSaisie('')!=='') return _echec(_poidsSaisie('58.75'));
+        if(serieSuivanteTexte({exercises:[{name:'Squat',reps:'8'}],currentEx:0,sessionData:{0:{sets:[{weight:'82.5',reps:'8'}]}}})!=='Série suivante : Squat · 82,5 kg × 8') return _echec('série suivante');
+        return true;
+      }finally{ currentUser=sU; }
+    });
+    okA('1951 — un exercice seul : carte de charge repliée après la série 1 ; la série suivante amenée au-dessus du cadran ; « 82,5 » se valide sans réécriture',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast, svAm=window._woAmenerLigne;
+      const vus=[];
+      try{
+        window.saveUser=()=>true; window.toast=()=>{}; window._woAmenerLigne=(k,j)=>{ vus.push(k+':'+j); return true; };
+        currentUser={id:'r1951',email:'r1951@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:3,reps:'8',repos:'2 min'}]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        const d=woState.sessionData[0];
+        const ch=()=>document.querySelector('#sets-body-0 input[data-serie="0"][data-champ="weight"]');
+        ch().value='82,5'; _woChargeSaisie(0,0,'weight',ch());
+        if(d.sets[0].weight!=='82.5'||ch().value!=='82,5') return _echec('saisie : '+d.sets[0].weight+' / '+ch().value);
+        toggleSet(0,0);
+        if(!document.getElementById('wo-charge-0').hidden) return _echec('carte non repliée');
+        await new Promise(r=>setTimeout(r,WO_DEFIL_ATTENTE_MS+80));
+        if(vus.join()!=='0:1') return _echec('défilement : '+vus.join());
+        return true;
+      }finally{
+        try{ annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); _rirBandeFermer(); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast; window._woAmenerLigne=svAm;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
@@ -82298,13 +82336,13 @@ async function testExercices(){
           if(/EXCEPTION/.test(h)) return _echec(h);
           // 100 × 5 à RIR 2 pour 5 reps à RIR 2 visé : la double progression est
           // accomplie, un pas de barre (progressionCharge, build 1825).
-          if(!/102[.,]5kg/.test(h)) return _echec('102,5kg absent');
+          if(!/102[.,]5\s?kg/.test(h)) return _echec('102,5kg absent');
           return !/en dessous/.test(h)?true:_echec('une décote est annoncée à 7 jours');});
         ok('Critère : à 40 jours, la charge est décotée et la phrase le dit',()=>{
           const h=_scene(40,100);
           if(/EXCEPTION/.test(h)) return _echec(h);
           // 102,5 × 0,90 = 92,25 → 91,25 au cran inférieur.
-          if(!/91[.,]25kg/.test(h)) return _echec('91,25kg absent');
+          if(!/91[.,]25\s?kg/.test(h)) return _echec('91,25kg absent');
           if(!/On repart 10 % en dessous/.test(h)) return _echec('phrase de décote absente');
           if(!/Ta dernière séance de SQUAT date du /.test(h)) return _echec('date absente');
           // En clair, pas via la constante : indexOf('') rend toujours 0, et la
@@ -82408,7 +82446,7 @@ async function testExercices(){
           const h7=_scene(7,40,'DIPS ASSISTE');
           const h40=_scene(40,40,'DIPS ASSISTE');
           if(/EXCEPTION/.test(h7)||/EXCEPTION/.test(h40)) return _echec(h7+' | '+h40);
-          const lire=h=>{const m=/(\d+(?:[.,]\d+)?)kg/.exec(h);
+          const lire=h=>{const m=/(\d+(?:[.,]\d+)?)\s?kg/.exec(h);
             return m?parseFloat(m[1].replace(',','.')):null;};
           const a=lire(h7), b=lire(h40);
           if(a==null||b==null) return _echec('charges illisibles : '+a+' / '+b);

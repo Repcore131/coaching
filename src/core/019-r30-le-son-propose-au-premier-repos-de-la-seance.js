@@ -180,7 +180,7 @@ function serieSuivanteTexte(etat){
     if(!ex||i<0) continue;
     const s=sets[i], kg=parseFloat(String(s.weight==null?'':s.weight).replace(',','.'));
     const reps=s.repsProp||s.reps||ex.reps||'';
-    const charge=kg>0?String(Math.round(kg*100)/100).replace('.',',')+'\u00a0kg':'';
+    const charge=kg>0?fmtCharge(kg):'';
     return 'Série suivante : '+ex.name+(charge||reps?' · '+[charge,reps].filter(Boolean).join(' × '):'');
   }
   return 'Dernière série faite : termine ta séance.';

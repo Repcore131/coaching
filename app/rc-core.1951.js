@@ -48303,7 +48303,7 @@ function serieSuivanteTexte(etat){
     if(!ex||i<0) continue;
     const s=sets[i], kg=parseFloat(String(s.weight==null?'':s.weight).replace(',','.'));
     const reps=s.repsProp||s.reps||ex.reps||'';
-    const charge=kg>0?String(Math.round(kg*100)/100).replace('.',',')+'\u00a0kg':'';
+    const charge=kg>0?fmtCharge(kg):'';
     return 'Série suivante : '+ex.name+(charge||reps?' · '+[charge,reps].filter(Boolean).join(' × '):'');
   }
   return 'Dernière série faite : termine ta séance.';
@@ -59031,7 +59031,7 @@ function _blocExo(idx,estSS){
       s0.weight=sug; s0.isAuto=true; s0.sugPremiere=true;
     }
   }
-  const _aff=kg=>kgVersAffiche(kg,currentUser)+_unite();
+  const _aff=kg=>fmtCharge(kg,currentUser);
   // QUAND LE TABLEAU PASSE EN CARTES : la regle est dans _seriesEnCartes, et
   // renderSets la lit aussi : l'en-tete et les lignes ne peuvent pas diverger.
   const isWide=pr.type==='degressive'||_seriesEnCartes(data);
@@ -59398,7 +59398,7 @@ function _woChargeSaisie(idx,i,champ,el){
   // auto-remplie, donc ni `userEdited` ni `isAuto` ne la concernent.
   const principal=champ!=='weight2';
   const lb=uniteCharge(currentUser)==='lb';
-  const avant=String(_poidsSaisie(s[champ]));
+  const avant=String(_poidsSaisie(s[champ])).replace(',','.');
   const tape=String(el.value).trim();
   const ecrire=(val)=>{
     s[champ]=val;
@@ -59416,7 +59416,7 @@ function _woChargeSaisie(idx,i,champ,el){
   const _max=lb?Math.round(maxKg/LB_KG):maxKg;
   const v=lireCharge(tape,_max);
   if(v==null){
-    el.value=avant;
+    el.value=avant.replace('.',',');
     toast(/^\s*-/.test(tape)?'Charge négative ignorée'
       :/^\d+(?:[.,]\d*)?$/.test(tape)?'Charge hors limites : '+_max+' '+(lb?'lb':'kg')+' au plus'
       :'Charge illisible : tape un nombre, par exemple 82,5','var(--orange)');
@@ -59429,7 +59429,7 @@ function _woChargeSaisie(idx,i,champ,el){
   const kg=lb?(inchangee?Number(s[champ]):afficheVersKg(String(v),currentUser,s[champ])):v;
   const val=inchangee&&!lb?String(s[champ]):String(kg);
   // Le champ affiche ce qui a été retenu : deux vérités pour une saisie, jamais.
-  el.value=lb?String(v):val;
+  el.value=(lb?String(v):val).replace('.',',');
   const record=inchangee?null:chargeSuspecte(kg,currentUser,nomEx);
   // Au-delà de 500 kg (presse, hack, barre guidée) : une question, même sans
   // historique. Une seule question si la charge est aussi suspecte.
@@ -59442,7 +59442,7 @@ function _woChargeSaisie(idx,i,champ,el){
       :'C’est au-delà de 500 kg. Confirme, ou corrige si une virgule a sauté.',
     'Oui, c’est ça','Corriger').then(ok=>{
       if(ok){ ecrire(val); return true; }
-      el.value=avant;
+      el.value=avant.replace('.',',');
       _woMajLignes(woState.exercises[idx],d,idx);
       try{ el.focus(); el.select(); }catch(e){}
       return false;
@@ -59513,7 +59513,7 @@ function _woBrancherEnchainement(tb,idx){
         // Compare ce que le champ AFFICHE (en livres, la valeur convertie) :
         // « 82,5 » face a un dossier en « 82.5 » n'est pas une nouvelle saisie.
         const brut=String(el.value).trim().replace(',','.');
-        const deja=champ==='repsDone'?String(s[champ]==null?'':s[champ]):String(_poidsSaisie(s[champ]));
+        const deja=champ==='repsDone'?String(s[champ]==null?'':s[champ]):String(_poidsSaisie(s[champ])).replace(',','.');
         if(brut!==deja){
           // R29 — les repetitions d'une fourchette ont leur propre ecriture.
           if(champ==='repsDone') _woRepsSaisie(idx,i,el);
@@ -60997,12 +60997,15 @@ function _woAmenerLigne(k,j){
   return true;
 }
 function _woDefilerApresValidation(idx,i){
+  // Lot 9 : après chaque ✓, la série suivante passe au-dessus du cadran et de
+  // la bande du RIR — en superset comme seul.
   const c=cibleSuivanteSuperset(woState.exercises,woState.sessionData,idx,i);
-  if(!c||!c.superset) return false;
-  const t0=Date.now();
+  if(!c) return false;
+  const t0=Date.now(), w=woState;
   setTimeout(()=>{
     // L'athlète a défilé lui-même, ou tape dans un champ : on ne bouge rien.
-    if(_woDefilUtil>=t0) return;
+    // Une autre séance entre-temps : rien non plus.
+    if(_woDefilUtil>=t0||woState!==w) return;
     const a=document.activeElement;
     if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
     _woAmenerLigne(c.idx,c.i);
@@ -61011,9 +61014,8 @@ function _woDefilerApresValidation(idx,i){
 }
 // Après la série 1, la carte de charge (et l'échauffement) se replient en une
 // ligne ; ▾ les rouvre. Une fois rouverte, elle le reste pour la séance.
+// Lot 9 : pour tous les exercices, plus seulement les supersets.
 function woChargeReplie(idx,data){
-  const g=_groupeDe(woState.exercises,idx);
-  if(g.length<2) return false;
   if((woState.chargeDepliee||[]).indexOf(idx)>=0) return false;
   return !!(data&&data.sets&&data.sets[0]&&data.sets[0].done);
 }
@@ -78445,9 +78447,18 @@ function afficheVersKg(val,user,kgActuel){
 // La valeur d'un champ de saisie : telle quelle en kilos, convertie en livres.
 function _poidsSaisie(v){
   if(v===''||v==null) return '';
-  if(uniteCharge(currentUser)!=='lb') return v;
+  // SÉRIE 7, LOT 9 : la virgule française dans la case (« 58,75 »).
+  if(uniteCharge(currentUser)!=='lb') return String(v).replace('.',',');
   const a=kgVersAffiche(v,currentUser);
-  return a==null?'':a;
+  return a==null?'':String(a).replace('.',',');
+}
+// SÉRIE 7, LOT 9. PURE. Une charge telle qu'on l'écrit partout : « 56,25 kg »
+// (deux décimales au plus, virgule, espace insécable, unité de l'athlète).
+function fmtCharge(kg,user){
+  const u=user===undefined?(typeof currentUser!=='undefined'?currentUser:null):user;
+  const a=kgVersAffiche(kg,u);
+  if(a==null) return '';
+  return String(a).replace('.',',')+'\u00a0'+(uniteCharge(u)==='lb'?'lb':'kg');
 }
 // PURE. Une charge PROPOSÉE (suggestion, série suivante, échauffement).
 // ⚠ À LA BARRE, EN KILOS, LE 1,25 DE chargeSuivante RESTE : la progression
@@ -87650,11 +87661,10 @@ function historiqueSeancesExo(user,nom,n){
 }
 /** PURE. Une serie en toutes lettres : « 100 kg × 8 @RIR 2 », P2 compris. */
 function _texteSerieHisto(x,user){
-  const kg=w=>{ const a=kgVersAffiche(w,user); return a==null?'?':String(a).replace('.',','); };
-  const u=' '+(uniteCharge(user)==='lb'?'lb':'kg');
+  const kg=w=>fmtCharge(w,user)||'?';
   let reps=x.repsDone!=null?x.repsDone:(x.reps||'?');
-  let t=(parseFloat(x.weight)>0?kg(x.weight)+u:'PDC')+' × '+reps;
-  if(x.degressive&&x.weight2) t+=' / '+kg(x.weight2)+u+' × '+(x.p2reps||'?');
+  let t=(parseFloat(x.weight)>0?kg(x.weight):'PDC')+' × '+reps;
+  if(x.degressive&&x.weight2) t+=' / '+kg(x.weight2)+' × '+(x.p2reps||'?');
   if(x.rir==='echec') t+=' @échec';
   else if(x.rir!==''&&x.rir!=null&&isFinite(Number(x.rir))) t+=' @RIR '+Number(x.rir);
   return t;
@@ -87666,7 +87676,7 @@ function htmlHistoriqueExo(user,nom){
   let rec=null; try{ rec=recordsExercice(u,nom); }catch(e){ rec=null; }
   const mc=rec&&rec.meilleureCharge, me=rec&&rec.meilleurE1rm;
   const unite=uniteCharge(u)==='lb'?'lb':'kg';
-  const aff=w=>String(kgVersAffiche(w,u)).replace('.',',')+' '+unite;
+  const aff=w=>fmtCharge(w,u);
   let h='<div class="rci-t" id="rc-histo-titre">'+escapeHtml(String(nom||''))+'</div>';
   if(mc||me){
     h+='<div class="histo-rec">'
