@@ -204,8 +204,12 @@ function reposInviteNotif(u,permission,premiereSeance){
 }
 function _reposInviteNotif(){
   if(typeof woState==='undefined'||!woState||woState._reposNotifVu) return false;
-  woState._reposNotifVu=true;
   const z=document.getElementById('rep-notif'); if(!z) return false;
+  // Le minuteur COMPACT (superset, petit écran) n'a pas la place d'une ligne
+  // de plus : l'invitation attend un repos en grand cadran.
+  const b=document.getElementById('rep-bandeau');
+  if(b&&b.classList.contains('rep-compact')){ z.hidden=true; z.innerHTML=''; return false; }
+  woState._reposNotifVu=true;
   if(!_notifSupported()){ z.hidden=true; z.innerHTML=''; return false; }
   let perm=''; try{ perm=window.Notification?Notification.permission:''; }catch(e){}
   const m=reposInviteNotif(currentUser,perm,!((currentUser&&currentUser.sessions)||[]).length);

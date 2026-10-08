@@ -75886,6 +75886,22 @@ async function testExercices(){
         if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
       }
     });
+    // ══ BUILD 1953 — LE MINUTEUR COMPACT GARDE SA HAUTEUR ═════════════════════════
+    ok('1953 — minuteur compact : pas d’invitation aux notifications, elle attend un grand cadran',()=>{
+      const svW=woState, svN=window.Notification, svU=currentUser, svS=window._notifSupported;
+      const z=document.getElementById('rep-notif'), b=document.getElementById('rep-bandeau');
+      if(!z||!b) return true;
+      const cl=b.classList.contains('rep-compact');
+      try{
+        window.Notification={permission:'default'}; window._notifSupported=()=>true;
+        currentUser={email:'n@t',sessions:[]}; woState={exercises:[{name:'A'}]};
+        b.classList.add('rep-compact');
+        if(_reposInviteNotif()||!z.hidden||woState._reposNotifVu) return _echec('invitation dans le compact');
+        b.classList.remove('rep-compact');
+        if(!_reposInviteNotif()||z.hidden) return _echec('pas d’invitation au grand cadran');
+        return true;
+      }finally{ b.classList.toggle('rep-compact',cl); z.hidden=true; z.innerHTML=''; woState=svW; window.Notification=svN; currentUser=svU; window._notifSupported=svS; }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

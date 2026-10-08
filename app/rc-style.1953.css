@@ -13862,3 +13862,5 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 /* Série 7, lot 8 — « + Exercice » et la séance libre */
 .wo-ajout-exo{width:100%;margin:6px 0 4px}
 .sp-libre .sp-jour{font-weight:800}
+/* Le minuteur compact n'affiche pas l'invitation aux notifications */
+.rep-compact #rep-notif{display:none}
