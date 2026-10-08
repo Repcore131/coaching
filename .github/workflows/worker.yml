@@ -14,10 +14,16 @@ on:
   push:
     paths:
       - 'cloudflare/**'
+      - 'scripts/mise_en_prod.mjs'
+      - 'scripts/migrer_boutique.mjs'
+      - 'scripts/verif/mise_en_prod.test.mjs'
       - '.github/workflows/worker.yml'
   pull_request:
     paths:
       - 'cloudflare/**'
+      - 'scripts/mise_en_prod.mjs'
+      - 'scripts/migrer_boutique.mjs'
+      - 'scripts/verif/mise_en_prod.test.mjs'
       - '.github/workflows/worker.yml'
   workflow_dispatch:
 
@@ -43,3 +49,6 @@ jobs:
       - name: node --test
         working-directory: cloudflare
         run: node --test "test/*.test.mjs"
+      # Série 6 (lot 10) : la liste de mise en production, sur une fausse base.
+      - name: mise_en_prod (fausse base)
+        run: node --test scripts/verif/mise_en_prod.test.mjs
