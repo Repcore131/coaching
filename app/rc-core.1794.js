@@ -7044,6 +7044,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // La lignee de synchronisation (voir CLOUD._baseDe) : un horodatage du
   // serveur, retire avant tout envoi. Rien de l'athlete.
   '_syncMaj',
+  // LOT PF1 — LE PLAN POINT FAIBLE appliqué : une date, deux muscles, un
+  // nombre d'opérations. Aucune mesure du corps n'y est recopiée : l'effet se
+  // recalcule au rite depuis les séances et les bilans.
+  'planPointFaible',
   // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
   // articulation, deux angles, un repère, posés par le coach. Une consigne
   // d'exécution, comme le réglage du coach — pas une mesure du corps.
@@ -16670,6 +16674,501 @@ function _morphoCalCache(){
   if(_morphoCal&&now-_morphoCalT<30000) return _morphoCal;
   _morphoCal=morphoCalibrageCoach(); _morphoCalT=now;
   return _morphoCal;
+}
+
+// ══ LOT PF1 — L'ASSISTANT « POINT FAIBLE » ═══════════════════════════════
+//
+// Le coach choisit un muscle faible et un muscle dominant ; l'assistant
+// PROPOSE une réorganisation de la semaine, opération par opération. Rien
+// n'est appliqué sans que le coach coche et valide.
+//
+// LES RÈGLES, et l'ordre où elles sont tenues :
+//   1. le faible deux fois par semaine — sinon on l'ajoute à une deuxième
+//      séance, de préférence celle du dominant (le dominant y est « associé »
+//      au faible, après lui) ;
+//   2. jamais le lendemain du dominant — une séance du faible ne suit pas
+//      une AUTRE séance qui travaille le dominant ;
+//   3. en début de semaine — la première séance du faible est le premier
+//      jour d'entraînement ;
+//   4. en tête de séance — faible d'abord, dominant en dernier ;
+//   5. +1 série (+2 pour un avancé) sur deux exercices du faible au plus par
+//      séance, JAMAIS au-delà de +2 sur un exercice ;
+//   6. un exercice en mode métabolique (20 répétitions et plus, repos de 90 s
+//      au plus) pour quatre semaines — pas chez un débutant.
+// ⚠ IDEMPOTENT. Les marques posées à l'application (pf, pfSeries, pfMeta)
+//   font qu'un plan appliqué, repassé dans l'assistant, ne propose plus rien.
+// ⚠ UN JOUR INCONNU N'EST PAS DEVINÉ : une séance sans jour de semaine est
+//   laissée hors des règles de calendrier, et l'avertissement le dit.
+// ⚠ « VERDICT M4 » : un exercice ajouté ne doit pas viser un schéma qu'une
+//   contrainte de santé déclarée écarte ; une fiche morpho qui l'aménage le
+//   dit dans la note. Le test filmé rouge sur le même mouvement l'écarte.
+
+const PF_NIVEAUX=Object.freeze({
+  debutant:Object.freeze({lib:'Débutant',series:1,ajouts:1,meta:false}),
+  intermediaire:Object.freeze({lib:'Intermédiaire',series:1,ajouts:2,meta:true}),
+  avance:Object.freeze({lib:'Avancé',series:2,ajouts:3,meta:true})});
+const PF_SERIES_MAX=2, PF_SERIES_PAR_SEANCE=2, PF_META_SEMAINES=4;
+const PF_META_REPS='20-25', PF_META_REPOS='1 min 30';
+/** Les muscles qu'on peut viser, dans l'ordre de l'écran. */
+const PF_MUSCLES=Object.freeze(['PECTORAUX','DELT_ANT','DELT_LAT','DELT_POST','DORSAUX','TRAP_MED','BICEPS','TRICEPS','QUADRICEPS','ISCHIOS','FESSIERS','MOLLETS']);
+/**
+ * LES MODÈLES DE DÉPART, en 4 et 5 jours. Un modèle n'est pas appliqué : il
+ * montre au coach une semaine qui tient déjà les règles, pour comparer.
+ */
+const SPLITS_POINT_FAIBLE=Object.freeze([
+  Object.freeze({faible:'PECTORAUX',dominants:Object.freeze(['TRICEPS','DELT_ANT']),
+    j4:Object.freeze([['Lundi','Pectoraux, biceps'],['Mardi','Jambes'],['Jeudi','Pectoraux, dos'],['Vendredi','Épaules, triceps']]),
+    j5:Object.freeze([['Lundi','Pectoraux, biceps'],['Mardi','Jambes'],['Mercredi','Dos, deltoïdes postérieurs'],['Vendredi','Pectoraux, épaules latérales'],['Samedi','Bras, triceps en fin']])}),
+  Object.freeze({faible:'DELT_LAT',dominants:Object.freeze(['TRICEPS','PECTORAUX','DORSAUX']),
+    j4:Object.freeze([['Lundi','Épaules, biceps'],['Mardi','Jambes'],['Jeudi','Épaules, dos'],['Vendredi','Pectoraux, triceps']]),
+    j5:Object.freeze([['Lundi','Épaules, biceps'],['Mardi','Jambes'],['Mercredi','Dos'],['Vendredi','Épaules, mollets'],['Samedi','Pectoraux, triceps']])}),
+  Object.freeze({faible:'DORSAUX',dominants:Object.freeze(['BICEPS','DELT_POST']),
+    j4:Object.freeze([['Lundi','Dos, triceps'],['Mardi','Jambes'],['Jeudi','Dos, pectoraux'],['Vendredi','Épaules, biceps']]),
+    j5:Object.freeze([['Lundi','Dos, triceps'],['Mardi','Jambes'],['Mercredi','Pectoraux, épaules'],['Vendredi','Dos (largeur)'],['Samedi','Bras, biceps en fin']])}),
+  Object.freeze({faible:'QUADRICEPS',dominants:Object.freeze(['FESSIERS','ISCHIOS']),
+    j4:Object.freeze([['Lundi','Quadriceps, mollets'],['Mardi','Haut du corps'],['Jeudi','Quadriceps, ischios'],['Vendredi','Haut du corps']]),
+    j5:Object.freeze([['Lundi','Quadriceps, mollets'],['Mardi','Haut du corps (poussée)'],['Mercredi','Haut du corps (tirage)'],['Vendredi','Quadriceps, fessiers en fin'],['Samedi','Bras, épaules']])}),
+  Object.freeze({faible:'ISCHIOS',dominants:Object.freeze(['FESSIERS','QUADRICEPS']),
+    j4:Object.freeze([['Lundi','Ischios, mollets'],['Mardi','Haut du corps'],['Jeudi','Ischios, quadriceps'],['Vendredi','Haut du corps']]),
+    j5:Object.freeze([['Lundi','Ischios, mollets'],['Mardi','Haut du corps (poussée)'],['Mercredi','Haut du corps (tirage)'],['Vendredi','Ischios, fessiers en fin'],['Samedi','Bras, épaules']])})
+]);
+/** PURE. Le modèle de départ pour un faible, un dominant et 4 ou 5 jours ; null s'il n'y en a pas. */
+function splitPointFaible(faible,dominant,jours){
+  const s=SPLITS_POINT_FAIBLE.find(x=>x.faible===faible&&(!dominant||x.dominants.indexOf(dominant)>=0))
+    ||SPLITS_POINT_FAIBLE.find(x=>x.faible===faible)||null;
+  if(!s) return null;
+  return {faible:s.faible,dominants:s.dominants,jours:(Number(jours)>=5?s.j5:s.j4)};
+}
+/** PURE. Le niveau d'un dossier, d'après c.level. */
+function niveauPointFaible(c){
+  const l=String((c&&c.level)||'').toLowerCase();
+  if(/débutant|debutant/.test(l)) return 'debutant';
+  if(/avancé|avance|expert|confirmé/.test(l)) return 'avance';
+  return 'intermediaire';
+}
+
+/**
+ * PURE. LA PROPOSITION.
+ * @param {any[]} programme  sessions_config
+ * @param {string} faible @param {string|null} dominant  clés de MUSCLES
+ * @param {string} niveau  'debutant' | 'intermediaire' | 'avance'
+ * @param {{musclesDe?:(ex:any)=>string[], candidats?:string[], compatible?:(nom:string)=>{ok:boolean,note?:string},
+ *   schemaDe?:(nom:string)=>string|null}} [opts]
+ * @returns {{operations:any[], avertissements:string[]}}
+ */
+function propositionPointFaible(programme,faible,dominant,niveau,opts){
+  const o=opts||{}, P=Array.isArray(programme)?programme:[];
+  const N=PF_NIVEAUX[niveau]||PF_NIVEAUX.intermediaire;
+  const ops=[], av=[];
+  if(!MUSCLES[faible]) return {operations:[],avertissements:['Muscle faible inconnu.']};
+  const dom=(dominant&&MUSCLES[dominant]&&dominant!==faible)?dominant:null;
+  if(dominant&&!dom) av.push('Le dominant est le même muscle que le faible, ou inconnu : il n’est pas pris en compte.');
+  const prim=ex=>{ try{ return (o.musclesDe?o.musclesDe(ex):[])||[]; }catch(e){ return []; } };
+  const libM=m=>((MUSCLES[m]||{}).lib||m).toLowerCase();
+  // ⚠ LE CRÉNEAU EST LE JOUR : l'index 0 est le lundi (cfg[(getDay()+6)%7]).
+  //   Au-delà du septième, un créneau n'a pas de jour.
+  const slots=P.map((s,i)=>({s,i,jour:i<DAYS.length?i:-1})).filter(x=>x.s&&x.s.active===true&&Array.isArray(x.s.exercises));
+  if(!slots.length) return {operations:[],avertissements:['Aucune séance active dans le programme.']};
+  const sansJour=slots.filter(x=>x.jour<0);
+  if(sansJour.length) av.push(sansJour.length+' séance'+(sansJour.length>1?'s':'')+' sans jour de semaine : elle'+(sansJour.length>1?'s restent':' reste')+' hors des règles de calendrier.');
+  const estF=ex=>prim(ex).indexOf(faible)>=0, estD=ex=>!!dom&&prim(ex).indexOf(dom)>=0;
+  // jours : créneau d'ORIGINE → jour où sa séance tombe, mis à jour à chaque déplacement proposé.
+  const jours=new Map(slots.map(x=>[x.i,x.jour]));
+  const fSet=new Set(slots.filter(x=>x.s.exercises.some(estF)).map(x=>x.i));
+  const dSet=new Set(slots.filter(x=>x.s.exercises.some(estD)).map(x=>x.i));
+  const nomSeance=i=>String((P[i]&&P[i].name)||('Séance du '+String((P[i]&&P[i].day)||(i+1)).toLowerCase()));
+  // UNE SÉANCE DU FAIBLE LE LENDEMAIN D'UNE AUTRE SÉANCE DU DOMINANT ?
+  const lendemain=(i,J)=>{ const j=J.get(i); if(j==null||j<0) return false;
+    const veille=(j+6)%7; return [...dSet].some(k=>k!==i&&J.get(k)===veille); };
+  const violations=J=>[...fSet].filter(i=>lendemain(i,J));
+  // ── 1. DEUX FOIS PAR SEMAINE.
+  if(fSet.size<2){
+    if(slots.length<2) av.push('Une seule séance active : impossible de travailler deux fois par semaine ('+libM(faible)+').');
+    else {
+      // LA SÉANCE QUI ACCUEILLE LE SECOND PASSAGE : pas le lendemain du
+      // dominant, celle du dominant d'abord (le dominant y est associé au
+      // faible, et passe après lui), puis la plus courte, puis la plus tôt.
+      const cand=slots.filter(x=>!fSet.has(x.i)).map(x=>({x,mal:lendemain(x.i,jours)}));
+      cand.sort((a,b)=>(Number(a.mal)-Number(b.mal))||((dSet.has(b.x.i)?1:0)-(dSet.has(a.x.i)?1:0))||(a.x.s.exercises.length-b.x.s.exercises.length)||((a.x.jour<0?9:a.x.jour)-(b.x.jour<0?9:b.x.jour)));
+      const cible=cand[0]&&cand[0].x;
+      if(cible&&cand[0].mal) av.push('La seule séance libre pour un second passage ('+libM(faible)+') suit une séance du dominant : à décaler.');
+      // UNE FAMILLE PAR AJOUT : ni les deux mêmes premiers mots, ni une
+      // variante d'un nom déjà pris (« BUTTERFLY » puis « BUTTERFLY
+      // UNILATERAL ») — le catalogue alphabétique proposait deux fois le même
+      // geste.
+      const famille=n=>String(n||'').toUpperCase().split(/\s+/).slice(0,2).join(' ');
+      const deja=new Set(); P.forEach(s=>((s&&s.exercises)||[]).forEach(e=>deja.add(famille(e&&e.name))));
+      const pris=new Set(); P.forEach(s=>((s&&s.exercises)||[]).forEach(e=>pris.add(String((e&&e.name)||'').toUpperCase())));
+      const choisis=[];
+      for(const nom of (o.candidats||[])){
+        if(choisis.length>=Math.max(1,Math.min(3,N.ajouts))) break;
+        const N0=String(nom).toUpperCase();
+        if(deja.has(famille(nom))||[...pris].some(x=>N0.indexOf(x+' ')===0||x.indexOf(N0+' ')===0)) continue;
+        const v=o.compatible?o.compatible(nom):{ok:true};
+        if(!v||!v.ok) continue;
+        choisis.push({nom,note:v.note||''}); deja.add(famille(nom)); pris.add(N0);
+      }
+      if(!cible) av.push('Aucune séance ne peut accueillir le second passage ('+libM(faible)+').');
+      else if(!choisis.length) av.push('Aucun exercice compatible à ajouter ('+libM(faible)+') : à choisir à la main.');
+      else {
+        choisis.forEach((c,k)=>ops.push({id:'ajouter_exercice:'+cible.i+':'+k,type:'ajouter_exercice',slot:cible.i,rang:k,
+          ex:{name:c.nom,series:3,reps:'10-12',repos:'1 min 30',pf:true},
+          texte:'Ajouter '+c.nom+' en tête de « '+nomSeance(cible.i)+' » (3 × 10-12)'+(c.note?' — '+c.note:'')}));
+        fSet.add(cible.i);
+      }
+    }
+  }
+  // ── 2 ET 3. LE CALENDRIER : début de semaine, jamais le lendemain du dominant.
+  // Un déplacement ÉCHANGE le contenu de deux créneaux (le jour reste au
+  // créneau, comme _echangerCreneaux) : vers un jour libre, la séance part et
+  // son ancien jour s'éteint.
+  const connus=slots.filter(x=>jours.get(x.i)>=0);
+  const occupe=(J,j)=>[...J.entries()].some(([,v])=>v===j);
+  const libres=J=>[0,1,2,3,4,5,6].filter(j=>j<P.length&&P[j]&&typeof P[j]==='object'&&!occupe(J,j));
+  const premierF=J=>{ const l=[...fSet].filter(i=>J.get(i)>=0).sort((a,b)=>J.get(a)-J.get(b)); return l[0]; };
+  const PREV=' Les charges de la dernière fois réapparaissent après une première séance sur le nouveau jour.';
+  if(connus.length&&[...fSet].some(i=>jours.get(i)>=0)){
+    const premier=Math.min(...connus.map(x=>jours.get(x.i)));
+    const f0=premierF(jours);
+    if(jours.get(f0)>premier){
+      const autre=connus.find(x=>jours.get(x.i)===premier).i;
+      const J=new Map(jours); J.set(f0,premier); J.set(autre,jours.get(f0));
+      if(violations(J).length<=violations(jours).length){
+        ops.push({id:'deplacer_seance:'+f0,type:'deplacer_seance',slot:f0,vers:premier,
+          texte:'Échanger « '+nomSeance(f0)+' » ('+DAYS[jours.get(f0)].toLowerCase()+') et « '+nomSeance(autre)+' » ('+DAYS[premier].toLowerCase()+') : la semaine s’ouvre sur le point faible ('+libM(faible)+').'+PREV});
+        jours.set(f0,premier); jours.set(autre,J.get(autre));
+      } else av.push('Avancer « '+nomSeance(f0)+' » en début de semaine la placerait le lendemain du dominant : laissée telle quelle.');
+    }
+    for(const i of violations(jours)){
+      // Un jour libre qui règle le lendemain ; de préférence un qui laisse le
+      // faible en début de semaine, puis le plus tôt.
+      const ouvre=J=>{ const f=premierF(J), v=[...J.values()].filter(x=>x>=0); return f!=null&&J.get(f)===Math.min(...v); };
+      const dispo=libres(jours).map(j=>{ const J=new Map(jours); J.set(i,j); return {j,J}; })
+        .filter(c=>!violations(c.J).length)
+        .sort((a,b)=>(Number(ouvre(b.J))-Number(ouvre(a.J)))||(a.j-b.j));
+      if(dispo.length){
+        const c=dispo[0];
+        ops.push({id:'deplacer_seance:'+i+':lendemain',type:'deplacer_seance',slot:i,vers:c.j,
+          texte:'Passer « '+nomSeance(i)+' » du '+DAYS[jours.get(i)].toLowerCase()+' au '+DAYS[c.j].toLowerCase()+' : elle tombait le lendemain d’une séance qui travaille le dominant ('+libM(dom)+').'+PREV});
+        jours.set(i,c.j);
+      } else av.push('« '+nomSeance(i)+' » tombe le lendemain d’une séance qui travaille le dominant ('+libM(dom)+'), et aucun jour libre ne règle le problème.');
+    }
+  }
+  // ── 4. EN TÊTE DE SÉANCE : faible d'abord, dominant en dernier.
+  for(const x of slots){
+    if(!fSet.has(x.i)) continue;
+    const l=x.s.exercises.map((e,k)=>({k,r:estF(e)?0:(estD(e)?2:1)}));
+    const ordre=l.slice().sort((a,b)=>(a.r-b.r)||(a.k-b.k)).map(z=>z.k);
+    if(ordre.some((k,n)=>k!==n)&&x.s.exercises.length>1)
+      ops.push({id:'reordonner:'+x.i,type:'reordonner',slot:x.i,ordre,
+        texte:'Dans « '+nomSeance(x.i)+' » : '+libM(faible)+' en tête'+(dom?', '+libM(dom)+' en dernier':'')+'.'});
+  }
+  // ── 5. LES SÉRIES : +1 (+2 avancé), deux exercices par séance, jamais au-delà de +2.
+  for(const x of slots){
+    if(!fSet.has(x.i)) continue;
+    let n=0;
+    x.s.exercises.forEach((e,k)=>{
+      // Un exercice déjà monté par un plan compte dans les deux : sinon un
+      // second passage monterait le troisième (⚠ idempotence).
+      if(estF(e)&&e.pfSeries){ n++; return; }
+      if(n>=PF_SERIES_PAR_SEANCE||!estF(e)||e.pf) return;
+      const s=parseInt(e.series,10);
+      if(!(s>0)) return;
+      const inc=Math.min(N.series,PF_SERIES_MAX);
+      n++;
+      ops.push({id:'ajouter_series:'+x.i+':'+k,type:'ajouter_series',slot:x.i,ex:k,de:s,vers:s+inc,
+        texte:String(e.name)+' (« '+nomSeance(x.i)+' ») : '+s+' → '+(s+inc)+' séries.'});
+    });
+  }
+  // ── 6. LE MODE MÉTABOLIQUE, quatre semaines, sur un exercice du faible —
+  //    de préférence une isolation de la SECONDE séance du faible.
+  const dejaMeta=P.some(s=>((s&&s.exercises)||[]).some(e=>e&&e.pfMeta));
+  if(N.meta&&!dejaMeta){
+    const ordreF=[...fSet].filter(i=>P[i]).sort((a,b)=>(jours.get(a)<0?9:jours.get(a))-(jours.get(b)<0?9:jours.get(b)));
+    const sch=n=>{ try{ return o.schemaDe?o.schemaDe(n):null; }catch(e){ return null; } };
+    // La seconde séance d'abord ; si elle ne porte que des exercices ajoutés
+    // par ce plan, la première, puis les suivantes.
+    const essais=ordreF.length>1?[ordreF[1],ordreF[0]].concat(ordreF.slice(2)):ordreF;
+    let sl=-1, k=-1, ex=[];
+    for(const z of essais){
+      ex=P[z].exercises; k=-1;
+      ex.forEach((e,i)=>{ if(estF(e)&&!e.pf&&/^isolation/.test(String(sch(e&&e.name)||''))) k=i; });
+      if(k<0) ex.forEach((e,i)=>{ if(estF(e)&&!e.pf) k=i; });
+      if(k>=0){ sl=z; break; }
+    }
+    if(k>=0) ops.push({id:'metabolique:'+sl+':'+k,type:'metabolique',slot:sl,ex:k,semaines:PF_META_SEMAINES,reps:PF_META_REPS,repos:PF_META_REPOS,
+      texte:String(ex[k].name)+' (« '+nomSeance(sl)+' ») en mode métabolique pendant '+PF_META_SEMAINES+' semaines : '+PF_META_REPS+' répétitions, '+PF_META_REPOS+' de repos.'});
+  }
+  return {operations:ops,avertissements:av};
+}
+
+/**
+ * PURE. Où se trouve, après les déplacements cochés, la séance de chaque
+ * créneau d'origine : rend `origine`, où origine[j] est le créneau d'origine
+ * de ce qui occupe le créneau j.
+ * @param {number} n @param {any[]} operations @param {string[]|null} [ids]
+ * @returns {number[]}
+ */
+function _pfOrigines(n,operations,ids){
+  const origine=Array.from({length:n},(_,i)=>i);
+  for(const x of (operations||[])){
+    if(x.type!=='deplacer_seance'||(ids&&ids.indexOf(x.id)<0)) continue;
+    const de=origine.indexOf(x.slot), vers=x.vers;
+    if(de<0||!(vers>=0&&vers<n)||de===vers) continue;
+    const t=origine[vers]; origine[vers]=origine[de]; origine[de]=t;
+  }
+  return origine;
+}
+/**
+ * PURE, NE MUTE PAS SON ENTRÉE. Applique les opérations cochées. L'ordre est
+ * imposé : les opérations qui visent un exercice par son rang d'origine
+ * passent AVANT celles qui déplacent les rangs, et les déplacements de
+ * séance en dernier — ils emportent les exercices avec eux.
+ * ⚠ UN DÉPLACEMENT ÉCHANGE LE CONTENU (SEANCE_CHAMPS_MOBILES) ET L'ÉTAT
+ *   ALLUMÉ des deux créneaux ; le jour reste au créneau. Au contraire du
+ *   geste « alterner » de l'athlète, l'état suit la séance : déplacer vers un
+ *   jour éteint sans l'allumer ferait disparaître la séance du programme.
+ * @param {any[]} programme @param {any[]} operations @param {string[]|null} [ids]  null = toutes
+ * @param {number} [maintenant]
+ */
+function appliquerPointFaible(programme,operations,ids,maintenant){
+  const P=(Array.isArray(programme)?programme:[]).map(s=>(s&&typeof s==='object')?Object.assign({},s,{
+    exercises:(Array.isArray(s.exercises)?s.exercises:[]).map(e=>(e&&typeof e==='object')?Object.assign({},e):e)}):s);
+  const on=x=>!ids||ids.indexOf(x.id)>=0;
+  const L=(operations||[]).filter(on);
+  const t=Math.round(Number(maintenant)||Date.now());
+  for(const x of L) if(x.type==='ajouter_series'){
+    const e=P[x.slot]&&P[x.slot].exercises[x.ex]; if(!e) continue;
+    const s=parseInt(e.series,10); if(!(s>0)) continue;
+    const inc=Math.max(0,Math.min(PF_SERIES_MAX-(Number(e.pfSeries)||0),x.vers-x.de));
+    e.series=s+inc; e.pfSeries=(Number(e.pfSeries)||0)+inc;
+  }
+  for(const x of L) if(x.type==='metabolique'){
+    const e=P[x.slot]&&P[x.slot].exercises[x.ex]; if(!e||e.pfMeta) continue;
+    e.pfMeta={semaines:x.semaines,depuis:t,reps:String(e.reps||''),repos:String(e.repos||'')};
+    e.reps=x.reps; e.repos=x.repos;
+  }
+  for(const x of L) if(x.type==='reordonner'){
+    const s=P[x.slot]; if(!s) continue;
+    const ex=s.exercises;
+    if(!Array.isArray(x.ordre)||x.ordre.length!==ex.length) continue;
+    s.exercises=x.ordre.map(k=>ex[k]);
+  }
+  const ajouts=L.filter(x=>x.type==='ajouter_exercice').sort((a,b)=>b.rang-a.rang);
+  for(const x of ajouts){ const s=P[x.slot]; if(s) s.exercises.unshift(Object.assign({},x.ex)); }
+  const origine=_pfOrigines(P.length,L,null);
+  const mobiles=SEANCE_CHAMPS_MOBILES.concat(['active']);
+  return origine.map((o,j)=>{
+    if(o===j||!P[j]||!P[o]||typeof P[j]!=='object') return P[j];
+    const r=Object.assign({},P[j]);
+    for(const k of mobiles){ if(P[o][k]===undefined) delete r[k]; else r[k]=P[o][k]; }
+    return r;
+  });
+}
+/**
+ * PURE. La semaine, jour par jour, avant et après : de quoi lire le
+ * changement d'un coup d'œil. Chaque exercice porte sa marque :
+ * 'ajout', 'series', 'meta' (prime sur 'series' : les séries montées se lisent
+ * encore par seriesAvant), ou rien.
+ * @param {any[]} avant @param {any[]} apres @param {number[]} [origine]  _pfOrigines
+ */
+function diffSemainePointFaible(avant,apres,origine){
+  const a0=Array.isArray(avant)?avant:[], b0=Array.isArray(apres)?apres:[];
+  const jourDe=i=>i<DAYS.length?DAYS[i]:'';
+  const ligne=(s,i)=>({i,jour:jourDe(i),nom:String((s&&s.name)||''),
+    ex:((s&&s.exercises)||[]).map(e=>({nom:String((e&&e.name)||''),series:e&&e.series,reps:String((e&&e.reps)||'')}))});
+  const actif=s=>!!(s&&s.active===true);
+  return b0.map((s,j)=>({s,j})).filter(z=>actif(z.s)).map(({s,j})=>{
+    const o=(origine&&origine[j]!=null)?origine[j]:j;
+    const b=ligne(s,j), a=actif(a0[o])?ligne(a0[o],o):{jour:'',ex:[]};
+    const noms=new Map(a.ex.map(e=>[e.nom,e]));
+    return {jour:b.jour,jourAvant:a.jour,deplace:o!==j,nom:b.nom,
+      ex:b.ex.map(e=>{ const v=noms.get(e.nom);
+        return Object.assign({},e,{marque:!v?'ajout':(v.reps!==e.reps?'meta':(String(v.series)!==String(e.series)?'series':'')),seriesAvant:v?v.series:null}); })};
+  });
+}
+
+// ── LES ENTRÉES : faible et dominant suggérés ───────────────────────────────
+/** Le faible et le dominant suggérés pour un dossier. Ni l'un ni l'autre n'est imposé. */
+function suggererPointFaible(c){
+  let faible=null, source='';
+  try{ const p=musclesEnPlateau(c); if(p&&p[0]&&MUSCLES[p[0].m]){ faible=p[0].m; source='plateau'; } }catch(e){}
+  if(!faible){
+    try{
+      const a=_morphoAsymetries(c);
+      const map={bicep:'BICEPS',thigh:'QUADRICEPS',calf:'MOLLETS'};
+      if(a&&a[0]&&map[a[0].cle]){ faible=map[a[0].cle]; source='asymetrie'; }
+    }catch(e){}
+  }
+  // LE DOMINANT : le plus gros volume des quatre dernières semaines révolues.
+  let dominant=null;
+  try{
+    const tot={};
+    for(const k of _semainesRevolues(4)){ const r=_calculSemaine(c,k); for(const m in r.muscles) tot[m]=(tot[m]||0)+r.muscles[m]; }
+    const l=Object.keys(tot).filter(m=>m!==faible&&PF_MUSCLES.indexOf(m)>=0).sort((a,b)=>tot[b]-tot[a]);
+    dominant=l[0]||null;
+  }catch(e){}
+  return {faible,dominant,source};
+}
+/** Les options réelles d'un dossier : muscles, candidats du catalogue, compatibilité. */
+function _optsPointFaible(c,faible){
+  const musclesDe=ex=>{ let cls=null; try{ cls=resoudreMusclesLecture((ex&&ex.name)||ex,ex&&ex.name?ex:{name:ex},c); }catch(e){ cls=null; }
+    return (cls&&cls!==VOL_CARDIO&&cls.p)?cls.p:[]; };
+  const candidats=[];
+  for(const k in _SCHEMA_INDEX){
+    const p=musclesDe({name:k});
+    if(p[0]===faible) candidats.push(k);
+  }
+  candidats.sort((a,b)=>(/^isolation/.test(_SCHEMA_INDEX[a])?1:0)-(/^isolation/.test(_SCHEMA_INDEX[b])?1:0)||a.localeCompare(b));
+  const compatible=nom=>{
+    try{ const l=contraintesPourExercice({name:nom},c); if(l&&l.length) return {ok:false}; }catch(e){}
+    try{
+      const sch=_SCHEMA_INDEX[exKey(nom)], vis=TESTS_COMPAT.find(t=>t.schemaVise===sch), r=vis&&testsCompatDe(c)[vis.cle];
+      if(r&&r.couleur==='rouge') return {ok:false};
+    }catch(e){}
+    let note='';
+    try{ const m=morphoPourExercice(c,{name:nom}); if(m&&m.lignes&&m.lignes[0]) note='à aménager : '+m.lignes[0].quoi+' ('+m.lignes[0].reglage+')'; }catch(e){}
+    return {ok:true,note};
+  };
+  return {musclesDe,candidats,compatible,schemaDe:n=>{ try{ return schemaDe({name:n},c); }catch(e){ return null; } }};
+}
+
+// ── L'ÉCRAN COACH ───────────────────────────────────────────────────────────
+let _pfa=null;   // {cid, faible, dominant, niveau, res, off:Set}
+function ouvrirPlanPointFaible(cid){
+  const c=getOwnedClient(cid);
+  if(!c||c._fromCode) return false;
+  const s=suggererPointFaible(c);
+  _pfa={cid,faible:s.faible||PF_MUSCLES[0],dominant:s.dominant,niveau:niveauPointFaible(c),source:s.source,off:new Set()};
+  _pfaRendre(true);
+  return true;
+}
+function _pfaCalcul(c){
+  return propositionPointFaible(_creneauxDe(c),_pfa.faible,_pfa.dominant,_pfa.niveau,_optsPointFaible(c,_pfa.faible));
+}
+/** Le contenu de la feuille (lit les créneaux par _creneauxDe, qui remet l'emballage Firebase à plat). */
+function htmlPlanPointFaible(c,etat,res){
+  const E=escapeHtml, libM=m=>(MUSCLES[m]||{}).lib||m;
+  const choisis=res.operations.filter(x=>!etat.off.has(x.id)).map(x=>x.id);
+  const cfg=_creneauxDe(c);
+  const apres=appliquerPointFaible(cfg,res.operations,choisis);
+  const diff=diffSemainePointFaible(cfg,apres,_pfOrigines(cfg.length,res.operations,choisis));
+  const avantParJour=diffSemainePointFaible(cfg,cfg);
+  const sel=(champ,val,liste,vide)=>'<select class="amc-in" onchange="pfaChoix(\''+champ+'\',this.value)">'+(vide?'<option value="">'+E(vide)+'</option>':'')
+    +liste.map(m=>'<option value="'+E(m[0])+'"'+(m[0]===val?' selected':'')+'>'+E(m[1])+'</option>').join('')+'</select>';
+  const sp=splitPointFaible(etat.faible,etat.dominant,cfg.filter(s=>s&&s.active===true).length);
+  const jourHtml=(d,av)=>'<div class="pfa-jour"><div class="pfa-j">'+E(d.jour||'Sans jour')+(d.deplace&&!av?' <i>(était '+E(d.jourAvant||'sans jour')+')</i>':'')+'</div><div class="pfa-n">'+E(d.nom)+'</div>'
+    +d.ex.map(e=>'<div class="pfa-e'+(av?'':' pfa-'+(e.marque||'x'))+'">'+(av||!e.marque?'':e.marque==='ajout'?'+ ':'~ ')+E(e.nom)+' <span>'
+      +(!av&&e.seriesAvant!=null&&String(e.seriesAvant)!==String(e.series)?E(String(e.seriesAvant))+'→':'')+E(String(e.series||''))+' × '+E(e.reps)+'</span></div>').join('')+'</div>';
+  return '<div class="pfa-feuille"><h2 style="margin:0 0 6px;font-size:var(--fs-lg)">Plan point faible</h2>'
+    +'<p class="rvm-s">Une proposition : rien n’est appliqué tant que tu ne valides pas. Décoche ce que tu ne veux pas.</p>'
+    +'<div class="amc-champs" style="grid-template-columns:1fr 1fr 1fr">'
+    +sel('faible',etat.faible,PF_MUSCLES.map(m=>[m,'Faible : '+libM(m)]))
+    +sel('dominant',etat.dominant||'',PF_MUSCLES.filter(m=>m!==etat.faible).map(m=>[m,'Dominant : '+libM(m)]),'Sans dominant')
+    +sel('niveau',etat.niveau,Object.keys(PF_NIVEAUX).map(k=>[k,PF_NIVEAUX[k].lib]))+'</div>'
+    +(etat.source?'<p class="rvm-src">Faible suggéré par '+(etat.source==='plateau'?'les plateaux':'l’asymétrie des mensurations')+' ; dominant : le plus gros volume des 4 dernières semaines.</p>':'')
+    +(res.avertissements.length?'<div class="rvm-manque">'+res.avertissements.map(E).join('<br>')+'</div>':'')
+    +(res.operations.length?'<div class="pfa-ops">'+res.operations.map(x=>'<label class="ta-cons"><input type="checkbox" data-id="'+E(x.id)+'"'
+      +(etat.off.has(x.id)?'':' checked')+' onchange="pfaCoche(this)"> <span>'+E(x.texte)+'</span></label>').join('')+'</div>'
+      :'<div class="rvm-vide">Rien à changer : la semaine tient déjà les règles.</div>')
+    +'<div class="pfa-diff"><div><div class="rvm-t">Avant</div>'+avantParJour.map(d=>jourHtml(d,true)).join('')+'</div>'
+    +'<div><div class="rvm-t">Après</div>'+diff.map(d=>jourHtml(d,false)).join('')+'</div></div>'
+    +(sp?'<details class="pfa-split"><summary>Modèle de départ ('+sp.jours.length+' jours)</summary>'+sp.jours.map(j=>'<div class="rvm-src"><b>'+E(j[0])+'</b> : '+E(j[1])+'</div>').join('')+'</details>':'')
+    +'<div class="amc-actions"><button type="button" class="btn btn-red" '+(choisis.length?'':'disabled ')+'onclick="pfaEnregistrer()">Enregistrer '+choisis.length+' opération'+(choisis.length>1?'s':'')+'</button>'
+    +'<button type="button" class="btn btn-outline" onclick="closeModal()">Fermer</button></div></div>';
+}
+function _pfaRendre(ouvrir){
+  if(!_pfa) return false;
+  const c=getOwnedClient(_pfa.cid);
+  if(!c) return false;
+  _pfa.res=_pfaCalcul(c);
+  const corps=htmlPlanPointFaible(c,_pfa,_pfa.res);
+  const z=document.getElementById('pf-corps');
+  if(z&&!ouvrir){ z.innerHTML=corps; return true; }
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" id="pf-corps" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 14px 20px;width:100%;max-width:760px;max-height:92vh;overflow:auto">'+corps+'</div></div>');
+  return true;
+}
+function pfaChoix(champ,val){
+  if(!_pfa) return false;
+  if(champ==='faible'&&PF_MUSCLES.indexOf(val)>=0){ _pfa.faible=val; if(_pfa.dominant===val) _pfa.dominant=null; }
+  if(champ==='dominant') _pfa.dominant=PF_MUSCLES.indexOf(val)>=0?val:null;
+  if(champ==='niveau'&&PF_NIVEAUX[val]) _pfa.niveau=val;
+  _pfa.off=new Set(); _pfa.source='';
+  return _pfaRendre(false);
+}
+function pfaCoche(cb){
+  if(!_pfa||!cb) return false;
+  if(cb.checked) _pfa.off.delete(cb.dataset.id); else _pfa.off.add(cb.dataset.id);
+  return _pfaRendre(false);
+}
+async function pfaEnregistrer(){
+  if(!_pfa||!currentUser||currentUser.role!=='coach') return false;
+  const users=DB.get('users')||{}, c=getOwnedClient(_pfa.cid,users);
+  if(!c||!c.email) return false;
+  const res=_pfaCalcul(c), ids=res.operations.filter(x=>!_pfa.off.has(x.id)).map(x=>x.id);
+  if(!ids.length) return false;
+  if(!await rcConfirm('Modifier son programme : '+ids.length+' opération'+(ids.length>1?'s':'')+' ?',
+    'Le programme de '+(c.fname||'l’athlète')+' est modifié tout de suite. Le suivi de l’effet t’est rappelé au bilan de fin de cycle, dans 28 jours.','Enregistrer')) return false;
+  c.sessions_config=appliquerPointFaible(_creneauxDe(c),res.operations,ids);
+  c.planPointFaible={date:Date.now(),faible:_pfa.faible,...(_pfa.dominant?{dominant:_pfa.dominant}:{}),semaines:PF_META_SEMAINES,n:ids.length};
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ closeModal(); }catch(e){}
+  try{ openClientDetail(c.id,true); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Plan point faible appliqué ✓','le plan est');
+  return true;
+}
+
+// ── LE SUIVI, AU RITE DE FIN DE CYCLE ───────────────────────────────────────
+/** Le tour de membre qui suit un muscle, quand il existe. */
+const PF_MENSURATIONS=Object.freeze({PECTORAUX:['chest'],BICEPS:['bicep-l','bicep-r'],QUADRICEPS:['thigh-l','thigh-r'],
+  ISCHIOS:['thigh-l','thigh-r'],FESSIERS:['glutes'],MOLLETS:['calf-l','calf-r']});
+/**
+ * L'EFFET D'UN PLAN : volume hebdomadaire du faible (4 semaines avant / depuis),
+ * meilleur e1RM d'un exercice du faible (avant / depuis), et le tour de membre
+ * (dernier bilan avant / dernier bilan depuis). Une valeur absente reste absente.
+ */
+function effetPointFaible(c,plan,maintenant){
+  const now=Number(maintenant)||Date.now(), t0=Number(plan&&plan.date)||0, f=plan&&plan.faible;
+  if(!t0||!MUSCLES[f]) return null;
+  const sem=(t,n,sens)=>{ const out=[]; for(let i=0;i<n;i++){ const d=new Date(t+(sens*7*i+(sens<0?-7:0))*864e5); out.push(semaineISO(d)); } return out; };
+  const vol=cles=>{ let s=0, n=0; for(const k of cles){ try{ const r=_calculSemaine(c,k); if(r.seances){ s+=(r.muscles[f]||0); n++; } }catch(e){} } return n?Math.round(s/n*10)/10:null; };
+  const avant=vol(sem(t0,4,-1)), apres=vol(sem(t0,4,1).filter(k=>{ const l=_lundiDeSemaine(k); return l&&l.getTime()+7*864e5<=now; }));
+  // L'E1RM : sur chaque exercice du faible au programme, le meilleur avant et depuis.
+  let e1=null;
+  for(const s of _creneauxDe(c)) for(const ex of ((s&&s.exercises)||[])){
+    let p=[]; try{ const cls=resoudreMusclesLecture(ex.name,ex,c); p=(cls&&cls!==VOL_CARDIO&&cls.p)||[]; }catch(e){}
+    if(p.indexOf(f)<0) continue;
+    const av=maxE1rmObserve(Object.assign({},c,{sessions:(c.sessions||[]).filter(x=>x&&x.date<t0)}),ex.name,t0);
+    const ap=maxE1rmObserve(Object.assign({},c,{sessions:(c.sessions||[]).filter(x=>x&&x.date>=t0)}),ex.name,now);
+    if(av&&ap&&(!e1||av>e1.avant)) e1={nom:ex.name,avant:Math.round(av),apres:Math.round(ap)};
+  }
+  let mens=null;
+  const ch=PF_MENSURATIONS[f];
+  if(ch){
+    const bl=(c.bilans||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+    const val=b=>{ const v=ch.map(k=>parseFloat(String(b[k]==null?'':b[k]).replace(',','.'))).filter(x=>isFinite(x)&&x>0); return v.length?v.reduce((a,b)=>a+b,0)/v.length:null; };
+    const ba=bl.filter(b=>b.date<=t0&&val(b)!=null).pop(), bp=bl.filter(b=>b.date>t0&&val(b)!=null).pop();
+    mens={avant:ba?Math.round(val(ba)*10)/10:null,apres:bp?Math.round(val(bp)*10)/10:null};
+  }
+  return {jours:Math.floor((now-t0)/864e5),volume:{avant,apres},e1rm:e1,mensuration:mens};
+}
+/** Le bloc de suivi, dans le rite de fin de cycle du coach, dès 28 jours. */
+function _htmlSuiviPointFaible(c,maintenant){
+  const p=c&&c.planPointFaible;
+  if(!p||!p.date) return '';
+  const now=Number(maintenant)||Date.now();
+  if(now-p.date<RITE_JOURS*864e5) return '';
+  const e=effetPointFaible(c,p,now); if(!e) return '';
+  const E=escapeHtml, n=v=>v==null?'—':String(v).replace('.',',');
+  return '<div class="rvm" style="margin-top:10px"><div class="rvm-t">Plan point faible : mesurer l’effet</div>'
+    +'<div class="rvm-s">'+E((MUSCLES[p.faible]||{}).lib||p.faible)+', appliqué il y a '+e.jours+' jours. Cycle terminé : est-ce que ça a marché ?</div>'
+    +'<div class="rvm-r">'+(e.volume.avant==null&&e.volume.apres==null?'Volume hebdomadaire : aucune séance enregistrée de part et d’autre du plan'
+      :'Volume hebdomadaire : '+n(e.volume.avant)+' → '+n(e.volume.apres)+' séries')+'</div>'
+    +'<div class="rvm-r">'+(e.e1rm?E(e.e1rm.nom)+' : '+e.e1rm.avant+' → '+e.e1rm.apres+' kg (1RM estimé)':'1RM estimé : pas assez de séances de part et d’autre du plan')+'</div>'
+    +'<div class="rvm-r">'+(e.mensuration?'Mensuration : '+n(e.mensuration.avant)+' → '+n(e.mensuration.apres)+' cm'+(e.mensuration.apres==null?' (pas encore de bilan depuis le plan)':''):'Pas de mensuration qui suive ce muscle')+'</div></div>';
 }
 
 // ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════
@@ -26991,6 +27490,8 @@ function renderRiteCoach(c){
   const z=document.getElementById('ccd-rite');
   if(!z) return;
   let h=''; try{ h=_htmlRiteCoach(c); }catch(e){ h=''; }
+  // LOT PF1 : le suivi du plan point faible, au terme du cycle de 28 jours.
+  try{ h+=_htmlSuiviPointFaible(c); }catch(e){}
   z.innerHTML=h;
   z.style.display=h?'':'none';
 }
@@ -65629,6 +66130,10 @@ function renderPlateauxCoach(c){
       <button type="button" class="btn btn-red" onclick="openCoachSessions()">Modifier le programme</button>
       <button type="button" class="btn btn-blanc" onclick="coachAttribuerMuscles()">Attribuer les muscles${nSans?' · '+nSans:''}</button>
     </div>
+    </div>
+    <div class="plx-pf">
+      <span>Un muscle en retard ? L’assistant propose une semaine réorganisée, opération par opération.</span>
+      <button type="button" class="btn btn-outline" data-cid="${escapeHtml(String(c.id||''))}" onclick="ouvrirPlanPointFaible(this.dataset.cid)">Plan point faible</button>
     </div>
     ${PERF_ENCADRE}
   </div>`;

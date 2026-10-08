@@ -16334,3 +16334,34 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .amc-in{min-height:44px;box-sizing:border-box;width:100%;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);
   color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);padding:6px 8px}
 .amc-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+
+/* ══ LOT PF1 — LE PLAN POINT FAIBLE (feuille coach) ═════════════════════════
+   Les opérations à cocher, puis la semaine avant / après côte à côte. Une
+   marque par exercice : + ajouté (vert), séries montées (ambre), métabolique
+   (bleu). ⚠ Préfixe pfa- : pf- est déjà pris par les filtres (.pf-chip). */
+.pfa-feuille .rvm-s{margin-bottom:6px}
+.pfa-ops{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.pfa-ops label.ta-cons{align-items:flex-start;line-height:1.35}
+.pfa-diff{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.pfa-jour{background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-2);padding:8px;margin-top:6px}
+.pfa-j{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--sub)}
+.pfa-j i{font-weight:600;text-transform:none;letter-spacing:0}
+.pfa-n{font-size:var(--fs-sm);font-weight:700;margin:2px 0 4px}
+.pfa-e{font-size:var(--fs-xs);display:flex;justify-content:space-between;gap:6px;padding:2px 0;border-top:1px dashed var(--border)}
+.pfa-e span{color:var(--sub);white-space:nowrap}
+.pfa-ajout{color:var(--green)}
+.pfa-series span{color:var(--amber);font-weight:700}
+.pfa-meta span{color:var(--accent-blue);font-weight:700}
+.pfa-split{margin-top:10px}
+.pfa-split summary{cursor:pointer;font-weight:700;font-size:var(--fs-sm);min-height:32px}
+@media (max-width:420px){
+  .pfa-diff{gap:6px}
+  .pfa-jour{padding:6px}
+  .pfa-e{flex-direction:column;gap:0}
+  .pfa-feuille .amc-champs{grid-template-columns:1fr !important}
+}
+/* L'entrée du plan, sous la grille des plateaux : hors de la case des deux
+   boutons (« Modifier le programme », « Attribuer les muscles »). */
+.plx-pf{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;
+  padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.plx-pf span{flex:1 1 200px;min-width:0}

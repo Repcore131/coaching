@@ -74036,6 +74036,171 @@ async function testExercices(){
           if(JSON.parse(l[0].dataset.prop).source!=='morpho'||!/thorax fin/.test(l[0].textContent)) return _echec('proposition');
           return (/"amplitudes"\s*:/.test(String(window._RC_RULES||''))&&/humerus_parallele\|mains_oreilles\|naturelle\|libre/.test(String(window._RC_RULES||'')))||_echec('règle');})());
       }
+      // ══ LOT PF1 — ASSISTANT POINT FAIBLE : règles, plafonds, idempotence ══
+      {
+        const _PFM={DC:['PECTORAUX'],DI:['PECTORAUX'],ECARTE:['PECTORAUX'],PECDEC:['PECTORAUX'],DIPS:['TRICEPS','PECTORAUX'],EXT:['TRICEPS'],
+          MIL:['DELT_ANT'],ELEV:['DELT_LAT'],ELEV2:['DELT_LAT'],TRAC:['DORSAUX'],ROW:['DORSAUX'],PULL:['DORSAUX'],CURL:['BICEPS'],
+          SQ:['QUADRICEPS','FESSIERS'],LEXT:['QUADRICEPS'],LCURL:['ISCHIOS'],LCURL2:['ISCHIOS'],SDT:['ISCHIOS','FESSIERS'],MOL:['MOLLETS']};
+        const _pfO=(cand,refus)=>({musclesDe:ex=>_PFM[ex&&ex.name]||[],candidats:cand||[],
+          compatible:n=>(refus||[]).indexOf(n)>=0?{ok:false}:{ok:true,note:n==='PULL'?'à aménager : prise neutre':''},
+          schemaDe:n=>/^(ECARTE|PECDEC|ELEV|ELEV2|EXT|CURL|LEXT|LCURL|LCURL2)$/.test(n)?'isolation':'compose'});
+        const _pfS=(day,name,...ex)=>({day,name,active:true,exercises:ex.map(e=>Array.isArray(e)?{name:e[0],series:e[1],reps:'8-10',repos:'2 min'}:{name:e,series:3,reps:'8-10',repos:'2 min'})});
+        // UNE SEMAINE DE SEPT CRÉNEAUX, comme _normaliserSessionsConfig : l'index est le jour.
+        const _pfSem=(...l)=>{ const P=DAYS.map(day=>({day,name:'',active:false,exercises:[]}));
+          for(const s of l){ const i=DAYS.indexOf(s.day); if(i>=0) P[i]=s; else P.push(s); } return P; };
+        // LES CINQ PROGRAMMES TYPES : [nom, programme, faible, dominant, candidats]
+        const _PF_TYPES=[
+          ['split 4 j, pecs le lendemain des bras',_pfSem(_pfS('Lundi','Jambes','SQ','LCURL','MOL'),_pfS('Mercredi','Bras','CURL','EXT','DIPS'),_pfS('Jeudi','Pecs','EXT','DC','ECARTE'),_pfS('Samedi','Dos','TRAC','ROW')),'PECTORAUX','TRICEPS',['PECDEC','DI']],
+          ['push-pull-legs 6 j',_pfSem(_pfS('Lundi','Push A','MIL','DC','EXT'),_pfS('Mardi','Pull A','TRAC','ROW','CURL'),_pfS('Mercredi','Legs A','SQ','LCURL'),_pfS('Jeudi','Push B','DIPS','DC','DI','ECARTE'),_pfS('Vendredi','Pull B','ROW','CURL'),_pfS('Samedi','Legs B','SDT','LEXT')),'PECTORAUX','TRICEPS',['PECDEC']],
+          ['haut / bas 4 j, épaules une fois',_pfSem(_pfS('Lundi','Haut A','DC','ROW','ELEV'),_pfS('Mardi','Bas A','SQ','LCURL'),_pfS('Jeudi','Haut B','DI','TRAC','MIL'),_pfS('Vendredi','Bas B','SDT','LEXT')),'DELT_LAT','PECTORAUX',['ELEV2','ELEV']],
+          ['split 5 j, dos le lendemain des bras',_pfSem(_pfS('Lundi','Pecs','DC','DI'),_pfS('Mardi','Bras','CURL','EXT'),_pfS('Mercredi','Dos','TRAC','ROW','CURL'),_pfS('Vendredi','Jambes','SQ'),_pfS('Samedi','Épaules','MIL','ELEV')),'DORSAUX','BICEPS',['PULL','ROW']],
+          ['jambes 4 j + une séance sans jour',_pfSem(_pfS('Lundi','Quadriceps','SQ','LEXT','LCURL'),_pfS('Mardi','Haut','DC','TRAC'),_pfS('Jeudi','Jambes','SQ','LCURL','SDT'),_pfS('Vendredi','Haut 2','MIL','ROW'),_pfS('','Bonus','MOL')),'ISCHIOS','QUADRICEPS',['LCURL2']]];
+        /** Les règles PF1, vérifiées sur une semaine : la liste de ce qui ne tient pas. */
+        const _pfRegles=(P,f,d,avant)=>{
+          const m=ex=>_PFM[ex&&ex.name]||[], out=[];
+          const sl=P.map((s,i)=>({s,i,j:i<7?i:-1})).filter(x=>x.s.active===true);
+          P.forEach((s,i)=>{ if(i<7&&s.day!==DAYS[i]) out.push('jour déplacé hors de son créneau : '+s.day); });
+          const F=sl.filter(x=>x.s.exercises.some(e=>m(e).includes(f))), D=sl.filter(x=>x.s.exercises.some(e=>m(e).includes(d)));
+          if(F.length<2) out.push('faible '+F.length+'×/sem');
+          const cj=sl.filter(x=>x.j>=0);
+          const prem=Math.min(...cj.map(x=>x.j)), fj=F.filter(x=>x.j>=0).map(x=>x.j);
+          if(fj.length&&Math.min(...fj)!==prem) out.push('pas en début de semaine');
+          for(const x of F) if(x.j>=0&&D.some(y=>y.i!==x.i&&y.j===(x.j+6)%7)) out.push('lendemain du dominant : '+x.s.name);
+          for(const x of F){ const r=x.s.exercises.map(e=>m(e).includes(f)?0:(m(e).includes(d)?2:1));
+            if(r.some((v,k)=>k&&v<r[k-1])) out.push('ordre : '+x.s.name); }
+          const jours=cj.map(x=>x.j); if(new Set(jours).size!==jours.length) out.push('deux séances le même jour');
+          P.forEach((s,i)=>s.exercises.forEach(e=>{ if((Number(e.pfSeries)||0)>2) out.push('pfSeries>2');
+            const a=avant&&avant[i]&&avant[i].exercises.find(z=>z.name===e.name&&!z.pf);
+            if(a&&!e.pf&&e.series-a.series>2) out.push('+'+(e.series-a.series)+' séries : '+e.name); }));
+          return out;
+        };
+        ok('PF1 — cinq programmes types : les règles tiennent après application',(()=>{
+          for(const [n,P,f,d,c] of _PF_TYPES){
+            if(!_pfRegles(P,f,d).length) return _echec(n+' : le cas de départ ne viole rien, il ne teste rien');
+            const r=propositionPointFaible(P,f,d,'intermediaire',_pfO(c));
+            const A=appliquerPointFaible(P,r.operations,null,1000);
+            const v=_pfRegles(A,f,d,P);
+            if(v.length) return _echec(n+' : '+v.join(' ; '));
+          }
+          return true;})());
+        ok('PF1 — idempotence : un plan appliqué, repassé dans l’assistant, ne propose plus rien',(()=>{
+          for(const niv of ['debutant','intermediaire','avance']) for(const [n,P,f,d,c] of _PF_TYPES){
+            const r=propositionPointFaible(P,f,d,niv,_pfO(c));
+            const A=appliquerPointFaible(P,r.operations,null,1000);
+            const r2=propositionPointFaible(A,f,d,niv,_pfO(c));
+            if(r2.operations.length) return _echec(niv+' / '+n+' : '+r2.operations.map(x=>x.texte).join(' | '));
+          }
+          return true;})());
+        ok('PF1 — jamais au-delà de +2 séries, même appliqué trois fois, et deux exercices par séance au plus',(()=>{
+          for(const [n,P,f,d,c] of _PF_TYPES){
+            const r=propositionPointFaible(P,f,d,'avance',_pfO(c));
+            const s=r.operations.filter(x=>x.type==='ajouter_series');
+            if(s.some(x=>x.vers-x.de!==2)) return _echec(n+' : un avancé monte de 2');
+            const parSeance={}; s.forEach(x=>parSeance[x.slot]=(parSeance[x.slot]||0)+1);
+            if(Object.values(parSeance).some(v=>v>PF_SERIES_PAR_SEANCE)) return _echec(n+' : plus de deux exercices montés');
+            let A=P; for(let k=0;k<3;k++) A=appliquerPointFaible(A,r.operations,null,1000);
+            const v=_pfRegles(A,f,d,P).filter(x=>/séries|pfSeries/.test(x));
+            if(v.length) return _echec(n+' : '+v.join(' ; '));
+          }
+          const ri=propositionPointFaible(_PF_TYPES[0][1],'PECTORAUX','TRICEPS','intermediaire',_pfO(['PECDEC']));
+          return ri.operations.filter(x=>x.type==='ajouter_series').every(x=>x.vers-x.de===1)||_echec('intermédiaire : +1');})());
+        ok('PF1 — le niveau : débutant sans métabolique ni plus d’un ajout, avancé jusqu’à trois',(()=>{
+          const P=_PF_TYPES[2][1], c=['ELEV2','ELEV','PECDEC','X1','X2'];
+          const o=_pfO(c); o.musclesDe=ex=>(/^(ELEV2|X1|X2)$/.test(ex&&ex.name)?['DELT_LAT']:_PFM[ex&&ex.name]||[]);
+          o.candidats=['ELEV2','X1','X2'];
+          const deb=propositionPointFaible(P,'DELT_LAT','PECTORAUX','debutant',o);
+          const av=propositionPointFaible(P,'DELT_LAT','PECTORAUX','avance',o);
+          if(deb.operations.some(x=>x.type==='metabolique')) return _echec('métabolique chez un débutant');
+          if(deb.operations.filter(x=>x.type==='ajouter_exercice').length!==1) return _echec('débutant : 1 ajout');
+          if(av.operations.filter(x=>x.type==='ajouter_exercice').length!==3) return _echec('avancé : 3 ajouts');
+          const m=av.operations.find(x=>x.type==='metabolique');
+          if(!m||m.semaines!==4||!(parseInt(m.reps,10)>=20)||m.repos!==PF_META_REPOS) return _echec('métabolique : '+JSON.stringify(m));
+          return (niveauPointFaible({level:'Débutant (< 1 an)'})==='debutant'&&niveauPointFaible({level:'Avancé (3-5 ans)'})==='avance'
+            &&niveauPointFaible({level:'Intermédiaire (1-3 ans)'})==='intermediaire'&&niveauPointFaible({})==='intermediaire')||_echec('niveauPointFaible');})());
+        ok('PF1 — compatibilité : un exercice écarté n’est pas ajouté, la note d’aménagement suit, rien → on le dit',(()=>{
+          const [n,P,f,d]=_PF_TYPES[3];
+          const r=propositionPointFaible(P,f,d,'intermediaire',_pfO(['PULL','ROW']));
+          const a=r.operations.filter(x=>x.type==='ajouter_exercice');
+          if(a.length!==1||a[0].ex.name!=='PULL'||!/prise neutre/.test(a[0].texte)) return _echec('ROW déjà au programme, PULL seul : '+JSON.stringify(a.map(x=>x.texte)));
+          const r2=propositionPointFaible(P,f,d,'intermediaire',_pfO(['PULL','ROW'],['PULL']));
+          if(r2.operations.some(x=>x.type==='ajouter_exercice')) return _echec('PULL refusé et pourtant ajouté');
+          return r2.avertissements.some(t=>/Aucun exercice compatible/.test(t))||_echec(r2.avertissements.join(' | '));})());
+        ok('PF1 — sept jours pleins : aucun jour libre, l’avertissement le dit au lieu de forcer',(()=>{
+          const P=DAYS.map((j,i)=>_pfS(j,'S'+i,i%2?'EXT':'DC'));
+          const r=propositionPointFaible(P,'PECTORAUX','TRICEPS','intermediaire',_pfO([]));
+          if(r.operations.some(x=>x.type==='deplacer_seance'&&/lendemain/.test(x.id))) return _echec('déplacement vers un jour pris');
+          return r.avertissements.some(t=>/aucun jour libre/.test(t))||_echec(r.avertissements.join(' | '));})());
+        ok('PF1 — appliquer ne touche pas l’entrée, et seules les opérations cochées passent',(()=>{
+          const [n,P,f,d,c]=_PF_TYPES[0];
+          const avant=JSON.stringify(P);
+          const r=propositionPointFaible(P,f,d,'intermediaire',_pfO(c));
+          const id=r.operations.find(x=>x.type==='ajouter_series').id;
+          const A=appliquerPointFaible(P,r.operations,[id],1000);
+          if(JSON.stringify(P)!==avant) return _echec('entrée mutée');
+          const diff=diffSemainePointFaible(P,A);
+          const marques=diff.flatMap(x=>x.ex.map(e=>e.marque)).filter(Boolean);
+          if(marques.join()!=='series'||diff.some(x=>x.deplace)) return _echec(JSON.stringify(marques));
+          const B=appliquerPointFaible(P,r.operations,null,1000), d2=diffSemainePointFaible(P,B,_pfOrigines(P.length,r.operations,null));
+          if(!d2.some(x=>x.deplace)||!d2.some(x=>x.ex.some(e=>e.marque==='meta'))||d2.some(x=>x.ex.some(e=>e.marque==='ajout'&&!/^(PECDEC|DI)$/.test(e.nom))))
+            return _echec('diff complet : '+JSON.stringify(d2.map(x=>[x.jour,x.jourAvant,x.ex.map(e=>e.nom+':'+e.marque)])));
+          // LE NOMBRE DE SÉANCES NE CHANGE PAS, et les jours restent à leur créneau.
+          return (B.filter(s=>s.active===true).length===P.filter(s=>s.active===true).length&&B.every((s,i)=>s.day===P[i].day))||_echec('séances perdues ou jours décalés');})());
+        ok('PF1 — bibliothèque de splits : gelée, 4 et 5 jours, le faible le lundi en tête, les dominants du cahier',(()=>{
+          if(!Object.isFrozen(SPLITS_POINT_FAIBLE)||!Object.isFrozen(SPLITS_POINT_FAIBLE[0].j4)) return _echec('non gelée');
+          const attendus={PECTORAUX:['TRICEPS','DELT_ANT'],DELT_LAT:['TRICEPS','PECTORAUX','DORSAUX'],DORSAUX:['BICEPS','DELT_POST'],QUADRICEPS:['FESSIERS','ISCHIOS'],ISCHIOS:['FESSIERS']};
+          for(const f in attendus){
+            for(const dm of attendus[f]){ const s=splitPointFaible(f,dm,4); if(!s||s.dominants.indexOf(dm)<0) return _echec(f+'/'+dm); }
+            const s4=splitPointFaible(f,null,4), s5=splitPointFaible(f,null,5);
+            if(s4.jours.length!==4||s5.jours.length!==5) return _echec(f+' : jours');
+            for(const s of [s4,s5]){
+              if(s.jours[0][0]!=='Lundi') return _echec(f+' : pas le lundi');
+              const lib=(MUSCLES[f]||{}).lib||'';
+              const mot=f==='DELT_LAT'?'Épaules':f==='DORSAUX'?'Dos':f==='PECTORAUX'?'Pectoraux':f==='QUADRICEPS'?'Quadriceps':'Ischios';
+              if(s.jours[0][1].indexOf(mot)!==0) return _echec(f+' : le faible n’ouvre pas la séance ('+lib+')');
+              if(s.jours.filter(j=>j[1].indexOf(mot)===0).length<2) return _echec(f+' : pas deux fois');
+            }
+          }
+          return splitPointFaible('MOLLETS',null,4)===null||_echec('modèle inventé');})());
+        ok('PF1 — suivi : rien avant 28 jours, puis volume, 1RM estimé et mensuration, l’absence dite',(()=>{
+          const t0=Date.UTC(2026,0,5), j=864e5;
+          const c={email:'pf@x',sessions:[],bilans:[{date:t0-3*j,chest:'100'},{date:t0+20*j,chest:'101,5'}],
+            sessions_config:_pfSem(_pfS('Lundi','Pecs','DC')),planPointFaible:{date:t0,faible:'PECTORAUX',dominant:'TRICEPS',semaines:4,n:3}};
+          if(_htmlSuiviPointFaible(c,t0+27*j)!=='') return _echec('affiché avant 28 jours');
+          const e=effetPointFaible(c,c.planPointFaible,t0+30*j);
+          if(!e||e.jours!==30||e.mensuration.avant!==100||e.mensuration.apres!==101.5||e.e1rm!==null) return _echec(JSON.stringify(e));
+          const h=_htmlSuiviPointFaible(c,t0+30*j);
+          if(!/mesurer l’effet/.test(h)||!/100 → 101,5 cm/.test(h)||!/pas assez de séances/.test(h)) return _echec(h);
+          const sans=_htmlSuiviPointFaible(Object.assign({},c,{bilans:[]}),t0+30*j);
+          return /—/.test(sans)||_echec(sans);})());
+        ok('PF1 — la feuille coach : une case par opération, l’aperçu avant / après, et la règle de la base',(()=>{
+          const [n,P,f,d,c]=_PF_TYPES[0];
+          const res=propositionPointFaible(P,f,d,'intermediaire',_pfO(c));
+          const etat={faible:f,dominant:d,niveau:'intermediaire',source:'plateau',off:new Set([res.operations[0].id])};
+          const el=document.createElement('div'); el.innerHTML=htmlPlanPointFaible({sessions_config:P},etat,res);
+          const cases=el.querySelectorAll('.pfa-ops input[type=checkbox]');
+          if(cases.length!==res.operations.length||cases[0].checked||!cases[1].checked) return _echec('cases');
+          if(el.querySelectorAll('.pfa-diff > div').length!==2||!el.querySelector('.pfa-series')) return _echec('aperçu');
+          if(!/Enregistrer 6 opérations/.test(el.textContent)||!/les plateaux/.test(el.textContent)) return _echec(el.textContent.slice(0,200));
+          if(el.querySelectorAll('select.amc-in').length!==3) return _echec('sélecteurs');
+          if(!/"planPointFaible"\s*:/.test(String(window._RC_RULES||''))) return _echec('règle');
+          return (/ouvrirPlanPointFaible\(this\.dataset\.cid\)/.test(_prodSrc())&&/_htmlSuiviPointFaible\(c\)/.test(_prodSrc()))||_echec('non branché');})());
+        ok('PF1 — la feuille s’ouvre vraiment depuis la fiche : aucun homonyme ne masque ses fonctions',(()=>{
+          const sU=currentUser, sv=DB.get('users');
+          try{
+            const c={id:'pfz',email:'pfz@t.fr',role:'athlete',coachId:'pfco',sessions:[],bilans:[],level:'Avancé (3-5 ans)',sessions_config:_PF_TYPES[0][1]};
+            currentUser={id:'pfco',email:'pfco@t.fr',role:'coach',sessions:[],bilans:[],studentCodes:[]};
+            const u={}; u[c.email]=c; DB.set('users',u);
+            if(ouvrirPlanPointFaible('pfz')!==true) return _echec('ouverture refusée');
+            const z=document.getElementById('pf-corps');
+            if(!z||!z.querySelector('.pfa-feuille')||!_pfa||!_pfa.res) return _echec('la feuille ne se construit pas');
+            if(_pfa.niveau!=='avance') return _echec('niveau : '+_pfa.niveau);
+            pfaChoix('faible','DORSAUX');
+            if(_pfa.faible!=='DORSAUX'||!/Dos|dorsaux/i.test(z.querySelector('select').selectedOptions[0].textContent)) return _echec('changement de faible');
+            for(const f of ['ouvrirPlanPointFaible','_pfaRendre','_pfaCalcul','pfaChoix','pfaCoche','pfaEnregistrer','htmlPlanPointFaible'])
+              if((_prodSrc().match(new RegExp('function '+f+'\\(','g'))||[]).length!==1) return _echec(f+' déclarée deux fois');
+            return true;
+          } finally { try{ closeModal(); }catch(e){} currentUser=sU; DB.set('users',sv||{}); }})());
+      }
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');
