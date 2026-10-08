@@ -2474,7 +2474,7 @@ export function creerMetier(deps) {
     // Un doublon n'est pas une erreur pour la personne : sa demande est bien arrivée.
     if (!r.ok) return r.raison === 'doublon' ? { ok: true, deja: true } : r;
     await db.ref('prospects/' + coach + '/' + idFile(t, 'p')).set(r.prospect);
-    try { await envoyerPush(coach, PR.messageNouveauProspect(r.prospect, LIB_FORMULES[r.prospect.formule]), { attendre: true }); } catch (e) { /* le prospect est enregistré, c'est l'essentiel */ }
+    try { await envoyerPush(coach, PR.messageNouveauProspect(r.prospect, PR.libFormuleVitrine(vitrine, r.prospect.formule) || LIB_FORMULES[r.prospect.formule]), { attendre: true }); } catch (e) { /* le prospect est enregistré, c'est l'essentiel */ }
     return { ok: true };
   }
   // GET /vitrine-vue?s=<slug> : une visite par appareil et par jour (la page

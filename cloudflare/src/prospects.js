@@ -51,7 +51,24 @@ export function contactNet(c) {
 export function formulesVitrine(v) {
   const f = v && v.formules;
   const l = Array.isArray(f) ? f : (f && typeof f === 'object' ? Object.values(f) : []);
-  return l.filter((k) => PROSPECT_FORMULES.indexOf(k) >= 0);
+  const out = l.filter((k) => PROSPECT_FORMULES.indexOf(k) >= 0);
+  // Série 6 (lot 9) : la formule libre du coach, quand elle est complète.
+  if (formuleLibre(v)) out.push('libre');
+  return out;
+}
+// PURE. La formule libre publiée {lib, prix, mois, inclus?}, ou null.
+export function formuleLibre(v) {
+  const l = v && v.libre;
+  if (!l || typeof l !== 'object') return null;
+  const lib = String(l.lib || '').trim(), prix = Number(l.prix), mois = Number(l.mois);
+  if (!lib || lib.length > 40 || !(prix >= 0 && prix <= 5000) || !(mois >= 1 && mois <= 24)) return null;
+  return { lib, prix, mois, inclus: String(l.inclus || '').slice(0, 140) };
+}
+// PURE. Le nom d'une formule tel que le coach l'a écrit, sinon ''.
+export function libFormuleVitrine(v, k) {
+  if (k === 'libre') { const l = formuleLibre(v); return l ? 'ta formule « ' + l.lib + ' »' : ''; }
+  const p = v && v.prixPerso && v.prixPerso[k];
+  return (p && typeof p.lib === 'string' && p.lib.trim()) ? 'ta formule « ' + p.lib.trim().slice(0, 40) + ' »' : '';
 }
 function liste(brut) {
   const o = (brut && typeof brut === 'object') ? brut : {};

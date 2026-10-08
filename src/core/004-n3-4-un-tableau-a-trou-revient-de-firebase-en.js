@@ -939,7 +939,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'vitrineProgrammes',
   // Les formules proposées sur la vitrine (des clés du tableau des offres) et
   // le message d'accueil des prospects (lot C6).
-  'vitrineFormules','prospectAccueil',
+  'vitrineFormules','prospectAccueil','vitrineFormulesPerso','vitrineFormuleLibre',
   // Le miroir de la liaison PayPal du coach (le serveur fait foi : coach_paiement).
   'paiementCoach',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',

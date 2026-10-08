@@ -13780,3 +13780,8 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rgx-pf-b.on{border-color:var(--red)}
 .rgx-pf-ap{margin:6px 0 10px;padding-left:18px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
 .rgx-pf-base{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:var(--fs-xs);color:var(--sub)}
+/* Série 6, lot 9 : mes prix */
+.pr-fp{display:grid;grid-template-columns:72px 64px minmax(0,1fr);gap:6px;margin:4px 0 10px 28px}
+.pr-fp input,.pr-fl .pr-fp-i{width:100%;min-width:0;margin:0;font-size:var(--fs-xs)}
+.pr-fl .pr-fp{margin-left:0}
+.pr-err{color:var(--orange)}

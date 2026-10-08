@@ -75092,6 +75092,61 @@ async function testExercices(){
       if(affichageDe({profilSuivi:'forme',affichageCoach:'complet'},null).profil!=='complet') return _echec('l’exception du coach ne passe pas devant');
       if(!/heriterProfilSuivi/.test(String(_appliquerPayloadCode))) return _echec('non branché');
       return CHAMPS_NON_SANTE.indexOf('profilSuivi')>=0?true:_echec('non classé');});
+    // ══ BUILD 1933 — MES PRIX : FORMULES PERSONNALISÉES DE LA VITRINE ═══════════
+    ok('1933 — validerFormulePerso : bornes, vide = RepCore, 0 = gratuit, formule libre complète',()=>{
+      const f=[];
+      if(validerFormulePerso({prix:'',mois:'',lib:''}).valeur!==null) f.push('vide');
+      if(validerFormulePerso({prix:'5001'}).ok||validerFormulePerso({prix:'-1'}).ok) f.push('prix');
+      if(validerFormulePerso({mois:'25'}).ok||validerFormulePerso({mois:'1.5'}).ok||validerFormulePerso({mois:'0'}).ok) f.push('mois');
+      if(validerFormulePerso({lib:'x'.repeat(41)}).ok) f.push('lib');
+      const g=validerFormulePerso({prix:'0'}); if(!g.ok||!g.gratuit||g.valeur.prix!==0) f.push('gratuit');
+      if(validerFormulePerso({prix:'49,5'}).valeur.prix!==49.5) f.push('virgule');
+      if(validerFormulePerso({lib:'Pack'},true).ok) f.push('libre incomplète acceptée');
+      if(!validerFormulePerso({lib:'Pack',prix:'30',mois:'2',inclus:'Deux appels'},true).ok) f.push('libre');
+      if(validerFormulePerso({lib:'Pack',prix:'30',mois:'2',inclus:'x'.repeat(141)},true).ok) f.push('inclus');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1933 — formuleAffichee : la surcharge du coach, sinon OFFRES ; publiée pour les formules cochées seulement',()=>{
+      const u={vitrineFormules:['coaching_essentiel'],vitrineFormulesPerso:{coaching_essentiel:{prix:59,lib:'Mon suivi'},coaching_transfo:{prix:10}},vitrineFormuleLibre:{lib:'Pack été',prix:0,mois:2}};
+      const a=formuleAffichee('coaching_essentiel',u);
+      if(a.prix!==59||a.lib!=='Mon suivi'||a.mois!==OFFRES.coaching_essentiel.mois) return _echec('surcharge : '+JSON.stringify(a));
+      const b=formuleAffichee('coaching_evolution',u);
+      if(b.prix!==OFFRES.coaching_evolution.prix||b.lib!==OFFRES.coaching_evolution.lib) return _echec('repli OFFRES');
+      if(formulePrixTexte(formuleAffichee('libre',u))!=='Gratuit') return _echec('Gratuit');
+      const d=vitrinePubliqueDonnees(Object.assign({role:'coach',fname:'Max',lname:'Dur',email:'m@x.fr'},u));
+      if(!d.prixPerso||!d.prixPerso.coaching_essentiel||d.prixPerso.coaching_transfo) return _echec('publication : '+JSON.stringify(d.prixPerso));
+      if(!d.libre||d.libre.lib!=='Pack été') return _echec('libre non publiée');
+      const k=vitrinePubliqueDonnees({role:'coach',fname:'Kevin',lname:'G',email:'k@x.fr',vitrineFormules:['coaching_essentiel']});
+      if(k.prixPerso||k.libre) return _echec('sans réglage, la vitrine change');
+      return true;});
+    okA('1933 — réglages : aperçu immédiat, « Gratuit ? » confirmé, lecture à l’enregistrement',async()=>{
+      const cu=currentUser, _c=window.rcConfirm;
+      const z=document.getElementById('coach-formules'), avant=z?z.innerHTML:null, dirty=z&&z.dataset.dirty;
+      if(!z) return _echec('conteneur absent');
+      try{
+        currentUser=Object.assign(_banCoach(),{vitrineFormules:['coaching_essentiel']});
+        z.innerHTML=htmlReglagesProspects(currentUser);
+        const l=z.querySelector('[data-fp="coaching_essentiel"]');
+        if(!l||l.querySelector('.pr-fp-p').placeholder.indexOf(String(OFFRES.coaching_essentiel.prix))<0) return _echec('placeholder RepCore');
+        l.querySelector('.pr-fp-p').value='59';
+        vitrinePersoApercu('coaching_essentiel');
+        if(!/59/.test(document.getElementById('pr-ap-coaching_essentiel').textContent)) return _echec('aperçu');
+        let q=0; window.rcConfirm=async()=>{ q++; return false; };
+        const e=l.querySelector('.pr-fp-p'); e.value='0';
+        await vitrinePersoGratuit(e,'coaching_essentiel');
+        if(!q||e.value!=='') return _echec('« Gratuit ? » : '+q+' / '+e.value);
+        e.value='45'; l.querySelector('.pr-fp-l').value='Mon suivi';
+        const lib=z.querySelector('[data-fp="libre"]');
+        lib.querySelector('.pr-fp-l').value='Pack été'; lib.querySelector('.pr-fp-p').value='30'; lib.querySelector('.pr-fp-m').value='2';
+        _lireReglagesProspects();
+        if(!currentUser.vitrineFormulesPerso||currentUser.vitrineFormulesPerso.coaching_essentiel.prix!==45||currentUser.vitrineFormulesPerso.coaching_essentiel.lib!=='Mon suivi') return _echec('lecture : '+JSON.stringify(currentUser.vitrineFormulesPerso));
+        if(!currentUser.vitrineFormuleLibre||currentUser.vitrineFormuleLibre.prix!==30) return _echec('libre');
+        return (CHAMPS_NON_SANTE.indexOf('vitrineFormulesPerso')>=0&&CHAMPS_NON_SANTE.indexOf('vitrineFormuleLibre')>=0)?true:_echec('non classés');
+      }finally{ currentUser=cu; window.rcConfirm=_c; z.innerHTML=avant; if(dirty) z.dataset.dirty=dirty; else delete z.dataset.dirty; }});
+    ok('1933 — la page publique lit prixPerso et la formule libre',()=>{
+      let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../c/index.html',false); x.send(); h=x.responseText; }catch(e){}
+      if(!h) return _echec('page illisible');
+      if(!/prixPerso/.test(h)||!/C\.libre=/.test(h)||!/'Gratuit'/.test(h)) return _echec('surcharges non lues');
+      return /k==='libre'\?'':v\.paiement/.test(h)?true:_echec('« Payer » sur la formule libre');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

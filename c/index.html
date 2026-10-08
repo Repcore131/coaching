@@ -6,16 +6,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>RepCore</title>
 <link rel="icon" href="/app/icons/icon-192x192.png">
-<!-- LA VITRINE PUBLIQUE D'UN COACH : /coach/<slug> (reecriture firebase.json),
-     ou c/?s=<slug> la ou il n'y a pas de reecriture.
-     Meme cahier des charges que p/ : autonome, une requete a /vitrines/<slug>
-     (lecture publique, liste blanche de champs — database.rules.json), moins
-     d'une seconde. Ce noeud est PUBLIE par l'app du coach a chaque
-     enregistrement de son profil (publierVitrinePublique), depuis ce que
-     s-vitrine montre deja a ses athletes — sans ses coordonnees, sans ses
-     messages, sans ses images en base64 (trop lourdes pour une page web).
-     Les balises og: entre les marqueurs : l'apercu par defaut, remplace par
-     la fonction pagePublique quand elle sert ces pages (plan Blaze). -->
+<!-- LA VITRINE PUBLIQUE D'UN COACH : /coach/<slug> (reecriture firebase.json) ou c/?s=<slug>.
+     Autonome, une requete a /vitrines/<slug> (lecture publique, liste blanche :
+     database.rules.json), publiee par l'app du coach (publierVitrinePublique),
+     sans coordonnees, messages ni images base64. Les og: entre les marqueurs
+     sont remplaces par pagePublique. Prix : prixPerso, libre, tarifs. -->
 <!--og:debut-->
 <meta property="og:type" content="profile">
 <meta property="og:site_name" content="RepCore">
@@ -101,6 +96,7 @@ main .cta{margin:28px 0 10px;min-height:52px}
   var SERVEUR='https://repcore-serveur.repcore.workers.dev';
   function euros(n){ var x=Number(n)||0; var s=(Math.round(x*100)%100===0)?String(Math.round(x)):x.toFixed(2).replace('.',','); return s+'\u00a0'+String.fromCharCode(8364); }
   function duree(k,f){
+    if(k==='libre') return f.mois+' mois';
     if(k==='revision_prog') return 'à la demande';
     if(k==='programme_perso') return 'une fois, '+f.mois+' mois d’app inclus';
     return f.mois+' mois de suivi';
@@ -167,14 +163,17 @@ main .cta{margin:28px 0 10px;min-height:52px}
           +(https(p.lienAchat)?'<a href="'+https(p.lienAchat)+'" target="_blank" rel="noopener noreferrer">Voir le programme</a>':'')
           +'</div></div></div>';}).join('');
       var fk=v.formules?Object.keys(v.formules).map(function(k){return v.formules[k];}):[];
-      var C=(T&&T.coaching)||{};
+      var C0=(T&&T.coaching)||{},C={},PP=v.prixPerso||{},L=v.libre,n=function(x,a,b){return x>=a&&x<=b;};
+      Object.keys(C0).forEach(function(k){var f={},p=PP[k]||{};for(var x in C0[k])f[x]=C0[k][x];
+        if(n(p.prix,0,5e3))f.prix=p.prix;if(n(p.mois,1,24))f.mois=p.mois;if(p.lib)f.lib=String(p.lib).slice(0,40);C[k]=f;});
+      if(L&&L.lib&&n(L.prix,0,5e3)&&n(L.mois,1,24)){C.libre={lib:String(L.lib).slice(0,40),prix:L.prix,mois:L.mois,comprend:String(L.inclus||'').slice(0,140)};fk.push('libre');}
       fk=fk.filter(function(k){ return C[k]&&typeof C[k].prix==='number'&&C[k].lib; });
       if(fk.length){
         h+='<h2>Mes formules</h2>'+fk.map(function(k){
           var f=C[k];
           return '<div class="frm" data-f="'+esc(k)+'"><b>'+esc(f.lib)+'</b>'+(f.comprend?'<p>'+esc(f.comprend)+'</p>':'')
-            +'<div class="ligne"><span><span class="prix">'+euros(f.prix)+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
-            +'<span class="gestes">'+(v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
+            +'<div class="ligne"><span><span class="prix">'+(f.prix===0?'Gratuit':euros(f.prix))+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
+            +'<span class="gestes">'+(k==='libre'?'':v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
             +'<button type="button" class="interesse">Ça m’intéresse</button></span></div>'
             +'<form novalidate><input name="prenom" autocomplete="given-name" maxlength="30" placeholder="Ton prénom" aria-label="Ton prénom">'
             +'<input name="contact" autocomplete="tel" maxlength="120" placeholder="Ton téléphone ou ton e-mail" aria-label="Ton téléphone ou ton e-mail">'

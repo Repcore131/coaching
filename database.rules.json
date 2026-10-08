@@ -1822,6 +1822,24 @@
         // LOT C6 : les formules proposees (des CLES du tableau des offres, jamais
         // un prix) et le message d accueil montre apres « Ca m interesse ».
         "formules":    { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)" } },
+        // SERIE 6 (lot 9) : les prix du coach, par formule publiee, et SA formule.
+        "prixPerso": {
+          "$k": {
+            ".validate": "$k.matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)",
+            "prix": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000" },
+            "mois": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 24 && newData.val() % 1 === 0" },
+            "lib":  { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "libre": {
+          ".validate": "newData.hasChildren(['lib', 'prix', 'mois'])",
+          "lib":    { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+          "prix":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000" },
+          "mois":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 24 && newData.val() % 1 === 0" },
+          "inclus": { ".validate": "newData.isString() && newData.val().length <= 140" },
+          "$autre": { ".validate": false }
+        },
         "accueil":     { ".validate": "newData.isString() && newData.val().length <= 600" },
         // Le coach encaisse dans l app (bouton « Payer ») : un simple drapeau, verifie cote serveur a la commande.
         "paiement":    { ".validate": "newData.isBoolean()" },

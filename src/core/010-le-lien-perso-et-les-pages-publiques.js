@@ -453,9 +453,52 @@ function prospectAccueilDe(u){
   const s=String((u&&u.prospectAccueil)||'').replace(/\s+\n/g,'\n').trim().slice(0,PROSPECT_ACCUEIL_MAX);
   return s||PROSPECT_ACCUEIL_DEFAUT;
 }
+// ══ SÉRIE 6, LOT 9 — MES PRIX ════════════════════════════════════════════
+// vitrineFormulesPerso = {cle:{prix 0-5000, mois 1-24, lib ≤40}} : le coach
+// remplace le prix, la durée ou le nom d'une formule du tableau ; une case
+// vide = la valeur RepCore. vitrineFormuleLibre = {lib, prix, mois, inclus ≤140} :
+// UNE formule à lui, clé « libre ». Le compte créateur n'en a pas besoin.
+const VITRINE_PRIX_MAX=5000, VITRINE_MOIS_MAX=24, VITRINE_LIB_MAX=40, VITRINE_INCLUS_MAX=140;
+// PURE. {ok, valeur|null, erreur, gratuit}. Tout vide → valeur null (RepCore).
+function validerFormulePerso(x,libre){
+  const o=x||{}, out={};
+  const brut=v=>String(v==null?'':v).replace(',','.').trim();
+  const p=brut(o.prix), m=brut(o.mois), l=String(o.lib==null?'':o.lib).replace(/\s+/g,' ').trim();
+  if(p!==''){ const n=Number(p); if(!isFinite(n)||n<0||n>VITRINE_PRIX_MAX) return {ok:false,erreur:'Prix de 0 à '+VITRINE_PRIX_MAX+' €'}; out.prix=Math.round(n*100)/100; }
+  if(m!==''){ const n=Number(m); if(!isFinite(n)||n<1||n>VITRINE_MOIS_MAX||n%1!==0) return {ok:false,erreur:'Durée de 1 à '+VITRINE_MOIS_MAX+' mois'}; out.mois=n; }
+  if(l){ if(l.length>VITRINE_LIB_MAX) return {ok:false,erreur:'Nom de '+VITRINE_LIB_MAX+' caractères au plus'}; out.lib=l; }
+  if(libre){
+    const i=String(o.inclus==null?'':o.inclus).replace(/\s+/g,' ').trim();
+    if(i){ if(i.length>VITRINE_INCLUS_MAX) return {ok:false,erreur:'Ce qui est inclus : '+VITRINE_INCLUS_MAX+' caractères au plus'}; out.inclus=i; }
+    if(!Object.keys(out).length) return {ok:true,valeur:null};
+    if(!out.lib||out.prix==null||!out.mois) return {ok:false,erreur:'Une formule à toi demande un nom, un prix et une durée'};
+  }
+  return {ok:true,valeur:Object.keys(out).length?out:null,gratuit:out.prix===0};
+}
+// PURE. Les surcharges valides, pour les formules connues seulement.
+function vitrineFormulesPersoDe(u){
+  const src=(u&&u.vitrineFormulesPerso&&typeof u.vitrineFormulesPerso==='object')?u.vitrineFormulesPerso:{};
+  const out={};
+  for(const k of VITRINE_FORMULES){ const r=validerFormulePerso(src[k]); if(r.ok&&r.valeur) out[k]=r.valeur; }
+  return out;
+}
+function formuleLibreDe(u){
+  const r=validerFormulePerso(u&&u.vitrineFormuleLibre,true);
+  return r.ok?r.valeur:null;
+}
+// PURE. Ce qu'affiche une formule : la surcharge du coach, sinon le tableau.
+function formuleAffichee(k,u){
+  if(k==='libre'){ const l=formuleLibreDe(u); return l?{lib:l.lib,prix:l.prix,mois:l.mois,inclus:l.inclus||'',perso:true}:null; }
+  const o=OFFRES[k]; if(!o) return null;
+  const p=vitrineFormulesPersoDe(u)[k]||{};
+  return {lib:p.lib||o.lib,prix:p.prix!=null?p.prix:o.prix,mois:p.mois||o.mois,perso:!!Object.keys(p).length};
+}
+function formulePrixTexte(f){ return f?(Number(f.prix)===0?'Gratuit':_euros(f.prix)):''; }
 // PURE. La durée d'une formule, comme la page publique l'écrit.
-function formuleDuree(k){
-  const o=OFFRES[k]; if(!o) return '';
+function formuleDuree(k,u){
+  if(k==='libre'){ const l=formuleLibreDe(u); return l?l.mois+' mois':''; }
+  const o0=OFFRES[k]; if(!o0) return '';
+  const o=formuleAffichee(k,u)||o0;
   if(k==='revision_prog') return 'à la demande';
   if(k==='programme_perso') return 'une fois, '+o.mois+' mois d’app inclus';
   return o.mois+' mois de suivi';
@@ -483,7 +526,7 @@ function prospectsListe(brut){
 function prospectLienReponse(p,coach){
   const pr=String((p&&p.prenom)||'').trim();
   const moi=String((coach&&coach.fname)||'').trim();
-  const lib=(OFFRES[p&&p.formule]||{}).lib||'ma formule';
+  const lib=(formuleAffichee(p&&p.formule,coach)||{}).lib||'ma formule';
   const txt='Salut '+pr+', c’est '+(moi||'ton coach')+' ! Merci pour ton intérêt pour '+lib+'. Quand es-tu disponible pour qu’on en parle quelques minutes ?';
   if(p&&p.canal==='tel') return 'https://wa.me/'+String(p.contact||'').replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(txt);
   if(p&&p.canal==='email') return 'mailto:'+encodeURIComponent(String(p.contact||''))+'?subject='+encodeURIComponent('Ton coaching avec '+(moi||'moi'))+'&body='+encodeURIComponent(txt);
@@ -494,9 +537,11 @@ function prospectLienReponse(p,coach){
 function htmlReglagesProspects(u){
   const f=vitrineFormulesDe(u), E=escapeHtml;
   return '<div class="pr-reg"><div class="pp-lab">Mes formules sur ma page</div>'
-    +'<p class="sub pr-p">Coche celles que tu proposes. Le prix, la durée et ce qu’elles comprennent viennent du tableau des offres : tu n’as rien à recopier. Aucun paiement sur la page, la personne te laisse juste son contact.</p>'
+    +'<p class="sub pr-p">Coche celles que tu proposes. Prix, durée et nom viennent du tableau des offres ; remplis une case pour mettre les tiens (vide = valeur RepCore). Aucun paiement sur la page, la personne te laisse juste son contact.</p>'
     +VITRINE_FORMULES.map(k=>{ const o=OFFRES[k]; return '<label class="pr-f"><input type="checkbox" data-formule="'+k+'"'+(f.indexOf(k)>=0?' checked':'')+'>'
-      +'<span><b>'+E(o.lib)+'</b> '+E(prixOffre(k))+' · '+E(formuleDuree(k))+'</span></label>'; }).join('')
+      +'<span id="pr-ap-'+k+'">'+_htmlApercuFormule(k,u)+'</span></label>'
+      +_htmlChampsFormulePerso(k,u); }).join('')
+    +_htmlFormuleLibre(u)
     +'<label class="pr-lab" for="coach-prospect-accueil">Le message qu’on lit après « Ça m’intéresse »</label>'
     +'<textarea id="coach-prospect-accueil" rows="4" maxlength="'+PROSPECT_ACCUEIL_MAX+'" placeholder="'+E(PROSPECT_ACCUEIL_DEFAUT)+'">'+E(String((u&&u.prospectAccueil)||''))+'</textarea>'
     +'<div class="sub pr-p">Dis ce qui se passe ensuite, et sous quel délai. {prénom} est remplacé par le prénom de la personne. Laissé vide, c’est le message proposé qui s’affiche.</div>'
@@ -516,6 +561,7 @@ function _lireReglagesProspects(){
   const z=document.getElementById('coach-formules');
   if(!z||!z.querySelector('[data-formule]')) return false;
   currentUser.vitrineFormules=[...z.querySelectorAll('[data-formule]')].filter(c=>c.checked).map(c=>c.dataset.formule).filter(k=>VITRINE_FORMULES.indexOf(k)>=0);
+  try{ const lu=_lireFormulesPerso(z); if(lu.erreur) toast(lu.erreur,'var(--orange)'); }catch(e){}
   const a=document.getElementById('coach-prospect-accueil');
   if(a) currentUser.prospectAccueil=String(a.value||'').trim().slice(0,PROSPECT_ACCUEIL_MAX);
   delete z.dataset.dirty;
@@ -570,7 +616,7 @@ function renderProspects(){
   else h+=l.map(p=>{
     const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'
-      +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
+      +'<div class="pr-l-d">'+E((formuleAffichee(p.formule,currentUser)||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
       +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
       +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
@@ -605,7 +651,7 @@ function prospectContactNet(p){
 }
 // PURE. La durée du code : celle de la formule, bornée.
 function prospectMoisInvitation(p,estCreateur){
-  const m=Math.round(Number((OFFRES[p&&p.formule]||{}).mois)||0);
+  const m=Math.round(Number((formuleAffichee(p&&p.formule,(typeof currentUser!=='undefined'?currentUser:null))||{}).mois)||0);
   const d=m>=1?m:3;
   return estCreateur?d:Math.min(CODE_MOIS_MAX_AFFILIE,d);
 }
@@ -876,6 +922,11 @@ function vitrinePubliqueDonnees(u,maintenant){
   // le message d'accueil qu'on lit après « Ça m'intéresse ».
   const fo=vitrineFormulesDe(u);
   if(fo.length) o.formules=fo;
+  // Série 6 (lot 9) : les prix du coach (formules publiées seulement) et sa formule libre.
+  const pp=vitrineFormulesPersoDe(u), ppo={};
+  for(const k of fo) if(pp[k]) ppo[k]=pp[k];
+  if(Object.keys(ppo).length) o.prixPerso=ppo;
+  const fl=formuleLibreDe(u); if(fl) o.libre=fl;
   o.accueil=prospectAccueilDe(u);
   if(pcRelie(u)&&pcPalierOk(u)) o.paiement=true;
   return o;
@@ -2378,4 +2429,75 @@ function _dfValeurTexte(d,v){
 function _dfInscrits(){ try{ const o=JSON.parse(localStorage.getItem(DEFI_INSCRITS_CLE)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
 function _dfMemoInscrit(id,oui){
   try{ const o=_dfInscrits(); if(oui) o[id]=Date.now(); else delete o[id]; localStorage.setItem(DEFI_INSCRITS_CLE,JSON.stringify(o)); }catch(e){}
+}
+// ── Lot 9 : les champs, l'aperçu immédiat, la lecture ─────────────────────
+function _htmlApercuFormule(k,u){
+  const f=formuleAffichee(k,u); if(!f) return '';
+  return '<b>'+escapeHtml(f.lib)+'</b> '+escapeHtml(formulePrixTexte(f))+' · '+escapeHtml(formuleDuree(k,u))+(f.perso?' · <i>mes prix</i>':'');
+}
+function _htmlChampsFormulePerso(k,u){
+  const o=OFFRES[k], p=((u&&u.vitrineFormulesPerso)||{})[k]||{};
+  const v=x=>x==null?'':escapeHtml(String(x));
+  return '<div class="pr-fp" data-fp="'+k+'">'
+    +'<input class="pr-fp-p" type="text" inputmode="decimal" autocomplete="off" data-dec aria-label="Prix '+escapeHtml(o.lib)+'" placeholder="'+escapeHtml(String(o.prix))+' €" value="'+v(p.prix)+'" oninput="vitrinePersoApercu(\''+k+'\')" onchange="vitrinePersoGratuit(this,\''+k+'\')">'
+    +'<input class="pr-fp-m" type="text" inputmode="numeric" autocomplete="off" aria-label="Durée en mois '+escapeHtml(o.lib)+'" placeholder="'+escapeHtml(String(o.mois||'-'))+' mois" value="'+v(p.mois)+'" oninput="vitrinePersoApercu(\''+k+'\')">'
+    +'<input class="pr-fp-l" type="text" maxlength="'+VITRINE_LIB_MAX+'" autocomplete="off" aria-label="Nom '+escapeHtml(o.lib)+'" placeholder="'+escapeHtml(o.lib)+'" value="'+v(p.lib)+'" oninput="vitrinePersoApercu(\''+k+'\')"></div>';
+}
+function _htmlFormuleLibre(u){
+  const l=(u&&u.vitrineFormuleLibre)||{};
+  const v=x=>x==null?'':escapeHtml(String(x));
+  return '<div class="pr-fl"><div class="pp-lab">Une formule à moi (facultatif)</div>'
+    +'<div class="pr-fp" data-fp="libre">'
+    +'<input class="pr-fp-p" type="text" inputmode="decimal" autocomplete="off" data-dec aria-label="Prix de ma formule" placeholder="Prix €" value="'+v(l.prix)+'" oninput="vitrinePersoApercu(\'libre\')" onchange="vitrinePersoGratuit(this,\'libre\')">'
+    +'<input class="pr-fp-m" type="text" inputmode="numeric" autocomplete="off" aria-label="Durée de ma formule en mois" placeholder="Mois" value="'+v(l.mois)+'" oninput="vitrinePersoApercu(\'libre\')">'
+    +'<input class="pr-fp-l" type="text" maxlength="'+VITRINE_LIB_MAX+'" autocomplete="off" aria-label="Nom de ma formule" placeholder="Nom" value="'+v(l.lib)+'" oninput="vitrinePersoApercu(\'libre\')"></div>'
+    +'<input class="pr-fp-i" type="text" maxlength="'+VITRINE_INCLUS_MAX+'" autocomplete="off" aria-label="Ce qui est inclus" placeholder="Ce qui est inclus (140 caractères)" value="'+v(l.inclus)+'" oninput="vitrinePersoApercu(\'libre\')">'
+    +'<div class="pr-p sub" id="pr-ap-libre">'+(formuleLibreDe(u)?_htmlApercuFormule('libre',u):'')+'</div></div>';
+}
+// Lit une ligne de champs ; `z` est le conteneur des réglages.
+function _lireChampsFormule(z,k){
+  const b=z&&z.querySelector('[data-fp="'+k+'"]'); if(!b) return null;
+  const g=c=>{ const e=b.querySelector('.'+c); return e?e.value:''; };
+  const x={prix:g('pr-fp-p'),mois:g('pr-fp-m'),lib:g('pr-fp-l')};
+  if(k==='libre'){ const i=z.querySelector('.pr-fp-i'); x.inclus=i?i.value:''; }
+  return x;
+}
+// L'aperçu IMMÉDIAT : la ligne de la formule se réécrit à chaque frappe.
+function vitrinePersoApercu(k){
+  const z=document.getElementById('coach-formules'); if(!z) return false;
+  const x=_lireChampsFormule(z,k), r=validerFormulePerso(x,k==='libre');
+  const ap=document.getElementById('pr-ap-'+k); if(!ap) return false;
+  if(!r.ok){ ap.textContent=r.erreur; ap.classList.add('pr-err'); return false; }
+  ap.classList.remove('pr-err');
+  const u=Object.assign({},currentUser);
+  if(k==='libre') u.vitrineFormuleLibre=r.valeur; else u.vitrineFormulesPerso=Object.assign({},u.vitrineFormulesPerso||{},{[k]:r.valeur});
+  ap.innerHTML=r.valeur||k!=='libre'?_htmlApercuFormule(k,u):'';
+  return true;
+}
+// Un prix à 0 : « Gratuit ? » — non, la case est vidée (valeur RepCore).
+async function vitrinePersoGratuit(el,k){
+  const v=String((el&&el.value)||'').replace(',','.').trim();
+  if(v===''||Number(v)!==0) return true;
+  const ok=await rcConfirm('Gratuit ?','La formule s’affichera « Gratuit » sur ta page publique.','Oui, gratuit','Non');
+  if(!ok){ el.value=''; try{ vitrinePersoApercu(k); }catch(e){} }
+  return ok;
+}
+// Lu à l'enregistrement du profil. Une ligne invalide garde l'ancienne valeur.
+function _lireFormulesPerso(z){
+  let erreur='';
+  const perso={};
+  for(const k of VITRINE_FORMULES){
+    const x=_lireChampsFormule(z,k); if(!x) continue;
+    const r=validerFormulePerso(x);
+    if(!r.ok){ erreur=erreur||((OFFRES[k]||{}).lib+' : '+r.erreur); const a=(currentUser.vitrineFormulesPerso||{})[k]; if(a) perso[k]=a; continue; }
+    if(r.valeur) perso[k]=r.valeur;
+  }
+  if(Object.keys(perso).length) currentUser.vitrineFormulesPerso=perso; else delete currentUser.vitrineFormulesPerso;
+  const xl=_lireChampsFormule(z,'libre');
+  if(xl){
+    const r=validerFormulePerso(xl,true);
+    if(!r.ok) erreur=erreur||('Ma formule : '+r.erreur);
+    else if(r.valeur) currentUser.vitrineFormuleLibre=r.valeur; else delete currentUser.vitrineFormuleLibre;
+  }
+  return {erreur};
 }
