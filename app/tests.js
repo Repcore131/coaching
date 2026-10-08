@@ -48844,9 +48844,10 @@ async function testExercices(){
     ok('Les cinq points d’accord comptent le meme evenement',()=>{
       const prod=_prodSrc();
       const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
-      if(n!==5) return _echec(n+' point(s) d’appel sur 5');
+      // SIXIÈME POINT (série 7, lot 1) : « Être prévenu même hors de l’app », sous le cadran du premier repos.
+      if(n!==6) return _echec(n+' point(s) d’appel sur 6');
       const d=(prod.match(/Notification\.requestPermission\(\)/g)||[]).length;
-      return d===5?true:_echec(d+' appel(s) a requestPermission au lieu de 5');});
+      return d===6?true:_echec(d+' appel(s) a requestPermission au lieu de 6');});
     ok('La question des jours ne se pose qu’au nouvel inscrit',()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
@@ -67555,7 +67556,8 @@ async function testExercices(){
       const sW=woState, sH=arcHaptique, sB=_bipRepos, sU=currentUser, sR=_swReg;
       let vib=0, bip=0;
       try{
-        arcHaptique=(n)=>{ if(n==='avertir') vib++; }; _bipRepos=()=>{ bip++; };
+        // Série 7 (lot 1) : la fin du repos a son motif, « finRepos ».
+        arcHaptique=(n)=>{ if(n==='finRepos') vib++; }; _bipRepos=()=>{ bip++; };
         _swReg=()=>Promise.resolve(null);
         currentUser=Object.assign({},sU||{},{sonRepos:true});
         Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
@@ -75443,6 +75445,62 @@ async function testExercices(){
       const d=lire('../docs/EXPLOITATION.md');
       if(!/Fabriqué par `node scripts\/exploitation\.mjs`/.test(d)||!/POST \/erreur/.test(d)) f.push('EXPLOITATION.md');
       return f.length?_echec(f.join(' | ')):true;});
+    // ══ BUILD 1944 — LA FIN DU REPOS EN ARRIÈRE-PLAN ════════════════════════════
+    const _reposBanc=async(cache,permission,fn)=>{
+      const svW=woState, _sw=window._swReg, _ah=window.arcHaptique, _N=window.Notification, _bip=window._bipRepos;
+      const notifs=[], vibres=[];
+      const z=document.getElementById('wo-repos'), zh=z?z.innerHTML:'', zd=z?z.style.display:'';
+      Object.defineProperty(document,'hidden',{configurable:true,get:()=>cache.hidden});
+      try{
+        window.Notification={permission};
+        window._swReg=()=>Promise.resolve({showNotification:(t,o)=>{ notifs.push({t,o}); return Promise.resolve(); }});
+        window.arcHaptique=n=>{ vibres.push(n); return true; };
+        window._bipRepos=()=>{};
+        woState={exercises:[{name:'Squat',reps:'8'}],currentEx:0,sessionData:{0:{sets:[{done:true,weight:'80'},{weight:'82.5',reps:'8',done:false}]}},
+          reposFin:Date.now()-2000,reposTotal:90,reposLib:'Squat',reposVibre:false,startTime:Date.now()};
+        return await fn({notifs,vibres});
+      }finally{
+        delete document.hidden;
+        woState=svW; window._swReg=_sw; window.arcHaptique=_ah; window.Notification=_N; window._bipRepos=_bip;
+        if(z){ z.innerHTML=zh; z.style.display=zd; }
+      }
+    };
+    okA('1944 — page cachée, échéance passée : pas de reposVibre, une seule notification « Repos terminé » (double tick)',async()=>{
+      return _reposBanc({hidden:true},'granted',async({notifs,vibres})=>{
+        _peindreRepos(); _peindreRepos();
+        await new Promise(r=>setTimeout(r,0));
+        if(woState.reposVibre) return _echec('reposVibre posé page cachée');
+        if(notifs.length!==1) return _echec('notifications : '+notifs.length);
+        const o=notifs[0].o;
+        if(notifs[0].t!=='Repos terminé'||o.tag!=='rc-repos'||!o.renotify||o.silent!==false||o.data.url!=='./index.html#seance') return _echec('options : '+JSON.stringify(o));
+        if(JSON.stringify(o.vibrate)!==JSON.stringify([400,150,400,150,400])) return _echec('motif');
+        if(o.body!=='Série suivante : Squat · 82,5 kg × 8') return _echec('corps : '+o.body);
+        if(vibres.length) return _echec('vibration page cachée');
+        // Le retour : la notification a sonné, pas de seconde vibration.
+        _reposRattraper(); _peindreRepos();
+        return vibres.length===0?true:_echec('vibre deux fois : '+vibres);});});
+    okA('1944 — sans permission : rien n’est posé caché ; le retour vibre une fois (verrouillage puis déverrouillage)',async()=>{
+      const cache={hidden:true};
+      return _reposBanc(cache,'denied',async({notifs,vibres})=>{
+        _peindreRepos();
+        await new Promise(r=>setTimeout(r,0));
+        if(notifs.length||woState.reposNotifFin||woState.reposVibre) return _echec('posé sans permission');
+        cache.hidden=false;
+        _reposRattraper(); _peindreRepos(); _peindreRepos();
+        if(vibres.filter(v=>v==='finRepos').length!==1) return _echec('vibrations : '+vibres);
+        return true;});});
+    okA('1944 — page visible : vibration « finRepos » ; pré-alerte 60 ms à 10 s ; l’invitation n’apparaît qu’à la 1re séance',async()=>{
+      return _reposBanc({hidden:false},'granted',async({vibres})=>{
+        woState.reposFin=Date.now()+8000; woState.reposTotal=60;
+        _peindreRepos(); _peindreRepos();
+        if(vibres.join()!=='preAlerte') return _echec('pré-alerte : '+vibres);
+        woState.reposFin=Date.now()-500;
+        _peindreRepos();
+        if(!woState.reposVibre||vibres[1]!=='finRepos') return _echec('fin : '+vibres);
+        if(JSON.stringify(ARC_VIBRE.finRepos)!=='[400,150,400,150,400]'||JSON.stringify(ARC_VIBRE.avertir)!=='[180,90,180]') return _echec('motifs');
+        if(!reposInviteNotif({sessions:[]},'default',true)) return _echec('invitation absente');
+        if(reposInviteNotif({},'default',false)||reposInviteNotif({},'granted',true)||reposInviteNotif({vus:{notifReposRefus:true}},'default',true)) return _echec('invitation de trop');
+        return true;});});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

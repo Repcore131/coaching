@@ -167,6 +167,65 @@ async function _reposNotifier(){
     return true;
   }catch(e){ return false; }
 }
+// ── SÉRIE 7 (lot 1) : LA FIN DU REPOS, PAR NOTIFICATION ────────────────────
+function reposNotifPermise(){ if(!_notifSupported()) return false; try{ const N=window.Notification; return !!(N&&N.permission==='granted'); }catch(e){ return false; } }
+// PURE. « Série suivante : Squat · 82,5 kg × 8 » — la première série non
+// faite à partir de l'exercice en cours.
+function serieSuivanteTexte(etat){
+  const w=etat||{}, l=w.exercises||[], deb=Math.max(0,Number(w.currentEx)||0);
+  for(let k=0;k<l.length;k++){
+    const idx=(deb+k)%l.length, ex=l[idx], d=(w.sessionData||{})[idx];
+    const sets=(d&&d.sets)||[];
+    const i=sets.findIndex(s=>s&&!s.done);
+    if(!ex||i<0) continue;
+    const s=sets[i], kg=parseFloat(String(s.weight==null?'':s.weight).replace(',','.'));
+    const reps=s.repsProp||s.reps||ex.reps||'';
+    const charge=kg>0?String(Math.round(kg*100)/100).replace('.',',')+'\u00a0kg':'';
+    return 'Série suivante : '+ex.name+(charge||reps?' · '+[charge,reps].filter(Boolean).join(' × '):'');
+  }
+  return 'Dernière série faite : termine ta séance.';
+}
+async function _reposNotifierFin(){
+  try{
+    if(!reposNotifPermise()) return false;
+    const reg=await _swReg();
+    if(!reg||typeof reg.showNotification!=='function') return false;
+    await reg.showNotification('Repos terminé',{body:serieSuivanteTexte(woState),tag:REPOS_NOTIF_TAG,renotify:true,silent:false,
+      vibrate:ARC_VIBRE.finRepos,requireInteraction:false,data:{url:'./index.html#seance'}});
+    return true;
+  }catch(e){ return false; }
+}
+// L'invitation : au premier repos de la PREMIÈRE séance, une ligne sous le
+// cadran, pas de modale. Refusée par le navigateur : plus jamais.
+function reposInviteNotif(u,permission,premiereSeance){
+  if(!u||!premiereSeance||permission!=='default') return null;
+  if(u.vus&&u.vus.notifReposRefus) return null;
+  return {texte:'Être prévenu même hors de l’app',lien:'Activer'};
+}
+function _reposInviteNotif(){
+  if(typeof woState==='undefined'||!woState||woState._reposNotifVu) return false;
+  woState._reposNotifVu=true;
+  const z=document.getElementById('rep-notif'); if(!z) return false;
+  if(!_notifSupported()){ z.hidden=true; z.innerHTML=''; return false; }
+  let perm=''; try{ perm=window.Notification?Notification.permission:''; }catch(e){}
+  const m=reposInviteNotif(currentUser,perm,!((currentUser&&currentUser.sessions)||[]).length);
+  if(!m){ z.hidden=true; z.innerHTML=''; return false; }
+  z.innerHTML='<span class="rep-invite-t">'+escapeHtml(m.texte)+'</span><span class="rep-invite-sep" aria-hidden="true">·</span>'
+    +'<button type="button" class="rep-invite-b" onclick="activerNotifDepuisRepos(event)">'+escapeHtml(m.lien)+'</button>';
+  z.hidden=false;
+  return true;
+}
+async function activerNotifDepuisRepos(ev){
+  try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch(e){}
+  const z=document.getElementById('rep-notif');
+  if(!_notifSupported()) return 'unsupported';
+  let r='default';
+  try{ r=await Notification.requestPermission(); if(r==='granted') rcm('notif_granted'); }catch(e){ r='default'; }
+  if(r!=='granted'&&currentUser){ if(!currentUser.vus||typeof currentUser.vus!=='object') currentUser.vus={}; currentUser.vus.notifReposRefus=true; try{ saveUser(); }catch(e){} }
+  if(z){ z.innerHTML=r==='granted'?'<span class="rep-invite-t">Tu seras prévenu '+icon('coche',14)+'</span>':''; if(r!=='granted') z.hidden=true;
+    else setTimeout(()=>{ if(z.isConnected){ z.hidden=true; z.innerHTML=''; } },2000); }
+  return r;
+}
 async function _reposFermerNotif(){
   try{
     const reg=await _swReg();
@@ -184,7 +243,10 @@ function _reposRattraper(){
     if(typeof woState==='undefined'||!woState||!woState.reposFin||woState.reposVibre) return false;
     if(woState.reposFin>Date.now()) return false;
     woState.reposVibre=true;
-    try{ arcHaptique('avertir'); }catch(e){}
+    // Série 7 (lot 1) : la notification de fin est partie (elle a vibré et
+    // sonné) : pas une seconde fois au retour.
+    if(woState.reposNotifFin) return false;
+    try{ arcHaptique('finRepos'); }catch(e){}
     try{ if(currentUser&&currentUser.sonRepos) _bipRepos(); }catch(e){}
     return true;
   }catch(e){ return false; }

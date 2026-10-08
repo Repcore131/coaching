@@ -2145,7 +2145,10 @@ function _auChamp(el,fn){
 // un temps, et une longue qui roule. Distinct de « succes » à dessein : un
 // record n'est pas une série de plus.
 const ARC_VIBRE=Object.freeze({legere:12,moyenne:26,lourde:55,
-  succes:[55,60,55],avertir:[180,90,180],foudre:[25,40,25,60,90]});
+  succes:[55,60,55],avertir:[180,90,180],foudre:[25,40,25,60,90],
+  // Série 7 (lot 1) : la FIN DU REPOS seule, plus longue (un téléphone posé
+  // sur le banc doit se faire entendre) ; et la pré-alerte à 10 s, brève.
+  finRepos:[400,150,400,150,400],preAlerte:60});
 function arcHaptique(nom){
   try{
     if(!navigator.vibrate) return false;

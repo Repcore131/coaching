@@ -2251,7 +2251,7 @@ function demarrerRepos(sec,lib){
   woState.reposFin=Date.now()+sec*1000;
   woState.reposTotal=sec;
   woState.reposLib=lib||'';
-  woState.reposVibre=false;
+  woState.reposVibre=false; woState.reposNotifFin=false; woState.reposPreAlerte=false;
   _reposDernierBat=null;
   _lancerTickRepos();
   _peindreRepos();
@@ -2261,6 +2261,7 @@ function demarrerRepos(sec,lib){
 function annulerRepos(){
   if(typeof woState==='undefined'||!woState) return;
   woState.reposFin=null; woState.reposTotal=null; woState.reposLib=''; woState.reposVibre=false;
+  woState.reposNotifFin=false; woState.reposPreAlerte=false;
   _reposDernierBat=null;
   if(_reposTick){ clearInterval(_reposTick); _reposTick=null; }
   _peindreRepos();
@@ -2272,7 +2273,7 @@ function ajusterRepos(delta){
   woState.reposTotal=Math.max(1,(woState.reposTotal||0)+delta);
   // Retirer du temps peut mettre l'échéance dans le passé : c'est légitime,
   // le dépassement prend le relais.
-  if(delta>0) woState.reposVibre=false;
+  if(delta>0){ woState.reposVibre=false; woState.reposNotifFin=false; }
   _reposDernierBat=null;
   _peindreRepos();
   woPersist();
@@ -2533,6 +2534,7 @@ function _monterRepos(z){
          l'entree du bandeau (_reposInviteSon). SOUS les deux colonnes, jamais
          par-dessus : « Passer » reste entier. -->
     <div id="rep-invite" class="rep-invite" hidden></div>
+    <div id="rep-notif" class="rep-invite" hidden></div>
   </div>`;
 }
 // LA SORTIE, puis le retrait. pointer-events coupes TOUT DE SUITE : les boutons
@@ -2563,14 +2565,24 @@ function _peindreRepos(){
     return;
   }
   const fini=reste<=0;
-  if(fini&&woState&&!woState.reposVibre){
+  // SÉRIE 7 (lot 1) : PAGE CACHÉE, LA VIBRATION NE PART PAS (Android l'ignore
+  // quand document.hidden). On ne pose donc PAS reposVibre : la notification de
+  // fin prend le relais, une seule fois (reposNotifFin), et _reposRattraper
+  // vibrera au retour si rien n'a pu partir.
+  if(fini&&woState&&!woState.reposVibre&&document.hidden){
+    if(!woState.reposNotifFin&&reposNotifPermise()){ woState.reposNotifFin=true; try{ _reposNotifierFin(); }catch(e){} }
+  }
+  // La pré-alerte : 60 ms à 10 s de la fin, page visible seulement.
+  if(woState&&!fini&&reste>10) woState.reposPreAlerte=false;
+  if(woState&&!fini&&reste<=10&&!woState.reposPreAlerte&&!document.hidden){ woState.reposPreAlerte=true; try{ arcHaptique('preAlerte'); }catch(e){} }
+  if(fini&&woState&&!woState.reposVibre&&!document.hidden){
     woState.reposVibre=true;
     // Dégradation silencieuse : iOS Safari n'expose pas vibrate, et un message
     // d'erreur pour un confort serait pire que l'absence du confort.
     // Le motif passe par arcHaptique, qui porte EXACTEMENT le même 180-90-180 :
     // deux avertissements qui se ressembleraient sans être identiques seraient
     // pires que deux avertissements franchement distincts.
-    try{ arcHaptique('avertir'); }catch(e){}
+    try{ arcHaptique('finRepos'); }catch(e){}
     try{ if(currentUser&&currentUser.sonRepos) _bipRepos(); }catch(e){}
     // La décharge de fin, pleine largeur. Posée ici et pas dans le rendu :
     // reposVibre est déjà le drapeau « une seule fois », et le rendu, lui,
@@ -2598,6 +2610,8 @@ function _peindreRepos(){
     _reposVisible=true;
     // R30 — le premier repos de la seance porte la ligne du son.
     try{ _reposInviteSon(); }catch(e){}
+    // Série 7 (lot 1) : et, à la toute première séance, celle des notifications.
+    try{ _reposInviteNotif(); }catch(e){}
     const c=z.firstElementChild;
     if(c&&!arcReduit()&&c.animate){
       _animer(c,[{transform:'translateY(14px)',opacity:0},{transform:'translateY(0)',opacity:1}],
