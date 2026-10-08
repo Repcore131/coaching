@@ -16445,6 +16445,8 @@ function renderRevueMorphoCoach(c){
   try{ h+=htmlCompatCoach(c); }catch(e){}
   // LOT TA1 : les tests articulaires, leurs conséquences et l'interrupteur.
   try{ h+=htmlArticCoach(c); }catch(e){}
+  // LOT ML1 : les conflits musculaires, les priorités et le classement.
+  try{ let ax=[]; try{ ax=morphoAxes(c,{calibrage:_morphoCalCache()}); }catch(e){ ax=[]; } h+=htmlConflitsCoach(c,ax); }catch(e){}
   // LOT SC1 : son corps en position, dès qu'une longueur est mesurée.
   try{ if(_corpsMesure(longueursCorps(c))) h+=htmlCarteSchemaCorps(c,'squat','coach'); }catch(e){}
   z.innerHTML=h;
@@ -16588,7 +16590,7 @@ function morphoInstrument(profils){
  * @param {{calibrage?:any}} [opts]
  */
 function morphoPourExercice(user,ex,opts){
-  const vide={schema:null,lignes:[],variantes:[],reglages:[],consequences:[]};
+  const vide={schema:null,lignes:[],variantes:[],reglages:[],consequences:[],conflits:[]};
   let schema=null;
   try{ schema=schemaDe(ex,user); }catch(e){ schema=null; }
   if(!schema) return vide;
@@ -16600,6 +16602,11 @@ function morphoPourExercice(user,ex,opts){
   vide.schema=schema; vide.consequences=consequences;
   let axes=[],res={profils:[]};
   try{ axes=morphoAxes(user,opts); res=morphoProfils(axes); }catch(e){ return vide; }
+  // LOT ML1 : les consignes des conflits musculaires actifs qui visent CET
+  // exercice (straps, isolation d'abord, amplitude, ordre dans la séance).
+  let conflits=[];
+  try{ conflits=consignesConflitsPourExercice(conflitsActifs(musclesDe(user),axes),ex,user); }catch(e){ conflits=[]; }
+  vide.conflits=conflits;
   const lignes=[];
   for(const p of (res.profils||[])){
     for(const am of (p.amenager||[])){
@@ -16609,10 +16616,10 @@ function morphoPourExercice(user,ex,opts){
     }
   }
   const reglages=morphoReglages(axes,res.profils).filter(r=>r.schemas.indexOf(schema)>=0);
-  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[],consequences};
+  if(!lignes.length&&!reglages.length) return {schema,lignes:[],variantes:[],reglages:[],consequences,conflits};
   let variantes=[];
   try{ variantes=_variantesSchema(schema,4).filter(n=>exKey(n)!==exKey((ex&&ex.name)||ex||'')); }catch(e){}
-  return {schema,lignes,variantes:variantes.slice(0,3),reglages,consequences};
+  return {schema,lignes,variantes:variantes.slice(0,3),reglages,consequences,conflits};
 }
 
 /**
@@ -16628,7 +16635,7 @@ function _htmlMorphoExercice(ex){
   if(!c) return '';
   let r=null;
   try{ r=morphoPourExercice(c,ex,{calibrage:_morphoCalCache()}); }catch(e){ return ''; }
-  if(!r||(!r.lignes.length&&!r.reglages.length&&!(r.consequences||[]).length)) return '';
+  if(!r||(!r.lignes.length&&!r.reglages.length&&!(r.consequences||[]).length&&!(r.conflits||[]).length)) return '';
   const bloc=(titre,corps)=>'<div style="margin-bottom:8px">'
     +'<span style="color:var(--sub);font-weight:800">'+escapeHtml(titre)+' :</span> '
     +'<span style="color:var(--text-dim)">'+corps+'</span></div>';
@@ -16643,6 +16650,7 @@ function _htmlMorphoExercice(ex){
       +'</span> '+escapeHtml(x.pourquoi));
   });
   (r.consequences||[]).forEach(x=>{ h+=bloc('Test articulaire',escapeHtml(x.texte)); });
+  (r.conflits||[]).forEach(x=>{ h+=bloc('Conflit musculaire',escapeHtml(x.texte)+' <span style="color:var(--text-faint)">'+escapeHtml(x.raison)+'</span>'); });
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
       +' : à envisager à côté, jamais à la place.');
@@ -16658,6 +16666,392 @@ function _morphoCalCache(){
   if(_morphoCal&&now-_morphoCalT<30000) return _morphoCal;
   _morphoCal=morphoCalibrageCoach(); _morphoCalT=now;
   return _morphoCal;
+}
+
+// ══ LOT ML1 — LONGUEURS MUSCULAIRES ET CONFLITS ══════════════════════════
+//
+// Sept muscles classés court / moyen / long, sur photo par le coach ou par
+// une question guidée à l'athlète ; et un moteur de CONFLITS : quand un
+// muscle « vole » le travail de celui qu'on veut développer, la consigne
+// change — straps, isolation d'abord, amplitude, ordre dans la séance.
+//
+// ⚠ LA LONGUEUR D'UN MUSCLE ORIENTE UN CHOIX, ELLE NE FIXE AUCUNE LIMITE.
+//   Rien de ce lot ne dit à l'athlète ce qu'il « pourra » ou « ne pourra
+//   pas » développer. Il ne voit QUE des consignes concrètes (« tirages avec
+//   straps »), jamais une longueur, jamais un potentiel.
+// ⚠ LE POINT FAIBLE EST DÉCLARÉ PAR LE COACH. Le carnet (axe A9) dit un
+//   déséquilibre de VOLUME, pas un muscle en retard : s'en servir comme
+//   « point faible » serait confondre programmation et résultat.
+// ⚠ DONNÉES PARTIELLES : un conflit dont une longueur manque n'est pas
+//   actif. Il est rendu au coach comme « à confirmer », avec ce qu'il faut
+//   classer — jamais deviné.
+// ⚠ LE COACH PRIME SUR LA RÉPONSE GUIDÉE : une photo classée par le coach
+//   vaut MORPHO_CONF.photo ; une réponse de l'athlète, moins.
+
+const MUSCLE_LONGUEURS=Object.freeze(['court','moyen','long']);
+const MUSCLE_LONGUEUR_LIB=Object.freeze({court:'Court',moyen:'Moyen',long:'Long'});
+/** Ce que vaut chaque source, sur l'échelle de MORPHO_CONF. */
+const MUSCLE_CONF=Object.freeze({coach:MORPHO_CONF.photo,declare:0.5});
+/**
+ * Les sept muscles. `vue` : la photo de bilan sur laquelle le coach classe.
+ * `axe` / `coherent` : la corrélation connue, vérifiable quand l'axe est
+ * renseigné — la position d'axe ATTENDUE pour un muscle long.
+ */
+const MORPHO_MUSCLES=Object.freeze([
+  Object.freeze({cle:'biceps',lib:'Biceps',vue:'face',
+    protocole:'Photo de face en double biceps, bras fléchis au maximum, biceps contractés.',
+    question:'Bras plié au maximum, biceps serré : combien de doigts passent entre ton avant-bras et ton biceps, au pli du coude ?',
+    reponses:Object.freeze({court:'Deux doigts ou plus',moyen:'Un doigt',long:'Aucun, ils se touchent presque'}),
+    correlation:'Biceps long ⇔ avant-bras court (rapport humérus / avant-bras élevé).',
+    axe:'A4',coherent:'haut'}),
+  Object.freeze({cle:'mollets',lib:'Mollets',vue:'dos',
+    protocole:'Photo de dos, sur la pointe des pieds : hauteur où finissent les jumeaux, rapportée à la longueur du tibia.',
+    question:'De dos, sur la pointe des pieds : où s’arrête le renflement de ton mollet ?',
+    reponses:Object.freeze({court:'Au-dessus du milieu de la jambe',moyen:'Vers le milieu',long:'Nettement plus bas, près de la cheville'}),
+    correlation:'Muscle court ⇔ segment long : un tibia long va souvent avec des jumeaux qui finissent haut.',
+    axe:'A2',coherent:'haut'}),
+  Object.freeze({cle:'fessiers',lib:'Fessiers',vue:'profil',
+    protocole:'Photo de profil, debout, fessiers relâchés puis contractés.',
+    question:'De profil, debout : jusqu’où descend ton fessier ?',
+    reponses:Object.freeze({court:'Il s’arrête haut, avec un pli marqué dessous',moyen:'Entre les deux',long:'Il descend bas et rejoint l’arrière de la cuisse'}),
+    correlation:'Fessier long ⇔ fémur court (rapport fémur / tronc bas).',
+    axe:'A1',coherent:'bas'}),
+  Object.freeze({cle:'dorsaux',lib:'Dorsaux',vue:'dos',
+    protocole:'Photo de dos, bras écartés du corps, dorsaux contractés.',
+    question:'De dos, dorsaux serrés : jusqu’où descend ton dorsal sur le côté du buste ?',
+    reponses:Object.freeze({court:'Il s’arrête haut sur les côtes',moyen:'Vers le milieu du dos',long:'Jusqu’à la taille'}),
+    correlation:'Muscle court ⇔ segment long : un tronc long laisse souvent un dorsal qui finit haut.'}),
+  Object.freeze({cle:'triceps',lib:'Triceps (longue portion)',vue:'profil',
+    protocole:'Photo de profil, bras tendu le long du corps, triceps contracté.',
+    question:'Bras tendu et serré, vu de côté : jusqu’où descend la masse de ton triceps ?',
+    reponses:Object.freeze({court:'Elle s’arrête loin du coude',moyen:'À mi-chemin',long:'Jusqu’au coude'}),
+    correlation:'Muscle court ⇔ segment long : un bras long laisse souvent un triceps qui finit haut.',
+    axe:'A3',coherent:'bas'}),
+  Object.freeze({cle:'deltoides_post',lib:'Deltoïdes postérieurs',vue:'dos',
+    protocole:'Photo de dos, bras relâchés.',
+    question:'De dos, bras relâchés : l’arrière de ton épaule…',
+    reponses:Object.freeze({court:'Reste petit, haut sur l’épaule',moyen:'Est visible sans dominer',long:'Est bombé et descend sur le bras'}),
+    correlation:'Pas de corrélation segmentaire établie : le classement se lit sur la photo.'}),
+  Object.freeze({cle:'quadriceps',lib:'Quadriceps (vaste externe)',vue:'face',
+    protocole:'Photo de face, jambes tendues, quadriceps contractés.',
+    question:'Jambe tendue et serrée : jusqu’où descend le galbe extérieur de ta cuisse ?',
+    reponses:Object.freeze({court:'Il s’arrête nettement au-dessus du genou',moyen:'Juste au-dessus',long:'Jusqu’au genou'}),
+    correlation:'Muscle court ⇔ segment long : un fémur long laisse souvent un vaste externe qui finit haut.',
+    axe:'A1',coherent:'bas'})
+]);
+/** Les groupes que le coach peut déclarer prioritaires (points faibles). */
+const MUSCLE_PRIORITES=Object.freeze([
+  Object.freeze({cle:'pecs',lib:'Pectoraux'}),Object.freeze({cle:'dos',lib:'Dos'}),
+  Object.freeze({cle:'epaules',lib:'Épaules'}),Object.freeze({cle:'bras',lib:'Bras'}),
+  Object.freeze({cle:'ischios',lib:'Ischios'}),Object.freeze({cle:'fessiers',lib:'Fessiers'}),
+  Object.freeze({cle:'quadriceps',lib:'Quadriceps'}),Object.freeze({cle:'mollets',lib:'Mollets'})]);
+
+// LES CIBLES D'EXERCICE, par schéma moteur et motif de nom (exKey).
+const _MC=Object.freeze({
+  tirages:Object.freeze([{s:'tirage-vertical',m:null},{s:'tirage-horizontal',m:null}]),
+  pullover:Object.freeze([{s:'tirage-vertical',m:'PULL OVER|PULLOVER'}]),
+  curls:Object.freeze([{s:'isolation-coude',m:'CURL'}]),
+  triceps:Object.freeze([{s:'isolation-coude',m:'TRICEPS|BARRE AU FRONT|KICKBACK|SKULL|FRENCH PRESS'}]),
+  developpes:Object.freeze([{s:'poussee-horizontale',m:'DEVELOPPE|DIPS|POMPE|PRESS|FLOOR'}]),
+  ecartes:Object.freeze([{s:'poussee-horizontale',m:'ECARTE|BUTTERFLY|CROSSOVER'}]),
+  arriereEpaule:Object.freeze([{s:'isolation-epaule',m:'OISEAU|ARRIERE|FACE PULL'},{s:'tirage-horizontal',m:'FACE PULL'}]),
+  rowings:Object.freeze([{s:'tirage-horizontal',m:null}]),
+  tiragesV:Object.freeze([{s:'tirage-vertical',m:null}]),
+  legcurl:Object.freeze([{s:'isolation-genou',m:'LEG CURL|NORDIC'}]),
+  charniere:Object.freeze([{s:'charniere-hanche',m:'ROUMAIN|RDL|GOOD MORNING|SOULEVE'}]),
+  hipthrust:Object.freeze([{s:'charniere-hanche',m:'HIP THRUST|GLUTE|BRIDGE|HYPTRUST'},{s:'isolation-hanche',m:null}]),
+  squats:Object.freeze([{s:'squat',m:null}]),
+  legext:Object.freeze([{s:'isolation-genou',m:'LEG EXTENSION'}])
+});
+/**
+ * LES SIX CONFLITS. `si` : toutes les conditions doivent tenir —
+ * {muscle, longueurs} sur une longueur classée, {axe, positions} sur un axe,
+ * {prioritaire:[groupes]} sur ce que le coach a déclaré. `ou` : alternative
+ * (au moins une). `impact` : 1 à 3, pondéré ensuite par la confiance.
+ * Les conséquences : chacune vise des exercices (`cibles`), et porte le texte
+ * de l'ATHLÈTE (`texte`, une consigne) et celui du COACH (`raison`).
+ */
+const CONFLITS=Object.freeze([
+  Object.freeze({cle:'dos_biceps',lib:'Dos ↔ biceps',impact:3,
+    si:Object.freeze([{prioritaire:['dos']},{muscle:'biceps',longueurs:['long']}]),
+    raison:'Biceps long : il prend une grande part des tirages, et le dos travaille moins que prévu.',
+    consequences:Object.freeze({
+      straps:Object.freeze({cibles:_MC.tirages,texte:'Avec straps : tes mains tiennent, ton dos tire.'}),
+      isolation_prioritaire:Object.freeze({cibles:_MC.pullover,texte:'Fais ce mouvement en premier : le dos travaille sans les bras.'}),
+      amplitude:Object.freeze({cibles:_MC.tirages,texte:'Tire avec les coudes, pas avec les mains ; garde la prise souple.'}),
+      ordre_dans_seance:Object.freeze({cibles:_MC.curls,texte:'Place-le après tes tirages.'})})}),
+  Object.freeze({cle:'dos_epaules',lib:'Dos ↔ épaules',impact:2,
+    si:Object.freeze([{prioritaire:['dos']}]),
+    ou:Object.freeze([{muscle:'deltoides_post',longueurs:['long']},{muscle:'dorsaux',longueurs:['court']}]),
+    raison:'Deltoïdes postérieurs longs ou dorsaux courts : l’arrière d’épaule finit les rowings à la place du dos.',
+    consequences:Object.freeze({
+      straps:null,
+      isolation_prioritaire:Object.freeze({cibles:_MC.pullover,texte:'Fais ce mouvement en premier : le dos travaille sans les épaules.'}),
+      amplitude:Object.freeze({cibles:_MC.rowings,texte:'Coudes près du corps, tire vers les hanches.'}),
+      ordre_dans_seance:Object.freeze({cibles:_MC.arriereEpaule,texte:'Place-le après tes tirages.'})})}),
+  Object.freeze({cle:'pecs_triceps',lib:'Pectoraux ↔ triceps',impact:3,
+    si:Object.freeze([{prioritaire:['pecs']},{muscle:'triceps',longueurs:['long']}]),
+    raison:'Triceps long : il finit les développés, et les pectoraux s’arrêtent avant.',
+    consequences:Object.freeze({
+      straps:null,
+      isolation_prioritaire:Object.freeze({cibles:_MC.ecartes,texte:'Fais ce mouvement avant tes développés.'}),
+      amplitude:Object.freeze({cibles:_MC.developpes,texte:'Ne verrouille pas les coudes en haut : garde la tension dans la poitrine.'}),
+      ordre_dans_seance:Object.freeze({cibles:_MC.triceps,texte:'Place-le après tes mouvements de pectoraux.'})})}),
+  Object.freeze({cle:'pecs_epaules',lib:'Pectoraux ↔ épaules',impact:2,
+    si:Object.freeze([{prioritaire:['pecs']},{axe:'A3',positions:['haut']}]),
+    raison:'Bras longs (axe A3) : l’avant de l’épaule prend une grande part des développés.',
+    consequences:Object.freeze({
+      straps:null,
+      isolation_prioritaire:Object.freeze({cibles:_MC.ecartes,texte:'Fais ce mouvement avant tes développés.'}),
+      amplitude:Object.freeze({cibles:_MC.developpes,texte:'Omoplates serrées et basses, coudes à 45–60° du buste.'}),
+      ordre_dans_seance:null})}),
+  Object.freeze({cle:'ischios_fessiers',lib:'Ischios ↔ fessiers',impact:2,
+    si:Object.freeze([{prioritaire:['ischios']},{muscle:'fessiers',longueurs:['long']}]),
+    raison:'Fessiers longs : ils prennent la charnière de hanche, et les ischios restent en retrait.',
+    consequences:Object.freeze({
+      straps:Object.freeze({cibles:_MC.charniere,texte:'Avec straps si ta prise lâche avant l’arrière des cuisses.'}),
+      isolation_prioritaire:Object.freeze({cibles:_MC.legcurl,texte:'Fais ce mouvement en premier.'}),
+      amplitude:Object.freeze({cibles:_MC.charniere,texte:'Genoux presque tendus, bassin vers l’arrière : l’étirement se sent derrière les cuisses.'}),
+      ordre_dans_seance:Object.freeze({cibles:_MC.hipthrust,texte:'Place-le après tes mouvements d’ischios.'})})}),
+  Object.freeze({cle:'quadriceps_posterieurs',lib:'Quadriceps ↔ ischios / fessiers',impact:3,
+    si:Object.freeze([{prioritaire:['fessiers','ischios']},{muscle:'quadriceps',longueurs:['long']}]),
+    raison:'Quadriceps long : le squat glisse vers l’avant de la cuisse, et l’arrière travaille moins.',
+    consequences:Object.freeze({
+      straps:null,
+      isolation_prioritaire:Object.freeze({cibles:_MC.hipthrust,texte:'Fais ce mouvement en premier.'}),
+      amplitude:Object.freeze({cibles:_MC.squats,texte:'Pieds un peu plus écartés, descends en poussant les hanches vers l’arrière.'}),
+      ordre_dans_seance:Object.freeze({cibles:_MC.legext,texte:'Place-le en fin de séance.'})})})
+]);
+const CONFLIT_TYPES=Object.freeze(['straps','isolation_prioritaire','amplitude','ordre_dans_seance']);
+
+/**
+ * PURE. Les longueurs musculaires et les priorités d'un dossier, relues :
+ * {longueurs:{cle:{longueur, source, date, conf}}, prioritaires:[groupes]}.
+ */
+function musclesDe(user){
+  const m=(user&&user.morpho&&typeof user.morpho==='object')?user.morpho:{};
+  const src=(m.muscles&&typeof m.muscles==='object')?m.muscles:{};
+  const longueurs={};
+  for(const d of MORPHO_MUSCLES){
+    const e=src[d.cle];
+    if(!e||MUSCLE_LONGUEURS.indexOf(e.longueur)<0||!(Number(e.date)>0)) continue;
+    const s=e.source==='coach'?'coach':'declare';
+    longueurs[d.cle]={longueur:e.longueur,source:s,date:Number(e.date),conf:MUSCLE_CONF[s]};
+  }
+  const p=(m.prioritaires&&typeof m.prioritaires==='object')?m.prioritaires:{};
+  return {longueurs,prioritaires:MUSCLE_PRIORITES.map(x=>x.cle).filter(k=>p[k]===true)};
+}
+/** PURE. Une condition : true, false, ou null quand la donnée manque. */
+function _conditionConflit(c,mu,axes){
+  if(c.prioritaire) return c.prioritaire.some(g=>mu.prioritaires.indexOf(g)>=0);
+  if(c.muscle){ const l=mu.longueurs[c.muscle]; return l?c.longueurs.indexOf(l.longueur)>=0:null; }
+  if(c.axe){
+    const a=(Array.isArray(axes)?axes:[]).find(x=>x&&x.cle===c.axe);
+    if(!a||a.position==null||!(a.confiance>=MORPHO_CONF_MIN-1e-9)) return null;
+    return c.positions.indexOf(a.position)>=0;
+  }
+  return false;
+}
+/** PURE. La confiance qu'apporte une condition tenue (1 pour une priorité déclarée). */
+function _confianceCondition(c,mu,axes){
+  if(c.muscle) return (mu.longueurs[c.muscle]||{}).conf||0;
+  if(c.axe){ const a=(axes||[]).find(x=>x&&x.cle===c.axe); return a?a.confiance:0; }
+  return 1;
+}
+/**
+ * PURE. Évalue chaque conflit : 'actif', 'inactif', ou 'a_confirmer' (une
+ * donnée manque et rien d'autre ne l'écarte), avec ce qu'il manque.
+ */
+function evaluerConflits(muscles,axes){
+  const mu=(muscles&&muscles.longueurs)?muscles:{longueurs:{},prioritaires:[]};
+  return CONFLITS.map(k=>{
+    const manque=[]; let etat='actif', conf=1;
+    for(const c of k.si){
+      const v=_conditionConflit(c,mu,axes);
+      if(v===false){ etat='inactif'; break; }
+      if(v===null){ manque.push(c.muscle||c.axe); continue; }
+      conf=Math.min(conf,_confianceCondition(c,mu,axes));
+    }
+    if(etat!=='inactif'&&k.ou){
+      const vs=k.ou.map(c=>({c,v:_conditionConflit(c,mu,axes)}));
+      const vrais=vs.filter(x=>x.v===true);
+      if(vrais.length) conf=Math.min(conf,Math.max(...vrais.map(x=>_confianceCondition(x.c,mu,axes))));
+      else if(vs.every(x=>x.v===false)) etat='inactif';
+      else vs.filter(x=>x.v===null).forEach(x=>manque.push(x.c.muscle||x.c.axe));
+    }
+    if(etat!=='inactif'&&manque.length) etat='a_confirmer';
+    return {cle:k.cle,lib:k.lib,etat,manque,confiance:etat==='actif'?Math.round(conf*100)/100:0,
+      impact:etat==='actif'?Math.round(k.impact*conf*100)/100:0,raison:k.raison,consequences:k.consequences};
+  });
+}
+/**
+ * PURE. LES CONFLITS ACTIFS, du plus grand impact au plus petit (impact du
+ * conflit × confiance la plus faible de ses conditions).
+ * @param muscles  sortie de musclesDe
+ * @param axes     sortie de morphoAxes
+ */
+function conflitsActifs(muscles,axes){
+  return evaluerConflits(muscles,axes).filter(x=>x.etat==='actif')
+    .sort((a,b)=>(b.impact-a.impact)||a.cle.localeCompare(b.cle));
+}
+/**
+ * PURE. Les consignes des conflits actifs qui visent UN exercice — ce que
+ * morphoPourExercice ajoute à la consigne d'exécution. Dédoublonnées.
+ */
+function consignesConflitsPourExercice(conflits,ex,user){
+  let schema=null; try{ schema=schemaDe(ex,user); }catch(e){ schema=null; }
+  const nom=(()=>{ try{ return exKey((ex&&ex.name)||ex||''); }catch(e){ return ''; } })();
+  if(!schema) return [];
+  const out=[], vus={};
+  for(const k of (conflits||[])) for(const t of CONFLIT_TYPES){
+    const c=k.consequences&&k.consequences[t];
+    if(!c) continue;
+    if(!c.cibles.some(x=>x.s===schema&&(!x.m||new RegExp(x.m).test(nom)))) continue;
+    if(vus[c.texte]) continue;
+    vus[c.texte]=1;
+    out.push({conflit:k.cle,type:t,texte:c.texte,raison:k.raison});
+  }
+  return out;
+}
+/** PURE. La corrélation connue tient-elle ? null quand on ne peut pas le dire. */
+function coherenceMuscle(cle,longueur,axes){
+  const d=MORPHO_MUSCLES.find(x=>x.cle===cle);
+  if(!d||!d.axe||longueur==='moyen') return null;
+  const a=(axes||[]).find(x=>x&&x.cle===d.axe);
+  if(!a||a.position==null||a.position==='neutre'||!(a.confiance>=MORPHO_CONF_MIN-1e-9)) return null;
+  const attendu=longueur==='long'?d.coherent:(d.coherent==='haut'?'bas':'haut');
+  return a.position===attendu;
+}
+
+// ── LA SAISIE ───────────────────────────────────────────────────────────────
+/** PURE. Ce qui s'écrit pour un classement, ou null s'il ne vaut pas d'être écrit. */
+function entreeMuscle(cle,longueur,source,existant,maintenant){
+  if(!MORPHO_MUSCLES.some(d=>d.cle===cle)||MUSCLE_LONGUEURS.indexOf(longueur)<0) return null;
+  // LE COACH PRIME : une réponse guidée n'efface pas une photo classée.
+  if(source!=='coach'&&existant&&existant.source==='coach') return null;
+  return {longueur,source:source==='coach'?'coach':'declare',date:Math.round(Number(maintenant)||Date.now())};
+}
+/** Le coach classe un muscle (3 boutons). */
+function classerMuscleCoach(bouton){
+  if(!currentUser||currentUser.role!=='coach'||!bouton) return false;
+  const ds=bouton.dataset||{}, users=DB.get('users')||{};
+  const c=getOwnedClient(String(ds.cid||''),users);
+  if(!c||!c.email) return false;
+  const m=(c.morpho&&typeof c.morpho==='object')?c.morpho:(c.morpho={});
+  const mu=(m.muscles&&typeof m.muscles==='object')?m.muscles:(m.muscles={});
+  const actuel=mu[ds.cle];
+  if(actuel&&actuel.source==='coach'&&actuel.longueur===ds.l){ delete mu[ds.cle]; }   // second appui : on retire
+  else { const e=entreeMuscle(ds.cle,ds.l,'coach',actuel); if(!e) return false; mu[ds.cle]=e; }
+  if(!Object.keys(mu).length) delete m.muscles;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ renderRevueMorphoCoach(c); }catch(x){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Classement enregistré ✓','le classement est');
+  return true;
+}
+/** Le coach déclare (ou retire) un groupe prioritaire. */
+function basculerPrioriteMuscle(cb){
+  if(!currentUser||currentUser.role!=='coach'||!cb) return false;
+  const ds=cb.dataset||{}, users=DB.get('users')||{};
+  const c=getOwnedClient(String(ds.cid||''),users);
+  if(!c||!c.email||!MUSCLE_PRIORITES.some(x=>x.cle===ds.g)) return false;
+  const m=(c.morpho&&typeof c.morpho==='object')?c.morpho:(c.morpho={});
+  const p=(m.prioritaires&&typeof m.prioritaires==='object')?m.prioritaires:(m.prioritaires={});
+  if(cb.checked) p[ds.g]=true; else delete p[ds.g];
+  if(!Object.keys(p).length) delete m.prioritaires;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ renderRevueMorphoCoach(c); }catch(x){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Priorité enregistrée ✓','la priorité est');
+  return true;
+}
+
+// ── LA CARTE COACH « CONFLITS MUSCULAIRES » ─────────────────────────────────
+/** PURE. La carte : conflits actifs, à confirmer, puis le classement des muscles. */
+function htmlConflitsCoach(c,axes){
+  if(!c) return '';
+  const E=escapeHtml, cid=String(c.id||''), mu=musclesDe(c);
+  const ev=evaluerConflits(mu,axes);
+  const actifs=ev.filter(x=>x.etat==='actif').sort((a,b)=>(b.impact-a.impact)||a.cle.localeCompare(b.cle));
+  const aConf=ev.filter(x=>x.etat==='a_confirmer');
+  const libM=k=>{ const d=MORPHO_MUSCLES.find(x=>x.cle===k); if(d) return d.lib.toLowerCase();
+    const a=MORPHO_AXES.find(x=>x.cle===k); return a?('l’axe « '+a.court+' »'):k; };
+  let h='<div class="rvm mu-coach"><div class="rvm-t">Conflits musculaires</div>'
+    +'<div class="rvm-s">Quand un muscle prend le travail de celui que tu veux développer, la consigne change. Une longueur de muscle oriente le choix des exercices : elle ne fixe aucune limite à ce que l’athlète peut développer, et l’athlète ne voit que les consignes.</div>';
+  // LES PRIORITÉS : sans elles, aucun conflit ne peut être actif.
+  h+='<div class="mu-prio" role="group" aria-label="Points faibles à développer"><span class="mu-prio-t">À développer en priorité :</span>'
+    +MUSCLE_PRIORITES.map(g=>'<label class="mu-chip"><input type="checkbox" data-cid="'+E(cid)+'" data-g="'+g.cle+'"'
+      +(mu.prioritaires.indexOf(g.cle)>=0?' checked':'')+' onchange="basculerPrioriteMuscle(this)"> '+E(g.lib)+'</label>').join('')+'</div>';
+  if(actifs.length){
+    for(const k of actifs){
+      h+='<div class="rvm-l"><div class="rvm-ex">'+E(k.lib)+' <span>· impact '+String(k.impact).replace('.',',')+' · confiance '+String(k.confiance).replace('.',',')+'</span></div>'
+        +'<div class="rvm-r">'+E(k.raison)+'</div>';
+      for(const t of CONFLIT_TYPES){
+        const q=k.consequences[t]; if(!q) continue;
+        h+='<div class="rvm-src"><b>'+E(({straps:'Straps',isolation_prioritaire:'Isolation d’abord',amplitude:'Amplitude',ordre_dans_seance:'Ordre dans la séance'})[t])
+          +' :</b> '+E(q.texte)+' <i>('+E(q.cibles.map(x=>SCHEMA_LIB[x.s]||x.s).filter((v,i,a)=>a.indexOf(v)===i).join(', '))+')</i></div>';
+      }
+      h+='</div>';
+    }
+  } else h+='<div class="rvm-vide">Aucun conflit actif'+(mu.prioritaires.length?'':' : déclare d’abord ce qu’il faut développer en priorité')+'.</div>';
+  if(aConf.length)
+    h+='<div class="rvm-manque">À confirmer : '+aConf.map(k=>E(k.lib)+' (classer '+k.manque.map(libM).join(', ')+')').join(' ; ')+'.</div>';
+  // LE CLASSEMENT, sur la dernière photo de bilan de la bonne vue.
+  const bl=(Array.isArray(c.bilans)?c.bilans:[]).filter(b=>b&&b.date).slice().sort((a,b)=>b.date-a.date);
+  const photo=vue=>{ for(const b of bl){ let s=null; try{ s=photoBilanSrc(b,vue); }catch(e){ s=null; } if(s) return s; } return null; };
+  h+='<details class="mu-classer"><summary>Classer les muscles sur photo</summary>';
+  for(const d of MORPHO_MUSCLES){
+    const l=mu.longueurs[d.cle], src=photo(d.vue), coh=l?coherenceMuscle(d.cle,l.longueur,axes):null;
+    const u=src?safeUrl(src):'';
+    h+='<div class="mu-ligne">'+(u&&u!=='#'?'<img class="mu-photo" src="'+u+'" alt="Photo de bilan, vue '+E(d.vue)+'" loading="lazy">':'<span class="mu-photo mu-sans">pas de photo '+E(d.vue)+'</span>')
+      +'<div class="mu-corps"><div class="rvm-ex">'+E(d.lib)+(l?' <span>· '+E(MUSCLE_LONGUEUR_LIB[l.longueur])+' · '+(l.source==='coach'?'ta photo':'réponse de l’athlète')+' · confiance '+String(l.conf).replace('.',',')+'</span>':'')+'</div>'
+      +'<div class="rvm-src">'+E(d.protocole)+' '+E(d.correlation)+'</div>'
+      +(coh===false?'<div class="rvm-manque">Ce classement ne suit pas la corrélation habituelle avec les segments mesurés : à revoir sur une autre photo.</div>':'')
+      +'<div class="mu-boutons" role="group" aria-label="'+E(d.lib)+'">'+MUSCLE_LONGUEURS.map(k=>'<button type="button" class="mu-b" data-cid="'+E(cid)+'" data-cle="'+d.cle+'" data-l="'+k+'" aria-pressed="'
+        +(!!(l&&l.source==='coach'&&l.longueur===k))+'" onclick="classerMuscleCoach(this)">'+MUSCLE_LONGUEUR_LIB[k]+'</button>').join('')+'</div></div></div>';
+  }
+  return h+'</details></div>';
+}
+
+// ── L'ATHLÈTE : les questions guidées, et rien sur les longueurs ────────────
+/** PURE. Les questions guidées (écran des tests). Aucune longueur affichée. */
+function htmlMusclesAthlete(user){
+  const E=escapeHtml, mu=musclesDe(user);
+  return '<div class="ta-titre-sec">Tes muscles, en quelques questions</div><div class="card tc-carte" id="mu-questions">'
+    +'<div class="tc-res" style="margin-top:0">Réponds à celles que tu peux : ton coach s’en sert pour choisir tes consignes.</div>'
+    +'<form class="ta-form" onsubmit="return _musclesRepondre(this)">'
+    +MORPHO_MUSCLES.map(d=>{
+      const l=mu.longueurs[d.cle], fait=l?(l.source==='coach'?' (déjà vu par ton coach)':' (déjà répondu)'):'';
+      return '<fieldset class="ta-q"><legend>'+E(d.question)+E(fait)+'</legend>'
+        +MUSCLE_LONGUEURS.map(k=>'<label class="ta-choix"><input type="radio" name="'+d.cle+'" value="'+k+'"'
+          +(l&&l.source==='declare'&&l.longueur===k?' checked':'')+(l&&l.source==='coach'?' disabled':'')+'> '+E(d.reponses[k])+'</label>').join('')
+        +'</fieldset>';
+    }).join('')+'<button type="submit" class="btn btn-outline tc-filmer">Enregistrer mes réponses</button></form></div>';
+}
+function renderMusclesAthlete(){
+  const z=document.getElementById('mu-cartes');
+  if(!z||!currentUser) return false;
+  z.innerHTML=htmlMusclesAthlete(currentUser);
+  return true;
+}
+/** @param {HTMLFormElement} f */
+function _musclesRepondre(f){
+  if(!currentUser||!f) return false;
+  const m=(currentUser.morpho&&typeof currentUser.morpho==='object')?currentUser.morpho:(currentUser.morpho={});
+  const mu=(m.muscles&&typeof m.muscles==='object')?m.muscles:(m.muscles={});
+  let n=0;
+  for(const d of MORPHO_MUSCLES){
+    const x=f.querySelector('input[name="'+d.cle+'"]:checked');
+    if(!x) continue;
+    const e=entreeMuscle(d.cle,x.value,'declare',mu[d.cle]);
+    if(e){ mu[d.cle]=e; n++; }
+  }
+  if(!Object.keys(mu).length) delete m.muscles;
+  if(!n){ toast('Aucune réponse à enregistrer.','var(--orange)'); return false; }
+  const ok=saveUser();
+  renderMusclesAthlete();
+  toast(ok?'Réponses enregistrées ✓':'Réponses lues, mais pas enregistrées sur l’appareil.',ok?'var(--green)':'var(--orange)');
+  return false;
 }
 
 // ══ LOT TA1 — QUATRE TESTS ARTICULAIRES, RELIÉS AUX CONSIGNES ════════════
@@ -17424,6 +17818,7 @@ function ouvrirTestsCompat(){
     if(z) z.innerHTML=currentUser?htmlCarteSchemaCorps(currentUser,'squat','athlete'):''; }catch(e){}
   renderTestsCompat();
   try{ renderTestsArtic(); }catch(e){}
+  try{ renderMusclesAthlete(); }catch(e){}
   go('s-tests-compat');
 }
 /**
@@ -52665,8 +53060,11 @@ function _htmlConsigneExo(ex){
   // LOT TA1 : ce que les tests articulaires changent au matériel ou au
   // placement, sur CET exercice — et rien d'autre (règle G7 : la consigne
   // traverse, l'explication reste chez le coach).
-  const conf=(()=>{ try{ return currentUser?(morphoPourExercice(currentUser,ex).consequences||[]):[]; }catch(e){ return []; } })();
-  if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img||conf.length)) return '';
+  // LOT ML1 : les consignes concrètes des conflits musculaires — la consigne
+  // seule, jamais la longueur d'un muscle ni ce qu'elle « permettrait ».
+  const mpe=(()=>{ try{ return currentUser?morphoPourExercice(currentUser,ex):null; }catch(e){ return null; } })();
+  const conf=(mpe&&mpe.consequences)||[], cibl=(mpe&&mpe.conflits)||[];
+  if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img||conf.length||cibl.length)) return '';
   return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:6px">CONSIGNE</div>
         ${blocTempo(ex)}
@@ -52675,6 +53073,7 @@ function _htmlConsigneExo(ex){
              condition d'affichage du bloc, sans ça, un exercice qui ne
              porterait QUE son matériel n'aurait rien affiché du tout. -->
         ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
+        ${cibl.map(c=>`<div class="ex-cibler" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Pour mieux cibler :</span> ${escapeHtml(c.texte)}</div>`).join('')}
         ${conf.map(c=>`<div class="ex-confort" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Pour ton confort :</span> ${escapeHtml(c.texte)}</div>`).join('')}
         ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Réglage du coach :</span> ${escapeHtml(ex.reglageCoach)}</div>`:''}
         <div style="display:flex;gap:12px;align-items:flex-start">

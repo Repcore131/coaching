@@ -73897,6 +73897,83 @@ async function testExercices(){
           if(/valgus|valgum|varum|pathologi|diagnostic|anomalie|déformation|défaut|guéri|soign|corrig/i.test(txt.replace(/data-cle="[^"]*"|id="ta-[^"]*"/g,''))) return _echec('un mot de diagnostic côté athlète');
           return (/"artic"\s*:/.test(String(window._RC_RULES||''))&&/id="ta-cartes"/.test(_prodSrc()))||_echec('règle ou écran absents');})());
       }
+      // ══ LOT ML1 — LONGUEURS MUSCULAIRES ET CONFLITS ══
+      {
+        const _mu=(l,p,src)=>{ const m={}; for(const k in (l||{})) m[k]={longueur:l[k],source:src||'coach',date:1};
+          const pr={}; (p||[]).forEach(g=>{ pr[g]=true; }); return musclesDe({morpho:{muscles:m,prioritaires:pr}}); };
+        const _etat=(cle,l,p,axes)=>evaluerConflits(_mu(l,p),axes||[]).find(x=>x.cle===cle).etat;
+        ok('ML1 — MORPHO_MUSCLES et CONFLITS : gelés, complets',(()=>{
+          if(!Object.isFrozen(MORPHO_MUSCLES)||MORPHO_MUSCLES.map(d=>d.cle).join()!=='biceps,mollets,fessiers,dorsaux,triceps,deltoides_post,quadriceps') return _echec('muscles');
+          for(const d of MORPHO_MUSCLES){
+            if(!d.protocole||!d.question||!d.correlation||Object.keys(d.reponses).join()!=='court,moyen,long') return _echec(d.cle+' incomplet');
+            if(['face','profil','dos'].indexOf(d.vue)<0) return _echec(d.cle+' vue');
+          }
+          if(!Object.isFrozen(CONFLITS)||CONFLITS.map(k=>k.cle).join()!=='dos_biceps,dos_epaules,pecs_triceps,pecs_epaules,ischios_fessiers,quadriceps_posterieurs') return _echec('conflits');
+          for(const k of CONFLITS) if(Object.keys(k.consequences).join()!=='straps,isolation_prioritaire,amplitude,ordre_dans_seance') return _echec(k.cle+' conséquences');
+          return true;})());
+        ok('ML1 — chaque conflit déclenché, et non déclenché',(()=>{
+          const A3=p=>[{cle:'A3',position:p,confiance:0.75}];
+          const cas=[
+            ['dos_biceps',{biceps:'long'},['dos'],null,'actif'],['dos_biceps',{biceps:'moyen'},['dos'],null,'inactif'],['dos_biceps',{biceps:'long'},['pecs'],null,'inactif'],
+            ['dos_epaules',{deltoides_post:'long'},['dos'],null,'actif'],['dos_epaules',{dorsaux:'court'},['dos'],null,'actif'],
+            ['dos_epaules',{deltoides_post:'moyen',dorsaux:'long'},['dos'],null,'inactif'],['dos_epaules',{deltoides_post:'long'},[],null,'inactif'],
+            ['pecs_triceps',{triceps:'long'},['pecs'],null,'actif'],['pecs_triceps',{triceps:'court'},['pecs'],null,'inactif'],
+            ['pecs_epaules',{},['pecs'],A3('haut'),'actif'],['pecs_epaules',{},['pecs'],A3('neutre'),'inactif'],['pecs_epaules',{},['dos'],A3('haut'),'inactif'],
+            ['ischios_fessiers',{fessiers:'long'},['ischios'],null,'actif'],['ischios_fessiers',{fessiers:'long'},['fessiers'],null,'inactif'],
+            ['quadriceps_posterieurs',{quadriceps:'long'},['fessiers'],null,'actif'],['quadriceps_posterieurs',{quadriceps:'long'},['ischios'],null,'actif'],
+            ['quadriceps_posterieurs',{quadriceps:'moyen'},['fessiers'],null,'inactif'],['quadriceps_posterieurs',{quadriceps:'long'},['quadriceps'],null,'inactif']];
+          for(const [k,l,p,ax,att] of cas){ const e=_etat(k,l,p,ax); if(e!==att) return _echec(k+' '+JSON.stringify(l)+' '+p+' → '+e+' au lieu de '+att); }
+          return true;})());
+        ok('ML1 — données partielles : « à confirmer », jamais actif, et ce qui manque est nommé',(()=>{
+          const e=evaluerConflits(_mu({},['dos','pecs']),[]);
+          const g=k=>e.find(x=>x.cle===k);
+          if(g('dos_biceps').etat!=='a_confirmer'||g('dos_biceps').manque.join()!=='biceps') return _echec(JSON.stringify(g('dos_biceps')));
+          if(g('dos_epaules').etat!=='a_confirmer'||g('dos_epaules').manque.join()!=='deltoides_post,dorsaux') return _echec('dos_epaules : '+g('dos_epaules').manque);
+          if(g('pecs_epaules').etat!=='a_confirmer') return _echec('axe absent jugé');
+          if(_etat('pecs_epaules',{},['pecs'],[{cle:'A3',position:'haut',confiance:0.4}])!=='a_confirmer') return _echec('axe peu sûr jugé');
+          if(_etat('dos_epaules',{deltoides_post:'moyen'},['dos'])!=='a_confirmer') return _echec('une alternative inconnue écartée trop tôt');
+          if(conflitsActifs(_mu({},['dos','pecs','ischios']),[]).length) return _echec('conflit actif sans longueur');
+          if(conflitsActifs(_mu({biceps:'long',triceps:'long'},[]),[]).length) return _echec('conflit actif sans priorité');
+          return conflitsActifs(null,null).length===0||_echec('entrée vide');})());
+        ok('ML1 — ordre par impact, et la réponse guidée pèse moins que la photo du coach',(()=>{
+          const l=conflitsActifs(_mu({biceps:'long',deltoides_post:'long',triceps:'long'},['dos','pecs']),[]);
+          if(l.map(x=>x.cle).join()!=='dos_biceps,pecs_triceps,dos_epaules') return _echec(l.map(x=>x.cle+':'+x.impact).join());
+          const d=conflitsActifs(_mu({biceps:'long'},['dos'],'declare'),[])[0], c=conflitsActifs(_mu({biceps:'long'},['dos']),[])[0];
+          if(!(d.impact<c.impact)||d.confiance!==MUSCLE_CONF.declare||c.confiance!==MUSCLE_CONF.coach) return _echec(JSON.stringify([d,c]));
+          const ex=entreeMuscle('biceps','court','declare',{longueur:'long',source:'coach',date:1});
+          if(ex!==null) return _echec('une réponse guidée écrase la photo du coach');
+          return (entreeMuscle('biceps','long','coach',{longueur:'court',source:'declare',date:1}).source==='coach'&&entreeMuscle('biceps','enorme','coach')===null)||_echec('entrée');})());
+        ok('ML1 — les conséquences enrichissent morphoPourExercice, exercice par exercice',(()=>{
+          const u={id:'ml',bilans:[],morpho:{muscles:{biceps:{longueur:'long',source:'coach',date:1}},prioritaires:{dos:true}}};
+          const c=n=>morphoPourExercice(u,{name:n}).conflits.map(x=>x.type).join();
+          if(c('TIRAGE POITRINE LARGE')!=='straps,amplitude') return _echec('tirage : '+c('TIRAGE POITRINE LARGE'));
+          if(c('PULL OVER')!=='straps,isolation_prioritaire,amplitude') return _echec('pull-over : '+c('PULL OVER'));
+          if(c('CURL BARRE')!=='ordre_dans_seance'||c('SQUAT')!=='') return _echec('curl / squat');
+          if(!/straps/i.test(morphoPourExercice(u,{name:'ROWING BARRE LARGE'}).conflits[0].texte)) return _echec('« tirages avec straps »');
+          const sans={id:'ml2',bilans:[],morpho:{muscles:{biceps:{longueur:'long',source:'coach',date:1}}}};
+          return morphoPourExercice(sans,{name:'TIRAGE POITRINE LARGE'}).conflits.length===0||_echec('consigne sans priorité');})());
+        ok('ML1 — l’athlète ne voit que des consignes : ni longueur, ni potentiel, ni limite',(()=>{
+          const sU=currentUser; let h='';
+          try{
+            currentUser={id:'ml3',bilans:[],morpho:{muscles:{biceps:{longueur:'long',source:'coach',date:1}},prioritaires:{dos:true}}};
+            h=_htmlConsigneExo({name:'TIRAGE POITRINE LARGE'});
+          } finally { currentUser=sU; }
+          if(!/Pour mieux cibler/.test(h)||!/Avec straps/.test(h)) return _echec('consigne : '+h);
+          const athl=h+htmlMusclesAthlete({morpho:{muscles:{biceps:{longueur:'long',source:'coach',date:1}}}});
+          const txt=athl.replace(/<[^>]+>/g,' ');
+          if(/potentiel|génétique|limite|biceps long|muscle long|muscle court|insertion/i.test(txt)) return _echec('un mot interdit côté athlète');
+          const tous=[]; CONFLITS.forEach(k=>CONFLIT_TYPES.forEach(t=>{ if(k.consequences[t]) tous.push(k.consequences[t].texte); }));
+          return !/potentiel|génétique|limite|long|court/i.test(tous.join(' '))||_echec('une consigne parle de longueur');})());
+        ok('ML1 — carte coach : priorités, conflits, à confirmer, et trois boutons par muscle',(()=>{
+          const c={id:'cm',bilans:[],morpho:{muscles:{biceps:{longueur:'long',source:'coach',date:1}},prioritaires:{dos:true,pecs:true}}};
+          const d=document.createElement('div'); d.innerHTML=htmlConflitsCoach(c,[]);
+          const t=d.textContent;
+          if(!/Dos ↔ biceps/.test(t)||!/À confirmer/.test(t)||!/aucune limite/.test(t)) return _echec(t.slice(0,300));
+          if(d.querySelectorAll('.mu-b').length!==21||d.querySelectorAll('.mu-prio input[type=checkbox]').length!==8) return _echec('saisie');
+          if(!d.querySelector('.mu-b[data-cle="biceps"][data-l="long"][aria-pressed="true"]')) return _echec('classement non montré');
+          if(!/"muscles"\s*:/.test(String(window._RC_RULES||''))||!/"prioritaires"\s*:/.test(String(window._RC_RULES||''))) return _echec('règles');
+          return /id="mu-cartes"/.test(_prodSrc())||_echec('écran athlète non branché');})());
+      }
       okA('TC1 — MOTION LAB : un squat de profil filmé, trois répétitions, le tronc lu au point bas',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof mlMesuresCompat!=='function'||typeof mlRepsCompat!=='function') return _echec('fonctions absentes');
