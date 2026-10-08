@@ -13794,3 +13794,12 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .visite-n{color:var(--sub);font-weight:800}
 .visite-t{flex:1;color:var(--sub)}
 .wel-visite{text-align:center;font-size:var(--fs-xs);color:var(--sub);margin:4px 0 0}
+/* Série 6, lot 14 : santé de l'app */
+.sa-q{margin-bottom:14px}
+.sa-q-v{font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text)}
+.sa-q70 .sa-q-v{color:var(--orange)}
+.sa-q90 .sa-q-v{color:var(--red-text)}
+.sa-l{padding:10px 0;border-bottom:1px solid var(--border);font-size:var(--fs-xs)}
+.sa-l-h{display:flex;justify-content:space-between;gap:10px;color:var(--text)}
+.sa-l-h b{min-width:0;overflow-wrap:anywhere}
+.sa-neuve .sa-l-h b,.sa-double .sa-l-h b{color:var(--orange)}

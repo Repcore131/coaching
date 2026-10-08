@@ -41,6 +41,7 @@ import { cloudinaryDestroy, cloudinarySigner, compteCloudinary } from './medias.
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique, servirSitemapCoachs } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
+import { enregistrerErreur } from './erreurs.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
 import { creerAppelsDroits, cleDe } from './droits-appels.js';
@@ -275,6 +276,14 @@ async function servir(req, env, ctx) {
       const o = outils(env);
       budgetRequete(o);
       return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
+    }
+    // LE CAPTEUR D'ERREURS (série 6, lot 14) : une signature, sans compte.
+    if (url.pathname === '/erreur' && req.method === 'POST') {
+      const o = outils(env);
+      let texte = '';
+      try { texte = await req.text(); } catch (e) { texte = ''; }
+      const r = await enregistrerErreur(o.db, texte, Date.now());
+      return reponse('', r.ok ? 204 : (r.raison === 'plafond' ? 429 : 400), 'text/plain');
     }
     // LE SUPPORT : /support, même protocole et même jeton que /fn/support.
     if (url.pathname === '/support' && req.method === 'POST') {

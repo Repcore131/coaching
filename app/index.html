@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1937';
+window.RC_BUILD='1938';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1937.css">
+<link rel="stylesheet" href="./rc-style.1938.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1937.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1938.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1670,6 +1670,18 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
+<!-- SÉRIE 6 (lot 14) : LA SANTÉ DE L'APP (créateur). -->
+<div id="s-sante-app" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-sante-app','s-coach-home')" aria-label="Retour"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button>
+    <span class="topbar-title">Santé de l'app</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="sa-corps"></div>
+    </div>
+  </div>
+</div>
 <!-- BUILD 1876 : LE SUPPORT DU CRÉATEUR (cloudflare/src/support.js). -->
 <div id="s-support" class="screen ecran-coach">
   <div class="topbar">
@@ -2285,6 +2297,18 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Accès</div>
               <div style="font-weight:800;font-size:var(--fs-md)">Ouvrir, fermer un accès</div>
               <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Par adresse, sans ouvrir de dossier</div>
+            </div>
+            <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
+          </div>
+        </div>
+
+        <!-- SÉRIE 6 (lot 14) : la santé de l'app, créateur seulement (même condition que l'accès). -->
+        <div id="ch-lien-sante" style="display:none;margin-bottom:20px">
+          <div onclick="ouvrirSanteApp()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 20px;cursor:pointer;display:flex;align-items:center;gap:14px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Santé de l'app</div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Erreurs et quota</div>
+              <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Sept jours, par build et par empreinte</div>
             </div>
             <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
           </div>
@@ -6370,5 +6394,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1937.js"></script>
+<script src="./rc-core.1938.js"></script>
 </body></html>

@@ -2625,6 +2625,16 @@
     // journal des actions et les signalements. Ecrits par le Worker seul
     // (compte de service), lus par le createur seul. support_corbeille et
     // support_tickets_dernier : aucun acces client.
+    // SERIE 6 (lot 14) : le capteur d erreurs. Ecrit par le Worker seul
+    // (POST /erreur), lu par le createur seul (ecran « Sante de l app »).
+    "erreurs": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
+    "erreurs_jour": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
     "support_log": {
       ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false

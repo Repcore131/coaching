@@ -1770,6 +1770,8 @@ function rcErreurMuette(ou,e){
     if(l.length>RC_ERREURS_MAX) l.splice(0,l.length-RC_ERREURS_MAX);
   }catch(_){}
   try{ console.warn('[RepCore]',ou,e); }catch(_){}
+  // Série 6 (lot 14) : un catch qui se taisait devient un signalement.
+  try{ signalerErreur((e&&e.message)||e,(e&&e.stack&&String(e.stack).split('\n')[1])||'',ou); }catch(_){}
 }
 // UNE SAISIE DE L'UTILISATEUR, et il doit savoir quand elle n'est pas gardée.
 // `perdu` nomme ce qui est perdu, au masculin : « Ton entraînement », « Ton

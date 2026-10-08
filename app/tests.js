@@ -44883,7 +44883,7 @@ async function testExercices(){
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
       // Série 6 : s-coach-reglages (Mes réglages).
-      const ECRANS_COACH=['s-coach-reglages','s-coach-home','s-coach-client','s-coach-sessions',
+      const ECRANS_COACH=['s-sante-app','s-coach-reglages','s-coach-home','s-coach-client','s-coach-sessions',
         's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
         's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
         's-coach-charge','s-coach-banque','s-charges','s-coach-file',
@@ -75249,6 +75249,46 @@ async function testExercices(){
       const z=document.querySelector('#s-welcome .wel-visite');
       if(!z||!/Voir l'app en 2 minutes/.test(z.textContent)) return _echec('absent');
       return z.querySelector('[onclick="visiteOuvrir(\'athlete\')"]')&&z.querySelector('[onclick="visiteOuvrir(\'coach\')"]')?true:_echec('deux portes');});
+    // ══ BUILD 1938 — LE CAPTEUR D'ERREURS ET LA SANTÉ DE L'APP ═════════════════
+    ok('1938 — signatureErreur : nettoyée, stable ; 20 par jour, une fois par empreinte, remise à zéro le lendemain',()=>{
+      const a=signatureErreur('Échec pour lea@exemple.fr, dossier 1234567','https://x/app/rc-core.1938.js?v=2:120:7','renderVolume','1938');
+      if(/lea@|1234567/.test(a.m)) return _echec('donnée personnelle : '+a.m);
+      if(/\?v=/.test(a.s)) return _echec('requête gardée : '+a.s);
+      const b=signatureErreur('Échec pour lea@exemple.fr, dossier 1234567','https://x/app/rc-core.1938.js:999:1','renderVolume','1938');
+      if(a.h!==b.h) return _echec('empreinte instable d’une ligne à l’autre');
+      if(!/^[a-z0-9]{4,16}$/.test(a.h)||a.b!=='1938') return _echec('forme : '+JSON.stringify(a));
+      let e=null, n=0;
+      for(let i=0;i<25;i++){ const r=erreurAEnvoyer(e,signatureErreur('err '+String.fromCharCode(97+i),'','x','1938'),'2026-10-08'); e=r.etat; if(r.envoyer) n++; }
+      if(n!==20) return _echec('plafond : '+n);
+      if(erreurAEnvoyer({jour:'2026-10-08',n:1,vus:[a.h],file:[]},a,'2026-10-08').envoyer) return _echec('doublon envoyé');
+      return erreurAEnvoyer(e,a,'2026-10-09').envoyer?true:_echec('pas de remise à zéro');});
+    okA('1938 — un catch muet devient un signalement : POST /erreur, sans adresse',async()=>{
+      const sv=localStorage.getItem(ERREUR_ENVOI_CLE), _f=window.fetch, envois=[];
+      try{
+        localStorage.removeItem(ERREUR_ENVOI_CLE);
+        window._rcErreurForcer=true;
+        window.fetch=(u,o)=>{ envois.push({u:String(u),o}); return Promise.resolve({ok:true,status:204}); };
+        rcErreurMuette('test1938',new Error('panne de test pour lea@exemple.fr'));
+        const e=JSON.parse(localStorage.getItem(ERREUR_ENVOI_CLE)||'{}');
+        if(!e.file||e.file.length!==1) return _echec('file : '+JSON.stringify(e));
+        const n=await viderErreurs();
+        if(n!==1||envois.length!==1) return _echec('envoi : '+n+'/'+envois.length);
+        if(!/\/erreur$/.test(envois[0].u)||envois[0].o.method!=='POST') return _echec('route : '+envois[0].u);
+        if(/lea@/.test(envois[0].o.body)) return _echec('adresse envoyée');
+        if(JSON.parse(envois[0].o.body).ou!=='test1938') return _echec('endroit');
+        return (JSON.parse(localStorage.getItem(ERREUR_ENVOI_CLE)).file||[]).length===0?true:_echec('file non vidée');
+      }finally{ window.fetch=_f; window._rcErreurForcer=false; if(sv==null) localStorage.removeItem(ERREUR_ENVOI_CLE); else localStorage.setItem(ERREUR_ENVOI_CLE,sv); }});
+    ok('1938 — santé de l’app : nouvelles, en hausse, quota 70 / 90 %, écran créateur',()=>{
+      const E=(n)=>({n,m:'x',ou:'js',s:'',dernier:1});
+      const l=santeAppResume({'2026-10-06':{1937:{a:E(2)}},'2026-10-07':{1937:{a:E(6),c:E(1)}},'2026-10-08':{1938:{d:E(1)}}},'2026-10-07');
+      const by=h=>l.find(x=>x.h===h);
+      if(!by('c').nouvelle||by('a').nouvelle||!by('a').doublee) return _echec('drapeaux : '+JSON.stringify(l));
+      const q=quotaMois({'2026-10-01':{oct_out_ko:9.2e6},'2026-09-30':{oct_out_ko:5e6}},'2026-10');
+      if(q.pct!==92||q.seuil!==90) return _echec('quota : '+JSON.stringify(q));
+      const h=htmlSanteApp(l,q);
+      if(!/92 %/.test(h)||!/nouvelle/.test(h)||!/en hausse/.test(h)) return _echec('rendu');
+      if(!document.getElementById('s-sante-app')||!document.getElementById('ch-lien-sante')) return _echec('écran ou entrée absents');
+      return /ch-lien-sante[\s\S]{0,120}isCreator/.test(String(loadMonetisationTab))?true:_echec('entrée non réservée au créateur');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

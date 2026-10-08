@@ -1670,6 +1670,8 @@ function loadMonetisationTab(){
   // pas de lien du tout.
   const _lienAcces=document.getElementById('ch-lien-acces');
   if(_lienAcces) _lienAcces.style.display=isCreator?'block':'none';
+  const _lienSante=document.getElementById('ch-lien-sante');
+  if(_lienSante) _lienSante.style.display=isCreator?'block':'none';
   const adminSection=document.getElementById('coach-admin-offboard');
   const adminSel=document.getElementById('admin-offboard-select');
   if(adminSection&&adminSel){

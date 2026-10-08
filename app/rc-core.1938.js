@@ -10213,6 +10213,60 @@ let _rcErreurs=(function(){ try{ const l=JSON.parse(localStorage.getItem(ERREURS
 function noterErreurJS(msg,src){
   _rcErreurs=ajouterErreurTampon(_rcErreurs,{le:Date.now(),m:_nettoyerTexteDiag(msg),s:_nettoyerTexteDiag(src,true)});
   try{ localStorage.setItem(ERREURS_CLE,JSON.stringify(_rcErreurs)); }catch(e){}
+  try{ signalerErreur(msg,src,'js'); }catch(e){}
+}
+// ══ SÉRIE 6, LOT 14 — LE CAPTEUR D'ERREURS ═════════════════════════════════
+// Chaque erreur devient une SIGNATURE (message nettoyé, endroit, build,
+// empreinte) envoyée au Worker (POST /erreur), au plus 20 par jour et une
+// fois par empreinte et par jour. Jamais le dossier, jamais une adresse.
+// En développement local et en visite, rien ne part.
+const ERREUR_ENVOI_JOUR_MAX=20, ERREUR_ENVOI_CLE='rc_erreurs_envoi';
+// PURE. L'empreinte : djb2 en base 36.
+function empreinteErreur(t){ let h=5381; const s=String(t||''); for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return h.toString(36); }
+// PURE. La signature d'une erreur.
+function signatureErreur(msg,src,ou,build){
+  const m=_nettoyerTexteDiag(msg), s=_nettoyerTexteDiag(String(src||'').replace(/\?[^:\s]*/,''),true).slice(0,120), o=_nettoyerTexteDiag(ou,true).slice(0,40);
+  const b=String(build||(typeof window!=='undefined'&&window.RC_BUILD)||'0');
+  return {m,s,ou:o,b,h:empreinteErreur(m+'|'+s.replace(/:\d+(:\d+)?$/,'')+'|'+o)};
+}
+// PURE. L'état de la file après une erreur : {etat, envoyer}.
+function erreurAEnvoyer(etat,sig,jour){
+  const e=(etat&&etat.jour===jour)?{jour,n:Number(etat.n)||0,vus:(Array.isArray(etat.vus)?etat.vus:[]).slice(),file:(Array.isArray(etat.file)?etat.file:[]).slice()}:{jour,n:0,vus:[],file:[]};
+  if(!sig||!sig.m||e.vus.indexOf(sig.h)>=0||e.n>=ERREUR_ENVOI_JOUR_MAX) return {etat:e,envoyer:false};
+  e.n++; e.vus.push(sig.h); e.file.push(sig);
+  return {etat:e,envoyer:true};
+}
+function _erreurEtat(){ try{ return JSON.parse(localStorage.getItem(ERREUR_ENVOI_CLE)||'null'); }catch(e){ return null; } }
+let _erreurVidage=null, _erreurDansEnvoi=false;
+function signalerErreur(msg,src,ou){
+  if(_erreurDansEnvoi) return false;
+  const sig=signatureErreur(msg,src,ou);
+  const r=erreurAEnvoyer(_erreurEtat(),sig,localISODate(new Date()));
+  if(!r.envoyer) return false;
+  try{ localStorage.setItem(ERREUR_ENVOI_CLE,JSON.stringify(r.etat)); }catch(e){}
+  clearTimeout(_erreurVidage); _erreurVidage=setTimeout(()=>{ viderErreurs().catch(()=>{}); },4000);
+  return true;
+}
+function _erreursEnvoiPermis(){
+  if(typeof window!=='undefined'&&window._rcErreurForcer) return true;
+  if(typeof RC_VISITE!=='undefined'&&RC_VISITE) return false;
+  const h=location.hostname; return !(h==='localhost'||h==='127.0.0.1'||h===''||h.startsWith('192.168.'));
+}
+// Envoie la file ; ce qui part est retiré, le reste attend le prochain passage.
+async function viderErreurs(){
+  const e=_erreurEtat(); if(!e||!Array.isArray(e.file)||!e.file.length) return 0;
+  if(!_erreursEnvoiPermis()) return 0;
+  let n=0; const reste=[];
+  _erreurDansEnvoi=true;
+  try{
+    for(const sig of e.file){
+      try{ const r=await fetch(SERVEUR_LEGER_URL+'/erreur',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(sig),keepalive:true});
+        if(r&&(r.ok||r.status===400||r.status===429)) n++; else reste.push(sig); }catch(err){ reste.push(sig); }
+    }
+  }finally{ _erreurDansEnvoi=false; }
+  const e2=_erreurEtat()||e; e2.file=reste.concat((e2.file||[]).filter(x=>e.file.every(y=>y.h!==x.h)));
+  try{ localStorage.setItem(ERREUR_ENVOI_CLE,JSON.stringify(e2)); }catch(err){}
+  return n;
 }
 try{
   if(typeof window!=='undefined'){
@@ -12009,6 +12063,57 @@ function arcChiffre(el,de,vers,o){
   return el;
 }
 
+
+// ── La santé de l'app (créateur) : sept jours d'erreurs, et le quota ────────
+const QUOTA_MOIS_KO=10e6, QUOTA_SEUILS=Object.freeze([70,90]);
+// PURE. Les erreurs de plusieurs jours → une ligne par build et empreinte.
+//   parJour : {AAAA-MM-JJ: {build: {empreinte: {n,m,s,ou,premier,dernier}}}}
+function santeAppResume(parJour,hier){
+  const lignes=new Map(), jours=Object.keys(parJour||{}).sort();
+  for(const j of jours){
+    const pb=parJour[j]||{};
+    for(const b of Object.keys(pb)) for(const h of Object.keys(pb[b]||{})){
+      const e=pb[b][h]||{}, k=b+'/'+h;
+      const l=lignes.get(k)||{b,h,m:e.m||'',s:e.s||'',ou:e.ou||'',n:0,nHier:0,nAvant:0,premierJour:j,dernier:0};
+      l.n+=Number(e.n)||0;
+      if(j===hier) l.nHier+=Number(e.n)||0; else if(j<hier) l.nAvant+=Number(e.n)||0;
+      l.dernier=Math.max(l.dernier,Number(e.dernier)||0);
+      lignes.set(k,l);
+    }
+  }
+  return [...lignes.values()].map(l=>Object.assign(l,{nouvelle:l.premierJour>=hier,doublee:l.nAvant>0&&l.nHier>=2*l.nAvant/Math.max(1,jours.filter(j=>j<hier).length)}))
+    .sort((a,b)=>b.n-a.n||b.dernier-a.dernier);
+}
+// PURE. Le quota de téléchargement du mois (metrics oct_out_ko, en Ko).
+function quotaMois(metricsParJour,mois){
+  let ko=0;
+  for(const j of Object.keys(metricsParJour||{})) if(j.indexOf(mois)===0) ko+=Number((metricsParJour[j]||{}).oct_out_ko)||0;
+  const pct=Math.round(ko/QUOTA_MOIS_KO*1000)/10;
+  return {ko,pct,seuil:QUOTA_SEUILS.filter(s=>pct>=s).pop()||0};
+}
+function htmlSanteApp(lignes,quota){
+  const E=escapeHtml;
+  const q=quota?'<div class="card sa-q'+(quota.seuil?' sa-q'+quota.seuil:'')+'"><div class="t-carte">Quota de la base, ce mois</div>'
+    +'<div class="sa-q-v">'+String(quota.pct).replace('.',',')+' %</div><div class="sub">'+Math.round(quota.ko/1000).toLocaleString('fr-FR')+' Mo téléchargés sur 10 Go'+(quota.seuil?' · au-delà de '+quota.seuil+' %':'')+'</div></div>':'';
+  if(!lignes.length) return q+emptyState('','Aucune erreur signalée sur sept jours.',null,null,'padding:16px 8px');
+  return q+'<div class="t-section">Erreurs, sept jours</div>'+lignes.slice(0,60).map(l=>'<div class="sa-l'+(l.nouvelle?' sa-neuve':'')+(l.doublee?' sa-double':'')+'">'
+    +'<div class="sa-l-h"><b>'+E(l.m)+'</b><span>'+l.n+'</span></div>'
+    +'<div class="sub">build '+E(l.b)+(l.ou?' · '+E(l.ou):'')+(l.s?' · '+E(l.s):'')+(l.nouvelle?' · nouvelle':'')+(l.doublee?' · en hausse':'')+'</div></div>').join('');
+}
+async function ouvrirSanteApp(){
+  go('s-sante-app');
+  const z=document.getElementById('sa-corps'); if(!z) return false;
+  z.innerHTML=etatChargement(3);
+  const t=Date.now(), jours=[...Array(7)].map((_,i)=>localISODate(new Date(t-i*864e5)));
+  const mois=jours[0].slice(0,7), jm=[...Array(Number(jours[0].slice(8)))].map((_,i)=>mois+'-'+String(i+1).padStart(2,'0'));
+  const [er,me]=await Promise.all([Promise.all(jours.map(j=>_fbJson('erreurs/'+j))),Promise.all(jm.map(j=>_fbJson('metrics/'+j)))]);
+  if(er.some(r=>!r.ok&&(r.st===401||r.st===403))){ z.innerHTML=emptyState('','Réservé au compte créateur.',null,null,'padding:16px 8px'); return false; }
+  const parJour={}, mj={};
+  jours.forEach((j,i)=>{ if(er[i].ok&&er[i].v) parJour[j]=er[i].v; });
+  jm.forEach((j,i)=>{ if(me[i].ok&&me[i].v) mj[j]=me[i].v; });
+  z.innerHTML=htmlSanteApp(santeAppResume(parJour,jours[1]),quotaMois(mj,mois));
+  return true;
+}
 // ══ LA FOUDRE — rcFoudre(cible, options) ═══════════════════════════════════
 //
 // L'événement rare. Un record en séance aujourd'hui ; demain un badge (idée
@@ -136672,6 +136777,8 @@ function rcErreurMuette(ou,e){
     if(l.length>RC_ERREURS_MAX) l.splice(0,l.length-RC_ERREURS_MAX);
   }catch(_){}
   try{ console.warn('[RepCore]',ou,e); }catch(_){}
+  // Série 6 (lot 14) : un catch qui se taisait devient un signalement.
+  try{ signalerErreur((e&&e.message)||e,(e&&e.stack&&String(e.stack).split('\n')[1])||'',ou); }catch(_){}
 }
 // UNE SAISIE DE L'UTILISATEUR, et il doit savoir quand elle n'est pas gardée.
 // `perdu` nomme ce qui est perdu, au masculin : « Ton entraînement », « Ton
@@ -141912,6 +142019,8 @@ function loadMonetisationTab(){
   // pas de lien du tout.
   const _lienAcces=document.getElementById('ch-lien-acces');
   if(_lienAcces) _lienAcces.style.display=isCreator?'block':'none';
+  const _lienSante=document.getElementById('ch-lien-sante');
+  if(_lienSante) _lienSante.style.display=isCreator?'block':'none';
   const adminSection=document.getElementById('coach-admin-offboard');
   const adminSel=document.getElementById('admin-offboard-select');
   if(adminSection&&adminSel){
