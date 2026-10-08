@@ -3975,6 +3975,15 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
         </div>
       </details>
+      <!-- LOT TC1 : LES TESTS DE COMPATIBILITÉ. Quatre mouvements filmés, lus
+           sur l'appareil ; le verdict détaillé va au coach. -->
+      <button type="button" class="card tc-entree" onclick="ouvrirTestsCompat()">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Tests de compatibilité</span>
+          <span class="tc-entree-d">Squat, développé, traction, soulevé : filme-les, ton coach adapte les variantes</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
       <!-- INVITER DES AMIS (parrainage) : pose par _rendreEntreeParrainage. -->
       <div id="atp-parrainage"></div>
       <!-- MA PAGE PUBLIQUE (/@pseudo) et le lien de la bio : _rendrePagePublique. -->
@@ -5301,6 +5310,18 @@ const COACH_PHOTO='icons/coach.jpg';
      l'est du leur : un complement se conseille, un medicament ne se conseille
      pas. Les deux ecrans se ressemblent ; ce qu'ils portent ne se ressemble
      pas. -->
+<!-- LOT TC1 : les quatre tests filmés. Les cartes sont rendues par
+     renderTestsCompat (htmlTestsCompat), le résultat aussi. -->
+<div id="s-tests-compat" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="retourDe('s-tests-compat','s-athlete-profile')">←</button><span class="topbar-title">Tests de compatibilité</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin:0 0 14px">Filme chaque mouvement en suivant la consigne. La vidéo est lue sur ton téléphone et n’est pas envoyée : seule la mesure part chez ton coach, qui choisit avec toi s’il faut une variante. Ce n’est pas un examen médical.</p>
+      <div id="tc-cartes"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-traitements" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-traitements','s-supplements')">←</button>

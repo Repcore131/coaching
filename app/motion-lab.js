@@ -10022,7 +10022,11 @@ function _mlChargerPose(){
  * @returns {Promise<{ok:true, images:number, vw:number, vh:number}|{ok:false, code:string}>}
  */
 async function _mlExtrairePose(url,debutMs,finMs,pasMs,surImage,arreter){
-  const adresse=safeUrlRaw(url);
+  // ⚠ UNE ADRESSE blob: EST ACCEPTÉE, ET ELLE SEULE EN PLUS DE https. C'est
+  // celle que la page fabrique elle-même avec URL.createObjectURL pour une
+  // vidéo que l'athlète vient de filmer (tests de compatibilité, lot TC1) :
+  // elle ne sort pas de l'appareil et ne désigne rien d'autre que ce fichier.
+  const adresse=/^blob:/.test(String(url||''))?String(url):safeUrlRaw(url);
   if(adresse==='#') return {ok:false,code:'chargement'};
   const ancien=_mlEl('ml-pose-src'); if(ancien) ancien.remove();
   const v=document.createElement('video');
@@ -13048,4 +13052,307 @@ function mlExporterComparaison(){
   try{ cv.toBlob((bl)=>{ if(!bl) return; const u=URL.createObjectURL(bl), a=document.createElement('a'); a.href=u; a.download='repcore-comparaison.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),4000); },'image/png'); }catch(e){ return false; }
   toast('Image de la comparaison téléchargée : joins-la à ta correction.','var(--green)');
   return true;
+}
+
+// ══ LOT TC1 — TESTS DE COMPATIBILITÉ : LA MESURE ════════════════════════════
+//
+// Quatre mouvements filmés par l'athlète lui-même — squat, développé couché,
+// traction, soulevé de terre — et, pour chacun, UNE grandeur mesurée par
+// répétition. Ce bloc ne juge rien : il mesure, répétition par répétition, et
+// dit ce qu'il n'a pas vu. Le verdict (couleur, variante) vit dans rc-core,
+// avec TESTS_COMPAT et verdictCompat : la fiche du coach le relit sans
+// charger ce fichier.
+//
+// ⚠ TOUT EST REPRIS DES LOTS 4 ET 13, RIEN N'EST REFAIT. Les angles viennent
+//   de mlAnglesPose (même seuil de visibilité, ML_POSE_VIS_MIN), le côté filmé
+//   de mlCotePose, l'aplomb de mlHorizon/mlRedresser, l'extraction des images
+//   de _mlExtrairePose et le moteur de _mlChargerPose.
+// ⚠ LA TÊTE EN PLUS, ET SEULEMENT ICI. ML_POSE_IDX ne garde pas la tête : le
+//   lot 4 n'en a pas besoin. La traction, si : « le menton avance » et « les
+//   épaules montent » se lisent sur le nez et l'oreille. Les quatorze premiers
+//   points restent rangés EXACTEMENT comme ML_POSE_IDX, si bien que
+//   mlAnglesPose et mlRangPose s'appliquent tels quels.
+// ⚠ UNE RÉPÉTITION SE COMPTE ALLER ET RETOUR. Une descente qui ne remonte pas
+//   (la dernière d'une vidéo coupée trop tôt) n'est pas une répétition.
+
+/** Les points lus pour un test : ceux du lot 4, puis nez, oreille G, oreille D. */
+const ML_COMPAT_IDX=Object.freeze(ML_POSE_IDX.concat([0,7,8]));
+/** Rang des points de tête dans ML_COMPAT_IDX. */
+const ML_COMPAT_TETE=Object.freeze({nez:14,oreilleG:15,oreilleD:16});
+/** Au-delà, l'athlète a filmé autre chose qu'une série : on refuse plutôt que d'échantillonner trop large. */
+const ML_COMPAT_DUREE_MAX_MS=45000;
+/** Le nombre d'images analysées au plus, sur toute la vidéo. */
+const ML_COMPAT_IMAGES=300;
+// LES DEUX SEUILS DE COMPENSATION À LA TRACTION. ⚠ SEUILS DE TRAVAIL, à
+// valider sur les vidéos réelles du coach : aucune source chiffrée ne les
+// donne. Ils sont donc LARGES — mieux vaut laisser passer une compensation
+// discrète que de rayer une répétition propre.
+//   — épaules : la distance oreille-épaule au sommet tombe sous 75 % de la
+//     plus grande vue pendant la même répétition ;
+//   — menton : le nez avance, par rapport à l'épaule, de plus de 15 % de la
+//     longueur du membre supérieur entre le bas et le sommet.
+const ML_COMPAT_EPAULES_RATIO=0.75;
+const ML_COMPAT_MENTON=0.15;
+
+/**
+ * @typedef {{tMs:number, X:number[], Y:number[], V:number[]}} EchCompat
+ * @typedef {{valeur:number|null, vis:number, comp:string[], compVue:boolean,
+ *   aux:number|null, tMs:number}} RepCompat
+ * @typedef {{cle:string, cote:string, visibilite:number|null, reps:RepCompat[],
+ *   images:number}} MesuresCompat
+ */
+
+/**
+ * PURE. Médiane d'une liste, null si elle est vide.
+ * @param {number[]} l
+ * @returns {number|null}
+ */
+function _mlMedianeCompat(l){
+  const t=l.filter(x=>isFinite(x)).sort((a,b)=>a-b), n=t.length;
+  if(!n) return null;
+  return n%2?t[(n-1)/2]:(t[n/2-1]+t[n/2])/2;
+}
+/**
+ * PURE. Le quantile q (entre 0 et 1) d'une liste, null si elle est vide.
+ * @param {number[]} l @param {number} q
+ * @returns {number|null}
+ */
+function _mlQuantileCompat(l,q){
+  const t=l.filter(x=>isFinite(x)).sort((a,b)=>a-b), n=t.length;
+  if(!n) return null;
+  return t[Math.min(n-1,Math.max(0,Math.round(q*(n-1))))];
+}
+
+/**
+ * PURE. Les répétitions d'un signal : les indices de ses MAXIMA, chacun
+ * encadré d'une descente et d'une remontée d'au moins `ampMin`. Les trous
+ * (null) sont sautés, jamais comblés.
+ *
+ * Le signal est une ordonnée d'image : il GRANDIT VERS LE BAS. Un maximum est
+ * donc un point bas — le fond du squat, la barre sur la poitrine, la barre au
+ * sol avant le tirage.
+ *
+ * ⚠ ON PART EN « CHERCHE LE BAS ». Une vidéo de soulevé commence barre au
+ *   sol : son premier départ est un maximum dès la première image, et il ne
+ *   serait jamais compté si l'on attendait d'abord une descente.
+ * @param {(number|null)[]} v
+ * @param {number} ampMin  en pixels
+ * @returns {number[]}
+ */
+function mlRepsCompat(v,ampMin){
+  /** @type {number[]} */
+  const out=[];
+  if(!Array.isArray(v)||!(ampMin>0)) return out;
+  let bas=true, maxV=-Infinity, iMax=-1, minV=Infinity;
+  for(let i=0;i<v.length;i++){
+    const x=v[i];
+    if(x==null||!isFinite(x)) continue;
+    if(bas){
+      if(x>maxV){ maxV=x; iMax=i; }
+      else if(x<=maxV-ampMin){ out.push(iMax); bas=false; minV=x; }
+    } else {
+      if(x<minV) minV=x;
+      else if(x>=minV+ampMin){ bas=true; maxV=x; iMax=i; }
+    }
+  }
+  return out;
+}
+
+/**
+ * PURE. Ce qu'on mesure, répétition par répétition, pour un test.
+ *
+ *   squat      inclinaison du tronc sur la verticale au point bas (hanche au
+ *              plus bas), en degrés : l'angle « tronc » de mlAnglesPose.
+ *   developpe  profondeur du coude sous la ligne des épaules au point bas
+ *              (barre au plus bas), rapportée à la longueur du bras ; positif
+ *              quand le coude passe sous l'épaule. `aux` : inclinaison de
+ *              l'avant-bras sur la verticale au même instant.
+ *   traction   au sommet (épaule au plus haut) : l'écart vertical restant
+ *              entre l'épaule et le poignet, rapporté à la longueur du membre
+ *              supérieur — 0 quand l'épaule arrive à hauteur des mains.
+ *              `comp` : les compensations vues ('epaules', 'menton').
+ *              `aux` : l'angle du coude au sommet.
+ *   souleve    angle de hanche (épaule-hanche-genou) au départ de chaque
+ *              tirage, barre au plus bas.
+ *
+ * Les longueurs de référence (cuisse, bras, membre) sont prises sur la vidéo
+ * elle-même, en pixels : seuls des RAPPORTS en sortent — la règle du lot 13.
+ *
+ * @param {string} cle  'squat' | 'developpe' | 'traction' | 'souleve'
+ * @param {EchCompat[]} ech  positions EN PIXELS, dix-sept points (ML_COMPAT_IDX)
+ * @param {{cote?:string, theta?:number}} [opts]
+ * @returns {MesuresCompat}
+ */
+function mlMesuresCompat(cle,ech,opts){
+  const o=opts||{};
+  const l0=Array.isArray(ech)?ech.filter(e=>e&&Array.isArray(e.X)&&Array.isArray(e.Y)&&Array.isArray(e.V)):[];
+  const cote=(o.cote==='G'||o.cote==='D')?o.cote:mlCotePose(l0);
+  const th=Number(o.theta)||0;
+  // L'APLOMB : les mesures se font dans le repère du monde, comme au lot 4.
+  const l=th?l0.map(e=>{ const r=mlRedresser(e.X,e.Y,th); return {tMs:e.tMs,X:r.X,Y:r.Y,V:e.V}; }):l0;
+  /** @type {MesuresCompat} */
+  const out={cle:String(cle||''),cote,visibilite:null,reps:[],images:l.length};
+  const besoins=/** @type {Object<string,string[]>} */({
+    squat:['epaule','hanche','genou'],
+    developpe:['epaule','coude','poignet'],
+    traction:['epaule','coude','poignet'],
+    souleve:['epaule','hanche','genou','poignet']})[out.cle];
+  if(!besoins||!l.length) return out;
+  /** @param {string} nom */
+  const rg=nom=>mlRangPose(nom,cote);
+  /** @param {number} k @param {number} r */
+  const vu=(k,r)=>r>=0&&isFinite(l[k].X[r])&&isFinite(l[k].Y[r])&&l[k].V[r]>=ML_POSE_VIS_MIN;
+  /** @param {number} k @param {number} r */
+  const visDe=(k,r)=>(r>=0&&isFinite(Number(l[k].V[r])))?Number(l[k].V[r]):0;
+  /** @param {number} k @param {string[]} noms */
+  const visMin=(k,noms)=>Math.min(...noms.map(n=>visDe(k,rg(n))));
+  /** @param {number} k @param {number} a @param {number} b */
+  const dist=(k,a,b)=>(vu(k,a)&&vu(k,b))?Math.hypot(l[k].X[a]-l[k].X[b],l[k].Y[a]-l[k].Y[b]):NaN;
+  /** @param {number} a @param {number} b */
+  const longueurs=(a,b)=>l.map((_,k)=>dist(k,a,b)).filter(x=>isFinite(x)&&x>1);
+  // LA VISIBILITÉ DU TEST : moyenne, sur toute la vidéo, du point le moins vu
+  // parmi ceux que le test exige. Un seul point caché suffit à fausser l'angle.
+  out.visibilite=Math.round(l.reduce((s,_,k)=>s+visMin(k,besoins),0)/l.length*100)/100;
+  /** @param {number} r */
+  const serieY=r=>l.map((_,k)=>vu(k,r)?l[k].Y[r]:null);
+  /** @param {number|null} x */
+  const r1=x=>x==null||!isFinite(x)?null:Math.round(x*10)/10;
+  /** @param {number|null} x */
+  const r2=x=>x==null||!isFinite(x)?null:Math.round(x*100)/100;
+  /** @param {number} k */
+  const angles=k=>mlAnglesPose(l[k].X,l[k].Y,l[k].V,cote);
+
+  if(out.cle==='squat'){
+    const cuisse=_mlMedianeCompat(longueurs(rg('hanche'),rg('genou')));
+    if(cuisse==null) return out;
+    for(const k of mlRepsCompat(serieY(rg('hanche')),0.25*cuisse)){
+      out.reps.push({valeur:r1(angles(k).tronc),vis:r2(visMin(k,['epaule','hanche']))||0,
+        comp:[],compVue:true,aux:null,tMs:Math.round(l[k].tMs)});
+    }
+    return out;
+  }
+  if(out.cle==='souleve'){
+    const tronc=_mlMedianeCompat(longueurs(rg('epaule'),rg('hanche')));
+    if(tronc==null) return out;
+    for(const k of mlRepsCompat(serieY(rg('poignet')),0.25*tronc)){
+      out.reps.push({valeur:r1(angles(k).hanche),vis:r2(visMin(k,['epaule','hanche','genou']))||0,
+        comp:[],compVue:true,aux:null,tMs:Math.round(l[k].tMs)});
+    }
+    return out;
+  }
+  if(out.cle==='developpe'){
+    // LE BRAS LE MOINS RACCOURCI : vu des pieds, il ne l'est qu'en haut, bras
+    // tendus. Le neuvième décile écarte une image où le modèle s'est trompé.
+    const bras=_mlQuantileCompat(longueurs(rg('epaule'),rg('coude')),0.9);
+    const avb=_mlMedianeCompat(longueurs(rg('coude'),rg('poignet')));
+    if(bras==null||avb==null) return out;
+    const re=rg('epaule'), rc=rg('coude');
+    for(const k of mlRepsCompat(serieY(rg('poignet')),0.3*avb)){
+      const prof=(vu(k,re)&&vu(k,rc))?(l[k].Y[rc]-l[k].Y[re])/bras:null;
+      out.reps.push({valeur:r2(prof),vis:r2(visMin(k,besoins))||0,
+        comp:[],compVue:true,aux:r1(angles(k).avantBras),tMs:Math.round(l[k].tMs)});
+    }
+    return out;
+  }
+  // TRACTION : le sommet est l'épaule au PLUS HAUT, donc l'ordonnée au plus
+  // petit — on retourne le signal pour que mlRepsCompat y lise des maxima.
+  const re=rg('epaule'), rp=rg('poignet');
+  const membre=_mlQuantileCompat(longueurs(re,rp),0.9);
+  if(membre==null) return out;
+  const yEp=serieY(re).map(y=>y==null?null:-y);
+  const nez=ML_COMPAT_TETE.nez, or=cote==='D'?ML_COMPAT_TETE.oreilleD:ML_COMPAT_TETE.oreilleG;
+  let debut=0;
+  for(const k of mlRepsCompat(yEp,0.3*membre)){
+    const valeur=(vu(k,re)&&vu(k,rp))?(l[k].Y[re]-l[k].Y[rp])/membre:null;
+    // LE BAS DE CETTE RÉPÉTITION : l'épaule au plus bas depuis le sommet
+    // précédent. C'est la référence des deux compensations.
+    let kb=-1, yb=-Infinity, dMax=-Infinity;
+    for(let j=debut;j<=k;j++){
+      if(vu(j,re)&&l[j].Y[re]>yb){ yb=l[j].Y[re]; kb=j; }
+      if(vu(j,re)&&vu(j,or)) dMax=Math.max(dMax,l[j].Y[re]-l[j].Y[or]);
+    }
+    debut=k;
+    /** @type {string[]} */
+    const comp=[];
+    const teteVue=kb>=0&&vu(k,or)&&vu(k,nez)&&vu(kb,or)&&vu(kb,nez)&&vu(kb,re)&&dMax>1;
+    if(teteVue){
+      if((l[k].Y[re]-l[k].Y[or])<ML_COMPAT_EPAULES_RATIO*dMax) comp.push('epaules');
+      // LE SENS DU REGARD se lit au bas : le nez est devant l'oreille.
+      const sens=Math.sign(l[kb].X[nez]-l[kb].X[or])||1;
+      const avance=((l[k].X[nez]-l[k].X[re])-(l[kb].X[nez]-l[kb].X[re]))*sens/membre;
+      if(avance>ML_COMPAT_MENTON) comp.push('menton');
+    }
+    out.reps.push({valeur:r2(valeur),vis:r2(visMin(k,besoins))||0,comp,compVue:!!teteVue,
+      aux:r1(angles(k).coude),tMs:Math.round(l[k].tMs)});
+  }
+  return out;
+}
+
+/**
+ * La durée d'une vidéo, en millisecondes, lue sur ses métadonnées seules.
+ * @param {string} url
+ * @returns {Promise<number|null>}
+ */
+function _mlDureeVideo(url){
+  return new Promise(res=>{
+    const v=document.createElement('video');
+    v.muted=true; v.preload='metadata';
+    const fin=(/** @type {number|null} */ d)=>{ clearTimeout(g); try{ v.removeAttribute('src'); v.load(); }catch(e){} res(d); };
+    const g=setTimeout(()=>fin(null),15000);
+    v.addEventListener('loadedmetadata',()=>{ const d=Number(v.duration); fin(isFinite(d)&&d>0?d*1000:null); },{once:true});
+    v.addEventListener('error',()=>fin(null),{once:true});
+    v.src=url;
+  });
+}
+
+/**
+ * Lit une vidéo filmée par l'athlète pour un test de compatibilité, et rend
+ * les mesures. N'ÉCRIT RIEN : l'appelant juge (verdictCompat) et enregistre.
+ * @param {Blob} fichier  la vidéo, telle que l'appareil l'a donnée
+ * @param {string} cle
+ * @param {{progres?:(n:number,total:number)=>void}} [opts]
+ * @returns {Promise<{ok:true, mesures:MesuresCompat}|{ok:false, code:string}>}
+ */
+async function mlTestCompatVideo(fichier,cle,opts){
+  const o=opts||{};
+  if(!fichier||typeof (/** @type {any} */(fichier)).size!=='number') return {ok:false,code:'fichier'};
+  let moteur=null;
+  try{ moteur=await _mlChargerPose(); }catch(e){ return {ok:false,code:'moteur'}; }
+  if(!moteur) return {ok:false,code:'moteur'};
+  const url=URL.createObjectURL(fichier);
+  try{
+    const duree=await _mlDureeVideo(url);
+    if(duree==null) return {ok:false,code:'chargement'};
+    if(duree>ML_COMPAT_DUREE_MAX_MS) return {ok:false,code:'longue'};
+    /** @type {any} */
+    let dernier=null;
+    moteur.onResults((/** @type {any} */ r)=>{ dernier=r; });
+    const pas=Math.max(1000/ML_POSE_HZ,duree/(ML_COMPAT_IMAGES-1));
+    const total=Math.max(1,Math.floor(duree/pas)+1);
+    /** @type {EchCompat[]} */
+    const ech=[];
+    const r=await _mlExtrairePose(url,0,Math.max(0,duree-1),pas,async im=>{
+      dernier=null;
+      try{ await moteur.send({image:im.toile}); }catch(e){ return 'moteur'; }
+      const L=dernier&&dernier.poseLandmarks;
+      const X=[], Y=[], V=[];
+      for(const idx of ML_COMPAT_IDX){
+        const q=L&&L[idx];
+        X.push(q?q.x*im.vw:NaN);
+        Y.push(q?q.y*im.vh:NaN);
+        V.push(q?Math.max(0,Math.min(1,Number(q.visibility)||0)):0);
+      }
+      ech.push({tMs:im.tMs,X,Y,V});
+      try{ if(o.progres) o.progres(ech.length,total); }catch(e){}
+      return ech.length<ML_COMPAT_IMAGES;
+    },()=>false);
+    if(r.ok===false) return {ok:false,code:r.code};
+    if(ech.length<2||!ech.some(e=>e.V.some(x=>x>=ML_POSE_VIS_MIN))) return {ok:false,code:'personne'};
+    // L'APLOMB n'a de sens que debout : au développé couché, les hanches sont
+    // à plat sur le banc et mlHorizon rendrait la posture, pas l'appareil.
+    const hz=(cle==='squat'||cle==='souleve')?mlHorizon(ech):null;
+    return {ok:true,mesures:mlMesuresCompat(cle,ech,{theta:hz?hz.theta:0})};
+  } finally {
+    try{ URL.revokeObjectURL(url); }catch(e){}
+  }
 }

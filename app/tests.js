@@ -73549,6 +73549,177 @@ async function testExercices(){
         // Rien de morpho du tout : pas de cadre.
         return htmlRevueMorpho({lignes:[],bloques:[],profilsSortis:false})===''?true:_echec('un cadre vide');})());
 
+      // ══ LOT TC1 — TESTS DE COMPATIBILITÉ : seuils, refus, enregistrement ══
+      {
+        const _tcR=(vals,o)=>({visibilite:(o&&o.vis!=null)?o.vis:0.9,
+          reps:vals.map(v=>(v&&typeof v==='object')?Object.assign({vis:0.9,comp:[],compVue:true,aux:null},v)
+            :{valeur:v,vis:0.9,comp:[],compVue:true,aux:null})});
+        ok('TC1 — TESTS_COMPAT : quatre entrées gelées, chacune avec ses champs',(()=>{
+          if(!Object.isFrozen(TESTS_COMPAT)||TESTS_COMPAT.length!==4) return _echec('liste : '+TESTS_COMPAT.length);
+          if(TESTS_COMPAT.map(t=>t.cle).join()!=='squat,developpe,traction,souleve') return _echec('clés');
+          for(const t of TESTS_COMPAT){
+            for(const k of ['cle','lib','schemaVise','vue','consigneFilmage','mesure','seuils','variantes'])
+              if(!(k in t)) return _echec(t.cle+' sans '+k);
+            if(!Object.isFrozen(t)||!Object.isFrozen(t.seuils)||!Object.isFrozen(t.variantes)) return _echec(t.cle+' non gelé');
+            if(t.vue!=='profil'&&t.vue!=='face') return _echec(t.cle+' vue '+t.vue);
+            if(!SCHEMA_LIB[t.schemaVise]) return _echec(t.cle+' schéma inconnu '+t.schemaVise);
+            // Une variante qui est un exercice doit exister au catalogue : sinon
+            // le remplacement poserait un nom sans muscles ni schéma.
+            for(const x of t.variantes) if(x.nom&&!schemaDe({name:x.nom})) return _echec('variante hors catalogue : '+x.nom);
+          }
+          return true;})());
+        ok('TC1 — squat : seuils EXACTS, 45,0° vert, 45,1° orange, 55,0° orange, 55,1° rouge',(()=>{
+          const c=v=>verdictCompat('squat',_tcR([v,v])).couleur;
+          const got=[c(45.0),c(45.1),c(55.0),c(55.1),c(12)].join();
+          if(got!=='vert,orange,orange,rouge,vert') return _echec(got);
+          const o=verdictCompat('squat',_tcR([45.1,45.1,46]));
+          if(o.valeur!==45.1||o.n!==3) return _echec('valeur '+o.valeur+' n '+o.n);
+          const noms=o.variantes.map(x=>x.nom).join();
+          if(!/SQUAT BARRE DEVANT/.test(noms)||!/HACKSQUAT/.test(noms)||!/SQUAT AU BELT SQUAT/.test(noms)||!/PRESSE A CUISSE/.test(noms))
+            return _echec('variantes : '+noms);
+          if(!o.variantes.some(x=>x.nom===null&&/talons/i.test(x.lib))) return _echec('talons surélevés absents');
+          if(verdictCompat('squat',_tcR([40,41])).variantes.length) return _echec('un vert propose des variantes');
+          return true;})());
+        ok('TC1 — visibilité sous 0,5 : couleur inconnue, raison dite, rien d’enregistré',(()=>{
+          const v=verdictCompat('squat',_tcR([40,41,42],{vis:0.49}));
+          if(v.couleur!=='inconnu'||v.valeur!==null||v.variantes.length||v.confiance!==0) return _echec(JSON.stringify(v));
+          if(!/visibilit/i.test(v.raison)) return _echec('raison : '+v.raison);
+          if(entreeTestCompat(v)!==null) return _echec('un inconnu s’enregistre');
+          const sans=verdictCompat('squat',{reps:[{valeur:40,vis:1},{valeur:41,vis:1}]});
+          if(sans.couleur!=='inconnu') return _echec('visibilité absente acceptée');
+          // Une répétition mal vue est écartée, même si la vidéo l'est bien.
+          const une=verdictCompat('squat',_tcR([{valeur:40},{valeur:41,vis:0.3}]));
+          return une.couleur==='inconnu'||_echec('rép. mal vue comptée : '+JSON.stringify(une));})());
+        ok('TC1 — une seule répétition : inconnu, jamais un verdict inventé',(()=>{
+          const v=verdictCompat('squat',_tcR([40]));
+          if(v.couleur!=='inconnu'||!/Une seule répétition/.test(v.raison)) return _echec(v.raison);
+          const z=verdictCompat('souleve',_tcR([]));
+          if(z.couleur!=='inconnu'||!/Aucune répétition/.test(z.raison)) return _echec(z.raison);
+          return verdictCompat('inexistant',_tcR([40,40])).couleur==='inconnu'||_echec('test inconnu jugé');})());
+        ok('TC1 — valeurs aberrantes : écartées en le disant, et elles ne font pas un verdict',(()=>{
+          const v=verdictCompat('squat',_tcR([45,200,-5]));
+          if(v.couleur!=='inconnu'||!/aberrante/.test(v.raison)) return _echec(v.raison);
+          const w=verdictCompat('squat',_tcR([40,42,300,NaN]));
+          if(w.couleur!=='vert'||w.n!==2||w.valeur!==41) return _echec(JSON.stringify(w));
+          if(!/Écartées/.test(w.raison)) return _echec('l’écart n’est pas dit : '+w.raison);
+          if(!(w.confiance<MORPHO_CONF.test)) return _echec('deux répétitions, confiance pleine');
+          // Des répétitions qui divergent baissent la confiance et le disent.
+          const d=verdictCompat('squat',_tcR([20,44,44]));
+          return (d.confiance<MORPHO_CONF.test&&/divergent/.test(d.raison))||_echec(JSON.stringify(d));})());
+        ok('TC1 — traction : jamais rouge, les répétitions compensées sont écartées',(()=>{
+          const v=verdictCompat('traction',_tcR([{valeur:0.3,comp:['epaules']},{valeur:0.32},{valeur:0.31}]));
+          if(v.couleur!=='vert'||v.n!==2||v.variantes.length) return _echec(JSON.stringify(v));
+          if(!/compensation/.test(v.raison)||/échec/i.test(v.phrase)) return _echec(v.raison+' | '+v.phrase);
+          const loin=verdictCompat('traction',_tcR([0.9,0.95,0.92]));
+          if(loin.couleur!=='vert') return _echec('amplitude faible jugée : '+loin.couleur);
+          const tout=verdictCompat('traction',_tcR([{valeur:0.3,comp:['menton']},{valeur:0.3,comp:['epaules']}]));
+          return (tout.couleur==='inconnu'&&/compensation/.test(tout.raison))||_echec(JSON.stringify(tout));})());
+        ok('TC1 — développé : coude très bas → décliné/convergente, coude haut → incliné',(()=>{
+          const bas=verdictCompat('developpe',_tcR([0.6,0.62]));
+          if(bas.couleur!=='orange'||bas.cas!=='coude-bas') return _echec(JSON.stringify(bas));
+          if(!bas.variantes.some(x=>x.nom==='DEVELOPPE DECLINE BARRE')||!bas.variantes.some(x=>/parallèle/.test(x.lib))) return _echec('variantes bas');
+          const haut=verdictCompat('developpe',_tcR([0.1,0.12]));
+          if(haut.cas!=='coude-haut'||!haut.variantes.every(x=>/INCLINE/.test(x.nom))) return _echec(JSON.stringify(haut.variantes));
+          if(verdictCompat('developpe',_tcR([0.5,0.5])).couleur!=='vert') return _echec('0,5 doit rester vert');
+          const av=verdictCompat('developpe',_tcR([{valeur:0.35,aux:30},{valeur:0.35,aux:30}]));
+          return (av.couleur==='vert'&&av.aux===30&&av.confiance<MORPHO_CONF.test&&/prise/.test(av.raison))||_echec(JSON.stringify(av));})());
+        ok('TC1 — soulevé : hanche peu fléchie → RDL, jambes tendues, hip thrust',(()=>{
+          const c=v=>verdictCompat('souleve',_tcR([v,v])).couleur;
+          if([c(100),c(100.1),c(115),c(115.1)].join()!=='vert,orange,orange,rouge') return _echec([c(100),c(100.1),c(115),c(115.1)].join());
+          const v=verdictCompat('souleve',_tcR([118,120]));
+          const l=v.variantes.map(x=>x.lib).join(' | ');
+          return (/roumain/i.test(l)&&/jambes tendues/i.test(l)&&/hip thrust/i.test(l))||_echec(l);})());
+        ok('TC1 — l’enregistrement porte la source « test », et nourrit l’axe A8',(()=>{
+          const now=Date.UTC(2026,9,8);
+          const v=verdictCompat('squat',_tcR([52.3,52.3,53]));
+          const e=entreeTestCompat(v,now);
+          if(!e||e.date!==now||e.valeur!==52.3||e.couleur!=='orange'||e.n!==3||e.source!=='test') return _echec(JSON.stringify(e));
+          if(Object.keys(e).sort().join()!=='couleur,date,n,source,valeur') return _echec('champs : '+Object.keys(e));
+          const u={id:'tc',bilans:[],morpho:{tests:{squat:e,traction:{date:now,valeur:'x',couleur:'vert',n:2,source:'test'}}}};
+          const l=testsCompatDe(u);
+          if(!l.squat||l.traction) return _echec('relecture : '+JSON.stringify(l));
+          const a8=morphoAxes(u,{maintenant:now+864e5}).find(a=>a.cle==='A8');
+          if(!a8||a8.source!=='test'||a8.confiance!==MORPHO_CONF.test) return _echec('A8 : '+JSON.stringify(a8));
+          if(!a8.facettes||!a8.facettes.squat||a8.facettes.squat.position!=='haut'||!/Squat filmé : 52,3°/.test(a8.texte)) return _echec('facette : '+JSON.stringify(a8.facettes));
+          if(a8.position!==null) return _echec('la position de l’axe a bougé : '+a8.position);
+          const vide=morphoAxes({id:'tv',bilans:[]},{maintenant:now}).find(a=>a.cle==='A8');
+          if(vide.texte!=='Aucun test d’amplitude articulaire relevé.') return _echec('A8 vide : '+vide.texte);
+          const vieux=morphoAxes(u,{maintenant:now+100*864e5}).find(a=>a.cle==='A8');
+          return vieux.perime===true||_echec('test de plus de 90 jours non périmé');})());
+        ok('TC1 — remplacer : seuls les exercices visés, le programme d’entrée intact',(()=>{
+          const prog=[{name:'Jambes',exercises:[{name:'SQUAT',series:4,reps:'6'},{name:'PRESSE A CUISSE INCLINE',series:3,reps:'10'}]},
+            {name:'Repos',active:false,exercises:[{name:'SQUAT'}]}];
+          const avant=JSON.stringify(prog);
+          const c=exercicesConcernesCompat(prog,'squat');
+          if(c.length!==1||c[0].nom!=='SQUAT'||c[0].seance!=='Jambes') return _echec(JSON.stringify(c));
+          const r=remplacerExerciceCompat(prog,'squat','HACKSQUAT');
+          if(JSON.stringify(prog)!==avant) return _echec('entrée mutée');
+          const ex=r.programme[0].exercises;
+          if(ex[0].name!=='HACKSQUAT'||ex[0].series!==4||ex[0].reps!=='6'||ex[1].name!=='PRESSE A CUISSE INCLINE') return _echec(JSON.stringify(ex));
+          if(r.programme[1].exercises[0].name!=='SQUAT') return _echec('une séance inactive touchée');
+          return remplacerExerciceCompat(prog,'squat','').remplaces.length===0||_echec('nom vide accepté');})());
+        ok('TC1 — écran athlète : quatre cartes, une caméra, aucun chiffre ni mot sur le squelette',(()=>{
+          const u={id:'tc',morpho:{tests:{squat:{date:Date.now(),valeur:52.3,couleur:'orange',n:3,source:'test'}}}};
+          const h=htmlTestsCompat(u,{traction:'Analyse : image 3 sur 80…'});
+          const d=document.createElement('div'); d.innerHTML=h;
+          if(d.querySelectorAll('.tc-carte').length!==4) return _echec('cartes');
+          if(d.querySelectorAll('input[type=file][accept="video/*"]').length!==4) return _echec('boutons filmer');
+          const t=d.textContent;
+          if(/52,3|52\.3|°|fémur|femur|squelette|levier/i.test(t)) return _echec('un chiffre ou un mot morpho côté athlète : '+t);
+          if(t.indexOf(phraseCompat('squat','orange'))<0) return _echec('la phrase n’est pas là');
+          if(!d.querySelector('#tc-traction input[disabled]')) return _echec('une analyse en cours laisse refilmer');
+          if(/guéri|douleur|soign|corrig/i.test(TESTS_COMPAT.map(x=>x.consigneFilmage.join(' ')).join(' ')+['vert','orange','rouge','inconnu'].map(c=>phraseCompat('squat',c)).join(' ')))
+            return _echec('une promesse médicale');
+          return (/id="s-tests-compat"/.test(_prodSrc())&&/ouvrirTestsCompat\(\)/.test(_prodSrc()))||_echec('écran ou entrée absents');})());
+        ok('TC1 — fiche coach : valeur brute, raisonnement, et un bouton seulement s’il y a quoi remplacer',(()=>{
+          const now=Date.now();
+          const c={id:'c<1>',sessions_config:[{name:'A',exercises:[{name:'SQUAT'}]}],
+            morpho:{tests:{squat:{date:now,valeur:52.3,couleur:'orange',n:3,source:'test'},
+              traction:{date:now,valeur:0.31,couleur:'vert',n:4,source:'test',aux:52}}}};
+          const h=htmlCompatCoach(c,now);
+          const d=document.createElement('div'); d.innerHTML=h;
+          const t=d.textContent;
+          if(!/52,3°/.test(t)||!/Repères/.test(t)||!/0,31 × membre/.test(t)) return _echec(t);
+          const b=d.querySelectorAll('button');
+          if(b.length!==4) return _echec(b.length+' boutons (4 variantes-exercices attendues)');
+          if(b[0].dataset.cid!=='c<1>'||b[0].dataset.cle!=='squat'||b[0].getAttribute('onclick')!=='accepterVarianteCompat(this)') return _echec('bouton : '+b[0].outerHTML);
+          if(/<1>/.test(h)) return _echec('id brut dans le HTML');
+          const sans=htmlCompatCoach(Object.assign({},c,{sessions_config:[]}),now);
+          if(/<button/.test(sans)||!/rien à remplacer/.test(sans)) return _echec('bouton sans exercice concerné');
+          return htmlCompatCoach({id:'x'},now)===''||_echec('cadre vide');})());
+        ok('TC1 — règles : le nœud morpho/tests est nommé et fermé',(()=>{
+          const r=String(window._RC_RULES||'');
+          if(!r) return _echec('règles non lues');
+          return (/"morpho"\s*:/.test(r)&&/squat\|developpe\|traction\|souleve/.test(r)&&/=== 'test'/.test(r))||_echec('règle absente');})());
+      }
+      okA('TC1 — MOTION LAB : un squat de profil filmé, trois répétitions, le tronc lu au point bas',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        if(typeof mlMesuresCompat!=='function'||typeof mlRepsCompat!=='function') return _echec('fonctions absentes');
+        // Le signal : deux allers-retours complets, une descente sans remontée.
+        const sig=[0,5,10,5,0,6,12,6,1,9];
+        if(mlRepsCompat(sig,4).join()!=='2,6') return _echec('reps : '+mlRepsCompat(sig,4).join());
+        if(mlRepsCompat([9,5,0,8,9,3,0],4).join()!=='0,4') return _echec('départ au plus bas : '+mlRepsCompat([9,5,0,8,9,3,0],4).join());
+        const rad=Math.PI/180, img=(p,vis)=>{
+          const ch={x:500,y:1000}, ge={x:ch.x+400*Math.sin(30*p*rad),y:ch.y-400*Math.cos(30*p*rad)};
+          const ha={x:ge.x-420*Math.sin(90*p*rad),y:ge.y-420*Math.cos(90*p*rad)};
+          const ep={x:ha.x+500*Math.sin(40*p*rad),y:ha.y-500*Math.cos(40*p*rad)};
+          const pts=[ep,ep,{x:ep.x+40,y:ep.y+150},{x:ep.x+40,y:ep.y+150},{x:ep.x+60,y:ep.y+280},{x:ep.x+60,y:ep.y+280},
+            ha,ha,ge,ge,ch,ch,{x:650,y:1000},{x:650,y:1000},{x:ep.x+20,y:ep.y-120},{x:ep.x,y:ep.y-110},{x:ep.x,y:ep.y-110}];
+          return {X:pts.map(q=>q.x),Y:pts.map(q=>q.y),V:pts.map(()=>vis)};
+        };
+        const ech=[]; let t=0;
+        for(let r=0;r<3;r++) for(let i=0;i<=20;i++){ const p=i<=10?i/10:(20-i)/10; ech.push(Object.assign({tMs:t},img(p,0.95))); t+=80; }
+        const m=mlMesuresCompat('squat',ech,{cote:'G'});
+        if(m.reps.length!==3) return _echec(m.reps.length+' répétitions');
+        if(m.reps.some(r=>Math.abs(r.valeur-40)>0.6)) return _echec('tronc : '+m.reps.map(r=>r.valeur).join());
+        const v=verdictCompat('squat',m);
+        if(v.couleur!=='vert'||v.n!==3) return _echec(JSON.stringify(v));
+        // La même vidéo mal vue : aucun verdict.
+        const mal=mlMesuresCompat('squat',ech.map(e=>Object.assign({},e,{V:e.V.map(()=>0.3)})),{cote:'G'});
+        if(!(mal.visibilite<0.5)||verdictCompat('squat',mal).couleur!=='inconnu') return _echec('vidéo mal vue jugée : '+mal.visibilite);
+        if(mlMesuresCompat('inconnu',ech).reps.length) return _echec('un test inconnu mesuré');
+        return true;
+      });
       ok('M5 — la prise se donne en INTERVALLE, et pas sans la mesure qu’elle multiplie',(()=>{
         // Bras longs : entrejambe court pour que A1 ne sorte pas, bras long
         // pour que A3 sorte.
@@ -76360,22 +76531,28 @@ async function testExercices(){
           if(!b||b.source===null) return _echec('aucune proposition');
           // Le cycle glucidique décale ON et OFF autour du total : leur moyenne
           // reste la dépense, aux arrondis près.
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('Critère : en maintien, le total vaut la dépense',(()=>{
           const b=besoinsProposes(_ath(62,'maintien'));
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('En recomposition aussi, le delta est nul',(()=>{
           const b=besoinsProposes(_ath(62,'recomp'));
-          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
-          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+
           const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
