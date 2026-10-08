@@ -16365,3 +16365,21 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .plx-pf{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;
   padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
 .plx-pf span{flex:1 1 200px;min-width:0}
+
+/* ══ LOT PO1 — L'ORDONNANCE DE PLATEAU (carte coach) ══════════════════════
+   Sous l'en-tête « Ce qui bloque » : le type, la consigne en une phrase, le
+   pourquoi, puis Mettre en place / Ignorer. Le verdict de réévaluation en
+   vert (efficace), en gris (sans effet ou non mesurable) — jamais en rouge :
+   une ordonnance sans effet n'est pas une faute. */
+.po-carte{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--info);border-radius:var(--r-2);
+  padding:10px 12px;margin:0 0 12px}
+.po-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--info)}
+.po-p{font-size:var(--fs-sm);color:var(--text);line-height:1.5;margin-top:4px}
+.po-s{font-size:var(--fs-2xs);color:var(--sub);line-height:1.5;margin-top:4px}
+.po-opt{margin-top:8px}
+.po-modes{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.po-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.po-actions .btn{flex:1 1 140px}
+.po-verdict{font-size:var(--fs-sm);font-weight:800;margin-top:8px}
+.po-efficace{color:var(--green)}
+.po-sans_effet,.po-indetermine{color:var(--sub)}

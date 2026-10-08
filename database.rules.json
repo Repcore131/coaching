@@ -241,6 +241,38 @@
           "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 50" },
           "$autre": { ".validate": false }
         },
+        // LOT PO1 — L ORDONNANCE DE PLATEAU, posee par le coach : son type,
+        // son etat, ses dates (mise en place, reprise, reevaluation), les
+        // mesures d avant (pour la reevaluation) et le journal des changements.
+        "ordonnancePlateau": {
+          ".validate": "newData.hasChildren(['type', 'statut', 'date'])",
+          "type": { ".validate": "newData.isString() && newData.val().matches(/^(faux|vrai|fatigue)$/)" },
+          "statut": { ".validate": "newData.isString() && newData.val().matches(/^(active|ignoree|terminee)$/)" },
+          "etape": { ".validate": "newData.isString() && newData.val().matches(/^(debut|reprise|fin)$/)" },
+          "date": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "reevaluation": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "repriseDate": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "fin": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "exercice": { ".validate": "newData.isString() && newData.val().length <= 120" },
+          "repriseKg": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" },
+          "repriseRef": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+          "verdict": { ".validate": "newData.isString() && newData.val().matches(/^(efficace|sans_effet|indetermine)$/)" },
+          "options": {
+            "repos": { ".validate": "newData.isBoolean()" },
+            "mode": { ".validate": "newData.isString() && newData.val().matches(/^(series|charge)$/)" },
+            "$autre": { ".validate": false }
+          },
+          "mesuresAvant": {
+            "$i": {
+              "nom": { ".validate": "newData.isString() && newData.val().length <= 120" },
+              "e1rm": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+              "reps": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 200" },
+              "$autre": { ".validate": false }
+            }
+          },
+          "journal": { "$i": { ".validate": "newData.isString() && newData.val().length <= 300" } },
+          "$autre": { ".validate": false }
+        },
         // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
         // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
         // ferait rejeter l ecriture du dossier entier.

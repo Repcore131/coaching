@@ -7047,7 +7047,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // LOT PF1 — LE PLAN POINT FAIBLE appliqué : une date, deux muscles, un
   // nombre d'opérations. Aucune mesure du corps n'y est recopiée : l'effet se
   // recalcule au rite depuis les séances et les bilans.
-  'planPointFaible',
+  'planPointFaible','ordonnancePlateau',
   // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
   // articulation, deux angles, un repère, posés par le coach. Une consigne
   // d'exécution, comme le réglage du coach — pas une mesure du corps.
@@ -17169,6 +17169,471 @@ function _htmlSuiviPointFaible(c,maintenant){
       :'Volume hebdomadaire : '+n(e.volume.avant)+' → '+n(e.volume.apres)+' séries')+'</div>'
     +'<div class="rvm-r">'+(e.e1rm?E(e.e1rm.nom)+' : '+e.e1rm.avant+' → '+e.e1rm.apres+' kg (1RM estimé)':'1RM estimé : pas assez de séances de part et d’autre du plan')+'</div>'
     +'<div class="rvm-r">'+(e.mensuration?'Mensuration : '+n(e.mensuration.avant)+' → '+n(e.mensuration.apres)+' cm'+(e.mensuration.apres==null?' (pas encore de bilan depuis le plan)':''):'Pas de mensuration qui suive ce muscle')+'</div></div>';
+}
+
+// ══ LOT PO1 — L'ORDONNANCE DE PLATEAU ═══════════════════════════════════
+//
+// La détection de plateau (musclesEnPlateau, plateauxParGroupe) DIT ce qui
+// bloque ; ce lot PROPOSE quoi faire, et mesure ensuite si ça a marché.
+//
+//   diagnosticPlateau(historique)  → 'aucun' | 'faux' | 'vrai' | 'fatigue'
+//   ORDONNANCES                    → ce qu'on prescrit pour chaque type
+//   appliquerOrdonnance(prog, o)   → nouveau programme + journal (PURE)
+//   evaluerOrdonnance(o, hist)     → « efficace » / « sans effet »
+//
+// ⚠ RIEN N'EST APPLIQUÉ SANS LE COACH. La carte propose ; « Mettre en place »
+//   écrit ; « Ignorer » met la proposition en sommeil. Le passage à la reprise
+//   et la clôture sont, eux aussi, des gestes du coach : aucune modification
+//   du programme ne tombe toute seule à une date.
+// ⚠ UNE SEULE ORDONNANCE À LA FOIS. Tant qu'une ordonnance est en cours, la
+//   carte suit celle-là et n'en propose pas d'autre — deux remèdes en même
+//   temps rendraient la réévaluation illisible.
+// ⚠ « HISTORIQUE » EST UNE ENTRÉE PURE : historiquePlateau(c) la construit
+//   depuis le dossier, les tests la fabriquent à la main.
+// ⚠ AUCUNE VALEUR INVENTÉE : un ratio de charge non mesurable (moins de
+//   trois semaines, notes de séance manquantes) n'est pas « normal », il est
+//   ABSENT, et la fatigue n'est alors pas diagnostiquée — la carte le dit.
+
+// LES SEUILS. Chacun dit ce qu'il mesure.
+const PO_FAUX_JOURS=14;        // faux plateau : un exercice sans progrès depuis 2 semaines au moins
+const PO_VRAI_JOURS=21;        // vrai plateau : sans progrès depuis 3 semaines au moins…
+const PO_VRAI_PART=0.70;       // …sur 70 % des exercices évalués au moins
+const PO_EX_MIN=2;             // sous deux exercices évalués, « les autres » n'existent pas
+const PO_SEANCES_MIN=3;        // trois séances d'un exercice, au moins, pour le juger…
+const PO_SUIVI_MIN_JOURS=14;   // …étalées sur deux semaines au moins
+const PO_FENETRE_JOURS=56;     // on lit les huit dernières semaines
+// LA FATIGUE : le ratio aigu/chronique au-dessus du seuil DÉJÀ défendu par
+// sautDeCharge (CHARGE_RATIO_SEUIL) — pas un second seuil voisin —, ET un RIR
+// réel plus bas que le prescrit d'au moins une répétition, en moyenne, sur
+// les séries des deux dernières semaines qui portent les deux.
+const PO_RIR_ECART=1;
+const PO_RIR_N_MIN=6;          // six séries comparables au moins, sinon on ne dit rien
+const PO_RIR_JOURS=14;
+// LA REPRISE APRÈS LE VRAI PLATEAU : 2,5 % de l'e1RM, bornés à 2 et 5 kg,
+// au demi-kilo. 80 kg d'e1RM → 2 kg ; 120 → 3 kg ; 200 et plus → 5 kg.
+const PO_DECOTE_PART=0.025, PO_DECOTE_MIN=2, PO_DECOTE_MAX=5;
+const PO_IGNORER_JOURS=14;     // une proposition ignorée se tait deux semaines
+const ORDONNANCES=Object.freeze({
+  faux:Object.freeze({titre:'Faux plateau',consigne:'Patience, rien à changer.',
+    phrase:'Un seul exercice cale, les autres avancent : patience, rien à changer.',reevaluerJours:14}),
+  vrai:Object.freeze({titre:'Vrai plateau',consigne:'Exercice principal en fin de séance, puis reprise allégée.',
+    phrase:'L’exercice principal passe en fin de séance trois semaines, puis reprend à sa place, 2 à 5 kg sous son niveau.',
+    finSeanceJours:21,repriseJours:7,decoteKg:Object.freeze([PO_DECOTE_MIN,PO_DECOTE_MAX]),
+    // « +30 s par palier » : un palier = une étape de l'ordonnance (la fin
+    // de séance, puis la reprise) ; rendu à la clôture.
+    repos:Object.freeze({secondes:30,ancienneteMinAns:3}),reevaluerJours:35}),
+  fatigue:Object.freeze({titre:'Fatigue',consigne:'Une semaine de décharge.',
+    phrase:'Une semaine de décharge : séries −40 % OU charge −15 %.',
+    // −40 % de séries = le facteur de décharge déjà en usage (60 % du volume).
+    series:Math.round((1-DECHARGE_FACTEUR_SERIES)*100)/100,charge:0.15,jours:7,
+    niveaux:Object.freeze(['intermediaire','avance']),reevaluerJours:14})
+});
+
+/**
+ * PURE. Où en est un exercice : la date de son dernier progrès — e1RM
+ * battu, ou plus de répétitions à une charge au moins égale à la plus haute
+ * déjà faite. La première séance sert de point de départ.
+ * @param {{date:number,e1rm?:number|null,reps?:number|null,charge?:number|null}[]} seances
+ * @param {number} maintenant
+ * @returns {{n:number,suivi:number,joursSansProgres:number,e1rm:number|null,reps:number|null,charge:number|null}|null}
+ */
+function _poProgresExercice(seances,maintenant){
+  const l=(seances||[]).filter(s=>s&&Number(s.date)>0).slice().sort((a,b)=>a.date-b.date);
+  if(l.length<PO_SEANCES_MIN) return null;
+  const suivi=Math.round((l[l.length-1].date-l[0].date)/864e5);
+  if(suivi<PO_SUIVI_MIN_JOURS) return null;
+  let maxE=-Infinity, chMax=-Infinity, repsMax=-Infinity, dernier=l[0].date;
+  for(const s of l){
+    const e=Number(s.e1rm), c=Number(s.charge), r=Number(s.reps);
+    let mieux=false;
+    if(isFinite(e)&&e>0){ if(e>maxE&&maxE>-Infinity) mieux=true; if(e>maxE) maxE=e; }
+    if(isFinite(c)&&c>0&&isFinite(r)&&r>0){
+      if(c>chMax){ chMax=c; repsMax=r; }
+      else if(c===chMax){ if(r>repsMax){ if(repsMax>-Infinity) mieux=true; repsMax=r; } }
+    }
+    if(mieux) dernier=s.date;
+  }
+  const fin=l[l.length-1];
+  return {n:l.length,suivi,joursSansProgres:Math.max(0,Math.floor((Number(maintenant)-dernier)/864e5)),
+    e1rm:maxE>0?Math.round(maxE*10)/10:null,reps:repsMax>0?repsMax:null,charge:Number(fin.charge)>0?Number(fin.charge):(chMax>0?chMax:null)};
+}
+/**
+ * PURE. LE DIAGNOSTIC.
+ * @param {{maintenant:number, exercices:{nom:string,seances:any[]}[], ratioCharge?:number|null,
+ *   rir?:{prescrit:number,reel:number,n:number}|null}} historique
+ * @returns {{type:string, evalues:any[], stagnants:any[], part:number|null, fatigue:{ratio:number|null,ecartRir:number|null,mesuree:boolean,haute:boolean}, raison:string}}
+ */
+function diagnosticPlateau(historique){
+  const h=historique||{maintenant:Date.now(),exercices:[]};
+  const now=Number(h.maintenant)||Date.now();
+  const evalues=[];
+  for(const x of (h.exercices||[])){
+    const p=_poProgresExercice(x&&x.seances,now);
+    if(p) evalues.push(Object.assign({nom:String(x.nom)},p));
+  }
+  const s2=evalues.filter(x=>x.joursSansProgres>=PO_FAUX_JOURS);
+  const s3=evalues.filter(x=>x.joursSansProgres>=PO_VRAI_JOURS);
+  const ratio=(h.ratioCharge!=null&&isFinite(Number(h.ratioCharge)))?Number(h.ratioCharge):null;
+  const rir=h.rir&&Number(h.rir.n)>=PO_RIR_N_MIN?h.rir:null;
+  const ecartRir=rir?Math.round((Number(rir.prescrit)-Number(rir.reel))*10)/10:null;
+  const mesuree=ratio!=null&&ecartRir!=null;
+  const haute=mesuree&&ratio>CHARGE_RATIO_SEUIL&&ecartRir>=PO_RIR_ECART;
+  const fatigue={ratio,ecartRir,mesuree,haute};
+  const part=evalues.length?Math.round(s3.length/evalues.length*100)/100:null;
+  const base={evalues,part,fatigue};
+  // ⚠ LA FATIGUE EST UN TYPE DE PLATEAU : elle suppose qu'au moins un
+  //   exercice cale. Une charge haute sur un athlète qui progresse partout
+  //   n'appelle pas d'ordonnance de plateau.
+  if(haute&&s2.length) return Object.assign(base,{type:'fatigue',stagnants:s2,
+    raison:'Charge aiguë/chronique à '+String(ratio).replace('.',',')+' et RIR réel plus bas que prévu de '+String(ecartRir).replace('.',',')+' en moyenne.'});
+  if(evalues.length>=PO_EX_MIN&&s3.length&&s3.length/evalues.length>=PO_VRAI_PART) return Object.assign(base,{type:'vrai',stagnants:s3,
+    raison:s3.length+' exercices sur '+evalues.length+' sans progrès depuis 3 semaines ou plus.'});
+  if(evalues.length>=PO_EX_MIN&&s2.length===1) return Object.assign(base,{type:'faux',stagnants:s2,
+    raison:s2[0].nom+' cale depuis '+s2[0].joursSansProgres+' jours ; les '+(evalues.length-1)+' autres avancent.'});
+  return Object.assign(base,{type:'aucun',stagnants:s2,
+    raison:evalues.length<PO_EX_MIN?'Pas assez d’exercices suivis assez longtemps pour juger.':(s2.length?'Plusieurs exercices ralentissent, sans plateau franc.':'Ça avance.')});
+}
+/** PURE. Le type seul. @param {any} historique @returns {string} */
+function typePlateau(historique){ return diagnosticPlateau(historique).type; }
+/** PURE. La décote de reprise en kg, d'après l'e1RM ; null sans e1RM. @param {number|null} e1rmKg @returns {number|null} */
+function decoteRepriseKg(e1rmKg){
+  const e=Number(e1rmKg);
+  if(!isFinite(e)||!(e>0)) return null;
+  return Math.min(PO_DECOTE_MAX,Math.max(PO_DECOTE_MIN,Math.round(e*PO_DECOTE_PART*2)/2));
+}
+/** PURE. Les années de pratique d'après c.level ; null si inconnues. @param {any} c @returns {number|null} */
+function ancienneteAns(c){
+  const l=String((c&&c.level)||'');
+  if(/débutant|debutant/i.test(l)) return 0;
+  if(/intermédiaire|intermediaire/i.test(l)) return 1;
+  if(/avancé|avance/i.test(l)) return 3;
+  return null;
+}
+/** PURE. Rang et créneaux d'un exercice dans le programme actif. */
+function _poPlaces(programme,nom){
+  const k=exKey(nom), out=[];
+  (Array.isArray(programme)?programme:[]).forEach((s,i)=>{
+    if(!s||s.active!==true||!Array.isArray(s.exercises)) return;
+    s.exercises.forEach((e,r)=>{ if(e&&exKey(e.name||'')===k) out.push({slot:i,rang:r}); });
+  });
+  return out;
+}
+/**
+ * PURE. L'ORDONNANCE PROPOSÉE pour un diagnostic.
+ * @param {any} diag  diagnosticPlateau
+ * @param {{niveau?:string, anciennete?:number|null, programme?:any[], active?:any, ignoree?:any, maintenant?:number}} ctx
+ */
+function ordonnancePourDiagnostic(diag,ctx){
+  const x=ctx||{}, now=Number(x.maintenant)||Date.now();
+  if(!diag||!ORDONNANCES[diag.type]) return null;
+  if(x.active&&x.active.statut==='active') return {type:diag.type,possible:false,raison:'Une ordonnance est déjà en cours : on la laisse agir avant d’en proposer une autre.'};
+  if(x.ignoree&&x.ignoree.statut==='ignoree'&&x.ignoree.type===diag.type&&now-Number(x.ignoree.date)<PO_IGNORER_JOURS*864e5) return null;
+  const O=ORDONNANCES[diag.type];
+  const o={type:diag.type,titre:O.titre,phrase:O.phrase,raison:diag.raison,possible:true,reevaluerJours:O.reevaluerJours,
+    mesuresAvant:diag.stagnants.map(s=>({nom:s.nom,e1rm:s.e1rm,reps:s.reps}))};
+  if(diag.type==='faux'){ o.exercice=diag.stagnants[0].nom; o.explication=O.phrase; return o; }
+  if(diag.type==='fatigue'){
+    if(O.niveaux.indexOf(x.niveau||'')<0) return Object.assign(o,{possible:false,
+      raison:'Décharge réservée aux intermédiaires et avancés : chez un débutant, c’est à toi de juger (sommeil, récupération, vie).'});
+    o.mesuresAvant=diag.evalues.map(s=>({nom:s.nom,e1rm:s.e1rm,reps:s.reps}));
+    o.explication=diag.raison+' Une semaine plus légère, puis on mesure.';
+    return o;
+  }
+  // VRAI : l'exercice principal — le premier en séance parmi ceux qui calent,
+  // puis le plus lourd.
+  const cand=diag.stagnants.map(s=>{ const p=_poPlaces(x.programme,s.nom); return {s,p,rang:p.length?Math.min(...p.map(z=>z.rang)):Infinity}; })
+    .filter(z=>z.p.length).sort((a,b)=>(a.rang-b.rang)||((b.s.e1rm||0)-(a.s.e1rm||0)));
+  if(!cand.length) return Object.assign(o,{possible:false,raison:'Les exercices qui calent ne sont plus au programme.'});
+  const p=cand[0].s;
+  o.exercice=p.nom; o.mesuresAvant=[{nom:p.nom,e1rm:p.e1rm,reps:p.reps}];
+  o.repriseKg=decoteRepriseKg(p.e1rm); o.repriseRef=p.charge;
+  const anc=x.anciennete;
+  o.repos=anc==null?{possible:false,raison:'ancienneté inconnue'}:(anc>=O.repos.ancienneteMinAns?{possible:true}:{possible:false,raison:'moins de 3 ans de pratique'});
+  o.explication=p.nom+' en fin de séance trois semaines, puis à sa place'+(o.repriseKg?' à '+String(o.repriseKg).replace('.',',')+' kg sous sa dernière charge':'')+'.';
+  return o;
+}
+
+/** PURE. Le repos décalé de `sec` secondes, rendu dans le format du produit. */
+function _poRepos(str,sec){
+  const v=parseRepos(str); if(v==null) return null;
+  const t=Math.max(0,Math.round(v+sec)), m=Math.floor(t/60), s=t%60;
+  return m?(m+' min'+(s?' '+String(s).padStart(2,'0'):'')):(s+' s');
+}
+/**
+ * PURE, NE MUTE PAS SON ENTRÉE. Applique une étape d'ordonnance.
+ * @param {any[]} programme
+ * @param {{type:string, etape?:string, exercice?:string, date?:number, options?:{repos?:boolean,mode?:string},
+ *   repriseKg?:number|null, repriseRef?:number|null}} ordonnance  etape : 'debut' (défaut) | 'reprise' | 'fin'
+ * @returns {{programme:any[], journal:string[]}}
+ */
+function appliquerOrdonnance(programme,ordonnance){
+  const P=(Array.isArray(programme)?programme:[]).map(s=>(s&&typeof s==='object')?Object.assign({},s,{
+    exercises:(Array.isArray(s.exercises)?s.exercises:[]).map(e=>(e&&typeof e==='object')?Object.assign({},e,e.ordo?{ordo:Object.assign({},e.ordo)}:{}):e)}):s);
+  const o=ordonnance||{type:''}, j=[], et=o.etape||'debut', t=Number(o.date)||Date.now(), opt=o.options||{};
+  const O=ORDONNANCES[o.type];
+  if(!O) return {programme:P,journal:['Ordonnance inconnue : rien n’est changé.']};
+  const jour=i=>String((P[i]&&P[i].day)||('créneau '+(i+1))).toLowerCase();
+  const actifs=P.map((s,i)=>({s,i})).filter(z=>z.s&&z.s.active===true&&Array.isArray(z.s.exercises));
+  if(et==='fin'){
+    for(const {s,i} of actifs){
+      let rendu=false;
+      s.exercises.forEach(e=>{ if(!e||!e.ordo) return;
+        if(e.ordo.seriesAvant!=null){ e.series=e.ordo.seriesAvant; rendu=true; }
+        if(e.ordo.reposAvant!=null){ e.repos=e.ordo.reposAvant; rendu=true; }
+        if(e.ordo.type==='vrai'&&e.ordo.etape==='fin_seance'&&e.ordo.rang!=null){
+          const k=s.exercises.indexOf(e); s.exercises.splice(k,1); s.exercises.splice(Math.min(e.ordo.rang,s.exercises.length),0,e); rendu=true; }
+        delete e.ordo; rendu=true; });
+      if(s.ordoDeload){ delete s.deload; delete s.ordoDeload; rendu=true; }
+      if(rendu) j.push('Le '+jour(i)+' : programme rétabli.');
+    }
+    if(!j.length) j.push('Rien à rétablir.');
+    return {programme:P,journal:j};
+  }
+  if(o.type==='faux') return {programme:P,journal:['Aucun changement : patience, on réévalue dans '+O.reevaluerJours+' jours.']};
+  if(o.type==='fatigue'){
+    const mode=opt.mode==='charge'?'charge':'series', jusqua=t+O.jours*864e5;
+    for(const {s,i} of actifs){
+      if(!s.exercises.length) continue;
+      s.exercises.forEach(e=>{ if(!e||typeof e!=='object') return;
+        if(mode==='series'){ const n=parseInt(e.series,10); if(n>0){ const v=Math.max(1,Math.round(n*(1-O.series)));
+          e.ordo={type:'fatigue',mode,seriesAvant:e.ordo&&e.ordo.seriesAvant!=null?e.ordo.seriesAvant:n,jusqua}; e.series=v; } }
+        else e.ordo={type:'fatigue',mode,facteur:Math.round((1-O.charge)*100)/100,jusqua}; });
+      if(!s.deload){ s.deload=true; s.ordoDeload=true; }
+      j.push('Le '+jour(i)+' : semaine de décharge, '+(mode==='series'?'séries −'+Math.round(O.series*100)+' %':'charge −'+Math.round(O.charge*100)+' %')+'.');
+    }
+    return {programme:P,journal:j.length?j:['Aucune séance active : rien à décharger.']};
+  }
+  // VRAI.
+  const k=exKey(o.exercice||'');
+  for(const {s,i} of actifs){
+    const idx=s.exercises.findIndex(e=>e&&exKey(e.name||'')===k);
+    if(idx<0) continue;
+    const e=s.exercises[idx];
+    if(et==='debut'){
+      if(e.ordo&&e.ordo.type==='vrai') continue;   // déjà en place : idempotent
+      e.ordo={type:'vrai',etape:'fin_seance',rang:idx,depuis:t,jusqua:t+O.finSeanceJours*864e5};
+      s.exercises.splice(idx,1); s.exercises.push(e);
+      j.push('Le '+jour(i)+' : '+e.name+' passe en fin de séance (3 semaines).');
+    } else if(et==='reprise'){
+      if(!e.ordo||e.ordo.etape!=='fin_seance') continue;
+      const rang=Math.min(Number(e.ordo.rang)||0,s.exercises.length-1);
+      s.exercises.splice(idx,1); s.exercises.splice(rang,0,e);
+      const kg=Number(o.repriseKg), ref=Number(o.repriseRef);
+      e.ordo=Object.assign({},e.ordo,{etape:'reprise',repriseDepuis:t,repriseJusqua:t+O.repriseJours*864e5},
+        (kg>0&&ref>kg)?{repriseKg:kg,repriseRef:ref}:{});
+      j.push('Le '+jour(i)+' : '+e.name+' reprend sa place'+((kg>0&&ref>kg)?', à '+String(Math.round((ref-kg)*100)/100).replace('.',',')+' kg (−'+String(kg).replace('.',',')+')':'')+'.');
+    } else continue;
+    if(opt.repos){
+      const r=_poRepos(e.repos,O.repos.secondes);
+      if(r){ if(e.ordo.reposAvant==null) e.ordo.reposAvant=String(e.repos); e.repos=r; j.push('Le '+jour(i)+' : repos de '+e.name+' +'+O.repos.secondes+' s.'); }
+    }
+  }
+  if(!j.length) j.push(o.exercice?o.exercice+' n’est dans aucune séance active : rien n’est changé.':'Aucun exercice visé.');
+  return {programme:P,journal:j};
+}
+/**
+ * PURE. Le facteur de charge que l'ordonnance impose à la suggestion de
+ * séance, ou null. Branché sur la décote de chargeSuivante — la plus forte
+ * des décotes s'applique, rien ne s'additionne.
+ * ⚠ DATÉ : passé `jusqua` (décharge) ou `repriseJusqua` (reprise), plus rien.
+ * @param {any} ex @param {number|string|null} poidsPrec @param {any} rirPrec @param {number} maintenant
+ * @returns {number|null}
+ */
+function facteurChargeOrdonnance(ex,poidsPrec,rirPrec,maintenant){
+  const o=ex&&ex.ordo, now=Number(maintenant)||Date.now();
+  if(!o) return null;
+  if(o.type==='fatigue'&&o.mode==='charge'&&now<Number(o.jusqua)&&o.facteur>0&&o.facteur<1) return o.facteur;
+  if(o.type==='vrai'&&o.etape==='reprise'&&now<Number(o.repriseJusqua)&&o.repriseKg>0&&o.repriseRef>o.repriseKg){
+    const w=parseFloat(String(poidsPrec)); if(!(w>0)) return null;
+    const m=multiplicateurRir(rirPrec);
+    return Math.min(1,(o.repriseRef-o.repriseKg)/(w*m));
+  }
+  return null;
+}
+/**
+ * PURE. LA RÉÉVALUATION. Compare, exercice par exercice, l'e1RM et les
+ * répétitions notés à la mise en place avec ce qu'on lit depuis.
+ * @param {any} ordo  {date, repriseDate?, mesuresAvant:[{nom,e1rm,reps}]}
+ * @param {any} historique
+ * @returns {{verdict:string, lignes:any[]}}  'efficace' | 'sans_effet' | 'indetermine'
+ */
+function evaluerOrdonnance(ordo,historique){
+  const depuis=Number(ordo&&(ordo.repriseDate||ordo.date))||0;
+  const lignes=[];
+  for(const m of ((ordo&&ordo.mesuresAvant)||[])){
+    const x=((historique&&historique.exercices)||[]).find(z=>exKey(z.nom)===exKey(m.nom));
+    const apres=((x&&x.seances)||[]).filter(s=>Number(s.date)>=depuis);
+    const e=Math.max(-Infinity,...apres.map(s=>Number(s.e1rm)).filter(v=>v>0));
+    const r=Math.max(-Infinity,...apres.map(s=>Number(s.reps)).filter(v=>v>0));
+    const ap={e1rm:e>0?Math.round(e*10)/10:null,reps:r>0?r:null};
+    let mieux=null;
+    if(ap.e1rm!=null&&m.e1rm!=null) mieux=ap.e1rm>m.e1rm;
+    if(!mieux&&ap.reps!=null&&m.reps!=null&&ap.e1rm!=null&&m.e1rm!=null&&ap.e1rm>=m.e1rm) mieux=ap.reps>m.reps;
+    lignes.push({nom:m.nom,avant:{e1rm:m.e1rm,reps:m.reps},apres:ap,mieux});
+  }
+  const lus=lignes.filter(l=>l.mieux!=null);
+  if(!lus.length) return {verdict:'indetermine',lignes};
+  return {verdict:lus.filter(l=>l.mieux).length*2>=lus.length?'efficace':'sans_effet',lignes};
+}
+
+// ── DU DOSSIER À L'HISTORIQUE ───────────────────────────────────────────────
+/** L'historique d'un dossier, lu sur les huit dernières semaines. */
+function historiquePlateau(c,maintenant){
+  const now=Number(maintenant)||Date.now(), debut=now-PO_FENETRE_JOURS*864e5;
+  const par=new Map();
+  const prescrit=new Map();
+  for(const s of _creneauxDe(c)) for(const e of ((s&&s.active===true&&s.exercises)||[])){
+    const r=_rirPrescrit(e); if(r!=='') prescrit.set(exKey(e.name||''),Number(r)); }
+  let rp=0, rr=0, rn=0;
+  for(const sess of ((c&&c.sessions)||[])){
+    if(!sess||!sess.data||sess.deload||!(sess.date>=debut&&sess.date<=now)) continue;
+    for(const nom of Object.keys(sess.data)){
+      const d=sess.data[nom]; if(!d||!Array.isArray(d.sets)) continue;
+      const _ex=_exPourCharge(nom,c);
+      let best=0, top=0, repsTop=0;
+      for(const se of d.sets){
+        if(!se||se.done!==true) continue;
+        const w=chargeEffective(se,_ex,c), r=_perfReps(se);
+        if(!(w>0)||!(r>0)) continue;
+        if(e1rmFiable(r,_perfRir(se,c))){ const v=e1rm(w,r,_perfRir(se,c)); if(v>best) best=v; }
+        if(w>top){ top=w; repsTop=r; } else if(w===top&&r>repsTop) repsTop=r;
+        const p=prescrit.get(exKey(nom));
+        if(p!=null&&sess.date>=now-PO_RIR_JOURS*864e5&&se.rir!==''&&se.rir!=null){
+          rp+=p; rr+=(se.rir==='echec'?0:(parseInt(se.rir,10)||0)); rn++; }
+      }
+      if(!top) continue;
+      const k=exKey(nom);
+      if(!par.has(k)) par.set(k,{nom,seances:[]});
+      par.get(k).seances.push({date:sess.date,e1rm:best>0?Math.round(best*10)/10:null,reps:repsTop,charge:top});
+    }
+  }
+  let ratio=null; try{ ratio=ratioCharge(c,now); }catch(e){ ratio=null; }
+  return {maintenant:now,exercices:[...par.values()],ratioCharge:ratio,
+    rir:rn?{prescrit:Math.round(rp/rn*10)/10,reel:Math.round(rr/rn*10)/10,n:rn}:null};
+}
+/** L'ordonnance d'un dossier : celle en cours, sinon la proposée. */
+function ordonnanceDossier(c,maintenant){
+  const now=Number(maintenant)||Date.now(), cur=c&&c.ordonnancePlateau;
+  if(cur&&cur.statut==='active') return {cours:cur,proposee:null,diag:null};
+  const h=historiquePlateau(c,now), diag=diagnosticPlateau(h);
+  const prop=ordonnancePourDiagnostic(diag,{niveau:niveauPointFaible(c),anciennete:ancienneteAns(c),programme:_creneauxDe(c),
+    active:cur,ignoree:cur,maintenant:now});
+  return {cours:null,proposee:prop,diag,historique:h};
+}
+
+// ── LA CARTE COACH ──────────────────────────────────────────────────────────
+let _poOpts={repos:false,mode:'series'};
+const _poDate=t=>new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+/** Le bloc ordonnance de la carte plateaux ; '' quand il n'y a rien à dire. */
+function htmlOrdonnanceCoach(c,maintenant){
+  const now=Number(maintenant)||Date.now(), E=escapeHtml;
+  let d; try{ d=ordonnanceDossier(c,now); }catch(e){ return ''; }
+  const cid=E(String((c&&c.id)||''));
+  if(d.cours){
+    const o=d.cours, O=ORDONNANCES[o.type]||{titre:o.type,phrase:''};
+    const reev=Number(o.reevaluation)||0, echue=reev&&now>=reev;
+    let corps='<div class="po-p">'+E(O.phrase)+'</div>'
+      +'<div class="po-s">En place depuis le '+E(_poDate(o.date))+(o.exercice?' · '+E(o.exercice):'')+' · réévaluation le '+E(_poDate(reev))+'</div>';
+    const btn=(et,lib,cls)=>'<button type="button" class="btn '+(cls||'btn-outline')+'" data-cid="'+cid+'" data-etape="'+et+'" onclick="poEtape(this)">'+lib+'</button>';
+    const acts=[];
+    if(o.type==='vrai'&&o.etape==='debut'&&now>=Number(o.date)+ORDONNANCES.vrai.finSeanceJours*864e5)
+      acts.push(btn('reprise','Passer à la reprise','btn-red'));
+    if(o.type==='fatigue'&&o.etape!=='fin'&&now>=Number(o.date)+ORDONNANCES.fatigue.jours*864e5)
+      acts.push(btn('fin','Rétablir le programme','btn-red'));
+    if(echue){
+      let ev={verdict:'indetermine',lignes:[]}; try{ ev=evaluerOrdonnance(o,historiquePlateau(c,now)); }catch(e){}
+      const n=v=>v==null?'—':String(v).replace('.',',');
+      corps+='<div class="po-verdict po-'+ev.verdict+'">'+(ev.verdict==='efficace'?'Ordonnance efficace':ev.verdict==='sans_effet'?'Ordonnance sans effet':'Effet non mesurable : pas assez de séances depuis')+'</div>'
+        +ev.lignes.map(l=>'<div class="po-s">'+E(l.nom)+' : e1RM '+n(l.avant.e1rm)+' → '+n(l.apres.e1rm)+' kg · répétitions '+n(l.avant.reps)+' → '+n(l.apres.reps)+'</div>').join('');
+      acts.push(btn('clore','Clore l’ordonnance',acts.length?'btn-outline':'btn-red'));
+    }
+    return '<div class="po-carte"><div class="po-t">Ordonnance en cours · '+E(O.titre)+'</div>'+corps
+      +(acts.length?'<div class="po-actions">'+acts.join('')+'</div>':'')+'</div>';
+  }
+  const p=d.proposee;
+  if(!p) return '';
+  const O=ORDONNANCES[p.type];
+  let opts='';
+  if(p.possible&&p.type==='vrai')
+    opts=p.repos&&p.repos.possible
+      ?'<label class="ta-cons po-opt"><input type="checkbox" data-champ="repos"'+(_poOpts.repos?' checked':'')+' onchange="poOption(this)"> <span>Option : repos +30 s par palier</span></label>'
+      :'<div class="po-s">Option repos +30 s indisponible : '+E((p.repos&&p.repos.raison)||'')+'.</div>';
+  if(p.possible&&p.type==='fatigue')
+    opts='<div class="po-modes">'+[['series','Séries −40 %'],['charge','Charge −15 %']].map(m=>'<label class="ta-choix"><input type="radio" name="po-mode" data-champ="mode" value="'+m[0]+'"'
+      +(_poOpts.mode===m[0]?' checked':'')+' onchange="poOption(this)"> <span>'+m[1]+'</span></label>').join('')+'</div>';
+  const reev=now+O.reevaluerJours*864e5;
+  return '<div class="po-carte" data-type="'+E(p.type)+'"><div class="po-t">Ordonnance proposée · '+E(O.titre)+'</div>'
+    +'<div class="po-p">'+E(p.possible?p.explication:p.raison)+'</div>'
+    +'<div class="po-s">Pourquoi : '+E(p.raison&&p.possible?p.raison:(d.diag&&d.diag.raison)||'')+'</div>'
+    +(d.diag&&d.diag.fatigue&&!d.diag.fatigue.mesuree?'<div class="po-s">Fatigue non évaluée : ratio de charge ou RIR pas assez renseignés.</div>':'')
+    +opts
+    +(p.possible?'<div class="po-s">Réévaluation automatique le '+E(_poDate(reev))+'.</div>'
+      +'<div class="po-actions"><button type="button" class="btn btn-red" data-cid="'+cid+'" onclick="poMettreEnPlace(this)">Mettre en place</button>'
+      +'<button type="button" class="btn btn-outline" data-cid="'+cid+'" onclick="poIgnorer(this)">Pas maintenant</button></div>':'')
+    +'</div>';
+}
+function poOption(el){
+  if(!el) return false;
+  if(el.dataset.champ==='repos') _poOpts.repos=!!el.checked;
+  if(el.dataset.champ==='mode'&&(el.value==='series'||el.value==='charge')) _poOpts.mode=el.value;
+  return true;
+}
+/** L'écriture commune : le dossier du coach, jamais saveUser(). */
+function _poEcrire(cid,fn,msg){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  const users=DB.get('users')||{}, c=getOwnedClient(cid,users);
+  if(!c||!c.email) return false;
+  if(fn(c)===false) return false;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  try{ _viderCachePlateau(); }catch(e){}
+  try{ renderPlateauxCoach(c); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),msg,'l’ordonnance est');
+  return true;
+}
+async function poMettreEnPlace(btn){
+  const cid=btn&&btn.dataset.cid;
+  const c0=getOwnedClient(cid); if(!c0) return false;
+  const d=ordonnanceDossier(c0), p=d.proposee;
+  if(!p||!p.possible) return false;
+  const O=ORDONNANCES[p.type];
+  if(p.type!=='faux'&&!await rcConfirm('Mettre en place l’ordonnance ?',O.phrase+' Le programme est modifié tout de suite.','Mettre en place')) return false;
+  return _poEcrire(cid,c=>{
+    const t=Date.now(), options=p.type==='vrai'?{repos:!!(_poOpts.repos&&p.repos&&p.repos.possible)}:p.type==='fatigue'?{mode:_poOpts.mode}:{};
+    const r=appliquerOrdonnance(_creneauxDe(c),{type:p.type,etape:'debut',exercice:p.exercice,date:t,options});
+    c.sessions_config=r.programme;
+    c.ordonnancePlateau=Object.assign({type:p.type,statut:'active',etape:'debut',date:t,reevaluation:t+O.reevaluerJours*864e5,
+      mesuresAvant:p.mesuresAvant.slice(0,12),options,journal:r.journal.slice(0,20)},
+      p.exercice?{exercice:p.exercice}:{},p.repriseKg?{repriseKg:p.repriseKg}:{},p.repriseRef?{repriseRef:p.repriseRef}:{});
+  },'Ordonnance en place ✓');
+}
+function poIgnorer(btn){
+  const cid=btn&&btn.dataset.cid;
+  const c0=getOwnedClient(cid); if(!c0) return false;
+  const p=ordonnanceDossier(c0).proposee; if(!p) return false;
+  return _poEcrire(cid,c=>{ c.ordonnancePlateau={type:p.type,statut:'ignoree',date:Date.now()}; },'Proposition ignorée pour '+PO_IGNORER_JOURS+' jours');
+}
+async function poEtape(btn){
+  const cid=btn&&btn.dataset.cid, et=btn&&btn.dataset.etape;
+  const c0=getOwnedClient(cid), o0=c0&&c0.ordonnancePlateau;
+  if(!o0||o0.statut!=='active') return false;
+  if(et==='reprise'&&!await rcConfirm('Passer à la reprise ?',(o0.exercice||'L’exercice')+' reprend sa place'+(o0.repriseKg?', '+String(o0.repriseKg).replace('.',',')+' kg sous sa dernière charge':'')+'.','Passer à la reprise')) return false;
+  return _poEcrire(cid,c=>{
+    const o=c.ordonnancePlateau, t=Date.now();
+    if(et==='reprise'){
+      const r=appliquerOrdonnance(_creneauxDe(c),{type:o.type,etape:'reprise',exercice:o.exercice,date:t,options:o.options,repriseKg:o.repriseKg,repriseRef:o.repriseRef});
+      c.sessions_config=r.programme; o.etape='reprise'; o.repriseDate=t;
+      // La réévaluation mesure la reprise : deux semaines après elle, au plus tôt.
+      o.reevaluation=Math.max(Number(o.reevaluation)||0,t+14*864e5);
+      o.journal=(o.journal||[]).concat(r.journal).slice(-20);
+    } else {
+      const r=appliquerOrdonnance(_creneauxDe(c),{type:o.type,etape:'fin',date:t});
+      c.sessions_config=r.programme; o.journal=(o.journal||[]).concat(r.journal).slice(-20);
+      if(et==='fin'){ o.etape='fin'; }
+      else { let ev={verdict:'indetermine'}; try{ ev=evaluerOrdonnance(o,historiquePlateau(c,t)); }catch(e){}
+        o.statut='terminee'; o.verdict=ev.verdict; o.fin=t; }
+    }
+  },et==='reprise'?'Reprise en place ✓':et==='fin'?'Programme rétabli ✓':'Ordonnance close ✓');
 }
 
 // ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════
@@ -54046,6 +54511,9 @@ function _blocExo(idx,estSS){
   // La reprise en douceur acceptée : -10 %, sans cumuler avec la décote de
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
+  // LOT PO1 : la décharge (−15 %) ou la reprise après plateau, posées par
+  // une ordonnance du coach et datées. La plus forte des décotes, sans cumul.
+  if(prev&&_decote!=null){ try{ const _fo=facteurChargeOrdonnance(ex,prev.weight,prev.rir,Date.now()); if(_fo!=null&&_fo>0) _decote=Math.min(_decote,_fo); }catch(e){} }
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
@@ -66093,7 +66561,11 @@ function renderPlateauxCoach(c){
   if(!c||!Array.isArray(c.sessions)||!c.sessions.length){ z.innerHTML=''; return; }
   let groupes=[];
   try{ groupes=plateauxParGroupe(c); }catch(e){ groupes=[]; }
-  if(!groupes.length){ z.innerHTML=''; return; }
+  // LOT PO1 : l'ordonnance proposée, ou celle en cours. Une ordonnance en
+  // cours se suit même quand plus rien ne bloque — c'est souvent qu'elle a marché.
+  let ordo=''; try{ ordo=htmlOrdonnanceCoach(c); }catch(e){ ordo=''; }
+  if(!groupes.length&&!ordo){ z.innerHTML=''; return; }
+  if(!groupes.length){ z.innerHTML='<div class="plx-carte"><div class="plx-tete"><span>Ce qui bloque</span></div>'+ordo+'</div>'; return; }
   const dat=(t)=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
   const nBlo=groupes.reduce((n,g)=>n+g.exercices.length,0);
   // Le compte sur le bouton blanc : ce qu'il reste a attribuer, dit d'avance.
@@ -66114,6 +66586,7 @@ function renderPlateauxCoach(c){
       <span>Ce qui bloque</span>
       <span class="plx-tete-n">${nBlo} exercice${nBlo>1?'s':''}${nMus?' · '+nMus+' groupe'+(nMus>1?'s':'')+' en plateau':''}</span>
     </div>
+    ${ordo}
     <div class="plx-grille">
     ${groupes.map((g,i)=>`<details class="plx-g"${i===0?' open':''}${g.musculaire?' data-mus':''}>
       <summary class="plx-s">

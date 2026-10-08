@@ -18861,8 +18861,10 @@ async function testExercices(){
             // LE RATIO NE S'AFFICHE PAS À L'ATHLÈTE : c'est une donnée de
             // pilotage de coach. Seuls la disponibilité (qui n'affiche aucun
             // chiffre) et le signal coach le lisent.
+            // PO1 : la cinquième lecture est le diagnostic de fatigue de
+            // l'ordonnance de plateau — une carte du coach, jamais de l'athlète.
             const n=(s.match(/ratioCharge\(/g)||[]).length;
-            if(n>4) return _echec(n+' lectures du ratio : il déborde du pilotage coach');
+            if(n>5) return _echec(n+' lectures du ratio : il déborde du pilotage coach');
             return true;})());
         })();
 
@@ -74200,6 +74202,137 @@ async function testExercices(){
               if((_prodSrc().match(new RegExp('function '+f+'\\(','g'))||[]).length!==1) return _echec(f+' déclarée deux fois');
             return true;
           } finally { try{ closeModal(); }catch(e){} currentUser=sU; DB.set('users',sv||{}); }})());
+      }
+      // ══ LOT PO1 — ORDONNANCE DE PLATEAU : diagnostic, ordonnances, application, réévaluation ══
+      {
+        const _T=Date.UTC(2026,5,1,12), _J=864e5;
+        // Un exercice : des points [jour (négatif = passé), e1rm, reps, charge].
+        const _poEx=(nom,pts)=>({nom,seances:pts.map(p=>({date:_T+p[0]*_J,e1rm:p[1],reps:p[2],charge:p[3]}))});
+        const _monte=nom=>_poEx(nom,[[-35,100,8,80],[-28,102,8,82],[-21,104,8,84],[-14,106,8,86],[-7,108,8,88],[-2,110,8,90]]);
+        const _cale=(nom,j)=>_poEx(nom,[[-49,100,8,80],[-j,110,8,88],[-j+3,108,7,88],[-3,109,8,88],[-1,107,7,88]]);
+        const _H=(ex,o)=>Object.assign({maintenant:_T,exercices:ex,ratioCharge:null,rir:null},o||{});
+        ok('PO1 — faux plateau : un seul exercice cale depuis 2 semaines, les autres avancent',(()=>{
+          const d=diagnosticPlateau(_H([_cale('DC',15),_monte('SQ'),_monte('ROW')]));
+          if(d.type!=='faux'||d.stagnants.length!==1||d.stagnants[0].nom!=='DC') return _echec(d.type+' : '+d.raison);
+          if(typePlateau(_H([_cale('DC',12),_monte('SQ'),_monte('ROW')]))!=='aucun') return _echec('12 jours suffisent');
+          return typePlateau(_H([_cale('DC',15)]))==='aucun'||_echec('sans « autres », pas de faux plateau');})());
+        ok('PO1 — vrai plateau : 70 % des exercices sans progrès depuis 3 semaines, et pas 60 %',(()=>{
+          const l=n=>Array.from({length:10},(_,i)=>i<n?_cale('C'+i,22):_monte('M'+i));
+          if(typePlateau(_H(l(7)))!=='vrai') return _echec('7 sur 10');
+          if(typePlateau(_H(l(6)))==='vrai') return _echec('6 sur 10');
+          const d=diagnosticPlateau(_H([_cale('A',25),_cale('B',30),_cale('C',21),_monte('D')]));
+          return (d.type==='vrai'&&d.part===0.75&&d.stagnants.length===3)||_echec(JSON.stringify([d.type,d.part]));})());
+        ok('PO1 — fatigue : charge aiguë/chronique haute ET RIR réel sous le prescrit ; une mesure manque → on ne dit rien',(()=>{
+          const ex=[_cale('DC',15),_monte('SQ'),_monte('ROW')];
+          const haut={ratioCharge:CHARGE_RATIO_SEUIL+0.1,rir:{prescrit:2,reel:0.6,n:8}};
+          if(typePlateau(_H(ex,haut))!=='fatigue') return _echec('fatigue non vue');
+          if(typePlateau(_H(ex,{ratioCharge:CHARGE_RATIO_SEUIL,rir:haut.rir}))==='fatigue') return _echec('au seuil, pas au-dessus');
+          if(typePlateau(_H(ex,{ratioCharge:haut.ratioCharge,rir:{prescrit:2,reel:1.4,n:8}}))==='fatigue') return _echec('écart de RIR < 1');
+          if(typePlateau(_H(ex,{ratioCharge:haut.ratioCharge,rir:{prescrit:2,reel:0,n:5}}))==='fatigue') return _echec('5 séries ne suffisent pas');
+          const sans=diagnosticPlateau(_H(ex,{ratioCharge:null,rir:haut.rir}));
+          if(sans.type==='fatigue'||sans.fatigue.mesuree) return _echec('ratio absent inventé');
+          return typePlateau(_H([_monte('DC'),_monte('SQ')],haut))!=='fatigue'||_echec('fatigue sans aucun exercice qui cale');})());
+        ok('PO1 — historiques trop courts : deux séances, ou dix jours de suivi, ne jugent rien',(()=>{
+          const court=_poEx('X',[[-6,100,8,80],[-1,100,8,80]]), dix=_poEx('Y',[[-10,100,8,80],[-5,100,8,80],[-1,100,8,80]]);
+          const d=diagnosticPlateau(_H([court,dix,_monte('SQ')]));
+          return (d.evalues.length===1&&d.type==='aucun'&&/Pas assez/.test(d.raison))||_echec(JSON.stringify(d.evalues.map(x=>x.nom)));})());
+        ok('PO1 — les répétitions comptent : même e1RM, une répétition de plus à la même charge, c’est un progrès',(()=>{
+          const p=_poEx('R',[[-30,100,8,80],[-23,100,8,80],[-4,100,9,80]]);
+          const d=_poProgresExercice(p.seances,_T);
+          return (d&&d.joursSansProgres===4)||_echec(JSON.stringify(d));})());
+        ok('PO1 — ORDONNANCES gelées, seuils gelés, décote de reprise 2 à 5 kg selon l’e1RM',(()=>{
+          if(!Object.isFrozen(ORDONNANCES)||!Object.isFrozen(ORDONNANCES.vrai)) return _echec('non gelées');
+          if(!/patience, rien à changer/.test(ORDONNANCES.faux.phrase)) return _echec('faux');
+          if(ORDONNANCES.fatigue.series!==0.4||ORDONNANCES.fatigue.charge!==0.15||ORDONNANCES.vrai.repos.secondes!==30||ORDONNANCES.vrai.finSeanceJours!==21) return _echec('valeurs');
+          const v=[40,80,120,140,200,400].map(decoteRepriseKg).join('|');
+          return (v==='2|2|3|3.5|5|5'&&decoteRepriseKg(null)===null)||_echec(v);})());
+        const _prog=()=>{ const P=DAYS.map(day=>({day,name:'',active:false,exercises:[]}));
+          P[0]={day:'Lundi',name:'Haut',active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'6-8',repos:'2 min'},{name:'ROWING BARRE',series:3,reps:'8-10',repos:'2 min'},{name:'CURL BARRE',series:5,reps:'10',repos:'1 min'}]};
+          P[3]={day:'Jeudi',name:'Bas',active:true,exercises:[{name:'SQUAT',series:3,reps:'5',repos:'3 min'}]};
+          return P; };
+        const _vrai=()=>diagnosticPlateau(_H([_cale('DEVELOPPE COUCHE BARRE',25),_cale('ROWING BARRE',30),_cale('SQUAT',22),_monte('CURL BARRE')]));
+        ok('PO1 — vrai : l’exercice principal (premier en séance), la reprise selon son e1RM, le repos selon l’ancienneté',(()=>{
+          const o=ordonnancePourDiagnostic(_vrai(),{niveau:'avance',anciennete:3,programme:_prog(),maintenant:_T});
+          if(!o.possible||o.exercice!=='DEVELOPPE COUCHE BARRE'||o.repriseKg!==3||o.repriseRef!==88||!o.repos.possible) return _echec(JSON.stringify(o));
+          const j=ordonnancePourDiagnostic(_vrai(),{niveau:'intermediaire',anciennete:1,programme:_prog(),maintenant:_T});
+          if(j.repos.possible||!/moins de 3 ans/.test(j.repos.raison)) return _echec('ancienneté insuffisante');
+          const n=ordonnancePourDiagnostic(_vrai(),{niveau:'intermediaire',anciennete:null,programme:_prog(),maintenant:_T});
+          if(n.repos.possible||!/inconnue/.test(n.repos.raison)) return _echec('ancienneté inconnue');
+          return (ancienneteAns({level:'Avancé (3-5 ans)'})===3&&ancienneteAns({level:'Intermédiaire (1-3 ans)'})===1&&ancienneteAns({})===null)||_echec('ancienneteAns');})());
+        ok('PO1 — fatigue : décharge réservée à l’intermédiaire et à l’avancé',(()=>{
+          const d=diagnosticPlateau(_H([_cale('DC',15),_monte('SQ'),_monte('ROW')],{ratioCharge:1.7,rir:{prescrit:2,reel:0,n:9}}));
+          const deb=ordonnancePourDiagnostic(d,{niveau:'debutant',maintenant:_T}), av=ordonnancePourDiagnostic(d,{niveau:'avance',maintenant:_T});
+          return (deb.possible===false&&/intermédiaires et avancés/.test(deb.raison)&&av.possible&&av.mesuresAvant.length===3)||_echec(JSON.stringify([deb,av.possible]));})());
+        ok('PO1 — ordonnance déjà active : rien d’autre n’est proposé ; ignorée : silence deux semaines',(()=>{
+          const d=_vrai(), ctx={niveau:'avance',anciennete:3,programme:_prog(),maintenant:_T};
+          const a=ordonnancePourDiagnostic(d,Object.assign({active:{type:'faux',statut:'active',date:_T-5*_J}},ctx));
+          if(a.possible!==false||!/déjà en cours/.test(a.raison)) return _echec('active');
+          if(ordonnancePourDiagnostic(d,Object.assign({ignoree:{type:'vrai',statut:'ignoree',date:_T-3*_J}},ctx))!==null) return _echec('ignorée encore proposée');
+          if(!ordonnancePourDiagnostic(d,Object.assign({ignoree:{type:'vrai',statut:'ignoree',date:_T-20*_J}},ctx))) return _echec('sommeil sans fin');
+          return ordonnancePourDiagnostic(d,Object.assign({ignoree:{type:'faux',statut:'ignoree',date:_T-3*_J}},ctx))!==null||_echec('un autre type reste proposable');})());
+        ok('PO1 — appliquer le vrai plateau : fin de séance, reprise à sa place, repos +30 s par palier, rétabli à la fin, rien muté',(()=>{
+          const P=_prog(), av=JSON.stringify(P);
+          const o={type:'vrai',exercice:'DEVELOPPE COUCHE BARRE',date:_T,options:{repos:true},repriseKg:2.5,repriseRef:88};
+          const a=appliquerOrdonnance(P,o);
+          if(JSON.stringify(P)!==av) return _echec('entrée mutée');
+          const L=a.programme[0].exercises;
+          if(L[2].name!=='DEVELOPPE COUCHE BARRE'||L[2].repos!=='2 min 30'||L[2].ordo.rang!==0||!/fin de séance/.test(a.journal.join())) return _echec(JSON.stringify(L.map(e=>e.name+' '+e.repos)));
+          if(JSON.stringify(appliquerOrdonnance(a.programme,o).programme)!==JSON.stringify(a.programme)) return _echec('début non idempotent');
+          const r=appliquerOrdonnance(a.programme,Object.assign({},o,{etape:'reprise',date:_T+21*_J}));
+          const R=r.programme[0].exercises;
+          if(R[0].name!=='DEVELOPPE COUCHE BARRE'||R[0].repos!=='3 min'||R[0].ordo.repriseKg!==2.5||!/85,5 kg/.test(r.journal.join())) return _echec(JSON.stringify(R[0])+r.journal.join());
+          const f=appliquerOrdonnance(r.programme,{type:'vrai',etape:'fin'});
+          return (JSON.stringify(f.programme)===av)||_echec('pas rétabli : '+JSON.stringify(f.programme[0].exercises));})());
+        ok('PO1 — appliquer la fatigue : séries −40 % ou charge −15 %, semaine marquée décharge, rétablie à la fin ; faux : rien',(()=>{
+          const P=_prog(), av=JSON.stringify(P);
+          const s=appliquerOrdonnance(P,{type:'fatigue',date:_T,options:{mode:'series'}});
+          const n=s.programme[0].exercises.map(e=>e.series).join(',')+'/'+s.programme[3].exercises[0].series;
+          if(n!=='2,2,3/2'||s.programme[0].deload!==true||s.programme[1].deload) return _echec(n);
+          const c=appliquerOrdonnance(P,{type:'fatigue',date:_T,options:{mode:'charge'}});
+          if(c.programme[0].exercises[0].series!==4||c.programme[0].exercises[0].ordo.facteur!==0.85) return _echec('charge');
+          if(JSON.stringify(appliquerOrdonnance(s.programme,{type:'fatigue',etape:'fin'}).programme)!==av) return _echec('séries non rétablies');
+          if(JSON.stringify(appliquerOrdonnance(c.programme,{type:'fatigue',etape:'fin'}).programme)!==av) return _echec('charge non rétablie');
+          const f=appliquerOrdonnance(P,{type:'faux',date:_T});
+          return (JSON.stringify(f.programme)===av&&/patience/.test(f.journal[0]))||_echec('faux');})());
+        ok('PO1 — la suggestion de séance : −15 % pendant la décharge, reprise 2,5 kg sous la charge, puis plus rien',(()=>{
+          const dech={name:'X',ordo:{type:'fatigue',mode:'charge',facteur:0.85,jusqua:_T+7*_J}};
+          if(facteurChargeOrdonnance(dech,100,'2',_T)!==0.85||facteurChargeOrdonnance(dech,100,'2',_T+8*_J)!==null) return _echec('décharge');
+          const rep={name:'DEVELOPPE COUCHE BARRE',ordo:{type:'vrai',etape:'reprise',repriseKg:2.5,repriseRef:88,repriseJusqua:_T+7*_J}};
+          const f=facteurChargeOrdonnance(rep,88,'1',_T), w=chargeSuivante(88,'1',false,f,'DEVELOPPE COUCHE BARRE');
+          if(!(w<=85.5&&w>=84)) return _echec('reprise : '+w);
+          if(facteurChargeOrdonnance(rep,88,'1',_T+8*_J)!==null||facteurChargeOrdonnance({name:'Y'},88,'1',_T)!==null) return _echec('hors période');
+          return /facteurChargeOrdonnance\(ex,prev\.weight,prev\.rir/.test(_prodSrc())||_echec('non branché sur la séance');})());
+        ok('PO1 — réévaluation : efficace, sans effet, ou non mesurable',(()=>{
+          const o={date:_T-20*_J,mesuresAvant:[{nom:'DC',e1rm:110,reps:8}]};
+          const h=pts=>({exercices:[_poEx('DC',pts)]});
+          if(evaluerOrdonnance(o,h([[-10,112,8,90]])).verdict!=='efficace') return _echec('e1RM battu');
+          if(evaluerOrdonnance(o,h([[-10,110,9,88]])).verdict!=='efficace') return _echec('une répétition de plus');
+          if(evaluerOrdonnance(o,h([[-10,108,8,88],[-25,120,8,95]])).verdict!=='sans_effet') return _echec('séance d’avant comptée');
+          return evaluerOrdonnance(o,h([[-30,115,8,92]])).verdict==='indetermine'||_echec('rien depuis');})());
+        ok('PO1 — l’historique se lit du dossier : séances, e1RM, charge, RIR prescrit contre réel',(()=>{
+          const now=Date.now(), d=k=>now-k*_J;
+          const set=(w,r,rir)=>({weight:String(w),reps:String(r),rir:String(rir),done:true});
+          const c={email:'po@t.fr',sessions:[0,7,14,21].map(k=>({id:'s'+k,date:d(k+1),slot:0,data:{'DEVELOPPE COUCHE BARRE':{sets:[set(80,8,0),set(80,8,1)]}}})),
+            sessions_config:(()=>{ const P=_prog(); P[0].exercises[0].rir='2'; return P; })(),bilans:[]};
+          const h=historiquePlateau(c,now), x=h.exercices.find(e=>e.nom==='DEVELOPPE COUCHE BARRE');
+          if(!x||x.seances.length!==4||!(x.seances[0].e1rm>80)||x.seances[0].charge!==80) return _echec(JSON.stringify(h.exercices));
+          return (h.rir&&h.rir.n===4&&h.rir.prescrit===2&&h.rir.reel===0.5&&h.ratioCharge===null)||_echec(JSON.stringify(h.rir)+' '+h.ratioCharge);})());
+        ok('PO1 — la carte coach : la proposition, sa phrase, Mettre en place / Ignorer, Pas maintenant (ignorer), la date de réévaluation ; en cours : le verdict',(()=>{
+          const sv=window.historiquePlateau;
+          try{
+            window.historiquePlateau=()=>_H([_cale('DEVELOPPE COUCHE BARRE',25),_cale('ROWING BARRE',30),_cale('SQUAT',22),_monte('CURL BARRE')],{maintenant:Date.now()});
+            const c={id:'po1',email:'po1@t.fr',level:'Avancé (3-5 ans)',sessions_config:_prog(),sessions:[],bilans:[]};
+            const el=document.createElement('div'); el.innerHTML=htmlOrdonnanceCoach(c);
+            const b=[...el.querySelectorAll('button')].map(x=>x.textContent);
+            if(el.querySelector('.po-carte').dataset.type!=='vrai'||b.join('|')!=='Mettre en place|Pas maintenant') return _echec(b.join('|'));
+            if(!/fin de séance trois semaines/.test(el.textContent)||!/Réévaluation automatique le/.test(el.textContent)||!el.querySelector('input[data-champ="repos"]')) return _echec(el.textContent.slice(0,300));
+            c.ordonnancePlateau={type:'vrai',statut:'active',etape:'debut',date:Date.now()-40*_J,reevaluation:Date.now()-_J,exercice:'DEVELOPPE COUCHE BARRE',mesuresAvant:[{nom:'DEVELOPPE COUCHE BARRE',e1rm:100,reps:8}]};
+            window.historiquePlateau=()=>({exercices:[_poEx('DEVELOPPE COUCHE BARRE',[[-1,104,8,85]].map(p=>[p[0]+(Date.now()-_T)/_J,p[1],p[2],p[3]]))]});
+            el.innerHTML=htmlOrdonnanceCoach(c);
+            const t=el.textContent;
+            if(!/Ordonnance en cours/.test(t)||!/Ordonnance efficace/.test(t)||!/Passer à la reprise/.test(t)||!/Clore l’ordonnance/.test(t)) return _echec(t.slice(0,300));
+          } finally { window.historiquePlateau=sv; }
+          return (/"ordonnancePlateau"\s*:/.test(String(window._RC_RULES||''))&&/htmlOrdonnanceCoach\(c\)/.test(_prodSrc()))||_echec('règle ou branchement');})());
       }
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
