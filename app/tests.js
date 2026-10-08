@@ -47437,6 +47437,84 @@ async function testExercices(){
       const h=String(_htmlAnat);
       if(h.indexOf('Hauteur de rotule du bilan écartée')<0||h.indexOf("demanderMesure(\\'deb-rotule\\')")<0) return _echec('le bandeau ne nomme pas la mesure ou n’offre pas de la redemander');
       return true;})());
+    // ══ LA LANGUE DE L'APP (07/10/2026) ═══════════════════════════════════════
+    const _i18nAvec=(dico,f)=>{
+      const S=_rcI18n, sauve={langue:S.langue,pret:S.pret,exact:S.exact,casse:S.casse,parDebut:S.parDebut,parFin:S.parFin,reste:S.reste,cache:S.cache};
+      try{ rcI18nPoser('en',dico); return f(); } finally { Object.assign(S,sauve); }
+    };
+    ok('LANGUE : en français rien ne tourne ; sans choix explicite l’app est en français, quel que soit le téléphone',(()=>{
+      if(typeof rcLangue!=='function'||typeof rcI18nT!=='function') return _echec('rcLangue / rcI18nT n’existent pas');
+      const s=localStorage.getItem(RC_LANGUE_CLE);
+      try{
+        localStorage.removeItem(RC_LANGUE_CLE);
+        if(rcLangue()!=='fr') return _echec('sans choix : '+rcLangue());
+        localStorage.setItem(RC_LANGUE_CLE,'klingon');
+        if(rcLangue()!=='fr') return _echec('une langue inconnue est acceptée');
+        if(/navigator\.language/.test(String(rcLangue))) return _echec('la langue est déduite du téléphone');
+      } finally { if(s===null) localStorage.removeItem(RC_LANGUE_CLE); else localStorage.setItem(RC_LANGUE_CLE,s); }
+      if(rcLangue()==='fr'){
+        if(_rcI18n.pret||_rcI18n.obs) return _echec('le traducteur tourne en français');
+        if(rcI18nT('Annuler')!=='Annuler') return _echec('un texte change en français');
+      }
+      return RC_LANGUES.join()==='fr,en,pt,es'?true:_echec('langues : '+RC_LANGUES.join());})());
+    ok('LANGUE : un texte fixe, une phrase à variable, une variable elle-même traduite, les bords, les capitales ; l’inconnu reste en français',(()=>
+      _i18nAvec({x:{'Annuler':'Cancel','3 séances':'3 sessions','Gérer mes séances':'Manage my sessions','Enregistré':'Saved'},
+        m:[['{0} séances cette semaine','{0} sessions this week'],['Total : {0}','Total: {0}'],['{0} série{1} non rattachée{2}','{0} unlinked set{1}'],['Bonjour {0}, {1} kg','{1} kg, hello {0}']]},()=>{
+        const cas=[['Annuler','Cancel'],['  Annuler\n','  Cancel\n'],['Gérer\u00a0mes   séances','Manage my sessions'],
+          ['4 séances cette semaine','4 sessions this week'],['Total : 3 séances','Total: 3 sessions'],
+          ['2 séries non rattachées','2 unlinked sets'],['1 série non rattachée','1 unlinked set'],
+          ['Bonjour Léa, 82,5 kg','82,5 kg, hello Léa'],['✓ Enregistré','✓ Saved'],['Annuler :','Cancel :'],['ANNULER','CANCEL'],
+          ['Mon texte à moi','Mon texte à moi'],['82,5','82,5'],['','']];
+        for(const [a,b] of cas){ const r=rcI18nT(a); if(r!==b) return _echec(JSON.stringify(a)+' → '+JSON.stringify(r)+' au lieu de '+JSON.stringify(b)); }
+        return true;}))());
+    ok('LANGUE : à l’écran, le texte et les attributs sont traduits ; ce que l’utilisateur écrit et les zones marquées ne le sont pas',(()=>
+      _i18nAvec({x:{'Annuler':'Cancel','Ton prénom':'Your first name','Français':'French'},m:[]},()=>{
+        const d=document.createElement('div');
+        d.innerHTML='<button title="Annuler">Annuler</button><input placeholder="Ton prénom"><textarea>Annuler</textarea>'
+          +'<span data-i18n-off>Français</span><p contenteditable="true">Annuler</p><i>Annuler</i>';
+        document.body.appendChild(d);
+        try{
+          _rcI18nNoeud(d);
+          const q=s=>d.querySelector(s);
+          if(q('button').textContent!=='Cancel'||q('button').title!=='Cancel') return _echec('bouton : '+q('button').outerHTML);
+          if(q('input').placeholder!=='Your first name') return _echec('placeholder');
+          if(q('i').textContent!=='Cancel') return _echec('texte simple');
+          if(q('textarea').value!=='Annuler'||q('textarea').textContent!=='Annuler') return _echec('la saisie de l’utilisateur est traduite');
+          if(q('span').textContent!=='Français') return _echec('une zone data-i18n-off est traduite');
+          if(q('p').textContent!=='Annuler') return _echec('une zone éditable est traduite');
+          // Rejoué : rien ne bouge (pas de double traduction).
+          _rcI18nNoeud(d);
+          return q('button').textContent==='Cancel'?true:_echec('double passage');
+        } finally { d.remove(); }}))());
+    ok('LANGUE : le choix est proposé à l’inscription, dans le profil et au coach ; il est enregistré dans le compte et n’est pas une donnée de santé',(()=>{
+      for(const id of ['r-langue','atp-langue','ch-langue']){
+        const s=document.getElementById(id);
+        if(!s) return _echec('#'+id+' absent');
+        if([...s.options].map(o=>o.value).join()!=='fr,en,pt,es') return _echec('#'+id+' : '+[...s.options].map(o=>o.value).join());
+        if([...s.options].map(o=>o.textContent).join()!=='Français,English,Português,Español') return _echec('#'+id+' : les langues ne sont pas dites dans leur propre langue');
+        if(!s.closest('[data-i18n-off]')) return _echec('#'+id+' serait traduit');
+        if(!/rcLangueChoisir\(this\.value\)/.test(s.getAttribute('onchange')||'')) return _echec('#'+id+' ne choisit rien');
+      }
+      if(!document.getElementById('r-langue').closest('#s-register')) return _echec('le sélecteur n’est pas sur l’écran d’inscription');
+      if(String(doRegister).indexOf('langue:rcLangue()')<0) return _echec('l’inscription n’enregistre pas la langue');
+      if(String(routeUser).indexOf('rcLangueDuCompte(currentUser)')<0) return _echec('la langue du compte n’est pas appliquée à l’entrée');
+      return CHAMPS_NON_SANTE.indexOf('langue')>=0?true:_echec('« langue » n’est pas classée');})());
+    ok('LANGUE : les trois dictionnaires sont là, lisibles, et aucune traduction n’invente une variable',(()=>{
+      for(const l of ['en','pt','es']){
+        let d=null;
+        try{ const x=new XMLHttpRequest(); x.open('GET','./i18n/'+l+'.json',false); x.send(); if(x.status!==200) return _echec(l+'.json : '+x.status); d=JSON.parse(x.responseText); }
+        catch(e){ return _echec(l+'.json illisible'); }
+        const nx=Object.keys(d.x||{}).length, nm=(d.m||[]).length;
+        if(nx<7000||nm<1500) return _echec(l+' : '+nx+' textes, '+nm+' motifs');
+        for(const [a,b] of d.m){
+          const va=a.match(/\{\d+\}/g)||[], vb=b.match(/\{\d+\}/g)||[];
+          if(vb.some(v=>va.indexOf(v)<0)) return _echec(l+' : variable inventée dans « '+b+' »');
+        }
+        // Les mots de tous les jours sont traduits.
+        for(const m of ['Annuler','Enregistrer','Fermer']) if(!d.x[m]) return _echec(l+' : « '+m+' » n’est pas traduit');
+      }
+      return true;})());
+
     // ══ LA SIGNATURE DES EXPORTS (05/10/2026) ═════════════════════════════════
     ok('EXPORTS SIGNÉS : RepCore, le coach, l’athlète destinataire, la date, sur chaque document ; le coach et la date sur les visuels',(()=>{
       if(typeof signatureDocument!=='function'||typeof htmlSignatureDocument!=='function'||typeof _recSignatureLigne2!=='function') return _echec('signatureDocument n’existe pas');

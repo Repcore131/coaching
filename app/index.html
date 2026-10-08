@@ -47,10 +47,10 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1792';
+window.RC_BUILD='1793';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
-window.RC_MAJ='2026-10-06';
+window.RC_MAJ='2026-10-07';
 // L'APPARENCE, AVANT LE PREMIER AFFICHAGE. Sombre par defaut ; « clair » ou
 // « auto » (comme le telephone) si l'utilisateur l'a choisi dans ses reglages.
 // Pose ici, et non dans rc-core, pour que l'ecran ne clignote pas en noir
@@ -462,7 +462,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1792.css">
+<link rel="stylesheet" href="./rc-style.1793.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -557,6 +557,9 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div style="padding:16px">
     <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
+    <div class="r-langue r-langue-coach" data-i18n-off>
+      <select id="ch-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+    </div>
     <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
     <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
          bord, le lien est donc à un clic une fois connecté. -->
@@ -1259,6 +1262,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="r-cadeau" class="r-cadeau" style="display:none"></div>
     <button type="button" id="r-parrain-appel" class="btn btn-outline btn-sm" style="display:none;margin:0;min-height:44px"
       onclick="parrainageAllerAuChamp()">Quelqu’un t’a invité ? Entre son code</button>
+    <!-- LA LANGUE, CHOISIE A L'INSCRIPTION (07/10/2026). Le libelle est ecrit
+         dans les quatre langues : celui qui ne lit pas le francais doit
+         pouvoir le trouver. data-i18n-off : ces noms-la ne se traduisent pas. -->
+    <div class="r-langue" data-i18n-off>
+      <label for="r-langue">Langue · Language · Idioma</label>
+      <select id="r-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+    </div>
     <!-- ══ LA PHOTO EST DEMANDEE A L'INSCRIPTION ══════════════════════════
          Demande de Kevin, 08/09/2026. L'accueil du coach s'ouvre desormais sur
          une grille de visages : sans photo, ce sont des initiales dans un rond
@@ -3980,6 +3990,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
         <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">Se déconnecter</button>
+      <!-- LA LANGUE DE L'APP (07/10/2026) : le meme choix qu'a l'inscription. -->
+      <div class="card r-langue" data-i18n-off style="margin-bottom:14px">
+        <label for="atp-langue">Langue · Language · Idioma</label>
+        <select id="atp-langue" class="rc-langue" onchange="rcLangueChoisir(this.value)" aria-label="Langue · Language · Idioma"><option value="fr">Français</option><option value="en">English</option><option value="pt">Português</option><option value="es">Español</option></select>
+      </div>
         <!-- LE PIED, COMME CELUI D'UN SITE (Kevin, 28/09/2026). Exporter et
              supprimer ne sont plus deux blocs, dont un rouge qui dominait
              l'écran : quatre liens discrets sur une ligne. Chacun demande
@@ -6025,5 +6040,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1792.js"></script>
+<script src="./rc-core.1793.js"></script>
 </body></html>
