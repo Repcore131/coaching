@@ -1231,12 +1231,18 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    Les marges laterales tombent (les icones au-dessus separent deja les
    onglets) et l'interlettrage se resserre d'un cinquieme de pixel. La taille,
    elle, reste a 10px : on ne descend pas sous l'exception deja mesuree. */
-@media(max-width:420px){.tab-btn{letter-spacing:-.2px;padding:6px 0;font-size:var(--fs-2xs);flex:1 1 auto}}
+/* LIBELLÉS COURTS (08/10/2026) : Food, Analyse, Daily, Results remplacent
+   Nutrition, Corrections, Lifestyle, Évolution. Les sept onglets ne pèsent
+   plus que 264 px à 10 px : l'interlettrage resserré n'a plus lieu d'être,
+   et les mots retrouvent leur respiration (14 px entre deux libellés à 360). */
+@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 0;font-size:var(--fs-2xs);flex:1 1 auto}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
    Le seuil etait a 340px avec six onglets ; le septieme le remonte a 359px. */
-@media(max-width:359px){
+/* Le défilement ne sert plus qu'en secours, sous 300 px : depuis les libellés
+   courts, les sept onglets tiennent sur un iPhone SE (320 px). */
+@media(max-width:299px){
   /* Le masque annonce le défilement en dégradant le dernier onglet. Il
      REMPLACE l'ascenseur — scrollbar-width:none reste posé plus haut.
      ATTENTION : un masque écrête TOUT le rendu de l'élément, ombre portée

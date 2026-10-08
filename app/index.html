@@ -5734,15 +5734,19 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
      de rester à l'écran sur Nutrition, Corrections, Lifestyle, Évolution et Bilan.
+     LIBELLÉS COURTS (Kevin, 08/10/2026) : Food, Analyse, Daily, Results à la
+     place de Nutrition, Corrections, Lifestyle, Évolution — sur un téléphone
+     étroit, les mots longs se touchaient et on ne voyait plus où finissait
+     un onglet. Les écrans eux-mêmes gardent leur titre.
      Ni son affichage ni l'onglet surligné ne sont décidés ici : go() les déduit
      de l'écran réellement affiché — voir _majTabbar(). -->
 <div class="tab-bar" id="client-tabbar" aria-label="Navigation athlète">
   <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Accueil</button>
   <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')"><span class="tab-dot" aria-hidden="true"></span>Bilan</button>
-  <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
-  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Corrections</button>
-  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')"><span class="tab-dot" aria-hidden="true"></span>Lifestyle</button>
-  <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
+  <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Food</button>
+  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Analyse</button>
+  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')"><span class="tab-dot" aria-hidden="true"></span>Daily</button>
+  <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Results</button>
   <!-- Sans coach rattaché, ce bouton reste VISIBLE et grisé plutôt que masqué :
        l'athlète autonome doit voir ce dont il ne dispose pas. aria-disabled et
        non l'attribut disabled — ce dernier le sortirait du parcours clavier et

@@ -9232,7 +9232,7 @@ function _majPastilleVideos(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
   if(!btn) return;
   _pastilleOnglet('videos',feedbacksNonVus(currentUser).length,
-    c=>'Corrections : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
+    c=>'Analyse : '+c+' retour'+(c>1?'s':'')+' du coach à consulter');
 }
 function _majTabbar(id){
   const bar=document.getElementById('client-tabbar');
@@ -79342,7 +79342,7 @@ function _majPastilleLifestyle(){
   const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-1);
   const veilleVide=vides.indexOf(localISODate(d))>=0;
   _pastilleOnglet('lifestyle',veilleVide?vides.length:0,
-    c=>'Lifestyle : '+c+' jour'+(c>1?'s':'')+' sans données cette semaine');
+    c=>'Daily : '+c+' jour'+(c>1?'s':'')+' sans données cette semaine');
 }
 // Pastille de l'onglet Bilan, calquée sur _majPastilleVideos.
 function _majPastilleBilan(){

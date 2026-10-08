@@ -59812,14 +59812,14 @@ async function testExercices(){
     // envoi. Et le chemin le plus simple — choisir la vidéo sur son téléphone —
     // y était présenté comme le repli du plus complexe.
 
-    ok('R17 — l’écran s’appelle « Mes corrections », l’onglet « Corrections », et leurs identifiants n’ont pas bougé',(()=>{
+    ok('R17 — l’écran s’appelle « Mes corrections », l’onglet « Analyse » (libellé court du 08/10/2026), et leurs identifiants n’ont pas bougé',(()=>{
       const e=document.getElementById('s-videos');
       if(!e) return _echec('l’écran s-videos a disparu');
       const t=e.querySelector('.topbar-title');
       if(!t||t.textContent.trim()!=='Mes corrections') return _echec('titre : « '+(t&&t.textContent.trim())+' »');
       const b=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
       if(!b) return _echec('l’onglet data-tab="videos" a disparu');
-      if(b.textContent.trim()!=='Corrections') return _echec('onglet : « '+b.textContent.trim()+' »');
+      if(b.textContent.trim()!=='Analyse') return _echec('onglet : « '+b.textContent.trim()+' »');
       if(TABBAR_ECRANS['s-videos']!=='videos') return _echec('TABBAR_ECRANS ne relie plus s-videos à l’onglet');
       // « Vidéos techniques » ne subsiste nulle part côté athlète.
       for(const s of document.querySelectorAll('.screen:not([id^="s-coach"]),#client-tabbar'))
@@ -59829,7 +59829,7 @@ async function testExercices(){
       try{
         currentUser={email:'r17@t.fr',videos:[{id:'a',feedbackSeen:false}]};
         _majPastilleVideos();
-        if(!/^Corrections : 1 retour/.test(b.getAttribute('aria-label')||'')) return _echec('pastille : « '+b.getAttribute('aria-label')+' »');
+        if(!/^Analyse : 1 retour/.test(b.getAttribute('aria-label')||'')) return _echec('pastille : « '+b.getAttribute('aria-label')+' »');
       } finally { currentUser=sU; _majPastilleVideos(); }
       return true;})());
 
@@ -59837,6 +59837,29 @@ async function testExercices(){
     // petits écrans ne s'applique pas dans le panneau de test : on la LIT dans
     // la feuille, on la pose sur une copie de la barre large de 360 px, et on
     // mesure. C'est la largeur d'un Galaxy ; sous 360, la barre défile.
+    // LIBELLÉS COURTS (Kevin, 08/10/2026) : « la police est trop grande, on ne
+    // perçoit pas les espaces entre les mots ». Les libellés sont fixés, et un
+    // écart LISIBLE entre deux libellés voisins est exigé, pas seulement « tient ».
+    ok('Barre athlète : Accueil, Bilan, Food, Analyse, Daily, Results, Canal — 10 px au moins entre deux libellés à 360 px',(()=>{
+      const bar=document.getElementById('client-tabbar');
+      // Le libellé seul : la pastille (un chiffre) et le cadenas sont des enfants à part.
+      const lib=b=>{ const n=[...b.childNodes].filter(x=>x.nodeType===3&&x.textContent.trim()).pop(); return n?n.textContent.trim():''; };
+      const noms=[...bar.querySelectorAll('.tab-btn')].map(lib).join('|');
+      if(noms!=='Accueil|Bilan|Food|Analyse|Daily|Results|Canal') return _echec('libellés : '+noms);
+      const css=_stylesProd().map(s=>s.textContent).join('\n');
+      const m=css.match(/@media\(max-width:420px\)\{\.tab-btn\{([^}]*)\}\}/);
+      if(!m) return _echec('la règle des petits écrans est introuvable');
+      const c=bar.cloneNode(true); c.removeAttribute('id');
+      c.style.cssText='position:fixed;left:0;top:0;display:flex;width:360px;visibility:hidden;z-index:-1';
+      document.body.appendChild(c);
+      try{
+        const bs=[...c.querySelectorAll('.tab-btn')]; bs.forEach(b=>b.setAttribute('style',m[1]));
+        const r=bs.map(b=>{ const n=[...b.childNodes].filter(x=>x.nodeType===3&&x.textContent.trim()).pop();
+          const g=document.createRange(); g.selectNodeContents(n); return g.getBoundingClientRect(); });
+        for(let i=1;i<r.length;i++) if(r[i].left-r[i-1].right<10)
+          return _echec('« '+lib(bs[i-1])+' » et « '+lib(bs[i])+' » à '+(r[i].left-r[i-1].right).toFixed(1)+' px');
+      } finally { c.remove(); }
+      return true;})());
     ok('R17 — les sept onglets tiennent entiers sur un téléphone de 360 px',(()=>{
       const css=_stylesProd().map(s=>s.textContent).join('\n');
       const m=css.match(/@media\(max-width:420px\)\{\.tab-btn\{([^}]*)\}\}/);
@@ -59851,7 +59874,7 @@ async function testExercices(){
         try{
           const bs=[...c.querySelectorAll('.tab-btn')];
           bs.forEach(b=>b.setAttribute('style',m[1]));
-          if(bs[3].textContent.trim()!=='Corrections') trop.push('l’onglet vidéos ne dit pas « Corrections »');
+          if(bs[3].textContent.trim()!=='Analyse') trop.push('l’onglet vidéos ne dit pas « Analyse »');
           const coupes=bs.filter(b=>b.scrollWidth>b.clientWidth+1).map(b=>b.textContent.trim());
           if(coupes.length) trop.push(w+' px : tronqué(s) '+coupes.join(', '));
           if(parseFloat(getComputedStyle(bs[3]).fontSize)<10) trop.push(w+' px : police sous 10 px');
