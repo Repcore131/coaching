@@ -1435,6 +1435,8 @@ function openClientDetail(cid,_refresh,_force){
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
+  // Série 6 : le profil d'affichage de cet élève (son défaut, ou son exception).
+  try{ _rendreAffichageFiche(c); }catch(e){}
   document.getElementById('ccd-streak').textContent=streakSemaines(c)+'';
   // Le taux se lit A COTE de la serie : deux mesures d assiduite, une seule
   // lecture. Aucun palier, aucune couleur d alerte.

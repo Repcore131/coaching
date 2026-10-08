@@ -1116,6 +1116,8 @@ function renderNutriAnneaux(){
   // rien, ne selectionnerait l'unite de personne.
   const elU=document.getElementById('clh-nutri-unite');
   if(!m.p&&!m.g&&!m.l){ el.innerHTML=''; if(elU) elU.innerHTML=''; return; }
+  // Série 6 : « Essentiel » retire les anneaux ; « Sans chiffres » les calories.
+  if(!moduleVisibleAth(currentUser,'nutritionMacros')){ el.innerHTML=''; if(elU) elU.innerHTML=''; return; }
   let tot;
   if(typeDiete(nut)==='strict'){
     let ouvert=false;

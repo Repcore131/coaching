@@ -1346,6 +1346,8 @@ function rendrePrefsAide(){
   z.innerHTML=htmlPrefsAide(role,themeChoisi(),window.RC_MAJ||'',window.RC_BUILD||'',ua);
   // LOT M1 : l'app porte la marque du coach ; RepCore le dit, en petit.
   if(role==='client'&&_marqueActive) z.insertAdjacentHTML('beforeend','<p class="mq-propulse">'+escapeHtml(_marqueActive.nom)+' · propulsé par RepCore</p>');
+  // Série 6 : une phrase, sans détail, quand le coach a simplifié l'affichage.
+  if(role==='client'){ try{ const h=htmlAffichageAthlete(currentUser); if(h) z.insertAdjacentHTML('afterbegin',h); }catch(e){} }
   return true;
 }
 function ouvrirReglagesAthlete(){

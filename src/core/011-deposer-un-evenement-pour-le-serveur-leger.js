@@ -1252,6 +1252,8 @@ async function _rendreDuelsAccueil(){
   const u=currentUser;
   if(!z) return false;
   if(!u||u.role==='coach'||!SERVEUR_LEGER){ z.innerHTML=''; return false; }
+  // Série 6 : les cartes sociales suivent le profil d'affichage du coach.
+  if(!moduleVisibleAth(u,'social')){ z.innerHTML=''; return false; }
   const inv=duelInviteEnAttente();
   let invite=null;
   if(inv&&!(u.duels&&u.duels[inv.id])){

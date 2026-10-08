@@ -677,6 +677,8 @@ function htmlCartePesee(u,maintenant,suffixe){
   // peser tous les jours quelqu'un dont plusieurs signaux de déficit se
   // cumulent déjà.
   if(!u||aTCA(u)||u.masquerPoids) return '';
+  // Série 6 : le profil d'affichage du coach (Sans chiffres, Essentiel).
+  if(!moduleVisibleAth(u,'pesee')||!moduleVisibleAth(u,'poids')) return '';
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const auj=localISODate(new Date(t));
   try{ if(paliersDeficit(u,auj)==='blocage') return ''; }catch(e){}

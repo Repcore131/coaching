@@ -589,7 +589,8 @@ function resumesReglagesCoach(c){
   const d=u.dispo&&u.dispo.delaiH;
   out.messages=(d?'réponse sous '+d+' h':'délai non déclaré')+(r.formules?' · formule perso':'')+(reglageSignature(u)?' · signature':'');
   const nb=(u.promoBanners||[]).length;
-  out.affichage=nb?nb+' bannière'+(nb>1?'s':''):'aucune bannière';
+  const _af=(u.defautsCoach&&AFFICHAGE_PROFILS[u.defautsCoach.affichage])?AFFICHAGE_PROFILS[u.defautsCoach.affichage].lib:'Complet';
+  out.affichage=_af+' · '+(nb?nb+' bannière'+(nb>1?'s':''):'aucune bannière');
   let th=''; try{ th=themeChoisi(); }catch(e){ th=''; }
   out.aide=th==='clair'?'thème clair':th==='auto'?'thème auto':'thème sombre';
   return out;
@@ -623,8 +624,7 @@ function _rgxRendre(){
   pose('rgx-defauts',_htmlRgxPrescription(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
   pose('rgx-bilans',_htmlRgxBilans(u));
   pose('rgx-messages',_htmlRgxMessages(u,l));
-  const aff=document.getElementById('rgx-affichage');
-  if(aff&&!aff.firstChild) aff.innerHTML='<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>';
+  pose('rgx-affichage',_htmlRgxAffichage(u)+'<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>');
   _rgxResumes();
   return true;
 }
@@ -786,9 +786,14 @@ function rgxBilanPrecedent(){
   return defautBilanAppliquer(validerDefautBilan(p),'tous');
 }
 // PURE. Ce que coach_public reçoit : le défaut de bilan, et seulement lui.
+// Série 6, lot 4 : et le profil d'affichage par défaut (l'athlète doit le lire).
 function defautsCoachPublics(coach){
+  const out={};
   const b=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan);
-  return b?{bilan:{freq:b.freq,jour:b.jour,questions:b.questions}}:null;
+  if(b) out.bilan={freq:b.freq,jour:b.jour,questions:b.questions};
+  const a=coach&&coach.defautsCoach&&coach.defautsCoach.affichage;
+  if(AFFICHAGE_PROFILS[a]&&a!=='complet') out.affichage=a;
+  return Object.keys(out).length?out:null;
 }
 
 // ══ SÉRIE 6, LOT 3 — LA PRESCRIPTION PAR DÉFAUT ════════════════════════════
@@ -888,4 +893,90 @@ function rgxPrescriptionChanger(){
   // La valeur normalisée revient dans les champs (« 150 » → « 2 min 30 »).
   try{ _rgxRendre(); const m2=document.getElementById('rgx-pr-msg'); if(m2) m2.textContent=r.notes.join(' · '); }catch(e){}
   return res;
+}
+
+// ══ SÉRIE 6, LOT 4 — CE QUE VOIENT MES ÉLÈVES ══════════════════════════════
+// Trois profils d'affichage. Chacun liste les MODULES qu'il masque ; aucun
+// ne réaffiche ce qu'une autre source a masqué :
+//   · l'athlète lui-même (masquerPoids) ; · le garde-fou TCA (aTCA) ;
+//   · l'exception posée par le coach sur CE dossier (affichageCoach) ;
+//   · le défaut du coach (defautsCoach.affichage).
+// moduleVisible rend false dès qu'UNE source masque. Masquer n'efface aucune
+// donnée : seul l'affichage change, et « Complet » rend tout ce que
+// l'athlète n'a pas masqué lui-même.
+const AFFICHAGE_MODULES=Object.freeze(['kcal','poids','pesee','checkinMatin','faim','social','sommeil','nutritionMacros']);
+const AFFICHAGE_PROFILS=Object.freeze({
+  complet:Object.freeze({lib:'Complet',phrase:'Tout s’affiche : calories, poids, pesée, check-in, défis entre amis.',masque:Object.freeze([])}),
+  sansChiffres:Object.freeze({lib:'Sans chiffres',phrase:'Ni calories ni poids : les grammes et les portions restent, la balance disparaît.',masque:Object.freeze(['kcal','poids','pesee'])}),
+  essentiel:Object.freeze({lib:'Essentiel',phrase:'L’entraînement et le check-in seulement : rien à compter, rien à comparer.',masque:Object.freeze(['kcal','poids','pesee','faim','social','nutritionMacros'])})
+});
+// PURE. Le profil qui s'applique à un athlète : son exception, sinon le défaut du coach.
+function affichageDe(athlete,coach){
+  const a=athlete&&athlete.affichageCoach;
+  if(AFFICHAGE_PROFILS[a]) return {profil:a,source:'athlete'};
+  const d=coach&&coach.defautsCoach&&coach.defautsCoach.affichage;
+  if(AFFICHAGE_PROFILS[d]) return {profil:d,source:'coach'};
+  return {profil:'complet',source:'repcore'};
+}
+// PURE. false dès qu'une source masque ; jamais l'inverse.
+function moduleVisible(athlete,coach,module){
+  const a=athlete||{};
+  if(module==='poids'||module==='pesee'){
+    if(a.masquerPoids) return false;
+    try{ if(aTCA(a)) return false; }catch(e){}
+  }
+  const p=AFFICHAGE_PROFILS[affichageDe(a,coach).profil];
+  return !(p&&p.masque.indexOf(module)>=0);
+}
+// Le module pour l'athlète connecté (son coach retrouvé : local + coach_public).
+function moduleVisibleAth(u,module){
+  const x=u||(typeof currentUser!=='undefined'?currentUser:null);
+  if(!x||x.role==='coach') return true;
+  let c=null; try{ c=_coachDeAthlete(x); }catch(e){ c=null; }
+  return moduleVisible(x,c,module);
+}
+function _htmlRgxAffichage(coach){
+  const cur=(coach&&AFFICHAGE_PROFILS[coach.defautsCoach&&coach.defautsCoach.affichage])?coach.defautsCoach.affichage:'complet';
+  return '<div class="rgx-aff" role="radiogroup" aria-label="Ce que voient mes élèves">'
+    +Object.keys(AFFICHAGE_PROFILS).map(k=>{ const p=AFFICHAGE_PROFILS[k];
+      return '<label class="rgx-aff-c'+(k===cur?' on':'')+'"><input type="radio" name="rgx-aff" value="'+k+'"'+(k===cur?' checked':'')
+        +' onchange="rgxAffichageChoisir(this.value)"><b>'+escapeHtml(p.lib)+'</b><span>'+escapeHtml(p.phrase)+'</span></label>'; }).join('')
+    +'</div><p class="bcad-d">Le défaut de tous tes élèves ; une fiche peut avoir son exception. Masquer n’efface aucune donnée, et rien ne réaffiche ce qu’un élève a masqué lui-même.</p>';
+}
+function rgxAffichageChoisir(k){
+  if(!AFFICHAGE_PROFILS[k]) return false;
+  return reglageCoachEcrire('defautsCoach.affichage',k==='complet'?null:k,{apresAnnuler:()=>{ try{ _rgxRendre(); }catch(e){} }});
+}
+// La ligne de la fiche : « Affichage : suit ton défaut · changer ».
+function htmlAffichageFiche(c){
+  const coach=_rgCoach();
+  const a=affichageDe(c,coach);
+  const lib=AFFICHAGE_PROFILS[a.profil].lib;
+  const opt=(v,l,sel)=>'<option value="'+v+'"'+(sel?' selected':'')+'>'+escapeHtml(l)+'</option>';
+  return '<div class="aff-fiche"><span>Affichage : '+(a.source==='athlete'?escapeHtml(lib)+' (propre à cet élève)':'suit ton défaut ('+escapeHtml(lib)+')')+'</span>'
+    +' <select aria-label="Changer l’affichage de cet élève" onchange="affichageFicheChoisir(this.value)">'
+    +opt('','Suivre mon défaut',a.source!=='athlete')+Object.keys(AFFICHAGE_PROFILS).map(k=>opt(k,AFFICHAGE_PROFILS[k].lib,a.source==='athlete'&&a.profil===k)).join('')+'</select></div>';
+}
+function affichageFicheChoisir(v){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const avant=c.affichageCoach;
+  if(AFFICHAGE_PROFILS[v]) c.affichageCoach=v; else delete c.affichageCoach;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  const defaire=()=>{ const us=DB.get('users')||{}, x=us[c.email]; if(!x) return;
+    if(avant===undefined) delete x.affichageCoach; else x.affichageCoach=avant; x.updatedAt=Date.now(); us[x.email]=x; DB.set('users',us);
+    CLOUD.pushOne(x.email,x); try{ _rendreAffichageFiche(x); }catch(e){} };
+  try{ _rendreAffichageFiche(c); }catch(e){}
+  return toastSyncAnnulable(ok,CLOUD.pushOne(c.email,c),'Affichage enregistré '+ICO.coche,'l’affichage est',defaire,RGX_ANNULER_MS);
+}
+function _rendreAffichageFiche(c){
+  const z=document.getElementById('ccd-affichage'); if(z) z.innerHTML=htmlAffichageFiche(c);
+}
+// Chez l'athlète, dans ses Réglages : une phrase, sans détail.
+function htmlAffichageAthlete(u){
+  if(!u||u.role==='coach') return '';
+  let c=null; try{ c=_coachDeAthlete(u); }catch(e){}
+  return affichageDe(u,c).profil!=='complet'?'<p class="prf-sub aff-simplifie">Ton coach a simplifié ton affichage.</p>':'';
 }

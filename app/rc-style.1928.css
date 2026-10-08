@@ -13743,3 +13743,13 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rgx-pr-c{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--sub);min-width:0}
 .rgx-pr-c .rg-in{width:100%;margin:0}
 .rgx-pr-msg{font-size:var(--fs-xs);color:var(--orange);line-height:1.5;min-height:0}
+/* SÉRIE 6, LOT 4 — ce que voient mes élèves : trois cartes radio, la ligne de la fiche. */
+.rgx-aff{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.rgx-aff-c{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer;position:relative}
+.rgx-aff-c input{position:absolute;opacity:0;pointer-events:none}
+.rgx-aff-c b{font-size:var(--fs-sm)}
+.rgx-aff-c span{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.rgx-aff-c.on,.rgx-aff-c:has(input:checked){border-color:var(--red);background:var(--surface-2)}
+.rgx-aff-c:has(input:focus-visible){outline:2px solid var(--red);outline-offset:2px}
+.aff-fiche{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px}
+.aff-fiche select{width:auto;margin:0;font-size:var(--fs-xs);padding:6px 8px;min-height:32px}

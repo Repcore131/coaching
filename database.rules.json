@@ -173,7 +173,15 @@
         // bilan est borne comme bilanCadence + questionsCoach ; les autres
         // sections (prescription, affichage, methode, profil) sont bornees par
         // leurs lots.
+        // SERIE 6, LOT 4 : l exception d affichage posee par le COACH sur ce
+        // dossier. L athlete ne peut pas la changer lui-meme (sa propre ecriture
+        // doit laisser la valeur intacte) : elle ne sert qu a masquer, jamais a
+        // reafficher ce qu il a masque.
+        "affichageCoach": {
+          ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/) && (auth.token.email.replace('.', ',') !== $emailKey || data.val() === newData.val())"
+        },
         "defautsCoach": {
+          "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/)" },
           "prescription": {
             "series": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0" },
             "reps": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12" },
@@ -727,6 +735,7 @@
         ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
         // SERIE 6 : le defaut de BILAN du coach, et lui seul (defautsCoachPublics).
         "defautsCoach": {
+          "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(sansChiffres|essentiel)$/)" },
           "bilan": {
             ".validate": "newData.hasChildren(['freq', 'jour'])",
             "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },

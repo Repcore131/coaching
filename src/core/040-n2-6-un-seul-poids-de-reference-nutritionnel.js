@@ -271,6 +271,8 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
 // que les anneaux : deux écrans qui affichent le même total ne doivent pas
 // pouvoir diverger sur son arrondi ni sur le plafonnement de la barre.
 function htmlLigneCalories(tot,m){
+  // Série 6 : en « Sans chiffres », pas de calories (les grammes restent).
+  try{ if(!moduleVisibleAth(null,'kcal')) return ''; }catch(e){}
   const pct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
   // LE CAISSON, ET NON UNE LIGNE POSEE SUR LE FOND. Les calories sont la
   // somme des trois anneaux du dessus : les encadrer dit qu'on change de

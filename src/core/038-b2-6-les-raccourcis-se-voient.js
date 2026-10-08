@@ -844,7 +844,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
   const _sansSom=checkinSansSommeil(u,t);
   return '<div class="ci-carte" data-acc role="group" aria-label="Check-in du matin">'+_accX('ci')
     +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
-    +CHECKIN_QUESTIONS.filter(q=>!(_sansSom&&q.cle==='sommeil')).map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
+    +CHECKIN_QUESTIONS.filter(q=>!(_sansSom&&q.cle==='sommeil')).filter(q=>!(q.cle==='faim'&&!moduleVisible(u,_coachDeAthlete(u),'faim'))).map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
       +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
       +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
         +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
@@ -856,7 +856,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
 function _rendreCheckin(u){
   const z=document.getElementById('clh-checkin');
   if(!z) return false;
-  if(accueilMasque('ci')){ z.innerHTML=''; return false; }
+  if(accueilMasque('ci')||!moduleVisibleAth(u,'checkinMatin')){ z.innerHTML=''; return false; }
   z.innerHTML=htmlCheckinAccueil(u,Date.now(),_ciBrouillon);
   try{ const p=z.querySelector('#ci-pct'); if(p&&z.dataset.anime!=='1'){ z.dataset.anime='1'; p.dataset.valeur='0';
     arcCompteur(p,Number(p.dataset.cible)||0,{duree:700,format:x=>Math.round(x)+' %'}); } }catch(e){}
@@ -923,6 +923,7 @@ function _htmlBatterieCoach(c,maintenant){
 // question ne doit pas disparaître avec le formulaire.
 function _htmlCiFaimApres(fait){
   if(!fait||_ciNote(fait.faim)) return '';
+  if(!moduleVisibleAth(null,'faim')) return '';
   const q=CHECKIN_QUESTIONS.find(x=>x.cle==='faim');
   if(!q) return '';
   return '<div class="ci-ligne ci-faim"><span class="ci-lib">'+escapeHtml(q.lib)+'</span>'

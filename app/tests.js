@@ -74648,7 +74648,7 @@ async function testExercices(){
       const f=[];
       if(!/^TEAM RIPPED · logo/.test(r.identite)) f.push(r.identite);
       if(!/réponse sous 24 h/.test(r.messages)) f.push(r.messages);
-      if(r.affichage!=='2 bannières') f.push(r.affichage);
+      if(r.affichage!=='Complet · 2 bannières') f.push(r.affichage);  // série 6, lot 4 : le profil d'affichage d'abord
       if(Object.keys(r).join(',')!=='identite,defauts,bilans,messages,affichage,aide') f.push(Object.keys(r).join(','));
       return f.length?_echec(f.join(' | ')):true;});
     ok('1925 — sonde : écran replié ≤ 2 hauteurs d’écran',()=>{
@@ -74778,6 +74778,57 @@ async function testExercices(){
       if(ex[0].series!==2||ex[0].rir!=='3') return _echec('allègement : '+JSON.stringify(ex[0]));
       if(!/facteurDecharge\(_co\)/.test(String(appliquerDecharge))) return _echec('appliquerDecharge garde les constantes');
       return apercuPrescription({defautsCoach:{prescription:{series:4,reps:'8-10',repos:'2 min 30',rir:'2'}}}).indexOf('Nouvel exercice : 4 × 8-10 · 2 min 30 · RIR 2')===0?true:_echec('aperçu');});
+
+    // ══ BUILD 1928 — CE QUE VOIENT MES ÉLÈVES (moduleVisible) ══════════════════
+    ok('1928 — moduleVisible : table de vérité ; aucune combinaison ne réaffiche un module masqué par l’athlète',()=>{
+      const f=[];
+      const sc={defautsCoach:{affichage:'sansChiffres'}}, ess={defautsCoach:{affichage:'essentiel'}}, co={defautsCoach:{affichage:'complet'}};
+      const tca={tcaDeclare:true,etatsSante:['tca']};
+      let estTca=false; try{ estTca=aTCA(tca); }catch(e){}
+      if(estTca&&moduleVisible(tca,co,'poids')) f.push('TCA + complet : poids visible');
+      if(moduleVisible({masquerPoids:true},co,'poids')) f.push('masquerPoids + complet : visible');
+      if(moduleVisible({masquerPoids:true,affichageCoach:'complet'},co,'pesee')) f.push('exception complet réaffiche la pesée');
+      if(moduleVisible({},sc,'kcal')) f.push('sansChiffres : kcal visibles');
+      if(!moduleVisible({},sc,'nutritionMacros')) f.push('sansChiffres : grammes masqués');
+      if(moduleVisible({},ess,'social')||moduleVisible({},ess,'faim')) f.push('essentiel : social / faim visibles');
+      if(!moduleVisible({},ess,'checkinMatin')) f.push('essentiel : check-in masqué');
+      if(moduleVisible({affichageCoach:'sansChiffres'},co,'kcal')) f.push('l’exception de la fiche ignorée');
+      if(!moduleVisible({affichageCoach:'complet'},sc,'kcal')) f.push('l’exception « complet » ne prime pas sur le défaut');
+      for(const m of AFFICHAGE_MODULES) for(const c of [null,co,sc,ess]) for(const ex of [undefined,'complet','sansChiffres','essentiel'])
+        if((m==='poids'||m==='pesee')&&moduleVisible({masquerPoids:true,affichageCoach:ex},c,m)) f.push('réaffiché : '+m+'/'+ex);
+      return f.length?_echec(f.slice(0,5).join(' | ')):true;});
+    ok('1928 — en « Sans chiffres », l’accueil ne montre ni calories ni poids (pesée, anneaux) ; aucune donnée effacée',()=>{
+      const faux=[];
+      const t=Date.now();
+      const u=Object.assign(_banAth(),{affichageCoach:'sansChiffres',weightLog:[{date:localISODate(new Date(t)),kg:62.4}],
+        nutrition:{macros:{on:{kcal:2000,p:120,g:220,l:60,f:30},off:{kcal:2000,p:120,g:220,l:60,f:30}},log:{[localISODate(new Date(t))]:{entries:[{kcal:500,p:30,c:50,l:15}]}}}});
+      const avant=JSON.stringify(u.weightLog)+JSON.stringify(u.nutrition);
+      if(htmlCartePesee(u,t)!=='') faux.push('carte de pesée rendue');
+      _sondeEcran(u,()=>{ go('s-client-home'); loadClientHome(); },()=>{
+        const z=document.getElementById('clh-pesee'); if(z&&/kg/.test(z.textContent)) faux.push('pesée : '+z.textContent.slice(0,60));
+        const r=document.getElementById('clh-nutri-rings'); if(r&&/kcal/i.test(r.textContent)) faux.push('anneaux : kcal');
+        const h=(document.getElementById('s-client-home')||{}).textContent||'';
+        if(/\bkcal\b/i.test(h)) faux.push('« kcal » sur l’accueil');
+        if(/62[,.]4/.test(h)) faux.push('le poids s’affiche');
+      });
+      if(JSON.stringify(u.weightLog)+JSON.stringify(u.nutrition)!==avant) faux.push('donnée modifiée');
+      const v=Object.assign({},u,{affichageCoach:'complet'});
+      if(htmlCartePesee(v,t)==='') faux.push('« Complet » ne réaffiche pas la pesée');
+      return faux.length?_echec(faux.join(' | ')):true;});
+    ok('1928 — le coach : trois cartes dans Mes réglages, une ligne sur la fiche ; l’athlète : une phrase',()=>{
+      const h=_htmlRgxAffichage({defautsCoach:{affichage:'essentiel'}});
+      if((h.match(/type="radio"/g)||[]).length!==3) return _echec('cartes');
+      if(!/value="essentiel" checked/.test(h)) return _echec('choix courant');
+      const cu=currentUser;
+      try{
+        currentUser=Object.assign(_banCoach(),{defautsCoach:{affichage:'sansChiffres'}});
+        if(!/suit ton défaut \(Sans chiffres\)/.test(htmlAffichageFiche({}))) return _echec('fiche : '+htmlAffichageFiche({}));
+        if(!/propre à cet élève/.test(htmlAffichageFiche({affichageCoach:'essentiel'}))) return _echec('exception');
+      }finally{ currentUser=cu; }
+      if(!/Ton coach a simplifié ton affichage/.test(htmlAffichageAthlete({role:'athlete',affichageCoach:'essentiel'}))) return _echec('phrase athlète');
+      if(htmlAffichageAthlete({role:'athlete'})!=='') return _echec('phrase sans raison');
+      const p=defautsCoachPublics({defautsCoach:{affichage:'sansChiffres',prescription:{series:4}}});
+      return p&&p.affichage==='sansChiffres'&&!p.prescription?true:_echec('publication : '+JSON.stringify(p));});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
