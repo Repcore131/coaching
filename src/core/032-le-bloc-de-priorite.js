@@ -1586,7 +1586,7 @@ function mentionSourceRepere(user,muscle){
   let r=null; try{ r=reperesEffectifs(user,muscle); }catch(e){ return ''; }
   if(!r) return '';
   if(r.source==='perso') return 'ajusté sur tes retours';
-  if(r.source==='coach') return 'fixé par ton coach';
+  if(r.source==='coach'||r.source==='methode') return 'fixé par ton coach';
   return '';
 }
 // LE JOURNAL, COTE COACH. Sans lui, l'allegement serait un secret entre

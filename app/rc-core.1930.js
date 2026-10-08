@@ -7797,7 +7797,7 @@ const CHAMPS_SANTE=Object.freeze([
   'pes','pesPartagee',
   // Ressentis de seance et ce qui en derive
   'fatigue','journalSeance','ecartsSeance','retourMuscle','rites','allegementJour',
-  'monteeChargeMasquee','reperesAuto','calibrageRir',
+  'monteeChargeMasquee','reperesAuto','reperesVolume','calibrageRir',
   // ⚠ L'AGE EST UNE DONNEE DE SANTE, et le texte de r-health le dit depuis
   // toujours : « … pas quotidiens et age pour mon suivi sportif ». Il est
   // demande au premier calcul de charge, et ce moment-la passe donc par le
@@ -46896,12 +46896,39 @@ const METHODES=Object.freeze([
 // LES REGLES EFFECTIVES : la table, surchargee par le coach. Meme patron que
 // POIDS_TECHNIQUE et que reperesEffectifs — la table de depart ne bouge
 // jamais, l'ajustement vit sur le dossier.
-function methodesRegles(user){
+// SÉRIE 6 (lot 6) : la méthode du coach (defautsCoach.methode.methodesRegles)
+// s'intercale : table < méthode du coach < dossier de l'athlète.
+const METHODE_MAX_SEMAINE=7, METHODE_COUT_MAX=5;
+function validerRegleMethode(cle,p){
+  if(!METHODES.some(m=>m.cle===cle)) return {ok:false,erreur:'méthode inconnue'};
+  if(p==null||p==='') return {ok:true,valeur:null};
+  if(typeof p!=='object') return {ok:false,erreur:'règle illisible'};
+  const out={};
+  const lims={maxParSemaine:METHODE_MAX_SEMAINE,coutFatigue:METHODE_COUT_MAX};
+  for(const k of Object.keys(lims)){
+    if(p[k]==null||p[k]==='') continue;
+    const n=Number(p[k]);
+    if(!isFinite(n)||n<0||n>lims[k]||n%1!==0) return {ok:false,erreur:(k==='maxParSemaine'?'Par semaine':'Coût de fatigue')+' : un entier de 0 à '+lims[k]};
+    out[k]=n;
+  }
+  return {ok:true,valeur:Object.keys(out).length?out:null};
+}
+function _reglesMethodeCoach(user,coach){
+  let c=coach;
+  if(c===undefined){ try{ c=_coachDeAthlete(_dossier(user)); }catch(e){ c=null; } }
+  const src=c&&c.defautsCoach&&c.defautsCoach.methode&&c.defautsCoach.methode.methodesRegles;
+  if(!src||typeof src!=='object') return {};
+  const out={};
+  for(const k of Object.keys(src)){ const v=validerRegleMethode(k,src[k]); if(v.ok&&v.valeur) out[k]=v.valeur; }
+  return out;
+}
+function methodesRegles(user,coach){
   const u=_dossier(user);
-  const perso=(u&&u.methodesRegles&&typeof u.methodesRegles==='object')?u.methodesRegles:{};
+  const dossier=(u&&u.methodesRegles&&typeof u.methodesRegles==='object')?u.methodesRegles:{};
+  const duCoach=_reglesMethodeCoach(user,coach);
   return METHODES.map(m=>{
-    const p=perso[m.cle];
-    if(!p||typeof p!=='object') return m;
+    const p=Object.assign({},duCoach[m.cle]||{},(dossier[m.cle]&&typeof dossier[m.cle]==='object')?dossier[m.cle]:{});
+    if(!Object.keys(p).length) return m;
     const o=Object.assign({},m);
     for(const k of ['maxParSemaine','coutFatigue'])
       if(typeof p[k]==='number'&&isFinite(p[k])&&p[k]>=0) o[k]=p[k];
@@ -75340,7 +75367,7 @@ function _rapBarreVolume(m){
       stroke="currentColor" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 2"/>
     <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" class="rap-lgd-s" fill="currentColor" fill-opacity=".55">${lib}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
-    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':(m.source==='coach'?', repères fixés par le coach':'')}" style="display:block">
+    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':((m.source==='coach'||m.source==='methode')?', repères fixés par le coach':'')}" style="display:block">
     <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
     <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="${ROUGE_MARQUE_MIN}" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}
@@ -79695,7 +79722,13 @@ function _libFrequence(user,cle,muscle){
 // `source` DIT D'OU VIENT LE CHIFFRE. Sans elle, le coach ne peut plus
 // arbitrer : un repere de reference et un repere mesure se lisent pareil, et
 // il ne sait pas lequel il a le droit de contredire.
-function reperesEffectifs(user,muscle){
+// SÉRIE 6 (lot 6) : un quatrième étage, LA MÉTHODE DU COACH
+// (defautsCoach.methode.reperesVolume), posé entre la table et la mesure :
+//   table < méthode du coach < reperesAuto (mesuré) < user.reperesVolume.
+// Le coach règle SA référence pour tous ses athlètes ; la boucle de retour
+// mesure ensuite chacun ; l'ajustement fait pour UN athlète gagne toujours.
+// `coach` est facultatif : absent, il est retrouvé (_coachDeAthlete).
+function reperesEffectifs(user,muscle,coach){
   // AU DÉPART, ×0,8 POUR UN DÉBUTANT OU UN SENIOR (profilEntrainement, build
   // 1829) — sur la TABLE seulement : la boucle de retour (reperesAuto) et le
   // coach (reperesVolume) l'ajustent ensuite. Un muscle PRIORITAIRE (bloc de
@@ -79711,11 +79744,20 @@ function reperesEffectifs(user,muscle){
       if(prio) d.mev=Math.max(d.mev,d0.mev);
     }
   }catch(e){ d=d0; }
+  const mc=_reperesMethodePour(user,coach);
+  const k=mc&&mc[muscle];
   const a=user&&user.reperesAuto&&user.reperesAuto[muscle];
   const o=user&&user.reperesVolume&&user.reperesVolume[muscle];
-  if(!d&&!a&&!o) return null;
-  const r=Object.assign({},d||{},a||{},o||{});
+  if(!d&&!a&&!o&&!k) return null;
+  const r=Object.assign({},d||{},k||{},a||{},o||{});
   for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
+  // Un MEV ou un MRV déplacé seul peut croiser la zone de progrès de la
+  // table : elle est ramenée DANS [MEV, MRV] plutôt que de rendre un repère
+  // incohérent (une zone verte au-dessus du maximum).
+  if(k&&!o){
+    r.mavMin=Math.min(Math.max(r.mavMin,r.mev),r.mrv);
+    r.mavMax=Math.min(Math.max(r.mavMax,r.mavMin),r.mrv);
+  }
   // LE VOLUME DE MAINTIEN (mv) : posé par le coach ou la boucle s'il l'a été,
   // sinon la moitié du MEV EFFECTIF — un MEV surchargé déplace le maintien.
   const mvPose=[o,a].find(x=>x&&typeof x.mv==='number');
@@ -79724,8 +79766,56 @@ function reperesEffectifs(user,muscle){
   // rien : l'annoncer « ajuste » ferait lire une mesure la ou il n'y en a pas.
   const bouge=(src)=>!!src&&['mev','mavMin','mavMax','mrv']
     .some(b=>typeof src[b]==='number'&&(!d0||src[b]!==d0[b]));
-  r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
+  r.source=bouge(o)?'coach':(bouge(a)?'perso':(bouge(k)?'methode':'table'));
   return r;
+}
+// La méthode du coach de cet athlète, lue au plus une fois par seconde et
+// demie : reperesEffectifs est appelée muscle par muscle, semaine par semaine.
+const _methodeMemo=new WeakMap();
+function _methodeCacheVider(){ try{ _methodeMemoCle++; }catch(e){} }
+let _methodeMemoCle=0;
+function _reperesMethodePour(user,coach){
+  if(coach!==undefined) return reperesMethode(coach);
+  if(!user||typeof user!=='object') return null;
+  const t=Date.now(), m=_methodeMemo.get(user);
+  if(m&&m.k===_methodeMemoCle&&t-m.t<1500) return m.v;
+  let v=null; try{ v=reperesMethode(_coachDeAthlete(user)); }catch(e){ v=null; }
+  _methodeMemo.set(user,{t,k:_methodeMemoCle,v});
+  return v;
+}
+// PURE. Les repères de la méthode du coach, validés muscle par muscle ; une
+// ligne invalide est IGNORÉE (la table reprend), jamais réparée en silence.
+function reperesMethode(coach){
+  const src=coach&&coach.defautsCoach&&coach.defautsCoach.methode&&coach.defautsCoach.methode.reperesVolume;
+  if(!src||typeof src!=='object') return null;
+  const out={};
+  for(const m of Object.keys(src)){
+    const v=validerRepereVolume(m,src[m]);
+    if(v.ok&&v.valeur) out[m]=v.valeur;
+  }
+  return Object.keys(out).length?out:null;
+}
+const REPERE_VOL_MAX=60;
+// PURE. Une ligne {mev?, mavMin?, mavMax?, mrv?} pour un muscle de la table.
+// Entiers 0..60 ; une case absente vaut le niveau du dessous ; MEV > MRV est
+// REFUSÉ (comparé à la valeur effective de la table quand l'un manque).
+function validerRepereVolume(muscle,r){
+  const t=reperesTable(muscle);
+  if(!t) return {ok:false,erreur:'muscle inconnu'};
+  if(r==null||r==='') return {ok:true,valeur:null};
+  if(typeof r!=='object') return {ok:false,erreur:'repère illisible'};
+  const out={};
+  for(const b of ['mev','mavMin','mavMax','mrv']){
+    const x=r[b];
+    if(x==null||x==='') continue;
+    const n=Number(x);
+    if(!isFinite(n)||n<0||n>REPERE_VOL_MAX||n%1!==0) return {ok:false,erreur:(b==='mev'?'MEV':b==='mrv'?'MRV':b)+' : un nombre entier de 0 à '+REPERE_VOL_MAX};
+    out[b]=n;
+  }
+  const mev=out.mev!=null?out.mev:t.mev, mrv=out.mrv!=null?out.mrv:t.mrv;
+  if(mev>mrv) return {ok:false,erreur:'MEV ('+mev+') au-dessus du MRV ('+mrv+') : le minimum ne peut pas dépasser le maximum'};
+  if(out.mavMin!=null&&out.mavMax!=null&&out.mavMin>out.mavMax) return {ok:false,erreur:'zone de progrès inversée'};
+  return {ok:true,valeur:Object.keys(out).length?out:null};
 }
 // L'ENTREE COTE COACH. Une ligne dans la fiche client, et le bouton qui ouvre
 // une echeance quand il n'y en a pas.
@@ -82632,7 +82722,7 @@ function mentionSourceRepere(user,muscle){
   let r=null; try{ r=reperesEffectifs(user,muscle); }catch(e){ return ''; }
   if(!r) return '';
   if(r.source==='perso') return 'ajusté sur tes retours';
-  if(r.source==='coach') return 'fixé par ton coach';
+  if(r.source==='coach'||r.source==='methode') return 'fixé par ton coach';
   return '';
 }
 // LE JOURNAL, COTE COACH. Sans lui, l'allegement serait un secret entre
@@ -97771,7 +97861,7 @@ function renderVolume(){
       ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
       <div class="vc-corps">
         <div class="vc-tete">
-          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':(_s==='methode'?'ta méthode':'fixé par toi')}</span>`; })()}</span>
           <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}</span>${delta}</span>
         </div>
         ${_volBarre(m,n,rep,c.aberrants[m],u)}
@@ -98421,6 +98511,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     <div style="margin-top:12px">${_htmlComptageCoach(c)}</div>
+    ${(()=>{ try{ return htmlAjusterVolumeAthlete(c); }catch(e){ return ''; } })()}
     ${_axPrio?'':_axial}
     ${(()=>{ try{ return _htmlEcheanceCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlRendement(c); }catch(e){ return ''; } })()}
@@ -145758,6 +145849,7 @@ function resumesReglagesCoach(c){
   out.identite=(nom||'Nom de team à choisir')+(u.logo?' · logo':'')+(u.catchphrase?' · accroche':'');
   const mod=reglageModele(u);
   out.defauts=(mod?'programme de départ':'aucun programme de départ')+' · ±'+reglagePasKcal(u)+' kcal';
+  try{ const _rm=resumeMethode(u); if(_rm) out.defauts+=' · méthode : '+_rm; }catch(e){}
   let cad=null; try{ cad=(typeof window.cadenceEffective==='function')?window.cadenceEffective(null,u):null; }catch(e){ cad=null; }
   if(!cad){ const x=reglageCadence(u); cad=x?{freq:x.freq,jour:x.jour,questions:[]}:null; }
   out.bilans=cad?(_RG_FREQ_LIB[cad.freq]||'')+', '+(BILAN_JOURS[cad.jour]||'')+((cad.questions||[]).length?' · '+cad.questions.length+' question'+(cad.questions.length>1?'s':''):''):'au choix de l’athlète';
@@ -145796,7 +145888,7 @@ function _rgxRendre(){
   const u=_rgCoach(); if(!u||!document.getElementById('s-coach-reglages')) return false;
   const l=lignesReglagesCoach(u);
   const pose=(id,h)=>{ const z=document.getElementById(id); if(z) z.innerHTML=h; };
-  pose('rgx-defauts',_htmlRgxPrescription(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
+  pose('rgx-defauts',_htmlRgxPrescription(u)+_htmlRgxMethode(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
   pose('rgx-bilans',_htmlRgxBilans(u));
   pose('rgx-messages',_htmlRgxMessages(u,l));
   pose('rgx-affichage',_htmlRgxAffichage(u)+'<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>');
@@ -145969,6 +146061,7 @@ function defautsCoachPublics(coach){
   if(b) out.bilan={freq:b.freq,jour:b.jour,questions:b.questions};
   const a=coach&&coach.defautsCoach&&coach.defautsCoach.affichage;
   if(AFFICHAGE_PROFILS[a]&&a!=='complet') out.affichage=a;
+  try{ const me=methodePublique(coach); if(me) out.methode=me; }catch(e){}
   return Object.keys(out).length?out:null;
 }
 
@@ -146155,6 +146248,156 @@ function htmlAffichageAthlete(u){
   if(!u||u.role==='coach') return '';
   let c=null; try{ c=_coachDeAthlete(u); }catch(e){}
   return affichageDe(u,c).profil!=='complet'?'<p class="prf-sub aff-simplifie">Ton coach a simplifié ton affichage.</p>':'';
+}
+
+// ══ SÉRIE 6, LOT 6 — MA MÉTHODE ════════════════════════════════════════════
+// defautsCoach.methode = {reperesVolume:{MUSCLE:{mev?,mrv?}}, methodesRegles:
+// {cle:{maxParSemaine?,coutFatigue?}}}. Une case vide = la valeur RepCore
+// (affichée en placeholder). Ordre de lecture : table < ma méthode < mesure
+// sur l'athlète < réglage posé sur l'athlète (reperesEffectifs).
+function _methodeDe(coach){ const m=coach&&coach.defautsCoach&&coach.defautsCoach.methode; return (m&&typeof m==='object')?m:{}; }
+// PURE. Le résumé d'une ligne (« 3 muscles, 1 méthode ajustés »), ou ''.
+function resumeMethode(coach){
+  const m=_methodeDe(coach);
+  const nv=Object.keys(m.reperesVolume||{}).length, nm=Object.keys(m.methodesRegles||{}).length;
+  if(!nv&&!nm) return '';
+  const p=[];
+  if(nv) p.push(nv+' muscle'+(nv>1?'s':''));
+  if(nm) p.push(nm+' méthode'+(nm>1?'s':''));
+  return p.join(', ')+' ajusté'+((nv+nm)>1?'s':'');
+}
+function _htmlRgxMethode(coach){
+  const m=_methodeDe(coach), rv=m.reperesVolume||{}, mr=m.methodesRegles||{};
+  const v=(o,k)=>(o&&o[k]!=null)?String(o[k]):'';
+  const muscles=Object.keys(REPERES_VOLUME);
+  const lignes=muscles.map(M=>{
+    const t=reperesTable(M), o=rv[M]||{};
+    return '<div class="rgx-mt-l"><span class="rgx-mt-n">'+escapeHtml((MUSCLES[M]||{}).lib||M)+'</span>'
+      +'<input id="rgx-mv-'+M+'-mev" class="rg-in" type="number" inputmode="numeric" min="0" max="'+REPERE_VOL_MAX+'" aria-label="MEV '+escapeHtml((MUSCLES[M]||{}).lib||M)+'" placeholder="'+t.mev+'" value="'+escapeHtml(v(o,'mev'))+'" onchange="rgxMethodeVolume(\''+M+'\')">'
+      +'<input id="rgx-mv-'+M+'-mrv" class="rg-in" type="number" inputmode="numeric" min="0" max="'+REPERE_VOL_MAX+'" aria-label="MRV '+escapeHtml((MUSCLES[M]||{}).lib||M)+'" placeholder="'+t.mrv+'" value="'+escapeHtml(v(o,'mrv'))+'" onchange="rgxMethodeVolume(\''+M+'\')"></div>';
+  }).join('');
+  const meth=METHODES.map(x=>{
+    const o=mr[x.cle]||{};
+    return '<div class="rgx-mt-l"><span class="rgx-mt-n">'+escapeHtml(x.lib)+'</span>'
+      +'<input id="rgx-mm-'+x.cle+'" class="rg-in" type="number" inputmode="numeric" min="0" max="'+METHODE_MAX_SEMAINE+'" aria-label="'+escapeHtml(x.lib)+' par semaine" placeholder="'+x.maxParSemaine+'" value="'+escapeHtml(v(o,'maxParSemaine'))+'" onchange="rgxMethodeRegle(\''+x.cle+'\')"><span></span></div>';
+  }).join('');
+  const res=resumeMethode(coach);
+  return '<details class="rg-l rgx-mt" id="rgx-methode"><summary class="rg-t">Ma méthode<span class="rgx-res">'+escapeHtml(res||'valeurs RepCore')+'</span></summary>'
+    +'<p class="bcad-d">Séries dures par semaine. Case vide : la valeur RepCore, en gris. Ce que la mesure ou ton réglage sur un athlète décide passe devant.</p>'
+    +'<div class="rgx-mt-l rgx-mt-h"><span></span><span>MEV</span><span>MRV</span></div>'+lignes
+    +'<div class="rgx-mt-l rgx-mt-h"><span>Méthodes</span><span>max / sem.</span><span></span></div>'+meth
+    +'<div class="rgx-pr-msg" id="rgx-mt-msg" role="status"></div>'
+    +(res?'<button type="button" class="rb-lien" onclick="rgxMethodeRepcore()">Revenir aux valeurs RepCore</button>':'')
+    +'</details>';
+}
+function _rgxMethodeEcrit(chemin,val){
+  const r=reglageCoachEcrire(chemin,val,{apresAnnuler:()=>{ try{ _methodeCacheVider(); _viderCacheVolume(); }catch(e){} try{ _rgxRendre(); }catch(e){} }});
+  try{ _methodeCacheVider(); _viderCacheVolume(); }catch(e){}
+  return r;
+}
+function _rgxMethodeOuverte(){ try{ const d=document.getElementById('rgx-methode'); return !!(d&&d.open); }catch(e){ return false; } }
+function _rgxMethodeRouvrir(ouv){ try{ _rgxRendre(); if(ouv){ const d=document.getElementById('rgx-methode'); if(d) d.open=true; } }catch(e){} }
+function rgxMethodeVolume(M){
+  const u=_rgCoach(); if(!u) return false;
+  const g=k=>document.getElementById('rgx-mv-'+M+'-'+k);
+  const brut={mev:(g('mev')||{}).value,mrv:(g('mrv')||{}).value};
+  const r=validerRepereVolume(M,brut);
+  const msg=document.getElementById('rgx-mt-msg');
+  if(!r.ok){ if(msg) msg.textContent=((MUSCLES[M]||{}).lib||M)+' : '+r.erreur; ['mev','mrv'].forEach(k=>{ const e=g(k); if(e) e.style.borderColor='var(--orange)'; }); return false; }
+  if(msg) msg.textContent='';
+  const ouv=_rgxMethodeOuverte();
+  const res=_rgxMethodeEcrit('defautsCoach.methode.reperesVolume.'+M,r.valeur);
+  _rgxMethodeRouvrir(ouv);
+  return res;
+}
+function rgxMethodeRegle(cle){
+  const u=_rgCoach(); if(!u) return false;
+  const e=document.getElementById('rgx-mm-'+cle);
+  const anc=(_methodeDe(u).methodesRegles||{})[cle]||{};
+  const r=validerRegleMethode(cle,Object.assign({},anc,{maxParSemaine:e?e.value:''}));
+  const msg=document.getElementById('rgx-mt-msg');
+  if(!r.ok){ if(msg) msg.textContent=r.erreur; if(e) e.style.borderColor='var(--orange)'; return false; }
+  if(msg) msg.textContent='';
+  const ouv=_rgxMethodeOuverte();
+  const res=_rgxMethodeEcrit('defautsCoach.methode.methodesRegles.'+cle,r.valeur);
+  _rgxMethodeRouvrir(ouv);
+  return res;
+}
+function rgxMethodeRepcore(){
+  const u=_rgCoach(); if(!u) return false;
+  const ouv=_rgxMethodeOuverte();
+  const res=_rgxMethodeEcrit('defautsCoach.methode',null);
+  _rgxMethodeRouvrir(ouv);
+  return res;
+}
+// PURE. La méthode publiée (coach_public) : seulement ce qui est valide.
+function methodePublique(coach){
+  const out={};
+  const rv=reperesMethode(coach); if(rv) out.reperesVolume=rv;
+  const mr=_reglesMethodeCoach(null,coach); if(Object.keys(mr).length) out.methodesRegles=mr;
+  return Object.keys(out).length?out:null;
+}
+
+// ── LA FICHE VOLUME : « Ajuster pour cet athlète » ────────────────────────
+// Écrit user.reperesVolume (gagne sur tout) et user.poidsTechnique (le
+// facteur des techniques que l'athlète pratique). Case vide = niveau du
+// dessus (mesure, ma méthode, RepCore). Annulable 10 s.
+function htmlAjusterVolumeAthlete(c){
+  const u=_dossier(c); if(!u) return '';
+  const muscles=Object.keys(REPERES_VOLUME);
+  const rv=(u.reperesVolume&&typeof u.reperesVolume==='object')?u.reperesVolume:{};
+  const SRC={coach:'cet athlète',perso:'mesuré',methode:'ta méthode',table:'réf.'};
+  const lignes=muscles.map(M=>{
+    let ss=null; try{ const sv=u.reperesVolume; delete u.reperesVolume; try{ ss=reperesEffectifs(u,M); }finally{ if(sv!==undefined) u.reperesVolume=sv; } }catch(e){ ss=null; }
+    const o=rv[M]||{}, eff=reperesEffectifs(u,M)||{};
+    return '<div class="rgx-mt-l rgx-mt-4"><span class="rgx-mt-n">'+escapeHtml((MUSCLES[M]||{}).lib||M)+'</span>'
+      +['mev','mrv'].map(k=>'<input id="avx-'+M+'-'+k+'" class="rg-in" type="number" inputmode="numeric" min="0" max="'+REPERE_VOL_MAX+'" aria-label="'+k.toUpperCase()+' '+escapeHtml((MUSCLES[M]||{}).lib||M)+'" placeholder="'+(ss&&ss[k]!=null?ss[k]:'')+'" value="'+(o[k]!=null?escapeHtml(String(o[k])):'')+'" onchange="ajusterVolumeAthlete(\''+M+'\')">').join('')
+      +'<span class="rgx-mt-s">'+escapeHtml(SRC[eff.source]||'réf.')+'</span></div>';
+  }).join('');
+  let fams=[]; try{ fams=_techniquesPratiquees(u); }catch(e){ fams=[]; }
+  const pt=fams.length?'<div class="rgx-mt-l rgx-mt-h"><span>Techniques</span><span>poids</span><span></span></div>'
+    +fams.map(f=>'<div class="rgx-mt-l"><span class="rgx-mt-n">'+escapeHtml(LIB_FAMILLE[f]||f)+'</span><input id="avx-pt-'+f+'" class="rg-in" type="text" inputmode="decimal" autocomplete="off" data-dec placeholder="'+String(POIDS_TECHNIQUE[f]).replace('.',',')+'" value="'+(poidsTechniqueSurcharge(f,u)!=null?String(u.poidsTechnique[f]):'')+'" onchange="ajusterPoidsTechnique(\''+f+'\')"><span></span></div>').join(''):'';
+  return '<details class="rgx-mt" id="avx"><summary class="rg-t">Ajuster pour cet athlète</summary>'
+    +'<p class="bcad-d">Case vide : la valeur du dessus (mesurée, ta méthode ou RepCore), en gris.</p>'
+    +'<div class="rgx-mt-l rgx-mt-4 rgx-mt-h"><span></span><span>MEV</span><span>MRV</span><span>source</span></div>'+lignes+pt
+    +'<div class="rgx-pr-msg" id="avx-msg" role="status"></div></details>';
+}
+function _avxEcrire(champ,cle,val){
+  const users=DB.get('users')||{};
+  const c=(typeof currentClientId!=='undefined'&&currentClientId)?getOwnedClient(currentClientId,users):null;
+  if(!c) return false;
+  const avant=(c[champ]&&typeof c[champ]==='object')?JSON.parse(JSON.stringify(c[champ])):undefined;
+  if(!c[champ]||typeof c[champ]!=='object') c[champ]={};
+  if(val==null) delete c[champ][cle]; else c[champ][cle]=val;
+  if(!Object.keys(c[champ]).length) delete c[champ];
+  c.updatedAt=Date.now(); users[c.email]=c;
+  try{ _viderCacheVolume(); }catch(e){}
+  const ok=DB.set('users',users);
+  const rendre=()=>{ try{ renderVolumeCoach(c); const d=document.getElementById('avx'); if(d) d.open=true; }catch(e){} };
+  const defaire=()=>{ if(avant===undefined) delete c[champ]; else c[champ]=avant; c.updatedAt=Date.now(); users[c.email]=c;
+    try{ _viderCacheVolume(); }catch(e){} DB.set('users',users); CLOUD.pushOne(c.email,c); rendre(); };
+  const r=toastSyncAnnulable(ok,CLOUD.pushOne(c.email,c),'Enregistré '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+  rendre();
+  return r;
+}
+function ajusterVolumeAthlete(M){
+  const c=(typeof currentClientId!=='undefined'&&currentClientId)?getOwnedClient(currentClientId):null;
+  if(!c) return false;
+  const g=k=>document.getElementById('avx-'+M+'-'+k);
+  const r=validerRepereVolume(M,{mev:(g('mev')||{}).value,mrv:(g('mrv')||{}).value});
+  const msg=document.getElementById('avx-msg');
+  if(!r.ok){ if(msg) msg.textContent=((MUSCLES[M]||{}).lib||M)+' : '+r.erreur; ['mev','mrv'].forEach(k=>{ const e=g(k); if(e) e.style.borderColor='var(--orange)'; }); return false; }
+  return _avxEcrire('reperesVolume',M,r.valeur);
+}
+function ajusterPoidsTechnique(f){
+  const c=(typeof currentClientId!=='undefined'&&currentClientId)?getOwnedClient(currentClientId):null;
+  if(!c) return false;
+  const e=document.getElementById('avx-pt-'+f);
+  const brut=String(e?e.value:'').replace(',','.').trim();
+  const n=brut===''?null:Number(brut);
+  const msg=document.getElementById('avx-msg');
+  if(n!=null&&!(isFinite(n)&&n>=POIDS_TECHNIQUE_MIN&&n<=POIDS_TECHNIQUE_MAX)){ if(msg) msg.textContent='Poids de '+POIDS_TECHNIQUE_MIN+' à '+POIDS_TECHNIQUE_MAX; if(e) e.style.borderColor='var(--orange)'; return false; }
+  return _avxEcrire('poidsTechnique',f,n==null?null:Math.round(n*10)/10);
 }
 // ══ LES FAITS CLÉS EN TÊTE DE FICHE (06/10/2026, build 1812) ══════════════
 //

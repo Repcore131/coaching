@@ -1925,7 +1925,7 @@ function renderVolume(){
       ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
       <div class="vc-corps">
         <div class="vc-tete">
-          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':(_s==='methode'?'ta méthode':'fixé par toi')}</span>`; })()}</span>
           <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}</span>${delta}</span>
         </div>
         ${_volBarre(m,n,rep,c.aberrants[m],u)}
@@ -2575,6 +2575,7 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     <div style="margin-top:12px">${_htmlComptageCoach(c)}</div>
+    ${(()=>{ try{ return htmlAjusterVolumeAthlete(c); }catch(e){ return ''; } })()}
     ${_axPrio?'':_axial}
     ${(()=>{ try{ return _htmlEcheanceCoach(c); }catch(e){ return ''; } })()}
     ${(()=>{ try{ return _htmlRendement(c); }catch(e){ return ''; } })()}

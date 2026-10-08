@@ -2024,12 +2024,39 @@ const METHODES=Object.freeze([
 // LES REGLES EFFECTIVES : la table, surchargee par le coach. Meme patron que
 // POIDS_TECHNIQUE et que reperesEffectifs — la table de depart ne bouge
 // jamais, l'ajustement vit sur le dossier.
-function methodesRegles(user){
+// SÉRIE 6 (lot 6) : la méthode du coach (defautsCoach.methode.methodesRegles)
+// s'intercale : table < méthode du coach < dossier de l'athlète.
+const METHODE_MAX_SEMAINE=7, METHODE_COUT_MAX=5;
+function validerRegleMethode(cle,p){
+  if(!METHODES.some(m=>m.cle===cle)) return {ok:false,erreur:'méthode inconnue'};
+  if(p==null||p==='') return {ok:true,valeur:null};
+  if(typeof p!=='object') return {ok:false,erreur:'règle illisible'};
+  const out={};
+  const lims={maxParSemaine:METHODE_MAX_SEMAINE,coutFatigue:METHODE_COUT_MAX};
+  for(const k of Object.keys(lims)){
+    if(p[k]==null||p[k]==='') continue;
+    const n=Number(p[k]);
+    if(!isFinite(n)||n<0||n>lims[k]||n%1!==0) return {ok:false,erreur:(k==='maxParSemaine'?'Par semaine':'Coût de fatigue')+' : un entier de 0 à '+lims[k]};
+    out[k]=n;
+  }
+  return {ok:true,valeur:Object.keys(out).length?out:null};
+}
+function _reglesMethodeCoach(user,coach){
+  let c=coach;
+  if(c===undefined){ try{ c=_coachDeAthlete(_dossier(user)); }catch(e){ c=null; } }
+  const src=c&&c.defautsCoach&&c.defautsCoach.methode&&c.defautsCoach.methode.methodesRegles;
+  if(!src||typeof src!=='object') return {};
+  const out={};
+  for(const k of Object.keys(src)){ const v=validerRegleMethode(k,src[k]); if(v.ok&&v.valeur) out[k]=v.valeur; }
+  return out;
+}
+function methodesRegles(user,coach){
   const u=_dossier(user);
-  const perso=(u&&u.methodesRegles&&typeof u.methodesRegles==='object')?u.methodesRegles:{};
+  const dossier=(u&&u.methodesRegles&&typeof u.methodesRegles==='object')?u.methodesRegles:{};
+  const duCoach=_reglesMethodeCoach(user,coach);
   return METHODES.map(m=>{
-    const p=perso[m.cle];
-    if(!p||typeof p!=='object') return m;
+    const p=Object.assign({},duCoach[m.cle]||{},(dossier[m.cle]&&typeof dossier[m.cle]==='object')?dossier[m.cle]:{});
+    if(!Object.keys(p).length) return m;
     const o=Object.assign({},m);
     for(const k of ['maxParSemaine','coutFatigue'])
       if(typeof p[k]==='number'&&isFinite(p[k])&&p[k]>=0) o[k]=p[k];

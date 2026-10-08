@@ -1052,7 +1052,13 @@ function _libFrequence(user,cle,muscle){
 // `source` DIT D'OU VIENT LE CHIFFRE. Sans elle, le coach ne peut plus
 // arbitrer : un repere de reference et un repere mesure se lisent pareil, et
 // il ne sait pas lequel il a le droit de contredire.
-function reperesEffectifs(user,muscle){
+// SÉRIE 6 (lot 6) : un quatrième étage, LA MÉTHODE DU COACH
+// (defautsCoach.methode.reperesVolume), posé entre la table et la mesure :
+//   table < méthode du coach < reperesAuto (mesuré) < user.reperesVolume.
+// Le coach règle SA référence pour tous ses athlètes ; la boucle de retour
+// mesure ensuite chacun ; l'ajustement fait pour UN athlète gagne toujours.
+// `coach` est facultatif : absent, il est retrouvé (_coachDeAthlete).
+function reperesEffectifs(user,muscle,coach){
   // AU DÉPART, ×0,8 POUR UN DÉBUTANT OU UN SENIOR (profilEntrainement, build
   // 1829) — sur la TABLE seulement : la boucle de retour (reperesAuto) et le
   // coach (reperesVolume) l'ajustent ensuite. Un muscle PRIORITAIRE (bloc de
@@ -1068,11 +1074,20 @@ function reperesEffectifs(user,muscle){
       if(prio) d.mev=Math.max(d.mev,d0.mev);
     }
   }catch(e){ d=d0; }
+  const mc=_reperesMethodePour(user,coach);
+  const k=mc&&mc[muscle];
   const a=user&&user.reperesAuto&&user.reperesAuto[muscle];
   const o=user&&user.reperesVolume&&user.reperesVolume[muscle];
-  if(!d&&!a&&!o) return null;
-  const r=Object.assign({},d||{},a||{},o||{});
+  if(!d&&!a&&!o&&!k) return null;
+  const r=Object.assign({},d||{},k||{},a||{},o||{});
   for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
+  // Un MEV ou un MRV déplacé seul peut croiser la zone de progrès de la
+  // table : elle est ramenée DANS [MEV, MRV] plutôt que de rendre un repère
+  // incohérent (une zone verte au-dessus du maximum).
+  if(k&&!o){
+    r.mavMin=Math.min(Math.max(r.mavMin,r.mev),r.mrv);
+    r.mavMax=Math.min(Math.max(r.mavMax,r.mavMin),r.mrv);
+  }
   // LE VOLUME DE MAINTIEN (mv) : posé par le coach ou la boucle s'il l'a été,
   // sinon la moitié du MEV EFFECTIF — un MEV surchargé déplace le maintien.
   const mvPose=[o,a].find(x=>x&&typeof x.mv==='number');
@@ -1081,8 +1096,56 @@ function reperesEffectifs(user,muscle){
   // rien : l'annoncer « ajuste » ferait lire une mesure la ou il n'y en a pas.
   const bouge=(src)=>!!src&&['mev','mavMin','mavMax','mrv']
     .some(b=>typeof src[b]==='number'&&(!d0||src[b]!==d0[b]));
-  r.source=bouge(o)?'coach':(bouge(a)?'perso':'table');
+  r.source=bouge(o)?'coach':(bouge(a)?'perso':(bouge(k)?'methode':'table'));
   return r;
+}
+// La méthode du coach de cet athlète, lue au plus une fois par seconde et
+// demie : reperesEffectifs est appelée muscle par muscle, semaine par semaine.
+const _methodeMemo=new WeakMap();
+function _methodeCacheVider(){ try{ _methodeMemoCle++; }catch(e){} }
+let _methodeMemoCle=0;
+function _reperesMethodePour(user,coach){
+  if(coach!==undefined) return reperesMethode(coach);
+  if(!user||typeof user!=='object') return null;
+  const t=Date.now(), m=_methodeMemo.get(user);
+  if(m&&m.k===_methodeMemoCle&&t-m.t<1500) return m.v;
+  let v=null; try{ v=reperesMethode(_coachDeAthlete(user)); }catch(e){ v=null; }
+  _methodeMemo.set(user,{t,k:_methodeMemoCle,v});
+  return v;
+}
+// PURE. Les repères de la méthode du coach, validés muscle par muscle ; une
+// ligne invalide est IGNORÉE (la table reprend), jamais réparée en silence.
+function reperesMethode(coach){
+  const src=coach&&coach.defautsCoach&&coach.defautsCoach.methode&&coach.defautsCoach.methode.reperesVolume;
+  if(!src||typeof src!=='object') return null;
+  const out={};
+  for(const m of Object.keys(src)){
+    const v=validerRepereVolume(m,src[m]);
+    if(v.ok&&v.valeur) out[m]=v.valeur;
+  }
+  return Object.keys(out).length?out:null;
+}
+const REPERE_VOL_MAX=60;
+// PURE. Une ligne {mev?, mavMin?, mavMax?, mrv?} pour un muscle de la table.
+// Entiers 0..60 ; une case absente vaut le niveau du dessous ; MEV > MRV est
+// REFUSÉ (comparé à la valeur effective de la table quand l'un manque).
+function validerRepereVolume(muscle,r){
+  const t=reperesTable(muscle);
+  if(!t) return {ok:false,erreur:'muscle inconnu'};
+  if(r==null||r==='') return {ok:true,valeur:null};
+  if(typeof r!=='object') return {ok:false,erreur:'repère illisible'};
+  const out={};
+  for(const b of ['mev','mavMin','mavMax','mrv']){
+    const x=r[b];
+    if(x==null||x==='') continue;
+    const n=Number(x);
+    if(!isFinite(n)||n<0||n>REPERE_VOL_MAX||n%1!==0) return {ok:false,erreur:(b==='mev'?'MEV':b==='mrv'?'MRV':b)+' : un nombre entier de 0 à '+REPERE_VOL_MAX};
+    out[b]=n;
+  }
+  const mev=out.mev!=null?out.mev:t.mev, mrv=out.mrv!=null?out.mrv:t.mrv;
+  if(mev>mrv) return {ok:false,erreur:'MEV ('+mev+') au-dessus du MRV ('+mrv+') : le minimum ne peut pas dépasser le maximum'};
+  if(out.mavMin!=null&&out.mavMax!=null&&out.mavMin>out.mavMax) return {ok:false,erreur:'zone de progrès inversée'};
+  return {ok:true,valeur:Object.keys(out).length?out:null};
 }
 // L'ENTREE COTE COACH. Une ligne dans la fiche client, et le bouton qui ouvre
 // une echeance quand il n'y en a pas.

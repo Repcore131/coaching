@@ -13757,3 +13757,13 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .fa-logo-nom{font-size:inherit;letter-spacing:1px}
 .pp-logo{display:block;max-height:56px;max-width:180px;object-fit:contain;margin:0 0 8px}
 .pp-marque{font-size:var(--fs-xs);font-weight:700;color:var(--sub);margin-bottom:4px}
+/* Série 6, lot 6 : Ma méthode / Ajuster pour cet athlète */
+.rgx-mt{margin-top:10px}
+.rgx-mt>summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.rgx-mt-l{display:grid;grid-template-columns:minmax(0,1fr) 64px 64px;gap:6px;align-items:center;margin:4px 0}
+.rgx-mt-4{grid-template-columns:minmax(0,1fr) 56px 56px 64px}
+.rgx-mt-l .rg-in{width:100%;margin:0;text-align:center}
+.rgx-mt-n{font-size:var(--fs-xs);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rgx-mt-h{font-size:var(--fs-2xs);color:var(--sub);text-transform:uppercase;letter-spacing:1px;text-align:center}
+.rgx-mt-h>span:first-child{text-align:left}
+.rgx-mt-s{font-size:var(--fs-2xs);color:var(--text-faint);text-align:right}

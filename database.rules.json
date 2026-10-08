@@ -182,6 +182,27 @@
         },
         "defautsCoach": {
           "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(complet|sansChiffres|essentiel)$/)" },
+          "methode": {
+            "reperesVolume": {
+              "$muscle": {
+                ".validate": "$muscle.matches(/^[A-Z_]{2,20}$/)",
+                "mev": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMax": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mrv": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "methodesRegles": {
+              "$cle": {
+                ".validate": "$cle.matches(/^[a-z-]{2,20}$/)",
+                "maxParSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7 && newData.val() % 1 === 0" },
+                "coutFatigue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          },
           "prescription": {
             "series": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0" },
             "reps": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12" },
@@ -738,6 +759,27 @@
         // SERIE 6 : le defaut de BILAN du coach, et lui seul (defautsCoachPublics).
         "defautsCoach": {
           "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(sansChiffres|essentiel)$/)" },
+          "methode": {
+            "reperesVolume": {
+              "$muscle": {
+                ".validate": "$muscle.matches(/^[A-Z_]{2,20}$/)",
+                "mev": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mavMax": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "mrv": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 60 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "methodesRegles": {
+              "$cle": {
+                ".validate": "$cle.matches(/^[a-z-]{2,20}$/)",
+                "maxParSemaine": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7 && newData.val() % 1 === 0" },
+                "coutFatigue": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5 && newData.val() % 1 === 0" },
+                "$autre": { ".validate": false }
+              }
+            },
+            "$autre": { ".validate": false }
+          },
           "bilan": {
             ".validate": "newData.hasChildren(['freq', 'jour'])",
             "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },

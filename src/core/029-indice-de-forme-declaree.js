@@ -2188,7 +2188,7 @@ function _rapBarreVolume(m){
       stroke="currentColor" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 2"/>
     <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" class="rap-lgd-s" fill="currentColor" fill-opacity=".55">${lib}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
-    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':(m.source==='coach'?', repères fixés par le coach':'')}" style="display:block">
+    aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':((m.source==='coach'||m.source==='methode')?', repères fixés par le coach':'')}" style="display:block">
     <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
     <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="${ROUGE_MARQUE_MIN}" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}

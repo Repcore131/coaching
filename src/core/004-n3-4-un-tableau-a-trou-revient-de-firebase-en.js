@@ -793,7 +793,7 @@ const CHAMPS_SANTE=Object.freeze([
   'pes','pesPartagee',
   // Ressentis de seance et ce qui en derive
   'fatigue','journalSeance','ecartsSeance','retourMuscle','rites','allegementJour',
-  'monteeChargeMasquee','reperesAuto','calibrageRir',
+  'monteeChargeMasquee','reperesAuto','reperesVolume','calibrageRir',
   // ⚠ L'AGE EST UNE DONNEE DE SANTE, et le texte de r-health le dit depuis
   // toujours : « … pas quotidiens et age pour mon suivi sportif ». Il est
   // demande au premier calcul de charge, et ce moment-la passe donc par le

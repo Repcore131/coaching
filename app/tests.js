@@ -74900,6 +74900,87 @@ async function testExercices(){
       if(!/Team Max/.test(h)) return _echec('nom du coach absent du programme');
       return true;
     });
+    // ══ BUILD 1930 — MA MÉTHODE : REPÈRES DE VOLUME ET MÉTHODES DU COACH ═════
+    ok('1930 — reperesEffectifs : table < ma méthode < mesure < réglage sur l’athlète',()=>{
+      const f=[], M='PECTORAUX', t=REPERES_VOLUME[M];
+      const coach={defautsCoach:{methode:{reperesVolume:{[M]:{mev:10,mrv:24}}}}};
+      const r0=reperesEffectifs({},M,null);
+      if(r0.mev!==t.mev||r0.source!=='table') f.push('table : '+JSON.stringify(r0));
+      const r1=reperesEffectifs({},M,coach);
+      if(r1.mev!==10||r1.mrv!==24||r1.source!=='methode') f.push('méthode : '+JSON.stringify(r1));
+      const r2=reperesEffectifs({reperesAuto:{[M]:{mev:11}}},M,coach);
+      if(r2.mev!==11||r2.mrv!==24||r2.source!=='perso') f.push('mesure sur méthode : '+JSON.stringify(r2));
+      const r3=reperesEffectifs({reperesAuto:{[M]:{mev:11}},reperesVolume:{[M]:{mev:6}}},M,coach);
+      if(r3.mev!==6||r3.source!=='coach') f.push('réglage athlète : '+JSON.stringify(r3));
+      const r4=reperesEffectifs({},M,{defautsCoach:{methode:{reperesVolume:{[M]:{mev:30,mrv:20}}}}});
+      if(r4.mev!==t.mev) f.push('une ligne invalide de la méthode est appliquée');
+      const r5=reperesEffectifs({},M,{defautsCoach:{methode:{reperesVolume:{[M]:{mev:16}}}}});
+      if(!(r5.mavMin>=16&&r5.mavMax<=r5.mrv)) f.push('zone de progrès hors [MEV, MRV] : '+JSON.stringify(r5));
+      if(mentionSourceRepere({},M)!==''&&reperesEffectifs({},M).source==='table') f.push('mention sans source');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1930 — validerRepereVolume : MEV > MRV refusé, case vide = niveau du dessus, bornes',()=>{
+      if(validerRepereVolume('PECTORAUX',{mev:30,mrv:20}).ok) return _echec('MEV > MRV accepté');
+      if(validerRepereVolume('PECTORAUX',{mev:30}).ok) return _echec('MEV au-dessus du MRV de la table accepté');
+      if(!/MEV/.test(validerRepereVolume('PECTORAUX',{mev:30,mrv:20}).erreur)) return _echec('message');
+      const v=validerRepereVolume('PECTORAUX',{mev:'',mrv:''});
+      if(!v.ok||v.valeur!==null) return _echec('cases vides : '+JSON.stringify(v));
+      if(validerRepereVolume('PECTORAUX',{mrv:61}).ok||validerRepereVolume('PECTORAUX',{mev:2.5}).ok) return _echec('bornes');
+      if(validerRepereVolume('INCONNU',{mev:2}).ok) return _echec('muscle inconnu');
+      return true;});
+    ok('1930 — methodesRegles : table < ma méthode < dossier de l’athlète',()=>{
+      const coach={defautsCoach:{methode:{methodesRegles:{dropset:{maxParSemaine:1}}}}};
+      const d0=METHODES.find(m=>m.cle==='dropset').maxParSemaine;
+      const a=methodesRegles({},coach).find(m=>m.cle==='dropset');
+      if(a.maxParSemaine!==1) return _echec('méthode ignorée');
+      const b=methodesRegles({methodesRegles:{dropset:{maxParSemaine:2}}},coach).find(m=>m.cle==='dropset');
+      if(b.maxParSemaine!==2) return _echec('le dossier ne gagne pas');
+      if(methodesRegles({},null).find(m=>m.cle==='dropset').maxParSemaine!==d0) return _echec('table');
+      if(validerRegleMethode('dropset',{maxParSemaine:9}).ok) return _echec('borne');
+      const p=defautsCoachPublics({defautsCoach:{methode:{reperesVolume:{PECTORAUX:{mev:30,mrv:20},DORSAUX:{mrv:30}},methodesRegles:{dropset:{maxParSemaine:1}}}}});
+      if(!p||!p.methode||p.methode.reperesVolume.PECTORAUX||p.methode.reperesVolume.DORSAUX.mrv!==30||p.methode.methodesRegles.dropset.maxParSemaine!==1) return _echec('publication : '+JSON.stringify(p));
+      return true;});
+    okA('1930 — Ma méthode : une case écrit (annulable), MEV > MRV refusé sans écrire, « Revenir aux valeurs RepCore »',async()=>{
+      const cu=currentUser, _su=window.saveUser, _pp=CLOUD.pushProfilCoach;
+      const z=document.createElement('div'); document.body.appendChild(z);
+      const _rd=document.getElementById('rgx-defauts'), _rdh=_rd?_rd.innerHTML:'';
+      try{
+        if(_rd) _rd.innerHTML='';
+        currentUser=Object.assign(_banCoach(),{});
+        window.saveUser=()=>true; CLOUD.pushProfilCoach=()=>Promise.resolve(true);
+        z.innerHTML=_htmlRgxMethode(currentUser);
+        if(!z.querySelector('#rgx-mv-PECTORAUX-mev')||z.querySelector('#rgx-mv-PECTORAUX-mev').placeholder!==String(REPERES_VOLUME.PECTORAUX.mev)) return _echec('placeholder RepCore');
+        if(!z.querySelector('#rgx-mm-dropset')) return _echec('méthodes absentes');
+        if(/Revenir aux valeurs RepCore/.test(z.innerHTML)) return _echec('bouton de retour sans rien à défaire');
+        z.querySelector('#rgx-mv-PECTORAUX-mev').value='30'; z.querySelector('#rgx-mv-PECTORAUX-mrv').value='20';
+        if(rgxMethodeVolume('PECTORAUX')!==false||(currentUser.defautsCoach&&currentUser.defautsCoach.methode)) return _echec('MEV > MRV écrit');
+        if(!/MRV/.test(z.querySelector('#rgx-mt-msg').textContent)) return _echec('refus muet');
+        z.querySelector('#rgx-mv-PECTORAUX-mev').value='10'; z.querySelector('#rgx-mv-PECTORAUX-mrv').value='';
+        rgxMethodeVolume('PECTORAUX');
+        const w=currentUser.defautsCoach&&currentUser.defautsCoach.methode&&currentUser.defautsCoach.methode.reperesVolume.PECTORAUX;
+        if(!w||w.mev!==10||'mrv' in w) return _echec('écriture : '+JSON.stringify(w));
+        rcAnnulerDernier();
+        if(currentUser.defautsCoach&&currentUser.defautsCoach.methode&&currentUser.defautsCoach.methode.reperesVolume&&currentUser.defautsCoach.methode.reperesVolume.PECTORAUX) return _echec('annuler');
+        currentUser.defautsCoach={methode:{reperesVolume:{DORSAUX:{mrv:30}}}};
+        if(!/Revenir aux valeurs RepCore/.test(_htmlRgxMethode(currentUser))) return _echec('bouton absent');
+        rgxMethodeRepcore();
+        if(currentUser.defautsCoach.methode) return _echec('retour RepCore');
+        if(!/méthode : 1 muscle ajusté/.test(resumesReglagesCoach({defautsCoach:{methode:{reperesVolume:{DORSAUX:{mrv:30}}}}}).defauts)) return _echec('résumé');
+        return true;
+      }finally{ z.remove(); if(_rd) _rd.innerHTML=_rdh; currentUser=cu; window.saveUser=_su; CLOUD.pushProfilCoach=_pp; }});
+    ok('1930 — fiche Volume : « Ajuster pour cet athlète » montre la source et écrit reperesVolume / poidsTechnique',()=>{
+      const cu=currentUser;
+      try{
+        currentUser=Object.assign(_banCoach(),{defautsCoach:{methode:{reperesVolume:{DORSAUX:{mrv:30}}}}});
+        const a={email:'a@x.fr',role:'client',coachId:currentUser.id,reperesAuto:{BICEPS:{mev:10}},reperesVolume:{PECTORAUX:{mev:6}}};
+        const h=htmlAjusterVolumeAthlete(a);
+        if(!/Ajuster pour cet athlète/.test(h)) return _echec('bloc absent');
+        const ligne=M=>{ const i=h.indexOf('id="avx-'+M+'-mev"'); return h.slice(i,h.indexOf('</div>',i)); };
+        if(!/cet athlète/.test(ligne('PECTORAUX'))||!/mesuré/.test(ligne('BICEPS'))||!/ta méthode/.test(ligne('DORSAUX'))||!/réf\./.test(ligne('QUADRICEPS'))) return _echec('sources');
+        if(!/id="avx-PECTORAUX-mev"[^>]*value="6"/.test(h)) return _echec('valeur posée');
+        if(!/id="avx-DORSAUX-mrv"[^>]*placeholder="30"/.test(h)) return _echec('placeholder = niveau du dessus');
+        if(!/ajusterVolumeAthlete/.test(String(renderVolumeCoach))&&!/htmlAjusterVolumeAthlete/.test(String(renderVolumeCoach))) return _echec('non branché');
+        return /ajusterPoidsTechnique/.test(String(htmlAjusterVolumeAthlete))?true:_echec('poidsTechnique sans interface');
+      }finally{ currentUser=cu; }});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
