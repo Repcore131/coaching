@@ -75430,6 +75430,19 @@ async function testExercices(){
         if(!/^https:\/\/wa\.me\/\?text=/.test(ouverts[0]||'')||decodeURIComponent(ouverts[0]).indexOf('?c=TOK123')<0) return _echec('WhatsApp');
         return /Copier le lien/.test(o.textContent)?true:_echec('copier');
       }finally{ try{ closeModal(); }catch(e){} currentUser=cu; window.inviterAthlete=_ia; window.open=_o; }});
+    // ══ BUILD 1943 — LA MARQUE CENTRALISÉE, L'EXPLOITATION ══════════════════════
+    ok('1943 — marque.json : les constantes de l’app disent la même chose',()=>{
+      const lire=u=>{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; };
+      const m=JSON.parse(lire('../marque.json')||'null');
+      if(!m) return _echec('marque.json non servi');
+      const f=[];
+      if(ROUGE_MARQUE!==m.couleur||ROUGE_MARQUE_MIN!==m.couleur.toLowerCase()) f.push('couleur');
+      if(CREATOR_EMAIL!==m.contact||CONTACT_CREATEUR!==m.contact) f.push('contact');
+      if(RC_COMPTE_INSTAGRAM!==m.instagram||RC_ADRESSE_AFFICHEE!==m.adresse) f.push('instagram / adresse');
+      if(marqueDocument({},null,MARQUE_CREATEUR).slogan!==m.slogan) f.push('slogan');
+      const d=lire('../docs/EXPLOITATION.md');
+      if(!/Fabriqué par `node scripts\/exploitation\.mjs`/.test(d)||!/POST \/erreur/.test(d)) f.push('EXPLOITATION.md');
+      return f.length?_echec(f.join(' | ')):true;});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

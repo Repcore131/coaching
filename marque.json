@@ -1,0 +1,9 @@
+{
+  "_lisez-moi": "La marque RepCore, en un seul endroit (série 6, lot 19). Changer une valeur ici, puis : node scripts/marque.mjs — le script la recopie dans le code ; node scripts/marque.mjs --verifier (CI) refuse un écart.",
+  "nom": "RepCore",
+  "couleur": "#E02020",
+  "slogan": "MORE THAN PROGRESS",
+  "contact": "guellec.coachingpro@gmail.com",
+  "instagram": "@kevin.gllc",
+  "adresse": "repcore-sync.web.app"
+}

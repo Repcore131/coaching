@@ -189,6 +189,11 @@ jobs:
       # SÉRIE 6 (lot 16) : la page /aide suit app/data/aide.json.
       - name: Page d'aide
         run: node scripts/aide_page.mjs --verifier
+      # SÉRIE 6 (lot 19) : la marque centralisée, et l'inventaire d'exploitation.
+      - name: Marque et exploitation a jour
+        run: |
+          node scripts/marque.mjs --verifier
+          node scripts/exploitation.mjs --verifier
       # SÉRIE 6 (lot 15) : /.well-known/assetlinks.json part avec le site.
       - name: Controler assetlinks.json
         run: node scripts/verif/assetlinks.mjs
