@@ -2158,7 +2158,7 @@ function renderDouleurAthlete(){
 const PREMIERS_PAS=Object.freeze([
   Object.freeze({icone:'user', titre:'Inviter mon premier athlète',
     detail:'Un code à lui transmettre, et il te rejoint.',
-    action:'openAddAthlete()'}),
+    action:'ouvrirFeuilleInvitation()'}),
   Object.freeze({icone:'folder', titre:'Créer un programme',
     detail:'Un modèle Homme/Femme, réutilisable pour tous.',
     action:'openCoachPrograms()'}),

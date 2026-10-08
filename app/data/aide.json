@@ -214,5 +214,23 @@
   "q": "Combien d’athlètes puis-je suivre ?",
   "r": "Cela dépend de ta formule coach, écrite dans l’onglet Paiements. Au-delà, l’app te prévient avant toute coupure.",
   "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Athlètes",
+  "q": "Qu’est-ce qu’un athlète actif ?",
+  "r": "Un athlète qui a fait au moins une séance dans les 60 derniers jours. Seuls les athlètes actifs comptent dans ta formule : un athlète inactif ne te coûte rien.",
+  "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Athlètes",
+  "q": "Combien de temps dure une invitation ?",
+  "r": "Tu choisis la durée de l’accès en invitant : 3 mois par défaut, de 1 à 12 mois. Le lien part par WhatsApp ou se copie ; l’athlète crée son compte depuis le lien.",
+  "ecran": "s-coach-home"
  }
 ]

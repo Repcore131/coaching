@@ -2428,7 +2428,8 @@ async function inviterAthlete(prenom,nom,opts){
     +((deja.prenom||deja.studentName||'cette personne'))+'. Relance-la plutôt '
     +'que d\'en créer une seconde.',existante:deja};
   let gen;
-  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT,undefined,
+  const _mois=(opts&&Number(opts.mois)>=1)?Math.min(24,Math.round(Number(opts.mois))):INV_MOIS_DEFAUT;
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),_mois,undefined,
     {programmeModeleId:opts&&opts.programmeModeleId,profilSuivi:opts&&opts.profilSuivi}); }
   catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
   const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
@@ -2705,3 +2706,87 @@ function _armerMarqueurOuverture(code){
   return true;
 }
 
+
+// ══ SÉRIE 6, LOT 18 — LA FEUILLE D'INVITATION ══════════════════════════════
+// Depuis « Premiers pas » et « + Ajouter » : un prénom, une durée (3 mois par
+// défaut), puis WhatsApp ou « Copier le lien » (/i/?c=<code>). Le quota est
+// regardé AVANT : la feuille dit où en est la formule et ce que compte un
+// athlète actif. L'ancien formulaire (compte créé par le coach, e-mail et mot
+// de passe) reste, replié en bas.
+const INV_FEUILLE_MOIS=Object.freeze([1,3,6,12]), INV_FEUILLE_DEFAUT=3;
+// PURE. Le lien court d'une invitation.
+function lienInvitationCourt(code,user){
+  const u=_dossier(user);
+  if(!u||!code) return '';
+  const base=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT+'/':APP_BASE_URL.replace(/app\/$/,'')+'i/';
+  return lienAttribue(base+'?c='+encodeURIComponent(code),{src:'invitation'});
+}
+// PURE. Les paliers coach, en une ligne (COACH_PALIERS, prix de tarifs.json).
+function lignePaliersCoach(){
+  return COACH_PALIERS.map(p=>p.titre+' : '+(p.quota===Infinity?'sans limite':p.quota+' athlète'+(p.quota>1?'s':''))
+    +(Number(p.prix)>0?', '+_euros(p.prix)+' '+p.periode:'')).join(' · ');
+}
+// PURE. Ce que la feuille dit du quota avant d'inviter.
+function etatQuotaInvitation(actifs,quota){
+  const q=quota===Infinity?Infinity:Number(quota)||0;
+  if(q===Infinity) return {plein:false,texte:actifs+' athlète'+(actifs>1?'s':'')+' actif'+(actifs>1?'s':'')+', sans limite dans ta formule.'};
+  const reste=q-actifs;
+  return {plein:reste<=0,texte:actifs+' athlète'+(actifs>1?'s':'')+' actif'+(actifs>1?'s':'')+' sur '+q+' dans ta formule'
+    +(reste<=0?' : le suivant dépassera ta formule (l’alerte vient avant toute coupure).':'.')};
+}
+function texteActifCoach(){ return 'Actif : au moins '+COACH_ACTIF_SEANCES_MIN+' séance dans les '+COACH_ACTIF_JOURS+' derniers jours. Un athlète inactif ne compte pas.'; }
+let _invFeuille=null;
+function ouvrirFeuilleInvitation(){
+  const u=currentUser; if(!u||u.role!=='coach') return false;
+  try{ closeModal(); }catch(e){}
+  _invFeuille=null;
+  let eq={plein:false,texte:''};
+  try{ eq=etatQuotaInvitation(countActiveAthletes(u),getCoachQuota(coachPlanDe(u))); }catch(e){}
+  const mois=INV_FEUILLE_MOIS.map(m=>'<option value="'+m+'"'+(m===INV_FEUILLE_DEFAUT?' selected':'')+'>'+m+' mois</option>').join('');
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" class="aide-o" onclick="closeModal()"><div class="aide-f inv-f" role="dialog" aria-label="Inviter un athlète" onclick="event.stopPropagation()">'
+    +'<h2 class="t-carte">Inviter un athlète</h2>'
+    +'<p class="sub inv-q'+(eq.plein?' inv-plein':'')+'">'+escapeHtml(eq.texte)+'</p>'
+    +'<div class="inv-l"><label for="invf-prenom">Prénom</label><input id="invf-prenom" autocomplete="off" maxlength="40" placeholder="Prénom de l’athlète"></div>'
+    +'<div class="inv-l"><label for="invf-mois">Durée de l’accès</label><select id="invf-mois">'+mois+'</select></div>'
+    +'<div class="inv-err" id="invf-err" role="alert"></div>'
+    +'<div id="invf-actions"><button type="button" class="btn btn-red" style="margin:0;width:100%" onclick="feuilleInvitationCreer()">Créer le lien</button></div>'
+    +'<p class="sub inv-n">'+escapeHtml(lignePaliersCoach())+'</p>'
+    +'<p class="sub inv-n">'+escapeHtml(texteActifCoach())+'</p>'
+    +'<details class="inv-ancien"><summary>Créer le compte moi-même (e-mail et mot de passe)</summary>'
+    +'<button type="button" class="rb-lien" onclick="closeModal();openAddAthlete()">Ouvrir l’ancien formulaire</button></details>'
+    +'</div></div>');
+  try{ document.getElementById('invf-prenom').focus(); }catch(e){}
+  return true;
+}
+async function feuilleInvitationCreer(){
+  const p=String((document.getElementById('invf-prenom')||{}).value||'').trim();
+  const m=Number((document.getElementById('invf-mois')||{}).value)||INV_FEUILLE_DEFAUT;
+  const err=document.getElementById('invf-err');
+  if(p.length<2){ if(err) err.textContent='Donne au moins un prénom.'; return false; }
+  if(err) err.textContent='';
+  const r=await inviterAthlete(p,'',{mois:m});
+  if(!r.ok){ if(err) err.textContent=r.raison||'Impossible de créer l’invitation.'; return false; }
+  const lien=lienInvitationCourt(r.invitation.token,currentUser)||r.lien;
+  _invFeuille={prenom:p,lien};
+  const z=document.getElementById('invf-actions');
+  if(z) z.innerHTML='<div class="inv-lien">'+escapeHtml(lien)+'</div>'
+    +'<div class="aide-pied"><button type="button" class="btn btn-red btn-sm" onclick="feuilleInvitationWhatsApp()">WhatsApp</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="feuilleInvitationCopier(this)">Copier le lien</button></div>';
+  try{ _rendreInvitations(); }catch(e){}
+  return lien;
+}
+// PURE. Le message prêt à partir.
+function messageInvitation(prenom,lien,coach){
+  return 'Salut '+prenom+' ! Je t’ouvre ton accès RepCore'+(coach&&coach.fname?' avec moi, '+coach.fname:'')+' : ton programme, tes séances et tes bilans sont là. Crée ton compte ici : '+lien;
+}
+function feuilleInvitationWhatsApp(){
+  if(!_invFeuille) return false;
+  try{ window.open('https://wa.me/?text='+encodeURIComponent(messageInvitation(_invFeuille.prenom,_invFeuille.lien,currentUser)),'_blank','noopener'); }catch(e){}
+  return true;
+}
+async function feuilleInvitationCopier(b){
+  if(!_invFeuille) return false;
+  let ok=false; try{ if(navigator.clipboard){ await navigator.clipboard.writeText(_invFeuille.lien); ok=true; } }catch(e){ ok=false; }
+  if(b) b.textContent=ok?'Lien copié':'Copie impossible';
+  return ok;
+}

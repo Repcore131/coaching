@@ -13822,3 +13822,12 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .ci-b{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .ci-b .btn{margin:0}
 .r-sans-coach{font-size:var(--fs-xs);line-height:1.5;margin:0}
+/* Série 6, lot 18 : la feuille d'invitation */
+.inv-f label{display:block;font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px}
+.inv-f select{width:100%;margin:0}
+.inv-q{font-size:var(--fs-xs);line-height:1.5;margin:0}
+.inv-plein{color:var(--orange)}
+.inv-err{color:var(--red-light);font-size:var(--fs-xs);min-height:0}
+.inv-lien{font-size:var(--fs-xs);color:var(--text);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px;overflow-wrap:anywhere;margin-bottom:8px}
+.inv-n{font-size:var(--fs-2xs);line-height:1.5;margin:0}
+.inv-ancien summary{font-size:var(--fs-xs);color:var(--sub);cursor:pointer}

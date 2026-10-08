@@ -75400,6 +75400,36 @@ async function testExercices(){
       if(/premier mois/.test(phraseInvitationInscription(''))) return _echec('texte en dur');
       const h=htmlPrefsAide('client','sombre','2026-10-08','1941','');
       return (rcModeDebug()||!/version 1941/.test(h))?true:_echec('numéro de build hors débogage');});
+    // ══ BUILD 1942 — LA FEUILLE D'INVITATION ════════════════════════════════════
+    ok('1942 — lien court /i/?c=, paliers en une ligne, quota et athlète actif dits avant',()=>{
+      const l=lienInvitationCourt('ABC123',{email:'c@t.fr',role:'coach'});
+      if(!/\/i\/\?c=ABC123/.test(l)||!/src=invitation/.test(l)) return _echec('lien : '+l);
+      const p=lignePaliersCoach();
+      if(!/Libre : 1 athlète/.test(p)||!/Coach : 15 athlètes/.test(p)||!/Pro : sans limite/.test(p)||p.indexOf(_euros(TARIFS.coach.coach))<0) return _echec('paliers : '+p);
+      if(!etatQuotaInvitation(15,15).plein||etatQuotaInvitation(3,15).plein||etatQuotaInvitation(40,Infinity).plein) return _echec('quota');
+      if(!/1 séance dans les 60 derniers jours/.test(texteActifCoach())) return _echec('actif');
+      return /Crée ton compte ici : https?:\/\/\S+/.test(messageInvitation('Léa','https://x/i/?c=A',{fname:'Max'}))?true:_echec('message');});
+    okA('1942 — la feuille : prénom, 3 mois par défaut, WhatsApp et « Copier le lien » ; ancien formulaire replié',async()=>{
+      const cu=currentUser, _ia=window.inviterAthlete, _o=window.open, appels=[], ouverts=[];
+      try{
+        currentUser=Object.assign(_banCoach(),{});
+        if(!/ouvrirFeuilleInvitation\(\)/.test(String(_renderPremiersPas))&&!PREMIERS_PAS.some(a=>a.action==='ouvrirFeuilleInvitation()')) return _echec('Premiers pas');
+        if(!document.querySelector('[onclick="ouvrirFeuilleInvitation()"]')) return _echec('« + Ajouter »');
+        ouvrirFeuilleInvitation();
+        const o=document.getElementById('modal-overlay');
+        if(!o||!o.querySelector('#invf-prenom')||o.querySelector('#invf-mois').value!=='3') return _echec('champs');
+        if(!o.querySelector('details.inv-ancien')||o.querySelector('details.inv-ancien').open) return _echec('ancien formulaire');
+        if(!/actif/.test(o.querySelector('.inv-q').textContent)) return _echec('quota absent');
+        window.inviterAthlete=async(p,n,opt)=>{ appels.push({p,opt}); return {ok:true,invitation:{token:'TOK123'},lien:'x'}; };
+        if(await feuilleInvitationCreer()!==false) return _echec('prénom vide accepté');
+        o.querySelector('#invf-prenom').value='Léa';
+        const lien=await feuilleInvitationCreer();
+        if(!/\?c=TOK123/.test(lien)||appels[0].opt.mois!==3) return _echec('création : '+lien+' '+JSON.stringify(appels));
+        window.open=(u)=>{ ouverts.push(u); return null; };
+        feuilleInvitationWhatsApp();
+        if(!/^https:\/\/wa\.me\/\?text=/.test(ouverts[0]||'')||decodeURIComponent(ouverts[0]).indexOf('?c=TOK123')<0) return _echec('WhatsApp');
+        return /Copier le lien/.test(o.textContent)?true:_echec('copier');
+      }finally{ try{ closeModal(); }catch(e){} currentUser=cu; window.inviterAthlete=_ia; window.open=_o; }});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
