@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1949';
+window.RC_BUILD='1950';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1949.css">
+<link rel="stylesheet" href="./rc-style.1950.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1949.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1950.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -4761,6 +4761,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- 1. LE HERO : flamme, titre. Le record n'y est plus, il est dans les
               recompenses et dans « Mes records » — trois fois la meme nouvelle
               la banalisait. -->
+      <!-- Série 7, lot 7 : « Ta séance », exercice par exercice, en tête. -->
+      <div id="wd-seance"></div>
       <div id="wd-msg"></div>
 
       <!-- 2. LES RECOMPENSES : trois au maximum, celle du milieu plus haute. -->
@@ -4837,7 +4839,8 @@ const COACH_PHOTO='icons/coach.jpg';
               le ressenti n'etait pas plus evident que celui qui le jette. -->
       <div style="margin-top:4px">
         <button class="btn btn-red" style="width:100%;margin:0" onclick="savePostSession()">Enregistrer et terminer</button>
-        <button type="button" onclick="go('s-client-home');loadClientHome()"
+        <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0" onclick="copierSeanceCoach(this)">Copier pour mon coach / WhatsApp</button>
+        <button type="button" onclick="passerPostSession()"
           style="display:block;width:100%;margin-top:12px;background:none;border:none;padding:10px;
           color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);
           font-weight:700;letter-spacing:1px;cursor:pointer;
@@ -6401,5 +6404,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1949.js"></script>
+<script src="./rc-core.1950.js"></script>
 </body></html>

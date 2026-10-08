@@ -6388,7 +6388,8 @@ async function testExercices(){
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
             currentUser=_ath([5,5,5]);
-            el.value='7';
+            // Série 7, lot 7 : seul un curseur TOUCHÉ part dans metrics.
+            rcfNoter('energie',7); for(const it of FORME_ITEMS) rcfNoter(it.cle,5);
             savePostSession(false);
             const m=currentUser.sessions[currentUser.sessions.length-1].metrics||{};
             if(m.energie===undefined) return _echec('energie n\'est pas écrite');
@@ -75758,6 +75759,55 @@ async function testExercices(){
         if(currentUser.ecartsSeance[0].motif!=='materiel_occupe') return _echec('motif par défaut non retenu');
         return true;
       }finally{ try{ closeModal(); }catch(e){} currentUser=sU; }
+    });
+    // ══ BUILD 1950 — LA FIN DE SÉANCE : CE QU'ON A FAIT D'ABORD ══════════════════
+    ok('1950 — resumeParExercice : meilleure série et flèche ↑ / = / ↓ face à la dernière fois',()=>{
+      const S=(kg,r)=>({weight:String(kg),reps:String(r),done:true});
+      const avant=[{date:1,data:{'SQUAT':{sets:[S(100,5)]},'CURL':{sets:[S(20,10)]},'DIPS':{sets:[S(10,8)]}}}];
+      const sess={date:2,data:{'SQUAT':{sets:[S(100,5),S(105,3)]},'CURL':{sets:[S(20,10)]},'DIPS':{sets:[S(10,6)]},'PRESSE':{sets:[S(150,10)]},'VIDE':{sets:[{weight:'50',reps:'5',done:false}]}}};
+      const l=resumeParExercice(sess,avant,{});
+      const f=n=>(l.find(x=>x.nom===n)||{}).fleche;
+      if(l.length!==4) return _echec(l.length+' lignes');
+      if(f('SQUAT')!=='↑'||f('CURL')!=='='||f('DIPS')!=='↓'||f('PRESSE')!==null) return _echec(l.map(x=>x.nom+x.fleche).join(' '));
+      const sq=l.find(x=>x.nom==='SQUAT');
+      if(sq.kg!==105||sq.reps!==3||sq.series!==2) return _echec(JSON.stringify(sq));
+      const t=texteSeancePourCoach({name:'Jambes',date:Date.now(),sets:6,setsPlanned:8,duration:50,data:sess.data},{},l);
+      if(!/Jambes/.test(t)||!/squat : 2 ×/.test(t)||!/↑/.test(t)) return _echec(t);
+      return true;
+    });
+    ok('1950 — badges et rang attendent « Enregistrer » ; « Passer » et l’accueil les libèrent',()=>{
+      const svF=_bdgFile.slice(), svR=_bdgRecap.slice(), svP=window._bdgPlanifier, svA=window._finEnAttente, svE=window.finAttendEnregistrement;
+      let plan=0;
+      try{
+        window._bdgPlanifier=()=>{ plan++; }; window.finAttendEnregistrement=()=>!!window._finEnAttente;
+        _bdgFile=[]; window._finEnAttente=true;
+        if(_bdgAfficher('assidu_1',0)!==false||_bdgFile[0]!=='assidu_1') return _echec('un écran de badge passe avant Enregistrer');
+        if(!_finLiberer()||window._finEnAttente||plan!==1) return _echec('la file ne reprend pas');
+        return true;
+      }finally{ _bdgFile=svF; _bdgRecap=svR; window._bdgPlanifier=svP; window._finEnAttente=svA; window.finAttendEnregistrement=svE; }
+    });
+    ok('1950 — un curseur non touché part absent ; touché, il part',()=>{
+      rcfPoserRessenti(); rcfReinitRessenti();
+      const sU=currentUser, svS=window.saveUser, svG=window.go, svH=window.loadClientHome, svT=window.toastEcriture, svA=window._finEnAttente;
+      try{
+        window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{}; window.toastEcriture=()=>{};
+        currentUser={email:'f@t',sessions:[{date:Date.now(),data:{}}],steps:{}};
+        rcfNoter('fatigue',7);
+        savePostSession();
+        const m=currentUser.sessions[0].metrics;
+        if(m.fatigue!=='7') return _echec('fatigue '+m.fatigue);
+        if('sensation' in m||'motivation' in m||'energie' in m) return _echec('non touchés présents : '+JSON.stringify(m));
+        return true;
+      }finally{ rcfReinitRessenti(); currentUser=sU; window.saveUser=svS; window.go=svG; window.loadClientHome=svH; window.toastEcriture=svT; window._finEnAttente=svA; }
+    });
+    ok('1950 — l’écran de fin : « Ta séance » en tête, « Copier pour mon coach / WhatsApp », « Passer » sans métriques',()=>{
+      const h=document.getElementById('s-workout-done').innerHTML;
+      const i=h.indexOf('id="wd-seance"'), j=h.indexOf('id="wd-msg"');
+      if(i<0||i>j) return _echec('#wd-seance absent ou après le titre');
+      if(!/Copier pour mon coach \/ WhatsApp/.test(h)) return _echec('bouton Copier absent');
+      if(!/passerPostSession\(\)/.test(h)) return _echec('Passer ne passe pas par passerPostSession');
+      if(/metrics/.test(String(passerPostSession))) return _echec('Passer écrit des métriques');
+      return true;
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

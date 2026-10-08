@@ -361,6 +361,11 @@ function finishWorkout(incomplete=false,opts){
 
   // 1. LE HERO : flamme et titre. Il ne depend d'aucun calcul, il ne peut
   //    donc pas manquer — et c'est lui qui dit que la seance est finie.
+  // SÉRIE 7, LOT 7 — « TA SÉANCE » D'ABORD : ce qu'on a fait, exercice par
+  // exercice, avant toute récompense. Les écrans de badge et de rang
+  // attendent « Enregistrer » (ou « Passer »).
+  window._finEnAttente=true;
+  _pose('wd-seance',(()=>{ try{ return htmlResumeSeance(resumeParExercice(sess,(currentUser.sessions||[]).slice(0,-1),currentUser)); }catch(e){ return ''; } })());
   _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin,currentUser,sess); }catch(e){
     return '<div class="rcf-hero"><h1 class="rcf-titre">Séance terminée</h1></div>'; } })());
   // 2. LES RECOMPENSES : trois au maximum. Aucune obtenue, aucun bloc — on
@@ -2330,4 +2335,88 @@ async function _corpsPeindreCalques(racine){
       _corpsBrancherBulle(cv,carte);
     }catch(e){}
   }
+}
+
+// ══ SÉRIE 7, LOT 7 — LA FIN DE SÉANCE ════════════════════════════════════
+// PURE. Une ligne par exercice fait : sa meilleure série (charge, puis
+// répétitions) et la flèche face à la dernière séance qui le contenait.
+function resumeParExercice(sess,avant,user){
+  const out=[];
+  const meilleure=sets=>{
+    let b=null;
+    for(const s of (sets||[])){
+      if(!s||s.done!==true) continue;
+      const kg=parseFloat(s.weight)||0;
+      const r=(s.repsDone!=null&&s.repsDone!=='')?parseInt(s.repsDone,10):parseInt(s.reps,10);
+      const reps=isFinite(r)&&r>0?r:0;
+      if(!b||kg>b.kg||(kg===b.kg&&reps>b.reps)) b={kg,reps};
+    }
+    return b;
+  };
+  const data=(sess&&sess.data)||{};
+  for(const nom of Object.keys(data)){
+    const sets=((data[nom]&&data[nom].sets)||[]);
+    const n=sets.filter(s=>s&&s.done===true).length;
+    if(!n) continue;
+    const m=meilleure(sets);
+    let prec=null;
+    for(let k=(avant||[]).length-1;k>=0&&!prec;k--){
+      let d=null; try{ d=_dataDeSeance(avant[k],nom); }catch(e){ d=null; }
+      if(d) prec=meilleure(d.sets);
+    }
+    let fleche=null;
+    if(prec&&m){
+      if(m.kg>prec.kg||(m.kg===prec.kg&&m.reps>prec.reps)) fleche='↑';
+      else if(m.kg===prec.kg&&m.reps===prec.reps) fleche='=';
+      else fleche='↓';
+    }
+    out.push({nom,series:n,kg:m?m.kg:0,reps:m?m.reps:0,fleche,prec});
+  }
+  return out;
+}
+function _texteMeilleure(l,user){
+  const kg=l.kg>0?(()=>{ try{ return fmtCharge(l.kg,user); }catch(e){ return String(l.kg).replace('.',',')+' kg'; } })():'PDC';
+  return kg+(l.reps?' × '+l.reps:'');
+}
+function htmlResumeSeance(l){
+  if(!l||!l.length) return '';
+  const cls={'↑':'rs-haut','=':'rs-egal','↓':'rs-bas'};
+  return '<div class="rs-bloc"><div class="rs-t">Ta séance</div>'
+    +l.map(x=>'<div class="rs-l"><span class="rs-n">'+escapeHtml(String(x.nom).toLowerCase())+'</span>'
+      +'<span class="rs-v">'+x.series+' × · '+escapeHtml(_texteMeilleure(x,currentUser))+'</span>'
+      +(x.fleche?'<span class="rs-f '+cls[x.fleche]+'" aria-label="'+(x.fleche==='↑'?'en hausse':x.fleche==='='?'stable':'en baisse')+'">'+x.fleche+'</span>':'<span class="rs-f"></span>')
+      +'</div>').join('')
+    +'</div>';
+}
+// PURE. Le texte à coller dans un message au coach.
+function texteSeancePourCoach(sess,user,lignes){
+  const d=new Date(Number(sess&&sess.date)||Date.now());
+  const l=lignes||resumeParExercice(sess,[],user);
+  const t=[(sess&&sess.name?sess.name:'Séance')+' — '+d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})];
+  t.push((Number(sess&&sess.sets)||0)+' séries'+(sess&&sess.setsPlanned?' sur '+sess.setsPlanned:'')+(sess&&sess.duration?' · '+sess.duration+' min':''));
+  for(const x of l) t.push('• '+String(x.nom).toLowerCase()+' : '+x.series+' × · '+_texteMeilleure(x,user)+(x.fleche&&x.fleche!=='='?' '+x.fleche:''));
+  if(sess&&sess.noteAthlete) t.push('« '+sess.noteAthlete+' »');
+  return t.join('\n');
+}
+function copierSeanceCoach(btn){
+  const s=((currentUser&&currentUser.sessions)||[]).slice(-1)[0];
+  if(!s) return false;
+  let txt=''; try{ txt=texteSeancePourCoach(s,currentUser,resumeParExercice(s,currentUser.sessions.slice(0,-1),currentUser)); }catch(e){ return false; }
+  const fait=()=>{ toast('Copié : colle-le dans ta conversation','var(--green)',2200); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(fait,()=>toast(txt)); return true; } }catch(e){}
+  toast(txt);
+  return true;
+}
+// Les écrans de badge et de rang reprennent leur file.
+function _finLiberer(){
+  if(!window._finEnAttente) return false;
+  window._finEnAttente=false;
+  try{ if(_bdgFile.length||_bdgRecap.length) _bdgPlanifier(); }catch(e){}
+  return true;
+}
+// « Passer » : la séance est déjà enregistrée ; le ressenti ne l'est pas.
+function passerPostSession(){
+  go('s-client-home'); loadClientHome();
+  _finLiberer();
+  return true;
 }

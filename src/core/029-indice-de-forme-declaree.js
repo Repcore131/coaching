@@ -1473,14 +1473,17 @@ function renderFormeCoach(c){
 
 function savePostSession(versBilan){
   const _lu=(id)=>{const e=document.getElementById('ps-'+id);return e?e.value:undefined;};
+  // SÉRIE 7, LOT 7 : un curseur qu'on n'a pas touché n'est pas une réponse —
+  // il part absent, pas à 5.
+  const _luN=(id)=>{const e=document.getElementById('ps-'+id);return (e&&e.dataset.touche==='1')?e.value:undefined;};
   const metrics={
-    fatigue:_lu('fatigue'),
-    sensation:_lu('sensation'),
-    motivation:_lu('motivation'),
+    fatigue:_luN('fatigue'),
+    sensation:_luN('sensation'),
+    motivation:_luN('motivation'),
     // Premier rang, comme les trois items de l'indice : il est TOUJOURS
     // écrit. Ce qui le distingue d'eux n'est pas la collecte, c'est qu'il
     // n'entre dans aucun score.
-    energie:_lu('energie'),
+    energie:_luN('energie'),
     steps:_lu('steps')
   };
   // Les trois curseurs secondaires ne sont écrits que si l'athlète a ouvert le
@@ -1488,8 +1491,8 @@ function savePostSession(versBilan){
   // que personne n'a rien répondu. Quand ils sont renseignés, ils partent au
   // même format qu'avant : rien à migrer, rien à relire autrement.
   if(_psDetailOuvert){
-    metrics.satisfaction=_lu('satisfaction');
-    metrics.hydratation=_lu('hydratation');
+    metrics.satisfaction=_luN('satisfaction');
+    metrics.hydratation=_luN('hydratation');
   }
   // Le mot pour le coach : borné ici ET dans les règles (PUT du dossier entier).
   const _note=String(_lu('note')||'').trim().slice(0,NOTE_SEANCE_MAX);
@@ -1497,6 +1500,7 @@ function savePostSession(versBilan){
   if(currentUser.sessions?.length){
     const _der=currentUser.sessions[currentUser.sessions.length-1];
     if(_note) _der.noteAthlete=_note; else delete _der.noteAthlete;
+    for(const k of Object.keys(metrics)) if(metrics[k]===undefined) delete metrics[k];
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
@@ -1510,8 +1514,9 @@ function savePostSession(versBilan){
   const _pas=parseInt(metrics.steps,10);
   if(!isNaN(_pas)&&_pas>0&&_pas<=99999) _recordSteps(localISODate(new Date()),_pas);
   toastEcriture(saveUser(),' Super séance enregistrée !','la séance est');
-  if(versBilan){openBilan('depart');return;}
+  if(versBilan){openBilan('depart');try{ _finLiberer(); }catch(e){} return;}
   go('s-client-home');loadClientHome();
+  try{ _finLiberer(); }catch(e){}
 }
 // ── Assiduité : le streak compte des SEMAINES, pas des jours consécutifs ────
 // L'ancienne version n'incrémentait que si l'écart valait exactement 1 jour.

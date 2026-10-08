@@ -1505,8 +1505,16 @@ function bdgRepartir(items,mode,dejaMontres,stats){
   const n=mode==='discretes'?0:Math.max(0,BDG_ECRAN_MAX-(Number(dejaMontres)||0));
   return {ecrans:p.slice(0,n),trophees:p.slice(n)};
 }
+// Série 7 (lot 7) : l'écran de fin est affiché et « Enregistrer » pas encore touché.
+function finAttendEnregistrement(){
+  if(!window._finEnAttente) return false;
+  const z=document.getElementById('s-workout-done');
+  return !!(z&&z.classList.contains('active'));
+}
 function _bdgAfficher(x,reste){
   if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat([x]); return false; }
+  // Série 7 (lot 7) : sur l'écran de fin, rien avant « Enregistrer ».
+  if(finAttendEnregistrement()){ _bdgFile=[x].concat(_bdgFile); try{ _bdgVague.ecrans=Math.max(0,_bdgVague.ecrans-1); }catch(e){} return false; }
   if(x&&typeof x==='object'&&x.retour) _retourEcran(x.retour,reste);
   else if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
   else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,reste);
@@ -1768,6 +1776,7 @@ function _bdgArcs(z,duree){
 // LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
 // seul bouton. Chacun reste partageable depuis sa fiche.
 function _bdgEcranRecap(ids){
+  if(finAttendEnregistrement()){ _bdgRecap=_bdgRecap.concat(ids||[]); return false; }
   // Série 7 (lot 2) : pas par-dessus une séance ; ils reviennent après.
   if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat(ids||[]); return false; }
   // Série 6 (lot 13) : la visite ne fête pas l'historique d'un compte fictif.

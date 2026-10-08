@@ -515,6 +515,7 @@ function _rendreCarteMoment(u){
   return c;
 }
 function loadClientHome(){
+  try{ if(window._finEnAttente) setTimeout(()=>{ try{ _finLiberer(); }catch(e){} },0); }catch(e){}
   try{ rendreCarteInstall(currentUser); }catch(e){}
   try{ rendreRepriseTete(currentUser); }catch(e){}
   try{ _majRappelVerification(); }catch(e){}

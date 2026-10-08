@@ -2593,10 +2593,12 @@ function _htmlRessentiFin(){
 // Poser une note : la pastille, le chiffre, et l'input qui porte la valeur.
 // L'evenement `input` est declenche a la main — une ecriture par script n'en
 // emet pas, et renderFormeSeance ne serait jamais rappelee.
-function rcfNoter(id,v){
+function rcfNoter(id,v,auto){
   const inp=document.getElementById('ps-'+id);
   if(inp){
     inp.value=String(v);
+    // Série 7, lot 7 : seule une note posée par l'athlète est une réponse.
+    if(auto) delete inp.dataset.touche; else inp.dataset.touche='1';
     try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
   }
   const val=document.getElementById('ps-'+id+'-val');
@@ -2610,7 +2612,7 @@ function rcfNoter(id,v){
 // Remise a 5 entre deux seances. Meme raison qu'avant : une valeur heritee de
 // la seance precedente passerait pour une reponse.
 function rcfReinitRessenti(){
-  RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5); }catch(e){} });
+  RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5,true); }catch(e){} });
   // Le mot de la seance precedente ne se recopie pas sur la suivante.
   try{ const n=document.getElementById('ps-note'); if(n) n.value=''; }catch(e){}
 }

@@ -13850,3 +13850,12 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .motif-pastilles{display:flex;flex-wrap:wrap;gap:8px}
 .motif-p{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-full);padding:8px 14px;color:var(--text-strong);font:inherit;font-size:var(--fs-xs);cursor:pointer;min-height:40px}
 .motif-p[aria-pressed="true"]{border-color:var(--red);background:color-mix(in srgb,var(--red) 15%,transparent)}
+/* Série 7, lot 7 — « Ta séance » en tête de la fin de séance */
+.rs-bloc{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px}
+.rs-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.rs-l{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-top:1px solid var(--border)}
+.rs-l:first-of-type{border-top:none}
+.rs-n{flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-v{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap}
+.rs-f{width:14px;text-align:center;font-size:var(--fs-sm);font-weight:800}
+.rs-haut{color:var(--green)}.rs-egal{color:var(--sub)}.rs-bas{color:var(--orange)}

@@ -50768,6 +50768,7 @@ function _rendreCarteMoment(u){
   return c;
 }
 function loadClientHome(){
+  try{ if(window._finEnAttente) setTimeout(()=>{ try{ _finLiberer(); }catch(e){} },0); }catch(e){}
   try{ rendreCarteInstall(currentUser); }catch(e){}
   try{ rendreRepriseTete(currentUser); }catch(e){}
   try{ _majRappelVerification(); }catch(e){}
@@ -61397,6 +61398,11 @@ function finishWorkout(incomplete=false,opts){
 
   // 1. LE HERO : flamme et titre. Il ne depend d'aucun calcul, il ne peut
   //    donc pas manquer — et c'est lui qui dit que la seance est finie.
+  // SÉRIE 7, LOT 7 — « TA SÉANCE » D'ABORD : ce qu'on a fait, exercice par
+  // exercice, avant toute récompense. Les écrans de badge et de rang
+  // attendent « Enregistrer » (ou « Passer »).
+  window._finEnAttente=true;
+  _pose('wd-seance',(()=>{ try{ return htmlResumeSeance(resumeParExercice(sess,(currentUser.sessions||[]).slice(0,-1),currentUser)); }catch(e){ return ''; } })());
   _pose('wd-msg',(()=>{ try{ return _htmlHeroFin(_badges,_ctxFin,currentUser,sess); }catch(e){
     return '<div class="rcf-hero"><h1 class="rcf-titre">Séance terminée</h1></div>'; } })());
   // 2. LES RECOMPENSES : trois au maximum. Aucune obtenue, aucun bloc — on
@@ -63366,6 +63372,90 @@ async function _corpsPeindreCalques(racine){
       _corpsBrancherBulle(cv,carte);
     }catch(e){}
   }
+}
+
+// ══ SÉRIE 7, LOT 7 — LA FIN DE SÉANCE ════════════════════════════════════
+// PURE. Une ligne par exercice fait : sa meilleure série (charge, puis
+// répétitions) et la flèche face à la dernière séance qui le contenait.
+function resumeParExercice(sess,avant,user){
+  const out=[];
+  const meilleure=sets=>{
+    let b=null;
+    for(const s of (sets||[])){
+      if(!s||s.done!==true) continue;
+      const kg=parseFloat(s.weight)||0;
+      const r=(s.repsDone!=null&&s.repsDone!=='')?parseInt(s.repsDone,10):parseInt(s.reps,10);
+      const reps=isFinite(r)&&r>0?r:0;
+      if(!b||kg>b.kg||(kg===b.kg&&reps>b.reps)) b={kg,reps};
+    }
+    return b;
+  };
+  const data=(sess&&sess.data)||{};
+  for(const nom of Object.keys(data)){
+    const sets=((data[nom]&&data[nom].sets)||[]);
+    const n=sets.filter(s=>s&&s.done===true).length;
+    if(!n) continue;
+    const m=meilleure(sets);
+    let prec=null;
+    for(let k=(avant||[]).length-1;k>=0&&!prec;k--){
+      let d=null; try{ d=_dataDeSeance(avant[k],nom); }catch(e){ d=null; }
+      if(d) prec=meilleure(d.sets);
+    }
+    let fleche=null;
+    if(prec&&m){
+      if(m.kg>prec.kg||(m.kg===prec.kg&&m.reps>prec.reps)) fleche='↑';
+      else if(m.kg===prec.kg&&m.reps===prec.reps) fleche='=';
+      else fleche='↓';
+    }
+    out.push({nom,series:n,kg:m?m.kg:0,reps:m?m.reps:0,fleche,prec});
+  }
+  return out;
+}
+function _texteMeilleure(l,user){
+  const kg=l.kg>0?(()=>{ try{ return fmtCharge(l.kg,user); }catch(e){ return String(l.kg).replace('.',',')+' kg'; } })():'PDC';
+  return kg+(l.reps?' × '+l.reps:'');
+}
+function htmlResumeSeance(l){
+  if(!l||!l.length) return '';
+  const cls={'↑':'rs-haut','=':'rs-egal','↓':'rs-bas'};
+  return '<div class="rs-bloc"><div class="rs-t">Ta séance</div>'
+    +l.map(x=>'<div class="rs-l"><span class="rs-n">'+escapeHtml(String(x.nom).toLowerCase())+'</span>'
+      +'<span class="rs-v">'+x.series+' × · '+escapeHtml(_texteMeilleure(x,currentUser))+'</span>'
+      +(x.fleche?'<span class="rs-f '+cls[x.fleche]+'" aria-label="'+(x.fleche==='↑'?'en hausse':x.fleche==='='?'stable':'en baisse')+'">'+x.fleche+'</span>':'<span class="rs-f"></span>')
+      +'</div>').join('')
+    +'</div>';
+}
+// PURE. Le texte à coller dans un message au coach.
+function texteSeancePourCoach(sess,user,lignes){
+  const d=new Date(Number(sess&&sess.date)||Date.now());
+  const l=lignes||resumeParExercice(sess,[],user);
+  const t=[(sess&&sess.name?sess.name:'Séance')+' — '+d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})];
+  t.push((Number(sess&&sess.sets)||0)+' séries'+(sess&&sess.setsPlanned?' sur '+sess.setsPlanned:'')+(sess&&sess.duration?' · '+sess.duration+' min':''));
+  for(const x of l) t.push('• '+String(x.nom).toLowerCase()+' : '+x.series+' × · '+_texteMeilleure(x,user)+(x.fleche&&x.fleche!=='='?' '+x.fleche:''));
+  if(sess&&sess.noteAthlete) t.push('« '+sess.noteAthlete+' »');
+  return t.join('\n');
+}
+function copierSeanceCoach(btn){
+  const s=((currentUser&&currentUser.sessions)||[]).slice(-1)[0];
+  if(!s) return false;
+  let txt=''; try{ txt=texteSeancePourCoach(s,currentUser,resumeParExercice(s,currentUser.sessions.slice(0,-1),currentUser)); }catch(e){ return false; }
+  const fait=()=>{ toast('Copié : colle-le dans ta conversation','var(--green)',2200); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(fait,()=>toast(txt)); return true; } }catch(e){}
+  toast(txt);
+  return true;
+}
+// Les écrans de badge et de rang reprennent leur file.
+function _finLiberer(){
+  if(!window._finEnAttente) return false;
+  window._finEnAttente=false;
+  try{ if(_bdgFile.length||_bdgRecap.length) _bdgPlanifier(); }catch(e){}
+  return true;
+}
+// « Passer » : la séance est déjà enregistrée ; le ressenti ne l'est pas.
+function passerPostSession(){
+  go('s-client-home'); loadClientHome();
+  _finLiberer();
+  return true;
 }
 // ══ LES TROIS GRAPHIQUES DU CADRE CORPS ════════════════════════════════════
 //
@@ -73835,10 +73925,12 @@ function _htmlRessentiFin(){
 // Poser une note : la pastille, le chiffre, et l'input qui porte la valeur.
 // L'evenement `input` est declenche a la main — une ecriture par script n'en
 // emet pas, et renderFormeSeance ne serait jamais rappelee.
-function rcfNoter(id,v){
+function rcfNoter(id,v,auto){
   const inp=document.getElementById('ps-'+id);
   if(inp){
     inp.value=String(v);
+    // Série 7, lot 7 : seule une note posée par l'athlète est une réponse.
+    if(auto) delete inp.dataset.touche; else inp.dataset.touche='1';
     try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){}
   }
   const val=document.getElementById('ps-'+id+'-val');
@@ -73852,7 +73944,7 @@ function rcfNoter(id,v){
 // Remise a 5 entre deux seances. Meme raison qu'avant : une valeur heritee de
 // la seance precedente passerait pour une reponse.
 function rcfReinitRessenti(){
-  RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5); }catch(e){} });
+  RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5,true); }catch(e){} });
   // Le mot de la seance precedente ne se recopie pas sur la suivante.
   try{ const n=document.getElementById('ps-note'); if(n) n.value=''; }catch(e){}
 }
@@ -75447,14 +75539,17 @@ function renderFormeCoach(c){
 
 function savePostSession(versBilan){
   const _lu=(id)=>{const e=document.getElementById('ps-'+id);return e?e.value:undefined;};
+  // SÉRIE 7, LOT 7 : un curseur qu'on n'a pas touché n'est pas une réponse —
+  // il part absent, pas à 5.
+  const _luN=(id)=>{const e=document.getElementById('ps-'+id);return (e&&e.dataset.touche==='1')?e.value:undefined;};
   const metrics={
-    fatigue:_lu('fatigue'),
-    sensation:_lu('sensation'),
-    motivation:_lu('motivation'),
+    fatigue:_luN('fatigue'),
+    sensation:_luN('sensation'),
+    motivation:_luN('motivation'),
     // Premier rang, comme les trois items de l'indice : il est TOUJOURS
     // écrit. Ce qui le distingue d'eux n'est pas la collecte, c'est qu'il
     // n'entre dans aucun score.
-    energie:_lu('energie'),
+    energie:_luN('energie'),
     steps:_lu('steps')
   };
   // Les trois curseurs secondaires ne sont écrits que si l'athlète a ouvert le
@@ -75462,8 +75557,8 @@ function savePostSession(versBilan){
   // que personne n'a rien répondu. Quand ils sont renseignés, ils partent au
   // même format qu'avant : rien à migrer, rien à relire autrement.
   if(_psDetailOuvert){
-    metrics.satisfaction=_lu('satisfaction');
-    metrics.hydratation=_lu('hydratation');
+    metrics.satisfaction=_luN('satisfaction');
+    metrics.hydratation=_luN('hydratation');
   }
   // Le mot pour le coach : borné ici ET dans les règles (PUT du dossier entier).
   const _note=String(_lu('note')||'').trim().slice(0,NOTE_SEANCE_MAX);
@@ -75471,6 +75566,7 @@ function savePostSession(versBilan){
   if(currentUser.sessions?.length){
     const _der=currentUser.sessions[currentUser.sessions.length-1];
     if(_note) _der.noteAthlete=_note; else delete _der.noteAthlete;
+    for(const k of Object.keys(metrics)) if(metrics[k]===undefined) delete metrics[k];
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
@@ -75484,8 +75580,9 @@ function savePostSession(versBilan){
   const _pas=parseInt(metrics.steps,10);
   if(!isNaN(_pas)&&_pas>0&&_pas<=99999) _recordSteps(localISODate(new Date()),_pas);
   toastEcriture(saveUser(),' Super séance enregistrée !','la séance est');
-  if(versBilan){openBilan('depart');return;}
+  if(versBilan){openBilan('depart');try{ _finLiberer(); }catch(e){} return;}
   go('s-client-home');loadClientHome();
+  try{ _finLiberer(); }catch(e){}
 }
 // ── Assiduité : le streak compte des SEMAINES, pas des jours consécutifs ────
 // L'ancienne version n'incrémentait que si l'écart valait exactement 1 jour.
@@ -83489,13 +83586,15 @@ function rcRepondreRetour(btn,muscle,champ,valeur){
 function rcRendreRetourSeance(sess){
   const z=document.getElementById('wd-retour-zone');
   if(!z) return false;
-  z.style.display='none'; z.innerHTML='';
+  z.style.display='none'; z.innerHTML=''; z.classList.remove('ps-detail-item');
   let l=[];
   try{ l=musclesAInterroger(currentUser,sess); }catch(e){ l=[]; }
   if(!l.length) return false;
   z.innerHTML='<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta semaine sur ces muscles</div>'
     +l.map(m=>_htmlChoixRetour(m,'congestion',RETOUR_LIB_CONGESTION)).join('');
-  z.style.display='block';
+  // Série 7, lot 7 : la congestion se replie derrière « Plus de détails ».
+  z.classList.add('ps-detail-item');
+  z.style.display=(typeof _psDetailOuvert!=='undefined'&&_psDetailOuvert)?'block':'none';
   return true;
 }
 // ⚠ L'ENCART DE COURBATURES A QUITTE L'ACCUEIL le 14/09/2026. Kevin : « ça
@@ -92562,8 +92661,16 @@ function bdgRepartir(items,mode,dejaMontres,stats){
   const n=mode==='discretes'?0:Math.max(0,BDG_ECRAN_MAX-(Number(dejaMontres)||0));
   return {ecrans:p.slice(0,n),trophees:p.slice(n)};
 }
+// Série 7 (lot 7) : l'écran de fin est affiché et « Enregistrer » pas encore touché.
+function finAttendEnregistrement(){
+  if(!window._finEnAttente) return false;
+  const z=document.getElementById('s-workout-done');
+  return !!(z&&z.classList.contains('active'));
+}
 function _bdgAfficher(x,reste){
   if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat([x]); return false; }
+  // Série 7 (lot 7) : sur l'écran de fin, rien avant « Enregistrer ».
+  if(finAttendEnregistrement()){ _bdgFile=[x].concat(_bdgFile); try{ _bdgVague.ecrans=Math.max(0,_bdgVague.ecrans-1); }catch(e){} return false; }
   if(x&&typeof x==='object'&&x.retour) _retourEcran(x.retour,reste);
   else if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
   else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,reste);
@@ -92825,6 +92932,7 @@ function _bdgArcs(z,duree){
 // LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
 // seul bouton. Chacun reste partageable depuis sa fiche.
 function _bdgEcranRecap(ids){
+  if(finAttendEnregistrement()){ _bdgRecap=_bdgRecap.concat(ids||[]); return false; }
   // Série 7 (lot 2) : pas par-dessus une séance ; ils reviennent après.
   if(typeof seanceAEcran==='function'&&seanceAEcran()){ _bdgRecap=_bdgRecap.concat(ids||[]); return false; }
   // Série 6 (lot 13) : la visite ne fête pas l'historique d'un compte fictif.

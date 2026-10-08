@@ -1538,13 +1538,15 @@ function rcRepondreRetour(btn,muscle,champ,valeur){
 function rcRendreRetourSeance(sess){
   const z=document.getElementById('wd-retour-zone');
   if(!z) return false;
-  z.style.display='none'; z.innerHTML='';
+  z.style.display='none'; z.innerHTML=''; z.classList.remove('ps-detail-item');
   let l=[];
   try{ l=musclesAInterroger(currentUser,sess); }catch(e){ l=[]; }
   if(!l.length) return false;
   z.innerHTML='<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta semaine sur ces muscles</div>'
     +l.map(m=>_htmlChoixRetour(m,'congestion',RETOUR_LIB_CONGESTION)).join('');
-  z.style.display='block';
+  // Série 7, lot 7 : la congestion se replie derrière « Plus de détails ».
+  z.classList.add('ps-detail-item');
+  z.style.display=(typeof _psDetailOuvert!=='undefined'&&_psDetailOuvert)?'block':'none';
   return true;
 }
 // ⚠ L'ENCART DE COURBATURES A QUITTE L'ACCUEIL le 14/09/2026. Kevin : « ça
