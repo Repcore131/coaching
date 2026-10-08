@@ -515,6 +515,7 @@ function _rendreCarteMoment(u){
   return c;
 }
 function loadClientHome(){
+  try{ rendreCarteInstall(currentUser); }catch(e){}
   try{ _majRappelVerification(); }catch(e){}
   // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
   try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}

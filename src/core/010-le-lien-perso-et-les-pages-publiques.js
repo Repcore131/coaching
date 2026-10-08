@@ -1805,14 +1805,19 @@ async function parrainInviteLire(code){
   }catch(e){ return null; }
 }
 // PURE. La ligne sous le champ du code.
+// PURE. Les mois d'essai d'un invité : essai + mois offert (tarifs.json).
+function moisEssaiParraine(){ return (Number(TARIFS.essai&&TARIFS.essai.mois)||0)+(Number(TARIFS.essai_parrainage&&TARIFS.essai_parrainage.moisEnPlus)||0); }
 function phraseInvitationInscription(prenom,amb,avantage){
   // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
   // mois d'Ultime à moitié prix.
   if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
-  if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
+  // SÉRIE 6 (lot 17) : la durée se lit dans tarifs.json (essai + mois offert
+  // par le parrainage), jamais écrite en dur.
+  const _m=moisEssaiParraine(), _t=_m+' mois d’essai';
+  if(amb) return 'Grâce à '+amb+', tu as '+_t;
   // Le mois offert PAR QUELQU'UN (lot C) : c'est ce « par quelqu'un » qui compte.
-  if(prenom) return prenom+' t’offre ton premier mois';
-  return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
+  if(prenom) return prenom+' t’offre '+_t;
+  return 'Le code d’un ami ou d’un ambassadeur te donne '+_t+'.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
 // L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
@@ -1858,6 +1863,7 @@ function parrainageChampInscription(role){
   const z=document.getElementById('r-parrain-z');
   if(!z) return;
   z.style.display=role==='athlete'?'':'none';
+  const _sc=document.getElementById('r-sans-coach'); if(_sc) _sc.style.display=role==='athlete'?'':'none';
   const i=document.getElementById('r-parrain');
   // L'ambassadeur passe devant le parrain : un seul avantage.
   const a=ambEnAttente(), c=a||parrainageRefEnAttente();

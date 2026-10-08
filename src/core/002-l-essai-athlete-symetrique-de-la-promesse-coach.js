@@ -972,7 +972,9 @@ function htmlPrefsAide(role,choix,maj,build,appareil){
     +'<h3 class="prf-t" id="prf-t-ct">Un souci avec l’application ?</h3>'
     +'<p class="prf-sub">Pour un bug, une question de compte ou de paiement, écris directement au créateur de RepCore'+(r==='client'?' (pas à ton coach)':'')+'. La version de ton application est jointe au message.</p>'
     +'<a class="btn btn-outline btn-casse prf-contact" href="'+escapeHtml(lienContactCreateur(r,build,maj,appareil))+'">Écrire au créateur de RepCore</a>'
-    +'<p class="prf-maj">'+escapeHtml(texteMiseAJour(maj,build))+'</p>'
+    // Série 6 (lot 17) : le numéro de build ne s'affiche qu'en débogage (?debug=1) ;
+    // il part toujours dans le message au support.
+    +'<p class="prf-maj">'+escapeHtml(texteMiseAJour(maj,(typeof rcModeDebug==='function'&&rcModeDebug())?build:''))+'</p>'
     +'</section>';
 }
 // ══ LOT M1 : LA MARQUE DU COACH PRO (30/09/2026) ═══════════════════════════

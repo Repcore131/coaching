@@ -640,7 +640,7 @@ function lienWhatsApp(texte){
 // Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
 // clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
 // créer de dimension imprévue.
-const RCM_EVENEMENTS=['visite_ouverte','visite_vers_inscription','landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
+const RCM_EVENEMENTS=['visite_ouverte','visite_vers_inscription','essai_direct','landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de

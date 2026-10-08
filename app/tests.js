@@ -11777,13 +11777,14 @@ async function testExercices(){
             try{
               _poser({coarse:true});
               localStorage.removeItem(CLE); localStorage.removeItem('rc_session');
-              if(rcEcranDeDepart()!=='s-install') return _echec('un visiteur neuf n’arrive pas sur l’installation');
+              // SÉRIE 6 (lot 17) : l'installation ne bloque plus l'entrée ; elle se propose en carte.
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('un visiteur neuf est bloqué sur l’installation');
               // DEUX REFUS SUFFISENT : insister une troisième fois n'est plus
               // une proposition, c'est du harcèlement.
               localStorage.setItem(CLE,'2');
               if(rcEcranDeDepart()!=='s-welcome') return _echec('deux refus ne suffisent pas');
               localStorage.setItem(CLE,'1');
-              if(rcEcranDeDepart()!=='s-install') return _echec('un seul refus ferme déjà la porte');
+              if(rcEcranDeDepart()!=='s-welcome') return _echec('l’écran d’installation revient sans #install');
               localStorage.removeItem(CLE);
               localStorage.setItem('rc_session','{}');
               if(rcEcranDeDepart()!=='s-welcome') return _echec('une session ouverte revoit l’offre');
@@ -59736,13 +59737,14 @@ async function testExercices(){
       return true;
     });
     ok('Inscription : « Julie t’offre ton premier mois » en haut, avant le formulaire, et le code demandé en haut sur iPhone installé',()=>{
-      if(phraseInvitationInscription('Julie')!=='Julie t’offre ton premier mois') return _echec(phraseInvitationInscription('Julie'));
+      // Série 6 (lot 17) : la durée vient de tarifs.json (essai + mois offert).
+      if(phraseInvitationInscription('Julie')!=='Julie t’offre '+moisEssaiParraine()+' mois d’essai') return _echec(phraseInvitationInscription('Julie'));
       if(ligneCadeauInscription('Julie t’offre ton premier mois',{prenom:'Julie',mesure:'seances',duree:14})!=='Julie te défie : 14 jours de régularité. Julie t’offre ton premier mois.')
         return _echec('défi puis cadeau : '+ligneCadeauInscription('Julie t’offre ton premier mois',{prenom:'Julie',mesure:'seances',duree:14}));
       { const f=document.querySelector('#s-register .scroll-area'), c=document.getElementById('r-cadeau');
         if(!f||!c||f.firstElementChild!==c) return _echec('le cadeau n’est pas le premier élément du formulaire'); }
-      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, ton premier mois est offert') return _echec('ambassadeur');
-      if(!/t’offre ton premier mois/.test(phraseInvitationInscription(''))) return _echec('sans code');
+      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, tu as '+moisEssaiParraine()+' mois d’essai') return _echec('ambassadeur');
+      if(!/te donne \d+ mois d’essai/.test(phraseInvitationInscription(''))) return _echec('sans code');
       if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
       if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
         return _echec('demandé à tort');
@@ -60314,7 +60316,7 @@ async function testExercices(){
       }finally{ currentUser=sv; }
       const ph=phraseInvitationInscription('','Julie Fit','ultime_demi');
       if(!/Grâce à Julie Fit/.test(ph)||!/Ultime est à/.test(ph)||ph.indexOf(prixOffre('ultime_demi'))<0) return _echec(ph);
-      if(!/Grâce à Julie Fit, ton premier mois est offert/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
+      if(!/Grâce à Julie Fit, tu as \d+ mois d’essai/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
       if(ambFiche({code:'LANCE',nom:'L',avantage:'ultime_demi'},{}).fiche.avantage!=='ultime_demi') return _echec('création');
       if(ambFiche({code:'JULIE',nom:'J',avantage:'nimporte'},{}).fiche.avantage!=='essai+1mois') return _echec('valeur hors liste');
       return /ultime_demi/.test(String(ambassadeurApresInscription))&&/jours:demi\?0:/.test(String(ambassadeurApresInscription))?true:_echec('inscription');});
@@ -62393,7 +62395,8 @@ async function testExercices(){
       if(q.length<5||[...q].some(x=>x.open)) return _echec(q.length+' questions, ou une ouverte');
       const a=d.querySelector('a.prf-contact');
       if(!a||a.getAttribute('href').indexOf('mailto:'+CREATOR_EMAIL+'?')!==0||decodeURIComponent(a.getAttribute('href')).indexOf('Version : 1598 du 2026-09-26')<0) return _echec('contact');
-      if(d.querySelector('.prf-maj').textContent!=='Mis à jour le 26 septembre 2026 · version 1598') return _echec(d.querySelector('.prf-maj').textContent);
+      // Série 6 (lot 17) : le numéro de build ne s'affiche qu'en débogage.
+      if(d.querySelector('.prf-maj').textContent!==(rcModeDebug()?'Mis à jour le 26 septembre 2026 · version 1598':'Mis à jour le 26 septembre 2026')) return _echec(d.querySelector('.prf-maj').textContent);
       const c=document.createElement('div'); c.innerHTML=htmlPrefsAide('coach','sombre','','1598','');
       if(/résilier/i.test(c.textContent)||!/inviter un athlète/i.test(c.textContent)) return _echec('FAQ coach');
       if(!/^\d{4}-\d{2}-\d{2}$/.test(String(window.RC_MAJ||''))) return _echec('RC_MAJ absent');
@@ -75360,6 +75363,43 @@ async function testExercices(){
       const ld=JSON.parse(m[1]);
       if(ld['@type']!=='FAQPage'||ld.mainEntity.length<15) return _echec('FAQPage');
       return /workers\.dev\/support/.test(h)&&/name="site"/.test(h)?true:_echec('formulaire');});
+    // ══ BUILD 1941 — #essai : DROIT À L'INSCRIPTION ═════════════════════════════
+    ok('1941 — #essai : inscription athlète, Ultime choisi, compteur essai_direct ; l’installation ne bloque plus',()=>{
+      const _s=localStorage.getItem('rc_session'), _go=window.go, _sr=window.selectRole, vus=[], roles=[];
+      try{
+        localStorage.removeItem('rc_session');
+        if(rcEcranDeDepart('#essai')!=='s-register') return _echec('#essai');
+        if(rcEcranDeDepart('')!=='s-welcome') return _echec('visiteur neuf bloqué');
+        if(rcEcranDeDepart('#install')!=='s-install'&&!rcInstallAutonome()) return _echec('#install');
+        localStorage.setItem('rc_session','{}');
+        if(rcEcranDeDepart('#essai')!=='s-welcome') return _echec('#essai avec une session ouverte');
+        window.go=s=>vus.push(s); window.selectRole=(r)=>roles.push(r);
+        essaiDirect();
+        if(vus[0]!=='s-register'||roles[0]!=='athlete') return _echec('chemin : '+vus+' / '+roles);
+        if(subOffreChoisie()!=='ultime') return _echec('Ultime non choisi');
+        if(RCM_EVENEMENTS.indexOf('essai_direct')<0) return _echec('compteur');
+        return /essaiDirect\(\)/.test(_prodSrc())?true:_echec('non branché au démarrage');
+      }finally{ window.go=_go; window.selectRole=_sr; if(_s==null) localStorage.removeItem('rc_session'); else localStorage.setItem('rc_session',_s);
+        try{ sessionStorage.removeItem('rc_offre_choisie'); }catch(e){} }});
+    ok('1941 — l’installation en carte : après la 1re séance ou au 2e lancement, jamais installée ni refusée deux fois',()=>{
+      const f=[];
+      if(carteInstallVisible({lancements:1,seances:0})) f.push('1er lancement');
+      if(!carteInstallVisible({lancements:2,seances:0})) f.push('2e lancement');
+      if(!carteInstallVisible({lancements:1,seances:1})) f.push('1re séance');
+      if(carteInstallVisible({lancements:5,seances:3,autonome:true})) f.push('déjà installée');
+      if(carteInstallVisible({lancements:5,seances:3,refus:2})) f.push('deux refus');
+      const z=document.getElementById('clh-installer');
+      if(!z||!z.closest('#s-client-home')) f.push('emplacement');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1941 — inscription : « facultative » pour l’athlète, durée du parrainage lue dans tarifs.json ; build en débogage seulement',()=>{
+      const p=document.getElementById('r-sans-coach');
+      if(!p||!/facultative/.test(p.textContent)) return _echec('mention');
+      const m=moisEssaiParraine();
+      if(m!==TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus) return _echec('mois');
+      if(phraseInvitationInscription('Léa').indexOf(m+' mois')<0) return _echec('phrase : '+phraseInvitationInscription('Léa'));
+      if(/premier mois/.test(phraseInvitationInscription(''))) return _echec('texte en dur');
+      const h=htmlPrefsAide('client','sombre','2026-10-08','1941','');
+      return (rcModeDebug()||!/version 1941/.test(h))?true:_echec('numéro de build hors débogage');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

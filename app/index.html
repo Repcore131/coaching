@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1940';
+window.RC_BUILD='1941';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1940.css">
+<link rel="stylesheet" href="./rc-style.1941.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1940.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1941.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1431,6 +1431,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- LE CODE D'UN AMI (parrainage). Athletes seulement (selectRole), pre-rempli
          depuis ?ref= — et saisissable a la main : sur iPhone, l'app installee
          ne voit pas le stockage de Safari ou le lien avait ete ouvert. -->
+    <!-- SÉRIE 6 (lot 17) : l'invitation d'un coach n'est pas requise pour s'inscrire. -->
+    <p class="sub r-sans-coach" id="r-sans-coach">Invitation d’un coach : facultative. Sans elle, ton essai démarre tout de suite.</p>
     <div id="r-parrain-z" style="display:none"><label for="r-parrain">Code d'un ami ou d'un ambassadeur (optionnel)</label>
       <input type="text" id="r-parrain" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="JULIE7K2" oninput="parrainageCodeSaisi(this.value)">
       <div class="sub" id="r-parrain-info" style="font-size:var(--fs-xs);margin-top:6px"></div></div>
@@ -3616,6 +3618,8 @@ const COACH_PHOTO='icons/coach.jpg';
            avant la carte du coach, pour rien : les deux emplacements qui les
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
+      <!-- SÉRIE 6 (lot 17) : l'installation, en carte (rendreCarteInstall). -->
+      <div id="clh-installer" hidden></div>
       <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:4px">
         <h1 id="clh-greeting" class="t-page"></h1>
         <p id="clh-phrase" style="margin-top:2px;font-size:var(--fs-sm);line-height:1.4;color:var(--text-dim)"></p>
@@ -6395,5 +6399,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1940.js"></script>
+<script src="./rc-core.1941.js"></script>
 </body></html>

@@ -640,7 +640,7 @@ function lienWhatsApp(texte){
 // Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
 // clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
 // créer de dimension imprévue.
-const RCM_EVENEMENTS=['visite_ouverte','visite_vers_inscription','landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
+const RCM_EVENEMENTS=['visite_ouverte','visite_vers_inscription','essai_direct','landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
@@ -2939,7 +2939,9 @@ function htmlPrefsAide(role,choix,maj,build,appareil){
     +'<h3 class="prf-t" id="prf-t-ct">Un souci avec l’application ?</h3>'
     +'<p class="prf-sub">Pour un bug, une question de compte ou de paiement, écris directement au créateur de RepCore'+(r==='client'?' (pas à ton coach)':'')+'. La version de ton application est jointe au message.</p>'
     +'<a class="btn btn-outline btn-casse prf-contact" href="'+escapeHtml(lienContactCreateur(r,build,maj,appareil))+'">Écrire au créateur de RepCore</a>'
-    +'<p class="prf-maj">'+escapeHtml(texteMiseAJour(maj,build))+'</p>'
+    // Série 6 (lot 17) : le numéro de build ne s'affiche qu'en débogage (?debug=1) ;
+    // il part toujours dans le message au support.
+    +'<p class="prf-maj">'+escapeHtml(texteMiseAJour(maj,(typeof rcModeDebug==='function'&&rcModeDebug())?build:''))+'</p>'
     +'</section>';
 }
 // ══ LOT M1 : LA MARQUE DU COACH PRO (30/09/2026) ═══════════════════════════
@@ -9068,7 +9070,8 @@ window.onload=()=>{
           if(!c&&inp&&inp.value) try{ _aeBanniereDepuisCode(inp.value); }catch(e){}
         },350);
       } else {
-        go(rcEcranDeDepart());
+        const _dep=rcEcranDeDepart();
+        if(_dep==='s-register') essaiDirect(); else go(_dep);
       }
       // ── L'INVITATION, SESSION DÉJÀ OUVERTE ────────────────────────────
       // Hors de la chaîne de `else` ci-dessus, et APRÈS son routage : le
@@ -25166,14 +25169,19 @@ async function parrainInviteLire(code){
   }catch(e){ return null; }
 }
 // PURE. La ligne sous le champ du code.
+// PURE. Les mois d'essai d'un invité : essai + mois offert (tarifs.json).
+function moisEssaiParraine(){ return (Number(TARIFS.essai&&TARIFS.essai.mois)||0)+(Number(TARIFS.essai_parrainage&&TARIFS.essai_parrainage.moisEnPlus)||0); }
 function phraseInvitationInscription(prenom,amb,avantage){
   // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
   // mois d'Ultime à moitié prix.
   if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
-  if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
+  // SÉRIE 6 (lot 17) : la durée se lit dans tarifs.json (essai + mois offert
+  // par le parrainage), jamais écrite en dur.
+  const _m=moisEssaiParraine(), _t=_m+' mois d’essai';
+  if(amb) return 'Grâce à '+amb+', tu as '+_t;
   // Le mois offert PAR QUELQU'UN (lot C) : c'est ce « par quelqu'un » qui compte.
-  if(prenom) return prenom+' t’offre ton premier mois';
-  return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
+  if(prenom) return prenom+' t’offre '+_t;
+  return 'Le code d’un ami ou d’un ambassadeur te donne '+_t+'.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
 // L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
@@ -25219,6 +25227,7 @@ function parrainageChampInscription(role){
   const z=document.getElementById('r-parrain-z');
   if(!z) return;
   z.style.display=role==='athlete'?'':'none';
+  const _sc=document.getElementById('r-sans-coach'); if(_sc) _sc.style.display=role==='athlete'?'':'none';
   const i=document.getElementById('r-parrain');
   // L'ambassadeur passe devant le parrain : un seul avantage.
   const a=ambEnAttente(), c=a||parrainageRefEnAttente();
@@ -50674,6 +50683,7 @@ function _rendreCarteMoment(u){
   return c;
 }
 function loadClientHome(){
+  try{ rendreCarteInstall(currentUser); }catch(e){}
   try{ _majRappelVerification(); }catch(e){}
   // LE BLOC SUIVANT DÉMARRE CE LUNDI (06/10/2026) : il devient le programme.
   try{ if(currentUser&&currentUser.role!=='coach'&&basculerBlocSuivant(currentUser,Date.now())){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); } }catch(e){}
@@ -139243,10 +139253,11 @@ function _rcSortieManuelle(nom,u){
 function rcEcranDeDepart(frag){
   const _h=(frag===undefined?(function(){ try{ return location.hash; }catch(e){ return ''; } })():frag);
   try{ if(String(_h||'').toLowerCase()==='#install'&&!rcInstallAutonome()) return 's-install'; }catch(e){}
-  if(rcInstallAutonome()) return 's-welcome';
-  try{ if((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)>=2) return 's-welcome'; }catch(e){}
-  try{ if(localStorage.getItem('rc_session')) return 's-welcome'; }catch(e){}
-  return 's-install';
+  // SÉRIE 6 (lot 17) : #essai mène droit à l'inscription athlète (Ultime à
+  // l'essai), sans session ouverte. Et L'INSTALLATION NE BLOQUE PLUS L'ENTRÉE :
+  // elle se propose en carte, après la première séance ou au 2e lancement.
+  try{ if(String(_h||'').toLowerCase()==='#essai'&&!localStorage.getItem('rc_session')) return 's-register'; }catch(e){}
+  return 's-welcome';
 }
 // L'INVITATION DU NAVIGATEUR, LUE PAR UNE FONCTION et non directement.
 // Elle vit desormais dans le <head>, sous window.__rcInstallEvt, et
@@ -140422,6 +140433,43 @@ function saveCoachPhone(){
   toastEcriture(saveUser(),'Numéro WhatsApp enregistré '+ICO.coche,'le numéro est');
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
+}
+
+// ══ SÉRIE 6, LOT 17 — LE CHEMIN DIRECT VERS L'ESSAI ═════════════════════════
+// #essai (page de vente, « Créer mon compte » de la visite) : l'inscription
+// athlète, Ultime choisi, sans écran d'installation ni question de rôle.
+function essaiDirect(){
+  try{ sessionStorage.setItem('rc_offre_choisie','ultime'); }catch(e){}
+  go('s-register');
+  try{ selectRole('athlete',true); }catch(e){}
+  try{ rcm('essai_direct'); }catch(e){}
+  return true;
+}
+// L'INSTALLATION EN CARTE : un lancement de plus à chaque ouverture.
+const RC_LANCEMENTS='rc_lancements';
+try{ localStorage.setItem(RC_LANCEMENTS,String((parseInt(localStorage.getItem(RC_LANCEMENTS),10)||0)+1)); }catch(e){}
+// PURE. La carte s'affiche-t-elle ? Pas installée, pas refusée deux fois, et
+// une séance faite ou un deuxième lancement.
+function carteInstallVisible(o){
+  const x=o||{};
+  if(x.autonome||(Number(x.refus)||0)>=2) return false;
+  return (Number(x.seances)||0)>=1||(Number(x.lancements)||0)>=2;
+}
+function rendreCarteInstall(u){
+  const z=document.getElementById('clh-installer'); if(!z) return false;
+  let vis=false;
+  try{ vis=carteInstallVisible({autonome:rcInstallAutonome(),refus:parseInt(localStorage.getItem(RC_INST_REFUS),10)||0,
+    lancements:parseInt(localStorage.getItem(RC_LANCEMENTS),10)||0,seances:((u&&u.sessions)||[]).length}); }catch(e){ vis=false; }
+  z.hidden=!vis;
+  z.innerHTML=vis?'<div class="ci-carte"><div><b>Installe RepCore sur ton écran d’accueil</b><span>Plein écran, ouverture en un geste, notifications.</span></div>'
+    +'<div class="ci-b"><button type="button" class="btn btn-red btn-sm" onclick="go(\'s-install\')">Installer</button>'
+    +'<button type="button" class="rb-lien" onclick="carteInstallPlusTard()">Plus tard</button></div></div>':'';
+  return vis;
+}
+function carteInstallPlusTard(){
+  try{ localStorage.setItem(RC_INST_REFUS,String((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1)); }catch(e){}
+  const z=document.getElementById('clh-installer'); if(z){ z.hidden=true; z.innerHTML=''; }
+  return true;
 }
 // ══ DECODER L'IMAGE AVANT DE LA REDIMENSIONNER ═══════════════════════════
 //

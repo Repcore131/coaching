@@ -1503,10 +1503,11 @@ function _rcSortieManuelle(nom,u){
 function rcEcranDeDepart(frag){
   const _h=(frag===undefined?(function(){ try{ return location.hash; }catch(e){ return ''; } })():frag);
   try{ if(String(_h||'').toLowerCase()==='#install'&&!rcInstallAutonome()) return 's-install'; }catch(e){}
-  if(rcInstallAutonome()) return 's-welcome';
-  try{ if((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)>=2) return 's-welcome'; }catch(e){}
-  try{ if(localStorage.getItem('rc_session')) return 's-welcome'; }catch(e){}
-  return 's-install';
+  // SÉRIE 6 (lot 17) : #essai mène droit à l'inscription athlète (Ultime à
+  // l'essai), sans session ouverte. Et L'INSTALLATION NE BLOQUE PLUS L'ENTRÉE :
+  // elle se propose en carte, après la première séance ou au 2e lancement.
+  try{ if(String(_h||'').toLowerCase()==='#essai'&&!localStorage.getItem('rc_session')) return 's-register'; }catch(e){}
+  return 's-welcome';
 }
 // L'INVITATION DU NAVIGATEUR, LUE PAR UNE FONCTION et non directement.
 // Elle vit desormais dans le <head>, sous window.__rcInstallEvt, et
@@ -2682,4 +2683,41 @@ function saveCoachPhone(){
   toastEcriture(saveUser(),'Numéro WhatsApp enregistré '+ICO.coche,'le numéro est');
   _renderCoachPhonePreview(raw);
   _renderContactCoach();
+}
+
+// ══ SÉRIE 6, LOT 17 — LE CHEMIN DIRECT VERS L'ESSAI ═════════════════════════
+// #essai (page de vente, « Créer mon compte » de la visite) : l'inscription
+// athlète, Ultime choisi, sans écran d'installation ni question de rôle.
+function essaiDirect(){
+  try{ sessionStorage.setItem('rc_offre_choisie','ultime'); }catch(e){}
+  go('s-register');
+  try{ selectRole('athlete',true); }catch(e){}
+  try{ rcm('essai_direct'); }catch(e){}
+  return true;
+}
+// L'INSTALLATION EN CARTE : un lancement de plus à chaque ouverture.
+const RC_LANCEMENTS='rc_lancements';
+try{ localStorage.setItem(RC_LANCEMENTS,String((parseInt(localStorage.getItem(RC_LANCEMENTS),10)||0)+1)); }catch(e){}
+// PURE. La carte s'affiche-t-elle ? Pas installée, pas refusée deux fois, et
+// une séance faite ou un deuxième lancement.
+function carteInstallVisible(o){
+  const x=o||{};
+  if(x.autonome||(Number(x.refus)||0)>=2) return false;
+  return (Number(x.seances)||0)>=1||(Number(x.lancements)||0)>=2;
+}
+function rendreCarteInstall(u){
+  const z=document.getElementById('clh-installer'); if(!z) return false;
+  let vis=false;
+  try{ vis=carteInstallVisible({autonome:rcInstallAutonome(),refus:parseInt(localStorage.getItem(RC_INST_REFUS),10)||0,
+    lancements:parseInt(localStorage.getItem(RC_LANCEMENTS),10)||0,seances:((u&&u.sessions)||[]).length}); }catch(e){ vis=false; }
+  z.hidden=!vis;
+  z.innerHTML=vis?'<div class="ci-carte"><div><b>Installe RepCore sur ton écran d’accueil</b><span>Plein écran, ouverture en un geste, notifications.</span></div>'
+    +'<div class="ci-b"><button type="button" class="btn btn-red btn-sm" onclick="go(\'s-install\')">Installer</button>'
+    +'<button type="button" class="rb-lien" onclick="carteInstallPlusTard()">Plus tard</button></div></div>':'';
+  return vis;
+}
+function carteInstallPlusTard(){
+  try{ localStorage.setItem(RC_INST_REFUS,String((parseInt(localStorage.getItem(RC_INST_REFUS),10)||0)+1)); }catch(e){}
+  const z=document.getElementById('clh-installer'); if(z){ z.hidden=true; z.innerHTML=''; }
+  return true;
 }

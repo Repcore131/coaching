@@ -1867,7 +1867,8 @@ window.onload=()=>{
           if(!c&&inp&&inp.value) try{ _aeBanniereDepuisCode(inp.value); }catch(e){}
         },350);
       } else {
-        go(rcEcranDeDepart());
+        const _dep=rcEcranDeDepart();
+        if(_dep==='s-register') essaiDirect(); else go(_dep);
       }
       // ── L'INVITATION, SESSION DÉJÀ OUVERTE ────────────────────────────
       // Hors de la chaîne de `else` ci-dessus, et APRÈS son routage : le
