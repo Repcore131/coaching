@@ -1601,9 +1601,9 @@ const SEANCE_EXOS_DEFAUT=5;
 // PURE. Un emplacement d'exercice, exactement la forme que pousse
 // addExercise : une seule definition, sinon l'editeur et la creation
 // divergeraient au premier champ ajoute.
+// Série 6 : les valeurs par défaut du coach connecté (exerciceVierge).
 function _exoVierge(){
-  return {name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null,
-    videoUrl:'',ss:false,methodeSeries:'',rir:''};
+  return exerciceVierge(_coachPrescription());
 }
 // PURE. Sept creneaux eteints et vides — la forme que tous les rendus
 // attendent. Un tableau vide ne suffit pas : ils lisent sept jours.

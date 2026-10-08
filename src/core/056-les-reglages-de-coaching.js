@@ -620,7 +620,7 @@ function _rgxRendre(){
   const u=_rgCoach(); if(!u||!document.getElementById('s-coach-reglages')) return false;
   const l=lignesReglagesCoach(u);
   const pose=(id,h)=>{ const z=document.getElementById(id); if(z) z.innerHTML=h; };
-  pose('rgx-defauts',(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
+  pose('rgx-defauts',_htmlRgxPrescription(u)+(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
   pose('rgx-bilans',_htmlRgxBilans(u));
   pose('rgx-messages',_htmlRgxMessages(u,l));
   const aff=document.getElementById('rgx-affichage');
@@ -789,4 +789,103 @@ function rgxBilanPrecedent(){
 function defautsCoachPublics(coach){
   const b=validerDefautBilan(coach&&coach.defautsCoach&&coach.defautsCoach.bilan);
   return b?{bilan:{freq:b.freq,jour:b.jour,questions:b.questions}}:null;
+}
+
+// ══ SÉRIE 6, LOT 3 — LA PRESCRIPTION PAR DÉFAUT ════════════════════════════
+// defautsCoach.prescription = {series 1-10, reps (texte ≤12), repos (texte lu
+// par parseRepos), rir ('' ou 0..5), dechargeSeriesPct 40-90, dechargeRirPlus
+// 0-3}. Sans réglage : exactement l'historique (3, '10', '2 min', rir '',
+// 60 %, +1). Changer un défaut ne modifie AUCUN exercice déjà écrit.
+const PRESCRIPTION_HISTORIQUE=Object.freeze({series:3,reps:'10',repos:REPOS_DEFAUT,rir:'',dechargeSeriesPct:60,dechargeRirPlus:1});
+const _borne=(v,a,b)=>Math.min(b,Math.max(a,v));
+// PURE. Le repos tel qu'on l'écrit partout (« 2 min », « 1 min 30 », « 45 s »),
+// ou un refus motivé. Un nombre nu ≤ 10 se lit en minutes, au-delà en
+// secondes ; hors 10 s - 10 min, ramené à la borne la plus proche.
+function normaliserRepos(brut){
+  const t=String(brut==null?'':brut).trim().toLowerCase().replace(/,/g,'.');
+  if(!t) return {ok:false,msg:'Le repos est vide.'};
+  let sec=null;
+  if(/^\d+(\.\d+)?$/.test(t)){ const n=parseFloat(t); sec=n<=10?n*60:n; }
+  else{
+    const m=t.match(/^(\d+(?:\.\d+)?)\s*(?:m|mn|min|minutes?)\s*(\d+)?\s*(?:s|sec|secondes?)?$/);
+    const sx=t.match(/^(\d+(?:\.\d+)?)\s*(?:s|sec|secondes?)$/);
+    if(m) sec=parseFloat(m[1])*60+(m[2]?parseInt(m[2],10):0);
+    else if(sx) sec=parseFloat(sx[1]);
+    else{ const p=parseRepos(t); sec=p; }
+  }
+  if(sec==null||!isFinite(sec)) return {ok:false,msg:'« '+String(brut).trim()+' » ? Écris par exemple « 2 min », « 1 min 30 » ou « 90 s ».'};
+  sec=_borne(Math.round(sec),REPOS_MIN,REPOS_MAX);
+  const mn=Math.floor(sec/60), ss=sec%60;
+  const texte=mn?(mn+' min'+(ss?' '+String(ss).padStart(2,'0'):'')):(ss+' s');
+  return {ok:true,texte,sec};
+}
+// PURE. La prescription saisie, bornée : {valeur, notes:[…]} ou {erreur}.
+function validerPrescription(p){
+  const x=p||{}, out={}, notes=[];
+  const num=(v,a,b,cle,lib)=>{ if(v===''||v==null) return; const n=Math.round(Number(String(v).replace(',','.')));
+    if(!isFinite(n)) return; const b2=_borne(n,a,b); if(b2!==n) notes.push(lib+' ramené à '+b2); out[cle]=b2; };
+  num(x.series,1,10,'series','Séries');
+  if(x.reps!=null&&String(x.reps).trim()!==''){ const r=String(x.reps).replace(/\s+/g,'').slice(0,12); if(/^\d+([-–]\d+)?$/.test(r)||/^[\w-]{1,12}$/.test(r)) out.reps=r.replace('–','-'); }
+  if(x.repos!=null&&String(x.repos).trim()!==''){ const r=normaliserRepos(x.repos); if(!r.ok) return {erreur:r.msg,champ:'repos'}; out.repos=r.texte; }
+  if(x.rir!=null&&String(x.rir).trim()!==''){ const r=String(x.rir).trim(); if(RIR_CIBLE_ECHELLE.some(e=>e.v===r&&r!=='')) out.rir=r; }
+  num(x.dechargeSeriesPct,40,90,'dechargeSeriesPct','Décharge');
+  num(x.dechargeRirPlus,0,3,'dechargeRirPlus','RIR de décharge');
+  return {valeur:out,notes};
+}
+function _prescriptionDe(coach){
+  const p=coach&&coach.defautsCoach&&coach.defautsCoach.prescription;
+  const v=(p&&typeof p==='object')?validerPrescription(p).valeur||{}:{};
+  return Object.assign({},PRESCRIPTION_HISTORIQUE,v);
+}
+// PURE. L'exercice neuf : les valeurs du coach, sinon l'historique. Les QUATRE
+// chemins de création (séance vierge, éditeur, addExercise, banque) passent
+// par elle.
+function exerciceVierge(coach){
+  const p=_prescriptionDe(coach);
+  return {name:'',series:p.series,reps:p.reps,repos:p.repos,description:'',image:null,
+    videoUrl:'',ss:false,methodeSeries:'',rir:p.rir};
+}
+// PURE. Le facteur de séries et le RIR ajouté d'une semaine de décharge.
+function facteurDecharge(coach){ return _prescriptionDe(coach).dechargeSeriesPct/100; }
+function rirDecharge(coach){ return _prescriptionDe(coach).dechargeRirPlus; }
+// Le coach dont la prescription s'applique dans l'éditeur : le coach connecté.
+function _coachPrescription(){ return (typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach')?currentUser:null; }
+// PURE. « Nouvel exercice : 4 × 8-10 · 2 min 30 · RIR 2 »
+function apercuPrescription(coach){
+  const p=_prescriptionDe(coach);
+  return 'Nouvel exercice : '+p.series+' × '+p.reps+' · '+p.repos+(p.rir!==''?' · RIR '+p.rir:'')
+    +' — décharge : '+p.dechargeSeriesPct+' % des séries, RIR +'+p.dechargeRirPlus;
+}
+function _htmlRgxPrescription(coach){
+  const brut=(coach&&coach.defautsCoach&&coach.defautsCoach.prescription)||{};
+  const ph=PRESCRIPTION_HISTORIQUE;
+  const ch=(cle,lib,attrs)=>'<label class="rgx-pr-c"><span>'+lib+'</span><input id="rgx-pr-'+cle+'" class="rg-in" '+attrs
+    +' value="'+escapeHtml(brut[cle]==null?'':String(brut[cle]))+'" placeholder="'+escapeHtml(String(ph[cle]===''?'-':ph[cle]))+'" onchange="rgxPrescriptionChanger()"></label>';
+  return '<div class="rg-l"><div class="rg-t">Prescription d’un nouvel exercice</div>'
+    +'<div class="rgx-pr">'
+    +ch('series','Séries','type="number" inputmode="numeric" min="1" max="10"')
+    +ch('reps','Répétitions','type="text" maxlength="12" autocomplete="off"')
+    +ch('repos','Repos','type="text" maxlength="16" autocomplete="off"')
+    +'<label class="rgx-pr-c"><span>RIR</span><select id="rgx-pr-rir" class="rg-in" onchange="rgxPrescriptionChanger()">'
+      +RIR_CIBLE_ECHELLE.map(e=>'<option value="'+e.v+'"'+(String(brut.rir==null?'':brut.rir)===e.v?' selected':'')+'>'+escapeHtml(e.lib)+'</option>').join('')+'</select></label>'
+    +ch('dechargeSeriesPct','Décharge (% séries)','type="number" inputmode="numeric" min="40" max="90"')
+    +ch('dechargeRirPlus','Décharge (RIR +)','type="number" inputmode="numeric" min="0" max="3"')
+    +'</div>'
+    +'<div class="rg-o" id="rgx-pr-apercu"><span>'+escapeHtml(apercuPrescription(coach))+'</span></div>'
+    +'<div class="rgx-pr-msg" id="rgx-pr-msg" role="status"></div>'
+    +'<p class="bcad-d">Changer ces valeurs ne modifie aucun exercice déjà écrit : seuls les exercices ajoutés ensuite les prennent.</p></div>';
+}
+function rgxPrescriptionChanger(){
+  const u=_rgCoach(); if(!u) return false;
+  const v=k=>(document.getElementById('rgx-pr-'+k)||{}).value;
+  const r=validerPrescription({series:v('series'),reps:v('reps'),repos:v('repos'),rir:v('rir'),dechargeSeriesPct:v('dechargeSeriesPct'),dechargeRirPlus:v('dechargeRirPlus')});
+  const msg=document.getElementById('rgx-pr-msg');
+  if(r.erreur){ if(msg) msg.textContent=r.erreur; const e=document.getElementById('rgx-pr-'+r.champ); if(e) e.style.borderColor='var(--orange)'; return false; }
+  ['repos'].forEach(k=>{ const e=document.getElementById('rgx-pr-'+k); if(e) e.style.borderColor=''; });
+  if(msg) msg.textContent=r.notes.join(' · ');
+  const val=Object.keys(r.valeur).length?r.valeur:null;
+  const res=reglageCoachEcrire('defautsCoach.prescription',val,{apresAnnuler:()=>{ try{ _rgxRendre(); }catch(e){} }});
+  // La valeur normalisée revient dans les champs (« 150 » → « 2 min 30 »).
+  try{ _rgxRendre(); const m2=document.getElementById('rgx-pr-msg'); if(m2) m2.textContent=r.notes.join(' · '); }catch(e){}
+  return res;
 }

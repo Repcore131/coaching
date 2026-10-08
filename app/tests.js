@@ -43702,7 +43702,8 @@ async function testExercices(){
         // imprimable lisent depuis toujours. `rirCible`, ajoute puis retire le
         // 26/08/2026, faisait DOUBLON avec lui dans la meme carte : deux
         // champs, meme libelle, deux destinations.
-        if(String(addExercise).indexOf("rir:''")<0)
+        // Série 6 : addExercise passe par exerciceVierge, qui pose rir:'' sans réglage.
+        if(String(addExercise).indexOf('exerciceVierge(')<0||exerciceVierge(null).rir!=='')
           return _echec('un exercice neuf ne porte pas le champ');
         // LA COLONNE DE LA FICHE IMPRIMABLE N'APPARAIT QUE REMPLIE.
         const sans={sessions_config:[{day:'Lundi',name:'H',active:true,
@@ -45499,8 +45500,9 @@ async function testExercices(){
         // — c'est ce qui empeche les trois de diverger a nouveau.
         const prod=_prodSrc();
         if(/repos:'01 min'/.test(prod)) return _echec('un « 01 min » subsiste dans le code');
+        // Série 6 : une seule définition (PRESCRIPTION_HISTORIQUE → exerciceVierge).
         const n=(prod.match(/repos:REPOS_DEFAUT/g)||[]).length;
-        if(n<2) return _echec(n+' creation(s) d\'exercice lisent la constante');
+        if(n<1||exerciceVierge(null).repos!==REPOS_DEFAUT) return _echec(n+' creation(s) d\'exercice lisent la constante');
         return /ex\.repos\|\|REPOS_DEFAUT/.test(prod)
           ?true:_echec('le champ du formulaire ne lit pas la constante');});
       ok('B2.9 — les cinq champs de prescription se presentent pareil',()=>{
@@ -64108,9 +64110,9 @@ async function testExercices(){
       // auraient divergé au premier champ ajouté à l'une des deux, et
       // l'éditeur aurait lu un champ absent sur les exercices créés par
       // l'autre chemin.
-      const f=String(addExercise);
-      for(const k of Object.keys(e))
-        if(f.indexOf(k+':')<0) return _echec('addExercise ne pose pas '+k);
+      // Série 6 : les deux passent par exerciceVierge — une seule définition.
+      if(String(addExercise).indexOf('exerciceVierge(')<0||String(_exoVierge).indexOf('exerciceVierge(')<0)
+        return _echec('addExercise et _exoVierge ne partagent plus exerciceVierge');
       // Et chaque appel rend un objet NEUF : un littéral partagé ferait que
       // modifier la 3e série d'un exercice les modifierait tous les cinq.
       const a=_exoVierge(), b=_exoVierge();
@@ -74734,6 +74736,48 @@ async function testExercices(){
         const h2=_htmlCadenceCoach({coachId:'cz',bilanCadence:{freq:2,jour:6},bilans:[]});
         return /Réglage propre/.test(h2)&&/revenir au défaut/.test(h2)?true:_echec('« Réglage propre » absent');
       }finally{ currentUser=cu; }});
+
+    // ══ BUILD 1927 — LA PRESCRIPTION PAR DÉFAUT DU COACH ═══════════════════════
+    ok('1927 — exerciceVierge : sans réglage, l’objet historique ; avec, les valeurs du coach',()=>{
+      const h=JSON.stringify(exerciceVierge(null));
+      const att=JSON.stringify({name:'',series:3,reps:'10',repos:'2 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rir:''});
+      if(h!==att) return _echec('historique : '+h);
+      const c={defautsCoach:{prescription:{series:4,reps:'8-10',repos:'2 min 30',rir:'2'}}};
+      const e=exerciceVierge(c);
+      return e.series===4&&e.reps==='8-10'&&e.repos==='2 min 30'&&e.rir==='2'?true:_echec(JSON.stringify(e));});
+    ok('1927 — les quatre chemins de création produisent le même objet',()=>{
+      const cu=currentUser, sv=progEx, f=[];
+      const _ob=window.ouvrirBanque, _r=window.renderProgEx;
+      try{
+        currentUser=Object.assign(_banCoach(),{defautsCoach:{prescription:{series:4,reps:'8-10',repos:'150',rir:'2'}}});
+        currentUser.defautsCoach.prescription=validerPrescription(currentUser.defautsCoach.prescription).valeur;
+        const ref=exerciceVierge(currentUser);
+        if(JSON.stringify(_exoVierge())!==JSON.stringify(ref)) f.push('séance vierge');
+        window.renderProgEx=()=>{};
+        progEx=[]; addExercise(); if(JSON.stringify(progEx[0])!==JSON.stringify(ref)) f.push('addExercise : '+JSON.stringify(progEx[0]));
+        window.ouvrirBanque=(cb)=>cb({nom:'Squat'});
+        progEx=[]; ajouterDepuisBanque();
+        const b=progEx[0]||{}; if(b.series!==4||b.reps!=='8-10'||b.repos!=='2 min 30'||b.rir!=='2') f.push('banque : '+JSON.stringify(b));
+        if(/'01 min'/.test(_prodSrc())) f.push('« 01 min » toujours présent');
+      }finally{ currentUser=cu; progEx=sv; window.ouvrirBanque=_ob; window.renderProgEx=_r; }
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1927 — repos normalisé ou refusé ; bornes ramenées',()=>{
+      const f=[];
+      for(const [b,t] of [['2mn30','2 min 30'],['150','2 min 30'],['2','2 min'],['90 s','1 min 30'],['45s','45 s'],['2 min','2 min'],['1h','?'],['abc','?'],['3 s','10 s'],['20 min','10 min']]){
+        const r=normaliserRepos(b); if(t==='?'?r.ok:(!r.ok||r.texte!==t)) f.push(b+' → '+JSON.stringify(r)); }
+      const v=validerPrescription({series:14,dechargeSeriesPct:20,dechargeRirPlus:9,repos:'90'});
+      if(v.valeur.series!==10||v.valeur.dechargeSeriesPct!==40||v.valeur.dechargeRirPlus!==3) f.push('bornes : '+JSON.stringify(v.valeur));
+      if(!v.notes.length) f.push('aucune note sur une valeur ramenée');
+      if(!validerPrescription({repos:'zzz'}).erreur) f.push('repos illisible accepté');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1927 — la décharge respecte le pourcentage et le RIR du coach (repli 60 % / +1)',()=>{
+      const c={defautsCoach:{prescription:{dechargeSeriesPct:50,dechargeRirPlus:2}}};
+      if(facteurDecharge(c)!==0.5||rirDecharge(c)!==2) return _echec('lecture');
+      if(facteurDecharge(null)!==0.6||rirDecharge({})!==1) return _echec('repli');
+      const ex=[{series:4,rir:'1'}]; allegerExercicesDecharge(ex,c);
+      if(ex[0].series!==2||ex[0].rir!=='3') return _echec('allègement : '+JSON.stringify(ex[0]));
+      if(!/facteurDecharge\(_co\)/.test(String(appliquerDecharge))) return _echec('appliquerDecharge garde les constantes');
+      return apercuPrescription({defautsCoach:{prescription:{series:4,reps:'8-10',repos:'2 min 30',rir:'2'}}}).indexOf('Nouvel exercice : 4 × 8-10 · 2 min 30 · RIR 2')===0?true:_echec('aperçu');});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

@@ -13738,3 +13738,8 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rgx-retard{color:var(--orange)!important}
 .bcad-defaut{color:var(--text-strong)}
 .bcad-remplacer{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);margin-top:8px}
+/* SÉRIE 6, LOT 3 — la prescription par défaut : six champs sur deux colonnes. */
+.rgx-pr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rgx-pr-c{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);color:var(--sub);min-width:0}
+.rgx-pr-c .rg-in{width:100%;margin:0}
+.rgx-pr-msg{font-size:var(--fs-xs);color:var(--orange);line-height:1.5;min-height:0}

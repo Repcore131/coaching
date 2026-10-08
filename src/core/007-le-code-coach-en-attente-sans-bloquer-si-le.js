@@ -1732,14 +1732,16 @@ function migrerDechargesCreneaux(u,maintenant){
 /** ÉCRIT SUR LA COPIE. Les règles de la décharge du bloc, appliquées aux
  *  exercices d'une séance : séries × 0,6 arrondi (au moins 1), RIR + 1
  *  plafonné à 5. Un exercice sans consigne de RIR n'en reçoit pas. */
-function allegerExercicesDecharge(exercises){
+// Série 6 : `coach` (facultatif) donne son facteur et son RIR de décharge.
+function allegerExercicesDecharge(exercises,coach){
+  const fs=coach?facteurDecharge(coach):DECHARGE_FACTEUR_SERIES, rp=coach?rirDecharge(coach):DECHARGE_RIR_PLUS;
   for(const ex of (exercises||[])){
     if(!ex||typeof ex!=='object') continue;
     const n0=parseInt(ex.series,10)||0;
-    if(n0) ex.series=Math.max(1,Math.round(n0*DECHARGE_FACTEUR_SERIES));
+    if(n0) ex.series=Math.max(1,Math.round(n0*fs));
     const r0=_rirPrescrit(ex);
     if(r0!==''){
-      const r=String(Math.min(5,Number(r0)+DECHARGE_RIR_PLUS));
+      const r=String(Math.min(5,Number(r0)+rp));
       // Le champ LU par _rirPrescrit : rirCible passe devant rir.
       if(ex.rirCible!=null&&String(ex.rirCible).trim()!=='') ex.rirCible=r;
       else ex.rir=r;
@@ -1779,8 +1781,10 @@ function appliquerDecharge(user,semaine,par){
     // periodisation, et il est ECRIT — donc visible dans la grille, et
     // modifiable comme n'importe quel autre ecart. Un allegement silencieux
     // dont le coach ignorerait l'existence serait pire que pas d'allegement.
-    try{ poserEcartSemaine(u,idx,{facteurSeries:DECHARGE_FACTEUR_SERIES,
-                                  rir:DECHARGE_RIR_PLUS,_decharge:true}); }catch(e){}
+    // Série 6 : le pourcentage et le RIR de décharge du coach (repli 0,6 / +1).
+    const _co=(()=>{ try{ return _coachDeAthlete(u); }catch(e){ return null; } })();
+    try{ poserEcartSemaine(u,idx,{facteurSeries:facteurDecharge(_co),
+                                  rir:rirDecharge(_co),_decharge:true}); }catch(e){}
     fait=true;
   }else{
     const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];

@@ -515,7 +515,7 @@ async function setExerciseCount(n){
   const cur=progEx.length;
   if(n===cur) return;
   if(n>cur){
-    for(let i=cur;i<n;i++) progEx.push({name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null});
+    for(let i=cur;i<n;i++) progEx.push(exerciceVierge(_coachPrescription()));
   } else {
     const toRemove=progEx.slice(n);
     const hasContent=toRemove.some(ex=>ex.name||ex.description);
@@ -1057,9 +1057,10 @@ async function remplacerDepuisBanque(i,mode){
 function ajouterDepuisBanque(){
   return ouvrirBanque(f=>{
     if(!Array.isArray(progEx)) progEx=[];
+    const _v=exerciceVierge(_coachPrescription());
     progEx.push({
       name:f.nom,
-      series:3, reps:'10', repos:f.repos||'01 min',
+      series:_v.series, reps:_v.reps, repos:f.repos||_v.repos, rir:_v.rir,
       description:f.execution||'',
       // LE MATÉRIEL DE LA FICHE. Il se retapait dans le NOM de l'exercice —
       // le placeholder du champ nom disait « (MATÉRIELS) » — alors que la
@@ -1962,7 +1963,8 @@ function addExercise(){
   // ne porte aucune consigne d'intensite tant que le coach n'en a pas choisi
   // une. C'est le champ etabli, celui que l'apercu de seance et la fiche
   // imprimable lisent depuis toujours.
-  progEx.push({name:'',series:3,reps:'10',repos:REPOS_DEFAUT,description:'',image:null,videoUrl:'',ss:false,methodeSeries:'',rir:''});
+  // Série 6 : exerciceVierge — les défauts du coach, sinon l'historique.
+  progEx.push(exerciceVierge(_coachPrescription()));
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice

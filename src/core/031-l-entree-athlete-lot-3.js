@@ -845,8 +845,8 @@ function synchroniserEcartsDecharge(user){
   for(const i of p.decharges){
     const cle=String(i);
     if(ec[cle]) continue;
-    if(poserEcartSemaine(u,i,{facteurSeries:DECHARGE_FACTEUR_SERIES,
-                              rir:DECHARGE_RIR_PLUS,_decharge:true})) n++;
+    if(poserEcartSemaine(u,i,{facteurSeries:facteurDecharge(_coachDeAthlete(u)),
+                              rir:rirDecharge(_coachDeAthlete(u)),_decharge:true})) n++;
   }
   return n;
 }
