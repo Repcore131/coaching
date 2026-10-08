@@ -17015,14 +17015,16 @@ async function testExercices(){
           if(!ouvert) return _echec('la modale ne s\'ouvre pas');
           if(!document.getElementById('rempl-liste')) return _echec('aucune liste rendue');
           _appliquerSubstitut(0,'LEG EXTENSION');
-          if(woState.exercises[0].name!=='LEG EXTENSION') return _echec('l\'exercice n\'a pas changé');
+          // Série 7, lot 6 : la série faite reste sous l'ancien nom, le remplaçant suit.
+          if(woState.exercises[1].name!=='LEG EXTENSION'||woState.exercises[0].name!=='DEVELOPPE COUCHE BARRE') return _echec('l\'exercice n\'a pas changé');
           if(currentUser.sessions_config[0].exercises[0].name!=='DEVELOPPE COUCHE BARRE')
             return _echec('le PROGRAMME a été modifié');
           if((woState.substitutions||[]).length!==1) return _echec('aucun journal');
           if(woState.substitutions[0].de!=='DEVELOPPE COUCHE BARRE'
             ||woState.substitutions[0].vers!=='LEG EXTENSION') return _echec('journal faux');
-          if(woState.sessionData[0].sets.some(x=>x.weight))
-            return _echec('les charges de l\'exercice précédent ont été gardées');
+          if(woState.sessionData[1].sets.some(x=>x.weight))
+            return _echec('les charges de l\'exercice précédent ont été transposées');
+          if(woState.sessionData[0].sets.length!==1||!woState.sessionData[0].sets[0].done) return _echec('la série faite est perdue');
           closeModal();
           return true;});
         ok('Le bouton conditionnel « Je remplace » reste conditionnel',()=>{
@@ -73221,7 +73223,8 @@ async function testExercices(){
         if(candidatsRemplacement('DÉVELOPPÉ COUCHÉ BARRE','curl').length!==0) return _echec('la recherche rend des noms à un athlète');
         ouvrirRemplacement(0);
         const bs=[...document.querySelectorAll('#modal-overlay .rempl-alt')];
-        if(bs.length!==2) return _echec(bs.length+' bouton(s) de remplaçant');
+        // Série 7, lot 6 : les remplaçants du coach en tête, six suggestions au plus.
+        if(bs.length<2||bs.length>6||bs[0].getAttribute('data-nom')!=='DÉVELOPPÉ COUCHÉ HALTÈRES'||bs[1].getAttribute('data-nom')!=='POMPES') return _echec(bs.length+' bouton(s) de remplaçant');
         if(bs.some(b=>!b.classList.contains('hit44'))) return _echec('un bouton n’est pas hit44');
         if(!document.getElementById('rempl-manuel')) return _echec('le champ libre a disparu');
         if(!/Autre…/.test(document.getElementById('modal-overlay').textContent)) return _echec('le champ libre n’est pas présenté comme « Autre… »');
@@ -73233,11 +73236,12 @@ async function testExercices(){
         if((currentUser.ecartsSeance||[]).length!==avant+1) return _echec('l’écart n’est pas journalisé');
         const w=woState.sessionData[0].sets.map(s=>s.weight);
         if(w.some(x=>x!=='32.5')) return _echec('charge préremplie : '+JSON.stringify(w));
-        // Sans remplaçants prévus, l'écran reste celui d'avant.
+        // Sans remplaçants prévus (série 7, lot 6) : déjà faits et salle, six au plus, jamais lui-même.
         closeModal();
         _r25Monter([{name:'SQUAT',series:2,reps:'8',repos:'2 min'}]);
         ouvrirRemplacement(0);
-        if(document.querySelector('#modal-overlay .rempl-alt')) return _echec('des boutons sans remplaçants prévus');
+        const bs2=[...document.querySelectorAll('#modal-overlay .rempl-alt')];
+        if(bs2.length>6||bs2.some(b=>exKey(b.getAttribute('data-nom'))===exKey('SQUAT'))) return _echec(bs2.length+' suggestions sans remplaçants prévus');
         return true;
       } finally { try{ closeModal(); }catch(e){} _r25Ranger(sU,sW,sSnap,svSave,svToast); }
     });
@@ -75699,6 +75703,62 @@ async function testExercices(){
         if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
       }
     });
+    // ══ BUILD 1949 — LE REMPLACEMENT GARDE CE QUI EST FAIT ═══════════════════════
+    ok('1949 — suggestionsRemplacement : coach d’abord, 6 au plus, jamais l’exercice lui-même',()=>{
+      const u={email:'s@t',sessions:[],exAlias:{},exMuscles:{}};
+      const l=suggestionsRemplacement(u,{name:'SQUAT',alternatives:['PRESSE A CUISSES','HACK SQUAT','SQUAT']},null);
+      if(l[0]!=='PRESSE A CUISSES'||l[1]!=='HACK SQUAT') return _echec(l.join(' | '));
+      if(l.some(n=>exKey(n)===exKey('SQUAT'))) return _echec('se propose lui-même');
+      if(l.length>REMPL_SUGG_MAX) return _echec(l.length+' suggestions');
+      return true;
+    });
+    ok('1949 — remplacer après 2 séries : elles restent sous l’ancien nom, le remplaçant est inséré après ; Annuler (6 s) défait tout ; « Revenir à » aussi',()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svT=window.toast, svS=window.saveUser;
+      const toasts=[];
+      try{
+        window.toast=(m,c,du,a)=>toasts.push({m:String(m),du,a}); window.saveUser=()=>true;
+        currentUser={id:'r1949',email:'r1949@t.fr',role:'athlete',sessions:[],ecartsSeance:[],exAlias:{},exMuscles:{}};
+        woState={exercises:[{name:'SQUAT',series:4,reps:'8',repos:'2 min'},{name:'CURL',series:3,reps:'10'}],
+          sessionData:{0:{sets:[{weight:'100',reps:'8',done:true},{weight:'100',reps:'8',done:true},{weight:'',reps:'8',done:false},{weight:'',reps:'8',done:false}]},1:{sets:[{weight:'',reps:'10',done:false}]}},
+          currentEx:0,startTime:Date.now(),progName:'Jambes',substitutions:[]};
+        _appliquerSubstitut(0,'PRESSE A CUISSES');
+        const e=woState.exercises.map(x=>x.name).join(',');
+        if(e!=='SQUAT,PRESSE A CUISSES,CURL') return _echec(e);
+        if(woState.sessionData[0].sets.length!==2||woState.sessionData[1].sets.length!==2||woState.sessionData[2].sets[0].reps!=='10') return _echec('séries mal réparties');
+        if(woState.currentEx!==1) return _echec('currentEx '+woState.currentEx);
+        if((currentUser.ecartsSeance||[]).length!==1) return _echec('écart non journalisé');
+        const t=toasts.find(x=>x.m==='Remplacé');
+        if(!t||t.du!==6000||!t.a||t.a.lib!=='Annuler') return _echec('toast '+JSON.stringify(toasts.map(x=>x.m)));
+        t.a.fn();
+        if(woState.exercises.map(x=>x.name).join(',')!=='SQUAT,CURL'||woState.sessionData[0].sets.length!==4||(currentUser.ecartsSeance||[]).length) return _echec('Annuler ne défait pas');
+        _appliquerSubstitut(0,'PRESSE A CUISSES');
+        if(!woRevenirA(1)) return _echec('Revenir à refusé');
+        if(woState.exercises.map(x=>x.name).join(',')!=='SQUAT,CURL'||woState.sessionData[0].sets.length!==4||!woState.sessionData[0].sets[1].done) return _echec('Revenir à : '+woState.exercises.map(x=>x.name).join(','));
+        // Sans série faite : sur place, et « Revenir à » rend l'ancien.
+        _appliquerSubstitut(1,'CURL MARTEAU');
+        if(woState.exercises[1].name!=='CURL MARTEAU'||woState.exercises.length!==2) return _echec('sur place');
+        woRevenirA(1);
+        if(woState.exercises[1].name!=='CURL') return _echec('retour sur place');
+        return true;
+      }finally{
+        try{ closeModal(); }catch(e){}
+        currentUser=sU; woState=sW; window.toast=svT; window.saveUser=svS;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
+    });
+    ok('1949 — le motif en pastilles, « Matériel occupé » présélectionné',()=>{
+      const sU=currentUser;
+      try{
+        currentUser={email:'m@t',ecartsSeance:[{exoPrevu:'A',exoFait:'B',motif:'autre'}]};
+        _demanderMotifEcart(0);
+        const p=document.querySelectorAll('#modal-overlay .motif-p');
+        if(p.length!==4) return _echec(p.length+' pastilles');
+        const on=document.querySelector('#modal-overlay .motif-p[aria-pressed="true"]');
+        if(!on||on.textContent!=='Matériel occupé') return _echec('présélection');
+        if(currentUser.ecartsSeance[0].motif!=='materiel_occupe') return _echec('motif par défaut non retenu');
+        return true;
+      }finally{ try{ closeModal(); }catch(e){} currentUser=sU; }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();
@@ -77942,12 +78002,12 @@ async function testExercices(){
           sessionData:{0:{sets:[{weight:'40',reps:'10',done:true}]}},startTime:Date.now(),progName:'Push',substitutions:[]};
         _appliquerSubstitut(0,'LEG EXTENSION');
         const apres=JSON.stringify(currentUser.sessions_config);
-        return avant===apres&&woState.exercises[0].name==='LEG EXTENSION'
+        return avant===apres&&woState.exercises[1].name==='LEG EXTENSION'
           &&woState.substitutions.length===1
           &&woState.substitutions[0].de==='DEVELOPPE MILITAIRE BARRE'
           &&woState.substitutions[0].vers==='LEG EXTENSION';});
-      ok('Les séries de l\'exercice remplacé sont remises à zéro',
-         woState.sessionData[0].sets.every(x=>!x.done&&!x.weight));
+      ok('Les séries du remplaçant partent de zéro, les faites restent sous l\'ancien nom',
+         woState.sessionData[1].sets.every(x=>!x.done&&!x.weight)&&woState.sessionData[0].sets.every(x=>x.done));
       ok('Critère 5 : les substitutions sont sérialisées dans la séance',
          /substitutions:\(woState\.substitutions\|\|\[\]\)\.slice\(\)/.test(String(finishWorkout)));
       ok('Les substitutions survivent à une pause',

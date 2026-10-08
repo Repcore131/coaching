@@ -59068,6 +59068,7 @@ function _blocExo(idx,estSS){
         ${_htmlBoutonHistorique(idx,ex)}
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
         </div>
+        ${(ex.remplaceDe&&!((data.sets||[]).some(s=>s&&s.done)))?`<button type="button" class="rb-lien wo-revenir" onclick="woRevenirA(${idx})">Revenir à ${escapeHtml(String(ex.remplaceDe.nom||'').toLowerCase())}</button>`:''}
         <div class="wo-ava"></div>
       </div>
 
@@ -87685,7 +87686,9 @@ function ouvrirRemplacement(idx){
   _remplIdx=idx;
   const _estCoach=!!(currentUser&&currentUser.role==='coach');
   // LES REMPLAÇANTS PRESCRITS PAR LE COACH, en boutons au-dessus du champ libre.
-  const _alts=normaliserAlternatives(ex.alternatives,ex.name);
+  // Série 7, lot 6 : six suggestions au plus (coach, déjà faits, salle).
+  const _alts=(()=>{ try{ return suggestionsRemplacement(currentUser,ex,(()=>{ try{ return salleActive(currentUser); }catch(e){ return null; } })()); }
+    catch(e){ return normaliserAlternatives(ex.alternatives,ex.name); } })();
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
@@ -87699,7 +87702,7 @@ function ouvrirRemplacement(idx){
         <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>`
         :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n\'est pas modifié, et ton coach verra l\'échange.
-          <b style="color:var(--text-strong)">${_alts.length?'Choisis un remplaçant prévu par ton coach, ou écris le mouvement que tu as fait.':'Écris le nom du mouvement que tu as fait à la place.'}</b>
+          <b style="color:var(--text-strong)">${_alts.length?'Choisis un remplaçant, ou écris le mouvement que tu as fait.':'Écris le nom du mouvement que tu as fait à la place.'}</b>
         </div>
         ${_alts.length?`<div class="rempl-alts">${_alts.map(n=>`<button type="button" class="hit44 rempl-alt" data-nom="${escapeHtml(n)}"
           onclick="_appliquerSubstitut(${idx},this.getAttribute('data-nom'));_demanderMotifEcart(${idx})">${escapeHtml(n.toLowerCase())}</button>`).join('')}</div>
@@ -87727,19 +87730,27 @@ function ouvrirRemplacement(idx){
 // remplacement : l'echange est deja fait, la question ne bloque donc rien, et
 // la fermer sans repondre laisse simplement « autre ».
 let _motifIdx=null;
+// SÉRIE 7, LOT 6 — des pastilles, « Matériel occupé » présélectionné : c'est
+// le cas de loin le plus courant, et fermer sans répondre le retient.
+const ECART_MOTIF_DEFAUT='materiel_occupe';
 function _demanderMotifEcart(idx){
   _motifIdx=idx;
   closeModal();
+  try{ const l=_tabBloc(currentUser&&currentUser.ecartsSeance); if(l.length&&(!l[l.length-1].motif||l[l.length-1].motif==='autre')) l[l.length-1].motif=ECART_MOTIF_DEFAUT; }catch(e){}
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[]).find((e,k)=>k>=idx&&e&&e.remplaceDe)||null;
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    '<div id="modal-overlay" onclick="_poserMotifEcart(ECART_MOTIF_DEFAUT)" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px">'
     +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Pourquoi ce changement ?</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'
     +'Ton coach le verra. Trois fois le même échange, c’est le programme qu’il faut corriger.</div>'
+    +'<div class="motif-pastilles" role="group" aria-label="Motif">'
     +Object.keys(ECART_MOTIFS).map(m=>
-      '<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" '
+      '<button type="button" class="pastille motif-p'+(m===ECART_MOTIF_DEFAUT?' on':'')+'" aria-pressed="'+(m===ECART_MOTIF_DEFAUT)+'" '
       +'onclick="_poserMotifEcart('+JSON.stringify(m).replace(/"/g,'&quot;')+')">'
       +escapeHtml(ECART_MOTIFS[m])+'</button>').join('')
+    +'</div>'
+    +(ex&&ex.remplaceDe?'<button type="button" class="rb-lien" style="margin-top:12px" onclick="closeModal();woRevenirA('+woState.exercises.indexOf(ex)+')">Revenir à '+escapeHtml(String(ex.remplaceDe.nom).toLowerCase())+'</button>':'')
     +'</div></div>');
   return true;
 }
@@ -87819,6 +87830,10 @@ function _rendreListeRemplacement(){
 function _appliquerSubstitut(idx,nom,motif){
   const ex=(woState.exercises||[])[idx];
   if(!ex) return;
+  // SÉRIE 7, LOT 6 — L'INSTANTANÉ POUR « ANNULER » (6 s), pris avant tout.
+  const _annul={exercises:JSON.parse(JSON.stringify(woState.exercises)),sessionData:JSON.parse(JSON.stringify(woState.sessionData||{})),
+    substitutions:(woState.substitutions||[]).slice(),currentEx:woState.currentEx,
+    douleurChoix:Object.assign({},woState.douleurChoix||{}),ecarts:((currentUser&&currentUser.ecartsSeance)||[]).length};
   if(!woState.substitutions) woState.substitutions=[];
   woState.substitutions.push({de:ex.name,vers:nom,date:Date.now()});
   // LE JOURNAL DES ECARTS. woState.substitutions meurt avec la seance ; le
@@ -87826,28 +87841,41 @@ function _appliquerSubstitut(idx,nom,motif){
   // n'est pas un incident, c'est un programme a corriger.
   try{ journaliserEcart(currentUser,{seance:(woState&&woState.progName)||'',
     exoPrevu:ex.name,exoFait:nom,motif:motif||'autre'}); }catch(e){}
-  // MÉMORISÉ AVANT L'AFFECTATION : woState.aFilmer contient des NOMS, et
-  // celui-ci est sur le point de disparaître.
   const _ancienNom=ex.name;
-  ex.name=nom;
-  // LE PLUS VISIBLE DES TROIS CAS. L’encart CONSIGNE de _blocExo réaffichait
-  // le matériel, la description, le tempo, le lien vidéo et la bannière de
-  // technique du mouvement abandonné — à l’écran, en salle, au moment où
-  // l’athlète va charger la barre. Sa condition d’affichage inclut
-  // `ex.materiel` : une fois la fiche vidée, l’encart disparaît de lui-même
-  // si le nouveau mouvement n’a ni illustration ni description.
-  //
-  // `series`, `reps` et `repos` restent : la reconstruction des séries plus
-  // bas les relit, et c’est la prescription du coach.
-  _oublierAncienMouvement(ex);
-  // L'INTENTION DE FILMER PORTAIT SUR LE MOUVEMENT REMPLACÉ. Sans ce retrait,
-  // l’écran de fin proposait « Déposer la vidéo de <ancien exercice> » — un
-  // mouvement que l’athlète n’a pas fait. La case de renderWoEx, elle, se
-  // décoche seule : estAFilmer lit le NOUVEAU nom, absent de la liste.
-  //
-  // SEULEMENT SI PLUS AUCUN exercice ne porte ce nom. Un programme peut
-  // répéter un mouvement à deux positions — en remplacer une ne doit pas
-  // effacer l’intention posée sur l’autre.
+  // SÉRIE 7, LOT 6 — LES SÉRIES FAITES RESTENT SOUS L'ANCIEN NOM. Elles ont
+  // été faites sur ce mouvement-là : les effacer perdait une vraie mesure, les
+  // rebaptiser l'attribuait à un mouvement qui n'a pas été fait. Le remplaçant
+  // est inséré juste après, avec les séries qui restent.
+  const _d0=(woState.sessionData||{})[idx];
+  const _faites=((_d0&&_d0.sets)||[]).filter(s=>s&&s.done);
+  let cible=idx;
+  if(_faites.length&&!isCardio(ex)){
+    const neuf=JSON.parse(JSON.stringify(ex));
+    delete neuf.remplacePar; delete neuf.remplaceDe;
+    neuf.name=nom;
+    _oublierAncienMouvement(neuf);
+    neuf.series=Math.max(1,(_d0.sets.length||Number(ex.series)||1)-_faites.length);
+    neuf.remplaceDe={nom:_ancienNom,insere:true};
+    // Dans un superset, le remplaçant reste enchaîné.
+    const g=_groupeDe(woState.exercises,idx);
+    neuf.ss=g.length>1;
+    ex.series=_faites.length;
+    ex.remplacePar=nom;
+    _d0.sets=_faites;
+    _woInsererExo(idx+1,neuf);
+    cible=idx+1;
+    woState.sessionData[cible]={sets:[]};
+  } else {
+    ex.remplaceDe={nom:_ancienNom,insere:false,avant:_annul.exercises[idx]};
+    ex.name=nom;
+    // LE PLUS VISIBLE DES TROIS CAS. L’encart CONSIGNE de _blocExo réaffichait
+    // le matériel, la description, le tempo, le lien vidéo et la bannière de
+    // technique du mouvement abandonné. `series`, `reps` et `repos` restent :
+    // c’est la prescription du coach.
+    _oublierAncienMouvement(ex);
+  }
+  // L'INTENTION DE FILMER PORTAIT SUR LE MOUVEMENT REMPLACÉ — retirée
+  // seulement si plus aucun exercice ne porte ce nom.
   try{
     if(_ancienNom&&Array.isArray(woState.aFilmer)
       &&!(woState.exercises||[]).some(e=>e&&e.name===_ancienNom)){
@@ -87855,44 +87883,128 @@ function _appliquerSubstitut(idx,nom,motif){
       if(_iF>=0) woState.aFilmer.splice(_iF,1);
     }
   }catch(e){}
-  // Les séries déjà saisies portaient sur l'exercice précédent : on repart
-  // propre plutôt que d'attribuer des charges à un mouvement qui n'a pas été
-  // fait.
-  //
-  // RECONSTRUITES À LA FORME DE _blocExo, et non vidées en `{}`. Des objets
-  // vides n'ont pas de `reps`, et repsToNumber(undefined) vaut 0 : tonnageSerie
-  // rendait donc 0 quelles que soient la charge et les répétitions saisies
-  // ensuite. L'exercice remplacé pesait zéro kilo dans wd-vol, dans le volume
-  // enregistré, et dans toutes les comparaisons qui en découlent.
-  //
-  // Les séries et les répétitions restent celles du programme : le
-  // remplacement change le MOUVEMENT, pas la prescription du coach.
-  if(woState.sessionData&&woState.sessionData[idx]){
-    const pr=parseReps(ex.reps);
-    woState.sessionData[idx].sets=Array.from({length:ex.series},()=>({weight:'',weight2:'',
-      reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,
+  // Les séries du remplaçant, RECONSTRUITES À LA FORME DE _blocExo, et non
+  // vidées en `{}` : des objets sans `reps` pèsent zéro kilo au tonnage.
+  const exC=woState.exercises[cible];
+  if(woState.sessionData&&woState.sessionData[cible]){
+    const pr=parseReps(exC.reps);
+    woState.sessionData[cible].sets=Array.from({length:exC.series},()=>({weight:'',weight2:'',
+      reps:pr.type==='degressive'?pr.p1:exC.reps,rir:'',pain:'',done:false,
       degressive:pr.type==='degressive',p2reps:pr.p2}));
   }
   // LA CHARGE NE SE TRANSPOSE PAS. On ne pre-remplit QUE si l'athlete a deja
-  // fait CE mouvement : deduire une charge d'un autre exercice par un ratio
-  // serait une invention, et elle serait prise pour une mesure.
-  // ⚠ APRES LA RECONSTRUCTION DES SERIES (30/09/2026). Pose avant, le
-  //   preremplissage etait efface deux blocs plus bas par les series neuves :
-  //   la charge d'un mouvement deja fait n'arrivait jamais a l'ecran.
+  // fait CE mouvement (historiqueExercice) — jamais par un rapport entre deux
+  // exercices. APRES LA RECONSTRUCTION DES SERIES.
   try{
     const h=historiqueExercice(currentUser,nom);
-    const d=(woState.sessionData||{})[idx];
+    const d=(woState.sessionData||{})[cible];
     if(d&&Array.isArray(d.sets)&&h.charge>0)
       for(const s of d.sets) if(!s.weight) s.weight=String(h.charge);
   }catch(e){}
-  // LES RECORDS DE L'ANCIEN MOUVEMENT S'EN VONT AVEC LUI. Le Set est indexé
-  // par position : sans cette purge, « RECORD » se recollerait sur les séries
-  // vides qu’on vient de reconstruire. Avant renderWoEx, qui les relit.
-  try{ _oublierRecordsExo(idx); }catch(e){}
+  // LES RECORDS DE L'ANCIEN MOUVEMENT S'EN VONT AVEC LUI quand il est
+  // remplacé sur place ; inséré, le remplaçant part d'un tableau neuf.
+  if(cible===idx) try{ _oublierRecordsExo(idx); }catch(e){}
+  if(woState.currentEx===idx&&_groupeDe(woState.exercises,cible).indexOf(idx)<0) woState.currentEx=cible;
+  woState.dernierRemplacement=_annul;
   woPersist();
   closeModal();
   renderWoEx();
-  toast('Remplacé pour aujourd\'hui');
+  toast('Remplacé','var(--green)',6000,{lib:'Annuler',fn:annulerRemplacement});
+}
+// SÉRIE 7, LOT 6. Insère un exercice à la position k et décale tout ce qui
+// est indexé par position (séries, choix de douleur, records, cartes dépliées).
+function _woInsererExo(k,ex){
+  _woDecalerIndex(k,1);
+  woState.exercises.splice(k,0,ex);
+}
+function _woRetirerExo(k){
+  woState.exercises.splice(k,1);
+  if(woState.sessionData) delete woState.sessionData[k];
+  _woDecalerIndex(k+1,-1);
+}
+function _woDecalerIndex(depuis,delta){
+  const dec=o=>{
+    if(!o) return o;
+    const n={};
+    for(const key of Object.keys(o)){ const v=parseInt(key,10); n[(isFinite(v)&&v>=depuis)?v+delta:key]=o[key]; }
+    return n;
+  };
+  woState.sessionData=dec(woState.sessionData)||{};
+  if(woState.douleurChoix) woState.douleurChoix=dec(woState.douleurChoix);
+  const decSet=s=>new Set(Array.from(s).map(x=>{ const [a,b]=String(x).split(':'); const v=parseInt(a,10); return (v>=depuis?v+delta:v)+':'+b; }));
+  try{ _recordsVus=decSet(_recordsVus); _foudresJouees=decSet(_foudresJouees); }catch(e){}
+  if(Array.isArray(woState.chargeDepliee)) woState.chargeDepliee=woState.chargeDepliee.map(v=>v>=depuis?v+delta:v);
+  if(typeof woState.currentEx==='number'&&woState.currentEx>=depuis) woState.currentEx+=delta;
+  try{ _woRepsPdc.clear(); }catch(e){}
+}
+function annulerRemplacement(){
+  const a=woState&&woState.dernierRemplacement;
+  if(!a) return false;
+  woState.dernierRemplacement=null;
+  woState.exercises=a.exercises; woState.sessionData=a.sessionData;
+  woState.substitutions=a.substitutions; woState.currentEx=a.currentEx; woState.douleurChoix=a.douleurChoix;
+  try{ const l=currentUser&&currentUser.ecartsSeance; if(Array.isArray(l)&&l.length>a.ecarts) l.splice(a.ecarts); }catch(e){}
+  try{ _rebatirRecordsVus(); }catch(e){}
+  try{ closeModal(); }catch(e){}
+  woPersist();
+  renderWoEx();
+  toast('Remplacement annulé','var(--sub)',1800);
+  return true;
+}
+// « Revenir à X » : tant que le remplaçant n'a aucune série faite.
+function woRevenirA(k){
+  const ex=(woState.exercises||[])[k], r=ex&&ex.remplaceDe;
+  if(!r) return false;
+  const d=(woState.sessionData||{})[k];
+  if(((d&&d.sets)||[]).some(s=>s&&s.done)){ toast('Des séries sont déjà faites sur '+String(ex.name).toLowerCase()+'.','var(--orange)'); return false; }
+  const reste=(d&&d.sets&&d.sets.length)||Number(ex.series)||1;
+  if(r.insere&&woState.exercises[k-1]&&woState.exercises[k-1].name===r.nom){
+    const av=woState.exercises[k-1], dav=woState.sessionData[k-1]||{sets:[]};
+    const pr=parseReps(av.reps);
+    for(let j=0;j<reste;j++) dav.sets.push({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:av.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2});
+    av.series=dav.sets.length; delete av.remplacePar;
+    woState.sessionData[k-1]=dav;
+    _woRetirerExo(k);
+    if(woState.currentEx>=woState.exercises.length) woState.currentEx=k-1;
+    woState.currentEx=k-1;
+  } else {
+    const av=r.avant||{name:r.nom};
+    for(const key of Object.keys(ex)) delete ex[key];
+    Object.assign(ex,JSON.parse(JSON.stringify(av)));
+    try{ _oublierRecordsExo(k); }catch(e){}
+  }
+  try{ const l=currentUser&&currentUser.ecartsSeance; if(Array.isArray(l)&&l.length&&l[l.length-1].exoPrevu===r.nom) l.pop(); }catch(e){}
+  try{ (woState.substitutions||[]).pop(); }catch(e){}
+  woState.dernierRemplacement=null;
+  woPersist();
+  renderWoEx();
+  toast('Retour à '+String(r.nom).toLowerCase(),'var(--sub)',1800);
+  return true;
+}
+// SÉRIE 7, LOT 6. PURE. Six suggestions au plus, dans cet ordre : les
+// remplaçants prévus par le coach ; les exercices déjà faits sur le même
+// muscle, du plus fréquent au moins fréquent ; trois équivalents de la salle.
+const REMPL_SUGG_MAX=6;
+function suggestionsRemplacement(user,ex,salle){
+  const u=_dossier(user);
+  const nom=(ex&&ex.name)||'', k0=exKey(nom), out=[], vus=new Set([k0]);
+  const pousser=n=>{ const k=exKey(n||''); if(!n||vus.has(k)||out.length>=REMPL_SUGG_MAX) return; vus.add(k); out.push(n); };
+  try{ for(const n of normaliserAlternatives(ex&&ex.alternatives,nom)) pousser(n); }catch(e){}
+  let prim=null; try{ prim=_substPrimaire(nom,u); }catch(e){ prim=null; }
+  if(prim){
+    const freq={}, libre={};
+    for(const s of ((u&&u.sessions)||[])){
+      for(const n of Object.keys((s&&s.data)||{})){
+        const d=s.data[n]; if(!((d&&d.sets)||[]).some(x=>x&&x.done)) continue;
+        let p=null; try{ p=_substPrimaire(n,u); }catch(e){ p=null; }
+        if(p!==prim) continue;
+        const k=exKey(n); freq[k]=(freq[k]||0)+1; if(!libre[k]) libre[k]=n;
+      }
+    }
+    Object.keys(freq).sort((a,b)=>freq[b]-freq[a]||String(libre[a]).localeCompare(String(libre[b]))).forEach(k=>pousser(libre[k]));
+  }
+  try{ (substitutsSalle(u,nom,salle).liste||[]).slice(0,3).forEach(x=>pousser(x.nom)); }catch(e){}
+  return out.slice(0,REMPL_SUGG_MAX);
 }
 
 function contreIndications(bilans){

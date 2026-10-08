@@ -13846,3 +13846,7 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 /* Série 7, lot 5 — la carte de charge repliée en une ligne */
 .wo-charge-ligne{display:flex;width:100%;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;margin:0 0 10px;color:var(--sub);font:inherit;font-size:var(--fs-xs);text-align:left;cursor:pointer}
 .wo-charge-ligne[hidden]{display:none}
+/* Série 7, lot 6 — le motif d'un remplacement en pastilles */
+.motif-pastilles{display:flex;flex-wrap:wrap;gap:8px}
+.motif-p{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-full);padding:8px 14px;color:var(--text-strong);font:inherit;font-size:var(--fs-xs);cursor:pointer;min-height:40px}
+.motif-p[aria-pressed="true"]{border-color:var(--red);background:color-mix(in srgb,var(--red) 15%,transparent)}
