@@ -631,6 +631,7 @@ function _rgxRendre(){
 // Ce que remplissait l'onglet PROFIL (les mêmes id), puis le brouillon.
 function _rgxRemplir(){
   try{ loadMonetisationTab(); }catch(e){}
+  try{ const e=document.getElementById('coach-slogan'); const u=_rgCoach(); if(e&&u) e.value=u.slogan||''; }catch(e){}
   try{ renderMarqueCoach(); }catch(e){}
   try{ rendrePrefsAide(); }catch(e){}
   try{ _rgxRendre(); }catch(e){}

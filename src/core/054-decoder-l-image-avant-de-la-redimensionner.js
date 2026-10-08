@@ -292,6 +292,16 @@ function _detourerSignature(f,apres,budgetKo){
   im.onerror=()=>{ URL.revokeObjectURL(url); toast('Image illisible','var(--orange)'); };
   im.src=url;
 }
+// PURE. Le logo du coach : 5 Mo au plus, et à peu près carré (le plus long
+// côté au plus 1,5 fois le plus court). Rend le message de refus, ou null.
+const LOGO_MAX_OCTETS=5*1024*1024, LOGO_RATIO_MAX=1.5;
+function validerLogo(octets,larg,haut){
+  if(Number(octets)>LOGO_MAX_OCTETS) return 'Logo trop lourd (5 Mo au plus) : ton ancien logo reste en place';
+  const l=Number(larg), h=Number(haut);
+  if(!(l>0&&h>0)) return 'Image illisible : ton ancien logo reste en place';
+  if(Math.max(l,h)/Math.min(l,h)>LOGO_RATIO_MAX) return 'Logo pas assez carré ('+l+'×'+h+') : recadre-le, ton ancien logo reste en place';
+  return null;
+}
 function _majImageVitrine(input,id){
   // Série 6 : depuis « Mes réglages », l'image s'enregistre tout de suite (annulable).
   const _champ=(_IMG_VITRINE[id]||[])[0], _avant=_champ?currentUser[_champ]:undefined;
@@ -304,6 +314,20 @@ function _majImageVitrine(input,id){
   // La difference est faite par la table, pas par une seconde branche.
   const _detour={'coach-signature':['signature','Signature détourée'],
                  'coach-logo':['logo','Logo détouré']}[id];
+  // Série 6 : un logo trop lourd ou franchement pas carré est refusé AVANT
+  // tout traitement ; l'ancien reste en place.
+  if(id==='coach-logo'&&_fs&&!input._logoVu){
+    const err0=validerLogo(_fs.size,1,1);
+    if(err0){ toast(err0,'var(--orange)'); try{ input.value=''; }catch(e){} return; }
+    const url=URL.createObjectURL(_fs), im=new Image();
+    im.onload=()=>{ URL.revokeObjectURL(url);
+      const err=validerLogo(_fs.size,im.naturalWidth,im.naturalHeight);
+      if(err){ toast(err,'var(--orange)'); try{ input.value=''; }catch(e){} return; }
+      input._logoVu=true; try{ _majImageVitrine(input,id); }finally{ input._logoVu=false; } };
+    im.onerror=()=>{ URL.revokeObjectURL(url); toast('Image illisible','var(--orange)'); };
+    im.src=url;
+    return;
+  }
   if(_detour&&_fs){
     _detourerSignature(_fs,b64=>{
       currentUser[_detour[0]]=b64;

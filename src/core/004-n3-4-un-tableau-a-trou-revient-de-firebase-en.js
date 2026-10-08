@@ -904,7 +904,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'bravos','wrappedVus',
   // Série 6 : les valeurs par défaut du coach (bilan, prescription, affichage,
   // méthode, profil) et les exceptions d'affichage qu'il pose sur un dossier.
-  'defautsCoach','affichageCoach',
+  'defautsCoach','affichageCoach','slogan',
   // Le parcours de démarrage : des étapes datées, rien de santé.
   'parcours',
   // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise

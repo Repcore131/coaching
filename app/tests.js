@@ -21637,7 +21637,7 @@ async function testExercices(){
     // ajoute 'vitrineProgrammes', les programmes que le coach met en vente,
     // reduits au nom, au pitch, au prix, au lien et a l'image — jamais les
     // seances, jamais les exercices, jamais les charges.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo','defautsCoach'];  // série 6 : le défaut de bilan (defautsCoachPublics)
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','logo','cartePro','diplomes','promoBanners','vitrineProgrammes','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo','defautsCoach','slogan'];  // série 6 : le défaut de bilan (defautsCoachPublics)
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -51102,7 +51102,7 @@ async function testExercices(){
         ['bilan de bloc',bilanBlocExportHtml,'htmlSignatureDocument(c)'],
         ['analyse morpho',anatExportHtml,'htmlSignatureDocument(c)'],
         ['fiche alimentaire (données)',ficheAlimDonnees,'edite:Date.now()'],
-        ['fiche alimentaire (rendu)',htmlFicheAlim,'fa-pied-pour']])
+        ['fiche alimentaire (rendu)',htmlFicheAlimDonnees,'fa-pied-pour']])
         if(String(f).indexOf(motif)<0) return _echec(nom+' : pas de signature');
       if((String(anatExportHtml).match(/htmlSignatureDocument\(c\)/g)||[]).length<2) return _echec('une des deux versions morpho (coach, athlète) n’est pas signée');
       if(String(anatExportHtml).indexOf('Préparé par ton coach<br>')>=0) return _echec('les consignes de l’athlète ne nomment pas le coach');
@@ -74830,6 +74830,76 @@ async function testExercices(){
       const p=defautsCoachPublics({defautsCoach:{affichage:'sansChiffres',prescription:{series:4}}});
       return p&&p.affichage==='sansChiffres'&&!p.prescription?true:_echec('publication : '+JSON.stringify(p));});
 
+    // ══ BUILD 1929 — LA MARQUE DU COACH SUR SES DOCUMENTS (marqueDocument) ════
+    ok('1929 : marqueDocument respecte l\'ordre de priorité (marque Pro > teamName > prénom nom ; logo Pro > logo > signature)',()=>{
+      const pro={nom:'Atelier Force',couleur:'#3a7bd5',logoUrl:'https://res.cloudinary.com/x/logo.png'};
+      const a=marqueDocument({teamName:'Team Max',fname:'Max',lname:'Dur',logo:'data:image/png;base64,AAA',signature:'data:image/png;base64,SIG'},pro,'max,dur@x,fr');
+      if(a.nom!=='Atelier Force'||a.logo!==pro.logoUrl) return _echec('Pro d\'abord : '+JSON.stringify(a));
+      const b=marqueDocument({teamName:'Team Max',fname:'Max',lname:'Dur',logo:'data:image/png;base64,AAA',signature:'data:image/png;base64,SIG'},null,'max,dur@x,fr');
+      if(b.nom!=='Team Max'||b.logo!=='data:image/png;base64,AAA') return _echec('teamName/logo ensuite : '+JSON.stringify(b));
+      const c=marqueDocument({fname:'Max',lname:'Dur',signature:'data:image/png;base64,SIG'},null,'max,dur@x,fr');
+      if(c.nom!=='Max Dur'||c.logo!=='data:image/png;base64,SIG') return _echec('prénom nom / signature en dernier : '+JSON.stringify(c));
+      if(c.createur||c.mottos||c.slogan) return _echec('un coach non créateur n\'hérite ni des devises ni du slogan RepCore');
+      const k=marqueDocument({fname:'Kevin'},null,MARQUE_CREATEUR);
+      if(!k.createur||k.slogan!=='MORE THAN PROGRESS'||!k.mottos) return _echec('le créateur garde ses textes');
+      return true;
+    });
+    ok('1929 : la fiche d\'un coach non créateur ne porte ni « MORE THAN PROGRESS » ni « DISCIPLINE », mais son teamName',()=>{
+      const coach={email:'max.dur@x.fr',role:'coach',teamName:'Team Max',fname:'Max',lname:'Dur'};
+      const _p=window._marqueProPour; window._marqueProPour=()=>null;
+      let h,hk;
+      try{
+        h=htmlFicheAlimDonnees(ficheTypeDonnees(coach));
+        hk=htmlFicheAlimDonnees(ficheTypeDonnees({email:MARQUE_CREATEUR.replace(/,/g,'.'),role:'coach',fname:'Kevin'}));
+      }finally{ window._marqueProPour=_p; }
+      if(/MORE THAN PROGRESS/.test(h)) return _echec('« MORE THAN PROGRESS » chez un autre coach');
+      if(/DISCIPLINE/.test(h)) return _echec('« DISCIPLINE » chez un autre coach');
+      if(!/TEAM MAX|Team Max/.test(h)) return _echec('teamName absent de la fiche');
+      if(!/MORE THAN PROGRESS/.test(hk)) return _echec('le créateur perd « MORE THAN PROGRESS »');
+      return true;
+    });
+    ok('1929 : un slogan vide n\'imprime rien, un slogan rempli s\'imprime (borné à 60)',()=>{
+      const d=ficheTypeDonnees({email:'a@b.fr',teamName:'Team A',slogan:''});
+      if(/fa-logo-sous/.test(htmlFicheAlimDonnees(d))) return _echec('slogan vide imprimé');
+      const d2=ficheTypeDonnees({email:'a@b.fr',teamName:'Team A',slogan:'Plus fort chaque semaine '+'x'.repeat(80)});
+      if(d2.md.slogan.length>60) return _echec('slogan non borné');
+      if(!/Plus fort chaque semaine/.test(htmlFicheAlimDonnees(d2))) return _echec('slogan absent');
+      return true;
+    });
+    ok('1929 : une couleur illisible sur papier est corrigée, et l\'originale gardée pour le dire',()=>{
+      const md=marqueDocument({teamName:'T'},{nom:'Pâle',couleur:'#fff59d'},'a,b@c,fr');
+      if(String(md.couleurOrigine).toLowerCase()!=='#fff59d'||!md.couleur||md.couleur.toLowerCase()==='#fff59d') return _echec('couleur pâle non corrigée : '+JSON.stringify(md));
+      if(contrasteCouleurs(md.couleur,'#ffffff')<3) return _echec('correction encore illisible');
+      const ok2=marqueDocument({teamName:'T'},{nom:'Bleu',couleur:'#1a3d8f'},'a,b@c,fr');
+      if(ok2.couleurOrigine||ok2.couleur.toLowerCase()!=='#1a3d8f') return _echec('une couleur lisible est touchée');
+      if(!/voirFicheType[\s\S]{0,400}couleurOrigine/.test(String(voirFicheType))) return _echec('la correction n\'est pas montrée au coach');
+      return true;
+    });
+    ok('1929 : un logo trop lourd ou pas carré est refusé, l\'ancien reste',()=>{
+      if(!validerLogo(6*1024*1024,500,500)) return _echec('6 Mo accepté');
+      if(!validerLogo(100000,1200,300)) return _echec('4:1 accepté');
+      if(validerLogo(100000,600,500)) return _echec('6:5 refusé');
+      if(!/reste en place/.test(validerLogo(100000,1200,300))) return _echec('le message ne dit pas que l\'ancien reste');
+      const src=String(_majImageVitrine);
+      if(!/coach-logo[\s\S]{0,200}validerLogo/.test(src)) return _echec('_majImageVitrine ne contrôle pas le logo');
+      return true;
+    });
+    ok('1929 : le programme imprimé porte le logo du coach quand il existe',()=>{
+      const coach={email:'max.dur@x.fr',role:'coach',teamName:'Team Max',logo:'data:image/png;base64,LOGO1929'};
+      const _ca=window.coachAffichable, _p=window._marqueProPour;
+      window.coachAffichable=()=>coach; window._marqueProPour=()=>null;
+      let h='',h2='';
+      try{
+        const u={email:'ath@x.fr',role:'client',fname:'A',coachEmail:'max.dur@x.fr',program:{days:[]}};
+        h=htmlProgrammePrint(u);
+        window.coachAffichable=()=>Object.assign({},coach,{logo:'',signature:''});
+        h2=htmlProgrammePrint(u);
+      }finally{ window.coachAffichable=_ca; window._marqueProPour=_p; }
+      if(!/pp-logo[^>]*LOGO1929|LOGO1929[^>]*pp-logo/.test(h)) return _echec('logo absent du programme');
+      if(/class="pp-logo"/.test(h2)) return _echec('une image vide quand il n\'y a pas de logo');
+      if(!/Team Max/.test(h)) return _echec('nom du coach absent du programme');
+      return true;
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

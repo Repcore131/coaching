@@ -1736,7 +1736,9 @@ const CLOUD={
     // Série 6 : le défaut de BILAN du coach (cadence, questions), et lui seul —
     // defautsCoachPublics le réduit avant l'envoi. L'athlète en a besoin pour
     // son échéance et ses questions (cadenceEffective).
-    'defautsCoach'],
+    'defautsCoach',
+    // Série 6, lot 5 : le slogan imprimé sur les documents (fiche alimentaire).
+    'slogan'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés

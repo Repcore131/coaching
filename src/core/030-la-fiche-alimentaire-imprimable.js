@@ -30,6 +30,47 @@ const FA_LIB_MOMENT=Object.freeze({
 // suffit, et un emoji change de dessin d'un telephone a l'autre.
 const FA_ICONE=Object.freeze({});
 const FA_MOTTO='« UNE MEILLEURE ALIMENTATION, DE MEILLEURS RÉSULTATS. »';
+// ══ SÉRIE 6, LOT 5 — LA MARQUE D'UN DOCUMENT ═══════════════════════════════
+// Les textes de Kevin (MORE THAN PROGRESS, NUTRITION | PERFORMANCE |
+// RÉSULTATS, DISCIPLINE AUJOURD'HUI…, COACHING | NUTRITION | SUIVI, DES
+// FONDATIONS SOLIDES…, FA_MOTTO) n'appartiennent qu'au compte créateur.
+// Tout autre coach imprime SA marque, et RepCore n'apparaît qu'en petit au pied.
+// PURE. {nom, logo, couleur, slogan, signature, createur, mottos}.
+// Priorité : marque Pro (nom, logoUrl, couleur rendue lisible), puis teamName,
+// puis prénom et nom ; logo de la marque, puis logo du profil, puis signature.
+// `pro` : la marque Pro connue (coachs/<coach>/marque) ; `cle` : la clé du
+// coach (coach_public ne porte pas son adresse).
+const FA_MOTTOS_CREATEUR=Object.freeze({tete:'NUTRITION | PERFORMANCE | RÉSULTATS',railG:['NUTRITION','PERFORMANCE','SANTÉ','DISCIPLINE'],
+  railD:['DISCIPLINE','AUJOURD\'HUI','RÉSULTATS','DEMAIN.'],pied:'COACHING | NUTRITION | SUIVI',piedC:['DES FONDATIONS SOLIDES','POUR DE MEILLEURS RÉSULTATS.'],motto:FA_MOTTO});
+const SLOGAN_MAX=60;
+function marqueDocument(coach,pro,cle){
+  const c=coach||{};
+  const m=(function(){ try{ return marqueValide(pro); }catch(e){ return null; } })();
+  const k=String(cle||c.email||'').replace(/\./g,',');
+  const createur=k===MARQUE_CREATEUR;
+  const perso=String(c.teamName||'').replace(/\s+/g,' ').trim()||((c.fname||'')+' '+(c.lname||'')).trim();
+  // Sur du papier blanc : une couleur illisible est corrigée, et l'originale
+  // gardée pour le dire au coach.
+  const _coul=(m&&pro&&pro.couleur)?(function(){ try{ return couleurAccessible(pro.couleur,'#ffffff',3); }catch(e){ return null; } })():null;
+  const sl=String(c.slogan||'').replace(/\s+/g,' ').trim().slice(0,SLOGAN_MAX);
+  return {nom:(m&&m.nom)||perso,
+    logo:(m&&m.logoUrl)||String(c.logo||'')||String(c.signature||''),
+    couleur:_coul?(_coul.ok?_coul.couleur:_coul.proposee):null,
+    couleurOrigine:(_coul&&!_coul.ok)?_coul.couleur:null,
+    slogan:sl||(createur?'MORE THAN PROGRESS':''),
+    signature:String(c.signature||''),
+    createur,
+    mottos:createur?FA_MOTTOS_CREATEUR:null};
+}
+// La marque Pro connue à cet instant : celle que l'athlète a chargée, ou celle
+// que le coach a lue dans son propre réglage.
+function _marqueProPour(u){
+  try{
+    if(typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach')
+      return (typeof _mqEd!=='undefined'&&_mqEd&&_mqEd.lu&&_mqEd.existe)?{nom:_mqEd.nom,couleur:_mqEd.couleur,logoUrl:_mqEd.logoUrl}:null;
+    return marqueActive();
+  }catch(e){ return null; }
+}
 
 /**
  * LE NOM D'UN ALIMENT SUR UNE PLANCHE, ET LE COMPROMIS QU'IL PORTE.
@@ -117,7 +158,9 @@ function ficheAlimDonnees(user,chercher){
     const n=((c.fname||'')+' '+(c.lname||'')).trim();
     return n||String(u.coachName||'').trim()||'';
   })();
+  const md=marqueDocument(coach,_marqueProPour(u),(function(){ try{ return cleCoachDe(u)||''; }catch(e){ return ''; } })());
   return {ok:true,
+    md,
     edite:Date.now(),
     athlete:((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'',
     kcal:(cib&&cib.kcal>0)?Math.round(cib.kcal):null,
@@ -134,38 +177,48 @@ function ficheAlimDonnees(user,chercher){
 
 /** Le document. Deux planches, dans l'ordre des deux PDF du coach. */
 function htmlFicheAlim(user,chercher){
-  const d=ficheAlimDonnees(user,chercher);
-  if(!d.ok) return emptyState('clipboard',escapeHtml(d.raison));
+  return htmlFicheAlimDonnees(ficheAlimDonnees(user,chercher));
+}
+// Série 6 : le rendu à partir des DONNÉES (la fiche type les fabrique).
+function htmlFicheAlimDonnees(d){
+  if(!d||!d.ok) return emptyState('clipboard',escapeHtml((d&&d.raison)||'Fiche indisponible.'));
   const E=escapeHtml;
   // L'EN-TÊTE, LE PIED ET LES DEUX RAILS sont communs aux deux planches : ils
   // FONT la planche. Les écrire deux fois les aurait fait diverger au premier
   // ajustement.
-  const marque=d.marque
-    ? `<img class="fa-logo-img" src="${E(d.marque)}" alt="">`
-    : `<div class="fa-logo-txt">REP<span>CORE</span></div>`;
+  // Série 6 : la marque du COACH (marqueDocument). Sans logo, son nom en
+  // toutes lettres ; RepCore ne garde que la mention du pied.
+  const md=d.md||marqueDocument({},null,'');
+  const M=md.mottos;
+  const logoDoc=md.logo||d.marque;
+  const marque=logoDoc
+    ? `<img class="fa-logo-img" src="${E(logoDoc)}" alt="">`
+    : (M?`<div class="fa-logo-txt">REP<span>CORE</span></div>`:`<div class="fa-logo-txt fa-logo-nom">${E(String(md.nom||d.coachNom||'').toUpperCase())}</div>`);
+  const slogan=md.slogan?`<div class="fa-logo-sous">${E(md.slogan)}</div>`:'';
+  const lignes=a=>a.map(x=>E(x)).join('<br>');
   // LE LOGO DU COACH PREND LA PLACE DU RAIL GAUCHE, A COTE DU TITRE (retour
   // de Kevin le 30/09/2026) : en tete de page, il poussait tout le bandeau
   // vers le bas et restait petit. Sans logo, rien ne change.
   const tete=(titre1,titre2,sous)=>`<header class="fa-tete">
-      <div class="fa-tete-g">${d.marque?'':`${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div>`}</div>
+      <div class="fa-tete-g">${logoDoc?'':`${marque}${slogan}`}</div>
       <div class="fa-tete-d">
-        ${d.coachNom?`<div class="fa-tete-coach"><span class="fa-tiret"></span>${E(d.coachNom.toUpperCase())}</div>`:''}
-        <div class="fa-tete-sous">NUTRITION | PERFORMANCE | RÉSULTATS</div>
+        ${(md.nom||d.coachNom)?`<div class="fa-tete-coach"><span class="fa-tiret"></span>${E(String(md.nom||d.coachNom).toUpperCase())}</div>`:''}
+        ${M?`<div class="fa-tete-sous">${E(M.tete)}</div>`:''}
       </div>
     </header>
     <div class="fa-bandeau">
-      ${d.marque?`<div class="fa-rail-logo">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>`
-        :`<div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>`}
+      ${logoDoc?`<div class="fa-rail-logo">${marque}${slogan}</div>`
+        :(M?`<div class="fa-rail fa-rail-g">${lignes(M.railG)}</div>`:'<div class="fa-rail fa-rail-g"></div>')}
       <div class="fa-titre-bloc">
         <h1 class="fa-h1">${E(titre1)} <em>${E(titre2)}</em></h1>
         ${sous?`<div class="fa-h1-sous">${sous}</div>`:''}
       </div>
-      <div class="fa-rail fa-rail-d">DISCIPLINE<br>AUJOURD'HUI<br><b>RÉSULTATS</b><br>DEMAIN.</div>
+      ${M?`<div class="fa-rail fa-rail-d">${E(M.railD[0])}<br>${E(M.railD[1])}<br><b>${E(M.railD[2])}</b><br>${E(M.railD[3])}</div>`:'<div class="fa-rail fa-rail-d"></div>'}
     </div>`;
   const pied=`<footer class="fa-pied">
-      <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
-      <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
-      <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
+      <div class="fa-pied-g">${logoDoc?`<img class="fa-pied-logo" src="${E(logoDoc)}" alt="">`:''}<div>${(md.nom||d.coachNom)?`<b>${E(String(md.nom||d.coachNom).toUpperCase())}</b>`:''}${M?`<span>${E(M.pied)}</span>`:(md.slogan?`<span>${E(md.slogan)}</span>`:'')}</div></div>
+      <div class="fa-pied-c">${M?lignes(M.piedC):''}${(d.athlete&&d.athlete.indexOf('@')<0)?`<small class="fa-pied-pour">POUR ${E(d.athlete.toUpperCase())} · ${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`:`<small class="fa-pied-pour">${E(new Date(d.edite||Date.now()).toLocaleDateString('fr-FR'))}</small>`}</div>
+      <div class="fa-pied-d">REP<span>CORE</span>${M?'<em>MORE THAN PROGRESS</em>':''}</div>
     </footer>`;
 
   // ── PLANCHE 1 : LE PROGRAMME ────────────────────────────────────────────
@@ -219,7 +272,9 @@ function htmlFicheAlim(user,chercher){
     +d.fruits.map(f=>`<tr><td class="fa-t4-n">${E(f.n)}</td><td>${E(f.q)}</td></tr>`).join('')
     +'</tbody></table>';
 
-  return `<article class="fa-page fa-p1">
+  // La couleur de la marque Pro, sur l'article : la fiche lit --fa-rouge.
+  const accent=md.couleur?` style="--fa-rouge:${E(md.couleur)}"`:'';
+  return `<article class="fa-page fa-p1"${accent}>
     ${tete('PROGRAMME','NUTRITIONNEL',
       (d.kcal?`( ${d.kcal} Cal )`:'')
       +`<div class="fa-h1-note">Ce programme alimentaire est proposé à titre indicatif, `
@@ -227,7 +282,7 @@ function htmlFicheAlim(user,chercher){
     ${blocs}
     ${pied}
   </article>
-  <article class="fa-page fa-p2">
+  <article class="fa-page fa-p2"${accent}>
     ${tete('TABLEAUX','NUTRITIONNELS',
       `<div class="fa-h1-note">DES REPÈRES SIMPLES POUR MIEUX MANGER</div>`)}
     <div class="fa-cols">
@@ -244,7 +299,7 @@ function htmlFicheAlim(user,chercher){
       <div class="fa-carte-t">SOURCES DE GLUCIDES</div>
       ${tblGluc}
     </section>
-    <div class="fa-motto">${E(FA_MOTTO)}</div>
+    ${M?`<div class="fa-motto">${E(M.motto)}</div>`:''}
     ${pied}
   </article>`;
 }
@@ -256,6 +311,31 @@ let _faCible=null;
  * écran que l'athlète et son coach ouvrent tous les deux ne doit s'appeler ni
  * l'un ni l'autre. Même raison que `s-traitement-edit`.
  */
+// ══ SÉRIE 6 : « VOIR MA FICHE TYPE » ═══════════════════════════════════════
+// Un athlète FICTIF (Léa Exemple), une journée type : le coach voit sa marque
+// sur la fiche avant de l'envoyer à qui que ce soit. Rien n'est écrit.
+function ficheTypeDonnees(coach){
+  const c=coach||currentUser||{};
+  const md=marqueDocument(c,_marqueProPour(c),String(c.email||'').replace(/\./g,','));
+  const L=(nom,q,unite)=>({type:'aliment',nom,q,unite,qte:q+' '+unite});
+  return {ok:true,type:true,md,edite:Date.now(),athlete:'Léa Exemple',kcal:2000,jourOn:true,marque:'',
+    coachNom:md.nom,nSources:{p:3,c:3},nRepasColonne:FA_REPAS_COLONNE,moment:'soir',avecComplements:false,
+    repas:[{cle:'petit_dej',lib:'PETIT DÉJEUNER',moment:FA_LIB_MOMENT.petit_dej||'',icone:'',lignes:[L('Flocons d’avoine',60,'g'),L('Skyr nature',150,'g'),{type:'fruit',nom:'1 fruit',qte:'Se référer au tableau plus bas pour les quantités'}]},
+      {cle:'midi',lib:'DÉJEUNER',moment:FA_LIB_MOMENT.midi||'',icone:'',lignes:[{type:'source',macro:'p',nom:'Source de protéines',qte:'Se référer au tableau plus bas pour les quantités'},{type:'source',macro:'c',nom:'Source de glucides',qte:'Se référer au tableau plus bas pour les quantités'},L('Légumes verts',200,'g')]},
+      {cle:'soir',lib:'DÎNER',moment:FA_LIB_MOMENT.soir||'',icone:'',lignes:[{type:'source',macro:'p',nom:'Source de protéines',qte:'Se référer au tableau plus bas pour les quantités'},L('Huile d’olive',10,'g')]}],
+    proteines:[{nom:'Blanc de poulet',q:150,per100:23,jour:900,alerte:false},{nom:'Cabillaud',q:180,per100:18,jour:1080,alerte:false},{nom:'Œufs',q:150,per100:12.5,jour:900,alerte:false}],
+    glucides:[{nom:'Riz basmati, cuit',q:180,per100:28,jour:1080,alerte:false},{nom:'Patate douce, cuite',q:250,per100:20,jour:1500,alerte:false},{nom:'Pâtes complètes, cuites',q:170,per100:30,jour:1020,alerte:false}],
+    fruits:PLAN_FRUITS.map(f=>({n:f.n,q:f.q}))};
+}
+function voirFicheType(){
+  _faCible={_ficheType:true};
+  goAvecRetour('s-fiche-alim');
+  faRendre();
+  // La couleur corrigée pour le papier est MONTRÉE, pas changée en silence.
+  try{ const md=marqueDocument(currentUser,_marqueProPour(currentUser));
+    if(md.couleurOrigine) toast('Ta couleur '+md.couleurOrigine+' est trop pâle sur papier : la fiche imprime '+md.couleur,'var(--orange)'); }catch(e){}
+  return true;
+}
 function ouvrirFicheAlim(cible){
   _faCible=cible||currentUser;
   goAvecRetour('s-fiche-alim');
@@ -271,7 +351,7 @@ function faRendre(){
   // comme le fait l'écran de l'athlète.
   if(!_ciqualDB){ try{ _loadCiqual().then(()=>{ if(_faCible) faRendre(); }); }catch(e){} }
   let h='';
-  try{ h=htmlFicheAlim(_faCible); }
+  try{ h=(_faCible&&_faCible._ficheType)?htmlFicheAlimDonnees(ficheTypeDonnees(currentUser)):htmlFicheAlim(_faCible); }
   catch(e){ h=etatErreur('Fiche indisponible : '+escapeHtml(String(e&&e.message||e))); }
   z.innerHTML=h;
   faEchelle();
@@ -472,7 +552,11 @@ function _ppTable(seance,cols){
 // le programme du coach sur la fiche de son athlète.
 function htmlProgrammePrint(u){
   const seances=_ppSeancesActives(u);
+  // Série 6 : le logo du coach (marqueDocument) en tête du programme imprimé.
+  const md=(function(){ try{ return marqueDocument(coachAffichable(u)||(u&&u.role==='coach'?u:null),_marqueProPour(u),cleCoachDe(u)||''); }catch(e){ return null; } })();
   const tete=`<header class="pp-tete">
+    ${md&&md.logo?`<img class="pp-logo" src="${escapeHtml(md.logo)}" alt="${escapeHtml(md.nom||'')}">`:''}
+    ${md&&md.nom?`<div class="pp-marque">${escapeHtml(md.nom)}${md.slogan?' · '+escapeHtml(md.slogan):''}</div>`:''}
     <div class="rap-titre">Programme</div>
     <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
     <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>

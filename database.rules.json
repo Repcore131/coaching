@@ -733,6 +733,8 @@
       "$emailKey": {
         ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $emailKey)",
         ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        // SERIE 6, LOT 5 : le slogan imprime sur les documents (60 caracteres).
+        "slogan": { ".validate": "newData.isString() && newData.val().length <= 60" },
         // SERIE 6 : le defaut de BILAN du coach, et lui seul (defautsCoachPublics).
         "defautsCoach": {
           "affichage": { ".validate": "newData.isString() && newData.val().matches(/^(sansChiffres|essentiel)$/)" },
