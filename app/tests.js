@@ -73974,6 +73974,94 @@ async function testExercices(){
           if(!/"muscles"\s*:/.test(String(window._RC_RULES||''))||!/"prioritaires"\s*:/.test(String(window._RC_RULES||''))) return _echec('règles');
           return /id="mu-cartes"/.test(_prodSrc())||_echec('écran athlète non branché');})());
       }
+      // ══ LOT AM1 — AMPLITUDE CIBLE : propositions, saisie, séance ══
+      {
+        const _A3=p=>[{cle:'A3',position:p,confiance:0.75,texte:'bras à 49 % de la taille'}];
+        const _A4=p=>[{cle:'A4',position:p,confiance:0.75,texte:'rapport 0,95'}];
+        const _c=o=>Object.assign({taille:180,femme:false},o||{});
+        ok('AM1 — slug d’exercice : minuscules, tirets, sans accent',(()=>
+          slugExercice('DÉVELOPPÉ COUCHÉ BARRE')==='developpe-couche-barre'&&slugExercice('Curl Larry Scott')==='curl-larry-scott'
+          ||_echec(slugExercice('DÉVELOPPÉ COUCHÉ BARRE')))());
+        ok('AM1 — développé couché : bras longs OU thorax fin → humérus parallèle, sinon libre',(()=>{
+          const a=amplitudeProposee({name:'DEVELOPPE COUCHE BARRE'},_A3('haut'),{corps:_c()});
+          if(a.repere!=='humerus_parallele'||a.articulation!=='coude'||a.angleMin!==AMPLITUDE_COUDE_PARALLELE||a.source!=='morpho'||!/bras longs/.test(a.raison)) return _echec(JSON.stringify(a));
+          const b=amplitudeProposee({name:'DEVELOPPE COUCHE HALTERE'},[],{corps:_c({thorax:21})});
+          if(b.repere!=='humerus_parallele'||!/thorax fin/.test(b.raison)) return _echec(JSON.stringify(b));
+          const n=amplitudeProposee({name:'DEVELOPPE COUCHE BARRE'},_A3('neutre'),{corps:_c({thorax:26})});
+          return (n.repere==='libre'&&n.raison.length>10&&n.angleMin==null)||_echec(JSON.stringify(n));})());
+        ok('AM1 — développé militaire : avant-bras longs OU clavicules courtes → mains aux oreilles',(()=>{
+          const a=amplitudeProposee({name:'DEVELOPPE MILITAIRE BARRE'},[],{corps:_c({avantbras:30})});
+          if(a.repere!=='mains_oreilles'||a.articulation!=='epaule'||a.angleMin!==AMPLITUDE_EPAULE_OREILLES||!/avant-bras longs/.test(a.raison)) return _echec(JSON.stringify(a));
+          if(amplitudeProposee({name:'SHOULDER PRESS'},_A4('bas'),{corps:_c()}).repere!=='mains_oreilles') return _echec('axe A4');
+          const b=amplitudeProposee({name:'DEVELOPPE EPAULES HALTERES'},[],{corps:_c({epaules:38})});
+          if(b.repere!=='mains_oreilles'||!/clavicules courtes/.test(b.raison)) return _echec(JSON.stringify(b));
+          const n=amplitudeProposee({name:'DEVELOPPE MILITAIRE BARRE'},[],{corps:_c({avantbras:27.8,epaules:43})});
+          return n.repere==='libre'||_echec(JSON.stringify(n));})());
+        ok('AM1 — tractions : amplitude naturelle issue du test M1, l’angle du test filmé s’il existe',(()=>{
+          const a=amplitudeProposee({name:'TRACTIONS'},[],{morphoTests:{epaule:{date:1,mur:'non',g:12}}});
+          if(a.repere!=='naturelle'||a.source!=='test'||a.angleMin!==null||!/mur/.test(a.raison)) return _echec(JSON.stringify(a));
+          const b=amplitudeProposee({name:'TRACTIONS PRISE NEUTRE'},[],{morphoTests:{epaule:{date:1,mur:'oui'}},compat:{traction:{aux:61.4}}});
+          if(b.articulation!=='coude'||b.angleMin!==61||!/61°/.test(b.raison)) return _echec(JSON.stringify(b));
+          const n=amplitudeProposee({name:'TRACTIONS'},[],{});
+          return (n.repere==='libre'&&/test/.test(n.raison))||_echec(JSON.stringify(n));})());
+        ok('AM1 — curl pupitre : coude au plus 165°, sous 170° ; ailleurs, libre avec sa raison',(()=>{
+          const a=amplitudeProposee({name:'CURL LARRY SCOTT'},[],{});
+          if(a.articulation!=='coude'||!(a.angleMax<170)||a.angleMin!==null||!a.raison) return _echec(JSON.stringify(a));
+          for(const n of ['SQUAT','CURL BARRE','LEG EXTENSION']){ const p=amplitudeProposee({name:n},[],{}); if(p.repere!=='libre'||!p.raison) return _echec(n); }
+          return true;})());
+        ok('AM1 — saisie bornée, et la séance n’affiche que ce que le coach a enregistré',(()=>{
+          if(!entreeAmplitude({repere:'humerus_parallele',articulation:'coude',angleMin:200}).erreur) return _echec('200° accepté');
+          if(!entreeAmplitude({repere:'libre',articulation:'coude',angleMin:120,angleMax:90}).erreur) return _echec('bornes inversées');
+          if(!entreeAmplitude({repere:'humerus_parallele',angleMin:85}).erreur) return _echec('angle sans articulation');
+          if(!entreeAmplitude({repere:'libre'}).erreur) return _echec('cible vide');
+          const e=entreeAmplitude({repere:'humerus_parallele',articulation:'coude',angleMin:'85',source:'morpho'},1000);
+          if(e.erreur||e.angleMin!==85||e.date!==1000||'angleMax' in e) return _echec(JSON.stringify(e));
+          const sU=currentUser; let h='', vide='';
+          try{
+            currentUser={id:'am',bilans:[],amplitudes:{'developpe-couche-barre':Object.assign({},e,{controle:{date:1,n:5,ok:4,court:1,sur:0}})}};
+            h=_htmlAmplitudeSeance({name:'DEVELOPPE COUCHE BARRE'});
+            currentUser={id:'am2',bilans:[],morpho:{}};
+            vide=_htmlAmplitudeSeance({name:'DEVELOPPE COUCHE BARRE'});
+          } finally { currentUser=sU; }
+          if(!/Descends jusqu’à : humérus parallèle au sol/.test(h)||!/<svg class="amc-picto"/.test(h)||!/4 répétitions sur 5/.test(h)) return _echec('séance : '+h);
+          if(vide!=='') return _echec('une proposition non validée descend en séance');
+          return (consigneAmplitude({repere:'libre',articulation:'coude',angleMax:165}).texte.indexOf('sans verrouiller')>=0
+            &&consigneAmplitude({repere:'libre'})===null)||_echec('consigne libre');})());
+        ok('AM1 — écran coach : la proposition préremplie, modifiable, et la règle de la base',(()=>{
+          const c={id:'c',bilans:[{date:1,'deb-height':'180','deb-thorax':'21'}],sessions_config:[{name:'A',exercises:[{name:'DEVELOPPE COUCHE BARRE'},{name:'SQUAT'},{name:'DEVELOPPE COUCHE BARRE'}]}]};
+          const d=document.createElement('div'); d.innerHTML=htmlAmplitudesCibles(c,[],{corps:longueursCorps(c)});
+          const l=d.querySelectorAll('.amc-ligne');
+          if(l.length!==2) return _echec(l.length+' lignes');
+          if(l[0].querySelector('[data-champ="repere"]').value!=='humerus_parallele'||l[0].querySelector('[data-champ="angleMin"]').value!=='85') return _echec('préremplissage');
+          if(JSON.parse(l[0].dataset.prop).source!=='morpho'||!/thorax fin/.test(l[0].textContent)) return _echec('proposition');
+          return (/"amplitudes"\s*:/.test(String(window._RC_RULES||''))&&/humerus_parallele\|mains_oreilles\|naturelle\|libre/.test(String(window._RC_RULES||'')))||_echec('règle');})());
+      }
+      okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
+        try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+        if(typeof controleAmplitude!=='function') return _echec('fonction absente');
+        let g=12345; const bruit=()=>{ g=(g*1103515245+12345)%2147483648; return (g/2147483648)*6-3; };
+        // Une répétition : de 170° au fond puis retour, 30 angles, bruit ±3°.
+        // En cosinus : le mouvement ralentit et s'arrête aux deux bouts, comme un vrai.
+        const rep=(fond,haut)=>{ const h=haut||170, l=[]; for(let i=0;i<30;i++){ const t=i/29; l.push(fond+(h-fond)*(1+Math.cos(2*Math.PI*t))/2+bruit()); } return l; };
+        const cible={angleMin:85};
+        for(let k=0;k<20;k++){ const r=controleAmplitude([rep(85+((k%5)-2))],cible).reps[0]; if(!r.ok) return _echec('fond à '+(85+((k%5)-2))+'° jugé hors cible : '+JSON.stringify(r)); }
+        const r=controleAmplitude([rep(86),rep(70),rep(100)],cible);
+        const [a,b,c]=r.reps;
+        if(!a.ok||b.type!=='sur_etirement'||c.type!=='trop_court') return _echec(JSON.stringify(r.reps));
+        if(Math.abs(b.ecartDeg-10)>3||Math.abs(c.ecartDeg-10)>3) return _echec('écarts : '+b.ecartDeg+' / '+c.ecartDeg);
+        if(r.resume.ok!==1||r.resume.sur_etirement!==1||r.resume.trop_court!==1||r.resume.mesurables!==3) return _echec(JSON.stringify(r.resume));
+        // Répétitions partiellement invisibles.
+        const moitie=rep(86).map((x,i)=>i%3?null:x), quatre=[90,88,86,87], rien=[];
+        const m=controleAmplitude([moitie,quatre,rien,rep(86)],cible);
+        if(m.reps.slice(0,3).some(q=>q.mesurable||q.ok!==null)) return _echec('mal vue jugée : '+JSON.stringify(m.reps));
+        if(m.resume.n!==4||m.resume.mesurables!==1||m.resume.ok!==1) return _echec(JSON.stringify(m.resume));
+        const assez=rep(86).map((x,i)=>i%5===0?null:x);
+        if(!controleAmplitude([assez],cible).reps[0].mesurable) return _echec('80 % visible rejetée');
+        // Une borne haute : le curl au pupitre qui verrouille.
+        const cu=controleAmplitude([rep(50,178),rep(50,162)],{angleMax:165});
+        if(cu.reps[0].type!=='sur_etirement'||!cu.reps[1].ok) return _echec(JSON.stringify(cu.reps));
+        return controleAmplitude([rep(86)],{}).reps[0].mesurable===false||_echec('cible vide jugée');
+      });
       okA('TC1 — MOTION LAB : un squat de profil filmé, trois répétitions, le tronc lu au point bas',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof mlMesuresCompat!=='function'||typeof mlRepsCompat!=='function') return _echec('fonctions absentes');

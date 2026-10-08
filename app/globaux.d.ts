@@ -109,3 +109,7 @@ declare function signatureDocument(u: any, o?: any): string;
 declare function tempoLu(txt: any): any;
 /** La clé d'un exercice : son nom en capitales, sans accent ni ponctuation (rc-core). */
 declare function exKey(nom: any): string;
+// LOT AM1 — l'amplitude cible, lue et enregistrée par rc-core.
+declare function slugExercice(nom: any): string;
+declare function amplitudesDe(user: any): Record<string, any>;
+declare function enregistrerControleAmplitude(email: string, nomExercice: string, resume: any): boolean;

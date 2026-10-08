@@ -7044,6 +7044,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // La lignee de synchronisation (voir CLOUD._baseDe) : un horodatage du
   // serveur, retire avant tout envoi. Rien de l'athlete.
   '_syncMaj',
+  // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
+  // articulation, deux angles, un repère, posés par le coach. Une consigne
+  // d'exécution, comme le réglage du coach — pas une mesure du corps.
+  'amplitudes',
   // LOT TC1 — LES TESTS DE COMPATIBILITÉ FILMÉS (morpho.tests) : un angle
   // ou un rapport de MOUVEMENT par test, une couleur, un nombre de
   // répétitions. Ni longueur de segment, ni contour, ni image — la vidéo ne
@@ -16668,6 +16672,276 @@ function _morphoCalCache(){
   return _morphoCal;
 }
 
+// ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════
+//
+// Une cible par exercice : une articulation, un angle à atteindre en bas
+// (angleMin) et/ou en haut (angleMax), et un REPÈRE que l'athlète sait voir
+// sans rapporteur — « humérus parallèle au sol », « mains à hauteur des
+// oreilles ». Saisie par le coach, ou proposée par la morpho et validée par
+// lui ; affichée en séance ; contrôlée en vidéo (controleAmplitude, dans
+// motion-lab).
+//
+// ⚠ L'ATHLÈTE NE VOIT QUE CE QUE LE COACH A ENREGISTRÉ. Une proposition
+//   morpho reste une proposition tant que le coach ne l'a pas validée dans
+//   l'écran Amplitudes : elle ne descend pas seule dans la séance.
+// ⚠ TOUJOURS UNE RAISON. Chaque proposition dit d'où elle vient (axe,
+//   mesure, test) — y compris « libre » quand aucune règle ne s'applique.
+// ⚠ VU DE PROFIL, L'HUMÉRUS PARALLÈLE SE LIT AU COUDE. Le cahier des charges
+//   parle d'angle d'épaule ; mais de profil, couché sur un banc, l'humérus
+//   écarté du tronc file vers l'objectif et l'angle épaule-tronc ne se lit
+//   plus. Avant-bras vertical (la consigne du développé), le coude à 90° EST
+//   l'humérus parallèle : c'est donc le coude qui est contrôlé. Au militaire,
+//   tronc vertical, l'angle d'épaule se lit bien : il reste l'épaule.
+
+const AMPLITUDE_REPERES=Object.freeze({
+  humerus_parallele:Object.freeze({lib:'Humérus parallèle au sol',verbe:'Descends jusqu’à',quoi:'humérus parallèle au sol',
+    svg:'<line x1="4" y1="34" x2="44" y2="34" class="amc-sol"/><line x1="10" y1="16" x2="30" y2="16" class="amc-seg"/><line x1="30" y1="16" x2="30" y2="2" class="amc-seg"/><circle cx="10" cy="16" r="3"/>'}),
+  mains_oreilles:Object.freeze({lib:'Mains à hauteur des oreilles',verbe:'Descends jusqu’à',quoi:'mains à hauteur des oreilles',
+    svg:'<circle cx="24" cy="12" r="6"/><line x1="6" y1="12" x2="42" y2="12" class="amc-rep"/><line x1="12" y1="24" x2="12" y2="12" class="amc-seg"/><line x1="36" y1="24" x2="36" y2="12" class="amc-seg"/><line x1="12" y1="24" x2="18" y2="30" class="amc-seg"/><line x1="36" y1="24" x2="30" y2="30" class="amc-seg"/>'}),
+  naturelle:Object.freeze({lib:'Amplitude naturelle',verbe:'Monte jusqu’à',quoi:'ton amplitude naturelle, sans hausser les épaules',
+    svg:'<line x1="4" y1="6" x2="44" y2="6" class="amc-sol"/><line x1="16" y1="6" x2="20" y2="22" class="amc-seg"/><line x1="32" y1="6" x2="28" y2="22" class="amc-seg"/><circle cx="24" cy="28" r="5"/>'}),
+  libre:Object.freeze({lib:'Libre',verbe:'',quoi:'',svg:''})
+});
+const AMPLITUDE_ARTICULATIONS=Object.freeze(['coude','epaule','hanche','genou','cheville']);
+/** Coude contrôlé au développé : 90° humérus parallèle, moins une marge de 5°. */
+const AMPLITUDE_COUDE_PARALLELE=85;
+/** Épaule contrôlée au militaire : humérus à l'horizontale, tronc vertical. */
+const AMPLITUDE_EPAULE_OREILLES=90;
+/** Curl pupitre : le coude ne se verrouille pas (sous 170°). */
+const AMPLITUDE_PUPITRE_MAX=165;
+/** Avant-bras « long » : 5 % au-dessus de la moyenne de Leva — SEUIL DE TRAVAIL. */
+const AMPLITUDE_AVANTBRAS_LONG=1.05;
+
+/** PURE. Le nom d'exercice en clé de base : minuscules, chiffres, tirets. */
+function slugExercice(nom){
+  let k=''; try{ k=exKey(nom); }catch(e){ k=String(nom||''); }
+  return String(k).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80);
+}
+/**
+ * PURE. LA PROPOSITION MORPHO pour un exercice.
+ * @param {any} ex     l'exercice, ou son nom
+ * @param {any[]} axes sortie de morphoAxes
+ * @param {{corps?:any, morphoTests?:any, compat?:any}} tests
+ *   corps : longueursCorps ; morphoTests : tests M1 bruts ; compat : testsCompatDe
+ * @returns {{articulation:string|null, angleMin:number|null, angleMax:number|null,
+ *   repere:string, source:string, raison:string}}
+ */
+function amplitudeProposee(ex,axes,tests){
+  const t=tests||{}, corps=t.corps||{}, m1=t.morphoTests||{}, compat=t.compat||{};
+  const nom=(()=>{ try{ return exKey((ex&&ex.name)||ex||''); }catch(e){ return ''; } })();
+  let schema=null; try{ schema=schemaDe(ex); }catch(e){ schema=null; }
+  const axe=k=>(Array.isArray(axes)?axes:[]).find(a=>a&&a.cle===k&&a.position!=null&&a.confiance>=MORPHO_CONF_MIN-1e-9)||null;
+  const femme=!!corps.femme, taille=Number(corps.taille)>0?Number(corps.taille):null;
+  const libre=r=>({articulation:null,angleMin:null,angleMax:null,repere:'libre',source:'morpho',raison:r});
+  // ── DÉVELOPPÉ COUCHÉ : bras longs ou thorax fin → humérus parallèle.
+  if(schema==='poussee-horizontale'&&/DEVELOPPE COUCHE|BENCH|FLOOR PRESS/.test(nom)){
+    const r=[];
+    const a3=axe('A3'); if(a3&&a3.position==='haut') r.push('bras longs ('+a3.texte+')');
+    const MR=ANAT_MESURES_REF[femme?'F':'H'];
+    if(corps.thorax!=null&&corps.thorax<MR.thorax-MR.thorax_et)
+      r.push('thorax fin ('+String(corps.thorax).replace('.',',')+' cm, sous la moyenne de '+String(MR.thorax).replace('.',',')+' ± '+String(MR.thorax_et).replace('.',',')+' cm)');
+    if(r.length) return {articulation:'coude',angleMin:AMPLITUDE_COUDE_PARALLELE,angleMax:null,repere:'humerus_parallele',source:'morpho',
+      raison:'Descente jusqu’à l’humérus parallèle : '+r.join(' et ')+'. La barre irait chercher plus bas que l’épaule ne l’accompagne confortablement. Contrôlé au coude (avant-bras vertical, 90° = humérus parallèle, '+AMPLITUDE_COUDE_PARALLELE+'° avec la marge).'};
+    return libre('Développé couché : ni bras longs, ni thorax fin relevés. Amplitude libre, à régler par le coach.');
+  }
+  // ── DÉVELOPPÉ MILITAIRE : avant-bras longs ou clavicules courtes → mains aux oreilles.
+  if(schema==='poussee-verticale'&&/MILITAIRE|EPAULES|SHOULDER PRESS|NUQUE|PUSH PRESS/.test(nom)){
+    const r=[];
+    const R=anatRef(femme), L=ANAT_LARGEURS[femme?'F':'H'];
+    const a4=axe('A4');
+    if(a4&&a4.position==='bas') r.push('avant-bras longs ('+a4.texte+')');
+    else if(corps.avantbras!=null&&taille&&corps.avantbras/taille>R.avantbras*AMPLITUDE_AVANTBRAS_LONG)
+      r.push('avant-bras longs ('+String(corps.avantbras).replace('.',',')+' cm, plus de 5 % au-dessus de la moyenne à cette taille)');
+    if(corps.epaules!=null&&taille&&corps.epaules<(L.biacromial-L.biacromial_et)*taille)
+      r.push('clavicules courtes (carrure de '+String(corps.epaules).replace('.',',')+' cm, sous la moyenne moins un écart-type)');
+    if(r.length) return {articulation:'epaule',angleMin:AMPLITUDE_EPAULE_OREILLES,angleMax:null,repere:'mains_oreilles',source:'morpho',
+      raison:'Descente jusqu’aux oreilles : '+r.join(' et ')+'. Plus bas, l’épaule finit le mouvement en rotation. Contrôlé à l’épaule (humérus à l’horizontale, '+AMPLITUDE_EPAULE_OREILLES+'°).'};
+    return libre('Développé militaire : ni avant-bras longs, ni clavicules courtes relevés. Amplitude libre.');
+  }
+  // ── TRACTIONS : l'amplitude naturelle, issue du test d'épaule M1.
+  if(schema==='tirage-vertical'&&/TRACTION|CHIN|PULL UP|MUSCLE UP/.test(nom)){
+    const ep=m1.epaule, tc=compat.traction;
+    const coude=(tc&&tc.aux!=null&&isFinite(Number(tc.aux)))?Math.round(Number(tc.aux)):null;
+    if(ep&&(ep.mur==='oui'||ep.mur==='non'||ep.g!=null||ep.d!=null)){
+      return {articulation:coude!=null?'coude':null,angleMin:coude,angleMax:null,repere:'naturelle',source:'test',
+        raison:'Amplitude naturelle : test d’épaule au mur'+(ep.mur==='non'?' (bras qui ne touchent pas le mur sans décoller les lombaires)':'')
+          +(coude!=null?' ; coude à '+coude+'° au sommet, relevé au test de traction filmé':' ; aucun angle filmé, la cible se règle à l’œil')+'.'};
+    }
+    if(coude!=null) return {articulation:'coude',angleMin:coude,angleMax:null,repere:'naturelle',source:'test',
+      raison:'Amplitude naturelle relevée au test de traction filmé : coude à '+coude+'° au sommet. Le test d’épaule M1 n’est pas fait.'};
+    return libre('Tractions : ni test d’épaule M1, ni traction filmée. Amplitude libre en attendant le test.');
+  }
+  // ── CURL PUPITRE : le coude ne se verrouille pas en bas.
+  if(schema==='isolation-coude'&&/LARRY SCOTT|PUPITRE|PREACHER/.test(nom))
+    return {articulation:'coude',angleMin:null,angleMax:AMPLITUDE_PUPITRE_MAX,repere:'libre',source:'morpho',
+      raison:'Curl au pupitre : le bras est bloqué en appui, et le coude ne se verrouille pas en bas (au plus '+AMPLITUDE_PUPITRE_MAX+'°, sous 170°).'};
+  return libre('Aucune règle d’amplitude ne s’applique à cet exercice : amplitude libre.');
+}
+
+/** PURE. Les cibles enregistrées d'un dossier, vérifiées. */
+function amplitudesDe(user){
+  const src=(user&&user.amplitudes&&typeof user.amplitudes==='object')?user.amplitudes:{};
+  const out={};
+  for(const k in src){
+    const e=src[k];
+    if(!/^[a-z0-9-]{1,80}$/.test(k)||!e||typeof e!=='object'||!AMPLITUDE_REPERES[e.repere]||!(Number(e.date)>0)) continue;
+    const n=v=>(v!=null&&isFinite(Number(v)))?Number(v):null;
+    out[k]={articulation:AMPLITUDE_ARTICULATIONS.indexOf(e.articulation)>=0?e.articulation:null,
+      angleMin:n(e.angleMin),angleMax:n(e.angleMax),repere:e.repere,
+      source:['coach','morpho','test'].indexOf(e.source)>=0?e.source:'coach',date:Number(e.date),
+      controle:(e.controle&&typeof e.controle==='object')?e.controle:null};
+  }
+  return out;
+}
+/**
+ * PURE. Une cible prête à écrire, ou {erreur}. Les bornes sont de vrais
+ * angles (0 à 180) ; une cible avec un angle exige son articulation.
+ */
+function entreeAmplitude(v,maintenant){
+  const n=x=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
+  const o=v||{}, mn=n(o.angleMin), mx=n(o.angleMax);
+  if(!AMPLITUDE_REPERES[o.repere]) return {erreur:'repère inconnu'};
+  for(const a of [mn,mx]) if(a!=null&&(a<0||a>180)) return {erreur:'un angle va de 0 à 180°'};
+  if(mn!=null&&mx!=null&&mn>=mx) return {erreur:'l’angle bas doit être inférieur à l’angle haut'};
+  const art=AMPLITUDE_ARTICULATIONS.indexOf(o.articulation)>=0?o.articulation:null;
+  if((mn!=null||mx!=null)&&!art) return {erreur:'choisis l’articulation contrôlée'};
+  if(o.repere==='libre'&&mn==null&&mx==null) return {erreur:'une cible libre sans angle ne dit rien : retire-la plutôt'};
+  const e={repere:o.repere,source:['coach','morpho','test'].indexOf(o.source)>=0?o.source:'coach',date:Math.round(Number(maintenant)||Date.now())};
+  if(art) e.articulation=art;
+  if(mn!=null) e.angleMin=Math.round(mn);
+  if(mx!=null) e.angleMax=Math.round(mx);
+  return e;
+}
+/**
+ * PURE. La ligne de séance : « Descends jusqu'à : humérus parallèle au sol »,
+ * et son pictogramme. null quand il n'y a rien à dire.
+ */
+function consigneAmplitude(c){
+  if(!c||!AMPLITUDE_REPERES[c.repere]) return null;
+  const r=AMPLITUDE_REPERES[c.repere];
+  if(c.repere!=='libre') return {texte:r.verbe+' : '+r.quoi,svg:r.svg};
+  if(c.articulation==='coude'&&c.angleMax!=null) return {texte:'En bas : bras presque tendu, sans verrouiller le coude',svg:''};
+  if(c.angleMin!=null||c.angleMax!=null) return {texte:'Amplitude réglée par ton coach : reste dans la plage qu’il t’a montrée',svg:''};
+  return null;
+}
+/** Le résumé du dernier contrôle vidéo, en une phrase courte. */
+function _resumeControleAmplitude(ctrl){
+  if(!ctrl||!(Number(ctrl.n)>0)) return '';
+  return 'Dernière vidéo : '+ctrl.ok+' répétition'+(ctrl.ok>1?'s':'')+' sur '+ctrl.n+' dans ta cible';
+}
+/** En séance, sous le nom de l'exercice. '' sans cible enregistrée. */
+function _htmlAmplitudeSeance(ex){
+  if(!currentUser||!ex||!ex.name) return '';
+  const c=amplitudesDe(currentUser)[slugExercice(ex.name)];
+  const k=consigneAmplitude(c);
+  if(!k) return '';
+  const rc=_resumeControleAmplitude(c.controle);
+  return '<div class="amc-seance">'+(k.svg?'<svg class="amc-picto" viewBox="0 0 48 36" aria-hidden="true">'+k.svg+'</svg>':'')
+    +'<span>'+escapeHtml(k.texte)+(rc?'<small>'+escapeHtml(rc)+'</small>':'')+'</span></div>';
+}
+
+// ── L'ÉDITEUR COACH, DANS L'ÉCRAN AMPLITUDES ────────────────────────────────
+/** PURE. Les exercices du programme, sans doublon, dans l'ordre. */
+function _exercicesDuProgramme(c){
+  const vus={}, out=[];
+  for(const s of ((c&&c.sessions_config)||[])) for(const ex of ((s&&s.exercises)||[])){
+    const nom=String((ex&&ex.name)||'').trim(), k=slugExercice(nom);
+    if(!nom||!k||vus[k]) continue; vus[k]=1; out.push(nom);
+  }
+  return out;
+}
+/** PURE. Le HTML de l'éditeur : une ligne par exercice, la proposition préremplie. */
+function htmlAmplitudesCibles(c,axes,tests){
+  const E=escapeHtml, enr=amplitudesDe(c), noms=_exercicesDuProgramme(c);
+  let h='<div class="amc-ed"><div class="rvm-t">Amplitude cible par exercice</div>'
+    +'<div class="rvm-s">La proposition morpho est préremplie : modifie-la, enregistre-la, ou laisse-la. L’athlète ne voit que ce que tu enregistres.</div>';
+  if(!noms.length) return h+'<div class="rvm-vide">Aucun exercice dans son programme.</div></div>';
+  for(const nom of noms){
+    const k=slugExercice(nom), e=enr[k], p=amplitudeProposee({name:nom},axes,tests);
+    const v=e||p;
+    const sel=(n,opts,val)=>'<select class="amc-in" data-champ="'+n+'">'+opts.map(o=>'<option value="'+E(o[0])+'"'+(o[0]===(val==null?'':val)?' selected':'')+'>'+E(o[1])+'</option>').join('')+'</select>';
+    h+='<div class="rvm-l amc-ligne" data-slug="'+E(k)+'" data-nom="'+E(nom)+'" data-prop="'+E(JSON.stringify({repere:p.repere,articulation:p.articulation,angleMin:p.angleMin,angleMax:p.angleMax,source:p.source}))+'">'
+      +'<div class="rvm-ex">'+E(nom)+' <span>· '+(e?'enregistrée ('+({coach:'par toi',morpho:'proposition morpho',test:'issue d’un test'})[e.source]+')':'non enregistrée')+'</span></div>'
+      +'<div class="rvm-src">Proposition : '+E(AMPLITUDE_REPERES[p.repere].lib)+' — '+E(p.raison)+'</div>'
+      +'<div class="amc-champs">'
+      +sel('repere',Object.keys(AMPLITUDE_REPERES).map(r=>[r,AMPLITUDE_REPERES[r].lib]),v.repere)
+      +sel('articulation',[['','Articulation']].concat(AMPLITUDE_ARTICULATIONS.map(a=>[a,a.charAt(0).toUpperCase()+a.slice(1)])),v.articulation)
+      +'<input class="amc-in" data-champ="angleMin" type="number" inputmode="numeric" min="0" max="180" placeholder="bas °" value="'+(v.angleMin==null?'':v.angleMin)+'" aria-label="Angle bas, en degrés">'
+      +'<input class="amc-in" data-champ="angleMax" type="number" inputmode="numeric" min="0" max="180" placeholder="haut °" value="'+(v.angleMax==null?'':v.angleMax)+'" aria-label="Angle haut, en degrés">'
+      +'</div><div class="amc-actions"><button type="button" class="btn btn-outline btn-sm" onclick="enregistrerAmplitudeCible(this)">Enregistrer</button>'
+      +(e?'<button type="button" class="btn btn-outline btn-sm" onclick="retirerAmplitudeCible(this)">Retirer</button>':'')
+      +(e&&e.controle?'<span class="rvm-src">'+E(_resumeControleAmplitude(e.controle))+'</span>':'')+'</div></div>';
+  }
+  return h+'</div>';
+}
+function _ampCibleContexte(){
+  if(!_amp) return null;
+  const users=DB.get('users')||{}, c=users[_amp.email];
+  if(!c||!currentUser||c.coachId!==currentUser.id) return null;
+  return {users,c};
+}
+function renderAmplitudesCibles(){
+  const z=document.getElementById('amp-cibles'), x=_ampCibleContexte();
+  if(!z||!x) return false;
+  let axes=[]; try{ axes=morphoAxes(x.c,{calibrage:_morphoCalCache()}); }catch(e){ axes=[]; }
+  const tests={corps:longueursCorps(x.c),morphoTests:x.c.morphoTests||{},compat:testsCompatDe(x.c)};
+  z.innerHTML=htmlAmplitudesCibles(x.c,axes,tests);
+  return true;
+}
+/** Enregistre une ligne. Source : 'morpho' / 'test' si la proposition est gardée telle quelle, 'coach' sinon. */
+function enregistrerAmplitudeCible(bouton){
+  const ligne=bouton&&bouton.closest&&bouton.closest('.amc-ligne'), x=_ampCibleContexte();
+  if(!ligne||!x) return false;
+  const val=ch=>{ const el=ligne.querySelector('[data-champ="'+ch+'"]'); return el?el.value:''; };
+  let prop={}; try{ prop=JSON.parse(ligne.dataset.prop||'{}'); }catch(e){ prop={}; }
+  const v={repere:val('repere'),articulation:val('articulation')||null,angleMin:val('angleMin'),angleMax:val('angleMax')};
+  const num=s=>{ const q=parseFloat(String(s==null?'':s)); return isFinite(q)?Math.round(q):null; };
+  const garde=v.repere===prop.repere&&(v.articulation||null)===(prop.articulation||null)
+    &&num(v.angleMin)===num(prop.angleMin)&&num(v.angleMax)===num(prop.angleMax);
+  v.source=garde?(prop.source||'morpho'):'coach';
+  const e=entreeAmplitude(v);
+  if(e.erreur){ toast(e.erreur.charAt(0).toUpperCase()+e.erreur.slice(1)+'.','var(--orange)'); return false; }
+  const avant=(x.c.amplitudes&&x.c.amplitudes[ligne.dataset.slug])||null;
+  if(avant&&avant.controle) e.controle=avant.controle;
+  if(!x.c.amplitudes||typeof x.c.amplitudes!=='object') x.c.amplitudes={};
+  x.c.amplitudes[ligne.dataset.slug]=e;
+  x.c.updatedAt=Date.now(); x.users[x.c.email]=x.c;
+  const ok=DB.set('users',x.users);
+  renderAmplitudesCibles();
+  toastSync(ok,CLOUD.pushOne(x.c.email,x.c),'Amplitude cible enregistrée ✓','l’amplitude cible est');
+  return true;
+}
+function retirerAmplitudeCible(bouton){
+  const ligne=bouton&&bouton.closest&&bouton.closest('.amc-ligne'), x=_ampCibleContexte();
+  if(!ligne||!x||!x.c.amplitudes) return false;
+  delete x.c.amplitudes[ligne.dataset.slug];
+  if(!Object.keys(x.c.amplitudes).length) delete x.c.amplitudes;
+  x.c.updatedAt=Date.now(); x.users[x.c.email]=x.c;
+  const ok=DB.set('users',x.users);
+  renderAmplitudesCibles();
+  toastSync(ok,CLOUD.pushOne(x.c.email,x.c),'Amplitude cible retirée ✓','le retrait est');
+  return true;
+}
+/**
+ * Le résumé d'un contrôle vidéo, rangé avec la cible (motion-lab l'appelle).
+ * CÔTÉ COACH. Il devient la ligne « Dernière vidéo : 4 sur 5 dans ta cible »
+ * du carnet de séance.
+ */
+function enregistrerControleAmplitude(email,nomExercice,resume){
+  if(!currentUser||currentUser.role!=='coach'||!resume) return false;
+  const users=DB.get('users')||{}, c=users[email], k=slugExercice(nomExercice);
+  if(!c||c.coachId!==currentUser.id||!c.amplitudes||!c.amplitudes[k]) return false;
+  const r={date:Date.now(),n:Math.max(0,Math.round(Number(resume.mesurables)||0)),ok:Math.max(0,Math.round(Number(resume.ok)||0)),
+    court:Math.max(0,Math.round(Number(resume.trop_court)||0)),sur:Math.max(0,Math.round(Number(resume.sur_etirement)||0))};
+  if(!r.n) return false;
+  c.amplitudes[k].controle=r;
+  c.updatedAt=Date.now(); users[email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(email,c),'Contrôle rangé dans son carnet ✓','le contrôle est');
+  return ok;
+}
+
 // ══ LOT ML1 — LONGUEURS MUSCULAIRES ET CONFLITS ══════════════════════════
 //
 // Sept muscles classés court / moyen / long, sur photo par le coach ou par
@@ -18760,7 +19034,10 @@ function _ampRendre(){
     +htmlPhoto
     +'<p style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:4px">'
     +'Un test vaut '+MORPHO_PEREMPTION_J+' jours : une amplitude se travaille et se perd, '
-    +'et passé un trimestre elle ne décrit plus l’athlète d’aujourd’hui.</p>';
+    +'et passé un trimestre elle ne décrit plus l’athlète d’aujourd’hui.</p>'
+    // LOT AM1 : l'amplitude cible par exercice, sous les tests qui la nourrissent.
+    +'<div id="amp-cibles"></div>';
+  try{ renderAmplitudesCibles(); }catch(e){}
   _ampMajEtat();
 }
 /**
@@ -53331,6 +53608,7 @@ function _blocExo(idx,estSS){
         <div class="wo-tete-txt">
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
+          ${_htmlAmplitudeSeance(ex)}
           ${_htmlNoteExo(idx,ex)}
           <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
           <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes

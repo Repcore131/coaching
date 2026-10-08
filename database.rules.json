@@ -205,6 +205,30 @@
           },
           "$autre": { ".validate": false }
         },
+        // LOT AM1 — L AMPLITUDE CIBLE PAR EXERCICE, posee par le coach (ou la
+        // proposition morpho qu il a validee). La cle est le nom d exercice en
+        // minuscules et tirets. `controle` : le resume du dernier controle video.
+        "amplitudes": {
+          "$exercice": {
+            ".validate": "$exercice.matches(/^[a-z0-9-]{1,80}$/) && newData.hasChildren(['repere', 'source', 'date'])",
+            "articulation": { ".validate": "newData.isString() && newData.val().matches(/^(coude|epaule|hanche|genou|cheville)$/)" },
+            "angleMin": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 180" },
+            "angleMax": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 180" },
+            "repere": { ".validate": "newData.isString() && newData.val().matches(/^(humerus_parallele|mains_oreilles|naturelle|libre)$/)" },
+            "source": { ".validate": "newData.isString() && newData.val().matches(/^(coach|morpho|test)$/)" },
+            "date": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "controle": {
+              ".validate": "newData.hasChildren(['date', 'n', 'ok'])",
+              "date": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "n": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 100" },
+              "ok": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+              "court": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+              "sur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+              "$autre": { ".validate": false }
+            },
+            "$autre": { ".validate": false }
+          }
+        },
         // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
         // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
         // ferait rejeter l ecriture du dossier entier.

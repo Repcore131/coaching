@@ -16323,3 +16323,14 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .mu-b{flex:1;min-height:40px;border:1px solid var(--border);border-radius:var(--r-1);background:none;color:var(--text);
   font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
 .mu-b[aria-pressed="true"]{border-color:var(--red);color:var(--text-strong)}
+/* ══ LOT AM1 — AMPLITUDE CIBLE ══ */
+.amc-seance{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:var(--fs-xs);color:var(--text);line-height:1.4}
+.amc-seance small{display:block;color:var(--text-faint);font-size:var(--fs-2xs);margin-top:2px}
+.amc-picto{flex:none;width:30px;height:22px;fill:none;stroke:var(--text);stroke-width:3;stroke-linecap:round}
+.amc-picto .amc-sol,.amc-picto .amc-rep{stroke:var(--red);stroke-width:2;stroke-dasharray:4 3}
+.amc-picto circle{fill:var(--text);stroke:none}
+.amc-ed{margin-top:16px}
+.amc-champs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.amc-in{min-height:44px;box-sizing:border-box;width:100%;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);padding:6px 8px}
+.amc-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}

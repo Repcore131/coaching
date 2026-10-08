@@ -9420,6 +9420,8 @@ function _mlMajLecture(){
     h+='<p class="ml-traj-aide">Pas de point dur marqué sur cette répétition : c’est une information, '
       +'pas un échec.</p>';
   }
+  // LOT AM1 : la cible d'amplitude, répétition par répétition.
+  try{ h+=_mlHtmlControleAmplitude(); }catch(e){}
   // LE TABLEAU DE LA SÉRIE. Les répétitions non analysées y sont en ligne
   // VIDE : sans elles, la série lue n'est pas celle qui a été filmée.
   if(lignes.length>1){
@@ -13387,4 +13389,130 @@ async function mlTestCompatVideo(fichier,cle,opts){
   } finally {
     try{ URL.revokeObjectURL(url); }catch(e){}
   }
+}
+
+// ══ LOT AM1 — L'AMPLITUDE CIBLE, CONTRÔLÉE EN VIDÉO ═════════════════════════
+//
+// La cible vient du dossier (amplitudes/{exercice}, posée par le coach) ; la
+// mesure, des articulations déjà lues par mlAnalyserArticulations. Une
+// répétition = un segment, comme partout dans ce module.
+//
+// ⚠ ±3° DE BRUIT SUR UN ANGLE LU. On ne juge donc ni sur un échantillon seul
+//   (la MÉDIANE des trois plus extrêmes : un point aberrant ne la déplace
+//   pas, et elle ne remonte pas le fond comme le ferait une moyenne), ni au
+//   degré près (une tolérance de 5° autour de chaque borne).
+// ⚠ UNE RÉPÉTITION MAL VUE N'EST NI BONNE NI MAUVAISE : moins de cinq angles
+//   lisibles, ou moins de la moitié de la répétition, et elle est rendue
+//   « non mesurable ». Elle ne compte ni dans les réussites ni dans les écarts.
+
+/** Tolérance autour d'une borne, en degrés. */
+const ML_AMP_TOL=5;
+/** Angles lisibles exigés : au moins ce nombre, et au moins cette part. */
+const ML_AMP_N_MIN=5;
+const ML_AMP_PART_MIN=0.5;
+
+/**
+ * @typedef {{ok:boolean|null, mesurable:boolean, ecartDeg:number|null,
+ *   type:'trop_court'|'sur_etirement'|null, bas:number|null, haut:number|null}} ControleRep
+ */
+/**
+ * PURE. Chaque répétition confrontée à la cible.
+ *   angleMin : l'angle à ATTEINDRE en bas (le plus fermé), à ± tolérance ;
+ *              au-delà vers le bas → 'sur_etirement', pas atteint → 'trop_court'.
+ *   angleMax : l'angle à atteindre en haut (le plus ouvert), même logique,
+ *              au-delà vers le haut → 'sur_etirement'.
+ * Une borne absente n'est pas contrôlée. ecartDeg : de combien la répétition
+ * sort de la bande, positif, arrondi au degré.
+ * @param {(number|null)[][]} serieAngles  une liste d'angles par répétition
+ * @param {{angleMin?:number|null, angleMax?:number|null, tolerance?:number}} cible
+ * @returns {{reps:ControleRep[], resume:{n:number, mesurables:number, ok:number, trop_court:number, sur_etirement:number}}}
+ */
+function controleAmplitude(serieAngles,cible){
+  const c=cible||{};
+  const tol=(c.tolerance!=null&&isFinite(Number(c.tolerance)))?Number(c.tolerance):ML_AMP_TOL;
+  const mn=(c.angleMin!=null&&isFinite(Number(c.angleMin)))?Number(c.angleMin):null;
+  const mx=(c.angleMax!=null&&isFinite(Number(c.angleMax)))?Number(c.angleMax):null;
+  /** @type {ControleRep[]} */
+  const reps=[];
+  const resume={n:0,mesurables:0,ok:0,trop_court:0,sur_etirement:0};
+  for(const serie of (Array.isArray(serieAngles)?serieAngles:[])){
+    resume.n++;
+    const tout=Array.isArray(serie)?serie:[];
+    const v=/** @type {number[]} */(tout.filter(x=>x!=null&&isFinite(Number(x))).map(Number)).sort((a,b)=>a-b);
+    if(v.length<ML_AMP_N_MIN||!tout.length||v.length/tout.length<ML_AMP_PART_MIN||(mn==null&&mx==null)){
+      reps.push({ok:null,mesurable:false,ecartDeg:null,type:null,bas:null,haut:null});
+      continue;
+    }
+    resume.mesurables++;
+    const bas=v[1], haut=v[v.length-2];
+    /** @type {{type:'trop_court'|'sur_etirement', e:number}[]} */
+    const ecarts=[];
+    if(mn!=null){
+      if(bas<mn-tol) ecarts.push({type:'sur_etirement',e:mn-tol-bas});
+      else if(bas>mn+tol) ecarts.push({type:'trop_court',e:bas-mn-tol});
+    }
+    if(mx!=null){
+      if(haut>mx+tol) ecarts.push({type:'sur_etirement',e:haut-mx-tol});
+      else if(haut<mx-tol) ecarts.push({type:'trop_court',e:mx-tol-haut});
+    }
+    ecarts.sort((a,b)=>b.e-a.e);
+    const pire=ecarts[0]||null;
+    if(pire) resume[pire.type]++; else resume.ok++;
+    reps.push({ok:!pire,mesurable:true,ecartDeg:pire?Math.round(pire.e):0,type:pire?pire.type:null,
+      bas:Math.round(bas*10)/10,haut:Math.round(haut*10)/10});
+  }
+  return {reps,resume};
+}
+/**
+ * La cible de la vidéo ouverte, d'après l'exercice auquel elle est liée.
+ * @returns {{nom:string, cible:any}|null}
+ */
+function _mlCibleAmplitude(){
+  if(!_ml) return null;
+  const v=_mlVideoSource(), nom=String((v&&v.lien&&v.lien.exerciceNom)||'');
+  if(!nom||typeof amplitudesDe!=='function') return null;
+  const c=(DB.get('users')||{})[_ml.email];
+  const cible=amplitudesDe(c)[slugExercice(nom)];
+  return cible&&cible.articulation&&(cible.angleMin!=null||cible.angleMax!=null)?{nom,cible}:null;
+}
+/** Le contrôle sur toutes les répétitions dont les articulations sont lues. */
+function _mlControleAmplitude(){
+  const x=_mlCibleAmplitude();
+  if(!x||!_ml) return null;
+  const series=(_ml.segments||[]).map(s=>{
+    const p=/** @type {any} */(s).pose;
+    if(!p) return [];
+    try{ return mlAnglesSerie(p,_ml&&_ml.angCote||undefined).ang[x.cible.articulation]||[]; }catch(e){ return []; }
+  });
+  return {x,r:controleAmplitude(series,x.cible)};
+}
+/** Le bloc du panneau de série. '' sans cible pour cet exercice. */
+function _mlHtmlControleAmplitude(){
+  const k=_mlControleAmplitude();
+  if(!k) return '';
+  const {x,r}=k, c=x.cible;
+  const borne=(c.angleMin!=null?'bas '+c.angleMin+'°':'')+(c.angleMin!=null&&c.angleMax!=null?', ':'')+(c.angleMax!=null?'haut '+c.angleMax+'°':'');
+  let h='<div class="ml-lab" style="margin-top:14px">Amplitude cible · '+escapeHtml(c.articulation)+' '+escapeHtml(borne)+' (± '+ML_AMP_TOL+'°)</div>'
+    +'<div class="ml-tab" role="table">'+r.reps.map((q,i)=>'<div class="ml-tr'+(q.mesurable?'':' ml-tr-vide')+'" role="row">'
+      +'<span role="cell">#'+(i+1)+'</span><span role="cell">'
+      +(!q.mesurable?'non mesurable (articulation mal vue)':q.ok?'dans la cible':(q.type==='trop_court'?'trop court de ':'au-delà de ')+q.ecartDeg+'°')
+      +'</span></div>').join('')+'</div>';
+  if(r.resume.mesurables){
+    h+='<p class="ml-traj-aide">'+r.resume.ok+' sur '+r.resume.mesurables+' dans la cible'
+      +(r.resume.n>r.resume.mesurables?' ; '+(r.resume.n-r.resume.mesurables)+' non mesurable(s)':'')+'.</p>';
+    if(_ml&&_ml.dureeMs&&!_ml.rec)
+      h+='<button type="button" class="ml-b" onclick="mlCarteAmplitude()">Ajouter à la correction et au carnet</button>';
+  }
+  return h;
+}
+/** Le résumé du contrôle : une carte de correction, et la ligne du carnet. */
+function mlCarteAmplitude(){
+  const k=_mlControleAmplitude();
+  if(!k||!_ml||!k.r.resume.mesurables) return false;
+  const s=k.r.resume;
+  const t='Amplitude : '+s.ok+' répétition'+(s.ok>1?'s':'')+' sur '+s.mesurables+' dans ta cible'
+    +(s.trop_court?' ; '+s.trop_court+' trop courte'+(s.trop_court>1?'s':''):'')
+    +(s.sur_etirement?' ; '+s.sur_etirement+' au-delà':'')+'.';
+  try{ enregistrerControleAmplitude(_ml.email,k.x.nom,s); }catch(e){}
+  return mlCarteTexte(t);
 }
