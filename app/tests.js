@@ -73783,6 +73783,97 @@ async function testExercices(){
           if(!/Sources : pied : mètre/.test(c.textContent)) return _echec('coach sans sources : '+c.textContent);
           return (/id="tc-schema"/.test(_prodSrc())&&/_htmlPourquoiExo\(ex\)/.test(_prodSrc()))||_echec('écrans non branchés');})());
       }
+      // ══ LOT TA1 — TESTS ARTICULAIRES : seuils, photo illisible, absence ══
+      {
+        const _taBras=(dev,vis,devD)=>{
+          const P=Array.from({length:33},()=>({x:0,y:0,v:0}));
+          const pose=(e,c,w,x0,d,sens)=>{ P[e]={x:x0,y:100,v:vis}; P[c]={x:x0,y:300,v:vis};
+            P[w]={x:x0+sens*200*Math.sin(d*Math.PI/180),y:300+200*Math.cos(d*Math.PI/180),v:vis}; };
+          pose(11,13,15,100,dev,-1); pose(12,14,16,400,devD==null?dev:devD,1);
+          return P;
+        };
+        const _taJambes=(ecart,vis)=>{
+          const P=Array.from({length:33},()=>({x:0,y:0,v:0}));
+          const kx=40, ax=kx+ecart*800/2;
+          P[23]={x:500-ax,y:0,v:vis}; P[24]={x:500+ax,y:0,v:vis};
+          P[25]={x:500-kx,y:400,v:vis}; P[26]={x:500+kx,y:400,v:vis};
+          P[27]={x:500-ax,y:800,v:vis}; P[28]={x:500+ax,y:800,v:vis};
+          return P;
+        };
+        ok('TA1 — MORPHO_TESTS_ARTIC : quatre tests gelés, deux photos, deux réponses guidées',(()=>{
+          if(!Object.isFrozen(MORPHO_TESTS_ARTIC)||MORPHO_TESTS_ARTIC.map(t=>t.cle).join()!=='valgus_coude,rotation_avantbras,genoux,bassin') return _echec('liste');
+          if(MORPHO_TESTS_ARTIC.map(t=>t.source).join()!=='photo,declare,photo,declare') return _echec('sources');
+          return MORPHO_TESTS_ARTIC.every(t=>Object.isFrozen(t))||_echec('entrée non gelée');})());
+        ok('TA1 — coude : 15,0° dans la moyenne, 15,1° marqué → barre EZ ou haltères',(()=>{
+          const a=testValgusCoude(_taBras(15.0,0.9)), b=testValgusCoude(_taBras(15.1,0.9));
+          if(a.resultat!=='normal'||a.valeur!==15||a.consequences.length) return _echec(JSON.stringify(a));
+          if(b.resultat!=='marque'||b.valeur!==15.1) return _echec(JSON.stringify(b));
+          if(b.consequences.map(c=>c.id).join()!=='ez_curl,ez_tirage_v,ez_tirage_h'||!b.consequences.every(c=>c.type==='materiel')) return _echec('conséquences');
+          const p=testValgusCoude(_taBras(60,0.9));
+          if(p.resultat!=='a_refaire'||!/plié/.test(p.raison)) return _echec('bras plié : '+JSON.stringify(p));
+          const un=testValgusCoude(_taBras(20,0.9,null).map((q,i)=>(i===12||i===14||i===16)?Object.assign({},q,{v:0.2}):q));
+          return (un.resultat==='marque'&&un.confiance<MORPHO_CONF.photo)||_echec('un seul côté lisible : '+JSON.stringify(un));})());
+        ok('TA1 — photo de mauvaise qualité (visibilité < 0,5) : « à refaire », aucune conséquence, rien d’enregistré',(()=>{
+          for(const r of [testValgusCoude(_taBras(25,0.49)),testGenoux(_taJambes(0.1,0.49)),testValgusCoude([]),testGenoux(null)]){
+            if(r.resultat!=='a_refaire'||r.valeur!==null||r.consequences.length||r.confiance!==0) return _echec(JSON.stringify(r));
+            if(entreeTestArtic('genoux',r)!==null) return _echec('un « à refaire » s’enregistre');
+          }
+          return true;})());
+        ok('TA1 — genoux : seuils de travail exacts, valgum → pointes légèrement ouvertes',(()=>{
+          const c=e=>testGenoux(_taJambes(e,0.9));
+          const got=[c(0.04).resultat,c(0.039).resultat,c(-0.099).resultat,c(-0.10).resultat].join();
+          if(got!=='valgum,neutre,neutre,varum') return _echec(got);
+          const v=c(0.06);
+          if(v.consequences.map(x=>x.exerciceSchema).join()!=='squat,fente'||!v.consequences.every(x=>x.type==='pieds')) return _echec(JSON.stringify(v.consequences));
+          return c(-0.2).consequences.length===0||_echec('varum : conséquence inventée');})());
+        ok('TA1 — avant-bras et bassin : réponses guidées, et une réponse manquante n’est pas un résultat',(()=>{
+          const r=(s,p)=>testRotationAvantbras({sup:s,pro:p}).resultat;
+          if([r('oui','non'),r('non','oui'),r('oui','oui'),r('non','non'),r('oui','')].join()!=='hyper_supinateur,hyper_pronateur,neutre,neutre,a_refaire') return _echec('rotation');
+          if(testRotationAvantbras({sup:'oui',pro:'non'}).consequences.length) return _echec('barre droite refusée à l’hyper-supinateur');
+          if(!testRotationAvantbras({sup:'non',pro:'non'}).consequences.some(c=>c.id==='ez_curl')) return _echec('neutre sans conséquence');
+          const b=m=>testBassin({main:m});
+          if([b('large').resultat,b('plat').resultat,b('non').resultat,b('').resultat].join()!=='anteversion,neutre,retroversion,a_refaire') return _echec('bassin');
+          if(!b('large').consequences.some(c=>c.type==='priorite'&&/fléchisseurs/.test(c.texte))||!b('non').consequences.some(c=>/ischios/.test(c.texte))) return _echec('priorités');
+          return b('plat').consequences.length===0||_echec('neutre avec conséquence');})());
+        ok('TA1 — les conséquences passent par morphoPourExercice, exercice par exercice',(()=>{
+          const now=Date.now();
+          const u={id:'ta',bilans:[],morpho:{artic:{valgus_coude:{date:now,resultat:'marque',valeur:18,source:'photo'},
+            rotation_avantbras:{date:now,resultat:'neutre',source:'declare'},genoux:{date:now,resultat:'valgum',valeur:0.06,source:'photo'}}}};
+          const c=n=>morphoPourExercice(u,{name:n}).consequences.map(x=>x.id).join();
+          if(c('CURL BARRE')!=='ez_curl') return _echec('curl barre : '+c('CURL BARRE'));
+          if(c('CURL HALTERES SUR BANC')!=='') return _echec('curl haltères visé');
+          if(c('TIRAGE POITRINE SUPINATION')!=='ez_tirage_v'||c('TIRAGE POITRINE LARGE')!=='') return _echec('tirage');
+          if(c('SQUAT')!=='pieds_squat'||c('DEVELOPPE COUCHE BARRE')!=='') return _echec('squat / développé');
+          // Le coach désactive : la conséquence disparaît de la consigne.
+          u.morpho.artic.valgus_coude.off={ez_curl:true}; u.morpho.artic.rotation_avantbras.off={ez_curl:true};
+          if(c('CURL BARRE')!=='') return _echec('conséquence désactivée encore présente');
+          const d=document.createElement('div'); d.innerHTML=htmlArticCoach(u);
+          const cb=d.querySelector('input[data-id="ez_curl"]');
+          if(!cb||cb.checked||cb.getAttribute('onchange')!=='basculerConsequenceArtic(this)') return _echec('interrupteur coach');
+          return d.querySelectorAll('input[type=checkbox]').length===8||_echec(d.querySelectorAll('input[type=checkbox]').length+' interrupteurs');})());
+        ok('TA1 — absence de test : aucune conséquence, nulle part',(()=>{
+          const u={id:'tv',bilans:[]};
+          if(Object.keys(testsArticDe(u)).length) return _echec('tests inventés');
+          if(morphoPourExercice(u,{name:'CURL BARRE'}).consequences.length||consequencesArticPourExercice(u,{name:'SQUAT'}).length) return _echec('conséquence sans test');
+          if(htmlArticCoach(u)!=='') return _echec('cadre vide côté coach');
+          const sU=currentUser;
+          try{ currentUser=u; if(/Pour ton confort/.test(_htmlConsigneExo({name:'CURL BARRE',description:'x'}))) return _echec('consigne sans test'); }
+          finally{ currentUser=sU; }
+          return true;})());
+        ok('TA1 — consigne athlète : confort et matériel, jamais de diagnostic',(()=>{
+          const sU=currentUser;
+          let h='';
+          try{
+            currentUser={id:'ta2',bilans:[],morpho:{artic:{valgus_coude:{date:Date.now(),resultat:'marque',valeur:18,source:'photo'}}}};
+            h=_htmlConsigneExo({name:'CURL BARRE'});
+          } finally { currentUser=sU; }
+          if(!/Pour ton confort/.test(h)||!/Barre EZ ou haltères/.test(h)) return _echec('consigne : '+h);
+          const tous=[];
+          for(const k in ARTIC_CONSEQUENCES) for(const r in ARTIC_CONSEQUENCES[k]) ARTIC_CONSEQUENCES[k][r].forEach(c=>tous.push(c.texte));
+          const txt=tous.join(' ')+' '+htmlTestsArtic({morpho:{artic:{genoux:{date:1,resultat:'valgum',source:'photo'}}}});
+          if(/valgus|valgum|varum|pathologi|diagnostic|anomalie|déformation|défaut|guéri|soign|corrig/i.test(txt.replace(/data-cle="[^"]*"|id="ta-[^"]*"/g,''))) return _echec('un mot de diagnostic côté athlète');
+          return (/"artic"\s*:/.test(String(window._RC_RULES||''))&&/id="ta-cartes"/.test(_prodSrc()))||_echec('règle ou écran absents');})());
+      }
       okA('TC1 — MOTION LAB : un squat de profil filmé, trois répétitions, le tronc lu au point bas',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof mlMesuresCompat!=='function'||typeof mlRepsCompat!=='function') return _echec('fonctions absentes');

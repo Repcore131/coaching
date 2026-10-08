@@ -16268,3 +16268,21 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .sc-pourquoi{display:block;width:100%;min-height:44px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);
   border-radius:var(--r-2);background:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);
   font-weight:700;text-align:left;cursor:pointer}
+/* ══ LOT TA1 — TESTS ARTICULAIRES ══ */
+.ta-titre-sec{margin:18px 0 10px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.ta-schema .ta-ok{stroke:var(--text)}
+.ta-schema .ta-mk{stroke:var(--red)}
+.ta-schema .ta-axe{stroke:var(--sub);stroke-width:2;stroke-dasharray:5 5}
+.ta-schema text{fill:var(--sub);stroke:none;font-family:Montserrat,sans-serif;font-size:11px}
+.ta-form{margin-top:10px}
+.ta-q{border:0;margin:0 0 10px;padding:0}
+.ta-q legend{font-size:var(--fs-sm);color:var(--text);line-height:1.5;margin-bottom:6px;padding:0}
+.ta-choix{display:flex;align-items:center;gap:8px;min-height:40px;font-size:var(--fs-sm);color:var(--text);cursor:pointer}
+.ta-cons{display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:var(--fs-sm);color:var(--text);line-height:1.5;cursor:pointer}
+.ta-cons input{margin-top:4px}
+.ta-off{color:var(--text-faint);text-decoration:line-through}
+/* Les libellés de case et de choix gardent la casse et l'alignement du texte :
+   le style global des <label> (majuscules, centrage) ne s'y applique pas. */
+label.ta-cons,label.ta-choix{display:flex;justify-content:flex-start;width:auto;text-align:left;text-transform:none;
+  letter-spacing:normal;font-weight:500;margin:6px 0 0;padding:0}
+label.ta-cons input,label.ta-choix input{flex:none;width:auto;min-height:0;margin:3px 0 0}

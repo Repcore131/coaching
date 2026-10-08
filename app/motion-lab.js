@@ -12606,6 +12606,27 @@ function mlMorphoPixels(p,w,h){
  * @returns {Promise<{ok:boolean, code?:string, prise?:any, rapports?:any[], pixels?:any, px?:{w:number,h:number}}>}
  */
 async function mlMorphoPhoto(src){
+  const r=await _mlPointsImage(src);
+  if(!r.ok) return {ok:false,code:r.code};
+  const pts=r.pts, w=r.w, h=r.h;
+  const prise=mlMorphoPrise(pts,w,h);
+  // ⚠ LE CONTRÔLE PASSE AVANT LA MESURE. Une photo « à refaire » ne rend
+  //   aucun rapport : mesurer dessus donnerait un chiffre, et un chiffre faux
+  //   est plus difficile à défaire qu'une case vide.
+  if(prise.verdict==='a_refaire') return {ok:true,prise,rapports:[],px:{w,h}};
+  // LES PIXELS VOYAGENT AVEC LES RAPPORTS (lot 7) : sans eux, rc-core ne peut
+  // pas mettre la photo a l'echelle, et il est le seul a savoir avec quoi.
+  return {ok:true,prise,rapports:mlMorphoRapports(pts,w,h),
+    pixels:mlMorphoPixels(pts,w,h),px:{w,h}};
+}
+/**
+ * Les 33 points du moteur de pose sur UNE image, en coordonnées normées
+ * telles que MediaPipe les rend. Partagé par mlMorphoPhoto et, depuis le lot
+ * TA1, par mlPointsPhoto (tests articulaires).
+ * @param {string} src
+ * @returns {Promise<{ok:true, pts:any[], w:number, h:number}|{ok:false, code:string}>}
+ */
+async function _mlPointsImage(src){
   if(!src||typeof src!=='string') return {ok:false,code:'image'};
   let moteur=null;
   try{ moteur=await _mlChargerPose(); }catch(e){ return {ok:false,code:'moteur'}; }
@@ -12632,15 +12653,26 @@ async function mlMorphoPhoto(src){
   });
   const pts=res&&res.poseLandmarks;
   if(!pts||pts.length<33) return {ok:false,code:'personne'};
-  const prise=mlMorphoPrise(pts,w,h);
-  // ⚠ LE CONTRÔLE PASSE AVANT LA MESURE. Une photo « à refaire » ne rend
-  //   aucun rapport : mesurer dessus donnerait un chiffre, et un chiffre faux
-  //   est plus difficile à défaire qu'une case vide.
-  if(prise.verdict==='a_refaire') return {ok:true,prise,rapports:[],px:{w,h}};
-  // LES PIXELS VOYAGENT AVEC LES RAPPORTS (lot 7) : sans eux, rc-core ne peut
-  // pas mettre la photo a l'echelle, et il est le seul a savoir avec quoi.
-  return {ok:true,prise,rapports:mlMorphoRapports(pts,w,h),
-    pixels:mlMorphoPixels(pts,w,h),px:{w,h}};
+  return {ok:true,pts,w,h};
+}
+/**
+ * LOT TA1. Une photo prise par l'athlète (tests articulaires), lue sur
+ * l'appareil : les 33 points EN PIXELS, avec leur visibilité. N'écrit rien,
+ * ne juge rien — rc-core mesure et décide (testValgusCoude, testGenoux).
+ * @param {Blob} fichier
+ * @returns {Promise<{ok:true, points:{x:number, y:number, v:number}[], w:number, h:number}|{ok:false, code:string}>}
+ */
+async function mlPointsPhoto(fichier){
+  if(!fichier||typeof (/** @type {any} */(fichier)).size!=='number') return {ok:false,code:'image'};
+  const url=URL.createObjectURL(fichier);
+  try{
+    const r=await _mlPointsImage(url);
+    if(!r.ok) return {ok:false,code:r.code};
+    return {ok:true,w:r.w,h:r.h,points:r.pts.map((/** @type {any} */ q)=>({x:Number(q.x)*r.w,y:Number(q.y)*r.h,
+      v:Math.max(0,Math.min(1,Number(q.visibility)||0))}))};
+  } finally {
+    try{ URL.revokeObjectURL(url); }catch(e){}
+  }
 }
 
 // ══ L'ANALYSE MORPHO-ANATOMIQUE — LES POINTS ET LE DÉTOURAGE ════════════════

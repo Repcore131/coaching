@@ -174,6 +174,20 @@
               "$autre": { ".validate": false }
             }
           },
+          // LOT TA1 — LES TESTS ARTICULAIRES (coude, avant-bras, genoux,
+          // bassin). Un resultat par test, ecrit par l athlete ; `off` porte
+          // les consequences que le coach a desactivees pour lui.
+          "artic": {
+            "$test": {
+              ".validate": "$test.matches(/^(valgus_coude|rotation_avantbras|genoux|bassin)$/) && newData.hasChildren(['date', 'resultat', 'source'])",
+              "date": { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "resultat": { ".validate": "newData.isString() && newData.val().matches(/^(marque|normal|hyper_supinateur|hyper_pronateur|neutre|valgum|varum|anteversion|retroversion)$/)" },
+              "source": { ".validate": "newData.isString() && newData.val().matches(/^(photo|declare)$/)" },
+              "valeur": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+              "off": { "$id": { ".validate": "$id.matches(/^[a-z_]{1,40}$/) && newData.val() === true" } },
+              "$autre": { ".validate": false }
+            }
+          },
           "$autre": { ".validate": false }
         },
         // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
