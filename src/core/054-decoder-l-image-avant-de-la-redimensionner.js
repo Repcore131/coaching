@@ -293,6 +293,9 @@ function _detourerSignature(f,apres,budgetKo){
   im.src=url;
 }
 function _majImageVitrine(input,id){
+  // Série 6 : depuis « Mes réglages », l'image s'enregistre tout de suite (annulable).
+  const _champ=(_IMG_VITRINE[id]||[])[0], _avant=_champ?currentUser[_champ]:undefined;
+  const _dire=(msg)=>{ let fait=false; try{ fait=reglageCoachImage(input,_champ,_avant); }catch(e){ fait=false; } if(!fait) toast(msg); };
   // La signature est TOUJOURS detouree, quel que soit le format d origine :
   // c est le seul moyen de garantir zero fond sans rien demander au coach.
   const _fs=input.files&&input.files[0];
@@ -305,7 +308,7 @@ function _majImageVitrine(input,id){
     _detourerSignature(_fs,b64=>{
       currentUser[_detour[0]]=b64;
       _apercuVitrine(id,b64);
-      toast(_detour[1]+' : pense à enregistrer');
+      _dire(_detour[1]+' : pense à enregistrer');
     },IMG_BUDGET_KO[_detour[0]]);
     return;
   }
@@ -321,7 +324,7 @@ function _majImageVitrine(input,id){
       _pngRamener(brut,IMG_BUDGET_KO[cfg[0]]||240,b64=>{
         currentUser[cfg[0]]=b64;
         _apercuVitrine(id,b64);
-        toast('Image ajoutée : pense à enregistrer');
+        _dire('Image ajoutée : pense à enregistrer');
       });
     });
     return;
@@ -330,13 +333,23 @@ function _majImageVitrine(input,id){
   _lireImage(input,cfg[1],cfg[2],b64=>{
     currentUser[cfg[0]]=b64;
     _apercuVitrine(id,b64);
-    toast('Image ajoutée : pense à enregistrer');
+    _dire('Image ajoutée : pense à enregistrer');
   });
 }
-function _viderImageVitrine(id){
+async function _viderImageVitrine(id){
   const cfg=_IMG_VITRINE[id]; if(!cfg) return;
+  // Série 6 : depuis « Mes réglages », retirer le logo ou la signature se
+  // confirme, puis s'enregistre (annulable).
+  const _ecran=document.getElementById('s-coach-reglages');
+  const _dans=!!(_ecran&&_ecran.classList.contains('active')&&(cfg[0]==='logo'||cfg[0]==='signature'));
+  const _avant=currentUser[cfg[0]];
+  if(_dans&&_avant){
+    const ok=await rcConfirm(RGX_CONFIRMER_VIDE[cfg[0]]||'Retirer cette image ?','Tu pourras en remettre une à tout moment.','Retirer','Garder');
+    if(!ok) return;
+  }
   currentUser[cfg[0]]='';
   _apercuVitrine(id,'');
+  if(_dans&&_avant){ try{ reglageCoachImage(_ecran,cfg[0],_avant); }catch(e){} }
 }
 function ajouterDiplomeRow(titre,image){
   const z=document.getElementById('coach-diplomes-liste');
@@ -826,7 +839,7 @@ function addCoachBannerRow(imageUrl, linkUrl){
     :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:var(--r-1);font-size:var(--fs-xs);color:var(--text-dim)">Ajouter une photo</div>`;
   row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:1px">BANNIÈRE ${n}</span>
-    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">${icon('croix',14)}</button>
+    <button onclick="this.closest('.banner-row').remove();if(this.isConnected===false&&document.getElementById('s-coach-reglages'))reglageCoachBannieres()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;line-height:1">${icon('croix',14)}</button>
   </div>
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>

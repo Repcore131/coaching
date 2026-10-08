@@ -83,6 +83,7 @@ def fixtures(vide=False):
 
 # ── Les écrans : (id de capture, persona, expression qui l'ouvre) ───────────
 ECRANS = [
+    ('s-coach-reglages', 'coach', "ouvrirMesReglages()"),
     ('s-client-home', 'ath', "clientTab('home')"),
     ('s-bilan-choice', 'ath', "clientTab('bilan')"),
     ('s-nutrition', 'ath', "clientTab('nutrition')"),

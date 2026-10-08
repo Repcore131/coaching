@@ -167,9 +167,15 @@ function htmlReglagesCoach(coach){
         +d.choix.map(x=>_rgOpt(x,x+d.unite,x===v)).join('')+'</select>',
       d.defaut+d.unite,(r.seuils||{})[k]!=null);
   }).join('');
+  // Série 6, lot 1 : les lignes sont aussi rangées une à une dans « Mes réglages ».
+  _rgDernieresLignes={cadence,modele,formule,pasKcal,signature,calme,seuils};
   return '<div class="rg">'+cadence+modele+formule+pasKcal+signature+calme+seuils
-    +'<p class="bcad-d">Ces réglages valent pour les athlètes et les codes créés à partir de maintenant. Les dossiers existants ne changent pas, et aucun réglage n’efface une donnée d’athlète. Les réglages propres à un athlète restent sur sa fiche.</p></div>';
+    +'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p></div>';
 }
+const RG_NOTE_EXISTANTS='Ces réglages valent pour les athlètes et les codes créés à partir de maintenant. Les dossiers existants ne changent pas, et aucun réglage n’efface une donnée d’athlète. Les réglages propres à un athlète restent sur sa fiche.';
+let _rgDernieresLignes=null;
+// PURE (rend les lignes de htmlReglagesCoach, une par réglage).
+function lignesReglagesCoach(coach){ htmlReglagesCoach(coach); return Object.assign({},_rgDernieresLignes||{}); }
 function ouvrirReglagesCoach(){
   const c=_rgCoach();
   if(!c) return false;
@@ -184,6 +190,7 @@ function ouvrirReglagesCoach(){
 function _rgRepeindre(){
   const z=document.getElementById('rg-corps');
   if(z){ const c=_rgCoach(); if(c) z.innerHTML=htmlReglagesCoach(c); }
+  try{ _rgxRendre(); }catch(e){}
 }
 // Le miroir des heures calmes : le Worker lit pushPrefs (une lecture qu'il
 // fait déjà avant chaque push), pas reglagesCoach.
@@ -442,3 +449,201 @@ function athletesSuivis(liste){
 }
 function nbAthletesSuivis(liste){ return athletesSuivis(liste).length; }
 function texteTuSuis(n){ return 'Tu suis '+n+' athlète'+(n>1?'s':'')+'.'; }
+
+// ══ MES RÉGLAGES (série 6, lot 1) ══════════════════════════════════════════
+//
+// UN SEUL ÉCRAN, s-coach-reglages, six sections <details> repliées :
+//   identite · defauts · bilans · messages · affichage · aide.
+// Les blocs de l'onglet PROFIL y ont été DÉPLACÉS tels quels (mêmes id, mêmes
+// fonctions de remplissage) ; ils s'enregistrent à la SORTIE DU CHAMP :
+//   reglageCoachEcrire(chemin, valeur) — l'écrivain des champs simples ;
+//   reglageCoachBloc(cles, fn)          — un bloc historique (saveCoachDispo…)
+//                                          rejoué sous capture, puis annulable.
+// Dans les deux cas : « Enregistré ✓ — Annuler » pendant 10 s, et la perte de
+// réseau est dite par toastSync (via toastSyncAnnulable). Les fonctions
+// historiques restent les points d'entrée internes.
+const RGX_SECTIONS=Object.freeze(['identite','defauts','bilans','messages','affichage','aide']);
+const RGX_ANNULER_MS=10000;
+const RGX_BROUILLON_CLE='rc_rgx_brouillon';
+function _rgxCopie(v){ try{ return v===undefined?undefined:JSON.parse(JSON.stringify(v)); }catch(e){ return v; } }
+function _rgxLire(o,chemin){ return String(chemin).split('.').reduce((x,k)=>(x&&typeof x==='object')?x[k]:undefined,o); }
+function _rgxPoser(o,chemin,v){
+  const ks=String(chemin).split('.'); let x=o;
+  for(let i=0;i<ks.length-1;i++){ if(!x[ks[i]]||typeof x[ks[i]]!=='object') x[ks[i]]={}; x=x[ks[i]]; }
+  const k=ks[ks.length-1];
+  if(v===undefined||v===null) delete x[k]; else x[k]=v;
+}
+function _rgxPousser(){
+  let p=null;
+  try{ p=CLOUD.pushProfilCoach(currentUser); }catch(e){ p=Promise.reject(e); }
+  return p;
+}
+// L'ÉCRIVAIN DES CHAMPS SIMPLES. Rend la promesse du toast.
+function reglageCoachEcrire(chemin,valeur,o){
+  const u=_rgCoach(); if(!u||!chemin) return null;
+  const avant=_rgxCopie(_rgxLire(u,chemin));
+  _rgxPoser(u,chemin,_rgxCopie(valeur));
+  let ok=false; try{ ok=saveUser(); }catch(e){ rcErreurMuette('reglageCoachEcrire',e); }
+  const defaire=()=>{ _rgxPoser(u,chemin,avant); try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){}
+    try{ _rgxRemplir(); }catch(e){} try{ (o&&o.apresAnnuler||(()=>{}))(); }catch(e){} };
+  try{ _rgxResumes(); }catch(e){}
+  return toastSyncAnnulable(ok,_rgxPousser(),'Enregistré '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+}
+// UN BLOC HISTORIQUE : `fn` écrit (saveCoachDispo, saveCoachBanners…). Son
+// propre toast est capturé : le seul message est « Enregistré — Annuler »,
+// et seulement si quelque chose a réellement changé.
+function reglageCoachBloc(cles,fn){
+  const u=_rgCoach(); if(!u) return null;
+  const avant={}; cles.forEach(k=>{ avant[k]=_rgxCopie(u[k]); });
+  const _ts=window.toastSync, _te=window.toastEcriture;
+  let capte=null;
+  window.toastSync=(ok,pr)=>{ capte={ok,pr}; return Promise.resolve(pr).catch(()=>{}); };
+  window.toastEcriture=(ok)=>{ capte=capte||{ok,pr:Promise.resolve()}; return ok; };
+  try{ fn(); }catch(e){ rcErreurMuette('reglageCoachBloc',e); }
+  finally{ window.toastSync=_ts; window.toastEcriture=_te; }
+  const change=cles.some(k=>JSON.stringify(u[k])!==JSON.stringify(avant[k]));
+  try{ _rgxResumes(); }catch(e){}
+  if(!change||!capte) return null;
+  const defaire=()=>{ cles.forEach(k=>{ if(avant[k]===undefined) delete u[k]; else u[k]=avant[k]; });
+    try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){} try{ _rgxRemplir(); }catch(e){} };
+  return toastSyncAnnulable(capte.ok,capte.pr,'Enregistré '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+}
+// UN TEXTE DU PROFIL (nom de team, accroche). Vider un nom qui existait
+// demande confirmation : la chaîne vide, poussée, effacerait la valeur des
+// autres appareils.
+const RGX_CONFIRMER_VIDE=Object.freeze({teamName:'Effacer le nom de ta team ?',logo:'Retirer ton logo ?',signature:'Retirer ta signature ?'});
+async function reglageCoachTexte(cle,el){
+  const u=_rgCoach(); if(!u||!el) return null;
+  const v=String(el.value||'').trim();
+  const avant=String(u[cle]||'');
+  _rgxBrouillonOublier(el.id);
+  if(v===avant) return null;
+  if(!v&&avant&&RGX_CONFIRMER_VIDE[cle]){
+    const ok=await rcConfirm(RGX_CONFIRMER_VIDE[cle],'« '+avant+' » ne sera plus affiché à tes athlètes.','Effacer','Garder');
+    if(!ok){ el.value=avant; return null; }
+  }
+  return reglageCoachEcrire(cle,v);
+}
+function reglageCoachDispo(){
+  // Une absence cochée attend sa date de fin : on n'enregistre pas à moitié.
+  const abs=document.getElementById('coach-dispo-abs'), au=document.getElementById('coach-dispo-au');
+  if(abs&&abs.checked&&au&&!au.value) return null;
+  return reglageCoachBloc(['dispo'],saveCoachDispo);
+}
+function reglageCoachBannieres(){ return reglageCoachBloc(['promoBanners'],saveCoachBanners); }
+function reglageCoachTelephone(){
+  const el=document.getElementById('coach-phone-input');
+  if(el&&!String(el.value||'').trim()) return null;
+  return reglageCoachBloc(['phone'],saveCoachPhone);
+}
+let _rgxMarqueT=0;
+function reglageCoachMarque(){
+  clearTimeout(_rgxMarqueT);
+  _rgxMarqueT=setTimeout(()=>{ try{ mqEnregistrer(); }catch(e){ rcErreurMuette('reglageCoachMarque',e); } },600);
+}
+// UNE IMAGE (logo, signature) posée depuis Mes réglages : enregistrée tout de
+// suite, annulable. Rend false hors de l'écran (l'appelant garde son toast).
+function reglageCoachImage(input,champ,avant){
+  if(!input||!input.closest||!input.closest('#s-coach-reglages')) return false;
+  const u=_rgCoach(); if(!u) return false;
+  let ok=false; try{ ok=saveUser(); }catch(e){}
+  const defaire=()=>{ u[champ]=avant||''; try{ saveUser(); }catch(e){} try{ _rgxPousser(); }catch(e){} try{ _rgxRemplir(); }catch(e){} };
+  try{ _rgxResumes(); }catch(e){}
+  toastSyncAnnulable(ok,_rgxPousser(),'Enregistré '+ICO.coche,'le réglage est',defaire,RGX_ANNULER_MS);
+  return true;
+}
+// LE BROUILLON : un rechargement au milieu d'une saisie ne perd rien.
+function _rgxBrouillon(){ try{ const o=JSON.parse(localStorage.getItem(RGX_BROUILLON_CLE)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+function _rgxBrouillonNoter(el){
+  if(!el||!el.id||el.type==='file'||el.type==='checkbox') return;
+  const b=_rgxBrouillon(); b[el.id]=String(el.value||'').slice(0,1200);
+  try{ localStorage.setItem(RGX_BROUILLON_CLE,JSON.stringify(b)); }catch(e){}
+}
+function _rgxBrouillonOublier(id){
+  const b=_rgxBrouillon(); if(!(id in b)) return;
+  delete b[id]; try{ localStorage.setItem(RGX_BROUILLON_CLE,JSON.stringify(b)); }catch(e){}
+}
+function _rgxBrouillonRestaurer(){
+  const b=_rgxBrouillon();
+  Object.keys(b).forEach(id=>{ const el=document.getElementById(id); if(el&&el.closest&&el.closest('#s-coach-reglages')&&el.value!==b[id]) el.value=b[id]; });
+}
+try{
+  document.addEventListener('input',e=>{ const t=e.target; if(t&&t.closest&&t.closest('#s-coach-reglages')&&/^(INPUT|TEXTAREA)$/.test(t.tagName)) _rgxBrouillonNoter(t); },true);
+  document.addEventListener('change',e=>{ const t=e.target; if(t&&t.id&&t.closest&&t.closest('#s-coach-reglages')) setTimeout(()=>_rgxBrouillonOublier(t.id),0); },true);
+}catch(e){}
+
+// ── LES RÉSUMÉS D'UNE LIGNE ───────────────────────────────────────────────
+// PURE. Le résumé de chaque section, tel qu'il s'affiche dans son titre.
+function resumesReglagesCoach(c){
+  const u=c||{}, r=reglagesDe(u), out={};
+  const nom=String(u.teamName||'').trim();
+  out.identite=(nom||'Nom de team à choisir')+(u.logo?' · logo':'')+(u.catchphrase?' · accroche':'');
+  const mod=reglageModele(u);
+  out.defauts=(mod?'programme de départ':'aucun programme de départ')+' · ±'+reglagePasKcal(u)+' kcal';
+  let cad=null; try{ cad=(typeof window.cadenceEffective==='function')?window.cadenceEffective(null,u):null; }catch(e){ cad=null; }
+  if(!cad){ const x=reglageCadence(u); cad=x?{freq:x.freq,jour:x.jour,questions:[]}:null; }
+  out.bilans=cad?(_RG_FREQ_LIB[cad.freq]||'')+', '+(BILAN_JOURS[cad.jour]||'')+((cad.questions||[]).length?' · '+cad.questions.length+' question'+(cad.questions.length>1?'s':''):''):'au choix de l’athlète';
+  const d=u.dispo&&u.dispo.delaiH;
+  out.messages=(d?'réponse sous '+d+' h':'délai non déclaré')+(r.formules?' · formule perso':'')+(reglageSignature(u)?' · signature':'');
+  const nb=(u.promoBanners||[]).length;
+  out.affichage=nb?nb+' bannière'+(nb>1?'s':''):'aucune bannière';
+  let th=''; try{ th=themeChoisi(); }catch(e){ th=''; }
+  out.aide=th==='clair'?'thème clair':th==='auto'?'thème auto':'thème sombre';
+  return out;
+}
+function _rgxResumes(){
+  const u=_rgCoach(); if(!u) return;
+  const r=resumesReglagesCoach(u);
+  RGX_SECTIONS.forEach(k=>{ const z=document.getElementById('rgx-res-'+k); if(z) z.textContent=r[k]||''; });
+}
+// ── LE RENDU ──────────────────────────────────────────────────────────────
+function _htmlRgxMessages(c,l){
+  return (l.formule||'')+(l.signature||'')
+    +'<div class="rg-l"><div class="rg-t">Modèles de messages</div>'
+      +'<button type="button" class="rb-lien" onclick="ouvrirGestionModeles()">Gérer mes modèles</button></div>'
+    +'<div class="rg-l"><div class="rg-t">Relances automatiques</div>'
+      +'<div class="rg-o"><span id="rgx-relances-res">'+escapeHtml(_rgxResumeRelances(c))+'</span>'
+      +'<button type="button" class="rb-lien" onclick="ouvrirRelances()">Ouvrir</button></div></div>'
+    +(l.calme||'')+(l.seuils||'');
+}
+function _rgxResumeRelances(c){
+  try{
+    if(relancesEnPause(c)) return 'en pause';
+    const r=relancesRegles(c); const n=RELANCE_SIGNAUX.filter(s=>r[s].actif).length;
+    return n?n+' règle'+(n>1?'s':'')+' allumée'+(n>1?'s':''):'coupées';
+  }catch(e){ return ''; }
+}
+function _rgxRendre(){
+  const u=_rgCoach(); if(!u||!document.getElementById('s-coach-reglages')) return false;
+  const l=lignesReglagesCoach(u);
+  const pose=(id,h)=>{ const z=document.getElementById(id); if(z) z.innerHTML=h; };
+  pose('rgx-defauts',(l.modele||'')+(l.pasKcal||'')+'<p class="bcad-d">'+RG_NOTE_EXISTANTS+'</p>');
+  pose('rgx-bilans',(l.cadence||''));
+  pose('rgx-messages',_htmlRgxMessages(u,l));
+  const aff=document.getElementById('rgx-affichage');
+  if(aff&&!aff.firstChild) aff.innerHTML='<p class="prf-sub">Les bannières s’affichent en bas de l’accueil de tes athlètes.</p>';
+  _rgxResumes();
+  return true;
+}
+// Ce que remplissait l'onglet PROFIL (les mêmes id), puis le brouillon.
+function _rgxRemplir(){
+  try{ loadMonetisationTab(); }catch(e){}
+  try{ renderMarqueCoach(); }catch(e){}
+  try{ rendrePrefsAide(); }catch(e){}
+  try{ _rgxRendre(); }catch(e){}
+  try{ _rgxBrouillonRestaurer(); }catch(e){}
+}
+let _rgxRetour='s-coach-home';
+function ouvrirMesReglages(section){
+  const u=_rgCoach(); if(!u) return false;
+  const act=(document.querySelector('.screen.active')||{}).id;
+  if(act&&act!=='s-coach-reglages') _rgxRetour=act;
+  go('s-coach-reglages');
+  _rgxRemplir();
+  if(section){ const d=document.getElementById('rgx-s-'+section); if(d) d.open=true; }
+  return true;
+}
+function fermerMesReglages(){
+  go(_rgxRetour||'s-coach-home');
+  if(_rgxRetour==='s-coach-home'){ try{ coachTab('profil'); }catch(e){} }
+}

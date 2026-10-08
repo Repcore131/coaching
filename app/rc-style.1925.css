@@ -13723,3 +13723,11 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:8px 12px;background:var(--dark,#0c0c0c);color:var(--text);
   border:1px solid var(--border);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700}
 .r-langue-coach select.rc-langue{width:100%;max-width:none}
+/* SÉRIE 6, LOT 1 — « Mes réglages » : six sections repliées, un résumé par titre. */
+.rgx-s{padding:0 16px;margin-bottom:12px}
+.rgx-t{list-style:none;cursor:pointer;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:56px;padding:10px 0}
+.rgx-t::-webkit-details-marker{display:none}
+.rgx-t .prf-t{margin:0}
+.rgx-res{font-size:var(--fs-xs);color:var(--sub);line-height:1.4;min-height:1em}
+.rgx-c{padding:4px 0 16px;border-top:1px solid var(--border)}
+.rgx-c>div:first-child{margin-top:12px}

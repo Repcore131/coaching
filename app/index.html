@@ -47,7 +47,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1924';
+window.RC_BUILD='1925';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-08';
@@ -757,13 +757,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1924.css">
+<link rel="stylesheet" href="./rc-style.1925.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1924.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1925.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -1816,6 +1816,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
+        <button type="button" onclick="ouvrirMesReglages()" aria-label="Mes réglages" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">Réglages</button>
         <button onclick="ouvrirComptes()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte"><span data-ico="echange" data-taille="14" aria-hidden="true"></span></button>
         <button class="hv-code" onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:background var(--t-1)">CODE</button>
         <button class="hv-texte" onclick="logout()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:color var(--t-1)">&#8592;</button>
@@ -2149,22 +2150,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- 🏷️ Identité coach / team -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
           <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Identité de la team</div>
-          <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
-            <label style="cursor:pointer;flex-shrink:0">
-              <div id="coach-photo-circle" style="width:72px;height:72px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:28px;height:28px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-              <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;letter-spacing:1px">PHOTO</div>
-              <input type="file" accept="image/*" style="display:none" onchange="uploadCoachPhoto(this)">
-            </label>
-            <div style="flex:1;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Photo du coach<br>visible par tes athlètes sur leur accueil</div>
-          </div>
-          <div style="margin-bottom:10px">
-            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Nom de la team</label>
-            <input id="coach-team-name" type="text" placeholder="ex: TEAM RIPPED" maxlength="40" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
-          </div>
-          <div style="margin-bottom:14px">
-            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Phrase d'accroche</label>
-            <input id="coach-catchphrase" type="text" placeholder="ex: Chaque rep compte. Chaque jour compte." maxlength="100" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
-          </div>
           <!-- VITRINE. Ce que l athlete lit en touchant la carte de son coach.
      Les images sont des URL, comme les bannieres promo : cette tranche ne
      tranche pas la question du televersement. Une signature gagne a etre
@@ -2198,39 +2183,6 @@ const COACH_PHOTO='icons/coach.jpg';
   <button type="button" onclick="_viderImageVitrine('coach-photo-vitrine')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
 </div>
-<div style="margin-bottom:16px">
-<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Signature</label>
-<div style="display:flex;gap:12px;align-items:center">
-  <div id="coach-signature-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
-  <div style="flex:1;min-width:0">
-    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
-      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-signature')">
-    </label>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Un PNG à fond transparent rend mieux sur le fond sombre.</div>
-  </div>
-  <button type="button" onclick="_viderImageVitrine('coach-signature')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
-</div>
-</div>
-<!-- LE LOGO. Il ne remplace pas la signature : il a un autre emploi, et c'est
-     le seul endroit de l app ou une image du coach sort de l app. Quand un
-     athlete telecharge sa seance en image, c est ce logo qui la signe. Sans
-     logo, la signature prend sa place — et sans l une ni l autre, l image
-     sort sans marque, ce qui reste correct. -->
-<div style="margin-bottom:16px">
-<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Logo</label>
-<div style="display:flex;gap:12px;align-items:center">
-  <div id="coach-logo-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
-  <div style="flex:1;min-width:0">
-    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
-      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-logo')">
-    </label>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Il signe l’image que tes athlètes téléchargent après leur séance. Sans logo, c’est ta signature qui est utilisée.</div>
-  </div>
-  <button type="button" onclick="_viderImageVitrine('coach-logo')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
-</div>
-</div>
-<!-- LOT M1 : la marque dans l’app des athlètes (palier Pro), rendue par renderMarqueCoach. -->
-<div id="coach-marque"></div>
 <!-- CARTE PRO ET DIPLOMES. Facultatifs, et retirables : vider le champ
      retire le document du profil public a la sauvegarde suivante.
      Ce sont des documents personnels publies a tes athletes rattaches —
@@ -2256,71 +2208,11 @@ const COACH_PHOTO='icons/coach.jpg';
 <button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:var(--text-strong);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
 <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">Enregistrer</button>
         </div>
-        <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
-             de delai reel, lui, ne quitte jamais cet ecran. -->
-        <div class="card" style="margin-bottom:14px">
-          <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Disponibilité</label>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Ce que tes athlètes liront juste avant de t'écrire. Tant que tu n'as rien déclaré, rien ne s'affiche chez eux.</div>
-          <label style="font-size:var(--fs-xs);color:var(--text-strong);display:block;margin-bottom:6px">Délai de réponse habituel (heures)</label>
-          <input id="coach-dispo-delai" type="number" min="1" max="168" placeholder="24" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box;margin-bottom:8px">
-          <div id="coach-dispo-apercu" style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px"></div>
-          <div style="border-top:1px solid var(--border);padding-top:12px">
-            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
-              <input type="checkbox" id="coach-dispo-abs" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
-              <span style="font-size:var(--fs-sm);color:var(--text-strong)">Je suis absent</span>
-            </label>
-            <div style="display:flex;gap:8px;margin-bottom:8px">
-              <div style="flex:1"><label style="font-size:var(--fs-2xs);color:var(--sub);display:block;margin-bottom:4px">Du</label>
-                <input id="coach-dispo-du" type="date" style="width:100%;font-size:var(--fs-md);padding:10px 10px;box-sizing:border-box"></div>
-              <div style="flex:1"><label style="font-size:var(--fs-2xs);color:var(--sub);display:block;margin-bottom:4px">Au (obligatoire)</label>
-                <input id="coach-dispo-au" type="date" style="width:100%;font-size:var(--fs-md);padding:10px 10px;box-sizing:border-box"></div>
-            </div>
-            <input id="coach-dispo-msg" type="text" maxlength="140" placeholder="Message affiché à tes athlètes (facultatif)" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
-            <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une date de fin est obligatoire, 90 jours au plus. L'absence s'éteint toute seule : tu n'as rien à décocher au retour. Elle n'empêche jamais un athlète de t'écrire.</div>
-          </div>
-          <button onclick="saveCoachDispo()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;margin-top:12px">Enregistrer</button>
-          <div id="coach-dispo-median" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
-        </div>
 
-        <!-- 🖼️ Bannières publicitaires -->
-        <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
-          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
-          <div id="coach-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
-          <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:var(--r-1);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
-          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">Enregistrer</button>
-        </div>
 
-        <!-- 📱 WhatsApp coach -->
-        <div style="background:#071a07;border:1px solid #1a3a1a;border-radius:var(--r-4);padding:20px;margin-bottom:20px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-            <div style="width:36px;height:36px;background:#0a2a0a;border-radius:var(--r-2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg></div>
-            <div>
-              <div style="font-weight:800;font-size:var(--fs-md)">Contact WhatsApp</div>
-              <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Bouton visible par tes athlètes sur leur accueil</div>
-            </div>
-          </div>
-          <div id="coach-contact-modes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
-          <div id="coach-contact-wa" style="display:none">
-            <div style="display:flex;gap:8px;margin-bottom:8px">
-              <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:var(--fs-md);padding:12px 14px">
-              <button onclick="saveCoachPhone()" style="background:var(--green);border:none;color:#000;border-radius:var(--r-1);padding:12px 20px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">Enregistrer</button>
-            </div>
-            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px">
-              <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
-              <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
-            </label>
-            <input id="coach-contact-horaires" type="text" placeholder="Mes horaires de réponse (facultatif)" maxlength="200" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:8px" oninput="saveHorairesContact(this.value)">
-            <div id="coach-contact-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px"></div>
-          </div>
-          <div id="coach-phone-preview" style="font-size:var(--fs-xs);color:var(--sub)"></div>
-        </div>
 
-        <!-- REGLAGES DE COACHING (build 1811) : les defauts de travail du coach,
-             ranges dans reglagesCoach (ouvrirReglagesCoach). -->
-        <button type="button" class="rel-entree" onclick="ouvrirReglagesCoach()" style="margin:0 0 20px"><span class="rel-entree-t">Réglages de coaching</span><span class="rel-entree-e">cadence, programme, formule, calories, signature, notifications</span></button>
-        <!-- APPARENCE ET AIDE : rendrePrefsAide (coachTab). -->
-        <div id="ct-prefs"></div>
+        <!-- MES RÉGLAGES (série 6) : identité, défauts, bilans, messages, affichage, aide. -->
+        <button type="button" class="rel-entree" onclick="ouvrirMesReglages()" style="margin:0 0 20px"><span class="rel-entree-t">Mes réglages</span><span class="rel-entree-e">identité, valeurs par défaut, bilans, messages, affichage, aide</span></button>
       </div>
     </div>
 
@@ -6013,6 +5905,159 @@ const COACH_PHOTO='icons/coach.jpg';
   <button type="button" id="rc-ban-non" aria-label="Fermer et ne plus proposer"
     onclick="rcBanniereInstallFermer()"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
 </div>
+<!-- ══════ MES RÉGLAGES (série 6, lot 1) ══════════════════════════════════
+     Tous les réglages GLOBAUX du coach, un seul écran, six sections repliées.
+     Les blocs viennent de l'onglet PROFIL, déplacés tels quels ; ils
+     s'enregistrent à la sortie du champ (reglageCoachEcrire / reglageCoachBloc),
+     avec « Annuler » pendant 10 s. L'onglet PROFIL garde la vitrine publique. -->
+<div id="s-coach-reglages" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-reglages')" aria-label="Retour"><span data-ico="retour" data-taille="20" aria-hidden="true"></span></button>
+    <span class="topbar-title">Mes réglages</span>
+    <span style="width:44px"></span>
+  </div>
+  <div class="pad rgx" id="rgx">
+    <details class="card prf rgx-s" id="rgx-s-identite" data-rgx="identite">
+      <summary class="rgx-t"><span class="prf-t t-carte">Identité et marque</span><span class="rgx-res" id="rgx-res-identite"></span></summary>
+      <div class="rgx-c">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+            <label style="cursor:pointer;flex-shrink:0">
+              <div id="coach-photo-circle" style="width:72px;height:72px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:28px;height:28px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+              <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;letter-spacing:1px">PHOTO</div>
+              <input type="file" accept="image/*" style="display:none" onchange="uploadCoachPhoto(this)">
+            </label>
+            <div style="flex:1;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Photo du coach<br>visible par tes athlètes sur leur accueil</div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Nom de la team</label>
+            <input id="coach-team-name" type="text" onchange="reglageCoachTexte('teamName',this)" placeholder="ex: TEAM RIPPED" maxlength="40" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Phrase d'accroche</label>
+            <input id="coach-catchphrase" type="text" onchange="reglageCoachTexte('catchphrase',this)" placeholder="ex: Chaque rep compte. Chaque jour compte." maxlength="100" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
+          </div>
+<div style="margin-bottom:16px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Signature</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <div id="coach-signature-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
+  <div style="flex:1;min-width:0">
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
+      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-signature')">
+    </label>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Un PNG à fond transparent rend mieux sur le fond sombre.</div>
+  </div>
+  <button type="button" onclick="_viderImageVitrine('coach-signature')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
+</div>
+</div>
+<!-- LE LOGO. Il ne remplace pas la signature : il a un autre emploi, et c'est
+     le seul endroit de l app ou une image du coach sort de l app. Quand un
+     athlete telecharge sa seance en image, c est ce logo qui la signe. Sans
+     logo, la signature prend sa place — et sans l une ni l autre, l image
+     sort sans marque, ce qui reste correct. -->
+<div style="margin-bottom:16px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Logo</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <div id="coach-logo-apercu" style="flex:none;width:64px;height:64px;border-radius:var(--r-3);background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:var(--fs-xl)">+</div>
+  <div style="flex:1;min-width:0">
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
+      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-logo')">
+    </label>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">Il signe l’image que tes athlètes téléchargent après leur séance. Sans logo, c’est ta signature qui est utilisée.</div>
+  </div>
+  <button type="button" onclick="_viderImageVitrine('coach-logo')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer"><span data-ico="croix" data-taille="14" aria-hidden="true"></span></button>
+</div>
+</div>
+<!-- LOT M1 : la marque dans l’app des athlètes (palier Pro), rendue par renderMarqueCoach. -->
+<div id="coach-marque" onchange="reglageCoachMarque()"></div>
+      </div>
+    </details>
+    <details class="card prf rgx-s" id="rgx-s-defauts" data-rgx="defauts">
+      <summary class="rgx-t"><span class="prf-t t-carte">Mes valeurs par défaut</span><span class="rgx-res" id="rgx-res-defauts"></span></summary>
+      <div class="rgx-c">
+          <div id="rgx-defauts"></div>
+      </div>
+    </details>
+    <details class="card prf rgx-s" id="rgx-s-bilans" data-rgx="bilans">
+      <summary class="rgx-t"><span class="prf-t t-carte">Bilans</span><span class="rgx-res" id="rgx-res-bilans"></span></summary>
+      <div class="rgx-c">
+          <div id="rgx-bilans"></div>
+      </div>
+    </details>
+    <details class="card prf rgx-s" id="rgx-s-messages" data-rgx="messages">
+      <summary class="rgx-t"><span class="prf-t t-carte">Messages et relances</span><span class="rgx-res" id="rgx-res-messages"></span></summary>
+      <div class="rgx-c">
+          <div id="rgx-messages"></div>
+        <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
+             de delai reel, lui, ne quitte jamais cet ecran. -->
+        <div class="card" style="margin-bottom:14px">
+          <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Disponibilité</label>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Ce que tes athlètes liront juste avant de t'écrire. Tant que tu n'as rien déclaré, rien ne s'affiche chez eux.</div>
+          <label style="font-size:var(--fs-xs);color:var(--text-strong);display:block;margin-bottom:6px">Délai de réponse habituel (heures)</label>
+          <input id="coach-dispo-delai" type="number" onchange="reglageCoachDispo()" min="1" max="168" placeholder="24" style="width:100%;font-size:var(--fs-lg);padding:12px 14px;box-sizing:border-box;margin-bottom:8px">
+          <div id="coach-dispo-apercu" style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px"></div>
+          <div style="border-top:1px solid var(--border);padding-top:12px">
+            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
+              <input type="checkbox" id="coach-dispo-abs" onchange="reglageCoachDispo()" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+              <span style="font-size:var(--fs-sm);color:var(--text-strong)">Je suis absent</span>
+            </label>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <div style="flex:1"><label style="font-size:var(--fs-2xs);color:var(--sub);display:block;margin-bottom:4px">Du</label>
+                <input id="coach-dispo-du" type="date" onchange="reglageCoachDispo()" style="width:100%;font-size:var(--fs-md);padding:10px 10px;box-sizing:border-box"></div>
+              <div style="flex:1"><label style="font-size:var(--fs-2xs);color:var(--sub);display:block;margin-bottom:4px">Au (obligatoire)</label>
+                <input id="coach-dispo-au" type="date" onchange="reglageCoachDispo()" style="width:100%;font-size:var(--fs-md);padding:10px 10px;box-sizing:border-box"></div>
+            </div>
+            <input id="coach-dispo-msg" type="text" onchange="reglageCoachDispo()" maxlength="140" placeholder="Message affiché à tes athlètes (facultatif)" style="width:100%;font-size:var(--fs-md);padding:12px 14px;box-sizing:border-box">
+            <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une date de fin est obligatoire, 90 jours au plus. L'absence s'éteint toute seule : tu n'as rien à décocher au retour. Elle n'empêche jamais un athlète de t'écrire.</div>
+          </div>
+          <div id="coach-dispo-median" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
+        </div>
+        <!-- 📱 WhatsApp coach -->
+        <div style="background:#071a07;border:1px solid #1a3a1a;border-radius:var(--r-4);padding:20px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:36px;height:36px;background:#0a2a0a;border-radius:var(--r-2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg></div>
+            <div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Contact WhatsApp</div>
+              <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Bouton visible par tes athlètes sur leur accueil</div>
+            </div>
+          </div>
+          <div id="coach-contact-modes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+          <div id="coach-contact-wa" style="display:none">
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input id="coach-phone-input" type="tel" onchange="reglageCoachTelephone()" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:var(--fs-md);padding:12px 14px">
+            </div>
+            <label class="reg-ligne reg-ligne--nue" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px">
+              <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
+              <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
+            </label>
+            <input id="coach-contact-horaires" type="text" placeholder="Mes horaires de réponse (facultatif)" maxlength="200" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:8px" oninput="saveHorairesContact(this.value)">
+            <div id="coach-contact-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px"></div>
+          </div>
+          <div id="coach-phone-preview" style="font-size:var(--fs-xs);color:var(--sub)"></div>
+        </div>
+      </div>
+    </details>
+    <details class="card prf rgx-s" id="rgx-s-affichage" data-rgx="affichage">
+      <summary class="rgx-t"><span class="prf-t t-carte">Ce que voient mes élèves</span><span class="rgx-res" id="rgx-res-affichage"></span></summary>
+      <div class="rgx-c">
+          <div id="rgx-affichage"></div>
+        <!-- 🖼️ Bannières publicitaires -->
+        <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
+          <div id="coach-banners-list" onchange="reglageCoachBannieres()" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+          <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:var(--r-1);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
+        </div>
+      </div>
+    </details>
+    <details class="card prf rgx-s" id="rgx-s-aide" data-rgx="aide">
+      <summary class="rgx-t"><span class="prf-t t-carte">Apparence et aide</span><span class="rgx-res" id="rgx-res-aide"></span></summary>
+      <div class="rgx-c">
+        <!-- APPARENCE ET AIDE : rendrePrefsAide (coachTab). -->
+        <div id="ct-prefs"></div>
+      </div>
+    </details>
+  </div>
+</div>
 <!-- ══════ ACCESS GATE ══════ -->
 <!-- PAS de prefixe s-coach- : go() refuse a tout athlete un ecran ainsi
      nomme (« Acces reserve au coach »), et cette vitrine est faite POUR lui.
@@ -6315,5 +6360,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1924.js"></script>
+<script src="./rc-core.1925.js"></script>
 </body></html>

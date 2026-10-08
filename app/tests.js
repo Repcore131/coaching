@@ -44881,7 +44881,8 @@ async function testExercices(){
     })();
     // ══════ HUIT LOTS DE NAVIGATION COACH — 26/08/2026 ══════════════════
     (()=>{
-      const ECRANS_COACH=['s-coach-home','s-coach-client','s-coach-sessions',
+      // Série 6 : s-coach-reglages (Mes réglages).
+      const ECRANS_COACH=['s-coach-reglages','s-coach-home','s-coach-client','s-coach-sessions',
         's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
         's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
         's-coach-charge','s-coach-banque','s-charges','s-coach-file',
@@ -74577,6 +74578,88 @@ async function testExercices(){
         const li=z.querySelector('.musc-rec-l li');
         return li&&/Squat/.test(li.textContent)&&/100 kg × 5/.test(li.textContent)?true:_echec('dépli : '+(li&&li.textContent));
       }finally{ currentUser=cu; _muscEvoPeriode=av; _muscRecOuvert=null; z.innerHTML=sv; if(cree) z.remove(); }});
+
+    // ══ BUILD 1925 — MES RÉGLAGES : UN SEUL ÉCRAN POUR LE COACH ═══════════════
+    ok('1925 — s-coach-reglages : six sections repliées, dans l’ordre, avec leur résumé',()=>{
+      const z=document.getElementById('s-coach-reglages'); if(!z) return _echec('écran absent');
+      const d=[...z.querySelectorAll('details.rgx-s')];
+      const ids=d.map(x=>x.dataset.rgx).join(',');
+      if(ids!=='identite,defauts,bilans,messages,affichage,aide') return _echec('sections : '+ids);
+      if(d.some(x=>x.open)) return _echec('une section ouverte d’office');
+      if(d.some(x=>!x.querySelector('.rgx-res'))) return _echec('résumé manquant');
+      if(d.some(x=>!x.querySelector(':scope>summary .prf-t'))) return _echec('une section a perdu son titre');
+      const ids0=[...document.querySelectorAll('[id]')].map(x=>x.id).filter(i=>/^rgx/.test(i)); if(new Set(ids0).size!==ids0.length) return _echec('id en double');
+      for(const id of ['coach-team-name','coach-catchphrase','coach-logo-apercu','coach-marque','coach-dispo-delai','coach-banners-list','coach-phone-input','ct-prefs'])
+        if(!z.querySelector('#'+id)) return _echec(id+' n’est pas dans Mes réglages');
+      const p=document.getElementById('ct-profil');
+      for(const id of ['coach-bio','coach-vision','coach-specialites','coach-diplomes-liste']) if(!p.querySelector('#'+id)) return _echec(id+' a quitté la vitrine');
+      if(!/ouvrirMesReglages\(\)/.test(p.innerHTML)) return _echec('pas de bouton « Mes réglages » dans PROFIL');
+      if(!/ouvrirMesReglages\(\)/.test(document.getElementById('ch-mobile-header').innerHTML)) return _echec('pas de lien « Réglages » dans l’en-tête');
+      return true;});
+    ok('1925 — aucun bouton « Enregistrer » dans les sections déplacées ; les fonctions historiques restent',()=>{
+      const z=document.getElementById('s-coach-reglages');
+      const b=[...z.querySelectorAll('button')].filter(x=>/^\s*Enregistrer/i.test(x.textContent)&&!x.closest('#coach-marque'));
+      if(b.length) return _echec(b.length+' bouton(s) Enregistrer : '+b[0].outerHTML.slice(0,80));
+      if(/saveCoach(Dispo|Banners|Phone|Identity)\(\)/.test(z.innerHTML)) return _echec('un onclick historique est resté');
+      for(const f of ['saveCoachIdentity','saveCoachDispo','saveCoachBanners','saveCoachPhone','mqEnregistrer','enregistrerFormulesReponse','ouvrirFormulesReponse','ouvrirGestionModeles','ouvrirRelances','ouvrirReglagesCoach'])
+        if(typeof window[f]!=='function') return _echec(f+' n’est plus appelable');
+      return true;});
+    okA('1925 — reglageCoachEcrire écrit, puis Annuler restaure',async()=>{
+      const cu=currentUser, _su=window.saveUser, _pp=CLOUD.pushProfilCoach;
+      try{
+        currentUser=Object.assign(_banCoach(),{teamName:'TEAM A'});
+        window.saveUser=()=>true; CLOUD.pushProfilCoach=()=>Promise.resolve(true);
+        reglageCoachEcrire('teamName','TEAM B');
+        if(currentUser.teamName!=='TEAM B') return _echec('pas écrit');
+        reglageCoachEcrire('defautsCoach.essai',{a:1});
+        if(!currentUser.defautsCoach||currentUser.defautsCoach.essai.a!==1) return _echec('chemin imbriqué');
+        rcAnnulerDernier();
+        if(currentUser.defautsCoach&&currentUser.defautsCoach.essai) return _echec('annuler n’a pas retiré le chemin');
+        return true;
+      }finally{ currentUser=cu; window.saveUser=_su; CLOUD.pushProfilCoach=_pp; }});
+    okA('1925 — un nom de team vidé demande confirmation ; « Garder » remet la valeur',async()=>{
+      const cu=currentUser, _su=window.saveUser, _pp=CLOUD.pushProfilCoach, _c=window.rcConfirm;
+      try{
+        currentUser=Object.assign(_banCoach(),{teamName:'TEAM A'});
+        window.saveUser=()=>true; CLOUD.pushProfilCoach=()=>Promise.resolve(true);
+        let demande=0; window.rcConfirm=async()=>{ demande++; return false; };
+        const el=document.createElement('input'); el.value='  ';
+        await reglageCoachTexte('teamName',el);
+        if(!demande) return _echec('pas de confirmation');
+        if(currentUser.teamName!=='TEAM A'||el.value!=='TEAM A') return _echec('effacé malgré « Garder » : '+currentUser.teamName);
+        return true;
+      }finally{ currentUser=cu; window.saveUser=_su; CLOUD.pushProfilCoach=_pp; window.rcConfirm=_c; }});
+    ok('1925 — reglageCoachBloc : le bloc historique enregistre, son toast est capturé, rien sans changement',()=>{
+      const cu=currentUser, _su=window.saveUser;
+      try{
+        currentUser=Object.assign(_banCoach(),{phone:'+33611111111'});
+        window.saveUser=()=>true;
+        const r=reglageCoachBloc(['phone'],()=>{ currentUser.phone='+33622222222'; toastSync(true,Promise.resolve(),'x','y'); });
+        if(!r||currentUser.phone!=='+33622222222') return _echec('bloc non joué');
+        const r2=reglageCoachBloc(['phone'],()=>{ toastSync(true,Promise.resolve(),'x','y'); });
+        if(r2!==null) return _echec('un toast sans changement');
+        rcAnnulerDernier();
+        return currentUser.phone==='+33611111111'?true:_echec('annuler : '+currentUser.phone);
+      }finally{ currentUser=cu; window.saveUser=_su; }});
+    ok('1925 — résumés : une ligne par section',()=>{
+      const r=resumesReglagesCoach({teamName:'TEAM RIPPED',logo:'x',dispo:{delaiH:24},promoBanners:[{},{}]});
+      const f=[];
+      if(!/^TEAM RIPPED · logo/.test(r.identite)) f.push(r.identite);
+      if(!/réponse sous 24 h/.test(r.messages)) f.push(r.messages);
+      if(r.affichage!=='2 bannières') f.push(r.affichage);
+      if(Object.keys(r).join(',')!=='identite,defauts,bilans,messages,affichage,aide') f.push(Object.keys(r).join(','));
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1925 — sonde : écran replié ≤ 2 hauteurs d’écran',()=>{
+      let h=0, faux='';
+      // renderMarqueCoach lit le réseau : neutralisé, pour ne rien laisser courir après ce test.
+      const _rm=window.renderMarqueCoach; window.renderMarqueCoach=()=>Promise.resolve(false);
+      try{ _sondeEcran(_banCoach(),()=>ouvrirMesReglages(),()=>{
+        const z=document.getElementById('rgx'); if(!z){ faux='rgx absent'; return; }
+        [...z.querySelectorAll('details')].forEach(d=>d.open=false);
+        h=z.scrollHeight;
+      }); }finally{ window.renderMarqueCoach=_rm; }
+      if(faux) return _echec(faux);
+      return h>0&&h<=2*844?true:_echec('hauteur '+h);});
 
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
