@@ -75847,6 +75847,45 @@ async function testExercices(){
         if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
       }
     });
+    // ══ BUILD 1952 — LA SÉANCE LIBRE ET « + EXERCICE » ═══════════════════════════
+    ok('1952 — « Séance libre » dans le sélecteur ; ajout journalisé « ajout » ; setsPlanned sans les ajouts ; ✕ avant toute série',()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svS=window.saveUser, svT=window.toast, svR=window.renderWoEx;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'r1952',email:'r1952@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],ecartsSeance:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,day:'Lundi',name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:3,reps:'8',repos:'2 min'}]}]};
+        openSessionPicker();
+        const lib=document.querySelector('#session-picker-list .sp-libre');
+        document.getElementById('session-picker').style.display='none';
+        if(!lib||!/Séance libre/.test(lib.textContent)) return _echec('pas de ligne « Séance libre »');
+        localStorage.removeItem('rc_wo_state');
+        if(!lancerSeanceLibre('curl marteau',3,'12')) return _echec('la séance libre ne démarre pas');
+        if(woState.progName!=='Séance libre'||!woState.exercises[0].ajoute) return _echec('séance libre : '+woState.progName);
+        if(!document.querySelector('#wo-content .wo-ajout-exo')) return _echec('pas de bouton « + Exercice »');
+        woAjouterExercice('dips',2,'10');
+        if(woState.exercises.length!==2||woState.currentEx!==1) return _echec('ajout');
+        const aj=currentUser.ecartsSeance.filter(x=>x.motif==='ajout');
+        if(aj.length!==2) return _echec(aj.length+' ajouts journalisés');
+        if(resumeEcarts(currentUser,Date.now())!=='') return _echec('les ajouts passent pour des remplacements');
+        if(!document.querySelector('#wo-content .wo-retirer-ajout')) return _echec('pas de ✕');
+        if(!woRetirerAjout(1)||woState.exercises.length!==1) return _echec('✕ ne retire pas');
+        if(currentUser.ecartsSeance.filter(x=>x.motif==='ajout').length!==1) return _echec('le journal garde l’ajout retiré');
+        // Une séance du programme + un ajout : setsPlanned ne compte que le programme.
+        launchWorkout(currentUser.sessions_config[0],0);
+        woAjouterExercice('curl',4,'10');
+        woState.sessionData[1]=woState.sessionData[1]||{sets:[]};
+        woState.sessionData[1].sets.forEach(s=>{ s.weight='20'; s.done=true; });
+        if(woRetirerAjout(1)) return _echec('✕ après une série faite');
+        const s=finishWorkout(false,{silencieux:true});
+        if(!s||s.setsPlanned!==3) return _echec('setsPlanned '+(s&&s.setsPlanned));
+        return true;
+      }finally{
+        try{ closeModal(); annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svS; window.toast=svT;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
+    });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

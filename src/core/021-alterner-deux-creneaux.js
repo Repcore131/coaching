@@ -1006,7 +1006,15 @@ function openSessionPicker(){
       </div>
       <span class="sp-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg></span>
     </div>`;
-  }).join('');
+  }).join('')
+  // SÉRIE 7, LOT 8 — LA SÉANCE LIBRE : hors programme, exercice par exercice.
+  +`<div class="sp-ligne sp-libre" style="--i:${_spRang++}" onclick="document.getElementById('session-picker').style.display='none';demarrerSeanceLibre()"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div class="sp-jour">+</div>
+      <div class="sp-txt"><div class="sp-jourlib">Hors programme</div><div class="sp-nom">Séance libre</div>
+        <div class="sp-nb">Tu ajoutes tes exercices au fur et à mesure</div></div>
+      <span class="sp-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg></span>
+    </div>`;
 }
 
 // Le modal de phase s'ouvrait sur le seul critère du GENRE DÉCLARÉ. Une
@@ -2615,5 +2623,85 @@ async function repriseEffacer(){
   if(!await rcConfirm('Effacer la séance en cours ?','Les séries saisies et non enregistrées sont perdues.','Effacer')) return false;
   try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
   try{ rendreRepriseTete(currentUser); loadClientHome(); }catch(e){}
+  return true;
+}
+
+// ══ SÉRIE 7, LOT 8 — LA SÉANCE LIBRE ET « + EXERCICE » ══════════════════
+// Un exercice ajouté porte ajoute:true : il ne compte pas dans setsPlanned
+// (personne ne l'avait prévu), il est journalisé pour le coach (motif
+// « ajout »), et il se retire d'un ✕ tant qu'aucune série n'est faite.
+const SEANCE_LIBRE_NOM='Séance libre';
+let _ajoutLibre=false;
+function demarrerSeanceLibre(){
+  _ajoutLibre=true;
+  return ouvrirAjoutExercice();
+}
+function ouvrirAjoutExercice(){
+  try{ closeModal(); }catch(e){}
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal();_ajoutLibre=false" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px">'
+    +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+(_ajoutLibre?SEANCE_LIBRE_NOM:'Ajouter un exercice')+'</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Ton programme n’est pas modifié, et ton coach verra l’ajout.</div>'
+    +'<label for="ajout-nom" style="margin:0 0 4px">Exercice</label>'
+    +'<input id="ajout-nom" type="text" maxlength="60" autocomplete="off" placeholder="Ex : curl marteau" style="width:100%;margin-bottom:10px"'
+      +' onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();ajoutExerciceDepuisFiche()}">'
+    +'<div style="display:flex;gap:10px;margin-bottom:10px">'
+      +'<div style="flex:1"><label for="ajout-series" style="margin:0 0 4px">Séries</label><input id="ajout-series" type="number" inputmode="numeric" min="1" max="12" value="3" style="width:100%"></div>'
+      +'<div style="flex:1"><label for="ajout-reps" style="margin:0 0 4px">Répétitions</label><input id="ajout-reps" type="text" inputmode="numeric" maxlength="7" value="10" style="width:100%"></div>'
+    +'</div>'
+    +'<div id="ajout-erreur" style="font-size:var(--fs-xs);color:var(--orange);line-height:1.5;margin-bottom:8px;display:none"></div>'
+    +'<button class="btn btn-red" style="width:100%" onclick="ajoutExerciceDepuisFiche()">'+(_ajoutLibre?'Commencer':'Ajouter')+'</button>'
+    +'</div></div>');
+  setTimeout(()=>{ const i=document.getElementById('ajout-nom'); if(i) i.focus(); },120);
+  return true;
+}
+function ajoutExerciceDepuisFiche(){
+  const v=id=>String((document.getElementById(id)||{}).value||'').trim();
+  const e=document.getElementById('ajout-erreur');
+  const nom=v('ajout-nom').replace(/\s+/g,' ');
+  if(nom.length<3){ if(e){ e.textContent='Écris le nom de l’exercice (3 caractères minimum).'; e.style.display='block'; } return false; }
+  const series=Math.max(1,Math.min(12,parseInt(v('ajout-series'),10)||3));
+  const reps=v('ajout-reps')||'10';
+  closeModal();
+  if(_ajoutLibre){ _ajoutLibre=false; return lancerSeanceLibre(nom,series,reps); }
+  return woAjouterExercice(nom,series,reps);
+}
+function _exAjoute(nom,series,reps){
+  return {name:String(nom).toUpperCase(),series,reps:String(reps),repos:'2 min',ajoute:true};
+}
+function lancerSeanceLibre(nom,series,reps){
+  launchWorkout({name:SEANCE_LIBRE_NOM,libre:true,exercises:[_exAjoute(nom,series,reps)]},null);
+  if(!woState||!woState.exercises||!woState.exercises.length) return false;
+  woState.libre=true; woState.progName=SEANCE_LIBRE_NOM;
+  try{ journaliserEcart(currentUser,{seance:SEANCE_LIBRE_NOM,exoPrevu:'',exoFait:woState.exercises[0].name,motif:'ajout'}); }catch(e){}
+  try{ woPersist(); }catch(e){}
+  return true;
+}
+function woAjouterExercice(nom,series,reps){
+  if(!woState||!Array.isArray(woState.exercises)) return false;
+  const ex=_exAjoute(nom,series,reps);
+  woState.exercises.push(ex);
+  try{ journaliserEcart(currentUser,{seance:woState.progName||'',exoPrevu:'',exoFait:ex.name,motif:'ajout'}); }catch(e){}
+  woState.currentEx=woState.exercises.length-1;
+  try{ woPersist(); }catch(e){}
+  try{ renderWoEx(); }catch(e){}
+  try{ toast(ex.name.toLowerCase()+' ajouté','var(--green)',1800); }catch(e){}
+  return true;
+}
+function woRetirerAjout(k){
+  const ex=(woState&&woState.exercises||[])[k];
+  if(!ex||!ex.ajoute) return false;
+  const d=(woState.sessionData||{})[k];
+  if(((d&&d.sets)||[]).some(s=>s&&s.done)) return false;
+  if(woState.exercises.length<2){ toast('C’est le seul exercice de la séance.','var(--orange)'); return false; }
+  _woRetirerExo(k);
+  if(woState.currentEx>=woState.exercises.length) woState.currentEx=woState.exercises.length-1;
+  try{
+    const l=currentUser&&currentUser.ecartsSeance;
+    if(Array.isArray(l)) for(let j=l.length-1;j>=0;j--) if(l[j]&&l[j].motif==='ajout'&&l[j].exoFait===ex.name){ l.splice(j,1); break; }
+  }catch(e){}
+  try{ woPersist(); }catch(e){}
+  try{ renderWoEx(); }catch(e){}
   return true;
 }

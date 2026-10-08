@@ -2399,7 +2399,10 @@ const ECART_MAX=40;
 function journaliserEcart(user,e){
   const u=_dossier(user);
   if(!u||!e) return {ok:false};
-  const motif=ECART_MOTIFS[e.motif]?e.motif:'autre';
+  // Série 7, lot 8 : « ajout » (un exercice ajouté en séance) n'est pas un
+  // motif de remplacement — il ne figure pas dans ECART_MOTIFS — mais il se
+  // journalise tel quel.
+  const motif=(ECART_MOTIFS[e.motif]||e.motif==='ajout')?e.motif:'autre';
   if(!Array.isArray(u.ecartsSeance)) u.ecartsSeance=_tabBloc(u.ecartsSeance);
   u.ecartsSeance.push({date:Date.now(),seance:String(e.seance||''),
     exoPrevu:String(e.exoPrevu||''),exoFait:String(e.exoFait||''),motif:motif});
@@ -2411,7 +2414,7 @@ function journaliserEcart(user,e){
 function resumeEcarts(user,maintenant){
   const u=_dossier(user);
   const t=Number(maintenant)||Date.now();
-  const l=_tabBloc(u&&u.ecartsSeance).filter(x=>x&&x.date>t-7*86400000);
+  const l=_tabBloc(u&&u.ecartsSeance).filter(x=>x&&x.date>t-7*86400000&&x.motif!=='ajout');
   if(!l.length) return '';
   const par={};
   for(const x of l){ const k=exKey(x.exoPrevu)||'?'; (par[k]=par[k]||{n:0,nom:x.exoPrevu}).n++; }

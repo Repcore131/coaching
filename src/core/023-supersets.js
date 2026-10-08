@@ -410,6 +410,7 @@ function renderWoEx(){
         </div>
       </div>`:''}
       ${blocs.map(b=>b.html).join(estSS?`<div style="display:flex;align-items:center;gap:8px;margin:2px 0 12px"><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div><span style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800">PUIS ENCHAÎNER</span><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div></div>`:'')}
+      <button type="button" class="btn btn-outline btn-sm wo-ajout-exo" onclick="ouvrirAjoutExercice()">+ Exercice</button>
       ${auMoinsUnMuscu?`<div style="margin-top:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <!-- La règle globale « label » met en majuscules et espace les lettres :
@@ -807,6 +808,7 @@ function _blocExo(idx,estSS){
         ${_htmlBoutonHistorique(idx,ex)}
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
         </div>
+        ${(ex.ajoute&&!((data.sets||[]).some(s=>s&&s.done)))?`<button type="button" class="rb-lien wo-retirer-ajout" aria-label="Retirer ${escapeHtml(String(ex.name).toLowerCase())}" onclick="woRetirerAjout(${idx})">${icon('x',11)} Retirer</button>`:''}
         ${(ex.remplaceDe&&!((data.sets||[]).some(s=>s&&s.done)))?`<button type="button" class="rb-lien wo-revenir" onclick="woRevenirA(${idx})">Revenir à ${escapeHtml(String(ex.remplaceDe.nom||'').toLowerCase())}</button>`:''}
         <div class="wo-ava"></div>
       </div>

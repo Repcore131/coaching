@@ -168,7 +168,8 @@ function finishWorkout(incomplete=false,opts){
   // le dénominateur ferait passer pour un décrochage un athlète qui en fait
   // DAVANTAGE. fmtSeries gère déjà le dépassement en n'affichant que le
   // réalisé quand il excède le prévu.
-  const setsPlanned=(woState.exercises||[]).reduce((n,ex)=>n+(parseInt(ex.series)||0),0);
+  // Série 7, lot 8 : un exercice AJOUTÉ en séance n'était pas prévu.
+  const setsPlanned=(woState.exercises||[]).reduce((n,ex)=>n+((ex&&ex.ajoute)?0:(parseInt(ex.series)||0)),0);
   // Seules les séries validées comptent : sessionData contient toutes les séries
   // prévues dès l'ouverture de l'exercice, l'ancien sets++ inconditionnel affichait
   // donc le programme au lieu du réalisé. Même définition que la fiche coach, qui

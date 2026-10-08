@@ -13859,3 +13859,6 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .rs-v{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap}
 .rs-f{width:14px;text-align:center;font-size:var(--fs-sm);font-weight:800}
 .rs-haut{color:var(--green)}.rs-egal{color:var(--sub)}.rs-bas{color:var(--orange)}
+/* Série 7, lot 8 — « + Exercice » et la séance libre */
+.wo-ajout-exo{width:100%;margin:6px 0 4px}
+.sp-libre .sp-jour{font-weight:800}
