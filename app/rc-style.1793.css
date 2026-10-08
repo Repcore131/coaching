@@ -16256,3 +16256,15 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .tc-variantes{margin-top:8px}
 .tc-var{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;font-size:var(--fs-sm);color:var(--text);line-height:1.45}
 .tc-var .btn{flex:none}
+/* ══ LOT SC1 — TON CORPS EN POSITION ══ */
+.sc-carte{margin-bottom:14px;padding:14px}
+.sc-titre{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-strong);margin-bottom:10px}
+.sc-onglets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.sc-onglet{flex:1;min-height:40px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-1);background:none;
+  color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+.sc-onglet[aria-pressed="true"]{border-color:var(--red);color:var(--text-strong)}
+.sc-svg svg{display:block;width:100%;height:auto;border-radius:var(--r-2)}
+.sc-txt{margin-top:8px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55}
+.sc-pourquoi{display:block;width:100%;min-height:44px;margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);
+  border-radius:var(--r-2);background:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);
+  font-weight:700;text-align:left;cursor:pointer}

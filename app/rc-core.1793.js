@@ -16443,6 +16443,8 @@ function renderRevueMorphoCoach(c){
   try{ h=htmlRevueMorpho(_etatRevueMorpho(c,_morphoCalCache(),_morphoAthletesDuCoach())); }catch(e){ h=''; }
   // LOT TC1 : les tests filmés, avec leur valeur brute et leurs variantes.
   try{ h+=htmlCompatCoach(c); }catch(e){}
+  // LOT SC1 : son corps en position, dès qu'une longueur est mesurée.
+  try{ if(_corpsMesure(longueursCorps(c))) h+=htmlCarteSchemaCorps(c,'squat','coach'); }catch(e){}
   z.innerHTML=h;
   return !!h;
 }
@@ -17038,6 +17040,9 @@ function renderTestsCompat(){
 }
 /** Ouvre l'écran des tests, depuis le profil de l'athlète. */
 function ouvrirTestsCompat(){
+  // LOT SC1 : le schéma « ton corps en position », en tête de l'écran.
+  try{ const z=document.getElementById('tc-schema');
+    if(z) z.innerHTML=currentUser?htmlCarteSchemaCorps(currentUser,'squat','athlete'):''; }catch(e){}
   renderTestsCompat();
   go('s-tests-compat');
 }
@@ -52617,6 +52622,7 @@ function _blocExo(idx,estSS){
         <div id="wo-consigne-${idx}">${_consigneHtml}</div>
         ${_videoTech}
       </details>
+      ${!isCardio(ex)?_htmlPourquoiExo(ex):''}
 
       ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);color:#fca5a5">
@@ -60879,7 +60885,15 @@ function anatSquatModele(p){
   const bh=barre-hanche, bg=genou-barre;
   const angle=_anatDeg(Math.asin(Math.max(-1,Math.min(1,bh/p.Tr))));
   const rapport=Math.abs(bg)>1e-6?bh/Math.abs(bg):Infinity;
-  return {angle,brasHanche:bh,brasGenou:bg,rapport,
+  // LES POINTS DE LA CHAÎNE (schéma « ton corps en position », lot SC1), dans
+  // la même unité que les longueurs, cheville à l'origine et y vers le haut.
+  // Ajoutés sans rien changer au calcul : l'épaule est au bout du tronc, sur
+  // l'aplomb de `barre` — sauf si le tronc est trop court pour l'atteindre,
+  // ce que `aplomb` dit (l'angle est alors borné à 90°).
+  const yh=p.T*Math.cos((p.alpha||0)*rad), ar=angle*rad;
+  const pts={cheville:{x:0,y:0},genou:{x:genou,y:yh},hanche:{x:hanche,y:yh},
+    epaule:{x:hanche+p.Tr*Math.sin(ar),y:yh+p.Tr*Math.cos(ar)},barre:{x:barre,y:0}};
+  return {angle,brasHanche:bh,brasGenou:bg,rapport,pts,aplomb:Math.abs(bh)<=p.Tr,
     dominante:rapport>ANAT_SQUAT.DOMINANTE?'hanche':(rapport<1/ANAT_SQUAT.DOMINANTE?'genou':'équilibre')};
 }
 /** PURE. Le tibia tiré du test du genou au mur : ≈ 30° + 1,2° par cm au-delà de 10 cm, borné 20–45°. APPROXIMATION. */
@@ -61082,6 +61096,398 @@ function anatSquatTexte(moi,ref,cfg,taille){
  * de de Leva (1996), DU MÊME SEXE — les fractions d'ANAT_REF, celles des fiches :
  * c'est l'ÉCART qui renseigne, pas la valeur absolue.
  */
+// ══ LOT SC1 — TON CORPS EN POSITION : LE SCHÉMA CALCULÉ ══════════════════
+//
+// Un dessin, pas une illustration : chaque point est CALCULÉ à partir des
+// longueurs de l'athlète, avec les modèles déjà en place — le squat A16
+// (anatSquatModele), le soulevé A17 (anatSouleveModele, la hanche à
+// l'intersection des cercles tronc / fémur, côté arrière), les conventions du
+// développé A18 (ANAT_DEV : épaule à mi-thorax, poitrine à la profondeur du
+// thorax, carrure moins deux fois 3,5 cm). À côté, le même calcul sur des
+// proportions moyennes À LA MÊME TAILLE (de Leva 1996 pour les segments,
+// ANSUR II pour le pied et la carrure) : seul l'écart de proportions reste.
+//
+// ⚠ AUCUNE LONGUEUR INVENTÉE. Une longueur absente est remplacée par la
+//   moyenne, dessinée en GRIS HACHURÉ, et nommée sous le schéma : « mesure
+//   manquante : fémur ». Le schéma ne prétend jamais montrer un corps qu'on
+//   n'a pas mesuré.
+// ⚠ AUCUN JUGEMENT. Rouge = le segment qui s'écarte le plus de la moyenne
+//   parmi ceux qui décident de la position. Pas « trop long », pas « défaut » :
+//   une différence explique pourquoi une variante peut être plus confortable.
+// ⚠ LA TÊTE N'EST PAS DESSINÉE : elle n'est mesurée par rien, et la poser
+//   ferait lire un menton au-dessus ou au-dessous d'une barre.
+// ⚠ CONVENTIONS DE POSE, écrites ici pour qu'on les discute : squat cuisse
+//   parallèle, tibia à 30°, épaules (et non la barre) à l'aplomb du milieu du
+//   pied ; développé vu des pieds, humérus écarté de 60° du tronc (ANAT_DEV),
+//   avant-bras vertical, barre sur le sternum ; traction en haut, prise à
+//   1,5 × la carrure (ANAT_DEV.PRISES), avant-bras verticaux ; soulevé au
+//   décollage, barre à 22,5 cm, épaule 1,5 cm devant la barre (ANAT_SOULEVE).
+
+const SCHEMA_CORPS_POSES=Object.freeze(['squat','developpe','traction','souleve']);
+const SCHEMA_CORPS_LIB_POSE=Object.freeze({squat:'Squat',developpe:'Développé',traction:'Traction',souleve:'Soulevé'});
+const SCHEMA_CORPS_COUL=Object.freeze({encre:'#141416',rouge:'#E02020',gris:'#9a9aa0',fond:'#f4f4f2',doux:'#5c5c62'});
+const SCHEMA_CORPS_W=700, SCHEMA_CORPS_H=380;
+/** Épaisseur des segments, en pixels. */
+const SCHEMA_CORPS_TRAIT=9;
+/** Les noms dits à l'écran. */
+const SCHEMA_CORPS_LIB=Object.freeze({femur:'fémur',tibia:'tibia',tronc:'tronc',humerus:'bras',avantbras:'avant-bras',
+  pied:'pied',thorax:'profondeur du thorax',epaules:'largeur d’épaules',taille:'taille'});
+/** Les longueurs dont chaque pose a besoin. */
+const SCHEMA_CORPS_BESOINS=Object.freeze({
+  squat:Object.freeze(['femur','tibia','tronc','pied']),
+  developpe:Object.freeze(['humerus','avantbras','thorax','epaules']),
+  traction:Object.freeze(['humerus','avantbras','epaules']),
+  souleve:Object.freeze(['femur','tibia','tronc','humerus','avantbras','pied'])});
+/** Celles qui DÉCIDENT de la position : le rouge se choisit parmi elles. */
+const SCHEMA_CORPS_MOTEURS=Object.freeze({
+  squat:Object.freeze(['femur','tibia','tronc']),
+  developpe:Object.freeze(['avantbras','humerus']),
+  traction:Object.freeze(['humerus','avantbras']),
+  souleve:Object.freeze(['femur','tronc','humerus','avantbras'])});
+
+/**
+ * PURE. Les longueurs d'un dossier, en cm, CENTRE ARTICULAIRE À CENTRE
+ * ARTICULAIRE quand elles viennent de la photo. Une longueur absente vaut null.
+ *   fémur, tibia, bras, avant-bras, tronc : analyse initiale gelée (photo du
+ *     premier bilan, mise à l'échelle par la rotule, ± sa marge) ;
+ *   avant-bras, à défaut : le mètre (olécrane → styloïde) ;
+ *   pied, profondeur du thorax, largeur d'épaules : le mètre.
+ * ⚠ L'ENTREJAMBE ET LA LONGUEUR DE BRAS AU MÈTRE N'ENTRENT PAS : ils ne
+ *   mesurent pas un segment (le pubis n'est pas la hanche, l'acromion n'est
+ *   pas le centre de l'épaule). Voir l'en-tête du lot M2.
+ * @param {any} user
+ */
+function longueursCorps(user){
+  const out={femur:null,tibia:null,tronc:null,humerus:null,avantbras:null,pied:null,thorax:null,epaules:null,
+    taille:null,femme:false,sources:{}};
+  if(!user||typeof user!=='object') return out;
+  try{ out.taille=_tailleCm(user); }catch(e){ out.taille=null; }
+  out.femme=isFemale(user._evol_gender||user.gender||'');
+  const mi=user.morphoInitiale;
+  if(mi&&mi.etat==='gelee'&&mi.longueurs&&typeof mi.longueurs==='object'){
+    for(const k of ['femur','tibia','humerus','avantbras','tronc']){
+      const x=mi.longueurs[k], cm=x?Number(x.cm):NaN;
+      if(isFinite(cm)&&cm>0){ out[k]=cm; out.sources[k]={source:'photo',marge:isFinite(Number(x.marge))?Number(x.marge):null}; }
+    }
+  }
+  const metre=(k,champ)=>{
+    if(out[k]!=null) return;
+    let m=null; try{ m=mesureMorpho(user,champ); }catch(e){ m=null; }
+    if(m&&m.cm!=null){ out[k]=m.cm; out.sources[k]={source:'metre',marge:MORPHO_ERREUR_CM}; }
+  };
+  metre('avantbras','deb-avantbras'); metre('pied','deb-pied'); metre('thorax','deb-thorax'); metre('epaules','deb-epaules');
+  return out;
+}
+
+/**
+ * PURE. Les longueurs moyennes, à la taille donnée, pour un sexe.
+ * @param {number} taille  cm
+ * @param {boolean} femme
+ */
+function _moyennesCorps(taille,femme){
+  const R=anatRef(femme), MR=ANAT_MESURES_REF[femme?'F':'H'], L=ANAT_LARGEURS[femme?'F':'H'];
+  return {femur:R.cuisse*taille,tibia:R.jambe*taille,tronc:R.tronc*taille,humerus:R.bras*taille,
+    avantbras:R.avantbras*taille,pied:MR.pied*taille,thorax:ANAT_DEV.THORAX[femme?'F':'H']*taille,
+    epaules:L.biacromial*taille};
+}
+
+/**
+ * PURE. La géométrie d'une pose, en cm, y vers le haut. Rend des segments
+ * nommés, l'aplomb, l'arc de l'angle, et les angles — ou `impossible` quand
+ * ces longueurs ne permettent pas la position telle qu'elle est définie.
+ * @param {string} pose
+ * @param {Object<string,number>} v  les longueurs (cm)
+ * @param {number} taille
+ */
+function _geoCorps(pose,v,taille){
+  const rad=Math.PI/180, main=ANAT_MAIN*taille;
+  /** @type {any} */
+  const g={segs:[],pts:{},decor:[],aplomb:null,arc:null,angles:{},impossible:null};
+  const seg=(cle,a,b)=>g.segs.push({cle,a,b});
+  if(pose==='squat'){
+    const m=anatSquatModele({F:v.femur,T:v.tibia,Tr:v.tronc,alpha:ANAT_SQUAT.ALPHA,beta:0,pied:v.pied});
+    const P=m.pts, talon={x:P.barre.x-0.5*v.pied,y:0}, pointe={x:P.barre.x+0.5*v.pied,y:0};
+    g.pts={cheville:P.cheville,genou:P.genou,hanche:P.hanche,epaule:P.epaule,milieuPied:P.barre,talon,pointe};
+    seg('pied',talon,pointe); seg('tibia',P.cheville,P.genou); seg('femur',P.genou,P.hanche); seg('tronc',P.hanche,P.epaule);
+    g.decor.push({type:'sol',y:0,x1:talon.x-25,x2:pointe.x+25});
+    g.decor.push({type:'barre',x:P.epaule.x,y:P.epaule.y,r:2.8});
+    g.aplomb={x:P.barre.x,y1:0,y2:P.epaule.y+12};
+    g.arc={c:P.hanche,a0:90,a1:90-m.angle,valeur:m.angle,lib:'buste'};
+    g.angles={buste:Math.round(m.angle*10)/10,tibia:ANAT_SQUAT.ALPHA,cuisse:0};
+    if(!m.aplomb) g.impossible='le tronc ne peut pas ramener les épaules au-dessus du milieu du pied';
+    return g;
+  }
+  if(pose==='souleve'){
+    const r=anatSouleveModele({F:v.femur/taille,T:v.tibia/taille,Tr:v.tronc/taille,
+      A:(v.humerus+v.avantbras)/taille+ANAT_MAIN/2,pied:v.pied/taille,taille,style:'conventionnel'});
+    if(!r){ g.impossible='aucune hanche ne relie ce tronc et ce fémur dans la position de départ'; return g; }
+    const k=x=>({x:x.x*taille,y:x.y*taille});
+    const ch={x:-ANAT_SQUAT.MILIEU_PIED*v.pied,y:ANAT_SOULEVE.CHEVILLE*taille};
+    const ge=k(r.genou), ha=k(r.hip), ep=k(r.epaule), yb=ANAT_SOULEVE.BARRE_CM;
+    const dx=0-ep.x, dy=yb-ep.y, n=Math.hypot(dx,dy);
+    const co={x:ep.x+dx/n*v.humerus,y:ep.y+dy/n*v.humerus};
+    const po={x:ep.x+dx/n*(v.humerus+v.avantbras),y:ep.y+dy/n*(v.humerus+v.avantbras)};
+    const talon={x:-0.5*v.pied,y:0}, pointe={x:0.5*v.pied,y:0};
+    g.pts={cheville:ch,genou:ge,hanche:ha,epaule:ep,coude:co,poignet:po,milieuPied:{x:0,y:0},barre:{x:0,y:yb}};
+    // LE PIED RELIE LA CHEVILLE AU SOL : le modèle A17 pose la cheville à
+    // 0,039 × la taille (Drillis & Contini), le talon et la pointe au sol.
+    seg('pied',talon,ch); seg('pied',ch,pointe); seg('tibia',ch,ge); seg('femur',ge,ha); seg('tronc',ha,ep);
+    seg('humerus',ep,co); seg('avantbras',co,po);
+    g.decor.push({type:'sol',y:0,x1:-60,x2:45});
+    g.decor.push({type:'disque',x:0,y:yb,r:ANAT_SOULEVE.BARRE_CM});
+    g.decor.push({type:'barre',x:0,y:yb,r:2.8});
+    g.aplomb={x:0,y1:0,y2:ep.y+12};
+    const buste=90-r.tronc;
+    g.arc={c:ha,a0:90,a1:r.tronc,valeur:buste,lib:'buste'};
+    const ang=(a,o,b)=>_anatDeg(Math.acos(Math.max(-1,Math.min(1,((a.x-o.x)*(b.x-o.x)+(a.y-o.y)*(b.y-o.y))
+      /(Math.hypot(a.x-o.x,a.y-o.y)*Math.hypot(b.x-o.x,b.y-o.y))))));
+    g.angles={buste:Math.round(buste*10)/10,hanche:Math.round(ang(ep,ha,ge)*10)/10,tibia:Math.round(r.tibia*10)/10};
+    return g;
+  }
+  if(pose==='developpe'){
+    // VU DEPUIS LES PIEDS : x vers la droite de l'athlète, y vers le haut,
+    // le banc à y = 0. L'épaule est à mi-thorax, la barre sur le sternum.
+    const S=v.epaules-2*ANAT_DEV.EPAULE_CM, ys=v.thorax/2, yb=v.thorax;
+    const d=v.avantbras+main/2-v.thorax/2;
+    if(!(Math.abs(d)<v.humerus)){ g.impossible='l’avant-bras vertical ne laisse pas le bras rejoindre l’épaule'; return g; }
+    const l=Math.sin(ANAT_DEV.THETA*rad)*Math.sqrt(v.humerus*v.humerus-d*d);
+    const eD={x:S/2,y:ys}, eG={x:-S/2,y:ys};
+    const cD={x:S/2+l,y:ys-d}, cG={x:-S/2-l,y:ys-d};
+    const pD={x:cD.x,y:cD.y+v.avantbras}, pG={x:cG.x,y:cG.y+v.avantbras};
+    g.pts={epauleD:eD,epauleG:eG,coudeD:cD,coudeG:cG,poignetD:pD,poignetG:pG,barre:{x:0,y:yb}};
+    g.decor.push({type:'thorax',x:0,y:ys,rx:S/2,ry:v.thorax/2,cle:'thorax'});
+    g.decor.push({type:'banc',y:0,x1:-S/2-10,x2:S/2+10});
+    seg('epaules',eG,eD); seg('humerus',eD,cD); seg('humerus',eG,cG); seg('avantbras',cD,pD); seg('avantbras',cG,pG);
+    g.decor.push({type:'tige',y:yb,x1:cG.x-18,x2:cD.x+18});
+    g.aplomb={x:cD.x,y1:cD.y-10,y2:yb+10};
+    const phi=_anatDeg(Math.atan2(d,l));
+    g.arc={c:eD,a0:0,a1:-phi,valeur:phi,lib:'bras'};
+    g.angles={bras:Math.round(phi*10)/10,profondeurCoude:Math.round(d*10)/10};
+    return g;
+  }
+  if(pose==='traction'){
+    // VUE DE DOS, EN HAUT : barre à y = 0, avant-bras verticaux.
+    const S=v.epaules-2*ANAT_DEV.EPAULE_CM, G=ANAT_DEV.PRISES[1]*v.epaules;
+    const dx=G/2-S/2;
+    if(!(dx<v.humerus)){ g.impossible='cette prise est plus large que ce que le bras peut atteindre'; return g; }
+    const mD={x:G/2,y:0}, mG={x:-G/2,y:0};
+    const pD={x:G/2,y:-main/2}, pG={x:-G/2,y:-main/2};
+    const cD={x:G/2,y:pD.y-v.avantbras}, cG={x:-G/2,y:pG.y-v.avantbras};
+    const dy=Math.sqrt(v.humerus*v.humerus-dx*dx);
+    const eD={x:S/2,y:cD.y+dy}, eG={x:-S/2,y:cG.y+dy};
+    g.pts={mainD:mD,mainG:mG,poignetD:pD,poignetG:pG,coudeD:cD,coudeG:cG,epauleD:eD,epauleG:eG};
+    g.decor.push({type:'tige',y:0,x1:-G/2-22,x2:G/2+22});
+    seg('epaules',eG,eD); seg('humerus',eD,cD); seg('humerus',eG,cG); seg('avantbras',cD,pD); seg('avantbras',cG,pG);
+    g.aplomb={x:cD.x,y1:cD.y-10,y2:10};
+    const phi=_anatDeg(Math.atan2(dy,dx));
+    g.arc={c:eD,a0:0,a1:-phi,valeur:phi,lib:'bras'};
+    g.angles={bras:Math.round(phi*10)/10,epaulesBarre:Math.round(eD.y*10)/10};
+    return g;
+  }
+  g.impossible='pose inconnue';
+  return g;
+}
+
+/**
+ * PURE. Le segment déterminant : parmi ceux qui décident de la position, celui
+ * qui s'écarte le plus de la moyenne. Une longueur manquante ne peut pas
+ * l'être — on ne désigne pas ce qu'on n'a pas mesuré.
+ */
+function _determinantCorps(pose,v,moy,gris){
+  const l=SCHEMA_CORPS_MOTEURS[pose]||[];
+  let best=null, ecart=-1;
+  for(const k of l){
+    if(gris[k]||!(moy[k]>0)) continue;
+    const e=Math.abs(v[k]/moy[k]-1);
+    if(e>ecart+1e-9){ ecart=e; best=k; }
+  }
+  return best||l[0]||null;
+}
+
+/**
+ * PURE. LE SCHÉMA « TON CORPS EN POSITION ».
+ *
+ * @param {any} longueurs  sortie de longueursCorps (cm), ou un objet de même forme
+ * @param {string} pose    'squat' | 'developpe' | 'traction' | 'souleve'
+ * @param {{id?:string}} [opts]  `id` : suffixe des identifiants du motif hachuré
+ * @returns {{svg:string, angles:any, anglesMoyenne:any, manquants:string[], determinant:string|null,
+ *   points:Object<string,{x:number,y:number}>, echelle:number, impossible:string|null}}
+ */
+function schemaCorps(longueurs,pose,opts){
+  const L=(longueurs&&typeof longueurs==='object')?longueurs:{};
+  const o=opts||{};
+  const id=String(o.id||pose||'x').replace(/[^a-z0-9_-]/gi,'');
+  const vide={svg:'',angles:{},anglesMoyenne:{},manquants:[],determinant:null,points:{},echelle:0,impossible:'pose inconnue'};
+  if(SCHEMA_CORPS_POSES.indexOf(pose)<0) return vide;
+  const manquants=[];
+  const tOk=isFinite(Number(L.taille))&&Number(L.taille)>0;
+  const taille=tOk?Number(L.taille):ANAT_SOULEVE.TAILLE_DEFAUT;
+  if(!tOk) manquants.push(SCHEMA_CORPS_LIB.taille);
+  const moy=_moyennesCorps(taille,!!L.femme);
+  const v={}, gris={};
+  for(const k of SCHEMA_CORPS_BESOINS[pose]){
+    const x=Number(L[k]);
+    if(L[k]!=null&&isFinite(x)&&x>0) v[k]=x;
+    else { v[k]=moy[k]; gris[k]=true; manquants.push(SCHEMA_CORPS_LIB[k]); }
+  }
+  const moi=_geoCorps(pose,v,taille), ref=_geoCorps(pose,moy,taille);
+  const det=_determinantCorps(pose,v,moy,gris);
+  // UNE ÉCHELLE COMMUNE aux deux schémas : sans elle, l'écart de proportions
+  // se perdrait dans un zoom différent.
+  const bornes=g=>{
+    const xs=[], ys=[];
+    for(const sg of g.segs){ xs.push(sg.a.x,sg.b.x); ys.push(sg.a.y,sg.b.y); }
+    for(const d of g.decor){
+      if(d.type==='sol'||d.type==='banc'||d.type==='tige'){ xs.push(d.x1,d.x2); ys.push(d.y); }
+      if(d.type==='disque'||d.type==='thorax'){ const rx=d.rx||d.r, ry=d.ry||d.r; xs.push(d.x-rx,d.x+rx); ys.push(d.y-ry,d.y+ry); }
+    }
+    if(g.aplomb){ ys.push(g.aplomb.y1,g.aplomb.y2); }
+    return {x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)};
+  };
+  const bM=bornes(moi.segs.length?moi:ref), bR=bornes(ref);
+  const larg=Math.max(bM.x1-bM.x0,bR.x1-bR.x0,1), haut=Math.max(bM.y1-bM.y0,bR.y1-bR.y0,1);
+  const s=Math.min(300/larg,250/haut);
+  const C=SCHEMA_CORPS_COUL, E=escapeHtml, f1=x=>(Math.round(x*10)/10).toString();
+  // Bas de chaque figure posé sur la même ligne, figure centrée dans son demi-cadre.
+  const place=(b,x0)=>({ox:x0+175-s*(b.x0+b.x1)/2,oy:300+s*b.y0});
+  const pM=place(bM,0), pR=place(bR,350);
+  const X=(p,P)=>P.ox+s*p.x, Y=(p,P)=>P.oy-s*p.y;
+  const figure=(g,P,estMoi)=>{
+    let h='';
+    for(const d of g.decor){
+      if(d.type==='sol'||d.type==='banc')
+        h+='<line x1="'+f1(P.ox+s*d.x1)+'" y1="'+f1(P.oy-s*d.y)+'" x2="'+f1(P.ox+s*d.x2)+'" y2="'+f1(P.oy-s*d.y)+'" stroke="'+C.doux+'" stroke-width="2"/>';
+      else if(d.type==='tige')
+        h+='<line x1="'+f1(P.ox+s*d.x1)+'" y1="'+f1(P.oy-s*d.y)+'" x2="'+f1(P.ox+s*d.x2)+'" y2="'+f1(P.oy-s*d.y)+'" stroke="'+C.doux+'" stroke-width="4" stroke-linecap="round"/>';
+      else if(d.type==='disque')
+        h+='<circle cx="'+f1(P.ox+s*d.x)+'" cy="'+f1(P.oy-s*d.y)+'" r="'+f1(s*d.r)+'" fill="none" stroke="'+C.doux+'" stroke-width="2"/>';
+      else if(d.type==='thorax')
+        h+='<ellipse cx="'+f1(P.ox+s*d.x)+'" cy="'+f1(P.oy-s*d.y)+'" rx="'+f1(s*d.rx)+'" ry="'+f1(s*d.ry)+'" fill="none" stroke="'
+          +(estMoi&&gris.thorax?'url(#sc-h-'+id+')':C.encre)+'" stroke-width="'+(estMoi&&gris.thorax?6:3)+'"/>';
+    }
+    if(g.aplomb)
+      h+='<line x1="'+f1(P.ox+s*g.aplomb.x)+'" y1="'+f1(P.oy-s*g.aplomb.y1)+'" x2="'+f1(P.ox+s*g.aplomb.x)+'" y2="'+f1(P.oy-s*g.aplomb.y2)
+        +'" stroke="'+C.doux+'" stroke-width="1.5" stroke-dasharray="5 5"/>';
+    for(const sg of g.segs){
+      const coul=(estMoi&&gris[sg.cle])?'url(#sc-h-'+id+')':(sg.cle===det?C.rouge:C.encre);
+      h+='<line class="sc-seg" data-cle="'+E(sg.cle)+'" x1="'+f1(X(sg.a,P))+'" y1="'+f1(Y(sg.a,P))+'" x2="'+f1(X(sg.b,P))+'" y2="'+f1(Y(sg.b,P))
+        +'" stroke="'+coul+'" stroke-width="'+SCHEMA_CORPS_TRAIT+'" stroke-linecap="round"/>';
+    }
+    const vus={};
+    for(const sg of g.segs) for(const p of [sg.a,sg.b]){
+      const k=f1(X(p,P))+','+f1(Y(p,P)); if(vus[k]) continue; vus[k]=1;
+      h+='<circle cx="'+f1(X(p,P))+'" cy="'+f1(Y(p,P))+'" r="3" fill="'+C.fond+'"/>';
+    }
+    for(const d of g.decor) if(d.type==='barre')
+      h+='<circle cx="'+f1(P.ox+s*d.x)+'" cy="'+f1(P.oy-s*d.y)+'" r="'+f1(Math.max(4,s*d.r))+'" fill="'+C.doux+'"/>';
+    if(g.arc){
+      const R=30, cx=X(g.arc.c,P), cy=Y(g.arc.c,P);
+      const pa=a=>({x:cx+R*Math.cos(a*Math.PI/180),y:cy-R*Math.sin(a*Math.PI/180)});
+      const a=pa(g.arc.a0), b=pa(g.arc.a1), grand=Math.abs(g.arc.a0-g.arc.a1)>180?1:0;
+      const sens=g.arc.a1<g.arc.a0?1:0;
+      h+='<path d="M'+f1(a.x)+' '+f1(a.y)+' A'+R+' '+R+' 0 '+grand+' '+sens+' '+f1(b.x)+' '+f1(b.y)+'" fill="none" stroke="'+C.rouge+'" stroke-width="2.5"/>';
+      // LE LIBELLÉ HORS DES SEGMENTS : au-dessus de l'arc quand l'angle part
+      // de la verticale (buste), à droite du bout de l'arc sinon (bras).
+      const vert=Math.abs(g.arc.a0-90)<1e-9;
+      const lx=vert?cx-8:cx+R+16, ly=vert?cy-R-8:cy+8;
+      h+='<text x="'+f1(lx)+'" y="'+f1(ly)+'" text-anchor="'+(vert?'end':'start')+'" font-size="15" font-weight="700" fill="'+C.rouge+'">'
+        +E(g.arc.lib)+' '+Math.round(g.arc.valeur)+'°</text>';
+    }
+    return h;
+  };
+  const txt=(x,y,t,o2)=>'<text x="'+x+'" y="'+y+'"'+(o2||'')+'>'+E(t)+'</text>';
+  let svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+SCHEMA_CORPS_W+' '+SCHEMA_CORPS_H+'" width="'+SCHEMA_CORPS_W+'" height="'+SCHEMA_CORPS_H
+    +'" role="img" aria-label="'+E((SCHEMA_CORPS_LIB_POSE[pose]||pose)+' : ton corps en position, à côté de proportions moyennes')+'"'
+    +' font-family="Arial, Helvetica, sans-serif">'
+    +'<defs><pattern id="sc-h-'+id+'" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+    +'<rect width="6" height="6" fill="#d9d9dc"/><line x1="0" y1="0" x2="0" y2="6" stroke="'+C.gris+'" stroke-width="3"/></pattern></defs>'
+    +'<rect width="'+SCHEMA_CORPS_W+'" height="'+SCHEMA_CORPS_H+'" fill="'+C.fond+'"/>'
+    +'<line x1="350" y1="20" x2="350" y2="330" stroke="#dcdcde" stroke-width="1"/>'
+    +txt(20,32,'Toi',' font-size="17" font-weight="700" fill="'+C.encre+'"')
+    +txt(370,32,'Proportions moyennes, même taille',' font-size="17" font-weight="700" fill="'+C.encre+'"');
+  if(moi.impossible) svg+=txt(175,170,'Position impossible avec ces longueurs',' text-anchor="middle" font-size="14" fill="'+C.rouge+'"')
+    +txt(175,190,moi.impossible,' text-anchor="middle" font-size="12" fill="'+C.doux+'"');
+  if(moi.segs.length) svg+=figure(moi,pM,true);
+  if(ref.segs.length) svg+=figure(ref,pR,false);
+  svg+=txt(20,352,manquants.length?'mesure manquante : '+manquants.join(', '):'Dessiné avec tes longueurs mesurées.',
+      ' font-size="13" fill="'+(manquants.length?C.encre:C.doux)+'"'+(manquants.length?' font-weight="700"':''))
+    +txt(20,370,det?'En rouge : '+SCHEMA_CORPS_LIB[det]+', le segment qui s’écarte le plus de la moyenne ici.':'',' font-size="12" fill="'+C.doux+'"')
+    +txt(370,352,'de Leva (1996) ; ANSUR II (pied, carrure)',' font-size="12" fill="'+C.doux+'"')
+    +'</svg>';
+  const points={};
+  for(const k in moi.pts) points[k]={x:Math.round(X(moi.pts[k],pM)*100)/100,y:Math.round(Y(moi.pts[k],pM)*100)/100};
+  return {svg,angles:moi.angles,anglesMoyenne:ref.angles,manquants,determinant:det,points,echelle:s,impossible:moi.impossible};
+}
+
+/** PURE. La pose qui explique un exercice, d'après son schéma moteur ; null sinon. */
+function poseCorpsDe(ex,user){
+  let k=null; try{ k=schemaDe(ex,user); }catch(e){ k=null; }
+  return ({'squat':'squat','poussee-horizontale':'developpe','tirage-vertical':'traction','charniere-hanche':'souleve'})[k]||null;
+}
+/** PURE. Au moins une longueur mesurée : sans elle, le schéma ne montrerait que la moyenne. */
+function _corpsMesure(L){
+  return ['femur','tibia','tronc','humerus','avantbras','pied','thorax','epaules'].some(k=>L&&L[k]!=null);
+}
+/**
+ * PURE. La carte : quatre onglets de pose, le schéma, et une phrase. `qui`
+ * dit à qui elle parle — 'athlete' : une phrase neutre ; 'coach' : la même,
+ * avec d'où vient chaque longueur.
+ * @param {any} user @param {string} pose @param {string} qui
+ * @returns {string}
+ */
+function htmlCarteSchemaCorps(user,pose,qui){
+  const E=escapeHtml, L=longueursCorps(user), p=SCHEMA_CORPS_POSES.indexOf(pose)>=0?pose:'squat';
+  const r=schemaCorps(L,p,{id:qui+'-'+p});
+  const onglets=SCHEMA_CORPS_POSES.map(k=>'<button type="button" class="sc-onglet" data-pose="'+k+'" data-qui="'+E(qui)+'" aria-pressed="'
+    +(k===p)+'" onclick="schemaCorpsPose(this)">'+E(SCHEMA_CORPS_LIB_POSE[k])+'</button>').join('');
+  let pied='<div class="sc-txt">Dessiné avec tes longueurs, à côté de proportions moyennes à la même taille. '
+    +'Une différence n’est pas un défaut : elle explique pourquoi une variante peut être plus confortable.</div>';
+  if(qui==='coach'){
+    const src=Object.keys(L.sources).map(k=>SCHEMA_CORPS_LIB[k]+' : '+(L.sources[k].source==='photo'?'photo':'mètre')
+      +(L.sources[k].marge!=null?' ± '+String(L.sources[k].marge).replace('.',',')+' cm':''));
+    pied='<div class="sc-txt">Calculé avec ses longueurs (modèles squat A16, soulevé A17, conventions du développé A18), à côté de proportions moyennes à la même taille.'
+      +(src.length?' Sources : '+E(src.join(' · '))+'.':' Aucune longueur mesurée.')+'</div>';
+  }
+  return '<div class="card sc-carte" data-qui="'+E(qui)+'"><div class="sc-titre">'+(qui==='coach'?'Son':'Ton')+' corps en position</div>'
+    +'<div class="sc-onglets" role="group" aria-label="Position">'+onglets+'</div>'
+    +'<div class="sc-svg">'+r.svg+'</div>'+pied+'</div>';
+}
+/** Change de pose dans une carte, sans rien recalculer d'autre. */
+function schemaCorpsPose(bouton){
+  const carte=bouton&&bouton.closest&&bouton.closest('.sc-carte');
+  if(!carte) return false;
+  const qui=bouton.dataset.qui==='coach'?'coach':'athlete';
+  let u=null;
+  if(qui==='coach'){ try{ u=getOwnedClient(currentClientId); }catch(e){ u=null; } }
+  else u=currentUser;
+  if(!u) return false;
+  carte.outerHTML=htmlCarteSchemaCorps(u,bouton.dataset.pose,qui);
+  return true;
+}
+/** Le bouton de la séance : seulement pour un exercice qu'une pose explique. */
+function _htmlPourquoiExo(ex){
+  if(!currentUser||!ex) return '';
+  const p=poseCorpsDe(ex,currentUser);
+  if(!p) return '';
+  return '<button type="button" class="sc-pourquoi" data-pose="'+p+'" onclick="ouvrirSchemaCorpsExo(this)">Pourquoi cet exercice pour moi ?</button>';
+}
+/** La feuille « pourquoi cet exercice pour moi ? ». */
+function ouvrirSchemaCorpsExo(bouton){
+  if(!currentUser) return false;
+  const p=(bouton&&bouton.dataset&&bouton.dataset.pose)||'squat';
+  try{ closeModal(); }catch(e){}
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 14px 20px;width:100%;max-width:720px;max-height:92vh;overflow:auto;'
+    +'animation:fadeIn var(--t-3) var(--c-out)">'
+    +htmlCarteSchemaCorps(currentUser,p,'athlete')
+    +'<button class="btn btn-outline" style="margin-top:10px;min-height:44px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+
 function anatLeviers(fiches,F,taille,femme,u){
   const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
   const R=anatRef(femme), carrure=ANAT_LARGEURS[femme?'F':'H'].biacromial;
