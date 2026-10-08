@@ -16427,3 +16427,44 @@ label.mu-chip input{width:auto;min-height:0;margin:0}
 .mp-cible{display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--info);
   border-radius:var(--r-2);padding:8px 12px;margin-bottom:12px;font-size:var(--fs-sm);color:var(--text);line-height:1.45}
 .mp-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--info)}
+
+/* ══ LOT RM1 — TEST DE 1RM ET JOUR DE COMPÉTITION ══════════════════════════ */
+.perf-onglets{display:flex;gap:8px;margin-bottom:12px}
+.perf-onglets .pf-chip{flex:1;min-height:40px}
+.perf-carte{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px}
+.perf-carte .amc-in{margin-top:6px}
+.perf-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.perf-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:6px}
+.perf-palier{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:baseline;padding:7px 0;border-top:1px solid var(--border);font-size:var(--fs-sm)}
+.perf-palier span{color:var(--sub);font-size:var(--fs-xs)}
+.perf-palier i{color:var(--text-faint);font-size:var(--fs-2xs);font-style:normal}
+.perf-palier.perf-ici{color:var(--text);background:var(--surface-2);border-radius:var(--r-1)}
+.perf-palier.perf-fait b{color:var(--sub);font-weight:600}
+.perf-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.perf-actions .btn{flex:1 1 140px;margin:0}
+.perf-4 .btn{flex:1 1 45%}
+.perf-repos{font-size:var(--fs-lg);font-weight:800;text-align:center;margin:10px 0;font-variant-numeric:tabular-nums}
+.perf-prochaine{font-size:var(--fs-md);margin-top:10px}
+.comp-disc{padding:8px 0;border-top:1px solid var(--border)}
+.comp-l{display:flex;gap:6px;align-items:center}
+.comp-l .amc-in{margin:0}
+.comp-h{flex:0 0 96px}
+.comp-k{flex:0 0 110px}
+.comp-essais{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-size:var(--fs-sm)}
+.comp-essais i{color:var(--sub);font-style:normal;font-size:var(--fs-2xs)}
+.comp-ech{margin-top:6px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6;font-variant-numeric:tabular-nums}
+.comp-ech b{color:var(--text);margin-right:6px}
+.perf-plein{position:fixed;inset:0;z-index:calc(var(--z-modal) + 1);background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:24px;text-align:center}
+.perf-plein .btn{max-width:320px;width:100%}
+.perf-plein-h{font-size:var(--fs-md);color:var(--sub);font-variant-numeric:tabular-nums}
+.perf-plein-t{font-size:var(--fs-lg);font-weight:800;line-height:1.35}
+.perf-plein-n{font-size:72px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.perf-plein-s{font-size:var(--fs-sm);color:var(--sub);line-height:1.5}
+@media (max-width:380px){ .comp-l{flex-wrap:wrap} .comp-h,.comp-k{flex:1 1 40%} }
+/* Le nom de la discipline prend toute la ligne ; l'heure et le meilleur dessous. */
+.comp-disc .comp-l{flex-wrap:wrap}
+.comp-disc .comp-l > .amc-in:first-child{flex:1 1 calc(100% - 46px)}
+.comp-disc .comp-h,.comp-disc .comp-k{flex:1 1 40%}
+.perf-carte label.ta-cons{display:flex;align-items:center}
+.perf-carte label.ta-cons .gf-x{margin-left:auto}

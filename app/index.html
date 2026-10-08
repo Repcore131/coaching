@@ -3985,6 +3985,14 @@ const COACH_PHOTO='icons/coach.jpg';
         </span>
         <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
       </button>
+      <!-- LOT RM1 : TEST DE 1RM ET JOUR DE COMPÉTITION, deux modes guidés. -->
+      <button type="button" class="card tc-entree" onclick="ouvrirPerf('test')">
+        <span style="flex:1;min-width:0">
+          <span class="tc-entree-t">Test de 1RM · Compétition</span>
+          <span class="tc-entree-d">Un test guidé palier par palier, ou ton plan d’échauffement minuté pour le jour J</span>
+        </span>
+        <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
+      </button>
       <!-- INVITER DES AMIS (parrainage) : pose par _rendreEntreeParrainage. -->
       <div id="atp-parrainage"></div>
       <!-- MA PAGE PUBLIQUE (/@pseudo) et le lien de la bio : _rendrePagePublique. -->
@@ -5314,6 +5322,14 @@ const COACH_PHOTO='icons/coach.jpg';
      pas. -->
 <!-- LOT TC1 : les quatre tests filmés. Les cartes sont rendues par
      renderTestsCompat (htmlTestsCompat), le résultat aussi. -->
+<!-- LOT RM1 : test de 1RM et jour de compétition (_perfRendre). -->
+<div id="s-perf" class="screen">
+  <!-- R21 — fermeture dediee : quitterPerf arrete les minuteurs et rappels du jour J, puis passe par retourDe (profil). -->
+  <div class="topbar"><button class="back-btn" onclick="quitterPerf()">←</button><span class="topbar-title">Test de 1RM · Compétition</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" id="perf-corps"></div>
+  </div>
+</div>
 <div id="s-tests-compat" class="screen">
   <div class="topbar"><button class="back-btn" onclick="retourDe('s-tests-compat','s-athlete-profile')">←</button><span class="topbar-title">Tests de compatibilité</span><span></span></div>
   <div class="scroll-area" style="flex:1">

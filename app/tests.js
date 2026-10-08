@@ -74546,6 +74546,94 @@ async function testExercices(){
             return (/_selecteurModele\(ex,i\)/.test(String(_selecteurTechnique)))||_echec('non branché');
           } finally { progEx=sv; }})());
       }
+      // ══ LOT RM1 — TEST DE 1RM ET JOUR DE COMPÉTITION ══
+      {
+        ok('RM1 — PROTOCOLE_1RM gelé, et les repos du cahier',(()=>{
+          const p=PROTOCOLE_1RM.map(x=>x.pct+'x'+x.reps).join();
+          return (Object.isFrozen(PROTOCOLE_1RM)&&Object.isFrozen(PROTOCOLE_1RM[0])&&p==='0x10,0.5x8,0.7x5,0.8x2,0.9x1,0.95x1'
+            &&RM_REPOS_AVANT_90.min===60&&RM_REPOS_AVANT_90.max===120&&RM_REPOS_DES_90===180)||_echec(p);})());
+        ok('RM1 — paliers : pourcentages de la référence, au disque de 1,25 kg, repos 60-120 s puis 180 s, puis la tentative',(()=>{
+          const pl=planTest1RM({kg:142,source:'e1rm'});
+          const c=pl.map(x=>x.charge).join();
+          if(c!==',71.25,100,113.75,127.5,135,142.5') return _echec(c);
+          if(!pl.every(x=>x.charge==null||Math.abs(x.charge/1.25-Math.round(x.charge/1.25))<1e-9)) return _echec('pas au disque');
+          const r=pl.map(x=>x.repos.min+'-'+x.repos.max).join();
+          if(r!=='60-120,60-120,60-120,60-120,180-180,180-180,180-180') return _echec(r);
+          return (pl[6].tentative&&pl[0].reps===10&&auDisque(100.6)===100&&auDisque(100.7)===101.25&&auDisque(0)===null)||_echec('arrondis');})());
+        ok('RM1 — la référence : e1RM observé, sinon l’estimation marquée comme telle, sinon rien (jamais inventée)',(()=>{
+          const a=referenceTest1RM(120.04,null), b=referenceTest1RM(null,'97,5'), c=referenceTest1RM(null,''), d=referenceTest1RM(0,'abc');
+          if(a.source!=='e1rm'||a.kg!==120||b.source!=='estimation'||b.kg!==97.5||c!==null||d!==null) return _echec(JSON.stringify([a,b,c,d]));
+          if(planTest1RM(null).length) return _echec('plan sans référence');
+          const sv=currentUser;
+          try{
+            currentUser={id:'rm',email:'rm@t.fr',sessions:[],bilans:[],sessions_config:(()=>{ const P=DAYS.map(day=>({day,name:'',active:false,exercises:[]}));
+              P[0]={day:'Lundi',name:'A',active:true,exercises:[{name:'DEVELOPPE COUCHE BARRE',series:3,reps:'5'}]}; return P; })()};
+            _perf={mode:'test',ex:'',estimation:'',etape:-1,tentatives:[],ref:null};
+            const el=document.createElement('div'); el.innerHTML=_htmlTest1RM(currentUser);
+            if(!/Aucun historique fiable/.test(el.textContent)||!el.querySelector('input[placeholder^="Ton estimation"]')||el.querySelector('.perf-palier')) return _echec(el.textContent.slice(0,200));
+          } finally { currentUser=sv; }
+          return true;})());
+        ok('RM1 — tentatives : +5 kg si rapide, +2,5 kg si correcte, arrêt si lente ou ratée, trois au plus',(()=>{
+          const t=(c,ok,v)=>({charge:c,ok,vitesse:v});
+          const r1=tentativeSuivante([t(140,true,'rapide')]), r2=tentativeSuivante([t(140,true,'moyenne')]);
+          if(r1.charge!==145||r2.charge!==142.5||r1.fin||r1.record!==140) return _echec(JSON.stringify([r1,r2]));
+          const l=tentativeSuivante([t(140,true,'lente')]);
+          if(!l.fin||l.record!==140) return _echec('lente');
+          const ra=tentativeSuivante([t(140,true,'rapide'),t(145,false,'')]);
+          if(!ra.fin||ra.record!==140) return _echec('ratée');
+          const zero=tentativeSuivante([t(140,false,'')]);
+          if(!zero.fin||zero.record!==null||!/pas de record testé/.test(zero.raison)) return _echec('aucune réussite');
+          const trois=tentativeSuivante([t(140,true,'rapide'),t(145,true,'rapide'),t(150,true,'rapide')]);
+          return (trois.fin&&trois.record===150)||_echec('trois');})());
+        ok('RM1 — record testé : rangé à part, source « testé », référence et tentatives gardées ; l’e1RM ne le lit pas',(()=>{
+          const e=entreeRecordTeste('DEVELOPPE COUCHE BARRE',[{charge:140,ok:true,vitesse:'moyenne'},{charge:142.5,ok:true,vitesse:'lente'}],{kg:138,source:'estimation'},1000);
+          if(!e||e.kg!==142.5||e.source!=='teste'||e.refSource!=='estimation'||e.refKg!==138||e.tentatives.length!==2||e.tentatives[1].vitesse!=='lente') return _echec(JSON.stringify(e));
+          if(entreeRecordTeste('X',[{charge:100,ok:false}],null,1)!==null) return _echec('record sans réussite');
+          const u={email:'rt@t.fr',sessions:[],recordsTestes:{'developpe-couche-barre':e}};
+          if(maxE1rmObserve(u,'DEVELOPPE COUCHE BARRE')!==null) return _echec('l’e1RM lit le record testé');
+          return (/"recordsTestes"\s*:/.test(String(window._RC_RULES||''))&&/'recordsTestes','competition'/.test(_prodSrc()))||_echec('règle ou classement');})());
+        ok('RM1 — compétition : ouverture 85-90 %, deuxième 95-100 %, troisième au record, au disque',(()=>{
+          const p=planCompetition(150,'14:30');
+          if(p.erreur) return _echec(p.erreur);
+          const o=p.ouverture, d=p.deuxieme;
+          if(o.min!==127.5||o.max!==135||o.charge!==131.25||d.min!==142.5||d.max!==150||d.charge!==146.25||p.troisieme.charge!==150||p.troisieme.battre!==152.5) return _echec(JSON.stringify(p));
+          if(!(o.charge>=150*0.85&&o.charge<=150*0.9&&d.charge>=150*0.95&&d.charge<=150)) return _echec('hors fourchette');
+          const q=planCompetition(97.3,'10:00');
+          return [q.ouverture.charge,q.deuxieme.charge,q.troisieme.charge].every(v=>Math.abs(v/1.25-Math.round(v/1.25))<1e-9)||_echec('disques');})());
+        ok('RM1 — horaires : dernière barre 7 à 10 min avant le passage, barres toutes les 5 min, échauffement général avant',(()=>{
+          const p=planCompetition(150,'14:30');
+          const h=p.echauffements.map(x=>x.heure).join();
+          if(h!=='13:47,14:02,14:07,14:12,14:17,14:22') return _echec(h);
+          const der=_compMin(p.echauffements[p.echauffements.length-1].heure), pas=_compMin(p.passage);
+          if(!(pas-der>=7&&pas-der<=10)) return _echec('écart '+(pas-der));
+          if(p.echauffements[0].charge!==null||p.echauffements[5].charge!==auDisque(131.25*0.9,'bas')) return _echec('charges');
+          const tot=planCompetition(100,'00:20');
+          return (tot.echauffements[0].heure==='23:37'&&_compHhmm(-1)==='23:59'&&_compMin('7h05')===425)||_echec('minuit : '+tot.echauffements[0].heure);})());
+        ok('RM1 — compétition sans référence ou sans heure : on le dit, aucun plan inventé',(()=>{
+          const a=planCompetition(null,'14:00'), b=planCompetition(0,'14:00'), c=planCompetition(140,'');
+          if(!/Pas de référence/.test(a.erreur||'')||!b.erreur||!/Heure/.test(c.erreur||'')||a.ouverture) return _echec(JSON.stringify([a,b,c]));
+          return evenementsCompetition([{nom:'Dips',heure:'14:00'},{nom:'Tractions',heure:'15:00'}],[null,120]).every(e=>/Tractions/.test(e.texte))||_echec('événements');})());
+        ok('RM1 — événements du jour triés, sac modifiable par défaut, routine facultative',(()=>{
+          const ev=evenementsCompetition([{nom:'Tractions',heure:'15:00'},{nom:'Dips',heure:'14:00'}],[60,80]);
+          if(ev.length!==14||ev.some((e,i)=>i&&e.min<ev[i-1].min)||!/Dips · Passage/.test(ev[6].texte)) return _echec(ev.map(e=>e.min+e.texte).join(' | '));
+          const sv=currentUser;
+          try{
+            currentUser={id:'c',sessions:[],bilans:[],sessions_config:[]};
+            const c=_compDe(currentUser);
+            if(c.sac.length!==SAC_COMPETITION.length||c.sac.some(x=>x.ok)||c.routine) return _echec('défauts');
+            if(!SAC_COMPETITION.includes('Ceinture de lest')||!SAC_COMPETITION.includes('Magnésie')||!SAC_COMPETITION.includes('Mousquetons')) return _echec('sac');
+          } finally { currentUser=sv; }
+          return (ROUTINE_MENTALE.length===5&&/Respiration énergisante/.test(ROUTINE_MENTALE[0].titre)&&/vertige/.test(ROUTINE_MENTALE[0].texte)
+            &&ROUTINE_MENTALE.slice(1).every((r,i)=>r.titre.indexOf('Visualisation '+(i+1))===0)&&/id="s-perf"/.test(_prodSrc())&&/ouvrirPerf\('test'\)/.test(_prodSrc()))||_echec('routine ou écran');})());
+      }
+      // UNE FONCTION DÉCLARÉE DEUX FOIS : la seconde écrase la première sans
+      // un mot. Arrivé deux fois pendant les lots PF1 (_pfRendre) et RM1
+      // (_hhmmEnMin). _lundiDe est un doublon ancien, identique, laissé tel quel.
+      ok('Aucune fonction homonyme dans le code de production (hors _lundiDe, connu)',(()=>{
+        const vus={}, doubles=[];
+        for(const m of _prodSrc().matchAll(/^(?:async )?function ([A-Za-z0-9_$]+)\(/gm)){ if(vus[m[1]]) doubles.push(m[1]); vus[m[1]]=1; }
+        const l=[...new Set(doubles)].filter(n=>n!=='_lundiDe');
+        return l.length===0||_echec('déclarées deux fois : '+l.join(', '));})());
       okA('AM1 — MOTION LAB : contrôle d’amplitude avec ±3° de bruit et répétitions mal vues',async()=>{
         try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
         if(typeof controleAmplitude!=='function') return _echec('fonction absente');

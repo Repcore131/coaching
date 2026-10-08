@@ -7047,7 +7047,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // LOT PF1 — LE PLAN POINT FAIBLE appliqué : une date, deux muscles, un
   // nombre d'opérations. Aucune mesure du corps n'y est recopiée : l'effet se
   // recalcule au rite depuis les séances et les bilans.
-  'planPointFaible','ordonnancePlateau',
+  'planPointFaible','ordonnancePlateau','recordsTestes','competition',
   // LOT AM1 — LES AMPLITUDES CIBLES (amplitudes/{exercice}) : une
   // articulation, deux angles, un repère, posés par le coach. Une consigne
   // d'exécution, comme le réglage du coach — pas une mesure du corps.
@@ -18233,6 +18233,377 @@ function _progExModeleDeload(i,on){
   _progExDirty=true;
   ex.modele.options=Object.assign({},ex.modele.options||{},{deload:!!on});
   renderProgEx(); return true;
+}
+
+// ══ LOT RM1 — TEST DE 1RM ET JOUR DE COMPÉTITION ═════════════════════════
+//
+// Deux modes guidés, côté athlète, dans l'écran s-perf.
+//
+// ⚠ LA RÉFÉRENCE N'EST JAMAIS INVENTÉE. Le test part de maxE1rmObserve (les
+//   séries fiables des 120 derniers jours) ; sans historique fiable, on
+//   DEMANDE une estimation à l'athlète, et elle reste marquée « estimation »
+//   jusque dans le record enregistré.
+// ⚠ UN RECORD TESTÉ N'EST PAS UN E1RM. Il est rangé à part (recordsTestes),
+//   avec la référence d'où le test est parti ; rien de ce qui calcule l'e1RM
+//   (records, plateaux, programmation) ne le lit comme une série.
+// ⚠ LES NOTIFICATIONS du jour de compétition partent de l'application
+//   OUVERTE (minuteurs du navigateur) : un téléphone verrouillé longtemps,
+//   ou l'app fermée, peut les retarder ou les perdre. L'écran le dit.
+// ⚠ LA ROUTINE MENTALE EST FACULTATIVE ET SANS PROMESSE : une aide à se
+//   concentrer, pas un traitement. La respiration énergisante s'arrête au
+//   moindre vertige.
+
+// LE PROTOCOLE DU TEST : la barre à vide (pct 0), puis 50, 70, 80, 90 et
+// 95 % de la référence, puis les tentatives.
+const PROTOCOLE_1RM=Object.freeze([
+  Object.freeze({pct:0,reps:10}),Object.freeze({pct:0.5,reps:8}),Object.freeze({pct:0.7,reps:5}),
+  Object.freeze({pct:0.8,reps:2}),Object.freeze({pct:0.9,reps:1}),Object.freeze({pct:0.95,reps:1})]);
+const RM_REPOS_AVANT_90=Object.freeze({min:60,max:120});   // jusqu'à 90 % : 60 à 120 s
+const RM_REPOS_DES_90=180;                                  // à partir de 90 % : 3 min
+const RM_TENTATIVES_MAX=3;
+// La tentative suivante, selon la vitesse ressentie d'une tentative réussie.
+const RM_SAUTS=Object.freeze({rapide:5,moyenne:2.5});       // lente : on s'arrête là
+const RM_PAS_DISQUE=1.25;
+/** PURE. Au disque près (1,25 kg), au plus proche ; null si rien. */
+function auDisque(kg,sens){
+  const v=Number(kg); if(!isFinite(v)||!(v>0)) return null;
+  return arrondiCharge(v,{pas:RM_PAS_DISQUE,sens:sens||'proche',user:{}});
+}
+/**
+ * PURE. La référence du test : l'e1RM observé, sinon l'estimation déclarée,
+ * sinon null (l'écran demande alors une estimation).
+ * @param {number|null} e1rmObserve @param {number|null} [estimation]
+ * @returns {{kg:number, source:string}|null}  source : 'e1rm' | 'estimation'
+ */
+function referenceTest1RM(e1rmObserve,estimation){
+  const e=Number(e1rmObserve);
+  if(isFinite(e)&&e>0) return {kg:Math.round(e*10)/10,source:'e1rm'};
+  const s=Number(String(estimation==null?'':estimation).replace(',','.'));
+  if(isFinite(s)&&s>0&&s<=PROG_EX_MAX_MAX) return {kg:s,source:'estimation'};
+  return null;
+}
+/**
+ * PURE. Les paliers du test, puis la première tentative (100 % de la référence).
+ * @param {{kg:number}|null} ref
+ * @returns {{pct:number, reps:number, charge:number|null, repos:{min:number,max:number}, tentative?:boolean}[]}
+ */
+function planTest1RM(ref){
+  if(!ref||!(ref.kg>0)) return [];
+  const p=PROTOCOLE_1RM.map(x=>({pct:x.pct,reps:x.reps,charge:x.pct>0?auDisque(ref.kg*x.pct):null,
+    repos:x.pct>=0.9?{min:RM_REPOS_DES_90,max:RM_REPOS_DES_90}:{min:RM_REPOS_AVANT_90.min,max:RM_REPOS_AVANT_90.max}}));
+  p.push({pct:1,reps:1,charge:auDisque(ref.kg),repos:{min:RM_REPOS_DES_90,max:RM_REPOS_DES_90},tentative:true});
+  return p;
+}
+/**
+ * PURE. LA TENTATIVE SUIVANTE.
+ * @param {{charge:number, ok:boolean, vitesse?:string}[]} tentatives
+ * @returns {{charge:number|null, fin:boolean, record:number|null, raison:string}}
+ */
+function tentativeSuivante(tentatives){
+  const l=(tentatives||[]).filter(t=>t&&t.charge>0);
+  const reussies=l.filter(t=>t.ok), record=reussies.length?Math.max(...reussies.map(t=>t.charge)):null;
+  const der=l[l.length-1];
+  if(!der) return {charge:null,fin:false,record:null,raison:''};
+  if(l.length>=RM_TENTATIVES_MAX) return {charge:null,fin:true,record,raison:RM_TENTATIVES_MAX+' tentatives : le test s’arrête.'};
+  if(!der.ok) return {charge:null,fin:true,record,raison:record?'Tentative ratée : ton record du jour est la dernière barre réussie.':'Tentative ratée : pas de record testé aujourd’hui, et c’est une information aussi.'};
+  const saut=RM_SAUTS[der.vitesse];
+  if(!saut) return {charge:null,fin:true,record,raison:'Barre lente : tu étais au bout, on s’arrête sur une réussite.'};
+  return {charge:auDisque(der.charge+saut),fin:false,record,raison:(der.vitesse==='rapide'?'Barre rapide : +5 kg.':'Barre correcte : +2,5 kg.')};
+}
+/** PURE. L'entrée de record testé, prête à écrire. */
+function entreeRecordTeste(nom,tentatives,ref,t){
+  const r=tentativeSuivante(tentatives).record;
+  if(!(r>0)) return null;
+  return {nom:String(nom||'').slice(0,120),kg:r,date:Number(t)||Date.now(),source:'teste',
+    refKg:ref&&ref.kg>0?ref.kg:0,refSource:ref&&ref.source==='estimation'?'estimation':'e1rm',
+    tentatives:(tentatives||[]).slice(0,RM_TENTATIVES_MAX).map(x=>({kg:Number(x.charge)||0,ok:!!x.ok,vitesse:x.ok&&RM_SAUTS[x.vitesse]?x.vitesse:(x.ok?'lente':'')}))};
+}
+
+// ── LE JOUR DE COMPÉTITION ──────────────────────────────────────────────────
+const COMP_OUVERTURE=Object.freeze([0.85,0.90]), COMP_DEUXIEME=Object.freeze([0.95,1.00]);
+// LA DERNIÈRE BARRE D'ÉCHAUFFEMENT tombe 7 à 10 minutes avant le passage :
+// on vise 8. Les barres précédentes, toutes les 5 minutes ; l'échauffement
+// général commence 15 minutes avant la première barre.
+const COMP_DERNIERE_MIN=8, COMP_ECART_MIN=5, COMP_GENERAL_MIN=15;
+// Les barres d'échauffement, en part de l'OUVERTURE.
+const COMP_ECHAUFFEMENTS=Object.freeze([Object.freeze({pct:0.4,reps:5}),Object.freeze({pct:0.55,reps:3}),
+  Object.freeze({pct:0.7,reps:2}),Object.freeze({pct:0.8,reps:1}),Object.freeze({pct:0.9,reps:1})]);
+const SAC_COMPETITION=Object.freeze(['Ceinture de lest','Chaîne de lest','Mousquetons','Magnésie','Gants ou maniques','Bandes de poignets',
+  'Genouillères','Chaussures','Licence et pièce d’identité','Eau et collation','Serviette']);
+const ROUTINE_MENTALE=Object.freeze([
+  Object.freeze({titre:'Respiration énergisante',duree:60,texte:'Vingt inspirations nasales rapides et actives, puis une longue expiration. Arrête au moindre vertige.'}),
+  Object.freeze({titre:'Visualisation 1 · le lieu',duree:30,texte:'Vois le plateau, la barre, les juges, le bruit de la salle.'}),
+  Object.freeze({titre:'Visualisation 2 · le placement',duree:30,texte:'Tes mains, tes pieds, ta ceinture : chaque point de contact, dans l’ordre.'}),
+  Object.freeze({titre:'Visualisation 3 · le mouvement',duree:30,texte:'Le mouvement entier, au bon rythme, sans une hésitation.'}),
+  Object.freeze({titre:'Visualisation 4 · la réussite',duree:30,texte:'Le signal de l’arbitre, la barre posée, ce que tu ressens.'})]);
+/** PURE. « 14:05 » → minutes depuis minuit ; null si illisible. */
+function _compMin(h){
+  const m=String(h==null?'':h).trim().match(/^(\d{1,2})[:hH](\d{2})$/);
+  if(!m) return null;
+  const a=parseInt(m[1],10), b=parseInt(m[2],10);
+  return (a<24&&b<60)?a*60+b:null;
+}
+/** PURE. Minutes → « 14:05 » (sur 24 h, la veille si négatif). */
+function _compHhmm(n){ const v=((Math.round(n)%1440)+1440)%1440; return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0'); }
+/**
+ * PURE. LE PLAN D'UNE DISCIPLINE.
+ * @param {number|null} meilleur  le meilleur (record testé, sinon e1RM), en kg
+ * @param {string} heurePassage  « HH:MM »
+ * @returns {{erreur?:string, ouverture?:any, deuxieme?:any, troisieme?:any, echauffements?:{heure:string,charge:number|null,reps:number|null,lib:string}[]}}
+ */
+function planCompetition(meilleur,heurePassage){
+  const m=Number(meilleur);
+  if(!isFinite(m)||!(m>0)) return {erreur:'Pas de référence : fais un test de 1RM ou saisis ton meilleur résultat.'};
+  const h=_compMin(heurePassage);
+  if(h==null) return {erreur:'Heure de passage illisible (attendu : 14:05).'};
+  const fourch=(f)=>({min:auDisque(m*f[0],'bas'),max:auDisque(m*f[1],'bas'),charge:auDisque(m*(f[0]+f[1])/2,'bas')});
+  const ouverture=fourch(COMP_OUVERTURE), deuxieme=fourch(COMP_DEUXIEME);
+  const troisieme={charge:auDisque(m,'proche'),battre:auDisque(m+2.5,'proche')};
+  const n=COMP_ECHAUFFEMENTS.length;
+  const barres=COMP_ECHAUFFEMENTS.map((x,i)=>({heure:_compHhmm(h-COMP_DERNIERE_MIN-(n-1-i)*COMP_ECART_MIN),
+    charge:auDisque(ouverture.charge*x.pct,'bas'),reps:x.reps,lib:'Barre '+(i+1)}));
+  const debut=h-COMP_DERNIERE_MIN-(n-1)*COMP_ECART_MIN-COMP_GENERAL_MIN;
+  const echauffements=[{heure:_compHhmm(debut),charge:null,reps:null,lib:'Échauffement général'}].concat(barres);
+  return {ouverture,deuxieme,troisieme,echauffements,passage:_compHhmm(h)};
+}
+
+// ── L'ÉCRAN ─────────────────────────────────────────────────────────────────
+let _perf={mode:'test',ex:'',estimation:'',etape:-1,tentatives:[],ref:null};
+let _perfMinuteurs=[], _perfTick=null;
+/** Les exercices du programme qui se chargent (charge externe ou lestée). */
+function _perfExercices(u){
+  const vus=new Set(), out=[];
+  for(const s of _creneauxDe(u)) for(const e of ((s&&s.active===true&&s.exercises)||[])){
+    const n=String((e&&e.name)||'').trim(); if(!n||vus.has(exKey(n))) continue;
+    let t=''; try{ t=typeCharge(_exPourCharge(n,u)); }catch(err){}
+    if(t==='externe'||t==='leste'){ vus.add(exKey(n)); out.push(n); }
+  }
+  return out;
+}
+function ouvrirPerf(mode){
+  if(mode) _perf.mode=mode==='competition'?'competition':'test';
+  _perfRendre();
+  go('s-perf');
+  return true;
+}
+function quitterPerf(){
+  _perfMinuteursArreter();
+  try{ document.getElementById('perf-plein')&&document.getElementById('perf-plein').remove(); }catch(e){}
+  retourDe('s-perf','s-athlete-profile');
+}
+function perfMode(m){ _perf.mode=m==='competition'?'competition':'test'; _perfRendre(); return true; }
+function _perfRendre(){
+  const z=document.getElementById('perf-corps'); if(!z||!currentUser) return;
+  const onglet=(m,lib)=>'<button type="button" class="pf-chip'+(_perf.mode===m?' active':'')+'" data-m="'+m+'" onclick="perfMode(this.dataset.m)">'+lib+'</button>';
+  z.innerHTML='<div class="perf-onglets">'+onglet('test','Test de 1RM')+onglet('competition','Jour de compétition')+'</div>'
+    +(_perf.mode==='test'?_htmlTest1RM(currentUser):_htmlCompetition(currentUser));
+}
+// ── TEST 1RM, L'ÉCRAN ───────────────────────────────────────────────────────
+function _htmlTest1RM(u){
+  const E=escapeHtml, exs=_perfExercices(u);
+  if(!_perf.ex&&exs.length) _perf.ex=exs[0];
+  let obs=null; try{ obs=_perf.ex?maxE1rmObserve(u,_perf.ex):null; }catch(e){ obs=null; }
+  const ref=referenceTest1RM(obs,_perf.estimation); _perf.ref=ref;
+  const rec=(u.recordsTestes||{})[slugExercice(_perf.ex||'')];
+  let h='<div class="perf-carte"><label>Exercice</label><select class="amc-in" onchange="perfChoix(\'ex\',this.value)">'
+    +(exs.length?exs.map(n=>'<option'+(n===_perf.ex?' selected':'')+'>'+E(n)+'</option>').join(''):'<option value="">Aucun exercice en charge au programme</option>')+'</select>';
+  if(!_perf.ex) return h+'</div>';
+  if(obs) h+='<div class="perf-s">Référence : '+E(String(ref.kg).replace('.',','))+' kg, e1RM calculé sur tes séries fiables des 120 derniers jours.</div>';
+  else h+='<div class="perf-s">Aucun historique fiable sur cet exercice : donne ton estimation de 1RM. Elle sera notée comme estimation.</div>'
+    +'<input class="amc-in" inputmode="decimal" placeholder="Ton estimation, en kg" value="'+E(String(_perf.estimation||''))+'" onchange="perfChoix(\'estimation\',this.value)">';
+  if(rec) h+='<div class="perf-s">Dernier record testé : '+E(String(rec.kg).replace('.',','))+' kg, le '+E(new Date(rec.date).toLocaleDateString('fr-FR'))+'.</div>';
+  h+='</div>';
+  if(!ref) return h;
+  const plan=planTest1RM(ref);
+  const kg=v=>v==null?'Barre à vide':String(v).replace('.',',')+' kg';
+  h+='<div class="perf-carte"><div class="perf-t">Paliers</div>'+plan.filter(p=>!p.tentative).map((p,i)=>'<div class="perf-palier'+(_perf.etape===i?' perf-ici':'')+(_perf.etape>i?' perf-fait':'')+'">'
+    +'<span>'+(p.pct?Math.round(p.pct*100)+' %':'Barre')+'</span><b>'+kg(p.charge)+' × '+p.reps+'</b><i>repos '+(p.repos.min===p.repos.max?p.repos.min+' s':p.repos.min+'-'+p.repos.max+' s')+'</i></div>').join('')+'</div>';
+  const nPal=PROTOCOLE_1RM.length;
+  if(_perf.etape<nPal){
+    h+='<div class="perf-actions">'+(_perf.etape<0?'<button type="button" class="btn btn-red" onclick="perfPalier()">Commencer</button>'
+      :'<button type="button" class="btn btn-red" onclick="perfPalier()">Palier fait</button>')+'</div>';
+    h+='<div id="perf-repos" class="perf-repos"></div>';
+    return h;
+  }
+  const suite=_perf.tentatives.length?tentativeSuivante(_perf.tentatives):{charge:plan[plan.length-1].charge,fin:false,record:null,raison:''};
+  h+='<div class="perf-carte"><div class="perf-t">Tentatives</div>'+_perf.tentatives.map((t,i)=>'<div class="perf-palier perf-fait"><span>Essai '+(i+1)+'</span><b>'+kg(t.charge)+'</b><i>'+(t.ok?'réussi · '+E(({rapide:'rapide',moyenne:'correct',lente:'lent'})[t.vitesse]||''):'raté')+'</i></div>').join('');
+  if(suite.raison) h+='<div class="perf-s">'+E(suite.raison)+'</div>';
+  if(!suite.fin&&suite.charge){
+    h+='<div class="perf-prochaine">Essai '+(_perf.tentatives.length+1)+' : <b>'+kg(suite.charge)+'</b> · repos '+RM_REPOS_DES_90+' s avant</div>'
+      +'<div class="perf-actions perf-4">'+[['rapide','Réussi, rapide'],['moyenne','Réussi, correct'],['lente','Réussi, lent']].map(v=>'<button type="button" class="btn btn-outline" data-v="'+v[0]+'" data-kg="'+suite.charge+'" onclick="perfTentative(+this.dataset.kg,true,this.dataset.v)">'+v[1]+'</button>').join('')
+      +'<button type="button" class="btn btn-outline" data-kg="'+suite.charge+'" onclick="perfTentative(+this.dataset.kg,false,\'\')">Raté</button></div>'
+      +'<div id="perf-repos" class="perf-repos"></div>';
+  } else if(suite.record){
+    h+='<div class="perf-actions"><button type="button" class="btn btn-red" onclick="perfEnregistrerRecord()">Enregistrer '+kg(suite.record)+' comme record testé</button></div>';
+  }
+  return h+'</div>';
+}
+function perfChoix(champ,val){
+  if(champ==='ex'){ _perf.ex=String(val||''); _perf.etape=-1; _perf.tentatives=[]; _perf.estimation=''; }
+  if(champ==='estimation') _perf.estimation=String(val||'').trim();
+  _perfRendre(); return true;
+}
+function perfPalier(){
+  const plan=planTest1RM(_perf.ref); if(!plan.length) return false;
+  const i=_perf.etape;
+  _perf.etape=i+1;
+  _perfRendre();
+  if(i>=0&&plan[i]) _perfReposDemarrer(plan[i].repos.max===plan[i].repos.min?plan[i].repos.min:90,plan[i].repos);
+  return true;
+}
+function perfTentative(kg,ok,vitesse){
+  _perf.tentatives.push({charge:Number(kg)||0,ok:!!ok,vitesse:String(vitesse||'')});
+  _perfRendre();
+  const s=tentativeSuivante(_perf.tentatives);
+  if(!s.fin) _perfReposDemarrer(RM_REPOS_DES_90,{min:RM_REPOS_DES_90,max:RM_REPOS_DES_90});
+  return true;
+}
+function _perfReposDemarrer(sec,fourch){
+  const z=document.getElementById('perf-repos');
+  const fin=Date.now()+sec*1000;
+  if(_perfTick) clearInterval(_perfTick);
+  const maj=()=>{ const r=Math.max(0,Math.round((fin-Date.now())/1000)), y=document.getElementById('perf-repos');
+    if(y) y.textContent=r?('Repos : '+Math.floor(r/60)+':'+String(r%60).padStart(2,'0')+(fourch&&fourch.min!==fourch.max?' (de '+fourch.min+' à '+fourch.max+' s)':'')):'Repos terminé : à toi.';
+    if(!r){ clearInterval(_perfTick); _perfTick=null; } };
+  if(z) maj(); _perfTick=setInterval(maj,1000);
+}
+function perfEnregistrerRecord(){
+  const e=entreeRecordTeste(_perf.ex,_perf.tentatives,_perf.ref,Date.now());
+  if(!e||!currentUser) return false;
+  const k=slugExercice(_perf.ex);
+  currentUser.recordsTestes=Object.assign({},currentUser.recordsTestes||{});
+  currentUser.recordsTestes[k]=e;
+  saveUser();
+  toast('Record testé enregistré : '+String(e.kg).replace('.',',')+' kg');
+  _perf.etape=-1; _perf.tentatives=[];
+  _perfRendre();
+  return true;
+}
+// ── COMPÉTITION, L'ÉCRAN ────────────────────────────────────────────────────
+function _compDe(u){
+  const c=(u&&u.competition&&typeof u.competition==='object')?u.competition:{};
+  const dis=Array.isArray(c.disciplines)?c.disciplines:(c.disciplines&&typeof c.disciplines==='object'?Object.values(c.disciplines):[]);
+  const sac=Array.isArray(c.sac)?c.sac:(c.sac&&typeof c.sac==='object'?Object.values(c.sac):SAC_COMPETITION.map(lib=>({lib,ok:false})));
+  return {date:String(c.date||''),disciplines:dis.filter(Boolean),sac:sac.filter(x=>x&&x.lib),routine:!!c.routine};
+}
+/** Le meilleur d'une discipline : record testé, sinon e1RM observé, sinon la valeur saisie. */
+function _compMeilleur(u,d){
+  const m=Number(d&&d.meilleur); if(m>0) return {kg:m,source:'saisi'};
+  const r=(u.recordsTestes||{})[slugExercice((d&&d.nom)||'')]; if(r&&r.kg>0) return {kg:r.kg,source:'testé'};
+  let o=null; try{ o=maxE1rmObserve(u,d.nom); }catch(e){ o=null; }
+  return o?{kg:o,source:'e1RM calculé'}:null;
+}
+function _htmlCompetition(u){
+  const E=escapeHtml, c=_compDe(u), exs=_perfExercices(u);
+  const kg=v=>v==null?'—':String(v).replace('.',',')+' kg';
+  let h='<div class="perf-carte"><div class="perf-t">Disciplines et heures de passage</div>'
+    +c.disciplines.map((d,i)=>{
+      const mb=_compMeilleur(u,d), p=planCompetition(mb&&mb.kg,d.heure);
+      return '<div class="comp-disc"><div class="comp-l"><input class="amc-in" value="'+E(d.nom||'')+'" list="perf-exos" placeholder="Discipline" data-i="'+i+'" data-c="nom" onchange="compChamp(this)">'
+        +'<input class="amc-in comp-h" type="time" value="'+E(d.heure||'')+'" data-i="'+i+'" data-c="heure" onchange="compChamp(this)">'
+        +'<input class="amc-in comp-k" inputmode="decimal" placeholder="Meilleur (kg)" value="'+E(d.meilleur?String(d.meilleur):'')+'" data-i="'+i+'" data-c="meilleur" onchange="compChamp(this)">'
+        +'<button type="button" class="gf-x" aria-label="Retirer" data-i="'+i+'" onclick="compRetirer(+this.dataset.i)">×</button></div>'
+        +(p.erreur?'<div class="perf-s">'+E(p.erreur)+'</div>'
+          :'<div class="perf-s">Référence : '+kg(mb.kg)+' ('+E(mb.source)+')</div>'
+           +'<div class="comp-essais"><span>1<sup>er</sup> : <b>'+kg(p.ouverture.charge)+'</b> <i>('+kg(p.ouverture.min)+' – '+kg(p.ouverture.max)+')</i></span>'
+           +'<span>2<sup>e</sup> : <b>'+kg(p.deuxieme.charge)+'</b> <i>('+kg(p.deuxieme.min)+' – '+kg(p.deuxieme.max)+')</i></span>'
+           +'<span>3<sup>e</sup> : <b>'+kg(p.troisieme.charge)+'</b> <i>(record ; '+kg(p.troisieme.battre)+' pour le battre)</i></span></div>'
+           +'<div class="comp-ech">'+p.echauffements.map(x=>'<div><b>'+x.heure+'</b> '+E(x.lib)+(x.charge!=null?' · '+kg(x.charge)+' × '+x.reps:'')+'</div>').join('')+'<div><b>'+p.passage+'</b> Passage</div></div>')
+        +'</div>';
+    }).join('')
+    +'<datalist id="perf-exos">'+exs.map(n=>'<option value="'+E(n)+'">').join('')+'</datalist>'
+    +'<div class="perf-actions"><button type="button" class="btn btn-outline" onclick="compAjouter()">Ajouter une discipline</button>'
+    +(c.disciplines.length?'<button type="button" class="btn btn-red" onclick="compPleinEcran()">Minuteur plein écran</button>':'')+'</div>'
+    +'<div class="perf-s">Les rappels partent de l’application ouverte : garde-la à l’écran le jour J.</div></div>';
+  h+='<div class="perf-carte"><div class="perf-t">Le sac</div>'+c.sac.map((x,i)=>'<label class="ta-cons"><input type="checkbox" data-i="'+i+'"'+(x.ok?' checked':'')+' onchange="compSac(+this.dataset.i,this.checked)"> <span>'+E(x.lib)+'</span>'
+    +'<button type="button" class="gf-x" aria-label="Retirer" data-i="'+i+'" onclick="compSacRetirer(+this.dataset.i)">×</button></label>').join('')
+    +'<div class="comp-l"><input id="comp-sac-n" class="amc-in" placeholder="Ajouter un objet"><button type="button" class="btn btn-outline" onclick="compSacAjouter()">Ajouter</button></div></div>';
+  h+='<div class="perf-carte"><label class="ta-cons"><input type="checkbox"'+(c.routine?' checked':'')+' onchange="compRoutine(this.checked)"> <span>Routine de préparation mentale (facultative)</span></label>'
+    +(c.routine?ROUTINE_MENTALE.map(r=>'<div class="perf-s"><b>'+E(r.titre)+'</b> · '+r.duree+' s — '+E(r.texte)+'</div>').join('')
+      +'<div class="perf-actions"><button type="button" class="btn btn-outline" onclick="compLancerRoutine()">Lancer la routine</button></div>':'')+'</div>';
+  return h;
+}
+function _compEcrire(fn){
+  if(!currentUser) return false;
+  const c=_compDe(currentUser);
+  fn(c);
+  currentUser.competition={date:c.date,disciplines:c.disciplines.slice(0,8),sac:c.sac.slice(0,40),routine:!!c.routine};
+  saveUser(); _perfRendre(); return true;
+}
+function compAjouter(){ return _compEcrire(c=>c.disciplines.push({nom:'',heure:'',meilleur:0})); }
+function compRetirer(i){ return _compEcrire(c=>c.disciplines.splice(i,1)); }
+function compChamp(el){
+  const i=+el.dataset.i, k=el.dataset.c;
+  return _compEcrire(c=>{ const d=c.disciplines[i]; if(!d) return;
+    if(k==='nom') d.nom=String(el.value||'').slice(0,120);
+    if(k==='heure') d.heure=_compMin(el.value)!=null?el.value:'';
+    if(k==='meilleur'){ const v=Number(String(el.value).replace(',','.')); d.meilleur=(v>0&&v<=PROG_EX_MAX_MAX)?v:0; } });
+}
+function compSac(i,ok){ return _compEcrire(c=>{ if(c.sac[i]) c.sac[i].ok=!!ok; }); }
+function compSacRetirer(i){ return _compEcrire(c=>c.sac.splice(i,1)); }
+function compSacAjouter(){ const el=document.getElementById('comp-sac-n'); const v=String((el&&el.value)||'').trim().slice(0,60); if(!v) return false; return _compEcrire(c=>c.sac.push({lib:v,ok:false})); }
+function compRoutine(on){ return _compEcrire(c=>{ c.routine=!!on; }); }
+/** PURE. Les événements du jour (échauffements et passages), en minutes, triés. */
+function evenementsCompetition(disciplines,meilleurs){
+  const out=[];
+  (disciplines||[]).forEach((d,i)=>{
+    const p=planCompetition(meilleurs[i],d&&d.heure); if(p.erreur) return;
+    for(const x of p.echauffements) out.push({min:_compMin(x.heure),texte:(d.nom?d.nom+' · ':'')+x.lib+(x.charge!=null?' : '+String(x.charge).replace('.',',')+' kg × '+x.reps:'')});
+    out.push({min:_compMin(p.passage),texte:(d.nom?d.nom+' · ':'')+'Passage — ouverture '+String(p.ouverture.charge).replace('.',',')+' kg'});
+  });
+  return out.sort((a,b)=>a.min-b.min);
+}
+function _perfNotifier(titre,corps){
+  try{ if(typeof Notification==='undefined'||Notification.permission!=='granted') return;
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(titre,{body:corps,tag:'rc-comp'})).catch(()=>{ try{ new Notification(titre,{body:corps}); }catch(e){} }); }catch(e){}
+}
+function _perfMinuteursArreter(){ _perfMinuteurs.forEach(clearTimeout); _perfMinuteurs=[]; if(_perfTick){ clearInterval(_perfTick); _perfTick=null; } }
+async function compPleinEcran(){
+  const u=currentUser, c=_compDe(u);
+  const ev=evenementsCompetition(c.disciplines,c.disciplines.map(d=>{ const m=_compMeilleur(u,d); return m&&m.kg; }));
+  if(!ev.length){ toast('Ajoute une heure de passage et une référence.','var(--orange)'); return false; }
+  // LA PERMISSION N'EST PAS DEMANDÉE ICI : les points d'accord sont comptés
+  // ailleurs (notif_granted). Sans elle, l'écran plein le dit et suffit.
+  const _sansNotif=typeof Notification==='undefined'||Notification.permission!=='granted';
+  _perfMinuteursArreter();
+  const now=new Date(), minNow=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;
+  for(const e of ev){ const dt=(e.min-minNow)*60000; if(dt>0&&dt<18*3600e3) _perfMinuteurs.push(setTimeout(()=>_perfNotifier('Jour de compétition',e.texte),dt)); }
+  document.body.insertAdjacentHTML('beforeend','<div id="perf-plein" class="perf-plein" role="dialog" aria-label="Minuteur de compétition"><div id="perf-plein-c"></div>'
+    +(_sansNotif?'<div class="perf-plein-s">Notifications désactivées : garde cet écran ouvert, il compte pour toi.</div>':'')
+    +'<button type="button" class="btn btn-outline" onclick="compFermerPlein()">Fermer</button></div>');
+  const z=document.getElementById('perf-plein');
+  try{ z.requestFullscreen&&z.requestFullscreen(); }catch(e){}
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
+  const maj=()=>{ const d=new Date(), m=d.getHours()*60+d.getMinutes()+d.getSeconds()/60;
+    const pro=ev.find(x=>x.min>m), y=document.getElementById('perf-plein-c'); if(!y) return;
+    if(!pro){ y.innerHTML='<div class="perf-plein-t">Tous les passages sont derrière toi.</div>'; return; }
+    const r=Math.round((pro.min-m)*60), hh=Math.floor(r/3600), mm=Math.floor(r%3600/60), ss=r%60;
+    y.innerHTML='<div class="perf-plein-h">'+_compHhmm(Math.floor(m))+'</div><div class="perf-plein-t">'+escapeHtml(pro.texte)+'</div>'
+      +'<div class="perf-plein-n">'+(hh?hh+':':'')+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0')+'</div>'
+      +'<div class="perf-plein-s">à '+_compHhmm(pro.min)+'</div>'
+      +ev.filter(x=>x.min>pro.min).slice(0,3).map(x=>'<div class="perf-plein-s">'+_compHhmm(x.min)+' · '+escapeHtml(x.texte)+'</div>').join(''); };
+  maj(); _perfTick=setInterval(maj,1000);
+  return true;
+}
+function compFermerPlein(){
+  if(_perfTick){ clearInterval(_perfTick); _perfTick=null; }
+  try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
+  const z=document.getElementById('perf-plein'); if(z) z.remove();
+  return true;
+}
+function compLancerRoutine(){
+  let i=0;
+  document.body.insertAdjacentHTML('beforeend','<div id="perf-plein" class="perf-plein"><div id="perf-plein-c"></div><button type="button" class="btn btn-outline" onclick="compFermerPlein()">Fermer</button></div>');
+  const etape=()=>{ const r=ROUTINE_MENTALE[i], y=document.getElementById('perf-plein-c'); if(!y) return;
+    if(!r){ y.innerHTML='<div class="perf-plein-t">Prêt.</div>'; return; }
+    let reste=r.duree;
+    const maj=()=>{ const yy=document.getElementById('perf-plein-c'); if(!yy) return;
+      yy.innerHTML='<div class="perf-plein-t">'+escapeHtml(r.titre)+'</div><div class="perf-plein-s">'+escapeHtml(r.texte)+'</div><div class="perf-plein-n">'+reste+'</div>';
+      if(reste--<=0){ clearInterval(_perfTick); i++; etape(); } };
+    if(_perfTick) clearInterval(_perfTick);
+    maj(); _perfTick=setInterval(maj,1000); };
+  etape();
+  return true;
 }
 
 // ══ LOT AM1 — L'AMPLITUDE CIBLE PERSONNELLE, PAR EXERCICE ════════════════

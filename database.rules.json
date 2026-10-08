@@ -273,6 +273,42 @@
           "journal": { "$i": { ".validate": "newData.isString() && newData.val().length <= 300" } },
           "$autre": { ".validate": false }
         },
+        // LOT RM1 — LES RECORDS TESTES (1RM reel, distinct d un e1RM calcule),
+        // par exercice (cle en minuscules et tirets), avec la reference d ou
+        // le test est parti ('e1rm' ou 'estimation') et ses tentatives.
+        "recordsTestes": {
+          "$exercice": {
+            ".validate": "$exercice.matches(/^[a-z0-9-]{1,80}$/) && newData.hasChildren(['kg', 'date', 'source'])",
+            "nom": { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "kg": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+            "date": { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "source": { ".validate": "newData.val() === 'teste'" },
+            "refKg": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+            "refSource": { ".validate": "newData.isString() && newData.val().matches(/^(e1rm|estimation)$/)" },
+            "tentatives": { "$i": {
+              "kg": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+              "ok": { ".validate": "newData.isBoolean()" },
+              "vitesse": { ".validate": "newData.isString() && newData.val().matches(/^(rapide|moyenne|lente|)$/)" },
+              "$autre": { ".validate": false } } },
+            "$autre": { ".validate": false }
+          }
+        },
+        // LOT RM1 — LE JOUR DE COMPETITION : disciplines (nom, heure de
+        // passage, meilleur saisi), le sac et la routine mentale facultative.
+        "competition": {
+          "date": { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "routine": { ".validate": "newData.isBoolean()" },
+          "disciplines": { "$i": {
+            "nom": { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "heure": { ".validate": "newData.isString() && newData.val().matches(/^([0-9]{1,2}:[0-9]{2})?$/)" },
+            "meilleur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+            "$autre": { ".validate": false } } },
+          "sac": { "$i": {
+            "lib": { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "ok": { ".validate": "newData.isBoolean()" },
+            "$autre": { ".validate": false } } },
+          "$autre": { ".validate": false }
+        },
         // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
         // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
         // ferait rejeter l ecriture du dossier entier.
