@@ -75192,6 +75192,63 @@ async function testExercices(){
         if(!z||!/Réessayer/.test(z.textContent)) return _echec('pas de « Réessayer »');
         return /loadSubscribePage\(\)/.test(z.innerHTML)?true:_echec('« Réessayer » ne repeint pas l’écran');
       }finally{ currentUser=cu; if(z) z.innerHTML=av; }});
+    // ══ BUILD 1937 — LE MODE VISITE ═════════════════════════════════════════════
+    ok('1937 — visiteReseauPermis : GET de l’app et les deux compteurs de la visite, rien d’autre',()=>{
+      const o='https://repcore-sync.web.app', f=[];
+      const cas=[['data/visite.json','GET',true],[o+'/app/rc-core.js','GET',true],['https://repcore-sync-default-rtdb.firebaseio.com/users/a.json','GET',false],
+        ['https://repcore-sync-default-rtdb.firebaseio.com/users/a.json','PUT',false],['https://repcore-sync-default-rtdb.firebaseio.com/metrics/2026-10-08/visite_ouverte.json','PUT',true],
+        ['https://repcore-sync-default-rtdb.firebaseio.com/metrics/2026-10-08/register_started.json','PUT',false],['https://repcore-serveur.repcore.workers.dev/fn/x','POST',false],
+        ['data/visite.json','POST',false],['https://evil.example/x','GET',false]];
+      for(const [u,m,att] of cas) if(visiteReseauPermis(u,m,o)!==att) f.push(m+' '+u);
+      if(RCM_EVENEMENTS.indexOf('visite_ouverte')<0||RCM_EVENEMENTS.indexOf('visite_vers_inscription')<0) f.push('compteurs absents');
+      return f.length?_echec(f.join(' | ')):true;});
+    okA('1937 — visiteRecaler : les dates fictives tombent sur aujourd’hui, la politique est à jour',async()=>{
+      const x=new XMLHttpRequest(); x.open('GET','data/visite.json',false); x.send();
+      if(x.status!==200) return _echec('data/visite.json : '+x.status);
+      const d=JSON.parse(x.responseText), t=Date.now();
+      const r=visiteRecaler(d,t), a=r.users[r.athlete], c=r.users[r.coach];
+      if(!a||!c||a.role!=='athlete'||c.role!=='coach') return _echec('comptes');
+      const der=a.weightLog[a.weightLog.length-1].date;
+      if(der!==localISODate(new Date(t))) return _echec('dernière pesée : '+der);
+      const s=Math.max(...a.sessions.map(x=>x.date));
+      if(!(s<=t&&t-s<4*864e5)) return _echec('séances non recalées');
+      if(a.consent.policyVersion!==POLICY_VERSION||!a.consent.cgu) return _echec('consentement');
+      if(/@(?!visite\.repcore)/.test(JSON.stringify(Object.keys(r.users)))) return _echec('une adresse réelle dans la visite');
+      return d.users[d.athlete].weightLog[0].date!==a.weightLog[0].date?true:_echec('donnée source modifiée ou non recalée');});
+    okA('1937 — #visite=athlete : espace séparé, rc_session réelle inchangée, toute écriture réseau refusée',async()=>{
+      const avant=localStorage.getItem('rc_session');
+      const fr=document.createElement('iframe');
+      fr.style.cssText='position:fixed;left:0;top:0;width:412px;height:800px;opacity:0;pointer-events:none;z-index:-1';
+      fr.src='index.html?nosw=1#visite=athlete';
+      document.body.appendChild(fr);
+      try{
+        let w=null;
+        for(let i=0;i<60;i++){ await new Promise(r=>setTimeout(r,150)); w=fr.contentWindow; if(w&&w.RC_VISITE&&w.eval('typeof currentUser!=="undefined"&&!!currentUser')&&w.document.getElementById('visite-bandeau')) break; }
+        if(!w||w.eval('currentUser&&currentUser.fname')!=='Léa') return _echec('compte fictif non chargé');
+        if(w.RC_VISITE!=='athlete') return _echec('RC_VISITE');
+        if(!/Visite · données fictives/.test(w.document.getElementById('visite-bandeau').textContent)||!/Créer mon compte/.test(w.document.getElementById('visite-bandeau').textContent)) return _echec('bandeau');
+        if(w.localStorage.getItem('rc_visite')!=='athlete'||localStorage.getItem('rc_visite')!==null) return _echec('espace non séparé');
+        if(localStorage.getItem('rc_session')!==avant) return _echec('rc_session réelle modifiée');
+        let refuse=false;
+        try{ await w.fetch('https://repcore-sync-default-rtdb.firebaseio.com/users/x.json',{method:'PUT',body:'{}'}); }catch(e){ refuse=true; }
+        if(!refuse) return _echec('PUT vers la base accepté');
+        refuse=false;
+        try{ await w.fetch('https://repcore-sync-default-rtdb.firebaseio.com/users/x.json'); }catch(e){ refuse=true; }
+        if(!refuse) return _echec('lecture de la vraie base acceptée');
+        w.eval('saveUser()');
+        if(localStorage.getItem('rc_session')!==avant) return _echec('saveUser a touché le vrai stockage');
+        const g=w.document.getElementById('visite-guide');
+        if(!/1\/4/.test(g.textContent)) return _echec('visite guidée');
+        w.visiteGuide(3); if(!/4\/4/.test(g.textContent)||!/Terminer/.test(g.textContent)) return _echec('quatre étapes');
+        return true;
+      }finally{
+        // Retirer l'iframe en plein premier rendu bloque la page : on la laisse finir.
+        await new Promise(r=>setTimeout(r,3500)); fr.remove();
+      }});
+    ok('1937 — « Voir l’app en 2 minutes » sur l’accueil, côté athlète et côté coach',()=>{
+      const z=document.querySelector('#s-welcome .wel-visite');
+      if(!z||!/Voir l'app en 2 minutes/.test(z.textContent)) return _echec('absent');
+      return z.querySelector('[onclick="visiteOuvrir(\'athlete\')"]')&&z.querySelector('[onclick="visiteOuvrir(\'coach\')"]')?true:_echec('deux portes');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

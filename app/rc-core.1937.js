@@ -20,6 +20,124 @@ const ROUGE_MARQUE='#E02020', ROUGE_MARQUE_MIN='#e02020';
 // du champ, qui n'en portent aucun.
 const POLICY_VERSION='2026-10';
 
+// ══ SÉRIE 6, LOT 13 — LE MODE VISITE (#visite=athlete|coach) ═══════════════
+// « Voir l'app en 2 minutes » : un athlète ou un coach FICTIFS (data/visite.json,
+// fabriqué par scripts/visite.mjs), dans un ESPACE SÉPARÉ — un stockage en
+// mémoire remplace localStorage pour toute la page, le vrai n'est ni lu ni
+// écrit (rc_session reste celle d'avant) — et SANS ÉCRITURE RÉSEAU : fetch ne
+// laisse passer que les fichiers de l'app (GET, même origine) et les deux
+// compteurs anonymes de la visite. Fermer l'onglet efface tout.
+const RC_VISITE=(function(){ try{ const m=/^#visite=(athlete|coach)$/.exec(location.hash||''); return m?m[1]:null; }catch(e){ return null; } })();
+try{ window.RC_VISITE=RC_VISITE; }catch(e){}
+const VISITE_RCM=['visite_ouverte','visite_vers_inscription'];
+function visiteStockageMemoire(){
+  const m=new Map();
+  return {getItem:k=>m.has(String(k))?m.get(String(k)):null, setItem:(k,v)=>{ m.set(String(k),String(v)); },
+    removeItem:k=>{ m.delete(String(k)); }, clear:()=>m.clear(), key:i=>[...m.keys()][i]||null, get length(){ return m.size; }};
+}
+// PURE. Une requête de la visite passe-t-elle ? GET d'un fichier de l'app, ou
+// l'incrément d'un des deux compteurs de la visite. Rien d'autre.
+function visiteReseauPermis(url,methode,origine){
+  const u=String(url||''), m=String(methode||'GET').toUpperCase(), o=String(origine||'');
+  if(m==='GET'&&(!/^[a-z]+:\/\//i.test(u)||(o&&u.indexOf(o+'/')===0))) return true;
+  if(m==='PUT'&&/\/metrics\/\d{4}-\d{2}-\d{2}\/(visite_ouverte|visite_vers_inscription)\.json$/.test(u)) return true;
+  return false;
+}
+// PURE. Recale les dates fictives sur `maintenant` : un horodatage (ms) et
+// une date « AAAA-MM-JJ » avancent du même nombre de jours.
+function visiteRecaler(d,maintenant){
+  const t=Number(maintenant)||Date.now(), g=Number(d&&d.genere)||t;
+  const jours=Math.round((t-g)/864e5), delta=jours*864e5;
+  const isoPlus=s=>{ const x=new Date(s+'T12:00:00'); x.setDate(x.getDate()+jours); return localISODate(x); };
+  const CLES=/^(date|createdAt|updatedAt|rattacheLe|accessExpiry|le|at|ouvertLe)$/;
+  const tour=(v,k)=>{
+    if(Array.isArray(v)) return v.map(x=>tour(x,''));
+    if(v&&typeof v==='object'){ const o={}; for(const c of Object.keys(v)) o[c]=tour(v[c],c); return o; }
+    if(CLES.test(k)&&typeof v==='number'&&v>1e12) return v+delta;
+    if(k==='date'&&typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)) return isoPlus(v);
+    return v;
+  };
+  const out=tour(d,'');
+  for(const u of Object.values(out.users||{})) if(u&&u.consent) u.consent.policyVersion=POLICY_VERSION;
+  return out;
+}
+// Pose l'espace séparé et le compte fictif. Rend le compte, ou null.
+function visiteInstaller(role,donnees,maintenant){
+  const st=visiteStockageMemoire();
+  try{ Object.defineProperty(window,'localStorage',{value:st,configurable:true}); }catch(e){ return null; }
+  try{ Object.defineProperty(window,'sessionStorage',{value:visiteStockageMemoire(),configurable:true}); }catch(e){}
+  const _f=window.fetch.bind(window);
+  window.fetch=function(u,o){
+    const url=(u&&u.url)||u, m=(o&&o.method)||(u&&u.method)||'GET';
+    if(visiteReseauPermis(url,m,location.origin)) return _f(u,o);
+    // Refus DIFFÉRÉ, comme un réseau absent : un refus immédiat ferait tourner
+    // à vide les boucles de nouvel essai de la synchronisation.
+    return new Promise((_,rej)=>setTimeout(()=>rej(new TypeError('Visite : aucune donnée ne quitte cet appareil')),400));
+  };
+  try{ navigator.sendBeacon=()=>false; }catch(e){}
+  const d=visiteRecaler(donnees,maintenant);
+  const moi=d.users&&d.users[role==='coach'?d.coach:d.athlete];
+  if(!moi) return null;
+  st.setItem('rc_users',JSON.stringify(d.users));
+  st.setItem('rc_session',JSON.stringify(moi));
+  st.setItem('rc_visite',role);
+  return moi;
+}
+if(RC_VISITE){
+  try{
+    const x=new XMLHttpRequest(); x.open('GET','data/visite.json',false); x.send();
+    if(x.status===200&&visiteInstaller(RC_VISITE,JSON.parse(x.responseText))){
+      document.addEventListener('DOMContentLoaded',()=>{ try{ visiteBandeau(); rcm('visite_ouverte'); }catch(e){} });
+    }
+  }catch(e){}
+}
+// « Voir l'app en 2 minutes » : la visite se charge dans une page neuve.
+function visiteOuvrir(role){
+  const r=role==='coach'?'coach':'athlete';
+  try{ location.hash='visite='+r; location.reload(); }catch(e){}
+  return r;
+}
+// Le bandeau, tout en haut, toujours là pendant la visite.
+const VISITE_ETAPES=Object.freeze({
+  athlete:[{ecran:'s-client-home',t:'Ton accueil : la séance du jour, ta semaine, ce que ton coach attend.'},
+    {ecran:'s-client-home',t:'Une séance se lance d’un geste ; chaque série se coche, les charges sont proposées.'},
+    {ecran:'s-progress',t:'Progrès : tes volumes, tes records, ta pesée et ton sommeil, sur une page.'},
+    {ecran:'s-client-home',t:'Chaque semaine, un bilan court part chez ton coach, qui te répond ici.'}],
+  coach:[{ecran:'s-coach-home',t:'Ton tableau de bord : qui s’entraîne, qui décroche, qui attend ta réponse.'},
+    {ecran:'s-coach-home',t:'Touche un athlète : sa fiche, ses séances, ses bilans, son volume par muscle.'},
+    {ecran:'s-coach-home',t:'Programmes et plans alimentaires se composent depuis tes modèles.'},
+    {ecran:'s-coach-reglages',t:'Mes réglages : tes valeurs par défaut, ta marque, ce que voient tes élèves.'}]
+});
+let _visiteEtape=0;
+function visiteBandeau(){
+  if(!RC_VISITE||document.getElementById('visite-bandeau')) return false;
+  const b=document.createElement('div');
+  b.id='visite-bandeau'; b.className='visite-b'; b.setAttribute('role','status');
+  b.innerHTML='<div class="visite-l"><span>Visite · données fictives</span>'
+    +'<button type="button" class="visite-cta" onclick="visiteVersInscription()">Créer mon compte</button></div>'
+    +'<div class="visite-g" id="visite-guide"></div>';
+  document.body.appendChild(b);
+  visiteGuide(0);
+  return true;
+}
+// La visite guidée : quatre étapes, « Suivant », puis la main au visiteur.
+function visiteGuide(i){
+  const l=VISITE_ETAPES[RC_VISITE]||[], z=document.getElementById('visite-guide');
+  _visiteEtape=i;
+  if(!z) return false;
+  if(i>=l.length){ z.innerHTML=''; return false; }
+  const e=l[i];
+  try{ if(e.ecran&&document.getElementById(e.ecran)&&typeof go==='function') go(e.ecran); }catch(err){}
+  z.innerHTML='<span class="visite-n">'+(i+1)+'/'+l.length+'</span><span class="visite-t">'+escapeHtml(e.t)+'</span>'
+    +'<button type="button" class="rb-lien" onclick="visiteGuide('+(i+1)+')">'+(i+1<l.length?'Suivant':'Terminer')+'</button>';
+  return true;
+}
+function visiteVersInscription(){
+  try{ rcm('visite_vers_inscription'); }catch(e){}
+  setTimeout(()=>{ try{ location.replace(location.pathname+location.search+'#essai'); location.reload(); }catch(e){} },150);
+  return true;
+}
+
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
 // depuis l'interface utilisateur.
@@ -512,7 +630,7 @@ function lienWhatsApp(texte){
 // Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
 // clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
 // créer de dimension imprévue.
-const RCM_EVENEMENTS=['landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
+const RCM_EVENEMENTS=['visite_ouverte','visite_vers_inscription','landing_view','landing_cta_click','coach_landing_view','blog_view','welcome_view','role_selected_coach','role_selected_athlete',
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   // CE QUE LE DOSSIER OUVRE SEUL (ordre de fermeture, 05/10/2026) : combien de
@@ -92029,6 +92147,8 @@ function _bdgArcs(z,duree){
 // LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
 // seul bouton. Chacun reste partageable depuis sa fiche.
 function _bdgEcranRecap(ids){
+  // Série 6 (lot 13) : la visite ne fête pas l'historique d'un compte fictif.
+  if(typeof RC_VISITE!=='undefined'&&RC_VISITE) return false;
   const n=ids.length;
   const vus=ids.slice(0,12);
   const z=_bdgCouche(
@@ -113608,7 +113728,7 @@ let _pastilleCacheFaite=false;
 function _pastilleServiParCache(){
   if(_pastilleCacheFaite||!window._rcServiParCache) return false;
   _pastilleCacheFaite=true;
-  try{ toast('Hors ligne : version en cache','var(--sub)'); }catch(e){}
+  if(typeof RC_VISITE==='undefined'||!RC_VISITE) try{ toast('Hors ligne : version en cache','var(--sub)'); }catch(e){}
   return true;
 }
 // ── Carte « Capacité », créateur seulement ──────────────────────────────

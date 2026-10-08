@@ -13785,3 +13785,12 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .pr-fp input,.pr-fl .pr-fp-i{width:100%;min-width:0;margin:0;font-size:var(--fs-xs)}
 .pr-fl .pr-fp{margin-left:0}
 .pr-err{color:var(--orange)}
+/* Série 6, lot 13 : la visite */
+.visite-b{position:fixed;left:0;right:0;top:0;z-index:9000;background:var(--surface-2);border-bottom:1px solid var(--red);padding:6px 16px calc(6px + 0px);font-size:var(--fs-xs);color:var(--text)}
+.visite-l{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:800;letter-spacing:.5px}
+.visite-cta{background:var(--red);color:#fff;border:none;border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer}
+.visite-g{display:flex;align-items:baseline;gap:8px;margin-top:4px;line-height:1.4}
+.visite-g:empty{display:none}
+.visite-n{color:var(--sub);font-weight:800}
+.visite-t{flex:1;color:var(--sub)}
+.wel-visite{text-align:center;font-size:var(--fs-xs);color:var(--sub);margin:4px 0 0}

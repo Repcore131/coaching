@@ -1323,7 +1323,7 @@ let _pastilleCacheFaite=false;
 function _pastilleServiParCache(){
   if(_pastilleCacheFaite||!window._rcServiParCache) return false;
   _pastilleCacheFaite=true;
-  try{ toast('Hors ligne : version en cache','var(--sub)'); }catch(e){}
+  if(typeof RC_VISITE==='undefined'||!RC_VISITE) try{ toast('Hors ligne : version en cache','var(--sub)'); }catch(e){}
   return true;
 }
 // ── Carte « Capacité », créateur seulement ──────────────────────────────

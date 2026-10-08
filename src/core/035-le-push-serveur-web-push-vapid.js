@@ -1767,6 +1767,8 @@ function _bdgArcs(z,duree){
 // LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
 // seul bouton. Chacun reste partageable depuis sa fiche.
 function _bdgEcranRecap(ids){
+  // Série 6 (lot 13) : la visite ne fête pas l'historique d'un compte fictif.
+  if(typeof RC_VISITE!=='undefined'&&RC_VISITE) return false;
   const n=ids.length;
   const vus=ids.slice(0,12);
   const z=_bdgCouche(
