@@ -67691,7 +67691,7 @@ async function testExercices(){
         // La bande du RIR est ouverte, avec les sept valeurs de RIR_CHOIX.
         const bande=document.getElementById('wo-rir-bande');
         if(!bande||bande.hidden||bande.querySelectorAll('.rir-pastille').length!==RIR_CHOIX.length) return _echec('bande du RIR absente');
-        if(RIR_BANDE_MS!==4000) return _echec('la bande ne dure pas 4 s');
+        if(RIR_BANDE_MS!==null) return _echec('la bande a encore une minuterie');
         // Un toucher y note le RIR, referme la bande, et la série 2 suit chargeSuivante.
         _rirBandeChoisir(0,0,'2');
         if(d.sets[0].rir!=='2'||!bande.hidden) return _echec('le RIR choisi n’est pas noté, ou la bande reste');
@@ -67953,7 +67953,7 @@ async function testExercices(){
         const entree=el=>el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
         // FOURCHETTE : un champ par série, la fourchette en indication.
         if(tb.querySelectorAll('input.wo-reps').length!==3) return _echec(tb.querySelectorAll('input.wo-reps').length+' champs de répétitions');
-        if(rep(0).placeholder!=='10-12'||rep(0).value!=='') return _echec('indication : « '+rep(0).placeholder+' »');
+        if(rep(0).placeholder!=='12'||rep(0).value!==''||!rep(0).classList.contains('wo-reps-prop')) return _echec('proposition : « '+rep(0).placeholder+' »');
         if(rep(2).getAttribute('enterkeyhint')!=='next'||ch(2).getAttribute('enterkeyhint')!=='done') return _echec('touches du clavier');
         // ENCHAÎNEMENT : répétitions → charge → répétitions de la série suivante.
         rep(0).focus(); rep(0).value='12'; entree(rep(0));
@@ -75567,6 +75567,46 @@ async function testExercices(){
       const i=r.indexOf('_reprendreSeanceAuDemarrage'), j=r.indexOf('loadClientHome()',i);
       if(i<0||j<0) return _echec('reprise absente de routeUser');
       return true;
+    });
+    // ══ BUILD 1946 — LES RÉPÉTITIONS PROPOSÉES ═══════════════════════════════════
+    ok('1946 — repsProposee (s.repsProp) : précédente > haut de fourchette > nombre ; consigne ; poids du corps ; dégressive rien',()=>{
+      const ex={name:'CURL',reps:'8-12'};
+      if(repsProposee(ex,{reps:'8-12'},{kg:20,reps:10},null)!==10) return _echec('précédente');
+      if(repsProposee(ex,{reps:'8-12'},{kg:20,reps:15},null)!==12) return _echec('bornée au haut');
+      if(repsProposee(ex,{reps:'8-12'},null,null)!==12) return _echec('haut de fourchette');
+      if(repsProposee({reps:'8'},{reps:'8'},{kg:20,reps:6},null)!==8) return _echec('nombre simple : la prescription');
+      if(repsProposee(ex,{reps:'5',rpeCible:'8'},null,null)!==5) return _echec('consigne programmée');
+      if(repsProposee(ex,{reps:'8-12'},null,11)!==11) return _echec('poids du corps : repsSuivantes');
+      if(repsProposee(ex,{reps:'8-12',degressive:true},{kg:20,reps:10},null)!==null) return _echec('dégressive');
+      return true;
+    });
+    okA('1946 — ✓ sans saisie pose repsDone = repsProp ; série suivante repérée ; bande du RIR sans minuterie, fermée au geste ailleurs',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'r1946',email:'r1946@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE HALTERES',series:3,reps:'10-12',repos:'2 min'}]}]};
+        localStorage.removeItem('rc_wo_state');
+        launchWorkout(currentUser.sessions_config[0],0);
+        const tb=document.getElementById('sets-body-0'), d=woState.sessionData[0];
+        const tr=()=>tb.querySelectorAll('tr');
+        if(!tr()[0].classList.contains('wo-suivante')) return _echec('la série 1 n’est pas repérée');
+        d.sets[0].weight='30';
+        toggleSet(0,0); await new Promise(r=>setTimeout(r,30));
+        if(d.sets[0].repsDone!==12) return _echec('repsDone : '+d.sets[0].repsDone);
+        if(!tr()[1].classList.contains('wo-suivante')||tr()[0].classList.contains('wo-suivante')) return _echec('le repère ne passe pas à la série 2');
+        const bande=document.getElementById('wo-rir-bande');
+        if(!bande||bande.hidden) return _echec('bande du RIR absente');
+        if(_rirBandeMin) return _echec('une minuterie est armée');
+        document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+        if(!bande.hidden) return _echec('la bande reste après un geste ailleurs');
+        return true;
+      }finally{
+        try{ _rirBandeFermer(); annulerRepos(); clearInterval(woState.timerInterval); _woTimerZero(); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap===null) localStorage.removeItem('rc_wo_state'); else localStorage.setItem('rc_wo_state',sSnap);
+      }
     });
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{

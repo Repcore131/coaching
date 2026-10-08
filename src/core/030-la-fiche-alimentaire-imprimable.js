@@ -2612,6 +2612,21 @@ function _woPrecAppliquer(ex,s,p){
   s.weight=String(p.kg);
   if(p.reps&&fourchetteReps(s.reps||ex.reps)) s.repsDone=p.reps;
 }
+// SÉRIE 7, LOT 3. PURE. Les répétitions proposées d'une série non validée :
+// dégressive → rien ; consigne programmée ou nombre simple → la prescription
+// (la case n'est qu'un affichage) ; fourchette → poids du corps
+// (repsSuivantes), sinon la même série de la dernière séance, sinon le haut
+// de la fourchette, toujours bornées à la fourchette.
+function repsProposee(ex,s,p,repsPdc){
+  if(!s||s.degressive) return null;
+  const presc=(s.reps!=null&&s.reps!=='')?s.reps:(ex&&ex.reps);
+  const f=s.rpeCible?null:fourchetteReps(presc);
+  if(!f){ const n=parseInt(presc,10); return n>0?n:null; }
+  const borne=n=>Math.max(f.min,Math.min(f.max,Math.round(n)));
+  if(Number(repsPdc)>0) return borne(Number(repsPdc));
+  if(p&&Number(p.reps)>0) return borne(Number(p.reps));
+  return f.max;
+}
 function _woPrecCopier(idx,i){
   if(typeof woState==='undefined'||!woState) return false;
   const ex=(woState.exercises||[])[idx], d=woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
@@ -2627,9 +2642,11 @@ function _woPrecCopier(idx,i){
 // ══ LE RIR EN UN TOUCHER, JUSTE APRÈS LE ✓ (30/09/2026) ══════════════════
 // Le menu restait le seul chemin, et il se fermait à la validation : un RIR
 // oublié l'était pour de bon. Après le ✓, une bande de sept pastilles (les
-// valeurs de RIR_CHOIX, inchangées) reste 4 s ; un toucher note le RIR de la
-// série et referme. On l'ignore : elle s'en va seule, et rien n'attend.
-const RIR_BANDE_MS=4000;
+// valeurs de RIR_CHOIX, inchangées) ; un toucher note le RIR de la série et
+// referme. SÉRIE 7, LOT 3 : plus de minuterie — 4 s, c'était souvent avant même
+// d'avoir posé la barre. Elle se ferme au premier geste ailleurs, ou à la fin
+// du repos.
+const RIR_BANDE_MS=null;
 let _rirBandeMin=null;
 function _rirBandeFermer(){
   if(_rirBandeMin){ clearTimeout(_rirBandeMin); _rirBandeMin=null; }
@@ -2648,10 +2665,13 @@ function _rirBandeOuvrir(idx,i){
     +`</div></div>`;
   z.dataset.serie=idx+':'+i;
   z.hidden=false;
-  if(_rirBandeMin) clearTimeout(_rirBandeMin);
-  _rirBandeMin=setTimeout(_rirBandeFermer,RIR_BANDE_MS);
+  if(_rirBandeMin){ clearTimeout(_rirBandeMin); _rirBandeMin=null; }
   return true;
 }
+try{ document.addEventListener('pointerdown',ev=>{
+  const z=document.getElementById('wo-rir-bande');
+  if(z&&!z.hidden&&!(ev.target&&z.contains(ev.target))) _rirBandeFermer();
+},true); }catch(e){}
 function _rirBandeChoisir(idx,i,v){
   const d=woState&&woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
   if(!s||!RIR_CHOIX.some(c=>c[0]===v)){ _rirBandeFermer(); return false; }

@@ -47891,6 +47891,8 @@ function _peindreRepos(){
   // La pré-alerte : 60 ms à 10 s de la fin, page visible seulement.
   if(woState&&!fini&&reste>10) woState.reposPreAlerte=false;
   if(woState&&!fini&&reste<=10&&!woState.reposPreAlerte&&!document.hidden){ woState.reposPreAlerte=true; try{ arcHaptique('preAlerte'); }catch(e){} }
+  // La bande du RIR se referme à la fin du repos (lot 3).
+  if(fini){ try{ const zb=document.getElementById('wo-rir-bande'); if(zb&&!zb.hidden) _rirBandeFermer(); }catch(e){} }
   if(fini&&woState&&!woState.reposVibre&&!document.hidden){
     woState.reposVibre=true;
     // Dégradation silencieuse : iOS Safari n'expose pas vibrate, et un message
@@ -58987,6 +58989,7 @@ function _blocExo(idx,estSS){
   // BORNÉ AU HAUT DE LA FOURCHETTE : au-delà, un lest ou une variante plus dure.
   const _progPdc=_prevPdc?(()=>{ try{ return progressionCharge({poidsCorps:true,repsFaites:[_perfReps(_prevPdc)],rirFait:_prevPdc.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),ex,user:currentUser}); }catch(e){ return null; } })():null;
   if(_sugReps&&_progPdc&&_progPdc.repsVisees!=null) _sugReps.reps=_progPdc.repsVisees;
+  _woRepsPdc.set(idx,_sugReps&&_sugReps.reps>0?_sugReps.reps:null);
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
   // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
@@ -60103,6 +60106,9 @@ function _woTeteDeGroupe(idx){
 // document. C'est ce que _woMajLignes compare au rendu precedent pour ne
 // remplacer que les lignes qui ont change. Le remplissage automatique de la
 // charge (plus bas) tourne dans les deux cas, a l'identique.
+// Lot 3 : les répétitions visées au poids du corps, par exercice (posées par
+// le rendu de l'exercice, lues par renderSets et toggleSet).
+const _woRepsPdc=new Map();
 function renderSets(ex,data,idx,opts){
   const _lignesSeules=!!(opts&&opts.lignesSeules);
   if(idx==null) idx=woState.currentEx;
@@ -60221,10 +60227,17 @@ function renderSets(ex,data,idx,opts){
   // ⚠ L'ÉTIQUETTE « 140×3 » SOUS LE NUMÉRO N'EST PLUS AFFICHÉE (Kevin,
   // 01/10/2026 : « ça perd la personne »). La dernière séance sert toujours :
   // une série vide se valide avec elle (toggleSet), et _woPrecCopier reste.
+  // SÉRIE 7, LOT 3 — LES RÉPÉTITIONS PROPOSÉES, en valeur grisée : la même
+  // série de la dernière séance sur ce créneau, sinon le haut de la fourchette.
+  const _prevS=(()=>{ try{ return prevSeries(ex.name,woState.slot,woState.progName)||[]; }catch(e){ return []; } })();
+  const _iSuivante=data.sets.findIndex(x=>!(x&&x.done));
+  // Le rendu n'écrit rien dans la série : la proposition est recalculée au ✓.
+  const _rp=data.sets.map((x,k)=>(x&&!x.done)?repsProposee(ex,x,_prevS[k],_woRepsPdc.get(idx)):null);
   const lignes=data.sets.map((s,i)=>{
+    const _prop=_rp[i];
     const baseW=parseFloat(s.weight)||0;
     const dis=s.done?'disabled':'';
-    const rowCls=s.done?'done':'';
+    const rowCls=s.done?'done':(i===_iSuivante?'wo-suivante':'');
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
 
     // Les deux charges passent par _woChargeSaisie : le refus du négatif y vit
@@ -60377,8 +60390,8 @@ function renderSets(ex,data,idx,opts){
     // prescription, comme avant. Il se ferme a la validation, comme la charge.
     const _fourch=(!isDeg&&!s.rpeCible)?fourchetteReps(s.reps||ex.reps):null;
     const repsAffiche=(taille)=>_fourch
-      ?`<input class="set-input wo-reps" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
-        +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_fourch.min}-${_fourch.max}"`
+      ?`<input class="set-input wo-reps${(_prop&&(s.repsDone==null||s.repsDone===''))?' wo-reps-prop':''}" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
+        +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_prop?_prop:(_fourch.min+'-'+_fourch.max)}"`
         +` aria-label="Répétitions faites à la série ${i+1}, fourchette de ${_fourch.min} à ${_fourch.max}" onchange="_woRepsSaisie(${idx},${i},this)" ${dis}>`
       :`<span style="font-family:var(--pile-titre);font-size:${taille}px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>`;
 
@@ -60729,6 +60742,11 @@ function toggleSet(i,idx){
       const p=prevSeries(ex.name,woState.slot,woState.progName)[i];
       if(p){ _woPrecAppliquer(ex,s,p); s.isAuto=true; }
     }
+    // ✓ sans saisie : les répétitions proposées deviennent les répétitions faites.
+    if(s&&ex&&!s.degressive&&(s.repsDone==null||s.repsDone==='')&&fourchetteReps(s.reps||ex.reps)){
+      let pr=null; try{ pr=repsProposee(ex,s,prevSeries(ex.name,woState.slot,woState.progName)[i],_woRepsPdc.get(idx)); }catch(e){ pr=null; }
+      if(pr>0) s.repsDone=pr;
+    }
   }
   d.sets[i].done=!avant;
   // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
@@ -60759,7 +60777,7 @@ function toggleSet(i,idx){
   // Et seulement quand on coche : décocher est une correction de saisie, pas
   // un événement d'entraînement — rien ne doit le célébrer.
   if(!avant) _arcSerieValidee(idx,i);
-  // Le RIR en un toucher, pendant 4 s ; décocher la referme.
+  // Le RIR en un toucher ; décocher la referme.
   try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
   woPersist();
 }
@@ -78991,6 +79009,21 @@ function _woPrecAppliquer(ex,s,p){
   s.weight=String(p.kg);
   if(p.reps&&fourchetteReps(s.reps||ex.reps)) s.repsDone=p.reps;
 }
+// SÉRIE 7, LOT 3. PURE. Les répétitions proposées d'une série non validée :
+// dégressive → rien ; consigne programmée ou nombre simple → la prescription
+// (la case n'est qu'un affichage) ; fourchette → poids du corps
+// (repsSuivantes), sinon la même série de la dernière séance, sinon le haut
+// de la fourchette, toujours bornées à la fourchette.
+function repsProposee(ex,s,p,repsPdc){
+  if(!s||s.degressive) return null;
+  const presc=(s.reps!=null&&s.reps!=='')?s.reps:(ex&&ex.reps);
+  const f=s.rpeCible?null:fourchetteReps(presc);
+  if(!f){ const n=parseInt(presc,10); return n>0?n:null; }
+  const borne=n=>Math.max(f.min,Math.min(f.max,Math.round(n)));
+  if(Number(repsPdc)>0) return borne(Number(repsPdc));
+  if(p&&Number(p.reps)>0) return borne(Number(p.reps));
+  return f.max;
+}
 function _woPrecCopier(idx,i){
   if(typeof woState==='undefined'||!woState) return false;
   const ex=(woState.exercises||[])[idx], d=woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
@@ -79006,9 +79039,11 @@ function _woPrecCopier(idx,i){
 // ══ LE RIR EN UN TOUCHER, JUSTE APRÈS LE ✓ (30/09/2026) ══════════════════
 // Le menu restait le seul chemin, et il se fermait à la validation : un RIR
 // oublié l'était pour de bon. Après le ✓, une bande de sept pastilles (les
-// valeurs de RIR_CHOIX, inchangées) reste 4 s ; un toucher note le RIR de la
-// série et referme. On l'ignore : elle s'en va seule, et rien n'attend.
-const RIR_BANDE_MS=4000;
+// valeurs de RIR_CHOIX, inchangées) ; un toucher note le RIR de la série et
+// referme. SÉRIE 7, LOT 3 : plus de minuterie — 4 s, c'était souvent avant même
+// d'avoir posé la barre. Elle se ferme au premier geste ailleurs, ou à la fin
+// du repos.
+const RIR_BANDE_MS=null;
 let _rirBandeMin=null;
 function _rirBandeFermer(){
   if(_rirBandeMin){ clearTimeout(_rirBandeMin); _rirBandeMin=null; }
@@ -79027,10 +79062,13 @@ function _rirBandeOuvrir(idx,i){
     +`</div></div>`;
   z.dataset.serie=idx+':'+i;
   z.hidden=false;
-  if(_rirBandeMin) clearTimeout(_rirBandeMin);
-  _rirBandeMin=setTimeout(_rirBandeFermer,RIR_BANDE_MS);
+  if(_rirBandeMin){ clearTimeout(_rirBandeMin); _rirBandeMin=null; }
   return true;
 }
+try{ document.addEventListener('pointerdown',ev=>{
+  const z=document.getElementById('wo-rir-bande');
+  if(z&&!z.hidden&&!(ev.target&&z.contains(ev.target))) _rirBandeFermer();
+},true); }catch(e){}
 function _rirBandeChoisir(idx,i,v){
   const d=woState&&woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
   if(!s||!RIR_CHOIX.some(c=>c[0]===v)){ _rirBandeFermer(); return false; }

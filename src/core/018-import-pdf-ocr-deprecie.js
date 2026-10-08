@@ -2575,6 +2575,8 @@ function _peindreRepos(){
   // La pré-alerte : 60 ms à 10 s de la fin, page visible seulement.
   if(woState&&!fini&&reste>10) woState.reposPreAlerte=false;
   if(woState&&!fini&&reste<=10&&!woState.reposPreAlerte&&!document.hidden){ woState.reposPreAlerte=true; try{ arcHaptique('preAlerte'); }catch(e){} }
+  // La bande du RIR se referme à la fin du repos (lot 3).
+  if(fini){ try{ const zb=document.getElementById('wo-rir-bande'); if(zb&&!zb.hidden) _rirBandeFermer(); }catch(e){} }
   if(fini&&woState&&!woState.reposVibre&&!document.hidden){
     woState.reposVibre=true;
     // Dégradation silencieuse : iOS Safari n'expose pas vibrate, et un message

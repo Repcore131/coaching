@@ -728,6 +728,7 @@ function _blocExo(idx,estSS){
   // BORNÉ AU HAUT DE LA FOURCHETTE : au-delà, un lest ou une variante plus dure.
   const _progPdc=_prevPdc?(()=>{ try{ return progressionCharge({poidsCorps:true,repsFaites:[_perfReps(_prevPdc)],rirFait:_prevPdc.rir,reps:ex.reps,rirCible:_rirPrescrit(ex),ex,user:currentUser}); }catch(e){ return null; } })():null;
   if(_sugReps&&_progPdc&&_progPdc.repsVisees!=null) _sugReps.reps=_progPdc.repsVisees;
+  _woRepsPdc.set(idx,_sugReps&&_sugReps.reps>0?_sugReps.reps:null);
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
   // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
@@ -1844,6 +1845,9 @@ function _woTeteDeGroupe(idx){
 // document. C'est ce que _woMajLignes compare au rendu precedent pour ne
 // remplacer que les lignes qui ont change. Le remplissage automatique de la
 // charge (plus bas) tourne dans les deux cas, a l'identique.
+// Lot 3 : les répétitions visées au poids du corps, par exercice (posées par
+// le rendu de l'exercice, lues par renderSets et toggleSet).
+const _woRepsPdc=new Map();
 function renderSets(ex,data,idx,opts){
   const _lignesSeules=!!(opts&&opts.lignesSeules);
   if(idx==null) idx=woState.currentEx;
@@ -1962,10 +1966,17 @@ function renderSets(ex,data,idx,opts){
   // ⚠ L'ÉTIQUETTE « 140×3 » SOUS LE NUMÉRO N'EST PLUS AFFICHÉE (Kevin,
   // 01/10/2026 : « ça perd la personne »). La dernière séance sert toujours :
   // une série vide se valide avec elle (toggleSet), et _woPrecCopier reste.
+  // SÉRIE 7, LOT 3 — LES RÉPÉTITIONS PROPOSÉES, en valeur grisée : la même
+  // série de la dernière séance sur ce créneau, sinon le haut de la fourchette.
+  const _prevS=(()=>{ try{ return prevSeries(ex.name,woState.slot,woState.progName)||[]; }catch(e){ return []; } })();
+  const _iSuivante=data.sets.findIndex(x=>!(x&&x.done));
+  // Le rendu n'écrit rien dans la série : la proposition est recalculée au ✓.
+  const _rp=data.sets.map((x,k)=>(x&&!x.done)?repsProposee(ex,x,_prevS[k],_woRepsPdc.get(idx)):null);
   const lignes=data.sets.map((s,i)=>{
+    const _prop=_rp[i];
     const baseW=parseFloat(s.weight)||0;
     const dis=s.done?'disabled':'';
-    const rowCls=s.done?'done':'';
+    const rowCls=s.done?'done':(i===_iSuivante?'wo-suivante':'');
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
 
     // Les deux charges passent par _woChargeSaisie : le refus du négatif y vit
@@ -2118,8 +2129,8 @@ function renderSets(ex,data,idx,opts){
     // prescription, comme avant. Il se ferme a la validation, comme la charge.
     const _fourch=(!isDeg&&!s.rpeCible)?fourchetteReps(s.reps||ex.reps):null;
     const repsAffiche=(taille)=>_fourch
-      ?`<input class="set-input wo-reps" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
-        +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_fourch.min}-${_fourch.max}"`
+      ?`<input class="set-input wo-reps${(_prop&&(s.repsDone==null||s.repsDone===''))?' wo-reps-prop':''}" type="number" min="1" max="999" step="1" inputmode="numeric" ${_attrs(i,'repsDone')}`
+        +` value="${s.repsDone!=null?s.repsDone:''}" placeholder="${_prop?_prop:(_fourch.min+'-'+_fourch.max)}"`
         +` aria-label="Répétitions faites à la série ${i+1}, fourchette de ${_fourch.min} à ${_fourch.max}" onchange="_woRepsSaisie(${idx},${i},this)" ${dis}>`
       :`<span style="font-family:var(--pile-titre);font-size:${taille}px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>`;
 
@@ -2470,6 +2481,11 @@ function toggleSet(i,idx){
       const p=prevSeries(ex.name,woState.slot,woState.progName)[i];
       if(p){ _woPrecAppliquer(ex,s,p); s.isAuto=true; }
     }
+    // ✓ sans saisie : les répétitions proposées deviennent les répétitions faites.
+    if(s&&ex&&!s.degressive&&(s.repsDone==null||s.repsDone==='')&&fourchetteReps(s.reps||ex.reps)){
+      let pr=null; try{ pr=repsProposee(ex,s,prevSeries(ex.name,woState.slot,woState.progName)[i],_woRepsPdc.get(idx)); }catch(e){ pr=null; }
+      if(pr>0) s.repsDone=pr;
+    }
   }
   d.sets[i].done=!avant;
   // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
@@ -2500,7 +2516,7 @@ function toggleSet(i,idx){
   // Et seulement quand on coche : décocher est une correction de saisie, pas
   // un événement d'entraînement — rien ne doit le célébrer.
   if(!avant) _arcSerieValidee(idx,i);
-  // Le RIR en un toucher, pendant 4 s ; décocher la referme.
+  // Le RIR en un toucher ; décocher la referme.
   try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
   woPersist();
 }
