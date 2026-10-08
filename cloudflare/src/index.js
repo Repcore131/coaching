@@ -42,6 +42,7 @@ import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique, servirSitemapCoachs } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { enregistrerErreur } from './erreurs.js';
+import { deposerTicketPublic } from './support.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
 import { creerAppelsDroits, cleDe } from './droits-appels.js';
@@ -284,6 +285,14 @@ async function servir(req, env, ctx) {
       try { texte = await req.text(); } catch (e) { texte = ''; }
       const r = await enregistrerErreur(o.db, texte, Date.now());
       return reponse('', r.ok ? 204 : (r.raison === 'plafond' ? 429 : 400), 'text/plain');
+    }
+    // SÉRIE 6 (lot 16) : /support SANS jeton = le formulaire public de la page /aide.
+    if (url.pathname === '/support' && req.method === 'POST' && !/^Bearer\s+/i.test(req.headers.get('Authorization') || '')) {
+      const o = outils(env);
+      let corps = null;
+      try { const t = await req.text(); corps = t.length <= 6000 ? JSON.parse(t) : null; } catch (e) { corps = null; }
+      const r = await deposerTicketPublic(o.db, corps, Date.now());
+      return reponse(JSON.stringify(r.ok ? { ok: true } : { ok: false, raison: r.raison }), r.ok ? 200 : (r.raison === 'plafond' ? 429 : 400));
     }
     // LE SUPPORT : /support, même protocole et même jeton que /fn/support.
     if (url.pathname === '/support' && req.method === 'POST') {

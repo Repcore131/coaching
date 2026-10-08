@@ -44,6 +44,6 @@ jobs:
         env:
           MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com' }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
-          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
+          MAIL_DESTINATAIRE: ${{ secrets.SUPPORT_EMAIL || secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
         run: |
           node scripts/envoyer_mail.mjs rapport-erreurs.md "RepCore : la santé de l'app"

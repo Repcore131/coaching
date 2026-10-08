@@ -21,3 +21,11 @@ test('rien de neuf et quota bas : pas de courriel', () => {
   const r = rapportErreurs({ '2026-10-06': { 1937: { a: E(3) } }, '2026-10-07': { 1937: { a: E(3) } } }, { '2026-10-01': { oct_out_ko: 1e6 } }, '2026-10-07', '2026-10');
   assert.equal(r.envoyer, false);
 });
+
+test('les messages de support de la veille partent dans le courriel', () => {
+  const t = Date.UTC(2026, 9, 7, 10);
+  const r = rapportErreurs({}, {}, '2026-10-07', '2026-10', [{ le: t, texte: 'Je ne peux plus me connecter', contact: 'a@b.fr', public: true }, { le: t - 5 * 864e5, texte: 'vieux' }]);
+  assert.equal(r.tickets.length, 1);
+  assert.equal(r.envoyer, true);
+  assert.match(texteRapport(r, '2026-10-07'), /Messages de support \(1\)[\s\S]*page \/aide, contact a@b\.fr/);
+});

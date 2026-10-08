@@ -2498,3 +2498,66 @@ function _videosConformes(doc){
   }
   return doc;
 }
+
+// ══ SÉRIE 6, LOT 16 — L'AIDE ═══════════════════════════════════════════════
+// app/data/aide.json = [{pour:['client'|'coach'], theme, q, r, ecran?}] ; la
+// même liste fait la page publique /aide (scripts/aide_page.mjs). Hors ligne
+// ou illisible, FAQ_APP prend le relais.
+let _aideListe=null, _aideTheme='', _aideTexte='';
+async function aideCharger(){
+  if(_aideListe) return _aideListe;
+  try{ const r=await fetch('data/aide.json',{cache:'no-cache'}); const l=await r.json(); if(Array.isArray(l)&&l.length) _aideListe=l; }catch(e){}
+  if(!_aideListe) _aideListe=FAQ_APP.map(x=>Object.assign({theme:'Questions fréquentes'},x));
+  return _aideListe;
+}
+const _aideNorm=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+// PURE. Les questions d'un rôle, filtrées par thème et par mots (tous présents).
+function aideFiltrer(liste,role,texte,theme){
+  const r=role==='coach'?'coach':'client', mots=_aideNorm(texte).split(/\s+/).filter(Boolean);
+  return (liste||[]).filter(x=>x&&(x.pour||[]).indexOf(r)>=0&&(!theme||x.theme===theme)
+    &&mots.every(m=>_aideNorm(x.q+' '+x.r+' '+(x.theme||'')).indexOf(m)>=0));
+}
+function aideThemes(liste,role){ const r=role==='coach'?'coach':'client'; return [...new Set((liste||[]).filter(x=>(x.pour||[]).indexOf(r)>=0).map(x=>x.theme).filter(Boolean))]; }
+function _aideRole(){ return (typeof currentUser!=='undefined'&&currentUser&&currentUser.role==='coach')?'coach':'client'; }
+function _htmlAideListe(){
+  const l=aideFiltrer(_aideListe,_aideRole(),_aideTexte,_aideTheme);
+  if(!l.length) return '<p class="sub aide-vide">Rien ne correspond. Écris-nous : la réponse viendra de quelqu’un.</p>';
+  return l.map(x=>'<details class="prf-q aide-q"><summary>'+escapeHtml(x.q)+'</summary><p>'+escapeHtml(x.r)+'</p>'
+    +(x.ecran&&document.getElementById(x.ecran)?'<button type="button" class="rb-lien" onclick="aideOuvrirEcran(\''+escapeHtml(x.ecran)+'\')">Ouvrir l’écran</button>':'')+'</details>').join('');
+}
+function aideRendre(){
+  const z=document.getElementById('aide-liste'); if(z) z.innerHTML=_htmlAideListe();
+  document.querySelectorAll('#aide-themes [data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute('data-theme')===_aideTheme)));
+}
+function aideChercher(v){ _aideTexte=String(v||''); aideRendre(); }
+function aideTheme(t){ _aideTheme=_aideTheme===t?'':t; aideRendre(); }
+function aideOuvrirEcran(id){
+  try{ closeModal(); }catch(e){}
+  if(id==='s-coach-reglages'&&typeof ouvrirMesReglages==='function') return ouvrirMesReglages();
+  try{ go(id); }catch(e){}
+  return true;
+}
+// Écrire : l'athlète choisit son coach (le suivi) ou le support (l'app).
+function aideEcrire(dest){
+  try{ closeModal(); }catch(e){}
+  if(dest==='coach'){ try{ go('s-messages'); }catch(e){} return 'coach'; }
+  ouvrirSignalement();
+  return 'support';
+}
+async function ouvrirAide(){
+  await aideCharger();
+  try{ closeModal(); }catch(e){}
+  _aideTheme=''; _aideTexte='';
+  const role=_aideRole(), coach=role==='client'&&currentUser&&currentUser.coachId;
+  const themes=aideThemes(_aideListe,role).map(t=>'<button type="button" class="aide-t" data-theme="'+escapeHtml(t)+'" aria-pressed="false" onclick="aideTheme(this.getAttribute(\'data-theme\'))">'+escapeHtml(t)+'</button>').join('');
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" class="aide-o" onclick="closeModal()"><div class="aide-f" role="dialog" aria-label="Aide" onclick="event.stopPropagation()">'
+    +'<h2 class="t-carte">Aide</h2>'
+    +'<input id="aide-q" type="search" autocomplete="off" placeholder="Chercher : bilan, programme, résilier…" aria-label="Chercher dans l’aide" oninput="aideChercher(this.value)">'
+    +'<div class="aide-ts" id="aide-themes">'+themes+'</div>'
+    +'<div class="aide-l" id="aide-liste">'+_htmlAideListe()+'</div>'
+    +'<div class="aide-pied">'+(coach?'<button type="button" class="btn btn-outline btn-sm" onclick="aideEcrire(\'coach\')">Écrire à mon coach</button>':'')
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="aideEcrire(\'support\')">Écrire au support RepCore</button></div>'
+    +'<p class="sub aide-n">'+(coach?'Ton entraînement, ta diète : ton coach. Un bug, ton compte, un paiement : le support.':'Un diagnostic technique part avec ton message (version, écran, erreurs) : aucune de tes mesures.')+'</p>'
+    +'</div></div>');
+  return true;
+}

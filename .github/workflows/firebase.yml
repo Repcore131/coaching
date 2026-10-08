@@ -186,6 +186,9 @@ jobs:
       # SÉRIE 6 (lot 13) : les données fictives de la visite suivent leur générateur.
       - name: Donnees de la visite
         run: node scripts/visite.mjs --verifier
+      # SÉRIE 6 (lot 16) : la page /aide suit app/data/aide.json.
+      - name: Page d'aide
+        run: node scripts/aide_page.mjs --verifier
       # SÉRIE 6 (lot 15) : /.well-known/assetlinks.json part avec le site.
       - name: Controler assetlinks.json
         run: node scripts/verif/assetlinks.mjs

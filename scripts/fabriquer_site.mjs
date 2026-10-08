@@ -29,7 +29,7 @@ if (!sortie) { console.error('usage : node scripts/fabriquer_site.mjs <dossier d
 const OUT = path.resolve(sortie);
 if (OUT === RACINE || RACINE.startsWith(OUT + path.sep)) { console.error('Refus : la sortie contiendrait le depot.'); process.exit(2); }
 
-const DOSSIERS = ['app', 'blog', 'i', 'maj', 'p', 'c', 'a'];
+const DOSSIERS = ['app', 'blog', 'i', 'maj', 'p', 'c', 'a', 'aide'];
 // coachs.html : l'annuaire public des coachs ; charte.css : la charte des
 // pages publiques (i/, p/, c/, 404.html la lient en /charte.css).
 const FICHIERS = ['index.html', 'coachs.html', 'legal.html', 'privacy.html', 'terms.html', '404.html', 'aide-apk.html',

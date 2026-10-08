@@ -75313,6 +75313,53 @@ async function testExercices(){
       if(!/versionCode 6\b/.test(g)||!/launchUrl: '\/app\/index\.html\?src=play'/.test(g)) return _echec('build.gradle');
       if(!/bundleRelease/.test(w)||!/assetlinks\.mjs/.test(w)) return _echec('apk.yml : AAB ou contrôle absent');
       return JSON.parse(a)[0].target.sha256_cert_fingerprints.length>=1?true:_echec('assetlinks');});
+    // ══ BUILD 1940 — L'AIDE ═════════════════════════════════════════════════════
+    okA('1940 — aide.json : bien formé, au moins 10 questions coach, chaque écran cité existe',async()=>{
+      _aideListe=null;
+      const l=await aideCharger();
+      if(!Array.isArray(l)||l.length<15) return _echec('liste : '+(l&&l.length));
+      const f=[];
+      for(const x of l){
+        if(!x.q||!x.r||!x.theme||!Array.isArray(x.pour)||!x.pour.length) f.push('incomplète : '+x.q);
+        if(x.ecran&&!document.getElementById(x.ecran)) f.push('écran inconnu : '+x.ecran);
+      }
+      if(l.filter(x=>x.pour.indexOf('coach')>=0).length<10) f.push('moins de 10 questions coach');
+      return f.length?_echec(f.join(' | ')):true;});
+    ok('1940 — aideFiltrer : par rôle, par thème, par mots sans accents',()=>{
+      const l=[{pour:['client'],theme:'Bilans',q:'Quand faire mon bilan ?',r:'Le jour choisi.'},{pour:['coach'],theme:'Bilans',q:'Où lire les bilans ?',r:'Accueil.'},{pour:['client','coach'],theme:'Appareil',q:'Écran trop sombre',r:'Apparence.'}];
+      if(aideFiltrer(l,'client','','').length!==2||aideFiltrer(l,'coach','','').length!==2) return _echec('rôle');
+      if(aideFiltrer(l,'coach','','Bilans').length!==1) return _echec('thème');
+      if(aideFiltrer(l,'client','ecran sombre','').length!==1) return _echec('accents');
+      if(aideFiltrer(l,'client','bilan inexistant','').length!==0) return _echec('tous les mots');
+      return aideThemes(l,'coach').join(',')==='Bilans,Appareil'?true:_echec('thèmes');});
+    okA('1940 — « ? Aide » : feuille avec recherche, thèmes, « Ouvrir l’écran » ; l’athlète écrit à son coach ou au support',async()=>{
+      const cu=currentUser;
+      try{
+        if(document.querySelectorAll('[onclick="ouvrirAide()"]').length<2) return _echec('boutons « ? Aide »');
+        currentUser=Object.assign(_banAth(),{});
+        await ouvrirAide();
+        const o=document.getElementById('modal-overlay');
+        if(!o||!o.querySelector('#aide-q')||!o.querySelector('#aide-themes [data-theme]')) return _echec('feuille');
+        if(!/Écrire à mon coach/.test(o.textContent)||!/Écrire au support RepCore/.test(o.textContent)) return _echec('deux destinataires');
+        aideChercher('bilan');
+        const n=o.querySelectorAll('.aide-q').length;
+        if(!n||[...o.querySelectorAll('.aide-q summary')].some(s=>!/bilan/i.test(s.closest('.aide-q').textContent))) return _echec('recherche');
+        if(!o.querySelector('.aide-q [onclick^="aideOuvrirEcran"]')) return _echec('« Ouvrir l’écran »');
+        closeModal();
+        currentUser=Object.assign(_banCoach(),{});
+        await ouvrirAide();
+        const c=document.getElementById('modal-overlay');
+        if(/Écrire à mon coach/.test(c.textContent)) return _echec('le coach n’a pas de coach');
+        return true;
+      }finally{ try{ closeModal(); }catch(e){} currentUser=cu; }});
+    ok('1940 — la page /aide : JSON-LD FAQPage et formulaire vers POST /support',()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../aide/index.html',false); x.send();
+      if(x.status!==200) return _echec('aide/index.html : '+x.status);
+      const h=x.responseText, m=h.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      if(!m) return _echec('JSON-LD absent');
+      const ld=JSON.parse(m[1]);
+      if(ld['@type']!=='FAQPage'||ld.mainEntity.length<15) return _echec('FAQPage');
+      return /workers\.dev\/support/.test(h)&&/name="site"/.test(h)?true:_echec('formulaire');});
     // ══ BUILD 1893 — PAS & SOMMEIL DANS PROGRÈS, UNE SEULE CARTE DE PESÉE ════
     ok('1893 — aucun lien athlète n’ouvre loadSteps()/loadSleep() ; le point du jour mène à Lifestyle',()=>{
       const src=_prodSrc();

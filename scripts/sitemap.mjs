@@ -33,6 +33,7 @@ export const PAGES_SITEMAP = [
   ['blog/cycle-menstruel-entrainement.html', 'blog/cycle-menstruel-entrainement.html', '0.8'],
   ['blog/suivi-athletes-sans-tableur.html', 'blog/suivi-athletes-sans-tableur.html', '0.8'],
   ['blog/numeriser-fiche-programme-papier.html', 'blog/numeriser-fiche-programme-papier.html', '0.8'],
+  ['aide/index.html', 'aide/', '0.6'],
   ['privacy.html', 'privacy.html', '0.3'],
   ['terms.html', 'terms.html', '0.3'],
   ['legal.html', 'legal.html', '0.3'],

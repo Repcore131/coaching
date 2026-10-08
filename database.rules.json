@@ -2631,6 +2631,10 @@
       ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false
     },
+    "support_publics": {
+      ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
+      ".write": false
+    },
     "erreurs_jour": {
       ".read": "auth != null && (auth.uid === 'UID_CREATEUR_A_POSER' && auth.token.email_verified === true)",
       ".write": false

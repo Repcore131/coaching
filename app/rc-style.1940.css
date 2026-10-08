@@ -13803,3 +13803,15 @@ select.rc-langue{flex:0 0 auto;width:auto;max-width:60%;min-height:44px;padding:
 .sa-l-h{display:flex;justify-content:space-between;gap:10px;color:var(--text)}
 .sa-l-h b{min-width:0;overflow-wrap:anywhere}
 .sa-neuve .sa-l-h b,.sa-double .sa-l-h b{color:var(--orange)}
+/* Série 6, lot 16 : l'aide */
+.aide-b{background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer}
+.aide-o{position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center}
+.aide-f{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 16px 20px;width:100%;max-width:480px;max-height:86vh;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
+.aide-f input{width:100%;box-sizing:border-box;margin:0}
+.aide-ts{display:flex;flex-wrap:wrap;gap:6px}
+.aide-t{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer}
+.aide-t[aria-pressed="true"]{border-color:var(--red);color:var(--text)}
+.aide-l{overflow-y:auto;flex:1;min-height:0}
+.aide-pied{display:flex;gap:8px;flex-wrap:wrap}
+.aide-pied .btn{flex:1;margin:0}
+.aide-n{font-size:var(--fs-2xs);line-height:1.5;margin:0}

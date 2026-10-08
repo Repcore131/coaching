@@ -1,0 +1,218 @@
+[
+ {
+  "pour": [
+   "client",
+   "coach"
+  ],
+  "theme": "Appareil",
+  "q": "Mes données sont-elles gardées sans connexion ?",
+  "r": "Oui. Ce que tu enregistres est d’abord gardé sur ton téléphone, puis envoyé dès que la connexion revient. Si un envoi échoue, un message te le dit."
+ },
+ {
+  "pour": [
+   "client",
+   "coach"
+  ],
+  "theme": "Appareil",
+  "q": "Comment installer RepCore sur mon téléphone ?",
+  "r": "Sur Android : menu du navigateur, puis « Ajouter à l’écran d’accueil ». Sur iPhone, dans Safari : bouton Partager, puis « Sur l’écran d’accueil »."
+ },
+ {
+  "pour": [
+   "client",
+   "coach"
+  ],
+  "theme": "Appareil",
+  "q": "Les notifications n’arrivent pas.",
+  "r": "Le bloc « Notifications » des réglages indique l’état de ton appareil. Sur iPhone, installe d’abord RepCore sur l’écran d’accueil : Safari n’envoie de notifications qu’aux applications installées."
+ },
+ {
+  "pour": [
+   "client",
+   "coach"
+  ],
+  "theme": "Appareil",
+  "q": "L’écran est trop sombre, ou trop clair.",
+  "r": "Dans les réglages, « Apparence » : Sombre, Clair, ou Auto pour suivre le réglage de ton téléphone. Le choix est gardé sur cet appareil."
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Compte",
+  "q": "Comment récupérer mes données ?",
+  "r": "Dans les réglages, « Mes données » : un fichier avec tout ce que RepCore conserve à ton sujet, disponible même si ton accès a expiré.",
+  "ecran": "s-client-reglages"
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Paiement",
+  "q": "Comment résilier mon abonnement ?",
+  "r": "Dans les réglages, le bloc « Mon abonnement » : la demande s’y fait directement, et la date de fin de ton accès y est écrite.",
+  "ecran": "s-client-reglages"
+ },
+ {
+  "pour": [
+   "client",
+   "coach"
+  ],
+  "theme": "Compte",
+  "q": "Qui voit mes données ?",
+  "r": "Toi, ton coach si tu es rattaché à un coach, et le créateur de RepCore pour le support. Le détail est dans la politique de confidentialité."
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Séances",
+  "q": "Comment lancer ma séance du jour ?",
+  "r": "Sur l’accueil, la carte de la séance du jour : touche « Commencer ». Chaque série se coche ; la charge de la dernière fois est proposée.",
+  "ecran": "s-client-home"
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Séances",
+  "q": "Je me suis trompé de charge ou de répétitions.",
+  "r": "Pendant la séance, touche la série pour la corriger. Après, ouvre la séance dans l’historique : chaque série reste modifiable.",
+  "ecran": "s-historique-seances"
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Bilans",
+  "q": "Quand faire mon bilan ?",
+  "r": "Le jour que ton coach a choisi, tu reçois un rappel. Le bilan prend deux minutes : poids, ressenti, photos si ton coach les demande.",
+  "ecran": "s-bilan-choice"
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Nutrition",
+  "q": "Comment noter un repas ?",
+  "r": "Onglet Nutrition, le repas concerné, puis « Ajouter » : cherche l’aliment, ajuste la quantité. Les repas habituels se reprennent d’un geste.",
+  "ecran": "s-nutrition"
+ },
+ {
+  "pour": [
+   "client"
+  ],
+  "theme": "Coach",
+  "q": "Comment écrire à mon coach ?",
+  "r": "Depuis l’accueil, « Messages » : ton coach reçoit une notification. Pour un bug ou un paiement, écris plutôt au support RepCore.",
+  "ecran": "s-messages"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Athlètes",
+  "q": "Comment inviter un athlète ?",
+  "r": "Onglet ATHLÈTES, « Ajouter de nouveaux élèves » : tu obtiens un lien à lui envoyer. Il crée son compte depuis le lien et apparaît dans ta liste.",
+  "ecran": "s-coach-code"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Athlètes",
+  "q": "Comment inviter plusieurs athlètes d’un coup ?",
+  "r": "Écran du code coach, « Inviter plusieurs athlètes » : colle une liste de prénoms et de noms, un lien est créé pour chacun.",
+  "ecran": "s-coach-code"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Programmes",
+  "q": "Comment écrire un programme ?",
+  "r": "Fiche de l’athlète, « Programme » : ajoute des créneaux et des exercices. Tes valeurs par défaut (séries, répétitions, repos) se règlent dans Mes réglages.",
+  "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Programmes",
+  "q": "Comment réutiliser un programme pour plusieurs athlètes ?",
+  "r": "Enregistre-le comme modèle depuis l’écran Programmes, puis assigne-le : chaque athlète reçoit sa copie, modifiable sans toucher aux autres.",
+  "ecran": "s-coach-programs"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Bilans",
+  "q": "Comment régler la fréquence des bilans ?",
+  "r": "Mes réglages, section Bilans : fréquence, jour et trois questions. Les athlètes qui suivent ton défaut changent avec lui ; un réglage propre à un athlète se fait sur sa fiche.",
+  "ecran": "s-coach-reglages"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Bilans",
+  "q": "Où lire les bilans reçus ?",
+  "r": "Sur l’accueil coach, « Mes notifications » : nouveaux bilans à lire, bilans en retard. Touche une ligne pour ouvrir le bilan.",
+  "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Nutrition",
+  "q": "Comment donner un plan alimentaire ?",
+  "r": "Fiche de l’athlète, « Plan alimentaire » : pars d’un modèle (le tien ou un modèle RepCore), ajuste, puis enregistre. L’athlète voit ses grammages calculés.",
+  "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Affichage",
+  "q": "Comment cacher les calories ou le poids à un athlète ?",
+  "r": "Mes réglages, « Ce que voient mes élèves » : Complet, Sans chiffres ou Essentiel. Une exception se pose sur la fiche de l’athlète.",
+  "ecran": "s-coach-reglages"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Relances",
+  "q": "Comment relancer un athlète qui décroche ?",
+  "r": "Mes réglages, Messages et relances : allume les relances automatiques (pas commencé, séance en retard, inactif). Elles partent seules, à l’heure que tu as fixée.",
+  "ecran": "s-coach-relances"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Marque",
+  "q": "Comment mettre mon logo sur les documents ?",
+  "r": "Mes réglages, Identité et marque : ton logo, ton nom de team et ton slogan passent sur la fiche alimentaire et le programme imprimé. « Voir ma fiche type » montre le rendu.",
+  "ecran": "s-coach-reglages"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Paiement",
+  "q": "Comment encaisser mes athlètes ?",
+  "r": "Ta page publique propose tes formules ; relie ton compte PayPal dans ton profil pour que le bouton « Payer » apparaisse. L’argent arrive directement chez toi.",
+  "ecran": "s-coach-home"
+ },
+ {
+  "pour": [
+   "coach"
+  ],
+  "theme": "Compte",
+  "q": "Combien d’athlètes puis-je suivre ?",
+  "r": "Cela dépend de ta formule coach, écrite dans l’onglet Paiements. Au-delà, l’app te prévient avant toute coupure.",
+  "ecran": "s-coach-home"
+ }
+]

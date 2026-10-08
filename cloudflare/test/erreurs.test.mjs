@@ -35,3 +35,18 @@ test('au-delà de 500 empreintes par jour : refus, les connues comptent encore',
   assert.equal((await enregistrerErreur(db, corps({ h: 'connu1' }), T)).ok, true);
   assert.equal((await db.ref('erreurs/2026-10-08/1938/connu1/n').get()).val(), 2);
 });
+
+import { ticketPublic, deposerTicketPublic, TICKETS_PUBLICS_JOUR_MAX } from '../src/support.js';
+test('support public : contact exigé, piège à robots, 50 par jour', async () => {
+  assert.equal(ticketPublic({ texte: 'Je ne peux plus me connecter', contact: 'pas un contact' }, T).raison, 'contact');
+  assert.equal(ticketPublic({ texte: 'Je ne peux plus me connecter', contact: 'a@b.fr', site: 'x' }, T).raison, 'robot');
+  assert.equal(ticketPublic({ texte: 'ok', contact: 'a@b.fr' }, T).raison, 'texte');
+  const db = base({});
+  assert.equal((await deposerTicketPublic(db, { texte: 'Je ne peux plus me connecter', contact: 'Lea@B.fr' }, T)).ok, true);
+  const l = Object.values((await db.ref('support_tickets').get()).val());
+  assert.equal(l.length, 1);
+  assert.equal(l[0].public, true);
+  assert.equal(l[0].contact, 'lea@b.fr');
+  const plein = base({ support_publics: { '2026-10-08': TICKETS_PUBLICS_JOUR_MAX } });
+  assert.equal((await deposerTicketPublic(plein, { texte: 'Je ne peux plus me connecter', contact: 'a@b.fr' }, T)).raison, 'plafond');
+});

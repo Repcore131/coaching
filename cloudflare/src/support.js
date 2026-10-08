@@ -161,3 +161,36 @@ export function creerSupport({ db, maintenant, estAdmin }) {
 
   return { support, signalerProbleme };
 }
+
+// ══ LE FORMULAIRE PUBLIC DE SUPPORT (série 6, lot 16, 08/10/2026) ══════════
+// POST /support SANS jeton (la page /aide, quelqu'un qui n'a pas de compte ou
+// ne peut plus se connecter) : un ticket support_tickets/<id> {le, texte,
+// contact, diag, public:true}. Un contact valable (e-mail ou téléphone) est
+// exigé pour pouvoir répondre ; le piège à robots (`site`) doit rester vide ;
+// 50 tickets publics par jour au plus. Le courriel du matin (rapport_erreurs)
+// les transmet à SUPPORT_EMAIL.
+export const TICKETS_PUBLICS_JOUR_MAX = 50;
+// PURE.
+export function ticketPublic(corps, t) {
+  const c = (corps && typeof corps === 'object') ? corps : {};
+  if (String(c.site || '')) return { ok: false, raison: 'robot' };
+  const texte = String(c.texte || '').trim().slice(0, TICKET_TEXTE_MAX);
+  if (texte.length < 5) return { ok: false, raison: 'texte' };
+  const contact = String(c.contact || '').trim().toLowerCase().slice(0, 120);
+  const email = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/.test(contact);
+  const tel = /^\+?[0-9 .()-]{8,20}$/.test(contact);
+  if (!email && !tel) return { ok: false, raison: 'contact' };
+  let diag = null;
+  try { const s = JSON.stringify(c.diag || null); diag = s && s.length <= 2000 ? JSON.parse(s) : { tronque: true }; } catch (e) { diag = null; }
+  const jour = new Date(t).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  return { ok: true, jour, ticket: { le: t, texte, contact, diag, public: true } };
+}
+export async function deposerTicketPublic(db, corps, t) {
+  const r = ticketPublic(corps, t);
+  if (!r.ok) return r;
+  let plein = false;
+  await db.ref('support_publics/' + r.jour).transaction((v) => { const n = Number(v) || 0; if (n >= TICKETS_PUBLICS_JOUR_MAX) { plein = true; return undefined; } return n + 1; });
+  if (plein) return { ok: false, raison: 'plafond' };
+  await db.ref('support_tickets').push().set(r.ticket);
+  return { ok: true };
+}

@@ -14,7 +14,7 @@ export const QUOTA_MOIS_KO = 10e6, SEUILS = [70, 90];
 const jourParis = (t) => new Date(t).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
 
 // PURE.
-export function rapportErreurs(parJour, metricsMois, hier, mois) {
+export function rapportErreurs(parJour, metricsMois, hier, mois, tickets) {
   const avant = Object.keys(parJour || {}).filter((j) => j < hier).sort();
   const vus = new Map();
   for (const j of avant) for (const [b, hs] of Object.entries(parJour[j] || {})) for (const [h, e] of Object.entries(hs || {})) {
@@ -30,13 +30,16 @@ export function rapportErreurs(parJour, metricsMois, hier, mois) {
   for (const [j, v] of Object.entries(metricsMois || {})) if (j.indexOf(mois) === 0) ko += Number(v && v.oct_out_ko) || 0;
   const pct = Math.round(ko / QUOTA_MOIS_KO * 1000) / 10, seuil = SEUILS.filter((s) => pct >= s).pop() || 0;
   const tri = (a, b) => b.n - a.n;
-  return { nouvelles: nouvelles.sort(tri), doublees: doublees.sort(tri), quota: { ko, pct, seuil }, envoyer: !!(nouvelles.length || doublees.length || seuil) };
+  // Série 6 (lot 16) : les messages de support de la veille (page /aide, app).
+  const tk = (tickets || []).filter((x) => x && jourParis(Number(x.le)) === hier);
+  return { nouvelles: nouvelles.sort(tri), doublees: doublees.sort(tri), quota: { ko, pct, seuil }, tickets: tk, envoyer: !!(nouvelles.length || doublees.length || seuil || tk.length) };
 }
 export function texteRapport(r, hier) {
   const l = ['# RepCore : la santé de l’app au ' + hier, ''];
   const ligne = (x) => '- **' + x.m + '** — build ' + x.b + (x.ou ? ', ' + x.ou : '') + ' : ' + x.n + ' fois' + (x.moy != null ? ' (moyenne ' + x.moy + ')' : '');
   if (r.nouvelles.length) l.push('## Nouvelles (' + r.nouvelles.length + ')', ...r.nouvelles.slice(0, 20).map(ligne), '');
   if (r.doublees.length) l.push('## En hausse (' + r.doublees.length + ')', ...r.doublees.slice(0, 20).map(ligne), '');
+  if ((r.tickets || []).length) l.push('## Messages de support (' + r.tickets.length + ')', ...r.tickets.slice(0, 30).map((x) => '- ' + (x.public ? 'page /aide, contact ' + x.contact : 'app, compte ' + String(x.email || '').replace(/,/g, '.')) + ' : « ' + String(x.texte || '').slice(0, 300).replace(/\n+/g, ' ') + ' »'), '');
   l.push('## Quota de la base', String(r.quota.pct).replace('.', ',') + ' % des 10 Go téléchargeables ce mois' + (r.quota.seuil ? ' — **au-delà de ' + r.quota.seuil + ' %**' : '') + '.', '');
   l.push('Le détail : l’app, onglet Paiements, « Santé de l’app ».');
   return l.join('\n');
@@ -56,7 +59,8 @@ async function lireBase(t) {
   const jm = [...Array(Number(jours[0].slice(8)))].map((_, i) => mois + '-' + String(i + 1).padStart(2, '0'));
   const er = await Promise.all(jours.map((j) => db.ref('erreurs/' + j).get().then((s) => s.val())));
   const me = await Promise.all(jm.map((j) => db.ref('metrics/' + j).get().then((s) => s.val())));
-  return { erreurs: Object.fromEntries(jours.map((j, i) => [j, er[i]]).filter((x) => x[1])), metrics: Object.fromEntries(jm.map((j, i) => [j, me[i]]).filter((x) => x[1])) };
+  const tk = await db.ref('support_tickets').orderByKey().limitToLast(60).get().then((s) => s.val()).catch(() => null);
+  return { tickets: Object.values(tk || {}), erreurs: Object.fromEntries(jours.map((j, i) => [j, er[i]]).filter((x) => x[1])), metrics: Object.fromEntries(jm.map((j, i) => [j, me[i]]).filter((x) => x[1])) };
 }
 
 if (import.meta.url === 'file://' + process.argv[1]) {
@@ -65,7 +69,7 @@ if (import.meta.url === 'file://' + process.argv[1]) {
   const hier = jourParis(t - 864e5);
   try {
     const d = arg('base') ? JSON.parse(readFileSync(arg('base'), 'utf8')) : await lireBase(t);
-    const r = rapportErreurs(d.erreurs, d.metrics, hier, hier.slice(0, 7));
+    const r = rapportErreurs(d.erreurs, d.metrics, hier, hier.slice(0, 7), d.tickets);
     const txt = texteRapport(r, hier);
     console.log(txt);
     if (r.envoyer) { writeFileSync('rapport-erreurs.md', txt); process.exit(0); }
